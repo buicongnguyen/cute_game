@@ -25,9 +25,9 @@ npm test        # gameplay, worlds, assets, save migration and real server tests
 
 - Click or tap to walk; hold the ground to steer. Arrow keys and the touch direction pad also work. Scroll or pinch to zoom.
 - Click objects to approach and interact. **F** uses the nearest object. **I** opens the backpack, **J** the journal, **M** the map, and **Escape** closes a panel.
-- **Space** attacks. **Q/W/E/R** use four skills, with different specials for weapons and disguises.
+- **Space** attacks. **Q/W/E/R** use four skills, with different specials for weapons and disguises. Hits flash, knock sparks loose and pop up damage numbers; critical hits briefly freeze the action and shake the camera.
 - Plant, harvest and sell crops. Buy gear and equip it from the backpack. The journal guides the first adventure and awards story, daily, weekly and achievement rewards.
-- Equip a fishing rod and visit a pond. Wait for the bite, then hold to reel and release during surges. Watch both line tension and progress.
+- Equip a fishing rod and walk up to a pond: the line casts itself and the fish swimming in the water come to investigate. Press **Reel** (or Space) the moment one bites, hold to pull it toward the shore, and let go when it surges or the line turns red. The catch leaps into your arms, and the journal's Collection tab keeps your record for every species.
 - Store valuables in the chest. If defeated, recover loose items from the dropped bag. A second defeat moves the previous bag's contents safely into storage.
 - Explore four regions around home, then use the rocket to visit eight other worlds. Watch environmental warnings and bring suitable equipment.
 
@@ -56,6 +56,10 @@ The default server listens only on this computer. Internet play requires deploym
 
 The interface uses English and original artwork. Each panel has its own colour band and icon, messages appear as short pills near the bottom of the screen, and on phones panels open as bottom sheets. Inventory and storage have no slot limit, so migration and reward collection do not discard possessions. These are intentional improvements. Physical-phone performance, browser installation behavior and long-session balancing still benefit from user play-testing.
 
+## Graphics and phones
+
+Settings → Graphics offers Auto, Sharp, Balanced and Battery saver. Auto starts phones on Balanced and desktops on Sharp, then watches the frame rate: if it stays under 36 fps it lowers the render resolution, then the shadow and particle quality, and it raises the resolution again when there is headroom. The choice is remembered per device. Models use flat colours rather than textures, scenery is merged into a few draw calls per area, and effects are pooled, so the game does not rely on normal maps or large textures.
+
 ## GitHub Pages edition
 
 Play the [solo browser edition](https://buicongnguyen.github.io/cute_game/). The full source is available in the [public GitHub repository](https://github.com/buicongnguyen/cute_game).
@@ -76,6 +80,7 @@ Browser saves are local to each website address. The published site starts a sep
 - `src/world.ts`, `enemy-types.ts`, `boss-patterns.ts`, `environments.ts`, `lava-weather.ts`: world simulation and encounters.
 - `src/environment-art.ts`, `decorations-art.ts`, `combat-view.ts`, `assets.ts`: original rendering and model integration.
 - `src/main.ts`, `online.ts`, `platform.ts`: interface, shared play and browser installation.
+- `src/fx.ts`, `sfx.ts`, `fishing-view.ts`, `graphics.ts`: pooled hit effects and floating numbers, synthesized sounds, in-world fishing, and adaptive graphics quality.
 - `server/`: HTTP/WebSocket account service, development launcher and offline build generator.
 - `tests/`: deterministic simulations and live HTTP/WebSocket integration tests.
 - `art/`: headless Blender generators for the props, scenery, crops and crop icons, their contract, previews, Unity FBX exports and the asset guide (`art/ASSET_GUIDE.md`).

@@ -82,6 +82,8 @@ kbd { font-family: var(--font); }
 button, input, #dialog, #title-screen { pointer-events: auto; }
 #hud { position: absolute; inset: 0; z-index: 1; }
 #world-labels { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+/* Damage numbers and pop-up text sit above world labels but below panels and messages. */
+#floating-text { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
 #dialog-layer { z-index: 4; }
 #darkness { position: absolute; inset: 0; background: #0b0c23ed; pointer-events: none; z-index: 0; }
 .eyebrow { font-size: var(--t-xs); letter-spacing: 1.3px; font-weight: 900; text-transform: uppercase; color: var(--ink-faint); }
@@ -580,6 +582,53 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 }
 
 #touch-controls { display: none; }
+
+/* Fishing: a big round Reel button, pressed while held and pulsing on a bite. */
+.reel-hud {
+  position: absolute;
+  right: 22px;
+  bottom: calc(84px + var(--safe-bottom));
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  border: 5px solid #fff;
+  background: radial-gradient(circle at 35% 30%, #8fd8ff, #2f7fd6);
+  box-shadow: 0 6px 0 rgba(20, 60, 120, .35), 0 14px 28px rgba(20, 50, 90, .3);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: pop .25s cubic-bezier(.2, 1.3, .5, 1);
+}
+.reel-hud .reel-icon { font-size: 36px; line-height: 1; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .2)); }
+#reel-text { font-size: var(--t-md); font-weight: 1000; text-shadow: 0 2px 0 rgba(10, 40, 80, .5); }
+.reel-hud.down { transform: scale(.9); background: radial-gradient(circle at 35% 30%, #6fc2f0, #1f5fb0); }
+.reel-hud.bite { animation: reel-bite .35s ease-in-out infinite; background: radial-gradient(circle at 35% 30%, #ffe27a, #ff8a2a); }
+.reel-hud.cast { width: 92px; height: 92px; background: radial-gradient(circle at 35% 30%, #a8f58a, #37b82c); box-shadow: 0 6px 0 rgba(20, 90, 20, .35); }
+@keyframes reel-bite { 50% { transform: scale(1.1) rotate(-6deg); } }
+#fish-hint {
+  position: absolute;
+  right: 18px;
+  bottom: calc(202px + var(--safe-bottom));
+  max-width: 220px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--glass);
+  color: #fff;
+  font-size: var(--t-sm);
+  font-weight: 900;
+  text-align: center;
+}
+/* While fishing the Reel button owns the corner: skills dim and ignore taps, the movement pad steps aside. */
+#hud.fishing .skills { opacity: .35; }
+#hud.fishing .skills button { pointer-events: none; }
+#hud.fishing #touch-controls { display: none !important; }
+#hud.fishing #context-prompt { display: none !important; }
+#hud.fishing .home-button { visibility: hidden; }
 #placement-bar {
   position: absolute;
   left: 50%;
@@ -1054,6 +1103,27 @@ h1 > span {
 .quest-row.complete { background: #f4fbee; border-color: #cfeebd; box-shadow: none; }
 .quest-row.complete > span { background: #dff7cf; color: var(--grass-deep); font-weight: 1000; }
 .quest-row.locked { opacity: .55; box-shadow: none; }
+.fish-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.fish-card {
+  min-width: 0;
+  padding: 8px 6px 10px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #e8f8ff, #c9ecfb);
+  border: 2px solid #aee0f5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.fish-card > span { width: 56px; height: 56px; display: grid; place-items: center; font-size: 30px; }
+.fish-card strong { font-size: var(--t-xs); line-height: 1.2; overflow-wrap: anywhere; }
+.fish-card small { font-size: 10px; font-weight: 900; color: #0f5d86; text-transform: capitalize; }
+.fish-card.rare { border-color: #b79cff; background: linear-gradient(180deg, #f3eeff, #e2d6ff); }
+.fish-card.legendary { border-color: #ffc93a; background: linear-gradient(180deg, #fff8dc, #ffe89a); }
+.fish-card.unknown { background: #eef3f5; border-color: #dde6ea; }
+.fish-card.unknown > span { filter: brightness(0) opacity(.22); }
+.fish-card.unknown strong { color: var(--ink-faint); }
 .chapter-banner {
   display: flex;
   align-items: center;
@@ -1311,6 +1381,9 @@ h1 > span {
 .settings-row strong { display: block; font-size: var(--t-md); }
 .settings-row small { display: block; margin-top: 2px; font-size: var(--t-sm); color: var(--ink-soft); }
 #zoom-value { min-width: 28px; text-align: center; font-variant-numeric: tabular-nums; }
+.segmented { flex: none; display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; border-radius: 14px; background: #f3eedf; }
+.segmented button { min-height: 34px; padding: 5px 12px; border-radius: 11px; font-size: var(--t-sm); font-weight: 900; color: var(--ink-soft); }
+.segmented button.on { background: #fff; color: var(--ink); box-shadow: 0 2px 0 var(--line-strong); }
 .toggle { flex: none; width: 52px; height: 30px; padding: 3px; border-radius: 999px; background: #d9d3c1; }
 .toggle::after { content: ''; display: block; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 2px 3px rgba(0, 0, 0, .2); transition: transform .15s; }
 .toggle.on { background: var(--grass); }
@@ -1394,16 +1467,26 @@ h1 > span {
   font-size: 18px;
 }
 .toast.leaving { opacity: 0; translate: 0 6px; transition: opacity .3s, translate .3s; }
+/* Floating numbers are positioned by the game every frame (see fx.ts). */
 .float {
   position: absolute;
-  transform: translateX(-50%);
-  font-size: 26px;
+  left: 0;
+  top: 0;
+  font-size: 22px;
   font-weight: 1000;
+  color: #fff;
+  white-space: nowrap;
   -webkit-text-stroke: 5px #2c3a26;
   paint-order: stroke fill;
-  animation: float 1.2s forwards;
   pointer-events: none;
+  will-change: transform, opacity;
 }
+.float.crit { color: #ffe14d; font-size: 30px; -webkit-text-stroke-color: #6b3a00; }
+.float.hurt { color: #ff6b6b; font-size: 24px; -webkit-text-stroke-color: #4a1010; }
+.float.heal { color: #8fe06a; }
+.float.xp { color: #8fe3ff; font-size: 18px; -webkit-text-stroke-color: #0f3d5a; }
+.float.item { font-size: 18px; -webkit-text-stroke-color: #2c5a26; }
+.float.big { font-size: 32px; }
 #damage-flash { position: absolute; inset: 0; box-shadow: inset 0 0 90px rgba(226, 73, 63, .55); opacity: 0; transition: opacity .15s; pointer-events: none; }
 #damage-flash.active { opacity: 1; }
 .fatal { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 40px; text-align: center; background: var(--paper); pointer-events: auto; }
@@ -1489,6 +1572,8 @@ h1 > span {
   .skill > kbd { display: none; }
   .skill > small { font-size: 10px; width: max-content; max-width: 74px; padding: 1px 6px; border-radius: 9px; white-space: normal; text-align: center; line-height: 1.15; }
   .home-button { bottom: 10px; height: 44px; padding: 0 12px; }
+  .reel-hud { right: 12px; bottom: calc(76px + var(--safe-bottom)); width: 96px; height: 96px; }
+  #fish-hint { right: 10px; bottom: calc(182px + var(--safe-bottom)); }
   .home-button span { display: none; }
   .save-indicator { display: none; }
   #context-prompt { bottom: calc(96px + var(--safe-bottom)); }

@@ -1239,5 +1239,1492 @@
         "rainbowrose": 3746
       }
     }
+  },
+  "fish": {
+    "generator": "art/blender/kit/build_fish.py",
+    "blender": "4.5.9 LTS",
+    "coordinates": "Blender Z up, head toward -Y (glTF Y up, head toward +Z); metres; each model empty sits at the centre of mass; tail origin = hinge, wag about local Y (glTF)",
+    "models": {
+      "file": "fish.glb",
+      "bytes": 315324,
+      "game_depth": 0.09,
+      "fish": {
+        "fish_perch": {
+          "cls": "small",
+          "length": 0.502,
+          "triangles": {
+            "body": 402,
+            "tail": 22,
+            "total": 424
+          },
+          "materials": {
+            "body": [
+              "Fish perch body",
+              "Fish perch belly",
+              "Fish perch bars",
+              "Fish eye white",
+              "Fish eye",
+              "Fish perch fin"
+            ],
+            "tail": [
+              "Fish perch fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.098,
+              -0.1783,
+              -0.0776
+            ],
+            "max": [
+              0.098,
+              0.3237,
+              0.1162
+            ],
+            "size": [
+              0.196,
+              0.502,
+              0.1939
+            ]
+          },
+          "top": 0.1162,
+          "bottom": -0.0776,
+          "centre_of_mass_authored": [
+            0,
+            -0.0717,
+            0.0064
+          ],
+          "wag": 0.6,
+          "note": "",
+          "tail_hinge": [
+            0,
+            0.2037,
+            -0.0026
+          ],
+          "tail_hinge_gltf": [
+            0,
+            -0.0026,
+            -0.2037
+          ],
+          "body_top": 0.0589,
+          "display_scale": 1.6,
+          "depth": {
+            "body_under": 0.074,
+            "all_under": 0.131,
+            "body_under_at_display_scale": 0.109
+          }
+        },
+        "fish_clown": {
+          "cls": "small",
+          "length": 0.4524,
+          "triangles": {
+            "body": 394,
+            "tail": 18,
+            "total": 412
+          },
+          "materials": {
+            "body": [
+              "Fish clown body",
+              "Fish clown edge",
+              "Fish clown band",
+              "Fish eye white",
+              "Fish eye",
+              "Fish clown fin"
+            ],
+            "tail": [
+              "Fish clown fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.1048,
+              -0.156,
+              -0.0803
+            ],
+            "max": [
+              0.1048,
+              0.2964,
+              0.0994
+            ],
+            "size": [
+              0.2096,
+              0.4524,
+              0.1798
+            ]
+          },
+          "top": 0.0994,
+          "bottom": -0.0803,
+          "centre_of_mass_authored": [
+            0,
+            -0.069,
+            0.0033
+          ],
+          "wag": 0.6,
+          "note": "",
+          "tail_hinge": [
+            0,
+            0.1914,
+            -0.0033
+          ],
+          "tail_hinge_gltf": [
+            0,
+            -0.0033,
+            -0.1914
+          ],
+          "body_top": 0.0595,
+          "display_scale": 1.6,
+          "depth": {
+            "body_under": 0.074,
+            "all_under": 0.114,
+            "body_under_at_display_scale": 0.11
+          }
+        },
+        "fish_puffer": {
+          "cls": "small",
+          "length": 0.4572,
+          "triangles": {
+            "body": 418,
+            "tail": 18,
+            "total": 436
+          },
+          "materials": {
+            "body": [
+              "Fish puffer body",
+              "Fish puffer belly",
+              "Fish puffer saddle",
+              "Fish eye white",
+              "Fish eye",
+              "Fish puffer spike",
+              "Fish puffer mouth",
+              "Fish puffer fin"
+            ],
+            "tail": [
+              "Fish puffer fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.1751,
+              -0.1632,
+              -0.1024
+            ],
+            "max": [
+              0.1751,
+              0.294,
+              0.1345
+            ],
+            "size": [
+              0.3502,
+              0.4572,
+              0.2369
+            ]
+          },
+          "top": 0.1345,
+          "bottom": -0.1024,
+          "centre_of_mass_authored": [
+            0,
+            -0.0418,
+            0.0074
+          ],
+          "wag": 0.6,
+          "note": "",
+          "tail_hinge": [
+            0,
+            0.182,
+            0.0021
+          ],
+          "tail_hinge_gltf": [
+            0,
+            0.0021,
+            -0.182
+          ],
+          "body_top": 0.1048,
+          "display_scale": 1.6,
+          "depth": {
+            "body_under": 0.12,
+            "all_under": 0.15,
+            "body_under_at_display_scale": 0.183
+          }
+        },
+        "fish_carp": {
+          "cls": "medium",
+          "length": 0.6612,
+          "triangles": {
+            "body": 406,
+            "tail": 22,
+            "total": 428
+          },
+          "materials": {
+            "body": [
+              "Fish carp bronze",
+              "Fish carp back",
+              "Fish carp body",
+              "Fish carp belly",
+              "Fish eye white",
+              "Fish eye",
+              "Fish carp fin"
+            ],
+            "tail": [
+              "Fish carp fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.1186,
+              -0.2312,
+              -0.0957
+            ],
+            "max": [
+              0.1186,
+              0.4299,
+              0.1502
+            ],
+            "size": [
+              0.2372,
+              0.6612,
+              0.2459
+            ]
+          },
+          "top": 0.1502,
+          "bottom": -0.0957,
+          "centre_of_mass_authored": [
+            0,
+            -0.0988,
+            0.0096
+          ],
+          "wag": 0.6,
+          "note": "",
+          "tail_hinge": [
+            0,
+            0.2749,
+            -0.0002
+          ],
+          "tail_hinge_gltf": [
+            0,
+            -0.0002,
+            -0.2749
+          ],
+          "body_top": 0.0817,
+          "display_scale": 1.4,
+          "depth": {
+            "body_under": 0.097,
+            "all_under": 0.165,
+            "body_under_at_display_scale": 0.129
+          }
+        },
+        "fish_shark": {
+          "cls": "big",
+          "length": 0.972,
+          "triangles": {
+            "body": 374,
+            "tail": 26,
+            "total": 400
+          },
+          "materials": {
+            "body": [
+              "Fish shark body",
+              "Fish shark belly",
+              "Fish eye white",
+              "Fish eye",
+              "Fish shark fin"
+            ],
+            "tail": [
+              "Fish shark fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.2211,
+              -0.3375,
+              -0.0997
+            ],
+            "max": [
+              0.2211,
+              0.6345,
+              0.2367
+            ],
+            "size": [
+              0.4421,
+              0.972,
+              0.3364
+            ]
+          },
+          "top": 0.2367,
+          "bottom": -0.0997,
+          "centre_of_mass_authored": [
+            0,
+            -0.1625,
+            0.0089
+          ],
+          "wag": 0.6,
+          "note": "",
+          "tail_hinge": [
+            0,
+            0.4345,
+            0.0026
+          ],
+          "tail_hinge_gltf": [
+            0,
+            0.0026,
+            -0.4345
+          ],
+          "body_top": 0.0784,
+          "display_scale": 1.1,
+          "depth": {
+            "body_under": 0.093,
+            "all_under": 0.252,
+            "body_under_at_display_scale": 0.101
+          }
+        },
+        "fish_rainbow": {
+          "cls": "small",
+          "length": 0.5153,
+          "triangles": {
+            "body": 338,
+            "tail": 22,
+            "total": 360
+          },
+          "materials": {
+            "body": [
+              "Fish rainbow red",
+              "Fish rainbow orange",
+              "Fish rainbow yellow",
+              "Fish rainbow green",
+              "Fish rainbow blue",
+              "Fish rainbow violet",
+              "Fish eye white",
+              "Fish eye",
+              "Fish rainbow fin"
+            ],
+            "tail": [
+              "Fish rainbow fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.0778,
+              -0.1864,
+              -0.0723
+            ],
+            "max": [
+              0.0778,
+              0.3289,
+              0.0992
+            ],
+            "size": [
+              0.1557,
+              0.5153,
+              0.1715
+            ]
+          },
+          "top": 0.0992,
+          "bottom": -0.0723,
+          "centre_of_mass_authored": [
+            0,
+            -0.0736,
+            0.0031
+          ],
+          "wag": 0.6,
+          "note": "",
+          "tail_hinge": [
+            0,
+            0.2189,
+            -0.0031
+          ],
+          "tail_hinge_gltf": [
+            0,
+            -0.0031,
+            -0.2189
+          ],
+          "body_top": 0.0539,
+          "display_scale": 1.6,
+          "depth": {
+            "body_under": 0.069,
+            "all_under": 0.114,
+            "body_under_at_display_scale": 0.101
+          }
+        },
+        "fish_catfish": {
+          "cls": "big",
+          "length": 0.8711,
+          "triangles": {
+            "body": 422,
+            "tail": 18,
+            "total": 440
+          },
+          "materials": {
+            "body": [
+              "Fish catfish body",
+              "Fish catfish belly",
+              "Fish eye white",
+              "Fish eye",
+              "Fish catfish spots",
+              "Fish catfish whisker",
+              "Fish catfish fin"
+            ],
+            "tail": [
+              "Fish catfish fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.3494,
+              -0.325,
+              -0.0826
+            ],
+            "max": [
+              0.3494,
+              0.5461,
+              0.1214
+            ],
+            "size": [
+              0.6989,
+              0.8711,
+              0.204
+            ]
+          },
+          "top": 0.1214,
+          "bottom": -0.0826,
+          "centre_of_mass_authored": [
+            0,
+            -0.1171,
+            0.0072
+          ],
+          "wag": 0.6,
+          "note": "",
+          "tail_hinge": [
+            0,
+            0.3961,
+            0.0024
+          ],
+          "tail_hinge_gltf": [
+            0,
+            0.0024,
+            -0.3961
+          ],
+          "body_top": 0.0611,
+          "display_scale": 1.1,
+          "depth": {
+            "body_under": 0.076,
+            "all_under": 0.136,
+            "body_under_at_display_scale": 0.082
+          }
+        },
+        "fish_koi": {
+          "cls": "medium",
+          "length": 0.6848,
+          "triangles": {
+            "body": 404,
+            "tail": 22,
+            "total": 426
+          },
+          "materials": {
+            "body": [
+              "Fish koi body",
+              "Fish koi patch",
+              "Fish eye white",
+              "Fish eye",
+              "Fish koi fin"
+            ],
+            "tail": [
+              "Fish koi fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.1347,
+              -0.2384,
+              -0.0895
+            ],
+            "max": [
+              0.1347,
+              0.4464,
+              0.1269
+            ],
+            "size": [
+              0.2695,
+              0.6848,
+              0.2164
+            ]
+          },
+          "top": 0.1269,
+          "bottom": -0.0895,
+          "centre_of_mass_authored": [
+            0,
+            -0.1053,
+            0.0071
+          ],
+          "wag": 0.6,
+          "note": "",
+          "tail_hinge": [
+            0,
+            0.2864,
+            0.0005
+          ],
+          "tail_hinge_gltf": [
+            0,
+            0.0005,
+            -0.2864
+          ],
+          "body_top": 0.0729,
+          "display_scale": 1.4,
+          "depth": {
+            "body_under": 0.088,
+            "all_under": 0.142,
+            "body_under_at_display_scale": 0.117
+          }
+        },
+        "fish_eel": {
+          "cls": "big",
+          "length": 1.04,
+          "triangles": {
+            "body": 334,
+            "tail": 64,
+            "total": 398
+          },
+          "materials": {
+            "body": [
+              "Fish eel body",
+              "Fish eel belly",
+              "Fish eye white",
+              "Fish eye",
+              "Fish eel fin"
+            ],
+            "tail": [
+              "Fish eel body"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.1174,
+              -0.3598,
+              -0.039
+            ],
+            "max": [
+              0.0764,
+              0.6802,
+              0.064
+            ],
+            "size": [
+              0.1938,
+              1.04,
+              0.103
+            ]
+          },
+          "top": 0.064,
+          "bottom": -0.039,
+          "centre_of_mass_authored": [
+            0.0138,
+            -0.1602,
+            0.002
+          ],
+          "wag": 0.35,
+          "note": "The tail is the rear third of the body, joined by an ellipsoid of revolution; it stays sealed at +-0.6 rad but bends most naturally under ~0.35 rad.",
+          "tail_hinge": [
+            -0.0598,
+            0.3266,
+            -0.002
+          ],
+          "tail_hinge_gltf": [
+            -0.0598,
+            -0.002,
+            -0.3266
+          ],
+          "body_top": 0.04,
+          "display_scale": 1.1,
+          "depth": {
+            "body_under": 0.055,
+            "all_under": 0.079,
+            "body_under_at_display_scale": 0.059
+          }
+        },
+        "fish_swordfish": {
+          "cls": "big",
+          "length": 1.0232,
+          "triangles": {
+            "body": 396,
+            "tail": 26,
+            "total": 422
+          },
+          "materials": {
+            "body": [
+              "Fish swordfish body",
+              "Fish swordfish back",
+              "Fish swordfish belly",
+              "Fish swordfish bill",
+              "Fish eye white",
+              "Fish eye",
+              "Fish swordfish sail"
+            ],
+            "tail": [
+              "Fish swordfish sail"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.175,
+              -0.5091,
+              -0.1581
+            ],
+            "max": [
+              0.175,
+              0.5141,
+              0.2705
+            ],
+            "size": [
+              0.35,
+              1.0232,
+              0.4286
+            ]
+          },
+          "top": 0.2705,
+          "bottom": -0.1581,
+          "centre_of_mass_authored": [
+            0,
+            -0.0209,
+            0.0076
+          ],
+          "wag": 0.6,
+          "note": "",
+          "tail_hinge": [
+            0,
+            0.3641,
+            0.0019
+          ],
+          "tail_hinge_gltf": [
+            0,
+            0.0019,
+            -0.3641
+          ],
+          "body_top": 0.0825,
+          "display_scale": 1.1,
+          "depth": {
+            "body_under": 0.097,
+            "all_under": 0.286,
+            "body_under_at_display_scale": 0.106
+          }
+        },
+        "fish_jelly": {
+          "cls": "small",
+          "length": 0.4917,
+          "triangles": {
+            "body": 342,
+            "tail": 75,
+            "total": 417
+          },
+          "materials": {
+            "body": [
+              "Fish jelly inner",
+              "Fish jelly rim",
+              "Fish jelly bell",
+              "Fish eye white",
+              "Fish eye"
+            ],
+            "tail": [
+              "Fish jelly tentacle"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.1427,
+              -0.1288,
+              -0.0749
+            ],
+            "max": [
+              0.1344,
+              0.3629,
+              0.0761
+            ],
+            "size": [
+              0.2771,
+              0.4917,
+              0.151
+            ]
+          },
+          "top": 0.0761,
+          "bottom": -0.0749,
+          "centre_of_mass_authored": [
+            0,
+            -0.0061,
+            0.058
+          ],
+          "wag": 0.45,
+          "note": "Bell tilted 6 degrees forward; the tail is the tentacle cluster, rooted around the hinge under the bell so any swing keeps it attached.",
+          "tail_hinge": [
+            0,
+            0.003,
+            -0.0282
+          ],
+          "tail_hinge_gltf": [
+            0,
+            -0.0282,
+            -0.003
+          ],
+          "body_top": 0.0733,
+          "display_scale": 1.6,
+          "depth": {
+            "body_under": 0.088,
+            "all_under": 0.091,
+            "body_under_at_display_scale": 0.132
+          }
+        },
+        "fish_icepike": {
+          "cls": "medium",
+          "length": 0.7279,
+          "triangles": {
+            "body": 424,
+            "tail": 22,
+            "total": 446
+          },
+          "materials": {
+            "body": [
+              "Fish icepike body",
+              "Fish icepike back",
+              "Fish icepike belly",
+              "Fish eye white",
+              "Fish eye",
+              "Fish icepike spots",
+              "Fish icepike fin"
+            ],
+            "tail": [
+              "Fish icepike fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.0676,
+              -0.3111,
+              -0.08
+            ],
+            "max": [
+              0.0676,
+              0.4169,
+              0.0972
+            ],
+            "size": [
+              0.1352,
+              0.7279,
+              0.1772
+            ]
+          },
+          "top": 0.0972,
+          "bottom": -0.08,
+          "centre_of_mass_authored": [
+            0,
+            -0.0789,
+            0.0024
+          ],
+          "wag": 0.6,
+          "note": "",
+          "tail_hinge": [
+            0,
+            0.2969,
+            0.0014
+          ],
+          "tail_hinge_gltf": [
+            0,
+            0.0014,
+            -0.2969
+          ],
+          "body_top": 0.0482,
+          "display_scale": 1.4,
+          "depth": {
+            "body_under": 0.063,
+            "all_under": 0.112,
+            "body_under_at_display_scale": 0.082
+          }
+        },
+        "fish_whale": {
+          "cls": "big",
+          "length": 0.952,
+          "triangles": {
+            "body": 376,
+            "tail": 26,
+            "total": 402
+          },
+          "materials": {
+            "body": [
+              "Fish whale body",
+              "Fish whale belly",
+              "Fish whale groove",
+              "Fish eye white",
+              "Fish eye"
+            ],
+            "tail": [
+              "Fish whale body"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.2897,
+              -0.3247,
+              -0.1305
+            ],
+            "max": [
+              0.2897,
+              0.6273,
+              0.1226
+            ],
+            "size": [
+              0.5794,
+              0.952,
+              0.2531
+            ]
+          },
+          "top": 0.1226,
+          "bottom": -0.1305,
+          "centre_of_mass_authored": [
+            0,
+            -0.1553,
+            0.0091
+          ],
+          "wag": 0.5,
+          "note": "Tail = horizontal flukes.",
+          "tail_hinge": [
+            0,
+            0.4723,
+            0.0197
+          ],
+          "tail_hinge_gltf": [
+            0,
+            0.0197,
+            -0.4723
+          ],
+          "body_top": 0.1226,
+          "display_scale": 1.1,
+          "depth": {
+            "body_under": 0.138,
+            "all_under": 0.138,
+            "body_under_at_display_scale": 0.15
+          }
+        },
+        "fish_kraken": {
+          "cls": "big",
+          "length": 0.8323,
+          "triangles": {
+            "body": 338,
+            "tail": 75,
+            "total": 413
+          },
+          "materials": {
+            "body": [
+              "Fish kraken body",
+              "Fish kraken belly",
+              "Fish eye white",
+              "Fish eye",
+              "Fish kraken spots"
+            ],
+            "tail": [
+              "Fish kraken body"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.1758,
+              -0.2979,
+              -0.0959
+            ],
+            "max": [
+              0.162,
+              0.5344,
+              0.1024
+            ],
+            "size": [
+              0.3378,
+              0.8323,
+              0.1984
+            ]
+          },
+          "top": 0.1024,
+          "bottom": -0.0959,
+          "centre_of_mass_authored": [
+            0,
+            -0.1244,
+            0.006
+          ],
+          "wag": 0.45,
+          "note": "Squid-style mini kraken, mantle first; the tail is five tentacles hinged at the mantle opening.",
+          "tail_hinge": [
+            0,
+            0.1544,
+            -0.006
+          ],
+          "tail_hinge_gltf": [
+            0,
+            -0.006,
+            -0.1544
+          ],
+          "body_top": 0.1019,
+          "display_scale": 1.1,
+          "depth": {
+            "body_under": 0.117,
+            "all_under": 0.117,
+            "body_under_at_display_scale": 0.127
+          }
+        },
+        "fish_golden": {
+          "cls": "medium",
+          "length": 0.6077,
+          "triangles": {
+            "body": 392,
+            "tail": 48,
+            "total": 440
+          },
+          "materials": {
+            "body": [
+              "Fish golden body",
+              "Fish golden belly",
+              "Fish eye white",
+              "Fish eye",
+              "Fish golden crown",
+              "Fish golden fin"
+            ],
+            "tail": [
+              "Fish golden fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.1308,
+              -0.1535,
+              -0.132
+            ],
+            "max": [
+              0.1308,
+              0.4542,
+              0.1746
+            ],
+            "size": [
+              0.2616,
+              0.6077,
+              0.3066
+            ]
+          },
+          "top": 0.1746,
+          "bottom": -0.132,
+          "centre_of_mass_authored": [
+            0,
+            -0.0465,
+            0.0034
+          ],
+          "wag": 0.6,
+          "note": "Legendary: light emissive glow, a tiny crown and a double fantail.",
+          "tail_hinge": [
+            0,
+            0.1842,
+            -0.0034
+          ],
+          "tail_hinge_gltf": [
+            0,
+            -0.0034,
+            -0.1842
+          ],
+          "body_top": 0.0803,
+          "display_scale": 1.4,
+          "depth": {
+            "body_under": 0.095,
+            "all_under": 0.19,
+            "body_under_at_display_scale": 0.127
+          }
+        },
+        "fish_sunfish": {
+          "cls": "big",
+          "length": 0.8906,
+          "triangles": {
+            "body": 408,
+            "tail": 22,
+            "total": 430
+          },
+          "materials": {
+            "body": [
+              "Fish sunfish body",
+              "Fish sunfish belly",
+              "Fish eye white",
+              "Fish eye",
+              "Fish sunfish spots",
+              "Fish sunfish fin"
+            ],
+            "tail": [
+              "Fish sunfish fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.4613,
+              -0.2637,
+              -0.1199
+            ],
+            "max": [
+              0.4293,
+              0.3374,
+              0.1213
+            ],
+            "size": [
+              0.8906,
+              0.6011,
+              0.2412
+            ]
+          },
+          "top": 0.1213,
+          "bottom": -0.1199,
+          "centre_of_mass_authored": [
+            0,
+            -0.0402,
+            0.0004
+          ],
+          "wag": 0.4,
+          "note": "Basks on its side (rolled 85 degrees about its length, right side up) so the round body reads from the high camera and fits a shallow pond.",
+          "tail_hinge": [
+            0,
+            0.2518,
+            -0.0004
+          ],
+          "tail_hinge_gltf": [
+            0,
+            -0.0004,
+            -0.2518
+          ],
+          "body_top": 0.0819,
+          "display_scale": 1.1,
+          "depth": {
+            "body_under": 0.097,
+            "all_under": 0.136,
+            "body_under_at_display_scale": 0.105
+          }
+        },
+        "fish_angler": {
+          "cls": "medium",
+          "length": 0.6862,
+          "triangles": {
+            "body": 415,
+            "tail": 18,
+            "total": 433
+          },
+          "materials": {
+            "body": [
+              "Fish angler mouth",
+              "Fish angler body",
+              "Fish angler belly",
+              "Fish angler teeth",
+              "Fish eye white",
+              "Fish eye",
+              "Fish angler fin",
+              "Fish angler lure"
+            ],
+            "tail": [
+              "Fish angler fin"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.1633,
+              -0.2651,
+              -0.1131
+            ],
+            "max": [
+              0.1633,
+              0.421,
+              0.1852
+            ],
+            "size": [
+              0.3267,
+              0.6862,
+              0.2982
+            ]
+          },
+          "top": 0.1852,
+          "bottom": -0.1131,
+          "centre_of_mass_authored": [
+            0,
+            -0.1239,
+            0.002
+          ],
+          "wag": 0.6,
+          "note": "Emissive lure bulb on a stalk ahead of the mouth.",
+          "tail_hinge": [
+            0,
+            0.291,
+            0.0172
+          ],
+          "tail_hinge_gltf": [
+            0,
+            0.0172,
+            -0.291
+          ],
+          "body_top": 0.0989,
+          "display_scale": 1.4,
+          "depth": {
+            "body_under": 0.114,
+            "all_under": 0.2,
+            "body_under_at_display_scale": 0.154
+          }
+        },
+        "fish_manta": {
+          "cls": "big",
+          "length": 1,
+          "triangles": {
+            "body": 318,
+            "tail": 15,
+            "total": 333
+          },
+          "materials": {
+            "body": [
+              "Fish manta body",
+              "Fish manta belly",
+              "Fish manta mark",
+              "Fish eye white",
+              "Fish eye"
+            ],
+            "tail": [
+              "Fish manta body"
+            ]
+          },
+          "bounds": {
+            "min": [
+              -0.5,
+              -0.2901,
+              -0.0356
+            ],
+            "max": [
+              0.5,
+              0.5189,
+              0.0429
+            ],
+            "size": [
+              1,
+              0.809,
+              0.0785
+            ]
+          },
+          "top": 0.0429,
+          "bottom": -0.0356,
+          "centre_of_mass_authored": [
+            0,
+            0.0211,
+            0.0071
+          ],
+          "wag": 0.5,
+          "note": "Tail = thin whip tail; pale shoulder marks on the dark back.",
+          "tail_hinge": [
+            0,
+            0.1789,
+            -0.0071
+          ],
+          "tail_hinge_gltf": [
+            0,
+            -0.0071,
+            -0.1789
+          ],
+          "body_top": 0.0405,
+          "display_scale": 1.1,
+          "depth": {
+            "body_under": 0.055,
+            "all_under": 0.058,
+            "body_under_at_display_scale": 0.059
+          }
+        },
+        "boot": {
+          "cls": "junk",
+          "length": 0.3602,
+          "triangles": {
+            "body": 236,
+            "tail": 0,
+            "total": 236
+          },
+          "materials": {
+            "body": [
+              "Fish boot leather",
+              "Fish boot sole",
+              "Fish boot lace",
+              "Fish boot inside",
+              "Fish boot patch",
+              "Fish boot weed"
+            ],
+            "tail": []
+          },
+          "bounds": {
+            "min": [
+              -0.08,
+              -0.2285,
+              -0.1446
+            ],
+            "max": [
+              0.1095,
+              0.1317,
+              0.1894
+            ],
+            "size": [
+              0.1895,
+              0.3602,
+              0.334
+            ]
+          },
+          "top": 0.1894,
+          "bottom": -0.1446,
+          "centre_of_mass_authored": [
+            0,
+            0.0085,
+            -0.0314
+          ],
+          "wag": 0.6,
+          "note": "Junk catch: an old boot with a strand of pond weed.",
+          "body_top": 0.1864,
+          "display_scale": 1.4,
+          "depth": {
+            "body_under": 0.201,
+            "all_under": 0.204,
+            "body_under_at_display_scale": 0.276
+          }
+        }
+      },
+      "dressing": {
+        "bobber": {
+          "triangles": 162,
+          "materials": [
+            "Bobber white",
+            "Bobber red"
+          ],
+          "bounds": {
+            "min": [
+              -0.064,
+              -0.064,
+              -0.066
+            ],
+            "max": [
+              0.064,
+              0.064,
+              0.134
+            ],
+            "size": [
+              0.128,
+              0.128,
+              0.2
+            ]
+          },
+          "radius_xy": 0.064,
+          "note": "Origin at the waterline: white half below, red half above. The line anchor is the antenna tip.",
+          "line_anchor": [
+            0,
+            0,
+            0.134
+          ],
+          "line_anchor_gltf": [
+            0,
+            0.134,
+            0
+          ]
+        },
+        "lily_pad": {
+          "triangles": 57,
+          "materials": [
+            "Lily pad"
+          ],
+          "bounds": {
+            "min": [
+              -0.3456,
+              -0.3571,
+              -0.006
+            ],
+            "max": [
+              0.354,
+              0.3412,
+              0.019
+            ],
+            "size": [
+              0.6996,
+              0.6983,
+              0.025
+            ]
+          },
+          "radius_xy": 0.3586,
+          "note": "Origin at the water surface; the pad top is 0.014-0.019 above it (place lily_flower there)."
+        },
+        "lily_flower": {
+          "triangles": 192,
+          "materials": [
+            "Lily flower",
+            "Lily centre"
+          ],
+          "bounds": {
+            "min": [
+              -0.0899,
+              -0.0899,
+              0.006
+            ],
+            "max": [
+              0.0899,
+              0.0899,
+              0.0795
+            ],
+            "size": [
+              0.1798,
+              0.1798,
+              0.0735
+            ]
+          },
+          "radius_xy": 0.0899,
+          "note": "Origin at the flower base (its lowest point): set it on a lily_pad top (+0.016) or on the water."
+        },
+        "reeds": {
+          "triangles": 148,
+          "materials": [
+            "Reed stem",
+            "Reed head"
+          ],
+          "bounds": {
+            "min": [
+              -0.2442,
+              -0.1517,
+              -0.0006
+            ],
+            "max": [
+              0.204,
+              0.2301,
+              0.89
+            ],
+            "size": [
+              0.4482,
+              0.3818,
+              0.8907
+            ]
+          },
+          "radius_xy": 0.251,
+          "note": "Origin at the ground where the stems stand; four cattails and three leaves."
+        }
+      },
+      "emissive": {
+        "Fish angler lure": 3,
+        "Fish golden belly": 0.25,
+        "Fish golden body": 0.28,
+        "Fish golden crown": 0.45,
+        "Fish golden fin": 0.35,
+        "Fish jelly bell": 0.6,
+        "Fish jelly inner": 0.3,
+        "Fish jelly rim": 0.45,
+        "Fish jelly tentacle": 0.5
+      },
+      "materials": [
+        "Bobber red",
+        "Bobber white",
+        "Fish angler belly",
+        "Fish angler body",
+        "Fish angler fin",
+        "Fish angler lure",
+        "Fish angler mouth",
+        "Fish angler teeth",
+        "Fish boot inside",
+        "Fish boot lace",
+        "Fish boot leather",
+        "Fish boot patch",
+        "Fish boot sole",
+        "Fish boot weed",
+        "Fish carp back",
+        "Fish carp belly",
+        "Fish carp body",
+        "Fish carp bronze",
+        "Fish carp fin",
+        "Fish catfish belly",
+        "Fish catfish body",
+        "Fish catfish fin",
+        "Fish catfish spots",
+        "Fish catfish whisker",
+        "Fish clown band",
+        "Fish clown body",
+        "Fish clown edge",
+        "Fish clown fin",
+        "Fish eel belly",
+        "Fish eel body",
+        "Fish eel fin",
+        "Fish eye",
+        "Fish eye white",
+        "Fish golden belly",
+        "Fish golden body",
+        "Fish golden crown",
+        "Fish golden fin",
+        "Fish icepike back",
+        "Fish icepike belly",
+        "Fish icepike body",
+        "Fish icepike fin",
+        "Fish icepike spots",
+        "Fish jelly bell",
+        "Fish jelly inner",
+        "Fish jelly rim",
+        "Fish jelly tentacle",
+        "Fish koi body",
+        "Fish koi fin",
+        "Fish koi patch",
+        "Fish kraken belly",
+        "Fish kraken body",
+        "Fish kraken spots",
+        "Fish manta belly",
+        "Fish manta body",
+        "Fish manta mark",
+        "Fish perch bars",
+        "Fish perch belly",
+        "Fish perch body",
+        "Fish perch fin",
+        "Fish puffer belly",
+        "Fish puffer body",
+        "Fish puffer fin",
+        "Fish puffer mouth",
+        "Fish puffer saddle",
+        "Fish puffer spike",
+        "Fish rainbow blue",
+        "Fish rainbow fin",
+        "Fish rainbow green",
+        "Fish rainbow orange",
+        "Fish rainbow red",
+        "Fish rainbow violet",
+        "Fish rainbow yellow",
+        "Fish shark belly",
+        "Fish shark body",
+        "Fish shark fin",
+        "Fish sunfish belly",
+        "Fish sunfish body",
+        "Fish sunfish fin",
+        "Fish sunfish spots",
+        "Fish swordfish back",
+        "Fish swordfish belly",
+        "Fish swordfish bill",
+        "Fish swordfish body",
+        "Fish swordfish sail",
+        "Fish whale belly",
+        "Fish whale body",
+        "Fish whale groove",
+        "Lily centre",
+        "Lily flower",
+        "Lily pad",
+        "Reed head",
+        "Reed stem"
+      ]
+    },
+    "icons": {
+      "dir": "icons/fish",
+      "size": [
+        160,
+        160
+      ],
+      "bytes": {
+        "fish_perch": 3378,
+        "fish_clown": 3732,
+        "fish_puffer": 5030,
+        "fish_carp": 3034,
+        "fish_shark": 2698,
+        "fish_rainbow": 2936,
+        "fish_catfish": 2700,
+        "fish_koi": 3020,
+        "fish_eel": 2212,
+        "fish_swordfish": 2858,
+        "fish_jelly": 3908,
+        "fish_icepike": 3040,
+        "fish_whale": 2814,
+        "fish_kraken": 3596,
+        "fish_golden": 3764,
+        "fish_sunfish": 2732,
+        "fish_angler": 2966,
+        "fish_manta": 3248,
+        "boot": 3766
+      }
+    }
   }
 }

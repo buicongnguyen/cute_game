@@ -10,3 +10,11 @@ test('holding against the fish can snap the line and leaving slack loses it',()=
 test('reeling between surges and releasing high tension can land a fish',()=>{const f=new FishingSimulation({quality:1,power:.4,bait:true,random:()=>.3});reachBite(f);f.press();for(let i=0;i<5000&&!f.finished;i++)f.update(.025,f.surge<=0&&f.tension<.68);assert.equal(f.phase,'caught');assert.equal(f.progress,1);});
 test('weighted catches respect pool and bounded sizes',()=>{const pool=[{id:'tiny',weight:100,min:2,max:5},{id:'rare',weight:1,min:20,max:30}];assert.equal(selectCatch(pool,()=>0).id,'tiny');const result=selectCatch(pool,()=>.999);assert.equal(result.id,'rare');assert.ok(result.size>=20&&result.size<=30);});
 test('huge fish are large samples inside the ordinary size range, never oversized junk',()=>{const result=selectCatch([{id:'carp',weight:1,min:10,max:50}],()=>.99);assert.equal(result.huge,true);assert.ok(result.size<=50);assert.equal(selectCatch([{id:'boot',weight:1,min:10,max:50,junk:true}],()=>.99).huge,false);assert.equal(selectCatch([{id:'carp',weight:1,min:10,max:50}],()=>.5).huge,false);});
+
+test('pressing before the bite scares the fish and is counted for the bobber tug',()=>{
+  const sim=new FishingSimulation({quality:.3,power:.3,bait:false,random:()=>.5});
+  sim.update(.6,false);assert.equal(sim.phase,'waiting');
+  sim.update(.01,true);assert.equal(sim.earlyPresses,1);assert.equal(sim.phase,'waiting');
+  sim.update(.01,true);assert.equal(sim.earlyPresses,1,'holding does not count again');
+  sim.update(.01,false);sim.update(.01,true);assert.equal(sim.earlyPresses,2);
+});

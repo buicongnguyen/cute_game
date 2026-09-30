@@ -1,6 +1,8 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { refinedAssets, sceneryKit, cropKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
+import { Effects } from './fx.ts';
+import type { QualityProfile } from './graphics.ts';
 import { approach, blocked, clearSegment, findRoute, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
 import { attackRange } from './combat.ts';
 import { type SaveState, type PlanetId, PLANETS, cropProgress, giftAvailable, maxHp } from './model.ts';
@@ -12,8 +14,10 @@ import {bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,type BossSkill} from './
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,type EnemyDefinition} from './enemy-types.ts';
 
-export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string }
-export interface Enemy extends Entity { hp: number; maxHp: number; damage: number; xp: number; homeX: number; homeZ: number; cooldown: number; respawn: number; boss: boolean; stun: number;type?:string;definition?:EnemyDefinition;phase?:string;phaseTime?:number;route?:Point[];routeTime?:number;lift?:number;liftVelocity?:number;statuses?:Record<string,number>;targetX?:number;targetZ?:number;bossStage?:number;attackCount?:number;skillCount?:number;skill?:BossSkill;telegraphs?:Array<{x:number;z:number;r:number;delay:number}>;skillEffects?:Array<{x:number;z:number;r:number;inner:number;remaining:number;multiplier:number}>;spinTick?:number;scaled?:boolean;baseMaxHp?:number;baseDamage?:number;level?:number }
+export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;
+  /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
+  pond?:{rx:number;rz:number;surface:number} }
+export interface Enemy extends Entity { hp: number; maxHp: number; damage: number; xp: number; homeX: number; homeZ: number; cooldown: number; respawn: number; boss: boolean; stun: number;type?:string;definition?:EnemyDefinition;phase?:string;phaseTime?:number;route?:Point[];routeTime?:number;lift?:number;liftVelocity?:number;statuses?:Record<string,number>;targetX?:number;targetZ?:number;bossStage?:number;attackCount?:number;skillCount?:number;skill?:BossSkill;telegraphs?:Array<{x:number;z:number;r:number;delay:number}>;skillEffects?:Array<{x:number;z:number;r:number;inner:number;remaining:number;multiplier:number}>;spinTick?:number;scaled?:boolean;baseMaxHp?:number;baseDamage?:number;level?:number;flash?:number;flashLit?:boolean }
 interface Obstacle { x: number; z: number; r: number;tag?:string }
 export interface RemotePose {id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
@@ -59,6 +63,8 @@ export class World {
   aim = new T.Vector3(); cameraTarget = new T.Vector3(); distanceToInteract = 2;
   onInteract: (e: Entity) => void = () => {}; onAttackEnemy: (e: Enemy) => void = () => {}; onDamage: (amount: number,source?:'melee'|'shot'|'hazard') => void = () => {};
   onZone: (name: string) => void = () => {}; lastZone = ''; hazardTimer = 0;
+  /** Called after every world build, so views such as the fishing ponds can restock. */
+  onBuilt?: () => void;
   environment!:EnvironmentSimulation;environmentView!:EnvironmentView;movementLocked=false;playerFlying=false;playerStealth=false;
   networkRole:'host'|'peer'|null=null;remotePlayers=new Map<string,{mesh:T.Group;pose:RemotePose}>();remoteRoot=new T.Group();
   onRemoteDamage:(id:string,amount:number,source?:'melee'|'shot'|'hazard')=>void=()=>{};
@@ -68,21 +74,29 @@ export class World {
   private dynamicObstacles:Obstacle[]=[];private environmentSignature='';private gateHits=0;private resourceTimers=new Map<string,number>();
   private enemyShots:Array<{id:string;ownerId:string;mesh:T.Mesh;vx:number;vz:number;life:number;damage:number;targetId?:string;targetEnemyId?:string}>=[];
   private sun: T.DirectionalLight; private cropMaterials: T.Material[] = [];
+  /** Pooled particles, rings, flashes, floating text, camera shake and hit-stop. */
+  fx?: Effects;
+  // Player animation timers set by combat and fishing.
+  punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; fishing:'idle'|'cast'|'wait'|'fight'='idle';
+  private shakeOffset=new T.Vector3(); private playerMaterials:T.MeshStandardMaterial[]=[]; private shadowTexel=72/1024;
   canvas: HTMLCanvasElement; state: SaveState;
-  constructor(canvas: HTMLCanvasElement, state: SaveState) {
+  constructor(canvas: HTMLCanvasElement, state: SaveState, options: { antialias?: boolean } = {}) {
     this.canvas=canvas;this.state=state;
-    this.renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    // High-density phone screens skip multisampling; their pixels are already small.
+    this.renderer = new T.WebGLRenderer({ canvas, antialias: options.antialias ?? true, alpha: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap; this.renderer.outputColorSpace = T.SRGBColorSpace;
     // Neutral tone mapping keeps the toy palette saturated; ACES washed the golds and pinks out.
     this.renderer.toneMapping = T.NeutralToneMapping; this.renderer.toneMappingExposure = 1.0;
     this.scene.add(new T.HemisphereLight('#fff5df', '#7fa174', 1.75));
     this.sun = new T.DirectionalLight('#fff0d0', 2.25); this.sun.position.set(-15, 35, 18); this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(1024, 1024); Object.assign(this.sun.shadow.camera, { left: -36, right: 36, top: 36, bottom: -36, near: 1, far: 90 });
+    // The shadow box covers the visible area with a margin; a tighter box means sharper shadows.
+    this.sun.shadow.mapSize.set(1024, 1024); Object.assign(this.sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 90 }); this.shadowTexel = 52 / 1024;
     this.sun.shadow.bias = -0.0003; this.sun.shadow.normalBias = 0.035;
     this.scene.add(this.sun, this.sun.target, this.root,this.remoteRoot);
     this.marker = mesh(new T.RingGeometry(0.22, 0.32, 32), '#ffffff'); this.marker.rotation.x = -Math.PI / 2; this.marker.position.y = 0.09; this.marker.visible = false; this.scene.add(this.marker);
     this.ring = mesh(new T.RingGeometry(0.7, 0.8, 32), '#fff09d'); this.ring.rotation.x = -Math.PI / 2; this.ring.position.y = 0.12; this.ring.visible = false; this.scene.add(this.ring);
+    this.fx = new Effects(this.scene, this.camera);
     this.build(state.planet); this.refreshPlayer(); this.resize(); window.addEventListener('resize', () => this.resize());
   }
   resize() {
@@ -91,8 +105,25 @@ export class World {
     const span = aspect < 0.8 ? this.zoom * Math.max(0.82, Math.min(1.35, 0.6 / aspect)) : this.zoom;
     this.camera.left = -span * aspect / 2; this.camera.right = span * aspect / 2; this.camera.top = span / 2; this.camera.bottom = -span / 2;
     this.camera.near = 0.1; this.camera.far = 180; this.camera.updateProjectionMatrix(); this.renderer.setSize(w, h);
+    // The shadow box follows the zoom: tight and sharp up close, wide enough when zoomed out.
+    const shadow=this.sun?.shadow?.camera;
+    if(shadow){const extent=Math.max(26,span*Math.max(1,aspect)*.8);if(Math.abs(shadow.right-extent)>.01){shadow.left=-extent;shadow.right=extent;shadow.top=extent;shadow.bottom=-extent;shadow.updateProjectionMatrix();this.shadowTexel=extent*2/this.sun.shadow.mapSize.x;}}
   }
   setQuality(low: boolean) { this.renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = !low; this.resize(); }
+  /** Apply a graphics profile: render resolution, shadow map size (0 turns shadows off) and particle density. */
+  applyGraphics(profile: QualityProfile, ratio: number) {
+    this.renderer.setPixelRatio(ratio);
+    const size = profile.shadow, shadows = size > 0, toggled = this.renderer.shadowMap.enabled !== shadows;
+    this.renderer.shadowMap.enabled = shadows; this.sun.castShadow = shadows;
+    if (shadows && this.sun.shadow.mapSize.x !== size) {
+      this.sun.shadow.mapSize.set(size, size); this.sun.shadow.map?.dispose(); (this.sun.shadow as { map: T.WebGLRenderTarget | null }).map = null;
+      this.shadowTexel = (this.sun.shadow.camera.right - this.sun.shadow.camera.left) / size;
+    }
+    // Switching shadows on or off changes every lit material's shader.
+    if (toggled) this.scene.traverse(o => { if (o instanceof T.Mesh) for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.needsUpdate = true; });
+    if (this.fx) this.fx.density = profile.particles;
+    this.resize();
+  }
   disposeTree(g: T.Object3D) { g.traverse(o => { if (o instanceof T.Mesh) { if (!isShared(o.geometry)) o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (!isShared(material) && ![...matCache.values()].includes(material as T.MeshStandardMaterial)) material.dispose(); } }); }
   applyRefinedAssets(assets: RefinedAssetLibrary = refinedAssets) {
     for (const entity of this.entities) this.applyRefinedAsset(entity, assets);
@@ -310,14 +341,21 @@ export class World {
     this.batchScenery();this.root.add(this.player,this.companion);this.cameraTarget.copy(this.position);this.syncCrops();this.syncDropped();this.applyRefinedAssets();this.syncDecorations();this.refreshEnvironmentNodes();
     if(this.remoteRoot&&!this.remoteRoot.parent)this.scene.add(this.remoteRoot);
     for(const remote of this.remotePlayers?.values()??[])remote.mesh.visible=!remote.pose.planet||remote.pose.planet===planet;
+    this.onBuilt?.();
   }
 
+  private waterMaterial?:T.MeshStandardMaterial;
   makePond(x:number,z:number,radius=5.6,waterId?:string) {
-    const pond=new T.Group();const edge=cyl('#e9d7a2',5.5,5.7,.11,0,.025,0,40);edge.scale.z=.73;
-    const water=cyl('#43c3ef',5.2,5.2,.09,0,.09,0,40);water.scale.z=.72;pond.add(edge,water);
-    for(let i=0;i<6;i++){const pad=cyl('#4fbf3a',.32,.32,.04,Math.sin(i*1.4)*3,.16,Math.cos(i*1.4)*2,12);pond.add(pad);}
-    pond.add(box('#d68a45',2.5,.13,1.6,-4.8,.27,0));for(let i=0;i<6;i++)pond.add(box('#9a5a2c',.04,.02,1.6,-5.8+i*.4,.35,0));
-    pond.scale.setScalar(radius/5.6);const entity=this.addEntity('fish',this.planet==='home'?'Fishing pond':'Planetary fishing pool','🎣',pond,x,z,radius);entity.waterId=waterId??(this.planet==='home'?Math.hypot(x,z)<18?'home':zoneAt({x,z})==='swamp'?'swamp':'lake':this.planet);this.obstacle(x,z,radius*.83);
+    // Translucent water over a blue bed that deepens toward the middle, so the fish
+    // swimming between them stay visible from above. Heights are in world units.
+    const s=radius/5.6,pond=new T.Group(),flat=(m:T.Mesh,sz=.72)=>{m.scale.set(s,1,s*sz);return m;};
+    if(!this.waterMaterial){this.waterMaterial=new T.MeshStandardMaterial({color:'#6fd8fb',transparent:true,opacity:.38,roughness:.08,metalness:0,depthWrite:false});this.waterMaterial.userData.sharedKit=true;}
+    // Layers from the bottom: sand rim (top .10), blue bed (.12–.135), swimming depth, glassy surface (.30), lily pads.
+    const surface=.3,water=flat(new T.Mesh(new T.CylinderGeometry(5.2,5.2,.02,48),this.waterMaterial));water.position.y=surface;water.renderOrder=1;
+    pond.add(flat(cyl('#f1d9a0',5.6,5.8,.1,0,.05,0,48),.73),flat(cyl('#2aa3dc',5.15,5.15,.02,0,.11,0,48)),flat(cyl('#1478c0',3.3,3.5,.02,0,.125,0,40),.7),water);
+    for(let i=0;i<6;i++){const pad=cyl('#4fbf3a',.32,.32,.03,Math.sin(i*1.4)*3*s,surface+.02,Math.cos(i*1.4)*2*s,12);pad.scale.z=.85;pond.add(pad);if(i%2===0)pond.add(ball('#ff8fc4',.1,Math.sin(i*1.4)*3*s,surface+.08,Math.cos(i*1.4)*2*s));}
+    pond.add(box('#d68a45',2.5*s,.13,1.6*s,-4.8*s,surface+.08,0));for(let i=0;i<6;i++)pond.add(box('#9a5a2c',.04,.02,1.6*s,(-5.8+i*.4)*s,surface+.16,0));
+    const entity=this.addEntity('fish',this.planet==='home'?'Fishing pond':'Planetary fishing pool','🎣',pond,x,z,radius);entity.waterId=waterId??(this.planet==='home'?Math.hypot(x,z)<18?'home':zoneAt({x,z})==='swamp'?'swamp':'lake':this.planet);entity.pond={rx:5.2*s,rz:5.2*s*.72,surface:.3};this.obstacle(x,z,radius*.83);
   }
   chibi(color: string) {
     const c=group();
@@ -326,7 +364,13 @@ export class World {
     c.add(ball('#655046',.23,-.42,1.61,.24),ball('#655046',.22,.4,1.7,.23),ball('#655046',.24,-.15,1.96,.25));
     for(const x of [-.21,.21]){c.add(ball('#3e4542',.052,x,1.62,.551,1),ball('#e8ab9d',.095,x*1.65,1.44,.47));}
     const smile=mesh(new T.TorusGeometry(.075,.015,4,8,Math.PI),'#8b6959',0,1.48,.578);smile.rotation.z=Math.PI;c.add(smile);
-    c.add(cyl(color,.32,.42,.65,0,.85,0,8),ball('#f3d5af',.14,-.46,.82,.05),ball('#f3d5af',.14,.46,.82,.05));
+    c.add(cyl(color,.32,.42,.65,0,.85,0,8));
+    // Arms hang from shoulder pivots so punches, swings and the fishing cast can animate.
+    for(const side of [-1,1]){
+      const arm=new T.Group();arm.name=side<0?'arm-left':'arm-right';arm.position.set(side*.37,1.08,.02);arm.rotation.order='YXZ';arm.rotation.z=side*.3;
+      const grip=new T.Object3D();grip.name=side<0?'hand-left':'hand-right';grip.position.set(0,-.36,.05);
+      arm.add(cyl(color,.12,.1,.3,0,-.12),ball('#f3d5af',.14,0,-.33,.02),grip);c.add(arm);
+    }
     const left=group(cyl('#f0d4ad',.1,.1,.35,0,.35),ball('#775f46',.17,0,.16,.08));left.position.x=-.18;left.name='leg-left';c.add(left);
     const right=left.clone();right.position.x=.18;right.name='leg-right';c.add(right);
     c.add(box('#b38d5c',.4,.44,.22,0,.9,-.34),ball('#f8ecd0',.08,0,.93,.36));
@@ -362,16 +406,21 @@ export class World {
       if(id==='dz_snowman')c.add(cyl('#efa75d',0,.1,.3,0,1.57,.66));
     }
     if(gear.boots)for(const x of [-.18,.18])c.add(box(gear.boots.includes('flipper')?'#66a9d6':'#b88c73',.27,.23,gear.boots.includes('flipper')?.6:.34,x,.17,.1));
+    const hand=c.getObjectByName('hand-right')??c;
     if(weapon?.kind==='sword'){
       const bladeColor=/fire|lava/.test(gear.weapon!)?'#f1a65d':/crystal|ice/.test(gear.weapon!)?'#a9e8f1':'#d5dce1';
-      const sword=group(box(bladeColor,.14,1.02,.13,0,.34),box('#c7a162',.42,.12,.18,0,-.16));sword.position.set(.58,.8,.24);sword.rotation.z=-.35;c.add(sword);
-    }else if(weapon?.kind==='gun')c.add(box('#9dc7cb',.25,.3,.65,.55,.91,.36),ball('#e7d997',.19,.55,.92,.69));
-    else if(weapon?.kind==='rod'){const rod=cyl('#ad8861',.025,.04,1.85,.6,1.2,.4);rod.rotation.x=.35;c.add(rod);}
+      const sword=group(box(bladeColor,.14,1.02,.13,0,.62),box('#c7a162',.42,.12,.18,0,.1),cyl('#8a5a34',.05,.05,.22,0,-.04));sword.name='weapon';sword.rotation.x=1.25;hand.add(sword);
+    }else if(weapon?.kind==='gun'){const gun=group(box('#9dc7cb',.25,.3,.65,0,.05,.25),ball('#e7d997',.19,0,.06,.58));gun.name='weapon';hand.add(gun);}
+    else if(weapon?.kind==='rod'){
+      const rod=group(cyl('#ad8861',.025,.04,1.85,0,.92),cyl('#6b4a2e',.05,.05,.26,0,.05));rod.name='weapon';rod.rotation.x=1.05;
+      const tip=new T.Object3D();tip.name='rod-tip';tip.position.set(0,1.85,0);rod.add(tip);hand.add(rod);
+    }
     if(gear.pet){const pet=this.petModel(gear.pet);pet.name='remote-pet';pet.position.set(-1,0,-.6);c.add(pet);}
     return c;
   }
   refreshPlayer() {
-    this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...this.state.gear,pet:undefined});this.root.add(this.player);
+    this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...this.state.gear,pet:undefined});this.player.rotation.order='YXZ';
+    this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();this.playerMaterials.push(o.material);}});this.root.add(this.player);
     this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=this.state.gear.pet?this.petModel(this.state.gear.pet):new T.Group();this.root.add(this.companion);
   }
 
@@ -416,7 +465,9 @@ export class World {
     const def=ENEMY_TYPES[type];if(!def)return null;
     const zone=this.planet==='home'?zoneAt({x,z}):this.planet,difficulty=({home:0,forest:1,meadow:1,swamp:2,canyon:3,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,cloud:5,shadow:6} as Record<string,number>)[zone],scale=[1,1,1.7,2.6,3.6,4.8,6.2][difficulty];
     const health=Math.round(def.hp*scale*(def.boss&&type!=='dragon'?2.6:1)),damage=def.damage*scale*(def.boss?1.35:1),xp=Math.round(def.xp*(.6+scale*.4));
-    const e=this.addEntity('enemy',def.name,def.boss?'👑':'⚔️',this.speciesModel(def),x,z,def.radius,index) as Enemy;
+    const model=this.speciesModel(def),flash:T.MeshStandardMaterial[]=[];
+    model.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;
+    const e=this.addEntity('enemy',def.name,def.boss?'👑':'⚔️',model,x,z,def.radius,index) as Enemy;
     Object.assign(e,{type,definition:def,hp:health,maxHp:health,baseMaxHp:health,baseDamage:damage,damage,xp,level:difficulty*3-2+(def.boss?6:0),homeX:x,homeZ:z,cooldown:0,respawn:0,boss:def.boss,stun:0,phase:'idle',phaseTime:0,route:[],routeTime:0,lift:0,liftVelocity:0,statuses:{}});this.enemies.push(e);return e;
   }
   environmentStatus():EnvironmentStatus[]{return this.environment?.status(this.position)??[];}
@@ -518,7 +569,9 @@ export class World {
       // Blender crops: a sprout, then a young plant, then the full crop with a sparkle.
       if(modelled){for(let j=0;j<4;j++){const x=(j%2)*.8-.4,z=Math.floor(j/2)*.8-.4,plant=cropKit.instance(stage===1?'crop_sprout':'crop_'+p.crop);if(!plant)continue;
         // Crops face the camera; a small turn keeps rows from looking stamped.
-        plant.position.set(x,.22,z);plant.rotation.y=(((j*37+i*17)%60)-30)*Math.PI/180;plant.scale.setScalar(stage===1?.9:stage===2?.58:1);g.add(plant);
+        plant.position.set(x,.22,z);plant.rotation.y=(((j*37+i*17)%60)-30)*Math.PI/180;
+        // Crops pop in with a springy bounce each time they grow a stage.
+        plant.userData.target=stage===1?.9:stage===2?.58:1;plant.userData.stage=stage;plant.userData.pop=0;plant.userData.seed=i*3.1+j;plant.scale.setScalar(.01);g.add(plant);
         if(stage===3){const star=mesh(new T.OctahedronGeometry(.07),'#fff0a8',x,1.05+Math.sin(j)*.12,z);g.add(star);}}return;}
       for(let j=0;j<4;j++){const x=(j%2)*.8-.4,z=Math.floor(j/2)*.8-.4;const crop=group();
         if(stage>=2)crop.add(ball(p.crop==='carrot'?'#e9a068':p.crop==='berry'?'#da7f88':'#e5c4d4',stage===3?.26:.15,0,.26,0,1));
@@ -563,10 +616,43 @@ export class World {
   nearest() {return this.entities.filter(e=>this.validTarget(e)).sort((a,b)=>Math.hypot(a.x-this.position.x,a.z-this.position.z)-a.radius-(Math.hypot(b.x-this.position.x,b.z-this.position.z)-b.radius)).find(e=>Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.radius+2);}
   interactNearest() {const e=this.nearest();if(e)this.select(e);}
   burst(x:number,z:number,color:string,count=14) {
+    if(this.fx){this.fx.burst({x,z},{n:count,color:[color,'#ffffff'],speed:4,up:5,size:.13});this.fx.burst({x,z},{n:Math.ceil(count/2),color,glow:true,size:.12,speed:3,up:4,life:.5});return;}
     for(let i=0;i<count;i++){const p=ball(color,.06+Math.random()*.05,x,.6,z,0);this.scene.add(p);this.particles.push({mesh:p,velocity:new T.Vector3((Math.random()-.5)*4,2+Math.random()*3,(Math.random()-.5)*4),life:.6+Math.random()*.4,max:1});}
   }
   skillEffect(radius:number,color:string) {
     const ring=mesh(new T.TorusGeometry(radius,.06,5,50),color,this.position.x,.4,this.position.z);ring.rotation.x=Math.PI/2;this.scene.add(ring);this.particles.push({mesh:ring,velocity:new T.Vector3(0,.5,0),life:.5,max:.5});this.burst(this.position.x,this.position.z,color,22);
+  }
+  /** Visual response to a landed hit: flash, colour chips, sparks, an impact ring and the number. */
+  hitFeedback(e:Enemy,amount:number,critical:boolean){
+    e.flash=.14;const fx=this.fx;if(!fx)return;
+    const at={x:e.x,y:e.mesh.position.y,z:e.z},colors=[e.definition?.color??'#fff0bb',e.definition?.accent??'#ffffff'];
+    fx.burst(at,{n:critical?14:8,color:colors,size:.12,speed:5,up:4,y:.8});
+    fx.burst(at,{n:critical?12:5,color:['#ffffff','#fff7a8'],glow:true,size:critical?.16:.1,speed:critical?8:5,up:3,y:.8,life:.35});
+    fx.ring({x:e.x,z:e.z},{color:critical?'#ffe14d':'#ffffff',from:.2,to:critical?1.6:1,life:.2,thick:.35,y:at.y+.8});
+    fx.text(at,critical?amount+'!':String(amount),critical?'crit big':'dmg');
+    if(critical){fx.flash({x:e.x,y:at.y+.9,z:e.z},'#fff3b0',1.6,.12);fx.freeze(.06);fx.shake(.12);}
+  }
+  /** A defeated creature bursts into a puff instead of blinking out. */
+  defeatFeedback(e:Enemy){
+    const fx=this.fx;if(!fx)return;const at={x:e.x,y:e.mesh.position.y,z:e.z},color=e.definition?.color??'#ffffff';
+    fx.burst(at,{n:e.boss?40:16,color:[color,'#ffffff',e.definition?.accent??color],size:.16,speed:6,up:6,y:.6});
+    fx.burst(at,{n:e.boss?30:12,color:['#ffffff','#fff7a8'],glow:true,size:.18,speed:4,up:5,life:.7});
+    fx.ring({x:e.x,z:e.z},{color:'#ffffff',from:.3,to:e.boss?4:2,life:.45,y:.1});fx.flash({x:e.x,y:at.y+.8,z:e.z},'#ffffff',e.boss?3.2:1.8,.18);
+    if(e.boss)fx.shake(.45);
+  }
+  /** The player flinches and briefly glows red. */
+  hurtFeedback(amount:number){
+    this.hurtT=.25;const fx=this.fx;if(!fx)return;
+    fx.text(this.position,'-'+amount,'hurt');fx.shake(Math.min(.35,.12+amount/60));
+    fx.burst(this.position,{n:6,color:['#ff7b6b','#ffffff'],size:.1,speed:4,up:3,y:.9});
+  }
+  /** Swing arcs and animation for the player's own attacks. */
+  playerAttack(kind:'fist'|'sword'|'gun'|'rod'){
+    const fx=this.fx,at={x:this.position.x,y:this.position.y,z:this.position.z};
+    if(kind==='gun'){this.aimT=.7;this.punchT=.12;fx?.flash({x:at.x+Math.sin(this.facing)*.9,y:at.y+1,z:at.z+Math.cos(this.facing)*.9},'#fff8c8',.9,.08);return;}
+    // The slash arc itself arrives through the shared combat effects, so remote players see it too.
+    if(kind==='sword')this.swingT=.26;else{this.punchT=.25;this.punchArm^=1;}
+    fx?.burst({x:at.x+Math.sin(this.facing)*1.3,y:at.y,z:at.z+Math.cos(this.facing)*1.3},{n:5,color:'#ffffff',glow:true,size:.1,speed:3,up:2,y:.8,life:.3});
   }
   damageEnemy(e:Enemy,amount:number,stun=0,hazard=false) {
     if(e.hp<=0)return;
@@ -758,6 +844,9 @@ export class World {
     e.mesh.position.set(e.x,ground+(e.lift??0)+(e.definition?.flying?1+Math.sin(this.time*4+e.homeX)*.15:Math.sin(this.time*3+e.homeX)*.06),e.z);
     const scale=(e.boss?1.85:1)*((e.statuses?.sheep??0)>0?.45:1);e.mesh.scale.setScalar(scale);
     if(e.type==='minislime')e.mesh.scale.multiplyScalar(.55);
+    // Hit reaction: a white flash and a quick swell, like a squeezed toy.
+    if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);e.mesh.scale.multiplyScalar(1+e.flash!*1.2);}
+    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as T.MeshStandardMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.emissive.set('#ffffff');m.emissiveIntensity=.75;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=1;}}}
     const shell=e.mesh.getObjectByName('shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
     let telegraph=e.mesh.getObjectByName('attack-telegraph') as T.Mesh|undefined;
     if(e.phase==='windup'&&!telegraph){telegraph=mesh(new T.RingGeometry(.92,1,32),'#f15c58');telegraph.name='attack-telegraph';telegraph.rotation.x=-Math.PI/2;telegraph.position.y=.06;e.mesh.add(telegraph);}
@@ -828,10 +917,60 @@ export class World {
     this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar(stats.sizeScale);this.player.position.y+=this.moving?Math.abs(Math.sin(this.time*11))*.1:Math.sin(this.time*2)*.02;
     const left=this.player.getObjectByName('leg-left'),right=this.player.getObjectByName('leg-right');if(left&&right){left.rotation.x=this.moving?Math.sin(this.time*11)*.6:0;right.rotation.x=-left.rotation.x;}
     if(this.state.gear.pet){this.companion.position.lerp(this.position.clone().add(new T.Vector3(-1,0,1)),Math.min(1,dt*3));this.companion.position.y=this.position.y+Math.abs(Math.sin(this.time*5))*.12;this.companion.rotation.y=this.facing;}
+    this.animatePlayer(dt);
     this.cameraTarget.lerp(this.position,1-Math.exp(-dt*4));this.camera.position.copy(this.cameraTarget).add(new T.Vector3(0,23,23));this.camera.lookAt(this.cameraTarget.x,this.cameraTarget.y,this.cameraTarget.z-2.4);
-    this.sun.position.set(this.position.x-15,35,this.position.z+18);this.sun.target.position.copy(this.position);
+    if(this.fx)this.camera.position.add(this.fx.shakeOffset(dt,this.shakeOffset));
+    this.followSun();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
+    this.animateCrops(dt);
+    this.fx?.update(dt);
     this.marker.scale.setScalar(1+Math.sin(this.time*5)*.12);if(draw)this.render();
+  }
+
+  /** Pop-in, sway and the sparkle of ripe crops. */
+  private animateCrops(dt:number){
+    if(this.planet!=='home')return;
+    this.plotMeshes.forEach((g,i)=>{
+      let ripe:T.Object3D|null=null;
+      for(const plant of g.children){const u=plant.userData;if(u.target===undefined)continue;
+        if(u.pop<1){u.pop=Math.min(1,u.pop+dt*3);const k=u.pop,spring=1+Math.sin(k*Math.PI*2.5)*(1-k)*.4;plant.scale.setScalar(u.target*Math.min(1,k*2)*spring);}
+        else plant.scale.setScalar(u.target*(u.stage===3?1+Math.sin(this.time*4+u.seed)*.04:1));
+        plant.rotation.z=Math.sin(this.time*(u.stage===3?2.5:1.5)+u.seed)*(u.stage===3?.06:.04);
+        if(u.stage===3)ripe=plant;}
+      if(ripe&&this.fx&&Math.random()<dt*2.5){const plot=g.parent;if(plot)this.fx.burst({x:plot.position.x+ripe.position.x,z:plot.position.z+ripe.position.z},{n:1,color:'#fff7a8',glow:true,size:.08,speed:1,up:2,y:.9,gravity:0,life:.8});}
+    });
+  }
+  private sunOffset=new T.Vector3(-15,35,18);private sunAxes:[T.Vector3,T.Vector3]|null=null;
+  /**
+   * The sun follows the player, snapped to whole shadow texels along the shadow
+   * camera's own axes. Without the snap, shadow edges crawl every frame you walk.
+   */
+  private followSun(){
+    this.sunOffset??=new T.Vector3(-15,35,18);this.shadowTexel||=72/1024;
+    if(!this.sunAxes){const dir=this.sunOffset.clone().normalize(),x=new T.Vector3().crossVectors(new T.Vector3(0,1,0),dir).normalize();this.sunAxes=[x,new T.Vector3().crossVectors(dir,x)];}
+    const [x,y]=this.sunAxes,texel=this.shadowTexel,p=this.sun.target.position.copy(this.position);
+    const a=p.dot(x),b=p.dot(y);p.addScaledVector(x,Math.round(a/texel)*texel-a).addScaledVector(y,Math.round(b/texel)*texel-b);
+    this.sun.position.copy(p).add(this.sunOffset);
+  }
+  /** Arm swings while walking, punches, sword sweeps, aiming, casting, flinching and the whirlwind spin. */
+  private animatePlayer(dt:number){
+    for(const key of ['punchT','swingT','aimT','hurtT','spinT','landT','castT'] as const)this[key]=Math.max(0,(this[key]||0)-dt);
+    const armL=this.player.getObjectByName('arm-left'),armR=this.player.getObjectByName('arm-right');let lean=0;
+    if(armL&&armR){
+      const walk=this.moving?Math.sin(this.time*11)*.55:Math.sin(this.time*2)*.05;
+      armL.rotation.set(walk,0,-.3);armR.rotation.set(-walk,0,.3);
+      if(this.fishing&&this.fishing!=='idle'){
+        armR.rotation.set(this.fishing==='cast'&&this.castT>.25?-2.5:this.fishing==='fight'?-.8+Math.sin(this.time*18)*.07:-.55,0,.12);armL.rotation.set(-.35,0,-.2);
+      }else if(this.swingT>0){const r=1-this.swingT/.26;armR.rotation.set(-1.25,1.3-2.8*r,.2);lean=.12*Math.sin(r*Math.PI);}
+      else if(this.aimT>0){armR.rotation.set(-1.45-(this.punchT>0?.25:0),0,.05);}
+      else if(this.punchT>0){const k=Math.sin((1-this.punchT/.25)*Math.PI),arm=this.punchArm?armR:armL;arm.rotation.x=-1.65*k;arm.rotation.z*=1-k;lean=.18*k;}
+    }
+    if(this.spinT>0)this.player.rotation.y=this.facing+(2.2-this.spinT)*14;
+    if(this.hurtT>0)lean=-.3*Math.sin(this.hurtT/.25*Math.PI);
+    this.player.rotation.x=lean;
+    if(this.landT>0){const k=Math.sin(this.landT/.25*Math.PI);this.player.scale.x*=1+k*.18;this.player.scale.y*=1-k*.22;this.player.scale.z*=1+k*.18;}
+    const red=this.hurtT>0;
+    for(const m of this.playerMaterials??[])if(m.userData.hurtLit!==red){m.userData.hurtLit=red;if(red){m.userData.baseEmissive??=m.emissive.getHex();m.emissive.set('#ff3b3b');m.emissiveIntensity=.55;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=1;}}
   }
 
   render(){this.renderer.render(this.scene,this.camera);}

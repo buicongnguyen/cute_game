@@ -4,7 +4,11 @@ export interface FishingOptions { quality:number; power:number; bait:boolean; ra
 /** A deterministic simulation of the visible fishing rules, independent of UI. */
 export class FishingSimulation {
   phase:FishingPhase='cast'; tension=.25; progress=.05; time=0; surge=0;missedBites=0;
-  reason=''; private timer=.5; private slack=0; private surgeWait=1.2; private nibbles=0;
+  /** Counts every nibble so the view can dip the bobber once per nibble. */
+  nibbles=0;
+  /** Presses before the bite; each one tugs the bobber and scares the fish away. */
+  earlyPresses=0;
+  reason=''; private timer=.5; private slack=0; private surgeWait=1.2; private nibblesLeft=0;
   private lastHeld=false; private quality:number; private power:number; private bait:boolean; private random:()=>number;
   constructor(options:FishingOptions){this.quality=Math.max(0,options.quality);this.power=Math.max(.1,options.power);this.bait=options.bait;this.random=options.random??Math.random;}
   private between(min:number,max:number){return min+this.random()*(max-min);}
@@ -19,10 +23,10 @@ export class FishingSimulation {
     if(this.phase==='fight')return this.surge>0?'The fish is surging! Release the line.':this.tension>.78?'Easy now — release before the line snaps.':this.tension<.08?'Keep some tension: reel gently.':'Reel steadily; release during a surge.';
     return this.reason;
   }
-  private wait(){this.phase='waiting';this.timer=this.between(2,5.5)/(this.bait?1.7:1)/(1+this.quality*.5);this.nibbles=1+Math.floor(this.random()*4);}
+  private wait(){this.phase='waiting';this.timer=this.between(2,5.5)/(this.bait?1.7:1)/(1+this.quality*.5);this.nibblesLeft=1+Math.floor(this.random()*4);}
   press(){
     if(this.phase==='bite'){this.phase='fight';this.tension=.25;this.progress=.05;this.slack=0;this.surgeWait=this.between(.5,1.5);return true;}
-    if(this.phase==='waiting'||this.phase==='nibble'){this.phase='waiting';this.timer+=1.5;this.reason='Too early — the fish moved away. Wait for a bite.';}
+    if(this.phase==='waiting'||this.phase==='nibble'){this.earlyPresses++;this.phase='waiting';this.timer+=1.5;this.reason='Too early — the fish moved away. Wait for a bite.';}
     return false;
   }
   update(dt:number,held:boolean,active=true){
@@ -42,9 +46,9 @@ export class FishingSimulation {
     this.timer-=dt;
     if(this.timer>0)return;
     if(this.phase==='cast')this.wait();
-    else if(this.phase==='waiting'){this.phase='nibble';this.timer=this.between(.5,1.6);}
+    else if(this.phase==='waiting'){this.phase='nibble';this.nibbles++;this.timer=this.between(.5,1.6);}
     else if(this.phase==='nibble'){
-      if(--this.nibbles>0)this.timer=this.between(.5,1.6);
+      if(--this.nibblesLeft>0){this.nibbles++;this.timer=this.between(.5,1.6);}
       else if(this.random()<.8){this.phase='bite';this.timer=.6+this.quality*.4;}
       else this.wait();
     }else if(this.phase==='bite'){this.missedBites++;this.wait();this.reason='The bite was missed. A new fish is approaching.';}

@@ -21,6 +21,7 @@ export const REFINED_ASSET_FILES = {
 export const KIT_FILES = {
   scenery: `${assetBase}assets/models/scenery.glb`,
   crops: `${assetBase}assets/models/crops.glb`,
+  fish: `${assetBase}assets/models/fish.glb`,
 } as const;
 
 export type RefinedAsset = keyof typeof REFINED_ASSET_FILES;
@@ -65,7 +66,7 @@ export class RefinedAssetLibrary {
   }
 }
 
-interface KitPart { geometry: T.BufferGeometry; material: T.Material; matrix: T.Matrix4 }
+interface KitPart { geometry: T.BufferGeometry; material: T.Material; matrix: T.Matrix4; name: string }
 
 /** Marks kit geometry and materials as shared so world disposal leaves them alive. */
 export function isShared(resource: { userData: Record<string, unknown> }) { return resource.userData.sharedKit === true; }
@@ -98,7 +99,9 @@ export class KitLibrary {
             if (!(object instanceof T.Mesh) || Array.isArray(object.material)) return;
             object.geometry.userData.sharedKit = true;
             object.material.userData.sharedKit = true;
-            parts.push({ geometry: object.geometry, material: object.material, matrix: inverse.clone().multiply(object.matrixWorld) });
+            // A single-material child keeps its own name, so animated parts (a fish tail) can be found.
+            const named = object.name || object.parent?.name || '';
+            parts.push({ geometry: object.geometry, material: object.material, matrix: inverse.clone().multiply(object.matrixWorld), name: named });
           });
           if (node.name && parts.length) this.models.set(node.name, parts);
         }
@@ -118,6 +121,7 @@ export class KitLibrary {
     for (const part of parts) {
       const mesh = new T.Mesh(part.geometry, this.material(part.material, tint?.[part.material.name]));
       mesh.applyMatrix4(part.matrix);
+      mesh.name = part.name;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       group.add(mesh);
@@ -143,3 +147,4 @@ export class KitLibrary {
 export const refinedAssets = new RefinedAssetLibrary();
 export const sceneryKit = new KitLibrary([KIT_FILES.scenery]);
 export const cropKit = new KitLibrary([KIT_FILES.crops]);
+export const fishKit = new KitLibrary([KIT_FILES.fish]);
