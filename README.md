@@ -41,7 +41,7 @@ For two-player testing on one computer, use separate browser profiles or a norma
 
 The server stores account profiles in `data/accounts.json`, excluded from source control. Back up that file to retain online progress. Browser saves remain in that browser's local storage. Online saves use revisions, retry deduplication and a local pending copy to avoid overwriting newer progress during interrupted connections. Restarting the server ends sign-in sessions; sign in again to resume.
 
-The default server listens only on this computer. Internet play requires deployment of both the built game and the Node/WebSocket service, persistent storage and HTTPS. No public deployment was performed. Shared creature simulation uses an elected player host with migration; it is intended for cooperative play and is not a competitive anti-cheat economy.
+The default server listens only on this computer. Internet play requires deployment of both the built game and the Node/WebSocket service, persistent storage and HTTPS. The solo edition is published on GitHub Pages; the multiplayer service has not been publicly deployed. Shared creature simulation uses an elected player host with migration; it is intended for cooperative play and is not a competitive anti-cheat economy.
 
 ## Included
 
@@ -58,7 +58,7 @@ The interface uses English and original artwork. Inventory and storage have no s
 
 ## GitHub Pages edition
 
-The solo browser edition is prepared for https://buicongnguyen.github.io/cute_game/.
+Play the [solo browser edition](https://buicongnguyen.github.io/cute_game/). The full source is available in the [public GitHub repository](https://github.com/buicongnguyen/cute_game).
 
 ```sh
 npm run build:pages
@@ -73,7 +73,7 @@ Browser saves are local to each website address. The published site starts a sep
 
 - `src/content.ts`, `model.ts`, `progression.ts`: catalog, game rules, persistence and rewards.
 - `src/combat.ts`, `fishing.ts`, `gameplay-controls.ts`, `gestures.ts`: timed gameplay and input.
-- `src/world.ts`, `enemies.ts`, `boss-patterns.ts`, `environments.ts`, `lava-weather.ts`: world simulation and encounters.
+- `src/world.ts`, `enemy-types.ts`, `boss-patterns.ts`, `environments.ts`, `lava-weather.ts`: world simulation and encounters.
 - `src/environment-art.ts`, `decorations-art.ts`, `combat-view.ts`, `assets.ts`: original rendering and model integration.
 - `src/main.ts`, `online.ts`, `platform.ts`: interface, shared play and browser installation.
 - `server/`: HTTP/WebSocket account service, development launcher and offline build generator.
