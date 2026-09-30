@@ -54,7 +54,7 @@ The default server listens only on this computer. Internet play requires deploym
 - Account saves, friends, visits, chat, private parties, shared creatures and environments, plus offline browser play and install/fullscreen support.
 - Preserved version-1 saves, colors and possessions. Earlier six-bed gardens receive three additional beds.
 
-The interface uses English and original artwork. Inventory and storage have no slot limit, so migration and reward collection do not discard possessions. These are intentional improvements. Physical-phone performance, browser installation behavior and long-session balancing still benefit from user play-testing.
+The interface uses English and original artwork. Each panel has its own colour band and icon, messages appear as short pills near the bottom of the screen, and on phones panels open as bottom sheets. Inventory and storage have no slot limit, so migration and reward collection do not discard possessions. These are intentional improvements. Physical-phone performance, browser installation behavior and long-session balancing still benefit from user play-testing.
 
 ## GitHub Pages edition
 
@@ -78,7 +78,8 @@ Browser saves are local to each website address. The published site starts a sep
 - `src/main.ts`, `online.ts`, `platform.ts`: interface, shared play and browser installation.
 - `server/`: HTTP/WebSocket account service, development launcher and offline build generator.
 - `tests/`: deterministic simulations and live HTTP/WebSocket integration tests.
-- `art/`: editable Blender source, export scripts, GLB/FBX assets and the asset guide.
+- `art/`: headless Blender generators for the props, scenery, crops and crop icons, their contract, previews, Unity FBX exports and the asset guide (`art/ASSET_GUIDE.md`).
+- `src/style.css`: interface design tokens and all HUD, panel, message and label styles.
 - `PARITY_REVIEW.md`: detailed coverage, validation and remaining evaluation limits.
 
 The earlier `ANALYSIS.md`, `REVIEW.md`, `EVALUATION.md` and `MULTIPLAYER_ASSESSMENT.md` record the initial evaluation and engine decision. Their old feature-gap lists are superseded by this README and the current parity review. Unity was assessed for browser multiplayer; this implementation keeps the existing web engine.

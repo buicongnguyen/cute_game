@@ -16,3 +16,4 @@ BUILD_RESULTS.txt
 TEST_RESULTS.txt
 TEST_RESULTS.md
 
+__pycache__/

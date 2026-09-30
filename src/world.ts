@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { refinedAssets, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
+import { refinedAssets, sceneryKit, cropKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { approach, blocked, clearSegment, findRoute, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
 import { attackRange } from './combat.ts';
 import { type SaveState, type PlanetId, PLANETS, cropProgress, giftAvailable, maxHp } from './model.ts';
@@ -24,7 +24,17 @@ export interface EnvironmentReward {id:string;count:number}
 type Particle = { mesh: T.Mesh; velocity: T.Vector3; life: number; max: number };
 const UP = new T.Vector3(0, 1, 0);
 const matCache = new Map<string, T.MeshStandardMaterial>();
-const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', sell: 'market', shop: 'outfitters', plot: 'garden', upgrade: 'crystal' };
+const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', sell: 'market', shop: 'outfitters', plot: 'garden', upgrade: 'crystal', chest: 'chest', craft: 'workshop', cook: 'kitchen', travel: 'rocket' };
+// Planet palettes for the shared scenery kit (material name → colour). Home uses the kit's own colours.
+const KIT_TINTS: Partial<Record<PlanetId, Record<string, string>>> = {
+  // "A" is the darker lower lobe, "B" the lighter crown on top.
+  candy: { 'Leaf A': '#ff7fb8', 'Leaf B': '#ffb8d9', 'Blossom A': '#a97cff', 'Blossom B': '#dcc8ff', 'Pine A': '#ff8a5c', 'Pine B': '#ffc49a', Bark: '#b06a52', Grass: '#ff9ccf', Rock: '#d7a3e8' },
+  ice: { 'Leaf A': '#8fcbe6', 'Leaf B': '#dcf5ff', 'Blossom A': '#b5e2fa', 'Blossom B': '#ecfaff', 'Pine A': '#7fbcd8', 'Pine B': '#d0f0fb', Bark: '#8b9db5', Grass: '#c6ecf7', Rock: '#b9d6e6' },
+  lava: { 'Leaf A': '#7e3f36', 'Leaf B': '#b0604a', 'Blossom A': '#ff6a2a', 'Blossom B': '#ffb36b', 'Pine A': '#6a3a32', 'Pine B': '#9a5a48', Bark: '#4a3434', Grass: '#8c5a48', Rock: '#5e4553' },
+  toy: { 'Leaf A': '#34b84a', 'Leaf B': '#8fe06a', 'Pine A': '#2f8fe0', 'Pine B': '#7cc8ff' },
+  jungle: { 'Leaf A': '#1c8a3a', 'Leaf B': '#3cc04e', 'Pine A': '#18763a', 'Pine B': '#2fae52', Grass: '#3fbf4f' },
+  shadow: { 'Leaf A': '#554a96', 'Leaf B': '#8f7fd6', 'Blossom A': '#8f6ff0', 'Blossom B': '#d3c3ff', 'Pine A': '#4a4080', 'Pine B': '#7a6cc0', Bark: '#3e3656', Grass: '#73699b', Rock: '#6d6690' },
+};
 function material(color: string, flat = true) {
   const key = color + flat;
   if (!matCache.has(key)) matCache.set(key, new T.MeshStandardMaterial({ color, flatShading: flat, roughness: 0.9 }));
@@ -64,7 +74,8 @@ export class World {
     this.renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap; this.renderer.outputColorSpace = T.SRGBColorSpace;
-    this.renderer.toneMapping = T.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.02;
+    // Neutral tone mapping keeps the toy palette saturated; ACES washed the golds and pinks out.
+    this.renderer.toneMapping = T.NeutralToneMapping; this.renderer.toneMappingExposure = 1.0;
     this.scene.add(new T.HemisphereLight('#fff5df', '#7fa174', 1.75));
     this.sun = new T.DirectionalLight('#fff0d0', 2.25); this.sun.position.set(-15, 35, 18); this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(1024, 1024); Object.assign(this.sun.shadow.camera, { left: -36, right: 36, top: 36, bottom: -36, near: 1, far: 90 });
@@ -76,14 +87,22 @@ export class World {
   }
   resize() {
     const w = innerWidth, h = innerHeight, aspect = w / h;
-    const span = aspect < 0.8 ? this.zoom * 0.82 : this.zoom;
+    // Portrait phones see about 12 m across, so the cottage does not fill the screen.
+    const span = aspect < 0.8 ? this.zoom * Math.max(0.82, Math.min(1.35, 0.6 / aspect)) : this.zoom;
     this.camera.left = -span * aspect / 2; this.camera.right = span * aspect / 2; this.camera.top = span / 2; this.camera.bottom = -span / 2;
     this.camera.near = 0.1; this.camera.far = 180; this.camera.updateProjectionMatrix(); this.renderer.setSize(w, h);
   }
   setQuality(low: boolean) { this.renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = !low; this.resize(); }
-  disposeTree(g: T.Object3D) { g.traverse(o => { if (o instanceof T.Mesh) { o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (![...matCache.values()].includes(material as T.MeshStandardMaterial)) material.dispose(); } }); }
+  disposeTree(g: T.Object3D) { g.traverse(o => { if (o instanceof T.Mesh) { if (!isShared(o.geometry)) o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (!isShared(material) && ![...matCache.values()].includes(material as T.MeshStandardMaterial)) material.dispose(); } }); }
   applyRefinedAssets(assets: RefinedAssetLibrary = refinedAssets) {
     for (const entity of this.entities) this.applyRefinedAsset(entity, assets);
+    // Props such as the well are scenery with their own model, kept out of batching.
+    for (const prop of this.root.children.filter(o => o.userData.prop && o.userData.refinedAsset !== o.userData.prop)) {
+      const visual = assets.clone(prop.userData.prop as RefinedAsset);
+      if (!visual) continue;
+      for (const child of [...prop.children]) { prop.remove(child); this.disposeTree(child); }
+      prop.add(visual); prop.userData.refinedAsset = prop.userData.prop;
+    }
   }
   private applyRefinedAsset(entity: Entity, assets: RefinedAssetLibrary = refinedAssets) {
     const asset = ENTITY_ASSETS[entity.kind];
@@ -109,19 +128,26 @@ export class World {
     // Hundreds of little flowers share a handful of materials. Batch their geometry
     // so software WebGL and modest mobile GPUs do not need hundreds of draw calls.
     this.root.updateMatrixWorld(true);
+    // Batches are split into 48 m chunks so the camera can skip scenery that is off screen.
     const batches=new Map<string,{ material:T.Material; geometries:T.BufferGeometry[]; shadow:boolean }>();
-    const scenery=this.root.children.filter(o=>!o.userData.entity&&!o.userData.hazard&&!o.userData.environment);
-    for(const child of scenery)child.traverse(o=>{if(!(o instanceof T.Mesh)||Array.isArray(o.material))return;const key=o.material.uuid+o.castShadow;let batch=batches.get(key);if(!batch){batch={material:o.material,geometries:[],shadow:o.castShadow};batches.set(key,batch);}const geo=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();geo.applyMatrix4(o.matrixWorld);batch.geometries.push(geo);});
+    const scenery=this.root.children.filter(o=>!o.userData.entity&&!o.userData.hazard&&!o.userData.environment&&!o.userData.prop);
+    for(const child of scenery){const chunk=Math.floor(child.position.x/48)+':'+Math.floor(child.position.z/48);child.traverse(o=>{if(!(o instanceof T.Mesh)||Array.isArray(o.material))return;const key=o.material.uuid+o.castShadow+chunk;let batch=batches.get(key);if(!batch){batch={material:o.material,geometries:[],shadow:o.castShadow};batches.set(key,batch);}const geo=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();geo.applyMatrix4(o.matrixWorld);batch.geometries.push(geo);});}
     for(const child of scenery){this.root.remove(child);this.disposeTree(child);}
     for(const batch of batches.values()){const geometry=mergeGeometries(batch.geometries,false);if(geometry){const combined=new T.Mesh(geometry,batch.material);combined.castShadow=batch.shadow;combined.receiveShadow=true;this.root.add(combined);}batch.geometries.forEach(g=>g.dispose());}
   }
+  /** A shared-kit model tinted for this planet, or null while the kit is unavailable. */
+  kit(name: string) { return sceneryKit.ready ? sceneryKit.instance(name, KIT_TINTS[this.planet]) : null; }
   tree(x: number, z: number, scale = 1, pink = false, random = Math.random) {
+    const model = this.kit(pink ? 'tree_blossom' : this.planet === 'ice' || this.planet === 'home' && zoneAt({x,z}) === 'forest' && Math.abs(x * 7 + z * 3) % 5 < 2 ? 'tree_pine' : 'tree_round');
+    if (model) { model.position.set(x, 0, z); model.scale.setScalar(scale); model.rotation.y = random() * 6; this.root.add(model); this.obstacle(x, z, scale * 0.55); return; }
     const trunk = cyl('#95694b', 0.18, 0.3, 2.2, 0, 1.1);
     const colors = this.planet === 'home' ? pink ? ['#ec9eb7', '#f3b3c7', '#df8eaa'] : ['#78ad6a', '#8bbc78', '#6b9c64'] : this.planet === 'candy' ? ['#ef9fc1', '#f5ca98', '#c8a5dd'] : this.planet === 'ice' ? ['#d5edf2', '#add4dc', '#eff8ef'] : this.planet === 'shadow' ? ['#8b80b1','#a398c5','#706694'] : this.planet === 'lava' ? ['#9d736e','#b08972','#866168'] : ['#5b9a74','#75ac7b','#498360'];
     const tree = group(trunk, ball(colors[0], 1.5, 0, 3), ball(colors[1], 1.1, -0.7, 2.75, 0.5), ball(colors[2], 1.15, 0.65, 2.75, -0.2));
     tree.position.set(x, 0, z); tree.scale.setScalar(scale); tree.rotation.y = random() * 6; this.root.add(tree); this.obstacle(x, z, scale * 0.55);
   }
   flower(x: number, z: number, color: string, scale = 1) {
+    const cluster = this.kit('flowers');
+    if (cluster) { cluster.position.set(x, 0, z); cluster.scale.setScalar(scale); cluster.rotation.y = (x * 12.9898 + z * 78.233) % 6.28; this.root.add(cluster); return; }
     const flower = group(cyl('#729959', 0.025, 0.025, 0.32, 0, 0.16), ball('#eed383', 0.065, 0, 0.35));
     for (let i=0;i<5;i++) flower.add(ball(color, .09, Math.cos(i*1.256)*.095, .35, Math.sin(i*1.256)*.095,0));
     flower.position.set(x,0,z); flower.scale.setScalar(scale); this.root.add(flower);
@@ -184,15 +210,17 @@ export class World {
         const nest=this.environment.layout.nest;vertices.setY(i,this.environment.layout.pools.some(p=>Math.hypot(x-p.x,z-p.z)<p.r+1)?-1.12:Math.hypot(x-nest.x,z-nest.z)<nest.r+1?-.25:0);
       }groundGeometry.computeVertexNormals();
     }
-    const ground=mesh(groundGeometry,planet==='home'?'#8ee06a':theme.color,0,planet==='cloud'?-30:planet==='ocean'?-1.15:0);ground.castShadow=false;this.root.add(ground);
+    const ground=mesh(groundGeometry,planet==='home'?'#86d25a':theme.color,0,planet==='cloud'?-30:planet==='ocean'?-1.15:0);ground.castShadow=false;this.root.add(ground);
     if(planet==='home'){
-      for(const [zone,color,start] of [['canyon','#edb277',-Math.PI/4],['meadow','#9fdb6c',Math.PI/4],['forest','#5fbf59',3*Math.PI/4],['swamp','#6faa7d',5*Math.PI/4]] as const){
+      for(const [zone,color,start] of [['canyon','#f0b273',-Math.PI/4],['meadow','#98d95e',Math.PI/4],['forest','#56b54c',3*Math.PI/4],['swamp','#68a878',5*Math.PI/4]] as const){
         const shape=new T.Shape();shape.moveTo(0,0);for(let i=0;i<=30;i++){const angle=start+i*Math.PI/60;shape.lineTo(Math.cos(angle)*150,-Math.sin(angle)*150);}shape.closePath();
         const sector=mesh(new T.ShapeGeometry(shape),color,0,.006);sector.rotation.x=-Math.PI/2;sector.castShadow=false;this.root.add(sector);
       }
-      const lawn=mesh(new T.CircleGeometry(18,72),'#75e444',0,.014);lawn.rotation.x=-Math.PI/2;lawn.castShadow=false;this.root.add(lawn);
-      const path=mesh(new T.PlaneGeometry(2.7,36),'#ddc68f',0,.026);path.rotation.x=-Math.PI/2;this.root.add(path);
-      const crossing=mesh(new T.PlaneGeometry(36,2.7),'#ddc68f',0,.024,0);crossing.rotation.x=-Math.PI/2;this.root.add(crossing);
+      const lawn=mesh(new T.CircleGeometry(18,72),'#7ad24c',0,.014);lawn.rotation.x=-Math.PI/2;lawn.castShadow=false;this.root.add(lawn);
+      if(!sceneryKit.ready){
+        const path=mesh(new T.PlaneGeometry(2.7,36),'#ddc68f',0,.026);path.rotation.x=-Math.PI/2;this.root.add(path);
+        const crossing=mesh(new T.PlaneGeometry(36,2.7),'#ddc68f',0,.024,0);crossing.rotation.x=-Math.PI/2;this.root.add(crossing);
+      }
       this.addEntity('home','Your cottage','🏡',this.house(),0,-8,3.2);this.obstacle(0,-8,2.7);
       this.addEntity('sell','Harvest market','🧺',this.stall('#f291a9','sell'),9,2.5,2);this.obstacle(9,2.5,1.7);
       const shop=this.stall('#68bcc7','shop');shop.rotation.y=-2.4;this.addEntity('shop','Equipment shop','🛍️',shop,9.6,10.6,2);this.obstacle(9.6,10.6,1.7);
@@ -204,14 +232,23 @@ export class World {
       this.addEntity('craft','Workshop','🔨',forge,5.5,6.5,1.3);this.obstacle(5.5,6.5,1.1);
       const cook=group(cyl('#71646b',1.2,.8,1.1,0,.55),cyl('#fc9b51',.7,.7,.12,0,1.12),box('#49454e',1.8,.12,.15,0,1.3));this.addEntity('cook','Volcano kitchen','🔥',cook,1,10.5,1.4);this.obstacle(1,10.5,1);
       for(let i=0;i<this.state.plots.length;i++)this.makePlot(i);
-      const well=group(cyl('#a0a8a2',1,1,.8,0,.4,0,10),cyl('#63c5ed',.72,.72,.05,0,.83),box('#957651',.12,2.2,.12,-.85,1.5),box('#957651',.12,2.2,.12,.85,1.5),box('#cc9f78',2.4,.15,1.8,0,2.6));well.position.set(-7,0,-11);this.root.add(well);this.obstacle(-7,-11,1.2);
+      const well=group(cyl('#a0a8a2',1,1,.8,0,.4,0,10),cyl('#63c5ed',.72,.72,.05,0,.83),box('#957651',.12,2.2,.12,-.85,1.5),box('#957651',.12,2.2,.12,.85,1.5),box('#cc9f78',2.4,.15,1.8,0,2.6));well.position.set(-7,0,-11);well.userData.prop='well';this.root.add(well);this.obstacle(-7,-11,1.2);
       for(let i=0;i<54;i++){
         const a=i/54*Math.PI*2;if(Math.abs(Math.sin(a*2))<.32)continue;
-        const g=group(box('#b18459',.16,1,.16,-1,.5),box('#b18459',.16,1,.16,1,.5),box('#edbe77',2.1,.12,.1,0,.4),box('#edbe77',2.1,.12,.1,0,.8));g.position.set(Math.cos(a)*18,0,Math.sin(a)*18);g.rotation.y=-a-Math.PI/2;this.root.add(g);
+        const g=this.kit('fence')??group(box('#b18459',.16,1,.16,-1,.5),box('#b18459',.16,1,.16,1,.5),box('#edbe77',2.1,.12,.1,0,.4),box('#edbe77',2.1,.12,.1,0,.8));g.position.set(Math.cos(a)*18,0,Math.sin(a)*18);g.rotation.y=-a-Math.PI/2;this.root.add(g);
         for(const d of [-.6,0,.6])this.obstacle(Math.cos(a)*18-Math.sin(a)*d,Math.sin(a)*18+Math.cos(a)*d,.42);
       }
-      for(let i=0;i<4;i++){const a=i*Math.PI/2,g=group(cyl('#b18c59',.14,.14,3.1,-1.7,1.55),cyl('#b18c59',.14,.14,3.1,1.7,1.55),box('#edc57a',3.75,.2,.2,0,3));g.position.set(Math.cos(a)*18,0,Math.sin(a)*18);g.rotation.y=-a-Math.PI/2;this.root.add(g);}
+      for(let i=0;i<4;i++){const a=i*Math.PI/2,g=this.kit('gate')??group(cyl('#b18c59',.14,.14,3.1,-1.7,1.55),cyl('#b18c59',.14,.14,3.1,1.7,1.55),box('#edc57a',3.75,.2,.2,0,3));g.position.set(Math.cos(a)*18,0,Math.sin(a)*18);g.rotation.y=-a-Math.PI/2;this.root.add(g);}
       for(const [x,z] of [[-13,-8],[-14,7],[3,-13],[10,-11],[14,5],[-2,15]])this.tree(x,z,.75,true,rng);
+      // Stepping-stone trails lead from the cottage to the four gates.
+      if(sceneryKit.ready)for(const [axis,from,to] of [['z',-3.6,17.4],['z',-12.6,-17.4],['x',2.2,17.4],['x',-2.2,-17.4]] as const){
+        const step=from<to?1.2:-1.2;for(let t=from,i=0;step>0?t<=to:t>=to;t+=step,i++){const side=(i%2?.22:-.22),x=axis==='z'?side:t,z=axis==='z'?t:side;
+          if(this.entities.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+.35))continue;
+          const stone=this.kit('stone_step');if(stone){stone.position.set(x,0,z);stone.rotation.y=i*1.3+t;stone.scale.setScalar(.95+(i%3)*.1);this.root.add(stone);}}}
+      // Walk-through dressing inside the fence. It adds no obstacles, so every player's map stays identical.
+      if(sceneryKit.ready)for(let i=0;i<16;i++){const a=(i+.5)/16*Math.PI*2,x=Math.cos(a)*16.4,z=Math.sin(a)*16.4;
+        if(this.entities.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+1.4)||this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+.9))continue;
+        const bush=this.kit(i%5===2?'mushroom':'bush');if(bush){bush.position.set(x,0,z);bush.rotation.y=a;bush.scale.setScalar(i%5===2?1.3:.85+(i%3)*.12);this.root.add(bush);}}
       this.makePond(-7.5,11.2,3.3);for(const [x,z,r] of [[10,52,9],[40,105,11],[-70,35,8],[-105,-30,7]])this.makePond(x,z,r);
       this.position.set(0,0,-4.8);
     }else{
@@ -253,7 +290,10 @@ export class World {
       if(this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+2.4)||this.enemies.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+2.1))continue;
       if((planet==='ocean'||planet==='cloud')||planet==='lava'&&terrainHeight(this.environment.layout,{x,z})<0)continue;
       if(planet==='home'&&zoneAt({x,z})==='canyon'||planet==='lava'){
-        const rock=ball(planet==='lava'?'#685363':'#c17a62',.8+rng(),x,.6,z,0);rock.scale.y=.8;this.root.add(rock);this.obstacle(x,z,.65);
+        const size=.8+rng(),boulder=this.kit('rock');
+        if(boulder){boulder.position.set(x,0,z);boulder.scale.set(size/.8,size/.8*.8,size/.8);boulder.rotation.y=x+z;this.root.add(boulder);}
+        else{const rock=ball(planet==='lava'?'#685363':'#c17a62',size,x,.6,z,0);rock.scale.y=.8;this.root.add(rock);}
+        this.obstacle(x,z,.65);
       }else this.tree(x,z,.7+rng()*.8,rng()>.84,rng);
     }
     for(let i=0;i<650;i++){
@@ -261,20 +301,22 @@ export class World {
       if(this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+1)||Math.hypot(x,z)<18&&(Math.abs(x)<2||this.entities.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+1)))continue;
       if(!environmentWalkable(this.environment.layout,{x,z})||inWater(this.environment.layout,{x,z})||terrainHeight(this.environment.layout,{x,z})<0)continue;
       if(i%4===0)this.flower(x,z,['#ffd25a','#e986c8','#fff8cd','#70cdec'][i%4],.9+rng()*.5);
-      else {const tuft=group(cyl(planet==='shadow'?'#73699b':'#79b85c',0,.13,.5,0,.25,0,3));tuft.position.set(x,0,z);this.root.add(tuft);}
+      else {const tuft=this.kit('tuft')??group(cyl(planet==='shadow'?'#73699b':'#79b85c',0,.13,.5,0,.25,0,3));tuft.position.set(x,0,z);tuft.rotation.y=i;this.root.add(tuft);}
     }
     // A visible rim agrees with the simulation bounds while leaving all map sectors open.
-    for(let i=0;i<160;i++){const a=i/160*Math.PI*2,r=151,rock=ball(planet==='home'?'#789b69':'#8c8b9e',2.5,Math.cos(a)*r,1.3,Math.sin(a)*r,0);this.root.add(rock);}
+    for(let i=0;i<160;i++){const a=i/160*Math.PI*2,r=151,boulder=this.kit(planet==='home'&&i%2?'tree_round':'rock');
+      if(boulder){boulder.position.set(Math.cos(a)*r,0,Math.sin(a)*r);boulder.scale.setScalar(planet==='home'&&i%2?1.9:3.1);boulder.rotation.y=i;this.root.add(boulder);}
+      else{const rock=ball(planet==='home'?'#789b69':'#8c8b9e',2.5,Math.cos(a)*r,1.3,Math.sin(a)*r,0);this.root.add(rock);}}
     this.batchScenery();this.root.add(this.player,this.companion);this.cameraTarget.copy(this.position);this.syncCrops();this.syncDropped();this.applyRefinedAssets();this.syncDecorations();this.refreshEnvironmentNodes();
     if(this.remoteRoot&&!this.remoteRoot.parent)this.scene.add(this.remoteRoot);
     for(const remote of this.remotePlayers?.values()??[])remote.mesh.visible=!remote.pose.planet||remote.pose.planet===planet;
   }
 
   makePond(x:number,z:number,radius=5.6,waterId?:string) {
-    const pond=new T.Group();const edge=cyl('#c5c4a2',5.5,5.7,.11,0,.025,0,40);edge.scale.z=.73;
-    const water=cyl('#78bcc2',5.2,5.2,.09,0,.09,0,40);water.scale.z=.72;pond.add(edge,water);
-    for(let i=0;i<6;i++){const pad=cyl('#91b582',.32,.32,.04,Math.sin(i*1.4)*3,.16,Math.cos(i*1.4)*2,12);pond.add(pad);}
-    pond.add(box('#b9986d',2.5,.13,1.6,-4.8,.27,0));for(let i=0;i<6;i++)pond.add(box('#9e7f5c',.04,.02,1.6,-5.8+i*.4,.35,0));
+    const pond=new T.Group();const edge=cyl('#e9d7a2',5.5,5.7,.11,0,.025,0,40);edge.scale.z=.73;
+    const water=cyl('#43c3ef',5.2,5.2,.09,0,.09,0,40);water.scale.z=.72;pond.add(edge,water);
+    for(let i=0;i<6;i++){const pad=cyl('#4fbf3a',.32,.32,.04,Math.sin(i*1.4)*3,.16,Math.cos(i*1.4)*2,12);pond.add(pad);}
+    pond.add(box('#d68a45',2.5,.13,1.6,-4.8,.27,0));for(let i=0;i<6;i++)pond.add(box('#9a5a2c',.04,.02,1.6,-5.8+i*.4,.35,0));
     pond.scale.setScalar(radius/5.6);const entity=this.addEntity('fish',this.planet==='home'?'Fishing pond':'Planetary fishing pool','🎣',pond,x,z,radius);entity.waterId=waterId??(this.planet==='home'?Math.hypot(x,z)<18?'home':zoneAt({x,z})==='swamp'?'swamp':'lake':this.planet);this.obstacle(x,z,radius*.83);
   }
   chibi(color: string) {
@@ -470,9 +512,14 @@ export class World {
     if(this.planet!=='home')return;
     if(this.plotMeshes.length<this.state.plots.length)for(let i=this.plotMeshes.length;i<this.state.plots.length;i++)this.makePlot(i);
     this.state.plots.forEach((p,i)=>{
-      const progress=cropProgress(p),stage=p.crop?progress>=1?3:progress>.35?2:1:0,signature=p.crop+':'+stage;
+      const progress=cropProgress(p),stage=p.crop?progress>=1?3:progress>.35?2:1:0,modelled=!!p.crop&&cropKit.has('crop_'+p.crop),signature=p.crop+':'+stage+(modelled?':kit':'');
       if(this.cropSignatures[i]===signature)return;this.cropSignatures[i]=signature;const g=this.plotMeshes[i];this.disposeTree(g);g.clear();
       if(!p.crop)return;
+      // Blender crops: a sprout, then a young plant, then the full crop with a sparkle.
+      if(modelled){for(let j=0;j<4;j++){const x=(j%2)*.8-.4,z=Math.floor(j/2)*.8-.4,plant=cropKit.instance(stage===1?'crop_sprout':'crop_'+p.crop);if(!plant)continue;
+        // Crops face the camera; a small turn keeps rows from looking stamped.
+        plant.position.set(x,.22,z);plant.rotation.y=(((j*37+i*17)%60)-30)*Math.PI/180;plant.scale.setScalar(stage===1?.9:stage===2?.58:1);g.add(plant);
+        if(stage===3){const star=mesh(new T.OctahedronGeometry(.07),'#fff0a8',x,1.05+Math.sin(j)*.12,z);g.add(star);}}return;}
       for(let j=0;j<4;j++){const x=(j%2)*.8-.4,z=Math.floor(j/2)*.8-.4;const crop=group();
         if(stage>=2)crop.add(ball(p.crop==='carrot'?'#e9a068':p.crop==='berry'?'#da7f88':'#e5c4d4',stage===3?.26:.15,0,.26,0,1));
         for(let k=0;k<3;k++){const leaf=ball(k%2?'#8cb569':'#6c9953',stage===1?.11:.14,(k-1)*.1,.3+(stage*.05),0);leaf.scale.set(.8,2,.6);leaf.rotation.z=(k-1)*-.45;crop.add(leaf);}crop.position.set(x,.22,z);g.add(crop);

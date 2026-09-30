@@ -1,41 +1,61 @@
-# Refined village assets
+# Zoo Garden art kit
 
-Created with Blender 4.5.14 LTS for Zoo Garden. All geometry and materials are original; no reference-game assets were extracted.
+Built with Blender 4.5 LTS by two headless generators. All geometry and materials are original; no reference-game assets were extracted. The look is a glossy toy style: chunky bevelled shapes, saturated warm colours and flat colour materials with no image textures.
 
-## Included files
+## Files
 
-- `blender/zoo-garden-village.blend`: editable objects, named materials, five asset collections, and a separate presentation studio.
-- `blender/build_assets.py` and `blender/props.py`: reproducible asset authoring and export scripts.
-- `../public/assets/models/*.glb`: five models loaded by the browser game.
-- `exports/unity-fbx/*.fbx`: matching exports for a possible Unity port. Unity import, materials, and runtime behavior have not been tested.
-- `previews/`: Blender renders of the cottage and the complete collection.
-- `asset-manifest.json`: geometry counts, dimensions, and export sizes.
+- `blender/kit/style.py`: the shared palette, materials, bevelled primitives, glTF export and the preview camera, which matches the game's 42° orthographic view.
+- `blender/kit/build_props.py`: the ten village props.
+- `blender/kit/build_nature.py`: the scenery kit, the 19 crops and their interface icons.
+- `blender/kit/CONTRACT.md`: footprints, heights, triangle budgets, node names and material names that the game relies on. Both generators fail rather than export a model that breaks it.
+- `../public/assets/models/*.glb`: the models the game loads.
+- `../public/assets/icons/crops/*.webp`: 160 px crop icons used in the seed picker, backpack, market and garden labels.
+- `exports/unity-fbx/*.fbx`: prop exports for a possible Unity port. Unity import has not been tested.
+- `previews/kit/`: Blender renders of every prop, the scenery, the crops and an icon contact sheet.
+- `asset-manifest.json`: triangles, bounds, materials and file sizes from the last build.
 
-| Model | Refinement | Triangles |
-| --- | --- | ---: |
-| Cottage | Layered thatch, timber frame, stone base, arched door, windows, flower boxes, lantern, porch | 12,632 |
-| Market stall | Curved striped canopy, scalloped hem, wooden counter, produce baskets | 9,560 |
-| Equipment stall | Teal canopy, timber counter, small gear displays | 7,038 |
-| Garden bed | Beveled wood, corner details, clear soil area for live crops | 1,196 |
-| Wishing crystal | Faceted crystal cluster and tiered stone base | 1,172 |
+## What the game uses
 
-The five GLBs total about 2.04 MB uncompressed. The garden model is reused for each plot. Materials use colors rather than image textures. Exported geometry is joined for efficient loading; the Blender source retains editable parts. Fine cottage and canopy details still need evaluation on physical phones.
+| File | Contents | Triangles | Size |
+| --- | --- | ---: | ---: |
+| `cottage.glb` | Round cottage with a three-tier golden thatch roof, red door, flower boxes and porch | 7,784 | 199 KB |
+| `market-stall.glb` | Red and white awning, produce crates and an energy sign | 4,260 | 116 KB |
+| `equipment-stall.glb` | Sky-blue awning, sword and shield rack, hats | 4,452 | 120 KB |
+| `garden-bed.glb` | Raised wooden bed with two soil ridges; copied for each of up to 33 beds | 784 | 23 KB |
+| `wishing-crystal.glb` | Glowing crystal cluster in a gold-trimmed fountain | 964 | 47 KB |
+| `storage-chest.glb` | Treasure chest with gold bands | 1,136 | 36 KB |
+| `workshop.glb` | Workbench, pegboard tools, anvil on a stump, striped awning | 3,364 | 100 KB |
+| `kitchen.glb` | Cauldron of soup over glowing embers | 2,440 | 60 KB |
+| `well.glb` | Stone well with a red gable roof and bucket | 2,824 | 88 KB |
+| `rocket.glb` | Rocket on a hazard-striped launch pad, used on every world | 3,772 | 102 KB |
+| `scenery.glb` | 11 pieces: blossom, round and pine trees, bush, flowers, grass tuft, rock, stepping stone, fence, gate, mushroom | 36–598 each | 82 KB |
+| `crops.glb` | A sprout plus one mature model for each of the 19 crops | 97–370 each | 197 KB |
+
+The models and icons total about 1.3 MB, down from 2.04 MB for the previous five models.
 
 ## Rebuild
 
-From the project root, with Blender on PATH:
+From the project root, with Blender 4.5 on PATH:
 
 ```powershell
-blender --background --factory-startup --python art/blender/build_assets.py -- --output art/generated --render
-Copy-Item art/generated/models/*.glb public/assets/models/
+blender -b --factory-startup --python art/blender/kit/build_props.py -- --install --render --fbx
+blender -b --factory-startup --python art/blender/kit/build_nature.py -- --install --render
 ```
 
-Omit `--render` for a faster model-only export. `art/generated/source` contains the regenerated Blender scene; `unity-fbx` contains the regenerated FBX models. Regeneration recreates the scripted design and will not incorporate manual changes to the existing `.blend` file. To keep manual refinements, edit and export from that file instead.
+- `--install` copies the results into `public/`. Without it, output stays in `art/generated/kit/`, which is not tracked.
+- `--render` refreshes the previews. `--fbx` refreshes the Unity exports.
+- `--only a,b` rebuilds some props. For nature, `--only` takes `scenery`, `crops` or `icons`.
 
-Blender uses Z up and -Y as the front. GLB exports use Y up and +Z as the front, in meters, with origin at ground level. Keep these conventions and the current model footprints when exporting replacements, since the game's interaction points and obstacles are unchanged.
+Each build takes seconds and is deterministic, so an unchanged script produces byte-identical files.
 
-## Runtime behavior
+Blender uses Z up with the front facing -Y. The GLBs are Y up with the front facing +Z, in metres, with the origin at the ground centre. Crops face the camera; the game turns them at most 30° either way.
 
-`src/assets.ts` loads and caches each model once. Each scene instance owns its mesh geometry and materials so world disposal cannot damage the cache. The original procedural models remain as a fallback if an optional GLB is unavailable. Asset replacement preserves the entity used for clicks, navigation, and interactions. Garden crop groups remain live when the wooden bed is replaced.
+## Runtime behaviour
+
+- **Props:** `src/assets.ts` loads the ten props once and gives each placed copy its own geometry and materials, so rebuilding a world cannot damage the cache. Each placeholder shape is replaced in place when its model arrives, keeping the entity used for clicks, navigation and interaction.
+- **Scenery:** the world waits up to four seconds for the scenery kit before its first build. Trees, flowers, fences and stones share geometry and materials. The world merges them by material into 48 m chunks, so hundreds of trees cost a few draw calls and off-screen chunks are skipped. Other worlds reuse the same pieces with tinted `Leaf`, `Blossom`, `Pine`, `Bark`, `Grass` and `Rock` materials.
+- **Dressing:** stepping stones, bushes and mushrooms in the village are decoration only. They add no obstacles, so every player's map and pathfinding stay identical online.
+- **Crops:** a bed shows the sprout while young, a smaller copy of the real crop while growing, and the full crop with a sparkle when ready.
+- **Fallbacks:** if any file fails to load, the matching procedural shapes and emoji icons are used instead.
 
 No saved-game format was changed.

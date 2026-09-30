@@ -5,8 +5,8 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#b4dc90",
-  "theme_color": "#76ad63",
+  "background_color": "#8fd66c",
+  "theme_color": "#4cc93a",
   "description": "Grow a garden, explore nine worlds, and play with friends.",
   "icons": [
     {"src":"./icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},

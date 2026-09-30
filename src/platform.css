@@ -1,2 +1,21 @@
-.platform-tools{position:fixed;right:20px;bottom:20px;z-index:24;display:flex;gap:7px}.platform-tools button{border:1px solid #fff9;border-radius:12px;background:#fffbeaeb;color:#315b47;box-shadow:0 3px 0 #30483720;padding:7px 10px;font:800 12px 'Nunito Variable',sans-serif;cursor:pointer}.platform-tools button:first-child{font-size:21px;line-height:1}.platform-tools button[hidden]{display:none}@media(max-width:620px){.platform-tools{right:10px;bottom:calc(135px + env(safe-area-inset-bottom));gap:5px}.platform-tools button{font-size:10px;padding:6px}.platform-tools button:first-child{font-size:18px}}
-#platform-slot .platform-tools{position:static;display:flex}#platform-slot .platform-tools button{width:44px;height:44px;border-radius:50%;padding:0;font-size:21px}#platform-slot .platform-tools button:not(:first-child){font-size:0}#platform-slot .platform-tools button:not(:first-child)::before{content:'📲';font-size:20px}@media(max-width:620px){#platform-slot .platform-tools button{width:34px;height:34px;font-size:18px}}
+/* Fullscreen and install controls. Inside the HUD menu they render as round
+   buttons (see style.css); this is the fallback dock when no menu slot exists. */
+.platform-tools { position: fixed; right: 20px; bottom: 20px; z-index: 24; display: flex; gap: 7px; }
+.platform-tools button {
+  padding: 7px 12px;
+  border: 3px solid #fff;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #8fe06a, #4cc93a);
+  color: #fff;
+  box-shadow: 0 4px 0 rgba(44, 58, 38, .18);
+  font: 900 13px 'Nunito Variable', sans-serif;
+  cursor: pointer;
+}
+.platform-tools button[hidden] { display: none; }
+#platform-slot .platform-tools { position: static; display: flex; gap: inherit; }
+#platform-slot .platform-tools button:not(:first-child) { font-size: 0; }
+#platform-slot .platform-tools button:not(:first-child)::before { content: '📲'; font-size: 19px; }
+@media (max-width: 620px) {
+  .platform-tools { right: 10px; bottom: calc(135px + env(safe-area-inset-bottom)); gap: 5px; }
+  #platform-slot .platform-tools button:not(:first-child)::before { font-size: 16px; }
+}

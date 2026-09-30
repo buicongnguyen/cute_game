@@ -1,246 +1,1243 @@
 {
-  "generator": "Blender 4.5.14 LTS",
-  "coordinate_system": "GLB: Y-up, +Z front, meters",
-  "assets": {
-    "cottage": {
-      "triangles": 12632,
-      "materials": 13,
-      "source_objects": 207,
-      "bounds_blender": [
-        [
-          -3.6549999713897705,
-          -4.059999942779541,
-          0.009999990463256836
+  "props": {
+    "generator": "art/blender/kit/build_props.py",
+    "units": "metres",
+    "coordinates": "Blender: Z up, front faces -Y, origin at ground centre",
+    "total_bytes": 910936,
+    "assets": {
+      "cottage": {
+        "triangles": 7784,
+        "budget": 9000,
+        "bounds": {
+          "min": [
+            -3.6494,
+            -3.6494,
+            0
+          ],
+          "max": [
+            3.6494,
+            3.6494,
+            6.2695
+          ]
+        },
+        "max_radius": 3.6494,
+        "materials": [
+          "Terracotta",
+          "Stone",
+          "Stone light",
+          "Plaster",
+          "Wood dark",
+          "Wood",
+          "Gold",
+          "Glass",
+          "Leaf",
+          "Flower pink",
+          "Wood light",
+          "Straw dark",
+          "Straw light",
+          "Straw"
         ],
-        [
-          -3.6549999713897705,
-          -4.059999942779541,
-          6.019999980926514
+        "emissive_materials": [],
+        "notes": "Door (with brass knob and round window) faces -Y. Walls r 2.32, plinth r 2.6, roof r 3.65; only the porch/step leaves r 2.7, toward -Y to y -3.39.",
+        "bytes": 203804,
+        "file": "cottage.glb"
+      },
+      "market-stall": {
+        "triangles": 4260,
+        "budget": 5000,
+        "bounds": {
+          "min": [
+            -1.5675,
+            -0.9564,
+            0
+          ],
+          "max": [
+            1.5868,
+            0.8655,
+            2.8003
+          ]
+        },
+        "max_radius": 1.8055,
+        "materials": [
+          "Red fruit",
+          "Wood dark",
+          "Wood",
+          "Wood light",
+          "Awning red",
+          "Awning white",
+          "Navy",
+          "Sun",
+          "Pumpkin",
+          "Leaf",
+          "Cabbage"
         ],
-        [
-          -3.6549999713897705,
-          3.6549999713897705,
-          6.019999980926514
+        "emissive_materials": [],
+        "notes": "Counter front and the navy energy badge (yellow bolt, tilted 40 deg back to face the camera) face -Y.",
+        "bytes": 118368,
+        "file": "market-stall.glb"
+      },
+      "equipment-stall": {
+        "triangles": 4452,
+        "budget": 5000,
+        "bounds": {
+          "min": [
+            -1.5956,
+            -0.876,
+            0
+          ],
+          "max": [
+            1.58,
+            0.7477,
+            2.75
+          ]
+        },
+        "max_radius": 1.783,
+        "materials": [
+          "Wood",
+          "Wood dark",
+          "Wood light",
+          "Awning teal",
+          "Awning white",
+          "Gold",
+          "Violet",
+          "Sun",
+          "Steel",
+          "Red"
         ],
-        [
-          -3.6549999713897705,
-          3.6549999713897705,
-          0.009999990463256836
+        "emissive_materials": [],
+        "notes": "Counter (hat, helmet, clothes) under the teal canopy on the left; sword-and-shield board and sword barrel on the right; all face -Y.",
+        "bytes": 123292,
+        "file": "equipment-stall.glb"
+      },
+      "garden-bed": {
+        "triangles": 784,
+        "budget": 900,
+        "bounds": {
+          "min": [
+            -1.05,
+            -1.05,
+            0
+          ],
+          "max": [
+            1.05,
+            1.05,
+            0.335
+          ]
+        },
+        "max_radius": 1.4535,
+        "materials": [
+          "Wood light",
+          "Wood",
+          "Soil",
+          "Soil ridge"
         ],
-        [
-          3.6549999713897705,
-          -4.059999942779541,
-          0.009999990463256836
+        "emissive_materials": [],
+        "notes": "Soil top z 0.22, frame planks top z 0.30, corner posts z 0.335. Ridges run along X at y = +-0.4 and rise to z 0.28, so crops at (+-0.4, +-0.4) sit slightly into them.",
+        "bytes": 23268,
+        "file": "garden-bed.glb"
+      },
+      "wishing-crystal": {
+        "triangles": 964,
+        "budget": 2500,
+        "bounds": {
+          "min": [
+            -1.2288,
+            -1.2288,
+            0
+          ],
+          "max": [
+            1.2288,
+            1.2288,
+            3.14
+          ]
+        },
+        "max_radius": 1.33,
+        "materials": [
+          "Stone",
+          "Stone light",
+          "Gold",
+          "Water",
+          "Crystal",
+          "Crystal light",
+          "Crystal violet",
+          "Crystal pink"
         ],
-        [
-          3.6549999713897705,
-          -4.059999942779541,
-          6.019999980926514
+        "emissive_materials": [
+          "Crystal",
+          "Crystal light",
+          "Crystal violet",
+          "Crystal pink"
         ],
-        [
-          3.6549999713897705,
-          3.6549999713897705,
-          6.019999980926514
+        "notes": "Crystal materials are emissive (Crystal, Crystal light, Crystal violet, Crystal pink); water surface at z 0.47.",
+        "bytes": 48376,
+        "file": "wishing-crystal.glb"
+      },
+      "storage-chest": {
+        "triangles": 1136,
+        "budget": 1200,
+        "bounds": {
+          "min": [
+            -0.6242,
+            -0.41,
+            0
+          ],
+          "max": [
+            0.6242,
+            0.395,
+            0.9257
+          ]
+        },
+        "max_radius": 0.7101,
+        "materials": [
+          "Gold",
+          "Wood dark",
+          "Chest wood",
+          "Chest wood light",
+          "Charcoal"
         ],
-        [
-          3.6549999713897705,
-          3.6549999713897705,
-          0.009999990463256836
-        ]
-      ],
-      "glb_bytes": 783636
+        "emissive_materials": [],
+        "notes": "Lock plate faces -Y. Domed lid; no separate lid object (one joined mesh).",
+        "bytes": 36384,
+        "file": "storage-chest.glb"
+      },
+      "workshop": {
+        "triangles": 3364,
+        "budget": 4000,
+        "bounds": {
+          "min": [
+            -1.1876,
+            -0.8,
+            0
+          ],
+          "max": [
+            1.1876,
+            0.873,
+            2.5122
+          ]
+        },
+        "max_radius": 1.4558,
+        "materials": [
+          "Iron",
+          "Wood",
+          "Wood light",
+          "Wood dark",
+          "Steel",
+          "Red",
+          "Navy",
+          "Awning orange",
+          "Awning yellow",
+          "Ember"
+        ],
+        "emissive_materials": [
+          "Ember"
+        ],
+        "notes": "Open front toward -Y; the awning covers only y >= 0.34 so the bench stays visible. Hot ingot on the anvil uses the emissive Ember material.",
+        "bytes": 102484,
+        "file": "workshop.glb"
+      },
+      "kitchen": {
+        "triangles": 2440,
+        "budget": 2500,
+        "bounds": {
+          "min": [
+            -1.0143,
+            -0.973,
+            0.005
+          ],
+          "max": [
+            1.0018,
+            0.9833,
+            1.585
+          ]
+        },
+        "max_radius": 1.041,
+        "materials": [
+          "Flame",
+          "Stone",
+          "Stone dark",
+          "Wood dark",
+          "Ember",
+          "Iron",
+          "Charcoal",
+          "Soup",
+          "Wood",
+          "White"
+        ],
+        "emissive_materials": [
+          "Flame",
+          "Ember",
+          "Soup"
+        ],
+        "notes": "Emissive: Ember (glowing coals and flame bodies), Flame (flame cores and soup bubbles), Soup (soup surface at z 1.03).",
+        "bytes": 61028,
+        "file": "kitchen.glb"
+      },
+      "well": {
+        "triangles": 2824,
+        "budget": 3000,
+        "bounds": {
+          "min": [
+            -1.1035,
+            -1.1035,
+            0
+          ],
+          "max": [
+            1.1035,
+            1.1035,
+            2.86
+          ]
+        },
+        "max_radius": 1.12,
+        "materials": [
+          "Wood light",
+          "Stone dark",
+          "Water",
+          "Stone",
+          "Stone light",
+          "Wood",
+          "Wood dark",
+          "Red",
+          "Gold",
+          "Terracotta"
+        ],
+        "emissive_materials": [],
+        "notes": "Gable roof ridge runs along Y so the gable (gold medallion) faces -Y; crank handle on +X; water surface at z 0.5.",
+        "bytes": 89772,
+        "file": "well.glb"
+      },
+      "rocket": {
+        "triangles": 3772,
+        "budget": 4000,
+        "bounds": {
+          "min": [
+            -2.64,
+            -2.64,
+            0
+          ],
+          "max": [
+            2.64,
+            2.64,
+            5.13
+          ]
+        },
+        "max_radius": 2.64,
+        "materials": [
+          "Sun",
+          "Pad",
+          "Pad dark",
+          "Hazard",
+          "Pad light",
+          "Charcoal",
+          "Rocket white",
+          "Rocket red",
+          "Gold",
+          "Glass"
+        ],
+        "emissive_materials": [
+          "Pad light"
+        ],
+        "notes": "Porthole faces -Y at z 2.35. Body r <= 0.93 (porthole rim about 0.96); the four diagonal fins reach r 1.42 (inside collision r 1.5); pad r 2.64. Pad light is emissive.",
+        "bytes": 104160,
+        "file": "rocket.glb"
+      }
+    }
+  },
+  "nature": {
+    "generator": "art/blender/kit/build_nature.py",
+    "blender": "4.5.9 LTS",
+    "scenery": {
+      "file": "scenery.glb",
+      "bytes": 83940,
+      "nodes": {
+        "tree_blossom": {
+          "triangles": 598,
+          "vertices": 373,
+          "materials": [
+            "Bark",
+            "Blossom B",
+            "Blossom A"
+          ],
+          "bounds": {
+            "min": [
+              -1.511,
+              -1.4008,
+              0
+            ],
+            "max": [
+              1.4986,
+              1.3616,
+              3.5598
+            ],
+            "size": [
+              3.0096,
+              2.7624,
+              3.5598
+            ]
+          },
+          "radius_xy": 1.5603
+        },
+        "tree_round": {
+          "triangles": 578,
+          "vertices": 344,
+          "materials": [
+            "Bark",
+            "Leaf B",
+            "Leaf A"
+          ],
+          "bounds": {
+            "min": [
+              -1.3755,
+              -1.3057,
+              0
+            ],
+            "max": [
+              1.3885,
+              1.301,
+              3.5355
+            ],
+            "size": [
+              2.764,
+              2.6066,
+              3.5355
+            ]
+          },
+          "radius_xy": 1.5186
+        },
+        "tree_pine": {
+          "triangles": 360,
+          "vertices": 213,
+          "materials": [
+            "Bark",
+            "Pine A",
+            "Pine B"
+          ],
+          "bounds": {
+            "min": [
+              -1.378,
+              -1.378,
+              0
+            ],
+            "max": [
+              1.378,
+              1.378,
+              3.8
+            ],
+            "size": [
+              2.756,
+              2.756,
+              3.8
+            ]
+          },
+          "radius_xy": 1.378
+        },
+        "bush": {
+          "triangles": 294,
+          "vertices": 181,
+          "materials": [
+            "Leaf A",
+            "Leaf B",
+            "Berry"
+          ],
+          "bounds": {
+            "min": [
+              -0.5879,
+              -0.448,
+              0
+            ],
+            "max": [
+              0.611,
+              0.4784,
+              0.7065
+            ],
+            "size": [
+              1.1988,
+              0.9264,
+              0.7065
+            ]
+          },
+          "radius_xy": 0.6416
+        },
+        "flowers": {
+          "triangles": 202,
+          "vertices": 200,
+          "materials": [
+            "Stem",
+            "Petal pink",
+            "Flower centre",
+            "Petal violet",
+            "Petal blue",
+            "Petal white",
+            "Petal yellow"
+          ],
+          "bounds": {
+            "min": [
+              -0.2542,
+              -0.2708,
+              -0.006
+            ],
+            "max": [
+              0.2558,
+              0.2921,
+              0.317
+            ],
+            "size": [
+              0.5101,
+              0.5629,
+              0.323
+            ]
+          },
+          "radius_xy": 0.3467
+        },
+        "tuft": {
+          "triangles": 36,
+          "vertices": 42,
+          "materials": [
+            "Grass"
+          ],
+          "bounds": {
+            "min": [
+              -0.2373,
+              -0.2561,
+              0
+            ],
+            "max": [
+              0.2383,
+              0.249,
+              0.3748
+            ],
+            "size": [
+              0.4756,
+              0.5051,
+              0.3748
+            ]
+          },
+          "radius_xy": 0.2608
+        },
+        "rock": {
+          "triangles": 95,
+          "vertices": 59,
+          "materials": [
+            "Rock"
+          ],
+          "bounds": {
+            "min": [
+              -0.6962,
+              -0.5538,
+              0
+            ],
+            "max": [
+              0.7763,
+              0.5792,
+              0.6419
+            ],
+            "size": [
+              1.4725,
+              1.1329,
+              0.6419
+            ]
+          },
+          "radius_xy": 0.8699
+        },
+        "stone_step": {
+          "triangles": 60,
+          "vertices": 37,
+          "materials": [
+            "Step stone"
+          ],
+          "bounds": {
+            "min": [
+              -0.4009,
+              -0.3098,
+              0
+            ],
+            "max": [
+              0.423,
+              0.2917,
+              0.074
+            ],
+            "size": [
+              0.8239,
+              0.6015,
+              0.074
+            ]
+          },
+          "radius_xy": 0.423
+        },
+        "fence": {
+          "triangles": 128,
+          "vertices": 86,
+          "materials": [
+            "Fence post",
+            "Fence rail"
+          ],
+          "bounds": {
+            "min": [
+              -1.0868,
+              -0.0918,
+              0
+            ],
+            "max": [
+              1.0918,
+              0.0918,
+              1
+            ],
+            "size": [
+              2.1786,
+              0.1835,
+              1
+            ]
+          },
+          "radius_xy": 1.092
+        },
+        "gate": {
+          "triangles": 292,
+          "vertices": 170,
+          "materials": [
+            "Fence post",
+            "Fence rail",
+            "Sign"
+          ],
+          "bounds": {
+            "min": [
+              -1.8848,
+              -0.1848,
+              0
+            ],
+            "max": [
+              1.8848,
+              0.1848,
+              3.0826
+            ],
+            "size": [
+              3.7696,
+              0.3696,
+              3.0826
+            ]
+          },
+          "radius_xy": 1.8863
+        },
+        "mushroom": {
+          "triangles": 112,
+          "vertices": 80,
+          "materials": [
+            "Mushroom stem",
+            "Mushroom cap",
+            "Mushroom spots"
+          ],
+          "bounds": {
+            "min": [
+              -0.168,
+              -0.1598,
+              0
+            ],
+            "max": [
+              0.168,
+              0.1598,
+              0.352
+            ],
+            "size": [
+              0.336,
+              0.3196,
+              0.352
+            ]
+          },
+          "radius_xy": 0.168
+        }
+      }
     },
-    "market-stall": {
-      "triangles": 9560,
-      "materials": 9,
-      "source_objects": 113,
-      "bounds_blender": [
-        [
-          -1.600000023841858,
-          -1.0049999952316284,
-          0.0
-        ],
-        [
-          -1.600000023841858,
-          -1.0049999952316284,
-          2.6500000953674316
-        ],
-        [
-          -1.600000023841858,
-          1.0,
-          2.6500000953674316
-        ],
-        [
-          -1.600000023841858,
-          1.0,
-          0.0
-        ],
-        [
-          1.600000023841858,
-          -1.0049999952316284,
-          0.0
-        ],
-        [
-          1.600000023841858,
-          -1.0049999952316284,
-          2.6500000953674316
-        ],
-        [
-          1.600000023841858,
-          1.0,
-          2.6500000953674316
-        ],
-        [
-          1.600000023841858,
-          1.0,
-          0.0
-        ]
-      ],
-      "glb_bytes": 612388
+    "crops": {
+      "file": "crops.glb",
+      "bytes": 201220,
+      "nodes": {
+        "crop_sprout": {
+          "triangles": 97,
+          "vertices": 68,
+          "materials": [
+            "Crop soil",
+            "Crop stem",
+            "Crop leaf light"
+          ],
+          "bounds": {
+            "min": [
+              -0.18,
+              -0.1712,
+              0
+            ],
+            "max": [
+              0.18,
+              0.1712,
+              0.3023
+            ],
+            "size": [
+              0.36,
+              0.3424,
+              0.3023
+            ]
+          },
+          "radius_xy": 0.18
+        },
+        "crop_radish": {
+          "triangles": 252,
+          "vertices": 165,
+          "materials": [
+            "Crop soil",
+            "Crop radish",
+            "Crop leaf"
+          ],
+          "bounds": {
+            "min": [
+              -0.24,
+              -0.24,
+              0
+            ],
+            "max": [
+              0.24,
+              0.2433,
+              0.5414
+            ],
+            "size": [
+              0.48,
+              0.4833,
+              0.5414
+            ]
+          },
+          "radius_xy": 0.2437
+        },
+        "crop_carrot": {
+          "triangles": 350,
+          "vertices": 233,
+          "materials": [
+            "Crop soil",
+            "Crop carrot",
+            "Crop carrot ridge",
+            "Crop leaf",
+            "Crop leaf light"
+          ],
+          "bounds": {
+            "min": [
+              -0.22,
+              -0.22,
+              0
+            ],
+            "max": [
+              0.2464,
+              0.2319,
+              0.6123
+            ],
+            "size": [
+              0.4664,
+              0.4519,
+              0.6123
+            ]
+          },
+          "radius_xy": 0.249
+        },
+        "crop_pumpkin": {
+          "triangles": 351,
+          "vertices": 189,
+          "materials": [
+            "Crop pumpkin",
+            "Crop pumpkin stem",
+            "Crop leaf",
+            "Crop stem"
+          ],
+          "bounds": {
+            "min": [
+              -0.2445,
+              -0.2145,
+              0.004
+            ],
+            "max": [
+              0.2445,
+              0.2745,
+              0.3751
+            ],
+            "size": [
+              0.4891,
+              0.4891,
+              0.3711
+            ]
+          },
+          "radius_xy": 0.2829
+        },
+        "crop_mint": {
+          "triangles": 272,
+          "vertices": 250,
+          "materials": [
+            "Crop stem",
+            "Crop mint",
+            "Crop mint light"
+          ],
+          "bounds": {
+            "min": [
+              -0.2405,
+              -0.1912,
+              -0.0007
+            ],
+            "max": [
+              0.2157,
+              0.23,
+              0.3516
+            ],
+            "size": [
+              0.4563,
+              0.4212,
+              0.3523
+            ]
+          },
+          "radius_xy": 0.2737
+        },
+        "crop_chili": {
+          "triangles": 301,
+          "vertices": 206,
+          "materials": [
+            "Crop stem",
+            "Crop leaf",
+            "Crop chili"
+          ],
+          "bounds": {
+            "min": [
+              -0.213,
+              -0.1671,
+              -0.0009
+            ],
+            "max": [
+              0.213,
+              0.269,
+              0.3779
+            ],
+            "size": [
+              0.426,
+              0.4361,
+              0.3788
+            ]
+          },
+          "radius_xy": 0.27
+        },
+        "crop_candy": {
+          "triangles": 304,
+          "vertices": 171,
+          "materials": [
+            "Crop stem",
+            "Crop leaf",
+            "Crop candy pink",
+            "Crop candy white",
+            "Crop candy yellow"
+          ],
+          "bounds": {
+            "min": [
+              -0.2134,
+              -0.1919,
+              -0.0005
+            ],
+            "max": [
+              0.2104,
+              0.147,
+              0.6432
+            ],
+            "size": [
+              0.4238,
+              0.3389,
+              0.6437
+            ]
+          },
+          "radius_xy": 0.2136
+        },
+        "crop_bean": {
+          "triangles": 316,
+          "vertices": 199,
+          "materials": [
+            "Crop stake",
+            "Crop stem",
+            "Crop bean shield",
+            "Crop bean pod",
+            "Crop leaf"
+          ],
+          "bounds": {
+            "min": [
+              -0.2433,
+              -0.2408,
+              0
+            ],
+            "max": [
+              0.2592,
+              0.1864,
+              0.645
+            ],
+            "size": [
+              0.5024,
+              0.4272,
+              0.645
+            ]
+          },
+          "radius_xy": 0.2598
+        },
+        "crop_star": {
+          "triangles": 288,
+          "vertices": 187,
+          "materials": [
+            "Crop leaf",
+            "Crop stem",
+            "Crop star fruit"
+          ],
+          "bounds": {
+            "min": [
+              -0.299,
+              -0.1949,
+              -0.0057
+            ],
+            "max": [
+              0.2939,
+              0.2185,
+              0.6309
+            ],
+            "size": [
+              0.593,
+              0.4134,
+              0.6366
+            ]
+          },
+          "radius_xy": 0.303
+        },
+        "crop_berry": {
+          "triangles": 370,
+          "vertices": 278,
+          "materials": [
+            "Crop stem",
+            "Crop leaf",
+            "Crop strawberry",
+            "Crop blossom white",
+            "Crop flower centre"
+          ],
+          "bounds": {
+            "min": [
+              -0.2372,
+              -0.2481,
+              -0.0042
+            ],
+            "max": [
+              0.2355,
+              0.2598,
+              0.3038
+            ],
+            "size": [
+              0.4727,
+              0.5079,
+              0.308
+            ]
+          },
+          "radius_xy": 0.3196
+        },
+        "crop_coffee": {
+          "triangles": 368,
+          "vertices": 277,
+          "materials": [
+            "Crop coffee stem",
+            "Crop coffee leaf",
+            "Crop coffee cherry",
+            "Crop coffee cherry ripe"
+          ],
+          "bounds": {
+            "min": [
+              -0.2128,
+              -0.1716,
+              -0.0011
+            ],
+            "max": [
+              0.2289,
+              0.2522,
+              0.5987
+            ],
+            "size": [
+              0.4417,
+              0.4238,
+              0.5998
+            ]
+          },
+          "radius_xy": 0.2522
+        },
+        "crop_moonflower": {
+          "triangles": 230,
+          "vertices": 168,
+          "materials": [
+            "Crop stem",
+            "Crop moonflower star",
+            "Crop moonflower",
+            "Crop moonflower centre",
+            "Crop moon leaf"
+          ],
+          "bounds": {
+            "min": [
+              -0.2401,
+              -0.2791,
+              -0.0002
+            ],
+            "max": [
+              0.24,
+              0.2444,
+              0.6712
+            ],
+            "size": [
+              0.4801,
+              0.5235,
+              0.6715
+            ]
+          },
+          "radius_xy": 0.2888
+        },
+        "crop_magnetmelon": {
+          "triangles": 324,
+          "vertices": 175,
+          "materials": [
+            "Crop magnet red",
+            "Crop magnet silver",
+            "Crop stem",
+            "Crop leaf"
+          ],
+          "bounds": {
+            "min": [
+              -0.205,
+              -0.185,
+              0.006
+            ],
+            "max": [
+              0.205,
+              0.225,
+              0.565
+            ],
+            "size": [
+              0.41,
+              0.41,
+              0.559
+            ]
+          },
+          "radius_xy": 0.2275
+        },
+        "crop_melon": {
+          "triangles": 300,
+          "vertices": 163,
+          "materials": [
+            "Crop melon light",
+            "Crop melon dark",
+            "Crop stem",
+            "Crop leaf"
+          ],
+          "bounds": {
+            "min": [
+              -0.3222,
+              -0.1681,
+              -0.015
+            ],
+            "max": [
+              0.2896,
+              0.2422,
+              0.365
+            ],
+            "size": [
+              0.6118,
+              0.4103,
+              0.38
+            ]
+          },
+          "radius_xy": 0.3224
+        },
+        "crop_clover": {
+          "triangles": 274,
+          "vertices": 235,
+          "materials": [
+            "Crop stem",
+            "Crop clover light",
+            "Crop clover"
+          ],
+          "bounds": {
+            "min": [
+              -0.297,
+              -0.1705,
+              -0.0049
+            ],
+            "max": [
+              0.2815,
+              0.3057,
+              0.52
+            ],
+            "size": [
+              0.5785,
+              0.4763,
+              0.5249
+            ]
+          },
+          "radius_xy": 0.3116
+        },
+        "crop_glowshroom": {
+          "triangles": 338,
+          "vertices": 239,
+          "materials": [
+            "Crop glowshroom stem",
+            "Crop glowshroom cap",
+            "Crop glowshroom spots"
+          ],
+          "bounds": {
+            "min": [
+              -0.275,
+              -0.1755,
+              -0.0058
+            ],
+            "max": [
+              0.245,
+              0.1797,
+              0.4386
+            ],
+            "size": [
+              0.52,
+              0.3552,
+              0.4444
+            ]
+          },
+          "radius_xy": 0.2767
+        },
+        "crop_iceberry": {
+          "triangles": 370,
+          "vertices": 240,
+          "materials": [
+            "Crop frost leaf",
+            "Crop ice berry",
+            "Crop ice crystal"
+          ],
+          "bounds": {
+            "min": [
+              -0.3108,
+              -0.1834,
+              -0.0142
+            ],
+            "max": [
+              0.3027,
+              0.2466,
+              0.333
+            ],
+            "size": [
+              0.6135,
+              0.43,
+              0.3472
+            ]
+          },
+          "radius_xy": 0.3122
+        },
+        "crop_goldcorn": {
+          "triangles": 344,
+          "vertices": 239,
+          "materials": [
+            "Crop stem",
+            "Crop leaf",
+            "Crop corn tassel",
+            "Crop corn gold",
+            "Crop corn husk"
+          ],
+          "bounds": {
+            "min": [
+              -0.2692,
+              -0.1195,
+              0
+            ],
+            "max": [
+              0.2692,
+              0.2857,
+              0.88
+            ],
+            "size": [
+              0.5385,
+              0.4052,
+              0.88
+            ]
+          },
+          "radius_xy": 0.3122
+        },
+        "crop_dragonfruit": {
+          "triangles": 304,
+          "vertices": 201,
+          "materials": [
+            "Crop cactus",
+            "Crop dragonfruit",
+            "Crop dragonfruit tip"
+          ],
+          "bounds": {
+            "min": [
+              -0.2359,
+              -0.24,
+              0
+            ],
+            "max": [
+              0.2336,
+              0.239,
+              0.5145
+            ],
+            "size": [
+              0.4696,
+              0.479,
+              0.5145
+            ]
+          },
+          "radius_xy": 0.2554
+        },
+        "crop_rainbowrose": {
+          "triangles": 352,
+          "vertices": 313,
+          "materials": [
+            "Crop leaf",
+            "Crop rose red",
+            "Crop rose orange",
+            "Crop rose yellow",
+            "Crop rose blue",
+            "Crop rose violet"
+          ],
+          "bounds": {
+            "min": [
+              -0.2156,
+              -0.2294,
+              -0.0004
+            ],
+            "max": [
+              0.2156,
+              0.1267,
+              0.6504
+            ],
+            "size": [
+              0.4311,
+              0.3561,
+              0.6508
+            ]
+          },
+          "radius_xy": 0.2511
+        }
+      }
     },
-    "equipment-stall": {
-      "triangles": 7038,
-      "materials": 7,
-      "source_objects": 88,
-      "bounds_blender": [
-        [
-          -1.600000023841858,
-          -1.0049999952316284,
-          0.0
-        ],
-        [
-          -1.600000023841858,
-          -1.0049999952316284,
-          2.6500000953674316
-        ],
-        [
-          -1.600000023841858,
-          1.0,
-          2.6500000953674316
-        ],
-        [
-          -1.600000023841858,
-          1.0,
-          0.0
-        ],
-        [
-          1.600000023841858,
-          -1.0049999952316284,
-          0.0
-        ],
-        [
-          1.600000023841858,
-          -1.0049999952316284,
-          2.6500000953674316
-        ],
-        [
-          1.600000023841858,
-          1.0,
-          2.6500000953674316
-        ],
-        [
-          1.600000023841858,
-          1.0,
-          0.0
-        ]
+    "icons": {
+      "dir": "icons/crops",
+      "size": [
+        160,
+        160
       ],
-      "glb_bytes": 474096
-    },
-    "garden-bed": {
-      "triangles": 1196,
-      "materials": 4,
-      "source_objects": 17,
-      "bounds_blender": [
-        [
-          -1.0500000715255737,
-          -1.0500000715255737,
-          0.005000002682209015
-        ],
-        [
-          -1.0500000715255737,
-          -1.0500000715255737,
-          0.23999999463558197
-        ],
-        [
-          -1.0500000715255737,
-          1.0500000715255737,
-          0.23999999463558197
-        ],
-        [
-          -1.0500000715255737,
-          1.0500000715255737,
-          0.005000002682209015
-        ],
-        [
-          1.0500000715255737,
-          -1.0500000715255737,
-          0.005000002682209015
-        ],
-        [
-          1.0500000715255737,
-          -1.0500000715255737,
-          0.23999999463558197
-        ],
-        [
-          1.0500000715255737,
-          1.0500000715255737,
-          0.23999999463558197
-        ],
-        [
-          1.0500000715255737,
-          1.0500000715255737,
-          0.005000002682209015
-        ]
-      ],
-      "glb_bytes": 82976
-    },
-    "wishing-crystal": {
-      "triangles": 1172,
-      "materials": 7,
-      "source_objects": 17,
-      "bounds_blender": [
-        [
-          -1.2999999523162842,
-          -1.2999999523162842,
-          0.0
-        ],
-        [
-          -1.2999999523162842,
-          -1.2999999523162842,
-          3.0
-        ],
-        [
-          -1.2999999523162842,
-          1.2999999523162842,
-          3.0
-        ],
-        [
-          -1.2999999523162842,
-          1.2999999523162842,
-          0.0
-        ],
-        [
-          1.2999999523162842,
-          -1.2999999523162842,
-          0.0
-        ],
-        [
-          1.2999999523162842,
-          -1.2999999523162842,
-          3.0
-        ],
-        [
-          1.2999999523162842,
-          1.2999999523162842,
-          3.0
-        ],
-        [
-          1.2999999523162842,
-          1.2999999523162842,
-          0.0
-        ]
-      ],
-      "glb_bytes": 87584
+      "bytes": {
+        "sprout": 3356,
+        "radish": 3380,
+        "carrot": 3796,
+        "pumpkin": 3568,
+        "mint": 4274,
+        "chili": 3824,
+        "candy": 3420,
+        "bean": 5320,
+        "star": 4958,
+        "berry": 5536,
+        "coffee": 4700,
+        "moonflower": 3896,
+        "magnetmelon": 4318,
+        "melon": 3908,
+        "clover": 6066,
+        "glowshroom": 4178,
+        "iceberry": 4696,
+        "goldcorn": 3696,
+        "dragonfruit": 4678,
+        "rainbowrose": 3746
+      }
     }
   }
 }
