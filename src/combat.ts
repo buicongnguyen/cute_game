@@ -49,7 +49,10 @@ export class CombatSimulation {
   private jobs:Scheduled[]=[]; private action:{kind:'dash'|'slam';until:number;started:number;direction:CombatPoint;speed:number;multiplier:number;hit:Set<string>}|null=null;
   constructor(host:CombatHost,random:()=>number=Math.random){this.host=host;this.random=random;}
   get locksMovement(){return !!this.action;}
-  get airborne(){return this.action?.kind==='slam'?Math.sin(Math.min(1,(this.time-this.action.started)/.8)*Math.PI)*2.2:0;}
+  /** Ground slam: a fast leap that snaps down onto the target when the shockwave lands at 0.42 s. */
+  get airborne(){if(this.action?.kind!=='slam')return 0;const t=(this.time-this.action.started)/.42;return t<1?Math.sin(t*Math.PI*.85)*2.6:0;}
+  /** The movement skill in progress and its elapsed time, for the explorer's pose. */
+  get pose(){return this.action?{kind:this.action.kind,t:this.time-this.action.started}:null;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0;}
   reset(){this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}

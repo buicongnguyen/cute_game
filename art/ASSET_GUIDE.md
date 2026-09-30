@@ -1,6 +1,6 @@
 # Zoo Garden art kit
 
-Built with Blender 4.5 LTS by two headless generators. All geometry and materials are original; no reference-game assets were extracted. The look is a glossy toy style: chunky bevelled shapes, saturated warm colours and flat colour materials with no image textures.
+Built with Blender 4.5 LTS by headless generators. All geometry and materials are original; no reference-game assets were extracted. The look is a glossy toy style: chunky bevelled shapes, saturated warm colours and flat colour materials with no image textures.
 
 ## Files
 
@@ -8,11 +8,16 @@ Built with Blender 4.5 LTS by two headless generators. All geometry and material
 - `blender/kit/build_props.py`: the ten village props.
 - `blender/kit/build_nature.py`: the scenery kit, the 19 crops and their interface icons.
 - `blender/kit/build_fish.py`: 18 fish and the old boot, pond dressing (bobber, lily pad and flower, reeds) and the fish icons.
+- `blender/kit/hero_spec.py`: the explorer's part pivots, hand grips and body envelope, shared by every gear generator so pieces fit the same body.
+- `blender/kit/build_hero.py`: the explorer (`hero.glb`) and the ten disguises.
+- `blender/kit/build_wear.py`: hats, outfits and boots.
+- `blender/kit/build_weapons.py`: swords, blasters, rods and other held weapons, plus the seven pets.
+- `blender/kit/build_items.py`: icons for materials, foods, seeds and farm supplies.
 - `blender/kit/CONTRACT.md`: footprints, heights, triangle budgets, node names and material names that the game relies on. Both generators fail rather than export a model that breaks it.
 - `../public/assets/models/*.glb`: the models the game loads.
-- `../public/assets/icons/crops/*.webp` and `icons/fish/*.webp`: 160 px icons used in the seed picker, backpack, market, garden labels and fish collection.
+- `../public/assets/icons/crops/*.webp`, `icons/fish/*.webp` and `icons/items/*.webp`: 160 px icons used in the seed picker, backpack, shop, market, crafting lists, garden labels and fish collection. Decoration icons are drawn by the game from the placed models instead.
 - `exports/unity-fbx/*.fbx`: prop exports for a possible Unity port. Unity import has not been tested.
-- `previews/kit/`: Blender renders of every prop, the scenery, the crops and an icon contact sheet.
+- `previews/kit/`: Blender renders of every prop, the scenery, the crops, the fish, the explorer in each hat, outfit, boot, weapon and disguise, the pets, and icon contact sheets.
 - `asset-manifest.json`: triangles, bounds, materials and file sizes from the last build.
 
 ## What the game uses
@@ -32,8 +37,13 @@ Built with Blender 4.5 LTS by two headless generators. All geometry and material
 | `scenery.glb` | 11 pieces: blossom, round and pine trees, bush, flowers, grass tuft, rock, stepping stone, fence, gate, mushroom | 36–598 each | 82 KB |
 | `crops.glb` | A sprout plus one mature model for each of the 19 crops | 97–370 each | 197 KB |
 | `fish.glb` | 18 fish and a boot, each with a separately wagging tail, plus the bobber, lily pad, lily flower and reeds | 148–450 each | 308 KB |
+| `hero.glb` | The explorer: `body`, `head` (with the `head-leaf` sprout), both arms with hand grips, both legs | 3,304 | 77 KB |
+| `gear-wear.glb` | 19 hats that follow the head, 17 outfits whose sleeves follow the arms, and 5 pairs of boots that follow the legs | 324–1,072 each | 680 KB |
+| `gear-weapons.glb` | 19 weapons held at the right hand, with `muzzle` and `rod-tip` markers | 356–888 each | 427 KB |
+| `disguises.glb` | Ten costumes, split into pieces that follow the head, body, arms and legs | 2,212–2,484 each | 581 KB |
+| `pets.glb` | Seven pets; the parrot, firefly and dragon have separate wings that flap | 1,268–1,440 each | 249 KB |
 
-The models and icons total about 1.7 MB.
+The models total about 3.4 MB and the icons about 0.6 MB. A new player downloads the world models and `hero.glb` only; each gear file loads the first time something from it is worn.
 
 ## Rebuild
 
@@ -43,6 +53,10 @@ From the project root, with Blender 4.5 on PATH:
 blender -b --factory-startup --python art/blender/kit/build_props.py -- --install --render --fbx
 blender -b --factory-startup --python art/blender/kit/build_nature.py -- --install --render
 blender -b --factory-startup --python art/blender/kit/build_fish.py -- --install --render
+blender -b --factory-startup --python art/blender/kit/build_hero.py -- --install --render
+blender -b --factory-startup --python art/blender/kit/build_wear.py -- --install --render
+blender -b --factory-startup --python art/blender/kit/build_weapons.py -- --install --render
+blender -b --factory-startup --python art/blender/kit/build_items.py -- --install --render
 ```
 
 - `--install` copies the results into `public/`. Without it, output stays in `art/generated/kit/`, which is not tracked.
@@ -60,6 +74,8 @@ Blender uses Z up with the front facing -Y. The GLBs are Y up with the front fac
 - **Dressing:** stepping stones, bushes and mushrooms in the village are decoration only. They add no obstacles, so every player's map and pathfinding stay identical online.
 - **Crops:** a bed shows the sprout while young, a smaller copy of the real crop while growing, and the full crop with a sparkle when ready. Each stage pops in with a springy bounce and ripe crops sway.
 - **Fish:** `src/fishing-view.ts` stocks every pond with species from its water. Fish swim under a translucent surface at their manifest display scale and depth, wag their tails, nibble the bobber, fight on the line and leap out when caught. Pond depths and tail hinges are part of the contract.
+- **Explorer:** `HeroLibrary` keeps the explorer's part hierarchy, so the game poses the arms, legs, head and body for walking, attacks, skills and fishing. Each explorer gets its own shirt materials in the player's colour.
+- **Gear:** every gear piece is named `<id>_<piece>@<part>` and is modelled around the resting explorer. The game re-parents each piece to the part after `@`, so hats turn with the head, sleeves swing with the arms and weapons stay in the right hand. Buying gear equips it at once. Each gear file downloads only the first time something from it is worn, and a slot shows simple shapes until then. The sprout hides under hats and most costumes.
 - **Fallbacks:** if any file fails to load, the matching procedural shapes and emoji icons are used instead.
 
 No saved-game format was changed.

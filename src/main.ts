@@ -2,8 +2,9 @@ import '@fontsource-variable/nunito';
 import './style.css';
 import { Box3, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
-import { refinedAssets, sceneryKit, cropKit, fishKit } from './assets.ts';
+import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit } from './assets.ts';
 import { FishingView, type PondView } from './fishing-view.ts';
+import { decorIcon } from './icons.ts';
 import * as M from './model.ts';
 import { CombatTimers, FishingInput, MovementControls } from './gameplay-controls.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatHit, type CombatEffect } from './combat.ts';
@@ -43,6 +44,7 @@ app.innerHTML = `
     <nav class="top-actions" aria-label="Game menu"><div class="energy"><span>ϟ</span><b id="energy">0</b></div><button class="icon-button" data-action="bag" title="Backpack · I" aria-label="Backpack">🎒</button><button class="icon-button" data-action="quests" title="Journal · J" aria-label="Quest journal">📖<i id="quest-dot"></i></button><div id="social-slot"></div><button class="icon-button secondary-icon" data-action="help" title="How to play" aria-label="How to play">?</button><button class="icon-button" data-action="settings" title="Settings" aria-label="Settings">⚙</button><div id="platform-slot"></div></nav>
     <div class="tracker-stack"><aside class="quest-tracker"><div class="eyebrow">YOUR LITTLE ADVENTURE <span id="quest-chapter">1 / 9</span></div><button id="quest-summary" data-action="quests"><span class="quest-icon" id="quest-icon">🥕</span><span><strong id="quest-title">A little green beginning</strong><small id="quest-task">Harvest 3 crops · 0 / 3</small></span><span class="chevron">›</span></button><div class="quest-progress"><i id="quest-fill"></i></div><button id="quick-claim" data-action="claim" hidden>Collect your reward ✨</button></aside>
     <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div></button><div id="buff-bar" aria-label="Active effects"></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="160" height="160"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
+    <div id="boss-bar" hidden><span id="boss-icon">👑</span><div><strong id="boss-name"></strong><div class="boss-meter"><i id="boss-fill"></i></div></div></div>
     <div id="zone-banner"><span id="zone-icon">🌿</span><div><strong id="banner-name">Clover Village</strong><small id="banner-detail">A little place to call home</small></div></div>
     <button id="reel-button" class="reel-hud" data-action="reel" hidden aria-label="Reel in the line"><span class="reel-icon" aria-hidden="true">🎣</span><span id="reel-text">Reel</span></button><div id="fish-hint" role="status" hidden></div>
     <div id="context-prompt" hidden><button id="interact-button" data-action="interact"><kbd>F</kbd><span id="interact-text">Interact</span></button></div>
@@ -105,14 +107,20 @@ function toast(message: string, icon='✨') {
   const live=Array.from(stack.children).filter(node=>!node.classList.contains('leaving'));for(const old of live.slice(0,Math.max(0,live.length-3)))dismiss(old);
   setTimeout(()=>dismiss(el),3800);
 }
-// Blender-rendered crop and fish icons, with the emoji kept as a fallback when an icon is unavailable.
+// Blender-rendered icons for crops, fish, gear and items; decorations are drawn from their
+// 3D models by the game; cooked food shows the raw item with a flame. Emoji remain the fallback.
 const ICON_BASE=`${import.meta.env.BASE_URL}assets/icons/`;
 const missingIcons=new Set<string>();
-function art(id:string,icon:string){
-  const folder=Object.hasOwn(M.CROPS,id)?'crops':Object.hasOwn(M.FISH,id)?'fish':'';
-  return folder&&!missingIcons.has(folder)?`<img class="art-icon" src="${ICON_BASE}${folder}/${id}.webp" alt="" draggable="false" data-folder="${folder}" data-fallback="${esc(icon)}">`:icon;
+function art(id:string,icon:string):string{
+  if(id.startsWith('cooked_')&&Object.hasOwn(M.ITEMS,id.slice(7)))return `<span class="cooked-art">${art(id.slice(7),icon)}<i>🔥</i></span>`;
+  const item=Object.hasOwn(M.ITEMS,id)?M.ITEMS[id]:undefined;
+  if(item?.type==='decor'){const url=decorIcon(id);return url?`<img class="art-icon" src="${url}" alt="" draggable="false">`:icon;}
+  const folder=Object.hasOwn(M.CROPS,id)?'crops':Object.hasOwn(M.FISH,id)?'fish':item?'items':'';
+  return folder&&!missingIcons.has(id)?`<img class="art-icon" src="${ICON_BASE}${folder}/${id}.webp" alt="" draggable="false" data-id="${esc(id)}" data-fallback="${esc(icon)}">`:icon;
 }
-document.addEventListener('error',event=>{const img=event.target;if(img instanceof HTMLImageElement&&img.dataset.fallback!==undefined){missingIcons.add(img.dataset.folder??'');img.replaceWith(document.createTextNode(img.dataset.fallback));}},true);
+/** A small inline icon for ingredient lists and chips. */
+const mini=(id:string)=>`<span class="mini-art">${art(id,M.ITEMS[id]?.icon??'✨')}</span>`;
+document.addEventListener('error',event=>{const img=event.target;if(img instanceof HTMLImageElement&&img.dataset.fallback!==undefined){missingIcons.add(img.dataset.id??'');img.replaceWith(document.createTextNode(img.dataset.fallback));}},true);
 const BUFF_WORDS:Record<string,string>={atk:'attack',def:'defense',haste:'attack speed',regen:'HP/s',speed:'speed',crit:'critical',xp:'XP',magnet:'loot magnet',luck:'luck',light:'light',fireres:'fire resistance',lifesteal:'life steal'};
 function effectText(item:M.ItemDef){
   const parts=Object.entries(item.buff??{}).filter(([key])=>key!=='time'&&BUFF_WORDS[key]).map(([key,value])=>key==='magnet'||key==='light'?BUFF_WORDS[key]:key==='def'||key==='regen'?`+${value} ${BUFF_WORDS[key]}`:`+${Math.round(Number(value)*100)}% ${BUFF_WORDS[key]}`);
@@ -126,7 +134,7 @@ const DIALOG_LOOK:Record<string,[string,string]>={
   quests:['📖','journal'],upgrade:['💎','crystal'],chest:['📦','chest'],cook:['🍲','kitchen'],craft:['🔨','craft'],travel:['🚀','travel'],
   settings:['⚙️','calm'],help:['🧭','calm'],'fish-help':['🎣','water'],fishing:['🎣','water'],catch:['🐟','water'],death:['🌷','rose'],reset:['🌱','rose'],
 };
-function floating(text:string,x=world.position.x,z=world.position.z,style='item') {world.fx?.text({x,z},text,style);}
+function floating(text:string,x=world.position.x,z=world.position.z,style='item',rise=0) {world.fx?.text({x,y:rise,z},text,style);}
 function levelCheck(before:number) {if(state.level>before){toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);}}
 function change<T>(action:()=>T):T {const before=state.level;const result=action();levelCheck(before);save();updateHud();return result;}
 function uiBlocked(){return !!modal||!!document.querySelector('dialog[open]');}
@@ -156,6 +164,9 @@ function updateHud() {
   $('#buff-bar').innerHTML=M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,t])=>`<span>✨ ${esc(name)} <b>${Math.ceil(t)}s</b></span>`).join('');
   $('#environment-bar').innerHTML=world.environmentStatus().map(e=>`<span>${e.icon??''} ${esc(e.label)} <b>${esc(String(e.value))}</b></span>`).join('');
   const dark=$('#darkness');dark.hidden=!world.darknessActive()||!started;
+  // The boss bar appears while a boss is fighting nearby.
+  const boss=world.enemies.find(e=>e.boss&&e.hp>0&&e.phase!=='idle'&&e.phase!=='return'&&Math.hypot(e.x-world.position.x,e.z-world.position.z)<30);
+  $('#boss-bar').hidden=!boss||!started;if(boss){$('#boss-name').textContent=boss.name;$('#boss-fill').style.width=`${boss.hp/boss.maxHp*100}%`;}
   const bounty=progressEntries(state,'bounties')[0];$('#bounty-tracker').hidden=!bounty;if(bounty){$('#bounty-title').textContent=bounty.title;$('#bounty-task').textContent=`${bounty.progress}/${bounty.target} · ${bounty.claimed?'Complete':bounty.description}`;}
   if(!dark.hidden){const holes=world.lightSources().map(light=>{const p=world.screen(light.x,.7,light.z),edge=world.screen(light.x+light.radius,.7,light.z);return `radial-gradient(circle ${Math.abs(edge.x-p.x)}px at ${p.x}px ${p.y}px, transparent 65%, black 100%)`;});dark.style.maskImage=holes.join(',');dark.style.maskComposite='intersect';}
 
@@ -190,7 +201,7 @@ function updateLabels() {
     }else if(e.kind==='fish'&&e.pond){
       if(fishGame&&fishPond===e)continue;y=.35;back=e.pond.rz*1.02;
     }else if(e.kind==='enemy'){
-      const enemy=e as Enemy;if(enemy.hp<=0)continue;y=enemy.boss?4.5:2;className+=' enemy-label';rank=0;reach=10;
+      const enemy=e as Enemy;if(enemy.hp<=0||enemy.boss||(enemy.hp>=enemy.maxHp&&(enemy.phase??'idle')==='idle'&&world.selected!==enemy))continue;y=enemy.boss?4.5:2;className+=' enemy-label';rank=0;reach=10;
     }else y=labelHeight(e);
     if(distance>reach)continue;
     const p=world.screen(e.x,y,e.z-back);if(!p.visible||p.y<70||p.y>innerHeight-70||p.x<0||p.x>innerWidth)continue;
@@ -242,7 +253,7 @@ function plotDialog(index:number) {
   const crops=Object.entries(M.CROPS).sort(([,a],[,b])=>Number(state.level<a.level)-Number(state.level<b.level)||a.level-b.level);
   openDialog('plant','Choose a seed',`<div class="garden-actions"><button class="primary" data-action="harvest-all">🌾 Harvest all</button><button class="soft-button" data-action="expand" ${state.plots.length>=33?'disabled':''}>＋ New bed · ${state.bag.plot_kit?'plot kit':`ϟ ${60+Math.max(0,state.plots.length-9)*20}`}</button><span>${state.plots.length} / 33 beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
     const locked=state.level<c.level,needsSeed=!!c.seed&&!state.bag[c.seed],item=M.ITEMS[id],effect=item?effectText(item):'';
-    return `<div class="crop-row ${locked?'locked':''}"><span class="crop-art">${art(id,c.icon)}</span><div><strong>${esc(c.name)}</strong>${effect?`<p>${esc(effect)}</p>`:''}<div class="chips"><span class="chip chip-time">⏱ ${c.duration/1000}s</span><span class="chip chip-xp">✨ ${c.xp} XP</span>${item?`<span class="chip chip-energy">ϟ ${item.sell}</span>`:''}${c.seed?`<span class="chip chip-seed">${M.ITEMS[c.seed]?.icon??'🌰'} ${state.bag[c.seed]||0} seeds</span>`:''}</div></div>${locked?`<span class="chip chip-lock">🔒 Level ${c.level}</span>`:`<div class="button-row"><button class="primary" data-action="plant" data-item="${id}" ${needsSeed?'disabled':''}>Plant</button><button class="sky-button" data-action="plant-all" data-item="${id}" ${needsSeed||!empty?'disabled':''}>All (${c.seed?Math.min(empty,state.bag[c.seed]||0):empty})</button></div>`}</div>`;
+    return `<div class="crop-row ${locked?'locked':''}"><span class="crop-art">${art(id,c.icon)}</span><div><strong>${esc(c.name)}</strong>${effect?`<p>${esc(effect)}</p>`:''}<div class="chips"><span class="chip chip-time">⏱ ${c.duration/1000}s</span><span class="chip chip-xp">✨ ${c.xp} XP</span>${item?`<span class="chip chip-energy">ϟ ${item.sell}</span>`:''}${c.seed?`<span class="chip chip-seed">${M.ITEMS[c.seed]?mini(c.seed):'🌰'} ${state.bag[c.seed]||0} seeds</span>`:''}</div></div>${locked?`<span class="chip chip-lock">🔒 Level ${c.level}</span>`:`<div class="button-row"><button class="primary" data-action="plant" data-item="${id}" ${needsSeed?'disabled':''}>Plant</button><button class="sky-button" data-action="plant-all" data-item="${id}" ${needsSeed||!empty?'disabled':''}>All (${c.seed?Math.min(empty,state.bag[c.seed]||0):empty})</button></div>`}</div>`;
   }).join('')}</div>`,'YOUR GARDEN');
 }
 function inventory() {
@@ -250,7 +261,7 @@ function inventory() {
   const slots:[M.GearSlot,string,string][]=[['weapon','⚔️','Weapon'],['hat','👒','Hat'],['outfit','🧥','Outfit'],['boots','👟','Boots'],['pet','🐾','Pet'],['disguise','🎭','Disguise']];
   if(selectedItem&&!state.bag[selectedItem])selectedItem=null;
   const item=selectedItem?M.ITEMS[selectedItem]:null,stats=M.activeStats(state),slot=item?.slot;
-  openDialog('bag','Your explorer & backpack',`<div class="stat-strip"><span>❤️ <b>${Math.ceil(state.hp)}/${Math.round(stats.maxHp)}</b></span><span>⚔️ <b>${stats.attack.toFixed(1)}</b></span><span>🛡️ <b>${stats.defense}</b></span><span>💨 <b>${stats.speed.toFixed(1)}</b></span><span>✨ <b>${Math.round(stats.critChance*100)}% crit</b></span></div><div class="equipment">${slots.map(([key,icon,name])=>`<div><button data-action="inspect" data-item="${state.gear[key]||''}" ${!state.gear[key]?'disabled':''}><span>${state.gear[key]?M.ITEMS[state.gear[key]!].icon:icon}</span><small>${state.gear[key]?esc(M.ITEMS[state.gear[key]!].name):name}</small></button>${state.gear[key]?`<button class="unequip" data-action="unequip" data-slot="${key}" aria-label="Unequip ${name}">Remove</button>`:''}</div>`).join('')}</div><div class="section-label">BACKPACK <span>${entries.reduce((n,[,q])=>n+q,0)} items</span></div><div class="inventory-grid">${entries.map(([id,count])=>`<button class="item-tile ${id===selectedItem?'selected':''}" data-action="inspect" data-item="${id}" aria-label="${esc(M.ITEMS[id].name)}, ${count}"><span>${art(id,M.ITEMS[id].icon)}</span><b>${count}</b><small>${esc(M.ITEMS[id].name)}</small>${Object.values(state.gear).includes(id)?'<i>Equipped</i>':''}</button>`).join('')||'<div class="empty-state"><span>🎒</span><strong>Your first harvest belongs here.</strong></div>'}</div>${item?`<div class="item-detail"><span class="item-hero">${art(selectedItem!,item.icon)}</span><div><h3>${esc(item.name)}</h3><p>${esc(item.desc)}</p><div class="button-row">${slot?`<button class="primary" data-action="equip" data-item="${selectedItem}" ${state.gear[slot]===selectedItem?'disabled':''}>${state.gear[slot]===selectedItem?'Equipped':'Equip'}</button>`:''}${item.heal||item.buff?`<button class="primary" data-action="eat" data-item="${selectedItem}">Use${item.heal?` · +${item.heal} HP`:''}</button>`:''}${item.type==='decor'||item.type==='placeable'?`<button class="primary" data-action="place-decor" data-item="${selectedItem}">Place at home</button>`:''}</div></div></div>`:''}<div class="button-row"><button class="soft-button" data-action="go" data-kind="cook">🔥 Volcano kitchen</button><button class="soft-button" data-action="decorations">🏡 Home decorations</button><button class="soft-button" data-action="journal-tab" data-kind="collection">🐟 Fish collection</button></div>`,'CHARACTER');
+  openDialog('bag','Your explorer & backpack',`<div class="stat-strip"><span>❤️ <b>${Math.ceil(state.hp)}/${Math.round(stats.maxHp)}</b></span><span>⚔️ <b>${stats.attack.toFixed(1)}</b></span><span>🛡️ <b>${stats.defense}</b></span><span>💨 <b>${stats.speed.toFixed(1)}</b></span><span>✨ <b>${Math.round(stats.critChance*100)}% crit</b></span></div><div class="equipment">${slots.map(([key,icon,name])=>`<div><button data-action="inspect" data-item="${state.gear[key]||''}" ${!state.gear[key]?'disabled':''}><span>${state.gear[key]?art(state.gear[key]!,M.ITEMS[state.gear[key]!].icon):icon}</span><small>${state.gear[key]?esc(M.ITEMS[state.gear[key]!].name):name}</small></button>${state.gear[key]?`<button class="unequip" data-action="unequip" data-slot="${key}" aria-label="Unequip ${name}">Remove</button>`:''}</div>`).join('')}</div><div class="section-label">BACKPACK <span>${entries.reduce((n,[,q])=>n+q,0)} items</span></div><div class="inventory-grid">${entries.map(([id,count])=>`<button class="item-tile ${id===selectedItem?'selected':''}" data-action="inspect" data-item="${id}" aria-label="${esc(M.ITEMS[id].name)}, ${count}"><span>${art(id,M.ITEMS[id].icon)}</span><b>${count}</b><small>${esc(M.ITEMS[id].name)}</small>${Object.values(state.gear).includes(id)?'<i>Equipped</i>':''}</button>`).join('')||'<div class="empty-state"><span>🎒</span><strong>Your first harvest belongs here.</strong></div>'}</div>${item?`<div class="item-detail"><span class="item-hero">${art(selectedItem!,item.icon)}</span><div><h3>${esc(item.name)}</h3><p>${esc(item.desc)}</p><div class="button-row">${slot?`<button class="primary" data-action="equip" data-item="${selectedItem}" ${state.gear[slot]===selectedItem?'disabled':''}>${state.gear[slot]===selectedItem?'Equipped':'Equip'}</button>`:''}${item.heal||item.buff?`<button class="primary" data-action="eat" data-item="${selectedItem}">Use${item.heal?` · +${item.heal} HP`:''}</button>`:''}${item.type==='decor'||item.type==='placeable'?`<button class="primary" data-action="place-decor" data-item="${selectedItem}">Place at home</button>`:''}</div></div></div>`:''}<div class="button-row"><button class="soft-button" data-action="go" data-kind="cook">🔥 Volcano kitchen</button><button class="soft-button" data-action="decorations">🏡 Home decorations</button><button class="soft-button" data-action="journal-tab" data-kind="collection">🐟 Fish collection</button></div>`,'CHARACTER');
 }
 // "36 energy · 6 XP · 15 stars" becomes three coloured chips.
 function rewardChips(label:string){return label.split(' · ').filter(Boolean).map(part=>{const kind=/energy/i.test(part)?'energy':/xp/i.test(part)?'xp':/star/i.test(part)?'star':'';return `<span class="chip${kind?` chip-${kind}`:''}">${kind==='energy'?'ϟ ':kind==='xp'?'✨ ':kind==='star'?'⭐ ':''}${esc(kind?part.replace(/\s*(energy|stars?)$/i,''):part)}</span>`;}).join('');}
@@ -277,21 +288,21 @@ const SHOP_TABS=['Weapons','Clothing','Pets','Disguises','Supplies','Decor'];
 function shop(){
   const matches=(item:M.ItemDef)=>shopTab==='Weapons'?item.slot==='weapon':shopTab==='Clothing'?['hat','outfit','boots'].includes(item.slot??''):shopTab==='Pets'?item.slot==='pet':shopTab==='Disguises'?item.slot==='disguise':shopTab==='Decor'?item.type==='decor':!item.slot&&item.type!=='decor';
   const entries=Object.entries(M.ITEMS).filter(([,item])=>item.price!==undefined&&matches(item));
-  openDialog('shop','Little outfitters',`<nav class="panel-tabs" aria-label="Shop categories">${SHOP_TABS.map(tab=>`<button class="${shopTab===tab?'active':''}" aria-pressed="${shopTab===tab}" data-action="shop-tab" data-kind="${tab}">${tab}</button>`).join('')}</nav><div class="shop-grid">${entries.map(([id,item])=>`<div class="shop-item"><span class="shop-icon">${item.icon}</span><div><strong>${esc(item.name)}</strong><p>${esc(item.desc)}</p><small>Owned: ${state.bag[id]||0}${Object.entries(item.materials??{}).map(([mat,n])=>` · ${M.ITEMS[mat].icon} ${esc(M.ITEMS[mat].name)} ${state.bag[mat]||0}/${n}`).join('')}</small></div><button class="primary" data-action="buy" data-item="${id}" ${state.energy<item.price!||Object.entries(item.materials??{}).some(([id,n])=>M.looseQuantity(state,id)<n!)?'disabled':''}>ϟ ${item.price}</button></div>`).join('')||'<p class="empty-state">Visit the workshop for this collection.</p>'}</div>`,'ϟ '+state.energy+' ENERGY');
+  openDialog('shop','Little outfitters',`<nav class="panel-tabs" aria-label="Shop categories">${SHOP_TABS.map(tab=>`<button class="${shopTab===tab?'active':''}" aria-pressed="${shopTab===tab}" data-action="shop-tab" data-kind="${tab}">${tab}</button>`).join('')}</nav><div class="shop-grid">${entries.map(([id,item])=>`<div class="shop-item"><span class="shop-icon">${art(id,item.icon)}</span><div><strong>${esc(item.name)}</strong><p>${esc(item.desc)}</p><small>Owned: ${state.bag[id]||0}${Object.entries(item.materials??{}).map(([mat,n])=>` · ${mini(mat)} ${esc(M.ITEMS[mat].name)} ${state.bag[mat]||0}/${n}`).join('')}</small></div><button class="primary" data-action="buy" data-item="${id}" ${state.energy<item.price!||Object.entries(item.materials??{}).some(([id,n])=>M.looseQuantity(state,id)<n!)?'disabled':''}>ϟ ${item.price}</button>${item.slot?Object.values(state.gear).includes(id)?'<span class="chip chip-seed">✓ Equipped</span>':state.bag[id]?`<button class="sky-button" data-action="equip" data-item="${id}">Equip</button>`:'':''}</div>`).join('')||'<p class="empty-state">Visit the workshop for this collection.</p>'}</div>`,'ϟ '+state.energy+' ENERGY');
 }
 
 function market(){const sellable=(Object.keys(state.bag) as M.ItemId[]).map(id=>[id,M.looseQuantity(state,id)] as [M.ItemId,number]).filter(([id,n])=>M.ITEMS[id].sell>0&&n>0);openDialog('sell','From your garden, with love',`<div class="owl-note"><span>🧺</span><p><strong>Welcome to the harvest market</strong>Trade your treasures for energy. Save a snack for the trail!</p></div><div class="shop-grid">${sellable.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(M.ITEMS[id].name)} <small>×${n}</small></strong><div class="chips"><span class="chip chip-energy">ϟ ${M.ITEMS[id].sell} each</span></div></div><div class="button-row"><button class="soft-button" data-action="sell-one" data-item="${id}">Sell 1</button><button class="primary" data-action="sell-all" data-item="${id}">Sell all · ϟ ${n*M.ITEMS[id].sell}</button></div></div>`).join('')||'<div class="empty-state"><span>🌾</span><strong>Something good is growing</strong><p>Bring crops, fish, or materials to sell here.</p><button class="primary" data-action="go" data-kind="plot">Visit the garden →</button></div>'}</div>`,'ϟ '+state.energy+' ENERGY');}
-function storage(){const rows=(inv:M.Inventory,toChest:boolean)=>(Object.entries(inv)as[M.ItemId,number][]).map(([id,n])=>`<div class="storage-row"><span>${M.ITEMS[id].icon} ${M.ITEMS[id].name} <b>×${n}</b></span><button class="soft-button" data-action="transfer" data-item="${id}" data-direction="${toChest?'store':'take'}" ${toChest&&M.looseQuantity(state,id)===0?'disabled':''}>${toChest?'Store →':'← Take'}</button></div>`).join('');openDialog('chest','Keep your treasures safe',`<p class="intro">Items in your chest stay safe when you get knocked out.</p><div class="storage-columns"><div><h3>🎒 Backpack</h3>${rows(state.bag,true)||'<p class="muted">Nothing here yet.</p>'}</div><div><h3>📦 Chest</h3>${rows(state.chest,false)||'<p class="muted">Room for something special.</p>'}</div></div>`,'YOUR STORAGE CHEST');}
+function storage(){const rows=(inv:M.Inventory,toChest:boolean)=>(Object.entries(inv)as[M.ItemId,number][]).map(([id,n])=>`<div class="storage-row"><span>${mini(id)} ${esc(M.ITEMS[id].name)} <b>×${n}</b></span><button class="soft-button" data-action="transfer" data-item="${id}" data-direction="${toChest?'store':'take'}" ${toChest&&M.looseQuantity(state,id)===0?'disabled':''}>${toChest?'Store →':'← Take'}</button></div>`).join('');openDialog('chest','Keep your treasures safe',`<p class="intro">Items in your chest stay safe when you get knocked out.</p><div class="storage-columns"><div><h3>🎒 Backpack</h3>${rows(state.bag,true)||'<p class="muted">Nothing here yet.</p>'}</div><div><h3>📦 Chest</h3>${rows(state.chest,false)||'<p class="muted">Room for something special.</p>'}</div></div>`,'YOUR STORAGE CHEST');}
 function upgrades(){const stats=M.activeStats(state),options:[keyof typeof M.UPGRADES,string,string][]=[['health','❤️ Health','+25 maximum health'],['attack','⚔️ Attack','+3 attack'],['defense','🛡️ Defense','+4 defense'],['crit','✨ Critical chance','+2.5% critical chance']];openDialog('upgrade','A wish for something more',`<div class="stat-strip"><span>❤️ ${stats.maxHp}</span><span>⚔️ ${stats.attack.toFixed(1)}</span><span>🛡️ ${stats.defense}</span><span>✨ ${Math.round(stats.critChance*100)}%</span></div><div class="upgrade-grid">${options.map(([id,name,description])=>`<div><h3>${name}</h3><p>${description}</p><button class="primary" data-action="upgrade" data-kind="${id}" ${state.energy<M.upgradeCost(state,id)||id==='crit'&&state.critUp>=28?'disabled':''}>ϟ ${M.upgradeCost(state,id)}</button></div>`).join('')}</div>`,'THE WISHING CRYSTAL');}
 function cooking(){const ingredients=Object.entries(state.bag).filter(([id,n])=>n!>0&&M.ITEMS['cooked_'+id]);openDialog('cook','A warm meal for the trail',`<p class="intro">Cook crops, fish, and meat for stronger healing and longer effects. Cooking is free at your garden kitchen.</p><div class="shop-grid">${ingredients.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(M.ITEMS[id].name)} <small>×${n}</small></strong><p>${esc(M.ITEMS['cooked_'+id].desc)}</p></div><div class="button-row"><button class="soft-button" data-action="cook-one" data-item="${id}">Cook 1</button><button class="primary" data-action="cook-all" data-item="${id}">Cook all</button></div></div>`).join('')||'<p class="empty-state">Bring crops, fish, or meat from your adventures.</p>'}</div>`,'VOLCANO KITCHEN');}
 function crafting(){
   const recipes=M.RECIPES.map((recipe,index)=>({...recipe,index})).filter(r=>r.station===craftStation),categories=['All',...new Set(recipes.map(r=>r.category))];
   if(!categories.includes(craftTab))craftTab='All';
-  openDialog('craft',craftStation==='forge'?'The ember forge':'Made with a little magic',`<nav class="panel-tabs" aria-label="Workshop categories">${categories.map(category=>`<button class="${craftTab===category?'active':''}" data-action="craft-tab" data-kind="${esc(category)}">${esc(category)}</button>`).join('')}</nav><div class="shop-grid">${recipes.filter(r=>craftTab==='All'||r.category===craftTab).map(r=>`<div class="shop-item"><span class="shop-icon">${M.ITEMS[r.result].icon}</span><div><strong>${esc(M.ITEMS[r.result].name)}${r.count&&r.count>1?` ×${r.count}`:''}</strong><p>${esc(M.ITEMS[r.result].desc)}</p><small>${Object.entries(r.materials).map(([id,n])=>`${M.ITEMS[id].icon} ${esc(M.ITEMS[id].name)} ${state.bag[id]||0}/${n}`).join(' · ')}</small></div><button class="primary" data-action="craft" data-index="${r.index}" ${!M.canCraft(state,r.index)?'disabled':''}>Craft · ϟ ${r.energy}</button></div>`).join('')||'<p class="empty-state">Collect materials on your travels, then return.</p>'}</div>`,craftStation==='forge'?'LAVA FURNACE':'WORKSHOP');
+  openDialog('craft',craftStation==='forge'?'The ember forge':'Made with a little magic',`<nav class="panel-tabs" aria-label="Workshop categories">${categories.map(category=>`<button class="${craftTab===category?'active':''}" data-action="craft-tab" data-kind="${esc(category)}">${esc(category)}</button>`).join('')}</nav><div class="shop-grid">${recipes.filter(r=>craftTab==='All'||r.category===craftTab).map(r=>`<div class="shop-item"><span class="shop-icon">${art(r.result,M.ITEMS[r.result].icon)}</span><div><strong>${esc(M.ITEMS[r.result].name)}${r.count&&r.count>1?` ×${r.count}`:''}</strong><p>${esc(M.ITEMS[r.result].desc)}</p><small>${Object.entries(r.materials).map(([id,n])=>`${mini(id)} ${esc(M.ITEMS[id].name)} ${state.bag[id]||0}/${n}`).join(' · ')}</small></div><button class="primary" data-action="craft" data-index="${r.index}" ${!M.canCraft(state,r.index)?'disabled':''}>Craft · ϟ ${r.energy}</button></div>`).join('')||'<p class="empty-state">Collect materials on your travels, then return.</p>'}</div>`,craftStation==='forge'?'LAVA FURNACE':'WORKSHOP');
 }
 function decorations(){
   const owned=Object.entries(state.bag).filter(([id,n])=>n!>0&&(M.ITEMS[id].type==='decor'));
-  openDialog('decor','Make this place your own',`<p class="intro">Place decorations on clear ground near home. Move around first to choose a spot, then select an item and tap the ground. R rotates before placement.</p><div class="shop-grid">${owned.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${M.ITEMS[id].icon}</span><div><strong>${esc(M.ITEMS[id].name)} ×${n}</strong></div><button class="primary" data-action="place-decor" data-item="${id}">Place</button></div>`).join('')||'<p>No decorations in your backpack. Browse the Decor tab at the shop.</p>'}</div><h3>Placed at home</h3><div class="shop-grid">${state.decorations.map(d=>`<div class="storage-row"><span>${M.ITEMS[d.id].icon} ${esc(M.ITEMS[d.id].name)}</span><button class="soft-button" data-action="remove-decor" data-id="${d.uid}">Pack away</button></div>`).join('')||'<p class="muted">A fresh canvas.</p>'}</div><button class="soft-button" data-action="decor-shop">Browse decorations</button>`,'YOUR HOME');
+  openDialog('decor','Make this place your own',`<p class="intro">Place decorations on clear ground near home. Move around first to choose a spot, then select an item and tap the ground. R rotates before placement.</p><div class="shop-grid">${owned.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(M.ITEMS[id].name)} ×${n}</strong></div><button class="primary" data-action="place-decor" data-item="${id}">Place</button></div>`).join('')||'<p>No decorations in your backpack. Browse the Decor tab at the shop.</p>'}</div><h3>Placed at home</h3><div class="shop-grid">${state.decorations.map(d=>`<div class="storage-row"><span>${mini(d.id)} ${esc(M.ITEMS[d.id].name)}</span><button class="soft-button" data-action="remove-decor" data-id="${d.uid}">Pack away</button></div>`).join('')||'<p class="muted">A fresh canvas.</p>'}</div><button class="soft-button" data-action="decor-shop">Browse decorations</button>`,'YOUR HOME');
 }
 function beginPlacement(id:string){if(visiting)return;if(state.planet!=='home'){toast('Decorations belong at home. Return to your garden first.','🏡');return;}closeDialog();placement={id,rotation:0};$('#placement-bar').hidden=false;$('#placement-name').textContent=`${M.ITEMS[id].icon} Place ${M.ITEMS[id].name}`;}
 function cancelPlacement(){placement=null;$('#placement-bar').hidden=true;}
@@ -360,10 +371,14 @@ function updateFishing(dt:number){
 }
 
 
+world.onAlert=()=>tone('alert');
 world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();};
 stockPonds();
 // Fish models stream in after the first build; restock the ponds when they arrive.
 void fishKit.load().then(()=>{if(fishKit.ready)stockPonds();});
+// The Blender explorer, gear and pets stream in after the world is playable.
+// Gear and pet files load on demand as the explorer puts them on (see World.kitFor).
+void heroKit.load().then(()=>{if(heroKit.ready)world.refreshAvatars();});
 world.onInteract=(e)=>{
   if(!started||uiBlocked())return;tone();if(visiting&&e.kind!=='travel'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
@@ -372,17 +387,42 @@ world.onInteract=(e)=>{
   else if(e.kind==='mine'){const index=e.index;if(index===undefined||!M.mineAvailable(state,state.planet,index)){toast('This crystal needs a moment to regrow.','💎');return;}if(!change(()=>M.claimMine(state,index)))return;world.burst(e.x,e.z,'#d9c9f3');toast('A crystal for your crafting collection!','💎');}
   else if(e.kind==='gift'){if(e.index===undefined)return;const outcome=change(()=>M.claimGift(state,e.index!));if(!outcome)return;e.mesh.visible=false;if(outcome.kind==='bomb'){for(const target of world.enemies)if(target.hp>0&&Math.hypot(target.x-e.x,target.z-e.z)<(outcome.radius??4.5))hit(target,Math.round(M.attack(state)*(outcome.damageMultiplier??3)));world.burst(e.x,e.z,'#ffb269',28);checkDefeat();}toast(outcome.label,'🎁');}
 };
-function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string}){
+function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string;x?:number;z?:number}){
   const loot=change(()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss));
-  toast(`${e.name??'Creature'} defeated! +${e.xp} XP${loot.length?` · ${loot.map(item=>`${M.ITEMS[item.id]?.name??item.id} ×${item.count}`).join(', ')}`:''}`,e.boss?'👑':'✨');if(e.boss)tone('level');
+  // Experience flies in as cyan orbs; loot pops up above the creature, one line at a time.
+  const x=e.x??world.position.x,z=e.z??world.position.z;
+  world.fx?.orbs({x,z},Math.min(8,3+Math.floor(e.xp/20)),'#7ff0ff',()=>world.position,()=>tone('coin'));
+  floating(`+${e.xp} EXP`,x,z,'xp',.5);
+  loot.forEach((item,i)=>setTimeout(()=>floating(`${M.ITEMS[item.id]?.icon??'✨'} ${M.ITEMS[item.id]?.name??item.id} ×${item.count}`,x,z,'item',1+i*.45),300+i*220));
+  if(e.boss){toast(`${e.name??'Boss'} defeated!`,'👑');tone('level');}
 }
 function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=false){
   if(e.hp<=0||(visiting&&!remote))return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;
   world.damageEnemy(e,damage,stun,hazard);world.hitFeedback(e,damage,!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
-  if(impact?.knock&&e.hp>0){const steps=Math.ceil(impact.knock/.2);for(let i=0;i<steps;i++)moveEnemy(e,e.x+impact.direction.x*impact.knock/steps,e.z+impact.direction.z*impact.knock/steps);}
-  if(e.hp===0){world.defeatFeedback(e);tone('poof');if(!remote)world.fx?.orbs({x:e.x,z:e.z},e.boss?10:4,'#ffe45c',()=>world.position,()=>tone('coin'));
+  if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
+  if(e.hp===0){world.defeatFeedback(e);tone('poof');
     const type=(e as Enemy&{type?:string}).type??'slime';if(network.onHostKill)network.onHostKill(e.id,e.xp,e.boss,type);else grantDefeat({...e,type});}
+}
+/** Ground slam impact, after the reference: flying dirt, two shockwaves and a heavy shake. */
+function slamImpact(){
+  const fx=world.fx;if(!fx)return;const at=world.position;
+  fx.shake(.7);fx.ring(at,{color:'#fff3c4',to:4.6,life:.45,thick:.25});fx.ring(at,{color:'#ffb347',to:3.5,life:.6,thick:.12});
+  fx.burst(at,{n:26,color:['#b98a5e','#8b5a36','#d9b58a'],speed:7,up:7,size:.18,life:1.1,y:.2});fx.burst(at,{n:14,color:'#ffffff',glow:true,speed:8,up:3,size:.12,life:.5});
+  tone('crit');vibrate(80);
+}
+/** Standing still near a creature, the explorer fights it automatically, as in the reference. */
+function autoAttack(kind:string){
+  if(!started||uiBlocked()||visiting||fishGame||placement||kind==='rod'||world.selected||world.destination||world.route.length||world.moving||world.keys.size||combat.locksMovement||combatTimers.attackCooldown>0)return;
+  const reach=kind==='gun'?6:2.4,p=world.position;
+  let best:Enemy|null=null,bestDistance=Infinity;
+  for(const e of world.enemies){if(e.hp<=0||!e.mesh.visible)continue;const d=Math.hypot(e.x-p.x,e.z-p.z)-e.radius;if(d<reach&&d<bestDistance){best=e;bestDistance=d;}}
+  if(best)world.select(best);
+}
+/** The new item appears on the explorer with a sparkle, a name tag and a chime. */
+function equipFeedback(id:string){
+  world.refreshPlayer();world.fx?.burst(world.position,{n:16,color:['#ffe66d','#ffffff'],glow:true,speed:3,up:6});
+  floating(`${M.ITEMS[id].name} ↑`,world.position.x,world.position.z,'item big');tone('level');
 }
 function basicAttack(e?:Enemy){
   if(!started||uiBlocked()||visiting||combatTimers.attackCooldown>0)return;
@@ -426,7 +466,7 @@ export const gameBridge:GameBridge={
   applyRemoteHit(id,damage,stun=0,impact){const enemy=world.enemies.find(e=>e.id===id);if(enemy)hit(enemy,damage,stun,impact,true);},
   applyRemoteStatus(id,kind,duration){const enemy=world.enemies.find(e=>e.id===id);if(enemy)world.statusEnemy(enemy,kind,Math.min(12,duration));},
   applyRemoteMove(id,x,z){const enemy=world.enemies.find(e=>e.id===id);if(enemy)moveEnemy(enemy,x,z);},
-  applySharedKill(id,xp,boss,type){if(sharedKills.has(id))return;sharedKills.add(id);if(sharedKills.size>500)sharedKills.delete(sharedKills.values().next().value!);grantDefeat({id,xp,boss,type});},
+  applySharedKill(id,xp,boss,type){if(sharedKills.has(id))return;sharedKills.add(id);if(sharedKills.size>500)sharedKills.delete(sharedKills.values().next().value!);const enemy=world.enemies.find(e=>e.id===id);grantDefeat({id,xp,boss,type,x:enemy?.x,z:enemy?.z});},
   applyRemoteEffect(effect){showEffect(effect);},
   applyRemoteDamage(amount,source){world.onDamage(amount,source==='shot'||source==='hazard'?source:'melee');},
   setVisiting(owner,home){
@@ -480,8 +520,11 @@ app.addEventListener('click',event=>{
     case 'cancel-decor':cancelPlacement();break;
     case 'rotate-decor':if(placement){placement.rotation=(placement.rotation+Math.PI/2)%(Math.PI*2);$('#placement-name').textContent=`${M.ITEMS[placement.id].name} · ${Math.round(placement.rotation*180/Math.PI)}°`;}break;
     case 'remove-decor':if(change(()=>M.removeDecoration(state,button.dataset.id!))){world.syncDecorations();decorations();}break;
-    case 'buy':if(change(()=>M.buy(state,id))){shop();toast(`${M.ITEMS[id].name} is in your backpack.`,'🎒');}break;
-    case 'equip':if(change(()=>M.equip(state,id))){world.refreshPlayer();inventory();toast(`${M.ITEMS[id].name} equipped.`,'✨');}break;
+    case 'buy':if(change(()=>M.buy(state,id))){
+      // Gear goes straight onto the explorer, like picking up a fishing rod.
+      if(M.ITEMS[id].slot&&change(()=>M.equip(state,id)))equipFeedback(id);else{floating(`+ ${M.ITEMS[id].name}`,world.position.x,world.position.z,'item');tone('success');}
+      shop();}break;
+    case 'equip':if(change(()=>M.equip(state,id))){equipFeedback(id);if(modal==='shop')shop();else inventory();}break;
     case 'eat':change(()=>M.eat(state,id));inventory();break;
     case 'sell-one':case 'sell-all':{const n=action==='sell-all'?M.looseQuantity(state,id):1;const value=change(()=>M.sell(state,id,n));if(value){tone('success');toast(`Sold for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
     case 'transfer':change(()=>M.transfer(state,id,button.dataset.direction==='store'));storage();break;
@@ -530,7 +573,10 @@ function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt
   // browser throttles rendering, and collisions do not tunnel at a low frame rate.
   for(let remaining=dt;remaining>0;){const step=Math.min(.025,remaining);remaining-=step;const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);combat.update(step,combatActive);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerStealth=(combat.statuses.stealth??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);if(started&&!document.hidden)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
   // Landing from the ground slam squashes the explorer and jolts the camera.
-  const airborne=combat.airborne>0;if(wasAirborne&&!airborne){world.landT=.25;fx?.shake(.32);tone('hit');}wasAirborne=airborne;
+  const airborne=combat.airborne>0;if(wasAirborne&&!airborne){world.landT=.25;slamImpact();}wasAirborne=airborne;
+  // The explorer's pose follows the weapon, skills, fishing line and hit invulnerability.
+  const weaponKind=M.weaponStats(state).kind;world.weaponKind=state.gear.disguise?'fist':weaponKind;world.pose=combat.pose;world.invulnerable=combatTimers.invulnerable>0;world.fishTension=fishGame?.simulation.tension??0;
+  autoAttack(weaponKind);
   fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.position,fishGame?.simulation??null);
   if(!fishGame&&!$('#reel-button').hidden&&(performance.now()>recastUntil||world.moving))showReel(false);
   world.render();positionLabels();fx?.updateText(realDt,innerWidth,innerHeight);

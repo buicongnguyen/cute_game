@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { RefinedAssetLibrary, REFINED_ASSET_FILES, KitLibrary, isShared } from '../src/assets.ts';
+import { RefinedAssetLibrary, REFINED_ASSET_FILES, KitLibrary, HeroLibrary, isShared } from '../src/assets.ts';
 import { World } from '../src/world.ts';
 
 function model() {
@@ -123,4 +123,45 @@ test('an unavailable kit keeps the procedural scenery', async () => {
   await kit.load();
   assert.equal(kit.ready, false);
   assert.equal(kit.instance('tree_round'), null);
+});
+
+test('gear pieces keep the hero part they follow and weapons keep their effect markers', async () => {
+  const scene = new T.Group(), sword = new T.Group(); sword.name = 'sword_wood';
+  const blade = new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial()); blade.name = 'sword_wood_blade@hand-right_1'; blade.position.set(.37, .72, .2);
+  const hat = new T.Group(); hat.name = 'hat_straw';
+  const brim = new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial()); brim.name = 'hat_straw@head';
+  const muzzle = new T.Object3D(); muzzle.name = 'muzzle'; muzzle.position.set(0, 0, .8); blade.add(muzzle);
+  sword.add(blade); hat.add(brim); scene.add(sword, hat);
+  const kit = new KitLibrary(['gear.glb'], async () => scene);
+  await kit.load();
+  const held = kit.instance('sword_wood')!, marker = held.getObjectByName('muzzle')!;
+  assert.equal(held.children[0].userData.tag, 'hand-right', 'numeric suffixes added by the loader are ignored');
+  assert.equal(marker.userData.tag, 'hand-right');
+  assert.ok(Math.abs(marker.position.z - 1) < 1e-6, 'markers keep their position in explorer space');
+  assert.equal(kit.instance('hat_straw')!.children[0].userData.tag, 'head');
+});
+
+test('each hero instance wears the player colour without changing the shared model', async () => {
+  const scene = new T.Group(), hero = new T.Group(); hero.name = 'hero';
+  const shirt = new T.MeshStandardMaterial({ color: '#ffffff' }); shirt.name = 'Hero shirt';
+  const shade = new T.MeshStandardMaterial({ color: '#ffffff' }); shade.name = 'Hero shirt shade';
+  const body = new T.Mesh(new T.BoxGeometry(), [shirt, shade]); body.name = 'body'; hero.add(body); scene.add(hero);
+  const library = new HeroLibrary('hero.glb', async () => scene);
+  await library.load();
+  const red = library.instance('#ff0000')!, part = red.getObjectByName('body') as T.Mesh<T.BufferGeometry, T.MeshStandardMaterial[]>;
+  assert.equal(part.material[0].color.getHexString(), 'ff0000');
+  assert.ok(part.material[1].color.r < 1 && part.material[1].color.r > .5, 'the shade is a darker red');
+  assert.equal(shirt.color.getHexString(), 'ffffff');
+  assert.ok(isShared(part.geometry), 'geometry is shared and survives world disposal');
+  assert.equal(new HeroLibrary('missing.glb', async () => { throw new Error('404'); }).instance('#fff'), null);
+});
+
+test('a gear file downloads nothing until something from it is worn, then only once', async () => {
+  let loads = 0;
+  const kit = new KitLibrary(['gear.glb'], async () => { loads++; return new T.Group(); });
+  assert.equal(kit.requested, false);
+  assert.equal(loads, 0);
+  await Promise.all([kit.load(), kit.load()]);
+  assert.equal(kit.requested, true);
+  assert.equal(loads, 1);
 });

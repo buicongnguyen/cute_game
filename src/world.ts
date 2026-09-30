@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { refinedAssets, sceneryKit, cropKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
+import { refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, disguiseKit, petKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
 import type { QualityProfile } from './graphics.ts';
 import { approach, blocked, clearSegment, findRoute, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
@@ -17,7 +17,7 @@ import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,type EnemyDefinition
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
   pond?:{rx:number;rz:number;surface:number} }
-export interface Enemy extends Entity { hp: number; maxHp: number; damage: number; xp: number; homeX: number; homeZ: number; cooldown: number; respawn: number; boss: boolean; stun: number;type?:string;definition?:EnemyDefinition;phase?:string;phaseTime?:number;route?:Point[];routeTime?:number;lift?:number;liftVelocity?:number;statuses?:Record<string,number>;targetX?:number;targetZ?:number;bossStage?:number;attackCount?:number;skillCount?:number;skill?:BossSkill;telegraphs?:Array<{x:number;z:number;r:number;delay:number}>;skillEffects?:Array<{x:number;z:number;r:number;inner:number;remaining:number;multiplier:number}>;spinTick?:number;scaled?:boolean;baseMaxHp?:number;baseDamage?:number;level?:number;flash?:number;flashLit?:boolean }
+export interface Enemy extends Entity { hp: number; maxHp: number; damage: number; xp: number; homeX: number; homeZ: number; cooldown: number; respawn: number; boss: boolean; stun: number;type?:string;definition?:EnemyDefinition;phase?:string;phaseTime?:number;route?:Point[];routeTime?:number;lift?:number;liftVelocity?:number;statuses?:Record<string,number>;targetX?:number;targetZ?:number;bossStage?:number;attackCount?:number;skillCount?:number;skill?:BossSkill;telegraphs?:Array<{x:number;z:number;r:number;delay:number}>;skillEffects?:Array<{x:number;z:number;r:number;inner:number;remaining:number;multiplier:number}>;spinTick?:number;scaled?:boolean;baseMaxHp?:number;baseDamage?:number;level?:number;flash?:number;flashLit?:boolean;knockVX?:number;knockVZ?:number;dying?:number }
 interface Obstacle { x: number; z: number; r: number;tag?:string }
 export interface RemotePose {id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
@@ -65,6 +65,8 @@ export class World {
   onZone: (name: string) => void = () => {}; lastZone = ''; hazardTimer = 0;
   /** Called after every world build, so views such as the fishing ponds can restock. */
   onBuilt?: () => void;
+  /** A creature has just noticed the explorer. */
+  onAlert?: (e: Enemy) => void;
   environment!:EnvironmentSimulation;environmentView!:EnvironmentView;movementLocked=false;playerFlying=false;playerStealth=false;
   networkRole:'host'|'peer'|null=null;remotePlayers=new Map<string,{mesh:T.Group;pose:RemotePose}>();remoteRoot=new T.Group();
   onRemoteDamage:(id:string,amount:number,source?:'melee'|'shot'|'hazard')=>void=()=>{};
@@ -78,6 +80,7 @@ export class World {
   fx?: Effects;
   // Player animation timers set by combat and fishing.
   punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; fishing:'idle'|'cast'|'wait'|'fight'='idle';
+  walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
   private shakeOffset=new T.Vector3(); private playerMaterials:T.MeshStandardMaterial[]=[]; private shadowTexel=72/1024;
   canvas: HTMLCanvasElement; state: SaveState;
   constructor(canvas: HTMLCanvasElement, state: SaveState, options: { antialias?: boolean } = {}) {
@@ -384,44 +387,96 @@ export class World {
     if(id.includes('dragon')||id.includes('parrot')||id.includes('fire'))for(const x of [-1,1]){const wing=ball('#e8e6a0',.32,x*.39,.6);wing.scale.set(1.3,.12,.6);pet.add(wing);}
     return pet;
   }
+  /** Puts a kit gear piece on the explorer; each piece rides the body part named by its tag. */
+  private wearKit(hero:T.Object3D,id:string|undefined,fallback:string){
+    const kit=id?this.kitFor(id):null,item=kit&&heroKit.ready?kit.instance(id!):null;if(!item)return false;
+    hero.updateMatrixWorld(true);const toHero=hero.matrixWorld.clone().invert();
+    for(const piece of [...item.children]){
+      const part=hero.getObjectByName(piece.userData.tag??fallback)??hero;
+      // Pieces are modelled in explorer space; re-express them in the part's own space.
+      piece.applyMatrix4(toHero.clone().multiply(part.matrixWorld).invert());part.add(piece);
+    }
+    return true;
+  }
+  /** A companion model: from the pet kit when it has loaded, otherwise the simple shapes. */
+  petFor(id:string){
+    const model=this.kitFor(id)?.instance(id)??this.petModel(id);
+    model.userData.flying=['pet_parrot','pet_firefly','pet_dragon'].includes(id);
+    // The kit's convention: the right wing lifts with +z, the left with -z.
+    model.userData.wings=model.children.filter(c=>/_wing_[lr]/.test(c.name)).map(c=>({node:c,base:c.rotation.z,side:/_wing_l/.test(c.name)?-1:1}));
+    return model;
+  }
+  /**
+   * The loaded kit holding a gear item, or null. Asking starts that file's download the
+   * first time; avatars are rebuilt when it arrives, and simple shapes stand in until then.
+   */
+  private kitFor(id:string){
+    const slot=M.ITEMS[id]?.slot,kit=slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
+    if(!kit.requested)void kit.load().then(()=>{if(kit.ready)this.refreshAvatars();});
+    return kit.ready&&kit.has(id)?kit:null;
+  }
+  /**
+   * The explorer in its gear. Each slot uses its Blender model when the kit has it and
+   * falls back to simple shapes otherwise, so a missing file never leaves a slot empty.
+   */
   private avatar(color:string,gear:SaveState['gear']={}){
-    const disguise=gear.disguise?M.DISGUISES[gear.disguise]:undefined,id=gear.disguise??'',c=this.chibi(disguise?.color??color);
-    const hat=gear.hat??'',outfit=gear.outfit??'',weapon=gear.weapon?M.ITEMS[gear.weapon]?.weapon:undefined;
-    if(hat||id){
-      const capColor=disguise?.color??(hat.includes('wizard')?'#6d60b1':hat.includes('santa')?'#e2646e':hat.includes('straw')?'#e3bd69':'#91b8c9');
-      if(/wizard|party/.test(hat)||id==='dz_mage')c.add(cyl(capColor,0,.66,.95,0,2.4),cyl(capColor,.75,.75,.09,0,2));
-      else if(/bunny|cat|bear|frog/.test(hat)||/dino|snowman/.test(id)){
-        c.add(ball(capColor,.62,0,1.88));for(const x of [-.38,.38]){const ear=ball(capColor,.18,x,2.3);ear.scale.y=hat.includes('bunny')?2.3:1; c.add(ear);}
-      }else if(hat.includes('halo')||id==='dz_fairy'){const halo=mesh(new T.TorusGeometry(.45,.06,6,16),'#ffe387',0,2.3);halo.rotation.x=Math.PI/2;c.add(halo);}
-      else c.add(cyl(capColor,.7,.74,.1,0,2.03),cyl(capColor,.43,.48,.35,0,2.2));
-      if(hat.includes('lantern'))c.add(ball('#ffe892',.22,0,2.35,.43));
+    const disguise=gear.disguise?M.DISGUISES[gear.disguise]:undefined,id=gear.disguise??'';
+    const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready;
+    const tint=disguise&&!kitDisguise?disguise.color:color,c=heroKit.instance(tint)??this.chibi(tint);
+    // The sprout pokes through hats and most costumes; the fairy crown and hero mask leave it showing.
+    const leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=!gear.hat&&(!id||(kitDisguise&&['dz_fairy','dz_superhero'].includes(id)));
+    if(id){if(!kitDisguise)this.simpleDisguise(c,id,disguise!.color);}
+    else{
+      if(gear.hat&&!this.wearKit(c,gear.hat,'head'))this.simpleHat(c,gear.hat);
+      if(gear.outfit&&!this.wearKit(c,gear.outfit,'body'))this.simpleOutfit(c,gear.outfit);
+      if(gear.boots&&!this.wearKit(c,gear.boots,'body'))for(const x of [-.18,.18])c.add(box(gear.boots.includes('flipper')?'#66a9d6':'#b88c73',.27,.23,gear.boots.includes('flipper')?.6:.34,x,.17,.1));
     }
-    if(outfit||disguise){
-      const coat=disguise?.color??(/leaf|hawaii/.test(outfit)?'#6db87a':/knight|space|bone/.test(outfit)?'#a9bed0':/angel|cloud|chef/.test(outfit)?'#f3f0e5':'#a17eaf');
-      c.add(cyl(coat,.35,.48,.64,0,.85,0,8));
-      if(/wings|angel|superhero/.test(outfit)||/fairy|vampire|superhero/.test(id))for(const x of [-1,1]){const wing=mesh(new T.ConeGeometry(.55,1.4,3),coat,x*.62,1.1,-.4);wing.rotation.z=x*.65;c.add(wing);}
-      if(id==='dz_mecha')for(const x of [-.49,.49])c.add(box('#93b5cd',.35,.6,.42,x,.9),ball('#e9d762',.14,x,1.23,.1));
-      if(id==='dz_ninja')c.add(box('#313f60',1.02,.2,.13,0,1.5,.54));
-      if(id==='dz_dino'){c.add(cyl('#65a47d',0,.3,.9,0,.52,-.62));for(let i=0;i<4;i++)c.add(cyl('#e3c77d',0,.13,.22,0,.65+i*.33,-.48));}
-      if(id==='dz_snowman')c.add(cyl('#efa75d',0,.1,.3,0,1.57,.66));
-    }
-    if(gear.boots)for(const x of [-.18,.18])c.add(box(gear.boots.includes('flipper')?'#66a9d6':'#b88c73',.27,.23,gear.boots.includes('flipper')?.6:.34,x,.17,.1));
-    const hand=c.getObjectByName('hand-right')??c;
+    if(kitDisguise)this.wearKit(c,id,'body');
+    if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
+    if(gear.pet){const pet=this.petFor(gear.pet);pet.name='remote-pet';pet.position.set(-1,0,-.6);c.add(pet);}
+    return c;
+  }
+  private simpleHat(c:T.Object3D,hat:string){
+    const capColor=hat.includes('wizard')?'#6d60b1':hat.includes('santa')?'#e2646e':hat.includes('straw')?'#e3bd69':'#91b8c9';
+    if(/wizard|party/.test(hat))c.add(cyl(capColor,0,.66,.95,0,2.4),cyl(capColor,.75,.75,.09,0,2));
+    else if(/bunny|cat|bear|frog/.test(hat)){
+      c.add(ball(capColor,.62,0,1.88));for(const x of [-.38,.38]){const ear=ball(capColor,.18,x,2.3);ear.scale.y=hat.includes('bunny')?2.3:1;c.add(ear);}
+    }else if(hat.includes('halo')){const halo=mesh(new T.TorusGeometry(.45,.06,6,16),'#ffe387',0,2.3);halo.rotation.x=Math.PI/2;c.add(halo);}
+    else c.add(cyl(capColor,.7,.74,.1,0,2.03),cyl(capColor,.43,.48,.35,0,2.2));
+    if(hat.includes('lantern'))c.add(ball('#ffe892',.22,0,2.35,.43));
+  }
+  private simpleOutfit(c:T.Object3D,outfit:string){
+    const coat=/leaf|hawaii/.test(outfit)?'#6db87a':/knight|space|bone/.test(outfit)?'#a9bed0':/angel|cloud|chef/.test(outfit)?'#f3f0e5':'#a17eaf';
+    c.add(cyl(coat,.35,.48,.64,0,.85,0,8));
+    if(/wings|angel|superhero/.test(outfit))for(const x of [-1,1]){const wing=mesh(new T.ConeGeometry(.55,1.4,3),coat,x*.62,1.1,-.4);wing.rotation.z=x*.65;c.add(wing);}
+  }
+  private simpleDisguise(c:T.Object3D,id:string,color:string){
+    if(id==='dz_mage')c.add(cyl(color,0,.66,.95,0,2.4),cyl(color,.75,.75,.09,0,2));
+    else if(/dino|snowman/.test(id)){c.add(ball(color,.62,0,1.88));for(const x of [-.38,.38])c.add(ball(color,.18,x,2.3));}
+    else if(id==='dz_fairy'){const halo=mesh(new T.TorusGeometry(.45,.06,6,16),'#ffe387',0,2.3);halo.rotation.x=Math.PI/2;c.add(halo);}
+    else c.add(cyl(color,.7,.74,.1,0,2.03),cyl(color,.43,.48,.35,0,2.2));
+    c.add(cyl(color,.35,.48,.64,0,.85,0,8));
+    if(/fairy|vampire|superhero/.test(id))for(const x of [-1,1]){const wing=mesh(new T.ConeGeometry(.55,1.4,3),color,x*.62,1.1,-.4);wing.rotation.z=x*.65;c.add(wing);}
+    if(id==='dz_mecha')for(const x of [-.49,.49])c.add(box('#93b5cd',.35,.6,.42,x,.9),ball('#e9d762',.14,x,1.23,.1));
+    if(id==='dz_ninja')c.add(box('#313f60',1.02,.2,.13,0,1.5,.54));
+    if(id==='dz_dino'){c.add(cyl('#65a47d',0,.3,.9,0,.52,-.62));for(let i=0;i<4;i++)c.add(cyl('#e3c77d',0,.13,.22,0,.65+i*.33,-.48));}
+    if(id==='dz_snowman')c.add(cyl('#efa75d',0,.1,.3,0,1.57,.66));
+  }
+  private simpleWeapon(c:T.Object3D,id:string){
+    const weapon=M.ITEMS[id]?.weapon,hand=c.getObjectByName('hand-right')??c;
     if(weapon?.kind==='sword'){
-      const bladeColor=/fire|lava/.test(gear.weapon!)?'#f1a65d':/crystal|ice/.test(gear.weapon!)?'#a9e8f1':'#d5dce1';
+      const bladeColor=/fire|lava/.test(id)?'#f1a65d':/crystal|ice/.test(id)?'#a9e8f1':'#d5dce1';
       const sword=group(box(bladeColor,.14,1.02,.13,0,.62),box('#c7a162',.42,.12,.18,0,.1),cyl('#8a5a34',.05,.05,.22,0,-.04));sword.name='weapon';sword.rotation.x=1.25;hand.add(sword);
     }else if(weapon?.kind==='gun'){const gun=group(box('#9dc7cb',.25,.3,.65,0,.05,.25),ball('#e7d997',.19,0,.06,.58));gun.name='weapon';hand.add(gun);}
     else if(weapon?.kind==='rod'){
       const rod=group(cyl('#ad8861',.025,.04,1.85,0,.92),cyl('#6b4a2e',.05,.05,.26,0,.05));rod.name='weapon';rod.rotation.x=1.05;
       const tip=new T.Object3D();tip.name='rod-tip';tip.position.set(0,1.85,0);rod.add(tip);hand.add(rod);
     }
-    if(gear.pet){const pet=this.petModel(gear.pet);pet.name='remote-pet';pet.position.set(-1,0,-.6);c.add(pet);}
-    return c;
   }
   refreshPlayer() {
     this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...this.state.gear,pet:undefined});this.player.rotation.order='YXZ';
-    this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();this.playerMaterials.push(o.material);}});this.root.add(this.player);
-    this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=this.state.gear.pet?this.petModel(this.state.gear.pet):new T.Group();this.root.add(this.companion);
+    this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();o.material.userData.sharedKit=false;this.playerMaterials.push(o.material);}});this.root.add(this.player);
+    this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=this.state.gear.pet?this.petFor(this.state.gear.pet):new T.Group();this.root.add(this.companion);
   }
 
   spawnEnemy(x:number,z:number,index:number,name:string,strong=false,boss=false) {
@@ -439,10 +494,10 @@ export class World {
     const color=def.color,accent=def.accent,g=new T.Group(),family=def.family;
     if(['quadruped','turtle','crab','dragon'].includes(family)){
       const body=ball(color,.8,0,.64);body.scale.set(1,.7,1.35);g.add(body,ball(color,.48,0,.95,1));
-      for(const x of [-.58,.58])for(const z of [-.66,.66])g.add(cyl(accent,.16,.2,.55,x,.28,z));
+      let leg=0;for(const x of [-.58,.58])for(const z of [-.66,.66]){const hip=new T.Group();hip.name='leg'+leg++;hip.position.set(x,.55,z);hip.add(cyl(accent,.16,.2,.55,0,-.27,0));g.add(hip);}
       if(family==='crab')for(const x of [-1,1])g.add(ball(accent,.35,x,.95,.85));
       if(family==='turtle'){const shell=ball('#506353',.84,0,.87);shell.scale.y=.65;shell.name='shell';g.add(shell);}
-      if(family==='dragon')for(const x of [-1,1]){const wing=mesh(new T.ConeGeometry(.7,1.5,3),accent,x*.9,1.1,-.15);wing.rotation.z=x*.8;g.add(wing);}
+      if(family==='dragon')for(const x of [-1,1]){const root=new T.Group();root.name=x<0?'wing-l':'wing-r';root.position.set(x*.45,1.1,-.15);const wing=mesh(new T.ConeGeometry(.7,1.5,3),accent,x*.45,0,0);wing.rotation.z=x*.8;root.add(wing);g.add(root);}
     }else if(family==='flower'||family==='cactus'||family==='lollipop'){
       g.add(cyl(color,.15,.3,1.2,0,.6),ball(color,.55,0,1.45));
       for(let i=0;i<6;i++){const a=i*Math.PI/3;g.add(ball(accent,.25,Math.cos(a)*.48,1.45+Math.sin(a)*.48,.06));}
@@ -453,7 +508,7 @@ export class World {
     else{g.add(ball(color,.65,0,.65),ball(color,.45,0,1.2,.15));for(const x of [-.42,.42])g.add(ball(accent,.2,x,.2,.25));}
     if(family==='mushroom')g.add(cyl(accent,0,.95,.58,0,1.72,0,12),ball(color,.65,0,1.78));
     if(family==='bunny')for(const x of [-.22,.22]){const ear=ball(accent,.18,x,1.94);ear.scale.y=2.3;g.add(ear);}
-    if(family==='winged')for(const x of [-1,1]){const wing=ball(accent,.45,x*.66,1.05);wing.scale.set(1.5,.18,.75);g.add(wing);}
+    if(family==='winged')for(const x of [-1,1]){const root=new T.Group();root.name=x<0?'wing-l':'wing-r';root.position.set(x*.3,1.05,0);const wing=ball(accent,.45,x*.36,0,0);wing.scale.set(1.5,.18,.75);root.add(wing);g.add(root);}
     if(family==='treant'){g.add(cyl(color,.55,.7,1.8,0,.9),ball(accent,.95,0,2.0));for(const x of [-1,1])g.add(box(color,.3,1.3,.3,x*.7,1.1));}
     if(family==='cake'){g.add(cyl(accent,.85,.85,.3,0,.55),cyl(color,.7,.8,.6,0,1),ball('#f06179',.23,0,1.9));}
     if(family==='eye')g.add(ball('#fff4de',.43,0,1.25,.4),ball('#db627c',.2,0,1.25,.78));
@@ -558,6 +613,8 @@ export class World {
   updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};remote.mesh.position.set(pose.x,pose.y??0,pose.z);remote.mesh.rotation.y=pose.facing??0;remote.mesh.visible=!pose.planet||pose.planet===this.planet;}
   updateRemotePlayers(players:Array<RemotePose&{id:string}>){const ids=new Set(players.map(p=>p.id));for(const id of this.remotePlayers?.keys()??[])if(!ids.has(id))this.removeRemotePlayer(id);for(const pose of players)this.updateRemotePlayer(pose.id,pose);}
   removeRemotePlayer(id:string){const remote=this.remotePlayers?.get(id);if(!remote)return;this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);this.remotePlayers.delete(id);}
+  /** Rebuild every explorer model, for example once the Blender explorer and gear have loaded. */
+  refreshAvatars(){this.refreshPlayer();for(const [id,remote] of this.remotePlayers??[]){const pose=remote.pose;this.removeRemotePlayer(id);this.addRemotePlayer(id,pose);}}
   clearRemotePlayers(){for(const id of [...this.remotePlayers?.keys()??[]])this.removeRemotePlayer(id);}
   syncCrops() {
     if(this.planet!=='home')return;
@@ -651,14 +708,14 @@ export class World {
     const fx=this.fx,at={x:this.position.x,y:this.position.y,z:this.position.z};
     if(kind==='gun'){this.aimT=.7;this.punchT=.12;fx?.flash({x:at.x+Math.sin(this.facing)*.9,y:at.y+1,z:at.z+Math.cos(this.facing)*.9},'#fff8c8',.9,.08);return;}
     // The slash arc itself arrives through the shared combat effects, so remote players see it too.
-    if(kind==='sword')this.swingT=.26;else{this.punchT=.25;this.punchArm^=1;}
+    this.punchT=.25;if(kind!=='sword')this.punchArm^=1;
     fx?.burst({x:at.x+Math.sin(this.facing)*1.3,y:at.y,z:at.z+Math.cos(this.facing)*1.3},{n:5,color:'#ffffff',glow:true,size:.1,speed:3,up:2,y:.8,life:.3});
   }
   damageEnemy(e:Enemy,amount:number,stun=0,hazard=false) {
     if(e.hp<=0)return;
     if(!hazard&&e.type==='magmaturtle')amount*=e.phase==='recover'?2:.12;
     e.hp=Math.max(0,e.hp-amount);e.stun=Math.max(e.stun,stun,.17);this.burst(e.x,e.z,'#fff0bb',8);
-    if(e.hp===0){e.respawn=e.type==='minislime'||e.type==='dragon'?999999:e.boss?90:22+Math.random()*10;e.mesh.visible=false;e.telegraphs=[];e.skillEffects=[];
+    if(e.hp===0){e.respawn=e.type==='minislime'||e.type==='dragon'?999999:e.boss?90:22+Math.random()*10;e.dying=.3;e.knockVX=e.knockVZ=0;e.telegraphs=[];e.skillEffects=[];
       if(e.type==='magmaslime'&&this.networkRole!=='peer')this.enemies.filter(m=>m.type==='minislime'&&m.hp<=0).slice(0,3).forEach((minion,index)=>{const a=index*Math.PI*2/3;minion.x=e.x+Math.cos(a)*.9;minion.z=e.z+Math.sin(a)*.9;this.resolveOverlap(minion,this.collisionObstacles(),minion.radius);minion.homeX=minion.x;minion.homeZ=minion.z;minion.hp=minion.maxHp;minion.phase='idle';minion.stun=0;minion.respawn=0;});
       if(this.selected===e){this.selected=null;this.destination=null;this.route=[];this.ring.visible=false;}}
   }
@@ -769,7 +826,7 @@ export class World {
   private updateEnemyAi(e:Enemy,dt:number){
     e.cooldown=Math.max(0,e.cooldown-dt);e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
     for(const key of Object.keys(e.statuses??{}))e.statuses![key]=Math.max(0,e.statuses![key]-dt);
-    if(e.hp<=0){e.respawn-=dt;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.phase='idle';e.route=[];e.stun=0;e.scaled=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];}return;}
+    if(e.hp<=0){e.respawn-=dt;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];}return;}
     const def=e.definition??{speed:2.4,reach:1.8,sight:e.boss?11:6,behavior:'melee',cooldown:1.3,windup:.35,flying:false};
     const target=this.enemyTarget(e),distance=target?Math.hypot(target.x-e.x,target.z-e.z):Infinity;
     if(e.boss&&!e.scaled&&distance<def.sight&&e.hp===e.maxHp){
@@ -834,7 +891,51 @@ export class World {
     const dx=goal.x-e.x,dz=goal.z-e.z,d=Math.hypot(dx,dz),speed=(chasing?def.speed:returning?def.speed*1.2:.6)*(e.boss&&e.hp<e.maxHp*.5?1.35:1)*(e.boss&&e.hp<e.maxHp*.3?1.25:1)*((e.bossStage??1)>=3?1.2:1)*((statuses.slow??0)>0?.45:1)*((statuses.sheep??0)>0?.45:1);
     if(d>.05){const step=Math.min(d,speed*dt);this.moveCreature(e,dx/d*step,dz/d*step);e.mesh.rotation.y=Math.atan2(dx,dz);e.phase=chasing?'chase':returning?'return':'idle';}
   }
+  /** Push a creature back; it slides and slows like the reference's knockback, blocked by scenery. */
+  knockEnemy(e:Enemy,dirX:number,dirZ:number,strength:number){
+    if(e.boss)strength*=.35;if(e.definition?.behavior==='rooted'||!(e.definition?.speed??1))return;
+    e.knockVX=(e.knockVX??0)+dirX*strength*8;e.knockVZ=(e.knockVZ??0)+dirZ*strength*8;
+  }
+  /**
+   * Creature body language: hoppers squash and stretch, walkers trot, flyers flap,
+   * rooted plants sway. Before an attack a creature crouches, leans back and trembles;
+   * it lunges on the strike, leans into a charge, wobbles while stunned, and shouts
+   * "!" when it first notices the explorer.
+   */
+  private animateEnemy(e:Enemy,dt:number){
+    const m=e.mesh,u=m.userData,def=e.definition;m.rotation.order='YXZ';
+    const moved=Math.hypot(e.x-(u.lastX??e.x),e.z-(u.lastZ??e.z));u.lastX=e.x;u.lastZ=e.z;
+    const moving=dt>0&&moved>dt*.4;u.moving=moving;
+    u.anim=(u.anim??(e.homeX*3.7%6))+dt*(moving?(e.phase==='charge'?22:10):3);
+    const o=u.anim,s=Math.sin(o),behavior=def?.behavior??'melee';
+    if(u.lastPhase!==e.phase){
+      if((u.lastPhase==='idle'||u.lastPhase==='return')&&e.phase==='chase'&&Math.hypot(e.x-this.position.x,e.z-this.position.z)<20){this.fx?.text({x:e.x,y:m.position.y+(e.boss?2.4:1.1),z:e.z},'!','alert');this.onAlert?.(e);}
+      if(u.lastPhase==='windup'&&e.phase!=='windup')u.strikeT=.25;
+      u.lastPhase=e.phase;
+    }
+    u.strikeT=Math.max(0,(u.strikeT??0)-dt);
+    const windup=e.phase==='windup'?Math.min(1,1-(e.phaseTime??0)/Math.max(.05,e.mesh.userData.slam?1.1:def?.windup??.45)):0;
+    let lean=0,roll=0,lift=0,sx=1,sy=1,sz=1,shake=0;
+    if(behavior==='hopper'){if(moving){const h=Math.abs(Math.sin(o*.6));lift=h*.45;sx=sz=1+(1-h)*.12;sy=1-(1-h)*.15+h*.08;}else sy=1+Math.sin(o)*.03;}
+    else if(behavior==='rooted'){roll=Math.sin(this.time*1.5+e.homeX)*.08;lean=Math.sin(this.time*1.1+e.homeZ)*.05;}
+    else if(!def?.flying){if(moving){lift=Math.abs(Math.cos(o))*.07;roll=s*.06;}else sy=1+Math.sin(o)*.02;}
+    const legs=u.legs??=[0,1,2,3].map(i=>m.getObjectByName('leg'+i)).filter(Boolean);
+    legs.forEach((leg:T.Object3D,i:number)=>{leg.rotation.x=moving?(i===1||i===2?s:-s)*.75:0;});
+    const wings=u.wings??=['wing-l','wing-r'].map(n=>m.getObjectByName(n)).filter(Boolean);
+    wings.forEach((wing:T.Object3D,i:number)=>{wing.rotation.z=(i?-1:1)*Math.sin(this.time*(def?.flying?16:6)+e.homeX)*(def?.flying?.55:.2);});
+    if(windup>0){sx*=1+windup*.2;sy*=1-windup*.25;sz*=1+windup*.2;lean=-windup*.2;shake=Math.sin(this.time*60)*.04*windup;}
+    if(u.strikeT>0)lean=(behavior==='rooted'?.55:.4)*(u.strikeT/.25);
+    if(e.phase==='charge')lean=.25;
+    if(e.stun>.25&&!e.lift){roll=Math.sin(this.time*20)*.1;if(this.fx&&Math.random()<dt*6)this.fx.burst({x:e.x,y:m.position.y+(e.boss?2.6:1.3),z:e.z},{n:1,color:'#fff27a',glow:true,size:.09,speed:1.5,up:.5,life:.5,gravity:0});}
+    m.position.y+=lift;m.position.x+=shake;m.rotation.x=lean;m.rotation.z=roll;m.scale.x*=sx;m.scale.y*=sy;m.scale.z*=sz;
+    // Knockback velocity decays quickly; scenery stops the slide.
+    if(this.networkRole!=='peer'&&(Math.abs(e.knockVX??0)>.05||Math.abs(e.knockVZ??0)>.05)&&dt>0){
+      this.moveCreature(e,(e.knockVX??0)*dt,(e.knockVZ??0)*dt);const k=Math.max(0,1-dt*8);e.knockVX=(e.knockVX??0)*k;e.knockVZ=(e.knockVZ??0)*k;
+    }
+  }
   private updateEnemyVisual(e:Enemy,dt:number){
+    // A defeated creature swells and shrinks away instead of blinking out.
+    if(e.hp<=0&&(e.dying??0)>0){e.dying=Math.max(0,e.dying!-dt);const t=1-e.dying/.3;e.mesh.visible=true;e.mesh.scale.setScalar((e.boss?1.85:1)*(1+t*.3)*Math.max(.001,1-t));if(!e.dying)e.mesh.visible=false;return;}
     this.updateBossTelegraphs(e);
     const lightRadius=M.activeStats(this.state).light?7.5:3.6;
     e.mesh.visible=e.hp>0&&(this.planet!=='shadow'||this.environment.revealed(e,this.position,lightRadius))&&(!e.definition?.stealth||this.planet==='shadow'||Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.definition.stealth||e.stun>0);
@@ -847,6 +948,7 @@ export class World {
     // Hit reaction: a white flash and a quick swell, like a squeezed toy.
     if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);e.mesh.scale.multiplyScalar(1+e.flash!*1.2);}
     const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as T.MeshStandardMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.emissive.set('#ffffff');m.emissiveIntensity=.75;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=1;}}}
+    this.animateEnemy(e,dt);
     const shell=e.mesh.getObjectByName('shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
     let telegraph=e.mesh.getObjectByName('attack-telegraph') as T.Mesh|undefined;
     if(e.phase==='windup'&&!telegraph){telegraph=mesh(new T.RingGeometry(.92,1,32),'#f15c58');telegraph.name='attack-telegraph';telegraph.rotation.x=-Math.PI/2;telegraph.position.y=.06;e.mesh.add(telegraph);}
@@ -914,9 +1016,15 @@ export class World {
     }
     const names={home:'Clover Village',forest:'Mushroom Forest',meadow:'Blue Lake Meadow',swamp:'Chomper Swamp',canyon:'Redrock Canyon'},zone=this.planet==='home'?names[zoneAt(this.position)]:PLANETS[this.planet].name;
     if(zone!==this.lastZone){this.lastZone=zone;this.onZone(zone);}if(active&&this.planet==='home'&&zoneAt(this.position)==='home')this.state.hp=Math.min(maxHp(this.state),this.state.hp+dt*4);
-    this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar(stats.sizeScale);this.player.position.y+=this.moving?Math.abs(Math.sin(this.time*11))*.1:Math.sin(this.time*2)*.02;
-    const left=this.player.getObjectByName('leg-left'),right=this.player.getObjectByName('leg-right');if(left&&right){left.rotation.x=this.moving?Math.sin(this.time*11)*.6:0;right.rotation.x=-left.rotation.x;}
-    if(this.state.gear.pet){this.companion.position.lerp(this.position.clone().add(new T.Vector3(-1,0,1)),Math.min(1,dt*3));this.companion.position.y=this.position.y+Math.abs(Math.sin(this.time*5))*.12;this.companion.rotation.y=this.facing;}
+    this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar(stats.sizeScale);
+    if(this.state.gear.pet){
+      // The companion trails behind and to one side; flyers hover and flap, walkers hop.
+      const back=new T.Vector3(this.position.x-Math.sin(this.facing)*1.1+Math.cos(this.facing)*.9,0,this.position.z-Math.cos(this.facing)*1.1-Math.sin(this.facing)*.9),c=this.companion,flying=!!c.userData.flying;
+      const before=c.position.clone();c.position.lerp(back,1-Math.exp(-dt*4));
+      c.position.y=this.position.y+(flying?1.1+Math.sin(this.time*3)*.18:Math.abs(Math.sin(this.time*5))*.12*(before.distanceTo(c.position)>dt*.5?1:.3));
+      const dx=c.position.x-before.x,dz=c.position.z-before.z;if(dx*dx+dz*dz>1e-5)c.rotation.y=Math.atan2(dx,dz);c.rotation.z=flying?Math.sin(this.time*2.5)*.1:0;
+      for(const wing of (c.userData.wings??[]) as {node:T.Object3D;base:number;side:number}[])wing.node.rotation.z=wing.base+wing.side*Math.sin(this.time*18)*.6;
+    }
     this.animatePlayer(dt);
     this.cameraTarget.lerp(this.position,1-Math.exp(-dt*4));this.camera.position.copy(this.cameraTarget).add(new T.Vector3(0,23,23));this.camera.lookAt(this.cameraTarget.x,this.cameraTarget.y,this.cameraTarget.z-2.4);
     if(this.fx)this.camera.position.add(this.fx.shakeOffset(dt,this.shakeOffset));
@@ -952,26 +1060,62 @@ export class World {
     const a=p.dot(x),b=p.dot(y);p.addScaledVector(x,Math.round(a/texel)*texel-a).addScaledVector(y,Math.round(b/texel)*texel-b);
     this.sun.position.copy(p).add(this.sunOffset);
   }
-  /** Arm swings while walking, punches, sword sweeps, aiming, casting, flinching and the whirlwind spin. */
+  /**
+   * The explorer's poses, after the reference: a leaning, bouncing walk; breathing
+   * and a look-around at rest; a raised sword, a lowered blaster or a two-handed aim;
+   * an overhead chop or alternating punches with a body twist; arms out for the
+   * whirlwind; a forward lean for the dash; a leap with arms overhead for the slam;
+   * casting and reeling; and a swell with a red flash when hurt.
+   */
   private animatePlayer(dt:number){
     for(const key of ['punchT','swingT','aimT','hurtT','spinT','landT','castT'] as const)this[key]=Math.max(0,(this[key]||0)-dt);
-    const armL=this.player.getObjectByName('arm-left'),armR=this.player.getObjectByName('arm-right');let lean=0;
-    if(armL&&armR){
-      const walk=this.moving?Math.sin(this.time*11)*.55:Math.sin(this.time*2)*.05;
-      armL.rotation.set(walk,0,-.3);armR.rotation.set(-walk,0,.3);
-      if(this.fishing&&this.fishing!=='idle'){
-        armR.rotation.set(this.fishing==='cast'&&this.castT>.25?-2.5:this.fishing==='fight'?-.8+Math.sin(this.time*18)*.07:-.55,0,.12);armL.rotation.set(-.35,0,-.2);
-      }else if(this.swingT>0){const r=1-this.swingT/.26;armR.rotation.set(-1.25,1.3-2.8*r,.2);lean=.12*Math.sin(r*Math.PI);}
-      else if(this.aimT>0){armR.rotation.set(-1.45-(this.punchT>0?.25:0),0,.05);}
-      else if(this.punchT>0){const k=Math.sin((1-this.punchT/.25)*Math.PI),arm=this.punchArm?armR:armL;arm.rotation.x=-1.65*k;arm.rotation.z*=1-k;lean=.18*k;}
+    this.walkClock=(this.walkClock||0)+dt*(this.moving?11:3);
+    const o=this.walkClock,c=Math.sin(o),p=this.player;
+    const armL=p.getObjectByName('arm-left'),armR=p.getObjectByName('arm-right'),legL=p.getObjectByName('leg-left'),legR=p.getObjectByName('leg-right'),head=p.getObjectByName('head');
+    const kind=this.weaponKind??'fist',pose=this.pose;
+    let twist=0,lean=0,lift=0,sx=1,sy=1,sz=1;
+    // Base: walk cycle or idle breathing.
+    if(this.moving){armL?.rotation.set(-c*.8,0,-.3);armR?.rotation.set(c*.8,0,.3);legL?.rotation.set(c*.7,0,0);legR?.rotation.set(-c*.7,0,0);lift=Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
+    else{armL?.rotation.set(0,0,-.3-Math.sin(o)*.05);armR?.rotation.set(0,0,.3+Math.sin(o)*.05);legL?.rotation.set(0,0,0);legR?.rotation.set(0,0,0);sy=1+Math.sin(o*1.2)*.025;if(head)head.rotation.set(0,Math.sin(o*.4)*.15,0);}
+    // Weapon stance.
+    if(armR){
+      if(kind==='sword'){armR.rotation.x=this.moving?-.3+c*.3:-.45;armR.rotation.z=.18;}
+      else if(kind==='gun'){if(this.aimT>0){armR.rotation.set(-1.5,0,.05);armL?.rotation.set(-1.3,0,.45);twist=.12;}else{armR.rotation.x=this.moving?-.25+c*.2:-.35;armR.rotation.z=.2;}}
+      else if(kind==='rod')armR.rotation.x=this.moving?-.2+c*.2:-.3;
     }
-    if(this.spinT>0)this.player.rotation.y=this.facing+(2.2-this.spinT)*14;
-    if(this.hurtT>0)lean=-.3*Math.sin(this.hurtT/.25*Math.PI);
-    this.player.rotation.x=lean;
-    if(this.landT>0){const k=Math.sin(this.landT/.25*Math.PI);this.player.scale.x*=1+k*.18;this.player.scale.y*=1-k*.22;this.player.scale.z*=1+k*.18;}
-    const red=this.hurtT>0;
-    for(const m of this.playerMaterials??[])if(m.userData.hurtLit!==red){m.userData.hurtLit=red;if(red){m.userData.baseEmissive??=m.emissive.getHex();m.emissive.set('#ff3b3b');m.emissiveIntensity=.55;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=1;}}
+    const hand=p.getObjectByName('hand-right');if(hand)hand.rotation.x=kind==='gun'&&this.aimT>0?1.45:0;
+    // Attacks: an overhead chop with the sword, recoil with a blaster, alternating punches otherwise.
+    if(this.punchT>0&&armR){
+      const t=1-this.punchT/.25,e=Math.sin(t*Math.PI);
+      if(kind==='sword'){armR.rotation.set(-2.6+t*2.5,0,.1);twist=.5-t*.9;lean=.2*e;}
+      else if(kind==='gun')armR.rotation.x=-1.5+e*.25;
+      else{const arm=this.punchArm?armR:armL;arm?.rotation.set(-1.6*e,0,0);twist=(this.punchArm?-.4:.4)*e;lean=.15*e;}
+    }
+    // Skills.
+    if(this.spinT>0){armL?.rotation.set(0,0,-1.45);armR?.rotation.set(kind==='sword'?-1.4:0,0,1.45);if(head)head.rotation.x=.15;}
+    else if(pose?.kind==='dash'){lean=.55;armL?.rotation.set(1.2,0,-.3);armR?.rotation.set(kind==='sword'?-1.3:1.2,0,.3);legL?.rotation.set(.8,0,0);legR?.rotation.set(-.4,0,0);lift=.15;}
+    else if(pose?.kind==='slam'){
+      if(pose.t<.42){const e=pose.t/.42;lean=-e*.4;const up=-2.9*Math.min(1,e*2);armL?.rotation.set(up,0,-.2);armR?.rotation.set(up,0,.2);legL?.rotation.set(-.5,0,0);legR?.rotation.set(-.5,0,0);}
+      else{const e=Math.min(1,(pose.t-.42)/.38);sx=sz=1+.25*(1-e);sy=1-.3*(1-e);armL?.rotation.set(-.9*(1-e),0,-.3);armR?.rotation.set(-.9*(1-e),0,.3);lean=.5*(1-e);}
+    }
+    // Fishing: the cast swings the rod overhead and forward; reeling leans back against the line.
+    if(this.fishing&&this.fishing!=='idle'&&armR){
+      armR.rotation.set(-.75,0,.1);armL?.rotation.set(-.8,0,.5);
+      if(this.fishing==='cast'){const t=Math.min(1,1-this.castT/.5);armR.rotation.x=-2.4+t*1.7;if(armL)armL.rotation.x=-2.2+t*1.4;}
+      if(this.fishing==='fight'){const n=this.fishTension||0;lean=-.25-n*.2;armR.rotation.x=-1+Math.sin(this.time*40)*n*.08;if(armL)armL.rotation.x=-.9+Math.sin(this.time*12)*.35;legL?.rotation.set(.3,0,0);}
+    }
+    if(this.hurtT>0){const k=1+this.hurtT*.4;sx*=k;sy*=k;sz*=k;}
+    if(this.landT>0){const k=Math.sin(this.landT/.25*Math.PI);sx*=1+k*.18;sy*=1-k*.22;sz*=1+k*.18;}
+    p.rotation.y=this.spinT>0?this.facing+(2.2-this.spinT)*22:this.facing+twist;
+    p.rotation.x=lean;p.position.y+=lift;p.scale.x*=sx;p.scale.y*=sy;p.scale.z*=sz;
+    if(this.spinT>0&&this.fx&&Math.random()<dt*40)this.fx.burst(this.position,{n:1,color:['#ffffff','#d4f1ff'],glow:true,size:.1,speed:6,up:1,life:.35,y:.6,gravity:0});
+    if(pose?.kind==='dash'&&this.fx)this.fx.burst(this.position,{n:2,color:['#ffffff','#bfe9ff'],size:.13,speed:1,up:1,life:.4,y:.3});
+    // Hurt flashes red; invulnerability after a hit blinks white.
+    const flash=this.hurtT>0?'hurt':this.invulnerable&&Math.sin(this.time*30)>0?'blink':'';
+    for(const m of this.playerMaterials??[])if(m.userData.flash!==flash){m.userData.flash=flash;m.userData.baseEmissive??=m.emissive.getHex();
+      if(flash==='hurt'){m.emissive.setRGB(.8,.16,.16);m.emissiveIntensity=1;}else if(flash==='blink'){m.emissive.setRGB(.4,.4,.4);m.emissiveIntensity=1;}else{m.emissive.setHex(m.userData.baseEmissive);m.emissiveIntensity=1;}}
   }
+
 
   render(){this.renderer.render(this.scene,this.camera);}
 }

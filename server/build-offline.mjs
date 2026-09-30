@@ -26,10 +26,14 @@ async function walk(directory) {
   return all;
 }
 const files = (await walk(dist)).sort();
-const assets = files.map(file => base + path.relative(dist, file).split(path.sep).join('/'));
+const urls = files.map(file => base + path.relative(dist, file).split(path.sep).join('/'));
+// Gear models download only when something from them is first worn, so the worker keeps
+// each one the first time it is fetched instead of fetching them all at install.
+const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|disguises|pets)\.glb$/.test(url);
+const assets = urls.filter(url => !onDemand(url)), later = urls.filter(onDemand);
 const hash = createHash('sha256');
 for (let index = 0; index < files.length; index++) {
-  hash.update(assets[index]).update('\0').update(await readFile(files[index])).update('\0');
+  hash.update(urls[index]).update('\0').update(await readFile(files[index])).update('\0');
 }
 // Different project Pages sites share an origin. An update must only retire
 // caches for this deployment path, never another game's offline files.
@@ -39,6 +43,7 @@ await writeFile(path.join(dist, 'sw.js'), `const BASE=${JSON.stringify(base)};
 const PREFIX=${JSON.stringify(prefix)};
 const VERSION=${JSON.stringify(version)};
 const ASSETS=${JSON.stringify(assets)};
+const ON_DEMAND=${JSON.stringify(later)};
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(ASSETS)));
 });
@@ -57,6 +62,8 @@ self.addEventListener('fetch',event=>{
     return;
   }
   if(ASSETS.includes(url.pathname))event.respondWith(caches.open(VERSION).then(cache=>cache.match(url.pathname).then(cached=>cached||fetch(event.request))));
+  else if(ON_DEMAND.includes(url.pathname))event.respondWith(caches.open(VERSION).then(cache=>cache.match(url.pathname).then(cached=>cached||fetch(event.request).then(response=>
+    response.ok?cache.put(url.pathname,response.clone()).then(()=>response,()=>response):response))));
 });
 `);
-console.log(`Offline game cache prepared (${assets.length} files, base ${base}).`);
+console.log(`Offline game cache prepared (${assets.length} files, ${later.length} gear models kept on first use, base ${base}).`);

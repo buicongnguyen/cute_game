@@ -2,7 +2,7 @@
  * Small synthesized sound effects. Everything is generated with WebAudio, so
  * there is nothing to download and the game stays playable offline.
  */
-export type Sound = 'click' | 'punch' | 'swing' | 'hit' | 'crit' | 'hurt' | 'pop' | 'splash' | 'cast' | 'reel' | 'snap'
+export type Sound = 'alert' | 'click' | 'punch' | 'swing' | 'hit' | 'crit' | 'hurt' | 'pop' | 'splash' | 'cast' | 'reel' | 'snap'
   | 'success' | 'level' | 'harvest' | 'shoot' | 'poof' | 'coin';
 
 export class Sfx {
@@ -50,6 +50,7 @@ export class Sfx {
     this.last.set(sound, now);
     const t = now + .005;
     switch (sound) {
+      case 'alert': this.tone(ctx, t, 'square', 660, 990, .07, .035); this.tone(ctx, t + .07, 'square', 990, 1320, .08, .03); break;
       case 'click': this.tone(ctx, t, 'sine', 740, 520, .06, .05); break;
       case 'pop': this.tone(ctx, t, 'sine', 420, 980, .09, .09); break;
       case 'coin': this.tone(ctx, t, 'square', 1320, 1320, .05, .025); this.tone(ctx, t + .05, 'square', 1760, 1760, .09, .025); break;

@@ -25,8 +25,9 @@ npm test        # gameplay, worlds, assets, save migration and real server tests
 
 - Click or tap to walk; hold the ground to steer. Arrow keys and the touch direction pad also work. Scroll or pinch to zoom.
 - Click objects to approach and interact. **F** uses the nearest object. **I** opens the backpack, **J** the journal, **M** the map, and **Escape** closes a panel.
-- **Space** attacks. **Q/W/E/R** use four skills, with different specials for weapons and disguises. Hits flash, knock sparks loose and pop up damage numbers; critical hits briefly freeze the action and shake the camera.
-- Plant, harvest and sell crops. Buy gear and equip it from the backpack. The journal guides the first adventure and awards story, daily, weekly and achievement rewards.
+- Stand near a creature and your explorer fights it automatically; click one to chase it down. **Space** attacks the nearest creature. **Q/W/E/R** use four skills: the whirlwind spins with arms out, the dash lunges through enemies, the ground slam leaps and crashes down with a shockwave, and the fourth is your weapon's or disguise's special.
+- Creatures shout "!" when they notice you, crouch and tremble before they strike, slide back when hit and pop into experience orbs when defeated. Critical hits briefly freeze the action and shake the camera. Bosses show a health bar at the top of the screen.
+- Plant, harvest and sell crops. Gear you buy is equipped straight away and appears on your explorer: weapons in hand, hats, outfits, boots, disguises and a pet that follows you. Swap gear from the backpack. The journal guides the first adventure and awards story, daily, weekly and achievement rewards.
 - Equip a fishing rod and walk up to a pond: the line casts itself and the fish swimming in the water come to investigate. Press **Reel** (or Space) the moment one bites, hold to pull it toward the shore, and let go when it surges or the line turns red. The catch leaps into your arms, and the journal's Collection tab keeps your record for every species.
 - Store valuables in the chest. If defeated, recover loose items from the dropped bag. A second defeat moves the previous bag's contents safely into storage.
 - Explore four regions around home, then use the rocket to visit eight other worlds. Watch environmental warnings and bring suitable equipment.
@@ -83,7 +84,7 @@ Browser saves are local to each website address. The published site starts a sep
 - `src/fx.ts`, `sfx.ts`, `fishing-view.ts`, `graphics.ts`: pooled hit effects and floating numbers, synthesized sounds, in-world fishing, and adaptive graphics quality.
 - `server/`: HTTP/WebSocket account service, development launcher and offline build generator.
 - `tests/`: deterministic simulations and live HTTP/WebSocket integration tests.
-- `art/`: headless Blender generators for the props, scenery, crops and crop icons, their contract, previews, Unity FBX exports and the asset guide (`art/ASSET_GUIDE.md`).
+- `art/`: headless Blender generators for the props, scenery, crops, fish, the explorer and every wearable item, weapon, pet, disguise and material icon, plus their contract, previews, Unity FBX exports and the asset guide (`art/ASSET_GUIDE.md`).
 - `src/style.css`: interface design tokens and all HUD, panel, message and label styles.
 - `PARITY_REVIEW.md`: detailed coverage, validation and remaining evaluation limits.
 
