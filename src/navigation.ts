@@ -1,0 +1,57 @@
+export interface Point { x: number; z: number }
+export interface Obstacle extends Point { r: number }
+export interface NavigationOptions {clearance?:number;bounds?:number;gridSize?:number;walkable?:(point:Point)=>boolean}
+export const WORLD_BOUNDS=148;
+const CLEARANCE = .36;
+
+export function blocked(point: Point, obstacles: Obstacle[],options:NavigationOptions={}) {
+  return Math.abs(point.x)>(options.bounds??49) || Math.abs(point.z)>(options.bounds??49) || options.walkable?.(point)===false || obstacles.some(o=>Math.hypot(point.x-o.x,point.z-o.z)<o.r+(options.clearance??CLEARANCE));
+}
+
+export function clearSegment(from: Point, to: Point, obstacles: Obstacle[],options:NavigationOptions={}) {
+  if (blocked(from, obstacles,options) || blocked(to, obstacles,options)) return false;
+  const dx = to.x-from.x, dz = to.z-from.z, lengthSquared = dx*dx+dz*dz;
+  if(options.walkable){const steps=Math.ceil(Math.sqrt(lengthSquared)/.5);for(let i=1;i<steps;i++)if(!options.walkable({x:from.x+dx*i/steps,z:from.z+dz*i/steps}))return false;}
+  return obstacles.every(obstacle => {
+    const t = lengthSquared ? Math.max(0, Math.min(1, ((obstacle.x-from.x)*dx+(obstacle.z-from.z)*dz)/lengthSquared)) : 0;
+    return Math.hypot(from.x+t*dx-obstacle.x, from.z+t*dz-obstacle.z) >= obstacle.r+(options.clearance??CLEARANCE);
+  });
+}
+
+export function approach(from: Point, target: Point, radius: number, obstacles: Obstacle[], distance = radius+1.1,options:NavigationOptions={}): Point | null {
+  const angle=Math.atan2(from.x-target.x,from.z-target.z);
+  return Array.from({length:16},(_,i)=>({x:target.x+Math.sin(angle+i*Math.PI/8)*distance,z:target.z+Math.cos(angle+i*Math.PI/8)*distance}))
+    .filter(p=>!blocked(p,obstacles,options)).sort((a,b)=>Math.hypot(a.x-from.x,a.z-from.z)-Math.hypot(b.x-from.x,b.z-from.z))[0]??null;
+}
+
+export function findRoute(from: Point, target: Point, obstacles: Obstacle[],options:NavigationOptions={}): Point[] {
+  if (blocked(from, obstacles,options) || blocked(target, obstacles,options)) return [];
+  if (clearSegment(from, target, obstacles,options)) return [{...target}];
+  const grid=options.gridSize??(Math.hypot(from.x-target.x,from.z-target.z)>75?2:1);
+  const key=(x:number,z:number)=>x+','+z, sx=Math.round(from.x/grid)*grid, sz=Math.round(from.z/grid)*grid;
+  const open: Array<Point & {g:number;f:number}> = [], cost=new Map<string,number>(), parents=new Map<string,string>(), closed=new Set<string>();
+  const push=(node:Point&{g:number;f:number})=>{open.push(node);let i=open.length-1;while(i){const p=(i-1)>>1;if(open[p].f<=node.f)break;open[i]=open[p];i=p;}open[i]=node;};
+  const pop=()=>{const first=open[0],last=open.pop()!;if(open.length){let i=0;while(i*2+1<open.length){let child=i*2+1;if(child+1<open.length&&open[child+1].f<open[child].f)child++;if(open[child].f>=last.f)break;open[i]=open[child];i=child;}open[i]=last;}return first;};
+  // Connect the exact player position to the grid with a collision-free segment.
+  // Its nearest rounded grid cell can be inside a tree even when the player is not.
+  for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++){
+    const point={x:sx+dx*grid,z:sz+dz*grid};
+    if(!clearSegment(from,point,obstacles,options))continue;
+    const g=Math.hypot(point.x-from.x,point.z-from.z);
+    cost.set(key(point.x,point.z),g);push({...point,g,f:g+Math.hypot(point.x-target.x,point.z-target.z)});
+  }
+  let end='';
+  for(let iterations=0;open.length&&iterations<50000;iterations++){
+    const n=pop(),k=key(n.x,n.z);if(closed.has(k))continue;closed.add(k);
+    // Being near the goal is insufficient: the final fractional segment must fit.
+    if(Math.hypot(n.x-target.x,n.z-target.z)<1.5*grid&&clearSegment(n,target,obstacles,options)){end=k;break;}
+    for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]){
+      const x=n.x+dx*grid,z=n.z+dz*grid,nk=key(x,z);if(closed.has(nk)||!clearSegment(n,{x,z},obstacles,options))continue;
+      const ng=n.g+Math.hypot(dx,dz)*grid;if(ng>=(cost.get(nk)??Infinity))continue;cost.set(nk,ng);parents.set(nk,k);push({x,z,g:ng,f:ng+Math.hypot(x-target.x,z-target.z)});
+    }
+  }
+  if(!end)return grid>1&&options.gridSize===undefined?findRoute(from,target,obstacles,{...options,gridSize:1}):[];
+  const route:Point[]=[{...target}];let k=end;
+  for(;;){const [x,z]=k.split(',').map(Number);route.unshift({x,z});const parent=parents.get(k);if(!parent)break;k=parent;}
+  return route;
+}

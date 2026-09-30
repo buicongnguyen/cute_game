@@ -1,0 +1,25 @@
+{
+  "name": "cute-game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server/start-dev.mjs",
+    "build": "tsc --noEmit && vite build && node server/build-offline.mjs",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
+    "dev:client": "vite --host 127.0.0.1",
+    "start": "node server/server.mjs",
+    "build:pages": "node server/build-pages.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/nunito": "^5.3.0",
+    "three": "^0.180.0",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7"
+  }
+}
