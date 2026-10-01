@@ -135,7 +135,10 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
   margin-bottom: 5px;
   font-size: var(--t-md);
   color: #fff;
-  text-shadow: 0 1px 0 rgba(20, 50, 20, .55), 0 2px 6px rgba(20, 50, 20, .35);
+  /* Ink outline like the floating numbers, so white text stays readable on bright planets (CC-9). */
+  -webkit-text-stroke: 3px #3a2433;
+  paint-order: stroke fill;
+  text-shadow: 0 2px 3px rgba(58, 36, 51, .35);
 }
 .player-name > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-name > span {
@@ -146,6 +149,7 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
   border-radius: 999px;
   background: var(--glass);
   text-shadow: none;
+  -webkit-text-stroke: 0;
 }
 .meter {
   position: relative;
@@ -183,7 +187,9 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
   margin-top: 6px;
   font-size: var(--t-sm);
   color: #fff;
-  text-shadow: 0 1px 0 rgba(20, 50, 20, .55), 0 2px 5px rgba(20, 50, 20, .35);
+  -webkit-text-stroke: 3px #3a2433;
+  paint-order: stroke fill;
+  text-shadow: 0 2px 3px rgba(58, 36, 51, .35);
 }
 .location-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sun); box-shadow: 0 0 0 2px #fff; }
 
@@ -370,6 +376,15 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 .bounty-tracker > div { min-width: 0; }
 .bounty-tracker strong { display: block; font-size: var(--t-sm); color: #ffb4c9; }
 .bounty-tracker small { display: block; margin-top: 1px; font-size: var(--t-xs); color: #e6f0df; }
+/* The trackers fold into one chip while a fight is near (CC-2), or when the player taps Fold; the chip opens them again. */
+.tracker-panels { display: flex; flex-direction: column; gap: inherit; }
+.tracker-stack.folded .tracker-panels { display: none; }
+.quest-tracker { position: relative; }
+.quest-tracker .eyebrow { padding-right: 58px; }
+.tracker-fold { position: absolute; right: 8px; top: 7px; z-index: 1; padding: 1px 8px; border-radius: 999px; background: rgba(255, 255, 255, .16); color: #fff; font-size: var(--t-xs); font-weight: 900; line-height: 18px; }
+.tracker-chip { display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; height: 32px; padding: 0 10px; border-radius: 999px; background: var(--glass); border: 2px solid var(--glass-line); color: #fff; font-size: var(--t-sm); font-weight: 900; white-space: nowrap; }
+.tracker-chip i { font-style: normal; opacity: .8; }
+#chip-bounty:empty { display: none; }
 
 #buff-bar,
 #environment-bar { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -393,61 +408,90 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 }
 #buff-bar b, #environment-bar b { margin-left: 4px; color: #ffe08a; font-weight: 1000; }
 
+/* Boss bar (RU-03, RC-32): bottom centre above the skills on desktop and landscape, under the minimap on portrait
+   phones, so it never covers the player card, the menu or the fight. It never takes taps. */
 #boss-bar {
   position: absolute;
   left: 50%;
-  top: calc(16px + var(--safe-top));
+  bottom: calc(108px + var(--safe-bottom));
   transform: translateX(-50%);
-  width: min(420px, calc(100vw - 32px));
+  width: min(460px, 46vw);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px 8px 8px;
+  gap: 8px;
+  padding: 4px 12px 5px 4px;
   border-radius: 999px;
   background: var(--glass);
   border: 2px solid rgba(255, 201, 58, .7);
   color: #fff;
+  pointer-events: none;
   z-index: 2;
+  animation: boss-in .3s cubic-bezier(.3, 1.4, .5, 1);
 }
-#boss-bar > span { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .15); font-size: 20px; }
+@keyframes boss-in { from { opacity: 0; translate: 0 14px; } }
+#boss-bar > span { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; background: rgba(255, 255, 255, .16); font-size: 20px; }
+#boss-bar > span img, .target-icon img { width: 100%; height: 100%; object-fit: contain; }
 #boss-bar > div { flex: 1; min-width: 0; }
-#boss-bar strong { display: block; font-size: var(--t-sm); color: #ffe08a; }
-.boss-meter { height: 10px; margin-top: 4px; border-radius: 999px; background: rgba(0, 0, 0, .35); overflow: hidden; border: 2px solid rgba(255, 255, 255, .6); }
-.boss-meter > i { display: block; height: 100%; background: linear-gradient(180deg, #ff7b6b, #e2493f); transition: width .15s; }
-#boss-bar:not([hidden]) ~ #environment-bar { top: calc(72px + var(--safe-top)); }
+.boss-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.boss-head strong { font-size: var(--t-sm); color: #ffe08a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.boss-head b { flex: none; font-size: var(--t-xs); font-weight: 900; font-variant-numeric: tabular-nums; }
+.boss-meter { height: 20px; margin-top: 2px; border-radius: 999px; background: rgba(0, 0, 0, .35); overflow: hidden; border: 2px solid rgba(255, 255, 255, .6); }
+.boss-meter > i { display: block; height: 100%; background: linear-gradient(90deg, #ff8a5a, #e03b3b); transition: width .15s; }
+#app.boss-on #toasts { bottom: calc(170px + var(--safe-bottom)); }
 .float.alert { color: #ffe14d; font-size: 34px; -webkit-text-stroke-color: #6b1a1a; }
+/* Target frame (CC-03, RC-17): the selected creature, or the last one hit within 3 s. Top centre on desktop and
+   landscape, above the skills on portrait phones; never over the middle of the screen, never hit-testable. */
+#target-frame {
+  position: absolute;
+  left: 50%;
+  top: calc(12px + var(--safe-top));
+  transform: translateX(-50%);
+  width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 5px;
+  border-radius: 16px;
+  background: var(--glass);
+  border: 2px solid var(--glass-line);
+  color: #fff;
+  pointer-events: none;
+  z-index: 2;
+  animation: target-in .25s cubic-bezier(.3, 1.6, .5, 1);
+}
+@keyframes target-in { from { scale: .85; opacity: 0; } }
+.target-icon { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; overflow: hidden; background: rgba(255, 255, 255, .16); font-size: 20px; }
+#target-frame > div { flex: 1; min-width: 0; }
+.target-head { display: flex; align-items: center; gap: 6px; }
+.target-head strong { min-width: 0; font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.target-level { flex: none; padding: 0 6px; border-radius: 999px; background: #3a2433; font-size: 11px; font-weight: 800; line-height: 16px; }
+.target-meter { position: relative; height: 14px; margin-top: 4px; border-radius: 999px; background: rgba(0, 0, 0, .35); overflow: hidden; }
+.target-meter > i { display: block; height: 100%; background: linear-gradient(90deg, #ff8a8a, #ff4d5e); transition: width .15s; }
+.target-hp { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; font-weight: 900; line-height: 1; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); font-variant-numeric: tabular-nums; }
+#app.target-on #environment-bar { top: calc(80px + var(--safe-top)); }
+/* Zone banner (C2): outlined text and a small difficulty chip, no card; it plays for 2.8 s and never takes taps. */
 #zone-banner {
   position: absolute;
   top: 17%;
   left: 50%;
-  transform: translate(-50%, -12px);
+  transform: translateX(-50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 4px;
   width: max-content;
-  max-width: min(440px, calc(100vw - 32px));
-  padding: 12px 26px 12px 14px;
-  border-radius: 999px;
-  background: #fff;
-  border: 4px solid var(--sun);
-  box-shadow: var(--float);
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  color: #fff;
   opacity: 0;
   pointer-events: none;
-  transition: opacity .5s, transform .5s;
 }
-#zone-banner.show { opacity: 1; transform: translate(-50%, 0); }
-#zone-icon {
-  flex: none;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: #eaffd8;
-  font-size: 28px;
-}
-#zone-banner strong { display: block; font-size: var(--t-xl); line-height: 1.1; }
-#zone-banner small { display: block; margin-top: 3px; font-size: var(--t-sm); color: var(--ink-soft); }
+#zone-banner.show { animation: zone-banner 2.8s forwards; }
+@keyframes zone-banner { 0% { opacity: 0; translate: 0 -10px; scale: .92; } 12% { opacity: 1; translate: 0 0; scale: 1; } 78% { opacity: 1; } 100% { opacity: 0; translate: 0 -6px; } }
+#zone-banner strong { font-size: clamp(28px, 3.4vw, 46px); font-weight: 1000; line-height: 1.05; -webkit-text-stroke: 6px #3a2433; paint-order: stroke fill; text-shadow: 0 3px 0 rgba(58, 36, 51, .35); }
+#zone-banner small { max-width: 32em; font-size: var(--t-sm); font-weight: 900; -webkit-text-stroke: 3px #3a2433; paint-order: stroke fill; }
+#banner-chip { padding: 2px 10px; border-radius: 999px; background: rgba(58, 36, 51, .82); color: #ffe08a; font-size: var(--t-xs); font-weight: 900; }
+#banner-chip:empty { display: none; }
 
 /* Skills: a column of glossy medallions on the left, like a controller's face buttons. */
 .bottom-bar { position: absolute; left: 18px; right: 18px; bottom: calc(18px + var(--safe-bottom)); pointer-events: none; }
@@ -729,28 +773,34 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 }
 .plot-label.ready { padding: 3px; gap: 0; }
 .plot-label.ready > span { width: 30px; height: 30px; background: #fff; font-size: 18px; overflow: hidden; }
+/* Creature HP bars (reference .ehp): an ink level pill and a 56x9 bar, no name (that is in the target frame).
+   They never take taps, so a tap on a creature reaches the creature. */
 .enemy-label {
-  flex-direction: column;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
   gap: 3px;
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(58, 36, 51, .75);
+  pointer-events: none;
+  will-change: transform;
+}
+.enemy-label > span {
+  min-width: 13px;
+  padding: 0 2px;
   color: #fff;
-  font-size: var(--t-xs);
-  text-shadow: 0 1px 0 #2c3a26, 1px 0 0 #2c3a26, -1px 0 0 #2c3a26, 0 -1px 0 #2c3a26, 0 2px 4px rgba(0, 0, 0, .4);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 13px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
-.enemy-label > span { width: auto; height: auto; background: none; font-size: var(--t-xs); }
-.enemy-label i {
-  display: block;
-  width: 58px;
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  border: 2px solid #fff;
-  background: rgba(40, 20, 20, .55);
-}
-.enemy-label b { display: block; height: 100%; background: linear-gradient(180deg, #ff7b6b, #e2493f); }
+.enemy-label i { display: block; width: 56px; height: 9px; overflow: hidden; border-radius: 5px; background: rgba(0, 0, 0, .35); }
+.enemy-label b { display: block; height: 100%; border-radius: 5px; background: linear-gradient(90deg, #ff8a8a, #ff4d5e); transition: width .15s; }
+.enemy-label.sel { outline: 2px solid #ffe14d; z-index: 1; }
 
 /* ------------------------------------------------------------- Welcome */
 #title-screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -1611,8 +1661,8 @@ h1 > span {
   #toasts { bottom: calc(150px + var(--safe-bottom)); }
   .toast { font-size: var(--t-sm); padding: 7px 14px 7px 7px; border-radius: 20px; }
   .toast > span { width: 28px; height: 28px; font-size: 16px; }
-  #zone-banner { top: 26%; padding: 8px 18px 8px 8px; }
-  #zone-icon { width: 40px; height: 40px; font-size: 22px; }
+  #zone-banner { top: 24%; }
+  #zone-banner strong { font-size: 30px; }
   .world-label { font-size: var(--t-xs); padding: 3px 9px 3px 4px; }
   .world-label > span { width: 20px; height: 20px; font-size: 13px; }
   .plot-label.ready { padding: 2px; }
@@ -1687,6 +1737,86 @@ h1 > span {
   #touch-controls button { width: 34px; height: 34px; }
   #context-prompt { left: 10px; transform: none; bottom: calc(96px + var(--safe-bottom)); }
   #toasts { left: 10px; transform: none; align-items: flex-start; max-width: calc(100vw - 140px); bottom: calc(150px + var(--safe-bottom)); }
+}
+/* Touch: panel bodies never take taps, so a tap on a creature behind a tracker reaches the creature (CC-2, F17).
+   The journal stays one tap away on the 📖 button; Fold, the chip and Collect remain explicit buttons. */
+@media (pointer: coarse) {
+  #quest-summary, #bounty-tracker { pointer-events: none; }
+}
+/* Portrait phones: the boss bar sits under the minimap and HUD block, the target frame above the skills. */
+@media (max-width: 600px) {
+  #boss-bar { left: 10px; right: 10px; top: calc(194px + var(--safe-top)); bottom: auto; width: auto; transform: none; }
+  #boss-bar > span { width: 34px; height: 34px; }
+  .boss-meter { height: 16px; }
+  #target-frame { left: 10px; top: auto; bottom: calc(150px + var(--safe-bottom)); transform: none; width: 176px; padding: 3px 10px 3px 3px; border-radius: 14px; }
+  .target-icon { width: 36px; height: 36px; border-radius: 10px; }
+  .target-head strong { font-size: var(--t-sm); }
+  .target-meter { height: 12px; margin-top: 3px; }
+  #app.boss-on #toasts { bottom: calc(150px + var(--safe-bottom)); }
+  #app.target-on #toasts { bottom: calc(206px + var(--safe-bottom)); }
+  #app.target-on #environment-bar { top: auto; bottom: calc(204px + var(--safe-bottom)); }
+  .quest-tracker { padding-right: 28px; }
+  .tracker-fold { top: 4px; right: 4px; width: 22px; height: 22px; padding: 0; font-size: 0; }
+  .tracker-fold::before { content: "▾"; font-size: 13px; }
+}
+/* Short landscape screens (C1): compact card and menu, a small minimap, compact trackers, a 2x2 skill block and the
+   boss bar bottom centre, so the interactive HUD stays near the 11% of the screen the reference uses. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .player-card { left: 10px; top: calc(6px + var(--safe-top)); gap: 8px; }
+  .avatar { width: 46px; height: 46px; border-width: 3px; }
+  .avatar > span { font-size: 22px; }
+  .avatar b { min-width: 22px; height: 22px; font-size: var(--t-xs); }
+  .player-details { width: 150px; }
+  .player-name { font-size: var(--t-sm); margin-bottom: 2px; }
+  .player-name > span { display: none; }
+  .meter { height: 15px; border-width: 2px; }
+  .experience { height: 8px; margin-top: 2px; }
+  .location { margin-top: 2px; font-size: var(--t-xs); }
+  .top-actions { right: 10px; top: calc(6px + var(--safe-top)); gap: 6px; }
+  .top-actions .secondary-icon { display: none; }
+  .energy { height: 34px; min-width: 0; padding: 0 10px 0 4px; font-size: var(--t-sm); border-width: 2px; }
+  .energy > span { width: 24px; height: 24px; font-size: 14px; }
+  .icon-button, #social-slot .social-toggle, #platform-slot .platform-tools button { width: 34px; height: 34px; font-size: 15px; border-width: 2px; }
+  .minimap { top: calc(50px + var(--safe-top)); right: 10px; width: 84px; height: 84px; border-width: 3px; }
+  .minimap > small { display: none; }
+  .tracker-stack { left: 10px; top: calc(62px + var(--safe-top)); width: 210px; gap: 5px; }
+  .quest-tracker { padding: 5px 28px 6px 9px; }
+  .quest-tracker .eyebrow, .chevron { display: none; }
+  #quest-summary { padding: 2px 0 4px; gap: 8px; }
+  .quest-icon { width: 26px; height: 26px; font-size: 16px; border-radius: 8px; }
+  #quest-summary strong { font-size: var(--t-xs); }
+  #quest-summary small { font-size: 10px; }
+  .bounty-tracker { padding: 4px 9px; gap: 8px; }
+  .bounty-tracker > span { font-size: 18px; }
+  .tracker-fold { top: 4px; right: 4px; width: 22px; height: 22px; padding: 0; font-size: 0; }
+  .tracker-fold::before { content: "▾"; font-size: 13px; }
+  .bottom-bar { left: 10px; right: 10px; bottom: calc(8px + var(--safe-bottom)); }
+  .skills { display: grid; grid-template-columns: repeat(2, 48px); gap: 10px 12px; bottom: 0; }
+  .skill { width: 48px; height: 48px; border-width: 3px; }
+  .skill > span { font-size: 22px; }
+  .skill > small, .skill > kbd, .control-hint, .save-indicator { display: none; }
+  .home-button { bottom: 0; height: 40px; padding: 0 10px; }
+  .home-button span { display: none; }
+  #context-prompt { bottom: calc(8px + var(--safe-bottom)); }
+  #context-prompt button { padding: 4px 14px 4px 4px; font-size: var(--t-sm); }
+  #context-prompt kbd { width: 26px; height: 26px; }
+  #touch-controls { right: 10px; bottom: calc(56px + var(--safe-bottom)); gap: 3px; }
+  #touch-controls > div { gap: 3px; }
+  #touch-controls button { width: 32px; height: 32px; }
+  #boss-bar { bottom: calc(58px + var(--safe-bottom)); }
+  #boss-bar > span { width: 32px; height: 32px; }
+  #target-frame { top: calc(6px + var(--safe-top)); width: 176px; padding: 3px 10px 3px 3px; border-radius: 14px; }
+  .target-icon { width: 36px; height: 36px; border-radius: 10px; }
+  .target-head strong { font-size: var(--t-sm); }
+  .target-meter { height: 12px; margin-top: 3px; }
+  #app.target-on #environment-bar { top: calc(60px + var(--safe-top)); }
+  #toasts { bottom: calc(60px + var(--safe-bottom)); max-width: 52vw; }
+  #app.boss-on #toasts { bottom: calc(112px + var(--safe-bottom)); }
+  .toast { font-size: var(--t-xs); padding: 5px 12px 5px 5px; }
+  .toast > span { width: 24px; height: 24px; font-size: 14px; }
+  #zone-banner { top: 16%; }
+  #zone-banner strong { font-size: 26px; -webkit-text-stroke-width: 5px; }
+  #zone-banner small { font-size: var(--t-xs); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

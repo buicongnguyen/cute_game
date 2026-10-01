@@ -124,7 +124,7 @@ export class ParticlePool {
 }
 
 interface Transient { object: T.Object3D; material: T.Material & { opacity: number }; t: number; life: number; from: number; to: number; opacity: number; grow: 'ring' | 'flash' | 'arc' }
-interface Floater { el: HTMLElement; pos: T.Vector3; t: number; life: number }
+interface Floater { el: HTMLElement; pos: T.Vector3; t: number; life: number; vx: number }
 
 /** Scene-level effects plus camera shake and hit-stop state shared by the game loop. */
 export class Effects {
@@ -135,7 +135,7 @@ export class Effects {
   shakeAmp = 0; shakeTime = 0; hitstop = 0;
   private root = new T.Group();
   private transients: Transient[] = [];
-  private floaters: Floater[] = [];
+  private floaters: Floater[] = []; private side = 1;
   private layer: HTMLElement | null = null;
   private ringGeometry = new T.RingGeometry(.82, 1, 48).rotateX(-Math.PI / 2);
   private arcGeometries = new Map<string, T.BufferGeometry>();
@@ -213,7 +213,9 @@ export class Effects {
     const el = document.createElement('span');
     el.className = `float ${style}`; el.textContent = message;
     this.layer.append(el);
-    this.floaters.push({ el, pos: new T.Vector3(at.x + between(-.3, .3), (at.y ?? 0) + 1.8, at.z), t: 0, life: style.includes('big') ? 1.3 : 1 });
+    // Numbers alternate left and right of the hit point and drift outward, so quick hits do not stack on one spot.
+    const side = this.side = -this.side;
+    this.floaters.push({ el, pos: new T.Vector3(at.x + side * between(.25, .5), (at.y ?? 0) + 1.8, at.z), t: 0, life: style.includes('big') ? 1.3 : 1, vx: side * .6 });
     if (this.floaters.length > 40) { const old = this.floaters.shift()!; old.el.remove(); }
   }
 
@@ -248,11 +250,12 @@ export class Effects {
   /** Floating text follows its world point every frame, so it never lags the camera. */
   updateText(dt: number, width: number, height: number) {
     for (let i = this.floaters.length - 1; i >= 0; i--) {
-      const f = this.floaters[i]; f.t += dt; f.pos.y += dt * 1.4;
+      const f = this.floaters[i]; f.t += dt; f.pos.y += dt * 1.4; f.pos.x += dt * f.vx;
       const r = f.t / f.life;
       if (r >= 1) { f.el.remove(); this.floaters.splice(i, 1); continue; }
       this.project.copy(f.pos).project(this.camera);
-      const pop = f.t < .12 ? .6 + f.t / .12 * .7 : 1.3 - Math.min(.3, (f.t - .12) * 1.5);
+      // Phones get 0.8x text so numbers and loot lines cover less of a narrow fight.
+      const pop = (f.t < .12 ? .6 + f.t / .12 * .7 : 1.3 - Math.min(.3, (f.t - .12) * 1.5)) * (width < 600 ? .8 : 1);
       f.el.style.transform = `translate(${(this.project.x * .5 + .5) * width}px,${(-this.project.y * .5 + .5) * height}px) translate(-50%,-50%) scale(${pop.toFixed(3)})`;
       f.el.style.opacity = r > .7 ? String((1 - r) / .3) : '1';
     }

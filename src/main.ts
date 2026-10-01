@@ -10,6 +10,7 @@ import { kitsFor } from './biomes.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import { FishingView, type PondView } from './fishing-view.ts';
 import { decorIcon } from './icons.ts';
+import { CombatHud, fightNear, lootText, zoneInfo } from './hud-combat.ts';
 import * as M from './model.ts';
 import { CombatTimers, FishingInput, MovementControls } from './gameplay-controls.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatHit, type CombatEffect } from './combat.ts';
@@ -54,10 +55,11 @@ app.innerHTML = `
   <div id="hud" hidden>
     <header class="player-card"><button class="avatar" data-action="bag" aria-label="Open character and backpack"><span>🌱</span><b id="level-badge">1</b></button><div class="player-details"><div class="player-name"><strong id="player-name"></strong><span id="level-text">Lv. 1</span></div><div class="meter health"><div id="hp-fill"></div><span id="hp-text">100 / 100</span></div><div class="meter experience"><div id="xp-fill"></div></div><div class="location"><span class="location-dot"></span><span id="zone-name">Clover Village</span></div></div></header>
     <nav class="top-actions" aria-label="Game menu"><div class="energy"><span>ϟ</span><b id="energy">0</b></div><button class="icon-button" data-action="bag" title="Backpack · I" aria-label="Backpack">🎒</button><button class="icon-button" data-action="quests" title="Journal · J" aria-label="Quest journal">📖<i id="quest-dot"></i></button><div id="social-slot"></div><button class="icon-button secondary-icon" data-action="help" title="How to play" aria-label="How to play">?</button><button class="icon-button" data-action="settings" title="Settings" aria-label="Settings">⚙</button><div id="platform-slot"></div></nav>
-    <div class="tracker-stack"><aside class="quest-tracker"><div class="eyebrow">YOUR LITTLE ADVENTURE <span id="quest-chapter">1 / 9</span></div><button id="quest-summary" data-action="quests"><span class="quest-icon" id="quest-icon">🥕</span><span><strong id="quest-title">A little green beginning</strong><small id="quest-task">Harvest 3 crops · 0 / 3</small></span><span class="chevron">›</span></button><div class="quest-progress"><i id="quest-fill"></i></div><button id="quick-claim" data-action="claim" hidden>Collect your reward ✨</button></aside>
-    <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div></button><div id="buff-bar" aria-label="Active effects"></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="160" height="160"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
-    <div id="boss-bar" hidden><span id="boss-icon">👑</span><div><strong id="boss-name"></strong><div class="boss-meter"><i id="boss-fill"></i></div></div></div>
-    <div id="zone-banner"><span id="zone-icon">🌿</span><div><strong id="banner-name">Clover Village</strong><small id="banner-detail">A little place to call home</small></div></div>
+    <div class="tracker-stack"><button id="tracker-chip" class="tracker-chip" data-action="trackers" aria-label="Show quest and bounty" hidden><span id="chip-quest">🥕 0/3</span><span id="chip-bounty">🎯</span><i>▸</i></button><div class="tracker-panels"><aside class="quest-tracker"><button class="tracker-fold" data-action="trackers" aria-label="Fold quest and bounty">▾ Fold</button><div class="eyebrow">YOUR LITTLE ADVENTURE <span id="quest-chapter">1 / 9</span></div><button id="quest-summary" data-action="quests"><span class="quest-icon" id="quest-icon">🥕</span><span><strong id="quest-title">A little green beginning</strong><small id="quest-task">Harvest 3 crops · 0 / 3</small></span><span class="chevron">›</span></button><div class="quest-progress"><i id="quest-fill"></i></div><button id="quick-claim" data-action="claim" hidden>Collect your reward ✨</button></aside>
+    <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div></button></div><div id="buff-bar" aria-label="Active effects"></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="160" height="160"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
+    <div id="boss-bar" hidden><span id="boss-icon">👑</span><div><div class="boss-head"><strong id="boss-name"></strong><b id="boss-hp"></b></div><div class="boss-meter"><i id="boss-fill"></i></div></div></div>
+    <div id="target-frame" hidden aria-live="off"><span class="target-icon"></span><div><div class="target-head"><strong></strong><span class="target-level">Lv 1</span></div><div class="target-meter"><i></i><b class="target-hp"></b></div></div></div>
+    <div id="zone-banner" role="status"><strong id="banner-name">Clover Village</strong><small id="banner-detail">A little place to call home</small><span id="banner-chip"></span></div>
     <button id="reel-button" class="reel-hud" data-action="reel" hidden aria-label="Reel in the line"><span class="reel-icon" aria-hidden="true">🎣</span><span id="reel-text">Reel</span></button><div id="fish-hint" role="status" hidden></div>
     <div id="context-prompt" hidden><button id="interact-button" data-action="interact"><kbd>F</kbd><span id="interact-text">Interact</span></button></div>
     <div class="bottom-bar"><div class="skills" aria-label="Combat skills"><button class="skill skill-spin" data-action="skill" data-index="0" aria-label="Q Whirlwind"><kbd>Q</kbd><span>🌀</span><small>Whirlwind</small><b class="cooldown"></b></button><button class="skill skill-dash" data-action="skill" data-index="1" aria-label="W Dash"><kbd>W</kbd><span>➶</span><small>Dash</small><b class="cooldown"></b></button><button class="skill skill-stomp" data-action="skill" data-index="2" aria-label="E Ground stomp"><kbd>E</kbd><span>💥</span><small>Stomp</small><b class="cooldown"></b></button><button class="skill skill-special" data-action="skill" data-index="3" aria-label="R Special attack"><kbd>R</kbd><span>✦</span><small id="special-name">Star punch</small><b class="cooldown"></b></button></div><div class="control-hint"><span>Click to wander</span><i>•</i> Arrows to move <i>•</i> <kbd>Space</kbd> attack</div><button class="home-button" data-action="return-home" title="Return home">⌂ <span>Home</span></button></div>
@@ -88,6 +90,8 @@ let world: World;
 try { world = new World($('#world'), state, { antialias: !(graphics.mobile && devicePixelRatio >= 2) }); }
 catch (error) { app.innerHTML = '<div class="fatal"><h1>Your garden needs WebGL</h1><p>Enable hardware acceleration in your browser, then reload this page.</p><p>Your saved adventure is safe.</p></div>'; throw error; }
 world.applyGraphics(graphics.profile, graphics.ratio);world.fx?.setTextLayer($('#floating-text'));
+// Over-head HP bars, target frame and boss bar; the trackers fold to a chip in fights ('auto'), or as the player asks.
+const combatHud=new CombatHud($('#world-labels'),(x,y,z)=>world.screen(x,y,z));let trackerMode:'auto'|'open'|'fold'='auto',wasFight=false;
 const movement = new MovementControls(world.keys);
 const combatView=new CombatView(world.scene);
 const combat=new CombatSimulation({
@@ -186,16 +190,21 @@ function updateHud() {
   $('#buff-bar').innerHTML=M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,t])=>`<span>✨ ${esc(name)} <b>${Math.ceil(t)}s</b></span>`).join('');
   $('#environment-bar').innerHTML=world.environmentStatus().map(e=>`<span>${e.icon??''} ${esc(e.label)} <b>${esc(String(e.value))}</b></span>`).join('');
   const dark=$('#darkness');dark.hidden=!world.darknessActive()||!started;
-  // The boss bar appears while a boss is fighting nearby.
-  const boss=world.enemies.find(e=>e.boss&&e.hp>0&&e.phase!=='idle'&&e.phase!=='return'&&Math.hypot(e.x-world.position.x,e.z-world.position.z)<30);
-  $('#boss-bar').hidden=!boss||!started;if(boss){$('#boss-name').textContent=boss.name;$('#boss-fill').style.width=`${boss.hp/boss.maxHp*100}%`;}
+  // Target frame and boss bar (hud-combat.ts). While a fight is near (or on a phone in the wild) the trackers fold into one chip.
+  const hud=app,shown=combatHud.panels(world.enemies,world.selected,world.position.x,world.position.z,started);hud.classList.toggle('boss-on',shown.boss);hud.classList.toggle('target-on',shown.target);
+  const fight=fightNear(world.enemies,world.position.x,world.position.z);if(fight&&!wasFight&&trackerMode==='open')trackerMode='auto';wasFight=fight;
+  const folded=trackerMode==='fold'||trackerMode==='auto'&&(fight||shown.boss||innerWidth<600&&(state.planet!=='home'||world.lastZone!=='Clover Village'));
+  $('.tracker-stack').classList.toggle('folded',folded);$('#tracker-chip').hidden=!folded;
   const bounty=progressEntries(state,'bounties')[0];$('#bounty-tracker').hidden=!bounty;if(bounty){$('#bounty-title').textContent=bounty.title;$('#bounty-task').textContent=`${bounty.progress}/${bounty.target} · ${bounty.claimed?'Complete':bounty.description}`;}
+  if(folded){$('#chip-quest').textContent=q?`${q.icon} ${progress}/${q.target}`:'🚀';$('#chip-bounty').textContent=bounty?`🎯 ${bounty.progress}/${bounty.target}`:'';}
   // Light pools cut holes in the darkness; a lamp behind the perspective camera would project mirrored, so it is skipped.
   if(!dark.hidden){const holes=world.lightSources().flatMap(light=>{const p=world.screen(light.x,.7,light.z),edge=world.screen(light.x+light.radius,.7,light.z);return p.front?[`radial-gradient(circle ${Math.abs(edge.x-p.x)}px at ${p.x}px ${p.y}px, transparent 65%, black 100%)`]:[];});dark.style.maskImage=holes.join(',');dark.style.maskComposite='intersect';}
 
   if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!e;$('#interact-text').textContent=e?e.kind==='enemy'?`Attack ${e.name}`:e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'';}else $('#context-prompt').hidden=true;
 }
-function showZone(name:string) {$('#zone-name').textContent=name;$('#banner-name').textContent=name;$('#banner-detail').textContent=name==='Clover Village'?'A peaceful place · health restores here':name==='Bramble Woods'?'Beyond the gate, a little courage goes a long way':M.PLANETS[state.planet].description;$('#zone-banner').classList.add('show');setTimeout(()=>$('#zone-banner').classList.remove('show'),3500);}
+// The zone banner is outlined text with a difficulty chip and no card (C2): it plays once for 2.8 s and never blocks taps.
+let zoneTimer=0;
+function showZone(name:string) {const info=zoneInfo(name,state.planet),banner=$('#zone-banner');$('#zone-name').textContent=name;$('#banner-name').textContent=name;$('#banner-detail').textContent=info.detail;$('#banner-chip').textContent=info.chip;banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');clearTimeout(zoneTimer);zoneTimer=window.setTimeout(()=>banner.classList.remove('show'),2800);}
 world.onZone=showZone;
 const labelNodes=new Map<string,HTMLButtonElement>();
 // Labels sit just above each model's real top. Heights are measured once per
@@ -214,7 +223,7 @@ const labelX=(x:number,width:number)=>Math.min(innerWidth-4-width/2,Math.max(4+w
 // Tall buildings near the explorer reach up behind the top HUD (player card, menu, quest tracker, minimap, boss bar), so their labels
 // slide down below whichever panel sits over them instead of hiding or sitting under it, like labelX at the sides.
 let hudPanels:{left:number;right:number;bottom:number}[]=[],labelPx=34;
-function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar').forEach(node=>{const r=node.getBoundingClientRect();if(r.height&&r.top<innerHeight/2)hudPanels.push({left:r.left,right:r.right,bottom:r.bottom});});}
+function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar,#target-frame').forEach(node=>{const r=node.getBoundingClientRect();if(r.height&&r.top<innerHeight/2)hudPanels.push({left:r.left,right:r.right,bottom:r.bottom});});}
 const labelLift=(anchor:string)=>labelPx*(anchor.includes('-100%')?1:anchor.includes('-75%')?.75:.5);
 function labelY(x:number,y:number,width:number,anchor:string){let top=12;for(const p of hudPanels)if(p.left<x+width/2+4&&x-width/2-4<p.right)top=Math.max(top,p.bottom+6);return Math.max(top+labelLift(anchor),y);}
 function updateLabels() {
@@ -231,14 +240,12 @@ function updateLabels() {
       else{text='Plant';icon='+';className+=' plot-label empty';rank=4;reach=4.5;}
     }else if(e.kind==='fish'&&e.pond){
       if(fishGame&&fishPond===e)continue;y=.35;back=e.pond.rz*1.02;
-    }else if(e.kind==='enemy'){
-      const enemy=e as Enemy;if(enemy.hp<=0||enemy.boss||(enemy.hp>=enemy.maxHp&&(enemy.phase??'idle')==='idle'&&world.selected!==enemy))continue;y=enemy.boss?4.5:2;className+=' enemy-label';rank=0;reach=10;
-    }else y=labelHeight(e);
+    }else if(e.kind==='enemy')continue; // Creature HP bars take their own path (hud-combat.ts), which never drops a bar.
+    else y=labelHeight(e);
     if(distance>reach)continue;
     const p=world.screen(e.x,y,e.z-back);if(!p.visible||p.y<-60||p.y>innerHeight-70||p.x<0||p.x>innerWidth)continue;
-    const enemy=e.kind==='enemy'?e as Enemy:null;
-    const html=enemy?`<span>${enemy.boss?'👑 ':''}${esc(text)}</span><i><b style="width:${enemy.hp/enemy.maxHp*100}%"></b></i>`:`<span>${icon}</span>${esc(text)}`;
-    candidates.push({e,x:p.x,y:p.y,wy:y,back,html,className,aria:e.kind==='plot'?`${text||'Ready to harvest'} in garden bed ${e.index!+1}`:text,rank,distance,width:enemy?72:34+text.length*7.4,anchor});
+    const html=`<span>${icon}</span>${esc(text)}`;
+    candidates.push({e,x:p.x,y:p.y,wy:y,back,html,className,aria:e.kind==='plot'?`${text||'Ready to harvest'} in garden bed ${e.index!+1}`:text,rank,distance,width:34+text.length*7.4,anchor});
   }
   // Nearest and most important labels win; anything that would overlap them waits.
   candidates.sort((a,b)=>a.rank-b.rank||a.distance-b.distance);
@@ -263,6 +270,7 @@ function updateLabels() {
 
 /** Re-project visible labels after each render so they move in step with the camera instead of trailing it. */
 function positionLabels(){
+  combatHud.frame(world.enemies,world.selected,world.position.x,world.position.z,!started||!!modal);
   if(!started||modal)return;
   for(const [id,a] of labelAnchors){const node=labelNodes.get(id);if(!node)continue;const p=world.screen(a.e.x,a.wy,a.e.z-a.back),x=labelX(p.x,a.width);node.style.transform=`translate(${x.toFixed(1)}px,${labelY(x,p.y,a.width,a.anchor).toFixed(1)}px) ${a.anchor}`;}
 }
@@ -437,12 +445,13 @@ function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:stri
   const x=e.x??world.position.x,z=e.z??world.position.z;
   world.fx?.orbs({x,z},Math.min(8,3+Math.floor(e.xp/20)),'#7ff0ff',()=>world.position,()=>tone('coin'));
   floating(`+${e.xp} EXP`,x,z,'xp',.5);
-  loot.forEach((item,i)=>setTimeout(()=>floating(`${M.ITEMS[item.id]?.icon??'✨'} ${M.ITEMS[item.id]?.name??item.id} ×${item.count}`,x,z,'item',1+i*.45),300+i*220));
+  // Loot merges into one line; the drops module may swap lootText for ground pickups.
+  const lootLine=lootText(loot.map(item=>({icon:M.ITEMS[item.id]?.icon??'✨',name:M.ITEMS[item.id]?.name??item.id,count:item.count})));if(lootLine)setTimeout(()=>floating(lootLine,x,z,'item',1),300);
   if(e.boss){toast(`${e.name??'Boss'} defeated!`,'👑');tone('level');}
 }
 function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=false){
   if(e.hp<=0||(visiting&&!remote))return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;
-  world.damageEnemy(e,damage,stun,hazard);world.hitFeedback(e,damage,!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
+  world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,damage,!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');
@@ -619,7 +628,7 @@ app.addEventListener('click',event=>{
   switch(action){
     case 'start':start();break;
     case 'color':state.color=button.dataset.color!;document.querySelectorAll<HTMLButtonElement>('.color-picker button').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});world.refreshPlayer();break;
-    case 'close':closeDialog();break;case 'bag':inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'help':help();break;
+    case 'close':closeDialog();break;case 'bag':inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;
     case 'claim':if(change(()=>M.claimQuest(state))){tone('success');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
     case 'plant':if(change(()=>M.plant(state,activePlot,id as M.CropId))){plantBurst(activePlot);tone('pop');world.syncCrops();closeDialog();toast(`${M.CROPS[id as M.CropId].name} planted. Let the sunshine do its thing.`,'🌱');}break;
     case 'cook-one':case 'cook-all':if(change(()=>M.cook(state,id,action==='cook-all'?(state.bag[id]||0):1))){tone('success');cooking();}break;

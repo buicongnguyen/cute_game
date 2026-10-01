@@ -21,11 +21,19 @@ function setup() {
 }
 
 export function decorIcon(id: string): string {
-  const known = cache.get(id); if (known !== undefined) return known;
+  return modelIcon(id, () => buildDecoration(id), true);
+}
+
+/**
+ * Any model drawn once into a cached icon. Creature portraits borrow the live creature's mesh
+ * (dispose=false), so its shared geometry and materials stay untouched.
+ */
+export function modelIcon(key: string, build: () => T.Object3D, dispose = false): string {
+  const known = cache.get(key); if (known !== undefined) return known;
   let url = '';
   try {
     if (!renderer) setup();
-    const model = buildDecoration(id), holder = new T.Group();
+    const model = build(), holder = new T.Group();
     holder.add(model); holder.rotation.y = -.5; scene!.add(holder); holder.updateMatrixWorld(true);
     box.setFromObject(holder); box.getCenter(centre); box.getSize(size);
     const distance = Math.max(size.x, size.y, size.z) * .62 / Math.tan(T.MathUtils.degToRad(15)), tilt = .45;
@@ -33,8 +41,8 @@ export function decorIcon(id: string): string {
     renderer!.render(scene!, camera!);
     url = renderer!.domElement.toDataURL('image/png');
     scene!.remove(holder);
-    holder.traverse(o => { if (o instanceof T.Mesh) o.geometry.dispose(); });
+    if (dispose) holder.traverse(o => { if (o instanceof T.Mesh) o.geometry.dispose(); });
   } catch { url = ''; }
-  cache.set(id, url);
+  cache.set(key, url);
   return url;
 }
