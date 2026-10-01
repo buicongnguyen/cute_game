@@ -21,7 +21,7 @@ export interface Animal {
   fedYoung?: boolean;
   fed?: boolean;
 }
-export interface FarmState { animals: Animal[]; nextId: number; penLevel: number }
+export interface FarmState { animals: Animal[]; nextId: number; penLevel: number; /** The pen has been built (a marked plot until then). */ built: boolean }
 export interface AnimalDef {
   name: string; baby: string; icon: string; babyIcon: string; level: number; price: number;
   growMs: number; productMs: number; product: ItemId; xp: number; cap: number; capStep: number;
@@ -36,6 +36,12 @@ export const FEED_SHARE = .5;
 /** Energy for each pen expansion (+2 chickens and +1 cow each). */
 export const PEN_EXPANSIONS = [140, 280] as const;
 export const MAX_PEN_LEVEL = PEN_EXPANSIONS.length;
+/**
+ * Building the pen: at level 2, when chicks unlock, for 40 energy. That is 1.6 chicks: a real first step (more than a
+ * chick, so the pen feels like a purchase) yet well under the first expansion (140), so a new player at level 2 has it
+ * after a couple of harvests and the first hen follows soon after.
+ */
+export const PEN_BUILD = { level: 2, price: 40 } as const;
 
 /**
  * Where the pen stands at home: north of the garden (behind it on screen), on open grass between the storage chest,
@@ -79,9 +85,19 @@ export const FARM_DISHES: readonly Dish[] = [
   { id: 'cheese', materials: { milk: 3 } },
 ];
 
-export function emptyFarm(): FarmState { return { animals: [], nextId: 1, penLevel: 0 }; }
+export function emptyFarm(): FarmState { return { animals: [], nextId: 1, penLevel: 0, built: false }; }
 /** Saves from before the farm have no `farm`: they start with an empty pen. */
 export function farmOf(s: SaveState): FarmState { return (s.farm ??= emptyFarm()); }
+export function penBuilt(s: SaveState) { return farmOf(s).built === true; }
+export type BuildCheck = 'ok' | 'away' | 'level' | 'energy' | 'built';
+export function canBuildPen(s: SaveState): BuildCheck {
+  if (penBuilt(s)) return 'built';
+  if (s.planet !== 'home') return 'away';
+  if (s.level < PEN_BUILD.level) return 'level';
+  return s.energy < PEN_BUILD.price ? 'energy' : 'ok';
+}
+/** Builds the pen on its marked plot: the yard, coop and troughs appear and animals can be bought. */
+export function buildPen(s: SaveState) { if (canBuildPen(s) !== 'ok') return false; s.energy -= PEN_BUILD.price; farmOf(s).built = true; return true; }
 export function adultAt(a: Animal) { return a.bornAt + ANIMALS[a.kind].growMs; }
 export function isAdult(a: Animal, now = Date.now()) { return now >= adultAt(a); }
 /** 0 → 1 while young. */
@@ -95,10 +111,11 @@ export function timeLeft(a: Animal, now = Date.now()) {
 }
 export function penCapacity(s: SaveState, kind: AnimalKind) { const d = ANIMALS[kind]; return d.cap + farmOf(s).penLevel * d.capStep; }
 export function animalCount(s: SaveState, kind: AnimalKind) { return farmOf(s).animals.filter(a => a.kind === kind).length; }
-export type BuyCheck = 'ok' | 'away' | 'level' | 'full' | 'energy';
+export type BuyCheck = 'ok' | 'away' | 'unbuilt' | 'level' | 'full' | 'energy';
 export function canBuyAnimal(s: SaveState, kind: AnimalKind): BuyCheck {
   const d = Object.hasOwn(ANIMALS, kind) ? ANIMALS[kind] : undefined;
   if (!d || s.planet !== 'home') return 'away';
+  if (!penBuilt(s)) return 'unbuilt';
   if (s.level < d.level) return 'level';
   if (animalCount(s, kind) >= penCapacity(s, kind)) return 'full';
   return s.energy < d.price ? 'energy' : 'ok';
@@ -150,7 +167,7 @@ export function penExpandCost(s: SaveState) { const level = farmOf(s).penLevel; 
 /** Room for two more chickens and one more cow. */
 export function expandPen(s: SaveState) {
   const cost = penExpandCost(s);
-  if (cost === null || s.planet !== 'home' || s.energy < cost) return false;
+  if (cost === null || s.planet !== 'home' || !penBuilt(s) || s.energy < cost) return false;
   s.energy -= cost; farmOf(s).penLevel++; return true;
 }
 export function canCookDish(s: SaveState, id: ItemId) {
@@ -180,6 +197,8 @@ export function parseFarm(raw: unknown): FarmState {
     seen.add(uid); room[kind]++;
     farm.animals.push({ uid, kind, bornAt, cycleAt, ...(a.fedYoung === true ? { fedYoung: true } : {}), ...(a.fed === true ? { fed: true } : {}) });
   }
+  // Saves from before building: a pen with animals or an expansion was already standing.
+  farm.built = v.built === true || farm.animals.length > 0 || farm.penLevel > 0;
   farm.nextId = Math.max(count(v.nextId, 1), 1, ...farm.animals.map(a => a.uid + 1));
   return farm;
 }
