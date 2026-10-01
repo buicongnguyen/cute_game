@@ -3788,6 +3788,10 @@ for (const [id, item] of Object.entries(ITEMS)) {
     if (FISH[id])
         FISH[id].name = item.name;
 }
+// The garden items say what they do (the growing-bed panel shows these lines beside its Use buttons).
+ITEMS.plot_kit.desc = 'One more garden bed for home. Place it from your backpack, or tap a garden bed and choose ➕ Expand garden.';
+ITEMS.manure.desc = 'Halves the time a growing crop still needs.';
+ITEMS.spore.desc = 'Ripens a growing crop right away.';
 const planetLabels: Record<PlanetId, string> = { home: 'Clover Village', candy: 'Candy Planet', ice: 'Frost Planet', lava: 'Volcano Planet', toy: 'Toybox Planet', jungle: 'Wild Jungle', ocean: 'Ocean Planet', cloud: 'Cloud Islands', shadow: 'Night Planet' };
 for (const [id, planet] of Object.entries(PLANETS)) {
     planet.name = planetLabels[id as PlanetId];

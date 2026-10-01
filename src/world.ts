@@ -12,6 +12,7 @@ import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, v
 import { QUALITY, type QualityProfile } from './graphics.ts';
 import { CropCards, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
 import { GardenBeds } from './garden-beds.ts';
+import { PlacementGhost } from './placement-ghost.ts';
 import { STARTING_PLOTS, MAX_EXTRA_PLOTS } from './content.ts';
 import { approach, blocked, clearSegment, findRoute, nearbyObstacles, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
 import { attackRange } from './combat.ts';
@@ -372,7 +373,7 @@ export class World {
     const saved=this.state.plots[index] as M.Plot&{x?:number;z?:number};
     const x=saved.x??-11.4+(index%3)*2.25,z=saved.z??-.4+Math.floor(index/3)*2.25;
     const p=group(new T.Mesh(BED_PICK,BED_PICK_MATERIAL));
-    const crops=new T.Group();p.add(crops);this.plotMeshes[index]=crops;this.addEntity('plot','Garden bed','🌱',p,x,z,1,index);
+    const crops=new T.Group();p.add(crops);p.rotation.y=saved.rotation??0;this.plotMeshes[index]=crops;this.addEntity('plot','Garden bed','🌱',p,x,z,1,index);
   }
   /** The simple bed until garden-bed.glb arrives: soil, a wooden frame and three furrows. */
   private bedBoxes(){
@@ -384,10 +385,29 @@ export class World {
   private syncBeds(assets: RefinedAssetLibrary = refinedAssets){
     const beds=this.gardenBeds??=new GardenBeds();if(beds.group.parent!==this.scene)this.scene.add(beds.group);
     const plots=this.planet==='home'?this.entities.filter(e=>e.kind==='plot'):[],refined=assets.has('garden');
-    beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z})),refined);
+    beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z,rotation:e.mesh.rotation.y})),refined);
   }
   /** The beds' draw calls, for tests and probes. */
   get bedDraws(){return this.gardenBeds?.draws??0;}
+  private ghost?: PlacementGhost;
+  /** Shows the see-through bed kit or decoration being placed (red where refused); null hides it. */
+  placementGhost(spot:{id:string;x:number;z:number;rotation:number;ok:boolean}|null){
+    // A rebuild (travel, visit) disposes the root and the ghost with it.
+    if(this.ghost&&(!spot||spot.id!==this.ghost.id||this.ghost.group.parent!==this.root)){this.ghost.dispose();this.ghost=undefined;}
+    if(!spot)return;
+    if(!this.ghost){
+      const bed=M.ITEMS[spot.id]?.type==='placeable',refined=bed&&refinedAssets.has('garden')?refinedAssets.clone('garden'):null;
+      this.ghost=new PlacementGhost(spot.id,bed?refined??this.bedBoxes():buildDecoration(spot.id),!bed||!!refined);this.root.add(this.ghost.group);
+    }
+    this.ghost.place(spot.x,spot.z,spot.rotation,spot.ok);
+  }
+  /** Forgets the beds from `index` on so syncCrops makes them again from the save (a stored bed shifts later ones down). */
+  dropPlotsFrom(index:number){
+    if(this.planet!=='home')return;
+    this.entities=this.entities.filter(e=>{if(e.kind!=='plot'||e.index!<index)return true;this.disposeTree(e.mesh);e.mesh.removeFromParent();if(this.selected===e){this.selected=null;this.ring.visible=false;}return false;});
+    this.plotMeshes.length=Math.min(this.plotMeshes.length,index);this.cropSignatures.length=Math.min(this.cropSignatures.length,index);
+    this.syncCrops();this.syncBeds();
+  }
   build(planet: PlanetId) {
     this.disposeTree(this.root);this.scene.remove(this.root);this.root=new T.Group();this.scene.add(this.root);
     this.entities=[];this.enemies=[];this.obstacles=[];this.dynamicObstacles=[];this.plotMeshes=[];this.cropSignatures=[];this.planet=planet;
