@@ -15,7 +15,7 @@ import { fightNear } from '../src/hud-combat.ts';
 // are intercepted so assertions can inspect which gear reaches each action.
 const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-const names = ['applyContextWeapon', 'prepareCombatWeapon', 'updateContextWeapon', 'fish', 'pondView', 'endFishing', 'updateFishing', 'basicAttack', 'skillList', 'skill'];
+const names = ['applyContextWeapon', 'prepareCombatWeapon', 'updateContextWeapon', 'fish', 'pondView', 'endFishing', 'updateFishing', 'finishFishingCatch', 'basicAttack', 'skillList', 'skill'];
 const declarations = names.map(name => {
   const node = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
   assert.ok(node, `main.ts must provide the actual ${name} controller`);
@@ -37,7 +37,7 @@ function fixture(...items) {
     state, gearState: state, gearPlanet: state.planet, gearWater: false, combatGearUntil: 0,actionHandler:null,
     contextGear: new ContextGearSelection(), started: true, visiting: null, blocked: false,
     document: { hidden: false }, now: 1000, performance: { now: () => ctx.now },
-    fishGame: null, fishPond: null, fishingWater: 'home', lastCast: null, recastUntil: 0,
+    fishGame: null, fishPond: null, fishingWater: 'home', lastCast: null, recastUntil: 0,fishingEpoch:0,
     cooldowns: combatTimers.skills, combatTimers, skillDurations: [7, 4, 9, 6],
     uiBlocked: () => ctx.blocked,
     world: {
@@ -239,11 +239,11 @@ function finishCatch(f) {
   simulation.phase = 'caught'; simulation.pick = { id, size: 23, huge: false, power: M.FISH[id].power };
   f.ctx.updateFishing(1 / 60);
   assert.equal(f.ctx.fishGame, null); assert.equal(f.calls.landings.length, 1);
-  assert.equal(f.state.bag[id], undefined, 'reward waits for the catch landing animation');
+  assert.equal(f.state.bag[id], 1, 'earned catch is saved before its optional landing animation');
   return id;
 }
 
-test('a completed catch grants its item and progression when the same save receives the landing callback', () => {
+test('a completed catch grants once before the landing callback displays its feedback', () => {
   const f = fixture('rod'), id = finishCatch(f);
   f.calls.landings.shift()();
   assert.equal(f.state.bag[id], 1); assert.equal(f.state.counters.fish, 1);

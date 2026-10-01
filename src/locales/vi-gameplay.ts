@@ -218,4 +218,5 @@ export const VI_GAMEPLAY: Record<string, string> = {
   "Left": "Trái",
   "Right": "Phải",
   "You have discovered 1 planet": "Bạn đã khám phá 1 hành tinh",
+  "There is no room for this catch.": "Không còn chỗ để nhận vật vừa câu được.",
 };

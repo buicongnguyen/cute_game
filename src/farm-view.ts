@@ -317,6 +317,18 @@ export class FarmPenView {
   }
   /** Where an animal stands (world metres), for bursts and floating text; null if unknown. */
   positionOf(uid: number) { const w = this.walkers.get(uid); return w ? { x: w.x, z: w.z } : null; }
+  /** Resolve a visible instanced body/product hit to its live animal, without confusing collection effects. */
+  pickAnimal(raycaster: T.Raycaster): number | null {
+    this.statics.updateWorldMatrix(true,true);
+    const meshes=[...this.meshes.values()].filter(mesh=>mesh.visible&&mesh.count>0);
+    // Instances move every frame; raycast bounds must be refreshed at the tap, not cached at their spawn point.
+    for(const mesh of meshes)mesh.computeBoundingSphere();
+    for(const hit of raycaster.intersectObjects(meshes,false)){
+      const uid=hit.instanceId===undefined?undefined:hit.object.userData.animalUids?.[hit.instanceId];
+      if(typeof uid==='number'&&this.walkers.has(uid))return uid;
+    }
+    return null;
+  }
   /** Presentation only: the server decides theft and damage before the guardian gives chase. */
   guardBite(target: { x: number; z: number }, follow?: () => { x: number; z: number } | null) {
     const dog = [...this.walkers.values()].find(w => w.kind === 'dog');
@@ -356,10 +368,11 @@ export class FarmPenView {
   activities() { return [...this.walkers.values()].map(w => ({ uid: w.uid, kind: w.kind, young: w.young, expired: w.expired, walking: w.walking, rest: w.rest, x: w.x, z: w.z })); }
   private player: { x: number; z: number } | null = null;
   /** A collected product flies up from its animal and shrinks (like a harvested crop). */
-  collect(uid: number, product?: string) {
-    const w = this.walkers.get(uid); if (!w) return;
-    const item = product === 'meat' || product === 'egg' || product === 'milk' || product === 'duck_egg' || product === 'truffle' ? product : w.expired ? 'meat' : PRODUCT[w.kind];
-    this.flights.push({ product: item, x: w.x - PEN.x, y: item === 'meat' ? .3 : this.rigOf(w.model).height + .2, z: w.z - PEN.z, t: 0 });
+  collect(uid: number, product?: string, origin?: { x: number; z: number }) {
+    const w = this.walkers.get(uid),at=w??origin;if(!at||!Number.isFinite(at.x)||!Number.isFinite(at.z))return;
+    const item = product === 'meat' || product === 'egg' || product === 'milk' || product === 'duck_egg' || product === 'truffle' ? product : !w || w.expired ? 'meat' : PRODUCT[w.kind];
+    // A committed online meat pickup may remove its walker before the HTTP reply animates it.
+    this.flights.push({ product: item, x: at.x - PEN.x, y: item === 'meat' ? .3 : w?this.rigOf(w.model).height + .2:.6, z: at.z - PEN.z, t: 0 });
   }
   private rigOf(id: ModelId) { let r = this.rigs.get(id); if (!r) { const src = model(id, true); r = rigOf(src, COAT_PARTS[id]); this.rigs.set(id, r); this.disposeSource(src); } return r; }
   /** Frees a stand-in model once its parts are merged; a kit instance shares the kit's geometry and materials. */
@@ -369,7 +382,7 @@ export class FarmPenView {
     if (!m) {
       // Animal parts carry their breed colours per instance (see animalMaterial).
       if (material === sharedMaterial) { geometry.setAttribute('coatA', new T.InstancedBufferAttribute(new Float32Array(max * 4), 4)); geometry.setAttribute('coatB', new T.InstancedBufferAttribute(new Float32Array(max * 3), 3)); }
-      m = new T.InstancedMesh(geometry, material, max); m.name = `farm-${key}`; m.castShadow = shadow; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; this.meshes.set(key, m); this.animals.add(m); }
+      m = new T.InstancedMesh(geometry, material, max); m.name = `farm-${key}`; m.castShadow = shadow; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.animalUids=[]; this.meshes.set(key, m); this.animals.add(m); }
     return m;
   }
   private productMesh(product: ProductId) {
@@ -427,12 +440,12 @@ export class FarmPenView {
       w.lodT = this.lodStep(w, w.seen); const step=Math.min(w.lodDt,.25);if(!this.stepGuard(w,step))stepRoamer(w, walkers, this.area, this.rng, step, this.player, this.grid); w.lodDt = 0;
     }
     for (const w of walkers) w.phase += dt * (w.kind === 'cow' ? 7 : 16) * Math.min(1, w.speed / .3);
-    for (const m of this.meshes.values()) m.count = 0;
+    for (const m of this.meshes.values()) { m.count = 0; m.userData.animalUids.length=0; }
     for (const a of list) {
       const w = this.walkers.get(a.uid)!;
       if (w.expired) {
         const marker = this.productMesh('meat'), i = marker.count;
-        if (i < MAX_PRODUCTS) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, .15 + Math.sin(time * 3 + w.seed) * .05, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, time * .7 + w.seed, 0)), this.s.setScalar(1.6))); marker.count = i + 1; }
+        if (i < MAX_PRODUCTS) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, .15 + Math.sin(time * 3 + w.seed) * .05, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, time * .7 + w.seed, 0)), this.s.setScalar(1.6))); marker.userData.animalUids[i]=a.uid; marker.count = i + 1; }
         continue;
       }
       const rig = this.rigOf(w.model), cow = a.kind === 'cow', young = w.model !== a.kind;
@@ -465,13 +478,13 @@ export class FarmPenView {
           else rz = moving ? Math.sin(w.phase) * .04 : 0;
           this.local.compose(this.v2.copy(at).setY(at.y + (p.draw === 'legs' ? 0 : w.flap * .08)), this.q.setFromEuler(this.e.set(rx, ry, rz)), this.one);
           const i = mesh.count; if (i >= max) continue;
-          mesh.setMatrixAt(i, this.m.multiplyMatrices(this.root, this.local)); mesh.count = i + 1;
+          mesh.setMatrixAt(i, this.m.multiplyMatrices(this.root, this.local)); mesh.userData.animalUids[i]=a.uid; mesh.count = i + 1;
           p.coatA?.setXYZW(i, coatA.r, coatA.g, coatA.b, fleck); p.coatB?.setXYZ(i, coatB.r, coatB.g, coatB.b);
         }
       }
       if (productReady(a, now)) {
         const marker = this.productMesh(PRODUCT[a.kind]), i = marker.count, y = rig.height * scale + .25 + Math.sin(time * 3 + w.seed) * .06;
-        if (i < MAX_PRODUCTS) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, y, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, time * 1.5 + w.seed, 0)), this.s.setScalar(1.6))); marker.count = i + 1; }
+        if (i < MAX_PRODUCTS) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, y, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, time * 1.5 + w.seed, 0)), this.s.setScalar(1.6))); marker.userData.animalUids[i]=a.uid; marker.count = i + 1; }
       }
     }
     const biting=this.guard&&this.guard.bite>=0?this.walkers.get(this.guard.uid):null;

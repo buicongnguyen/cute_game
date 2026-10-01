@@ -1,16 +1,17 @@
 import './platform.css';
 import { t, onLanguageChange } from './i18n.ts';
 interface InstallPrompt extends Event {prompt():Promise<void>;userChoice:Promise<{outcome:string}>}
+export async function toggleFullscreen(notice:(message:string)=>void){
+  try {
+    if(document.fullscreenElement)await document.exitFullscreen();
+    else if(typeof document.documentElement.requestFullscreen==='function')await document.documentElement.requestFullscreen();
+    else notice(t('Use your browser’s fullscreen option on this device.'));
+  }catch{notice(t('Use your browser’s fullscreen option on this device.'));}
+}
 export function initPlatform(notice:(message:string)=>void){
   const dock=document.createElement('div');dock.className='platform-tools';
   const fullscreen=document.createElement('button');fullscreen.type='button';fullscreen.textContent='⛶';fullscreen.title=t('Fullscreen');fullscreen.setAttribute('aria-label',t('Toggle fullscreen'));
-  fullscreen.addEventListener('click',async()=>{
-    try {
-      if(document.fullscreenElement) await document.exitFullscreen();
-      else if(typeof document.documentElement.requestFullscreen==='function') await document.documentElement.requestFullscreen();
-      else notice(t('Use your browser’s fullscreen option on this device.'));
-    } catch {notice(t('Use your browser’s fullscreen option on this device.'));}
-  });dock.append(fullscreen);
+  fullscreen.addEventListener('click',()=>void toggleFullscreen(notice));dock.append(fullscreen);
   const install=document.createElement('button');install.type='button';install.textContent=t('Install game');install.hidden=true;let prompt:InstallPrompt|null=null;
   window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();prompt=event as InstallPrompt;install.hidden=false;});
   install.addEventListener('click',async()=>{

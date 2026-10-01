@@ -10,6 +10,8 @@ import { createActionService, commandHash } from '../server/action-service.mjs';
 import { createGameServer } from '../server/server.mjs';
 import { ACTION_RULES_VERSION } from '../src/actions.ts';
 import * as Game from '../src/model.ts';
+import {createEnvironmentLayout} from '../src/environments.ts';
+import {environmentResourceNodes} from '../src/environment-resources.ts';
 
 const status=n=>error=>error.status===n;
 function account(id,profile=Game.newGame(id)){return {id,username:id,hash:'test-hash',salt:'test-salt',friends:[],requests:[],profile};}
@@ -62,6 +64,19 @@ for(const kind of ['file','postgres'])test(`${kind} commands have durable receip
   assert.equal(race.find(r=>r.status==='rejected').reason.status,409);
   assert.equal(['alice','bob'].includes((await store.get('owner')).claimed),true);
   assert.equal(((await store.get('alice')).profile.bag.carrot??0)+((await store.get('bob')).profile.bag.carrot??0),1);
+});
+
+for(const kind of ['file','postgres'])test(`${kind} checks revoked access inside the transaction before mutation or receipt replay`,async t=>{
+  const f=await fixture(t,kind);await f.store.create(account('alice'));await f.store.create(account('bob'));
+  let release,enter;const entered=new Promise(resolve=>enter=resolve),held=new Promise(resolve=>release=resolve);let allowed=true;
+  const checkAccess=()=>{if(!allowed)throw Object.assign(new Error('Session revoked'),{status:401});};
+  const blocking=f.store.command(spec('alice',0,async()=>{enter();await held;return true;}));await entered;
+  const request=spec('alice',1,records=>{records.get('alice').profile.energy+=10;return true;},{checkAccess});
+  const queued=f.store.command(request),friend=f.store.friendAction('alice','bob','request',checkAccess);
+  const rejected=Promise.all([assert.rejects(queued,status(401)),assert.rejects(friend,status(401))]);allowed=false;release();await blocking;await rejected;
+  assert.equal((await f.store.get('alice')).profile.energy,0);assert.deepEqual((await f.store.get('bob')).requests,[]);
+  allowed=true;await f.store.command(request);allowed=false;await assert.rejects(f.store.command(request),status(401));
+  assert.equal((await f.store.get('alice')).profile.energy,10);
 });
 
 test('file write failure leaves neither partial command changes nor a replay receipt',async t=>{
@@ -175,6 +190,36 @@ test('fishing requires an owned rod, server ticket, elapsed reeling proof and on
   const finish=await h.act('alice','fishFinish',payload,{requestId});assert.equal(finish.result.id,ticket.outcome.id);assert.equal((await h.store.get('alice')).fishingTicket,undefined);
   const before=await h.store.get('alice');assert.equal((await h.act('alice','fishFinish',payload,{requestId})).replayed,true);assert.deepEqual(await h.store.get('alice'),before);
   await assert.rejects(h.act('alice','fishFinish',payload),status(409));
+});
+
+test('mystery eligibility follows the exact pond and starts its durable cooldown only after a successful catch',async t=>{
+  let at=2_000_000_000_000;t.mock.method(Date,'now',()=>at);const h=await service(t),a=account('alice');a.profile.bag={rod:1};await h.store.create(a);
+  const peer={planet:'home',room:'public:home',pose:{x:-7.5,z:15.3}};h.peers.set('alice',peer);
+  const cast={rodId:'rod',water:'home',cast:{x:-7.5,z:13.5},mystery:true};
+  const first=await h.act('alice','fishStart',cast);assert.equal(first.result.pick.mystery,true);assert.deepEqual(first.result.mysteryState,{readyAt:0,serverNow:at});
+  await h.act('alice','fishCancel',{ticketId:first.result.ticketId});assert.equal((await h.store.get('alice')).mysteryReadyAt,undefined);
+  const second=await h.act('alice','fishStart',cast);assert.equal(second.result.pick.mystery,true);
+  at+=20_000;const proof={elapsed:20,hookAt:1,samples:[{t:7,held:true,tension:.3,progress:.2},{t:14,held:true,tension:.5,progress:.6},{t:20,held:true,tension:.4,progress:1}]};
+  const requestId=randomUUID(),payload={ticketId:second.result.ticketId,telemetry:proof},finish=await h.act('alice','fishFinish',payload,{requestId});
+  assert.equal(finish.result.mystery,true);assert.equal(finish.result.mysteryState.serverNow,at);assert.ok(finish.result.mysteryState.readyAt>=at+45000&&finish.result.mysteryState.readyAt<=at+90000);
+  const cooldown=finish.result.mysteryState.readyAt;at+=1000;const replay=await h.act('alice','fishFinish',payload,{requestId});assert.deepEqual(replay.result,finish.result);
+  const ordinary=await h.act('alice','fishStart',cast);assert.equal(ordinary.result.pick.mystery,false);assert.equal(ordinary.result.mysteryState.readyAt,cooldown);
+  await h.act('alice','fishCancel',{ticketId:ordinary.result.ticketId});
+  peer.pose={x:10,z:63};const lake={...cast,water:'lake',cast:{x:10,z:59.5}},other=await h.act('alice','fishStart',lake);
+  assert.equal(other.result.pick.mystery,true);assert.equal(other.result.mysteryState.readyAt,0,'another pond does not inherit the home pond cooldown');
+  at+=180001;const expired=await h.act('alice','fishStart',lake);assert.equal(expired.result.pick.mystery,true,'an expired ticket leaves the pond opportunity available');
+});
+
+test('interior cave crystals require the opened gate while the exterior crystals remain mineable',async t=>{
+  let at=2_000_000_000_000;t.mock.method(Date,'now',()=>at);const h=await service(t),a=account('alice');a.profile.planet='lava';a.profile.level=30;await h.store.create(a);
+  const layout=createEnvironmentLayout('lava'),nodes=environmentResourceNodes(layout).filter(node=>node.kind==='fire-crystal'),outside=nodes[0],inside=nodes[2];
+  const peer={planet:'lava',room:'public:lava',pose:{x:inside.x,z:inside.z}};h.peers.set('alice',peer);
+  const before=await h.store.get('alice');await assert.rejects(h.act('alice','environmentResource',{nodeId:inside.id}),/Open the cave gate/);assert.deepEqual(await h.store.get('alice'),before);
+  peer.pose={x:outside.x,z:outside.z};assert.equal((await h.act('alice','environmentResource',{nodeId:outside.id})).result.hits,1);at+=250;
+  assert.ok((await h.act('alice','environmentResource',{nodeId:outside.id})).result.rewards.length);
+  peer.pose={...layout.cave.gate};for(let i=0;i<8;i++){at+=250;await h.act('alice','openCave');}assert.equal((await h.store.get('alice')).profile.worldRewards.lava.gateOpen,true);
+  peer.pose={x:inside.x,z:inside.z};at+=250;assert.equal((await h.act('alice','environmentResource',{nodeId:inside.id})).result.hits,1);at+=250;
+  assert.ok((await h.act('alice','environmentResource',{nodeId:inside.id})).result.rewards.length);
 });
 
 test('HTTP denies full profile overwrites and derives action identity from the authenticated session',async t=>{

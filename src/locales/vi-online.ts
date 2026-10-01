@@ -1,5 +1,6 @@
 /** Online and browser controls. Interpolation values are deliberately not translated. */
 export const VI_ONLINE: Record<string, string> = {
+  'Open the cave gate before mining inside.': 'Hãy mở cổng hang trước khi khai thác bên trong.',
   'Share nearby loot': 'Chia sẻ đồ rơi gần đây',
   'There is no protected loot of yours nearby.': 'Không có đồ rơi đang được bảo vệ nào của bạn ở gần đây.',
   'Shared {count} nearby loot drops.': 'Đã chia sẻ {count} món đồ rơi ở gần đây.',

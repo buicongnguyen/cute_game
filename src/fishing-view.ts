@@ -83,12 +83,16 @@ export class FishingView {
   private ripples = new Map<PondView, number>();
   private clock = 0;
   private mysterySpawns:Array<{pond:PondView;at:number}>=[];
+  private ponds:PondView[]=[];
+  private mysteryDeadlines=new Map<string,number>();
   private mysterySpecies:(waterId:string)=>string=()=> 'fish_perch';
   private symbolTextures=new Map<string,T.CanvasTexture>();
+  /** Seconds of monotonic time; cooldowns continue while animation is suspended. */
+  private readonly monotonicNow:()=>number;
 
   private fx:Effects;private kit:KitLibrary;private sound:(name:'pop'|'splash'|'cast'|'snap'|'reel')=>void;
-  constructor(scene: T.Scene, fx: Effects, kit: KitLibrary, sound: (name: 'pop' | 'splash' | 'cast' | 'snap' | 'reel') => void) {
-    this.fx=fx;this.kit=kit;this.sound=sound;
+  constructor(scene: T.Scene, fx: Effects, kit: KitLibrary, sound: (name: 'pop' | 'splash' | 'cast' | 'snap' | 'reel') => void, monotonicNow:()=>number=()=>performance.now()/1000) {
+    this.fx=fx;this.kit=kit;this.sound=sound;this.monotonicNow=monotonicNow;
     this.root.name = 'fishing';
     scene.add(this.root);
     this.bobber = this.makeBobber(); this.bobber.visible = false; this.root.add(this.bobber);
@@ -132,12 +136,13 @@ export class FishingView {
     this.fish = []; this.dressing = []; this.respawns = []; this.mysterySpawns=[]; this.ripples.clear();
     for(const leap of this.leaps)this.root.remove(leap.obj);this.leaps=[];
     this.mysterySpecies=mysterySpecies??(waterId=>pool(waterId).find(id=>id!=='boot')??'fish_perch');
+    this.ponds=ponds;
     if (this.kit.ready) { const fresh = this.makeBobber(); this.root.remove(this.bobber); this.bobber = fresh; this.bobber.visible = false; this.root.add(fresh); }
     for (const pond of ponds) {
       const species = pool(pond.waterId).filter(id => id !== 'boot');
       const count = FISH_PER_WATER[pond.waterId] ?? 4;
       for (let i = 0; i < count && species.length; i++) this.addFish(pond, species[Math.floor(Math.random() * species.length)]);
-      if(count&&species.length)this.mysterySpawns.push({pond,at:this.clock+between(MYSTERY.firstMin,MYSTERY.firstMax)});
+      if(count&&species.length)this.mysterySpawns.push({pond,at:this.mysteryDeadlines.get(pond.id)??this.monotonicNow()+between(MYSTERY.firstMin,MYSTERY.firstMax)});
       // Reeds on the sandy lip and lily flowers on the water, from the kit.
       for (const [name, count2, onEdge] of [['reeds', 3, true], ['lily_flower', 2, false]] as const) {
         for (let i = 0; i < count2; i++) {
@@ -166,6 +171,16 @@ export class FishingView {
   }
   /** Hidden species is revealed only on landing; the visible question mark determines attraction. */
   mysteryNearCast(){return this.fish.find(f=>f.mystery&&f.pond.id===this.pond?.id&&f.state==='swim'&&Math.hypot(f.obj.position.x-this.castTo.x,f.obj.position.z-this.castTo.z)<MYSTERY.reach)?.species??null;}
+
+  /** Apply relative server time, so changing the browser clock cannot alter eligibility. */
+  setMysteryAvailability(pondId:string,remaining:number){
+    if(!Number.isFinite(remaining))return;
+    const at=this.monotonicNow()+Math.max(0,remaining);this.mysteryDeadlines.set(pondId,at);
+    this.mysterySpawns=this.mysterySpawns.filter(entry=>entry.pond.id!==pondId);
+    if(remaining>0)for(let i=this.fish.length-1;i>=0;i--){const fish=this.fish[i];if(fish.mystery&&fish.pond.id===pondId&&fish!==this.interest){this.root.remove(fish.obj);this.fish.splice(i,1);}}
+    const pond=this.ponds.find(p=>p.id===pondId);if(pond)this.mysterySpawns.push({pond,at});
+  }
+  resetMysteryAvailability(){this.mysteryDeadlines.clear();}
 
   private addFish(pond: PondView, species: string, fromEdge = false) {
     const { obj, tail } = this.makeFish(species), a = Math.random() * Math.PI * 2, r = fromEdge ? .85 : Math.random() * .7;
@@ -231,8 +246,8 @@ export class FishingView {
     if (fish) { this.fish.splice(this.fish.indexOf(fish), 1); obj = fish.obj; }
     else { obj = this.makeFish(this.species).obj; obj.position.copy(this.bobber.position); this.root.add(obj); }
     if(fish?.mystery&&reveal){const previous=obj;obj=reveal.fish!==false?this.makeFish(reveal.id).obj:new T.Group();if(reveal.fish===false)obj.add(this.symbol(reveal.icon??'✨',1.1));obj.position.copy(previous.position);if(reveal.supergiant)obj.scale.multiplyScalar(2.2);this.root.remove(previous);this.root.add(obj);}
-    if (pond) {if(fish?.mystery)this.mysterySpawns.push({pond,at:this.clock+between(MYSTERY.respawnMin,MYSTERY.respawnMax)});else this.respawns.push({ pond, at: this.clock + RESTOCK_AFTER_CATCH });}
     this.interest = null;
+    if (pond) {if(fish?.mystery)this.setMysteryAvailability(pond.id,between(MYSTERY.respawnMin,MYSTERY.respawnMax));else this.respawns.push({ pond, at: this.clock + RESTOCK_AFTER_CATCH });}
     const from = obj.position.clone(); from.y = (pond?.surface ?? 0) + .1;
     this.fx.burst(from, { n: 20, color: ['#ffffff', '#9fe3ff'], glow: true, speed: 5, up: 7, y: 0 });
     this.fx.ring(from, { color: '#ffffff', to: 2, life: .5, y: (pond?.surface ?? 0) + .02 });
@@ -243,7 +258,8 @@ export class FishingView {
 
   update(dt: number, time: number, rodTip: T.Vector3, player: T.Vector3, sim: FishingState | null) {
     this.clock += dt;
-    for(let i=this.mysterySpawns.length-1;i>=0;i--)if(this.mysterySpawns[i].at<=this.clock){this.addMystery(this.mysterySpawns[i].pond);this.mysterySpawns.splice(i,1);}
+    const mysteryNow=this.monotonicNow();
+    for(let i=this.mysterySpawns.length-1;i>=0;i--)if(this.mysterySpawns[i].at<=mysteryNow){this.addMystery(this.mysterySpawns[i].pond);this.mysterySpawns.splice(i,1);}
     for (let i = this.respawns.length - 1; i >= 0; i--) if (this.respawns[i].at <= this.clock) {
       const { pond } = this.respawns[i]; this.respawns.splice(i, 1);
       const species = this.fish.find(f => f.pond.id === pond.id&&!f.mystery)?.species; if (species) this.addFish(pond, species, true);

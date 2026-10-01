@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import http from 'node:http';
 import { WebSocket } from 'ws';
 import { createGameServer } from '../server/server.mjs';
 import { createAccountStore } from '../server/account-store.mjs';
@@ -95,7 +96,7 @@ async function fixture(t) {
     };
     connections.push(connection); return connection;
   }
-  return { store, request, register, befriend, delayRead, connect, failReads: value => { failReads = value; } };
+  return { url:app.url,store, request, register, befriend, delayRead, connect, failReads: value => { failReads = value; } };
 }
 
 for (const stage of ['account lookup', 'friend refresh']) {
@@ -125,6 +126,19 @@ test('a delayed session read cannot authenticate after concurrent logout', async
   const response = await pending;
   assert.equal(response.status, 200);
   assert.equal(response.body.account, null);
+});
+
+for(const action of ['settings','friend request'])test(`logout while an authenticated ${action} body is incomplete prevents its later mutation`,async t=>{
+  const f=await fixture(t),alice=await f.register('alice'),bob=await f.register('bob');
+  const route=action==='settings'?'actions':'friends/request',body=JSON.stringify(action==='settings'?{type:'settings',rulesVersion:1,expectedRevision:0,requestId:'revoked-body-action-0001',payload:{name:'Changed after logout'}}:{id:bob.id});
+  const gate=f.delayRead(alice.id);let finish;
+  const pending=new Promise((resolve,reject)=>{
+    const request=http.request(f.url+'/api/'+route,{method:'POST',headers:{Cookie:alice.cookie,'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)}},response=>{let text='';response.on('data',chunk=>text+=chunk);response.on('end',()=>resolve({status:response.statusCode,body:JSON.parse(text)}));});
+    request.on('error',reject);request.write(body.slice(0,1));finish=()=>request.end(body.slice(1));
+  });
+  await gate.entered();gate.release();assert.equal((await f.request(alice.cookie,'auth/logout',{})).status,200);finish();
+  const response=await within(pending,'revoked body response');assert.equal(response.status,401);
+  assert.equal((await f.store.get(alice.id)).profile.name,'alice');assert.deepEqual((await f.store.get(bob.id)).requests,[]);
 });
 
 test('a stale account read cannot restore a removed friendship or authorize a garden visit', async t => {

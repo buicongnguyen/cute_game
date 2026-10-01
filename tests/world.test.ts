@@ -8,6 +8,7 @@ import {claimGift,newGame,plant,weaponStats} from '../src/model.ts';
 import * as M from '../src/model.ts';
 import {EnvironmentSimulation,createEnvironmentLayout} from '../src/environments.ts';
 import {lavaEvent} from '../src/lava-weather.ts';
+import {beginTitanAttack,titanTelegraphs} from '../src/titan-patterns.ts';
 
 // Exercise actual world behavior with real Three objects; only WebGL is omitted.
 function world() {
@@ -136,6 +137,29 @@ test('remote avatars are separate from obstacles and refresh equipment without d
   const w=world();w.addRemotePlayer('friend',{x:3,z:4,color:'#abcdff',gear:{weapon:'gun_bubble',pet:'pet_bunny'}});const first=w.remotePlayers.get('friend')!.mesh;
   w.updateRemotePlayer('friend',{x:5,z:6,gear:{weapon:'sword_lava',disguise:'dz_mecha'}});assert.notEqual(w.remotePlayers.get('friend')!.mesh,first);assert.equal(w.remoteRoot.children.length,1);assert.equal(w.obstacles.length,0);
   w.clearRemotePlayers();assert.equal(w.remotePlayers.size,0);assert.equal(w.remoteRoot.children.length,0);
+});
+
+test('late asset refresh rebuilds each remote avatar once and preserves its transformation',()=>{
+ const w=world();w.addRemotePlayer('giant',{x:3,z:4,visual:{size:2,shield:true}});w.addRemotePlayer('stealth',{x:-3,z:5,visual:{stealth:true}});
+ const previous=[...w.remotePlayers.values()].map(p=>p.mesh);let rebuilt=0;
+ const add=w.addRemotePlayer.bind(w);w.addRemotePlayer=(id,pose)=>{assert.ok(++rebuilt<=2,'refresh must not revisit Map entries that it re-adds');add(id,pose);};
+ w.refreshAvatars();assert.equal(rebuilt,2);assert.equal(w.remotePlayers.size,2);assert.equal(w.remoteRoot.children.length,2);
+ assert.notEqual(w.remotePlayers.get('giant')!.mesh,previous[0]);assert.notEqual(w.remotePlayers.get('stealth')!.mesh,previous[1]);
+ assert.equal(w.remotePlayers.get('giant')!.mesh.scale.x,HERO_SCALE*2);assert.equal(w.remotePlayers.get('giant')!.mesh.getObjectByName('status-shield')!.visible,true);
+ assert.equal(w.remotePlayers.get('stealth')!.mesh.userData.statusOpacity,.25);
+});
+
+test('a farm animal tap carries only its own UID while the pen remains a separate interaction',t=>{
+ const oldWidth=Object.getOwnPropertyDescriptor(globalThis,'innerWidth'),oldHeight=Object.getOwnPropertyDescriptor(globalThis,'innerHeight');
+ Object.defineProperty(globalThis,'innerWidth',{value:800,configurable:true});Object.defineProperty(globalThis,'innerHeight',{value:600,configurable:true});
+ t.after(()=>{if(oldWidth)Object.defineProperty(globalThis,'innerWidth',oldWidth);else Reflect.deleteProperty(globalThis,'innerWidth');if(oldHeight)Object.defineProperty(globalThis,'innerHeight',oldHeight);else Reflect.deleteProperty(globalThis,'innerHeight');});
+ const w=world();w.state.level=20;w.state.energy=1000;w.state.farm.built=true;const animal=M.buyAnimal(w.state,'cow',Date.now()-600000)!;M.buyAnimal(w.state,'chicken',Date.now()-600000);w.build('home');
+ w.farmView!.update(w.state.farm.animals,.1,1,Date.now());const at=w.farmView!.positionOf(animal.uid)!;
+ w.camera.position.set(at.x,20,at.z+12);w.camera.lookAt(at.x,.6,at.z);w.camera.updateMatrixWorld(true);w.root.updateMatrixWorld(true);
+ const pixel=new T.Vector3(at.x,.6,at.z).project(w.camera),picked=w.pickEntity((pixel.x+1)*400,(1-pixel.y)*300)!;
+ assert.equal(picked.kind,'animal');assert.equal(picked.animalUid,animal.uid);assert.equal(picked.name,'Cow');
+ let interaction:typeof picked|null=null;w.onInteract=e=>{interaction=e;};w.position.set(at.x,0,at.z);w.select(picked);assert.equal(interaction,picked);
+ const pen=w.entities.find(e=>e.kind==='pen')!;w.position.set(pen.x,0,pen.z);w.select(pen);assert.equal(interaction,pen);w.farmView!.dispose();
 });
 
 test('home includes nine plots and exact regional creature populations within full bounds',()=>{
@@ -308,4 +332,29 @@ test('the well by the storage chest is scenery only, like the reference: no enti
   let well:T.Object3D|undefined;w.root.traverse(o=>{if(o.userData.prop==='well')well=o;});
   assert.ok(well,'the well is built');assert.equal(well!.userData.entity,undefined);
   assert.ok(!w.entities.some(e=>Math.hypot(e.x-well!.position.x,e.z-well!.position.z)<1.5),'no interactive entity sits on the well');
+});
+
+test('Titan summon recalls living mobile creatures, stacks their attack and never creates or revives one',()=>{
+ const w=world();w.planet='candy';w.environment=new EnvironmentSimulation(createEnvironmentLayout('candy'));w.time=10;
+ const titan=w.spawnSpecies('titan_hydra',40,0,0)!,minion=w.spawnSpecies('minislime',44,0,1)!,dead=w.spawnSpecies('gummy',46,0,2)!,plant=w.spawnSpecies('chomper',45,0,3)!;
+ const mobs=Array.from({length:5},(_,i)=>w.spawnSpecies('gummy',50+i,0,4+i)!);const base=mobs[0].damage;dead.hp=0;mobs.forEach(e=>e.hp=1);
+ const positions=w.enemies.map(e=>({x:e.x,z:e.z})),ids=w.enemies.map(e=>e.id),cast=()=>{const source={x:titan.x,z:titan.z,radius:titan.radius,facing:0};titan.titanAttacks=[beginTitanAttack('summon',source,titanTelegraphs('summon',source,source),[])];(w as unknown as {updateTitanAttacks(e:typeof titan,dt:number):void}).updateTitanAttacks(titan,.05);};
+ cast();cast();assert.deepEqual(w.enemies.map(e=>e.id),ids);for(const e of mobs.slice(0,4)){assert.equal(e.hp,e.maxHp);assert.ok(Math.abs(e.damage-base*1.3*1.3)<1e-9);assert.equal(e.lastHitAt,10);assert.equal(e.phase,'chase');}
+ for(const e of [minion,dead,plant,mobs[4]])assert.deepEqual({x:e.x,z:e.z},positions[w.enemies.indexOf(e)]);
+ assert.equal(dead.hp,0);assert.equal(mobs[4].hp,1);
+ // The online world predicts the ring only. Its canonical summon comes from the server.
+ w.authoritativeAction=()=>{};const before=mobs.map(e=>({x:e.x,z:e.z,hp:e.hp,damage:e.damage}));cast();assert.deepEqual(mobs.map(e=>({x:e.x,z:e.z,hp:e.hp,damage:e.damage})),before);
+});
+
+test('enemy snapshot migration preserves the remaining summon or hit chase grace across different clocks',()=>{
+ const host=world();host.planet='candy';host.environment=new EnvironmentSimulation(createEnvironmentLayout('candy'));host.time=100;const e=host.spawnSpecies('gummy',80,0,0)!;e.lastHitAt=98;e.phase='chase';e.homeX=30;e.homeZ=0;
+ const peer=world();peer.planet='candy';peer.environment=new EnvironmentSimulation(createEnvironmentLayout('candy'));peer.time=12;peer.spawnSpecies('gummy',30,0,0);peer.applyEnemySnapshots(host.enemySnapshots());
+ assert.equal(peer.enemySnapshots()[0].chaseGrace,2);assert.equal(peer.enemies[0].lastHitAt,10);peer.time=13;assert.equal(peer.enemySnapshots()[0].chaseGrace,1);
+ peer.applyAuthoritativeEnemyHealth({...peer.enemySnapshots()[0],chaseGrace:4});assert.equal(peer.enemies[0].lastHitAt,13);
+});
+
+test('incremental remote pose updates retain transformations until an explicit visual update',()=>{
+ const w=world();w.addRemotePlayer('friend',{x:3,z:4,y:2,facing:1,visual:{size:2,stealth:true,shield:true}});w.updateRemotePlayer('friend',{x:4,z:5});const remote=w.remotePlayers.get('friend')!;
+ assert.equal(remote.mesh.scale.x,HERO_SCALE*2);assert.equal(remote.mesh.userData.statusOpacity,.25);assert.equal(remote.mesh.getObjectByName('status-shield')!.visible,true);assert.equal(remote.mesh.position.y,2);assert.equal(remote.mesh.rotation.y,1);
+ w.updateRemotePlayer('friend',{x:4,z:5,visual:{size:1,stealth:false,shield:false}});assert.equal(remote.mesh.scale.x,HERO_SCALE);assert.equal(remote.mesh.userData.statusOpacity,1);assert.equal(remote.mesh.getObjectByName('status-shield')!.visible,false);
 });

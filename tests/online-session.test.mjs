@@ -203,6 +203,14 @@ test('a delayed drop listing from a previous party cannot leak into the newly jo
   responses[1]({ok:true,json:async()=>({drops:[{id:'private-drop',room:'ABC123:home'}]})});await flush();assert.equal(app.spawned[0].id,'private-drop');
 });
 
+test('returning to the same room accepts only the new drop snapshot, not a delayed earlier listing',async()=>{
+  const responses=[],app=await fixture({responseFor:url=>url.endsWith('/drops')?new Promise(resolve=>responses.push(resolve)):undefined});
+  await flush();app.join({party:'ABC123'});await flush();app.join();await flush();
+  responses[2]({ok:true,json:async()=>({drops:[{id:'current-drop',room:'public:home'}]})});await flush();
+  responses[0]({ok:true,json:async()=>({drops:[{id:'old-claimed-drop',room:'public:home'}]})});await flush();
+  assert.deepEqual(app.spawned.map(drop=>drop.id),['current-drop']);responses[1]({ok:true,json:async()=>({drops:[]})});await flush();
+});
+
 test('visiting a garden from another planet preserves the canonical return destination',async()=>{
   const app=await fixture();app.bridge.getState().planet='lava';
   app.socket.message({type:'joined',host:'alice',planet:'home',party:null,room:'public:home',visiting:'friend',players:[]});

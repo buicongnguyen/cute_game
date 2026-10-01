@@ -149,6 +149,13 @@ export function tickEffects(s: SaveState, dt: number, now = Date.now()) { if (!N
 export function addItem(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw); if (!Object.hasOwn(ITEMS, id) || !Number.isSafeInteger(count) || count < 1)
     return false; const next = (s.bag[id] || 0) + count; if (!Number.isSafeInteger(next))
     return false; s.bag[id] = next; s.collection[id] = 1; return true; }
+/** A reward bundle is one grant: never consume its source after receiving only some items. */
+function addItems(s: SaveState, items: Inventory) {
+    const next = { ...s, bag: { ...s.bag }, collection: { ...s.collection } };
+    for (const [id, count] of Object.entries(items)) if (!addItem(next, id, count)) return false;
+    s.bag = next.bag; s.collection = next.collection; return true;
+}
+const validRoll = (value: number) => Number.isFinite(value) && value >= 0 && value < 1;
 export function removeItem(inv: Inventory, raw: ItemId, count = 1) { const id = canonicalItem(raw); if (!Object.hasOwn(ITEMS, id) || !Number.isSafeInteger(count) || count < 1 || (inv[id] || 0) < count)
     return false; inv[id]! -= count; if (!inv[id])
     delete inv[id]; return true; }
@@ -413,9 +420,8 @@ export function chooseFish(s: SaveState, water: string = s.planet, rng: () => nu
         return id;
 } return weighted[weighted.length - 1][0]; }
 export function grantCatch(s: SaveState, raw: ItemId, size?: number, hugeCatch = false) { const id = canonicalItem(raw), fish = Object.hasOwn(FISH, id) ? FISH[id] : undefined; if (!fish)
-    return false; const huge = hugeCatch && fish.rarity !== 'junk'; if (!addItem(s, id))
-    return false; gainXp(s, fish.xp * (huge ? 2 : 1)); if (huge)
-    s.energy += Math.round(fish.sell * .6); if (size && Number.isFinite(size))
+    return false; const huge = hugeCatch && fish.rarity !== 'junk', bonus = huge ? Math.round(fish.sell * .6) : 0; if (!Number.isSafeInteger(s.energy + bonus) || !addItem(s, id))
+    return false; gainXp(s, fish.xp * (huge ? 2 : 1)); s.energy += bonus; if (size && Number.isFinite(size))
     s.fishRecords[id] = Math.max(s.fishRecords[id] || 0, size); recordEvent(s, 'fish'); if (ITEMS[id].rare || ITEMS[id].legend)
     recordEvent(s, 'fishrare'); if (ITEMS[id].legend)
     recordEvent(s, 'legendFish'); return true; }
@@ -424,7 +430,7 @@ export function grantMysteryCatch(s: SaveState, raw: ItemId, size?: number, supe
     const id = canonicalItem(raw), fish = FISH[id];
     if (!fish) return addItem(s,id);
     if (!supergiant) return grantCatch(s,id,size,false);
-    if (!addItem(s,id)) return false;
+    if (!Number.isSafeInteger(s.energy + fish.sell*2) || !addItem(s,id)) return false;
     gainXp(s,fish.xp*4); s.energy += fish.sell*2;
     if (size && Number.isFinite(size)) s.fishRecords[id] = Math.max(s.fishRecords[id]||0,size);
     recordEvent(s,'fish'); if (ITEMS[id].rare || ITEMS[id].legend) recordEvent(s,'fishrare'); if (ITEMS[id].legend) recordEvent(s,'legendFish');
@@ -454,13 +460,13 @@ export function giftAvailable(s: SaveState, planet: PlanetId, index: number, now
 export function claimGift(s: SaveState, index: number, now = Date.now(), rng: () => number = Math.random): GiftOutcome | false {
     if (!giftAvailable(s, s.planet, index, now))
         return false;
-    (s.worldRewards.giftReadyAt.toy ??= Array(GIFT_COUNT).fill(0))[index] = now + GIFT_REGROW_MS;
+    const firstRoll=rng();if(!validRoll(firstRoll))return false;
     const choices: [
         GiftOutcome['kind'],
         number,
         string
     ][] = [['giant', 3, 'Giant power!'], ['tiny', 3, 'Tiny speed!'], ['coins', 3, 'Energy shower!'], ['heal', 2, 'Fully healed!'], ['bomb', 2, 'Surprise explosion!'], ['toys', 3, 'Toy parts!'], ['curse', 1, 'Sticky feet!']];
-    let draw = Math.max(0, Math.min(.999999999, rng())) * 17, choice = choices[0];
+    let draw = firstRoll * 17, choice = choices[0];
     for (const entry of choices) {
         draw -= entry[1];
         if (draw < 0) {
@@ -474,7 +480,9 @@ export function claimGift(s: SaveState, index: number, now = Date.now(), rng: ()
         addBuff(s, kind === 'giant' ? { atk: .5, time: 20 } : { speed: .6, time: 20 }, 'gift', now);
     }
     else if (kind === 'coins') {
-        result.energy = 20 + Math.round(rng() * 40) + s.level * 2;
+        const roll=rng();if(!validRoll(roll))return false;
+        result.energy = 20 + Math.round(roll * 40) + s.level * 2;
+        if(!Number.isSafeInteger(s.energy+result.energy))return false;
         s.energy += result.energy;
     }
     else if (kind === 'heal')
@@ -485,29 +493,31 @@ export function claimGift(s: SaveState, index: number, now = Date.now(), rng: ()
         s.hp = Math.max(0, s.hp - maxHp(s) * .1);
     }
     else if (kind === 'toys') {
-        addItem(s, 'gear', 2 + Math.min(2, Math.floor(rng() * 3)));
-        if (rng() < .15)
-            addItem(s, 'battery');
+        const countRoll=rng(),bonusRoll=rng();if(!validRoll(countRoll)||!validRoll(bonusRoll))return false;
+        if(!addItems(s,{gear:2+Math.floor(countRoll*3),...(bonusRoll<.15?{battery:1}:{})}))return false;
     }
     else
         s.buffs.speed = { value: -.4, expiresAt: now + 8000, source: 'gift' };
+    (s.worldRewards.giftReadyAt.toy ??= Array(GIFT_COUNT).fill(0))[index] = now + GIFT_REGROW_MS;
     return result;
 }
 export function claimEnvironmentResource(s: SaveState, key: string, raw: ItemId, now = Date.now(), cooldownMs = 20000) { const id = canonicalItem(raw); if (!/^[a-zA-Z0-9:_-]{1,100}$/.test(key) || ['constructor', '__proto__', 'prototype'].includes(key) || !Object.hasOwn(ITEMS, id) || !Number.isFinite(now) || now < 0 || now > 8.64e15-86400000 || !Number.isFinite(cooldownMs) || cooldownMs < 0 || now < (s.worldRewards.resourceReadyAt[key] || 0))
     return false; if (!addItem(s, id)) return false; s.worldRewards.resourceReadyAt[key] = now + Math.min(cooldownMs, 86400000); recordEvent(s, 'mine', 1, undefined, now); return true; }
 export function openCave(s: SaveState) { if (s.planet !== 'lava' || s.worldRewards.lava.gateOpen)
     return false; s.worldRewards.lava.gateOpen = true; return true; }
-export function lightBrazier(s: SaveState, index: number, rng:()=>number=Math.random) { const lava = s.worldRewards.lava; if (s.planet !== 'lava' || !Number.isInteger(index) || index < 0 || index > 2 || lava.braziers.includes(index) || !removeItem(s.bag, 'fcrystal'))
-    return false; lava.braziers.push(index);
-    if(lava.braziers.length===3){addItem(s,'firecore',2);addItem(s,'deco_volcano');addItem(s,'obsidian',2+Math.min(1,Math.floor(rng()*2)));}
+export function lightBrazier(s: SaveState, index: number, rng:()=>number=Math.random) { const lava = s.worldRewards.lava; if (s.planet !== 'lava' || !Number.isInteger(index) || index < 0 || index > 2 || lava.braziers.includes(index) || !(s.bag.fcrystal!>=1))
+    return false;
+    if(lava.braziers.length===2){const roll=rng();if(!validRoll(roll)||!addItems(s,{firecore:2,deco_volcano:1,obsidian:2+Math.floor(roll*2)}))return false;}
+    removeItem(s.bag,'fcrystal');lava.braziers.push(index);
     return true; }
 export function furnaceReady(s: SaveState) { return s.worldRewards.lava.braziers.length === 3; }
-export function claimCaveChest(s: SaveState, now = Date.now(), rng: () => number = Math.random) { if (!Number.isFinite(now) || Math.abs(now) > 8.64e15)
+export function claimCaveChest(s: SaveState, now = Date.now(), rng: () => number = Math.random) { if (!Number.isFinite(now) || now < 0 || now > 8.64e15)
     return false; const date = new Date(now).toISOString().slice(0, 10), lava = s.worldRewards.lava; if (s.planet !== 'lava' || !lava.gateOpen || lava.caveChestDay === date)
-    return false; lava.caveChestDay = date; addItem(s, 'obsidian', 3 + Math.min(2, Math.floor(rng() * 3))); addItem(s, 'firecore', 1 + Math.min(1, Math.floor(rng() * 2))); if (rng() < .35)
-    addItem(s, 'dragonegg'); if (rng() < .3)
-    addItem(s, 'deco_nest'); if (rng() < .5)
-    addItem(s, 'starshard'); return true; }
+    return false;
+    const rolls=Array.from({length:5},()=>rng());if(!rolls.every(validRoll))return false;
+    const rewards:Inventory={obsidian:3+Math.floor(rolls[0]*3),firecore:1+Math.floor(rolls[1]*2)};
+    if(rolls[2]<.35)rewards.dragonegg=1;if(rolls[3]<.3)rewards.deco_nest=1;if(rolls[4]<.5)rewards.starshard=1;
+    if(!addItems(s,rewards))return false;lava.caveChestDay=date;return true; }
 export function die(s: SaveState, x: number, z: number) { const items: Inventory = {}; for (const id of Object.keys(s.bag)) {
     const n = looseQuantity(s, id);
     if (n) {
@@ -515,14 +525,16 @@ export function die(s: SaveState, x: number, z: number) { const items: Inventory
         removeItem(s.bag, id, n);
     }
 } if (s.dropped)
-    for (const [id, n] of Object.entries(s.dropped.items))
-        s.chest[id] = (s.chest[id] || 0) + n!; s.dropped = Object.keys(items).length ? { x, z, planet: s.planet, items } : null; s.planet = 'home'; s.hp = maxHp(s); s.buffs = {}; s.sizeEffect = null; }
+    for (const [id, n] of Object.entries(s.dropped.items)) {
+        // Bank the old stash first. At the numeric storage limit, preserve overflow in the
+        // newly emptied bag/current stash instead of serializing an unsafe integer that reload discards.
+        let remaining=n!;
+        for(const target of [s.chest,s.bag,items]){const moved=Math.min(remaining,Number.MAX_SAFE_INTEGER-(target[id]||0));if(moved>0)target[id]=(target[id]||0)+moved;remaining-=moved;if(!remaining)break;}
+    } s.dropped = Object.keys(items).length ? { x, z, planet: s.planet, items } : null; s.planet = 'home'; s.hp = maxHp(s); s.buffs = {}; s.sizeEffect = null; }
 export function recoverBag(s: SaveState) { if (!s.dropped || s.dropped.planet !== s.planet)
     return false;
     // Stage the entire pickup: a failed grant must preserve every item for a later retry.
-    const next = { ...s, bag: { ...s.bag }, collection: { ...s.collection } };
-    for (const [id, n] of Object.entries(s.dropped.items)) if (!addItem(next, id, n)) return false;
-    s.bag = next.bag; s.collection = next.collection; s.dropped = null; return true; }
+    if(!addItems(s,s.dropped.items))return false;s.dropped = null; return true; }
 function record(value: unknown): value is Record<string, any> { return !!value && typeof value === 'object' && !Array.isArray(value); }
 function integer(value: unknown, fallback = 0, max = Number.MAX_SAFE_INTEGER) { return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(max, Math.floor(value)) : fallback; }
 function planetId(value: unknown): PlanetId | null { const id = value === 'sky' ? 'cloud' : value === 'dark' ? 'shadow' : value; return typeof id === 'string' && Object.hasOwn(PLANETS, id) ? id as PlanetId : null; }

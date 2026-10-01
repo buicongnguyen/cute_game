@@ -2,6 +2,7 @@ import { ITEMS, CROPS, canonicalItem, type ItemId, type Inventory } from './cont
 import { addItem, removeItem, gainXp, looseQuantity, type SaveState } from './model.ts';
 import { gameHours } from './farm-clock.ts';
 import { recordEvent } from './progression.ts';
+import { newFarmHelper, parseFarmHelper, type FarmHelperState } from './farm-helper-state.ts';
 
 /** Livestock production uses the offline farm clock; aging uses two real hours. */
 export type AnimalKind = 'chicken' | 'duck' | 'cow' | 'pig' | 'dog';
@@ -27,7 +28,7 @@ export interface Animal {
   home?: { x: number; z: number };
   pen?: boolean;
 }
-export interface FarmState { animals: Animal[]; nextId: number; penLevel: number; /** The pen has been built (a marked plot until then). */ built: boolean; speciesPens?: Partial<Record<AnimalKind, { x: number; z: number }>> }
+export interface FarmState { animals: Animal[]; nextId: number; penLevel: number; /** The pen has been built (a marked plot until then). */ built: boolean; speciesPens?: Partial<Record<AnimalKind, { x: number; z: number }>>; helper?: FarmHelperState }
 export interface AnimalDef {
   name: string; baby: string; icon: string; babyIcon: string; level: number; price: number;
   growMs: number; productMs: number; product: ItemId; xp: number; cap: number; capStep: number;
@@ -117,7 +118,7 @@ export const FARM_DISHES: readonly Dish[] = [
   { id: 'cheese', materials: { milk: 3 } },
 ];
 
-export function emptyFarm(): FarmState { return { animals: [], nextId: 1, penLevel: 0, built: false, speciesPens: {} }; }
+export function emptyFarm(): FarmState { return { animals: [], nextId: 1, penLevel: 0, built: false, speciesPens: {}, helper: newFarmHelper() }; }
 /** Saves from before the farm have no `farm`: they start with an empty pen. */
 export function farmOf(s: SaveState): FarmState { return (s.farm ??= emptyFarm()); }
 export function penBuilt(s: SaveState) { return farmOf(s).built === true; }
@@ -292,6 +293,7 @@ export function parseFarm(raw: unknown): FarmState {
   const farm = emptyFarm();
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return farm;
   const v = raw as Record<string, unknown>;
+  farm.helper = parseFarmHelper(v.helper);
   farm.penLevel = Math.min(MAX_PEN_LEVEL, count(v.penLevel));
   if (v.speciesPens && typeof v.speciesPens === 'object') for (const kind of ANIMAL_KINDS) {
     const pen = (v.speciesPens as Record<string, unknown>)[kind] as { x?: unknown; z?: unknown } | undefined;

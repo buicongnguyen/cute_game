@@ -7,7 +7,7 @@ import * as M from '../src/model.ts';
 
 const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
 const ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
-const functions=['launch','arrive','executeEnemy'].map(name=>ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text===name).getText(ast));
+const functions=['launch','arrive','executeEnemy','farmHelperContext'].map(name=>ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text===name).getText(ast));
 const click=ast.statements.find(node=>ts.isExpressionStatement(node)&&node.expression.getText(ast).startsWith("app.addEventListener('click',async"));
 const actionSwitch=click.expression.arguments[1].body.statements.find(ts.isSwitchStatement);
 const cases=actionSwitch.caseBlock.clauses.filter(node=>['plant','fertilize','fertilize-manure','feed-all'].includes(node.expression?.text)).map(node=>node.getText(ast));
@@ -30,6 +30,15 @@ function fixture(){
   vm.runInContext(compiled,ctx);
   return {state,ctx,calls,animations,panels,notices,reply:result=>resolveAction(result)};
 }
+
+test('animal helper scene identity survives routine dropped-bag/entity refreshes and changes only on rebuild',()=>{
+  const f=fixture();Object.assign(f.ctx,{started:true,document:{hidden:false},network:{role:null}});Object.assign(f.ctx.world,{state:f.state,planet:'home',entities:[]});
+  const context=f.ctx.farmHelperContext();assert.equal(context,f.ctx.world.root);
+  for(let i=0;i<4;i++){f.ctx.world.entities=[{kind:'dropped'}];assert.equal(f.ctx.farmHelperContext(),context);}
+  f.ctx.world.root={};assert.notEqual(f.ctx.farmHelperContext(),context);
+  f.ctx.visiting='friend';assert.equal(f.ctx.farmHelperContext(),null);
+  f.ctx.visiting=null;f.ctx.actionHandler=()=>{};assert.equal(f.ctx.farmHelperContext(),null,'wait for the authenticated multiplayer room');
+});
 
 test('repeated launch taps while the server is pending charge only one flight',async()=>{
   const f=fixture(),first=f.ctx.launch();await f.ctx.launch();assert.equal(f.calls.length,1);

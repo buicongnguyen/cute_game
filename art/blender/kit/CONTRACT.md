@@ -50,6 +50,14 @@ these material names.
 | `gate` | `Fence post`, `Fence rail`, `Sign` | posts at x = ±1.7, h 3.1 | ≤ 300 |
 | `mushroom` | `Mushroom cap`, `Mushroom spots`, `Mushroom stem` | h ≈ 0.35 | ≤ 120 |
 
+The October tree refinement exposes round-tree forks and pine trunks, with uneven
+crowns and tier edges. Round trees use 554 triangles (previously 578), pines 358
+(previously 360); blossom trees stay at 598. Materials and the ground origin,
+height and collision envelope are preserved. `scenery.glb` is 84,676 bytes.
+The runtime still merges each tree into one vertex-colored part and instances
+it by tile. Subtle stable warm/cool shades outside the village use instance
+colors, including in the occluder fade, without extra materials or textures.
+
 ## Crops (`build_nature.py` → `public/assets/models/crops.glb`)
 
 Nodes `crop_sprout` plus `crop_<id>` for every crop id below. Each mature crop
@@ -800,3 +808,7 @@ The farm generator imports build_farm_expansion.py. Duck and duckling use the bi
 The separate build_fruit_crops.py generator exports fruit_crops.glb (limit 600 KB), with crop_apple, crop_grape, crop_mango, crop_pineapple, crop_coconut, crop_durian, crop_lychee and crop_peach. These are whole mature plants with grounded origins and identity root transforms, 0.98–1.27m high, below 2,600 triangles each. Grapes use a trellis, pineapple a leaf rosette, coconut a palm; other fruit has small orchard trees. Crop cards capture these nodes through the existing crop kit. Previews are art/previews/kit/farm-expansion.webp and fruit-crops.webp.
 
 The fruit generator also renders all eight harvested-fruit inventory icons to public/assets/icons/crops/ at 160 x 160 with transparent WebP backgrounds. The fruit-icons.webp contact sheet verifies full-size and 52px readability; the eight files total about 29 KB.
+
+### Titan inventory images
+
+`build_titan_icons.py` imports the shipped `titans.glb` and renders all nine `hat_t_*` and nine `pet_t_*` meshes with the same item studio. The 18 transparent 160×160 WebP files live under `public/assets/icons/items/`, each below 18 KB (about 85 KB total). The generator verifies alpha and dimensions and updates the `titan_icons` manifest entry. `art/previews/kit/titan-icons.webp` shows full-size and 52px views. No runtime model is altered by rendering these images.

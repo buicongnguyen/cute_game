@@ -15,6 +15,8 @@ const derive = promisify(scrypt);
 const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_BODY = 256 * 1024;
 const COOKIE = 'zoo_session';
+// Direct health actions use the latest durable damage and normal revision conflicts.
+const HEALTH_ACTIONS = new Set(['eat','jungleFruit','rest','equip','unequip']);
 const text = (value, limit = 160) => typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, limit) : '';
 const number = (value, fallback = 0, min = -1000, max = 1000) => typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
 const sameString = (a, b) => {
@@ -127,7 +129,7 @@ export async function createGameServer(options = {}) {
   function endVisit(peer) {
     peer.visit = null; send(peer.socket, { type: 'visit', home: null });
     const party=peer.visitReturnParty&&parties.has(peer.visitReturnParty)?peer.visitReturnParty:null;delete peer.visitReturnParty;
-    join(peer,peer.account.profile.planet,party);
+    join(peer,peer.account.profile.planet,party,null,true);
     const room = rooms.get(peer.room); if (room) broadcast(room, { type: 'pose', player: presence(peer) }, peer.account.id);
   }
   function presence(peer) {
@@ -149,12 +151,12 @@ export async function createGameServer(options = {}) {
     if (!room.members.size) rooms.delete(room.id); else elect(room);
     peer.room = null;
   }
-  function join(peer, planet = 'home', party = null, visitId = null) {
+  function join(peer, planet = 'home', party = null, visitId = null, refresh = false) {
     if (!Object.hasOwn(Game.PLANETS, planet)) throw failure(400, 'Unknown world.');
     if (party && !parties.has(party)) throw failure(404, 'That party code was not found.');
     const key = `${party || 'public'}:${planet}`;
     if (peer.room === key) {
-      if(peer.visit===visitId)return;
+      if(peer.visit===visitId&&!refresh)return;
       peer.visit=visitId;
       const room=rooms.get(key);
       send(peer.socket,{type:'joined',id:peer.account.id,room:key,party,host:room.host,planet,visiting:visitId,players:roster(room),enemies:room.enemies,environment:room.environment,epoch:room.epoch});
@@ -208,10 +210,15 @@ export async function createGameServer(options = {}) {
       return respond(response, 200, account && validSession(request)?.id === account.id ? { account: publicAccount(account), profile: account.profile, revision:account.profileRevision||0, authorityVersion:1, ...friends } : { account: null });
     }
     if (!account) throw failure(401, 'Sign in to play online.');
+    const authorizedSession=validSession(request);
+    const checkAccess=()=>{if(!authorizedSession||validSession(request)!==authorizedSession)throw failure(401,'Sign in to play online.');};
     if(route==='actions'&&method==='POST'){
       rate(`action:${account.id}`,240);
       const data=await body(request);data.payload??={};
-      return respond(response,200,await executeAction(account.id,data));
+      checkAccess();
+      const peer=peers.get(account.id);
+      if(peer&&(HEALTH_ACTIONS.has(data.type)||data.type==='upgrade'&&data.payload.kind==='health'||data.type==='environmentResource'&&peer.planet==='jungle'))await combatAuthority.flushPeerHealth(peer);
+      return respond(response,200,await executeAction(account.id,data,{checkAccess}));
     }
     if(route==='drops'&&method==='GET'){
       const peer=peers.get(account.id),now=Date.now();
@@ -226,8 +233,9 @@ export async function createGameServer(options = {}) {
     if (route.startsWith('friends/') && method === 'POST') {
       rate(`friend:${account.id}`, 25);
       const data = await body(request), target = remember((typeof data.id === 'string' ? await store.get(data.id) : null) || await store.findByUsername(text(data.username, 24).toLowerCase()));
+      checkAccess();
       if (!target || target.id === account.id) throw failure(404, 'Choose another explorer.');
-      const changed = await store.friendAction(account.id, target.id, route.slice('friends/'.length));
+      const changed = await store.friendAction(account.id, target.id, route.slice('friends/'.length),checkAccess);
       changed.forEach(remember);
       for (const visitor of peers.values()) if (visitor.visit && !visitor.account.friends.includes(visitor.visit)) endVisit(visitor);
       tellFriends(account); tellFriends(target); return respond(response, 200, await refreshFriends(account));

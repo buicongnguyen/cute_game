@@ -660,10 +660,28 @@ def puffy_crown(crown_mat, lobe_mat, crown, lobes):
 
 def build_tree_round(m):
     p = Piece('tree_round')
-    trunk(p, m['bark'], 2.1, 0.25, 0.16, segs=8)
-    blobs = puffy_crown(m['leaf_b'], m['leaf_a'], ((0.0, 0.03, 2.66), (0.98, 0.95, 0.86)),
-                        ((35, 0.82, 2.22, 0.74), (125, 0.8, 2.3, 0.7), (215, 0.84, 2.18, 0.72), (305, 0.8, 2.26, 0.7)))
-    canopy(p, blobs, wobble=0.025)
+    trunk(p, m['bark'], 2.1, 0.25, 0.14, segs=8, lean=(-0.07, 0.03))
+    # Spend fewer triangles on buried puff surfaces and expose a real fork below
+    # the lifted canopy. All branches share the existing Bark draw batch.
+    for side in (-1, 1):
+        p.add(tube([(0, 0, 0.96), (side * 0.38, -0.12, 1.43), (side * 0.78, -0.3, 2.19)],
+                   [0.145, 0.105, 0.065], sides=5), m['bark'])
+    blobs = [
+        dict(c=(-0.1, 0.18, 2.73), r=(0.94, 0.88, 0.8), segs=18, m=m['leaf_b'], phase=0.1),
+        dict(c=(-0.61, 0.56, 2.51), r=(0.71, 0.72, 0.6), segs=12, m=m['leaf_a'], phase=0.4),
+        dict(c=(0.67, 0.47, 2.62), r=(0.68, 0.77, 0.58), segs=12, m=m['leaf_a'], phase=0.8),
+        dict(c=(-0.78, -0.57, 2.4), r=(0.61, 0.68, 0.48), segs=14, m=m['leaf_a'], phase=1.2),
+        dict(c=(0.79, -0.52, 2.44), r=(0.6, 0.7, 0.48), segs=14, m=m['leaf_b'], phase=1.6),
+    ]
+    canopy(p, blobs, wobble=0.045)
+    # Keep the original ground origin, overall height and collision envelope.
+    top = max(v.z for v in p.verts)
+    for v in p.verts:
+        v.z *= 3.5355 / top
+        radius = math.hypot(v.x, v.y)
+        if radius > 1.5185:
+            v.x *= 1.5185 / radius
+            v.y *= 1.5185 / radius
     return p.build()
 
 
@@ -683,15 +701,33 @@ def build_tree_blossom(m):
 
 def build_tree_pine(m):
     p = Piece('tree_pine')
-    p.add(lathe([(0.22, 0.0), (0.15, 0.14), (0.12, 0.95)], 6), m['bark'])
-    tiers = [(0.5, 1.98, 1.3), (1.36, 2.92, 1.02), (2.2, 3.8, 0.74)]
+    p.add(lathe([(0.22, 0.0), (0.15, 0.14), (0.105, 1.88)], 6), m['bark'])
+    for angle in (-145, -35, 90):
+        a = RAD(angle)
+        p.add(tube([(0, 0, 0.78), (math.cos(a) * 0.64, math.sin(a) * 0.64, 1.62)],
+                   [0.08, 0.035], sides=5), m['bark'])
+    tiers = [(1.2, 2.45, 1.3), (1.95, 3.25, 1.01), (2.69, 3.8, 0.72)]
     for k, (b, t, r) in enumerate(tiers):
         prof = [(0.32 * r, b + 0.03), (r, b + 0.11), (0.87 * r, b + 0.29), (0.53 * r, b + 0.56 * (t - b)), (0.0, t)]
 
         def mod(th, i, k=k):
-            return 1 + 0.06 * math.cos(8 * th + k) if i in (1, 2) else 1.0
+            return 1 + 0.05 * math.cos(7 * th + k) + 0.018 * math.sin(3 * th + k) if i in (1, 2) else 1.0
         # Lighter tier tops over darker rims and undersides: the layers read from the high camera.
         g = lathe(prof, 16, mod=mod, phase=k * 0.4, tag=lambda band, s: 1 if band >= 2 else 0)
+        if k == 2:
+            # The inner underside of the top tier is entirely inside the tier
+            # below; dropping it funds smoother 16-sided rims and the branches.
+            g = g.keep(lambda face: not all(v < 32 for v in face))
+        for v in g.verts:
+            # A slightly uneven hem and a gentle bent tip break the stacked-cone
+            # silhouette without alpha foliage, new materials or extra vertices.
+            if abs(v.z - (b + 0.11)) < 1e-5:
+                v.z -= 0.045 * (0.5 + 0.5 * math.cos(7 * math.atan2(v.y, v.x) + k))
+            v.x += 0.055 * (v.z / 3.8) ** 2
+            radius = math.hypot(v.x, v.y)
+            if radius > 1.378:
+                v.x *= 1.378 / radius
+                v.y *= 1.378 / radius
         p.add(g, {0: m['pine_a'], 1: m['pine_b']})
     return p.build()
 

@@ -24,6 +24,18 @@ export interface TallPiece { x: number; z: number; y: number; height: number; ra
 export type CoverBuilder = (pieces: DecorPlacement[]) => T.Object3D | null;
 
 const extents = new WeakMap<KitPart[], { height: number; radius: number }>(), box = new T.Box3(), part = new T.Box3();
+// A few sun/warm/cool shades break up repeated trees. Stored once in the existing instance buffer: no extra
+// materials, geometry, draw calls or per-frame work. Do not consume the world-placement RNG (shared with collisions).
+const VARIED_TREES = new Set(['tree_round', 'tree_pine', 'tree_blossom', 'tree_swamp']);
+const TREE_SHADES = [[1, 1, 1], [.95, 1, .9], [1, .96, .87], [.88, .96, 1]] as const;
+function treeShade(p: DecorPlacement, color: T.Color) {
+  if (Math.hypot(p.x, p.z) <= 17) return color.setRGB(1, 1, 1);
+  let h = Math.imul(Math.round(p.x * 100), 73856093) ^ Math.imul(Math.round(p.z * 100), 19349663);
+  for (let i = 0; i < p.type.length; i++) h = Math.imul(h ^ p.type.charCodeAt(i), 16777619);
+  h ^= h >>> 16;
+  const shade = TREE_SHADES[(h >>> 0) % TREE_SHADES.length];
+  return color.setRGB(shade[0], shade[1], shade[2]);
+}
 /** Height above the base and horizontal reach of a model at scale 1, measured once per part list. */
 export function partsExtent(parts: KitPart[]) {
   let known = extents.get(parts);
@@ -52,12 +64,13 @@ export function buildScatter(placements: readonly DecorPlacement[], parts: PartS
     const target = cover && isCover ? coverTiles : buckets, key = cover && isCover ? tile : `${p.type}|${tile}`;
     let list = target.get(key); if (!list) target.set(key, list = []); list.push(p);
   }
-  const matrix = new T.Matrix4(), rotation = new T.Quaternion(), scale = new T.Vector3(), position = new T.Vector3(), up = new T.Vector3(0, 1, 0);
+  const matrix = new T.Matrix4(), rotation = new T.Quaternion(), scale = new T.Vector3(), position = new T.Vector3(), up = new T.Vector3(0, 1, 0), color = new T.Color();
   for (const [key, list] of buckets) {
     const type = key.slice(0, key.indexOf('|')), source = parts(type) ?? fallbackParts(type), extent = partsExtent(source);
     const meshes = source.map(part => {
       const mesh = new T.InstancedMesh(part.geometry, part.material, list.length);
-      list.forEach((p, i) => { rotation.setFromAxisAngle(up, p.rotation); scale.setScalar(p.scale); mesh.setMatrixAt(i, matrix.compose(position.set(p.x, p.y, p.z), rotation, scale).multiply(part.matrix)); });
+      list.forEach((p, i) => { rotation.setFromAxisAngle(up, p.rotation); scale.setScalar(p.scale); mesh.setMatrixAt(i, matrix.compose(position.set(p.x, p.y, p.z), rotation, scale).multiply(part.matrix)); if (VARIED_TREES.has(type)) mesh.setColorAt(i, treeShade(p, color)); });
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
       // Ground cover and low pieces never cast; taller ones cast only near the camera target (updateScatterShadows).
       mesh.castShadow = false; mesh.receiveShadow = true; mesh.userData.scatter = type;

@@ -32,7 +32,7 @@ export function fadeMaterial(source: T.Material) {
   return material;
 }
 
-const zero = new T.Matrix4().makeScale(0, 0, 0);
+const zero = new T.Matrix4().makeScale(0, 0, 0), instanceColor = new T.Color();
 
 /**
  * Whether the segment from `from` (the camera) to `to` passes through a piece: an upright cylinder of 80% of its reach,
@@ -87,6 +87,12 @@ export class OccluderFade {
       const overlay = overlays[i], slot = overlay.used.indexOf(null), m = new T.Matrix4();
       mesh.getMatrixAt(piece.index, m); f.saved.push(m); overlay.used[slot] = f; f.slots.push({ overlay, slot });
       overlay.mesh.setMatrixAt(slot, m); overlay.fade.setX(slot, 1);
+      // A tinted tree keeps its exact shade when it moves into the fade overlay. Shared overlay slots can also
+      // receive an untinted piece, so overwrite old colors with white instead of inheriting the previous occupant.
+      if (mesh.instanceColor || overlay.mesh.instanceColor) {
+        instanceColor.setRGB(1, 1, 1); if (mesh.instanceColor) mesh.getColorAt(piece.index, instanceColor);
+        overlay.mesh.setColorAt(slot, instanceColor); overlay.mesh.instanceColor!.needsUpdate = true;
+      }
       overlay.mesh.count = Math.max(overlay.mesh.count, slot + 1); overlay.mesh.instanceMatrix.needsUpdate = true; overlay.fade.needsUpdate = true;
       mesh.setMatrixAt(piece.index, zero); mesh.instanceMatrix.addUpdateRange(piece.index * 16, 16); mesh.instanceMatrix.needsUpdate = true;
     });

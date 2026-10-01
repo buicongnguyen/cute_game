@@ -12,7 +12,7 @@ import {clearJourney} from './adventure-lifecycle.mjs';
 
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const finite=(value,fallback=0,min=-160,max=160)=>Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;
-const snapshot=enemy=>{const {roster,home,changedAt,deadUntil,generation,pending,contributors,scaled,damageAt,cast,nextCastAt,hostPhase,hostAttackCount,combatAttacks,lastHitAt,...publicState}=enemy;return publicState;};
+const snapshot=enemy=>{const {roster,home,changedAt,deadUntil,generation,pending,contributors,scaled,damageAt,cast,nextCastAt,hostPhase,hostAttackCount,combatAttacks,lastHitAt,...publicState}=enemy;return {...publicState,chaseGrace:Math.max(0,Math.min(4,((lastHitAt||0)+4000-Date.now())/1000))};};
 const STATUS=['fear','charm','slow','blind','sheep','taunt'];
 
 /** The browser host animates navigation; the server owns HP, skill timing, stats, kills and rewards. */
@@ -84,7 +84,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       c.attack??=beginTitanAttack(c.skill,c.source,c.marks,points);const result=stepTitanAttack(c.attack,dt,enemy,points);
       for(const hit of result.hits){const target=peers.get(hit.id);if(target?.room===room.id)hurtEnemyTarget(target,enemy,hit.multiplier,hit.source);}
       if(result.move){enemy.x=result.move.x;enemy.z=result.move.z;enemy.titanLift=result.move.y;}
-      if(result.summon)[...state(room).enemies.values()].filter(e=>e!==enemy&&e.hp>0&&!e.boss&&ENEMY_TYPES[e.type].speed>0&&dist(e,enemy)<60).slice(0,4).forEach((e,i)=>{const angle=c.source.facing+(i+.5)*Math.PI/2;e.x=enemy.x+Math.sin(angle)*(enemy.radius+2);e.z=enemy.z+Math.cos(angle)*(enemy.radius+2);e.hp=e.maxHp;e.damage=e.roster.baseDamage*1.3;e.phase='chase';health(room,e);});
+      if(result.summon)[...state(room).enemies.values()].filter(e=>e!==enemy&&e.hp>0&&!e.pending&&!e.roster.dormant&&!e.boss&&ENEMY_TYPES[e.type].speed>0&&dist(e,enemy)<60).slice(0,4).forEach((e,i)=>{const angle=c.source.facing+(i+.5)*Math.PI/2;e.x=enemy.x+Math.sin(angle)*(enemy.radius+2);e.z=enemy.z+Math.cos(angle)*(enemy.radius+2);e.hp=e.maxHp;e.damage*=1.3;e.phase='chase';e.lastHitAt=now;health(room,e);});
       if(result.done){c.done=true;if(c.skill==='leap')enemy.titanLift=0;}return;
     }
     if(c.skill==='slam')once(0,0,()=>area(enemy,4.8,1.6));
@@ -145,14 +145,14 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     }).catch(()=>{enemy.pending=false;enemy.hp=Math.max(1,enemy.hp);health(room,enemy);send(killer.socket,{type:'error',message:'The reward could not be saved. Please try again.'});});
   }
   function hit(peer,enemy,impact,execute=false,hazard=false){
-    const room=rooms.get(peer.room);if(!room||peer.visit||enemy.hp<=0||enemy.pending)return;
+    const room=rooms.get(peer.room);if(!room||peer.visit||enemy.hp<=0||enemy.pending)return 0;
     if(!enemy.scaled&&enemy.boss){const players=[...room.members].map(id=>peers.get(id)).filter(p=>p&&!p.visit&&dist(p.pose,enemy)<28),level=Math.max(...players.map(p=>p.account.profile.level),1),difference=Math.max(0,level-enemy.roster.level);enemy.maxHp=Math.round(enemy.roster.baseMaxHp*(1+.6*Math.max(0,players.length-1))*(enemy.type==='dragon'?1:1+difference*.12));enemy.hp=enemy.maxHp;enemy.damage=enemy.roster.baseDamage*(enemy.type==='dragon'?1:(1+difference*.07)*(1+.1*Math.max(0,players.length-1)));enemy.scaled=true;}
     const control=hitControl(enemy.boss,impact.stun||0);
     if(!hazard&&!execute&&enemy.type==='magmaturtle')impact={...impact,amount:impact.amount*(enemy.phase==='recover'?2:.12)};
-    enemy.contributors.set(peer.account.id,Date.now());enemy.lastHitAt=Date.now();enemy.hp=Math.max(0,enemy.hp-Math.max(0,impact.amount));enemy.stun=Math.max(enemy.stun||0,control.stun);
+    const dealt=Math.min(enemy.hp,Math.max(0,impact.amount));enemy.contributors.set(peer.account.id,Date.now());enemy.lastHitAt=Date.now();enemy.hp-=dealt;enemy.stun=Math.max(enemy.stun||0,control.stun);
     if(control.slow)enemy.statuses.slow=Math.max(enemy.statuses.slow||0,control.slow);
     if(impact.lift>0){enemy.liftVelocity=Math.max(enemy.liftVelocity||0,Math.sqrt(liftHeight(enemy.boss,impact.lift)*24));enemy.stun=Math.max(enemy.stun||0,.8);enemy.phase='chase';enemy.telegraphs=[];enemy.combatAttacks=(enemy.combatAttacks??[]).filter(c=>c.attack||c.elapsed>0);enemy.cast=enemy.combatAttacks.at(-1)??null;}
-    if(enemy.hp<=0){enemy.hp=1;kill(room,enemy,peer,execute);}health(room,enemy,impact);
+    if(enemy.hp<=0){enemy.hp=1;kill(room,enemy,peer,execute);}health(room,enemy,impact);return dealt;
   }
   const epoch=account=>({adventure:account.adventureEpoch||0,life:account.lifeEpoch||0});
   function hp(peer,amount,source){
@@ -162,9 +162,10 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     else engine.healthEvents.push({...context,amount,source,at:now,planet:peer.planet,x:peer.pose.x,z:peer.pose.z});
   }
   function flushHealth(engine){
-    if(engine.pendingHealth?.flushing||!engine.pendingHealth&&!engine.healthEvents.length)return;
+    if(engine.pendingHealth?.flushing)return engine.pendingHealth.promise;
+    if(!engine.pendingHealth&&!engine.healthEvents.length)return Promise.resolve(true);
     const batch=engine.pendingHealth??={events:engine.healthEvents.splice(0),requestId:randomUUID(),flushing:false},events=batch.events,actorId=engine.peer.account.id;batch.flushing=true;engine.hpAt=Date.now();
-    internal(actorId,'health',[],records=>{
+    return batch.promise=internal(actorId,'health',[],records=>{
       const account=records.get(actorId),profile=account.profile;let delta=0,died=false;
       for(const event of events){
         if(event.adventure!==(account.adventureEpoch||0)||event.life!==(account.lifeEpoch||0)||event.at<(account.healthBoundaryAt||0))continue;
@@ -172,10 +173,17 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
         if(profile.hp<=0){profile.planet=event.planet;Game.die(profile,event.x,event.z);clearJourney(account);account.lifeEpoch=(account.lifeEpoch||0)+1;died=true;}
       }
       return {delta,died,lifeEpoch:account.lifeEpoch||0};
-    },batch.requestId).then(result=>{engine.pendingHealth=null;if(!result)return;const live=peers.get(actorId);if(!live)return;
+    },batch.requestId).then(result=>{engine.pendingHealth=null;if(!result)return true;const live=peers.get(actorId);if(!live)return true;
       if(result.reply.result.died){resetPeer(live,{newLife:true});onDeath(live);}
-      send(live.socket,{type:'healthResult',...result.reply.result});
-    }).catch(()=>{batch.flushing=false;});
+      send(live.socket,{type:'healthResult',...result.reply.result});return true;
+    }).catch(()=>{batch.flushing=false;return false;});
+  }
+  /** Settle already observed damage before an inventory action calculates healing. */
+  async function flushPeerHealth(peer){
+    const engine=engines.get(peer.account.id);if(!engine)return;
+    const pending=!!engine.pendingHealth,buffered=engine.healthEvents.length>0;
+    if(pending&&!await flushHealth(engine))throw new Error('Pending health could not be saved. Please try again.');
+    if(buffered&&!await flushHealth(engine))throw new Error('Pending health could not be saved. Please try again.');
   }
   function combatProfile(peer){
     const engine=engineFor(peer),profile=peer.account.profile;engine.gear??=new ContextGearSelection();
@@ -255,5 +263,5 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   }
   const timer=setInterval(()=>{if(!stopped)try{tick(.05);}catch(error){onError(error);}},50);timer.unref();
   function bomb(peer,radius,multiplier){const room=rooms.get(peer.room);if(!room||peer.visit)return;for(const enemy of state(room).enemies.values())if(enemy.hp>0&&dist(peer.pose,enemy)<=radius+enemy.radius)hit(peer,enemy,{amount:Math.round(Game.attack(combatProfile(peer))*multiplier),critical:false,stun:.5,lift:0,knock:2,direction:{x:0,z:0}});}
-  return {acceptSnapshots,basic,skill,damage,bomb,engineFor,state,internal,resetPeer,async close(){stopped=true;clearInterval(timer);for(const engine of engines.values())flushHealth(engine);await Promise.allSettled([...queues.values()]);}};
+  return {acceptSnapshots,basic,skill,damage,bomb,engineFor,state,internal,resetPeer,flushPeerHealth,async close(){stopped=true;clearInterval(timer);for(const engine of engines.values())flushHealth(engine);await Promise.allSettled([...queues.values()]);}};
 }

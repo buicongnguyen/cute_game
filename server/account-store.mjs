@@ -68,9 +68,12 @@ function updateProfile(account, update) {
 }
 function commandSpec(spec) {
   if (!object(spec) || typeof spec.actorId !== 'string' || typeof spec.requestId !== 'string' || !/^[a-zA-Z0-9-]{16,80}$/.test(spec.requestId) || typeof spec.hash !== 'string' || !/^[a-f0-9]{64}$/.test(spec.hash) || !Number.isSafeInteger(spec.expectedRevision) || spec.expectedRevision < 0 || typeof spec.run !== 'function') throw failure(400,'This action needs a valid request.');
+  if(spec.checkAccess!==undefined&&typeof spec.checkAccess!=='function')throw failure(400,'This action needs a valid request.');
   return [...new Set([spec.actorId,...(spec.relatedIds || [])])].sort();
 }
 async function runCommand(spec, records, receipt) {
+  // Access may have been revoked while the request waited for a database lock.
+  spec.checkAccess?.();
   const actor = records.get(spec.actorId);
   if (!actor) throw failure(404,'That account was not found.');
   if (receipt) {
@@ -182,8 +185,9 @@ async function fileStore(dataDir) {
         return { value: result, changed: !result.replayed };
       });
     },
-    async friendAction(actorId, targetId, action) {
+    async friendAction(actorId, targetId, action, checkAccess) {
       return write(next => {
+        checkAccess?.();
         const pair = updateFriends(next.get(actorId), next.get(targetId), action);
         for (const account of pair) next.set(account.id, account);
         return { value: pair };
@@ -255,10 +259,11 @@ async function postgresStore(databaseUrl, injectedPool) {
         return result;
       });
     },
-    async friendAction(actorId, targetId, action) {
+    async friendAction(actorId, targetId, action, checkAccess) {
       return transaction(async client => {
         // All callers lock pairs in the same order, including opposite-direction friend requests.
         const rows = (await client.query('SELECT account FROM zoo_accounts WHERE id = ANY($1::text[]) ORDER BY id FOR UPDATE', [[actorId, targetId]])).rows;
+        checkAccess?.();
         const pair = updateFriends(rows.find(row => row.account.id === actorId)?.account, rows.find(row => row.account.id === targetId)?.account, action);
         for (const account of pair) await update(client, account);
         return pair;

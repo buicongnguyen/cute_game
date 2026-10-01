@@ -1,6 +1,6 @@
 # Reference update review and implementation plan
 
-Reviewed and implemented locally: **2 October 2026**. The second review checked reachable controls and browser/server integration, and found several gaps that unit-level implementation alone had missed. The review findings and navigation guide below distinguish delivered behavior from outstanding acceptance work. The public [GitHub Pages edition](https://buicongnguyen.github.io/cute_game/) is solo; multiplayer service deployment, real-device acceptance, and native PostgreSQL connection/recovery checks remain separate.
+Reviewed and implemented locally: **2 October 2026**. Three implementation reviews checked reachable controls, reward persistence, and browser/server integration. The latest review found additional missing interactions and defects despite the previous passing suite; its evidence is recorded below. The public [GitHub Pages edition](https://buicongnguyen.github.io/cute_game/) is solo; multiplayer service deployment, real-device acceptance, and native PostgreSQL connection/recovery checks remain separate.
 
 ## Evidence and scope
 
@@ -25,7 +25,7 @@ This is a fresh public-client and update-feed review, not a full live playthroug
 | Planets / Hành tinh | Stable jungle fruit deadlines, three-hit clams, contact bounce clouds, eclipse-disabled lamps, carried Fire Crystal light and continuous lava-event timing. / Sửa thời gian quả rừng, sò ba đòn, mây nhún tự động, nhật thực, ánh sáng Pha Lê Lửa và sự kiện dung nham. |
 | Discovery / Khám phá | Question-mark sign near the bottom of the home safe area shows the explorer name, discovered count out of nine, and unknown-planet icons; opens the star map. / Biển dấu hỏi ở phía dưới khu an toàn hiển thị tên, số hành tinh đã khám phá trên chín và mở bản đồ sao. |
 | Mobile / Điện thoại | Joystick enabled by default on touch devices when no preference is saved; default left movement/right skills, with a left/right-handed setting. Turning it off restores tap controls. / Mặc định bật cần di chuyển trên thiết bị cảm ứng; có tùy chọn đổi bên hoặc tắt để dùng cách chạm cũ. |
-| Help and input / Hướng dẫn và điều khiển | 24 bilingual local Help topics, physical-key shortcuts, composition guards, Enter chat and click-player friendship actions. / 24 mục hướng dẫn song ngữ, phím tắt theo phím vật lý, bảo vệ lúc gõ tiếng Việt, Enter mở chat và chọn người chơi để kết bạn. |
+| Help and input / Hướng dẫn và điều khiển | 25 bilingual local Help topics, physical-key shortcuts, composition guards, Enter chat and click-player friendship actions. / 25 mục hướng dẫn song ngữ, phím tắt theo phím vật lý, bảo vệ lúc gõ tiếng Việt, Enter mở chat và chọn người chơi để kết bạn. |
 | Online progress / Tiến trình online | Versioned commands, durable retry receipts, transactional economy/theft/drops, server-selected rewards and server combat/health calculations. Full-profile uploads are rejected. / Lệnh có phiên bản, lưu kết quả để thử lại an toàn, giao dịch nguyên tử và máy chủ tính phần thưởng/sát thương. |
 
 ### Deliberate differences and limits
@@ -34,7 +34,7 @@ This is a fresh public-client and update-feed review, not a full live playthroug
 - The user requested mobile joystick mode by default, superseding the reference's tap default. Saved explicit tap mode is respected. Either movement side is selectable because the requested handedness was ambiguous.
 - The discovery sign matches the reference's home placement at approximately `(2.6, 2.7, 14.5)`, visible nearby, with discovered emoji and unknown ❔ slots. It is localized and reflects saved discoveries.
 - Old crop healing, quick garden collection, automatic rod selection, separate offline saves, and banking an older death bag are preserved local improvements. Crop harvesting resets the plant; fruit is not a permanently regrowing orchard.
-- Animals are bought through the animal-pen panel and automatically released near their species' garden anchor, rather than through the reference Equipment Shop's Pets tab and manual release. Individual collection is available from animal rows; quick collection still collects all ready products.
+- Animals are bought through the animal-pen panel, also accessible from Shop → Pets, and automatically released near their species' garden anchor rather than manually placed. Tap a particular animal or its ready product to collect only its stock; the animal rows also have Collect buttons. Tapping the pen still collects all ready products.
 - Pond bridges/jetties were removed at the user's request so they cannot hide fish. Water remains blocked and fishing is performed from the shore. The bar below health now displays **EXP current / required** on desktop and phones.
 - Server action checks protect inventory, spending, crop ownership, reward rolls, cooldowns and health. The elected browser host still supplies bounded enemy movement/visual snapshots; player movement remains client reported. Fishing checks server tickets, elapsed time and bounded reeling telemetry, which is not proof of human input. This is **not a claim of complete anti-cheat parity** with the reference's private backend.
 - Hosted TLS, native PostgreSQL multi-connection behavior, sleeping-service recovery, real phones, real UniKey composition, and long-session encounter balancing require later acceptance. Local browser emulation does not replace those checks.
@@ -71,9 +71,9 @@ The following gap descriptions record the **pre-implementation baseline** and th
 
 ### Planets and shared world systems
 
-All nine planets already exist. Their normal enemies and much of their environmental gameplay are present. **The new Titan layer is absent on all nine planets**, including nine legendary hats and nine Titan pets. The reference loot table gives the corresponding hat a 12% drop chance and pet a 6% chance; these are table probabilities, not guaranteed rewards.
+At the pre-update baseline, all nine planets existed with normal enemies and much of their environmental gameplay. The Titan layer, nine legendary hats and nine Titan pets were absent then; they have since been implemented. The reference loot table gives the corresponding hat a 12% drop chance and pet a 6% chance; these are table probabilities, not guaranteed rewards.
 
-| Planet | Already implemented examples | Missing Titan | Other confirmed gap / follow-up |
+| Planet | Pre-update examples | Titan subsequently added | Pre-update gap / follow-up, resolved by this implementation |
 | --- | --- | --- | --- |
 | Home | Garden, regional enemies, original bosses | Ancient Mountain Turtle | Farm update, guarded crop theft, shared drops |
 | Candy | Existing world, creatures, ordinary bosses | Three-Headed Candy Hydra | Add Titan moves and rewards; no broader claim of complete parity |
@@ -311,11 +311,11 @@ The listed light, timer, pet, dinosaur, friendship, chat and travel-wording gaps
 
 ## Local validation evidence
 
-The final full suite passed **627 tests**, with **zero failures** and three optional browser checks skipped by that command. Those HUD checks were run separately against the local development browser server and passed **3/3** at 390×844, 1440×900 and 844×390, including the taller, labeled EXP bar. Both the Pages build and complete server build passed; `dist/` was restored to the complete server edition. The existing large-chunk warning remains, with no compilation errors.
+The final full suite passed **685 tests**, with **zero failures** and three optional browser checks skipped by that command. Those HUD checks were run separately against the local development browser server and passed **3/3** at 390×844, 1440×900 and 844×390, including the taller, labeled EXP bar. Both the Pages build and complete server build passed; `dist/` was restored to the complete server edition. The existing large-chunk warning remains, with no compilation errors.
 
 Coverage includes migrations, repeated receipt replay across restart/import, transactional rollback, concurrent theft and private garden boundaries, paid flights, combat authority, health/life transitions, UI acknowledgment races, fishing, farm caps/timers and model contracts. Database tests use PGlite's PostgreSQL engine; hosted TLS and native multi-connection contention remain separate acceptance work.
 
-Browser evidence is kept outside the repository under `outputs/reference-update/` in the task workspace. It covers phone 390×844, landscape 844×390 and desktop layouts, both movement sides, language switching, 24 Help topics, forging and a complete mystery catch. A separate production-server smoke test used two isolated browser contexts and temporary accounts: UI registration, acknowledged chat, server-approved planting, mutual friendship, garden visits and crop/friend persistence after reload all passed without page errors. The discovery sign was checked in English and Vietnamese for its name, 3/9 count, six unknown icons, default phone controls and star-map navigation. Phone prompts/notices were moved clear of the thumb controls and visually checked. Physical phones and hosted PostgreSQL are not represented by these local checks.
+Browser evidence is kept outside the repository under `outputs/reference-update/` in the task workspace. It covers phone 390×844, landscape 844×390 and desktop layouts, both movement sides, language switching, 25 Help topics, forging and a complete mystery catch. A separate production-server smoke test used two isolated browser contexts and temporary accounts: UI registration, acknowledged chat, server-approved planting, mutual friendship, garden visits and crop/friend persistence after reload all passed without page errors. The discovery sign was checked in English and Vietnamese for its name, 3/9 count, six unknown icons, default phone controls and star-map navigation. Phone prompts/notices were moved clear of the thumb controls and visually checked. Physical phones and hosted PostgreSQL are not represented by these local checks.
 
 ### Second review: actual gaps and their corrections
 
@@ -340,6 +340,7 @@ The earlier checklist overstated completeness where backend functions existed wi
 | Feature | Playable path | Verification boundary |
 | --- | --- | --- |
 | Ducks, pigs, guard dog and shelters | Home → animal pen, or Shop → Pets → Animal pen; buy animals/shelters, feed or collect from animal rows | Local rules/serialization/UI covered; hosted theft acceptance remains open. |
+| Animal pen robot (user extension) | Animal pen → Animal pen helper → Hire for ϟ1000 | Independent from garden robot; gathers waiting products/meat, with pause and optional feeding from the bag. |
 | Fruit and older crop changes | Select a garden bed → crop list; choose a fruit crop, fertilize or harvest | Eight fruit types, migrations, caps and two-dose fertilizer covered. Fruit is single-harvest. |
 | Weapon forging | Workshop → forge, or Bag → weapon → forge | +15 cap, 30% roll and failure costs tested offline/server. |
 | Mystery fishing | Carry a rod, approach a pond, choose a mystery silhouette | A complete local browser mystery catch was verified; server proof has the limits stated above. |
@@ -347,13 +348,50 @@ The earlier checklist overstated completeness where backend functions existed wi
 | Titans, hats and combat pets | Travel to each planet and find its Titan; pick up and equip rewards | Nine world spawns, all move sets and all nine reward pairs tested through pickup/equip/save/reload/pet damage. Not every full encounter was manually played. |
 | Discovery counter | Question-mark sign near the bottom of the safe area → star map | EN/VI phone checks include name, count and unknown slots. |
 | Chat, friends, visits, theft and shared loot | Online panel, Enter chat, click another player; visit a friend; World → Share nearby loot | Available in the server edition. Pages cannot provide shared multiplayer without that service. |
-| Movement and help | Settings → Movement; Help button | Default phone joystick, side selection, tap mode and 24 bilingual topics; physical-device/UniKey testing remains open. |
+| Movement and help | Settings → Movement; Help button | Default phone joystick, side selection, tap mode and 25 bilingual topics; physical-device/UniKey testing remains open. |
 
-Unfinished acceptance work remains unchecked in Phase 5. Dedicated Titan inventory thumbnails are not generated; the bag uses its existing icon fallback while worn hats, companions and encounters use the new models. The historical comparison earlier in this file describes the pre-update baseline, not missing features in this release.
+Unfinished acceptance work remains unchecked in Phase 5. All 18 Titan hat/companion inventory thumbnails are now generated from the shipped Blender models; the bag, equipment panel and loot labels use these images. Emoji remain a fallback for failed asset requests. The historical comparison earlier in this file describes the pre-update baseline, not missing features in this release.
 
-A final phone browser smoke test verified **Shop → Pets → Animal pen → Collect ×3** grants only the selected chicken's stock while leaving duck eggs untouched. It also checked all 24 Help entries in both languages, the new fruit/product inventory tiles and the unobscured pond. The isolated multiplayer browser check reported no page errors or failed API responses.
+A final phone browser smoke test verified **Shop → Pets → Animal pen → Collect ×3** grants only the selected chicken's stock while leaving duck eggs untouched. It also checked all 25 Help entries in both languages, the new fruit/product inventory tiles and the unobscured pond. The isolated multiplayer browser check reported no page errors or failed API responses.
 
 ## Farm implementation notes — 2026-10-02
+
+### Third implementation and logic review
+
+| Plan requirement | Missing or incorrect behavior found | Implemented correction / evidence |
+| --- | --- | --- |
+| Individual animal collection (Phase 1) | Direct taps on animals selected the whole pen even though row buttons existed. | Instanced body/head/leg/product hits now retain the animal UID; selection follows a walking animal. Actual phone-browser tap collected the chosen chicken's three eggs while preserving the duck's stock. |
+| Product pickup feedback (Phase 1) | An early online profile update could remove expired livestock before its meat animation began. | Collection retains the pre-command origin and uses it if the animal mesh has already disappeared. Farm-picking and collection tests cover both orders. |
+| Save completed fishing rewards (Phases 0/3) | Offline catches were granted only when the visual leap finished; a world rebuild or reload could erase an earned catch. | The model grant and save now precede animation. Late replies/callbacks cannot affect a new cast, world or account. Failed grants do not show success. |
+| Mystery silhouette/reward integration (Phase 3) | Client shadows respawned after landing, but server eligibility began at the start of a cast. Visible shadows could produce rejected casts, and visual cooldowns stopped during space flight/background suspension. | Canonical per-pond cooldown begins on a committed mystery catch. Cancellation preserves eligibility. Start/finish replies synchronize relative remaining time against a monotonic clock; stale mystery requests still allow an ordinary cast. |
+| New Titan asset completeness (Phase 5) | All nine hats and nine pets had usable 3D models but no inventory images. | `build_titan_icons.py` renders all 18 transparent 160×160 images from `titans.glb`, totaling about 85 KB. Browser inventory checks verified all 18 images load. |
+| Stable avatar/assets and quality changes (Phases 4/5) | Refreshing remote avatars deleted/reinserted keys while iterating the same Map, which could loop forever. | Refresh iterates a snapshot. Regression and two-browser runtime checks verify it returns with remote players still present. |
+| Atomic reward acceptance (Phase 0) | Oversized catch bonuses, gift rewards, the final brazier and daily cave chest could consume their source despite an incomplete grant. Banking an old death stash could create invalid counts later discarded on reload. | Model operations preflight whole reward bundles and numeric limits. Invalid attempts preserve inventory, timers and unlocks; regression tests reload the resulting saves. |
+| Session authorization (Phase 0) | Requests authenticated before reading a slow body or waiting for a transaction could still change an account after logout. | Access is revalidated after body parsing and inside the locked command/receipt operation. Deferred-request and queued-command tests reproduce the revoked-session cases. |
+| Loot after visiting (Phases 2/4) | Leaving a garden into the same home room could omit the room snapshot and drop reload. | Visit exit refreshes the same-room snapshot; client fetches use an epoch so stale drop lists cannot reappear after a newer transition. |
+| Titan summons and transformation snapshots (Phase 4) | Summon boosts did not stack as in the reference, the online host could also move reinforcements locally, and partial player poses could clear active transformations. | Only server-approved online summons move living reinforcements; boosts and remaining chase time survive snapshots. Partial poses preserve transformations. |
+| Confirmed-hit effects and health order (Phases 0/4) | A rejected hit could grant lifesteal; buffered damage could commit after a potion was consumed. | Lifesteal requires an accepted hit. Pending damage is committed before health-changing commands; conflicts preserve the consumable and refresh the profile. |
+| Fullscreen from Help (H17) | The global fullscreen button existed, but the Help guide lacked its advertised control. | Help now has a localized Fullscreen button sharing the existing capability/fallback handler. |
+| Locked lava cave (H11) | A client requesting an interior fire crystal could bypass the closed gate. | The server checks the resource against the actual cave geometry and requires the gate to be open. |
+
+The review also checks the existing eight fruits, migration clocks, two-dose fertilizer rule, shelters/caps, forge costs and ownership, all nine Titan definitions/move sets/rewards, dinosaur skills, discovery sign, mobile controls, and H01–H18 Help requirements. Feature presence is distinguished from hosted acceptance: PostgreSQL TLS/native multi-connection tests and physical phone/UniKey/installation checks are still open, and GitHub Pages remains solo. These are not represented as missing local feature code or as completed tests.
+
+### Requested tree refinement / Cải thiện cây ngoài vùng an toàn
+
+- **EN:** Round trees now have visible forks and less regular crowns; pines have exposed trunks and uneven tier edges. Deterministic warm/cool color variation makes the wild trees less repetitive. Tree locations, collision radii, tile batching, nearby shadows and battery-saver behavior remain compatible.
+- **VI:** Cây tán tròn có nhánh chạc rõ hơn và tán bớt đều; cây thông lộ thân với viền tầng lá tự nhiên hơn. Màu ấm/lạnh thay đổi nhẹ, ổn định theo vị trí giúp cây ngoài vùng an toàn bớt lặp lại. Vị trí cây, bán kính va chạm, cách vẽ theo nhóm, bóng gần nhân vật và chế độ tiết kiệm pin vẫn tương thích.
+- Blender asset budgets: round **578 → 554** triangles, pine **360 → 358**, blossom **598 unchanged**. The scenery file grows only **736 bytes**, to **84,676 bytes**. All other scenery geometry/materials are unchanged. No leaf textures or tree animations were added.
+- Fixed-camera browser checks at 390×844 and 1280×800 kept the same scenery draw calls: forest **23/27**, meadow **16/23**. Rendered scenery triangles decreased in all four views (phone forest **55,517 → 54,041**). Per-instance colors use **16,176 bytes** across the home scenery. These are local renderer measurements, not a physical-phone frame-rate guarantee.
+- Regression coverage verifies stable colors across rebuild/order/quality changes, untouched placement and shared resources, fading/overlay reuse without color flashes, and the actual shipped model's triangle and single-batch limits.
+
+### Animal pen helper / Rô-bốt chăm vật nuôi
+
+- **EN:** Hire a separate animal-pen robot for **1,000 energy**, the same shared price as the garden robot. It collects eggs, duck eggs, milk, truffles and meat from expired livestock into the bag, with normal EXP. Pause/resume is available. Automatic feeding starts **off**; turning it on spends the cheapest suitable crops already in the bag. It never purchases feed, animals or replacements. Returning home collects only the stock actually waiting, once, within existing animal storage limits.
+- **VI:** Thuê riêng một rô-bốt chăm vật nuôi với giá **1.000 năng lượng**, bằng giá rô-bốt làm vườn. Rô-bốt thu trứng gà, trứng vịt, sữa, nấm truffle và thịt từ vật nuôi hết tuổi thọ vào túi, nhận EXP như bình thường. Có thể tạm dừng hoặc tiếp tục. **Tự động cho ăn mặc định tắt**; khi bật, rô-bốt dùng nông sản phù hợp rẻ nhất đang có trong túi. Rô-bốt không tự mua thức ăn, vật nuôi hay con thay thế. Khi về nhà, rô-bốt chỉ thu một lần lượng sản phẩm thực sự đang chờ, theo giới hạn tích trữ hiện có.
+- The pen menu contains the hire/settings entry in English and Vietnamese. Ownership and both switches are stored inside `farm.helper`; old saves default to unowned. Visitors see the owner's robot but cannot make it work on their own inventory or the owner's farm. The view reuses the six rigid parts of `helper.glb` with no new asset download or shadow pass.
+- Rule and authority tests cover equal price, duplicate purchase/receipt handling, pause, feeding opt-in, available inventory, all products and meat, capped offline stock, save migration, visits and flight restrictions. Phone-browser QA verified the 1,000-energy charge, three automatically collected eggs, feeding only after opting in, paused behavior, visible robot, persisted switches after reload and Vietnamese settings.
+
+### Farm design and asset details
 
 - `src/farm-clock.ts` defines one game hour as 60 real seconds. Offline elapsed wall-clock time advances production. Chicken/duck/cow/pig cycles are 120/180/240/360 seconds; fruit crops use real 8/12/14-hour timers. Online actions use server timestamps. The farm panel explains these clocks explicitly.
 - Livestock retain the two-real-hour lifespan, immutable acquisition timestamps, juvenile growth, feeding and coat/breed data. Expired livestock stay as collectible meat until a successful collection; guard dogs never age into meat. Chicken/cow caps remain ten each; ducks/pigs also cap at ten, dogs at one. Cow grazing remains three times the actual prior walking duration.

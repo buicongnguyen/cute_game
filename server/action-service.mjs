@@ -16,6 +16,7 @@ const validId=value=>typeof value==='string'&&/^[a-zA-Z0-9:_-]{1,100}$/.test(val
 const point=value=>value&&Number.isFinite(value.x)&&Number.isFinite(value.z);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','helperHarvest','helperPlant','rest','cook','cookDish']);
+const farmHelperActions=new Set(['buyFarmHelper','setFarmHelperPaused','setFarmHelperAutoFeed','farmHelperCollect','farmHelperFeed','farmHelperCatchUp']);
 export function waterNodes(planet){
   if(planet==='home')return [[-7.5,11.2,3.3],[10,52,9],[40,105,11],[-70,35,8],[-105,-30,7]].map(([x,z,r])=>({x,z,r,water:Math.hypot(x,z)<18?'home':zoneAt({x,z})==='swamp'?'swamp':'lake'}));
   if(['candy','ice','toy','jungle','shadow'].includes(planet))return Array.from({length:4},(_,i)=>({x:Math.cos(i*Math.PI/2+.4)*(38+i*17),z:Math.sin(i*Math.PI/2+.4)*(38+i*17),r:6+i*.6,water:planet}));
@@ -42,17 +43,19 @@ function saveDrop(account,item,count,peer,now,{owner=account.id,priority=0,life=
 
 /** Account records, receipts, theft ledgers and drops commit in one storage transaction. */
 export function createActionService({store,getPeer,getWorld=()=>null,afterCommit=()=>{}}){
-  return async function execute(actorId,data){
+  return async function execute(actorId,data,{checkAccess}={}){
+    checkAccess?.();
     if(data?.rulesVersion!==ACTION_RULES_VERSION||!validId(data.type)||!data.payload||typeof data.payload!=='object'||Array.isArray(data.payload))fail(400,'This action needs the current game rules.');
     const intent={type:data.type,payload:data.payload},p=data.payload;
     const relatedIds=['stealCrop','claimDrop','releaseDrop'].includes(data.type)&&validId(p.ownerId)?[p.ownerId]:[];
     let reservation;
     try {
-    const committed=await store.command({actorId,requestId:data.requestId,expectedRevision:data.expectedRevision,actionType:data.type,hash:commandHash({rulesVersion:data.rulesVersion,...intent}),relatedIds,run:records=>{
+    const committed=await store.command({actorId,requestId:data.requestId,expectedRevision:data.expectedRevision,actionType:data.type,hash:commandHash({rulesVersion:data.rulesVersion,...intent}),relatedIds,checkAccess,run:records=>{
       const account=records.get(actorId),state=Game.parseSave(JSON.stringify(account.profile)),peer=getPeer(actorId),now=Date.now();
       if(!state)fail(409,'Reconnect to load your adventure.');account.profile=state;
       if(peer&&peer.planet!==state.planet&&!['returnHome','stealCrop'].includes(data.type))fail(409,'Reconnect to load your current planet.');
       if(farmActions.has(data.type)&&(state.planet!=='home'||peer?.visit))fail(409,'Return to your own garden first.');
+      if(farmHelperActions.has(data.type)&&(state.planet!=='home'||!peer?.active||peer.visit||account.journeyPaid))fail(409,'Return to your own garden first.');
       let result;
       if(data.type==='stealCrop'){
         const owner=records.get(p.ownerId);
@@ -78,8 +81,9 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         const water=waterNodes(state.planet).find(node=>node.water===p.water&&distance(node,p.cast)<node.r&&distance(node,peer.pose)<=node.r+3.05&&distance(p.cast,peer.pose)<=8);
         if(!water)fail(409,'Move to the pond before casting.');
         if(account.fishingTicket&&now-account.fishingTicket.startedAt<180000)fail(409,'Finish or cancel your current cast first.');
-        const mystery=p.mystery===true,key=`${state.planet}:${water.x}:${water.z}`;
-        if(mystery&&now<(account.mysteryReadyAt?.[key]||0))fail(409,'The mysterious shadow has not returned yet.');
+        const key=`${state.planet}:${water.x}:${water.z}`,readyAt=account.mysteryReadyAt?.[key]||0;
+        // A stale browser silhouette must not reject an otherwise valid ordinary cast.
+        const mystery=p.mystery===true&&now>=readyAt;
         const bait=(state.bag.worm||0)>0,bonus=(bait?.8:0)+(rod.quality??.3)-.3+Game.activeStats(state).luck;
         const choices=(Game.FISH_WEIGHTS[p.water]||[]).map(([id,weight])=>[id,catchWeight(weight,Game.FISH[id]?.rarity,bonus)]);
         if(!choices.length)fail(409,'No fish live in this water.');
@@ -88,8 +92,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         const outcome=mystery?resolveMysteryCatch({id,max:fish.size[1]},random):{id,size,huge:fish.rarity!=='junk'&&fraction>.82,supergiant:false,mystery:false};
         const ticket={id:randomUUID(),startedAt:now,planet:state.planet,water:key,power:fish.power,steady:rod.steady===true,outcome,cast:{...p.cast}};
         account.fishingTicket=ticket;if(bait)Game.removeItem(state.bag,'worm');
-        if(mystery){account.mysteryReadyAt??={};account.mysteryReadyAt[key]=now+(45+random()*45)*1000;}
-        result={ticketId:ticket.id,bait,pick:{id,power:fish.power,size,huge:fraction>.82,mystery}};
+        result={ticketId:ticket.id,bait,pick:{id,power:fish.power,size,huge:fraction>.82,mystery},mysteryState:{readyAt,serverNow:now}};
       }else if(data.type==='fishFinish'||data.type==='fishCancel'){
         const ticket=account.fishingTicket;
         if(!ticket||ticket.id!==p.ticketId)fail(409,'That cast is no longer available.');
@@ -98,7 +101,9 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
           if(ticket.planet!==state.planet||now-ticket.startedAt>180000)fail(409,'That cast has expired.');requireNear(peer,ticket.cast,9);
           validateFishingProof(p.telemetry,ticket,now);const catchResult=ticket.outcome;
           const ok=catchResult.mystery?Game.grantMysteryCatch(state,catchResult.id,catchResult.size,catchResult.supergiant):Game.grantCatch(state,catchResult.id,catchResult.size,catchResult.huge);
-          if(!ok)fail(409,'Your bag cannot hold that catch.');delete account.fishingTicket;result=catchResult;
+          if(!ok)fail(409,'Your bag cannot hold that catch.');
+          if(catchResult.mystery){account.mysteryReadyAt??={};account.mysteryReadyAt[ticket.water]=now+(45+random()*45)*1000;}
+          delete account.fishingTicket;result={...catchResult,mysteryState:{readyAt:account.mysteryReadyAt?.[ticket.water]||0,serverNow:now}};
         }
       }else if(data.type==='dropItem'){
         if(!peer||peer.visit||!validId(p.id)||!Number.isSafeInteger(p.count)||p.count<1||p.count>Game.looseQuantity(state,p.id))fail(409,'That item cannot be dropped.');
@@ -130,8 +135,9 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         const planet=Object.hasOwn(STAR_MAP,p.id)&&STAR_MAP[p.id],position=flightPoint(account,p.position,now);
         if(!planet||distance(planet,position)>planet.r+DISCOVER_RANGE+5)fail(409,'Fly closer to discover that planet.');result=Game.discover(state,p.id)||true;
       }else if(data.type==='environmentResource'||data.type==='jungleFruit'){
-        const node=environmentResourceNodes(createEnvironmentLayout(state.planet)).find(node=>node.id===p.nodeId);
+        const layout=createEnvironmentLayout(state.planet),node=environmentResourceNodes(layout).find(node=>node.id===p.nodeId);
         if(!node||data.type==='jungleFruit'&&node.kind!=='fruit')fail(400,'Unknown resource.');requireNear(peer,node,node.radius+3);
+        if(node.kind==='fire-crystal'&&distance(node,layout.cave)<layout.cave.r&&!state.worldRewards.lava.gateOpen)fail(409,'Open the cave gate before mining inside.');
         if(now<(state.worldRewards.resourceReadyAt[node.id]||0))fail(409,'This resource is growing back.');
         if(node.kind==='fruit'){
           state.hp=Math.min(Game.maxHp(state),state.hp+Math.round(Game.maxHp(state)*.3));Game.addBuff(state,random()<.5?{regen:4,time:30}:{haste:.3,time:30},'jungle-fruit',now);if(random()<.35)Game.addItem(state,'vine');state.worldRewards.resourceReadyAt[node.id]=now+60000;result={kind:'fruit'};

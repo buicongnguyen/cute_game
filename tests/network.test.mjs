@@ -8,6 +8,7 @@ import { WebSocket } from 'ws';
 import { createGameServer } from '../server/server.mjs';
 import { createAccountStore } from '../server/account-store.mjs';
 import { enemyRoster } from '../src/enemy-roster.ts';
+import { ITEMS } from '../src/model.ts';
 import { beginTitanAttack, titanTelegraphs } from '../src/titan-patterns.ts';
 
 function connect(url, cookie) {
@@ -96,6 +97,18 @@ test('visiting a garden from another planet preserves the saved destination and 
   assert.equal((await store.get(peer.id)).profile.planet,'lava');
 });
 
+test('returning from a garden in the same room refreshes the canonical scene and restores visible ground loot',async t=>{
+  const {game,host,peer,store,action}=await protocolRoom(t,{configure:profile=>{profile.bag.carrot=1;}});
+  await store.friendAction(host.id,peer.id,'request');await store.friendAction(peer.id,host.id,'accept');
+  for(const client of [host,peer])await fetch(game.url+'/api/auth/session',{headers:{Cookie:client.cookie}});
+  const dropped=await action(peer,'dropItem',{id:'carrot',count:1});assert.equal(dropped.status,200);
+  peer.send({type:'visit',id:host.id});await peer.next(message=>message.type==='joined'&&message.visiting===host.id);await peer.next(message=>message.type==='visit'&&message.home?.id===host.id);
+  const visiting=await (await fetch(game.url+'/api/drops',{headers:{Cookie:peer.cookie}})).json();assert.deepEqual(visiting.drops,[]);
+  peer.send({type:'leaveVisit'});await peer.next(message=>message.type==='visit'&&!message.home);
+  const returned=await peer.next(message=>message.type==='joined'&&message.visiting===null);assert.equal(returned.room,'public:home');assert.ok(returned.players.some(player=>player.id===peer.id));
+  const own=await (await fetch(game.url+'/api/drops',{headers:{Cookie:peer.cookie}})).json();assert.equal(own.drops.length,1);assert.equal(own.drops[0].id,dropped.data.result.id);
+});
+
 test('combat quantities and rewards are authoritative while canonical boss visuals are replicated',async t=>{
   const {host,peer,barrier,game}=await protocolRoom(t);
   const canonical=enemyRoster('home').find(e=>e.type==='treant');
@@ -119,6 +132,20 @@ test('one server-simulated basic kill commits once and forged raw attacks cannot
   const saved=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();assert.equal(saved.profile.counters.kills,before.profile.counters.kills+1);assert.equal(saved.profile.xp-before.profile.xp,enemy.xp);assert.ok(saved.revision>before.revision);
   peer.send({type:'basic',targetId:enemy.id});peer.send({type:'attack',id:enemy.id,damage:1e9});host.send({type:'defeat',id:enemy.id,xp:1e9});await barrier(host,peer);assert.deepEqual(peer.drain(m=>m.type==='defeat'&&m.id===enemy.id),[]);
   const final=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();assert.equal(final.profile.counters.kills,1);assert.equal(final.profile.energy,saved.profile.energy);
+});
+
+test('healing settles buffered combat damage and preserves food on a stale revision',async t=>{
+  // Hold only automatic world/health intervals; WS and HTTP still run normally.
+  t.mock.timers.enable({apis:['setInterval']});
+  const {host,peer,barrier,store,action}=await protocolRoom(t,{configure:profile=>{profile.hp=50;profile.bag.carrot=1;}});
+  const enemy=enemyRoster('home').find(value=>value.zone==='forest'&&!value.boss);
+  host.send({type:'enemies',enemies:[{id:enemy.id,type:enemy.type,x:-30,z:0}]});await peer.next(message=>message.type==='enemies');
+  peer.send({type:'pose',x:-30,z:1});await host.next(message=>message.type==='pose'&&message.player.id===peer.id);
+  host.send({type:'damage',id:peer.id,enemyId:enemy.id});await barrier(host,peer);
+  assert.equal((await store.get(peer.id)).profile.hp,50,'damage is still buffered before the action');
+  const stale=await action(peer,'eat',{id:'carrot'},{expectedRevision:peer.session.revision});assert.equal(stale.status,409);
+  const damaged=await store.get(peer.id);assert.ok(damaged.profile.hp<50);assert.equal(damaged.profile.bag.carrot,1,'conflicting heal keeps the food');
+  const healed=await action(peer,'eat',{id:'carrot'});assert.equal(healed.status,200);assert.equal(healed.data.profile.hp,damaged.profile.hp+ITEMS.carrot.heal);assert.ok(!healed.data.profile.bag.carrot);
 });
 
 test('server-owned volcano weather advances through host migration and ignores forged weather',async t=>{

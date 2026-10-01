@@ -47,7 +47,7 @@ export function initOnline(game:GameBridge) {
   if(import.meta.env.VITE_STATIC_HOST==='true'){initSoloEdition();return;}
   const serviceBase=import.meta.env.BASE_URL;
   let account:Explorer|null=null,friends:Explorer[]=[],requests:Explorer[]=[],socket:WebSocket|null=null;
-  let host:string|null=null,party:string|null=null,planet='',visiting:string|null=null,offline:SaveState|null=null;
+  let host:string|null=null,party:string|null=null,planet='',visiting:string|null=null,offline:SaveState|null=null,roomEpoch=0;
   let reconnect:number|undefined,saveTimer:number|undefined,saving:Promise<void>|null=null,stopped=false,revision=0,sessionEpoch=0;
   let actionQueue:ActionJob[]=[];const waiting=new Map<string,{resolve:(reply:ActionReply)=>void;reject:(error:Error)=>void}>();
   const pendingSave=()=>actionQueue.length>0;
@@ -190,7 +190,7 @@ export function initOnline(game:GameBridge) {
       const nextRoom=typeof message.room==='string'?message.room:`${message.party||'public'}:${message.planet}`;if(chatRoom!==nextRoom)clearChat(nextRoom);chatReady=true;
       desiredParty=null;restoring=false;if(visiting)game.setVisiting(null);players.clear();for(const player of message.players||[])players.set(player.id,player);party=message.party;planet=message.planet;visiting=typeof message.visiting==='string'?message.visiting:null;
       // A visit changes the room, never the owner's saved adventure planet.
-      if(message.enemies?.length)world().applyEnemySnapshots(message.enemies);game.clearNetworkDrops();void api<{drops:NetworkDrop[]}>('drops').then(result=>{if(socket===connection&&chatRoom===nextRoom&&account)for(const drop of result.drops||[])if(drop.room===nextRoom)game.spawnNetworkDrop(drop,account.id);}).catch(()=>{});if(message.environment)world().applyEnvironmentSnapshot(message.environment);authority(message.host,message.enemies);renderPlayers();status=party?'Party {code}':'Online';refreshButton();if(dialog.open)render();else refreshChatControls();
+      if(message.enemies?.length)world().applyEnemySnapshots(message.enemies);game.clearNetworkDrops();const dropEpoch=++roomEpoch;void api<{drops:NetworkDrop[]}>('drops').then(result=>{if(socket===connection&&roomEpoch===dropEpoch&&chatRoom===nextRoom&&!visiting&&account)for(const drop of result.drops||[])if(drop.room===nextRoom)game.spawnNetworkDrop(drop,account.id);}).catch(()=>{});if(message.environment)world().applyEnvironmentSnapshot(message.environment);authority(message.host,message.enemies);renderPlayers();status=party?'Party {code}':'Online';refreshButton();if(dialog.open)render();else refreshChatControls();
     }
     socket.addEventListener('open',()=>{if(socket!==connection)return;status='Online';refreshButton();send({type:'active',active:!document.hidden});void flushSave();});
     socket.addEventListener('message',event=>{

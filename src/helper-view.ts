@@ -35,6 +35,9 @@ export interface HelperFrame {
   plant(index: number): boolean;
 }
 
+/** Shared rigid robot presentation; callers own their tasks and never mutate through this method. */
+export interface HelperPose { visible: boolean; x: number; z: number; facing: number; mode: 'idle' | 'walk' | 'work'; work?: 'harvest' | 'plant' }
+
 let material: T.MeshToonMaterial | null = null;
 function sharedMaterial() { if (!material) { material = toonMaterial({ vertexColors: true }); material.userData.sharedKit = true; } return material; }
 
@@ -139,10 +142,17 @@ export class HelperView {
     if (this.task && this.mode === 'work') { const b = M.bedPosition(s, this.task.index); this.turnTo(Math.atan2(b.x - this.x, b.z - this.z), dt); }
     this.pose(dt);
   }
+  present(dt: number, pose: HelperPose) {
+    this.group.visible = pose.visible; if (!pose.visible) return;
+    if (!this.parts.size || helperKit.ready && !this.fromKit) this.build();
+    if (!helperKit.requested) void helperKit.load().then(() => { if (helperKit.ready) this.build(); });
+    this.x = pose.x; this.z = pose.z; this.facing = pose.facing; this.mode = pose.mode; this.t += dt;
+    this.pose(dt, pose.work);
+  }
   private turnTo(target: number, dt: number) { this.facing += Math.atan2(Math.sin(target - this.facing), Math.cos(target - this.facing)) * Math.min(1, dt * 10); }
 
   /** Rigid-part animation: a bouncy waddle, a tug (harvest), a can tilt (plant) and an idle look-around. */
-  private pose(dt: number) {
+  private pose(dt: number, work = this.task?.kind) {
     const p = (r: Role) => this.parts.get(r)!, t = this.t;
     if (!this.parts.size) return;
     for (const r of ROLES) { const o = p(r); o.rotation.set(0, 0, 0); o.position.copy(o.userData.rest as T.Vector3); }
@@ -151,7 +161,7 @@ export class HelperView {
       this.stride += dt * 13; const s = Math.sin(this.stride);
       p('leg_l').rotation.x = s * .7; p('leg_r').rotation.x = -s * .7; p('arm_l').rotation.x = -s * .6; p('arm_r').rotation.x = s * .35;
       bob = Math.abs(Math.cos(this.stride)) * .025; p('body').rotation.z = s * .06; p('head').rotation.z = -s * .05;
-    } else if (this.mode === 'work' && this.task?.kind === 'harvest') {
+    } else if (this.mode === 'work' && work === 'harvest') {
       const k = Math.sin(t * 9);
       p('body').rotation.x = .35; p('head').rotation.x = .25; p('head').position.z += .03;
       p('arm_l').rotation.x = -1.1 + k * .35; p('arm_r').rotation.x = -1.1 - k * .35; bob = -.02;

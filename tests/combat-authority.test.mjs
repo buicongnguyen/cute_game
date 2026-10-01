@@ -50,6 +50,23 @@ test('pets deal real server damage without client hit packets and pause with ina
  const f=await fixture(t,{profile:p=>{p.bag.pet_t_turtle=1;p.gear.pet='pet_t_turtle';}}),enemy=f.spawn('mushroom');enemy.z=5;f.peer.pose.z=0;
  const engine=f.authority.engineFor(f.peer);engine.sim.update(.05,false);assert.equal(engine.sim.projectiles.length,0);engine.sim.update(.4);assert.ok(enemy.hp<enemy.maxHp);
 });
+
+test('rejected hits against a pending defeat cannot grant vampire lifesteal',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
+ const f=await fixture(t,{profile:p=>{p.bag.dz_vampire=1;p.gear.disguise='dz_vampire';p.hp=20;}}),enemy=f.spawn('mushroom'),engine=f.authority.engineFor(f.peer);engine.hpAt=Date.now()+100000;engine.sim.statuses.lifesteal=6;enemy.pending=true;enemy.hp=1;
+ engine.sim.basic(enemy);assert.equal(engine.healthEvents.length,0);assert.equal(enemy.hp,1);
+});
+
+test('canonical Titan summon recalls existing eligible mobs with stacked attack and migration grace',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
+ const f=await fixture(t,{planet:'candy'}),titan=f.spawn('titan_hydra',30,0),entries=enemyRoster('candy').filter(e=>!e.boss&&ENEMY_TYPES[e.type].speed>0).slice(0,6);
+ f.authority.acceptSnapshots(f.room,entries.map((e,i)=>({id:e.id,type:e.type,x:42+i,z:0})));const state=f.authority.state(f.room),mobs=entries.map(e=>state.enemies.get(e.id)),ids=[...state.enemies.keys()];
+ mobs[0].pending=true;mobs.forEach(e=>e.hp=1);const before=mobs.map(e=>({x:e.x,z:e.z,damage:e.damage}));
+ const cast=count=>{titan.nextCastAt=0;f.authority.acceptSnapshots(f.room,[{id:titan.id,type:titan.type,x:30,z:0,phase:'windup',attackCount:count,skill:'summon',facing:0}]);assert.ok(titan.cast);titan.cast.startsAt=Date.now()-1;t.mock.timers.tick(50);};
+ cast(2);cast(4);assert.deepEqual([...state.enemies.keys()],ids);
+ for(let i=1;i<=4;i++){assert.equal(mobs[i].hp,mobs[i].maxHp);assert.ok(Math.abs(mobs[i].damage-before[i].damage*1.3*1.3)<1e-9);const packet=f.messages.findLast(m=>m.type==='enemyHealth'&&m.id===mobs[i].id);assert.equal(packet.chaseGrace,4);assert.equal(packet.phase,'chase');}
+ for(const i of [0,5]){assert.equal(mobs[i].hp,1);assert.equal(mobs[i].x,before[i].x);assert.equal(mobs[i].damage,before[i].damage);}
+});
 test('pending damage survives reconnect and travel and lethal damage drops the bag at its original location',async t=>{
  const f=await fixture(t,{profile:p=>{p.hp=1;p.bag.wood=2;}}),enemy=f.spawn('mushroom');
  await f.authority.internal('actor','fixtureJourney',[],records=>{Object.assign(records.get('actor'),{journeyPaid:true,flightDust:[{id:0,x:0,z:0}],flightPoint:{x:0,z:0},rideUntil:Date.now()+45000,ridePlanet:'home',fishingTicket:{id:'old-life'}});return {};});
@@ -61,6 +78,15 @@ test('pending damage survives reconnect and travel and lethal damage drops the b
 test('old-life healing and damage cannot cross a reset epoch boundary',async t=>{
  const f=await fixture(t,{profile:p=>{p.hp=30;}}),enemy=f.spawn('mushroom');f.authority.damage(f.peer,enemy.id);const engine=f.authority.engineFor(f.peer);assert.ok(engine.healthEvents.length);
  f.account.adventureEpoch=1;f.account.lifeEpoch=1;f.authority.resetPeer(f.peer,{newLife:true,reason:'reset'});assert.equal(engine.healthEvents.length,0);assert.equal(engine.sim.projectiles.length,0);assert.equal(engine.nextSkill[0],0);
+});
+
+test('healing actions can await buffered and in-flight health before consuming an item',async t=>{
+ const f=await fixture(t),enemy=f.spawn('mushroom'),engine=f.authority.engineFor(f.peer),hp=f.account.profile.hp;await f.authority.flushPeerHealth({account:{id:'absent'}});
+ f.authority.damage(f.peer,enemy.id);const damage=-engine.healthEvents[0].amount;engine.nextBasic=12345;
+ await Promise.all([f.authority.flushPeerHealth(f.peer),f.authority.flushPeerHealth(f.peer)]);
+ assert.equal((await f.store.get('actor')).profile.hp,hp-damage);assert.equal(f.account.profile.hp,hp-damage);assert.equal(engine.healthEvents.length,0);assert.equal(engine.pendingHealth,null);assert.equal(engine.nextBasic,12345);
+ await f.authority.internal('actor','fixtureHeal',[],records=>{const profile=records.get('actor').profile;profile.hp=Math.min(Game.maxHp(profile),profile.hp+damage);return {};});
+ assert.equal(f.account.profile.hp,hp);await f.authority.flushPeerHealth(f.peer);assert.equal(f.account.profile.hp,hp,'settled damage is not applied again after healing');
 });
 test('untouched enemies take shared environmental damage without awarding a player a kill',async t=>{
  const f=await fixture(t,{planet:'lava'}),env=f.authority.state(f.room).environment;env.time=25;env.weather.time=25;let pool;for(let x=25;x<120&&!pool;x+=2)for(let z=-100;z<100;z+=2)if(env.lavaAt({x,z})){pool={x,z};break;}assert.ok(pool);const enemy=f.spawn('firelizard',pool.x,pool.z),before=enemy.hp;f.peer.pose={x:0,z:0};

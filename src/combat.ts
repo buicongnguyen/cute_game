@@ -7,7 +7,7 @@ export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|
 export interface CombatHost {
   position(): CombatPoint; facing(): number; face(angle: number): void;
   targets(): CombatTarget[]; weapon(): WeaponProfile; stats(): CombatStats;
-  move(x: number, z: number): void; hit(target: CombatTarget, hit: CombatHit): void;
+  move(x: number, z: number): void; hit(target: CombatTarget, hit: CombatHit): number|void;
   effect(effect: CombatEffect): void; clearShot?(from: CombatPoint, to: CombatPoint): boolean;
   heal?(fraction: number): void;
   /** Online execution is resolved by the authority; healing is awarded only on its confirmation. */
@@ -72,9 +72,10 @@ export class CombatSimulation {
     const bonus=(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?3:1)*(this.marked.has(target.id)?1.5:1);
     this.statuses.stealth=0;
     const amount=Math.max(1,Math.round(stats.attack*multiplier*bonus*(critical?(stats.critDamage??2):1)*(.9+this.random()*.2)));
-    this.host.hit(target,{amount,critical,stun,lift,knock,direction:direction(angle)});
+    const applied=this.host.hit(target,{amount,critical,stun,lift,knock,direction:direction(angle)});
+    const dealt=typeof applied==='number'?Math.max(0,Math.min(amount,applied)):amount;
     const lifesteal=(stats.lifesteal??0)+(this.statuses.lifesteal>0?.4:0);
-    if(lifesteal>0)this.host.heal?.(amount*lifesteal/(stats.maxHp??100));
+    if(lifesteal>0&&dealt>0)this.host.heal?.(dealt*lifesteal/(stats.maxHp??100));
   }
   private area(point:CombatPoint,radius:number,multiplier:number,stun=0,lift=0,color='#e5f6ff',knock=1.2){
     this.emit('ring',point,radius,color);

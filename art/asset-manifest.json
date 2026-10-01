@@ -344,10 +344,10 @@
   },
   "nature": {
     "generator": "art/blender/kit/build_nature.py",
-    "blender": "4.5.9 LTS",
+    "blender": "4.5.14 LTS",
     "scenery": {
       "file": "scenery.glb",
-      "bytes": 83940,
+      "bytes": 84676,
       "nodes": {
         "tree_blossom": {
           "triangles": 598,
@@ -377,8 +377,8 @@
           "radius_xy": 1.5603
         },
         "tree_round": {
-          "triangles": 578,
-          "vertices": 344,
+          "triangles": 554,
+          "vertices": 337,
           "materials": [
             "Bark",
             "Leaf B",
@@ -386,26 +386,26 @@
           ],
           "bounds": {
             "min": [
-              -1.3755,
-              -1.3057,
+              -1.3619,
+              -1.2232,
               0
             ],
             "max": [
-              1.3885,
-              1.301,
+              1.3622,
+              1.267,
               3.5355
             ],
             "size": [
-              2.764,
-              2.6066,
+              2.7241,
+              2.4901,
               3.5355
             ]
           },
-          "radius_xy": 1.5186
+          "radius_xy": 1.5185
         },
         "tree_pine": {
-          "triangles": 360,
-          "vertices": 213,
+          "triangles": 358,
+          "vertices": 227,
           "materials": [
             "Bark",
             "Pine A",
@@ -413,22 +413,22 @@
           ],
           "bounds": {
             "min": [
-              -1.378,
-              -1.378,
+              -1.2704,
+              -1.3234,
               0
             ],
             "max": [
-              1.378,
-              1.378,
+              1.3711,
+              1.2766,
               3.8
             ],
             "size": [
-              2.756,
-              2.756,
+              2.6415,
+              2.6,
               3.8
             ]
           },
-          "radius_xy": 1.378
+          "radius_xy": 1.376
         },
         "bush": {
           "triangles": 294,
@@ -17609,6 +17609,87 @@
             "materials": 3
           }
         }
+      }
+    }
+  },
+  "titan_icons": {
+    "generator": "art/blender/kit/build_titan_icons.py",
+    "size": [
+      160,
+      160
+    ],
+    "assets": {
+      "hat_t_turtle": {
+        "file": "icons/items/hat_t_turtle.webp",
+        "bytes": 4452
+      },
+      "hat_t_hydra": {
+        "file": "icons/items/hat_t_hydra.webp",
+        "bytes": 4490
+      },
+      "hat_t_crystal": {
+        "file": "icons/items/hat_t_crystal.webp",
+        "bytes": 4976
+      },
+      "hat_t_scorpion": {
+        "file": "icons/items/hat_t_scorpion.webp",
+        "bytes": 5092
+      },
+      "hat_t_clock": {
+        "file": "icons/items/hat_t_clock.webp",
+        "bytes": 4466
+      },
+      "hat_t_flower": {
+        "file": "icons/items/hat_t_flower.webp",
+        "bytes": 4892
+      },
+      "hat_t_kraken": {
+        "file": "icons/items/hat_t_kraken.webp",
+        "bytes": 4582
+      },
+      "hat_t_whale": {
+        "file": "icons/items/hat_t_whale.webp",
+        "bytes": 3292
+      },
+      "hat_t_eye": {
+        "file": "icons/items/hat_t_eye.webp",
+        "bytes": 3932
+      },
+      "pet_t_turtle": {
+        "file": "icons/items/pet_t_turtle.webp",
+        "bytes": 4972
+      },
+      "pet_t_hydra": {
+        "file": "icons/items/pet_t_hydra.webp",
+        "bytes": 5536
+      },
+      "pet_t_crystal": {
+        "file": "icons/items/pet_t_crystal.webp",
+        "bytes": 6072
+      },
+      "pet_t_scorpion": {
+        "file": "icons/items/pet_t_scorpion.webp",
+        "bytes": 4772
+      },
+      "pet_t_clock": {
+        "file": "icons/items/pet_t_clock.webp",
+        "bytes": 4910
+      },
+      "pet_t_flower": {
+        "file": "icons/items/pet_t_flower.webp",
+        "bytes": 5524
+      },
+      "pet_t_kraken": {
+        "file": "icons/items/pet_t_kraken.webp",
+        "bytes": 5128
+      },
+      "pet_t_whale": {
+        "file": "icons/items/pet_t_whale.webp",
+        "bytes": 3566
+      },
+      "pet_t_eye": {
+        "file": "icons/items/pet_t_eye.webp",
+        "bytes": 4670
       }
     }
   }

@@ -29,3 +29,7 @@ test('equipped combat pet fires a real travelling projectile, pauses and observe
  a.run(.6);assert.equal(a.hits.length,1);assert.equal(a.hits[0].amount,6);a.run(.35);assert.equal(a.sim.projectiles.length,0);a.run(.1);assert.equal(a.sim.projectiles.length,1);
  a.sim.reset();a.host.pet=()=>null;a.run(1);assert.equal(a.hits.length,1);
 });
+
+test('lifesteal heals only accepted damage, not rejected or overkill damage',()=>{
+ for(const dealt of [0,3]){const a=arena(),target=a.add();target.z=1;a.host.stats=()=>({attack:10,maxHp:100,critChance:0,lifesteal:.5});a.host.hit=()=>dealt;assert.equal(a.sim.basic(target),true);assert.equal(a.heals(),dealt*.5/100);}
+});

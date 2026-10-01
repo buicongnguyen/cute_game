@@ -1,6 +1,7 @@
 import { t, localizeHtml } from './i18n.ts';
 import { ITEMS, type ItemDef, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
+import { farmHelperRow } from './farm-helper-ui.ts';
 import { BREEDS, coatOf, ANIMALS, ANIMAL_KINDS, ANIMAL_LIFESPAN_MS, productCount, productCapacity, productDuration, speciesPenCost, FARM_DISHES, PEN_BUILD, expired, lifetimeLeft, productFor, canBuildPen, penBuilt, animalCount, canBuyAnimal, canCookDish, canFeed, farmOf, feedCrop, growth, isAdult, penCapacity, penExpandCost, productProgress, productReady, timeLeft, type Animal, type Collected } from './farm.ts';
 
 /**
@@ -22,7 +23,7 @@ export function animalStatus(a: Animal, now = Date.now()) {
 }
 /** Changes when the panel needs drawing again (an animal grew up, a product became ready, feed or energy changed). */
 export function penSignature(s: SaveState, now = Date.now()) {
-  return [penBuilt(s), s.energy, s.level, feedCrop(s), feedCrop(s) ? s.bag[feedCrop(s)!] : 0, farmOf(s).penLevel, ...farmOf(s).animals.map(a => `${a.uid}:${isAdult(a, now)}:${productCount(a, now)}:${a.pen}:${expired(a, now)}:${canFeed(a, now)}`)].join('|');
+  return [penBuilt(s), s.energy, s.level, feedCrop(s), feedCrop(s) ? s.bag[feedCrop(s)!] : 0, farmOf(s).penLevel, JSON.stringify(s.farm?.helper), ...farmOf(s).animals.map(a => `${a.uid}:${isAdult(a, now)}:${productCount(a, now)}:${a.pen}:${expired(a, now)}:${canFeed(a, now)}`)].join('|');
 }
 /** Moves the meters and times of an open pen panel without drawing it again. */
 export function tickPen(root: ParentNode, s: SaveState, now = Date.now()) {
@@ -63,7 +64,7 @@ export function penHtml(s: SaveState, ui: FarmUi, now = Date.now()) {
     const cost = speciesPenCost(s, kind), name = t(ANIMALS[kind].name);
     return `<div class="garden-actions farm-species-pen"><span>${ANIMALS[kind].icon} ${t('{name} shelter', { name })}<small>${t(kind === 'dog' ? 'Guard bite damage rises from 18 to 30.' : 'Stores 5 products instead of 3; production takes 70% of the normal time.')}</small></span>${cost === null ? `<span class="chip">✓ ${t('Built')}</span>` : `<button class="soft-button" data-action="build-species-pen" data-kind="${kind}" ${s.energy < cost ? 'disabled' : ''}>${t('Build · ϟ {price}', { price: cost })}</button>`}</div>`;
   }).join('');
-  return localizeHtml(`<div class="chips farm-counts">${counts}</div>${collect}${feed}<div class="crop-list">${rows}</div><div class="section-label">NEW FRIENDS</div><div class="crop-list">${shop}</div>${grow}<div class="section-label">${t('SPECIES SHELTERS')}</div>${pens}<p class="garden-tip">${t('Farm clock: 1 game hour = 1 real minute. Production continues while you are away.')}</p><p class="garden-tip">💡 Livestock produces while you are away and leaves meat after two real hours. Guard dogs stay with you. Sell the products at the market or cook them at the kitchen.</p>`);
+  return localizeHtml(`<div class="chips farm-counts">${counts}</div>${farmHelperRow(s)}${collect}${feed}<div class="crop-list">${rows}</div><div class="section-label">NEW FRIENDS</div><div class="crop-list">${shop}</div>${grow}<div class="section-label">${t('SPECIES SHELTERS')}</div>${pens}<p class="garden-tip">${t('Farm clock: 1 game hour = 1 real minute. Production continues while you are away.')}</p><p class="garden-tip">💡 Livestock produces while you are away and leaves meat after two real hours. Guard dogs stay with you. Sell the products at the market or cook them at the kitchen.</p>`);
 }
 /** One summary line for a collect: "Collected 3: 2 eggs, 1 milk." */
 export function collectText(list: readonly Collected[]) {

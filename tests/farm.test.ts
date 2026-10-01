@@ -198,7 +198,7 @@ test('home builds the pen as one entity with a fence of obstacles, and animals d
   const hen = view.positions().find(p => p.kind === 'chicken')!; w.position.set(hen.x + .3, 0, hen.z);
   for (let i = 0; i < 20; i++) w.update(.05, false, false);
   const after = view.positionOf(hen.uid)!; assert.ok(Math.hypot(after.x - w.position.x, after.z - w.position.z) > .9, 'a hen steps away from the explorer');
-  // A tap on an animal picks the pen.
+  // A tap preserves the individual animal, including one far from the pen.
   // Out in the village too: the camera follows the explorer to the animal farthest from the pen.
   let far = view.positions().sort((a, b) => Math.hypot(b.x - M.PEN.x, b.z - M.PEN.z) - Math.hypot(a.x - M.PEN.x, a.z - M.PEN.z))[0];
   assert.ok(Math.hypot(far.x - M.PEN.x, far.z - M.PEN.z) > 4, 'the tapped animal is out in the village');
@@ -206,7 +206,9 @@ test('home builds the pen as one entity with a fence of obstacles, and animals d
   Object.assign(globalThis, { innerWidth: 1440, innerHeight: 900 }); w.camera.aspect = 1440 / 900; w.camera.updateProjectionMatrix(); w.camera.updateMatrixWorld();
   far = { ...far, ...view.positionOf(far.uid)! };
   const sp = new T.Vector3(far.x, far.kind === 'cow' ? .8 : .3, far.z).project(w.camera);
-  assert.equal(w.pickEntity((sp.x + 1) / 2 * 1440, (1 - sp.y) / 2 * 900)?.kind, 'pen', 'tapping the farthest animal opens the pen');
+  const picked=w.pickEntity((sp.x + 1) / 2 * 1440, (1 - sp.y) / 2 * 900);
+  assert.equal(picked?.kind, 'animal', 'tapping the farthest animal targets that animal');
+  assert.equal(picked?.animalUid,far.uid);
   w.build('ice'); assert.equal(w.farmView, undefined); assert.ok(!w.entities.some(e => e.kind === 'pen'));
 });
 

@@ -1,5 +1,6 @@
 import * as Game from './model.ts';
 import * as Helper from './helper.ts';
+import * as FarmHelper from './farm-helper.ts';
 import { claimProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 
 export const ACTION_RULES_VERSION = 1;
@@ -75,6 +76,12 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'helperHarvest': result = Helper.helperHarvest(state, index(), now); break;
     case 'helperPlant': result = Helper.helperPlant(state, index(), now); break;
     case 'helperCatchUp': result = Helper.catchUp(state,now); break;
+    case 'buyFarmHelper': result = FarmHelper.buyFarmHelper(state); if (result !== 'bought') return invalid(); break;
+    case 'setFarmHelperPaused': if (typeof p.paused !== 'boolean') return invalid(); result = FarmHelper.setFarmHelperPaused(state, p.paused); break;
+    case 'setFarmHelperAutoFeed': if (typeof p.autoFeed !== 'boolean') return invalid(); result = FarmHelper.setFarmHelperAutoFeed(state, p.autoFeed); break;
+    case 'farmHelperCollect': result = FarmHelper.helperCollect(state, integer(p.uid), now); if (!(result as unknown[]).length) return invalid(); break;
+    case 'farmHelperFeed': result = FarmHelper.helperFeed(state, integer(p.uid), now); break;
+    case 'farmHelperCatchUp': if (!FarmHelper.canWork(state)) return invalid(); result = FarmHelper.catchUp(state, now); break;
     case 'claimProgress': result = claimProgress(state, kind() as ProgressKind, id(), now); break;
     case 'claimQuest': result = claimProgress(state, 'story', `story:${state.progression.story.index}`, now); break;
     case 'rerollDaily': result = rerollDaily(state, index(), now); break;

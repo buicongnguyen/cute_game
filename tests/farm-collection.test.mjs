@@ -12,9 +12,9 @@ import { setLanguage } from '../src/i18n.ts';
 // between the first immediate pickup and the remaining staggered callbacks.
 const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-const declaration = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'collectFarm');
-assert.ok(declaration, 'main.ts must provide the real collection controller');
-const compiled = ts.transpileModule(declaration.getText(ast), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const declarations = ['farmCollectFeedback', 'collectFarm'].map(name => ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name));
+assert.ok(declarations.every(Boolean), 'main.ts must provide the real collection controller and feedback');
+const compiled = ts.transpileModule(declarations.map(node => node.getText(ast)).join('\n'), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 
 function fullExpiredFarm(now) {
   const state = M.newGame(); state.level = 25; state.energy = 100_000; state.farm.built = true;
