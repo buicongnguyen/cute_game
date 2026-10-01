@@ -173,10 +173,10 @@ export function planDecor({ planet, layout, random, free, ponds = [], clearings 
       place(type, x, z, radius, undefined, where === 'sea'); placed++;
     }
   };
-  // Reeds around each pond's sandy rim; the ponds are a little longer than they are wide.
+  // Reeds around each pond's sandy rim (the ponds are round, as in the reference).
   for (const pond of ponds) {
     const count = pond.r < 4 ? 4 : pond.r >= 7 && planet === 'home' ? 16 : 5;
-    for (let i = 0; i < count; i++) { const a = random() * Math.PI * 2, x = pond.x + Math.cos(a) * (pond.r + .7), z = pond.z + Math.sin(a) * (pond.r * .73 + .7); place('reeds', x, z, 0); }
+    for (let i = 0; i < count; i++) { const a = random() * Math.PI * 2, x = pond.x + Math.cos(a) * (pond.r + .7), z = pond.z + Math.sin(a) * (pond.r + .7); place('reeds', x, z, 0); }
   }
   if (planet === 'home') {
     // Inside the village fence: flowers, grass and bushes around the buildings and trails.

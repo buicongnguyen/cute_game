@@ -1,14 +1,14 @@
 import * as T from 'three';
 import type { KitLibrary } from './assets.ts';
 import type { Effects } from './fx.ts';
-import type { FishingSimulation } from './fishing.ts';
+import { CAST, FISH_PER_WATER, RESTOCK_AFTER_CATCH, type FishingState, type Point } from './fishing.ts';
 
 /** Swimmable water of one pond, in world units. */
 export interface PondView { id: string; x: number; z: number; rx: number; rz: number; surface: number; waterId: string }
-type FishState = 'swim' | 'approach' | 'nibble' | 'hooked' | 'flee';
+type FishState = 'swim' | 'approach' | 'nibble' | 'bite' | 'hooked' | 'flee';
 interface Swimmer {
   obj: T.Group; tail: T.Object3D | null; pond: PondView; species: string; heading: number; speed: number; depth: number; wag: number;
-  goal: { x: number; z: number } | null; state: FishState; t: number; wig: number; dart: number;
+  goal: { x: number; z: number } | null; state: FishState; t: number; wig: number;
 }
 interface Leap { obj: T.Group; from: T.Vector3; target: () => T.Vector3; t: number; done: () => void }
 
@@ -53,10 +53,10 @@ const FALLBACK: Record<string, [string, string]> = {
 };
 
 /**
- * Fishing drawn in the world: fish swim in the ponds, the bobber arcs out on a
- * line, fish nibble and bite, a hooked fish is dragged toward the shore as the
- * catch progresses, and a landed fish leaps into the explorer's arms. The rules
- * live in FishingSimulation; this class only shows them.
+ * Fishing drawn in the world: fish swim in the ponds, the bobber arcs out on a line to the
+ * tapped spot, the chosen fish swims up, nibbles and bites, a hooked fish is dragged toward the
+ * shore as the catch progresses, and a landed fish leaps into the explorer's arms. The rules
+ * (timings, the early-press tug, which fish comes) live in FishingSimulation; this class only shows them.
  */
 export class FishingView {
   active = false;
@@ -70,13 +70,15 @@ export class FishingView {
   private linePositions: Float32Array;
   private lineMaterial = new T.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: .95 });
   private castFrom = new T.Vector3();
-  private shore = new T.Vector3();
-  private t = 0; private phase = ''; private nibbles = 0; private missed = 0; private dip = 0; private early = 0;
+  private t = 0; private phase = ''; private dip = 0;
+  /** Counters of the simulation already shown. */
+  private seen = { nibbles: 0, missed: 0, early: 0, fled: 0 };
   private interest: Swimmer | null = null; private species = '';
   private leaps: Leap[] = [];
   private scratch = new T.Vector3();
   private readonly segments = 18;
   private respawns: Array<{ pond: PondView; at: number }> = [];
+  private ripples = new Map<PondView, number>();
   private clock = 0;
 
   constructor(scene: T.Scene, private fx: Effects, private kit: KitLibrary, private sound: (name: 'pop' | 'splash' | 'cast' | 'snap' | 'reel') => void) {
@@ -115,23 +117,23 @@ export class FishingView {
     return { obj: group, tail: hinge };
   }
 
-  /** Stock the ponds of a freshly built world. `pool` lists species by weight for each water. */
+  /** Stock the ponds of a freshly built world with the reference's count per kind of water. `pool` lists species by weight for each water. */
   populate(ponds: PondView[], pool: (waterId: string) => string[]) {
     this.cancel();
     for (const f of this.fish) this.root.remove(f.obj);
     for (const d of this.dressing) this.root.remove(d);
-    this.fish = []; this.dressing = []; this.respawns = [];
+    this.fish = []; this.dressing = []; this.respawns = []; this.ripples.clear();
     if (this.kit.ready) { const fresh = this.makeBobber(); this.root.remove(this.bobber); this.bobber = fresh; this.bobber.visible = false; this.root.add(fresh); }
     for (const pond of ponds) {
       const species = pool(pond.waterId).filter(id => id !== 'boot');
-      const count = Math.max(3, Math.min(8, Math.round(pond.rx * pond.rz * .5)));
+      const count = FISH_PER_WATER[pond.waterId] ?? 4;
       for (let i = 0; i < count && species.length; i++) this.addFish(pond, species[Math.floor(Math.random() * species.length)]);
-      // Reeds and lily flowers from the kit dress the shoreline.
+      // Reeds on the sandy lip and lily flowers on the water, from the kit.
       for (const [name, count2, onEdge] of [['reeds', 3, true], ['lily_flower', 2, false]] as const) {
         for (let i = 0; i < count2; i++) {
           const piece = this.kit.ready ? this.kit.instance(name) : null; if (!piece) continue;
-          const a = (i + .3) / count2 * Math.PI * 2 + pond.x, r = onEdge ? .98 : .55;
-          piece.position.set(pond.x + Math.cos(a) * pond.rx * r, onEdge ? 0 : pond.surface + .01, pond.z + Math.sin(a) * pond.rz * r);
+          const a = (i + .3) / count2 * Math.PI * 2 + pond.x, d = onEdge ? pond.rx + .3 : pond.rx * .55;
+          piece.position.set(pond.x + Math.cos(a) * d, onEdge ? .12 : pond.surface + .01, pond.z + Math.sin(a) * d);
           // Lily pads and reeds lie flat or are thin: their shadows would cost a pass and add nothing.
           piece.traverse(o => { o.castShadow = false; });
           piece.rotation.y = a; this.root.add(piece); this.dressing.push(piece);
@@ -145,7 +147,7 @@ export class FishingView {
     const [scale, top, wag] = this.kit.ready ? look(species) : [1, .06, .5], depth = top * scale + .015;
     obj.position.set(pond.x + Math.cos(a) * pond.rx * r, pond.surface - depth, pond.z + Math.sin(a) * pond.rz * r);
     this.root.add(obj);
-    const fish: Swimmer = { obj, tail, pond, species, heading: Math.random() * 6.28, speed: between(.5, 1.1), goal: null, state: 'swim', t: 0, wig: Math.random() * 10, dart: 0, depth, wag };
+    const fish: Swimmer = { obj, tail, pond, species, heading: Math.random() * 6.28, speed: between(.5, 1.1), goal: null, state: 'swim', t: 0, wig: Math.random() * 10, depth, wag };
     this.fish.push(fish); return fish;
   }
 
@@ -154,18 +156,27 @@ export class FishingView {
     return d <= 1 ? { x, z } : { x: pond.x + u / d * pond.rx * margin, z: pond.z + v / d * pond.rz * margin };
   }
 
-  /** Start a cast from the rod tip toward the water in front of the explorer. */
-  begin(pond: PondView, rodTip: T.Vector3, player: T.Vector3, species: string) {
+  /** Start a cast from the rod tip to `cast` (chosen from the tap by planCast). */
+  begin(pond: PondView, rodTip: T.Vector3, cast: Point) {
     this.cancel();
-    this.active = true; this.pond = pond; this.species = species; this.t = 0; this.phase = 'cast'; this.nibbles = 0; this.missed = 0; this.dip = 0; this.early = 0;
-    const dx = pond.x - player.x, dz = pond.z - player.z, length = Math.hypot(dx, dz) || 1;
-    const reach = Math.min(3.2, Math.max(1.6, Math.min(pond.rx, pond.rz) * .9));
-    const spot = this.inside(pond, player.x + dx / length * reach, player.z + dz / length * reach, .7);
-    this.castTo.set(spot.x, pond.surface, spot.z);
-    const edge = this.inside(pond, player.x, player.z, .92); this.shore.set(edge.x, pond.surface, edge.z);
+    this.active = true; this.pond = pond; this.t = 0; this.phase = 'cast'; this.dip = 0; this.seen = { nibbles: 0, missed: 0, early: 0, fled: 0 };
+    this.castTo.set(cast.x, pond.surface, cast.z);
     this.castFrom.copy(rodTip);
     this.bobber.visible = true; this.line.visible = true; this.bobber.position.copy(rodTip);
     this.sound('cast');
+  }
+
+  /**
+   * The fish the simulation sends to the bobber (attract @868468): 60 % of the time one of that species
+   * already swimming here, else a new one from the rim. Returns its distance to the bobber.
+   */
+  approachDistance(species: string) {
+    const pond = this.pond; if (!pond) return 2.5;
+    if (this.interest && this.interest.state !== 'swim') this.flee(this.interest);
+    const same = this.fish.filter(f => f.pond === pond && f.state === 'swim' && f.species === species);
+    const fish = same.length && Math.random() < .6 ? same[Math.floor(Math.random() * same.length)] : this.addFish(pond, species, true);
+    fish.state = 'approach'; fish.t = 0; this.interest = fish; this.species = species;
+    return Math.hypot(fish.obj.position.x - this.castTo.x, fish.obj.position.z - this.castTo.z);
   }
 
   cancel() {
@@ -184,15 +195,16 @@ export class FishingView {
     this.fx.burst(mid, { n: 14, color: '#ffffff', glow: true, speed: 5, up: 3, y: 0 });
     this.fx.burst(this.bobber.position, { n: 16, color: ['#ffffff', '#9fe3ff'], speed: 4, up: 5, y: 0 });
     this.fx.shake(.3); this.sound('snap');
-    this.cancel();
+    const fish = this.interest; this.cancel(); if (fish) fish.speed = 4.5;
   }
 
-  /** The catch leaps out of the water in an arc and lands in the explorer's arms. */
+  /** The catch leaps out of the water in an arc and lands in the explorer's arms; a new fish swims in 12 s later. */
   land(target: () => T.Vector3, done: () => void) {
     const fish = this.interest, pond = this.pond;
     let obj: T.Group;
-    if (fish) { this.fish.splice(this.fish.indexOf(fish), 1); obj = fish.obj; if (pond) this.respawns.push({ pond, at: this.clock + 12 }); }
+    if (fish) { this.fish.splice(this.fish.indexOf(fish), 1); obj = fish.obj; }
     else { obj = this.makeFish(this.species).obj; obj.position.copy(this.bobber.position); this.root.add(obj); }
+    if (pond) this.respawns.push({ pond, at: this.clock + RESTOCK_AFTER_CATCH });
     this.interest = null;
     const from = obj.position.clone(); from.y = (pond?.surface ?? 0) + .1;
     this.fx.burst(from, { n: 20, color: ['#ffffff', '#9fe3ff'], glow: true, speed: 5, up: 7, y: 0 });
@@ -202,77 +214,95 @@ export class FishingView {
     this.cancel();
   }
 
-  update(dt: number, time: number, rodTip: T.Vector3, player: T.Vector3, sim: FishingSimulation | null) {
+  update(dt: number, time: number, rodTip: T.Vector3, player: T.Vector3, sim: FishingState | null) {
     this.clock += dt;
     for (let i = this.respawns.length - 1; i >= 0; i--) if (this.respawns[i].at <= this.clock) {
       const { pond } = this.respawns[i]; this.respawns.splice(i, 1);
       const species = this.fish.find(f => f.pond === pond)?.species; if (species) this.addFish(pond, species, true);
     }
     for (const fish of this.fish) this.updateFish(fish, dt, time, Math.hypot(player.x - fish.pond.x, player.z - fish.pond.z) < 45);
+    this.ambientRipples(player);
     this.updateLeaps(dt);
     if (!this.active || !sim || !this.pond) return;
     this.t += dt;
     const pond = this.pond, bob = this.bobber.position;
-    if (sim.phase !== this.phase) this.enter(sim.phase, sim);
-    if (sim.missedBites > this.missed) {
-      this.missed = sim.missedBites;
-      if (this.interest) this.flee(this.interest); this.interest = null;
-      this.fx.ring(bob, { color: '#ffffff', from: .2, to: .7, life: .4, y: pond.surface + .01 });
-    }
-    if (sim.earlyPresses > this.early) {
-      // Too early: the bobber is tugged toward the explorer and the fish swims off.
-      this.early = sim.earlyPresses;
-      const dx = player.x - this.castTo.x, dz = player.z - this.castTo.z, d = Math.hypot(dx, dz) || 1;
-      const moved = this.inside(pond, this.castTo.x + dx / d * .7, this.castTo.z + dz / d * .7, .7); this.castTo.set(moved.x, pond.surface, moved.z);
+    if (sim.phase !== this.phase) this.enter(sim.phase);
+    if (sim.cast) this.castTo.set(sim.cast.x, pond.surface, sim.cast.z);
+    if (sim.earlyPresses > this.seen.early) {
+      // Too early: the bobber is tugged toward the explorer (the simulation moved the cast point).
+      this.seen.early = sim.earlyPresses;
       this.fx.ring(this.castTo, { color: '#ffffff', from: .2, to: .8, life: .4, y: pond.surface + .01 });
+    }
+    if (sim.fled > this.seen.fled) {
+      this.seen.fled = sim.fled;
       if (this.interest) this.flee(this.interest); this.interest = null;
     }
-    if (sim.nibbles > this.nibbles) { this.nibbles = sim.nibbles; if (this.interest) this.interest.dart = .3; }
+    if (sim.missedBites > this.seen.missed) { this.seen.missed = sim.missedBites; this.fx.ring(bob, { color: '#ffffff', from: .2, to: .7, life: .4, y: pond.surface + .01 }); }
+    if (sim.nibbles > this.seen.nibbles) {
+      // Each nibble touches the bobber: a dip and a small ring.
+      this.seen.nibbles = sim.nibbles; this.dip = .25;
+      this.fx.ring(bob, { color: '#ffffff', from: .15, to: .5, life: .35, y: pond.surface + .01, opacity: .6 });
+    }
     let float: number | null = pond.surface + Math.sin(time * 2.2) * .02;
     if (this.phase === 'cast') {
-      const k = Math.min(1, this.t / .5);
-      bob.lerpVectors(this.castFrom, this.castTo, k); bob.y = this.castFrom.y * (1 - k) + pond.surface * k + Math.sin(k * Math.PI) * 1.6; float = null;
-    } else if (this.phase === 'waiting' || this.phase === 'nibble') {
+      const k = Math.min(1, this.t / CAST.flight);
+      bob.lerpVectors(this.castFrom, this.castTo, k); bob.y = this.castFrom.y * (1 - k) + pond.surface * k + Math.sin(k * Math.PI) * CAST.arc; float = null;
+    } else if (this.phase === 'wait' || this.phase === 'approach' || this.phase === 'nibble') {
       bob.x += (this.castTo.x - bob.x) * Math.min(1, dt * 3); bob.z += (this.castTo.z - bob.z) * Math.min(1, dt * 3);
-      if (!this.interest) this.attract();
-      if (this.dip > 0) { this.dip -= dt; float -= Math.sin((1 - this.dip / .25) * Math.PI) * .07; }
+      if (this.dip > 0) { this.dip -= dt; float -= Math.sin((1 - Math.max(0, this.dip) / .25) * Math.PI) * .07; }
+      this.drawSuitor(dt, sim);
     } else if (this.phase === 'bite') {
       float = pond.surface - .22 + Math.sin(time * 25) * .03;
       bob.x += Math.sin(time * 9) * dt * .4; bob.z += Math.cos(time * 7) * dt * .4;
       if (Math.random() < dt * 25) this.fx.burst(bob, { n: 1, color: '#ffffff', size: .06, speed: 1.5, up: 2, y: .05 });
-    } else if (this.phase === 'fight') { this.updateFight(dt, time, sim, player); float = null; }
+      this.drawSuitor(dt, sim);
+    } else if (this.phase === 'hooked') { this.updateFight(dt, time, sim, player); float = null; }
     if (float !== null) bob.y += (float - bob.y) * Math.min(1, dt * 12);
     this.bobber.rotation.z = Math.sin(time * 3) * .1;
-    this.drawLine(time, rodTip, this.phase === 'fight' ? sim.tension : 0);
+    this.drawLine(time, rodTip, this.phase === 'hooked' ? sim.tension : 0);
   }
 
-  private enter(phase: string, sim: FishingSimulation) {
+  private enter(phase: string) {
     const pond = this.pond!, bob = this.bobber.position;
     if (this.phase === 'cast' && phase !== 'cast') {
       this.fx.ring(this.castTo, { color: '#ffffff', from: .2, to: 1.2, life: .6, y: pond.surface + .01 });
       this.fx.burst(this.castTo, { n: 8, color: ['#ffffff', '#bfe9ff'], speed: 2, up: 3, size: .07, y: 0 }); this.sound('pop');
     }
     if (phase === 'bite') {
-      this.fx.ring(bob, { color: '#ffffff', from: .2, to: 1, life: .45, y: pond.surface + .01 });
+      this.fx.ring(bob, { color: '#ffffff', from: .3, to: 1.5, life: .5, y: pond.surface + .01 });
       this.fx.burst(bob, { n: 10, color: ['#ffffff', '#bfe9ff'], glow: true, speed: 3, up: 4, y: 0 }); this.sound('splash');
+      if (this.interest) this.interest.state = 'bite';
     }
-    if (phase === 'fight') {
-      if (!this.interest) this.attract();
+    if (phase === 'hooked') {
       if (this.interest) this.interest.state = 'hooked';
       this.fx.burst(bob, { n: 12, color: ['#ffffff', '#bfe9ff'], glow: true, speed: 3, up: 4, y: 0 }); this.fx.shake(.2);
     }
-    this.phase = phase; this.t = 0; void sim;
+    this.phase = phase; this.t = 0;
   }
 
-  /** Pick the fish that will take the bait: one of the chosen species if it lives here. */
-  private attract() {
-    const pond = this.pond!;
-    const same = this.fish.filter(f => f.pond === pond && f.state === 'swim' && f.species === this.species);
-    const fish = same.length && Math.random() < .6 ? same[Math.floor(Math.random() * same.length)] : this.addFish(pond, this.species, true);
-    fish.state = 'approach'; fish.t = 0; this.interest = fish;
+  /** The fish the simulation sent: it swims in to the distance the simulation says, darts at the bobber on each nibble, and grabs it on the bite. */
+  private drawSuitor(dt: number, sim: FishingState) {
+    const fish = this.interest; if (!fish || fish.state === 'flee' || fish.state === 'swim') return;
+    const p = fish.obj.position, bob = this.bobber.position, pond = fish.pond;
+    if (this.phase === 'approach') fish.state = 'approach'; else if (this.phase === 'nibble') fish.state = 'nibble';
+    const face = Math.atan2(bob.x - p.x, bob.z - p.z);
+    fish.heading = turn(fish.heading, face, dt * (fish.state === 'approach' ? 4 : 6));
+    if (fish.state === 'bite') {
+      p.x += (bob.x - p.x) * Math.min(1, dt * 10); p.z += (bob.z - p.z) * Math.min(1, dt * 10); p.y = pond.surface - fish.depth - .1;
+      fish.heading += Math.sin(this.clock * 20) * dt * 3;
+    } else {
+      // Nibbling: hold 0.5 m off, then dart in 0.32 m and back over 0.3 s (the reference's dart).
+      const away = fish.state === 'nibble' ? .5 - (sim.dart > 0 ? Math.sin((1 - sim.dart / .3) * Math.PI) * .32 : 0) : sim.fishDistance;
+      const dx = p.x - bob.x, dz = p.z - bob.z, d = Math.hypot(dx, dz) || 1;
+      const goal = this.inside(pond, bob.x + dx / d * away, bob.z + dz / d * away, .95), k = Math.min(1, dt * (sim.dart > 0 ? 30 : 8));
+      p.x += (goal.x - p.x) * k; p.z += (goal.z - p.z) * k;
+      p.y = pond.surface - fish.depth + Math.sin(this.clock * 1.3 + fish.wig) * .012;
+    }
+    fish.obj.rotation.y = fish.heading;
+    if (fish.tail) fish.tail.rotation.y = Math.sin(this.clock * (fish.state === 'bite' ? 22 : 10) + fish.wig) * fish.wag;
   }
 
-  private updateFight(dt: number, time: number, sim: FishingSimulation, player: T.Vector3) {
+  private updateFight(dt: number, time: number, sim: FishingState, player: T.Vector3) {
     const fish = this.interest; if (!fish) return;
     const pond = this.pond!, surging = sim.surge > 0, p = fish.obj.position;
     const shore = this.scratch.set(player.x, 0, player.z).lerp(this.castTo, .18);
@@ -283,7 +313,7 @@ export class FishingView {
     p.x += (goal.x - p.x) * Math.min(1, dt * 6); p.z += (goal.z - p.z) * Math.min(1, dt * 6);
     p.y = pond.surface - fish.depth + (surging ? Math.abs(Math.sin(time * 9)) * .3 : 0);
     fish.heading = Math.atan2(this.castTo.x - shore.x, this.castTo.z - shore.z) + Math.sin(time * 12) * .5;
-    fish.obj.rotation.y = fish.heading;
+    fish.obj.rotation.y = fish.heading; fish.obj.rotation.z = Math.sin(time * 18) * .4;
     if (fish.tail) fish.tail.rotation.y = Math.sin(time * 26 + fish.wig) * Math.min(.6, fish.wag * 1.2);
     this.bobber.position.set(p.x, pond.surface - .05, p.z);
     if (surging && Math.random() < dt * 30) this.fx.burst(p, { n: 1, color: ['#ffffff', '#bfe9ff'], size: .09, speed: 2.5, up: 4, y: .3 });
@@ -291,38 +321,37 @@ export class FishingView {
     if (Math.random() < dt * 3) this.sound('reel');
   }
 
+  /** Now and then a swimming fish nudges the surface: a faint ring, so still water looks alive. Pooled rings, nearby ponds only. */
+  private ambientRipples(player: T.Vector3) {
+    for (const fish of this.fish) {
+      const pond = fish.pond; if (Math.hypot(player.x - pond.x, player.z - pond.z) > 26 + pond.rx) continue;
+      const next = this.ripples.get(pond) ?? this.clock + between(.5, 2.5);
+      if (next > this.clock) { this.ripples.set(pond, next); continue; }
+      if (fish.state === 'swim' && fish.obj.visible) this.fx.ring(fish.obj.position, { color: '#ffffff', from: .12, to: .7, life: 1.1, y: pond.surface + .012, thick: .12, opacity: .25 });
+      this.ripples.set(pond, this.clock + between(1.2, 3.2) / Math.max(1, this.fish.filter(f => f.pond === pond).length / 3));
+    }
+  }
+
   private updateFish(fish: Swimmer, dt: number, time: number, near: boolean) {
     fish.obj.visible = near;
     if (!near && fish.state === 'swim') return;
-    if (fish.state === 'hooked') return;
-    fish.t += dt;
-    const p = fish.obj.position, bob = this.bobber.position;
-    let goal: { x: number; z: number } | null = null, speed = fish.speed;
+    // The suitor and the hooked fish are moved by drawSuitor and updateFight.
+    if (fish.state !== 'swim' && fish.state !== 'flee') { if (!this.active || fish !== this.interest) { fish.state = 'swim'; fish.goal = null; } return; }
+    fish.t += dt; fish.obj.rotation.z = 0;
+    const p = fish.obj.position;
+    let goal: { x: number; z: number }, speed = fish.speed;
     if (fish.state === 'swim') {
       if (!fish.goal || Math.hypot(fish.goal.x - p.x, fish.goal.z - p.z) < .3 || fish.t > 8) {
         const a = Math.random() * 6.28, r = Math.random() * .8; fish.goal = this.inside(fish.pond, fish.pond.x + Math.cos(a) * fish.pond.rx * r, fish.pond.z + Math.sin(a) * fish.pond.rz * r); fish.t = 0;
       }
       goal = fish.goal;
-    } else if (fish.state === 'flee') {
+    } else {
       goal = { x: p.x + Math.sin(fish.heading) * 2, z: p.z + Math.cos(fish.heading) * 2 };
       if (fish.t > 1.4) { fish.state = 'swim'; fish.speed = between(.5, 1.1); fish.goal = null; }
-    } else {
-      const distance = Math.hypot(bob.x - p.x, bob.z - p.z);
-      speed = distance > 2 ? 1.1 : .45;
-      if (distance > .55 && fish.dart <= 0) goal = { x: bob.x, z: bob.z };
-      else fish.heading = turn(fish.heading, Math.atan2(bob.x - p.x, bob.z - p.z), dt * 5);
-      if (fish.dart > 0) {
-        // A nibble: dart in, tap the bobber, back off.
-        fish.dart -= dt; const k = Math.sin((1 - fish.dart / .3) * Math.PI);
-        p.x = bob.x - Math.sin(fish.heading) * (.5 - k * .32); p.z = bob.z - Math.cos(fish.heading) * (.5 - k * .32);
-        if (fish.dart < .15 && this.dip <= 0) { this.dip = .25; this.fx.ring(bob, { color: '#ffffff', from: .15, to: .5, life: .35, y: fish.pond.surface + .01, opacity: .6 }); }
-      }
     }
-    if (goal) {
-      fish.heading = turn(fish.heading, Math.atan2(goal.x - p.x, goal.z - p.z), dt * 3);
-      const next = this.inside(fish.pond, p.x + Math.sin(fish.heading) * speed * dt, p.z + Math.cos(fish.heading) * speed * dt);
-      p.x = next.x; p.z = next.z;
-    }
+    fish.heading = turn(fish.heading, Math.atan2(goal.x - p.x, goal.z - p.z), dt * 3);
+    const next = this.inside(fish.pond, p.x + Math.sin(fish.heading) * speed * dt, p.z + Math.cos(fish.heading) * speed * dt);
+    p.x = next.x; p.z = next.z;
     p.y = fish.pond.surface - fish.depth + Math.sin(time * 1.3 + fish.wig) * .012;
     fish.obj.rotation.y = fish.heading;
     if (fish.tail) fish.tail.rotation.y = Math.sin(time * (fish.state === 'flee' ? 22 : 9) + fish.wig) * fish.wag;
@@ -340,7 +369,7 @@ export class FishingView {
 
   /** A sagging line while waiting; taut, reddening and trembling with tension while reeling. */
   private drawLine(time: number, tip: T.Vector3, tension: number) {
-    const bob = this.bobber.position, hooked = this.phase === 'fight', sag = hooked ? .05 : .5, tremble = hooked ? tension * .06 : 0;
+    const bob = this.bobber.position, hooked = this.phase === 'hooked', sag = hooked ? .05 : .5, tremble = hooked ? tension * .06 : 0;
     for (let i = 0; i < this.segments; i++) {
       const s = i / (this.segments - 1);
       this.linePositions[i * 3] = tip.x + (bob.x - tip.x) * s;
