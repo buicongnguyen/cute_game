@@ -32,6 +32,7 @@ export const KIT_FILES = {
   worldsBright: `${assetBase}assets/models/worlds-bright.glb`,
   worldsHarsh: `${assetBase}assets/models/worlds-harsh.glb`,
   farm: `${assetBase}assets/models/farm.glb`,
+  creatures: `${assetBase}assets/models/creatures.glb`,
 } as const;
 export const HERO_FILE = `${assetBase}assets/models/hero.glb`;
 

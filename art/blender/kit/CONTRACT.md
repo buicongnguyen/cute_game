@@ -754,3 +754,24 @@ and glTF) and material colours. `--render` writes:
 - `farm-icons.webp`: the icon sheet.
 
 `--debug DIR` adds close-ups of every piece.
+
+## Creatures (`build_creatures.py` → `creatures.glb`)
+
+`public/assets/models/creatures.glb` redraws the wild creatures (src/enemy-types.ts) with believable anatomy in the
+toon style; `src/creature-art.ts` loads it the first time a creature spawns and re-dresses creatures that spawned
+before it arrived. Creatures it lacks, and every creature while it is missing, keep the procedural shapes.
+
+- One root node per creature, named its `ENEMY_TYPES` id, at the origin. One child per part, `<id>_<part>`; the
+  child's translation is the part's hinge (glTF), its vertices relative to it, no rotation. Right parts (`_fr`,
+  `_br`, `_r`) are on +X.
+- Parts match the old family's animated parts, so draws do not grow: legged `body, leg_fl, leg_fr, leg_bl, leg_br`
+  (crab legs hold two legs each), winged `body, wing_l, wing_r`, solid `body`. The game merges each part into one
+  vertex-coloured mesh and names the hinges `leg0` (back left) … `leg3`, `wing-l`, `wing-r`.
+- Heights stay within 20 % of the old shapes (before `enemyScale`; bosses are drawn 1.85x). Budgets: 2,500
+  triangles per common creature, 5,000 per boss. Flat colours named `Creature <name>`, single sided, no textures.
+- Positions and normals are quantised (`KHR_mesh_quantization`, int16 / int8; each part node carries the
+  dequantising scale), about 855 KB for 26 creatures (limit 900 KB).
+
+Redrawn: mushroom, mushking, boar, bee, wolf, frog, crab, chomper, cactus, bear, treant, croc, gummy, jelly,
+snowball, penguin, icebloom, magmaslime, minislime, firelizard, magmacrab, chameleon, flytrap, cloudsheep, yeti,
+mammoth. Previews: `art/previews/kit/creatures.webp`, `creatures-planets.webp`, `creatures-poses.webp`.

@@ -16,6 +16,7 @@ import { CropCards, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from
 import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
+import { creatureKit, creatureArt, adoptCreatureModel } from './creature-art.ts';
 import type { RoamArea } from './farm-roam.ts';
 import { STARTING_PLOTS, MAX_EXTRA_PLOTS } from './content.ts';
 import { approach, blocked, clearSegment, findRoute, nearbyObstacles, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
@@ -734,13 +735,28 @@ export class World {
     if(def.boss){g.scale.setScalar(1.85);g.add(cyl('#ffda5a',.36,.3,.28,0,2.1,0,5));}
     return g;
   }
+  /** A creature's drawn model: its creatures.glb art once that has loaded (creature-art.ts), else the procedural shapes. */
+  private enemyModel(type:string,def:EnemyDefinition){
+    if(!creatureKit.requested&&typeof document!=='undefined')void creatureKit.load().then(()=>{if(creatureKit.ready)this.restyleCreatures();});
+    const art=creatureArt(type);
+    // Plain body parts become one or two meshes; named parts (legs, wings, shell) keep animating on their own.
+    const model=art??bakeModel(this.speciesModel(def),{deep:false,keep:o=>!!o.name}),flash:LitMaterial[]=[];
+    model.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;model.userData.creatureArt=!!art;model.scale.setScalar(enemyScale(type,def.boss));addOutlines(model);showOutlines(model,false);
+    return model;
+  }
+  /** Re-dresses creatures that spawned before creatures.glb arrived; each keeps its entity, pose and fight state. */
+  restyleCreatures(){
+    for(const e of this.enemies??[]){
+      if(e.mesh.userData.creatureArt||!e.type||!e.definition)continue;
+      const model=this.enemyModel(e.type,e.definition);
+      if(model.userData.creatureArt){adoptCreatureModel(e.mesh,model,old=>this.disposeTree(old));e.flashLit=false;}else this.disposeTree(model);
+    }
+  }
   spawnSpecies(type:string,x:number,z:number,index:number){
     const def=ENEMY_TYPES[type];if(!def)return null;
     const zone=this.planet==='home'?zoneAt({x,z}):this.planet,difficulty=({home:0,forest:1,meadow:1,swamp:2,canyon:3,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,cloud:5,shadow:6} as Record<string,number>)[zone],scale=[1,1,1.7,2.6,3.6,4.8,6.2][difficulty];
     const health=Math.round(def.hp*scale*(def.boss&&type!=='dragon'?2.6:1)),damage=def.damage*scale*(def.boss?1.35:1),xp=Math.round(def.xp*(.6+scale*.4));
-    // Plain body parts become one or two meshes; named parts (legs, wings, shell) keep animating on their own.
-    const model=bakeModel(this.speciesModel(def),{deep:false,keep:o=>!!o.name}),flash:LitMaterial[]=[];
-    model.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;model.scale.setScalar(enemyScale(type,def.boss));addOutlines(model);showOutlines(model,false);
+    const model=this.enemyModel(type,def);
     const e=this.addEntity('enemy',def.name,def.boss?'👑':'⚔️',model,x,z,def.radius,index) as Enemy;
     Object.assign(e,{type,definition:def,hp:health,maxHp:health,baseMaxHp:health,baseDamage:damage,damage,xp,level:difficulty*3-2+(def.boss?6:0),homeX:x,homeZ:z,cooldown:0,respawn:0,boss:def.boss,stun:0,phase:'idle',phaseTime:0,route:[],routeTime:0,lift:0,liftVelocity:0,statuses:{}});this.enemies.push(e);return e;
   }
