@@ -231,7 +231,8 @@ export function rollLoot(type: string, luck = 0, rng: () => number = Math.random
     if (rng() < Math.min(1, chance * (chance < .5 ? 1 + Math.max(0, luck) : 1)))
         loot.push({ id, count: min + Math.min(max - min, Math.floor(rng() * (max - min + 1))) });
 } return loot; }
-export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random) { gainXp(s, xp); const loot = rollLoot(type, activeStats(s).luck, rng); for (const item of loot)
+/** bank=false leaves the loot out of the bag: the game tosses it onto the ground instead (drops.ts). */
+export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true) { gainXp(s, xp); const loot = rollLoot(type, activeStats(s).luck, rng); if (bank) for (const item of loot)
     addItem(s, item.id, item.count); recordEvent(s, 'kill', 1, type); if (boss)
     recordEvent(s, 'boss', 1, type); return loot; }
 export function chooseFish(s: SaveState, water: string = s.planet, rng: () => number = Math.random) { const choices = FISH_WEIGHTS[water] || FISH_WEIGHTS.home, luck = activeStats(s).luck, weighted = choices.map(([id, weight]) => [id, weight * (ITEMS[id].legend ? 1 + luck * 1.5 : ITEMS[id].rare ? 1 + luck : 1)] as const); let draw = rng() * weighted.reduce((sum, [, w]) => sum + w, 0); for (const [id, weight] of weighted) {

@@ -27,6 +27,7 @@ import { initPlatform } from './platform.ts';
 import { Sfx, type Sound } from './sfx.ts';
 import { loadGraphics, saveGraphics, QUALITY, type QualitySetting } from './graphics.ts';
 import { frameSteps } from './frame-steps.ts';
+import { createDrops } from './drops-view.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 const esc = (value: string) => value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
@@ -439,14 +440,20 @@ world.onInteract=(e)=>{
   else if(e.kind==='mine'){const index=e.index;if(index===undefined||!M.mineAvailable(state,state.planet,index)){toast('This crystal needs a moment to regrow.','💎');return;}if(!change(()=>M.claimMine(state,index)))return;world.burst(e.x,e.z,'#d9c9f3');toast('A crystal for your crafting collection!','💎');}
   else if(e.kind==='gift'){if(e.index===undefined)return;const outcome=change(()=>M.claimGift(state,e.index!));if(!outcome)return;e.mesh.visible=false;if(outcome.kind==='bomb'){for(const target of world.enemies)if(target.hp>0&&Math.hypot(target.x-e.x,target.z-e.z)<(outcome.radius??4.5))hit(target,Math.round(M.attack(state)*(outcome.damageMultiplier??3)));world.burst(e.x,e.z,'#ffb269',28);checkDefeat();}toast(outcome.label,'🎁');}
 };
+// Loot lands on the ground (drops.ts) and reaches the bag through the pickup magnet, with a '+n name' float.
+const drops=createDrops(world,{layer:$('#world-labels'),alive:()=>state.hp>0,item:id=>Object.hasOwn(M.ITEMS,id)?M.ITEMS[id]:undefined,
+  iconUrl:id=>M.ITEMS[id]?.type==='decor'?decorIcon(id)||null:`${ICON_BASE}${Object.hasOwn(M.CROPS,id)?'crops':Object.hasOwn(M.FISH,id)?'fish':'items'}/${id}.webp`,
+  canAdd:(id,n)=>Number.isSafeInteger((state.bag[id]??0)+n),onPick:(d,stack)=>{if(!change(()=>M.addItem(state,d.item,d.count)))return;floating(`+${d.count} ${M.ITEMS[d.item].name}`,world.position.x,world.position.z,'item',stack*.7);tone('coin');},
+  onFull:()=>toast('Your backpack is full. Store or sell something first.','🎒'),onRare:(d,name)=>{floating(`${d.rarity==='legendary'?'👑':'✨'} ${name}`,d.x,d.z,'item');tone('level');},onExpire:d=>world.burst(d.x,d.z,'#cfd6e6',6)});
+frameListeners.add(dt=>drops.update(dt));
 function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string;x?:number;z?:number}){
-  const loot=change(()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss));
-  // Experience flies in as cyan orbs; loot pops up above the creature, one line at a time.
+  const loot=change(()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss,Math.random,false));
+  // Experience flies in as cyan orbs; the loot is tossed onto the ground where the creature fell.
   const x=e.x??world.position.x,z=e.z??world.position.z;
   world.fx?.orbs({x,z},Math.min(8,3+Math.floor(e.xp/20)),'#7ff0ff',()=>world.position,()=>tone('coin'));
   floating(`+${e.xp} EXP`,x,z,'xp',.5);
-  // Loot merges into one line; the drops module may swap lootText for ground pickups.
-  const lootLine=lootText(loot.map(item=>({icon:M.ITEMS[item.id]?.icon??'✨',name:M.ITEMS[item.id]?.name??item.id,count:item.count})));if(lootLine)setTimeout(()=>floating(lootLine,x,z,'item',1),300);
+  // Loot lands on the ground (drops.ts); picking it up shows the +n float.
+  drops.spawnLoot(loot,x,z);
   if(e.boss){toast(`${e.name??'Boss'} defeated!`,'👑');tone('level');}
 }
 function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=false){
@@ -725,4 +732,4 @@ requestAnimationFrame(frame);
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView}});
+if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,drops,get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView}});
