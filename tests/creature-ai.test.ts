@@ -106,3 +106,12 @@ test('fifty aggro creatures around the explorer outside the forest gate cost und
   assert.ok(awake.filter(e=>e.phase!=='idle').length>=45,'the creatures are fighting, not resting');
   assert.ok(best<1,`median step ${best.toFixed(3)} ms`);
 });
+
+test('a minute in the home forest never stalls on a calm wanderer searching for a route',()=>{
+  // At this spot a boar whose wander goal lies past a fence used to run a whole-map A* search every
+  // 25 s, a stall of most of a second. Calm wanderers no longer search, and walking home has a budget.
+  const w=world();w.build('home');w.position.set(-30.88,0,9.2);
+  let worst=0,at=0;
+  for(let i=0;i<2400;i++){const t=performance.now();step(w);const spent=performance.now()-t;if(spent>worst){worst=spent;at=i*.025;}}
+  assert.ok(worst<200,`the slowest step took ${worst.toFixed(1)} ms at ${at.toFixed(2)} s`);
+});

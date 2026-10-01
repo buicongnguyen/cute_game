@@ -1,7 +1,7 @@
 import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
 import { buildScatter, disposeScatter } from './scatter.ts';
 import { buildGround } from './ground.ts';
-import { ignoreRetarget, nearRay, pickCircle, pickInScreen, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
+import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
@@ -71,6 +71,8 @@ function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 
 export const HERO_SCALE = .84;
 // Creature AI level of detail, as in the reference: calm creatures farther than this from every explorer do not think.
 const AI_REST_RANGE=48,EXPLORER_RADIUS=.45;
+/** A* steps for a creature walking home (about a 35 m square of 1 m cells): enough around fences and ponds, never a long stall. */
+const ROUTE_BUDGET=1200,heightBox=new T.Box3();
 /** A fixed 0-3 slot per creature id, so throttled creatures think on different steps. */
 function aiSlot(id:string){let h=0;for(let i=0;i<id.length;i++)h=h*31+id.charCodeAt(i)|0;return (h>>>0)%4;}
 function anyStatus(statuses:Record<string,number>|undefined){if(statuses)for(const key in statuses)if(statuses[key]>0)return true;return false;}
@@ -687,21 +689,38 @@ export class World {
     this.selected=null;this.ring.visible=false;this.walkTo(point.x,point.z);
   }
   /** Hold-to-steer, throttled to every 0.2 s by GroundGestures: a new path only when the target really moves. */
-  steer(clientX:number,clientY:number) {const point=this.groundPoint(clientX,clientY);if(point&&!ignoreRetarget(point,this.selected?null:this.destination,this.position,true))this.walkTo(point.x,point.z);}
+  steer(clientX:number,clientY:number) {
+    const point=this.groundPoint(clientX,clientY);if(!point)return;
+    // A finger resting on the explorer stops it (a chase too), unless it is just arriving under the finger.
+    if(holdsHero(point,this.position)){if(!this.selected&&ignoreRetarget(point,this.destination,this.position,false))return;this.selected=null;this.ring.visible=false;this.destination=null;this.route=[];this.marker.visible=false;return;}
+    if(!ignoreRetarget(point,this.selected?null:this.destination,this.position,true))this.walkTo(point.x,point.z);
+  }
   /** What a tap at this pixel picks: the reference's screen-space circles, then a raycast over the few entities near the tap ray. */
   pickEntity(clientX:number,clientY:number):Entity|null {
     const scale=pickScale(innerHeight,this.zoom),circles:Array<PickCircle&{entity:Entity}>=[];
-    for(const e of this.entities)if(!RAYCAST_ONLY.has(e.kind)&&this.validTarget(e)){const c=pickCircle(e.kind,e.radius,(e as Enemy).boss);circles.push({x:e.x,y:e.mesh.position.y+c.h,z:e.z,radius:c.r*scale,entity:e});}
-    const picked=pickInScreen(circles,this.camera,innerWidth,innerHeight,clientX,clientY);if(picked)return picked.entity;
-    // Fallback for the cottage, ponds and tall parts outside a circle: only meshes near the tap ray, never the whole scene.
-    // A creature's warning ring is ground the explorer is stepping out of, not part of the creature.
+    for(const e of this.entities)if(!RAYCAST_ONLY.has(e.kind)&&this.validTarget(e)){const c=pickCircle(e.kind,e.radius,(e as Enemy).boss,e.kind==='enemy'?this.modelHeight(e):0);circles.push({x:e.x,y:e.mesh.position.y+c.h,z:e.z,radius:c.r*scale,entity:e});}
+    const held=circlesAt(circles,this.camera,innerWidth,innerHeight,clientX,clientY);
     this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);
+    // Circles of a pack overlap: when several hold the tap, a real body under the finger beats the deepest circle.
+    if(held.length>1)return this.raycastEntity(held.map(c=>c.entity.mesh))??held[0].entity;
+    if(held.length)return held[0].entity;
+    // Fallback for the cottage, ponds and tall parts outside a circle: only meshes near the tap ray, never the whole scene.
     const near=this.entities.filter(e=>this.validTarget(e)&&nearRay(this.raycaster.ray,e.x,e.mesh.position.y,e.z,e.radius)).map(e=>e.mesh);
-    for(const hit of near.length?this.raycaster.intersectObjects(near,true):[]){if(hit.object.name==='attack-telegraph')continue;let obj:T.Object3D|null=hit.object;let entity:Entity|undefined,visible=true;
+    return near.length?this.raycastEntity(near):null;
+  }
+  /** The nearest visible entity the raycaster's ray hits among these meshes. A creature's warning ring is ground the explorer is stepping out of, not part of the creature. */
+  private raycastEntity(meshes:T.Object3D[]):Entity|null {
+    for(const hit of this.raycaster.intersectObjects(meshes,true)){if(hit.object.name==='attack-telegraph')continue;let obj:T.Object3D|null=hit.object;let entity:Entity|undefined,visible=true;
       while(obj){if(!obj.visible)visible=false;if(obj.userData.entity)entity=obj.userData.entity;obj=obj.parent;}
       if(visible&&entity&&this.validTarget(entity))return entity;
     }
     return null;
+  }
+  /** A creature's model height, measured once per model (a refined model replaces the placeholder later). */
+  private modelHeight(e:Entity) {
+    const data=e.mesh.userData,asset=data.refinedAsset??null;
+    if(data.pickHeight===undefined||data.pickHeightAsset!==asset){const box=heightBox.setFromObject(e.mesh);data.pickHeight=Number.isFinite(box.max.y)?Math.max(0,box.max.y-e.mesh.position.y):0;data.pickHeightAsset=asset;}
+    return data.pickHeight as number;
   }
   private validTarget(e:Entity) { return this.entities.includes(e)&&e.mesh.parent===this.root&&e.mesh.visible&&(e.kind!=='enemy'||(e as Enemy).hp>0); }
   private interactionRange(e:Entity) { return e.kind==='enemy'?attackRange(M.weaponStats(this.state),e.radius):e.radius+1.45; }
@@ -844,10 +863,11 @@ export class World {
     });
     living.forEach((e,i)=>{const x=push[i*2],z=push[i*2+1],d=Math.hypot(x,z),k=Math.min(1,e.radius/Math.max(d,1e-9));if(d>0)this.moveCreature(e,x*k,z*k);});
     // Nothing piles onto the explorer: creatures are pushed out of a circle around it. Only the creature moves, so
-    // walking and knockback feel the same, and a boss in the middle of a skill keeps its course and telegraphs.
+    // walking and knockback feel the same. A charge or a bat's dive runs through the explorer to the far side, and a boss
+    // in the middle of a skill keeps its course and telegraphs.
     const px=this.position.x,pz=this.position.z;
     for(const e of living){
-      if(!((e.definition?.speed??2.4)>0)||e.boss&&(e.phase==='windup'&&!!e.skill||e.phase==='charge'||e.phase==='bspin'))continue;
+      if(!((e.definition?.speed??2.4)>0)||e.phase==='charge'||e.boss&&(e.phase==='windup'&&!!e.skill||e.phase==='bspin'))continue;
       const dx=e.x-px,dz=e.z-pz,d=Math.hypot(dx,dz),minimum=EXPLORER_RADIUS+e.radius;if(d>=minimum)continue;
       const nx=d>.0001?dx/d:Math.sin(this.facing),nz=d>.0001?dz/d:Math.cos(this.facing);this.moveCreature(e,nx*(minimum-d+.002),nz*(minimum-d+.002));
     }
@@ -982,8 +1002,13 @@ export class World {
     const obstacles=this.creatureObstacles(),options=this.navigationOptions(e.radius,true);
     options.walkable=p=>this.creatureWalkable(e,p);
     this.resolveOverlap(e,obstacles,options.clearance!);
-    if(!clearSegment(e,goal,obstacles,options)){
-      if(!e.routeTime){e.routeTime=.7;const endpoint=approach(e,goal,0,obstacles,chasing?Math.max(.7,def.reach*.7):.3,options);e.route=endpoint?findRoute(e,endpoint,obstacles,options):[];}
+    // A calm wanderer never searches for a route: its goal drifts around home, so when the way is blocked it slides
+    // along what it can (moveCreature) or waits for the goal to come round. Walking home gets a small search budget,
+    // because a home behind a fence or water would otherwise make A* scan the whole map, a stall of most of a second.
+    const wandering=!chasing&&!returning;
+    if(wandering)e.route=[];
+    else if(!clearSegment(e,goal,obstacles,options)){
+      if(!e.routeTime){e.routeTime=.7;const endpoint=approach(e,goal,0,obstacles,chasing?Math.max(.7,def.reach*.7):.3,options);e.route=endpoint?findRoute(e,endpoint,obstacles,chasing?options:{...options,maxIterations:ROUTE_BUDGET}):[];}
       if(e.route?.length){if(Math.hypot(e.route[0].x-e.x,e.route[0].z-e.z)<.12)e.route.shift();if(e.route.length)goal=e.route[0];}
     }else e.route=[];
     const dx=goal.x-e.x,dz=goal.z-e.z,d=Math.hypot(dx,dz),speed=(chasing?def.speed:returning?def.speed*1.2:.6)*(e.boss&&e.hp<e.maxHp*.5?1.35:1)*(e.boss&&e.hp<e.maxHp*.3?1.25:1)*((e.bossStage??1)>=3?1.2:1)*((statuses.slow??0)>0?.45:1)*((statuses.sheep??0)>0?.45:1);

@@ -211,9 +211,15 @@ interface LabelCandidate {e:Entity;x:number;y:number;wy:number;back:number;html:
 const labelAnchors=new Map<string,{e:Entity;wy:number;back:number;anchor:string;width:number}>();
 // The portrait view is only about ±4.75 m wide, so labels near a side edge slide in rather than vanish.
 const labelX=(x:number,width:number)=>Math.min(innerWidth-4-width/2,Math.max(4+width/2,x));
+// Tall buildings near the explorer reach up behind the top HUD (player card, menu, quest tracker, minimap, boss bar), so their labels
+// slide down below whichever panel sits over them instead of hiding or sitting under it, like labelX at the sides.
+let hudPanels:{left:number;right:number;bottom:number}[]=[],labelPx=34;
+function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar').forEach(node=>{const r=node.getBoundingClientRect();if(r.height&&r.top<innerHeight/2)hudPanels.push({left:r.left,right:r.right,bottom:r.bottom});});}
+const labelLift=(anchor:string)=>labelPx*(anchor.includes('-100%')?1:anchor.includes('-75%')?.75:.5);
+function labelY(x:number,y:number,width:number,anchor:string){let top=12;for(const p of hudPanels)if(p.left<x+width/2+4&&x-width/2-4<p.right)top=Math.max(top,p.bottom+6);return Math.max(top+labelLift(anchor),y);}
 function updateLabels() {
   if(!started)return;
-  const candidates:LabelCandidate[]=[];
+  const candidates:LabelCandidate[]=[];measureHud();
   for(const e of world.entities){
     const distance=Math.hypot(e.x-world.position.x,e.z-world.position.z);
     let text=e.name,icon=e.icon,y:number,back=0,className='world-label',rank=2,reach=world.selected===e?30:11,anchor='translate(-50%,-100%)';
@@ -229,7 +235,7 @@ function updateLabels() {
       const enemy=e as Enemy;if(enemy.hp<=0||enemy.boss||(enemy.hp>=enemy.maxHp&&(enemy.phase??'idle')==='idle'&&world.selected!==enemy))continue;y=enemy.boss?4.5:2;className+=' enemy-label';rank=0;reach=10;
     }else y=labelHeight(e);
     if(distance>reach)continue;
-    const p=world.screen(e.x,y,e.z-back);if(!p.visible||p.y<70||p.y>innerHeight-70||p.x<0||p.x>innerWidth)continue;
+    const p=world.screen(e.x,y,e.z-back);if(!p.visible||p.y<-60||p.y>innerHeight-70||p.x<0||p.x>innerWidth)continue;
     const enemy=e.kind==='enemy'?e as Enemy:null;
     const html=enemy?`<span>${enemy.boss?'👑 ':''}${esc(text)}</span><i><b style="width:${enemy.hp/enemy.maxHp*100}%"></b></i>`:`<span>${icon}</span>${esc(text)}`;
     candidates.push({e,x:p.x,y:p.y,wy:y,back,html,className,aria:e.kind==='plot'?`${text||'Ready to harvest'} in garden bed ${e.index!+1}`:text,rank,distance,width:enemy?72:34+text.length*7.4,anchor});
@@ -238,14 +244,14 @@ function updateLabels() {
   candidates.sort((a,b)=>a.rank-b.rank||a.distance-b.distance);
   const placed:{left:number;right:number;top:number;bottom:number}[]=[],active=new Set<string>();
   for(const c of candidates){
-    const height=28,x=labelX(c.x,c.width),top=c.anchor.includes('-100%')?c.y-height:c.anchor.includes('-75%')?c.y-height*.75:c.y-height/2,box={left:x-c.width/2,right:x+c.width/2,top,bottom:top+height};
+    const height=labelPx,x=labelX(c.x,c.width),y=labelY(x,c.y,c.width,c.anchor),top=y-labelLift(c.anchor),box={left:x-c.width/2,right:x+c.width/2,top,bottom:top+height};
     if(placed.some(o=>o.left<box.right&&box.left<o.right&&o.top<box.bottom&&box.top<o.bottom))continue;
     placed.push(box);active.add(c.e.id);
     let label=labelNodes.get(c.e.id);
     if(!label){label=document.createElement('button');label.dataset.entity=c.e.id;labelNodes.set(c.e.id,label);$('#world-labels').append(label);}
     if(label.className!==c.className)label.className=c.className;
-    if(label.innerHTML!==c.html)label.innerHTML=c.html;label.setAttribute('aria-label',c.aria);
-    label.style.transform=`translate(${x.toFixed(1)}px,${c.y.toFixed(1)}px) ${c.anchor}`;label.hidden=!!modal;labelAnchors.set(c.e.id,{e:c.e,wy:c.wy,back:c.back,anchor:c.anchor,width:c.width});
+    if(label.innerHTML!==c.html){label.innerHTML=c.html;labelPx=label.offsetHeight||labelPx;}label.setAttribute('aria-label',c.aria);
+    label.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) ${c.anchor}`;label.hidden=!!modal;labelAnchors.set(c.e.id,{e:c.e,wy:c.wy,back:c.back,anchor:c.anchor,width:c.width});
   }
   for(const[id,node]of labelNodes)if(!active.has(id)){node.remove();labelNodes.delete(id);labelAnchors.delete(id);}
   const canvas=$<HTMLCanvasElement>('#minimap'),ctx=canvas.getContext('2d')!;ctx.clearRect(0,0,160,160);ctx.fillStyle=state.planet==='home'?'#72d04c':M.PLANETS[state.planet].color;ctx.fillRect(0,0,160,160);
@@ -258,7 +264,7 @@ function updateLabels() {
 /** Re-project visible labels after each render so they move in step with the camera instead of trailing it. */
 function positionLabels(){
   if(!started||modal)return;
-  for(const [id,a] of labelAnchors){const node=labelNodes.get(id);if(!node)continue;const p=world.screen(a.e.x,a.wy,a.e.z-a.back);node.style.transform=`translate(${labelX(p.x,a.width).toFixed(1)}px,${p.y.toFixed(1)}px) ${a.anchor}`;}
+  for(const [id,a] of labelAnchors){const node=labelNodes.get(id);if(!node)continue;const p=world.screen(a.e.x,a.wy,a.e.z-a.back),x=labelX(p.x,a.width);node.style.transform=`translate(${x.toFixed(1)}px,${labelY(x,p.y,a.width,a.anchor).toFixed(1)}px) ${a.anchor}`;}
 }
 /** Sparkles, the XP number and a few orbs flying into the bag when a crop comes up. */
 function harvestBurst(index:number,crop:M.CropId){

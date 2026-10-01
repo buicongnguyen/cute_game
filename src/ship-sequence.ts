@@ -70,8 +70,9 @@ export class ShipSequence {
         this.sound('level'); this.finish();
       }
     }
-    // Once landed, the camera goes back to the explorer.
-    if (this.phase) this.track(rocket);
+    // Once landed, the camera goes back to the explorer. The lift speeds up faster than the 5/s cut-scene
+    // follow can catch, so the camera rides with the ship instead of trailing it off the top of the screen.
+    if (this.phase) { this.track(rocket); if (this.phase === 'lift') this.world.cameraTarget.copy(this.focus); }
   }
 
   private finish() {

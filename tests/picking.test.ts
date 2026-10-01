@@ -47,13 +47,15 @@ test('pick circles use the reference radii, scaled by view height and zoom',()=>
   assert.equal(pickScale(450,900/57),.5);assert.equal(pickScale(900,2*900/57),.5);
 });
 
-test('a tap picks the nearest creature inside its pixel radius, without a raycast, and otherwise walks on the ground',()=>{
-  const w=world(),intersect=w.raycaster.intersectObjects.bind(w.raycaster);let raycasts=0;
-  w.raycaster.intersectObjects=((...a:Parameters<typeof intersect>)=>{raycasts++;return intersect(...a);}) as typeof intersect;
+test('a tap picks the nearest creature inside its pixel radius, raycasting only overlapping circles, and otherwise walks on the ground',()=>{
+  const w=world(),intersect=w.raycaster.intersectObjects.bind(w.raycaster);const raycasts:T.Object3D[][]=[];
+  w.raycaster.intersectObjects=((...a:Parameters<typeof intersect>)=>{raycasts.push(a[0]);return intersect(...a);}) as typeof intersect;
   w.spawnEnemy(-.18,0,0,'Far');w.spawnEnemy(.1,0,1,'Near');w.spawnEnemy(1.2,0,2,'Aside');w.root.updateMatrixWorld(true);
   w.pointer(400,300);assert.equal(w.selected?.name,'Near');
+  // Two circles hold this tap, so only those two bodies are raycast.
+  assert.equal(raycasts.length,1);assert.ok(raycasts[0].length===2&&w.enemies.slice(0,2).every(e=>raycasts[0].includes(e.mesh)),'just Near and Far');
   // Creature circles are 55 px x pickScale(600) = 27.6 px here: 0.15 m (20 px) from 'Aside' picks it.
-  w.pointer(400+1.35*PX,300);assert.equal(w.selected?.name,'Aside');assert.equal(raycasts,0,'creatures are picked in screen space');
+  w.pointer(400+1.35*PX,300);assert.equal(w.selected?.name,'Aside');assert.equal(raycasts.length,1,'a creature alone under the tap is picked in screen space');
   // Zoomed out (26.7 px per metre), the 27.6 px circle reaches past the 0.7 m body: a tap 0.9 m out still picks.
   const far=world(topDown(new T.OrthographicCamera(-15,15,15,-15,.1,40)));far.spawnEnemy(0,0,0,'Small');far.root.updateMatrixWorld(true);
   far.raycaster.setFromCamera(new T.Vector2(.9/15,0),far.camera);assert.equal(far.raycaster.intersectObject(far.enemies[0].mesh,true).length,0,'the ray misses the body');
@@ -109,4 +111,30 @@ test('a held pointer steers once the press becomes a hold, then re-targets at mo
   for(let i=1;i<walks.length;i++)assert.ok(walks[i].t-walks[i-1].t>=HOLD_RETARGET-1e-9,`walk ${i} came ${walks[i].t-walks[i-1].t} s after the last`);
   assert.ok(walks.length>=6&&walks.length<=7,`${walks.length} re-targets in 1.5 s`);
   assert.equal(walks.at(-1)!.x,Math.round(walks.at(-1)!.t*60),'each re-target follows the latest pointer position');
+});
+
+test('in a pack, a tap on a tall front creature\'s upper body picks it, not the creature behind it',()=>{
+  // The game's own view: a 40° lens 17 m up and 13.5 m back, looking down at the pack.
+  const camera=new T.PerspectiveCamera(40,800/600,.5,300);camera.position.set(0,17,13.5);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
+  const w=world(camera);w.position.set(0,0,6);
+  const creature=(name:string,x:number,z:number,height:number)=>{const g=new T.Group(),m=new T.Mesh(new T.BoxGeometry(1.2,height,1.2),new T.MeshBasicMaterial());m.position.y=height/2;g.add(m);const e=w.addEntity('enemy',name,'',g,x,z,.7);Object.assign(e,{hp:10,maxHp:10});return e;};
+  const front=creature('Bear',0,0,2.6),behind=creature('Frog',0,-1.5,.9);w.root.updateMatrixWorld(true);
+  const screen=(x:number,y:number,z:number)=>{const v=new T.Vector3(x,y,z).project(camera);return {x:(v.x+1)*400,y:(1-v.y)*300};};
+  // Upper chest and head of the bear: the frog's circle holds these taps too, and used to win them.
+  for(const y of [1.9,2.3]){const p=screen(0,y,.6);assert.equal(w.pickEntity(p.x,p.y)?.name,front.name,`a tap at ${y} m on the bear`);}
+  // The top of the frog peeking out behind the bear still picks the frog.
+  const frog=screen(0,.85,-1.5);assert.equal(w.pickEntity(frog.x,frog.y)?.name,behind.name);
+  // Tall creatures anchor their circle at half their model height.
+  const anchor=(w as unknown as {modelHeight(e:Entity):number}).modelHeight(front);assert.ok(Math.abs(anchor-2.6)<.01);
+  assert.deepEqual(pickCircle('enemy',.7,false,2.6),{h:1.3,r:55});assert.deepEqual(pickCircle('enemy',.7,false,1),{h:.6,r:55},'short ones keep the reference .6 m');
+});
+
+test('a finger held on the explorer stops a walk or a chase without a new path',()=>{
+  const w=world();w.pointer(400+2*PX,300);assert.ok(w.destination);
+  // The explorer stands at (0, 2.5): a hold on it ends the walk.
+  w.steer(400+.2*PX,550);assert.equal(w.destination,null);assert.deepEqual(w.route,[]);
+  w.spawnEnemy(-2,-2,0,'Target');w.root.updateMatrixWorld(true);w.select(w.enemies[0]);assert.ok(w.selected&&w.destination);
+  w.steer(400,550);assert.equal(w.selected,null,'the chase ends');assert.equal(w.destination,null);
+  // A walk ending under the finger is left to arrive.
+  w.position.set(1.5,0,2);w.walkTo(1.6,2.5);const destination=w.destination;w.steer(400+1.6*PX,550);assert.equal(w.destination,destination);
 });

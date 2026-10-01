@@ -30,9 +30,12 @@ export interface PickCircle {x:number;y:number;z:number;radius:number}
 /** The reference scales its pixel radii by view height / 900 / zoom (its portrait pull-back excluded, as here). */
 export function pickScale(viewHeight:number,zoom=21){return viewHeight/900*REFERENCE_SPAN/zoom;}
 
-/** Anchor height and unscaled pixel radius of an entity's circle; big creatures keep at least their own footprint. */
-export function pickCircle(kind:string,radius:number,boss=false):{h:number;r:number}{
-  if(kind==='enemy'){const c=boss?BOSS_CIRCLE:CREATURE_CIRCLE;return {h:c.h,r:Math.max(c.r,radius*NODE_PX_PER_METRE)};}
+/**
+ * Anchor height and unscaled pixel radius of an entity's circle; big creatures keep at least their own footprint and
+ * sit at half their model height (when known), so a tap on a tall creature's upper body lands in its own circle.
+ */
+export function pickCircle(kind:string,radius:number,boss=false,height=0):{h:number;r:number}{
+  if(kind==='enemy'){const c=boss?BOSS_CIRCLE:CREATURE_CIRCLE;return {h:Math.max(c.h,height/2),r:Math.max(c.r,radius*NODE_PX_PER_METRE)};}
   return PICK_CIRCLES[kind]??{h:NODE_ANCHOR,r:radius*NODE_PX_PER_METRE};
 }
 
@@ -42,12 +45,16 @@ const projected=new T.Vector3();
  * Vector3.project serves orthographic and perspective cameras alike; anchors behind the camera or past far are skipped.
  */
 export function pickInScreen<C extends PickCircle>(circles:Iterable<C>,camera:T.Camera,width:number,height:number,x:number,y:number):C|null{
-  let best:C|null=null,depth=0;
+  return circlesAt(circles,camera,width,height,x,y)[0]??null;
+}
+/** Every circle holding the tap, the most deeply held first. */
+export function circlesAt<C extends PickCircle>(circles:Iterable<C>,camera:T.Camera,width:number,height:number,x:number,y:number):C[]{
+  const held:Array<{c:C;d:number}>=[];
   for(const c of circles){
     projected.set(c.x,c.y,c.z).project(camera);if(projected.z<-1||projected.z>1)continue;
-    const d=Math.hypot((projected.x+1)*width/2-x,(1-projected.y)*height/2-y)-c.radius;if(d<depth){depth=d;best=c;}
+    const d=Math.hypot((projected.x+1)*width/2-x,(1-projected.y)*height/2-y)-c.radius;if(d<0)held.push({c,d});
   }
-  return best;
+  return held.sort((a,b)=>a.d-b.d).map(h=>h.c);
 }
 
 const base=new T.Vector3(),top=new T.Vector3();
@@ -56,6 +63,8 @@ export const PICK_HEIGHT=8;
 /** Whether the tap ray passes close enough to an entity's upright extent for its meshes to be worth an exact raycast. */
 export function nearRay(ray:T.Ray,x:number,y:number,z:number,radius:number){return ray.distanceSqToSegment(base.set(x,y,z),top.set(x,y+PICK_HEIGHT,z))<(radius+1.5)**2;}
 
+/** A held pointer this close to the explorer stops it: a chase or walk ends without a new path. */
+export function holdsHero(point:{x:number;z:number},hero:{x:number;z:number}){return Math.hypot(point.x-hero.x,point.z-hero.z)<HOLD_HERO_ZONE;}
 /** A move re-target that can be skipped: within .6 m of the current walk target or, while held, within .8 m of the explorer. */
 export function ignoreRetarget(point:{x:number;z:number},target:{x:number;z:number}|null,hero:{x:number;z:number},held:boolean){
   return !!target&&Math.hypot(point.x-target.x,point.z-target.z)<RETARGET_DEAD_ZONE||held&&Math.hypot(point.x-hero.x,point.z-hero.z)<HOLD_HERO_ZONE;

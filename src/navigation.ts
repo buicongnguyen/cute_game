@@ -1,6 +1,7 @@
 export interface Point { x: number; z: number }
 export interface Obstacle extends Point { r: number }
-export interface NavigationOptions {clearance?:number;bounds?:number;gridSize?:number;walkable?:(point:Point)=>boolean}
+/** maxIterations caps the A* search (default 50000), so a goal that cannot be reached costs a bounded amount of time. */
+export interface NavigationOptions {clearance?:number;bounds?:number;gridSize?:number;walkable?:(point:Point)=>boolean;maxIterations?:number}
 export const WORLD_BOUNDS=148;
 const CLEARANCE = .36;
 
@@ -82,7 +83,8 @@ export function findRoute(from: Point, target: Point, obstacles: Obstacle[],opti
     cost.set(key(point.x,point.z),g);push({...point,g,f:g+Math.hypot(point.x-target.x,point.z-target.z)});
   }
   let end='';
-  for(let iterations=0;open.length&&iterations<50000;iterations++){
+  const budget=options.maxIterations??50000;
+  for(let iterations=0;open.length&&iterations<budget;iterations++){
     const n=pop(),k=key(n.x,n.z);if(closed.has(k))continue;closed.add(k);
     // Being near the goal is insufficient: the final fractional segment must fit.
     if(Math.hypot(n.x-target.x,n.z-target.z)<1.5*grid&&clearSegment(n,target,obstacles,options)){end=k;break;}

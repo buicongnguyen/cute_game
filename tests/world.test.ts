@@ -213,8 +213,17 @@ test('dragon later-phase rain creates extra fire warnings that survive environme
 test('bat-type creatures orbit at five metres, then wind up and dive through the target',()=>{
   const w=world();w.environment=new EnvironmentSimulation(createEnvironmentLayout('home'));w.position.set(40,0,0);const bat=w.spawnSpecies('firebat',45,0,0)!;bat.cooldown=10;
   for(let i=0;i<120;i++)w.update(.025,true,false);assert.ok(Math.abs(bat.z)>1);assert.ok(Math.abs(Math.hypot(bat.x-40,bat.z)-5)<.2);
-  bat.cooldown=0;w.update(.025,true,false);assert.equal(bat.phase,'windup');let hits=0;w.onDamage=()=>hits++;
+  bat.cooldown=0;w.update(.025,true,false);assert.equal(bat.phase,'windup');let hits=0;w.onDamage=()=>hits++;const from={x:bat.x-40,z:bat.z};
   for(let i=0;i<70;i++)w.update(.025,true,false);assert.equal(hits,1);assert.ok(Math.hypot(bat.x-40,bat.z)>1);
+  // The dive is not stopped at the explorer's body: the bat ends well past it, on the far side.
+  const along=((bat.x-40)*from.x+bat.z*from.z)/Math.hypot(from.x,from.z);assert.ok(along<-3,`the bat ends ${along.toFixed(2)} m along its approach`);
+});
+
+test('a charging boar runs through the explorer and ends on the far side',()=>{
+  const w=world();w.environment=new EnvironmentSimulation(createEnvironmentLayout('home'));w.position.set(40,0,0);const boar=w.spawnSpecies('boar',46,0,0)!;let hits=0;w.onDamage=()=>hits++;
+  let from:{x:number;z:number}|null=null;for(let i=0;i<200&&!from;i++){w.update(.025,true,false);if(boar.phase==='charge')from={x:boar.x-40,z:boar.z};}
+  assert.ok(from,'the boar charges');for(let i=0;i<40&&boar.phase==='charge';i++)w.update(.025,true,false);
+  assert.equal(hits,1);const along=((boar.x-40)*from!.x+boar.z*from!.z)/Math.hypot(from!.x,from!.z);assert.ok(along<-2,`the boar ends ${along.toFixed(2)} m along its approach`);
 });
 
 test('creature separation untangles coincident enemies without moving rooted plants or crossing rocks',()=>{
