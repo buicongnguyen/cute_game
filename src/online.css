@@ -40,38 +40,40 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 16px 14px 20px;
+  padding: 7px 8px 7px 14px;
   background: linear-gradient(180deg, #efebff, #dcd3ff);
-  border-bottom: 3px solid #a996ff;
+  border-bottom: 2px solid #a996ff;
 }
-.social-header h2 { margin: 0; font-size: 22px; font-weight: 1000; color: #2e2468; }
+.social-header h2 { margin: 0; font-size: 17px; font-weight: 1000; color: #2e2468; }
 .social-dialog button {
-  min-height: 38px;
-  padding: 8px 14px;
+  position: relative;
+  min-height: 32px;
+  padding: 4px 12px;
   border: 2px solid #efe2c2;
-  border-radius: 14px;
+  border-radius: 11px;
   background: #fff;
   color: #2c3a26;
-  font: 900 14px 'Nunito Variable', sans-serif;
-  box-shadow: 0 3px 0 #e2cf9f;
+  font: 900 13px 'Nunito Variable', sans-serif;
+  box-shadow: 0 2px 0 #e2cf9f;
   cursor: pointer;
 }
 .social-dialog button:focus-visible,
 .social-dialog input:focus-visible { outline: 3px solid #29b1f2; outline-offset: 2px; }
 .social-dialog button:disabled { opacity: .55; cursor: wait; }
 .social-dialog .social-close {
-  width: 42px;
-  min-width: 42px;
-  height: 42px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
   padding: 0;
-  border: 3px solid #fff;
+  border: 2px solid #fff;
   border-radius: 50%;
   background: #2c3a26;
   color: #fff;
   font-size: 18px;
   box-shadow: 0 3px 0 rgba(0, 0, 0, .2);
 }
-.social-tabs { display: flex; gap: 6px; padding: 14px 20px 4px; }
+.social-tabs { display: flex; gap: 5px; padding: 8px 14px 2px; }
 .social-tabs button { flex: 1; border-radius: 999px; }
 .social-tabs button[aria-pressed=true] {
   border-color: #e39a0c;
@@ -79,23 +81,23 @@
   color: #4a3000;
   box-shadow: 0 3px 0 #e39a0c;
 }
-.social-content { display: grid; gap: 14px; padding: 12px 20px 22px; }
+.social-content { display: grid; gap: 8px; padding: 8px 14px 14px; }
 .social-content h3, .social-content p { margin: 0; }
-.social-content h3 { font-size: 16px; font-weight: 1000; }
-.social-notice { min-height: 0; margin: 10px 20px 0; padding: 8px 12px; border-radius: 12px; background: #fff4cc; font-size: 13px; color: #7a5200; }
+.social-content h3 { font-size: 14px; font-weight: 1000; }
+.social-notice { min-height: 0; margin: 8px 14px 0; padding: 8px 12px; border-radius: 12px; background: #fff4cc; font-size: 13px; color: #7a5200; }
 .social-notice:empty { display: none; }
-.social-intro { font-size: 15px; line-height: 1.55; }
-.social-small { font-size: 13px; line-height: 1.5; color: #56644d; }
+.social-intro { font-size: 13px; line-height: 1.4; }
+.social-small { font-size: 12px; line-height: 1.35; color: #56644d; }
 .social-field { display: grid; gap: 5px; font-size: 13px; font-weight: 900; }
-.social-auth { display: grid; gap: 12px; }
+.social-auth { display: grid; gap: 8px; }
 .social-dialog input {
   width: 100%;
   min-width: 0;
-  padding: 10px 12px;
-  border: 3px solid #efe2c2;
-  border-radius: 14px;
+  padding: 6px 10px;
+  border: 2px solid #efe2c2;
+  border-radius: 11px;
   background: #fff;
-  font: 800 15px 'Nunito Variable', sans-serif;
+  font: 800 14px 'Nunito Variable', sans-serif;
   color: inherit;
 }
 .social-dialog .social-primary {
@@ -113,17 +115,17 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 14px;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 12px;
   background: #fff;
   border: 2px solid #efe2c2;
-  font-size: 14px;
+  font-size: 13px;
 }
 .social-person > span:nth-child(2) { flex: 1; min-width: 130px; }
-.social-person button { min-height: 32px; padding: 5px 10px; font-size: 12.5px; }
-.social-avatar { font-size: 24px; }
-.social-roster { display: grid; gap: 6px; max-height: 160px; overflow: auto; }
+.social-person button { min-height: 28px; padding: 2px 9px; font-size: 12px; }
+.social-avatar { font-size: 20px; }
+.social-roster { display: grid; gap: 4px; max-height: 220px; overflow: auto; }
 .social-chat-log {
   min-height: 70px;
   max-height: 170px;
@@ -139,9 +141,17 @@
 @media (max-width: 620px) {
   .social-toggle { right: 10px; top: 88px; padding: 7px 10px; font-size: 12px; }
   .social-dialog { width: 100vw; max-width: 100vw; max-height: 92dvh; margin: auto auto 0; border-radius: 26px 26px 0 0; border-bottom: 0; }
-  .social-header { padding: 12px 12px 12px 16px; }
-  .social-header h2 { font-size: 19px; }
-  .social-tabs { padding: 12px 14px 2px; }
-  .social-content { padding: 10px 14px calc(20px + env(safe-area-inset-bottom, 0px)); }
+  .social-dialog { border-radius: 18px 18px 0 0; }
+  .social-header { padding: 6px 8px 6px 12px; }
+  .social-header h2 { font-size: 16px; }
+  .social-tabs { padding: 7px 10px 2px; }
+  .social-content { padding: 7px 10px calc(12px + env(safe-area-inset-bottom, 0px)); }
   .social-person > span:nth-child(2) { min-width: 100px; }
+}
+/* Touch: small buttons keep a 44 px tall hit area through an invisible ::before (menus.css does the same for panels). */
+@media (pointer: coarse) {
+  .social-dialog button::before { content: ''; position: absolute; left: 0; right: 0; top: min(0px, calc(50% - 22px)); bottom: min(0px, calc(50% - 22px)); }
+  .social-dialog .social-close::before { left: -5px; right: -5px; }
+  .social-auth { gap: 10px; }
+  .social-dialog .social-link { margin-top: 8px; }
 }
