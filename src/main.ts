@@ -99,7 +99,7 @@ const combat=new CombatSimulation({
   status:(target,kind,duration)=>{if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
   moveTarget:(target,x,z)=>{if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
 });
-const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(placement)return;const p=world.groundPoint(x,y);if(p)world.walkTo(p.x,p.z);},zoom:ratio=>{world.zoom=Math.max(13,Math.min(38,world.zoom*ratio));world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
+const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=Math.max(13,Math.min(38,world.zoom*ratio));world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 // Swings become additive slash trails and area skills become expanding rings with sparks.
 function showEffect(effect:CombatEffect){
   const fx=world.fx,at={x:effect.x,z:effect.z};

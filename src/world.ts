@@ -1,6 +1,7 @@
 import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
 import { buildScatter, disposeScatter } from './scatter.ts';
 import { buildGround } from './ground.ts';
+import { ignoreRetarget, nearRay, pickCircle, pickInScreen, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
@@ -659,14 +660,27 @@ export class World {
     const d=this.state.dropped;if(d&&d.planet===this.planet)this.addEntity('dropped','Your dropped backpack','🎒',group(ball('#dd94b6',.5,0,.5),cyl('#e5bad0',.17,.17,.25,0,1)),d.x,d.z,.8);
   }
   screen(x:number,y:number,z:number) { const v=new T.Vector3(x,y,z).project(this.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2,visible:v.z<1&&Math.abs(v.x)<1.3&&Math.abs(v.y)<1.3}; }
+  /** A tap: an entity picked in screen space (or by the short raycast fallback), else a walk unless it would change nothing. */
   pointer(clientX:number,clientY:number) {
+    const entity=this.pickEntity(clientX,clientY);if(entity){this.select(entity);return;}
+    const point=this.groundPoint(clientX,clientY);if(!point||ignoreRetarget(point,this.selected?null:this.destination,this.position,false))return;
+    this.selected=null;this.ring.visible=false;this.walkTo(point.x,point.z);
+  }
+  /** Hold-to-steer, throttled to every 0.2 s by GroundGestures: a new path only when the target really moves. */
+  steer(clientX:number,clientY:number) {const point=this.groundPoint(clientX,clientY);if(point&&!ignoreRetarget(point,this.selected?null:this.destination,this.position,true))this.walkTo(point.x,point.z);}
+  /** What a tap at this pixel picks: the reference's screen-space circles, then a raycast over the few entities near the tap ray. */
+  pickEntity(clientX:number,clientY:number):Entity|null {
+    const scale=pickScale(innerHeight,this.zoom),circles:Array<PickCircle&{entity:Entity}>=[];
+    for(const e of this.entities)if(!RAYCAST_ONLY.has(e.kind)&&this.validTarget(e)){const c=pickCircle(e.kind,e.radius,(e as Enemy).boss);circles.push({x:e.x,y:e.mesh.position.y+c.h,z:e.z,radius:c.r*scale,entity:e});}
+    const picked=pickInScreen(circles,this.camera,innerWidth,innerHeight,clientX,clientY);if(picked)return picked.entity;
+    // Fallback for the cottage, ponds and tall parts outside a circle: only meshes near the tap ray, never the whole scene.
     this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);
-    const hits=this.raycaster.intersectObjects(this.root.children,true);
-    for(const hit of hits){let obj:T.Object3D|null=hit.object;let entity:Entity|undefined,visible=true;
+    const near=this.entities.filter(e=>this.validTarget(e)&&nearRay(this.raycaster.ray,e.x,e.mesh.position.y,e.z,e.radius)).map(e=>e.mesh);
+    for(const hit of near.length?this.raycaster.intersectObjects(near,true):[]){let obj:T.Object3D|null=hit.object;let entity:Entity|undefined,visible=true;
       while(obj){if(!obj.visible)visible=false;if(obj.userData.entity)entity=obj.userData.entity;obj=obj.parent;}
-      if(visible&&entity&&this.validTarget(entity)){this.select(entity);return;}
+      if(visible&&entity&&this.validTarget(entity))return entity;
     }
-    const point=this.raycaster.ray.intersectPlane(new T.Plane(UP,0),new T.Vector3());if(point){this.selected=null;this.ring.visible=false;this.walkTo(point.x,point.z);}
+    return null;
   }
   private validTarget(e:Entity) { return this.entities.includes(e)&&e.mesh.parent===this.root&&e.mesh.visible&&(e.kind!=='enemy'||(e as Enemy).hp>0); }
   private interactionRange(e:Entity) { return e.kind==='enemy'?attackRange(M.weaponStats(this.state),e.radius):e.radius+1.45; }
