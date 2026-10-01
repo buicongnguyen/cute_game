@@ -6,7 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
 import type { QualityProfile } from './graphics.ts';
-import { approach, blocked, clearSegment, findRoute, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
+import { approach, blocked, clearSegment, findRoute, nearbyObstacles, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
 import { attackRange } from './combat.ts';
 import { type SaveState, type PlanetId, PLANETS, cropProgress, giftAvailable, maxHp } from './model.ts';
 import * as M from './model.ts';
@@ -22,6 +22,11 @@ export interface Entity { id: string; kind: string; name: string; icon: string; 
   pond?:{rx:number;rz:number;surface:number} }
 export interface Enemy extends Entity { hp: number; maxHp: number; damage: number; xp: number; homeX: number; homeZ: number; cooldown: number; respawn: number; boss: boolean; stun: number;type?:string;definition?:EnemyDefinition;phase?:string;phaseTime?:number;route?:Point[];routeTime?:number;lift?:number;liftVelocity?:number;statuses?:Record<string,number>;targetX?:number;targetZ?:number;bossStage?:number;attackCount?:number;skillCount?:number;skill?:BossSkill;telegraphs?:Array<{x:number;z:number;r:number;delay:number}>;skillEffects?:Array<{x:number;z:number;r:number;inner:number;remaining:number;multiplier:number}>;spinTick?:number;scaled?:boolean;baseMaxHp?:number;baseDamage?:number;level?:number;flash?:number;flashLit?:boolean;knockVX?:number;knockVZ?:number;dying?:number }
 interface Obstacle { x: number; z: number; r: number;tag?:string }
+/**
+ * AI level of detail: a resting creature does not think at all; a calm wanderer thinks on every 4th step (its slot)
+ * and is drawn gliding from (x, z), `age` steps after it last thought.
+ */
+export interface Enemy { resting?:boolean;lod?:{wait:number;age:number;x:number;z:number;slot:number} }
 export interface RemotePose {id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
 export interface EnemySnapshot {id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
@@ -56,6 +61,13 @@ function box(color: string, w: number, h: number, d: number, x = 0, y = 0, z = 0
 function cyl(color: string, top: number, bottom: number, h: number, x = 0, y = 0, z = 0, sides = 12) { return mesh(new T.CylinderGeometry(top, bottom, h, sides), color, x, y, z); }
 function group(...children: T.Object3D[]) { const g = new T.Group(); if(children.length)g.add(...children); return g; }
 function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 15, 1 | seed); seed ^= seed + Math.imul(seed ^ seed >>> 7, 61 | seed); return ((seed ^ seed >>> 14) >>> 0) / 4294967296; }; }
+// Creature AI level of detail, as in the reference: calm creatures farther than this from every explorer do not think.
+const AI_REST_RANGE=48,EXPLORER_RADIUS=.45;
+/** A fixed 0-3 slot per creature id, so throttled creatures think on different steps. */
+function aiSlot(id:string){let h=0;for(let i=0;i<id.length;i++)h=h*31+id.charCodeAt(i)|0;return (h>>>0)%4;}
+function anyStatus(statuses:Record<string,number>|undefined){if(statuses)for(const key in statuses)if(statuses[key]>0)return true;return false;}
+/** Same obstacles by value: the environment hands out a fresh list of moving obstacles every step. */
+function sameObstacles(a:Obstacle[],b:Obstacle[]){return a.length===b.length&&a.every((o,i)=>o.x===b[i].x&&o.z===b[i].z&&o.r===b[i].r);}
 
 export class World {
   scene = new T.Scene(); camera = new T.OrthographicCamera(); renderer: T.WebGLRenderer;
@@ -680,9 +692,24 @@ export class World {
   /** Static and moving obstacles together; the same list is reused until either changes, so its grid index is too. */
   private collisionObstacles(){
     const dynamic=this.dynamicObstacles??[],cached=this.combinedObstacles;
-    if(cached&&cached.base===this.obstacles&&cached.length===this.obstacles.length&&cached.dynamic===dynamic)return cached.list;
+    if(cached&&cached.base===this.obstacles&&cached.length===this.obstacles.length&&(cached.dynamic===dynamic||sameObstacles(cached.dynamic,dynamic))){cached.dynamic=dynamic;return cached.list;}
     const list=dynamic.length?this.obstacles.concat(dynamic):this.obstacles;
     this.combinedObstacles={list,base:this.obstacles,length:this.obstacles.length,dynamic};return list;
+  }
+  private creatureObstacleCache:{base:Obstacle[];lit:string;list:Obstacle[]}|null=null;
+  /** Simulation steps so far; throttled creatures think when it matches their slot. */
+  private aiStep=0;
+  /**
+   * What creatures collide with: scenery, plus the lit light pillars on the shadow planet. Every creature
+   * uses it on every step, so the list is cached (by which pillars are lit) and never copied per call:
+   * a new list would rebuild the navigation grid index over a thousand obstacles each time.
+   */
+  private creatureObstacles(){
+    const base=this.collisionObstacles();if(this.planet!=='shadow')return base;
+    const light=this.environment.enemyLightObstacles();if(!light.length)return base;
+    const lit=light.map(o=>o.x+','+o.z+','+o.r).join(';'),cached=this.creatureObstacleCache;
+    if(cached&&cached.base===base&&cached.lit===lit)return cached.list;
+    const list=base.concat(light);this.creatureObstacleCache={base,lit,list};return list;
   }
   private navigationOptions(clearance=.36,allowVoid=false):NavigationOptions{return {bounds:WORLD_BOUNDS,clearance,walkable:p=>Math.hypot(p.x,p.z)<=WORLD_BOUNDS&&(allowVoid||this.playerFlying||!this.environment||environmentWalkable(this.environment.layout,p))};}
   blocked(x:number,z:number) {return blocked({x,z},this.collisionObstacles(),this.navigationOptions());}
@@ -752,11 +779,13 @@ export class World {
   }
   dash() {for(let i=0;i<18;i++)this.move(Math.sin(this.facing)*.25,Math.cos(this.facing)*.25);this.burst(this.position.x,this.position.z,'#e8f5e1');}
   private resolveOverlap(point:Point,obstacles:Obstacle[],clearance:number){
-    for(let pass=0;pass<8;pass++){let changed=false;for(const o of obstacles){const distance=Math.hypot(point.x-o.x,point.z-o.z),minimum=o.r+clearance+.015;if(distance<minimum){const angle=distance>.0001?Math.atan2(point.z-o.z,point.x-o.x):.73;point.x=o.x+Math.cos(angle)*minimum;point.z=o.z+Math.sin(angle)*minimum;changed=true;}}if(!changed)break;}
+    // Only obstacles in nearby grid cells can touch the point (a push moves it, so each pass looks again).
+    for(let pass=0;pass<8;pass++){let changed=false;for(const o of nearbyObstacles(obstacles,point.x,point.z,clearance+.015)){const distance=Math.hypot(point.x-o.x,point.z-o.z),minimum=o.r+clearance+.015;if(distance<minimum){const angle=distance>.0001?Math.atan2(point.z-o.z,point.x-o.x):.73;point.x=o.x+Math.cos(angle)*minimum;point.z=o.z+Math.sin(angle)*minimum;changed=true;}}if(!changed)break;}
   }
   private creatureWalkable(e:Enemy,point:Point,allowVoid=false){
     if(Math.hypot(point.x,point.z)>=WORLD_BOUNDS)return false;
-    const floating=e.definition?.flying||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??'');
+    // Path checks call this for every half metre, so the flyer test only runs where it matters (cloud and lava).
+    const floating=(this.planet==='cloud'||this.planet==='lava')&&(e.definition?.flying||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''));
     if(!allowVoid&&!floating&&this.planet==='cloud'&&!environmentWalkable(this.environment.layout,point))return false;
     if(!allowVoid&&!floating&&e.type!=='lavaworm'&&this.planet==='lava'){
       // Rising lava may surround a creature: allow escape, but never walk into it from dry ground.
@@ -766,7 +795,7 @@ export class World {
     return Math.hypot(point.x,point.z)>=Math.min(safe,Math.hypot(e.x,e.z))-.001;
   }
   private moveCreature(e:Enemy,dx:number,dz:number,allowVoid=false){
-    const light=this.planet==='shadow'?this.environment.enemyLightObstacles():[],obstacles=light.length?this.collisionObstacles().concat(light):this.collisionObstacles(),options=this.navigationOptions(e.radius,true);
+    const obstacles=this.creatureObstacles(),options=this.navigationOptions(e.radius,true);
     options.walkable=p=>this.creatureWalkable(e,p,allowVoid);
     this.resolveOverlap(e,obstacles,options.clearance!);
     const next={x:e.x+dx,z:e.z+dz};
@@ -775,16 +804,29 @@ export class World {
     if(clearSegment(e,{x:e.x,z:next.z},obstacles,options))e.z=next.z;
   }
   private separateCreatures(){
-    const living=this.enemies.filter(e=>e.hp>0),cells=new Map<string,Enemy[]>(),size=4;
-    for(const e of living){const key=Math.floor(e.x/size)+','+Math.floor(e.z/size),cell=cells.get(key)??[];cell.push(e);cells.set(key,cell);}
-    const index=new Map(living.map((e,i)=>[e,i]));
-    for(const a of living){const cx=Math.floor(a.x/size),cz=Math.floor(a.z/size);
-      for(let x=cx-1;x<=cx+1;x++)for(let z=cz-1;z<=cz+1;z++)for(const b of cells.get(x+','+z)??[]){
-        if(index.get(a)!>=index.get(b)!)continue;const moveA=(a.definition?.speed??2.4)>0,moveB=(b.definition?.speed??2.4)>0;if(!moveA&&!moveB)continue;
+    // Resting creatures (calm, far from every explorer) stand still, so only the others need separating. This runs
+    // every step: cells use number keys and hold indices, so no strings or maps are made per creature.
+    const living=this.enemies.filter(e=>e.hp>0&&!e.resting),cells=new Map<number,number[]>(),none:number[]=[],size=4,cell=(x:number,z:number)=>(x+4096)*8192+z+4096;
+    living.forEach((e,i)=>{const key=cell(Math.floor(e.x/size),Math.floor(e.z/size)),list=cells.get(key);if(list)list.push(i);else cells.set(key,[i]);});
+    // Pushes from every overlapping neighbour add up, then each creature moves once: one collision check per
+    // creature instead of one per pair, which matters when a crowd presses around the explorer.
+    const push=new Float64Array(living.length*2);
+    living.forEach((a,i)=>{const cx=Math.floor(a.x/size),cz=Math.floor(a.z/size);
+      for(let x=cx-1;x<=cx+1;x++)for(let z=cz-1;z<=cz+1;z++)for(const j of cells.get(cell(x,z))??none){
+        if(i>=j)continue;const b=living[j],moveA=(a.definition?.speed??2.4)>0,moveB=(b.definition?.speed??2.4)>0;if(!moveA&&!moveB)continue;
         const dx=a.x-b.x,dz=a.z-b.z,d=Math.hypot(dx,dz),minimum=a.radius+b.radius;if(d>=minimum)continue;
-        const angle=(index.get(a)!*2.399+index.get(b)!*.73),nx=d>.0001?dx/d:Math.cos(angle),nz=d>.0001?dz/d:Math.sin(angle),push=(minimum-d+.002)/(moveA&&moveB?2:1);
-        if(moveA)this.moveCreature(a,nx*push,nz*push);if(moveB)this.moveCreature(b,-nx*push,-nz*push);
+        const angle=(i*2.399+j*.73),nx=d>.0001?dx/d:Math.cos(angle),nz=d>.0001?dz/d:Math.sin(angle),amount=(minimum-d+.002)/(moveA&&moveB?2:1);
+        if(moveA){push[i*2]+=nx*amount;push[i*2+1]+=nz*amount;}if(moveB){push[j*2]-=nx*amount;push[j*2+1]-=nz*amount;}
       }
+    });
+    living.forEach((e,i)=>{const x=push[i*2],z=push[i*2+1],d=Math.hypot(x,z),k=Math.min(1,e.radius/Math.max(d,1e-9));if(d>0)this.moveCreature(e,x*k,z*k);});
+    // Nothing piles onto the explorer: creatures are pushed out of a circle around it. Only the creature moves, so
+    // walking and knockback feel the same, and a boss in the middle of a skill keeps its course and telegraphs.
+    const px=this.position.x,pz=this.position.z;
+    for(const e of living){
+      if(!((e.definition?.speed??2.4)>0)||e.boss&&(e.phase==='windup'&&!!e.skill||e.phase==='charge'||e.phase==='bspin'))continue;
+      const dx=e.x-px,dz=e.z-pz,d=Math.hypot(dx,dz),minimum=EXPLORER_RADIUS+e.radius;if(d>=minimum)continue;
+      const nx=d>.0001?dx/d:Math.sin(this.facing),nz=d>.0001?dz/d:Math.cos(this.facing);this.moveCreature(e,nx*(minimum-d+.002),nz*(minimum-d+.002));
     }
   }
   private enemyTarget(e:Enemy){
@@ -857,7 +899,16 @@ export class World {
       const nearby=[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&(r.pose.hp??1)>0&&Math.hypot(r.pose.x-e.x,r.pose.z-e.z)<32),players=nearby.length+(Math.hypot(this.position.x-e.x,this.position.z-e.z)<32?1:0),level=Math.max(this.state.level,...nearby.map(r=>r.pose.level??1)),difference=Math.max(0,level-(e.level??1));
       e.maxHp=Math.round((e.baseMaxHp??e.maxHp)*(1+.6*Math.max(0,players-1))*(e.type==='dragon'?1:1+difference*.12));e.hp=e.maxHp;e.damage=(e.baseDamage??e.damage)*(e.type==='dragon'?1:(1+difference*.07)*(1+.1*Math.max(0,players-1)));e.scaled=true;
     }
-    if(distance>65&&(!e.phase||e.phase==='idle')&&e.hp===e.maxHp)return;
+    // Level of detail, like the reference: a calm creature (idle, unhurt, no status) farther than 48 m from every explorer
+    // does not think. Between its sight and 48 m it only wanders, so it thinks on every 4th step with the skipped time added.
+    // Anything aggro, hurt, returning home or close enough to notice an explorer thinks on every step.
+    const calm=(!e.phase||e.phase==='idle')&&e.hp===e.maxHp&&!e.stun&&!anyStatus(e.statuses);
+    e.resting=calm&&distance>AI_REST_RANGE;if(e.resting){e.lod=undefined;return;}
+    if(calm&&distance>def.sight+1){
+      const lod=e.lod??={wait:0,age:0,x:e.x,z:e.z,slot:aiSlot(e.id)};lod.wait+=dt;
+      if(((this.aiStep??0)+lod.slot)%4){lod.age++;return;}
+      dt=lod.wait;lod.wait=0;lod.age=0;lod.x=e.x;lod.z=e.z;
+    }else e.lod=undefined;
     if(e.boss){e.bossStage=e.type==='dragon'?bossPhase(e.hp,e.maxHp):1;for(const pulse of e.skillEffects??[]){pulse.remaining-=dt;if(pulse.remaining<=0){this.areaDamage(e,pulse.x,pulse.z,pulse.r,pulse.multiplier,pulse.inner);this.burst(pulse.x,pulse.z,'#edb875',12);}}e.skillEffects=e.skillEffects?.filter(p=>p.remaining>0);}
     const statuses=e.statuses??{},noAttack=(statuses.blind??0)>0||(statuses.sheep??0)>0||(statuses.fear??0)>0;
     if(e.stun>0){e.phase='chase';e.telegraphs=[];return;}
@@ -905,7 +956,7 @@ export class World {
     }
     if(def.speed===0)return;
     if(chasing&&distance<def.reach*.8&&!noAttack)return;
-    const obstacles=this.collisionObstacles().concat(this.planet==='shadow'?this.environment.enemyLightObstacles():[]),options=this.navigationOptions(e.radius,true);
+    const obstacles=this.creatureObstacles(),options=this.navigationOptions(e.radius,true);
     options.walkable=p=>this.creatureWalkable(e,p);
     this.resolveOverlap(e,obstacles,options.clearance!);
     if(!clearSegment(e,goal,obstacles,options)){
@@ -928,7 +979,8 @@ export class World {
    */
   private animateEnemy(e:Enemy,dt:number){
     const m=e.mesh,u=m.userData,def=e.definition;m.rotation.order='YXZ';
-    const moved=Math.hypot(e.x-(u.lastX??e.x),e.z-(u.lastZ??e.z));u.lastX=e.x;u.lastZ=e.z;
+    // Measured on the drawn body, which glides between thinking steps for throttled wanderers.
+    const px=m.position.x,pz=m.position.z,moved=Math.hypot(px-(u.lastX??px),pz-(u.lastZ??pz));u.lastX=px;u.lastZ=pz;
     const moving=dt>0&&moved>dt*.4;u.moving=moving;
     u.anim=(u.anim??(e.homeX*3.7%6))+dt*(moving?(e.phase==='charge'?22:10):3);
     const o=u.anim,s=Math.sin(o),behavior=def?.behavior??'melee';
@@ -965,12 +1017,15 @@ export class World {
     // A defeated creature swells and shrinks away instead of blinking out.
     if(e.hp<=0&&(e.dying??0)>0){e.dying=Math.max(0,e.dying!-dt);const t=1-e.dying/.3;e.mesh.visible=true;e.mesh.scale.setScalar((e.boss?1.85:1)*(1+t*.3)*Math.max(.001,1-t));if(!e.dying)e.mesh.visible=false;return;}
     this.updateBossTelegraphs(e);
-    const lightRadius=M.activeStats(this.state).light?7.5:3.6;
+    // Gear stats only matter on the shadow planet; adding them up for every creature on every step was a measurable cost.
+    const lightRadius=this.planet==='shadow'&&M.activeStats(this.state).light?7.5:3.6;
     e.mesh.visible=e.hp>0&&(this.planet!=='shadow'||this.environment.revealed(e,this.position,lightRadius))&&(!e.definition?.stealth||this.planet==='shadow'||Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.definition.stealth||e.stun>0);
     if(!e.mesh.visible)return;
     e.liftVelocity=Math.max(-15,(e.liftVelocity??0)-24*dt);e.lift=Math.max(0,(e.lift??0)+(e.liftVelocity??0)*dt);if(!e.lift)e.liftVelocity=0;
     const ground=this.planet==='ocean'&&inWater(this.environment.layout,e)?-.5:Math.max(-.7,terrainHeight(this.environment.layout,e));
-    e.mesh.position.set(e.x,ground+(e.lift??0)+(e.definition?.flying?1+Math.sin(this.time*4+e.homeX)*.15:Math.sin(this.time*3+e.homeX)*.06),e.z);
+    // A wanderer that thinks on every 4th step glides between its last two positions instead of hopping (teleports snap).
+    const lod=this.networkRole!=='peer'?e.lod:undefined,glide=lod&&Math.abs(e.x-lod.x)+Math.abs(e.z-lod.z)<.5?Math.min(1,(lod.age+1)/4):1,drawX=lod?lod.x+(e.x-lod.x)*glide:e.x,drawZ=lod?lod.z+(e.z-lod.z)*glide:e.z;
+    e.mesh.position.set(drawX,ground+(e.lift??0)+(e.definition?.flying?1+Math.sin(this.time*4+e.homeX)*.15:Math.sin(this.time*3+e.homeX)*.06),drawZ);
     const scale=(e.boss?1.85:1)*((e.statuses?.sheep??0)>0?.45:1);e.mesh.scale.setScalar(scale);
     if(e.type==='minislime')e.mesh.scale.multiplyScalar(.55);
     // Hit reaction: a white flash and a quick swell, like a squeezed toy.
@@ -1026,6 +1081,7 @@ export class World {
       if(this.selected&&!this.validTarget(this.selected)){this.selected=null;this.destination=null;this.route=[];this.ring.visible=false;this.marker.visible=false;}
       if(this.selected){const e=this.selected;this.ring.position.set(e.x,.1,e.z);if(Math.hypot(e.x-this.position.x,e.z-this.position.z)<=this.interactionRange(e)){this.destination=null;this.route=[];this.marker.visible=false;if(e.kind==='enemy')this.onAttackEnemy(e as Enemy);else{this.selected=null;this.ring.visible=false;this.onInteract(e);}}else if((e.kind==='enemy'||e.kind==='turtle')&&(!this.destination||Math.hypot(this.destination.x-e.x,this.destination.z-e.z)>4))this.select(e);}
     }
+    if(simulateWorld&&this.networkRole!=='peer')this.aiStep=(this.aiStep??0)+1;
     if(simulateWorld&&this.networkRole!=='peer')for(const enemy of [...this.enemies]){if(!this.enemies.includes(enemy))break;this.updateEnemyAi(enemy,dt);}
     if(this.environment!==environmentForFrame)return;
     if(simulateWorld&&this.networkRole!=='peer')this.separateCreatures();

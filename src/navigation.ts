@@ -33,6 +33,15 @@ export function someObstacleNear(obstacles:Obstacle[],minX:number,minZ:number,ma
   for(let cx=x0;cx<=x1;cx++)for(let cz=z0;cz<=z1;cz++){const list=index.cells.get(cellKey(cx,cz));if(list)for(const o of list)if(test(o))return true;}
   return false;
 }
+/** Obstacles whose edge could be within `reach` of the point: the large ones plus nearby grid cells (every obstacle for short lists). */
+export function nearbyObstacles(obstacles:Obstacle[],x:number,z:number,reach:number):readonly Obstacle[]{
+  const index=indexOf(obstacles);if(!index)return obstacles;
+  const r=reach+SMALL,x0=Math.floor((x-r)/CELL),x1=Math.floor((x+r)/CELL),z0=Math.floor((z-r)/CELL),z1=Math.floor((z+r)/CELL);
+  if((x1-x0+1)*(z1-z0+1)>index.cells.size)return obstacles;
+  const near=index.large.slice();
+  for(let cx=x0;cx<=x1;cx++)for(let cz=z0;cz<=z1;cz++){const list=index.cells.get(cellKey(cx,cz));if(list)for(const o of list)near.push(o);}
+  return near;
+}
 
 export function blocked(point: Point, obstacles: Obstacle[],options:NavigationOptions={}) {
   const clearance=options.clearance??CLEARANCE;
