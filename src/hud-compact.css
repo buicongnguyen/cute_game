@@ -131,18 +131,33 @@
   #context-prompt kbd { width: 24px; height: 24px; }
 }
 
-/* Phones (both orientations): two slim tracker rows, like the reference's chapter and bounty lines. */
+/* Phone messages (both orientations): the quest and the bounty become one-line chips (icon, short title, progress) under the
+   player card; toasts are small, brief and at most two (main.ts toast); the zone notice and event chips are smaller. */
+.tracker-count { display: none; }
 @media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
-  .quest-tracker { padding: 4px 26px 5px 7px; border-radius: 12px; }
-  #quest-summary { padding: 1px 0 3px; gap: 6px; }
-  .quest-icon { width: 22px; height: 22px; font-size: 13px; border-radius: 7px; }
-  #quest-summary strong { font-size: var(--t-xs); line-height: 1.2; }
-  #quest-summary small { margin-top: 0; font-size: 10px; }
-  .quest-progress { display: none; }
-  .bounty-tracker { padding: 3px 7px; gap: 6px; border-radius: 12px; }
-  .bounty-tracker > span { font-size: 14px; }
-  .bounty-tracker strong { font-size: var(--t-xs); }
-  .bounty-tracker small { font-size: 10px; }
+  .tracker-stack { width: min(188px, 50vw); gap: 4px; }
+  .tracker-count { display: block; flex: none; margin-left: auto; padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, .16); color: #ffe08a; font-size: 10px; font-weight: 900; line-height: 16px; font-variant-numeric: tabular-nums; }
+  .quest-tracker { padding: 3px 26px 3px 4px; border-width: 1px; border-radius: 999px; }
+  #quest-summary { padding: 0; gap: 5px; }
+  .quest-icon { width: 20px; height: 20px; font-size: 12px; border-radius: 50%; }
+  #quest-summary small, .bounty-tracker small, .quest-progress { display: none; }
+  #quest-summary strong, .bounty-tracker strong { font-size: 11px; line-height: 16px; }
+  .bounty-tracker { padding: 3px 5px 3px 6px; gap: 5px; border-width: 1px; border-radius: 999px; }
+  .bounty-tracker > span { font-size: 13px; }
+  .tracker-fold { top: calc(50% - 9px); right: 3px; width: 18px; height: 18px; }
+  .tracker-fold::before { font-size: 11px; }
+  #quick-claim { margin-top: 3px; padding: 3px 8px; border-radius: 999px; font-size: 10.5px; }
+  .tracker-chip { height: 24px; padding: 0 8px; gap: 6px; font-size: 10.5px; }
+  #toasts { gap: 4px; max-width: min(78vw, 340px); }
+  .toast { padding: 3px 10px 3px 3px; gap: 6px; border-width: 2px; font-size: 11px; line-height: 1.25; box-shadow: 0 2px 0 rgba(227, 154, 12, .4), 0 4px 10px rgba(30, 60, 20, .15); }
+  .toast > span { width: 20px; height: 20px; font-size: 12px; }
+  .toast > div { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #zone-banner { gap: 2px; }
+  #zone-banner strong { font-size: 20px; -webkit-text-stroke-width: 4px; }
+  #zone-banner small { font-size: 10px; -webkit-text-stroke-width: 2.5px; }
+  #banner-chip { padding: 1px 8px; font-size: 10px; }
+  #buff-bar, #environment-bar { gap: 4px; }
+  #buff-bar span, #environment-bar span { padding: 2px 7px; font-size: 10px; }
 }
 
 /* The touch pad: small light glass keys on a 44 px pitch (the hit areas meet, the visuals do not). */
