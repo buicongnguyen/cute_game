@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {EnvironmentSimulation,createEnvironmentLayout,terrainHeight,tideHeight,ventPhase,trainPosition,raftPosition} from '../src/environments.ts';
-import {lavaEvent} from '../src/lava-weather.ts';
+import {lavaEvent,LAVA_EVENT_INFO} from '../src/lava-weather.ts';
 const traits={speed:6,maxHp:100};const still={x:0,z:0};
 test('ice retains momentum after release and brakes over time',()=>{
   const sim=new EnvironmentSimulation(createEnvironmentLayout('ice')),p={x:30,z:0};
@@ -82,4 +82,8 @@ test('cloud lightning warns on solid ground before damaging player and nearby en
   sim.step(.11,{x:0,z:0},still,traits,[]);assert.equal(sim.lightning.bolts.length,1);const bolt=sim.lightning.bolts[0];assert.equal(bolt.remaining,1.2);assert.ok(terrainHeight(sim.layout,bolt)>=0);assert.ok(sim.lightning.wait>=7&&sim.lightning.wait<=13);
   assert.equal(sim.step(1.1,bolt,still,traits,[]).damage,0);const hit=sim.step(.11,bolt,still,traits,[{...bolt,id:'enemy',hp:100,maxHp:100,boss:false}]);assert.equal(hit.damage,12);assert.equal(hit.enemyHits[0].amount,20);assert.equal(sim.lightning.bolts.length,0);
   const peer=new EnvironmentSimulation(sim.layout);peer.authoritative=false;peer.step(20,{x:0,z:0},still,traits,[]);assert.equal(peer.lightning.bolts.length,0);
+});
+test('volcano weather shows a name for every event, never the internal id',()=>{
+  const sim=new EnvironmentSimulation(createEnvironmentLayout('lava'));
+  for(let cycle=0;cycle<12;cycle++){sim.time=cycle*360+5;const weather=sim.status({x:40,z:0}).find(s=>s.label==='Weather')!;const event=lavaEvent(sim.time);assert.ok(LAVA_EVENT_INFO[event.id].name);assert.ok(weather.value.startsWith(LAVA_EVENT_INFO[event.id].name),weather.value);assert.ok(!weather.value.startsWith(event.id+' '),weather.value);}
 });

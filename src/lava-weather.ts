@@ -6,6 +6,8 @@ export type LavaEventId = 'normal'|'eruption'|'meteor'|'storm'|'dragon'|'treasur
 export interface WeatherPoint {x:number;z:number}
 export interface LavaEvent {id:LavaEventId;index:number;left:number;tideOffset:number}
 export const LAVA_EVENT_WEIGHTS = {eruption:2,meteor:2,storm:1.5,dragon:1.5,treasure:1.5} as const;
+/** Player-facing names, translated in spirit from the reference's weather table. */
+export const LAVA_EVENT_INFO:Record<LavaEventId,{name:string;icon:string}>={normal:{name:'Calm planet',icon:'🌋'},eruption:{name:'Volcano awakens',icon:'🌋'},meteor:{name:'Meteor shower',icon:'☄️'},storm:{name:'Magma storm',icon:'🌪️'},dragon:{name:'Dragon invasion',icon:'🐉'},treasure:{name:'Treasure eruption',icon:'💎'}};
 export const LAVA_CYCLE_SECONDS=360,LAVA_ACTIVE_SECONDS=240;
 function unit(seed:number){let value=Math.imul(seed^0x9e3779b9,0x85ebca6b);value^=value>>>13;value=Math.imul(value,0xc2b2ae35);return ((value^(value>>>16))>>>0)/4294967296;}
 export function lavaEvent(timeSeconds:number):LavaEvent{

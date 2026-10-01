@@ -1,6 +1,6 @@
 import type {PlanetId} from './model.ts';
 import type {Point,Obstacle} from './navigation.ts';
-import {LavaWeather,lavaEvent} from './lava-weather.ts';
+import {LavaWeather,lavaEvent,LAVA_EVENT_INFO} from './lava-weather.ts';
 
 export interface Circle extends Point {r:number;id:number;height?:number}
 export interface Link {a:Point;b:Point}
@@ -151,7 +151,7 @@ export class EnvironmentSimulation {
       const height=terrainHeight(this.layout,player),resistance=1-Math.max(0,Math.min(1,traits.fireResistance??0));
       const previousEvent=this.weather.snapshot().eventKey,weather=this.weather.step(dt,player,(x,z)=>terrainHeight(this.layout,{x,z}),{time:this.time,blocked:this.weatherBlocked,vents:this.layout.vents,nearbyPlayers:this.nearbyPlayers,authority:this.authoritative});
       out.dragonDismiss=this.authoritative&&weather.changed&&previousEvent.endsWith(':dragon');
-      if(weather.changed)out.events.push({kind:'weather',message:`Lava weather: ${weather.event.id}. ${Math.ceil(weather.event.left)} seconds remaining.`});out.dragonSummon=weather.dragonSummon;
+      if(weather.changed)out.events.push({kind:'weather',message:`${LAVA_EVENT_INFO[weather.event.id].icon} ${LAVA_EVENT_INFO[weather.event.id].name}: ${Math.ceil(weather.event.left)} seconds remaining.`});out.dragonSummon=weather.dragonSummon;
       for(const impact of weather.impacts){if(length(player,impact)<impact.radius&&!traits.flying)out.damage+=traits.maxHp*impact.playerFraction*resistance;for(const enemy of enemies)if(enemy.hp>0&&length(enemy,impact)<impact.radius)out.enemyHits.push({id:enemy.id,amount:enemy.maxHp*impact.enemyFraction});}
       let onRaft=false;
       for(const pool of this.layout.pools){const previous=raftPosition(pool,previousTime);if(length(player,previous)<1.3){const next=raftPosition(pool,this.time);out.push.x+=next.x-previous.x;out.push.z+=next.z-previous.z;out.y=next.y+this.weather.tideOffset;onRaft=true;break;}}
@@ -211,7 +211,7 @@ export class EnvironmentSimulation {
   status(point:Point):EnvironmentStatus[]{
     switch(this.layout.planet){
       case 'ice':return[{icon:'❄️',label:'Ice',value:Math.hypot(point.x,point.z)>13?'Slippery — release early to brake':'Safe landing pad'}];
-      case 'lava':return[{icon:'🌋',label:'Lava tide',value:tideHeight(this.time+1)>tideHeight(this.time)?'Rising — use high stones':'Falling',fraction:(tideHeight(this.time)+.82)/.42},{icon:'☄️',label:'Weather',value:lavaEvent(this.time).id+' · '+Math.ceil(lavaEvent(this.time).left)+' seconds'}];
+      case 'lava':return[{icon:'🌋',label:'Lava tide',value:tideHeight(this.time+1)>tideHeight(this.time)?'Rising — use high stones':'Falling',fraction:(tideHeight(this.time)+.82)/.42},(()=>{const event=lavaEvent(this.time),info=LAVA_EVENT_INFO[event.id];return{icon:info.icon,label:'Weather',value:`${info.name} · ${Math.ceil(event.left)} seconds`};})()];
       case 'toy':return[{icon:'🚂',label:'Toy railway',value:'Moving trains hurt explorers and creatures'}];
       case 'jungle':return[{icon:'🌿',label:'Jungle',value:this.layout.poison.some(p=>length(p,point)<p.r)?'Poison gas! Leave the purple ground':'Thorn walls rise for 16 of every 36 seconds'}];
       case 'ocean':return[{icon:'🫧',label:'Oxygen',value:Math.ceil(this.oxygen)+'%',fraction:this.oxygen/100},...(this.riding?[{icon:'🐢',label:'Turtle ride',value:Math.ceil(this.rideUntil-this.time)+' seconds'}]:[])];

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as M from '../src/model.ts';
 import * as P from '../src/progression.ts';
+import { ENEMY_TYPES } from '../src/enemy-types.ts';
 
 const start=Date.UTC(2026,8,30,12);
 const reload=(s:M.SaveState)=>M.parseSave(JSON.stringify(s))!;
@@ -39,6 +40,12 @@ test('achievements unlock successive tiers and cannot replay a claimed tier',()=
 test('bounties count only the requested creature and expire at the saved half-hour boundary',()=>{
   const s=M.newGame();P.refreshProgress(s,start);const b=s.progression.bounty!;P.recordEvent(s,'kill',20,'not-the-target',start);assert.equal(b.progress,0);P.recordEvent(s,'kill',b.target,b.type,start);const entry=P.progressEntries(s,'bounties',start)[0];assert.equal(entry.complete,true);assert.equal(P.claimProgress(s,'bounties',entry.id,start),true);assert.equal(P.claimProgress(reload(s),'bounties',entry.id,start),false);assert.equal(s.progression.totals.bounty,1);
   P.refreshProgress(s,b.ends);assert.notEqual(s.progression.bounty!.key,b.key);assert.equal(s.progression.bounty!.progress,0);assert.equal(P.claimProgress(s,'bounties',entry.id,b.ends),false);
+});
+test('bounty and challenge labels name the creature and the task, not internal ids',()=>{
+  for(const[id,planet]of Object.entries(M.PLANETS))for(const[type]of planet.spawns)assert.ok(ENEMY_TYPES[type]?.name,`${id}: bounty candidate ${type} has no display name`);
+  const s=M.newGame();P.refreshProgress(s,start);const b=s.progression.bounty!;const bounty=P.progressEntries(s,'bounties',start)[0];
+  assert.equal(bounty.title,`Wanted: ${ENEMY_TYPES[b.type].name}`);assert.ok(!bounty.title.endsWith(`: ${b.type}`));
+  s.level=2;assert.equal(P.startChallenge(s,'kill',start),true);assert.equal(P.progressEntries(s,'challenges',start)[0].title,'Quick challenge: Defeat creatures');
 });
 test('timed challenges track successful actions and preserve/restart streaks correctly',()=>{
   const s=M.newGame();assert.equal(P.startChallenge(s,'kill',start),false);s.level=2;assert.equal(P.startChallenge(s,'kill',start),true);assert.equal(P.startChallenge(s,'fish',start),false);P.recordEvent(s,'kill',4,'mushroom',start+5000);const entry=P.progressEntries(s,'challenges',start+5000)[0];assert.equal(entry.complete,true);assert.equal(P.claimProgress(s,'challenges',entry.id,start+5000),true);assert.equal(s.progression.streak,1);assert.equal(P.claimProgress(reload(s),'challenges',entry.id,start+5000),false);

@@ -1,5 +1,6 @@
 import { ITEMS, PLANETS, COLLECTIONS, STORY_STEPS, type Inventory } from './content.ts';
 import { addItem, gainXp, xpNeeded, type SaveState } from './model.ts';
+import { ENEMY_TYPES } from './enemy-types.ts';
 export { STORY_STEPS } from './content.ts';
 export type ProgressKind = 'story' | 'daily' | 'weekly' | 'achievements' | 'pass' | 'bounties' | 'collection' | 'challenges';
 export interface ProgressEntry {
@@ -181,6 +182,8 @@ function weeklyChest(s: SaveState): Reward { return { energy: 400 + s.level * 30
 function loginReward(s: SaveState, now: number): Reward { const streak = s.progression.login.day === day(now - 86400000) ? s.progression.login.streak + 1 : 1; return { energy: 25 + Math.min(streak, 30) * 5 + (streak % 7 === 0 ? 150 : 0), xp: 10 + s.level * 3, items: streak % 7 === 0 ? { seed_star: 1, spore: 2 } : { potion: 1 }, stars: 5 }; }
 function bountyReward(s: SaveState): Reward { return { energy: 40 + s.level * 8, xp: Math.round(xpNeeded(s.level) * .15), items: { [BONUS[hash(s.progression.bounty?.key || '') % BONUS.length]]: 1 }, stars: 15 }; }
 function achievementReward(tier: number, target: number): Reward { return { energy: 40 * (tier + 1) + Math.min(300, Math.round(target / 10)), xp: 30 * (tier + 1), stars: 10 }; }
+/** Player-facing name of a challenge type (the daily task titles), never the internal id. */
+export function challengeTitle(type: string): string { return DAILY[type]?.title ?? type; }
 function entry(id: string, title: string, progress: number, target: number, claimed: boolean, reward: Reward = {}, icon = '📜', description = ''): ProgressEntry { return { id, title, description, progress: Math.min(progress, target), target, complete: progress >= target, claimed, rewardLabel: rewardLabel(reward), icon }; }
 export function progressEntries(s: SaveState, kind: ProgressKind, now = Date.now()): ProgressEntry[] {
     refreshProgress(s, now);
@@ -203,7 +206,7 @@ export function progressEntries(s: SaveState, kind: ProgressKind, now = Date.now
         return PASS_REWARDS.map((reward, i) => entry(`${p.pass.season}:${i}`, `Star pass · Tier ${i + 1}`, p.pass.stars, (i + 1) * 50, p.pass.claimed.includes(i), reward, '⭐', `Season ${p.pass.season}`));
     if (kind === 'bounties') {
         const b = p.bounty;
-        return b ? [entry(b.key, `Wanted: ${b.type}`, b.progress, b.target, b.claimed, bountyReward(s), '🎯', `${Math.max(0, Math.ceil((b.ends - now) / 60000))} minutes remaining`)] : [];
+        return b ? [entry(b.key, `Wanted: ${ENEMY_TYPES[b.type]?.name ?? b.type}`, b.progress, b.target, b.claimed, bountyReward(s), '🎯', `${Math.max(0, Math.ceil((b.ends - now) / 60000))} minutes remaining`)] : [];
     }
     if (kind === 'collection')
         return Object.entries(COLLECTIONS).map(([id, group]) => { const found = group.items.filter(item => s.collection[item]).length; return entry(id, group.name, found, group.items.length, true, {}, group.emoji, group.items.map(item => `${s.collection[item] ? '✓' : '?'} ${ITEMS[item].name}`).join(' · ')); });
@@ -211,7 +214,7 @@ export function progressEntries(s: SaveState, kind: ProgressKind, now = Date.now
     if (!c)
         return [];
     const mult = 1 + Math.min(p.streak, 8) * .25;
-    return [entry(`challenge:${c.ends}`, `Quick challenge: ${c.type}`, c.progress, c.target, c.claimed, { energy: Math.round((15 + s.level * 4) * mult), xp: Math.round(xpNeeded(s.level) * .07 * mult), stars: 6 }, '⏱️', `${Math.ceil((c.ends - now) / 1000)} seconds remaining`)];
+    return [entry(`challenge:${c.ends}`, `Quick challenge: ${challengeTitle(c.type)}`, c.progress, c.target, c.claimed, { energy: Math.round((15 + s.level * 4) * mult), xp: Math.round(xpNeeded(s.level) * .07 * mult), stars: 6 }, '⏱️', `${Math.ceil((c.ends - now) / 1000)} seconds remaining`)];
 }
 export function claimProgress(s: SaveState, kind: ProgressKind, id: string, now = Date.now()): boolean {
     const available = progressEntries(s, kind, now).find(e => e.id === id);
