@@ -78,7 +78,9 @@ test('scatter tiles are 32 m; cover and low pieces never cast; taller ones cast 
 
 test('a tall piece between the camera and the explorer fades to 35% in 0.15 s, then returns to its batch',()=>{
   const w=built('home'),group=w.root.getObjectByName('scatter') as T.Group,fade=new OccluderFade(group);
-  const piece=tallPiecesNear(group,-60,10,30).find(p=>p.height>2.5)!;assert.ok(piece&&piece.height>TALL_DECOR);
+  // A piece with open ground 30 m east of it, where the explorer walks off to (the layout shifts as scenery changes).
+  const clearAt=(x:number,z:number)=>{const at=new T.Vector3(x+30,1,z),eye=new T.Vector3(x,18,z+12.5);return !tallPiecesNear(group,x+30,z,30).some(q=>blocks(q,eye,at));};
+  const piece=tallPiecesNear(group,-60,10,30).find(p=>p.height>2.5&&clearAt(p.x,p.z))!;assert.ok(piece&&piece.height>TALL_DECOR);
   // The explorer stands just north of the piece; the camera looks from the south, as the game's does.
   const hero=new T.Vector3(piece.x,1,piece.z-1),eye=hero.clone().add(new T.Vector3(0,17,13.5)),away=new T.Vector3(piece.x+30,1,piece.z);
   assert.ok(blocks(piece,eye,hero));assert.ok(!blocks(piece,away.clone().add(new T.Vector3(0,17,13.5)),away));

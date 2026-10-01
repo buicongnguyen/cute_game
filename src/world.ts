@@ -3,6 +3,7 @@ import { buildScatter, disposeScatter, fallbackParts, updateScatterShadows } fro
 import { OccluderFade } from './occluders.ts';
 import { bakeCoverAtlas, coverCards, tickCoverCards, type CoverAtlas } from './cover-cards.ts';
 import { buildGround } from './ground.ts';
+import { buildPond } from './pond-view.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -138,7 +139,7 @@ export class World {
   /** The creature last hit and when: it stays marked for TARGET_HOLD seconds. */
   lastHit?: {e:Enemy;t:number}|null;
   // Player animation timers set by combat and fishing.
-  punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; fishing:'idle'|'cast'|'wait'|'fight'='idle';
+  punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; /** The last tap on a pond's water, for the cast point. */ pondTap:{id:string;x:number;z:number}|null=null; fishing:'idle'|'cast'|'wait'|'fight'='idle';
   walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
   private shakeOffset=new T.Vector3(); private playerMaterials:T.MeshStandardMaterial[]=[];
   canvas: HTMLCanvasElement; state: SaveState;
@@ -437,6 +438,8 @@ export class World {
       }
       for(let i=0;i<4;i++){const a=i*Math.PI/2,g=this.kit('gate')??group(cyl('#b18c59',.14,.14,3.1,-1.7,1.55),cyl('#b18c59',.14,.14,3.1,1.7,1.55),box('#edc57a',3.75,.2,.2,0,3));g.position.set(Math.cos(a)*18,0,Math.sin(a)*18);g.rotation.y=-a-Math.PI/2;this.root.add(g);}
       for(const [x,z] of [[-13,-8],[-14,7],[3,-13],[10,-11],[14,5],[-2,15]])this.tree(x,z,.75,true,rng);
+      // The home pond first, so the stones and fence-side bushes below keep off its water.
+      this.makePond(-7.5,11.2,3.3);
       // Stepping-stone trails lead from the cottage to the four gates.
       if(sceneryKit.ready)for(const [axis,from,to] of [['z',-3.6,17.4],['z',-12.6,-17.4],['x',2.2,17.4],['x',-2.2,-17.4]] as const){
         const step=from<to?1.2:-1.2;for(let t=from,i=0;step>0?t<=to:t>=to;t+=step,i++){const side=(i%2?.22:-.22),x=axis==='z'?side:t,z=axis==='z'?t:side;
@@ -446,7 +449,7 @@ export class World {
       if(sceneryKit.ready)for(let i=0;i<16;i++){const a=(i+.5)/16*Math.PI*2,x=Math.cos(a)*16.4,z=Math.sin(a)*16.4;
         if(this.entities.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+1.4)||this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+.9))continue;
         const bush=this.kit(i%5===2?'mushroom':'bush');if(bush){bush.position.set(x,0,z);bush.rotation.y=a;bush.scale.setScalar(i%5===2?1.3:.85+(i%3)*.12);this.root.add(bush);}}
-      this.makePond(-7.5,11.2,3.3);for(const [x,z,r] of [[10,52,9],[40,105,11],[-70,35,8],[-105,-30,7]])this.makePond(x,z,r);
+      for(const [x,z,r] of [[10,52,9],[40,105,11],[-70,35,8],[-105,-30,7]])this.makePond(x,z,r);
       this.position.set(0,0,-4.8);
     }else{
       this.position.set(0,0,3.6);this.addEntity('travel','Starship','🚀',this.rocket(),0,0,2);this.obstacle(0,0,1.4);
@@ -465,8 +468,9 @@ export class World {
     }
     const layout=this.environment.layout,ponds=this.entities.filter(e=>e.kind==='fish').map(e=>({x:e.x,z:e.z,r:e.radius}));
     // Lava pools and the dragon nest sit below the rock; stones and mesas are their own solid pieces.
+    // Ponds draw their own soft sandy shore (pond-view.ts): a halo on the ground's 3 m vertex grid came out jagged.
     const sunk=planet==='lava'?(x:number,z:number)=>layout.pools.some(p=>Math.hypot(x-p.x,z-p.z)<p.r+1)?-1.12:Math.hypot(x-layout.nest.x,z-layout.nest.z)<layout.nest.r+1?-.25:0:undefined;
-    this.root.add(buildGround({planet,layout,ponds,base:planet==='cloud'?-30:planet==='ocean'?-1.15:0,height:sunk,segments:planet==='lava'?20:12}));
+    this.root.add(buildGround({planet,layout,ponds:[],base:planet==='cloud'?-30:planet==='ocean'?-1.15:0,height:sunk,segments:planet==='lava'?20:12}));
     // Creatures are placed before the scenery, which then leaves a clearing around each spawn point (CC-7).
     const angles:Record<string,number>={canyon:0,meadow:Math.PI/2,forest:Math.PI,swamp:-Math.PI/2};let enemyIndex=0;
     const placeEnemy=(type:string,zone?:string,boss=false)=>{
@@ -497,19 +501,18 @@ export class World {
     this.onBuilt?.();
   }
 
-  private waterMaterial?:T.MeshStandardMaterial;
   makePond(x:number,z:number,radius=5.6,waterId?:string) {
-    // Translucent water over a blue bed that deepens toward the middle, so the fish
-    // swimming between them stay visible from above. Heights are in world units.
-    const s=radius/5.6,pond=new T.Group(),flat=(m:T.Mesh,sz=.72)=>{m.scale.set(s,1,s*sz);return m;};
-    if(!this.waterMaterial){this.waterMaterial=new T.MeshStandardMaterial({color:'#6fd8fb',transparent:true,opacity:.38,roughness:.08,metalness:0,depthWrite:false});this.waterMaterial.userData.sharedKit=true;}
-    // Layers from the bottom: sand rim (top .10), blue bed (.12–.135), swimming depth, glassy surface (.30), lily pads.
-    const surface=.3,water=flat(new T.Mesh(new T.CylinderGeometry(5.2,5.2,.02,48),this.waterMaterial));water.position.y=surface;water.renderOrder=1;
-    pond.add(flat(cyl('#f1d9a0',5.6,5.8,.1,0,.05,0,48),.73),flat(cyl('#2aa3dc',5.15,5.15,.02,0,.11,0,48)),flat(cyl('#1478c0',3.3,3.5,.02,0,.125,0,40),.7),water);
-    for(let i=0;i<6;i++){const pad=cyl('#4fbf3a',.32,.32,.03,Math.sin(i*1.4)*3*s,surface+.02,Math.cos(i*1.4)*2*s,12);pad.scale.z=.85;pond.add(pad);if(i%2===0)pond.add(ball('#ff8fc4',.1,Math.sin(i*1.4)*3*s,surface+.08,Math.cos(i*1.4)*2*s));}
-    pond.add(box('#d68a45',2.5*s,.13,1.6*s,-4.8*s,surface+.08,0));for(let i=0;i<6;i++)pond.add(box('#9a5a2c',.04,.02,1.6*s,(-5.8+i*.4)*s,surface+.16,0));
+    // A round pond like the reference's waters (radius = water line): one smooth bank mesh (deep bed, shallows,
+    // sandy lip, sand fading into the grass) and a translucent water disc whose edge the lip hides (pond-view.ts).
+    const id=waterId??(this.planet==='home'?Math.hypot(x,z)<18?'home':zoneAt({x,z})==='swamp'?'swamp':'lake':this.planet),surface=.3,r=radius;
+    const {group:pond}=buildPond(r,surface,id);
+    for(let i=0;i<5;i++){const a=i*2.4+.7,d=r*(.38+(i%3)*.17),pad=cyl('#4fbf3a',.3,.3,.03,Math.cos(a)*d,surface+.02,Math.sin(a)*d,12);pad.scale.z=.85;pond.add(pad);if(i%2===0)pond.add(ball('#ff8fc4',.1,Math.cos(a)*d,surface+.08,Math.sin(a)*d));}
+    // A little jetty on the west side, reaching over the shallows.
+    const jetty=Math.min(2.4,r*.6);pond.add(box('#d68a45',jetty,.13,1.3,-(r-jetty*.5+.35),surface+.08,0));for(let i=0;i<5;i++)pond.add(box('#9a5a2c',.04,.02,1.3,-(r+.35)+(i+.5)*jetty/5,surface+.16,0));
     pond.traverse(o=>{o.castShadow=false;});
-    const entity=this.addEntity('fish',this.planet==='home'?'Fishing pond':'Planetary fishing pool','🎣',pond,x,z,radius);entity.waterId=waterId??(this.planet==='home'?Math.hypot(x,z)<18?'home':zoneAt({x,z})==='swamp'?'swamp':'lake':this.planet);entity.pond={rx:5.2*s,rz:5.2*s*.72,surface:.3};this.obstacle(x,z,radius*.83);
+    const entity=this.addEntity('fish',this.planet==='home'?'Fishing pond':'Planetary fishing pool','🎣',pond,x,z,radius);entity.waterId=id;entity.pond={rx:r,rz:r,surface};
+    // Solid up to the sandy lip: the explorer fishes from the shore, 0.6 m outside the water line.
+    this.obstacle(x,z,r+.15);
   }
   chibi(color: string) {
     const c=group();
@@ -807,7 +810,10 @@ export class World {
   screen(x:number,y:number,z:number) { const v=new T.Vector3(x,y,z).project(this.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2,visible:v.z<1&&Math.abs(v.x)<1.3&&Math.abs(v.y)<1.3,front:v.z<1}; }
   /** A tap: an entity picked in screen space (or by the short raycast fallback), else a walk unless it would change nothing. */
   pointer(clientX:number,clientY:number) {
-    const entity=this.pickEntity(clientX,clientY);if(entity){this.select(entity);return;}
+    const entity=this.pickEntity(clientX,clientY);
+    // A tap on a pond also says where to cast: the point under the finger on the water's surface (as the reference's plan()).
+    if(entity?.pond){const p=this.raycaster.ray.intersectPlane(new T.Plane(UP,-entity.pond.surface),new T.Vector3());this.pondTap=p?{id:entity.id,x:p.x,z:p.z}:null;if(p)this.fx?.ring(p,{from:.9,to:.2,life:.35,thick:.25,y:entity.pond.surface+.02});}
+    if(entity){this.select(entity);return;}
     const point=this.groundPoint(clientX,clientY);if(!point||ignoreRetarget(point,this.selected?null:this.destination,this.position,false))return;
     this.selected=null;this.ring.visible=false;this.walkTo(point.x,point.z);
   }
@@ -851,7 +857,7 @@ export class World {
   private interactionRange(e:Entity) { return e.kind==='enemy'?attackRange(M.weaponStats(this.state),e.radius):e.radius+1.45; }
   select(e:Entity) {
     if(!this.validTarget(e))return;
-    this.selected=e;this.ring.visible=e.kind!=='enemy';this.ring.scale.setScalar(e.radius);this.ring.position.set(e.x,.12,e.z);
+    this.selected=e;this.ring.visible=e.kind!=='enemy'&&!e.pond;this.ring.scale.setScalar(e.radius);this.ring.position.set(e.x,.12,e.z);
     if(this.position.distanceTo(new T.Vector3(e.x,0,e.z))<=this.interactionRange(e)){this.destination=null;this.route=[];this.marker.visible=false;if(e.kind==='enemy')this.onAttackEnemy(e as Enemy);else {this.selected=null;this.ring.visible=false;this.onInteract(e);}return;}
     const point=approach(this.position,e,e.radius,this.collisionObstacles(),e.kind==='enemy'?this.interactionRange(e)-.15:e.radius+1.1,this.navigationOptions());if(point)this.walkTo(point.x,point.z,true);
   }

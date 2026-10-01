@@ -15,7 +15,7 @@ import * as M from './model.ts';
 import { CombatTimers, FishingInput, MovementControls } from './gameplay-controls.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatHit, type CombatEffect } from './combat.ts';
 import { CombatView } from './combat-view.ts';
-import { FishingSimulation, selectCatch } from './fishing.ts';
+import { FishingSimulation, selectCatch, planCast, catchWeight } from './fishing.ts';
 import { GroundGestures } from './gestures.ts';
 import { ZOOM, clampZoom } from './camera-rig.ts';
 import {clearSegment,WORLD_BOUNDS} from './navigation.ts';
@@ -42,7 +42,10 @@ let saveFailed = false, elapsed = 0, uiElapsed = 0, frameTime = 16;
 const combatTimers = new CombatTimers();
 const cooldowns = combatTimers.skills, skillDurations = [7,4,9,6];
 let audio: AudioContext | null = null;
-let fishGame: {input:FishingInput;simulation:FishingSimulation;id:string;size:number;huge:boolean;bait:boolean;lastPhase:string;missedBites:number} | null = null;
+type FishPick={id:string;power:number;size:number;huge:boolean};
+let fishGame: {input:FishingInput;simulation:FishingSimulation<FishPick>;lastPhase:string;seen:{missed:number;bait:number;early:number};tooEarlyUntil:number} | null = null;
+/** Where the last line went in, so the Cast button and F recast to the same spot. */
+let lastCast:{id:string;x:number;z:number}|null=null;
 let fishingWater='home';
 let shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forge'='craft',craftTab='All';
 let placement:{id:string;rotation:number;x:number;z:number;ok:boolean}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
@@ -461,39 +464,45 @@ function fish(pond?:Entity|null){
   pond??=world.entities.filter(e=>e.kind==='fish'&&e.pond).sort((a,b)=>Math.hypot(a.x-world.position.x,a.z-world.position.z)-a.radius-(Math.hypot(b.x-world.position.x,b.z-world.position.z)-b.radius))[0]??null;
   if(!pond?.pond||Math.hypot(pond.x-world.position.x,pond.z-world.position.z)>pond.radius+3){toast('Walk up to a pond to cast your line.','🎣');return;}
   fishPond=pond;fishingWater=pond.waterId??state.planet;
-  const weights=M.FISH_WEIGHTS[fishingWater]??M.FISH_WEIGHTS.home,stats=M.activeStats(state),bait=(state.bag.worm??0)>0;
-  const pool=weights.map(([id,weight])=>{const fish=M.FISH[id];return {id,weight:weight*(fish.rarity==='rare'?1+stats.luck+(rod.quality??0)*.4:fish.rarity==='legendary'?1+stats.luck*2+(rod.quality??0)*.6:1),min:fish.size[0],max:fish.size[1],junk:fish.rarity==='junk'};});
-  const selected=selectCatch(pool),definition=M.FISH[selected.id],input=new FishingInput();input.ready=true;
-  fishGame={input,simulation:new FishingSimulation({quality:rod.quality??0,power:definition.power,bait}),id:selected.id,size:selected.size,huge:selected.huge,bait,lastPhase:'cast',missedBites:0};
-  world.destination=null;world.route=[];world.selected=null;world.ring.visible=false;world.facing=Math.atan2(pond.x-world.position.x,pond.z-world.position.z);
+  // The tap on the water picks the cast point, near or far (the reference's plan()); a recast reuses the last spot.
+  const water={x:pond.x,z:pond.z,r:pond.pond.rx},tap=world.pondTap?.id===pond.id?world.pondTap:lastCast?.id===pond.id?lastCast:water;world.pondTap=null;
+  const {cast}=planCast(water,world.position,tap);lastCast={id:pond.id,...cast};
+  const weights=M.FISH_WEIGHTS[fishingWater]??M.FISH_WEIGHTS.home,stats=M.activeStats(state),input=new FishingInput();input.ready=true;
+  // Each fish that swims up is chosen then, with the worm/rod/luck bonus on rare and legendary fish.
+  const choose=(bonus:number):FishPick=>{const s=selectCatch(weights.map(([id,weight])=>{const f=M.FISH[id];return {id,weight:catchWeight(weight,f.rarity,bonus),min:f.size[0],max:f.size[1],junk:f.rarity==='junk'};}));return {...s,power:M.FISH[s.id].power};};
+  const simulation=new FishingSimulation<FishPick>({quality:rod.quality??.3,bait:(state.bag.worm??0)>0,luck:stats.luck,choose,approachFrom:p=>fishingView.approachDistance(p.id),water,cast,player:{x:world.position.x,z:world.position.z}});
+  fishGame={input,simulation,lastPhase:'cast',seen:{missed:0,bait:0,early:0},tooEarlyUntil:0};
+  world.destination=null;world.route=[];world.selected=null;world.ring.visible=false;world.facing=Math.atan2(cast.x-world.position.x,cast.z-world.position.z);
   world.fishing='cast';world.castT=.5;showReel(true);
-  fishingView.begin(pondView(pond),tipPosition(),world.position,selected.id);
+  fishingView.begin(pondView(pond),tipPosition(),cast);
 }
-const FISH_HINTS:Record<string,string>={cast:'Casting…',waiting:'Wait for a bite…',nibble:'A nibble… not yet!',bite:'Bite! Press Reel!'};
+const FISH_HINTS:Record<string,string>={cast:'Casting…',wait:'Wait for a fish…',approach:'A fish is coming… wait!',nibble:'A nibble… not yet!',bite:'Bite! Press Reel!'};
 function updateFishing(dt:number){
   const f=fishGame;if(!f)return;const sim=f.simulation;
   if(world.destination||world.route.length){endFishing('Fishing line reeled in.');return;}
   sim.update(dt,f.input.held);
-  if(sim.missedBites>f.missedBites){f.missedBites=sim.missedBites;if(f.bait)change(()=>M.removeItem(state.bag,'worm'));f.bait=(state.bag.worm??0)>0;sim.setBait(f.bait);toast('Missed the bite — wait for the next fish.','🎣');}
+  // Worms are used at a missed bite, a snap, slack line and a catch (not when a fish just swims off).
+  if(sim.baitUsed>f.seen.bait){const used=sim.baitUsed-f.seen.bait;f.seen.bait=sim.baitUsed;change(()=>{for(let i=0;i<used;i++)M.removeItem(state.bag,'worm');});sim.setBait((state.bag.worm??0)>0);}
+  if(sim.missedBites>f.seen.missed){f.seen.missed=sim.missedBites;toast('Missed the bite — wait for the next fish.','🎣');}
+  if(sim.earlyPresses>f.seen.early){f.seen.early=sim.earlyPresses;f.tooEarlyUntil=sim.time+1.5;}
   if(sim.phase!==f.lastPhase){if(sim.phase==='bite')vibrate(40);f.lastPhase=sim.phase;}
-  world.fishing=sim.phase==='cast'?'cast':sim.phase==='fight'?'fight':'wait';
-  $('#fish-hint').textContent=sim.phase==='fight'?(sim.surge>0?'Surge! Let go!':sim.tension>.78?'Easy… let the line go':'Hold Reel to pull it in'):FISH_HINTS[sim.phase]??'';
+  world.fishing=sim.phase==='cast'?'cast':sim.phase==='hooked'?'fight':'wait';
+  $('#fish-hint').textContent=sim.phase==='wait'&&sim.time<f.tooEarlyUntil?'Too early! Wait for the bobber to sink.':sim.phase==='hooked'?(sim.surge>0?'Surge! Let go!':sim.tension>.78?'Easy… let the line go':'Hold Reel to pull it in'):FISH_HINTS[sim.phase]??'';
   const button=$('#reel-button');button.classList.toggle('bite',sim.phase==='bite');button.classList.toggle('down',f.input.held);button.setAttribute('aria-pressed',String(f.input.held));
   if(!sim.finished)return;
   fishGame=null;world.fishing='idle';
-  if(f.bait)change(()=>M.removeItem(state.bag,'worm'));
   if(sim.phase==='escaped'){
-    if(sim.reason.includes('snapped')){fishingView.snap();floating('Line snapped! 💔',world.position.x,world.position.z,'hurt');}else fishingView.cancel();
+    if(sim.snapped){fishingView.snap();setTimeout(()=>floating('Line snapped! 💔',world.position.x,world.position.z,'hurt'),250);}else fishingView.cancel();
     showReel(true,'cast');recastUntil=performance.now()+6000;toast(sim.reason,'💧');return;
   }
-  const caught=M.FISH[f.id];showReel(false);
+  const pick=sim.pick!,caught=M.FISH[pick.id];showReel(false);
   fishingView.land(()=>world.position,()=>{
-    change(()=>M.grantCatch(state,f.id,f.size,f.huge));tone('success');
+    change(()=>M.grantCatch(state,pick.id,pick.size,pick.huge));tone('success');
     world.fx?.burst(world.position,{n:18,color:['#bfe9ff','#ffffff','#ffe66d'],glow:true,speed:4,up:6});
     floating(`${caught.rarity==='legendary'?'👑':caught.rarity==='rare'?'✨':caught.rarity==='junk'?'🥾':'🐟'} ${caught.name}`,world.position.x,world.position.z,caught.rarity==='junk'?'item':'item big');
-    if(caught.rarity!=='junk')setTimeout(()=>floating(`${f.huge?'💪 HUGE ':'📏 '}${formatSize(f.size)}`,world.position.x,world.position.z,f.huge?'crit big':'xp'),350);
-    if(f.huge)world.fx?.shake(.3);
-    if(caught.rarity==='legendary')toast(`Legendary catch! ${caught.name}, ${formatSize(f.size)}.`,'👑');
+    if(caught.rarity!=='junk')setTimeout(()=>floating(`${pick.huge?'💪 HUGE ':'📏 '}${formatSize(pick.size)}`,world.position.x,world.position.z,pick.huge?'crit big':'xp'),350);
+    if(pick.huge)world.fx?.shake(.3);
+    if(caught.rarity==='legendary')toast(`Legendary catch! ${caught.name}, ${formatSize(pick.size)}.`,'👑');
     showReel(true,'cast');recastUntil=performance.now()+6000;
   });
 }
@@ -808,4 +817,4 @@ requestAnimationFrame(frame);
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,drops,get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone}});
+if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,drops,fishingView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone}});
