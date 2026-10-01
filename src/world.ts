@@ -42,8 +42,9 @@ type Particle = { mesh: T.Mesh; velocity: T.Vector3; life: number; max: number }
 const UP = new T.Vector3(0, 1, 0);
 const matCache = new Map<string, T.MeshStandardMaterial>();
 const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', sell: 'market', shop: 'outfitters', upgrade: 'crystal', chest: 'chest', craft: 'workshop', cook: 'kitchen' };
-// A bed's entity holds only this invisible box (tap raycasts still find the bed and its crop); GardenBeds draws the beds.
-const BED_PICK=new T.BoxGeometry(2.1,1.2,2.1).translate(0,.6,0),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
+// A bed's entity holds only this invisible shape, the bed slab plus a column where its crop card stands, so tap raycasts
+// find the bed and its crop but pass over it to the bed behind. GardenBeds draws the beds.
+const BED_PICK=mergeGeometries([new T.BoxGeometry(2.1,.32,2.1).translate(0,.16,0),new T.BoxGeometry(.8,1.05,.8).translate(0,.75,0)]),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
 // Planet palettes for the shared scenery kit (material name → colour). Home uses the kit's own colours.
 const SCENERY_KITS = { scenery: sceneryKit, wilds: wildsKit, bright: brightKit, harsh: harshKit };
 const KIT_TINTS: Partial<Record<PlanetId, Record<string, string>>> = {
@@ -733,6 +734,8 @@ export class World {
     for(const e of this.entities)if(!RAYCAST_ONLY.has(e.kind)&&this.validTarget(e)){const c=pickCircle(e.kind,e.radius,(e as Enemy).boss,e.kind==='enemy'?this.modelHeight(e):0);circles.push({x:e.x,y:e.mesh.position.y+c.h,z:e.z,radius:c.r*scale,entity:e});}
     const held=circlesAt(circles,this.camera,innerWidth,innerHeight,clientX,clientY);
     this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);
+    // A ripe crop stands up toward the bed behind, whose circle can hold its top: the bed or crop under the finger wins.
+    if(held[0]?.entity.kind==='plot'){const beds=this.entities.filter(e=>e.kind==='plot'&&nearRay(this.raycaster.ray,e.x,0,e.z,e.radius)).map(e=>e.mesh);const bed=beds.length?this.raycastEntity(beds):null;if(bed)return bed;}
     // Circles of a pack overlap: when several hold the tap, a real body under the finger beats the deepest circle.
     if(held.length>1)return this.raycastEntity(held.map(c=>c.entity.mesh))??held[0].entity;
     if(held.length)return held[0].entity;

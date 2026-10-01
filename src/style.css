@@ -715,7 +715,7 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
   font-size: 15px;
 }
 /* Compact crop labels on the bed's front edge (reference 29/09 update): a 20 px ready badge or a 22x5 px growth bar. */
-.plot-label, .plot-label.ready { padding: 0; gap: 0; border: 0; background: none; box-shadow: none; }
+.plot-label, .plot-label.ready { padding: 0; gap: 0; border: 0; background: none; box-shadow: none; pointer-events: none; }
 .plot-label.ready > span { width: 20px; height: 20px; border: 2px solid #fff; background: var(--sun); box-shadow: 0 2px 0 var(--sun-deep); font-size: 10px; animation: bounce 1.2s ease-in-out infinite; }
 .plot-label.growing > span { display: block; width: 22px; height: 5px; border-radius: 3px; background: rgba(58, 36, 51, .55); box-shadow: 0 0 0 1px rgba(255, 255, 255, .85); overflow: hidden; }
 .plot-label.growing > span > b { display: block; height: 100%; border-radius: 3px; background: #9be36f; }

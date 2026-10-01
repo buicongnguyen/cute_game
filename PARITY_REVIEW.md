@@ -41,6 +41,7 @@ This is a substantially expanded evaluation build. Two independent browser accou
 - Offline and online adventures are separate. Signing out restores the offline adventure rather than replacing it with the account profile.
 - Renewable rewards use persisted timestamps. Reloading does not reset mine, resource or gift cooldowns.
 - If an explorer falls again before retrieving a dropped bag, its old contents move to storage rather than disappearing.
+- Garden crops match the reference's look (one crop per bed, its sprout / young / ripe stages and scales, ripe crops about 40 px tall on a phone, ink outline past the sprout, the 0.45 s harvest fly-up and the compact front-edge labels) with a different technique: the clone's own 3D crop models are baked at load into an atlas from the camera's angle and drawn as 2D cards in one instanced draw, where the reference draws a 3D model per crop. Beds are instanced and do not cast shadows. On a phone with 33 ripe beds this takes the garden view from about 1,450 to about 200 draw calls. The 3D crops remain as a fallback.
 
 ## Verified in this review
 
