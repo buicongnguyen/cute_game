@@ -65,13 +65,18 @@ export const CREATURE_TELEGRAPHS:Record<string,{r:number;at:'self'|'front'|'targ
  * How bosses take hits, after the reference (apply/applyStatus/trap): a hit never staggers a boss, so its
  * wind-up and skill go on; knockback is 6 m/s per knock unit, x0.15 on a boss; a launch (ground slam) lifts a
  * boss at x0.25, which does interrupt it; sheep, charm and fear are resisted and become a slow (x0.6 duration),
- * and a hard stun (ice, bubble, thunder) does the same. Ordinary creatures keep their short hit flinch.
+ * and a hard stun (ice, bubble, thunder) does the same.
+ * Ordinary creatures do not flinch either (the reference's feedback() only flashes, puffs and sparks; apply() never
+ * changes a wind-up): a hit pushes them, and only real crowd control (a stun of HARD_STUN or more: ice, bubble,
+ * thunder, bonk) stops them. A launch still interrupts through knockUpEnemy, like the reference's air-then-stun.
  */
+export const HARD_STUN=.5;
 export const KNOCK_IMPULSE=6,BOSS_KNOCK=.15,BOSS_LIFT=.25,BOSS_RESISTED=['fear','charm','sheep'] as const,RESIST_SLOW=.6;
-/** The stagger and slow a hit leaves on a creature: bosses turn a stun of 0.5 s or more into a slow and ignore the rest. */
-export function hitControl(boss:boolean,stun:number,flinch=.17):{stun:number;slow:number}{
-  if(!boss)return {stun:Math.max(stun,flinch),slow:0};
-  return {stun:0,slow:stun>=.5?stun*RESIST_SLOW:0};
+/** What a hit's stun leaves on a creature: below HARD_STUN nothing; a hard stun stuns an ordinary creature and only slows a boss. */
+export function hitControl(boss:boolean,stun:number):{stun:number;slow:number}{
+  const hard=stun>=HARD_STUN;
+  if(!boss)return {stun:hard?stun:0,slow:0};
+  return {stun:0,slow:hard?stun*RESIST_SLOW:0};
 }
 /** Launch height for a lift: velocity scales by BOSS_LIFT on a boss, so the height by its square. */
 export const liftHeight=(boss:boolean,height:number)=>boss?height*BOSS_LIFT*BOSS_LIFT:height;

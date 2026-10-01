@@ -156,7 +156,6 @@ export class CombatHud {
     if (boss) {
       if (boss.id !== this.bossId) { const icon = portrait(boss); document.getElementById('boss-icon')!.innerHTML = icon ?? '👑'; document.getElementById('boss-name')!.textContent = `👑 ${boss.name}`; if (icon !== null) this.bossId = boss.id; }
       document.getElementById('boss-fill')!.style.width = `${boss.hp / boss.maxHp * 100}%`;
-      document.getElementById('boss-hp')!.textContent = `${Math.ceil(boss.hp)} / ${boss.maxHp}`;
     } else this.bossId = '';
     return { target: !!target, boss: !!boss };
   }

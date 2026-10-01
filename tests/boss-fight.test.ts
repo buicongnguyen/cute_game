@@ -35,13 +35,11 @@ test('a hit never staggers a boss: its skill wind-up runs to the end and the ski
   assert.ok(Math.abs(steps*.025-total)<.03,`the wind-up ran its full ${total}s (${steps*.025}s)`);
   assert.equal(e.phase,'recover');assert.ok(damage>0,'the slam hit the explorer');
   assert.deepEqual(callouts,[BOSS_CALLOUTS.slam],'one callout for one wind-up, never repeated');
-  // An ordinary creature still flinches.
-  const wolf=w.spawnSpecies('wolf',40,0,1)!;w.damageEnemy(wolf,1);assert.ok(wolf.stun>=.17);
 });
 
 test('hard stuns and sheep, charm or fear only slow a boss (resisted), with a RESIST float',()=>{
   assert.deepEqual(hitControl(true,.15),{stun:0,slow:0});assert.deepEqual(hitControl(true,3),{stun:0,slow:3*.6});
-  assert.deepEqual(hitControl(false,0),{stun:.17,slow:0});assert.deepEqual(hitControl(false,2),{stun:2,slow:0});
+  assert.deepEqual(hitControl(false,0),{stun:0,slow:0});assert.deepEqual(hitControl(false,.15),{stun:0,slow:0});assert.deepEqual(hitControl(false,2),{stun:2,slow:0});
   texts.length=0;const w=world();w.fx=quietFx();w.position.set(32,0,0);const e=w.spawnSpecies('bear',30,0,0)!;
   w.damageEnemy(e,5,3);assert.equal(e.stun,0);assert.ok(Math.abs(e.statuses!.slow-1.8)<1e-9);
   w.statusEnemy(e,'sheep',6);w.statusEnemy(e,'charm',8);w.statusEnemy(e,'fear',4);
@@ -114,4 +112,25 @@ test('a defeated boss comes back after 90 s, and only once every explorer is mor
   const w=world();w.position.set(32,0,0);const e=w.spawnSpecies('bear',30,0,0)!;w.damageEnemy(e,e.hp);assert.equal(e.respawn,90);
   for(let i=0;i<3700;i++)w.update(.025,true,false);assert.equal(e.hp,0,'the explorer still stands near its home');
   w.position.set(60,0,0);step(w);assert.equal(e.hp,e.maxHp);assert.equal(e.enraged??false,false);
+});
+
+test('an ordinary creature does not flinch: punches during its wind-up neither stun it nor cancel the bite',()=>{
+  const w=world();let damage=0;w.onDamage=n=>{damage+=n;};w.position.set(30,0,0);const wolf=w.spawnSpecies('wolf',31.2,0,0)!;
+  for(let i=0;i<40&&wolf.phase!=='windup';i++)step(w);assert.equal(wolf.phase,'windup');
+  for(let i=0;i<60&&!damage;i++){if(i%4===0)w.damageEnemy(wolf,1,.15);assert.equal(wolf.stun,0);step(w);}
+  assert.ok(damage>0,'the wind-up ran out and the bite landed');
+  // Real crowd control still stops it: a hard stun (ice, thunder) and a launch.
+  w.damageEnemy(wolf,1,1.5);assert.equal(wolf.stun,1.5);step(w);assert.equal(wolf.phase,'chase');
+});
+
+test('knock distances match the reference: a punch slides a creature about 0.6 m, a boss about 0.09 m',()=>{
+  // Two identical worlds, one knocked: the difference is the slide alone (6 m/s per unit, damped by 1 - 8 dt).
+  const slide=(type:string,knock:number)=>{
+    const run=(k:number)=>{const w=world();w.position.set(0,0,0);const e=w.spawnSpecies(type,45,0,0)!;if(k)w.knockEnemy(e,1,0,k);step(w,60);return e.x;};
+    return run(knock)-run(0);
+  };
+  const wolf=slide('wolf',.8),third=slide('wolf',2.2),bear=slide('bear',.8);
+  assert.ok(Math.abs(wolf-.8*6/8)<.08,`punch slide ${wolf.toFixed(3)} m`);
+  assert.ok(Math.abs(third-2.2*6/8)<.2,`third punch slide ${third.toFixed(3)} m`);
+  assert.ok(Math.abs(bear-.8*6*.15/8)<.03,`boss slide ${bear.toFixed(3)} m`);
 });

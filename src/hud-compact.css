@@ -108,6 +108,8 @@
   .home-button { width: var(--b); height: var(--b); padding: 0; justify-content: center; bottom: 8px; }
   #context-prompt { bottom: calc(86px + var(--safe-bottom)); }
   #boss-bar { top: calc(var(--edge) + var(--safe-top) + var(--b) * 2 + var(--gap) + var(--mm) + 16px); }
+  /* The zone banner would sit on the boss bar: with a boss up it drops just below the bar (about 46 px tall). */
+  #app.boss-on #zone-banner { top: calc(var(--edge) + var(--safe-top) + var(--b) * 2 + var(--gap) + var(--mm) + 16px + 58px); }
 }
 /* Short landscape screens: one row of menu buttons, the 2x2 skill block, labels hidden. */
 @media (max-height: 520px) and (orientation: landscape) {
