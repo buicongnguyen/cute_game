@@ -31,7 +31,7 @@ const urls = files.map(file => base + path.relative(dist, file).split(path.sep).
 // when that planet is first visited and the farm pen kit only when the pen is first shown,
 // so the worker keeps each one the first time it is fetched instead of fetching them all
 // at install.
-const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|disguises|pets|worlds-[a-z]+|farm|creatures)\.glb$/.test(url);
+const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|disguises|pets|worlds-[a-z]+|farm|creatures|helper)\.glb$/.test(url);
 const assets = urls.filter(url => !onDemand(url)), later = urls.filter(onDemand);
 const hash = createHash('sha256');
 for (let index = 0; index < files.length; index++) {

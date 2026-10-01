@@ -24,7 +24,7 @@ const safeProfile = value => Game.parseSave(JSON.stringify(value));
 const publicAccount = account => ({ id: account.id, username: account.username, name: account.profile.name, color: account.profile.color, level: account.profile.level, gear: account.profile.gear });
 const publicHome = account => {
   const source = account.profile;
-  return { ...publicAccount(account), plots: source.plots, decorations: source.decorations || [], farm: source.farm || null, home: source.home || null, placed: source.placed || [] };
+  return { ...publicAccount(account), plots: source.plots, decorations: source.decorations || [], farm: source.farm || null, helper: source.helper || null, home: source.home || null, placed: source.placed || [] };
 };
 const send = (socket, payload) => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload)); };
 const failure = (status, message) => Object.assign(new Error(message), { status });

@@ -1,6 +1,6 @@
 """Zoo Garden weapons and pet companions: gear-weapons.glb, pets.glb and their item icons.
 
-Nineteen hand-held weapons (swords, blasters, hammers, a scythe, a bow, a staff, a trident and two
+Nineteen hand-held weapons (swords, blasters, hammers, a scythe, a bow, a staff, a trident and three
 fishing rods) and seven pet companions, authored procedurally as chunky, glossy toys that read in the
 explorer's hand from the high game camera: bold silhouettes, strong colour contrast and emissive parts
 for anything that should glow. See CONTRACT.md, "Explorer and gear".
@@ -71,6 +71,7 @@ WEAPONS = [
     ('trident', 'trident', 'Ocean trident', 'tsunami'),
     ('rod', 'rod', 'Fishing rod', None),
     ('rod_gold', 'rod', 'Golden fishing rod', None),
+    ('rod_steady', 'rod', 'Steady fishing rod', None),
 ]
 WEAPON_IDS = [w[0] for w in WEAPONS]
 KIND = {w[0]: w[1] for w in WEAPONS}
@@ -1313,13 +1314,25 @@ def build_rod_gold():
     return W
 
 
+def build_rod_steady():
+    # The steady rod: a sturdy cobalt rod with silver guides, a big reel wound with bright yellow line and a green
+    # glowing tip; its line never snaps in the game.
+    W = Weapon('rod_steady')
+    build_rod_common(W, W.m('grip', '#1F2A44', 0.6), W.m('butt', '#E8453C', 0.45), W.m('shaft', '#2F6BE0', 0.35),
+                     W.m('band', '#DCE4EE', 0.3, metal=0.4), W.m('reel', '#C9D3E0', 0.25, metal=0.45),
+                     W.m('reel line', '#FFD23A', 0.4), W.m('knob', '#FF8A2A', 0.4),
+                     W.m('tip', '#9BFF6B', 0.2, emit='#5CFF3A', strength=1.0), tip_r=0.026,
+                     gem=W.m('gem', '#2EE6A8', 0.15, emit='#18D18F', strength=0.8))
+    return W
+
+
 WEAPON_BUILDERS = dict(
     sword_wood=build_sword_wood, sword_tusk=build_sword_tusk, sword_crystal=build_sword_crystal,
     gun_pea=build_gun_pea, gun_bubble=build_gun_bubble, gun_spike=build_gun_spike, sword_candy=build_sword_candy,
     gun_ice=build_gun_ice, sword_lava=build_sword_lava, sword_obsidian=build_sword_obsidian,
     hammer_thunder=build_hammer_thunder, scythe_moon=build_scythe_moon, bow_star=build_bow_star,
     staff_fire=build_staff_fire, blaster_rainbow=build_blaster_rainbow, toy_hammer=build_toy_hammer,
-    trident=build_trident, rod=build_rod, rod_gold=build_rod_gold)
+    trident=build_trident, rod=build_rod, rod_gold=build_rod_gold, rod_steady=build_rod_steady)
 
 
 def pose_rotation(kind):

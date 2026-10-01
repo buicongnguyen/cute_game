@@ -1,0 +1,30 @@
+import { CROPS, canonicalItem, type CropId } from './content.ts';
+
+/**
+ * The garden helper's saved state. Kept apart from helper.ts (which needs model.ts) so model.ts can parse it without
+ * an import cycle. Saves from before the helper have no `helper` field: parseHelper turns that into "not owned".
+ */
+export interface HelperState {
+  owned: boolean;
+  /** The settings toggle: a paused helper stands by its bench and touches nothing. */
+  paused: boolean;
+  /** 'same' replants each bed with what grew there last; a crop id always plants that crop. */
+  seed: 'same' | CropId;
+  /** Last crop planted per bed, keyed by the bed's position (indices shift when a bed is stored, positions do not). */
+  last: Record<string, CropId>;
+}
+export const HELPER_COST = 1000;
+export const newHelper = (): HelperState => ({ owned: false, paused: false, seed: 'same', last: {} });
+const crop = (raw: unknown): CropId | null => { if (typeof raw !== 'string') return null; const id = canonicalItem(raw); return Object.hasOwn(CROPS, id) ? id : null; };
+
+/** Validates a saved helper (or a visitor's copy of one); anything malformed falls back to safe defaults. */
+export function parseHelper(raw: unknown): HelperState {
+  const h = newHelper();
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return h;
+  const v = raw as Record<string, unknown>;
+  h.owned = v.owned === true; h.paused = v.paused === true;
+  h.seed = v.seed === 'same' ? 'same' : crop(v.seed) ?? 'same';
+  if (v.last && typeof v.last === 'object' && !Array.isArray(v.last))
+    for (const [key, id] of Object.entries(v.last as Record<string, unknown>).slice(0, 64)) { const c = crop(id); if (c && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(key)) h.last[key] = c; }
+  return h;
+}

@@ -37,6 +37,10 @@ import './item-views.css';
 import { penHtml, penSignature, tickPen, collectText, dishesHtml, type FarmUi } from './farm-ui.ts';
 // Compact HUD sizes; imported last so it overrides style.css (and the online/platform styles) for the HUD only.
 import './hud-compact.css';
+import { HelperView } from './helper-view.ts';
+import * as Helper from './helper.ts';
+import { helperRow, helperPanel } from './helper-ui.ts';
+import './helper.css';
 import './language.css';
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
@@ -199,8 +203,10 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   $('.close-button').focus({preventScroll:true});
 }
 function closeDialog(){modal='';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
-function start() {settle();state.name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
+function start() {settle();helperCatchUp();state.name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
+/** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
+function helperCatchUp(){const r=change(()=>Helper.catchUp(state));if(r.harvested.length||r.planted.length)setTimeout(()=>toast(t('While you were away, Sprout harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
 function updateHud() {
   $('#world').dataset.status=JSON.stringify({position:[+world.position.x.toFixed(2),+world.position.z.toFixed(2)],route:world.route.length,next:world.route[0]?[world.route[0].x,world.route[0].z]:null,visibility:document.visibilityState,modal,started,frameMs:Math.round(frameTime),drawCalls:world.renderer.info.render.calls});
   $('#player-name').textContent=state.name;$('#level-badge').textContent=t(String(state.level));$('#level-text').textContent=t(`Lv. ${state.level}`);$('#energy').textContent=t(state.energy.toLocaleString());
@@ -358,14 +364,14 @@ function plotDialog(index:number) {
     // Reference openPlot: the crop with a big progress bar, a card per fertilizer, a tip when there is none, then expand.
     const crop=M.CROPS[plot.crop],progress=M.cropProgress(plot),fertilizer=(['manure','spore'] as const).map(id=>{const n=state.bag[id]||0,item=M.ITEMS[id];
       return `<div class="crop-row garden-row fertilizer-row"><span class="crop-art">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))} <span class="chip">×${n}</span></strong><p>${esc(item.desc)}</p></div><button class="primary" data-action="${id==='spore'?'fertilize':'fertilize-manure'}" ${n?'':'disabled'}>Use</button></div>`;}).join('');
-    openDialog('plot','Growing bed',`<div class="crop-row garden-row bed-status"><span class="crop-art">${art(plot.crop,crop.icon)}</span><div><strong>${esc(t(crop.name))}</strong><div class="grow-meter big"><i id="grow-fill" style="width:${progress*100}%"></i></div><p class="muted" id="grow-time">${growText(plot)}</p></div></div>${fertilizer}${!state.bag.manure&&!state.bag.spore?'<p class="garden-tip">💡 Defeat Grumpy Mushrooms, Wild Boars, Snapping Flowers… to collect fertilizer, or buy it at the equipment shop.</p>':''}${expandButton(true)}`,'GARDEN BED '+(index+1),art(plot.crop,crop.icon));return;
+    openDialog('plot','Growing bed',`<div class="crop-row garden-row bed-status"><span class="crop-art">${art(plot.crop,crop.icon)}</span><div><strong>${esc(t(crop.name))}</strong><div class="grow-meter big"><i id="grow-fill" style="width:${progress*100}%"></i></div><p class="muted" id="grow-time">${growText(plot)}</p></div></div>${fertilizer}${!state.bag.manure&&!state.bag.spore?'<p class="garden-tip">💡 Defeat Grumpy Mushrooms, Wild Boars, Snapping Flowers… to collect fertilizer, or buy it at the equipment shop.</p>':''}${expandButton(true)}${helperRow(state,!!visiting)}`,'GARDEN BED '+(index+1),art(plot.crop,crop.icon));return;
   }
   const empty=state.plots.filter(p=>!p.crop).length;
   // Unlocked crops first, then locked ones by the level that opens them.
   const crops=Object.entries(M.CROPS).sort(([,a],[,b])=>Number(state.level<a.level)-Number(state.level<b.level)||a.level-b.level);
   // Reference openSeeds: the grow button first, "store this bed" on an extra bed, then the seeds. A ripe tap gathers the
   // ripe beds around it, so the old "Harvest all" button is gone from here.
-  openDialog('plant','Choose a seed',`${expandButton(false)}<div class="garden-actions">${M.isExtraBed(state,index)?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.STARTING_PLOTS+M.MAX_EXTRA_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
+  openDialog('plant','Choose a seed',`${expandButton(false)}${helperRow(state,!!visiting)}<div class="garden-actions">${M.isExtraBed(state,index)?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.STARTING_PLOTS+M.MAX_EXTRA_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
     const locked=state.level<c.level,needsSeed=!!c.seed&&!state.bag[c.seed],item=M.ITEMS[id],effect=item?effectText(item):'';
     return `<div class="crop-row garden-row ${locked?'locked':''}"><span class="crop-art">${art(id,c.icon)}</span><div><strong>${esc(t(c.name))}</strong>${effect?`<p>${esc(effect)}</p>`:''}<div class="chips"><span class="chip chip-time">⏱ ${c.duration/1000}s</span><span class="chip chip-xp">✨ ${c.xp} XP</span>${item?`<span class="chip chip-energy">ϟ ${item.sell}</span>`:''}${c.seed?`<span class="chip chip-seed">${M.ITEMS[c.seed]?mini(c.seed):'🌰'} ${state.bag[c.seed]||0} seeds</span>`:''}</div></div>${locked?`<span class="chip chip-lock">🔒 Level ${c.level}</span>`:`<div class="button-row"><button class="primary" data-action="plant" data-item="${id}" ${needsSeed?'disabled':''}>Plant</button><button class="sky-button" data-action="plant-all" data-item="${id}" ${needsSeed||!empty?'disabled':''}>All (${c.seed?Math.min(empty,state.bag[c.seed]||0):empty})</button></div>`}</div>`;
   }).join('')}</div>`,'YOUR GARDEN');
@@ -524,6 +530,11 @@ function help(){openDialog('help','A small guide to a big world',`<div class="he
 // Fishing happens in the world: no panel, just the pond, the line and a big Reel button.
 let fishPond:Entity|null=null,recastUntil=0;
 const fishingView=new FishingView(world.scene,world.fx!,fishKit,sound=>tone(sound));
+// The garden helper (helper.ts rules, helper-view.ts walking and poses, helper-ui.ts panels).
+const helperView=new HelperView();world.scene.add(helperView.group);
+function helperDialog(){if(visiting)return;openDialog('helper','Garden helper',helperPanel(state,{esc,mini,picture:`${ICON_BASE}helper.webp`}),'GARDEN HELPER','🤖');}
+const helperHarvest=(i:number)=>{const crop=change(()=>Helper.helperHarvest(state,i));if(crop){harvestBurst(i,crop);world.syncCrops();}return !!crop;};
+const helperPlant=(i:number)=>{const crop=change(()=>Helper.helperPlant(state,i));if(crop){plantBurst(i);tone('pop');world.syncCrops();}return !!crop;};
 const rodTip=new Vector3();
 function tipPosition(){const tip=world.player.getObjectByName('rod-tip');if(tip){world.player.updateWorldMatrix(true,true);tip.getWorldPosition(rodTip);}else rodTip.set(world.position.x,1.4,world.position.z);return rodTip;}
 function pondView(e:Entity):PondView{return {id:e.id,x:e.x,z:e.z,rx:e.pond!.rx,rz:e.pond!.rz,surface:e.pond!.surface,waterId:e.waterId??state.planet};}
@@ -567,7 +578,7 @@ function fish(pond?:Entity|null){
   const weights=M.FISH_WEIGHTS[fishingWater]??M.FISH_WEIGHTS.home,stats=M.activeStats(state),input=new FishingInput();input.ready=true;
   // Each fish that swims up is chosen then, with the worm/rod/luck bonus on rare and legendary fish.
   const choose=(bonus:number):FishPick=>{const s=selectCatch(weights.map(([id,weight])=>{const f=M.FISH[id];return {id,weight:catchWeight(weight,f.rarity,bonus),min:f.size[0],max:f.size[1],junk:f.rarity==='junk'};}));return {...s,power:M.FISH[s.id].power};};
-  const simulation=new FishingSimulation<FishPick>({quality:rod.quality??.3,bait:(state.bag.worm??0)>0,luck:stats.luck,choose,approachFrom:p=>fishingView.approachDistance(p.id),water,cast,player:{x:world.position.x,z:world.position.z}});
+  const simulation=new FishingSimulation<FishPick>({quality:rod.quality??.3,steady:rod.steady===true,bait:(state.bag.worm??0)>0,luck:stats.luck,choose,approachFrom:p=>fishingView.approachDistance(p.id),water,cast,player:{x:world.position.x,z:world.position.z}});
   fishGame={input,simulation,lastPhase:'cast',seen:{missed:0,bait:0,early:0},tooEarlyUntil:0};
   world.destination=null;world.route=[];world.moving=false;world.selected=null;world.ring.visible=false;world.facing=Math.atan2(cast.x-world.position.x,cast.z-world.position.z);
   world.fishing='cast';world.castT=.5;showReel(true);
@@ -629,6 +640,8 @@ const drops=createDrops(world,{layer:$('#world-labels'),alive:()=>state.hp>0,ite
   canAdd:(id,n)=>Number.isSafeInteger((state.bag[id]??0)+n),onPick:(d,stack)=>{if(!change(()=>M.addItem(state,d.item,d.count)))return;floating(`+${d.count} ${t(M.ITEMS[d.item].name)}`,world.position.x,world.position.z,'item',stack*.7);tone('coin');},
   onFull:()=>toast('Your backpack is full. Store or sell something first.','🎒'),onRare:(d,name)=>{floating(`${d.rarity==='legendary'?'👑':'✨'} ${name}`,d.x,d.z,'item');tone('level');},onExpire:d=>world.burst(d.x,d.z,'#cfd6e6',6)});
 frameListeners.add(dt=>drops.update(dt));
+// Drawn on the next frame's render: a one-frame lag is invisible on a 0.5 m gardener.
+frameListeners.add(dt=>helperView.update(dt,{state:!flight&&world.planet==='home'?world.state:null,act:started&&!visiting&&world.state===state&&!document.hidden,now:Date.now(),harvest:helperHarvest,plant:helperPlant}));
 function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string;x?:number;z?:number}){
   const loot=change(()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss,Math.random,false));
   // Experience flies in as cyan orbs; the loot is tossed onto the ground where the creature fell.
@@ -716,13 +729,13 @@ export const gameBridge:GameBridge={
   setVisiting(owner,home){
     if(owner&&owner===visiting&&home&&visitHome){
       const expanded=home.plots&&home.plots.length!==visitHome.plots.length,decorChanged=JSON.stringify(home.decorations??[])!==JSON.stringify(visitHome.decorations);
-      visitHome.plots=structuredClone(home.plots??visitHome.plots);visitHome.decorations=structuredClone(home.decorations??visitHome.decorations);visitHome.farm=M.parseFarm((home as {farm?:unknown}).farm);
+      visitHome.plots=structuredClone(home.plots??visitHome.plots);visitHome.decorations=structuredClone(home.decorations??visitHome.decorations);visitHome.farm=M.parseFarm((home as {farm?:unknown}).farm);visitHome.helper=M.parseHelper((home as {helper?:unknown}).helper);
       if(expanded){const position=world.position.clone();rebuildHomePresentation('home');world.position.copy(position);world.refreshPlayer();}
       else{world.syncCrops();if(decorChanged)world.syncDecorations();}
       updateLabels();return;
     }
     visiting=owner;resetCombat();closeDialog();
-    if(owner&&home){visitHome={...structuredClone(state),planet:'home',plots:structuredClone(home.plots??state.plots),decorations:structuredClone(home.decorations??[]),farm:M.parseFarm((home as {farm?:unknown}).farm)};world.state=visitHome;rebuildHomePresentation('home');}
+    if(owner&&home){visitHome={...structuredClone(state),planet:'home',plots:structuredClone(home.plots??state.plots),decorations:structuredClone(home.decorations??[]),farm:M.parseFarm((home as {farm?:unknown}).farm),helper:M.parseHelper((home as {helper?:unknown}).helper)};world.state=visitHome;rebuildHomePresentation('home');}
     else{visitHome=null;world.state=state;rebuildHomePresentation(state.planet);}
     world.refreshPlayer();$('#visit-banner').hidden=!owner;$('#visit-banner').textContent=t(owner?t('Visiting {owner} · look around their garden',{owner}):'');updateLabels();
   },
@@ -832,6 +845,10 @@ app.addEventListener('click',event=>{
     // Reference: a fertilizer that ripens the crop closes the panel; one that only speeds it up refreshes it.
     case 'fertilize-manure':case 'fertilize':if(change(()=>M.fertilize(state,activePlot,action==='fertilize'?'spore':'manure'))){world.syncCrops();const p=state.plots[activePlot];if(M.cropProgress(p)>=1){closeDialog();toast('Ready to harvest!','🌿');}else{plotDialog(activePlot);toast('Your crop will be ready sooner.','🌿');}}break;
     case 'expand':buyPlot();break;
+    case 'helper':helperDialog();break;
+    case 'helper-buy':{const r=change(()=>Helper.buyHelper(state));if(r==='bought'){tone('coin');helperView.reset();toast('Sprout joins your garden! It will tend the beds by itself.','🤖');}else if(r==='energy')toast(`You need ${Helper.HELPER_COST} energy to hire Sprout.`,'ϟ');else if(r==='away')toast('Garden beds belong at home. Return to your garden first.','🏡');helperDialog();break;}
+    case 'helper-pause':if(state.helper)change(()=>Helper.setHelperPaused(state,!state.helper!.paused));helperDialog();break;
+    case 'helper-seed':change(()=>Helper.setHelperSeed(state,id as M.CropId|'same'));helperDialog();break;
     case 'confirm-place':confirmPlacement();break;
     case 'store-bed':{const i=activePlot;if(change(()=>M.storeBed(state,i))){closeDialog();world.dropPlotsFrom(i);tone('poof');toast('The bed is packed away. It is in your bag as a garden bed kit.','🎒');}break;}
     case 'shop-tab':shopTab=button.dataset.kind!;shop();break;
@@ -952,4 +969,4 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,drops,fishingView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone}});
+if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,drops,fishingView,helperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone}});

@@ -775,3 +775,21 @@ before it arrived. Creatures it lacks, and every creature while it is missing, k
 Redrawn: mushroom, mushking, boar, bee, wolf, frog, crab, chomper, cactus, bear, treant, croc, gummy, jelly,
 snowball, penguin, icebloom, magmaslime, minislime, firelizard, magmacrab, chameleon, flytrap, cloudsheep, yeti,
 mammoth. Previews: `art/previews/kit/creatures.webp`, `creatures-planets.webp`, `creatures-poses.webp`.
+
+## Garden helper (`build_helper.py` → `helper.glb`)
+
+`public/assets/models/helper.glb` holds Sprout, the garden helper: a tiny
+gardening robot with a leaf sprout and a watering can, 0.53 m to the leaf tip
+(about a quarter of the explorer). Same rules as the farm animals: Blender Z up,
+front -Y (glTF Y up, front +Z), metres, origin at the ground centre.
+
+One root empty `helper` with one child mesh per part, `helper_<part>`:
+`body`, `head`, `arm_l`, `arm_r` (holds the can), `leg_l`, `leg_r`. A child's
+translation is the part's **pivot** (shoulder, hip, neck, waist) and its
+vertices are relative to it; no rotation or scale. Multi-material parts load as
+several meshes; match by the `helper_<part>` prefix. Materials are `Helper
+<name>`, flat colours, no textures or glow. Budget 1,500 triangles (now 1,436),
+about 46 KB. The game shows it at 1.5x (0.8 m) so it reads at the game camera. The runtime (`src/helper-view.ts`) bakes each part's colours into
+one geometry and draws all six with one shared toon material, with no shadow
+casting (a blob decal sits underneath). The build also renders
+`public/assets/icons/helper.webp` (160 × 160) for the hire panel.
