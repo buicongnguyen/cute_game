@@ -228,12 +228,13 @@ test('install manifest resolves its identity, launch URL, scope and icons within
   }
 });
 
-test('gear, planet scenery and the farm pen are kept the first time they are needed instead of downloading at install',async t=>{
-  const app=worker(await buildFixture(t,{'index.html':'shell','assets/models/cottage.glb':'cottage','assets/models/gear-wear.glb':'hats','assets/models/pets.glb':'pets','assets/models/worlds-harsh.glb':'ice','assets/models/farm.glb':'farm'},{base:'/cute_game/'}));
+test('gear, planet scenery, the farm pen and the creatures are kept the first time they are needed instead of downloading at install',async t=>{
+  const app=worker(await buildFixture(t,{'index.html':'shell','assets/models/cottage.glb':'cottage','assets/models/gear-wear.glb':'hats','assets/models/pets.glb':'pets','assets/models/worlds-harsh.glb':'ice','assets/models/farm.glb':'farm','assets/models/creatures.glb':'creatures'},{base:'/cute_game/'}));
   await app.lifecycle('install');
   assert.deepEqual(app.caches.requests.slice().sort(),['/cute_game/assets/models/cottage.glb','/cute_game/index.html']);
   assert.equal(await(await app.request('/cute_game/assets/models/gear-wear.glb')).text(),`network:${origin}/cute_game/assets/models/gear-wear.glb`);
   app.setNetwork(async()=>{throw new Error('offline');});
   assert.equal(await(await app.request('/cute_game/assets/models/gear-wear.glb')).text(),`network:${origin}/cute_game/assets/models/gear-wear.glb`,'the first download is kept for offline play');
   await assert.rejects(async()=>app.request('/cute_game/assets/models/pets.glb'),/offline/,'unworn gear needs the network; the game shows simple shapes instead');
+  await assert.rejects(async()=>app.request('/cute_game/assets/models/creatures.glb'),/offline/,'creatures never seen online keep their simple shapes offline');
 });
