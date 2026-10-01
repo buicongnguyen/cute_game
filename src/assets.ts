@@ -56,6 +56,7 @@ export class RefinedAssetLibrary {
     return this.loading;
   }
 
+  has(name: RefinedAsset) { return this.scenes.has(name); }
   clone(name: RefinedAsset): T.Group | null {
     const source = this.scenes.get(name);
     if (!source) return null;

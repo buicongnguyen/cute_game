@@ -133,3 +133,19 @@ test('stardust gives energy and sometimes a star shard; discovered planets survi
   M.discover(s,'ocean');const restored=M.parseSave(JSON.stringify(s))!;assert.deepEqual(restored.discovered,['home','ocean']);
   const old=JSON.parse(JSON.stringify(s));delete old.discovered;old.visited=['home','toy'];assert.deepEqual(M.parseSave(JSON.stringify(old))!.discovered,['home','toy'],'older saves count visited planets as discovered');
 });
+
+test('new beds never land on village obstacles, and saved beds on top of them move on load', () => {
+  const s = M.newGame(); s.energy = 1e7;
+  while (M.expandGarden(s));
+  assert.equal(s.plots.length, 33);
+  for (const p of s.plots.slice(9)) assert.ok(M.bedClear(p.x!, p.z!), `${p.x},${p.z}`);
+  // Explicit spots: the well and the cottage are refused.
+  const t = M.newGame(); t.energy = 1e4;
+  assert.equal(M.expandGarden(t, -7, -11), false); assert.equal(M.expandGarden(t, 0, -8), false); assert.equal(M.expandGarden(t, -13.65, 4.1), true);
+  // An old save with a bed on the well and one stacked on a starting bed.
+  const old = M.newGame(); old.plots.push({ crop: 'radish', plantedAt: 5, x: -7, z: -11 }, { crop: null, plantedAt: 0, x: -11.4, z: -.4 });
+  const r = reload(old), [well, stacked] = r.plots.slice(9);
+  assert.ok(M.bedClear(well.x!, well.z!)); assert.equal(well.crop, 'radish'); assert.equal(well.plantedAt, 5);
+  assert.ok(r.plots.slice(0, 10).every(p => Math.hypot(p.x! - stacked.x!, p.z! - stacked.z!) >= 2.15));
+  assert.deepEqual(r.plots.slice(0, 9).map(p => [p.x, p.z]), M.newGame().plots.map(p => [p.x, p.z]));
+});
