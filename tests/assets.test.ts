@@ -165,3 +165,16 @@ test('a gear file downloads nothing until something from it is worn, then only o
   assert.equal(kit.requested, true);
   assert.equal(loads, 1);
 });
+
+test('baking a model keeps the children of a merged mesh visible', async () => {
+  const { bakeModel } = await import('../src/assets.ts');
+  const root = new T.Group(), material = (color: string) => new T.MeshStandardMaterial({ color });
+  const arm = new T.Mesh(new T.BoxGeometry(), material('#ff0000')), body = new T.Mesh(new T.BoxGeometry(), material('#00ff00'));
+  const hand = new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffcc00', emissiveIntensity: 1 }));
+  hand.name = 'hand'; arm.add(hand); root.add(arm, body);
+  bakeModel(root);
+  assert.ok(root.getObjectByName('hand'), 'the glowing child is still in the model');
+  assert.equal(arm.parent, root, 'the merged parent stays, hidden');
+  assert.equal(arm.layers.mask, 0, 'and is no longer drawn');
+  assert.ok(root.children.some(c => c.name === 'baked'), 'the merged mesh was added');
+});

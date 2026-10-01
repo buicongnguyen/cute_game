@@ -147,7 +147,9 @@ export function bakeModel<O extends T.Object3D>(node: O, { deep = true, keep = (
     if (!geometry) continue;
     const material = like.clone(); material.color.set('#ffffff'); material.vertexColors = true; material.roughness = finish(like.roughness); material.name = `Baked ${signature.split('|')[1]}`;
     const merged = new T.Mesh(geometry, material); merged.name = 'baked'; merged.castShadow = meshes.some(m => m.castShadow); merged.receiveShadow = true;
-    for (const mesh of meshes) mesh.removeFromParent();
+    // A one-material glTF node is a Mesh that can have children (sockets, limbs): hide it
+    // rather than remove it, or its children would disappear with it.
+    for (const mesh of meshes) { if (mesh.children.length) mesh.layers.disableAll(); else mesh.removeFromParent(); }
     node.add(merged);
   }
   return node;
