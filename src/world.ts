@@ -1,5 +1,7 @@
 import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
-import { buildScatter, disposeScatter } from './scatter.ts';
+import { buildScatter, disposeScatter, fallbackParts, updateScatterShadows } from './scatter.ts';
+import { OccluderFade } from './occluders.ts';
+import { bakeCoverAtlas, coverCards, tickCoverCards, type CoverAtlas } from './cover-cards.ts';
 import { buildGround } from './ground.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
@@ -17,7 +19,7 @@ import {EnvironmentView} from './environment-art.ts';
 import {buildDecoration} from './decorations-art.ts';
 import {bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,type BossSkill} from './boss-patterns.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
-import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,type EnemyDefinition} from './enemy-types.ts';
+import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,enemyScale,type EnemyDefinition} from './enemy-types.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
@@ -69,10 +71,14 @@ function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 
  * fights: 105-120 CSS px on a 1440x900 desktop, 73-87 px on a 390x844 phone. Explorers online match.
  */
 export const HERO_SCALE = .84;
+/** The explorer model's height before HERO_SCALE (hero.glb), so the explorer stands about 1.93 m. */
+export const HERO_MODEL_HEIGHT = 2.3;
 // Creature AI level of detail, as in the reference: calm creatures farther than this from every explorer do not think.
 const AI_REST_RANGE=48,EXPLORER_RADIUS=.45;
 /** A* steps for a creature walking home (about a 35 m square of 1 m cells): enough around fences and ponds, never a long stall. */
-const ROUTE_BUDGET=1200,heightBox=new T.Box3();
+const ROUTE_BUDGET=1200,heightBox=new T.Box3(),occluderPoints=[new T.Vector3(),new T.Vector3(),new T.Vector3()],explorerPoints=occluderPoints.slice(0,2);
+/** Glowing eyes for creatures on dark planets (C8): one small unlit ball per eye, all in one batch. */
+const EYE_GLINTS=48,eyeGeometry=new T.IcosahedronGeometry(.15,1),eyeMaterial=new T.MeshBasicMaterial({color:'#fff3a6',toneMapped:false}),eyeMatrix=new T.Matrix4();
 /** A fixed 0-3 slot per creature id, so throttled creatures think on different steps. */
 function aiSlot(id:string){let h=0;for(let i=0;i<id.length;i++)h=h*31+id.charCodeAt(i)|0;return (h>>>0)%4;}
 function anyStatus(statuses:Record<string,number>|undefined){if(statuses)for(const key in statuses)if(statuses[key]>0)return true;return false;}
@@ -207,12 +213,60 @@ export class World {
   /** 1 draws all ground cover; .5 (low graphics) draws half of the grass and flowers. */
   detail=1;
   private scatterGroup:T.Group|null=null;
+  /** Fades tall scenery in front of the explorer and its target (CC-06). */
+  occluders?:OccluderFade;
+  private coverAtlas?:CoverAtlas;
+  private shadowsAt?:{x:number;z:number};
   /** Redraws the scenery from the plan, using whichever model files have loaded. */
   refreshScenery(){
     if(this.scatterGroup){this.root.remove(this.scatterGroup);disposeScatter(this.scatterGroup);}
     const tint=KIT_TINTS[this.planet];
     const parts=(type:string)=>{const kind=DECOR[type];if(!kind)return undefined;const kit=SCENERY_KITS[kind.kit];return kit.ready?kit.mergedParts(type,kind.tint?tint:undefined):undefined;};
-    this.scatterGroup=buildScatter(this.decor??[],parts,this.detail);this.root.add(this.scatterGroup);
+    // Ground cover becomes 2D cards baked from this world's own (tinted) cover models; without a renderer (tests) it stays 3D.
+    this.coverAtlas?.dispose();this.coverAtlas=undefined;
+    const coverKinds=[...new Set((this.decor??[]).filter(p=>DECOR[p.type]?.cover).map(p=>p.type))];
+    if(this.renderer&&coverKinds.length)this.coverAtlas=bakeCoverAtlas(this.renderer,coverKinds,type=>parts(type)??fallbackParts(type));
+    const atlas=this.coverAtlas;
+    this.scatterGroup=buildScatter(this.decor??[],parts,this.detail,atlas?list=>coverCards(atlas,list):undefined);this.root.add(this.scatterGroup);
+    this.occluders=new OccluderFade(this.scatterGroup);this.shadowsAt=undefined;
+  }
+  /**
+   * Scenery upkeep each frame: trees cast shadows only within 20 m of the camera target (re-checked every 2 m), the wind
+   * moves the cover cards, and tall pieces in front of the explorer's chest and head or its target fade (CC-06).
+   */
+  private updateScenery(dt:number,force=false){
+    const group=this.scatterGroup;if(!group)return;
+    tickCoverCards(this.time);
+    const t=this.cameraTarget;if(!this.shadowsAt||Math.hypot(t.x-this.shadowsAt.x,t.z-this.shadowsAt.z)>2){this.shadowsAt={x:t.x,z:t.z};updateScatterShadows(group,t.x,t.z);}
+    const height=HERO_MODEL_HEIGHT*HERO_SCALE*(this.player?.scale.y?this.player.scale.y/HERO_SCALE:1),p=this.position,points=occluderPoints;
+    points[0].set(p.x,p.y+height*.5,p.z);points[1].set(p.x,p.y+height*.88,p.z);let n=2;
+    const target=this.selected;
+    if(target&&this.validTarget(target)){const h=target.kind==='enemy'?this.modelHeight(target):1.2;points[2].set(target.x,target.mesh.position.y+h*.5,target.z);n=3;}
+    this.occluders?.update(dt,this.camera.position,n===3?points:explorerPoints,p,force);
+  }
+  /** Re-tests and snaps the occluder fade for the current camera at once (probes and tests). */
+  fadeOccludersNow(){this.camera.updateMatrixWorld();this.updateScenery(1,true);}
+  /** Where creature eyes glow on a dark planet outside the light (C8): the darkness gets a small hole at each. */
+  eyeGlints(){
+    const out:Array<{x:number;y:number;z:number;radius:number;creature:Enemy}>=[];if(!this.darknessActive())return out;
+    for(const e of this.enemies){
+      if(e.hp<=0||Math.hypot(e.x-this.position.x,e.z-this.position.z)>22)continue;
+      const s=enemyScale(e.type,e.boss),facing=e.mesh.rotation.y,ground=Math.max(-.7,terrainHeight(this.environment.layout,e))+(e.definition?.flying?1:0);
+      // The eyes sit 1.25 m up and 0.56 m forward on the unscaled model.
+      out.push({x:e.x+Math.sin(facing)*.56*s,y:ground+1.25*s,z:e.z+Math.cos(facing)*.56*s,radius:.8*s,creature:e});
+    }
+    return out;
+  }
+  private eyeMesh?:T.InstancedMesh;
+  /** Places the glowing eyes; they show only in the dark, where main.ts also opens a small hole in the darkness at each. */
+  private updateEyeGlints(){
+    const glints=this.darknessActive?.()?this.eyeGlints():[];
+    if(!glints.length){if(this.eyeMesh)this.eyeMesh.visible=false;return;}
+    if(!this.eyeMesh){this.eyeMesh=new T.InstancedMesh(eyeGeometry,eyeMaterial,EYE_GLINTS*2);this.eyeMesh.name='eye-glints';this.eyeMesh.frustumCulled=false;}
+    const mesh=this.eyeMesh;if(mesh.parent!==this.root)this.root.add(mesh);mesh.visible=true;
+    let n=0;for(const g of glints.slice(0,EYE_GLINTS)){const e=g.creature,f=e.mesh.rotation.y,s=enemyScale(e.type,e.boss),side=.18*s;
+      for(const k of [-1,1])mesh.setMatrixAt(n++,eyeMatrix.makeScale(s,s,s).setPosition(g.x+Math.cos(f)*side*k,g.y,g.z-Math.sin(f)*side*k));}
+    mesh.count=n;mesh.instanceMatrix.needsUpdate=true;
   }
   /** A shared-kit model tinted for this planet, or null while the kit is unavailable. */
   kit(name: string) { return sceneryKit.ready ? sceneryKit.instance(name, KIT_TINTS[this.planet]) : null; }
@@ -355,10 +409,7 @@ export class World {
     // Lava pools and the dragon nest sit below the rock; stones and mesas are their own solid pieces.
     const sunk=planet==='lava'?(x:number,z:number)=>layout.pools.some(p=>Math.hypot(x-p.x,z-p.z)<p.r+1)?-1.12:Math.hypot(x-layout.nest.x,z-layout.nest.z)<layout.nest.r+1?-.25:0:undefined;
     this.root.add(buildGround({planet,layout,ponds,base:planet==='cloud'?-30:planet==='ocean'?-1.15:0,height:sunk,segments:planet==='lava'?20:12}));
-    const free=(x:number,z:number,r:number)=>!someObstacleNear(this.obstacles,x,z,x,z,r,o=>Math.hypot(x-o.x,z-o.z)<o.r+r)&&!this.entities.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+r);
-    this.decor=planDecor({planet,layout,random:rng,free,ponds});
-    for(const piece of this.decor)if(piece.radius>0)this.obstacle(piece.x,piece.z,piece.radius);
-    for(const name of kitsFor(planet)){const kit=SCENERY_KITS[name];if(!kit.ready)void kit.load().then(()=>{if(kit.ready&&this.planet===planet)this.refreshScenery();});}
+    // Creatures are placed before the scenery, which then leaves a clearing around each spawn point (CC-7).
     const angles:Record<string,number>={canyon:0,meadow:Math.PI/2,forest:Math.PI,swamp:-Math.PI/2};let enemyIndex=0;
     const placeEnemy=(type:string,zone?:string,boss=false)=>{
       const def=ENEMY_TYPES[type];if(!def)return;
@@ -378,6 +429,10 @@ export class World {
       const dragon=this.enemies.find(e=>e.type==='dragon');if(dragon){dragon.x=dragon.homeX=this.environment.layout.nest.x;dragon.z=dragon.homeZ=this.environment.layout.nest.z;dragon.hp=0;dragon.respawn=999999;dragon.mesh.visible=false;}
       for(let i=0;i<18;i++){const minion=this.spawnSpecies('minislime',30,30,enemyIndex++)!;minion.hp=0;minion.respawn=999999;minion.mesh.visible=false;}
     }
+    const free=(x:number,z:number,r:number)=>!someObstacleNear(this.obstacles,x,z,x,z,r,o=>Math.hypot(x-o.x,z-o.z)<o.r+r)&&!this.entities.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+r);
+    this.decor=planDecor({planet,layout,random:rng,free,ponds,clearings:this.enemies.filter(e=>e.respawn<999999).map(e=>({x:e.homeX,z:e.homeZ,type:e.type}))});
+    for(const piece of this.decor)if(piece.radius>0)this.obstacle(piece.x,piece.z,piece.radius);
+    for(const name of kitsFor(planet)){const kit=SCENERY_KITS[name];if(!kit.ready)void kit.load().then(()=>{if(kit.ready&&this.planet===planet)this.refreshScenery();});}
     this.batchScenery();this.refreshScenery();this.root.add(this.player,this.companion);this.cameraTarget.copy(this.position);this.syncCrops();this.syncDropped();this.applyRefinedAssets();this.syncDecorations();this.refreshEnvironmentNodes();
     if(this.remoteRoot&&!this.remoteRoot.parent)this.scene.add(this.remoteRoot);
     for(const remote of this.remotePlayers?.values()??[])remote.mesh.visible=!remote.pose.planet||remote.pose.planet===planet;
@@ -560,7 +615,7 @@ export class World {
     const health=Math.round(def.hp*scale*(def.boss&&type!=='dragon'?2.6:1)),damage=def.damage*scale*(def.boss?1.35:1),xp=Math.round(def.xp*(.6+scale*.4));
     // Plain body parts become one or two meshes; named parts (legs, wings, shell) keep animating on their own.
     const model=bakeModel(this.speciesModel(def),{deep:false,keep:o=>!!o.name}),flash:T.MeshStandardMaterial[]=[];
-    model.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;
+    model.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;model.scale.setScalar(enemyScale(type,def.boss));
     const e=this.addEntity('enemy',def.name,def.boss?'👑':'⚔️',model,x,z,def.radius,index) as Enemy;
     Object.assign(e,{type,definition:def,hp:health,maxHp:health,baseMaxHp:health,baseDamage:damage,damage,xp,level:difficulty*3-2+(def.boss?6:0),homeX:x,homeZ:z,cooldown:0,respawn:0,boss:def.boss,stun:0,phase:'idle',phaseTime:0,route:[],routeTime:0,lift:0,liftVelocity:0,statuses:{}});this.enemies.push(e);return e;
   }
@@ -717,10 +772,10 @@ export class World {
     return null;
   }
   /** A creature's model height, measured once per model (a refined model replaces the placeholder later). */
-  private modelHeight(e:Entity) {
+  modelHeight(e:Entity) {
     const data=e.mesh.userData,asset=data.refinedAsset??null;
-    if(data.pickHeight===undefined||data.pickHeightAsset!==asset){const box=heightBox.setFromObject(e.mesh);data.pickHeight=Number.isFinite(box.max.y)?Math.max(0,box.max.y-e.mesh.position.y):0;data.pickHeightAsset=asset;}
-    return data.pickHeight as number;
+    if(data.pickHeight===undefined||data.pickHeightAsset!==asset){const box=heightBox.setFromObject(e.mesh);data.pickHeight=Number.isFinite(box.max.y)?Math.max(0,box.max.y-e.mesh.position.y)/(e.mesh.scale.y||1):0;data.pickHeightAsset=asset;}
+    return (data.pickHeight as number)*(e.kind==='enemy'?enemyScale((e as Enemy).type,(e as Enemy).boss):1);
   }
   private validTarget(e:Entity) { return this.entities.includes(e)&&e.mesh.parent===this.root&&e.mesh.visible&&(e.kind!=='enemy'||(e as Enemy).hp>0); }
   private interactionRange(e:Entity) { return e.kind==='enemy'?attackRange(M.weaponStats(this.state),e.radius):e.radius+1.45; }
@@ -1063,7 +1118,7 @@ export class World {
     const near=Math.hypot(e.x-this.cameraTarget.x,e.z-this.cameraTarget.z)<16;
     if(e.mesh.userData.castsShadow!==near){e.mesh.userData.castsShadow=near;e.mesh.traverse(o=>{if(o instanceof T.Mesh&&o.name!=='attack-telegraph')o.castShadow=near;});}
     // A defeated creature swells and shrinks away instead of blinking out.
-    if(e.hp<=0&&(e.dying??0)>0){e.dying=Math.max(0,e.dying!-dt);const t=1-e.dying/.3;e.mesh.visible=true;e.mesh.scale.setScalar((e.boss?1.85:1)*(1+t*.3)*Math.max(.001,1-t));if(!e.dying)e.mesh.visible=false;return;}
+    if(e.hp<=0&&(e.dying??0)>0){e.dying=Math.max(0,e.dying!-dt);const t=1-e.dying/.3;e.mesh.visible=true;e.mesh.scale.setScalar(enemyScale(e.type,e.boss)*(1+t*.3)*Math.max(.001,1-t));if(!e.dying)e.mesh.visible=false;return;}
     this.updateBossTelegraphs(e);
     // Gear stats only matter on the shadow planet; adding them up for every creature on every step was a measurable cost.
     const lightRadius=this.planet==='shadow'&&M.activeStats(this.state).light?7.5:3.6;
@@ -1074,8 +1129,7 @@ export class World {
     // A wanderer that thinks on every 4th step glides between its last two positions instead of hopping (teleports snap).
     const lod=this.networkRole!=='peer'?e.lod:undefined,glide=lod&&Math.abs(e.x-lod.x)+Math.abs(e.z-lod.z)<.5?Math.min(1,(lod.age+1)/4):1,drawX=lod?lod.x+(e.x-lod.x)*glide:e.x,drawZ=lod?lod.z+(e.z-lod.z)*glide:e.z;
     e.mesh.position.set(drawX,ground+(e.lift??0)+(e.definition?.flying?1+Math.sin(this.time*4+e.homeX)*.15:Math.sin(this.time*3+e.homeX)*.06),drawZ);
-    const scale=(e.boss?1.85:1)*((e.statuses?.sheep??0)>0?.45:1);e.mesh.scale.setScalar(scale);
-    if(e.type==='minislime')e.mesh.scale.multiplyScalar(.55);
+    const scale=enemyScale(e.type,e.boss)*((e.statuses?.sheep??0)>0?.45:1);e.mesh.scale.setScalar(scale);
     // Hit reaction: a white flash and a quick swell, like a squeezed toy.
     if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);e.mesh.scale.multiplyScalar(1+e.flash!*1.2);}
     const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as T.MeshStandardMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.emissive.set('#ffffff');m.emissiveIntensity=.75;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=1;}}}
@@ -1162,6 +1216,7 @@ export class World {
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);
     if(this.fx)this.camera.position.add(this.fx.shakeOffset(dt,this.shakeOffset));
+    this.updateScenery(dt);this.updateEyeGlints();
     this.followSun();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
     this.animateCrops(dt);

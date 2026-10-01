@@ -792,3 +792,26 @@ const combatRules:Record<string,Partial<EnemyDefinition>>={
   }
 };
 for(const [id,rule] of Object.entries(combatRules))if(ENEMY_TYPES[id])Object.assign(ENEMY_TYPES[id],rule);
+
+/**
+ * Size hierarchy (CC-05, RC-04): the reference's common creatures stand 0.60-0.74x its hero (hero 1.79 m; mushroom 1.14,
+ * boar 1.16, bee 1.07, wolf 1.33). Our explorer stands 2.3 m x HERO_SCALE 0.84 = 1.93 m, and the species models were
+ * 1.43-2.43 m tall (measured with speciesModel: mushroom 2.43, bunny 2.35, flowers/cactus/lollipop/urchin 2.12, jackbox 1.95,
+ * blobs/bipeds/winged/frog/penguin 1.65, worms 1.62, eye 1.68, volcano 1.45, quadrupeds/crabs/turtle 1.43), so most stood
+ * as tall as the explorer or taller. These scales bring every common creature to about 0.62x (small hoppers and fliers),
+ * 0.67x (middling) or 0.73x (big brutes and rooted plants) of the explorer. Bosses keep their own 1.85 scale and are not
+ * listed; the tiny magma slime that the magma slime splits into stays the smallest. Hit radii stay the reference's.
+ */
+export const ENEMY_SCALE:Readonly<Record<string,number>>={
+  mushroom:.49,boar:.91,bee:.73,wolf:.99,chomper:.67,frog:.73,cactus:.67,crab:.99,
+  jelly:.73,gummy:.91,lollipop:.61,bunny:.51,chocobeetle:.99,
+  snowball:.73,penguin:.85,icebloom:.67,seal:.99,owl:.73,
+  magmaslime:.85,minislime:.67,firelizard:.99,volcano:.89,firebat:.73,magmacrab:.99,magmaturtle:.99,lavaworm:.87,
+  toysoldier:.78,windmouse:.84,jackbox:.72,
+  monkey:.85,snake:.74,chameleon:.91,flytrap:.67,
+  jellyzap:.78,hammershark:.99,urchin:.67,
+  cloudsheep:.99,thunderbird:.85,windspirit:.78,
+  wisp:.73,spider:.99,demoneye:.84,
+};
+/** The scale a creature's model is drawn at: bosses 1.85, common creatures their ENEMY_SCALE. */
+export function enemyScale(type:string|undefined,boss=false){return boss?1.85:ENEMY_SCALE[type??'']??1;}
