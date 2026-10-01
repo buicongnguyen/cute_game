@@ -76,6 +76,14 @@ test('the raycast fallback tests only the few entities near the tap ray, never t
   assert.ok(lists.every(list=>list.every(o=>(o.userData.entity as Entity|undefined)?.kind==='home')),'no raycast ever held scenery or the far pond');
 });
 
+test('a tap on a creature\'s attack warning ring walks out of it instead of picking the creature',()=>{
+  const w=world();w.spawnEnemy(0,0,0,'Little Volcano');
+  const ring=new T.Mesh(new T.RingGeometry(1.4,1.5,32),new T.MeshBasicMaterial());ring.name='attack-telegraph';ring.rotation.x=-Math.PI/2;ring.position.y=.06;
+  w.enemies[0].mesh.add(ring);w.root.updateMatrixWorld(true);
+  w.raycaster.setFromCamera(new T.Vector2(1.45/3,0),w.camera);assert.equal(w.raycaster.intersectObject(ring).length,1,'the tap lands on the ring');
+  w.pointer(400+1.45*PX,300);assert.equal(w.selected,null);assert.ok(w.destination&&Math.abs(w.destination.x-1.45)<.01);
+});
+
 test('a move re-target within 0.6 m of the walk target keeps the path; a held pointer also rests within 0.8 m of the explorer',()=>{
   assert.equal(ignoreRetarget({x:.5,z:0},{x:0,z:0},{x:5,z:5},false),RETARGET_DEAD_ZONE>.5);
   assert.equal(ignoreRetarget({x:.7,z:0},{x:0,z:0},{x:5,z:5},false),false);

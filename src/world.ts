@@ -674,9 +674,10 @@ export class World {
     for(const e of this.entities)if(!RAYCAST_ONLY.has(e.kind)&&this.validTarget(e)){const c=pickCircle(e.kind,e.radius,(e as Enemy).boss);circles.push({x:e.x,y:e.mesh.position.y+c.h,z:e.z,radius:c.r*scale,entity:e});}
     const picked=pickInScreen(circles,this.camera,innerWidth,innerHeight,clientX,clientY);if(picked)return picked.entity;
     // Fallback for the cottage, ponds and tall parts outside a circle: only meshes near the tap ray, never the whole scene.
+    // A creature's warning ring is ground the explorer is stepping out of, not part of the creature.
     this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);
     const near=this.entities.filter(e=>this.validTarget(e)&&nearRay(this.raycaster.ray,e.x,e.mesh.position.y,e.z,e.radius)).map(e=>e.mesh);
-    for(const hit of near.length?this.raycaster.intersectObjects(near,true):[]){let obj:T.Object3D|null=hit.object;let entity:Entity|undefined,visible=true;
+    for(const hit of near.length?this.raycaster.intersectObjects(near,true):[]){if(hit.object.name==='attack-telegraph')continue;let obj:T.Object3D|null=hit.object;let entity:Entity|undefined,visible=true;
       while(obj){if(!obj.visible)visible=false;if(obj.userData.entity)entity=obj.userData.entity;obj=obj.parent;}
       if(visible&&entity&&this.validTarget(entity))return entity;
     }
