@@ -8,7 +8,7 @@ import { buildPond } from './pond-view.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
+import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
 import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
@@ -60,7 +60,7 @@ const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', 
 // find the bed and its crop but pass over it to the bed behind. GardenBeds draws the beds.
 const BED_PICK=mergeGeometries([new T.BoxGeometry(1.94*M.BED_SCALE,.32,1.94*M.BED_SCALE).translate(0,.16,0),new T.BoxGeometry(.8*M.CROP_SCALE,1.05*M.CROP_SCALE,.8*M.CROP_SCALE).translate(0,.75*M.CROP_SCALE,0)]),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
 // Planet palettes for the shared scenery kit (material name → colour). Home uses the kit's own colours.
-const SCENERY_KITS = { scenery: sceneryKit, wilds: wildsKit, bright: brightKit, harsh: harshKit };
+const SCENERY_KITS = { scenery: sceneryKit, wilds: wildsKit, bright: brightKit, harsh: harshKit, dressing: dressingKit };
 const KIT_TINTS: Partial<Record<PlanetId, Record<string, string>>> = {
   // "A" is the darker lower lobe, "B" the lighter crown on top.
   candy: { 'Leaf A': '#ff7fb8', 'Leaf B': '#ffb8d9', 'Blossom A': '#a97cff', 'Blossom B': '#dcc8ff', 'Pine A': '#ff8a5c', 'Pine B': '#ffc49a', Bark: '#b06a52', Grass: '#ff9ccf', Rock: '#d7a3e8' },

@@ -45,6 +45,8 @@ export function buildScatter(placements: readonly DecorPlacement[], parts: PartS
     const isCover = !!DECOR[p.type]?.cover;
     // Low graphics keeps every other blade of grass and flower; nothing that blocks is skipped.
     if (detail < 1 && isCover && coverIndex++ % 2) continue;
+    // Low graphics also leaves out the tiny dressing (pebbles, shells, sprinkles) entirely.
+    if (detail < 1 && DECOR[p.type]?.dressing) continue;
     // Tiles are centred on the origin so the village sits inside a single tile.
     const tile = `${Math.floor(p.x / SCATTER_TILE + .5)}|${Math.floor(p.z / SCATTER_TILE + .5)}`;
     const target = cover && isCover ? coverTiles : buckets, key = cover && isCover ? tile : `${p.type}|${tile}`;
@@ -112,6 +114,8 @@ const LOOK: Record<string, [string, string, 'tree' | 'pine' | 'rock' | 'blob' | 
   bush: ['#4fae4a', '#4fae4a', 'blob'], dry_bush: ['#d8b870', '#d8b870', 'blob'], fern: ['#3f9a4a', '#3f9a4a', 'blob'], gumdrops: ['#ff7ab0', '#9be36f', 'blob'], donut: ['#e8b070', '#ff9fd0', 'blob'],
   cupcake: ['#f2c070', '#ffffff', 'blob'], toyblock: ['#ff5a4a', '#4a8aff', 'blob'], toyball: ['#ff5a4a', '#ffe14d', 'blob'], snowman: ['#ffffff', '#ffffff', 'blob'], coral: ['#ff7a8a', '#ffb070', 'blob'],
   toadstools: ['#f4ead8', '#e8443a', 'blob'], mushroom: ['#f4ead8', '#e8443a', 'blob'], log: ['#8a5a3b', '#8a5a3b', 'blob'],
+  pebbles: ['#b9b2a6', '#b9b2a6', 'blob'], sprinkles: ['#ff4fa3', '#3fb6ff', 'tuft'], toy_bits: ['#ee2d2d', '#2462ea', 'blob'], sky_bloom: ['#fcfeff', '#8fd2ff', 'blob'],
+  jungle_bloom: ['#3fc23e', '#ff5a2e', 'tuft'], shells: ['#ffe3c8', '#ff8a4a', 'blob'], ice_shards: ['#bfe8ff', '#bfe8ff', 'tuft'], embers: ['#3a3036', '#ff7a2b', 'blob'], glow_shrooms: ['#d8ccf0', '#9a6aff', 'tuft'],
   flowers: ['#5aa04a', '#ffd25a', 'tuft'], tuft: ['#79b85c', '#79b85c', 'tuft'], reeds: ['#6a9a4a', '#8a6a3a', 'tuft'],
 };
 export function fallbackParts(type: string): KitPart[] {
@@ -123,6 +127,7 @@ export function fallbackParts(type: string): KitPart[] {
   else if (shape === 'spire') parts = [{ geometry: shared(new T.ConeGeometry(.4, 2.6, 5).translate(0, 1.3, 0)), material: material(base, glow), matrix: new T.Matrix4(), name: type }];
   else if (shape === 'rock') parts = [{ geometry: shared(new T.DodecahedronGeometry(.9, 0)), material: material(base), matrix: at(0, .45, 0, 1, .7, 1), name: type }];
   else if (shape === 'tuft') parts = [{ geometry: shared(new T.ConeGeometry(.13, .5, 3).translate(0, .25, 0)), material: material(type === 'flowers' ? top : base), matrix: new T.Matrix4(), name: type }];
+  else if (DECOR[type]?.dressing) parts = [{ geometry: shared(new T.IcosahedronGeometry(.18, 0)), material: material(top), matrix: at(0, .1, 0, 1, .6, 1), name: type }];
   else parts = [{ geometry: shared(new T.IcosahedronGeometry(.55, 0)), material: material(base), matrix: at(0, .45, 0, 1, .8, 1), name: type }];
   fallbacks.set(type, parts);
   return parts;

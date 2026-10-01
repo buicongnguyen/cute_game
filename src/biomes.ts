@@ -7,13 +7,15 @@ import { terrainHeight, zoneAt, type EnvironmentLayout } from './environments.ts
  * outside the walkable circle. Placement is seeded and never depends on whether a model
  * file has loaded, so every player gets the same trees and the same obstacles.
  */
-export type KitName = 'scenery' | 'wilds' | 'bright' | 'harsh';
+export type KitName = 'scenery' | 'wilds' | 'bright' | 'harsh' | 'dressing';
 export interface DecorKind {
   kit: KitName;
   /** Small ground cover: no shadow, and thinned on low graphics (it never blocks). */
   cover?: boolean;
   /** Takes the planet's recolour of the shared scenery materials. */
   tint?: boolean;
+  /** Tiny ground dressing (pebbles, shells, sprinkles): cover that low graphics leaves out entirely. */
+  dressing?: boolean;
 }
 export const DECOR: Record<string, DecorKind> = {
   tree_round: { kit: 'scenery', tint: true }, tree_pine: { kit: 'scenery', tint: true }, tree_blossom: { kit: 'scenery', tint: true },
@@ -26,6 +28,9 @@ export const DECOR: Record<string, DecorKind> = {
   jungletree: { kit: 'bright' }, palm: { kit: 'bright' }, coral: { kit: 'bright', cover: true },
   snow_pine: { kit: 'harsh' }, ice_spire: { kit: 'harsh' }, snow_rock: { kit: 'harsh' }, snowman: { kit: 'harsh' },
   lava_rock: { kit: 'harsh' }, obsidian: { kit: 'harsh' }, ash_tree: { kit: 'harsh' }, mini_volcano: { kit: 'harsh' }, deadtree: { kit: 'harsh' },
+  pebbles: { kit: 'dressing', cover: true, dressing: true }, sprinkles: { kit: 'dressing', cover: true, dressing: true }, toy_bits: { kit: 'dressing', cover: true, dressing: true },
+  sky_bloom: { kit: 'dressing', cover: true, dressing: true }, jungle_bloom: { kit: 'dressing', cover: true, dressing: true }, shells: { kit: 'dressing', cover: true, dressing: true },
+  ice_shards: { kit: 'dressing', cover: true, dressing: true }, embers: { kit: 'dressing', cover: true, dressing: true }, glow_shrooms: { kit: 'dressing', cover: true, dressing: true },
 };
 /** [type, count, collision radius (0 = walk through), where: land by default, or 'sea']. */
 export type DecorRule = [string, number, number?, ('sea')?];
@@ -45,11 +50,21 @@ export const PLANET_DECOR: Partial<Record<PlanetId, { decor: DecorRule[]; rim: s
   cloud: { decor: [['cloudtree', 90, .4], ['skyrock', 50, .8], ['flowers', 90], ['tuft', 160]], rim: [] },
   shadow: { decor: [['deadtree', 130, .35], ['rock', 50, .7], ['tuft', 120]], rim: ['deadtree'] },
 };
+/**
+ * Small dressing per world, [type, count]. It is planned after everything else from its own seeded stream, so adding it
+ * left every existing tree, rock and collider exactly where it was (multiplayer maps match across versions of the plan).
+ * Dressing is ground cover: drawn as 2D cards in each tile's single cover batch, so it adds no draw calls.
+ */
+export const DRESSING: Partial<Record<PlanetId, [string, number][]>> = {
+  home: [['pebbles', 700]], candy: [['sprinkles', 1100]], ice: [['ice_shards', 900]], lava: [['embers', 1100]], toy: [['toy_bits', 800]],
+  jungle: [['jungle_bloom', 900]], ocean: [['shells', 600]], cloud: [['sky_bloom', 600]], shadow: [['glow_shrooms', 700]],
+};
 /** The kits a world needs, so they can be fetched before it is built. */
 export function kitsFor(planet: PlanetId): KitName[] {
   const types = planet === 'home' ? [...Object.values(HOME_DECOR).flat().map(r => r[0]), 'tree_swamp', 'rock_red', 'tree_dead', 'reeds'] : [...(PLANET_DECOR[planet]?.decor.map(r => r[0]) ?? []), ...(PLANET_DECOR[planet]?.rim ?? [])];
   // Planets with fishing ponds ring them with reeds from the wilds kit.
   if (['home', 'candy', 'ice', 'toy', 'jungle', 'shadow'].includes(planet)) types.push('reeds');
+  for (const [type] of DRESSING[planet] ?? []) types.push(type);
   return [...new Set(types.map(t => DECOR[t].kit))];
 }
 
@@ -143,6 +158,12 @@ function hazardAt(layout: EnvironmentLayout, x: number, z: number, pad: number) 
   return false;
 }
 
+/** A small seeded stream (mulberry32) keyed by the planet's name. */
+function seeded(key: string) {
+  let a = [...key].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261) >>> 0;
+  return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
 /** A coarse grid of circles already taken by scenery, so pieces never overlap. */
 class Occupancy {
   private cells = new Map<number, { x: number; z: number; r: number }[]>();
@@ -200,6 +221,15 @@ export function planDecor({ planet, layout, random, free, ponds = [], clearings 
       else type = rim![Math.floor(random() * rim!.length)];
       out.push({ type, x, z, y: 0, rotation: random() * Math.PI * 2, scale: between(1.1, 1.6), radius: 0 });
     }
+  }
+  // Dressing last, from its own stream (see DRESSING): it never shifts the pieces above.
+  const own = seeded(planet);
+  for (const [type, count] of DRESSING[planet] ?? []) for (let placed = 0, tries = 0; placed < count && tries < count * 20; tries++) {
+    const a = own() * Math.PI * 2, d = Math.sqrt(own() * (1 - (12 / 138) ** 2) + (12 / 138) ** 2) * 138, x = Math.cos(a) * d, z = Math.sin(a) * d, rotation = own() * Math.PI * 2, scale = 1.6 + own() * .8;
+    if (planet === 'home' && (trailDistance(x, z) < 2.6 || zoneAt({ x, z }) === 'swamp')) continue;
+    if (taken.taken(x, z, .35) || !free(x, z, .35)) continue;
+    if (planet === 'ocean' ? terrainHeight(layout, { x, z }) < -.3 || !layout.islands.some(i => Math.hypot(x - i.x, z - i.z) < i.r - 1) : hazardAt(layout, x, z, .3)) continue;
+    out.push({ type, x, z, y: Math.max(0, terrainHeight(layout, { x, z })), rotation, scale, radius: 0 }); taken.add(x, z, .4); placed++;
   }
   return out;
 }

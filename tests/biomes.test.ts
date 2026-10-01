@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planDecor, trailDistance, kitsFor, DECOR, HOME_DECOR, PLANET_DECOR, RIM_START, type DecorPlacement } from '../src/biomes.ts';
+import { planDecor, trailDistance, kitsFor, DECOR, DRESSING, HOME_DECOR, PLANET_DECOR, RIM_START, type DecorPlacement } from '../src/biomes.ts';
 import { createEnvironmentLayout, zoneAt, terrainHeight } from '../src/environments.ts';
 import { seeded } from '../src/space.ts';
 import { WORLD_BOUNDS } from '../src/navigation.ts';
@@ -24,6 +24,15 @@ test('home regions carry their own mix at close to the reference counts, and tra
   }
   assert.equal(pieces.filter(p => zoneAt(p) === 'canyon' && p.type === 'tree_pine').length, 0, 'no pines in the canyon');
   assert.ok(pieces.filter(p => Math.hypot(p.x, p.z) > 17).every(p => trailDistance(p.x, p.z) >= 2.6), 'the sand trails are walkable');
+});
+
+test('ground dressing is planned last from its own stream: every tree, rock and collider stays where it was', () => {
+  for (const planet of ['home', 'candy', 'ocean', 'cloud', 'shadow'] as PlanetId[]) {
+    const withDressing = plan(planet), saved = DRESSING[planet]!; DRESSING[planet] = [];
+    try { assert.deepEqual(withDressing.filter(p => !DECOR[p.type].dressing), plan(planet), planet); } finally { DRESSING[planet] = saved; }
+    const dressing = withDressing.filter(p => DECOR[p.type].dressing);
+    assert.ok(dressing.length > saved[0][1] * .5 && dressing.every(p => p.radius === 0 && DECOR[p.type].cover), `${planet}: ${dressing.length} walk-through cover pieces`);
+  }
 });
 
 test('pieces never overlap and blocking pieces never stand where something else already is', () => {
@@ -58,7 +67,7 @@ test('planets keep their hazards, islands and seas clear', () => {
 });
 
 test('each world asks only for the scenery files it uses', () => {
-  assert.deepEqual(kitsFor('home').sort(), ['scenery', 'wilds']);
-  assert.deepEqual(kitsFor('lava'), ['harsh']);
+  assert.deepEqual(kitsFor('home').sort(), ['dressing', 'scenery', 'wilds']);
+  assert.deepEqual(kitsFor('lava'), ['harsh', 'dressing']);
   assert.ok(kitsFor('candy').includes('bright') && kitsFor('candy').includes('wilds'), 'candy needs its sweets and reeds for its ponds');
 });

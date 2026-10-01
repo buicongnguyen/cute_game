@@ -4,7 +4,7 @@ import { t, localizeHtml, getLanguage, setLanguage, onLanguageChange, bindLangua
 import './menus.css';
 import { Box3, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
-import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit } from './assets.ts';
+import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit } from './assets.ts';
 import { SpaceFlight, planRoutes, type RouteOption, type SpaceEvent } from './space.ts';
 import { SpaceView } from './space-view.ts';
 import { ShipSequence } from './ship-sequence.ts';
@@ -746,7 +746,7 @@ export const gameBridge:GameBridge={
 
 function go(kind:string){closeDialog();const entities=world.entities.filter(e=>e.kind===kind);const entity=kind==='plot'?entities.find(e=>!world.state.plots[e.index!]?.crop)||entities[0]:entities[0];if(entity){world.select(entity);toast(`Off to ${kind==='plot'?'the garden':entity.name.toLowerCase()}…`,'👣');}else toast('That place is back in Clover Village.','🏡');}
 // ---- The starship: take-off, a piloted flight between planets, and landing ----
-const SCENERY_KITS={scenery:sceneryKit,wilds:wildsKit,bright:brightKit,harsh:harshKit};
+const SCENERY_KITS={scenery:sceneryKit,wilds:wildsKit,bright:brightKit,harsh:harshKit,dressing:dressingKit};
 shipSequence=new ShipSequence(world,tone);const ship=shipSequence;
 const spaceView=new SpaceView($('#space-labels'),spaceKit);
 const spaceKeys=new Set<string>();let spacePointer:{x:number;y:number}|null=null,boostHeld=false;
