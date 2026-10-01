@@ -27,10 +27,11 @@ async function walk(directory) {
 }
 const files = (await walk(dist)).sort();
 const urls = files.map(file => base + path.relative(dist, file).split(path.sep).join('/'));
-// Gear models download only when something from them is first worn, and planet scenery only
-// when that planet is first visited, so the worker keeps each one the first time it is
-// fetched instead of fetching them all at install.
-const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|disguises|pets|worlds-[a-z]+)\.glb$/.test(url);
+// Gear models download only when something from them is first worn, planet scenery only
+// when that planet is first visited and the farm pen kit only when the pen is first shown,
+// so the worker keeps each one the first time it is fetched instead of fetching them all
+// at install.
+const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|disguises|pets|worlds-[a-z]+|farm)\.glb$/.test(url);
 const assets = urls.filter(url => !onDemand(url)), later = urls.filter(onDemand);
 const hash = createHash('sha256');
 for (let index = 0; index < files.length; index++) {

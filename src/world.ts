@@ -14,6 +14,7 @@ import { QUALITY, type QualityProfile } from './graphics.ts';
 import { CropCards, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
 import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
+import { FarmPenView, farmKit } from './farm-view.ts';
 import { STARTING_PLOTS, MAX_EXTRA_PLOTS } from './content.ts';
 import { approach, blocked, clearSegment, findRoute, nearbyObstacles, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
 import { attackRange } from './combat.ts';
@@ -54,7 +55,7 @@ const matCache = new Map<string, T.MeshToonMaterial>();
 const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', sell: 'market', shop: 'outfitters', upgrade: 'crystal', chest: 'chest', craft: 'workshop', cook: 'kitchen' };
 // A bed's entity holds only this invisible shape, the bed slab plus a column where its crop card stands, so tap raycasts
 // find the bed and its crop but pass over it to the bed behind. GardenBeds draws the beds.
-const BED_PICK=mergeGeometries([new T.BoxGeometry(2.1,.32,2.1).translate(0,.16,0),new T.BoxGeometry(.8,1.05,.8).translate(0,.75,0)]),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
+const BED_PICK=mergeGeometries([new T.BoxGeometry(2.1*M.BED_SCALE,.32,2.1*M.BED_SCALE).translate(0,.16,0),new T.BoxGeometry(.8*M.CROP_SCALE,1.05*M.CROP_SCALE,.8*M.CROP_SCALE).translate(0,.75*M.CROP_SCALE,0)]),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
 // Planet palettes for the shared scenery kit (material name → colour). Home uses the kit's own colours.
 const SCENERY_KITS = { scenery: sceneryKit, wilds: wildsKit, bright: brightKit, harsh: harshKit };
 const KIT_TINTS: Partial<Record<PlanetId, Record<string, string>>> = {
@@ -133,6 +134,8 @@ export class World {
   /** Kill switch and A/B arm: draw the 3D crop models instead of the cards. */
   cropCardsOff = false;
   private cardCellPx = 128; private gardenBeds?: GardenBeds; private bedCrops: BedCrop[] = [];
+  /** The animal pen at home (farm-view.ts); undefined elsewhere. */
+  farmView?: FarmPenView;
   /** Pooled particles, rings, flashes, floating text, camera shake and hit-stop. */
   fx?: Effects;
   /** The red target ring and arrow, and the pooled danger discs. */
@@ -372,8 +375,7 @@ export class World {
     entity.mesh.add(pad,body);entity.mesh.userData.spaceKit=true;
   }
   makePlot(index: number) {
-    const saved=this.state.plots[index] as M.Plot&{x?:number;z?:number};
-    const x=saved.x??-11.4+(index%3)*2.25,z=saved.z??-.4+Math.floor(index/3)*2.25;
+    const saved=this.state.plots[index],{x,z}=M.bedPosition(this.state,index);
     const p=group(new T.Mesh(BED_PICK,BED_PICK_MATERIAL));
     const crops=new T.Group();p.add(crops);p.rotation.y=saved.rotation??0;this.plotMeshes[index]=crops;this.addEntity('plot','Garden bed','🌱',p,x,z,1,index);
   }
@@ -387,7 +389,17 @@ export class World {
   private syncBeds(assets: RefinedAssetLibrary = refinedAssets){
     const beds=this.gardenBeds??=new GardenBeds();if(beds.group.parent!==this.scene)this.scene.add(beds.group);
     const plots=this.planet==='home'?this.entities.filter(e=>e.kind==='plot'):[],refined=assets.has('garden');
-    beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z,rotation:e.mesh.rotation.y})),refined);
+    beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z,rotation:e.mesh.rotation.y})),refined,M.BED_SCALE);
+  }
+  /**
+   * The animal pen north of the garden (farm.ts PEN): one entity to tap (its baked fence, coop and troughs are the
+   * entity's mesh, the animals ride inside it) and a ring of fence obstacles, so nobody walks through the rails.
+   */
+  private buildPen(){
+    const view=this.farmView=new FarmPenView(),{x,z,hw,hd}=M.PEN;
+    this.addEntity('pen','Animal pen','🐔',view.statics,x,z,2.6);
+    for(const [ax,az,bx,bz] of [[-hw,-hd,hw,-hd],[-hw,hd,hw,hd],[-hw,-hd,-hw,hd],[hw,-hd,hw,hd]]){const n=Math.ceil(Math.hypot(bx-ax,bz-az)/.6);for(let i=0;i<=n;i++)this.obstacle(x+ax+(bx-ax)*i/n,z+az+(bz-az)*i/n,.35);}
+    if(!farmKit.ready)void farmKit.load().then(()=>{if(farmKit.ready&&this.farmView===view)view.refresh();});
   }
   /** The beds' draw calls, for tests and probes. */
   get bedDraws(){return this.gardenBeds?.draws??0;}
@@ -399,7 +411,7 @@ export class World {
     if(!spot)return;
     if(!this.ghost){
       const bed=M.ITEMS[spot.id]?.type==='placeable',refined=bed&&refinedAssets.has('garden')?refinedAssets.clone('garden'):null;
-      this.ghost=new PlacementGhost(spot.id,bed?refined??this.bedBoxes():buildDecoration(spot.id),!bed||!!refined);this.root.add(this.ghost.group);
+      this.ghost=new PlacementGhost(spot.id,bed?refined??this.bedBoxes():buildDecoration(spot.id),!bed||!!refined);this.root.add(this.ghost.group);if(bed)this.ghost.group.scale.setScalar(M.BED_SCALE);
     }
     this.ghost.place(spot.x,spot.z,spot.rotation,spot.ok);
   }
@@ -411,6 +423,7 @@ export class World {
     this.syncCrops();this.syncBeds();
   }
   build(planet: PlanetId) {
+    this.farmView?.dispose();this.farmView=undefined;
     this.disposeTree(this.root);this.scene.remove(this.root);this.root=new T.Group();this.scene.add(this.root);
     this.entities=[];this.enemies=[];this.obstacles=[];this.dynamicObstacles=[];this.plotMeshes=[];this.cropSignatures=[];this.planet=planet;
     this.destination=null;this.route=[];this.selected=null;this.ring.visible=false;this.marker.visible=false;this.gateHits=0;
@@ -431,6 +444,7 @@ export class World {
       this.addEntity('craft','Workshop','🔨',forge,5.5,6.5,1.3);this.obstacle(5.5,6.5,1.1);
       const cook=group(cyl('#71646b',1.2,.8,1.1,0,.55),cyl('#fc9b51',.7,.7,.12,0,1.12),box('#49454e',1.8,.12,.15,0,1.3));this.addEntity('cook','Volcano kitchen','🔥',cook,1,10.5,1.4);this.obstacle(1,10.5,1);
       for(let i=0;i<this.state.plots.length;i++)this.makePlot(i);
+      this.buildPen();
       const well=group(cyl('#a0a8a2',1,1,.8,0,.4,0,10),cyl('#63c5ed',.72,.72,.05,0,.83),box('#957651',.12,2.2,.12,-.85,1.5),box('#957651',.12,2.2,.12,.85,1.5),box('#cc9f78',2.4,.15,1.8,0,2.6));well.position.set(-7,0,-11);well.userData.prop='well';this.root.add(well);this.obstacle(-7,-11,1.2);
       for(let i=0;i<54;i++){
         const a=i/54*Math.PI*2;if(Math.abs(Math.sin(a*2))<.32)continue;
@@ -793,11 +807,11 @@ export class World {
         // Small and flat: crops never cast into the shadow map (C6).
         plant.traverse(o=>{o.castShadow=false;});plant.position.set(0,SOIL_Y,0);plant.rotation.y=(((i*17)%60)-30)*Math.PI/180;
         // Crops pop in with a springy bounce each time they grow a stage.
-        plant.userData.target=stageScale(p.crop,stage);plant.userData.stage=stage;plant.userData.pop=0;plant.userData.seed=i*3.1;plant.scale.setScalar(.01);g.add(plant);return;}
+        plant.userData.target=stageScale(p.crop,stage)*M.CROP_SCALE;plant.userData.stage=stage;plant.userData.pop=0;plant.userData.seed=i*3.1;plant.scale.setScalar(.01);g.add(plant);return;}
       const crop=group();
       if(stage>=2)crop.add(ball(p.crop==='carrot'?'#e9a068':p.crop==='berry'?'#da7f88':'#e5c4d4',stage===3?.32:.2,0,.3,0,1));
       for(let k=0;k<3;k++){const leaf=ball(k%2?'#8cb569':'#6c9953',stage===1?.13:.17,(k-1)*.12,.34+(stage*.06),0);leaf.scale.set(.8,2,.6);leaf.rotation.z=(k-1)*-.45;crop.add(leaf);}
-      crop.traverse(o=>{o.castShadow=false;});crop.position.set(0,SOIL_Y,0);g.add(crop);
+      crop.traverse(o=>{o.castShadow=false;});crop.position.set(0,SOIL_Y,0);crop.scale.setScalar(M.CROP_SCALE);g.add(crop);
     });
   }
   /** Creates and bakes the crop cards once the crop kit is in; false keeps the 3D crops (no renderer, bake failed, switched off). */
@@ -805,7 +819,7 @@ export class World {
     if(this.cropCardsOff||!this.renderer||!cropKit.ready)return false;
     if(!this.cropCards){
       this.cropCards=new CropCards(this.renderer,()=>this.scene.children.filter((o):o is T.Light=>o instanceof T.Light),this.cardCellPx??128,STARTING_PLOTS+MAX_EXTRA_PLOTS);
-      this.scene.add(this.cropCards.group);this.cropCards.bake(Object.keys(M.CROPS).filter(id=>cropKit.has('crop_'+id)));
+      this.cropCards.size=M.CROP_SCALE;this.scene.add(this.cropCards.group);this.cropCards.bake(Object.keys(M.CROPS).filter(id=>cropKit.has('crop_'+id)));
     }
     return this.cropCards.ready;
   }
@@ -1367,6 +1381,7 @@ export class World {
     this.followSun();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
     this.animateCrops(dt);
+    if(this.farmView&&this.planet==='home')this.farmView.update(this.state.farm?.animals??[],dt,this.time);
     this.updateTarget(dt);
     this.fx?.update(dt);
     this.marker.scale.setScalar(1+Math.sin(this.time*5)*.12);if(draw)this.render();

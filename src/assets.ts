@@ -31,6 +31,7 @@ export const KIT_FILES = {
   wilds: `${assetBase}assets/models/wilds.glb`,
   worldsBright: `${assetBase}assets/models/worlds-bright.glb`,
   worldsHarsh: `${assetBase}assets/models/worlds-harsh.glb`,
+  farm: `${assetBase}assets/models/farm.glb`,
 } as const;
 export const HERO_FILE = `${assetBase}assets/models/hero.glb`;
 
@@ -376,3 +377,5 @@ export const spaceKit = new KitLibrary([KIT_FILES.space]);
 export const wildsKit = new KitLibrary([KIT_FILES.wilds]);
 export const brightKit = new KitLibrary([KIT_FILES.worldsBright]);
 export const harshKit = new KitLibrary([KIT_FILES.worldsHarsh]);
+/** The animal pen (farm-view.ts), loaded the first time the home pen is built. */
+export const farmKit = new KitLibrary([KIT_FILES.farm]);

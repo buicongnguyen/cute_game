@@ -1,4 +1,4 @@
-import { PLANETS, type PlanetId } from './model.ts';
+import { PLANETS, PEN, type PlanetId } from './model.ts';
 import { zoneAt, type EnvironmentLayout } from './environments.ts';
 import { trailOffset } from './biomes.ts';
 import { aggro } from './hud-combat.ts';
@@ -79,6 +79,7 @@ export function drawMarkers(ctx: Ctx, view: MapView) {
   for (const e of view.entities) {
     if (e.kind === 'home') { const p = mapPoint(e.x, e.z); ctx.fillStyle = '#c47a3a'; ctx.fillRect(p.x - 3, p.y - 3, 6, 6); }
     else if (e.kind === 'dropped') { ctx.fillStyle = '#ff7ab0'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; const p = mapPoint(e.x, e.z); ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, TAU); ctx.fill(); ctx.stroke(); }
+    else if (e.kind === 'pen') { const a = mapPoint(e.x - PEN.hw, e.z - PEN.hd); ctx.fillStyle = '#efc879'; ctx.strokeStyle = '#8a5a3b'; ctx.lineWidth = 1; ctx.fillRect(a.x, a.y, PEN.hw * 2 * MAP_SCALE, PEN.hd * 2 * MAP_SCALE); ctx.strokeRect(a.x, a.y, PEN.hw * 2 * MAP_SCALE, PEN.hd * 2 * MAP_SCALE); }
     else if (e.kind === 'travel') { const p = mapPoint(e.x, e.z); ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🚀', p.x, p.y); }
   }
   ctx.fillStyle = '#ffe66d'; for (const b of view.ready) { const p = mapPoint(b.x, b.z); ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }

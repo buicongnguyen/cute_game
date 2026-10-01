@@ -93,6 +93,8 @@ export class CropCards {
   cellPx: number;
   /** Milliseconds the last bake took. */
   bakeMs = 0;
+  /** Every crop is drawn at this share of its standard size (the garden's smaller beds, model.ts CROP_SCALE). */
+  size = 1;
   private atlas: T.WebGLRenderTarget | null = null;
   private cells = new Map<string, Cell>();
   private cards: T.InstancedMesh; private blobs: T.InstancedMesh;
@@ -241,17 +243,17 @@ export class CropCards {
       const stage = cropStage(bed.crop, bed.progress), key = `${bed.crop}:${stage}`, state = this.beds[i] ??= { key, stage, crop: bed.crop, pop: 1 };
       if (state.key !== key) {
         // A ripe crop that left its bed was harvested: send it flying.
-        if (state.stage === 3 && !bed.crop && state.crop && this.flights.length < MAX_FLIGHTS) this.flights.push({ crop: state.crop, x: bed.x, z: bed.z, t: 0, scale: stageScale(state.crop, 3) / STAGE_SCALE[3], flip: bedFlip(i) });
+        if (state.stage === 3 && !bed.crop && state.crop && this.flights.length < MAX_FLIGHTS) this.flights.push({ crop: state.crop, x: bed.x, z: bed.z, t: 0, scale: stageScale(state.crop, 3) / STAGE_SCALE[3] * this.size, flip: bedFlip(i) });
         Object.assign(state, { key, stage, crop: bed.crop, pop: 0 });
       }
       if (!stage || !bed.crop) return;
       const c = this.cells.get(stage === 1 ? 'sprout' : bed.crop); if (!c) return;
       state.pop = Math.min(1, state.pop + dt * 3);
-      const bob = stage === 3 && state.pop >= 1 ? 1 + Math.sin(time * 4 + i * 3.1) * .04 : 1, scale = stageScale(bed.crop, stage) * popScale(state.pop) * bob, seed = i * 3.1;
+      const bob = stage === 3 && state.pop >= 1 ? 1 + Math.sin(time * 4 + i * 3.1) * .04 : 1, scale = stageScale(bed.crop, stage) * popScale(state.pop) * bob * this.size, seed = i * 3.1;
       put(c, bed.x, SOIL_Y, bed.z + c.bounds.front * scale, scale, bedFlip(i), seed, stage === 3 ? .06 : .04, stage === 3 ? 2.5 : 1.5);
       blob(bed.x, bed.z, Math.max(.35, (c.bounds.right - c.bounds.left) * scale * 1.05));
       const star = this.cells.get('sparkle');
-      if (stage === 3 && star) put(star, bed.x + .18 * bedFlip(i), SOIL_Y + c.bounds.top * scale * 1.15 + .12 + Math.sin(time * 3 + seed) * .06, bed.z + c.bounds.front * scale, (1 + Math.sin(time * 5 + seed) * .25) * popScale(state.pop), Math.cos(time * 2 + seed) || 1, seed, 0, 0);
+      if (stage === 3 && star) put(star, bed.x + .18 * this.size * bedFlip(i), SOIL_Y + c.bounds.top * scale * 1.15 + .12 + Math.sin(time * 3 + seed) * .06, bed.z + c.bounds.front * scale, (1 + Math.sin(time * 5 + seed) * .25) * popScale(state.pop), Math.cos(time * 2 + seed) || 1, seed, 0, 0);
     });
     this.beds.length = beds.length;
     for (let i = this.flights.length - 1; i >= 0; i--) {
