@@ -4,22 +4,29 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server/start-dev.mjs",
+    "dev": "node --env-file-if-exists=.env server/start-dev.mjs",
     "build": "tsc --noEmit && vite build && node server/build-offline.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
     "dev:client": "vite --host 127.0.0.1",
-    "start": "node server/server.mjs",
-    "build:pages": "node server/build-pages.mjs"
+    "start": "node --env-file-if-exists=.env server/server.mjs",
+    "build:pages": "node server/build-pages.mjs",
+    "db:check": "node --env-file-if-exists=.env server/database-cli.mjs check",
+    "db:import": "node --env-file-if-exists=.env server/database-cli.mjs import"
   },
   "dependencies": {
     "@fontsource-variable/nunito": "^5.3.0",
+    "pg": "8.23.1",
     "three": "^0.180.0",
     "ws": "^8.22.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@types/three": "^0.180.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.7"
+  },
+  "engines": {
+    "node": ">=24 <27"
   }
 }

@@ -1,0 +1,6 @@
+.farm-species-pen { align-items: center; gap: .75rem; padding: .7rem 0; border-bottom: 1px solid #294e3522; }
+.farm-species-pen > span:first-child { flex: 1; min-width: 0; font-weight: 700; }
+.farm-species-pen small { display: block; font-weight: 400; line-height: 1.4; margin-top: .25rem; opacity: .8; }
+.farm-species-pen button { flex-shrink: 0; }
+.farm-counts { flex-wrap: wrap; }
+@media (max-width: 480px) { .farm-species-pen { flex-wrap: wrap; } .farm-species-pen > span:first-child { flex-basis: 100%; } }

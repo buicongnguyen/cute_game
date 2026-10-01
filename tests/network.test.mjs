@@ -6,6 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { WebSocket } from 'ws';
 import { createGameServer } from '../server/server.mjs';
+import { createAccountStore } from '../server/account-store.mjs';
+import { enemyRoster } from '../src/enemy-roster.ts';
+import { beginTitanAttack, titanTelegraphs } from '../src/titan-patterns.ts';
 
 function connect(url, cookie) {
   return new Promise((resolve,reject) => {
@@ -19,7 +22,7 @@ function connect(url, cookie) {
 
 test('local multiplayer: accounts, saves, friendship, privacy, rooms and host migration', async t => {
   const dataDir=await mkdtemp(path.join(os.tmpdir(),'zoo-garden-network-test-'));
-  const game=await createGameServer({port:0,dataDir});
+  const game=await createGameServer({port:0,dataDir,databaseUrl:'',databaseRequired:false});
   const sockets=[];
   t.after(async()=>{for(const client of sockets)client.socket.terminate();await game.close();});
   async function call(route,body,cookie,method=body?'POST':'GET',origin){const response=await fetch(game.url+'/api/'+route,{method,headers:{...(cookie?{Cookie:cookie}:{}),...(origin?{Origin:origin}:{}),'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});return {status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};}
@@ -33,8 +36,9 @@ test('local multiplayer: accounts, saves, friendship, privacy, rooms and host mi
   assert.equal((await call('auth/login',{username:'alice',password:'wrong-password'})).status,401);
   assert.equal((await call('auth/session',null,alice.cookie)).data.account.username,'alice');
   const profile=alice.data.profile;profile.energy=321;profile.name='Alice 🌱';
-  assert.equal((await call('profile',{profile,revision:1,mutation:randomUUID()},alice.cookie,'PUT')).status,200);
-  assert.equal((await call('auth/session',null,alice.cookie)).data.profile.energy,321);
+  assert.equal((await call('profile',{profile,revision:1,mutation:randomUUID()},alice.cookie,'PUT')).status,409);
+  const settings=await call('actions',{type:'settings',payload:{name:'Alice 🌱'},rulesVersion:1,expectedRevision:alice.data.revision,requestId:randomUUID()},alice.cookie);assert.equal(settings.status,200);
+  assert.equal((await call('auth/session',null,alice.cookie)).data.profile.energy,0);
   assert.equal((await call('homes/'+alice.data.account.id,null,bob.cookie)).status,403);
   assert.equal((await call('friends/request',{username:'alice'},bob.cookie)).status,200);
   const requests=await call('friends',null,alice.cookie);assert.equal(requests.data.requests[0].id,bob.data.account.id);
@@ -42,30 +46,31 @@ test('local multiplayer: accounts, saves, friendship, privacy, rooms and host mi
   const home=await call('homes/'+alice.data.account.id,null,bob.cookie);assert.equal(home.status,200);assert.ok(Array.isArray(home.data.home.plots));assert.equal(home.data.home.bag,undefined);assert.equal(home.data.home.energy,undefined);assert.equal(home.data.home.hash,undefined);
   const a=await connect(game.url,alice.cookie);sockets.push(a);const initialA=await a.next(m=>m.type==='joined');assert.equal(initialA.host,alice.data.account.id);
   const b=await connect(game.url,bob.cookie);sockets.push(b);const initialB=await b.next(m=>m.type==='joined');assert.equal(initialB.host,alice.data.account.id);assert.equal(initialB.players.length,2);
-  a.send({type:'enemies',enemies:[{id:'home:slime:1',x:1,z:1,hp:20,maxHp:20,type:'slime'}]});
-  assert.equal((await b.next(m=>m.type==='enemies')).enemies[0].hp,20);
-  b.send({type:'attack',id:'home:slime:1',damage:8});const hit=await a.next(m=>m.type==='attack');assert.equal(hit.by,bob.data.account.id);assert.equal(hit.damage,8);
-  a.send({type:'defeat',id:'home:slime:1',xp:6,energy:4,item:'wood'});const reward=await b.next(m=>m.type==='reward');assert.equal(reward.reward.xp,6);assert.equal(reward.reward.enemyId,'home:slime:1');
+  const enemy=enemyRoster('home').find(e=>e.zone==='forest'&&!e.boss);a.send({type:'enemies',enemies:[{id:enemy.id,type:enemy.type,x:-30,z:0,hp:1,maxHp:1}]});
+  assert.equal((await b.next(m=>m.type==='enemies')).enemies[0].hp,enemy.baseMaxHp);
   b.send({type:'chat',message:'Hello, explorer!'});assert.equal((await a.next(m=>m.type==='chat')).message,'Hello, explorer!');
   a.send({type:'active',active:false});assert.equal((await b.next(m=>m.type==='authority'&&m.host===bob.data.account.id)).host,bob.data.account.id);
   b.send({type:'visit',id:alice.data.account.id});assert.equal((await b.next(m=>m.type==='visit')).home.id,alice.data.account.id);
   b.send({type:'leaveVisit'});assert.equal((await b.next(m=>m.type==='visit')).home,null);
   b.send({type:'party'});const privateParty=await b.next(m=>m.type==='party');assert.match(privateParty.code,/^[A-F0-9]{6}$/);
   a.send({type:'join',planet:'home',party:privateParty.code});const joinedParty=await a.next(m=>m.type==='joined'&&m.party===privateParty.code);assert.equal(joinedParty.players.length,2);
-  const raw=await readFile(path.join(dataDir,'accounts.json'),'utf8');assert.ok(!raw.includes('password-one'));assert.ok(!raw.includes('zoo_session'));assert.equal(JSON.parse(raw).accounts.find(v=>v.username==='alice').profile.energy,321);
+  const raw=await readFile(path.join(dataDir,'accounts.json'),'utf8');assert.ok(!raw.includes('password-one'));assert.ok(!raw.includes('zoo_session'));assert.equal(JSON.parse(raw).accounts.find(v=>v.username==='alice').profile.energy,0);
   await call('auth/logout',{},alice.cookie);assert.equal((await call('auth/session',null,alice.cookie)).data.account,null);
   await game.close();
-  const restarted=await createGameServer({port:0,dataDir});
-  try {const response=await fetch(restarted.url+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'alice',password:'password-one'})});assert.equal(response.status,200);assert.equal((await response.json()).profile.energy,321);} finally {await restarted.close();}
+  const restarted=await createGameServer({port:0,dataDir,databaseUrl:'',databaseRequired:false});
+  try {const response=await fetch(restarted.url+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'alice',password:'password-one'})});assert.equal(response.status,200);assert.equal((await response.json()).profile.energy,0);} finally {await restarted.close();}
 });
 
-async function protocolRoom(t) {
+async function protocolRoom(t,{planet='home',configure=()=>{}}={}) {
   const dataDir=await mkdtemp(path.join(os.tmpdir(),'zoo-garden-protocol-test-'));
-  const game=await createGameServer({port:0,dataDir}),clients=[];
+  const store=await createAccountStore({dataDir,databaseUrl:''});
+  const game=await createGameServer({port:0,dataDir,accountStore:store,databaseUrl:'',databaseRequired:false}),clients=[];
   t.after(async()=>{for(const client of clients)client.socket.terminate();await game.close();});
   async function explorer(username){
     const response=await fetch(game.url+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password:'protocol-password'})});
-    assert.equal(response.status,200);const session=await response.json(),cookie=response.headers.get('set-cookie').split(';')[0];
+    assert.equal(response.status,200);let session=await response.json();const cookie=response.headers.get('set-cookie').split(';')[0];
+    await store.command({actorId:session.account.id,requestId:randomUUID(),hash:'a'.repeat(64),expectedRevision:session.revision,actionType:'testFixture',run:records=>{const profile=records.get(session.account.id).profile;profile.planet=planet;profile.visited=[...new Set(['home',planet])];profile.discovered=[...profile.visited];configure(profile,username);return true;}});
+    session=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:cookie}})).json();
     const client=await connect(game.url,cookie);clients.push(client);const joined=await client.next(m=>m.type==='joined');
     return Object.assign(client,{id:session.account.id,cookie,session,joined});
   }
@@ -73,100 +78,182 @@ async function protocolRoom(t) {
   assert.equal(peer.joined.host,host.id);
   // Chat is an ordered protocol barrier, avoiding arbitrary sleeps for negative assertions.
   async function barrier(sender,receiver){const marker=randomUUID();sender.send({type:'chat',message:marker});await receiver.next(m=>m.type==='chat'&&m.message===marker);}
-  return {game,host,peer,explorer,barrier};
+  async function action(client,type,payload={},extra={}){const current=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:client.cookie}})).json();const response=await fetch(game.url+'/api/actions',{method:'POST',headers:{Cookie:client.cookie,'Content-Type':'application/json'},body:JSON.stringify({type,payload,rulesVersion:1,requestId:randomUUID(),expectedRevision:current.revision,...extra})});return {status:response.status,data:await response.json()};}
+  return {game,host,peer,explorer,barrier,store,action};
 }
 
-test('combat protocol relays bounded impacts and statuses and preserves boss casts',async t=>{
-  const {host,peer,barrier}=await protocolRoom(t);
-  const boss={id:'forest:treant:boss',type:'treant',kind:'boss',boss:true,x:4,z:3,hp:650,maxHp:1200,phase:'windup',phaseTime:.8,skill:'rain',bossStage:2,attackCount:6,skillCount:3,spinTick:.2,damage:42,lift:1,liftVelocity:3,cooldown:1.4,targetX:1,targetZ:2,statuses:{fear:2,sheep:4,poison:99},telegraphs:[{x:1,z:2,r:2,delay:1.3}],skillEffects:[{x:4,z:3,r:6,inner:3.6,remaining:.44,multiplier:1.1}]};
-  host.send({type:'enemies',enemies:[boss]});
-  const snapshot=(await peer.next(m=>m.type==='enemies')).enemies[0];
-  for(const key of ['boss','phase','phaseTime','skill','bossStage','attackCount','skillCount','spinTick','damage','lift','liftVelocity','cooldown','targetX','targetZ'])assert.equal(snapshot[key],boss[key],key);
-  assert.deepEqual(snapshot.telegraphs,boss.telegraphs);assert.deepEqual(snapshot.skillEffects,boss.skillEffects);assert.equal(snapshot.statuses.fear,2);assert.equal(snapshot.statuses.sheep,4);assert.equal(snapshot.statuses.poison,undefined);
-  peer.send({type:'attack',id:boss.id,damage:8,stun:30,impact:{amount:9999,critical:true,stun:20,lift:90,knock:90,direction:{x:9,z:-9}}});
-  const attack=await host.next(m=>m.type==='attack');assert.equal(attack.by,peer.id);assert.equal(attack.damage,8);assert.equal(attack.stun,5);
-  assert.deepEqual(attack.impact,{amount:8,critical:true,stun:5,lift:12,knock:12,direction:{x:1,z:-1}});
-  peer.send({type:'status',id:boss.id,kind:'charm',duration:999});assert.deepEqual(await host.next(m=>m.type==='status'),{type:'status',id:boss.id,kind:'charm',duration:12});
-  peer.send({type:'moveEnemy',id:boss.id,x:7,z:5});assert.deepEqual(await host.next(m=>m.type==='moveEnemy'),{type:'moveEnemy',id:boss.id,x:7,z:5});
-  peer.send({type:'status',id:boss.id,kind:'not-a-status',duration:4});peer.send({type:'moveEnemy',id:boss.id,x:50,z:50});peer.send({type:'enemies',enemies:[{...boss,hp:0}]});peer.send({type:'damage',id:host.id,amount:100});
-  await barrier(peer,host);assert.deepEqual(host.drain(m=>['status','moveEnemy','enemies','damage'].includes(m.type)),[]);
-  host.send({type:'damage',id:peer.id,amount:7,source:'shot'});assert.deepEqual(await peer.next(m=>m.type==='damage'),{type:'damage',amount:7,source:'shot'});
-  host.send({type:'defeat',id:boss.id,xp:320,boss:false,enemy:'treant'});const reward=(await peer.next(m=>m.type==='reward')).reward;assert.equal(reward.boss,true);assert.equal(reward.enemy,'treant');assert.equal(reward.xp,320);
-  host.send({type:'defeat',id:boss.id,xp:320});await barrier(host,peer);assert.deepEqual(peer.drain(m=>m.type==='reward'),[]);
+test('visiting a garden from another planet preserves the saved destination and returns to its room',async t=>{
+  const {game,host,peer,store}=await protocolRoom(t,{planet:'lava'});
+  await store.friendAction(host.id,peer.id,'request');await store.friendAction(peer.id,host.id,'accept');
+  // Refresh the server's live account records after this test-only setup.
+  for(const client of [host,peer])await fetch(game.url+'/api/auth/session',{headers:{Cookie:client.cookie}});
+  peer.send({type:'visit',id:host.id});
+  const entered=await peer.next(message=>message.type==='joined'&&message.planet==='home');assert.equal(entered.visiting,host.id);
+  assert.equal((await peer.next(message=>message.type==='visit')).home.id,host.id);
+  assert.equal((await store.get(peer.id)).profile.planet,'lava');
+  peer.send({type:'leaveVisit'});assert.equal((await peer.next(message=>message.type==='visit'&&!message.home)).home,null);
+  const back=await peer.next(message=>message.type==='joined'&&message.planet==='lava');assert.equal(back.visiting,null);assert.equal(back.room,'public:lava');
+  assert.equal((await store.get(peer.id)).profile.planet,'lava');
 });
 
-test('host migration transfers weather, boss state and environment authority',async t=>{
-  const {host,peer,explorer,barrier}=await protocolRoom(t);
-  host.send({type:'join',planet:'lava'});await host.next(m=>m.type==='joined'&&m.planet==='lava');
-  peer.send({type:'join',planet:'lava'});await peer.next(m=>m.type==='joined'&&m.planet==='lava');
-  peer.drain(m=>m.type==='authority');
-  const boss={id:'lava:dragon:1',x:30,z:0,type:'dragon',boss:true,hp:700,maxHp:2100,phase:'bspin',phaseTime:1.2,bossStage:3,skill:'spin',spinTick:.1};
-  host.send({type:'enemies',enemies:[boss]});const enemySnapshot=(await peer.next(m=>m.type==='enemies')).enemies;
-  const environment={time:725,lamps:[[0,780]],eclipseUntil:730,nestLevel:-.55,fireRain:[{id:'dragon:6:0:1',x:30,z:4,remaining:.6,duration:1.1},{id:'vent2:7',x:28,z:6,remaining:.3,duration:.8}],weather:{time:725,tideOffset:.17,seed:123456,sequence:17,eventKey:'2:storm',meteorWait:1.8,stormWait:.4,treasureWait:12,dragonSummoned:true,meteors:[{id:'falling',kind:'meteor',x:20,z:1,y:0,age:.7}],fireballs:[{id:'fire',kind:'fireball',x:22,z:2,y:0,age:.4}],ores:[{id:'ore1',kind:'meteor',x:21,z:0,y:0,expiresAt:800}]}};
-  environment.lightning={wait:6,sequence:1,bolts:[{id:'cloud-1',x:12,z:13,remaining:1,duration:1.2}]};
-  host.send({type:'environment',snapshot:environment});const received=(await peer.next(m=>m.type==='environment')).snapshot;
-  assert.equal(received.weather.seed,123456);assert.equal(received.weather.sequence,17);assert.equal(received.weather.meteors[0].age,.7);assert.equal(received.weather.meteors[0].duration,1.8);assert.equal(received.weather.fireballs[0].duration,1);assert.equal(received.weather.ores[0].id,'ore1');assert.equal(received.eclipseUntil,730);
-  assert.equal(received.nestLevel,-.55);assert.deepEqual(received.fireRain,environment.fireRain);
-  assert.deepEqual(received.lightning,environment.lightning);
-  const late=await explorer('late_player');late.send({type:'join',planet:'lava'});const joined=await late.next(m=>m.type==='joined'&&m.planet==='lava');assert.deepEqual(joined.environment,received);assert.deepEqual(joined.enemies,enemySnapshot);
-  host.send({type:'active',active:false});const migrated=await peer.next(m=>m.type==='authority'&&m.host===peer.id);assert.deepEqual(migrated.environment,received);assert.deepEqual(migrated.enemies,enemySnapshot);assert.ok(migrated.epoch>joined.epoch);
-  // The old host can no longer replace weather. A subsequent update from the new host succeeds.
-  host.send({type:'environment',snapshot:{time:9999,lamps:[]}});await barrier(host,peer);assert.deepEqual(peer.drain(m=>m.type==='environment'),[]);
-  peer.send({type:'environment',snapshot:{...received,time:726,weather:{...received.weather,time:726,stormWait:.2}}});const resumed=(await host.next(m=>m.type==='environment')).snapshot;assert.equal(resumed.time,726);assert.equal(resumed.weather.stormWait,.2);assert.equal(resumed.weather.seed,123456);
+test('combat quantities and rewards are authoritative while canonical boss visuals are replicated',async t=>{
+  const {host,peer,barrier,game}=await protocolRoom(t);
+  const canonical=enemyRoster('home').find(e=>e.type==='treant');
+  const boss={id:canonical.id,type:canonical.type,x:-40,z:3,hp:1,maxHp:1,damage:999999,phase:'windup',phaseTime:.8,skill:'rain',bossStage:2,attackCount:6,skillCount:3,spinTick:.2,lift:1,liftVelocity:3,cooldown:1.4,targetX:-38,targetZ:2,statuses:{charm:999},telegraphs:[{x:-38,z:2,r:2,delay:1.3}],skillEffects:[{x:-40,z:3,r:6,inner:3.6,remaining:.44,multiplier:1.1}]};
+  host.send({type:'enemies',enemies:[boss,{...boss,id:'invented-enemy'}]});
+  const received=(await peer.next(m=>m.type==='enemies')).enemies;assert.equal(received.length,1);const snapshot=received[0];
+  for(const key of ['phase','phaseTime','skill','bossStage','attackCount','skillCount','spinTick','lift','liftVelocity','cooldown','targetX','targetZ'])assert.equal(snapshot[key],boss[key],key);
+  assert.equal(snapshot.hp,canonical.baseMaxHp);assert.equal(snapshot.maxHp,canonical.baseMaxHp);assert.equal(snapshot.damage,canonical.baseDamage);assert.ok(!snapshot.statuses.charm);
+  assert.deepEqual(snapshot.telegraphs.map(({x,z,r,delay})=>({x,z,r,delay})),boss.telegraphs);
+  peer.send({type:'attack',id:boss.id,damage:1e9});peer.send({type:'status',id:boss.id,kind:'charm',duration:999});peer.send({type:'moveEnemy',id:boss.id,x:1,z:1});peer.send({type:'enemies',enemies:[{...boss,hp:0}]});peer.send({type:'damage',id:host.id,amount:1e9});host.send({type:'defeat',id:boss.id,xp:1e9,energy:1e9,item:'star'});
+  await barrier(peer,host);await barrier(host,peer);assert.deepEqual(host.drain(m=>['attack','status','moveEnemy','damage','reward','defeat'].includes(m.type)),[]);assert.deepEqual(peer.drain(m=>['reward','defeat'].includes(m.type)),[]);
+  const session=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();assert.equal(session.profile.counters.kills,0);assert.equal(session.profile.energy,0);assert.equal(session.profile.hp,100);
 });
 
-test('shared ore requires a host acknowledgement and grants only one reward per request',async t=>{
-  const {host,peer,barrier}=await protocolRoom(t);
-  const weather={time:10,tideOffset:0,seed:1,sequence:1,eventKey:'0:treasure',meteorWait:2,stormWait:3,treasureWait:4,dragonSummoned:false,meteors:[],fireballs:[],ores:[{id:'shared-ore',kind:'meteor',x:1,z:0,y:0,expiresAt:100},{id:'distant-ore',kind:'ore_magma',x:90,z:0,y:0,expiresAt:100}]};
-  host.send({type:'environment',snapshot:{time:10,lamps:[],weather}});await peer.next(m=>m.type==='environment');
-  peer.send({type:'environmentAction',action:{kind:'collect-ore',id:'shared-ore'}});const request=await host.next(m=>m.type==='environmentAction');assert.equal(request.by,peer.id);assert.equal(request.action.id,'shared-ore');assert.ok(request.requestId);
-  await barrier(host,peer);assert.deepEqual(peer.drain(m=>m.type==='environmentReward'),[]);
-  peer.send({type:'environmentResult',requestId:request.requestId,ok:true,rewards:[{id:'mcrystal',count:50}]});await barrier(peer,peer);assert.deepEqual(peer.drain(m=>m.type==='environmentReward'),[]);
-  host.send({type:'environmentResult',requestId:request.requestId,ok:true,rewards:[{id:'mcrystal',count:2},{id:'not-an-item',count:10}]});const reward=await peer.next(m=>m.type==='environmentReward');assert.equal(reward.eventId,request.requestId);assert.deepEqual(reward.rewards,[{id:'mcrystal',count:2}]);
-  host.send({type:'environmentResult',requestId:request.requestId,ok:true,rewards:[{id:'mcrystal',count:2}]});host.send({type:'environmentResult',requestId:randomUUID(),ok:true,rewards:[{id:'mcrystal',count:2}]});await barrier(host,peer);assert.deepEqual(peer.drain(m=>m.type==='environmentReward'),[]);
-  // Once consumed, the host snapshot removes the collectible for every client.
-  host.send({type:'environment',snapshot:{time:10,lamps:[],weather:{...weather,ores:weather.ores.slice(1)}}});await peer.next(m=>m.type==='environment');
-  peer.send({type:'environmentAction',action:{kind:'collect-ore',id:'shared-ore'}});peer.send({type:'environmentAction',action:{kind:'collect-ore',id:'distant-ore'}});await barrier(peer,host);assert.deepEqual(host.drain(m=>m.type==='environmentAction'),[]);
+test('one server-simulated basic kill commits once and forged raw attacks cannot award progress',async t=>{
+  const {host,peer,barrier,game}=await protocolRoom(t,{configure:(profile,name)=>{if(name==='peer_player')profile.attackUp=1000;}});
+  const enemy=enemyRoster('home').find(e=>e.zone==='forest'&&!e.boss),spawn={id:enemy.id,type:enemy.type,x:-30,z:0,hp:999999,maxHp:999999};
+  host.send({type:'enemies',enemies:[spawn]});await peer.next(m=>m.type==='enemies');peer.send({type:'pose',x:-30,z:1});await host.next(m=>m.type==='pose'&&m.player.id===peer.id);
+  const before=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();
+  peer.send({type:'basic',targetId:enemy.id});const death=await peer.next(m=>m.type==='defeat'&&m.id===enemy.id);assert.deepEqual(death.by,[peer.id]);
+  const saved=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();assert.equal(saved.profile.counters.kills,before.profile.counters.kills+1);assert.equal(saved.profile.xp-before.profile.xp,enemy.xp);assert.ok(saved.revision>before.revision);
+  peer.send({type:'basic',targetId:enemy.id});peer.send({type:'attack',id:enemy.id,damage:1e9});host.send({type:'defeat',id:enemy.id,xp:1e9});await barrier(host,peer);assert.deepEqual(peer.drain(m=>m.type==='defeat'&&m.id===enemy.id),[]);
+  const final=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();assert.equal(final.profile.counters.kills,1);assert.equal(final.profile.energy,saved.profile.energy);
 });
 
-test('projectile snapshots retain their owning enemy and continue across late join and host migration',async t=>{
+test('server-owned volcano weather advances through host migration and ignores forged weather',async t=>{
+  const {host,peer,explorer,barrier}=await protocolRoom(t,{planet:'lava'});
+  const first=(await peer.next(m=>m.type==='environment')).snapshot;assert.ok(first.time>=0);assert.ok(Number.isFinite(first.weather.seed));
+  const forged={time:99999,lamps:[[0,1e9]],eclipseUntil:1e9,weather:{...first.weather,time:99999,seed:123456,ores:[{id:'forged-gold',kind:'meteor',x:0,z:0,y:0,expiresAt:1e9}]}};
+  host.send({type:'environment',snapshot:forged});await barrier(host,peer);const after=(await peer.next(m=>m.type==='environment'&&m.snapshot.time>first.time)).snapshot;
+  assert.ok(after.time-first.time<2);assert.notEqual(after.time,99999);assert.equal(after.weather.seed,first.weather.seed);assert.ok(!after.weather.ores.some(o=>o.id==='forged-gold'));assert.equal(after.eclipseUntil,0);
+  const late=await explorer('late_player');assert.equal(late.joined.environment.weather.seed,first.weather.seed);assert.ok(late.joined.environment.time>=after.time);
+  peer.drain(m=>m.type==='authority');host.send({type:'active',active:false});const migrated=await peer.next(m=>m.type==='authority'&&m.host===peer.id);assert.ok(migrated.environment.time>=after.time);assert.equal(migrated.environment.weather.seed,first.weather.seed);
+  peer.send({type:'environment',snapshot:forged});const resumed=(await peer.next(m=>m.type==='environment'&&m.snapshot.time>migrated.environment.time)).snapshot;assert.ok(resumed.time-migrated.environment.time<2);assert.notEqual(resumed.time,99999);assert.equal(resumed.weather.seed,first.weather.seed);
+});
+
+test('invented meteor claims and obsolete host reward acknowledgements cannot grant items',async t=>{
+  const {host,peer,barrier,action,game}=await protocolRoom(t,{planet:'lava'});
+  const before=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();
+  const denied=await action(peer,'collectMeteor',{id:'invented-meteor'});assert.equal(denied.status,409);
+  host.send({type:'environmentResult',requestId:randomUUID(),ok:true,rewards:[{id:'mcrystal',count:99}]});peer.send({type:'environmentAction',action:{kind:'collect-ore',id:'invented-meteor'}});await barrier(host,peer);assert.deepEqual(peer.drain(m=>m.type==='environmentReward'),[]);
+  const after=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();assert.deepEqual(after.profile.bag,before.profile.bag);
+});
+
+test('late join and host migration retain bounded projectiles and Titan attack visuals',async t=>{
   const {host,peer,explorer}=await protocolRoom(t);
-  const first={id:'forest:bee:1',type:'bee',x:5,z:2,hp:30,maxHp:30,shots:[{id:'bee:shot:1',x:4,y:1.2,z:2,vx:-13,vz:0,life:.8,damage:7,targetEnemyId:'forest:boar:2'}]};
-  const second={id:'forest:boar:2',type:'boar',x:6,z:3,hp:40,maxHp:40,shots:Array.from({length:35},(_,i)=>({id:`boar:shot:${i}`,x:8,y:999,z:1,vx:500,vz:-500,life:500,damage:1e8}))};
-  host.send({type:'enemies',enemies:[first,second]});const received=(await peer.next(m=>m.type==='enemies')).enemies;
-  assert.deepEqual(received[0].shots,first.shots);assert.equal(received[1].shots.length,30);assert.ok(received[1].shots.every(shot=>shot.id.startsWith('boar:shot:')));
-  assert.deepEqual(received[1].shots[0],{id:'boar:shot:0',x:8,y:50,z:1,vx:100,vz:-100,life:60,damage:100000});
-  const late=await explorer('projectile_viewer');assert.deepEqual(late.joined.enemies,received);
-  host.send({type:'active',active:false});const migrated=await peer.next(m=>m.type==='authority'&&m.host===peer.id);assert.deepEqual(migrated.enemies,received);assert.equal(migrated.enemies[0].shots[0].targetEnemyId,second.id);
+  const roster=enemyRoster('home'),first=roster.find(e=>e.zone==='forest'&&!e.boss),titan=roster.find(e=>e.titan),source={x:100,z:0,radius:titan.radius,facing:0},targets=[{id:peer.id,x:95,z:1}];
+  const attack=beginTitanAttack('lines',source,titanTelegraphs('lines',source,targets[0],targets,()=>.5),targets);
+  const enemy={id:first.id,type:first.type,x:-30,z:2,hp:1,shots:[{id:'shot:one',x:-29,y:1.2,z:2,vx:13,vz:0,life:.8,damage:999999,targetEnemyId:titan.id}]};
+  const boss={id:titan.id,type:titan.type,x:100,z:0,hp:1,phase:'windup',skill:'lines',phaseTime:.8,titanAttacks:[attack],telegraphs:attack.marks,titanLift:2,shots:Array.from({length:35},(_,i)=>({id:`titan:shot:${i}`,x:98,y:999,z:1,vx:500,vz:-500,life:500,damage:1e8}))};
+  host.send({type:'enemies',enemies:[enemy,boss]});const received=(await peer.next(m=>m.type==='enemies')).enemies;
+  const shot=received[0].shots[0];assert.equal(shot.targetEnemyId,titan.id);assert.equal(shot.damage,first.baseDamage);assert.equal(shot.vx,13);
+  assert.equal(received[1].shots.length,30);assert.equal(received[1].shots[0].damage,titan.baseDamage);assert.equal(received[1].shots[0].vx,100);assert.equal(received[1].shots[0].y,50);assert.equal(received[1].shots[0].life,60);assert.deepEqual(received[1].titanAttacks,[attack]);assert.equal(received[1].telegraphs.length,42);
+  const late=await explorer('projectile_viewer');assert.deepEqual(late.joined.enemies.map(e=>e.shots),received.map(e=>e.shots));assert.deepEqual(late.joined.enemies[1].titanAttacks,[attack]);
+  peer.drain(m=>m.type==='authority');host.send({type:'active',active:false});const migrated=await peer.next(m=>m.type==='authority'&&m.host===peer.id);assert.deepEqual(migrated.enemies[1].titanAttacks,[attack]);assert.equal(migrated.enemies[0].shots[0].targetEnemyId,titan.id);
 });
 
 test('concurrent registrations cannot duplicate an account name',async()=>{
   const dataDir=await mkdtemp(path.join(os.tmpdir(),'zoo-garden-registration-test-'));
-  const game=await createGameServer({port:0,dataDir});
+  const game=await createGameServer({port:0,dataDir,databaseUrl:'',databaseRequired:false});
   try {const results=await Promise.all([1,2].map(()=>fetch(game.url+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'same_name',password:'password-one'})})));assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);}finally{await game.close();}
 });
 
 
-test('cloud saves preserve client timestamps, reject stale writes, and safely retry a save',async()=>{
+test('server-approved actions preserve progress with durable receipts and reject stale or forged profile writes',async()=>{
   const dataDir=await mkdtemp(path.join(os.tmpdir(),'zoo-garden-revision-test-'));
-  const game=await createGameServer({port:0,dataDir});
-  try {
+  const game=await createGameServer({port:0,dataDir,databaseUrl:'',databaseRequired:false});
+  try{
     const registered=await fetch(game.url+'/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'revision_test',password:'password-three'})});
     const cookie=registered.headers.get('set-cookie').split(';')[0],session=await registered.json();
-    const profile=session.profile;profile.savedAt=1000;profile.energy=12;
-    const first={profile,revision:1,mutation:randomUUID()};
-    const save=async job=>fetch(game.url+'/api/profile',{method:'PUT',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify(job)});
-    assert.equal((await save(first)).status,200);assert.equal((await save(first)).status,200);
-    const next={profile:{...profile,energy:25,savedAt:1100},revision:2,mutation:randomUUID()};
-    assert.equal((await save(next)).status,200);assert.equal((await save({...first,mutation:randomUUID()})).status,409);
-    const current=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:cookie}})).json();assert.equal(current.revision,2);assert.equal(current.profile.energy,25);assert.equal(current.profile.savedAt,1100);
-    const newer={profile:{...profile,energy:44,savedAt:1400},revision:4,mutation:randomUUID()},older={profile:{...profile,energy:33,savedAt:1300},revision:3,mutation:randomUUID()};
-    const [newerResult,olderResult]=await Promise.all([save(newer),save(older)]);assert.equal(newerResult.status,200);assert.ok([200,409].includes(olderResult.status));
-    // Retrying the last mutation acknowledges it without applying a modified payload twice.
-    const retry=await save({...newer,profile:{...newer.profile,energy:999}});assert.equal(retry.status,200);assert.equal((await retry.json()).revision,4);
-    assert.equal((await save(next)).status,409);assert.equal((await save({...newer,mutation:randomUUID()})).status,409);
-    assert.equal((await save({...newer,revision:4.5,mutation:randomUUID()})).status,400);assert.equal((await save({...newer,revision:5,mutation:'short'})).status,400);
-    const final=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:cookie}})).json();assert.equal(final.revision,4);assert.equal(final.profile.energy,44);assert.equal(final.profile.savedAt,1400);
-    const stored=JSON.parse(await readFile(path.join(dataDir,'accounts.json'),'utf8')).accounts[0];assert.equal(stored.profileRevision,4);assert.equal(stored.lastMutation,newer.mutation);assert.equal(stored.profile.energy,44);
+    const call=async(route,job,method='POST')=>{const response=await fetch(game.url+'/api/'+route,{method,headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify(job)});return {status:response.status,data:await response.json()};};
+    const first={type:'settings',payload:{name:'Amber',energy:99999},rulesVersion:1,expectedRevision:session.revision,requestId:randomUUID()};const saved=await call('actions',first);assert.equal(saved.status,200);assert.equal(saved.data.profile.energy,0);assert.equal(saved.data.profile.name,'Amber');
+    const retried=await call('actions',first);assert.equal(retried.status,200);assert.equal(retried.data.replayed,true);assert.equal(retried.data.revision,saved.data.revision);
+    assert.equal((await call('actions',{...first,payload:{name:'Modified retry'}})).status,409);
+    const planted=await call('actions',{type:'plant',payload:{index:0,id:'carrot'},rulesVersion:1,expectedRevision:saved.data.revision,requestId:randomUUID()});assert.equal(planted.status,200);assert.equal(planted.data.profile.plots[0].crop,'carrot');assert.ok(planted.data.profile.plots[0].plantedAt>Date.now()-5000);
+    assert.equal((await call('actions',{...first,requestId:randomUUID()})).status,409);
+    const jobs=['Aster','Willow'].map(name=>({type:'settings',payload:{name},rulesVersion:1,expectedRevision:planted.data.revision,requestId:randomUUID()}));const concurrent=await Promise.all(jobs.map(job=>call('actions',job)));assert.deepEqual(concurrent.map(r=>r.status).sort(),[200,409]);
+    assert.equal((await call('profile',{profile:{...session.profile,energy:999999},revision:999,mutation:randomUUID()},'PUT')).status,409);
+    const final=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:cookie}})).json();assert.equal(final.profile.energy,0);assert.equal(final.profile.plots[0].crop,'carrot');assert.equal(final.revision,planted.data.revision+1);
+    const stored=JSON.parse(await readFile(path.join(dataDir,'accounts.json'),'utf8')).accounts[0];assert.equal(stored.profileRevision,final.revision);assert.equal(stored.profile.energy,0);assert.equal(stored.profile.plots[0].plantedAt,planted.data.profile.plots[0].plantedAt);
   }finally{await game.close();}
+});
+
+test('chat acknowledgements are sender-only and retries do not broadcast twice',async t=>{
+  const {host,peer,barrier}=await protocolRoom(t);
+  const message={type:'chat',requestId:randomUUID(),message:'Xin chào, explorer!'};
+  host.send(message);
+  assert.deepEqual(await host.next(m=>m.type==='chatAck'),{type:'chatAck',requestId:message.requestId});
+  const received=await peer.next(m=>m.type==='chat'&&m.message===message.message);
+  assert.equal(received.id,host.id);assert.equal(received.name,host.session.profile.name);assert.equal(received.requestId,undefined,'delivery receipts are not exposed to other players');
+  assert.equal((await host.next(m=>m.type==='chat'&&m.message===message.message)).id,host.id);
+  await barrier(host,peer);assert.deepEqual(peer.drain(m=>m.type==='chatAck'),[]);
+
+  host.send(message);
+  assert.deepEqual(await host.next(m=>m.type==='chatAck'),{type:'chatAck',requestId:message.requestId});
+  await barrier(host,peer);
+  assert.deepEqual(peer.drain(m=>m.type==='chat'&&m.message===message.message),[]);
+  assert.deepEqual(host.drain(m=>m.type==='chat'&&m.message===message.message),[]);
+  assert.deepEqual(peer.drain(m=>m.type==='chatAck'),[]);
+});
+
+test('a chat request ID cannot be reused for changed text or another room',async t=>{
+  const {host,peer,barrier}=await protocolRoom(t);
+  const message={type:'chat',requestId:randomUUID(),message:'Original conversation'};
+  host.send(message);await host.next(m=>m.type==='chatAck'&&m.requestId===message.requestId);
+  await peer.next(m=>m.type==='chat'&&m.message===message.message);await host.next(m=>m.type==='chat'&&m.message===message.message);
+
+  host.send({...message,message:'Changed text'});
+  assert.deepEqual(await host.next(m=>m.type==='error'),{type:'error',requestId:message.requestId,message:'That message was already sent in another conversation.'});
+  await barrier(host,peer);assert.deepEqual(peer.drain(m=>m.type==='chat'&&m.message==='Changed text'),[]);assert.deepEqual(host.drain(m=>m.type==='chatAck'),[]);
+
+  host.send({type:'party'});const room=await host.next(m=>m.type==='party');await host.next(m=>m.type==='joined'&&m.party===room.code);
+  host.send(message);
+  assert.deepEqual(await host.next(m=>m.type==='error'),{type:'error',requestId:message.requestId,message:'That message was already sent in another conversation.'});
+  await barrier(host,host);assert.deepEqual(host.drain(m=>m.type==='chat'&&m.message===message.message),[]);assert.deepEqual(host.drain(m=>m.type==='chatAck'),[]);
+
+  // Request IDs are scoped to an authenticated account, not another player's text.
+  peer.send(message);assert.deepEqual(await peer.next(m=>m.type==='chatAck'),{type:'chatAck',requestId:message.requestId});assert.equal((await peer.next(m=>m.type==='chat'&&m.message===message.message)).id,peer.id);
+});
+
+test('empty chat rejection includes its request ID and broadcasts no message',async t=>{
+  const {host,peer,barrier}=await protocolRoom(t),requestId=randomUUID();
+  host.send({type:'chat',requestId,message:' \n\u0000\t '});
+  assert.deepEqual(await host.next(m=>m.type==='error'),{type:'error',requestId,message:'Write a message before sending.'});
+  await barrier(peer,peer);await barrier(peer,host);
+  assert.deepEqual(host.drain(m=>m.type==='chatAck'||m.type==='chat'&&!m.message.trim()),[]);
+  assert.deepEqual(peer.drain(m=>m.type==='chatAck'||m.type==='chat'&&!m.message.trim()),[]);
+});
+
+test('chat rate rejection preserves request IDs while an accepted retry remains idempotent',async t=>{
+  const {host,peer,barrier}=await protocolRoom(t),accepted=[];
+  for(let i=0;i<24;i++){
+    const message={type:'chat',requestId:randomUUID(),message:`Allowed message ${i}`};accepted.push(message);host.send(message);
+    assert.equal((await host.next(m=>m.type==='chatAck')).requestId,message.requestId);
+  }
+  await peer.next(m=>m.type==='chat'&&m.message===accepted.at(-1).message);
+  assert.equal(peer.drain(m=>m.type==='chat').length,23);assert.equal(host.drain(m=>m.type==='chat').length,24);
+
+  const rejected={type:'chat',requestId:randomUUID(),message:'This exceeds the limit'};host.send(rejected);
+  assert.deepEqual(await host.next(m=>m.type==='error'),{type:'error',requestId:rejected.requestId,message:'Please wait a moment before trying again.'});
+  host.send(accepted[0]);assert.deepEqual(await host.next(m=>m.type==='chatAck'),{type:'chatAck',requestId:accepted[0].requestId});
+  // The other account supplies the ordered barrier because this sender is rate-limited.
+  await barrier(peer,peer);
+  assert.deepEqual(peer.drain(m=>m.type==='chat'&&[rejected.message,accepted[0].message].includes(m.message)),[]);
+  assert.deepEqual(host.drain(m=>m.type==='chat'&&[rejected.message,accepted[0].message].includes(m.message)),[]);
+  assert.deepEqual(peer.drain(m=>m.type==='chatAck'),[]);
+});
+
+test('same-account reconnect retains chat receipts and acknowledges a retry without rebroadcast',async t=>{
+  const {game,host,peer,barrier}=await protocolRoom(t);
+  const message={type:'chat',requestId:randomUUID(),message:'Only once across reconnect'};
+  host.send(message);await host.next(m=>m.type==='chatAck'&&m.requestId===message.requestId);await peer.next(m=>m.type==='chat'&&m.message===message.message);
+  const replaced=new Promise(resolve=>host.socket.once('close',code=>resolve(code)));
+  const reconnected=await connect(game.url,host.cookie);t.after(()=>reconnected.socket.terminate());
+  const joined=await reconnected.next(m=>m.type==='joined');assert.equal(joined.id,host.id);assert.equal(joined.room,'public:home');assert.equal(await replaced,4001);
+  reconnected.send(message);assert.deepEqual(await reconnected.next(m=>m.type==='chatAck'),{type:'chatAck',requestId:message.requestId});
+  await barrier(reconnected,peer);
+  assert.deepEqual(peer.drain(m=>m.type==='chat'&&m.message===message.message),[]);
+  assert.deepEqual(reconnected.drain(m=>m.type==='chat'&&m.message===message.message),[]);
+  assert.deepEqual(peer.drain(m=>m.type==='chatAck'),[]);
 });

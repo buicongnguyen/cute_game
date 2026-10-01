@@ -32,7 +32,7 @@ test('the pen grows to ten chickens and ten cows over two paid expansions', () =
   const poor = home(10, 139); assert.equal(M.expandPen(poor), false); assert.equal(poor.farm.penLevel, 0);
 });
 
-test('young animals grow up on a timer, then make one product per cycle that waits to be collected', () => {
+test('young animals grow up on a timer, then accumulate up to three products while away', () => {
   const s = home(), a = M.buyAnimal(s, 'chicken', t0)!, d = M.ANIMALS.chicken;
   assert.equal(M.isAdult(a, t0 + d.growMs - 1), false); assert.equal(M.growth(a, t0 + d.growMs / 2), .5);
   assert.equal(M.productProgress(a, t0 + d.growMs - 1), 0, 'no eggs while young');
@@ -40,9 +40,9 @@ test('young animals grow up on a timer, then make one product per cycle that wai
   const adult = t0 + d.growMs;
   assert.equal(M.productReady(a, adult + d.productMs - 1), false); assert.equal(M.timeLeft(a, adult + d.productMs - 1), 1);
   assert.equal(M.productReady(a, adult + d.productMs), true);
-  // A product waits; it never piles up while nobody collects.
+  // Offline stock stops at three; collecting a full store resets the next cycle.
   const later = adult + d.productMs * 10, got = M.collectProducts(s, later);
-  assert.deepEqual(got, [{ uid: a.uid, kind: 'chicken', item: 'egg' }]); assert.equal(s.bag.egg, 1);
+  assert.deepEqual(got, Array.from({length:3},()=>({ uid: a.uid, kind: 'chicken', item: 'egg' }))); assert.equal(s.bag.egg, 3);
   assert.equal(M.productReady(a, later), false, 'the next cycle starts at the collect'); assert.equal(M.productReady(a, later + d.productMs), true);
   assert.deepEqual(M.collectProducts(s, later + 1), [], 'nothing to collect twice');
   const cow = M.buyAnimal(s, 'cow', t0)!, c = M.ANIMALS.cow; assert.equal(M.collectProducts(s, t0 + c.growMs + c.productMs, [cow.uid])[0].item, 'milk');
@@ -75,9 +75,9 @@ test('one collect gathers every waiting product with XP, in the order given', ()
   const hens = [0, 1, 2].map(() => M.buyAnimal(s, 'chicken', t0)!), cow = M.buyAnimal(s, 'cow', t0)!;
   const now = t0 + c.growMs + c.productMs; hens[1].cycleAt = now; // that hen just laid
   const xp = s.xp, level = s.level, got = M.collectProducts(s, now, [cow.uid, hens[2].uid, hens[1].uid, hens[0].uid]);
-  assert.deepEqual(got.map(g => g.uid), [cow.uid, hens[2].uid, hens[0].uid]); assert.equal(s.bag.egg, 2); assert.equal(s.bag.milk, 1);
+  assert.deepEqual(got.map(g => g.uid), [cow.uid, hens[2].uid, hens[2].uid, hens[0].uid, hens[0].uid]); assert.equal(s.bag.egg, 4); assert.equal(s.bag.milk, 1);
   assert.ok(s.level > level || s.xp > xp, 'collecting gives XP');
-  assert.equal(collectText(got), 'Collected 3: 1 milk, 2 eggs.');
+  assert.equal(collectText(got), 'Collected 5: 1 milk, 4 eggs.');
   assert.ok(d.productMs < c.productMs && M.ITEMS.milk.sell > M.ITEMS.egg.sell, 'milk is slower and worth more');
   const away = reload(s); away.planet = 'ice'; assert.deepEqual(M.collectProducts(away, now * 2), []);
 });
@@ -101,7 +101,7 @@ test('the farm saves and loads; old saves get an empty pen; bad entries are drop
   const r = reload(s); assert.deepEqual(r.farm, s.farm);
   assert.equal(r.farm.built, true);
   const old = JSON.parse(JSON.stringify(s)); delete old.farm; assert.deepEqual(M.parseSave(JSON.stringify(old))!.farm, M.emptyFarm());
-  const odd = JSON.parse(JSON.stringify(s)); odd.farm = { penLevel: 99, nextId: -4, animals: [{ uid: 1, kind: 'pig', bornAt: 1 }, { uid: 2, kind: 'cow', bornAt: 'x' }, { uid: 3, kind: 'cow', bornAt: 5 }, { uid: 3, kind: 'cow', bornAt: 6 }, ...Array.from({ length: 12 }, (_, i) => ({ uid: 10 + i, kind: 'chicken', bornAt: 7 }))] };
+  const odd = JSON.parse(JSON.stringify(s)); odd.farm = { penLevel: 99, nextId: -4, animals: [{ uid: 1, kind: 'unicorn', bornAt: 1 }, { uid: 2, kind: 'cow', bornAt: 'x' }, { uid: 3, kind: 'cow', bornAt: 5 }, { uid: 3, kind: 'cow', bornAt: 6 }, ...Array.from({ length: 12 }, (_, i) => ({ uid: 10 + i, kind: 'chicken', bornAt: 7 }))] };
   const f = M.parseSave(JSON.stringify(odd))!.farm;
   assert.equal(f.penLevel, M.MAX_PEN_LEVEL); assert.deepEqual(f.animals.filter(a => a.kind === 'cow').map(a => a.uid), [3], 'unknown kinds, bad times and repeated ids go');
   assert.equal(f.animals.filter(a => a.kind === 'chicken').length, 10, 'never more than the pen holds'); assert.ok(f.nextId > Math.max(...f.animals.map(a => a.uid)));
@@ -221,9 +221,9 @@ test('stand-in animals carry the contract part names, and the rig splits them in
 test('the pen panel lists animals, feed, buying and growing; the kitchen shows farm dishes once there are products', () => {
   const ui: FarmUi = { art: (id, icon) => icon, esc: s => s, mini: id => id, chips: m => Object.keys(m ?? {}).join(','), effect: i => `${i.heal}` };
   const s = home(3, 30), now = Date.now();
-  let html = penHtml(s, ui, now); assert.match(html, /pen is empty/); assert.match(html, /data-action="buy-animal" data-kind="chicken"/); assert.match(html, /Level 5/);
+  let html = penHtml(s, ui, now); assert.match(html, /farm is empty/); assert.match(html, /data-action="buy-animal" data-kind="chicken"/); assert.match(html, /Level 5/);
   M.buyAnimal(s, 'chicken', now - 1e6); M.addItem(s, 'carrot', 2); html = penHtml(s, ui, now);
-  assert.match(html, /Collect 1/); assert.match(html, /Feed: carrot/); assert.match(html, /data-animal="1"/);
+  assert.match(html, /Collect 3/); assert.match(html, /Feed: carrot/); assert.match(html, /data-animal="1"/);
   const sig = penSignature(s, now); M.collectProducts(s, now); assert.notEqual(penSignature(s, now), sig);
   assert.equal(dishesHtml(M.newGame(), ui), ''); assert.match(dishesHtml(s, ui), /data-action="cook-dish" data-item="omelette"/);
 });

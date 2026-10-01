@@ -43,7 +43,7 @@ test('heavy fish land quickly, but fishing stays interactive (hook at the bite, 
   const plain=sim({steady:false});assert.ok(Math.abs(sim().biteWindow-plain.biteWindow-STEADY.bite)<1e-9);
   // Missing the bite still loses the fish.
   const missed=sim();for(let s=0;s<60&&missed.missedBites===0;s+=.025)missed.update(.025,false);assert.equal(missed.missedBites,1);
-  // Letting go for over 4 s still lets the fish slip away.
-  const slack=hooked(sim());for(let s=0;s<5&&!slack.finished;s+=.025)slack.update(.025,false);
+  // Letting go for over 7 s still lets the fish slip away.
+  const slack=hooked(sim());for(let s=0;s<8&&!slack.finished;s+=.025)slack.update(.025,false);
   assert.equal(slack.phase,'escaped');assert.equal(slack.snapped,false);
 });

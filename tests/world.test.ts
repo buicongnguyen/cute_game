@@ -139,7 +139,7 @@ test('remote avatars are separate from obstacles and refresh equipment without d
 });
 
 test('home includes nine plots and exact regional creature populations within full bounds',()=>{
-  const w=world();w.build('home');assert.equal(w.plotMeshes.length,9);assert.equal(w.enemies.length,150);assert.equal(w.enemies.filter(e=>e.boss).length,4);
+  const w=world();w.build('home');assert.equal(w.plotMeshes.length,9);assert.equal(w.enemies.length,151);assert.equal(w.enemies.filter(e=>e.boss).length,5);assert.equal(w.enemies.filter(e=>e.definition?.titan).length,1);
   assert.ok(w.enemies.some(e=>Math.hypot(e.x,e.z)>100));assert.equal(w.blocked(149,0),true);
   assert.deepEqual(w.entities.filter(e=>e.kind==='plot').slice(0,3).map(e=>[e.x,e.z]),[[-10.79,1.35],[-9.15,1.35],[-7.51,1.35]]);
 });

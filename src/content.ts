@@ -1,3 +1,4 @@
+import { TITAN_ITEMS, TITAN_LOOT } from './titan-content.ts';
 // Gameplay facts measured from the public reference client, 2026-09-30.
 // Rendering assets, descriptions and implementation code are independently authored.
 export type GearSlot = 'weapon' | 'hat' | 'outfit' | 'boots' | 'pet' | 'disguise';
@@ -42,6 +43,9 @@ export interface ItemDef {
     weapon?: WeaponDef;
     pet?: {
         scale?: number;
+        dmg?: number;
+        cd?: number;
+        shot?: string;
         [key: string]: unknown;
     };
     luck?: number;
@@ -3641,7 +3645,22 @@ export const COLLECTIONS: Record<string, {
     emoji: string;
     items: string[];
 }> = { "toy": { "name": "Hành Tinh Đồ Chơi", "emoji": "🧸", "items": ["deco_teddy", "deco_musicbox", "deco_traincar", "toy_hammer", "pet_robot", "battery"] }, "jungle": { "name": "Rừng Rậm Nguyên Sinh", "emoji": "🌿", "items": ["deco_totem", "deco_rafflesia", "deco_fruittree", "armor_leaf", "pet_parrot", "amber"] }, "ocean": { "name": "Hành Tinh Đại Dương", "emoji": "🌊", "items": ["deco_aquarium", "deco_shell", "deco_piratechest", "trident", "pet_turtle", "pearl", "fish_manta"] }, "sky": { "name": "Quần Đảo Mây Trời", "emoji": "☁️", "items": ["deco_cloudsofa", "deco_windchime", "deco_rainbow", "armor_cloud", "pet_sheep", "thunderstone"] }, "dark": { "name": "Tinh Cầu Bóng Đêm", "emoji": "🌑", "items": ["deco_ghostlantern", "deco_nightcrystal", "deco_owlstatue", "hat_lantern", "pet_firefly", "moonstone"] }, "lava": { "name": "Hành Tinh Dung Nham", "emoji": "🌋", "items": ["deco_volcano", "deco_lamp", "deco_table", "deco_statue", "deco_nest", "deco_trophy", "dragonegg", "pet_dragon", "boots_lava", "armor_wings", "sword_obsidian"] } };
-const cropIcons: Record<string, string> = { radish: '🌱', carrot: '🥕', pumpkin: '🎃', mint: '🌿', chili: '🌶️', candy: '🍭', bean: '🫘', star: '⭐', berry: '🍓', coffee: '☕', moonflower: '🌼', magnetmelon: '🧲', melon: '🍉', clover: '🍀', glowshroom: '🍄', iceberry: '🫐', goldcorn: '🌽', dragonfruit: '🐉', rainbowrose: '🌹' };
+export const CROP_TIMER_VERSION = 3;
+/** These baseline definitions are scaled once on module load, never on saved inventory or EXP. */
+export const LEGACY_CROP_IDS = Object.freeze(Object.keys(CROP_FACTS));
+for (const id of LEGACY_CROP_IDS) { const crop = CROP_FACTS[id]; crop.heal ??= 8 + crop.energy; crop.time *= 10; crop.exp *= 3; crop.energy *= 3; }
+const FRUIT_FACTS: Record<string, any> = {
+  apple: { name: 'Magic Red Apple', lvl: 3, time: 8 * 3600, exp: 400, energy: 600, heal: 120 },
+  grape: { name: 'Juicy Purple Grapes', lvl: 5, time: 8 * 3600, exp: 450, energy: 700, buff: { regen: 4, time: 180 } },
+  mango: { name: 'Golden Mango', lvl: 7, time: 8 * 3600, exp: 500, energy: 800, buff: { speed: .25, time: 180 } },
+  pineapple: { name: 'Crown Pineapple', lvl: 9, time: 12 * 3600, exp: 750, energy: 1200, buff: { atk: .25, time: 180 } },
+  coconut: { name: 'Refreshing Coconut', lvl: 11, time: 12 * 3600, exp: 800, energy: 1300, heal: 400, buff: { fireres: .5, time: 180 } },
+  durian: { name: 'Spiky Durian', lvl: 14, time: 12 * 3600, exp: 950, energy: 1500, buff: { def: 25, time: 180 } },
+  lychee: { name: 'Ruby Lychee', lvl: 16, time: 14 * 3600, exp: 1100, energy: 1800, buff: { crit: .15, haste: .2, time: 180 } },
+  peach: { name: 'Immortal Peach', lvl: 18, time: 14 * 3600, exp: 1400, energy: 2200, heal: 9999, buff: { atk: .2, def: 15, regen: 5, xp: .5, time: 300 } },
+};
+Object.assign(CROP_FACTS, FRUIT_FACTS);
+const cropIcons: Record<string, string> = { apple: '🍎', grape: '🍇', mango: '🥭', pineapple: '🍍', coconut: '🥥', durian: '🌳', lychee: '🔴', peach: '🍑', radish: '🌱', carrot: '🥕', pumpkin: '🎃', mint: '🌿', chili: '🌶️', candy: '🍭', bean: '🫘', star: '⭐', berry: '🍓', coffee: '☕', moonflower: '🌼', magnetmelon: '🧲', melon: '🍉', clover: '🍀', glowshroom: '🍄', iceberry: '🫐', goldcorn: '🌽', dragonfruit: '🐉', rainbowrose: '🌹' };
 const typeIcons: Record<string, string> = { material: '💎', food: '🍲', farm: '🌿', bait: '🪱', fish: '🐟', junk: '🥾', weapon: '⚔️', hat: '🎩', armor: '🧥', feet: '👟', pet: '🐾', decor: '🏡', placeable: '🌱', disguise: '🎭' };
 const slots: Record<string, GearSlot> = { weapon: 'weapon', hat: 'hat', armor: 'outfit', feet: 'boots', pet: 'pet', disguise: 'disguise' };
 export const CROPS: Record<CropId, CropDef> = {};
@@ -3783,6 +3802,7 @@ for (const item of Object.values(ITEMS))
             delete item[key];
 // Original English labels keep the interface consistent without changing IDs or balance.
 const englishNames: Record<string, string> = {
+    ...Object.fromEntries(Object.entries(FRUIT_FACTS).map(([id, fact]) => [id, fact.name])),
     radish: 'Radish', carrot: 'Carrot', pumpkin: 'Pumpkin', mint: 'Mint', chili: 'Chili', candy: 'Candy bloom', bean: 'Shield bean', star: 'Star fruit', berry: 'Berry', coffee: 'Coffee bean', moonflower: 'Moonflower', magnetmelon: 'Magnet melon', melon: 'Melon', clover: 'Lucky clover', glowshroom: 'Glow mushroom', iceberry: 'Ice berry', goldcorn: 'Golden corn', dragonfruit: 'Dragon fruit', rainbowrose: 'Rainbow rose',
     seed_fire: 'Fire seed', seed_ice: 'Ice seed', seed_star: 'Star seed', plot_kit: 'Garden bed kit', meat: 'Meat', leather: 'Leather', bone: 'Bone', manure: 'Fertilizer', spore: 'Magic spore', tusk: 'Tusk', claw: 'Claw', sap: 'Sap', nectar: 'Nectar', spine: 'Cactus spine', cwater: 'Cactus water', bloom: 'Wild flower', honey: 'Honey', sugar: 'Sugar', icecrystal: 'Ice crystal', magma: 'Magma', starshard: 'Star shard', mcrystal: 'Magma crystal', obsidian: 'Obsidian', firecore: 'Fire core', dragonscale: 'Dragon scale', fcrystal: 'Fire crystal', gear: 'Toy gear', battery: 'Battery', vine: 'Vine', amber: 'Amber', pearl: 'Pearl', coral: 'Coral', feather: 'Feather', thunderstone: 'Thunder stone', shadow: 'Shadow essence', moonstone: 'Moonstone', dragonegg: 'Dragon egg', potion: 'Healing potion', worm: 'Worm bait', boot: 'Old boot', rod: 'Fishing rod', rod_gold: 'Golden fishing rod', rod_steady: 'Steady fishing rod', crown: 'Royal crown', trident: 'Ocean trident', toy_hammer: 'Toy hammer', wood: 'Wild wood', bunny: 'Mochi bunny',
     fish_perch: 'Perch', fish_clown: 'Clownfish', fish_puffer: 'Pufferfish', fish_carp: 'Carp', fish_shark: 'Shark', fish_rainbow: 'Rainbow fish', fish_catfish: 'Catfish', fish_koi: 'Koi', fish_eel: 'Eel', fish_swordfish: 'Swordfish', fish_jelly: 'Jellyfish', fish_icepike: 'Ice pike', fish_whale: 'Whale', fish_kraken: 'Kraken', fish_golden: 'Golden fish', fish_sunfish: 'Sunfish', fish_angler: 'Anglerfish', fish_manta: 'Manta ray',
@@ -3839,3 +3859,6 @@ ITEMS.rod_gold.desc='A stronger rod that makes difficult fish easier to land and
 ITEMS.rod_steady.desc='A sturdy rod whose line never snaps. It reels heavy fish in quickly; you still hook at the bite and keep the line from going slack.';
 const worldDescriptions:Record<PlanetId,string>={home:'Your garden and four trails: forest, meadow, swamp and canyon.',candy:'Sweet forests, springy surprises and powerful candy creatures.',ice:'Slippery ice, frozen ponds and snowbound bosses. Plan your stopping distance.',lava:'Eruptions, rising lava, meteors and a hidden cave furnace. Watch the warning circles.',toy:'Ride the moving trains and open surprise gifts among giant toys.',jungle:'Changing thorn walls, poisonous plants and restorative fruit.',ocean:'Swim between islands. Refill your air at bubbles or ride a sea turtle.',cloud:'Bounce between floating islands and watch the wind near their edges.',shadow:'Explore the darkness, light ancient pillars and face the Night Lord.'};
 for(const id of Object.keys(PLANETS)as PlanetId[])PLANETS[id].description=worldDescriptions[id];
+
+Object.assign(ITEMS, TITAN_ITEMS);
+Object.assign(LOOT_TABLES, TITAN_LOOT);

@@ -52,7 +52,8 @@ test('pen status tracks life separately, rerenders at expiry, and offers meat in
   const html = penHtml(s, ui, end);
   assert.match(html, /data-item="meat"/);
   assert.match(html, /Meat ready/);
-  assert.match(html, /data-action="feed-animal"[^>]*disabled/);
+  assert.match(html, /data-action="collect-animal"/);
+  assert.doesNotMatch(html, /data-action="feed-animal"/);
   assert.doesNotMatch(html, /animals are friends, never food/);
   setLanguage('vi');
   assert.match(animalStatus(a, end - 1000).text, /Tuổi thọ còn: 1g/);

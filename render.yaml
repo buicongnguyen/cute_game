@@ -1,0 +1,28 @@
+# Deployment template only. Create the Blueprint in Render when ready.
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+services:
+  - type: web
+    name: zoo-garden-multiplayer
+    runtime: node
+    plan: free
+    branch: main
+    numInstances: 1
+    autoDeployTrigger: "off"
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: VITE_BASE_PATH
+        value: /
+      - key: VITE_STATIC_HOST
+        value: "false"
+      - key: DATABASE_REQUIRED
+        value: "1"
+      - key: DATABASE_URL
+        sync: false

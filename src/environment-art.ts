@@ -30,7 +30,7 @@ export class EnvironmentView {
       this.staticRoot.add(this.disk('#56bce6',151,0,0,-.16));
       l.bubbles.forEach(p=>{const g=new T.Group();g.add(this.cyl('#b8d7df',.8,.5,0,-.8));for(let i=0;i<5;i++)g.add(this.ball('#dcf8ff',.12+(i%2)*.06,Math.sin(i)*.4,-.6+i*.32,Math.cos(i)*.4));g.position.set(p.x,0,p.z);this.dynamicRoot.add(g);});
       l.turtles.forEach(p=>{const g=this.turtle();this.node('turtle','Sea turtle · ride for 45 seconds','🐢',p.id,p.x,p.z,1.3,g);this.turtles.set(p.id,g);});
-      l.bubbles.slice(0,12).forEach((p,index)=>{const g=new T.Group();const shell=this.ball('#c3a0d4',.6,0,-.5);shell.scale.y=.45;g.add(shell,this.ball('#fff0d2',.2,0,-.25));this.node('clam','Pearl clam','🐚',index,p.x+2.3,p.z+.8,.8,g);});
+      l.bubbles.slice(0,16).forEach((p,index)=>{const g=new T.Group();const shell=this.ball('#c3a0d4',.6,0,-.5);shell.scale.y=.45;g.add(shell,this.ball('#fff0d2',.2,0,-.25));this.node('clam','Pearl clam','🐚',index,p.x+2.3,p.z+.8,.8,g);});
     }
     if(l.planet==='cloud'){
       this.staticRoot.add(this.disk('#e1f3ff',220,0,0,-12));
@@ -79,7 +79,7 @@ export class EnvironmentView {
     for(const item of this.vents){const vent=this.layout.vents[item.id],phase=ventPhase(sim.time,vent.phase,sim.ventPeriod);item.ring.visible=phase==='warning';item.ring.scale.setScalar(.94+Math.sin(sim.time*8)*.06);item.fire.visible=phase==='eruption';item.fire.scale.y=2.5+Math.sin(sim.time*18)*.5;}
     for(const item of this.trains){const p=trainPosition(this.layout.tracks[item.track],sim.time,item.car);item.mesh.position.set(p.x,.05,p.z);item.mesh.rotation.y=p.facing;}
     for(const item of this.thorns){const raised=thornRaised(sim.time,this.layout.thorns[item.index].phase);item.group.scale.y=raised?1:.05;item.group.visible=raised;}
-    for(const [id,mesh] of this.lamps){const flame=mesh.getObjectByName('flame');if(flame)flame.visible=(sim.lamps.get(id)??0)>sim.time;}
+    for(const [id,mesh] of this.lamps){const flame=mesh.getObjectByName('flame');if(flame)flame.visible=sim.lampLit(id);}
     for(const [id,mesh] of this.turtles){const home=this.layout.turtles[id],angle=sim.time*.15+id*1.3;mesh.position.set(home.x+Math.cos(angle)*6,-.45+Math.sin(sim.time*2+id)*.05,home.z+Math.sin(angle)*6);mesh.rotation.y=-angle;}
   }
 }

@@ -1,5 +1,18 @@
 export type MovementKey = 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight';
 const movementKeys = new Set<string>(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+/** Physical keys keep shortcuts stable with Vietnamese layouts. Composition never triggers gameplay. */
+export function gameplayKey(event:{code?:string;key:string;isComposing?:boolean;keyCode?:number;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean}){
+  if(event.isComposing||event.keyCode===229||event.ctrlKey||event.metaKey||event.altKey)return '';
+  const code=event.code||'';return /^Key[A-Z]$/.test(code)?code.slice(3).toLowerCase():code==='Space'?' ':code.startsWith('Arrow')?code:code==='Escape'?'Escape':code==='Enter'?'Enter':code==='Tab'?'Tab':event.key.length===1?event.key.toLowerCase():event.key;
+}
+export const JOYSTICK={radius:52,deadZone:.18} as const;
+export class JoystickInput{
+  pointer:number|null=null;x=0;z=0;
+  begin(pointer:number){if(this.pointer!==null)return false;this.pointer=pointer;return true;}
+  move(pointer:number,x:number,z:number){if(this.pointer!==pointer)return;const length=Math.hypot(x,z),scale=length>JOYSTICK.radius?JOYSTICK.radius/length:1;this.x=x*scale;this.z=z*scale;}
+  end(pointer=this.pointer){if(pointer!==this.pointer)return;this.pointer=null;this.x=this.z=0;}
+  get direction(){const length=Math.hypot(this.x,this.z);return this.pointer===null||length<JOYSTICK.radius*JOYSTICK.deadZone?null:{x:this.x/length,z:this.z/length};}
+}
 
 /** Combine keyboard and touch input without one input source releasing another. */
 export class MovementControls {

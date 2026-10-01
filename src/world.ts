@@ -1,4 +1,8 @@
 import { t } from './i18n.ts';
+import {TITANS,TITAN_BY_PLANET,type TitanId} from './titan-content.ts';
+import {titanKit,titanArt,titanFallback} from './titan-art.ts';
+import {beginTitanAttack,stepTitanAttack,titanTelegraphs,isTitanSkill,sanitizeTitanAttacks,type TitanAttack,type TitanTarget,type TitanMark} from './titan-patterns.ts';
+import {TitanAttackView} from './titan-view.ts';
 import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
 import { buildScatter, disposeScatter, fallbackParts, updateScatterShadows } from './scatter.ts';
 import { OccluderFade } from './occluders.ts';
@@ -12,7 +16,7 @@ import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wea
 import { Effects } from './fx.ts';
 import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
-import { CropCards, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
+import { CropCards, CROP_PRESENTATION_SCALE, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
 import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
@@ -46,9 +50,11 @@ interface Obstacle { x: number; z: number; r: number;tag?:string }
 export interface Enemy { resting?:boolean;lod?:{wait:number;age:number;x:number;z:number;slot:number} }
 /** windupTotal: the length of the current wind-up, so its telegraph fills exactly when the blow lands; enraged: below 30% HP (one toast). */
 export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;resistAt?:number }
-export interface RemotePose {id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];hp?:number;level?:number}
+export interface AvatarVisual {size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
+export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
+export interface RemotePose {visual?:Partial<AvatarVisual>;id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
-export interface EnemySnapshot {id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
+export interface EnemySnapshot {titanAttacks?:TitanAttack[];titanLift?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
 export interface EnvironmentSnapshot {time:number;lamps:Array<[number,number]>;eclipseUntil?:number;weather?:LavaWeatherSnapshot;nestLevel?:number;fireRain?:EnvironmentSimulation['fireRain'];lightning?:LightningState}
 export interface EnvironmentAction {kind:'light-pillar'|'collect-ore';id:string;index?:number}
 export interface EnvironmentReward {id:string;count:number}
@@ -117,15 +123,19 @@ export class World {
   viewOffset = cameraOffset(16 / 9);
   /** The explorer is inside the starship: hidden, with the companion. */
   boarded = false;
-  onInteract: (e: Entity) => void = () => {}; onAttackEnemy: (e: Enemy) => void = () => {}; onDamage: (amount: number,source?:'melee'|'shot'|'hazard') => void = () => {};
+  onInteract: (e: Entity) => void = () => {}; onAttackEnemy: (e: Enemy) => void = () => {}; onDamage: (amount: number,source?:'melee'|'shot'|'hazard',enemyId?:string) => void = () => {};
   onZone: (name: string) => void = () => {}; lastZone = ''; hazardTimer = 0;
   /** Called after every world build, so views such as the fishing ponds can restock. */
   onBuilt?: () => void;
   /** A creature has just noticed the explorer. */
   onAlert?: (e: Enemy) => void;
+  joystickInput:Point|null=null;onRemotePlayerClick?:(id:string)=>void;
+  playerSizeScale=1;playerShield=false;playerBat=false;
+  authoritativeAction?:(intent:{type:string;payload?:Record<string,unknown>})=>Promise<unknown>;
+  private progressPending=new Set<string>();private titanView?:TitanAttackView;
   environment!:EnvironmentSimulation;environmentView!:EnvironmentView;movementLocked=false;playerFlying=false;playerStealth=false;
   networkRole:'host'|'peer'|null=null;remotePlayers=new Map<string,{mesh:T.Group;pose:RemotePose}>();remoteRoot=new T.Group();
-  onRemoteDamage:(id:string,amount:number,source?:'melee'|'shot'|'hazard')=>void=()=>{};
+  onRemoteDamage:(id:string,amount:number,source?:'melee'|'shot'|'hazard',enemyId?:string)=>void=()=>{};
   onEnvironmentEvent:(event:EnvironmentEvent)=>void=()=>{};
   onEnvironmentAction:(action:EnvironmentAction)=>void=()=>{};
   onHazardEnemy:(enemy:Enemy,amount:number)=>void=(enemy,amount)=>this.damageEnemy(enemy,amount,0,true);
@@ -404,7 +414,7 @@ export class World {
     const view=this.farmView=new FarmPenView(),{x,z}=M.PEN,built=M.penBuilt(this.state);
     // Until it is bought the pen is a marked plot with a sign (still one entity to tap); a visit shows the host's.
     this.addEntity('pen',built?'Animal pen':'Animal pen site','🐔',view.statics,x,z,2.6);
-    view.setBuilt(built);if(built)this.penObstacles();
+    view.setBuilt(built);view.setSpeciesPens(this.state.farm?.speciesPens);if(built)this.penObstacles();
     view.setArea(this.roamArea());view.setCamera(this.camera);this.roamKeep=[];
     this.penKeepClock=0;
     if(!farmKit.ready)void farmKit.load().then(()=>{if(farmKit.ready&&this.farmView===view)view.refresh();});
@@ -417,7 +427,7 @@ export class World {
   /** After the pen is bought: the yard, coop and props pop up in place and start blocking. */
   showPenBuilt(){
     const view=this.farmView;if(!view||view.isBuilt||!M.penBuilt(this.state))return false;
-    view.setBuilt(true,true);this.penObstacles();this.penKeepClock=0;
+    view.setBuilt(true,true);view.setSpeciesPens(this.state.farm?.speciesPens);this.penObstacles();this.penKeepClock=0;
     const e=this.entities.find(v=>v.kind==='pen');if(e)e.name='Animal pen';return true;
   }
   private penKeepClock?:number;private roamKeep:{x:number;z:number;r:number}[]=[];
@@ -471,7 +481,7 @@ export class World {
     this.syncCrops();this.syncBeds();
   }
   build(planet: PlanetId) {
-    this.farmView?.dispose();this.farmView=undefined;
+    this.farmView?.dispose();this.farmView=undefined;this.titanView?.clear();this.joystickInput=null;
     this.disposeTree(this.root);this.scene.remove(this.root);this.root=new T.Group();this.scene.add(this.root);
     this.entities=[];this.enemies=[];this.obstacles=[];this.dynamicObstacles=[];this.plotMeshes=[];this.cropSignatures=[];this.planet=planet;
     this.destination=null;this.route=[];this.selected=null;this.ring.visible=false;this.marker.visible=false;this.gateHits=0;
@@ -537,19 +547,20 @@ export class World {
     // Creatures are placed before the scenery, which then leaves a clearing around each spawn point (CC-7).
     const angles:Record<string,number>={canyon:0,meadow:Math.PI/2,forest:Math.PI,swamp:-Math.PI/2};let enemyIndex=0;
     const placeEnemy=(type:string,zone?:string,boss=false)=>{
-      const def=ENEMY_TYPES[type];if(!def)return;
+      const def=ENEMY_TYPES[type];if(!def)return;const spawnIndex=enemyIndex++;
       for(let attempt=0;attempt<500;attempt++){
         let a=zone?angles[zone]+(rng()-.5)*1.3:rng()*Math.PI*2,d=boss?100+rng()*24:27+rng()*97,x=Math.cos(a)*d,z=Math.sin(a)*d;
         if(planet==='cloud'){const islands=this.environment.layout.islands,isl=islands[1+(enemyIndex%(islands.length-1))];a=rng()*Math.PI*2;d=rng()*(isl.r-3);x=isl.x+Math.cos(a)*d;z=isl.z+Math.sin(a)*d;}
-        if(this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+def.radius+1)||this.enemies.some(e=>Math.hypot(x-e.x,z-e.z)<2.4))continue;
+        if(this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+def.radius+1)||this.enemies.some(e=>Math.hypot(x-e.x,z-e.z)<(def.titan&&e.boss?25:2.4)))continue;
         if(planet==='lava'&&terrainHeight(this.environment.layout,{x,z})<-.4)continue;
-        this.spawnSpecies(type,x,z,enemyIndex++);break;
+        this.spawnSpecies(type,x,z,spawnIndex);break;
       }
     };
     if(planet==='home'){
       for(const [zone,spawns] of Object.entries(HOME_SPAWNS))for(const [type,count] of spawns)for(let i=0;i<count;i++)placeEnemy(type,zone);
       for(const [type,zone] of [['bear','canyon'],['treant','forest'],['croc','swamp'],['mushking','meadow']])placeEnemy(type,zone,true);
     }else{for(const [type,count] of PLANET_SPAWNS[planet]??[])for(let i=0;i<count;i++)placeEnemy(type);for(const type of PLANET_BOSSES[planet]??[])placeEnemy(type,undefined,true);}
+    const titan=TITAN_BY_PLANET[planet];if(titan)placeEnemy(titan,planet==='home'?'canyon':undefined,true);
     if(planet==='lava'){
       const dragon=this.enemies.find(e=>e.type==='dragon');if(dragon){dragon.x=dragon.homeX=this.environment.layout.nest.x;dragon.z=dragon.homeZ=this.environment.layout.nest.z;dragon.hp=0;dragon.respawn=999999;dragon.mesh.visible=false;}
       for(let i=0;i<18;i++){const minion=this.spawnSpecies('minislime',30,30,enemyIndex++)!;minion.hp=0;minion.respawn=999999;minion.mesh.visible=false;}
@@ -570,8 +581,7 @@ export class World {
     const id=waterId??(this.planet==='home'?Math.hypot(x,z)<18?'home':zoneAt({x,z})==='swamp'?'swamp':'lake':this.planet),surface=.3,r=radius;
     const {group:pond}=buildPond(r,surface,id);
     for(let i=0;i<5;i++){const a=i*2.4+.7,d=r*(.38+(i%3)*.17),pad=cyl('#4fbf3a',.3,.3,.03,Math.cos(a)*d,surface+.02,Math.sin(a)*d,12);pad.scale.z=.85;pond.add(pad);if(i%2===0)pond.add(ball('#ff8fc4',.1,Math.cos(a)*d,surface+.08,Math.sin(a)*d));}
-    // A little jetty on the west side, reaching over the shallows.
-    const jetty=Math.min(2.4,r*.6);pond.add(box('#d68a45',jetty,.13,1.3,-(r-jetty*.5+.35),surface+.08,0));for(let i=0;i<5;i++)pond.add(box('#9a5a2c',.04,.02,1.3,-(r+.35)+(i+.5)*jetty/5,surface+.16,0));
+    // Keep the water unobstructed so fish remain visible; fishing takes place on the bank.
     pond.traverse(o=>{o.castShadow=false;});
     const entity=this.addEntity('fish',this.planet==='home'?'Fishing pond':'Planetary fishing pool','🎣',pond,x,z,radius);entity.waterId=id;entity.pond={rx:r,rz:r,surface};
     // Solid up to the sandy lip: the explorer fishes from the shore, 0.6 m outside the water line.
@@ -618,7 +628,7 @@ export class World {
   /** A companion model: from the pet kit when it has loaded, otherwise the simple shapes. */
   petFor(id:string){
     const model=this.kitFor(id)?.instance(id)??this.petModel(id);
-    model.userData.flying=['pet_parrot','pet_firefly','pet_dragon'].includes(id);
+    model.userData.flying=['pet_parrot','pet_firefly','pet_dragon','pet_t_crystal','pet_t_whale','pet_t_eye'].includes(id);
     // The kit's convention: the right wing lifts with +z, the left with -z.
     model.userData.wings=model.children.filter(c=>/_wing_[lr]/.test(c.name)).map(c=>({node:c,base:c.rotation.z,side:/_wing_l/.test(c.name)?-1:1}));
     return model;
@@ -628,7 +638,7 @@ export class World {
    * first time; avatars are rebuilt when it arrives, and simple shapes stand in until then.
    */
   private kitFor(id:string){
-    const slot=M.ITEMS[id]?.slot,kit=slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
+    const slot=M.ITEMS[id]?.slot,kit=/^(hat|pet)_t_/.test(id)?titanKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
     if(!kit.requested)void kit.load().then(()=>{if(kit.ready)this.refreshAvatars();});
     return kit.ready&&kit.has(id)?kit:null;
   }
@@ -738,9 +748,10 @@ export class World {
   /** A creature's drawn model: its creatures.glb art once that has loaded (creature-art.ts), else the procedural shapes. */
   private enemyModel(type:string,def:EnemyDefinition){
     if(!creatureKit.requested&&typeof document!=='undefined')void creatureKit.load().then(()=>{if(creatureKit.ready)this.restyleCreatures();});
-    const art=creatureArt(type);
+    const titan=Object.hasOwn(TITANS,type);if(titan&&!titanKit.requested&&typeof document!=='undefined')void titanKit.load().then(()=>{if(titanKit.ready){this.restyleCreatures();this.refreshAvatars();}});
+    const art=titan?titanArt(type as TitanId):creatureArt(type);
     // Plain body parts become one or two meshes; named parts (legs, wings, shell) keep animating on their own.
-    const model=art??bakeModel(this.speciesModel(def),{deep:false,keep:o=>!!o.name}),flash:LitMaterial[]=[];
+    const model=art??bakeModel(titan?titanFallback(type as TitanId):this.speciesModel(def),{deep:false,keep:o=>!!o.name}),flash:LitMaterial[]=[];
     model.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;model.userData.creatureArt=!!art;model.scale.setScalar(enemyScale(type,def.boss));addOutlines(model);showOutlines(model,false);
     return model;
   }
@@ -755,7 +766,7 @@ export class World {
   spawnSpecies(type:string,x:number,z:number,index:number){
     const def=ENEMY_TYPES[type];if(!def)return null;
     const zone=this.planet==='home'?zoneAt({x,z}):this.planet,difficulty=({home:0,forest:1,meadow:1,swamp:2,canyon:3,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,cloud:5,shadow:6} as Record<string,number>)[zone],scale=[1,1,1.7,2.6,3.6,4.8,6.2][difficulty];
-    const health=Math.round(def.hp*scale*(def.boss&&type!=='dragon'?2.6:1)),damage=def.damage*scale*(def.boss?1.35:1),xp=Math.round(def.xp*(.6+scale*.4));
+    const health=Math.round(def.hp*scale*(def.titan?7:def.boss&&type!=='dragon'?2.6:1)),damage=def.damage*scale*(def.titan?1.6:def.boss?1.35:1),xp=Math.round(def.xp*(.6+scale*.4));
     const model=this.enemyModel(type,def);
     const e=this.addEntity('enemy',def.name,def.boss?'👑':'⚔️',model,x,z,def.radius,index) as Enemy;
     Object.assign(e,{type,definition:def,hp:health,maxHp:health,baseMaxHp:health,baseDamage:damage,damage,xp,level:difficulty*3-2+(def.boss?6:0),homeX:x,homeZ:z,cooldown:0,respawn:0,boss:def.boss,stun:0,phase:'idle',phaseTime:0,route:[],routeTime:0,lift:0,liftVelocity:0,statuses:{}});this.enemies.push(e);return e;
@@ -764,7 +775,8 @@ export class World {
   lightSources(){
     if(!this.environment)return[];const stats=M.activeStats(this.state),radius=(stats.light?7.5:3.6)*(this.environment.time<this.environment.eclipseUntil?.4:1);
     const sources=[{x:this.position.x,z:this.position.z,radius}];
-    for(const lamp of this.environment.layout.lamps)if((this.environment.lamps.get(lamp.id)??0)>this.environment.time)sources.push({x:lamp.x,z:lamp.z,radius:lamp.r});
+    for(const lamp of this.environment.layout.lamps)if(this.environment.lampLit(lamp.id))sources.push({x:lamp.x,z:lamp.z,radius:lamp.r});
+    for(const e of this.enemies)if(e.hp>0&&e.definition?.titan)sources.push({x:e.x,z:e.z,radius:e.radius+8});
     for(const flower of this.environment.layout.flowers)if(Math.hypot(flower.x-this.position.x,flower.z-this.position.z)<28)sources.push({x:flower.x,z:flower.z,radius:flower.r});
     return sources;
   }
@@ -774,7 +786,7 @@ export class World {
       if(e.kind==='gift')e.mesh.visible=giftAvailable(this.state,this.planet,e.index??0);
       if(['fire-crystal','magma-ore','obsidian-ore','clam'].includes(e.kind))e.mesh.visible=(this.state.worldRewards.resourceReadyAt[e.id]??0)<=Date.now();
       if(e.kind==='brazier'||e.kind==='furnace'){const fire=e.mesh.getObjectByName('flame');if(fire)fire.visible=e.kind==='furnace'?M.furnaceReady(this.state):this.state.worldRewards.lava.braziers.includes(e.index!);}
-      if(e.kind==='fruit'){const fruit=e.mesh.getObjectByName('fruit');if(fruit)fruit.visible=(this.resourceTimers?.get(e.id)??0)<(this.environment?.time??0);}
+      if(e.kind==='fruit'){const fruit=e.mesh.getObjectByName('fruit');if(fruit)fruit.visible=(this.state.worldRewards.resourceReadyAt[e.id]??0)<=Date.now();}
       if(e.kind==='turtle'&&e.mesh.userData.ridden)e.mesh.visible=!(this.environment?.riding??false);
     }
   }
@@ -795,29 +807,42 @@ export class World {
     if(!M.claimEnvironmentResource(this.state,'loot:'+eventId,valid[0].id,Date.now(),86400000))return false;
     valid.forEach((reward,index)=>M.addItem(this.state,reward.id,reward.count-(index===0?1:0)));this.onEnvironmentEvent?.({kind:'resource-collected',message:t('Meteor minerals collected.')});return true;
   }
+  private requestProgress(e:Entity,type:string,payload:Record<string,unknown>){
+    if(!this.authoritativeAction)return false;this.progressPending??=new Set();if(this.progressPending.has(e.id))return true;
+    this.progressPending.add(e.id);const state=this.state,planet=this.planet;
+    void this.authoritativeAction({type,payload}).then(result=>{if(this.state!==state||this.planet!==planet)return;
+      if(e.kind==='cave-gate'&&state.worldRewards.lava.gateOpen){e.mesh.removeFromParent();this.disposeTree(e.mesh);this.entities=this.entities.filter(v=>v!==e);this.obstacles=this.obstacles.filter(o=>o.tag!=='cave-gate');}
+      if(e.kind==='turtle'){this.environment.rideUntil=this.environment.time+45;e.mesh.visible=false;e.mesh.userData.ridden=true;}
+      this.refreshEnvironmentNodes();const progress=result as {hits?:number;required?:number}|null;this.onEnvironmentEvent?.({kind:'resource-collected',message:progress&&Number.isFinite(progress.hits)&&Number.isFinite(progress.required)?t('Mining {count}/{total} strikes.',{count:progress.hits!,total:progress.required!}):t('Done!')});
+    }).catch(error=>{if(this.state===state)this.onEnvironmentEvent?.({kind:'error',message:t(error instanceof Error?error.message:'Action failed. Try again.')});}).finally(()=>this.progressPending.delete(e.id));return true;
+  }
   interactEnvironment(e:Entity):{message:string;openCrafting?:boolean}|null{
     const env=this.environment,index=e.index??0;if(!env)return null;
     if(e.kind==='bounce'){const target=e.mesh.userData.bounceTo as Point;env.launch(this.position,target);this.destination=null;this.route=[];return {message:t('Up you go! Jumping to the next cloud island.')};}
-    if(e.kind==='turtle'){env.rideUntil=env.time+45;e.mesh.visible=false;e.mesh.userData.ridden=true;return {message:t('Sea turtle ride: faster swimming and no oxygen loss for 45 seconds.')};}
+    if(e.kind==='turtle'){if(this.requestProgress(e,'rideTurtle',{index}))return {message:t('Boarding the sea turtle…')};env.rideUntil=env.time+45;e.mesh.visible=false;e.mesh.userData.ridden=true;return {message:t('Sea turtle ride: faster swimming and no oxygen loss for 45 seconds.')};}
     if(e.kind==='light-pillar'){env.lightPillar(index);if(this.networkRole)this.onEnvironmentAction?.({kind:'light-pillar',id:e.id,index});this.burst(e.x,e.z,'#ffe69a');return {message:t('Light pillar lit for 150 seconds. Its light heals and repels shadow creatures.')};}
     if(e.kind==='meteor-ore'){
+      if(this.requestProgress(e,'collectMeteor',{id:e.id}))return {message:t('Collecting shared meteor minerals…')};
       const hits=LAVA_ORE_RULES[e.mesh.userData.lootKind==='meteor'?'meteor':'ore_magma'].hits;e.mesh.userData.hits=(e.mesh.userData.hits??0)+1;this.burst(e.x,e.z,'#ffbe6e',8);
       if(e.mesh.userData.hits<hits)return {message:t('Mining {count}/{total} strikes.', { count: e.mesh.userData.hits, total: hits })};e.mesh.userData.hits=0;
       const action:EnvironmentAction={kind:'collect-ore',id:e.id};if(this.networkRole){this.onEnvironmentAction?.(action);return {message:t('Collecting shared meteor minerals…')};}
       const result=this.applyEnvironmentAction(action);if(result.ok)this.grantEnvironmentReward(action.id+':'+Date.now(),result.rewards??[]);return {message:t(result.ok?'Meteor minerals collected!':'This meteor was already collected.')};
     }
-    if(e.kind==='fruit'){if((this.resourceTimers.get(e.id)??0)>env.time)return {message:t('This tree needs a minute to grow more fruit.')};this.resourceTimers.set(e.id,env.time+60);this.state.hp=Math.min(maxHp(this.state),this.state.hp+Math.round(maxHp(this.state)*.3));M.addBuff(this.state,Math.random()<.5?{regen:4,time:30}:{haste:.3,time:30},'jungle-fruit');if(Math.random()<.35)M.addItem(this.state,'vine');this.refreshEnvironmentNodes();return {message:t('Jungle fruit restores health and grants a 30-second boost.')};}
-    if(e.kind==='brazier'){const success=M.lightBrazier(this.state,index);this.refreshEnvironmentNodes();return {message:t(success?M.furnaceReady(this.state)?'All three flames are lit. The ancient furnace is awake!':t('Brazier lit: {count}/3.', { count: this.state.worldRewards.lava.braziers.length }):this.state.worldRewards.lava.braziers.includes(index)?'This brazier is already burning.':'Bring one fire crystal from the cave entrance.')};}
+    if(e.kind==='fruit'){if((this.state.worldRewards.resourceReadyAt[e.id]??0)>Date.now())return {message:t('This tree needs a minute to grow more fruit.')};if(this.requestProgress(e,'environmentResource',{nodeId:e.id}))return {message:t('Collecting…')};this.state.worldRewards.resourceReadyAt[e.id]=Date.now()+60000;this.state.hp=Math.min(maxHp(this.state),this.state.hp+Math.round(maxHp(this.state)*.3));M.addBuff(this.state,Math.random()<.5?{regen:4,time:30}:{haste:.3,time:30},'jungle-fruit');if(Math.random()<.35)M.addItem(this.state,'vine');this.refreshEnvironmentNodes();return {message:t('Jungle fruit restores health and grants a 30-second boost.')};}
+    if(e.kind==='brazier'){if(this.requestProgress(e,'lightBrazier',{index}))return {message:t('Lighting the brazier…')};const success=M.lightBrazier(this.state,index);this.refreshEnvironmentNodes();return {message:t(success?M.furnaceReady(this.state)?'All three flames are lit. The ancient furnace is awake!':t('Brazier lit: {count}/3.', { count: this.state.worldRewards.lava.braziers.length }):this.state.worldRewards.lava.braziers.includes(index)?'This brazier is already burning.':'Bring one fire crystal from the cave entrance.')};}
     if(e.kind==='furnace')return {message:t(M.furnaceReady(this.state)?'The ancient furnace is ready to smelt.':'Light all three braziers with fire crystals first.'),openCrafting:M.furnaceReady(this.state)};
     if(e.kind==='cave-gate'){
+      if(this.requestProgress(e,'openCave',{}))return {message:t('Opening the cave…')};
       this.gateHits++;this.burst(e.x,e.z,'#a798ba',7);
       if(this.gateHits<8)return {message:t('Cracks spread through the gate. {count} more strikes.', { count: 8-this.gateHits })};
       M.openCave(this.state);this.root.remove(e.mesh);this.disposeTree(e.mesh);this.entities=this.entities.filter(v=>v!==e);this.obstacles=this.obstacles.filter(o=>o.tag!=='cave-gate');return {message:t('The obsidian gate breaks open. Carry a fire crystal to light the cave.')};
     }
+    if(e.kind==='cave-chest'&&this.requestProgress(e,'claimCaveChest',{}))return {message:t('Collecting…')};
     if(e.kind==='cave-chest')return {message:t(M.claimCaveChest(this.state)?'Ancient cave treasure collected. The chest replenishes tomorrow.':'The chest is empty for today.')};
     if(['fire-crystal','clam','magma-ore','obsidian-ore'].includes(e.kind)){
       if((this.state.worldRewards.resourceReadyAt[e.id]??0)>Date.now())return {message:t('This resource is regrowing.')};
-      const rules=e.kind==='clam'?undefined:LAVA_ORE_RULES[e.kind==='fire-crystal'?'ore_fire':e.kind==='magma-ore'?'ore_magma':'ore_obsidian'];
+      if(this.requestProgress(e,'environmentResource',{nodeId:e.id}))return {message:t('Collecting…')};
+      const rules=e.kind==='clam'?{hits:3,loot:[['coral',1,1,2]] as [string,number,number,number][]}:LAVA_ORE_RULES[e.kind==='fire-crystal'?'ore_fire':e.kind==='magma-ore'?'ore_magma':'ore_obsidian'];
       if(rules){e.mesh.userData.hits=(e.mesh.userData.hits??0)+1;this.burst(e.x,e.z,'#d3bc88',5);if(e.mesh.userData.hits<rules.hits)return {message:t('Mining {count}/{total} strikes.', { count: e.mesh.userData.hits, total: rules.hits })};e.mesh.userData.hits=0;}
       const item=e.kind==='fire-crystal'?'fcrystal':e.kind==='magma-ore'?'mcrystal':e.kind==='obsidian-ore'?'obsidian':'coral';const success=M.claimEnvironmentResource(this.state,e.id,item,Date.now(),e.kind==='obsidian-ore'?180000:e.kind==='fire-crystal'?120000:150000);
       if(success){this.burst(e.x,e.z,e.kind==='clam'?'#d3f5fa':'#ffc76b');if(e.kind==='clam'&&Math.random()<.3)M.addItem(this.state,'pearl');if(rules)for(const [id,chance,min,max] of rules.loot)if(Math.random()<chance)M.addItem(this.state,id,min+Math.floor(Math.random()*(max-min+1))-(id===item?1:0));}
@@ -842,16 +867,39 @@ export class World {
   setNetworkRole(role:'host'|'peer'|null){this.networkRole=role;}
   environmentSnapshot():EnvironmentSnapshot{return {time:this.environment.time,lamps:[...this.environment.lamps],eclipseUntil:this.environment.eclipseUntil,...(this.planet==='lava'?{weather:this.environment.weather.snapshot(),nestLevel:this.environment.nestLevel,fireRain:this.environment.fireRain.map(p=>({...p}))}:{}),...(this.planet==='cloud'?{lightning:{...this.environment.lightning,bolts:this.environment.lightning.bolts.map(p=>({...p}))}}:{})};}
   applyEnvironmentSnapshot(snapshot:EnvironmentSnapshot){if(!this.environment||!Number.isFinite(snapshot.time)||snapshot.time<0)return;const offset=snapshot.time-this.environment.time;if(this.environment.riding)this.environment.rideUntil+=offset;this.environment.time=snapshot.time;this.environment.lamps=new Map(snapshot.lamps.filter(([id,until])=>Number.isInteger(id)&&Number.isFinite(until)));this.environment.eclipseUntil=snapshot.eclipseUntil??0;if(snapshot.weather)this.environment.weather.restore(snapshot.weather);if(Number.isFinite(snapshot.nestLevel))this.environment.nestLevel=Math.max(-.9,Math.min(.32,snapshot.nestLevel!));if(snapshot.fireRain)this.environment.fireRain=snapshot.fireRain.filter(p=>[p.x,p.z,p.duration,p.remaining].every(Number.isFinite)&&p.remaining>0&&p.duration>0).map(p=>({...p}));if(snapshot.lightning){const source=snapshot.lightning;this.environment.lightning={wait:Math.max(0,Math.min(13,source.wait||0)),sequence:Math.max(0,Math.floor(source.sequence||0)),bolts:source.bolts.filter(p=>[p.x,p.z,p.remaining,p.duration].every(Number.isFinite)&&p.remaining>0&&p.duration>0).map(p=>({...p}))};}this.syncWeatherNodes();}
-  enemySnapshots():EnemySnapshot[]{return this.enemies.map(e=>({id:e.id,type:e.type,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,respawn:e.respawn,phase:e.phase,facing:e.mesh.rotation.y,lift:e.lift??0,boss:e.boss,phaseTime:e.phaseTime,stun:e.stun,statuses:{...e.statuses},cooldown:e.cooldown,targetX:e.targetX,targetZ:e.targetZ,bossStage:e.bossStage,skill:e.skill,attackCount:e.attackCount,skillCount:e.skillCount,telegraphs:e.telegraphs?.map(p=>({...p})),skillEffects:e.skillEffects?.map(p=>({...p})),spinTick:e.spinTick,damage:e.damage,shots:(this.enemyShots??[]).filter(s=>s.ownerId===e.id).map(s=>({id:s.id,x:s.mesh.position.x,y:s.mesh.position.y,z:s.mesh.position.z,vx:s.vx,vz:s.vz,life:s.life,damage:s.damage,targetEnemyId:s.targetEnemyId}))}));}
+  enemySnapshots():EnemySnapshot[]{return this.enemies.map(e=>({id:e.id,type:e.type,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,respawn:e.respawn,phase:e.phase,facing:e.mesh.rotation.y,lift:e.lift??0,boss:e.boss,phaseTime:e.phaseTime,stun:e.stun,statuses:{...e.statuses},cooldown:e.cooldown,targetX:e.targetX,targetZ:e.targetZ,bossStage:e.bossStage,skill:e.skill,attackCount:e.attackCount,skillCount:e.skillCount,telegraphs:e.telegraphs?.map(p=>({...p})),skillEffects:e.skillEffects?.map(p=>({...p})),spinTick:e.spinTick,damage:e.damage,titanAttacks:e.titanAttacks?.map(a=>structuredClone(a)),titanLift:e.titanLift,shots:(this.enemyShots??[]).filter(s=>s.ownerId===e.id).map(s=>({id:s.id,x:s.mesh.position.x,y:s.mesh.position.y,z:s.mesh.position.z,vx:s.vx,vz:s.vz,life:s.life,damage:s.damage,targetEnemyId:s.targetEnemyId}))}));}
   // Creature ids start with their planet ("candy:enemy:3"). A host's message can still arrive for the world just left (a late
   // 'enemies' message during travel, or a host that flew off and reports its new world to the old room); applying it would
   // spawn creatures nobody simulates or can defeat, which then stay on the map and the minimap forever.
-  applyEnemySnapshots(snapshots:EnemySnapshot[]){const own=`${this.planet}:`;for(const snapshot of snapshots){if(typeof snapshot.id!=='string'||!snapshot.id.startsWith(own)||!Number.isFinite(snapshot.x)||!Number.isFinite(snapshot.z)||!Number.isFinite(snapshot.hp))continue;let e=this.enemies.find(e=>e.id===snapshot.id);if(!e&&snapshot.type&&ENEMY_TYPES[snapshot.type]){e=this.spawnSpecies(snapshot.type,snapshot.x,snapshot.z,this.enemies.length)??undefined;if(e)e.id=snapshot.id;}if(!e)continue;e.x=snapshot.x;e.z=snapshot.z;e.hp=Math.max(0,snapshot.hp);e.maxHp=snapshot.maxHp;e.respawn=snapshot.respawn;e.phase=snapshot.phase;e.lift=snapshot.lift??0;e.stun=snapshot.stun??0;e.phaseTime=snapshot.phaseTime??0;e.cooldown=snapshot.cooldown??0;e.statuses={...snapshot.statuses};e.targetX=snapshot.targetX;e.targetZ=snapshot.targetZ;e.bossStage=snapshot.bossStage;e.skill=snapshot.skill;e.attackCount=snapshot.attackCount;e.skillCount=snapshot.skillCount;e.telegraphs=snapshot.telegraphs?.map(p=>({...p}));e.skillEffects=snapshot.skillEffects?.map(p=>({...p}));e.spinTick=snapshot.spinTick;e.damage=snapshot.damage??e.damage;e.scaled=true;e.mesh.position.set(e.x,terrainHeight(this.environment.layout,e)+(e.lift??0),e.z);e.mesh.rotation.y=snapshot.facing??0;e.mesh.visible=e.hp>0;
+  private authorityImpacts=new Set<string>();
+  /** Apply server combat facts once; predicted casts never award HP damage locally. */
+  applyAuthoritativeEnemyHealth(snapshot:EnemySnapshot&{impactId?:string;impact?:{amount:number;critical?:boolean;stun?:number;lift?:number;knock?:number;direction?:Point}}){
+    const e=this.enemies.find(e=>e.id===snapshot.id);if(!e||!Number.isFinite(snapshot.hp))return;
+    const wasAlive=e.hp>0;e.hp=Math.max(0,snapshot.hp);if(Number.isFinite(snapshot.maxHp))e.maxHp=snapshot.maxHp;if(Number.isFinite(snapshot.damage))e.damage=snapshot.damage!;if(Number.isFinite(snapshot.respawn))e.respawn=snapshot.respawn;e.scaled=true;
+    if(snapshot.statuses)e.statuses={...snapshot.statuses};if(Number.isFinite(snapshot.stun))e.stun=snapshot.stun!;
+    if(wasAlive&&e.hp<=0){e.dying=.3;e.telegraphs=[];e.skillEffects=[];e.titanAttacks=[];e.titanLift=0;e.knockVX=e.knockVZ=0;this.defeatFeedback(e);return;}
+    const impact=snapshot.impact;if(!impact||!Number.isFinite(impact.amount))return;
+    this.authorityImpacts??=new Set();if(snapshot.impactId){if(this.authorityImpacts.has(snapshot.impactId))return;this.authorityImpacts.add(snapshot.impactId);if(this.authorityImpacts.size>512)this.authorityImpacts.delete(this.authorityImpacts.values().next().value!);}
+    this.hitFeedback(e,impact.amount,!!impact.critical);e.lastHitAt=this.time;
+    if(impact.knock&&impact.direction)this.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
+    if(impact.lift)this.knockUpEnemy(e,impact.lift,.8);
+  }
+  applyEnemySnapshots(snapshots:EnemySnapshot[]){const own=`${this.planet}:`;for(const snapshot of snapshots){if(typeof snapshot.id!=='string'||!snapshot.id.startsWith(own)||!Number.isFinite(snapshot.x)||!Number.isFinite(snapshot.z)||!Number.isFinite(snapshot.hp))continue;let e=this.enemies.find(e=>e.id===snapshot.id);if(!e&&snapshot.type&&ENEMY_TYPES[snapshot.type]){e=this.spawnSpecies(snapshot.type,snapshot.x,snapshot.z,this.enemies.length)??undefined;if(e)e.id=snapshot.id;}if(!e)continue;e.x=snapshot.x;e.z=snapshot.z;e.hp=Math.max(0,snapshot.hp);e.maxHp=snapshot.maxHp;e.respawn=snapshot.respawn;e.phase=snapshot.phase;e.lift=snapshot.lift??0;e.stun=snapshot.stun??0;e.phaseTime=snapshot.phaseTime??0;e.cooldown=snapshot.cooldown??0;e.statuses={...snapshot.statuses};e.targetX=snapshot.targetX;e.targetZ=snapshot.targetZ;e.bossStage=snapshot.bossStage;e.skill=snapshot.skill;e.attackCount=snapshot.attackCount;e.skillCount=snapshot.skillCount;e.telegraphs=snapshot.telegraphs?.map(p=>({...p}));e.skillEffects=snapshot.skillEffects?.map(p=>({...p}));e.spinTick=snapshot.spinTick;e.damage=snapshot.damage??e.damage;e.titanAttacks=sanitizeTitanAttacks(snapshot.titanAttacks);e.titanLift=snapshot.titanLift??0;e.scaled=true;e.mesh.position.set(e.x,terrainHeight(this.environment.layout,e)+(e.lift??0),e.z);e.mesh.rotation.y=snapshot.facing??0;e.mesh.visible=e.hp>0;
       if(snapshot.shots){this.enemyShots??=[];const ids=new Set(snapshot.shots.map(s=>s.id));for(let i=this.enemyShots.length-1;i>=0;i--)if(this.enemyShots[i].ownerId===e.id&&!ids.has(this.enemyShots[i].id)){const old=this.enemyShots[i];this.scene.remove(old.mesh);old.mesh.geometry.dispose();this.enemyShots.splice(i,1);}for(const source of snapshot.shots){if(![source.x,source.y,source.z,source.vx,source.vz,source.life,source.damage].every(Number.isFinite)||source.life<=0)continue;let shot=this.enemyShots.find(s=>s.id===source.id);if(!shot){const model=ball(e.definition?.accent??'#ffbb72',.17);this.scene.add(model);shot={...source,ownerId:e.id,mesh:model};this.enemyShots.push(shot);}Object.assign(shot,{vx:source.vx,vz:source.vz,life:source.life,damage:source.damage,targetEnemyId:source.targetEnemyId});shot.mesh.position.set(source.x,source.y,source.z);}}
     }}
   receiveRemoteHit(id:string,amount:number,stun=0){const e=this.enemies.find(e=>e.id===id);if(!e||e.hp<=0||!Number.isFinite(amount)||amount<0)return false;this.damageEnemy(e,amount,stun);return true;}
   addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear);avatar.userData.remoteId=id;this.remoteRoot.add(avatar);this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
-  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};remote.mesh.position.set(pose.x,pose.y??0,pose.z);remote.mesh.rotation.y=pose.facing??0;remote.mesh.scale.setScalar(HERO_SCALE);remote.mesh.visible=!pose.planet||pose.planet===this.planet;}
+  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};remote.mesh.position.set(pose.x,pose.y??0,pose.z);remote.mesh.rotation.y=pose.facing??0;this.applyAvatarVisual(remote.mesh,pose.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,pose.visual?.size??1)));remote.mesh.visible=!pose.planet||pose.planet===this.planet;}
+  visualSnapshot():AvatarVisual{return {size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat};}
+  private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
+    const opacity=visual?.stealth?.25:1;
+    if(mesh.userData.statusOpacity!==opacity){mesh.userData.statusOpacity=opacity;mesh.traverse(o=>{if(!(o instanceof T.Mesh)||o.name==='status-shield')return;
+      if(!o.userData.statusMaterials){o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();o.userData.statusMaterials=true;}
+      for(const m of Array.isArray(o.material)?o.material:[o.material]){m.userData.normalOpacity??=m.opacity;m.opacity=m.userData.normalOpacity*opacity;m.transparent=opacity<1||m.userData.normalOpacity<1;m.needsUpdate=true;}
+    });}
+    let shield=mesh.getObjectByName('status-shield');if(visual?.shield&&!shield){shield=new T.Mesh(new T.SphereGeometry(1.15,16,10),new T.MeshBasicMaterial({color:'#a1f5ef',transparent:true,opacity:.22,depthWrite:false,wireframe:true}));shield.name='status-shield';shield.position.y=1.1;mesh.add(shield);}if(shield)shield.visible=!!visual?.shield;
+    let bat=mesh.getObjectByName('status-bat');if(visual?.bat&&!bat){const b=new T.Group();b.name='status-bat';for(const side of [-1,1]){const wing=box('#49345f',1.1,.07,.8);wing.position.set(side*.75,1.4,0);wing.rotation.z=side*.3;b.add(wing);}bat=b;mesh.add(b);}if(bat)bat.visible=!!visual?.bat;
+  }
   updateRemotePlayers(players:Array<RemotePose&{id:string}>){const ids=new Set(players.map(p=>p.id));for(const id of this.remotePlayers?.keys()??[])if(!ids.has(id))this.removeRemotePlayer(id);for(const pose of players)this.updateRemotePlayer(pose.id,pose);}
   removeRemotePlayer(id:string){const remote=this.remotePlayers?.get(id);if(!remote)return;this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);this.remotePlayers.delete(id);}
   /** Rebuild every explorer model, for example once the Blender explorer and gear have loaded. */
@@ -874,7 +922,7 @@ export class World {
       const crop=group();
       if(stage>=2)crop.add(ball(p.crop==='carrot'?'#e9a068':p.crop==='berry'?'#da7f88':'#e5c4d4',stage===3?.32:.2,0,.3,0,1));
       for(let k=0;k<3;k++){const leaf=ball(k%2?'#8cb569':'#6c9953',stage===1?.13:.17,(k-1)*.12,.34+(stage*.06),0);leaf.scale.set(.8,2,.6);leaf.rotation.z=(k-1)*-.45;crop.add(leaf);}
-      crop.traverse(o=>{o.castShadow=false;});crop.position.set(0,SOIL_Y,0);crop.scale.setScalar(M.CROP_SCALE);g.add(crop);
+      crop.traverse(o=>{o.castShadow=false;});crop.position.set(0,SOIL_Y,0);crop.scale.setScalar(M.CROP_SCALE*(stage>=2?CROP_PRESENTATION_SCALE:1));g.add(crop);
     });
   }
   /** Creates and bakes the crop cards once the crop kit is in; false keeps the 3D crops (no renderer, bake failed, switched off). */
@@ -894,6 +942,7 @@ export class World {
   screen(x:number,y:number,z:number) { const v=new T.Vector3(x,y,z).project(this.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2,visible:v.z<1&&Math.abs(v.x)<1.3&&Math.abs(v.y)<1.3,front:v.z<1}; }
   /** A tap: an entity picked in screen space (or by the short raycast fallback), else a walk unless it would change nothing. */
   pointer(clientX:number,clientY:number) {
+    if(this.onRemotePlayerClick&&this.remotePlayers?.size){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const meshes=[...this.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh);for(const hit of this.raycaster.intersectObjects(meshes,true)){let o:T.Object3D|null=hit.object;while(o&&!o.userData.remoteId)o=o.parent;if(o){this.destination=null;this.route=[];this.selected=null;this.onRemotePlayerClick(o.userData.remoteId);return;}}}
     const entity=this.pickEntity(clientX,clientY);
     // A tap on a pond also says where to cast: the point under the finger on the water's surface (as the reference's plan()).
     if(entity?.pond){const p=this.raycaster.ray.intersectPlane(new T.Plane(UP,-entity.pond.surface),new T.Vector3());this.pondTap=p?{id:entity.id,x:p.x,z:p.z}:null;if(p)this.fx?.ring(p,{from:.9,to:.2,life:.35,thick:.25,y:entity.pond.surface+.02});}
@@ -1038,7 +1087,7 @@ export class World {
     // A hit never staggers a boss (its wind-up and skill go on, as in the reference); a hard stun only slows it.
     const control=hitControl(e.boss,stun);if(!hazard)e.lastHitAt=this.time??0;
     e.hp=Math.max(0,e.hp-amount);e.stun=Math.max(e.stun,control.stun);if(control.slow&&e.hp>0){e.statuses??={};e.statuses.slow=Math.max(e.statuses.slow??0,control.slow);this.resistFeedback(e);}this.burst(e.x,e.z,'#fff0bb',8);
-    if(e.hp===0){e.respawn=e.type==='minislime'||e.type==='dragon'?999999:e.boss?90:22+Math.random()*10;e.dying=.3;e.knockVX=e.knockVZ=0;e.telegraphs=[];e.skillEffects=[];
+    if(e.hp===0){e.respawn=e.type==='minislime'||e.type==='dragon'?999999:e.definition?.titan?600:e.boss?90:22+Math.random()*10;e.dying=.3;e.knockVX=e.knockVZ=0;e.telegraphs=[];e.skillEffects=[];e.titanAttacks=[];e.titanLift=0;
       if(e.type==='magmaslime'&&this.networkRole!=='peer')this.enemies.filter(m=>m.type==='minislime'&&m.hp<=0).slice(0,3).forEach((minion,index)=>{const a=index*Math.PI*2/3;minion.x=e.x+Math.cos(a)*.9;minion.z=e.z+Math.sin(a)*.9;this.resolveOverlap(minion,this.collisionObstacles(),minion.radius);minion.homeX=minion.x;minion.homeZ=minion.z;minion.hp=minion.maxHp;minion.phase='idle';minion.stun=0;minion.respawn=0;});
       if(this.selected===e){this.selected=null;this.destination=null;this.route=[];this.ring.visible=false;}}
   }
@@ -1106,11 +1155,11 @@ export class World {
     const candidates:Array<Point&{id?:string;enemy?:Enemy}>=[];
     const safe=this.planet==='home'?18:11;
     if(!this.playerStealth&&Math.hypot(this.position.x,this.position.z)>=safe)candidates.push({x:this.position.x,z:this.position.z});
-    for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&(remote.pose.hp??1)>0&&Math.hypot(remote.pose.x,remote.pose.z)>=safe)candidates.push({x:remote.pose.x,z:remote.pose.z,id});
+    for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&!remote.pose.visual?.stealth&&(remote.pose.hp??1)>0&&Math.hypot(remote.pose.x,remote.pose.z)>=safe)candidates.push({x:remote.pose.x,z:remote.pose.z,id});
     if((e.statuses?.charm??0)>0)return this.enemies.filter(other=>other!==e&&other.hp>0).map(enemy=>({x:enemy.x,z:enemy.z,enemy})).sort((a,b)=>Math.hypot(a.x-e.x,a.z-e.z)-Math.hypot(b.x-e.x,b.z-e.z))[0];
     return candidates.sort((a,b)=>Math.hypot(a.x-e.x,a.z-e.z)-Math.hypot(b.x-e.x,b.z-e.z))[0];
   }
-  private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy},amount:number,source:'melee'|'shot'|'hazard'='melee'){if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id)this.onRemoteDamage?.(target.id,amount,source);else if(!this.playerFlying||source!=='melee')this.onDamage(amount,source);}
+  private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string){if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id)this.onRemoteDamage?.(target.id,amount,source,enemyId);else if(!this.playerFlying||source!=='melee')this.onDamage(amount,source,enemyId);}
   private shootEnemy(e:Enemy,target:Point&{id?:string;enemy?:Enemy}){
     const distance=Math.max(.01,Math.hypot(target.x-e.x,target.z-e.z)),shot=ball(e.definition?.accent??'#f5b576',.17,e.x,1.0,e.z,0);this.scene.add(shot);
     this.enemyShots.push({id:e.id+':shot:'+Math.random().toString(36).slice(2,10),ownerId:e.id,mesh:shot,vx:(target.x-e.x)/distance*13,vz:(target.z-e.z)/distance*13,life:1.4,damage:e.damage,targetId:target.id,targetEnemyId:target.enemy?.id});
@@ -1118,21 +1167,46 @@ export class World {
   private areaDamage(e:Enemy,x:number,z:number,radius:number,multiplier:number,inner=0){
     const hit=(p:Point)=>{const d=Math.hypot(p.x-x,p.z-z);return d<radius&&d>=inner;};
     if((e.statuses?.charm??0)>0){for(const target of this.enemies)if(target!==e&&target.hp>0&&hit(target))(this.onHazardEnemy??((v,d)=>this.damageEnemy(v,d)))(target,e.damage*multiplier);return;}
-    const environmentAtStart=this.environment,source=e.skill==='rain'||e.skill==='eclipse'?'shot':'melee';if(hit(this.position))this.hitEnemyTarget(this.position,e.damage*multiplier,source);
+    const environmentAtStart=this.environment,source=e.skill==='rain'||e.skill==='eclipse'?'shot':'melee';if(hit(this.position))this.hitEnemyTarget(this.position,e.damage*multiplier,source,e.id);
     if(this.environment!==environmentAtStart)return;
-    for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&(remote.pose.hp??1)>0&&hit(remote.pose))this.onRemoteDamage?.(id,e.damage*multiplier,source);
+    for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&(remote.pose.hp??1)>0&&hit(remote.pose))this.onRemoteDamage?.(id,e.damage*multiplier,source,e.id);
+  }
+  localPlayerId='local';
+  private titanTargets():TitanTarget[]{
+    const safe=this.planet==='home'?18:11,targets:TitanTarget[]=[];
+    if(this.state.hp>0&&Math.hypot(this.position.x,this.position.z)>=safe)targets.push({id:this.localPlayerId??'local',x:this.position.x,z:this.position.z,airborne:this.playerFlying||this.environment.airborne});
+    for(const[id,r]of this.remotePlayers??[])if(r.mesh.visible&&(r.pose.hp??1)>0&&Math.hypot(r.pose.x,r.pose.z)>=safe)targets.push({id,x:r.pose.x,z:r.pose.z,airborne:!!r.pose.visual?.flight});return targets;
+  }
+  private updateTitanAttacks(e:Enemy,dt:number,authoritative=true){
+    if(!e.titanAttacks?.length)return;if(e.hp<=0){e.titanAttacks=[];e.titanLift=0;return;}
+    const environment=this.environment;
+    for(const a of e.titanAttacks){const result=stepTitanAttack(a,dt,e,this.titanTargets());
+      if(authoritative)for(const hit of result.hits){if(hit.id===(this.localPlayerId??'local'))this.onDamage(e.damage*hit.multiplier,hit.source,e.id);else this.onRemoteDamage?.(hit.id,e.damage*hit.multiplier,hit.source,e.id);if(this.environment!==environment)return;}
+      // Each client applies its own pull from shared state; damage still belongs to the host.
+      for(const p of result.pulls)if(p.id===(this.localPlayerId??'local'))this.move(p.x,p.z,true);
+      if(result.move){e.x=result.move.x;e.z=result.move.z;e.titanLift=result.move.y;if(result.done){e.titanLift=0;e.phase='recover';e.phaseTime=.5;}}
+      for(const p of result.bursts){this.fx?.ring(p,{color:e.definition?.accent??'#ffb13d',from:.2,to:p.r,life:.4,thick:.25});this.burst(p.x,p.z,e.definition?.color??'#ff9b4a',12);}
+      if(authoritative&&result.summon)this.enemies.filter(m=>m!==e&&m.hp>0&&!m.boss&&(m.definition?.speed??0)>0&&Math.hypot(m.x-e.x,m.z-e.z)<60).slice(0,4).forEach((m,i)=>{const angle=e.mesh.rotation.y+(i+.5)*Math.PI/2;m.x=e.x+Math.sin(angle)*(e.radius+2);m.z=e.z+Math.cos(angle)*(e.radius+2);if(!this.authoritativeAction){m.hp=m.maxHp;m.damage=Math.min((m.baseDamage??m.damage)*1.3,m.damage*1.3);}m.phase='chase';m.lastHitAt=this.time;});
+    }e.titanAttacks=e.titanAttacks.filter(a=>a.age<a.life);
+  }
+  private drawTitanAttacks(){
+    if(!this.titanView){this.titanView=new TitanAttackView();this.scene.add(this.titanView.root);}this.titanView.begin();
+    for(const e of this.enemies)if(e.hp>0)for(const a of e.titanAttacks??[])this.titanView.draw(a,e,(x,z)=>Math.max(0,terrainHeight(this.environment.layout,{x,z})));
+    this.titanView.end();
   }
   private beginBossSkill(e:Enemy,target:Point){
+    if(e.definition?.titan&&Math.hypot(target.x-e.x,target.z-e.z)>e.definition.reach+1)e.attackCount=(e.attackCount??0)|1;
     e.attackCount=(e.attackCount??0)+1;
     e.skill=bossSkill(e.type??'',e.attackCount,e.hp/e.maxHp,e.skillCount??0)??undefined;
     if(!e.skill){e.telegraphs=[];return false;}
     e.skillCount=(e.skillCount??0)+1;e.phaseTime=BOSS_WINDUPS[e.skill]*(e.hp<e.maxHp*.3?.8:1);
     const phase=e.hp<e.maxHp*.5?Math.max(2,e.bossStage??1):e.bossStage??1;e.telegraphs=bossTelegraphs(e.skill,e,target,phase,e.attackCount);
     if(e.skill==='rain'&&!(e.statuses?.charm)){const additional=[this.position,...[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&(r.pose.hp??1)>0).map(r=>r.pose)].filter(p=>Math.hypot(p.x-e.x,p.z-e.z)<=22&&Math.hypot(p.x-target.x,p.z-target.z)>.05);for(const p of additional)e.telegraphs.push(...bossTelegraphs(e.skill,e,p,phase,e.attackCount+e.telegraphs.length));}
-    if(e.type==='dragon'&&(e.bossStage??1)>=2&&(e.skill==='slam'||e.skill==='rain')){
+    if(!this.authoritativeAction&&e.type==='dragon'&&(e.bossStage??1)>=2&&(e.skill==='slam'||e.skill==='rain')){
       const random=seeded(e.attackCount*9127),targets=[this.position,...[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&(r.pose.hp??1)>0).map(r=>r.pose)].filter(p=>Math.hypot(p.x-e.x,p.z-e.z)<=25);
       targets.forEach((p,index)=>{for(let i=0;i<((e.bossStage??1)>=3?5:3);i++){const angle=random()*Math.PI*2,r=random()*4;this.environment.addFireRain({x:p.x+Math.cos(angle)*r,z:p.z+Math.sin(angle)*r},`dragon:${e.attackCount}:${index}:${i}`);}});
     }
+    if(isTitanSkill(e.skill))e.telegraphs=titanTelegraphs(e.skill,{x:e.x,z:e.z,radius:e.radius,facing:e.mesh.rotation.y},target,this.titanTargets(),seeded(e.attackCount*91571));
     this.bossCallout(e,e.skill);
     return true;
   }
@@ -1167,6 +1241,7 @@ export class World {
   private castBossSkill(e:Enemy){
     const skill=e.skill;if(!skill)return;
     e.phase='recover';e.phaseTime=.7;e.cooldown=(e.definition?.cooldown??2)*(e.hp<e.maxHp*.5?.7:1)*(e.hp<e.maxHp*.3?.6:1)*((e.bossStage??1)>=3?.8:1);
+    if(isTitanSkill(skill)){e.titanAttacks??=[];e.titanAttacks.push(beginTitanAttack(skill,{x:e.x,z:e.z,radius:e.radius,facing:e.mesh.rotation.y},e.telegraphs as TitanMark[]??[],this.titanTargets()));if(skill==='leap'){e.phase='titan-leap';e.phaseTime=.8;}e.telegraphs=[];return;}
     if(skill==='slam')this.areaDamage(e,e.x,e.z,4.8,1.6);
     if(skill==='quake')e.skillEffects=[3,6,9].map((r,index)=>({x:e.x,z:e.z,r:r+.4,inner:r-2.4,remaining:.12+index*.32,multiplier:1.1}));
     if(skill==='rain')for(const p of e.telegraphs??[])this.areaDamage(e,p.x,p.z,p.r,1.3);
@@ -1191,7 +1266,7 @@ export class World {
   private drawTelegraphs(e:Enemy){
     const decals=this.decals;if(!decals||e.hp<=0||e.phase!=='windup')return;
     const progress=this.windupProgress(e),ground=(p:{x:number;z:number})=>Math.max(.04,terrainHeight(this.environment.layout,p)+.04);
-    if(e.skill){for(const mark of e.telegraphs??[])decals.draw(mark.x,ground(mark),mark.z,mark.r,progress,BOSS_TELEGRAPH_COLORS[e.skill]);return;}
+    if(e.skill){for(const mark of e.telegraphs??[])decals.draw(mark.x,ground(mark),mark.z,mark.r,progress,('safe' in mark&&mark.safe)?'#5aff9a':BOSS_TELEGRAPH_COLORS[e.skill]);return;}
     if(e.boss&&e.mesh.userData.slam){decals.draw(e.x,ground(e),e.z,4.8,progress,BOSS_TELEGRAPH_COLORS.slam);return;}
     const look=CREATURE_TELEGRAPHS[e.type??''];if(!look)return;
     const facing=e.mesh.rotation.y,at=look.at==='target'?{x:e.targetX??e.x,z:e.targetZ??e.z}:look.at==='front'?{x:e.x+Math.sin(facing)*1.2,z:e.z+Math.cos(facing)*1.2}:{x:e.x,z:e.z};
@@ -1210,12 +1285,12 @@ export class World {
     marker.update(dt,this.time,{x:e.mesh.position.x,y:ground,z:e.mesh.position.z,footprint:data.footprint*s,height:e.mesh.position.y-ground+this.modelHeight(e)},e.radius);
   }
   private updateEnemyAi(e:Enemy,dt:number){
-    e.cooldown=Math.max(0,e.cooldown-dt);e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
+    e.cooldown=Math.max(0,e.cooldown-dt);this.updateTitanAttacks(e,dt);if(e.phase==='titan-leap'&&e.titanAttacks?.some(a=>a.skill==='leap'))return;e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
     for(const key of Object.keys(e.statuses??{}))e.statuses![key]=Math.max(0,e.statuses![key]-dt);
-    if(e.hp<=0){e.respawn-=dt;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];}return;}
-    const def=e.definition??{speed:2.4,reach:1.8,sight:e.boss?11:6,behavior:'melee',cooldown:1.3,windup:.35,flying:false};
+    if(e.hp<=0){e.respawn=Math.max(0,e.respawn-dt);if(this.authoritativeAction)return;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];}return;}
+    const def=e.definition??{speed:2.4,reach:1.8,sight:e.boss?11:6,behavior:'melee',cooldown:1.3,windup:.35,flying:false,titan:false};
     const target=this.enemyTarget(e),distance=target?Math.hypot(target.x-e.x,target.z-e.z):Infinity;
-    if(e.boss&&!e.scaled&&distance<def.sight&&e.hp===e.maxHp){
+    if(!this.authoritativeAction&&e.boss&&!e.scaled&&distance<def.sight&&e.hp===e.maxHp){
       const nearby=[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&(r.pose.hp??1)>0&&Math.hypot(r.pose.x-e.x,r.pose.z-e.z)<32),players=nearby.length+(Math.hypot(this.position.x-e.x,this.position.z-e.z)<32?1:0),level=Math.max(this.state.level,...nearby.map(r=>r.pose.level??1)),difference=Math.max(0,level-(e.level??1));
       e.maxHp=Math.round((e.baseMaxHp??e.maxHp)*(1+.6*Math.max(0,players-1))*(e.type==='dragon'?1:1+difference*.12));e.hp=e.maxHp;e.damage=(e.baseDamage??e.damage)*(e.type==='dragon'?1:(1+difference*.07)*(1+.1*Math.max(0,players-1)));e.scaled=true;
     }
@@ -1244,7 +1319,7 @@ export class World {
         else{
           if(target&&!noAttack){const reach=e.mesh.userData.slam?5.5:def.reach+(e.boss?BOSS_REACH.strike-.4:0);
             if(def.behavior==='shooter')this.shootEnemy(e,target);
-            else if(distance<reach+.4&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1));
+            else if(distance<reach+.4&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1),'melee',e.id);
           }
           e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown;
         }
@@ -1254,7 +1329,7 @@ export class World {
     if(e.phase==='charge'){
       const dx=(e.targetX??e.x)-e.x,dz=(e.targetZ??e.z)-e.z,d=Math.hypot(dx,dz);
       if(d>.1)this.moveCreature(e,dx/d*(e.skill==='charge'?18:13)*dt,dz/d*(e.skill==='charge'?18:13)*dt);
-      if(target&&distance<(e.boss&&e.skill==='charge'?e.radius+.6:def.reach+.4)&&!e.mesh.userData.chargeHit){this.hitEnemyTarget(target,e.damage*1.3);e.mesh.userData.chargeHit=true;}
+      if(target&&distance<(e.boss&&e.skill==='charge'?e.radius+.6:def.reach+.4)&&!e.mesh.userData.chargeHit){this.hitEnemyTarget(target,e.damage*1.3,'melee',e.id);e.mesh.userData.chargeHit=true;}
       e.phaseTime=(e.phaseTime??0)-dt;if((e.phaseTime??0)<=0||d<.3){e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown;}return;
     }
     if(e.phase==='recover'){e.phaseTime=(e.phaseTime??0)-dt;if(e.phaseTime!<=0)e.phase='chase';return;}
@@ -1265,10 +1340,10 @@ export class World {
     const chasing=!!target&&(sinceHit<LEASH.hitGrace||(e.phase==='return'?(distance<def.sight||taunted)&&homeDistance<20:wasChasing?keepsChasing(taunted?0:distance,def.sight,homeDistance,sinceHit,leash):(distance<def.sight||taunted)&&homeDistance<leash));
     if(e.boss&&chasing&&!e.enraged&&e.hp<e.maxHp*.3)this.enrageBoss(e);
     let returning=!chasing&&(wasChasing||e.phase==='return');
-    if(returning){e.phase='return';e.hp=Math.min(e.maxHp,e.hp+e.maxHp*.3*dt);if(homeDistance<.8||def.speed===0){e.hp=e.maxHp;e.phase='idle';returning=false;e.enraged=false;e.scaled=false;}}
+    if(returning){e.phase='return';if(!this.authoritativeAction)e.hp=Math.min(e.maxHp,e.hp+e.maxHp*.3*dt);if(homeDistance<.8||def.speed===0){if(!this.authoritativeAction)e.hp=e.maxHp;e.phase='idle';returning=false;e.enraged=false;e.scaled=false;}}
     let goal:Point=chasing?target!:returning?{x:e.homeX,z:e.homeZ}:{x:e.homeX+Math.sin(this.time*.25+e.homeZ)*2,z:e.homeZ+Math.cos(this.time*.25+e.homeX)*2};
     if((statuses.fear??0)>0&&target)goal={x:e.x+(e.x-target.x),z:e.z+(e.z-target.z)};
-    const canWindup=distance<(e.type==='lavaworm'?1.2:def.reach+(e.boss?BOSS_REACH.windup:0))||(e.type==='boar'||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''))&&distance<8;
+    const canWindup=!!def.titan&&distance<24||distance<(e.type==='lavaworm'?1.2:def.reach+(e.boss?BOSS_REACH.windup:0))||(e.type==='boar'||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''))&&distance<8;
     if(chasing&&canWindup&&!e.cooldown&&!noAttack){
       e.phase='windup';e.phaseTime=def.windup;e.targetX=target!.x;e.targetZ=target!.z;e.mesh.userData.attackCount=(e.mesh.userData.attackCount??0)+1;e.mesh.userData.slam=e.boss&&!BOSS_SKILLS[e.type??'']&&e.mesh.userData.attackCount%3===0;
       if(e.boss)this.beginBossSkill(e,target!);else e.skill=undefined;
@@ -1352,13 +1427,13 @@ export class World {
     this.drawTelegraphs(e);
     // Gear stats only matter on the shadow planet; adding them up for every creature on every step was a measurable cost.
     const lightRadius=this.planet==='shadow'&&M.activeStats(this.state).light?7.5:3.6;
-    e.mesh.visible=e.hp>0&&(this.planet!=='shadow'||this.environment.revealed(e,this.position,lightRadius))&&(!e.definition?.stealth||this.planet==='shadow'||Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.definition.stealth||e.stun>0);
+    e.mesh.visible=e.hp>0&&(this.planet!=='shadow'||e.definition?.titan||this.environment.revealed(e,this.position,lightRadius))&&(!e.definition?.stealth||this.planet==='shadow'||Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.definition.stealth||e.stun>0);
     if(!e.mesh.visible)return;
     e.liftVelocity=Math.max(-15,(e.liftVelocity??0)-24*dt);e.lift=Math.max(0,(e.lift??0)+(e.liftVelocity??0)*dt);if(!e.lift)e.liftVelocity=0;
     const ground=this.planet==='ocean'&&inWater(this.environment.layout,e)?-.5:Math.max(-.7,terrainHeight(this.environment.layout,e));
     // A wanderer that thinks on every 4th step glides between its last two positions instead of hopping (teleports snap).
     const lod=this.networkRole!=='peer'?e.lod:undefined,glide=lod&&Math.abs(e.x-lod.x)+Math.abs(e.z-lod.z)<.5?Math.min(1,(lod.age+1)/4):1,drawX=lod?lod.x+(e.x-lod.x)*glide:e.x,drawZ=lod?lod.z+(e.z-lod.z)*glide:e.z;
-    e.mesh.position.set(drawX,ground+(e.lift??0)+(e.definition?.flying?1+Math.sin(this.time*4+e.homeX)*.15:Math.sin(this.time*3+e.homeX)*.06),drawZ);
+    e.mesh.position.set(drawX,ground+(e.lift??0)+(e.titanLift??0)+(e.definition?.flying?1+Math.sin(this.time*4+e.homeX)*.15:Math.sin(this.time*3+e.homeX)*.06),drawZ);
     const scale=enemyScale(e.type,e.boss)*((e.statuses?.sheep??0)>0?.45:1);e.mesh.scale.setScalar(scale);
     // Hit reaction: a pop in the creature's own colour (emissive 0.35) and a ×1.15 squash, so the silhouette survives the hit.
     if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);const k=e.flash!/.14;e.mesh.scale.x*=1+k*.15;e.mesh.scale.z*=1+k*.15;e.mesh.scale.y*=1+k*.06;}
@@ -1372,7 +1447,7 @@ export class World {
     if(active||simulateWorld)this.time+=dt;
     let dx=0,dz=0,routeTarget:T.Vector3|undefined;
     if(active&&!this.movementLocked&&!this.environment.airborne){
-      dx=Number(this.keys.has('ArrowRight'))-Number(this.keys.has('ArrowLeft'));dz=Number(this.keys.has('ArrowDown'))-Number(this.keys.has('ArrowUp'));
+      dx=Number(this.keys.has('ArrowRight'))-Number(this.keys.has('ArrowLeft'));dz=Number(this.keys.has('ArrowDown'))-Number(this.keys.has('ArrowUp'));if(!dx&&!dz&&this.joystickInput){dx=this.joystickInput.x;dz=this.joystickInput.z;}
       if(dx||dz){this.destination=null;this.route=[];this.selected=null;this.marker.visible=false;this.ring.visible=false;}
       else if(this.route.length){routeTarget=this.route[0];dx=routeTarget.x-this.position.x;dz=routeTarget.z-this.position.z;if(Math.hypot(dx,dz)<.001){this.route.shift();dx=dz=0;}}
     }
@@ -1380,7 +1455,7 @@ export class World {
     this.moving=active&&inputLength>.0001;
     if(active||simulateWorld){
       const environmentAtStart=this.environment;
-      this.environment.authoritative=this.networkRole!=='peer';const dragon=this.enemies.find(e=>e.type==='dragon'&&e.hp>0);this.environment.dragonPhase=dragon?bossPhase(dragon.hp,dragon.maxHp):0;this.environment.nearbyPlayers=1+[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&Math.hypot(r.pose.x-this.position.x,r.pose.z-this.position.z)<40).length;this.environment.weatherBlocked=(x,z,r)=>this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+r);
+      this.environment.authoritative=!this.authoritativeAction&&this.networkRole!=='peer';const dragon=this.enemies.find(e=>e.type==='dragon'&&e.hp>0);this.environment.dragonPhase=dragon?bossPhase(dragon.hp,dragon.maxHp):0;this.environment.nearbyPlayers=1+[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&Math.hypot(r.pose.x-this.position.x,r.pose.z-this.position.z)<40).length;this.environment.weatherBlocked=(x,z,r)=>this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+r);
       const step=this.environment.step(dt,this.position,input,{speed:stats.speed,maxHp:stats.maxHp,fireResistance:stats.lavaproof?1:stats.fireResistance,poisonImmune:stats.poisonImmune,flippers:stats.flippers,featherFall:stats.featherFall,flying:this.playerFlying||stats.flying},this.networkRole==='peer'?[]:this.enemies.map(e=>({id:e.id,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,boss:e.boss,flying:e.definition?.flying||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''),lavaImmune:e.type==='lavaworm'})));
       this.dynamicObstacles=this.environment.dynamicObstacles();const signature=this.dynamicObstacles.map(o=>o.x+','+o.z).join(';');
       if(signature!==this.environmentSignature){this.environmentSignature=signature;this.resolveOverlap(this.position,this.collisionObstacles(),.36);if(this.destination)this.route=this.findPath(this.destination);}
@@ -1395,7 +1470,7 @@ export class World {
       if(inputLength>.0001)this.facing=Math.atan2(dx,dz);
       if(routeTarget&&Math.hypot(routeTarget.x-this.position.x,routeTarget.z-this.position.z)<.001){this.route.shift();this.environment.velocity={x:0,z:0};}
       if(this.destination&&!this.route.length){this.destination=null;this.marker.visible=false;}
-      this.state.hp=Math.min(stats.maxHp,this.state.hp+step.heal);
+      if(!this.authoritativeAction)this.state.hp=Math.min(stats.maxHp,this.state.hp+step.heal);
       if(step.damage>0)this.onDamage(step.damage,'hazard');
       if(this.environment!==environmentAtStart)return;
       for(const event of step.events)this.onEnvironmentEvent?.(event);
@@ -1414,22 +1489,23 @@ export class World {
     if(simulateWorld&&this.networkRole!=='peer')for(const enemy of [...this.enemies]){if(!this.enemies.includes(enemy))break;this.updateEnemyAi(enemy,dt);}
     if(this.environment!==environmentForFrame)return;
     if(simulateWorld&&this.networkRole!=='peer')this.separateCreatures();
-    this.decals?.begin();for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);this.decals?.end();
+    if(simulateWorld&&this.networkRole==='peer')for(const enemy of this.enemies)this.updateTitanAttacks(enemy,dt,false);
+    this.drawTitanAttacks();this.decals?.begin();for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);this.decals?.end();
     if(simulateWorld)for(let i=this.enemyShots.length-1;i>=0;i--){
       const shot=this.enemyShots[i],from={x:shot.mesh.position.x,z:shot.mesh.position.z};shot.mesh.position.x+=shot.vx*dt;shot.mesh.position.z+=shot.vz*dt;shot.life-=dt;
       if(this.networkRole!=='peer'){
       if(!clearSegment(from,shot.mesh.position,this.obstacles,{bounds:WORLD_BOUNDS,clearance:.1}))shot.life=0;
       if(shot.targetEnemyId){const enemy=this.enemies.find(e=>e.id===shot.targetEnemyId);if(enemy&&enemy.hp>0&&shot.life>0&&Math.hypot(shot.mesh.position.x-enemy.x,shot.mesh.position.z-enemy.z)<enemy.radius+.2){(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(enemy,shot.damage);shot.life=0;}}
       else{
-        if(shot.life>0&&Math.hypot(shot.mesh.position.x-this.position.x,shot.mesh.position.z-this.position.z)<.65){this.onDamage(shot.damage,'shot');shot.life=0;}
-        for(const [id,remote] of this.remotePlayers??[])if(shot.life>0&&remote.mesh.visible&&Math.hypot(shot.mesh.position.x-remote.pose.x,shot.mesh.position.z-remote.pose.z)<.65){this.onRemoteDamage?.(id,shot.damage,'shot');shot.life=0;}
+        if(shot.life>0&&Math.hypot(shot.mesh.position.x-this.position.x,shot.mesh.position.z-this.position.z)<.65){this.onDamage(shot.damage,'shot',shot.ownerId);shot.life=0;}
+        for(const [id,remote] of this.remotePlayers??[])if(shot.life>0&&remote.mesh.visible&&Math.hypot(shot.mesh.position.x-remote.pose.x,shot.mesh.position.z-remote.pose.z)<.65){this.onRemoteDamage?.(id,shot.damage,'shot',shot.ownerId);shot.life=0;}
       }
       }
       if(shot.life<=0){this.scene.remove(shot.mesh);shot.mesh.geometry.dispose();this.enemyShots.splice(i,1);}
     }
     const names={home:'Clover Village',forest:'Mushroom Forest',meadow:'Blue Lake Meadow',swamp:'Chomper Swamp',canyon:'Redrock Canyon'},zone=this.planet==='home'?names[zoneAt(this.position)]:PLANETS[this.planet].name;
-    if(zone!==this.lastZone){this.lastZone=zone;this.onZone(zone);}if(active&&this.planet==='home'&&zoneAt(this.position)==='home')this.state.hp=Math.min(maxHp(this.state),this.state.hp+dt*4);
-    this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar(stats.sizeScale*HERO_SCALE);
+    if(zone!==this.lastZone){this.lastZone=zone;this.onZone(zone);}if(!this.authoritativeAction&&active&&this.planet==='home'&&zoneAt(this.position)==='home')this.state.hp=Math.min(maxHp(this.state),this.state.hp+dt*4);
+    this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
     if(this.state.gear.pet){
       // The companion trails behind and to one side; flyers hover and flap, walkers hop.
       const back=new T.Vector3(this.position.x-Math.sin(this.facing)*1.1+Math.cos(this.facing)*.9,0,this.position.z-Math.cos(this.facing)*1.1-Math.sin(this.facing)*.9),c=this.companion,flying=!!c.userData.flying;
@@ -1447,7 +1523,7 @@ export class World {
     this.followSun();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
     this.animateCrops(dt);
-    if(this.farmView&&this.planet==='home'){if((this.penKeepClock=(this.penKeepClock??0)-dt)<=0){this.penKeepClock=1;this.roamKeep=this.penKeepOut();}this.farmView.update(this.state.farm?.animals??[],dt,this.time,Date.now(),this.position);}
+    if(this.farmView&&this.planet==='home'){this.farmView.setSpeciesPens(this.state.farm?.speciesPens);if((this.penKeepClock=(this.penKeepClock??0)-dt)<=0){this.penKeepClock=1;this.roamKeep=this.penKeepOut();}this.farmView.update(this.state.farm?.animals??[],dt,this.time,Date.now(),this.position);}
     this.updateTarget(dt);
     this.fx?.update(dt);
     this.marker.scale.setScalar(1+Math.sin(this.time*5)*.12);if(draw)this.render();

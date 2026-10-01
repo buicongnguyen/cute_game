@@ -7,7 +7,7 @@ function garden() { const s = M.newGame(); s.level = 25; s.energy = 100_000; s.f
 const reload = (s: M.SaveState) => M.parseSave(JSON.stringify(s))!;
 
 test('each pen level enforces its independent chicken/cow capacity, never above ten', () => {
-  const limits = [[4, 2], [7, 6], [10, 10]];
+  const limits = [[4, 2, 4, 4, 1], [7, 6, 7, 7, 1], [10, 10, 10, 10, 1]];
   for (let level = 0; level <= M.MAX_PEN_LEVEL; level++) {
     const s = garden();
     for (let i = 0; i < level; i++) assert.equal(M.expandPen(s), true);
@@ -117,7 +117,7 @@ test('invalid clocks never buy, feed or grant products, and unsafe saved timesta
 test('late-life feeding still halves production time without changing the lifetime', () => {
   const s = garden(), a = M.buyAnimal(s, 'chicken', start)!, end = M.expiresAt(a);
   M.addItem(s, 'carrot');
-  assert.equal(M.collectProducts(s, end - 10_000).length, 1);
+  assert.equal(M.collectProducts(s, end - 10_000).length, 3);
   const now = end - 9_000, remaining = M.ANIMALS.chicken.productMs - 1_000;
   assert.equal(M.timeLeft(a, now), remaining);
   assert.equal(M.feedAnimal(s, a.uid, now), 'carrot');

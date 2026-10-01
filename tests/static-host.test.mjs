@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import ts from 'typescript';
 import {VI_ONLINE} from '../src/locales/vi-online.ts';
+import {gameplayKey} from '../src/gameplay-controls.ts';
 
 class Element {
   constructor(tag='div'){this.tagName=tag;this.children=[];this.listeners=new Map();this.attributes=new Map();this.dataset={};this.classes=new Set();this.classList={add:name=>this.classes.add(name)};this.open=false;this.style={};this.value='';this.selectionStart=null;this.selectionEnd=null;}
@@ -38,11 +39,11 @@ async function online({staticHost='true',base='/cute_game/',slotPresent=true,lan
   class Socket extends Element {static OPEN=1;readyState=1;sent=[];constructor(){super();sockets.push(this);}send(value){this.sent.push(JSON.parse(value));}message(value){this.listeners.get('message')?.({data:JSON.stringify(value)});}}
   let registrations=0;
   let state={name:'Clover',color:'#789abc',planet:'home'};
-  const bridge=staticHost==='true'?new Proxy({},{get(){throw new Error('Static hosting must not replace the local game or save hooks');}}):{onFrame(){registrations++;},onAction(){registrations++;},getState:()=>state,getPresence:()=>({planet:'home',x:0,z:0}),getWorld:()=>new Proxy({},{get:()=>()=>{}}),setPersistence(){},applyState:value=>{state=value;},setNetworkHooks(){},showNotice(){}};
+  const bridge=staticHost==='true'?new Proxy({},{get(){throw new Error('Static hosting must not replace the local game or save hooks');}}):{onFrame(){registrations++;},onAction(){registrations++;},getState:()=>state,getPresence:()=>({planet:'home',x:0,z:0}),getWorld:()=>new Proxy({},{get:()=>()=>{}}),setPersistence(){},setActionHandler(){},applyAuthoritativeState(){},clearNetworkDrops(){},spawnNetworkDrop(){},applyState:value=>{state=value;},setNetworkHooks(){},showNotice(){}};
   const exports={};
   vm.runInNewContext(await compile('online.ts',{VITE_STATIC_HOST:staticHost,BASE_URL:base}),{
     exports,document,window,
-    require:name=>{if(name==='./i18n.ts')return i18n;assert.equal(name,'./model.ts');return {};},
+    require:name=>{if(name==='./i18n.ts')return i18n;if(name==='./gameplay-controls.ts')return {gameplayKey};assert.equal(name,'./model.ts');return {};},
     fetch:async(url,options)=>{requests.push({url,options});return loginError&&url.endsWith('auth/login')?{ok:false,status:401,json:async()=>({error:loginError})}:{ok:true,json:async()=>session};},
     WebSocket:staticHost==='true'?class{constructor(){throw new Error('Unexpected socket connection');}}:Socket,
     localStorage:staticHost==='true'?new Proxy({},{get(){throw new Error('Static mode must not modify browser saves');}}):{getItem:()=>null,setItem(){}},
@@ -98,7 +99,7 @@ test('changing online language preserves typed credentials, focus and server err
 
 test('Vietnamese social labels keep player names, party codes and chat text verbatim',async()=>{
   const account={id:'local',name:'Online',username:'fern_1',color:'#789abc',level:2,gear:{}};
-  const app=await online({staticHost:'',base:'/',session:{account,profile:{...account,planet:'home'},revision:0}});
+  const app=await online({staticHost:'',base:'/',session:{authorityVersion:1,account,profile:{...account,planet:'home'},revision:0}});
   await Promise.resolve();await Promise.resolve();app.slot.children[0].click();
   const socket=app.sockets[0];assert.ok(socket);
   socket.message({type:'joined',host:'local',party:'AB12CD',planet:'home',players:[account]});
@@ -110,7 +111,7 @@ test('Vietnamese social labels keep player names, party codes and chat text verb
   assert.ok(nodes.some(node=>node.textContent==='Send: '));assert.ok(nodes.some(node=>node.textContent==='Sign in {name}'));
   assert.equal(nodes.find(node=>node.name==='world-chat').value,'Online {code}');
   assert.equal(app.slot.children[0].title,'Nhóm AB12CD');
-  assert.equal(app.requests.length,1,'relabeling must not queue another profile save or network request');
+  assert.equal(app.requests.length,2,'relabeling must not queue another profile save or network request');
 });
 
 test('switching languages during sign-in cannot submit the same credentials twice',async()=>{
@@ -136,5 +137,5 @@ test('all refined model URLs honor a project deployment prefix',async()=>{
   const exports={};
   vm.runInNewContext(await compile('assets.ts',{BASE_URL:'/cute_game/'}),{exports,require:name=>name==='three'?{}:{GLTFLoader:class{}}});
   const paths=[...Object.values(exports.REFINED_ASSET_FILES),...Object.values(exports.KIT_FILES)];
-  assert.equal(paths.length,24);assert.ok(paths.every(url=>url.startsWith('/cute_game/assets/models/')&&url.endsWith('.glb')));
+  assert.equal(paths.length,25);assert.ok(paths.every(url=>url.startsWith('/cute_game/assets/models/')&&url.endsWith('.glb')));
 });

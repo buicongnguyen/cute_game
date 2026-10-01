@@ -22,6 +22,7 @@ export const REFINED_ASSET_FILES = {
 export const KIT_FILES = {
   scenery: `${assetBase}assets/models/scenery.glb`,
   crops: `${assetBase}assets/models/crops.glb`,
+  fruitCrops: `${assetBase}assets/models/fruit_crops.glb`,
   fish: `${assetBase}assets/models/fish.glb`,
   wear: `${assetBase}assets/models/gear-wear.glb`,
   weapons: `${assetBase}assets/models/gear-weapons.glb`,
@@ -366,7 +367,7 @@ export class HeroLibrary {
 
 export const refinedAssets = new RefinedAssetLibrary();
 export const sceneryKit = new KitLibrary([KIT_FILES.scenery]);
-export const cropKit = new KitLibrary([KIT_FILES.crops]);
+export const cropKit = new KitLibrary([KIT_FILES.crops,KIT_FILES.fruitCrops]);
 export const fishKit = new KitLibrary([KIT_FILES.fish]);
 export const heroKit = new HeroLibrary();
 // Gear the explorer can wear or hold, one file per group so each downloads only when first worn.

@@ -1183,6 +1183,7 @@ def main():
                 o.hide_render = True
         hero = build_wilds.import_nodes(HERO_GLB, {'hero'}).get('hero')
         if opts['render']:
+            preview_expansion(entries)
             preview_sheet(entries, hero, os.path.join(PREVIEWS, 'farm.webp'))
             if hero is not None:
                 for o in [hero] + list(hero.children_recursive):
@@ -1210,6 +1211,9 @@ def main():
         print('installed', GLB_NAME, 'and', len(PRODUCTS), 'icons')
     print('\nFarm kit OK')
 
+
+from build_farm_expansion import extend
+extend(globals())
 
 if __name__ == '__main__':
     try:

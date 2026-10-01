@@ -2,6 +2,9 @@ import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TAB
 import { createProgression, normalizeProgression, recordEvent, progressEntries, claimProgress, type ProgressionState } from './progression.ts';
 import { parseHelper, type HelperState } from './helper-state.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
+import { forgeLevel, parseForge } from './weapon-forge.ts';
+import { LEGACY_CROP_IDS } from './content.ts';
+export * from './weapon-forge.ts';
 export * from './content.ts';
 export * from './farm.ts';
 export * from './helper-state.ts';
@@ -13,6 +16,10 @@ export interface Plot {
     z?: number;
     /** Turn about the vertical axis in 45° steps (reference placement); missing in older saves = 0. */
     rotation?: number;
+    /** Snapshot at planting: content updates cannot lengthen a crop already growing. */
+    growDuration?: number;
+    /** Changes on every planting so delayed harvest/theft requests cannot target a replacement crop. */
+    generation?: string;
 }
 export interface Decoration {
     uid: string;
@@ -44,7 +51,7 @@ export type Counters = {
 };
 export interface SaveState {
     version: 1;
-    contentVersion: 2;
+    contentVersion: 3;
     name: string;
     color: string;
     level: number;
@@ -70,6 +77,7 @@ export interface SaveState {
         lowGraphics: boolean;
         /** The on-screen movement pad; off by default because the reference is tap-to-move only. */
         movePad?: boolean;
+        joystickSide?: 'left'|'right';
         /** "Place new beds myself": a bought bed opens the see-through placement instead of going down automatically. */
         placeBeds?: boolean;
     };
@@ -101,20 +109,22 @@ export interface SaveState {
     gardenLayout?: number;
     /** The garden helper (helper.ts); older saves have none and parse as not owned. */
     helper?: HelperState;
+    forge?: Record<string, number>;
+    nextPlantId?: number;
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
-export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 2, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, lowGraphics: false }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now() }; }
+export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 3, forge: {}, nextPlantId: 0, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, lowGraphics: false }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now() }; }
 export function xpNeeded(level: number) { return Math.round(25 * Math.pow(Math.max(1, level), 1.55)); }
 function equipped(s: SaveState) { return Object.values(s.gear).map(id => ITEMS[id]).filter(Boolean); }
 function equipmentStat(s: SaveState, key: string) { return equipped(s).reduce((sum, item) => sum + ((item.stats as Record<string, number> | undefined)?.[key] || 0), 0); }
 function effect(s: SaveState, key: BuffKey, now = Date.now()) { const buff = s.buffs[key]; return buff && buff.expiresAt > now ? buff.value : 0; }
 export function maxHp(s: SaveState) { return 100 + (s.level - 1) * 10 + s.healthUp * 25 + equipmentStat(s, 'hp'); }
-export function attack(s: SaveState, now = Date.now()) { return (10 + (s.level - 1) * 1.5 + s.attackUp * 3 + equipmentStat(s, 'atk')) * (1 + effect(s, 'atk', now)); }
+export function attack(s: SaveState, now = Date.now()) { return (10 + (s.level - 1) * 1.5 + s.attackUp * 3 + equipmentStat(s, 'atk')) * (1 + (s.gear.weapon ? forgeLevel(s, s.gear.weapon) / 100 : 0)) * (1 + effect(s, 'atk', now)); }
 export function defense(s: SaveState, now = Date.now()) { return s.defenseUp * 4 + (s.level - 1) + equipmentStat(s, 'def') + effect(s, 'def', now); }
 export function activeStats(s: SaveState, now = Date.now()) {
     const gear = equipped(s), dz = s.gear.disguise ? DISGUISES[s.gear.disguise] : undefined;
-    return { attack: attack(s, now), defense: defense(s, now), maxHp: maxHp(s), speed: 6 * Math.max(.2, 1 + equipmentStat(s, 'speed') + effect(s, 'speed', now)), critChance: Math.min(.85, .05 + s.critUp * .025 + equipmentStat(s, 'crit') + effect(s, 'crit', now)), critDamage: 2, haste: effect(s, 'haste', now), regen: equipmentStat(s, 'regen') + effect(s, 'regen', now), xp: effect(s, 'xp', now) + gear.reduce((n, i) => n + (i.xp || 0), 0), magnet: effect(s, 'magnet', now) ? 3 : 1, luck: effect(s, 'luck', now) + gear.reduce((n, i) => n + (i.luck || 0), 0), light: effect(s, 'light', now) > 0 || gear.some(i => i.light), fireResistance: Math.min(1, effect(s, 'fireres', now)), lifesteal: (dz?.lifesteal || 0) + effect(s, 'lifesteal', now), lavaproof: gear.some(i => i.lavaproof), antidote: gear.some(i => i.antidote), poisonImmune: gear.some(i => i.antidote), flippers: s.gear.boots === 'boots_flipper', featherFall: gear.some(i => (i as any).featherfall), flying: false, sizeScale: s.sizeEffect && s.sizeEffect.expiresAt > now ? s.sizeEffect.scale : 1 };
+    return { attack: attack(s, now), defense: defense(s, now), maxHp: maxHp(s), speed: 6 * Math.max(.2, 1 + equipmentStat(s, 'speed') + effect(s, 'speed', now)), critChance: Math.min(.85, .05 + s.critUp * .025 + equipmentStat(s, 'crit') + effect(s, 'crit', now)), critDamage: 2, haste: effect(s, 'haste', now), regen: equipmentStat(s, 'regen') + effect(s, 'regen', now), xp: effect(s, 'xp', now) + gear.reduce((n, i) => n + (i.xp || 0), 0), magnet: effect(s, 'magnet', now) ? 3 : 1, luck: effect(s, 'luck', now) + gear.reduce((n, i) => n + (i.luck || 0), 0), light: effect(s, 'light', now) > 0 || gear.some(i => i.light) || s.planet === 'lava' && (s.bag.fcrystal || 0) > 0, fireResistance: Math.min(1, effect(s, 'fireres', now)), lifesteal: (dz?.lifesteal || 0) + effect(s, 'lifesteal', now), lavaproof: gear.some(i => i.lavaproof), antidote: gear.some(i => i.antidote), poisonImmune: gear.some(i => i.antidote), flippers: s.gear.boots === 'boots_flipper', featherFall: gear.some(i => (i as any).featherfall), flying: false, sizeScale: s.sizeEffect && s.sizeEffect.expiresAt > now ? s.sizeEffect.scale : 1 };
 }
 export function weaponStats(s: SaveState): WeaponDef {
     const weapon = (s.gear.disguise && DISGUISES[s.gear.disguise]?.weapon) || (s.gear.weapon && ITEMS[s.gear.weapon]?.weapon);
@@ -152,13 +162,14 @@ export function gainXp(s: SaveState, amount: number, now = Date.now()): number {
 } return s.level - before; }
 export function plant(s: SaveState, index: number, raw: CropId, now = Date.now()) { const crop = canonicalItem(raw), p = s.plots[index], def = Object.hasOwn(CROPS, crop) ? CROPS[crop] : undefined; if (!p || p.crop || !def || def.level > s.level || !Number.isFinite(now) || now < 0)
     return false; if (def.seed && !removeItem(s.bag, def.seed))
-    return false; p.crop = crop; p.plantedAt = now; return true; }
+    return false; p.crop = crop; p.plantedAt = now; p.growDuration = def.duration; s.nextPlantId = (s.nextPlantId || 0) + 1; p.generation = `${now}-${s.nextPlantId}`; return true; }
 export function plantAll(s: SaveState, crop: CropId, now = Date.now()) { let count = 0; s.plots.forEach((_, i) => { if (plant(s, i, crop, now))
     count++; }); return count; }
-export function cropProgress(p: Plot, now = Date.now()) { const def = p.crop && Object.hasOwn(CROPS, p.crop) ? CROPS[p.crop] : undefined; return def ? Math.max(0, Math.min(1, (now - p.plantedAt) / def.duration)) : 0; }
-export function harvest(s: SaveState, index: number, now = Date.now()): CropId | null { const p = s.plots[index]; if (!p?.crop || cropProgress(p, now) < 1)
+export function cropDuration(p: Plot) { const def = p.crop && Object.hasOwn(CROPS, p.crop) ? CROPS[p.crop] : undefined; return def ? (Number.isFinite(p.growDuration) && p.growDuration! > 0 ? p.growDuration! : def.duration) : 0; }
+export function cropProgress(p: Plot, now = Date.now()) { const duration = cropDuration(p); return duration ? Math.max(0, Math.min(1, (now - p.plantedAt) / duration)) : 0; }
+export function harvest(s: SaveState, index: number, now = Date.now()): CropId | null { const p = s.plots[index]; if (!Number.isFinite(now) || now < 0 || !p?.crop || !(cropProgress(p, now) >= 1))
     return null; const id = p.crop; if (!addItem(s, id))
-    return null; p.crop = null; p.plantedAt = 0; gainXp(s, CROPS[id].xp, now); recordEvent(s, 'harvest', 1, id, now); return id; }
+    return null; p.crop = null; p.plantedAt = 0; delete p.growDuration; delete p.generation; gainXp(s, CROPS[id].xp, now); recordEvent(s, 'harvest', 1, id, now); return id; }
 export function harvestAll(s: SaveState, now = Date.now()) { const harvested: CropId[] = []; s.plots.forEach((_, i) => { const id = harvest(s, i, now); if (id)
     harvested.push(id); }); return harvested; }
 export function fertilize(s: SaveState, index: number, timeOrItem: number | string = Date.now(), raw = 'spore') {
@@ -172,11 +183,11 @@ export function fertilize(s: SaveState, index: number, timeOrItem: number | stri
         !Number.isFinite(plot.plantedAt) || Math.abs(plot.plantedAt) > Number.MAX_SAFE_INTEGER || plot.plantedAt > now ||
         !Number.isFinite(crop.duration) || crop.duration <= 0)
         return false;
-    const elapsed = Math.max(0, now - plot.plantedAt);
-    if (elapsed >= crop.duration || !removeItem(s.bag, id))
+    const duration = cropDuration(plot), elapsed = Math.max(0, now - plot.plantedAt);
+    if (elapsed >= duration || !removeItem(s.bag, id))
         return false;
     // Each dose advances a fixed share of the original timer; excess never carries into the next crop.
-    plot.plantedAt = now - Math.min(crop.duration, elapsed + crop.duration * grow);
+    plot.plantedAt = now - Math.min(duration, elapsed + duration * grow);
     return true;
 }
 /**
@@ -199,7 +210,7 @@ export const HOME_CLEARANCE: readonly { x: number; z: number; r: number }[] = [
  * BED_REACH the farthest a bed corner may reach from the village centre.
  */
 export const BED_SCALE = .8, BED_HALF = .78, BED_STEP = 1.64, BED_GAP = 1.58, TRAIL_HALF = .55, BED_REACH = 17.4;
-/** Crops shrink less than their beds so they stay readable: a ripe crop is 35 px tall on a phone instead of 40. */
+/** Crops shrink less than their beds: the updated 50 px mature silhouette stays about 44 px tall on a phone. */
 export const CROP_SCALE = .88;
 /**
  * Where starting bed `i` sits: a 3 x 3 block on the garden grid around GARDEN_CENTRE. Its south row stands just off
@@ -324,6 +335,11 @@ export function storeBed(s: SaveState, i: number) {
     if (s.planet !== 'home' || !isExtraBed(s, i) || s.plots[i].crop || !addItem(s, 'plot_kit')) return false;
     s.plots.splice(i, 1); return true;
 }
+/** Reposition a bed without changing its crop or its original growing duration. */
+export function moveBed(s: SaveState, i: number, x: number, z: number, rotation = 0) {
+    if (s.planet !== 'home' || !Number.isInteger(i) || !s.plots[i] || !Number.isFinite(rotation) || !bedClear(x,z,rotation) || !bedRoom(s,x,z,rotation,bedSpots(s).filter((_,index)=>index!==i))) return false;
+    Object.assign(s.plots[i], { x, z, rotation }); return true;
+}
 export function looseQuantity(s: SaveState, raw: ItemId) { const id = canonicalItem(raw); return Math.max(0, (s.bag[id] || 0) - (Object.values(s.gear).includes(id) ? 1 : 0)); }
 export function sell(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item || !Number.isSafeInteger(count) || count < 1 || !item.sell || count > looseQuantity(s, id))
     return 0; const value = item.sell * count; if (!Number.isSafeInteger(value) || !Number.isSafeInteger(s.energy + value) || !removeItem(s.bag, id, count))
@@ -403,6 +419,17 @@ export function grantCatch(s: SaveState, raw: ItemId, size?: number, hugeCatch =
     s.fishRecords[id] = Math.max(s.fishRecords[id] || 0, size); recordEvent(s, 'fish'); if (ITEMS[id].rare || ITEMS[id].legend)
     recordEvent(s, 'fishrare'); if (ITEMS[id].legend)
     recordEvent(s, 'legendFish'); return true; }
+/** Mystery catches are resolved once by the caller's authority, including unusual treasure. */
+export function grantMysteryCatch(s: SaveState, raw: ItemId, size?: number, supergiant = false) {
+    const id = canonicalItem(raw), fish = FISH[id];
+    if (!fish) return addItem(s,id);
+    if (!supergiant) return grantCatch(s,id,size,false);
+    if (!addItem(s,id)) return false;
+    gainXp(s,fish.xp*4); s.energy += fish.sell*2;
+    if (size && Number.isFinite(size)) s.fishRecords[id] = Math.max(s.fishRecords[id]||0,size);
+    recordEvent(s,'fish'); if (ITEMS[id].rare || ITEMS[id].legend) recordEvent(s,'fishrare'); if (ITEMS[id].legend) recordEvent(s,'legendFish');
+    return true;
+}
 export function placeDecoration(s: SaveState, raw: ItemId, x: number, z: number, rotation = 0) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (item?.type === 'placeable')
     return expandGarden(s, x, z, rotation); if (s.planet !== 'home' || item?.type !== 'decor' || s.decorations.length >= MAX_DECORATIONS || !Number.isFinite(rotation) || !placementFree(s, x, z, 1.9) || !removeItem(s.bag, id))
     return false; s.decorations.push({ uid: `decor-${s.nextDecorationId++}`, id, x, z, rotation }); recordEvent(s, 'decorate'); return true; }
@@ -410,11 +437,11 @@ export function moveDecoration(s: SaveState, uid: string, x: number, z: number, 
     return false; d.x = x; d.z = z; if (rotation !== undefined)
     d.rotation = rotation; return true; }
 export function removeDecoration(s: SaveState, uid: string) { const index = s.decorations.findIndex(d => d.uid === uid); if (index < 0 || s.planet !== 'home')
-    return false; const [d] = s.decorations.splice(index, 1); addItem(s, d.id); return true; }
+    return false; if (!addItem(s, s.decorations[index].id)) return false; s.decorations.splice(index, 1); return true; }
 export const MINE_REGROW_MS = 20000;
 export function mineAvailable(s: SaveState, planet: PlanetId, index: number, now = Date.now()) { return Object.hasOwn(PLANETS, planet) && planet !== 'home' && Number.isInteger(index) && index >= 0 && index < 2 && Number.isFinite(now) && now >= 0 && now <= Number.MAX_SAFE_INTEGER - MINE_REGROW_MS && now >= (s.worldRewards.mineReadyAt[planet]?.[index] || 0); }
 export function claimMine(s: SaveState, index: number, now = Date.now()) { if (!mineAvailable(s, s.planet, index, now))
-    return false; (s.worldRewards.mineReadyAt[s.planet] ??= [0, 0])[index] = now + MINE_REGROW_MS; const material: Record<PlanetId, string> = { home: 'stone', candy: 'sugar', ice: 'icecrystal', lava: 'mcrystal', toy: 'gear', jungle: 'vine', ocean: 'coral', cloud: 'feather', shadow: 'shadow' }; addItem(s, material[s.planet]); recordEvent(s, 'mine', 1, undefined, now); return true; }
+    return false; const material: Record<PlanetId, string> = { home: 'stone', candy: 'sugar', ice: 'icecrystal', lava: 'mcrystal', toy: 'gear', jungle: 'vine', ocean: 'coral', cloud: 'feather', shadow: 'shadow' }; if (!addItem(s, material[s.planet])) return false; (s.worldRewards.mineReadyAt[s.planet] ??= [0, 0])[index] = now + MINE_REGROW_MS; recordEvent(s, 'mine', 1, undefined, now); return true; }
 export const GIFT_REGROW_MS = 45000, GIFT_COUNT = 26;
 export interface GiftOutcome {
     kind: 'giant' | 'tiny' | 'coins' | 'heal' | 'bomb' | 'toys' | 'curse';
@@ -467,7 +494,7 @@ export function claimGift(s: SaveState, index: number, now = Date.now(), rng: ()
     return result;
 }
 export function claimEnvironmentResource(s: SaveState, key: string, raw: ItemId, now = Date.now(), cooldownMs = 20000) { const id = canonicalItem(raw); if (!/^[a-zA-Z0-9:_-]{1,100}$/.test(key) || ['constructor', '__proto__', 'prototype'].includes(key) || !Object.hasOwn(ITEMS, id) || !Number.isFinite(now) || now < 0 || now > 8.64e15-86400000 || !Number.isFinite(cooldownMs) || cooldownMs < 0 || now < (s.worldRewards.resourceReadyAt[key] || 0))
-    return false; s.worldRewards.resourceReadyAt[key] = now + Math.min(cooldownMs, 86400000); addItem(s, id); recordEvent(s, 'mine', 1, undefined, now); return true; }
+    return false; if (!addItem(s, id)) return false; s.worldRewards.resourceReadyAt[key] = now + Math.min(cooldownMs, 86400000); recordEvent(s, 'mine', 1, undefined, now); return true; }
 export function openCave(s: SaveState) { if (s.planet !== 'lava' || s.worldRewards.lava.gateOpen)
     return false; s.worldRewards.lava.gateOpen = true; return true; }
 export function lightBrazier(s: SaveState, index: number, rng:()=>number=Math.random) { const lava = s.worldRewards.lava; if (s.planet !== 'lava' || !Number.isInteger(index) || index < 0 || index > 2 || lava.braziers.includes(index) || !removeItem(s.bag, 'fcrystal'))
@@ -491,8 +518,11 @@ export function die(s: SaveState, x: number, z: number) { const items: Inventory
     for (const [id, n] of Object.entries(s.dropped.items))
         s.chest[id] = (s.chest[id] || 0) + n!; s.dropped = Object.keys(items).length ? { x, z, planet: s.planet, items } : null; s.planet = 'home'; s.hp = maxHp(s); s.buffs = {}; s.sizeEffect = null; }
 export function recoverBag(s: SaveState) { if (!s.dropped || s.dropped.planet !== s.planet)
-    return false; for (const [id, n] of Object.entries(s.dropped.items))
-    addItem(s, id, n); s.dropped = null; return true; }
+    return false;
+    // Stage the entire pickup: a failed grant must preserve every item for a later retry.
+    const next = { ...s, bag: { ...s.bag }, collection: { ...s.collection } };
+    for (const [id, n] of Object.entries(s.dropped.items)) if (!addItem(next, id, n)) return false;
+    s.bag = next.bag; s.collection = next.collection; s.dropped = null; return true; }
 function record(value: unknown): value is Record<string, any> { return !!value && typeof value === 'object' && !Array.isArray(value); }
 function integer(value: unknown, fallback = 0, max = Number.MAX_SAFE_INTEGER) { return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(max, Math.floor(value)) : fallback; }
 function planetId(value: unknown): PlanetId | null { const id = value === 'sky' ? 'cloud' : value === 'dark' ? 'shadow' : value; return typeof id === 'string' && Object.hasOwn(PLANETS, id) ? id as PlanetId : null; }
@@ -504,7 +534,7 @@ export function parseSave(raw: string | null): SaveState | null {
         if (!record(v) || v.version !== 1 || typeof v.name !== 'string' || typeof v.level !== 'number' || !Number.isFinite(v.level) || v.level < 1 || !planetId(v.planet) || !Array.isArray(v.plots))
             return null;
         const s = newGame(v.name, typeof v.color === 'string' && /^#[0-9a-f]{6}$/i.test(v.color) ? v.color : COLORS[0]);
-        const legacy = v.contentVersion !== 2, layoutBed = v.gardenLayout === GARDEN_LAYOUT ? defaultBed : v.gardenLayout === 2 ? layout2Bed : legacyBed;
+        const legacy = !(typeof v.contentVersion === 'number' && v.contentVersion >= 2), oldCropTimers = !(typeof v.contentVersion === 'number' && v.contentVersion >= 3), layoutBed = v.gardenLayout === GARDEN_LAYOUT ? defaultBed : v.gardenLayout === 2 ? layout2Bed : legacyBed;
         const inventory = (data: unknown): Inventory => { const result: Inventory = {}; if (record(data))
             for (const [raw, n] of Object.entries(data)) {
                 const id = canonicalItem(raw);
@@ -520,6 +550,8 @@ export function parseSave(raw: string | null): SaveState | null {
         s.critUp = integer(v.critUp, 0, 28);
         s.bag = inventory(v.bag);
         s.chest = inventory(v.chest);
+        s.forge = parseForge(v.forge);
+        s.nextPlantId = integer(v.nextPlantId);
         if (record(v.gear))
             for (const [rawSlot, rawId] of Object.entries(v.gear)) {
                 if (typeof rawId !== 'string')
@@ -529,7 +561,18 @@ export function parseSave(raw: string | null): SaveState | null {
                     s.gear[slot as GearSlot] = id;
             }
         s.hp = Math.min(typeof v.hp === 'number' && Number.isFinite(v.hp) && v.hp >= 0 ? v.hp : 100, maxHp(s));
-        s.plots = v.plots.slice(0, STARTING_PLOTS + MAX_EXTRA_PLOTS).map((p: unknown, i: number) => { const crop = record(p) && typeof p.crop === 'string' ? canonicalItem(p.crop) : null; const point = record(p) && Number.isFinite(p.x) && Number.isFinite(p.z) ? { x: p.x, z: p.z } : layoutBed(i); const rotation = record(p) && typeof p.rotation === 'number' && Number.isFinite(p.rotation) && p.rotation ? { rotation: p.rotation } : {}; return { crop: crop && Object.hasOwn(CROPS, crop) ? crop : null, plantedAt: record(p) ? integer(p.plantedAt) : 0, ...point, ...rotation }; });
+        s.plots = v.plots.slice(0, STARTING_PLOTS + MAX_EXTRA_PLOTS).map((p: unknown, i: number) => {
+            const rawCrop = record(p) && typeof p.crop === 'string' ? canonicalItem(p.crop) : null;
+            const crop = rawCrop && Object.hasOwn(CROPS, rawCrop) ? rawCrop : null;
+            const point = record(p) && Number.isFinite(p.x) && Number.isFinite(p.z) ? { x: p.x, z: p.z } : layoutBed(i);
+            const rotation = record(p) && typeof p.rotation === 'number' && Number.isFinite(p.rotation) && p.rotation ? { rotation: p.rotation } : {};
+            // Fertilizer may legitimately advance a synthetic-clock planting before epoch zero.
+            const plantedAt = record(p) && Number.isSafeInteger(p.plantedAt) && p.plantedAt >= -14*86400000 ? p.plantedAt : 0;
+            const duration = crop ? CROPS[crop].duration / (oldCropTimers && LEGACY_CROP_IDS.includes(crop) ? 10 : 1) : 0;
+            const growDuration = crop && record(p) && typeof p.growDuration === 'number' && Number.isFinite(p.growDuration) && p.growDuration > 0 && p.growDuration <= 14 * 86400000 ? p.growDuration : duration;
+            const generation = crop ? record(p) && typeof p.generation === 'string' && /^[a-zA-Z0-9:_-]{1,100}$/.test(p.generation) ? p.generation : `legacy:${i}:${plantedAt}:${crop}` : undefined;
+            return { crop, plantedAt, ...point, ...rotation, ...(crop ? { growDuration, generation } : {}) };
+        });
         if (legacy) {
             const target = Math.min(STARTING_PLOTS + MAX_EXTRA_PLOTS, s.plots.length + 3);
             while (s.plots.length < target)
@@ -544,7 +587,8 @@ export function parseSave(raw: string | null): SaveState | null {
         s.visited = [...new Set<PlanetId>(['home', ...(Array.isArray(v.visited) ? v.visited.map(planetId).filter((id: PlanetId | null): id is PlanetId => !!id) : []), s.planet])];
         s.discovered = [...new Set<PlanetId>([...s.visited, ...(Array.isArray(v.discovered) ? v.discovered.map(planetId).filter((id: PlanetId | null): id is PlanetId => !!id) : [])])];
         const settings = record(v.settings) ? v.settings : {};
-        s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true, ...(settings.movePad === true ? { movePad: true } : {}) };
+        s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true, ...(typeof settings.movePad === 'boolean' ? { movePad: settings.movePad } : {}) };
+        if(settings.joystickSide==='left'||settings.joystickSide==='right')s.settings.joystickSide=settings.joystickSide;
         if (settings.placeBeds === true) s.settings.placeBeds = true;
         const rewards = record(v.worldRewards) ? v.worldRewards : {};
         if (record(rewards.mineReadyAt))

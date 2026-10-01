@@ -1,0 +1,26 @@
+.movement-joystick{position:fixed;left:max(22px,env(safe-area-inset-left));bottom:max(32px,env(safe-area-inset-bottom));width:128px;height:128px;border:3px solid #fff9;border-radius:50%;background:#244d6145;box-shadow:0 3px 12px #213b4225;touch-action:none;user-select:none;pointer-events:auto;z-index:30}
+.movement-joystick[hidden]{display:none!important}.joystick-knob{position:absolute;width:50px;height:50px;left:36px;top:36px;background:#f3fff0c9;border:3px solid white;border-radius:50%;box-shadow:0 3px 0 #4b706760;pointer-events:none}
+#hud.joystick-on #touch-controls{display:none!important}#hud.joystick-on .skills{position:fixed;left:auto;right:max(18px,env(safe-area-inset-right));transform:none;bottom:80px}
+#hud.joystick-on .control-hint{display:none}
+#discovery-progress{position:fixed;bottom:calc(6px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;border:0;border-radius:20px;padding:4px 10px;background:#fff8e5df;color:#294b3a;font:800 11px Nunito,sans-serif;pointer-events:auto;white-space:nowrap;max-width:90vw;z-index:25}
+#discovery-progress b{display:inline-grid;place-items:center;width:20px;height:20px;background:#c7e2fc;color:#275375;border-radius:50%;font-size:15px}
+#discovery-text{display:grid;gap:1px;text-align:center}#discovery-text strong{font-size:10px;max-width:190px;overflow:hidden;text-overflow:ellipsis}#discovery-text small{font-size:12px;letter-spacing:-1px}
+#hud.fishing #discovery-progress{display:none}
+@media(max-width:600px){.movement-joystick{left:16px;bottom:48px}#hud.joystick-on .skills{display:grid;grid-template-columns:repeat(2,52px);right:18px;bottom:88px;gap:16px 18px;max-width:calc(100vw - 166px)}#hud.joystick-on .skill{width:52px;min-width:52px;height:52px}#hud.joystick-on .home-button{position:fixed;right:20px;bottom:38px}}
+@media(max-height:500px){.movement-joystick{bottom:40px;left:18px}#hud.joystick-on .skills{display:grid;grid-template-columns:repeat(2,44px);bottom:74px;gap:12px 16px}#hud.joystick-on .skill{width:44px;height:44px}#hud.joystick-on .home-button{position:fixed;right:22px;bottom:30px}}
+#hud.joystick-right .movement-joystick{left:auto;right:max(18px,env(safe-area-inset-right))}
+#hud.joystick-on.joystick-right .skills{right:auto;left:max(18px,env(safe-area-inset-left))}
+#hud.joystick-on.joystick-right .home-button{right:auto;left:max(22px,env(safe-area-inset-left))}
+@media(max-width:600px) and (orientation:portrait){#hud.joystick-on #target-frame{left:16px;bottom:calc(202px + env(safe-area-inset-bottom));top:auto;transform:none;max-width:calc(100vw - 32px)}#hud.joystick-on.joystick-right #target-frame{left:auto;right:16px}}
+/* Keep interaction prompts and transient notices clear of both thumb controls. */
+@media(max-width:600px) and (orientation:portrait){
+  #hud.joystick-on #context-prompt{left:50%;transform:translateX(-50%);bottom:calc(218px + var(--safe-bottom))}
+  #app:has(#hud.joystick-on) #toasts{left:50%;transform:translateX(-50%);align-items:center;bottom:calc(260px + var(--safe-bottom));max-width:calc(100vw - 28px)}
+  #app.target-on #hud.joystick-on #context-prompt{bottom:calc(276px + var(--safe-bottom))}
+  #app.target-on:has(#hud.joystick-on) #toasts{bottom:calc(320px + var(--safe-bottom))}
+}
+@media(max-height:500px){
+  #hud.joystick-on #context-prompt{left:50%;transform:translateX(-50%);bottom:calc(18px + var(--safe-bottom))}
+  #app:has(#hud.joystick-on) #toasts{left:50%;transform:translateX(-50%);align-items:center;max-width:calc(100vw - 360px);bottom:calc(70px + var(--safe-bottom))}
+}
+#app:has(#hud.joystick-on) #dialog-layer:not([hidden]) ~ #toasts{top:calc(14px + var(--safe-top));bottom:auto}

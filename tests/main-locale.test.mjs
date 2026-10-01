@@ -12,6 +12,7 @@ import {dishesHtml,penHtml,penSignature} from '../src/farm-ui.ts';
 import {QUALITY} from '../src/graphics.ts';
 import {planRoutes} from '../src/space.ts';
 import {helperRow} from '../src/helper-ui.ts';
+import {HELP_TOPICS} from '../src/help-topics.ts';
 
 afterEach(()=>setLanguage('en'));
 
@@ -38,6 +39,7 @@ function fixture(advanced=true){
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
   const context={M,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,ZOOM:{},state,saved:state,app:{innerHTML:''},visiting:null,activePlot:0,selectedItem:advanced?'manure':null,shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60},world:{zoom:1,planet:'home'},saveFailed:false,persistence:null,
+    HELP_TOPICS,joystickEnabled:()=>state.settings.movePad??false,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},
     farmUi:{art,esc,mini,chips:()=>'',effect:item=>t(item.desc)},
@@ -75,7 +77,7 @@ test('all main menus switch Vietnamese and back with identical game actions and 
   }
   const byType=type=>vietnamese.find(panel=>panel.type===type).html;
   assert.match(byType('settings'),/Ngôn ngữ/);assert.match(byType('settings'),/Sắc nét/);assert.match(byType('settings'),/độ phân giải 2\.00×/);
-  assert.match(byType('help'),/Nhấp hoặc chạm để đi/);assert.match(byType('plant'),/Cà Rốt/);
+  assert.match(byType('help'),/Nhấn mặt đất để đi/);assert.match(byType('plant'),/Cà Rốt/);
   assert.match(byType('bag'),/ba lô|Ba lô/);assert.match(byType('pen'),/Tuổi thọ/);
   assert.doesNotMatch(byType('settings'),/Choose your language|Sound effects|Automatic|resolution/);
   assert.equal(JSON.stringify(app.state),saved,'translation must not rewrite game data or progression');

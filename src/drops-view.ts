@@ -110,20 +110,10 @@ export class DropView {
     this.syncTags(drops, camera, hero, width, height);
   }
 
-  private syncTags(drops: Drop[], camera: T.Camera, hero: { x: number; z: number }, width: number, height: number) {
-    const seen = new Set<number>();
-    for (const d of drops) {
-      if (Math.hypot(hero.x - d.x, hero.z - d.z) >= DROP.labelRange) continue;
-      this.v.set(d.x, d.y + CARD - .2, d.z).project(camera); if (this.v.z >= 1) continue;
-      seen.add(d.uid);
-      let tag = this.tags.get(d.uid); if (!tag) { const el = document.createElement('div'); el.className = 'droptag'; this.layer.append(el); tag = { el, text: '', warn: false }; this.tags.set(d.uid, tag); }
-      const { text: sourceText, warn } = dropLabel(d); const text = t(sourceText);
-      if (tag.text !== text) { tag.el.textContent = text; tag.text = text; }
-      if (tag.warn !== warn) { tag.el.classList.toggle('warn', warn); tag.warn = warn; }
-      tag.el.style.transform = `translate(${((this.v.x * .5 + .5) * width).toFixed(1)}px,${((-this.v.y * .5 + .5) * height).toFixed(1)}px) translate(-50%,-100%)`;
-    }
-    for (const [uid, tag] of this.tags) if (!seen.has(uid)) { tag.el.remove(); this.tags.delete(uid); }
+  private syncTags(_drops:Drop[],_camera:T.Camera,_hero:{x:number;z:number},_width:number,_height:number){
+    for(const tag of this.tags.values())tag.el.remove();this.tags.clear();
   }
+
 }
 
 /** The parts of World the drops need (kept structural so tests and tools can fake it). */

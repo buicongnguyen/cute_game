@@ -24,11 +24,11 @@ function fixture() {
   const noop = () => {};
   const context = {
     M, frameSteps, graphics, previous: 0, frameTime: 0, elapsed: 0, uiElapsed: 0,
-    flight: null, arriving: false, started: true, blocked: false, settledAt: -1,
+    flight: null, arriving: false, started: true, blocked: false, settledAt: -1,actionHandler:null,
     wasAirborne: false, fishGame: null, recastUntil: 0, modal: '',
     state: M.newGame(), document: { hidden: false }, performance: { now: () => now },
     innerWidth: 1280, innerHeight: 720, network: { role: null },
-    ship: { update: noop }, gestures: { update: noop }, combatTimers: { advance: noop },
+    ship: { update: noop }, gestures: { update: noop }, joystick:{update:noop},combatTimers: { advance: noop },
     combat: { update: noop, statuses: {}, airborne: 0, projectiles: [], allies: [], pose: 'idle' },
     combatView: { update: noop }, fishingView: { update: noop, active: false }, rodTip: {},
     uiBlocked: () => context.blocked,

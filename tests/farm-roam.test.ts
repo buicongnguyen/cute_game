@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newRoamer, roamRadius, stepRoamer, type RoamArea, type RoamKind } from '../src/farm-roam.ts';
+import { newRoamer, roamRadius, spacing, stepRoamer, type RoamArea, type RoamKind } from '../src/farm-roam.ts';
+
+test('mixed species keep the same separation regardless of herd iteration order or age', () => {
+  const kinds: RoamKind[] = ['chicken', 'duck', 'cow', 'pig', 'dog'];
+  for (const kindA of kinds) for (const kindB of kinds) for (const youngA of [false, true]) for (const youngB of [false, true]) {
+    const a = { kind: kindA, young: youngA }, b = { kind: kindB, young: youngB };
+    assert.equal(spacing(a, b), spacing(b, a), `${kindA}/${kindB}, young=${youngA}/${youngB}`);
+    assert.ok(spacing(a, b) >= roamRadius(a) + roamRadius(b), 'bodies do not overlap');
+  }
+});
 
 function random(seed: number) { return () => ((seed = seed * 16807 % 2147483647) - 1) / 2147483646; }
 const stones = [{ x: 0, z: 0, r: 2.3 }, { x: 6, z: -4, r: 1.5 }, { x: -6, z: -4, r: 1.5 }, { x: -6, z: 6, r: 1.5 }, { x: 7, z: 6, r: 1.2 }];

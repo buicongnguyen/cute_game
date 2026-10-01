@@ -4,22 +4,22 @@ import * as M from '../src/model.ts';
 
 const reload=(s:M.SaveState)=>M.parseSave(JSON.stringify(s))!;
 const now=Date.now();
-test('reference crop catalog has all nineteen exact unlocks, timers, XP and values',()=>{
+test('updated crop catalog retains nineteen unlocks with tenfold timers and triple XP/value plus eight fruits',()=>{
   const facts=[['radish',1,15,6,4],['carrot',1,10,4,3],['pumpkin',2,30,14,10],['mint',3,35,14,9],['chili',4,40,18,12],['candy',4,50,26,18],['bean',5,60,24,16],['star',6,80,45,32],['berry',6,70,30,20],['coffee',7,60,28,18],['moonflower',8,90,40,26],['magnetmelon',9,100,44,30],['melon',9,120,80,60],['clover',10,110,50,34],['glowshroom',11,100,48,30],['iceberry',12,120,60,40],['goldcorn',13,150,70,110],['dragonfruit',15,160,90,70],['rainbowrose',18,200,120,90]] as const;
-  assert.equal(Object.keys(M.CROPS).length,19);
-  for(const[id,level,time,xp,sell]of facts){assert.deepEqual([M.CROPS[id].level,M.CROPS[id].duration,M.CROPS[id].xp,M.ITEMS[id].sell],[level,time*1000,xp,sell]);}
+  assert.equal(Object.keys(M.CROPS).length,27);
+  for(const[id,level,time,xp,sell]of facts){assert.deepEqual([M.CROPS[id].level,M.CROPS[id].duration,M.CROPS[id].xp,M.ITEMS[id].sell],[level,time*10000,xp*3,sell*3]);}
   assert.deepEqual(['iceberry','dragonfruit','rainbowrose'].map(id=>M.CROPS[id].seed),['seed_ice','seed_fire','seed_star']);
 });
 test('nine starting beds, exact harvest boundary and no duplicate resources',()=>{
   const s=M.newGame();assert.equal(s.plots.length,9);assert.equal(s.energy,0);
-  assert.equal(M.plant(s,0,'carrot',now),true);assert.equal(M.harvest(s,0,now+9999),null);assert.equal(M.harvest(s,0,now+10000),'carrot');assert.equal(M.harvest(s,0,now+10000),null);
-  assert.equal(s.bag.carrot,1);assert.equal(s.xp,4);assert.equal(M.sell(s,'carrot',-1),0);assert.equal(M.sell(s,'carrot',2),0);assert.equal(M.sell(s,'carrot'),3);
+  assert.equal(M.plant(s,0,'carrot',now),true);assert.equal(M.harvest(s,0,now+99999),null);assert.equal(M.harvest(s,0,now+100000),'carrot');assert.equal(M.harvest(s,0,now+100000),null);
+  assert.equal(s.bag.carrot,1);assert.equal(s.xp,12);assert.equal(M.sell(s,'carrot',-1),0);assert.equal(M.sell(s,'carrot',2),0);assert.equal(M.sell(s,'carrot'),9);
   assert.equal(M.plant(s,0,'berry'),false);assert.equal(M.buy(s,'gun_bubble'),false);assert.equal(M.expandGarden(s),false);
 });
 test('rare seeds are consumed only when a valid empty unlocked bed is planted',()=>{
   const s=M.newGame();M.addItem(s,'seed_fire',2);assert.equal(M.plant(s,0,'dragonfruit',now),false);assert.equal(s.bag.seed_fire,2);
   s.level=15;assert.equal(M.plant(s,0,'dragonfruit',now),true);assert.equal(M.plant(s,0,'dragonfruit',now),false);assert.equal(M.plant(s,99,'dragonfruit',now),false);assert.equal(s.bag.seed_fire,1);
-  assert.equal(M.plantAll(s,'dragonfruit',now),1);assert.equal(s.bag.seed_fire,undefined);assert.equal(M.harvestAll(s,now+160000).length,2);
+  assert.equal(M.plantAll(s,'dragonfruit',now),1);assert.equal(s.bag.seed_fire,undefined);assert.equal(M.harvestAll(s,now+1600000).length,2);
 });
 test('level formula, carry-over, health restoration and stat upgrade costs match the reference',()=>{
   const s=M.newGame();s.hp=1;const amount=M.xpNeeded(1)+M.xpNeeded(2)+5;assert.equal(M.gainXp(s,amount),2);assert.equal(s.level,3);assert.equal(s.xp,5);assert.equal(s.hp,120);
@@ -30,7 +30,7 @@ test('level formula, carry-over, health restoration and stat upgrade costs match
 });
 test('manure and spore each advance half the original growth timer',()=>{
   const s=M.newGame();M.addItem(s,'manure',2);M.addItem(s,'spore',2);assert.equal(M.fertilize(s,0,now),false);M.plant(s,0,'carrot',now);
-  assert.equal(M.fertilize(s,0,now+2000,'manure'),true);assert.equal(M.cropProgress(s.plots[0],now+2000),.7);assert.equal(s.bag.manure,1);
+  assert.equal(M.fertilize(s,0,now+2000,'manure'),true);assert.equal(M.cropProgress(s.plots[0],now+2000),.52);assert.equal(s.bag.manure,1);
   assert.equal(M.fertilize(s,0,now+2000),true);assert.equal(M.fertilize(s,0,now+2000),false);assert.equal(s.bag.spore,1);assert.equal(M.harvest(s,0,now+2000),'carrot');
 });
 test('food buffs work at full HP, reapplication extends half remaining time, and expiry persists',()=>{
@@ -41,7 +41,7 @@ test('food buffs work at full HP, reapplication extends half remaining time, and
 });
 test('cooking improves crop and fish value, healing and precise buff strength',()=>{
   const s=M.newGame();M.addItem(s,'moonflower',2);assert.equal(M.cook(s,'moonflower',2),true);assert.equal(s.bag.moonflower,undefined);assert.equal(s.bag.cooked_moonflower,2);
-  const cooked=M.ITEMS.cooked_moonflower;assert.equal(cooked.sell,Math.round(26*2.2)+2);assert.equal(cooked.heal,68);assert.equal(cooked.buff!.crit,.12*1.35);assert.equal(cooked.buff!.time,180);assert.equal(M.cook(s,'cooked_moonflower'),false);
+  const cooked=M.ITEMS.cooked_moonflower;assert.equal(cooked.sell,Math.round(78*2.2)+2);assert.equal(cooked.heal,68);assert.equal(cooked.buff!.crit,.12*1.35);assert.equal(cooked.buff!.time,180);assert.equal(M.cook(s,'cooked_moonflower'),false);
   s.planet='toy';M.addItem(s,'fish_perch');assert.equal(M.cook(s,'fish_perch'),false);assert.equal(s.bag.fish_perch,1);
 });
 test('material purchases and crafting preserve funds and items on failure',()=>{
@@ -98,7 +98,7 @@ test('lava braziers, gate, daily chest and furnace cannot be replayed for reward
 });
 test('version1 migration aliases old inventory, gear, crops and dropped assets without loss',()=>{
   const old={...M.newGame(),contentVersion:undefined,plots:Array.from({length:8},()=>({crop:'turnip',plantedAt:now})),bag:{turnip:3,radish:2,sword:1,crystal:4,wood:2},chest:{fertilizer:3},gear:{weapon:'sword'},dropped:{x:1,z:2,planet:'candy',items:{ember:2,fish:4}},worldRewards:{collectedGifts:{toy:[0]},mineReadyAt:{}},savedAt:now};
-  const r=M.parseSave(JSON.stringify(old))!;assert.equal(r.contentVersion,2);assert.equal(r.plots.length,11);assert.equal(r.plots[0].crop,'radish');assert.deepEqual(r.bag,{radish:5,sword_wood:1,starshard:4,wood:2});assert.deepEqual(r.chest,{spore:3});assert.equal(r.gear.weapon,'sword_wood');assert.deepEqual(r.dropped?.items,{magma:2,fish_perch:4});assert.equal(M.giftAvailable(r,'toy',0,now),false);assert.equal(M.giftAvailable(r,'toy',0,now+45000),true);assert.equal(reload(r).plots.length,11);
+  const r=M.parseSave(JSON.stringify(old))!;assert.equal(r.contentVersion,3);assert.equal(r.plots.length,11);assert.equal(r.plots[0].crop,'radish');assert.deepEqual(r.bag,{radish:5,sword_wood:1,starshard:4,wood:2});assert.deepEqual(r.chest,{spore:3});assert.equal(r.gear.weapon,'sword_wood');assert.deepEqual(r.dropped?.items,{magma:2,fish_perch:4});assert.equal(M.giftAvailable(r,'toy',0,now),false);assert.equal(M.giftAvailable(r,'toy',0,now+45000),true);assert.equal(reload(r).plots.length,11);
 });
 test('the original six-bed save gains three fully positioned interactive beds and retains its color',()=>{
   const old={...M.newGame('Clover','#69c5ff'),contentVersion:undefined,plots:Array.from({length:6},(_,i)=>({crop:i===2?'carrot':null,plantedAt:i===2?1234:0})),bag:{rod:1,sword:1},energy:32,level:3};

@@ -45,7 +45,7 @@ test('a fish is chosen at each approach with the bait/rod/luck bonus, and swims 
   // 1 m at 1.1 m/s, then 1.45 m at 0.45 m/s.
   assert.ok(Math.abs(t-(1/1.1+1.45/.45))<.06,`approach took ${t}`);
 });
-test('1–4 nibbles dip the bobber, then the fish bites (80 %) or swims off (20 %)',()=>{
+test('1–4 nibbles dip the bobber, then the fish bites (95 %) or swims off (5 %)',()=>{
   let bites=0,fled=0;
   for(let s=1;s<=200;s++){
     const f=sim({random:seeded(s)});until(f,'nibble');
@@ -53,17 +53,17 @@ test('1–4 nibbles dip the bobber, then the fish bites (80 %) or swims off (20 
     assert.ok(f.nibbles>=1&&f.nibbles<=4,`nibbles ${f.nibbles}`);
     if(f.phase==='bite')bites++;else{assert.equal(f.phase,'wait');assert.equal(f.fled,1);fled++;}
   }
-  assert.ok(bites>130&&bites<190&&fled>10,`bites ${bites} fled ${fled}`);
+  assert.ok(bites>180&&bites<200&&fled>0,`bites ${bites} fled ${fled}`);
 });
-test('the bite lasts 0.6 + 0.4 × rod quality; a missed bite uses the worm and a new fish is chosen',()=>{
+test('the bite lasts 1.4 + 0.6 × rod quality; a missed bite uses the worm and a new fish is chosen',()=>{
   for(const q of [.3,.7]){
     let picks=0;const f=sim({quality:q,bait:true,random:seeded(11),choose:()=>{picks++;return perch;}});until(f,'bite');
     let t=0;while(f.phase==='bite'){f.update(.01,false);t+=.01;}
-    assert.ok(Math.abs(t-(.6+.4*q))<.02,`window ${t}`);
+    assert.ok(Math.abs(t-(1.4+.6*q))<.02,`window ${t}`);
     assert.equal(f.phase,'wait');assert.equal(f.missedBites,1);assert.equal(f.baitUsed,1);
     until(f,'approach');assert.equal(picks,2);
   }
-  const nobait=sim();until(nobait,'bite');advance(nobait,1.2);assert.equal(nobait.baitUsed,0,'no worm, nothing used');
+  const nobait=sim();until(nobait,'bite');advance(nobait,2.2);assert.equal(nobait.baitUsed,0,'no worm, nothing used');
 });
 test('pressing early scares the fish, waits 1.5 s longer and pulls the bobber toward the explorer',()=>{
   const water={x:0,z:0,r:9},f=sim({water,cast:{x:-3,z:0},player:{x:10,z:0},approachFrom:()=>2});
@@ -80,10 +80,10 @@ test('pressing on the bite hooks the fish at tension 0.25 and progress 0.05',()=
 test('paused fishing leaves the bite timer and line tension unchanged',()=>{
   const f=sim();until(f,'bite');f.update(20,false,false);assert.equal(f.phase,'bite');f.press();const tension=f.tension;f.update(20,true,false);assert.equal(f.tension,tension);
 });
-test('holding through surges snaps the line; leaving it slack 4 s loses the fish; both use the worm',()=>{
+test('holding through surges snaps the line; leaving it slack 7 s loses the fish; both use the worm',()=>{
   const f=sim({quality:0,bait:true,choose:()=>shark});until(f,'bite');f.press();advance(f,10,true);
   assert.equal(f.phase,'escaped');assert.equal(f.snapped,true);assert.equal(f.baitUsed,1);
-  const g=sim({quality:1,bait:true});until(g,'bite');g.press();g.release();advance(g,4.1,false);
+  const g=sim({quality:1,bait:true});until(g,'bite');g.press();g.release();advance(g,7.1,false);
   assert.equal(g.phase,'escaped');assert.match(g.reason,/slack/);assert.equal(g.baitUsed,1);
 });
 test('reeling between surges lands the fish, using the worm',()=>{

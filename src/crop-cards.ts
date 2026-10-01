@@ -22,12 +22,14 @@ export const STAGE_SCALE: readonly [number, number, number, number] = [0, 1.4, .
 export const VIEW_PITCH = Math.atan2(CAMERA.offset[1], CAMERA.offset[2]);
 /** CSS pixels per metre across the view plane at the camera target on a portrait phone (844 px tall, default zoom). */
 export function phonePxPerMetre(height = 844) { return height / (2 * Math.hypot(...CAMERA.offset) * CAMERA.portraitScale * Math.tan(CAMERA.fov * Math.PI / 360)); }
-/** Ripe crops read about 40 px tall on a phone, like the reference's (RG-04). */
-export const RIPE_PX = 40;
-/** On-screen height (view-plane metres) of a model at bed scale 1: ripe = 1.25 × this = 40 px on a phone. */
+/** The October crop update enlarges young and ripe plants by 25%; sprouts keep their previous size. */
+export const CROP_PRESENTATION_SCALE = 1.25;
+/** Ripe plants read 50 px before the compact garden scale (44 px with CROP_SCALE=.88). */
+export const RIPE_PX = 40 * CROP_PRESENTATION_SCALE;
+/** On-screen height (view-plane metres) of a model at bed scale 1. */
 export const BED_HEIGHT = RIPE_PX / phonePxPerMetre() / STAGE_SCALE[3];
 /** The sprout model is normalised smaller than the crops, so sprout ×1.4 stays below young ×0.55 ≈ 14 px vs 17 px. */
-export const SPROUT_SHARE = .32;
+export const SPROUT_SHARE = .32 / CROP_PRESENTATION_SCALE;
 /** Top of the soil in a bed, where crops stand. */
 export const SOIL_Y = .22;
 /** Reference harvest (RG-06): the crop flies up sin(πe)·1.6 m over 0.45 s while it shrinks from 1.4 to 0.28 and spins. */
@@ -70,6 +72,13 @@ export function stageScale(crop: string, stage: CropStage) {
   if (!stage) return 0;
   const b = cropBounds(stage === 1 ? 'sprout' : crop);
   return b ? STAGE_SCALE[stage] * bedScale(b, stage === 1) : STAGE_SCALE[stage];
+}
+/** A compact ready badge above the mature silhouette, in the same view plane as crop cards. */
+export function cropBadgeAnchor(crop: string, size = 1): { y: number; back: number } {
+  const bounds = cropBounds(crop), scale = stageScale(crop, 3) * size;
+  const top = bounds ? bounds.top * scale : RIPE_PX / phonePxPerMetre() * size;
+  const height = top * 1.04 + .25; // maximum idle bob plus room for the small badge
+  return { y: SOIL_Y + height * Math.cos(VIEW_PITCH), back: height * Math.sin(VIEW_PITCH) - (bounds?.front ?? 0) * scale };
 }
 /** Stable per-bed variety: about half the beds show their crop mirrored. */
 export function bedFlip(index: number) { return ((index * 2654435761) >>> 0) % 7 < 3 ? -1 : 1; }

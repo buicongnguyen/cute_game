@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { BED_HEIGHT, HARVEST_TIME, RIPE_PX, STAGE_SCALE, VIEW_PITCH, bedFlip, bedScale, cropStage, harvestFlight, phonePxPerMetre, popScale, viewBounds } from '../src/crop-cards.ts';
+import { BED_HEIGHT, CROP_PRESENTATION_SCALE, HARVEST_TIME, RIPE_PX, SOIL_Y, STAGE_SCALE, VIEW_PITCH, bedFlip, bedScale, cropBadgeAnchor, cropStage, harvestFlight, phonePxPerMetre, popScale, viewBounds } from '../src/crop-cards.ts';
 import { GardenBeds } from '../src/garden-beds.ts';
 
 test('crop stages follow the reference: sprout below 50 %, young until ripe, ripe at 100 %', () => {
@@ -12,10 +12,11 @@ test('crop stages follow the reference: sprout below 50 %, young until ripe, rip
   assert.deepEqual(STAGE_SCALE, [0, 1.4, .55, 1.25]);
 });
 
-test('the atlas is baked along the camera pitch and ripe crops read about 40 px tall on a phone', () => {
+test('the crop update enlarges mature plants 25% with the atlas baked along the camera pitch', () => {
   assert.ok(Math.abs(VIEW_PITCH * 180 / Math.PI - 51.5) < .1);
   assert.ok(Math.abs(phonePxPerMetre() - 41.1) < .2);
   assert.ok(Math.abs(BED_HEIGHT * STAGE_SCALE[3] * phonePxPerMetre() - RIPE_PX) < 1e-9);
+  assert.equal(CROP_PRESENTATION_SCALE,1.25);assert.equal(RIPE_PX,50);
 });
 
 test('view bounds put the pivot at the front ground point and measure the on-screen height', () => {
@@ -35,13 +36,22 @@ test('sprout, young and ripe sizes grow in order and the harvest flight matches 
   const px = (scale: number, b: typeof unit) => scale * (b.top - b.bottom) * phonePxPerMetre();
   const sizes = [px(STAGE_SCALE[1] * bedScale(sprout, true), sprout), px(STAGE_SCALE[2] * bedScale(unit), unit), px(STAGE_SCALE[3] * bedScale(unit), unit)];
   assert.ok(sizes[0] < sizes[1] && sizes[1] < sizes[2], sizes.join(' < '));
-  assert.ok(Math.abs(sizes[2] - 40) < 1e-6);
+  assert.ok(Math.abs(sizes[2] - 50) < 1e-6);
+  assert.ok(Math.abs(sizes[0] - 40 / 1.25 * .32 * 1.4) < 1e-6,'sprout screen size is unchanged by the mature enlargement');
   assert.equal(HARVEST_TIME, .45);
   assert.equal(harvestFlight(0).lift, 0); assert.ok(Math.abs(harvestFlight(.5).lift - 1.6) < 1e-9); assert.ok(Math.abs(harvestFlight(1).lift) < 1e-9);
   assert.ok(Math.abs(harvestFlight(0).scale - 1.4) < 1e-9); assert.ok(Math.abs(harvestFlight(1).scale - .28) < 1e-9);
   assert.equal(popScale(0), 0); assert.equal(popScale(1), 1);
   const flips = Array.from({ length: 33 }, (_, i) => bedFlip(i));
   assert.ok(flips.includes(1) && flips.includes(-1));
+});
+
+test('ready badges remain above the enlarged silhouette even before model assets load',()=>{
+  for(const crop of ['carrot','apple','grape','pineapple']){
+    const a=cropBadgeAnchor(crop,.88),up=(a.y-SOIL_Y)*Math.cos(VIEW_PITCH)+a.back*Math.sin(VIEW_PITCH);
+    assert.ok(Number.isFinite(a.y)&&Number.isFinite(a.back));
+    assert.ok(up>RIPE_PX/phonePxPerMetre()*.88,'badge clears the ripe crop and idle bob');
+  }
 });
 
 test('garden beds draw as instances that receive but never cast shadows, rebuilt only on change', () => {

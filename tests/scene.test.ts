@@ -22,7 +22,7 @@ test('every common creature stands 0.55-0.8x the explorer, as in the reference (
 });
 
 test('bosses keep their size and still tower over the explorer',()=>{
-  for(const [type,def] of Object.entries(ENEMY_TYPES))if(def.boss){assert.equal(enemyScale(type,true),1.85);assert.ok(drawnHeight(type)>explorer,type);}
+  for(const [type,def] of Object.entries(ENEMY_TYPES))if(def.boss&&!def.titan){assert.equal(enemyScale(type,true),1.85);assert.ok(drawnHeight(type)>explorer,type);}
 });
 
 test('a spawned creature is drawn, picked and labelled at its smaller size',()=>{

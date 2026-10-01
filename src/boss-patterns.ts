@@ -1,8 +1,9 @@
+import {TITAN_WINDUPS,TITAN_MOVE_SETS,TITAN_COLORS,TITAN_CALLOUTS,isTitanSkill,titanTelegraphs,type TitanSkill} from './titan-patterns.ts';
 /** Public gameplay rules expressed as data and independently authored pure logic. */
-export type BossSkill='slam'|'quake'|'charge'|'barrage'|'rain'|'spin'|'eclipse';
+export type BossSkill=TitanSkill|'slam'|'quake'|'charge'|'barrage'|'rain'|'spin'|'eclipse';
 export interface BossPoint {x:number;z:number}
 export interface BossTelegraph extends BossPoint {r:number;delay:number}
-export const BOSS_WINDUPS:Record<BossSkill,number>={slam:1.1,quake:1.2,charge:1,barrage:.9,rain:1.3,spin:.7,eclipse:1.2};
+export const BOSS_WINDUPS:Record<BossSkill,number>={slam:1.1,quake:1.2,charge:1,barrage:.9,rain:1.3,spin:.7,eclipse:1.2,...TITAN_WINDUPS};
 export const BOSS_SKILLS:Record<string,readonly BossSkill[]>={
   bear:['slam','charge','quake'],treant:['slam','rain','barrage'],croc:['charge','spin','slam'],mushking:['rain','spin','slam'],
   cake:['barrage','rain','slam'],gingerbread:['charge','barrage','spin'],jellyqueen:['quake','barrage','rain'],
@@ -11,6 +12,7 @@ export const BOSS_SKILLS:Record<string,readonly BossSkill[]>={
   gorilla:['slam','charge','rain','quake'],leviathan:['barrage','rain','quake','charge'],phoenix:['barrage','rain','charge','spin'],
   shadowlord:['eclipse','rain','spin','barrage','quake'],
 };
+Object.assign(BOSS_SKILLS,TITAN_MOVE_SETS);
 export const ZONE_DIFFICULTY:Record<string,number>={home:0,forest:1,meadow:1,swamp:2,canyon:3,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,sky:5,cloud:5,dark:6,shadow:6};
 const DIFFICULTY_MULTIPLIERS=[1,1,1.7,2.6,3.6,4.8,6.2];
 export function creatureScale(difficulty:number,boss=false,worldBoss=false){
@@ -31,6 +33,7 @@ export function bossSkill(type:string,attackCount:number,hpFraction:number,skill
   return special?skills[Math.max(0,skillCount)%skills.length]:null;
 }
 export function bossTelegraphs(skill:BossSkill,from:BossPoint,target:BossPoint,phase=1,seed=1):BossTelegraph[]{
+  if(isTitanSkill(skill)){const s=from as BossPoint&{radius?:number;facing?:number};let n=seed;return titanTelegraphs(skill,{...from,radius:s.radius??4,facing:s.facing??0},target,[],()=>{n=(Math.imul(n,1664525)+1013904223)>>>0;return n/4294967296;});}
   const delay=BOSS_WINDUPS[skill],round=(n:number)=>Math.round(n*100)/100,point=(p:BossPoint,r:number)=>({x:round(p.x),z:round(p.z),r,delay});
   if(skill==='charge'){
     const distance=Math.hypot(target.x-from.x,target.z-from.z)||1,dx=(target.x-from.x)/distance,dz=(target.z-from.z)/distance;
@@ -48,9 +51,9 @@ export function bossTelegraphs(skill:BossSkill,from:BossPoint,target:BossPoint,p
  */
 export const TELEGRAPH_LOOK={base:.18,fill:.35,edge:.8,edgeWidth:.12};
 /** Disc colours, the reference's (showSkillWindup): meteor rain orange, the charge lane amber, every other skill red. */
-export const BOSS_TELEGRAPH_COLORS:Record<BossSkill,string>={slam:'#ff3b3b',quake:'#ff3b3b',charge:'#ffb13d',barrage:'#ff3b3b',rain:'#ff7a1f',spin:'#ff3b3b',eclipse:'#ff3b3b'};
+export const BOSS_TELEGRAPH_COLORS:Record<BossSkill,string>={slam:'#ff3b3b',quake:'#ff3b3b',charge:'#ffb13d',barrage:'#ff3b3b',rain:'#ff7a1f',spin:'#ff3b3b',eclipse:'#ff3b3b',...TITAN_COLORS};
 /** The callout floated above a boss at the start of a wind-up (one per skill, never a toast). */
-export const BOSS_CALLOUTS:Record<BossSkill,string>={slam:'⚠️ SLAM',quake:'⚠️ QUAKE',charge:'⚠️ CHARGE',barrage:'⚠️ BARRAGE',rain:'⚠️ METEOR RAIN',spin:'⚠️ SPIN',eclipse:'⚠️ ECLIPSE'};
+export const BOSS_CALLOUTS:Record<BossSkill,string>={slam:'⚠️ SLAM',quake:'⚠️ QUAKE',charge:'⚠️ CHARGE',barrage:'⚠️ BARRAGE',rain:'⚠️ METEOR RAIN',spin:'⚠️ SPIN',eclipse:'⚠️ ECLIPSE',...TITAN_CALLOUTS};
 /** Callouts show only to explorers this close to the boss (metres). */
 export const CALLOUT_RANGE=30;
 /**

@@ -4,7 +4,7 @@ A browser adventure built against the gameplay of Zoo Pet, with independently au
 
 ## Run
 
-Tested with Node.js 26.7. Use Node.js 22.18 or later for native TypeScript support in the server and tests.
+Use Node.js 24, selected by `.node-version`, for the server, tests, and Render deployment.
 
 ```sh
 npm install
@@ -23,7 +23,7 @@ npm test        # gameplay, worlds, assets, save migration and real server tests
 
 ## Play
 
-- Click or tap to walk; hold the ground to steer. Arrow keys and the touch direction pad also work. Scroll or pinch to zoom.
+- Click or tap to walk; hold the ground to steer. Arrow keys also work. Phones enable a draggable joystick by default, with skills on the opposite side. Settings can swap hands or restore tap controls. Scroll or pinch to zoom.
 - Click objects to approach and interact. **F** uses the nearest object. **I** opens the backpack, **J** the journal, **M** the map, and **Escape** closes a panel.
 - Stand near a creature and your explorer fights it automatically; click one to chase it down. **Space** attacks the nearest creature. **Q/W/E/R** use four skills: the whirlwind spins with arms out, the dash lunges through enemies, the ground slam leaps and crashes down with a shockwave, and the fourth is your weapon's or disguise's special.
 - Creatures shout "!" when they notice you, crouch and tremble before they strike, slide back when hit and pop into experience orbs when defeated. Critical hits briefly freeze the action and shake the camera. Bosses show a health bar at the top of the screen.
@@ -36,26 +36,33 @@ npm test        # gameplay, worlds, assets, save migration and real server tests
 
 ## Online play
 
-Open **Play together** to create a local account or sign in. Accounts use usernames and passwords; no email is required. Offline and online adventures have separate saves. Signing out restores the offline adventure you left behind.
+Open **Play together** to create an account on the current game server or sign in. Accounts use usernames and passwords; no email is required. Offline and online adventures have separate saves. Signing out restores the offline adventure you left behind.
 
 Online players share the wild areas, enemies, boss attacks and world events. Gardens are private; friends can visit and see planting or decorating updates. Use a party code for a private shared world. One browser tab per account is active at a time.
 
 For two-player testing on one computer, use separate browser profiles or a normal window and a private window, and create different accounts. This build was also exercised with separate localhost hostnames.
 
-The server stores account profiles in `data/accounts.json`, excluded from source control. Back up that file to retain online progress. Browser saves remain in that browser's local storage. Online saves use revisions, retry deduplication and a local pending copy to avoid overwriting newer progress during interrupted connections. Restarting the server ends sign-in sessions; sign in again to resume.
+For local development without `DATABASE_URL`, the server stores accounts in `data/accounts.json`, excluded from source control. Back up that file to retain local account progress. With `DATABASE_URL`, account credentials, profiles, save revisions, friends, and friend requests persist in PostgreSQL. The Render configuration requires Neon and fails startup if the database is missing or unavailable. Browser offline saves remain in that browser's local storage. Online actions use revisions and immutable request IDs; durable receipts make retries safe without uploading a client save. Identical retries return the original action result with the current canonical profile.
 
-The default server listens only on this computer. Internet play requires deployment of both the built game and the Node/WebSocket service, persistent storage and HTTPS. The solo edition is published on GitHub Pages; the multiplayer service has not been publicly deployed. Shared creature simulation uses an elected player host with migration; it is intended for cooperative play and is not a competitive anti-cheat economy.
+Restarting the server clears sign-in sessions, parties, chat history, and active rooms; players sign in again to resume their saved account progress. Run one server instance because live sessions and rooms are held in memory.
+
+The default server listens only on this computer. [`render.yaml`](render.yaml) and the [Render + Neon deployment guide](docs/multiplayer-deployment.md) prepare one free HTTPS service for the complete game, account API, and WebSockets. Automatic code deploys are off, and the database connection is supplied privately in Render. The configuration does not create or deploy any remote resources by itself. When deployed, players open the new Render address; GitHub Pages remains the separate solo edition.
+
+Copy `.env.example` to `.env` for local database settings. `npm run db:check` checks the PostgreSQL connection; `npm run db:import -- --path "C:\path\accounts.json"` explicitly imports a legacy account file into an empty PostgreSQL destination. See the deployment guide before importing. Never put database credentials in a `VITE_*` variable.
+
+The server calculates online spending, rewards, combat damage, health and cooldowns. An elected browser host still supplies bounded enemy movement and visual snapshots; movement and fishing telemetry are not proof of honest human input. This remains cooperative multiplayer, not a complete anti-cheat guarantee.
 
 ## Included
 
-- 19 crops; nine starting beds, expandable to 33; rare seeds, cooking and timed food effects. Each fertilizer removes half the original growing time, so two applications ripen a newly planted crop.
-- An animal pen with up to 10 chickens and 10 cows after two expansions. Animals produce eggs or milk during a two-hour lifespan, then become collectible meat. Timers continue offline; feeding speeds production without changing lifespan. Cows and calves graze for roughly three times as long as they walk.
-- Six equipment slots, ten disguises with four skills each, 64 shop offers, 30 workshop recipes, two furnace recipes and 21 distinct placeable decorations.
+- 27 crops, including eight long-growing fruits; nine starting beds, expandable to 33; rare seeds, cooking and timed food effects. Each fertilizer removes half the original growing time, so two applications ripen a newly planted crop.
+- Up to 10 chickens, ducks, cows and pigs each, plus one permanent guard dog. Animals stockpile eggs, duck eggs, milk or truffles during a two-real-hour lifespan, then become meat. One game hour is 60 real seconds; production takes 120/180/240/360 seconds and continues offline. Species shelters store five products and shorten production to 70%. Cows graze three times as long as they walk.
+- Six equipment slots, ten disguises with four skills each, workshop and furnace crafting, placeable decorations, nine Titan hats and nine combat companions. Weapon forging reaches +15 with 30% success; failed attempts consume materials.
 - Nine full-size worlds, each with its own scenery mix, a three-row border and shaded ground; four home regions; a piloted starship flight with fuel, stardust, asteroid belts, planet discovery and landing; species-specific creatures, bosses, loot, ranged attacks and status effects.
 - Ice inertia, volcano warnings and tides, cave and furnace progression, special lava weather, toy trains and renewable gifts, jungle thorns and poison, ocean oxygen and turtles, cloud bounce routes and night-world light pillars.
-- 18 fish plus junk; water-specific catches, rare and huge fish, bait and collection records.
+- 18 fish plus junk; water-specific catches, bait, collection records and mysterious silhouettes that reveal supergiant fish or unusual items.
 - 29 story milestones and ongoing tasks, daily and weekly activities, achievements, monthly star pass, bounties, timed challenges and six collection groups.
-- Account saves, friends, visits, chat, private parties, shared creatures and environments, plus offline browser play and install/fullscreen support.
+- Account saves, friends, visits, chat, private parties, server-approved crop theft and guard dogs, shared loot with ten-second owner priority and thirty-second expiry, plus offline browser play and install/fullscreen support.
+- Nine Titan encounters, moving dinosaur giant attacks, planet-specific hazards and a home discovery sign showing explored worlds out of nine.
 - Preserved version-1 saves, colors and possessions. Earlier six-bed gardens receive three additional beds.
 
 The interface supports English and Vietnamese with original artwork. Choose a language on the welcome screen or in Settings; the preference stays on this device and does not change saved progress or player names. Vietnamese catalog terms follow the reference game where available, with translations for this game’s additional features. Each panel has its own colour band and icon, messages appear as short pills near the bottom of the screen, and on phones panels open as bottom sheets. Inventory and storage have no slot limit, so migration and reward collection do not discard possessions. These are intentional improvements. Physical-phone performance, browser installation behavior and long-session balancing still benefit from user play-testing.
@@ -74,7 +81,7 @@ Play the [solo browser edition](https://buicongnguyen.github.io/cute_game/). The
 npm run build:pages
 ```
 
-This creates only the playable static files in `dist/`, with the `/cute_game/` path prefix. It includes farming, fishing, combat, all worlds and progression, original runtime models, browser saves and offline installation. The Pages interface clearly identifies solo play. Accounts, friends, chat and shared worlds require the Node/WebSocket service and remain available with `npm run dev` or `npm start`; GitHub Pages cannot run that service.
+This creates only the playable static files in `dist/`, with the `/cute_game/` path prefix. It includes farming, fishing, combat, all worlds and progression, original runtime models, browser saves and offline installation. The Pages interface clearly identifies solo play. Accounts, friends, chat and shared worlds require the Node/WebSocket service and remain available with `npm run dev`, `npm start`, or the prepared [Render + Neon deployment](docs/multiplayer-deployment.md); GitHub Pages cannot run that service.
 
 The Pages workflow runs all tests before publishing `dist/` from `main`. Source files, editable Blender artwork and account data are not included in the website artifact. `VITE_BASE_PATH` can override the deployment directory; the normal build remains rooted at `/`.
 
@@ -87,10 +94,11 @@ Browser saves are local to each website address. The published site starts a sep
 - `src/environment-art.ts`, `decorations-art.ts`, `combat-view.ts`, `assets.ts`: original rendering and model integration.
 - `src/main.ts`, `online.ts`, `platform.ts`: interface, shared play and browser installation.
 - `src/fx.ts`, `sfx.ts`, `fishing-view.ts`, `graphics.ts`: pooled hit effects and floating numbers, synthesized sounds, in-world fishing, and adaptive graphics quality.
-- `server/`: HTTP/WebSocket account service, development launcher and offline build generator.
+- `server/`: HTTP/WebSocket account service, file/PostgreSQL persistence, database utilities, development launcher and offline build generator.
 - `tests/`: deterministic simulations and live HTTP/WebSocket integration tests.
 - `art/`: headless Blender generators for the props, scenery, crops, fish, the explorer and every wearable item, weapon, pet, disguise and material icon, plus their contract, previews, Unity FBX exports and the asset guide (`art/ASSET_GUIDE.md`).
 - `src/style.css`: interface design tokens and all HUD, panel, message and label styles.
-- `PARITY_REVIEW.md`: detailed coverage, validation and remaining evaluation limits.
+- `docs/reference-update-plan-2026-10-02.md`: current update implementation, bilingual reference Help, deliberate differences and remaining hosted/device acceptance.
+- `PARITY_REVIEW.md`: earlier coverage and evaluation history.
 
 The earlier `ANALYSIS.md`, `REVIEW.md`, `EVALUATION.md` and `MULTIPLAYER_ASSESSMENT.md` record the initial evaluation and engine decision. Their old feature-gap lists are superseded by this README and the current parity review. Unity was assessed for browser multiplayer; this implementation keeps the existing web engine.

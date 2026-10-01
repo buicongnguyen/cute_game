@@ -25,6 +25,8 @@ export interface Drop {
   resting: boolean;
   /** A thrown item cannot be re-collected by its thrower until they walk 3.6 m away. */
   selfLock: boolean;
+  /** Server ownership priority stays locked independently of thrower walk-away range. */
+  pickupLocked?: boolean;
   /** Online only: the killer's id. TODO(online): owner-first 10 s lock lives behind the network hooks. */
   owner?: string;
 }
@@ -91,7 +93,7 @@ export class DropManager {
       } else d.y = d.ground + DROP.rest + Math.sin(this.time * DROP.bobRate + d.phase) * DROP.bob;
       let dist = Math.hypot(hero.x - d.x, hero.z - d.z);
       if (d.selfLock && dist > DROP.selfLockRange) d.selfLock = false;
-      if (alive && d.age > DROP.magnetDelay && !d.selfLock && dist < radius) {
+      if (alive && d.age > DROP.magnetDelay && !d.selfLock && !d.pickupLocked && dist < radius) {
         if (!canAdd(d.item, d.count)) {
           if (dist < DROP.fullWarnRange && this.fullWarnT <= 0) { this.fullWarnT = DROP.fullWarnEvery; events.full.push(d); }
         } else {

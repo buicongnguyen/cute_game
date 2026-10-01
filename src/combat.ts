@@ -10,6 +10,10 @@ export interface CombatHost {
   move(x: number, z: number): void; hit(target: CombatTarget, hit: CombatHit): void;
   effect(effect: CombatEffect): void; clearShot?(from: CombatPoint, to: CombatPoint): boolean;
   heal?(fraction: number): void;
+  /** Online execution is resolved by the authority; healing is awarded only on its confirmation. */
+  execute?(target:CombatTarget,healFraction:number):void;
+  moving?():boolean;
+  pet?():{x:number;z:number;dmg:number;cd:number;shot?:string}|null;
   status?(target:CombatTarget,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt',duration:number):void;
   moveTarget?(target:CombatTarget,x:number,z:number):void;
 }
@@ -46,15 +50,18 @@ export class CombatSimulation {
   readonly statuses: Record<string,number>={};
   readonly marked=new Map<string,number>();
   private host:CombatHost; private random:()=>number; private time=0; private serial=0; private combo=0;
+  private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;
   private jobs:Scheduled[]=[]; private action:{kind:'dash'|'slam';until:number;started:number;direction:CombatPoint;speed:number;multiplier:number;hit:Set<string>}|null=null;
   constructor(host:CombatHost,random:()=>number=Math.random){this.host=host;this.random=random;}
+  get visualScale(){return this.statuses.giant>0?2:1;}
+  get defenseBonus(){return this.statuses.giant>0?20:0;}
   get locksMovement(){return !!this.action;}
   /** Ground slam: a fast leap that snaps down onto the target when the shockwave lands at 0.42 s. */
   get airborne(){if(this.action?.kind!=='slam')return 0;const t=(this.time-this.action.started)/.42;return t<1?Math.sin(t*Math.PI*.85)*2.6:0;}
   /** The movement skill in progress and its elapsed time, for the explorer's pose. */
   get pose(){return this.action?{kind:this.action.kind,t:this.time-this.action.started}:null;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0;}
-  reset(){this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing()){this.host.effect({...point,kind,radius,color,facing});}
@@ -69,9 +76,9 @@ export class CombatSimulation {
     const lifesteal=(stats.lifesteal??0)+(this.statuses.lifesteal>0?.4:0);
     if(lifesteal>0)this.host.heal?.(amount*lifesteal/(stats.maxHp??100));
   }
-  private area(point:CombatPoint,radius:number,multiplier:number,stun=0,lift=0,color='#e5f6ff'){
+  private area(point:CombatPoint,radius:number,multiplier:number,stun=0,lift=0,color='#e5f6ff',knock=1.2){
     this.emit('ring',point,radius,color);
-    for(const target of this.host.targets())if(target.hp>0&&Math.hypot(target.x-point.x,target.z-point.z)<=radius+target.radius)this.damage(target,multiplier,stun,lift,1.2);
+    for(const target of this.host.targets())if(target.hp>0&&Math.hypot(target.x-point.x,target.z-point.z)<=radius+target.radius)this.damage(target,multiplier,stun,lift,knock);
   }
   private arc(radius:number,multiplier:number,threshold:number,target?:CombatTarget,knock=1.2){
     const p=this.host.position(),d=direction(this.host.facing());this.emit('arc',p,radius,this.host.weapon().fx??'#fff4c8');
@@ -151,11 +158,14 @@ export class CombatSimulation {
     else if(effect==='stealth'||effect==='bats'){this.statuses.stealth=effect==='bats'?0:5;this.statuses.bats=effect==='bats'?2.5:0;if(effect==='bats')this.statuses.shield=2.5;this.emit('ring',p,2,'#c0ace8');}
     else if(effect==='teleport'){this.host.move(d.x*8,d.z*8);this.emit('impact',this.host.position(),2,'#c6adff');}
     else if(effect==='backstab'){const t=this.nearest(12);if(!t)return false;this.host.move(t.x-p.x-d.x*1.2,t.z-p.z-d.z*1.2);this.damage(t,3,1);this.emit('arc',t,2,'#f9f0ce');}
-    else if(effect==='giant'){this.statuses.giant=10;for(let i=0;i<20;i++)this.later(i*.5,()=>this.area(this.host.position(),2.8,.35,.2,0,'#d2ac76'));}
+    else if(effect==='giant'){this.statuses.giant=10;this.giantStep=0;this.lastStep={...p};this.emit('ring',p,2.5,'#c96a3a');}
     else if(effect==='tank'){this.statuses.tank=6;for(let i=0;i<24;i++)this.later(i*.25,()=>this.area(this.host.position(),2,1,.3,1,'#8fa8ad'));}
     else if(effect==='charge')this.dash(3,25,.45);
-    else if(effect==='tail')this.area(p,5,2,1,2,'#dfc09b');
-    else if(effect==='devour'){const t=this.nearest(3);if(!t)return false;if(!t.boss&&t.hp/(t.maxHp??t.hp)<.4){this.host.hit(t,{amount:t.hp,critical:false,stun:0,lift:0,knock:0,direction:d});this.host.heal?.(.25);}else this.damage(t,3.5,.5);this.emit('arc',p,3,'#d4e79a');}
+    else if(effect==='tail')this.area(p,3.6,1.8,0,0,'#5fbf5a',6);
+    else if(effect==='devour'){const t=this.nearest(3.2);if(!t)return false;if(!t.boss&&t.hp/(t.maxHp??t.hp)<.4){
+      if(this.host.execute)this.host.execute(t,.25);
+      else{this.host.hit(t,{amount:t.hp+1,critical:true,stun:0,lift:0,knock:0,direction:d});if(t.hp<=0)this.host.heal?.(.25);}
+    }else this.damage(t,3,0,0,1);this.emit('arc',p,2.4,'#d4e79a');}
     else if(effect==='roar'||effect==='smoke'||effect==='taunt'||effect==='sheep'||effect==='charm'){
       const t=this.nearest(12),center=(effect==='sheep'||effect==='charm')?(t??p):p,radius=effect==='sheep'?3:effect==='charm'?1:effect==='roar'?9:effect==='taunt'?12:5;
       for(const e of this.host.targets())if(e.hp>0&&Math.hypot(e.x-center.x,e.z-center.z)<radius+e.radius)this.host.status?.(e,effect==='roar'?'fear':effect==='smoke'?'blind':effect==='taunt'?'taunt':effect==='sheep'?'sheep':'charm',effect==='charm'?8:effect==='sheep'||effect==='taunt'?6:4);
@@ -183,7 +193,16 @@ export class CombatSimulation {
     return true;
   }
   update(dt:number,active=true){
-    if(!active)return;this.time+=dt;
+    if(!active||!Number.isFinite(dt)||dt<=0)return;this.time+=dt;
+    const position=this.host.position(),moved=this.host.moving?.()??(!!this.lastStep&&Math.hypot(position.x-this.lastStep.x,position.z-this.lastStep.z)>dt);
+    if(this.statuses.giant>0){this.giantStep-=dt;if(moved&&this.giantStep<=0){this.giantStep=.45;this.area(position,2.5,.7,0,0,'#c96a3a',2);}}
+    this.lastStep={...position};
+    this.petCooldown=Math.max(0,this.petCooldown-dt);
+    const pet=this.host.pet?.();
+    if(pet&&Number.isFinite(pet.dmg)&&pet.dmg>0&&Number.isFinite(pet.cd)&&pet.cd>0&&this.petCooldown<=0){
+      const target=this.host.targets().filter(e=>e.hp>0&&Math.hypot(e.x-position.x,e.z-position.z)<7+e.radius).sort((a,b)=>Math.hypot(a.x-position.x,a.z-position.z)-Math.hypot(b.x-position.x,b.z-position.z))[0];
+      if(target){const angle=Math.atan2(target.x-pet.x,target.z-pet.z);this.shoot(pet.shot??'fire',angle,pet.dmg,9,{x:pet.x,z:pet.z});this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot??'fire'),angle);}
+    }
     for(const key of Object.keys(this.statuses))this.statuses[key]=Math.max(0,this.statuses[key]-dt);
     for(const[id,time]of this.marked){if(time<=dt)this.marked.delete(id);else this.marked.set(id,time-dt);}
     const due=this.jobs.filter(job=>job.at<=this.time);this.jobs=this.jobs.filter(job=>job.at>this.time);for(const job of due)job.run();

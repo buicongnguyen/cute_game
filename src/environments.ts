@@ -109,6 +109,7 @@ export class EnvironmentSimulation {
   lightning:LightningState={wait:6,sequence:0,bolts:[]};
   nestLevel=-.9;dragonPhase=0;
   lastSafe:Point={x:0,z:3.6};flight:null|{from:Point;to:Point;t:number;duration:number;height:number;fall?:boolean}=null;
+  private stayPad:Point|null=null;
   private timers=new Map<string,number>();private warnings=new Map<string,string>();
   layout:EnvironmentLayout;
   constructor(layout:EnvironmentLayout){this.layout=layout;}
@@ -120,13 +121,14 @@ export class EnvironmentSimulation {
   addFireRain(point:Point,id:string,delay=1.1){if(terrainHeight(this.layout,point)>.9||this.lavaAt(point)||this.fireRain.some(p=>p.id===id))return false;this.fireRain.push({...point,id,remaining:delay,duration:delay});return true;}
   get ventPeriod(){return lavaEvent(this.time).id==='eruption'?50:140;}
   lightPillar(index:number){this.lamps.set(index,this.time+150);}
-  inLight(point:Point){return this.layout.lamps.some(l=>(this.lamps.get(l.id)??0)>this.time&&length(l,point)<l.r);}
+  lampLit(id:number){return this.time>=this.eclipseUntil&&(this.lamps.get(id)??0)>this.time;}
+  inLight(point:Point){return this.layout.lamps.some(l=>this.lampLit(l.id)&&length(l,point)<l.r);}
   revealed(point:Point,player:Point,radius=3.6){return length(point,player)<(this.time<this.eclipseUntil?1.6:radius)+.5||this.inLight(point)||this.layout.flowers.some(p=>length(p,point)<p.r);}
-  launch(from:Point,to:Point){const distance=length(from,to);this.flight={from:{...from},to:{...to},t:0,duration:Math.min(2.2,Math.max(.9,distance/14)),height:3+distance*.15};}
+  launch(from:Point,to:Point){this.stayPad={...to};const distance=length(from,to);this.flight={from:{...from},to:{...to},t:0,duration:Math.min(2.2,Math.max(.9,distance/14)),height:3+distance*.15};}
   dynamicObstacles():Obstacle[]{
     return this.layout.thorns.flatMap(w=>thornRaised(this.time,w.phase)?[-3,-1.5,0,1.5,3].map(t=>({x:w.x+Math.cos(w.angle)*t,z:w.z+Math.sin(w.angle)*t,r:.75})):[]);
   }
-  enemyLightObstacles():Obstacle[]{return this.layout.lamps.filter(l=>(this.lamps.get(l.id)??0)>this.time).map(l=>({x:l.x,z:l.z,r:l.r}));}
+  enemyLightObstacles():Obstacle[]{return this.layout.lamps.filter(l=>this.lampLit(l.id)).map(l=>({x:l.x,z:l.z,r:l.r}));}
   private tick(key:string,period:number,dt:number){const remaining=(this.timers.get(key)??0)-dt;if(remaining<=0){this.timers.set(key,period);return true;}this.timers.set(key,remaining);return false;}
   private warning(key:string,value:string,message:string,events:EnvironmentEvent[]){if(this.warnings.get(key)!==value){this.warnings.set(key,value);if(value==='warning')events.push({kind:key,message:t(message)});}}
   step(dt:number,player:Point&{y?:number},input:Point,traits:EnvironmentTraits,enemies:EnvironmentActor[]):EnvironmentStep{
@@ -141,6 +143,10 @@ export class EnvironmentSimulation {
       this.velocity.x+=(input.x*speed-this.velocity.x)*amount;this.velocity.z+=(input.z*speed-this.velocity.z)*amount;
       out.motion={x:this.velocity.x*dt,z:this.velocity.z*dt};
     }else{this.velocity={x:input.x*speed,z:input.z*speed};out.motion={x:this.velocity.x*dt,z:this.velocity.z*dt};}
+    if(this.layout.planet==='cloud'&&!this.flight&&!traits.flying){
+      if(this.stayPad&&length(player,this.stayPad)>1.5)this.stayPad=null;
+      if(!this.stayPad)for(const link of this.layout.links){const from=length(player,link.a)<1.1?link.a:length(player,link.b)<1.1?link.b:null;if(from){this.launch(player,from===link.a?link.b:link.a);break;}}
+    }
     if(this.flight){
       const flight=this.flight;flight.t+=dt;const progress=Math.min(1,flight.t/flight.duration);out.airborne=true;out.motion={x:0,z:0};
       if(flight.fall){out.relocate={x:flight.from.x,z:flight.from.z,y:-22*progress*progress};if(progress===1){out.relocate={...this.lastSafe,y:0};if(!traits.featherFall)out.damage+=traits.maxHp*.12;out.events.push({kind:'fall',message:t(traits.featherFall?'Your cloud gear carries you safely back.':'You fell! Returned to the last safe platform.')});}}
@@ -164,7 +170,7 @@ export class EnvironmentSimulation {
           if(length(player,vent)<vent.r&&height<.9&&!traits.flying)out.damage+=traits.maxHp*.14*resistance;
           for(const e of enemies)if(e.hp>0&&length(e,vent)<vent.r&&terrainHeight(this.layout,e)<.9)out.enemyHits.push({id:e.id,amount:e.maxHp*(e.boss?.03:.14)});
         }
-        if(phase==='eruption'&&this.tick('rain-'+vent.id,.3,dt)){
+        if(this.authoritative&&phase==='eruption'&&this.tick('rain-'+vent.id,.3,dt)){
           const sequence=Math.floor(this.time/.3),random=rng(sequence*9743+vent.id*1351),angle=random()*Math.PI*2,distance=3+random()*11,p={x:vent.x+Math.cos(angle)*distance,z:vent.z+Math.sin(angle)*distance};
           if(terrainHeight(this.layout,p)<.9&&terrainHeight(this.layout,p)>tideHeight(this.time))this.fireRain.push({...p,id:vent.id+':'+sequence,remaining:.8,duration:.8});
         }

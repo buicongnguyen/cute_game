@@ -34,7 +34,7 @@ function fixture(...items) {
   const ctx = vm.createContext({
     M, ContextGearSelection, FishingSimulation, FishingInput, planCast, selectCatch, catchWeight,
     BASE_SKILLS, SPECIALS, fightNear, recordEvent: M.recordEvent,
-    state, gearState: state, gearPlanet: state.planet, gearWater: false, combatGearUntil: 0,
+    state, gearState: state, gearPlanet: state.planet, gearWater: false, combatGearUntil: 0,actionHandler:null,
     contextGear: new ContextGearSelection(), started: true, visiting: null, blocked: false,
     document: { hidden: false }, now: 1000, performance: { now: () => ctx.now },
     fishGame: null, fishPond: null, fishingWater: 'home', lastCast: null, recastUntil: 0,
@@ -46,6 +46,7 @@ function fixture(...items) {
       refreshPlayer: () => { calls.refresh++; }, playerAttack() {},
     },
     fishingView: {
+      mysteryNearCast:()=>null,
       approachDistance: () => 2,
       begin: (...args) => calls.casts.push(args),
       cancel: () => { calls.cancel++; },
@@ -129,7 +130,7 @@ test('casting uses the best bag rod directly, including while wearing a combat d
   f.ctx.fish();
   assert.equal(f.state.gear.weapon, 'rod_gold'); assert.equal(f.state.gear.disguise, disguise);
   assert.equal(f.ctx.fishGame.simulation.phase, 'cast');
-  assert.equal(f.ctx.fishGame.simulation.biteWindow, .6 + M.ITEMS.rod_gold.weapon.quality * .4);
+  assert.equal(f.ctx.fishGame.simulation.biteWindow, 1.4 + M.ITEMS.rod_gold.weapon.quality * .6);
   assert.equal(f.ctx.fishGame.input.ready, true); assert.equal(f.calls.casts.length, 1);
   assert.equal(f.calls.dialogs.length, 0); assert.equal(f.calls.refresh, 1); assert.equal(f.calls.save, 1);
   for (let i = 0; i < 120; i++) f.ctx.updateContextWeapon();

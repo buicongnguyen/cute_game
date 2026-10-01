@@ -3,7 +3,7 @@
  * seedable simulation. The view (fishing-view.ts) only draws what this decides.
  *
  * Phases: cast (0.5 s) → wait → approach (a fish swims to the bobber) → nibble (1–4 taps)
- * → bite (0.6 + 0.4 × rod quality s) → hooked (hold to reel against tension) → caught | escaped.
+ * → bite (1.4 + 0.6 × rod quality s) → hooked (hold to reel against tension) → caught | escaped.
  */
 export type FishingPhase = 'cast'|'wait'|'approach'|'nibble'|'bite'|'hooked'|'caught'|'escaped';
 export interface Point { x:number; z:number }
@@ -16,13 +16,13 @@ export interface FishingOptions<P extends FishPick=FishPick> {
   quality:number;
   /**
    * A steady rod (rod_steady): the line never snaps at any tension, heavy fish barely slow the reel, and the bite
-   * window is 0.4 s longer. Still interactive: you must hook at the bite, and 4 s of slack still loses the fish.
+   * window is 0.4 s longer. Still interactive: you must hook at the bite, and 7 s of slack still loses the fish.
    */
   steady?:boolean;
   /** True while the bag holds a worm. */
   bait:boolean;
   /** Picks the fish that comes, given the rare-fish bonus of bait, rod and luck. */
-  choose:(bonus:number)=>P;
+  choose:(bonus:number)=>P|null;
   /** Player luck, added to the bonus. */
   luck?:number;
   /** How far the chosen fish starts from the bobber (the view knows where its fish swim). */
@@ -116,7 +116,7 @@ export class FishingSimulation<P extends FishPick=FishPick> {
   get usingBait(){return this.bait;}
   /** Wait for the next fish (nextWait @863574): 2–5.5 s, ÷ 1.7 with a worm, ÷ (1 + quality / 2). */
   nextWait(){return this.between(2,5.5)/(this.bait?1.7:1)/(1+this.quality*.5);}
-  get biteWindow(){return .6+this.quality*.4+(this.steady?STEADY.bite:0);}
+  get biteWindow(){return 1.4+this.quality*.6+(this.steady?STEADY.bite:0);}
   private useBait(){if(this.bait)this.baitUsed++;}
   private toWait(extra=0){this.phase='wait';this.t=0;this.waitT=this.nextWait()+extra;this.pick=null;this.fishDistance=0;this.dart=0;}
 
@@ -159,7 +159,7 @@ export class FishingSimulation<P extends FishPick=FishPick> {
           if(this.dart<=0){
             this.dart=0;
             if(--this.nibblesLeft>0)this.nibT=this.between(.5,1.6);
-            else if(this.random()<.8){this.phase='bite';this.t=0;this.biteT=this.biteWindow;}
+            else if(this.random()<.95){this.phase='bite';this.t=0;this.biteT=this.biteWindow;}
             else{this.fled++;this.toWait();this.reason='The fish lost interest.';}
           }
         }
@@ -175,34 +175,43 @@ export class FishingSimulation<P extends FishPick=FishPick> {
   /** attract(): pick the fish by the bait/rod/luck bonus and send it toward the bobber for 1–4 nibbles. */
   private attract(){
     const pick=this.options.choose(catchBonus(this.bait,this.quality,this.options.luck??0));
+    if(!pick){this.waitT=.1;return;}
     this.pick=pick;this.approaches++;this.phase='approach';this.t=0;
     this.fishDistance=Math.max(.55,this.options.approachFrom?.(pick)??2.5);
     this.nibblesLeft=1+Math.floor(this.random()*4);this.dart=0;
   }
 
-  /** updateReel @871900: hold to gain line, let go during surges; too much tension snaps it, 4 s of slack loses the fish. */
+  /** Reference updateReel: hold to gain line; tension snaps it, seven seconds of slack loses it. */
   private reel(dt:number){
     const q=this.quality,p=this.steady?this.power*STEADY.heavy:this.power;
     this.surgeCd-=dt;
     if(this.surge>0)this.surge-=dt;else if(this.surgeCd<=0){this.surge=this.between(.4,.8+p);this.surgeCd=this.between(.8,2.2)*(1.2-p*.5);}
     const surging=this.surge>0;
     if(this.holding){
-      this.progress+=dt*.2*(1.15-p*.55)*(surging?(this.steady?STEADY.surge:.2):1)*(this.steady?STEADY.reel:1);
-      this.tension+=dt*(1.2-q*.45)*(.16+(surging?1.25*p+.25:.05));
-      if(!this.steady&&surging&&this.random()<dt*Math.max(0,p-q)*.25){this.snap();return;}
+      this.progress+=dt*.3*(1.15-p*.45)*(surging?(this.steady?STEADY.surge:.4):1)*(this.steady?STEADY.reel:1);
+      this.tension+=dt*(1.2-q*.45)*(.08+(surging?.6*p+.12:.02));
       this.slack=0;
-    }else{this.tension-=dt*.6;this.progress-=dt*.05*p*(surging?2.5:1);this.slack+=dt;}
+    }else{this.tension-=dt*.9;this.progress-=dt*.05*p*(surging?2.5:1);this.slack+=dt;}
     this.tension=Math.max(0,this.tension);this.progress=Math.max(0,this.progress);
     // A steady line flexes instead of snapping: tension stops just short of the break.
     if(this.steady)this.tension=Math.min(this.tension,STEADY.maxTension);
     else if(this.tension>=1){this.snap();return;}
-    if(this.slack>4){this.useBait();this.phase='escaped';this.reason='The line went slack and the fish slipped away.';return;}
+    if(this.slack>7){this.useBait();this.phase='escaped';this.reason='The line went slack and the fish slipped away.';return;}
     if(this.progress>=1){this.progress=1;this.useBait();this.phase='caught';this.reason='A lovely catch!';}
   }
   private snap(){this.tension=Math.max(this.tension,1);this.useBait();this.phase='escaped';this.reason='The line snapped. Let go of Reel when the fish surges.';}
 }
 
 export interface CatchCandidate { id:string; weight:number; min:number; max:number;junk?:boolean }
+export const MYSTERY_TREASURE_WEIGHTS:readonly (readonly [string,number])[]=[['starshard',3],['pearl',3],['amber',3],['moonstone',2],['thunderstone',2],['seed_star',2],['crown',1],['fish_golden',1],['deco_piratechest',1]];
+export const MYSTERY={chance:.6,reach:3.5,firstMin:4,firstMax:20,respawnMin:45,respawnMax:90} as const;
+/** Resolve only after landing the silhouette. Server actions use the same table with server-owned randomness. */
+export function resolveMysteryCatch(fish:Pick<CatchCandidate,'id'|'max'>,random:()=>number=Math.random){
+  if(random()<MYSTERY.chance)return {id:fish.id,size:Math.round(fish.max*(1.6+random())),huge:true,supergiant:true,mystery:true};
+  let roll=random()*MYSTERY_TREASURE_WEIGHTS.reduce((sum,[,weight])=>sum+weight,0);
+  const id=MYSTERY_TREASURE_WEIGHTS.find(([,weight])=>(roll-=weight)<=0)?.[0]??'starshard';
+  return {id,size:0,huge:false,supergiant:false,mystery:true};
+}
 export function selectCatch(pool:CatchCandidate[],random:()=>number=Math.random){
   const available=pool.filter(f=>f.weight>0);if(!available.length)throw new Error('No fish available in this water');
   let roll=random()*available.reduce((sum,f)=>sum+f.weight,0);let selected=available[available.length-1];

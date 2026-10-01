@@ -24,6 +24,8 @@ for (const [name, view] of Object.entries(VIEWS)) {
     const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
     try {
       const page = await (await browser.newContext(view)).newPage();
+      // Isolate layout measurements from development hot reload while other modules are rebuilt.
+      await page.routeWebSocket(socketUrl=>new URL(socketUrl).searchParams.has('token'),()=>{});
       await page.goto(url, { waitUntil: 'load', timeout: 60000 });
       await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
       await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
@@ -34,6 +36,8 @@ for (const [name, view] of Object.entries(VIEWS)) {
       // A boss fight with a regular creature selected: both the boss bar and the target frame show.
       await page.evaluate(() => {
         const w = window.__zoo.world, s = window.__zoo.state;
+        // This is a layout fixture; new Titans must not kill its level-one explorer before measuring.
+        w.onDamage = () => {};
         const boss = w.enemies.filter(e => e.boss && e.hp > 0).sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0];
         w.position.set(boss.x, 0, boss.z + 7); w.cameraTarget.copy(w.position); boss.hp = boss.maxHp * .8;
         const other = w.enemies.filter(e => !e.boss && e.hp > 0).sort((a, b) => Math.hypot(a.x - boss.x, a.z - boss.z) - Math.hypot(b.x - boss.x, b.z - boss.z))[0];
@@ -43,12 +47,13 @@ for (const [name, view] of Object.entries(VIEWS)) {
       const r = await page.evaluate(() => {
         const box = el => { const b = el.getBoundingClientRect(); return b.width && b.height && getComputedStyle(el).visibility !== 'hidden' ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
         const all = sel => [...document.querySelectorAll(sel)].filter(el => !el.closest('[hidden]')).map(box).filter(Boolean);
-        const panels = { player: all('.player-card'), buttons: all('.top-actions button'), minimap: all('.minimap'), trackers: all('.tracker-stack > :not([hidden])'), skills: all('.skill'), toasts: all('.toast'), prompt: all('#context-prompt button'), pad: all('#touch-controls button'), home: all('.home-button') };
+        const panels = { player: all('.player-card'), buttons: all('.top-actions button'), minimap: all('.minimap'), trackers: all('.tracker-stack > :not([hidden])'), skills: all('.skill'), toasts: all('.toast'), prompt: all('#context-prompt button'), pad: all('#touch-controls button'), joystick:all('#movement-joystick'), home: all('.home-button') };
         const W = innerWidth, H = innerHeight; let hits = 0, n = 0;
         for (let y = 4; y < H; y += 8) for (let x = 4; x < W; x += 8) { n++; const el = document.elementFromPoint(x, y); if (el && el.closest('#hud') && getComputedStyle(el).pointerEvents !== 'none') hits++; }
         return { boss: all('#boss-bar')[0] ?? null, target: all('#target-frame')[0] ?? null, panels, tappable: hits / n, W, H };
       });
-      assert.equal(r.panels.pad.length, 0, 'no movement pad by default: the reference is tap-to-move only (Settings can show it)');
+      assert.equal(r.panels.pad.length, 0, 'the old directional buttons are replaced by the optional joystick');
+      assert.equal(r.panels.joystick.length,view.hasTouch?1:0,'joystick starts enabled on touch-first devices only');
       assert.ok(r.boss, 'the boss bar shows'); assert.ok(r.target, 'the target frame shows');
       const overlap = (a, b) => a.l < b.r - .5 && b.l < a.r - .5 && a.t < b.b - .5 && b.t < a.b - .5;
       for (const [what, frame] of [['boss bar', r.boss], ['target frame', r.target]]) {
@@ -60,7 +65,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
       assert.ok(!overlap(r.target, mid), 'the target frame stays out of the middle of the screen');
       // Wave 3: every touch target is at least 44 x 44 px (invisible hit areas around 32-34 px visuals), which costs about 2 points
       // of tappable area over the reference's 11%; the painted HUD itself shrank (see hud-compact.css).
-      if (name.startsWith('landscape')) assert.ok(r.tappable <= .15, `tappable HUD ${(r.tappable * 100).toFixed(1)}% stays near 13% on a short screen`);
+      if (name.startsWith('landscape')) assert.ok(r.tappable <= .23, `tappable HUD ${(r.tappable * 100).toFixed(1)}% leaves most of the world clear with the requested default joystick`);
     } finally { await browser.close(); }
   });
 }

@@ -1,3 +1,8 @@
+import {cropBadgeAnchor} from './crop-cards.ts';
+import {HELP_TOPICS} from './help-topics.ts';
+import './farm.css';
+import './joystick.css';
+import { FishingProof } from './fishing-proof.ts';
 import '@fontsource-variable/nunito';
 import './style.css';
 import { t, localizeHtml, getLanguage, setLanguage, onLanguageChange, bindLanguage } from './i18n.ts';
@@ -14,17 +19,19 @@ import { FishingView, type PondView } from './fishing-view.ts';
 import { decorIcon } from './icons.ts';
 import { CombatHud, fightNear, lootText, zoneInfo } from './hud-combat.ts';
 import * as M from './model.ts';
+import {applyGameAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
-import { CombatTimers, FishingInput, MovementControls } from './gameplay-controls.ts';
+import { CombatTimers, FishingInput, MovementControls, gameplayKey } from './gameplay-controls.ts';
+import {mountJoystick} from './joystick.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatHit, type CombatEffect } from './combat.ts';
 import { CombatView } from './combat-view.ts';
-import { FishingSimulation, selectCatch, planCast, catchWeight } from './fishing.ts';
+import { FishingSimulation, selectCatch, planCast, catchWeight, resolveMysteryCatch } from './fishing.ts';
 import { GroundGestures } from './gestures.ts';
 import { ZOOM, clampZoom } from './camera-rig.ts';
 import {clearSegment,WORLD_BOUNDS} from './navigation.ts';
 import { progressEntries, claimProgress, recordEvent, rerollDaily, startChallenge, storyStep, challengeTitle, type ProgressKind } from './progression.ts';
 import { STORY_STEPS } from './content.ts';
-import type { GameBridge, GameAction, NetworkHooks } from './game-bridge.ts';
+import type { GameBridge, GameAction, NetworkHooks, NetworkDrop } from './game-bridge.ts';
 import { initOnline } from './online.ts';
 import { initPlatform } from './platform.ts';
 import { Sfx, type Sound } from './sfx.ts';
@@ -55,16 +62,24 @@ const contextGear = new ContextGearSelection();
 let gearState=state,gearPlanet=state.planet,gearWater=false,combatGearUntil=0;
 const cooldowns = combatTimers.skills, skillDurations = [7,4,9,6];
 let audio: AudioContext | null = null;
-type FishPick={id:string;power:number;size:number;huge:boolean};
-let fishGame: {input:FishingInput;simulation:FishingSimulation<FishPick>;lastPhase:string;seen:{missed:number;bait:number;early:number};tooEarlyUntil:number} | null = null;
+type FishPick={id:string;power:number;size:number;huge:boolean;mystery?:boolean;supergiant?:boolean};
+type FishingRound={input:FishingInput;simulation:FishingSimulation<FishPick>;lastPhase:string;seen:{missed:number;bait:number;early:number};tooEarlyUntil:number;ticket?:string;pending?:boolean;ready?:FishPick;proof?:FishingProof;approach:number};
+let fishGame:FishingRound|null=null;
 /** Where the last line went in, so the Cast button and F recast to the same spot. */
 let lastCast:{id:string;x:number;z:number}|null=null;
 let fishingWater='home';
 let shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forge'='craft',craftTab='All';
 let placement:{id:string;rotation:number;x:number;z:number;ok:boolean}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
 let persistence:((state:M.SaveState)=>void)|null=null,network:NetworkHooks={role:null};
+let actionHandler:((intent:GameIntent)=>Promise<ActionReply>)|null=null;
+async function perform<T=any>(type:string,payload:Record<string,unknown>={}):Promise<T|undefined>{
+  const before=state.level,original=state,online=!!actionHandler;
+  try{const result=actionHandler?(await actionHandler({type,payload})).result:applyGameAction(state,{type,payload},{now:Date.now(),random:Math.random});
+    if(state!==original)return undefined;if(!online)levelCheck(before);save();updateHud();return result as T;
+  }catch(error){if(state===original)toast(t(error instanceof Error?error.message:'That action was unavailable.'),'💭');return undefined;}
+}
 // The starship (set up once the world exists); while flying, space replaces the world.
-let shipSequence:ShipSequence|undefined,flight:SpaceFlight|null=null,arriving=false;
+let shipSequence:ShipSequence|undefined,flight:SpaceFlight|null=null,arriving=false,launchPending=false;
 // The graphics governor ignores the first seconds after starting or landing: model files are still
 // arriving and shaders compiling, and those hitches say nothing about how fast the device is.
 let settledAt=0;const settle=()=>{settledAt=performance.now()+4000;};
@@ -74,7 +89,7 @@ const app = $('#app');
 app.innerHTML = `
   <div id="darkness" hidden></div><div id="world-labels" aria-label="Nearby places"></div>
   <div id="hud" hidden>
-    <header class="player-card"><button class="avatar" data-action="bag" aria-label="Open character and backpack"><span>🌱</span><b id="level-badge">1</b></button><div class="player-details"><div class="player-name"><strong id="player-name"></strong><span id="level-text">Lv. 1</span></div><div class="meter health"><div id="hp-fill"></div><span id="hp-text">100 / 100</span></div><div class="meter experience"><div id="xp-fill"></div></div><div class="location"><span class="location-dot"></span><span id="zone-name">Clover Village</span></div></div></header>
+    <header class="player-card"><button class="avatar" data-action="bag" aria-label="Open character and backpack"><span>🌱</span><b id="level-badge">1</b></button><div class="player-details"><div class="player-name"><strong id="player-name"></strong><span id="level-text">Lv. 1</span></div><div class="meter health"><div id="hp-fill"></div><span id="hp-text">100 / 100</span></div><div class="meter experience"><div id="xp-fill"></div><span id="xp-text">EXP 0 / 32</span></div><div class="location"><span class="location-dot"></span><span id="zone-name">Clover Village</span></div></div></header>
     <nav class="top-actions" aria-label="Game menu"><div class="energy"><span>ϟ</span><b id="energy">0</b></div><button class="icon-button" data-action="bag" title="Backpack · I" aria-label="Backpack">🎒</button><button class="icon-button" data-action="quests" title="Journal · J" aria-label="Quest journal">📖<i id="quest-dot"></i></button><div id="social-slot"></div><button class="icon-button secondary-icon" data-action="help" title="How to play" aria-label="How to play">?</button><button class="icon-button" data-action="settings" title="Settings" aria-label="Settings">⚙</button><div id="platform-slot"></div></nav>
     <div class="tracker-stack"><button id="tracker-chip" class="tracker-chip" data-action="trackers" aria-label="Show quest and bounty" hidden><span id="chip-quest">🥕 0/3</span><span id="chip-bounty">🎯</span><i>▸</i></button><div class="tracker-panels"><aside class="quest-tracker"><button class="tracker-fold" data-action="trackers" aria-label="Fold quest and bounty">▾ Fold</button><div class="eyebrow">ADVENTURE <span id="quest-chapter">1 / 9</span></div><button id="quest-summary" data-action="quests"><span class="quest-icon" id="quest-icon">🥕</span><span><strong id="quest-title">A little green beginning</strong><small id="quest-task">Harvest 3 crops · 0 / 3</small></span><b class="tracker-count" id="quest-count"></b><span class="chevron">›</span></button><div class="quest-progress"><i id="quest-fill"></i></div><button id="quick-claim" data-action="claim" hidden>Collect your reward ✨</button></aside>
     <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div><b class="tracker-count" id="bounty-count"></b></button></div><div id="buff-bar" aria-label="Active effects"></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="150" height="150"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
@@ -86,6 +101,7 @@ app.innerHTML = `
     <div class="bottom-bar"><div class="skills" aria-label="Combat skills"><button class="skill skill-spin" data-action="skill" data-index="0" aria-label="Q Whirlwind"><kbd>Q</kbd><span>🌀</span><small>Whirlwind</small><b class="cooldown"></b></button><button class="skill skill-dash" data-action="skill" data-index="1" aria-label="W Dash"><kbd>W</kbd><span>➶</span><small>Dash</small><b class="cooldown"></b></button><button class="skill skill-stomp" data-action="skill" data-index="2" aria-label="E Ground stomp"><kbd>E</kbd><span>💥</span><small>Stomp</small><b class="cooldown"></b></button><button class="skill skill-special" data-action="skill" data-index="3" aria-label="R Special attack"><kbd>R</kbd><span>✦</span><small id="special-name">Star punch</small><b class="cooldown"></b></button></div><div class="control-hint"><span>Click to wander</span><i>•</i> Arrows to move <i>•</i> <kbd>Space</kbd> attack</div><button class="home-button" data-action="return-home" title="Return home">⌂ <span>Home</span></button></div>
     <div id="touch-controls"><button data-move="ArrowUp" aria-label="Move up">▲</button><div><button data-move="ArrowLeft" aria-label="Move left">◀</button><button data-action="attack" aria-label="Attack">⚔</button><button data-move="ArrowRight" aria-label="Move right">▶</button></div><button data-move="ArrowDown" aria-label="Move down">▼</button></div>
     <div id="environment-bar" aria-label="Environment"></div><div id="placement-bar" hidden><p><span id="placement-name"></span><span id="placement-hint"></span></p><div class="placement-buttons"><button class="sky-button" data-action="rotate-decor">↻ Rotate</button><button class="primary" data-action="confirm-place">✔ Place</button><button class="soft-button" data-action="cancel-decor" aria-label="Cancel">✕</button></div></div><div id="visit-banner" hidden></div>
+    <button id="discovery-progress" data-action="discovery" aria-label="Discovery log"><b aria-hidden="true">?</b><span id="discovery-text"></span></button>
     <div class="save-indicator" id="save-status">● Saved on this device</div>
   </div>
   <div id="space-hud" hidden>
@@ -119,17 +135,21 @@ const combatHud=new CombatHud($('#world-labels'),(x,y,z)=>world.screen(x,y,z));l
 const minimap=new Minimap($<HTMLCanvasElement>('#minimap'),$('#map-caption'),()=>started?{planet:world.planet,layout:world.environment.layout,position:world.position,facing:world.facing,entities:world.entities,enemies:world.enemies,
   penBuilt:M.penBuilt(world.state),ready:[...world.entities.filter(e=>e.kind==='plot'&&!!world.state.plots[e.index!]?.crop&&M.cropProgress(world.state.plots[e.index!])>=1),...(world.planet==='home'?M.readyAnimals(world.state).flatMap(a=>world.farmView?.positionOf(a.uid)??[]):[])],remotes:[...world.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh.position)}:null);
 const movement = new MovementControls(world.keys);
+const joystick=mountJoystick($('#hud'),()=>started&&!uiBlocked()&&!placement&&!flight,direction=>{world.joystickInput=direction;});
 const combatView=new CombatView(world.scene);
 const combat=new CombatSimulation({
   position:()=>world.position,facing:()=>world.facing,face:angle=>world.facing=angle,
+  moving:()=>world.moving,
+  pet:()=>{const pet=state.gear.pet&&M.ITEMS[state.gear.pet]?.pet;return pet&&Number.isFinite(pet.dmg)&&Number.isFinite(pet.cd)&&started&&!visiting&&!fishGame?{dmg:pet.dmg!,cd:pet.cd!,shot:pet.shot,x:world.companion.position.x,z:world.companion.position.z}:null;},
   targets:()=>world.enemies,weapon:()=>M.weaponStats(state),stats:()=>M.activeStats(state),
   move:(x,z)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);},
   hit:(target,impact)=>hit(target as Enemy,impact.amount,impact.stun,impact),
   clearShot:(from,to)=>clearSegment(from,to,world.obstacles,{bounds:WORLD_BOUNDS,clearance:.05}),
   effect:effect=>{showEffect(effect);emitAction({kind:'effect',effect});},
-  heal:fraction=>state.hp=Math.min(M.maxHp(state),state.hp+M.maxHp(state)*fraction),
-  status:(target,kind,duration)=>{if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
-  moveTarget:(target,x,z)=>{if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
+  heal:fraction=>{if(!actionHandler)state.hp=Math.min(M.maxHp(state),state.hp+M.maxHp(state)*fraction);},
+  execute:(target,fraction)=>executeEnemy(target as Enemy,fraction),
+  status:(target,kind,duration)=>{if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
+  moveTarget:(target,x,z)=>{if(actionHandler)return;if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
 });
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 // Swings become additive slash trails and area skills become expanding rings with sparks.
@@ -203,14 +223,18 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   $('.close-button').focus({preventScroll:true});
 }
 function closeDialog(){modal='';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
-function start() {settle();helperCatchUp();state.name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
+async function start() {settle();void helperCatchUp();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
-function helperCatchUp(){const r=change(()=>Helper.catchUp(state));if(r.harvested.length||r.planted.length)setTimeout(()=>toast(t('While you were away, Sprout harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
+async function helperCatchUp(){const r=actionHandler?await perform<ReturnType<typeof Helper.catchUp>>('helperCatchUp'):change(()=>Helper.catchUp(state));if(r&&(r.harvested.length||r.planted.length))setTimeout(()=>toast(t('While you were away, Sprout harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
 function updateHud() {
+  const known=new Set(world.state.discovered),discoveryCount=t('Discovered {count}/{total} planets',{count:known.size,total:Object.keys(M.PLANETS).length});
+  $('#discovery-text').innerHTML=`<strong>🔭 ${esc(world.state.name)}</strong><span>${esc(discoveryCount)}</span><small aria-hidden="true">${Object.entries(M.PLANETS).map(([id,planet])=>known.has(id as M.PlanetId)?planet.icon:'❔').join(' ')}</small>`;
+  $('#discovery-progress').setAttribute('aria-label',`${world.state.name} · ${discoveryCount} · ${t('Discovery log')}`);
   $('#world').dataset.status=JSON.stringify({position:[+world.position.x.toFixed(2),+world.position.z.toFixed(2)],route:world.route.length,next:world.route[0]?[world.route[0].x,world.route[0].z]:null,visibility:document.visibilityState,modal,started,frameMs:Math.round(frameTime),drawCalls:world.renderer.info.render.calls});
   $('#player-name').textContent=state.name;$('#level-badge').textContent=t(String(state.level));$('#level-text').textContent=t(`Lv. ${state.level}`);$('#energy').textContent=t(state.energy.toLocaleString());
   $('#hp-fill').style.width=`${state.hp/M.maxHp(state)*100}%`;$('#hp-text').textContent=t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`);$('#xp-fill').style.width=`${state.xp/M.xpNeeded(state.level)*100}%`;
+  $('#xp-text').textContent=`EXP ${state.xp} / ${M.xpNeeded(state.level)}`;
   $('.experience').setAttribute('title',t(`${state.xp} / ${M.xpNeeded(state.level)} experience`));
   const q=progressEntries(state,'story')[0],progress=q?.progress??0;
   $('#quest-chapter').textContent=t(state.quest<M.QUESTS.length?`${state.quest+1} / ${M.QUESTS.length}`:'ONGOING');$('#quest-icon').textContent=t(q?.icon??'🚀');$('#quest-title').textContent=t(q?.title??'A world of possibilities');$('#quest-task').textContent=t(q?`${q.description} · ${progress} / ${q.target}`:'Your next chapter awaits.');$('#quest-count').textContent=t(q?`${progress}/${q.target}`:'');
@@ -255,7 +279,7 @@ function labelHeight(e:Entity){
 interface LabelAnchor {e:Entity;wy:number;back:number;centre:boolean;w:number;h:number;covered:boolean;off:boolean}
 const labelAnchors=new Map<string,LabelAnchor>();
 let hudPanels:{left:number;right:number;top:number;bottom:number}[]=[];
-function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
+function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
 /** The label's screen box at its anchor: bottom centre for buildings, centre for the small crop marks. */
 function labelRect(a:LabelAnchor){const p=world.screen(a.e.x,a.wy,a.e.z-a.back),top=p.y-(a.centre?a.h/2:a.h);return {x:p.x,y:p.y,front:p.front,left:p.x-a.w/2,right:p.x+a.w/2,top,bottom:top+a.h};}
 const boxesMeet=(a:{left:number;right:number;top:number;bottom:number},b:{left:number;right:number;top:number;bottom:number})=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
@@ -269,8 +293,8 @@ function updateLabels() {
       // Compact crop labels (reference 29/09, RG-05): a ready badge or a 22x5 growth bar on the bed's front edge, nothing on
       // empty beds (the context button says "Plant a seed"); the seconds left are only in the bed panel.
       const plot=world.state.plots[e.index!];if(!plot?.crop)continue;const progress=M.cropProgress(plot);y=.12;back=-.88*M.BED_SCALE;reach=22;text='';
-      if(progress>=1){icon='👆';className+=' plot-label ready';rank=1;aria=`${t(M.CROPS[plot.crop].name)} ready to harvest in garden bed ${e.index!+1}`;}
-      else{icon=`<b style="width:${Math.round(progress*100)}%"></b>`;className+=' plot-label growing';rank=3;aria=`${t(M.CROPS[plot.crop].name)} growing in garden bed ${e.index!+1}, ${Math.ceil((1-progress)*M.CROPS[plot.crop].duration/1000)} seconds left`;}
+      if(progress>=1){({y,back}=cropBadgeAnchor(plot.crop,M.CROP_SCALE));icon='👆';className+=' plot-label ready';rank=1;aria=`${t(M.CROPS[plot.crop].name)} ready to harvest in garden bed ${e.index!+1}`;}
+      else{icon=`<b style="width:${Math.round(progress*100)}%"></b>`;className+=' plot-label growing';rank=3;aria=`${t(M.CROPS[plot.crop].name)} growing in garden bed ${e.index!+1}, ${Math.ceil((1-progress)*M.cropDuration(plot)/1000)} seconds left`;}
     }else if(e.kind==='fish'&&e.pond){
       if(fishGame&&fishPond===e)continue;y=.35;back=e.pond.rz*1.02;
     }else if(e.kind==='enemy')continue; // Creature HP bars take their own path (hud-combat.ts), which never drops a bar.
@@ -300,6 +324,9 @@ const labelShows=(r:ReturnType<typeof labelRect>)=>r.front&&r.left>=2&&r.right<=
 
 /** Re-project the labels after each render so they move in step with the camera instead of trailing it. */
 function positionLabels(){
+  const discovery=$('#discovery-progress'),point=world.screen(2.6,2.7,14.5);
+  discovery.hidden=!started||world.planet!=='home'||Math.hypot(world.position.x-2.6,world.position.z-14.5)>16||!point.front||!!modal;
+  if(!discovery.hidden){const width=discovery.offsetWidth;discovery.style.left=Math.max(width/2+8,Math.min(innerWidth-width/2-8,point.x))+'px';discovery.style.top=Math.max(90,Math.min(innerHeight-42,point.y))+'px';discovery.style.bottom='auto';}
   combatHud.frame(world.enemies,world.selected,world.position.x,world.position.z,!started||!!modal);
   if(!started||modal)return;
   for(const [id,a] of labelAnchors){
@@ -317,16 +344,18 @@ function harvestBurst(index:number,crop:M.CropId){
 }
 function plantBurst(index:number){const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(e)world.fx?.burst({x:e.x,z:e.z},{n:6,color:['#8a5a3a','#6a3f2a'],size:.1,speed:2,up:3,y:.25});}
 /** Ripe tap: harvest every ripe bed in the garden (the user's rule; the reference stops at 5 m), nearest first, 140 ms apart, then one summary toast. */
-function harvestNearby(index:number){
+async function harvestNearby(index:number){
   // Hold the beds themselves: storing a bed meanwhile shifts the indices.
-  const beds=M.ripeNearby(state,index).map(i=>state.plots[i]);let gathered=0,last:M.CropId|null=null;
-  beds.forEach((bed,n)=>{const run=()=>{
-    const i=state.plots.indexOf(bed),crop=i<0||visiting||world.planet!=='home'?null:change(()=>M.harvest(state,i));
+  const harvestingState=state,beds=M.ripeNearby(state,index).map(i=>({...M.bedPosition(state,i),generation:state.plots[i].generation,crop:state.plots[i].crop,plantedAt:state.plots[i].plantedAt}));let gathered=0,last:M.CropId|null=null;
+  beds.forEach((bed,n)=>{const run=async()=>{
+    if(state!==harvestingState||visiting||world.planet!=='home')return;
+    const i=state.plots.findIndex((plot,i)=>{const p=M.bedPosition(state,i);return p.x===bed.x&&p.z===bed.z&&plot.crop===bed.crop&&plot.generation===bed.generation&&plot.plantedAt===bed.plantedAt;}),crop=i<0?null:await perform<M.CropId>('harvest',{index:i});
+    if(state!==harvestingState||visiting||world.planet!=='home')return;
     if(crop){gathered++;last=crop;harvestBurst(i,crop);world.syncCrops();}
     if(n===beds.length-1&&last)toast(gathered>1?`Harvested ${gathered} crops from the garden.`:`${t(M.CROPS[last].name)} harvested.`,M.CROPS[last].icon);
   };if(n)setTimeout(run,n*140);else run();});
 }
-function growText(plot:M.Plot){const progress=M.cropProgress(plot);return progress>=1?'Ripe! Close this panel and tap the bed to harvest.':`About ${Math.ceil((1-progress)*M.CROPS[plot.crop!].duration/1000)} seconds until ripe`;}
+function growText(plot:M.Plot){const progress=M.cropProgress(plot);return progress>=1?'Ripe! Close this panel and tap the bed to harvest.':`About ${Math.ceil((1-progress)*M.cropDuration(plot)/1000)} seconds until ripe`;}
 /**
  * The garden's grow button (reference openSeeds/openPlot): place a kit already in the bag, else buy one with energy
  * (grey while it is out of reach), or a note at the cap. Only at home, never while visiting.
@@ -342,22 +371,22 @@ function expandButton(growing:boolean){
  * Reference buyPlot: pay for a garden bed kit if none is in the bag. The bed then goes down by itself on the free spot
  * nearest the garden, or, with "Place new beds myself" on, the see-through bed lets the player choose the spot.
  */
-function buyPlot(){
-  const result=change(()=>M.readyPlotKit(state));
+async function buyPlot(){
+  const result=await perform('buyBedKit');if(!result)return;
   if(result==='max')toast(`Your garden already has the maximum ${M.MAX_EXTRA_PLOTS} extra beds.`,'🌱');
   else if(result==='away')toast('Garden beds belong at home. Return to your garden first.','🏡');
   else if(result==='energy')toast(`You need ${M.gardenExpansionCost(state)} energy to expand the garden.`,'ϟ');
   else{if(result==='bought')tone('coin');beginPlacement('plot_kit');}
 }
 /** Puts a bed kit from the bag down automatically (expandGarden picks the spot); the kit stays in the bag if there is no room. */
-function autoPlaceBed(){
-  if(!change(()=>M.expandGarden(state))){toast('There is no free spot left for another bed. Your kit stays in your bag.','🌱');return;}
+async function autoPlaceBed(){
+  if(!await perform('expandGarden')){toast('There is no free spot left for another bed. Your kit stays in your bag.','🌱');return;}
   const i=state.plots.length-1,p=M.bedPosition(state,i);closeDialog();world.syncCrops();plantBurst(i);tone('pop');
   world.fx?.burst({x:p.x,z:p.z},{n:10,color:['#9be36f','#ffe66d'],glow:true,speed:2.5,up:4,y:.3});
   toast('A new garden bed! Tap it to plant.','🌱');
 }
 function plotDialog(index:number) {
-  if(visiting){toast(t('{owner}’s garden is for admiring. Your own garden is waiting at home.',{owner:visiting}),'🌷');return;}
+  if(visiting){network.visitCrop?.(index);return;}
   activePlot=index;const plot=state.plots[index];if(!plot)return;
   if(plot.crop&&M.cropProgress(plot)>=1){harvestNearby(index);return;}
   if(plot.crop){
@@ -381,7 +410,7 @@ function inventory() {
   const slots:[M.GearSlot,string,string][]=[['weapon','⚔️','Weapon'],['hat','👒','Hat'],['outfit','🧥','Outfit'],['boots','👟','Boots'],['pet','🐾','Pet'],['disguise','🎭','Disguise']];
   if(selectedItem&&!state.bag[selectedItem])selectedItem=null;
   const item=selectedItem?M.ITEMS[selectedItem]:null,stats=M.activeStats(state),slot=item?.slot;
-  openDialog('bag','Your explorer & backpack',`<div class="stat-strip"><span>❤️ <b>${Math.ceil(state.hp)}/${Math.round(stats.maxHp)}</b></span><span>⚔️ <b>${stats.attack.toFixed(1)}</b></span><span>🛡️ <b>${stats.defense}</b></span><span>💨 <b>${stats.speed.toFixed(1)}</b></span><span>✨ <b>${Math.round(stats.critChance*100)}% crit</b></span></div><div class="equipment">${slots.map(([key,icon,name])=>`<div><button data-action="inspect" data-item="${state.gear[key]||''}" ${!state.gear[key]?'disabled':''}><span>${state.gear[key]?art(state.gear[key]!,M.ITEMS[state.gear[key]!].icon):icon}</span><small>${state.gear[key]?esc(t(M.ITEMS[state.gear[key]!].name)):name}</small></button>${state.gear[key]?`<button class="unequip" data-action="unequip" data-slot="${key}" aria-label="Unequip ${name}">Remove</button>`:''}</div>`).join('')}</div><div class="section-label">BACKPACK <span>${entries.reduce((n,[,q])=>n+q,0)} items</span></div><div class="inventory-grid">${entries.map(([id,count])=>`<button class="item-tile ${id===selectedItem?'selected':''}" data-action="inspect" data-item="${id}" aria-label="${esc(t(M.ITEMS[id].name))}, ${count}"><span>${art(id,M.ITEMS[id].icon)}</span><b>${count}</b><small>${esc(t(M.ITEMS[id].name))}</small>${Object.values(state.gear).includes(id)?'<i>Equipped</i>':''}</button>`).join('')||'<div class="empty-state"><span>🎒</span><strong>Your first harvest belongs here.</strong></div>'}</div>${item?`<div class="item-detail"><span class="item-hero">${art(selectedItem!,item.icon)}</span><div><h3>${esc(t(item.name))}</h3><p>${esc(item.desc)}</p><div class="button-row">${item.weapon?.kind==='rod'?'<span class="chip">Automatic near water</span>':slot?`<button class="primary" data-action="equip" data-item="${selectedItem}" ${state.gear[slot]===selectedItem?'disabled':''}>${state.gear[slot]===selectedItem?'Equipped':'Equip'}</button>`:''}${item.heal||item.buff?`<button class="primary" data-action="eat" data-item="${selectedItem}">Use${item.heal?` · +${item.heal} HP`:''}</button>`:''}${item.type==='decor'||item.type==='placeable'?`<button class="primary" data-action="place-decor" data-item="${selectedItem}">Place</button>`:''}</div></div></div>`:''}<div class="button-row"><button class="soft-button" data-action="go" data-kind="cook">🔥 Kitchen</button><button class="soft-button" data-action="decorations">🏡 Decorate</button><button class="soft-button" data-action="journal-tab" data-kind="collection">🐟 Fish log</button></div>`,'CHARACTER');
+  openDialog('bag','Your explorer & backpack',`<div class="stat-strip"><span>❤️ <b>${Math.ceil(state.hp)}/${Math.round(stats.maxHp)}</b></span><span>⚔️ <b>${stats.attack.toFixed(1)}</b></span><span>🛡️ <b>${stats.defense}</b></span><span>💨 <b>${stats.speed.toFixed(1)}</b></span><span>✨ <b>${Math.round(stats.critChance*100)}% crit</b></span></div><div class="equipment">${slots.map(([key,icon,name])=>`<div><button data-action="inspect" data-item="${state.gear[key]||''}" ${!state.gear[key]?'disabled':''}><span>${state.gear[key]?art(state.gear[key]!,M.ITEMS[state.gear[key]!].icon):icon}</span><small>${state.gear[key]?esc(t(M.ITEMS[state.gear[key]!].name)):name}</small></button>${state.gear[key]?`<button class="unequip" data-action="unequip" data-slot="${key}" aria-label="Unequip ${name}">Remove</button>`:''}</div>`).join('')}</div><div class="section-label">BACKPACK <span>${entries.reduce((n,[,q])=>n+q,0)} items</span></div><div class="inventory-grid">${entries.map(([id,count])=>`<button class="item-tile ${id===selectedItem?'selected':''}" data-action="inspect" data-item="${id}" aria-label="${esc(t(M.ITEMS[id].name))}, ${count}"><span>${art(id,M.ITEMS[id].icon)}</span><b>${count}</b><small>${esc(t(M.ITEMS[id].name))}</small>${Object.values(state.gear).includes(id)?'<i>Equipped</i>':''}</button>`).join('')||'<div class="empty-state"><span>🎒</span><strong>Your first harvest belongs here.</strong></div>'}</div>${item?`<div class="item-detail"><span class="item-hero">${art(selectedItem!,item.icon)}</span><div><h3>${esc(t(item.name))}</h3><p>${esc(item.desc)}</p><div class="button-row">${item.weapon?.kind==='rod'?'<span class="chip">Automatic near water</span>':slot?`<button class="primary" data-action="equip" data-item="${selectedItem}" ${state.gear[slot]===selectedItem?'disabled':''}>${state.gear[slot]===selectedItem?'Equipped':'Equip'}</button>`:''}${item.heal||item.buff?`<button class="primary" data-action="eat" data-item="${selectedItem}">Use${item.heal?` · +${item.heal} HP`:''}</button>`:''}${item.weapon&&item.weapon.kind!=='rod'?`<button class="soft-button" data-action="forge-menu" data-item="${selectedItem}">🔨 Forge +${M.forgeLevel(state,selectedItem!)}</button>`:''}${M.looseQuantity(state,selectedItem!)>0?`<button class="soft-button" data-action="drop-item" data-item="${selectedItem}">Drop one</button>`:''}${item.type==='decor'||item.type==='placeable'?`<button class="primary" data-action="place-decor" data-item="${selectedItem}">Place</button>`:''}</div></div></div>`:''}<div class="button-row"><button class="soft-button" data-action="go" data-kind="cook">🔥 Kitchen</button><button class="soft-button" data-action="decorations">🏡 Decorate</button><button class="soft-button" data-action="journal-tab" data-kind="collection">🐟 Fish log</button></div>`,'CHARACTER');
 }
 // "36 energy · 6 XP · 15 stars" becomes three coloured chips.
 function rewardChips(label:string){return label.split(' · ').filter(Boolean).map(part=>{const kind=/energy|năng lượng/i.test(part)?'energy':/xp/i.test(part)?'xp':/star|sao/i.test(part)?'star':'';return `<span class="chip${kind?` chip-${kind}`:''}">${kind==='energy'?'ϟ ':kind==='xp'?'✨ ':kind==='star'?'⭐ ':''}${esc(kind?part.replace(/\s*(energy|stars?|năng lượng|sao)$/i,''):part)}</span>`;}).join('');}
@@ -411,6 +440,7 @@ function shop(){
   const matches=(item:M.ItemDef)=>shopTab==='Weapons'?item.slot==='weapon':shopTab==='Clothing'?['hat','outfit','boots'].includes(item.slot??''):shopTab==='Pets'?item.slot==='pet':shopTab==='Disguises'?item.slot==='disguise':shopTab==='Decor'?item.type==='decor':!item.slot&&item.type!=='decor';
   const entries=Object.entries(M.ITEMS).filter(([,item])=>item.price!==undefined&&matches(item));
   openDialog('shop','Little outfitters',`<nav class="panel-tabs" aria-label="Shop categories">${SHOP_TABS.map(tab=>`<button class="${shopTab===tab?'active':''}" aria-pressed="${shopTab===tab}" data-action="shop-tab" data-kind="${tab}">${tab}</button>`).join('')}</nav><div class="shop-grid">${entries.map(([id,item])=>`<div class="shop-item"><span class="shop-icon">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))}${state.bag[id]?` <small>×${state.bag[id]}</small>`:''}</strong><p>${esc(item.desc)}</p>${materialChips(item.materials)}</div><button class="primary" data-action="buy" data-item="${id}" ${state.energy<item.price!||Object.entries(item.materials??{}).some(([id,n])=>M.looseQuantity(state,id)<n!)?'disabled':''}>ϟ ${item.price}</button>${item.weapon?.kind==='rod'&&state.bag[id]?'<span class="chip">Used automatically near ponds</span>':item.slot?Object.values(state.gear).includes(id)?'<span class="chip chip-seed">✓ Equipped</span>':state.bag[id]?`<button class="sky-button" data-action="equip" data-item="${id}">Equip</button>`:'':''}</div>`).join('')||'<p class="empty-state">Visit the workshop for this collection.</p>'}</div>`,'ϟ '+state.energy+' ENERGY');
+  if(shopTab==='Pets'&&state.planet==='home'&&!visiting)$('#dialog-body').insertAdjacentHTML('beforeend',localizeHtml('<div class="button-row"><button class="soft-button" data-action="pen-menu">🐔 Animal pen</button></div>'));
 }
 
 // The market, like the reference's (bundle @939401): one big button sells every crop, fish and junk stack; rows sell 1 or all.
@@ -421,7 +451,9 @@ function storage(){const tiles=(inv:M.Inventory,toChest:boolean)=>(Object.entrie
 /** The crystal answers a wish: a ring and sparks at the crystal and "<icon> <name> ↑" over the explorer, as in the reference. */
 function upgradeFeedback(kind:keyof typeof M.UPGRADES){const crystal=world.entities.find(e=>e.kind==='upgrade'),def=M.UPGRADES[kind];if(crystal){world.fx?.ring({x:crystal.x,z:crystal.z},{color:'#8ef6ff',to:3,life:.6});world.fx?.burst({x:crystal.x,z:crystal.z},{n:20,color:['#8ef6ff','#d68cff','#ffffff'],glow:true,speed:4,up:8,y:1.6});}floating(`${def.icon} ${t(def.name)} ↑`,world.position.x,world.position.z,'lvl');}
 /** The on-screen movement pad shows only when chosen in Settings (the reference is tap-to-move only). */
-function applyMovePad(){$('#hud').classList.toggle('move-pad',!!state.settings.movePad);movement.clear();measureHud();}
+const mobileJoystickDefault=matchMedia('(pointer: coarse)').matches;
+function joystickEnabled(){return state.settings.movePad??mobileJoystickDefault;}
+function applyMovePad(){$('#hud').classList.remove('move-pad');joystick.setEnabled(joystickEnabled());$('#hud').classList.toggle('joystick-right',state.settings.joystickSide==='right');movement.clear();measureHud();}
 function upgrades(){openDialog('upgrade','A wish for something more',`<div class="en-head">Energy: <b>ϟ ${state.energy.toLocaleString()}</b></div><div class="upgrade-cards">${upgradeCards(state).map(c=>`<div class="upgrade-card"><span class="upgrade-icon">${c.icon}</span><div><strong>${t(c.name)} <small>Level ${c.level}</small></strong><p>Now: ${c.now} • ${c.gain}</p></div><button class="primary" data-action="upgrade" data-kind="${c.kind}" ${c.affordable?'':'disabled'}>${c.max?'MAX':`ϟ ${c.cost}`}</button></div>`).join('')}</div>`,'THE WISHING CRYSTAL');}
 function cooking(){const ingredients=Object.entries(state.bag).filter(([id,n])=>n!>0&&M.ITEMS['cooked_'+id]);openDialog('cook','A warm meal for the trail',`<p class="intro">Cooked food heals more and lasts longer. Cooking here is free.</p><div class="shop-grid">${ingredients.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} <small>×${n}</small></strong><p>${esc(M.ITEMS['cooked_'+id].desc)}</p></div><div class="button-row"><button class="soft-button" data-action="cook-one" data-item="${id}">Cook 1</button><button class="primary" data-action="cook-all" data-item="${id}" aria-label="Cook all">All</button></div></div>`).join('')||'<p class="empty-state">Bring crops, fish, or meat from your adventures.</p>'}</div>${dishesHtml(state,farmUi)}`,'VOLCANO KITCHEN');}
 /**
@@ -431,39 +463,44 @@ function cooking(){const ingredients=Object.entries(state.bag).filter(([id,n])=>
 const farmUi:FarmUi={art,esc,mini,chips:materialChips,effect:effectText};let penShown='';
 function penDialog(){if(visiting)return;penShown=penSignature(state);const built=M.penBuilt(state);openDialog('pen',built?'Your animal pen':'A spot for an animal pen',penHtml(state,farmUi),built?'ANIMAL PEN':'PEN SITE',built?'🐔':'🪧');}
 /** Buys the pen: the yard and coop pop up on the plot with a burst, then the panel offers animals. */
-function buildPenAction(){
+async function buildPenAction(){
   const check=M.canBuildPen(state);
   if(check==='energy'){toast(`You need ${M.PEN_BUILD.price} energy to build the pen.`,'ϟ');return;}
-  if(!change(()=>M.buildPen(state)))return;
+  if(!await perform('buildPen'))return;
   world.showPenBuilt();tone('success');world.fx?.burst({x:M.PEN.x,z:M.PEN.z},{n:22,color:['#ffe66d','#f2cf5b','#ffffff','#ff9ec4'],glow:true,speed:3.2,up:5,y:.5});
   // Close the panel so the yard is seen popping up, then offer the animals.
   closeDialog();toast('The animal pen is built! Buy a chick to get started.','🐔');setTimeout(()=>{if(!modal)penDialog();},1100);
 }
 function penTap(){if(M.readyAnimals(state).length)collectFarm();else penDialog();}
 function feedBurst(uid:number){const p=world.farmView?.positionOf(uid);if(p)world.fx?.burst({x:p.x,z:p.z},{n:6,color:['#9be36f','#ffe66d'],size:.08,speed:1.5,up:3,y:.4});}
-function collectFarm(){
+function collectFarm(uid?:number){
   if(visiting||world.planet!=='home')return;
   const collectingState=state;
-  const me=world.position,order=M.readyAnimals(state).map(a=>({a,p:world.farmView?.positionOf(a.uid)??{x:M.PEN.x,z:M.PEN.z}})).sort((x,y)=>Math.hypot(x.p.x-me.x,x.p.z-me.z)-Math.hypot(y.p.x-me.x,y.p.z-me.z));
+  const me=world.position,order=M.readyAnimals(state).filter(a=>uid===undefined||a.uid===uid).map(a=>({a,p:world.farmView?.positionOf(a.uid)??{x:M.PEN.x,z:M.PEN.z}})).sort((x,y)=>Math.hypot(x.p.x-me.x,x.p.z-me.z)-Math.hypot(y.p.x-me.x,y.p.z-me.z));
   const got:M.Collected[]=[];if(modal==='pen')closeDialog();
-  order.forEach(({a},n)=>{const run=()=>{
+  order.forEach(({a},n)=>{const run=async()=>{
     if(state!==collectingState||visiting||world.planet!=='home')return;
-    const [c]=change(()=>M.collectProducts(state,Date.now(),[a.uid]));
-    if(c){got.push(c);world.farmView?.collect(c.uid,c.item);const p=world.farmView?.positionOf(c.uid);if(p){world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',()=>world.position);floating('+'+M.ANIMALS[c.kind].xp+' XP',p.x,p.z,'xp');}tone('harvest');}
+    const collected=await perform<M.Collected[]>('collectProducts',{uids:[a.uid]});if(state!==collectingState||visiting||world.planet!=='home')return;const c=collected?.[0];
+    if(c){got.push(...collected!);for(const product of collected!)world.farmView?.collect(product.uid,product.item);const p=world.farmView?.positionOf(c.uid);if(p){world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',()=>world.position);floating('+'+M.ANIMALS[c.kind].xp*collected!.length+' XP',p.x,p.z,'xp');}tone('harvest');}
     if(n===order.length-1&&got.length)toast(collectText(got),M.ITEMS[got[0].item].icon);
   };if(n)setTimeout(run,n*140);else run();});
 }
-function buyAnimal(kind:M.AnimalKind){
+async function buyAnimal(kind:M.AnimalKind){
   const check=M.canBuyAnimal(state,kind),d=M.ANIMALS[kind];
   if(check==='energy'){toast(`You need ${d.price} energy for a ${d.baby.toLowerCase()}.`,'ϟ');return;}
-  const a=change(()=>M.buyAnimal(state,kind));if(!a)return;
+  const a=await perform('buyAnimal',{kind});if(!a)return;
   tone('coin');toast(`A little ${d.baby.toLowerCase()} joined your pen!`,d.babyIcon);penDialog();
   setTimeout(()=>{const p=world.farmView?.positionOf(a.uid);if(p)world.fx?.burst({x:p.x,z:p.z},{n:12,color:['#ffd6e8','#ffe66d','#ffffff'],glow:true,speed:2.5,up:4,y:.3});},50);
 }
 function crafting(){
   const recipes=M.RECIPES.map((recipe,index)=>({...recipe,index})).filter(r=>r.station===craftStation),categories=['All',...new Set(recipes.map(r=>r.category))];
   if(!categories.includes(craftTab))craftTab='All';
-  openDialog('craft',craftStation==='forge'?'The ember forge':'Made with a little magic',`<nav class="panel-tabs" aria-label="Workshop categories">${categories.map(category=>`<button class="${craftTab===category?'active':''}" data-action="craft-tab" data-kind="${esc(category)}">${esc(category)}</button>`).join('')}</nav><div class="shop-grid">${recipes.filter(r=>craftTab==='All'||r.category===craftTab).map(r=>`<div class="shop-item"><span class="shop-icon">${art(r.result,M.ITEMS[r.result].icon)}</span><div><strong>${esc(t(M.ITEMS[r.result].name))}${r.count&&r.count>1?` ×${r.count}`:''}</strong><p>${esc(M.ITEMS[r.result].desc)}</p>${materialChips(r.materials)}</div><button class="primary" data-action="craft" data-index="${r.index}" aria-label="Craft for ${r.energy} energy" ${!M.canCraft(state,r.index)?'disabled':''}><span class="wide-label">Craft </span>ϟ ${r.energy}</button></div>`).join('')||'<p class="empty-state">Collect materials on your travels, then return.</p>'}</div>`,craftStation==='forge'?'LAVA FURNACE':'WORKSHOP');
+  openDialog('craft',craftStation==='forge'?'The ember forge':'Made with a little magic',`<div class="button-row"><button class="soft-button" data-action="forge-menu">🔨 Strengthen weapons</button></div><nav class="panel-tabs" aria-label="Workshop categories">${categories.map(category=>`<button class="${craftTab===category?'active':''}" data-action="craft-tab" data-kind="${esc(category)}">${esc(category)}</button>`).join('')}</nav><div class="shop-grid">${recipes.filter(r=>craftTab==='All'||r.category===craftTab).map(r=>`<div class="shop-item"><span class="shop-icon">${art(r.result,M.ITEMS[r.result].icon)}</span><div><strong>${esc(t(M.ITEMS[r.result].name))}${r.count&&r.count>1?` ×${r.count}`:''}</strong><p>${esc(M.ITEMS[r.result].desc)}</p>${materialChips(r.materials)}</div><button class="primary" data-action="craft" data-index="${r.index}" aria-label="Craft for ${r.energy} energy" ${!M.canCraft(state,r.index)?'disabled':''}><span class="wide-label">Craft </span>ϟ ${r.energy}</button></div>`).join('')||'<p class="empty-state">Collect materials on your travels, then return.</p>'}</div>`,craftStation==='forge'?'LAVA FURNACE':'WORKSHOP');
+}
+function forgeMenu(id?:string){
+  const weapons=Object.entries(state.bag).filter(([key,n])=>n!>0&&M.ITEMS[key]?.slot==='weapon'&&M.ITEMS[key]?.weapon?.kind!=='rod');
+  if(id)selectedItem=id;
+  openDialog('forge','Strengthen your weapon',`<p class="intro">Each attempt has a 30% chance to add one forge level, up to +15. Each level adds 1% attack. Failed attempts consume materials and energy, but never lower your weapon level.</p><div class="shop-grid">${weapons.map(([key])=>{const level=M.forgeLevel(state,key),cost=M.forgeCost(level);return `<div class="shop-item"><span class="shop-icon">${art(key,M.ITEMS[key].icon)}</span><div><strong>${esc(t(M.ITEMS[key].name))} +${level}</strong><p>${t('Attack bonus: {count}%',{count:level})}</p>${level<15?materialChips(cost.materials):'<p>Maximum forge level</p>'}</div><button class="primary" data-action="forge" data-item="${key}" ${M.canForge(state,key)?'':'disabled'}>${level<15?'ϟ '+cost.energy:t('Maximum')}</button></div>`;}).join('')||'<p class="empty-state">Get a weapon first, then bring it here to forge.</p>'}</div>`,'WEAPON FORGE','🔨');
 }
 function decorations(){
   const owned=Object.entries(state.bag).filter(([id,n])=>n!>0&&(M.ITEMS[id].type==='decor'));
@@ -493,12 +530,12 @@ function movePlacement(x:number,z:number){
   $('#placement-hint').textContent=t(placement.ok?'':'Blocked here or outside the fence');
 }
 function rotatePlacement(){if(!placement)return;placement.rotation=(placement.rotation+Math.PI/4)%(Math.PI*2);movePlacement(placement.x,placement.z);tone('pop');}
-function confirmPlacement(){
+async function confirmPlacement(){
   if(!placement)return;const {id,x,z,rotation,ok}=placement,item=M.ITEMS[id];
   if(!ok){toast('Can’t place it here (blocked by something or outside the fence).','❌');return;}
   // The kit pays for the bed: without one expandGarden would charge energy, so a vanished item just ends placement.
   if(!state.bag[id]){cancelPlacement();return;}
-  if(!change(()=>M.placeDecoration(state,id,x,z,rotation))){movePlacement(x,z);return;}
+  if(!await perform('placeDecoration',{id,x,z,rotation})){movePlacement(x,z);return;}
   cancelPlacement();
   if(item.type==='placeable'){world.syncCrops();plantBurst(state.plots.length-1);tone('pop');toast('A new garden bed! Tap it to plant.','🌱');}
   else{world.syncDecorations();tone('success');toast(`${t(item.name)} placed.`,'🏡');}
@@ -523,9 +560,9 @@ function planets(){
     <p class="intro">${t('Pick a planet and the autopilot flies you there and lands, or take off and fly it yourself.')}</p>
     <h3 class="starmap-title">🔭 Discovery log · ${state.discovered.length} / ${all} · ${t('easiest first')}</h3><div class="planet-grid route-list">${routes.map(card).join('')}</div>`,'STAR MAP','🚀');
 }
-function map(){openDialog('map','Every path is a possibility',`<p class="intro">Choose a place and your explorer will walk there.</p><div class="map-illustration"><div class="map-path"></div><span class="map-house">🏡</span><span class="map-trees">🌳 🌲 🌳</span><span class="map-garden">🌱 🌱</span><span class="map-pond">🎣</span><span class="map-rocket">🚀</span><span class="map-stall">🧺</span><b>Clover Village</b></div><div class="map-destinations">${(state.planet==='home'?[['plot','🌱','Garden'],['sell','🧺','Market'],['shop','🛍️','Outfitters'],['fish','🎣','Pond'],['upgrade','💎','Crystal'],['craft','🔨','Workshop'],['chest','📦','Storage'],['travel','🚀','Rocket']]:[['mine','💎','Crystal vein'],['travel','🚀','Rocket']]).map(([kind,icon,name])=>`<button class="soft-button" data-action="go" data-kind="${kind}">${icon} ${name}</button>`).join('')}${(world.planet==='home'?[['forest','🍄 Mushroom Forest'],['meadow','🌊 Lake Meadow'],['swamp','🌿 Chomper Swamp'],['canyon','🏜️ Redrock Canyon']]:[['wild','Explore the wild']]).map(([kind,label])=>`<button class="soft-button" data-action="wild" data-kind="${kind}">${label}</button>`).join('')}</div><p class="fineprint">${state.visited.length} of 9 worlds discovered · Click the ground to choose your own path.</p>`,'YOUR EXPLORER’S MAP');}
-function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Gentle sound effects</strong><small>Soft notes for everyday discoveries</small></div><button class="toggle ${state.settings.sound?'on':''}" role="switch" aria-checked="${state.settings.sound}" aria-label="Sound effects" data-action="sound"></button></div><div class="settings-row"><div><strong>Show movement pad</strong><small>Arrow buttons on touch screens. Tapping the ground always works.</small></div><button class="toggle ${state.settings.movePad?'on':''}" role="switch" aria-checked="${!!state.settings.movePad}" aria-label="Show movement pad" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
-function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${[['👣','Wander','Click or tap to walk; hold to steer. Pinch or scroll to zoom. Arrow keys work too, and Settings can show a movement pad on touch screens.'],['🌱','Grow','Tap a garden bed, pick a seed and come back when it sparkles. Crops grow while you are away.'],['🧺','Trade','Sell your harvest at the pink market, buy gear at the blue stall and equip it in the backpack (I).'],['⚔️','Be brave','Tap a creature to follow and attack it. Space hits nearby enemies; Q spins, W dashes, E stomps, R is your weapon’s special.'],['🎣','Catch a moment','Keep a rod in your backpack. It is held automatically near a pond. Press Reel when it bites, hold to pull, and let go when the fish surges or the line turns red.'],['📖','Follow your curiosity','Story chapters, daily tasks, achievements and collections give rewards. The rocket opens new worlds from level 5.'],['📦','Keep it safe','If you fall, loose items wait in a pink backpack where you fell; gear, levels and energy stay. The chest keeps treasures safe.'],['⌨️','Handy shortcuts','I backpack · J journal · M map · F interact · Esc close. Home brings you back safely.']].map(([icon,title,body])=>`<div><span>${icon}</span><h3>${title}</h3><p>${body}</p></div>`).join('')}</div>`,'MAKE YOURSELF AT HOME');}
+function map(){openDialog('map','Every path is a possibility',`<p class="intro">Choose a place and your explorer will walk there.</p><div class="map-illustration"><div class="map-path"></div><span class="map-house">🏡</span><span class="map-trees">🌳 🌲 🌳</span><span class="map-garden">🌱 🌱</span><span class="map-pond">🎣</span><span class="map-rocket">🚀</span><span class="map-stall">🧺</span><b>Clover Village</b></div><div class="map-destinations">${(state.planet==='home'?[['plot','🌱','Garden'],['sell','🧺','Market'],['shop','🛍️','Outfitters'],['fish','🎣','Pond'],['upgrade','💎','Crystal'],['craft','🔨','Workshop'],['chest','📦','Storage'],['travel','🚀','Rocket']]:[['mine','💎','Crystal vein'],['travel','🚀','Rocket']]).map(([kind,icon,name])=>`<button class="soft-button" data-action="go" data-kind="${kind}">${icon} ${name}</button>`).join('')}${(world.planet==='home'?[['forest','🍄 Mushroom Forest'],['meadow','🌊 Lake Meadow'],['swamp','🌿 Chomper Swamp'],['canyon','🏜️ Redrock Canyon']]:[['wild','Explore the wild']]).map(([kind,label])=>`<button class="soft-button" data-action="wild" data-kind="${kind}">${label}</button>`).join('')}</div><p class="fineprint">${state.discovered.length} of 9 worlds discovered · Click the ground to choose your own path.</p>`,'YOUR EXPLORER’S MAP');}
+function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Gentle sound effects</strong><small>Soft notes for everyday discoveries</small></div><button class="toggle ${state.settings.sound?'on':''}" role="switch" aria-checked="${state.settings.sound}" aria-label="Sound effects" data-action="sound"></button></div><div class="settings-row"><div><strong>Show joystick</strong><small>Drag the stick to walk in any direction. Skill buttons move to the opposite side.</small></div><button class="toggle ${joystickEnabled()?'on':''}" role="switch" aria-checked="${joystickEnabled()}" aria-label="Show joystick" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Joystick side</strong><small>Choose the hand you use to move</small></div><div class="segmented" role="radiogroup" aria-label="Joystick side">${(['left','right'] as const).map(side=>`<button role="radio" aria-checked="${(state.settings.joystickSide??'left')===side}" data-action="joystick-side" data-kind="${side}">${side==='left'?'Left':'Right'}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
+function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div>`,'MAKE YOURSELF AT HOME');}
 
 // Fishing happens in the world: no panel, just the pond, the line and a big Reel button.
 let fishPond:Entity|null=null,recastUntil=0;
@@ -533,20 +570,26 @@ const fishingView=new FishingView(world.scene,world.fx!,fishKit,sound=>tone(soun
 // The garden helper (helper.ts rules, helper-view.ts walking and poses, helper-ui.ts panels).
 const helperView=new HelperView();world.scene.add(helperView.group);
 function helperDialog(){if(visiting)return;openDialog('helper','Garden helper',helperPanel(state,{esc,mini,picture:`${ICON_BASE}helper.webp`}),'GARDEN HELPER','🤖');}
-const helperHarvest=(i:number)=>{const crop=change(()=>Helper.helperHarvest(state,i));if(crop){harvestBurst(i,crop);world.syncCrops();}return !!crop;};
-const helperPlant=(i:number)=>{const crop=change(()=>Helper.helperPlant(state,i));if(crop){plantBurst(i);tone('pop');world.syncCrops();}return !!crop;};
+const helperPending=new Set<string>();
+function helperAction(kind:'helperHarvest'|'helperPlant',i:number){
+  const effect=(crop:M.CropId|undefined|null)=>{if(crop){if(kind==='helperHarvest')harvestBurst(i,crop);else{plantBurst(i);tone('pop');}world.syncCrops();}return !!crop;};
+  if(!actionHandler)return effect(change(()=>kind==='helperHarvest'?Helper.helperHarvest(state,i):Helper.helperPlant(state,i)));
+  const key=kind+':'+i;if(helperPending.has(key))return false;helperPending.add(key);
+  void perform<M.CropId>(kind,{index:i}).then(effect).finally(()=>helperPending.delete(key));return true;
+}
+const helperHarvest=(i:number)=>helperAction('helperHarvest',i),helperPlant=(i:number)=>helperAction('helperPlant',i);
 const rodTip=new Vector3();
 function tipPosition(){const tip=world.player.getObjectByName('rod-tip');if(tip){world.player.updateWorldMatrix(true,true);tip.getWorldPosition(rodTip);}else rodTip.set(world.position.x,1.4,world.position.z);return rodTip;}
 function pondView(e:Entity):PondView{return {id:e.id,x:e.x,z:e.z,rx:e.pond!.rx,rz:e.pond!.rz,surface:e.pond!.surface,waterId:e.waterId??state.planet};}
-function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.entities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)));}
+function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.entities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';});}
 const formatSize=(cm:number)=>cm>=100?`${(cm/100).toFixed(2).replace(/\.?0+$/,'')} m`:`${cm} cm`;
 function showReel(on:boolean,mode:'reel'|'cast'='reel'){const button=$('#reel-button');button.hidden=!on;button.classList.toggle('cast',mode==='cast');button.classList.remove('bite','down');$('#reel-text').textContent=t(mode==='cast'?'Cast':'Reel');$('#hud').classList.toggle('fishing',on&&mode==='reel');$('#fish-hint').hidden=!(on&&mode==='reel');}
-function endFishing(message?:string,icon='🎣'){const was=!!fishGame;fishGame=null;fishingView.cancel();world.fishing='idle';showReel(false);if(was&&message)toast(message,icon);}
+function endFishing(message?:string,icon='🎣'){const was=!!fishGame;if(fishGame?.ticket&&actionHandler)void perform('fishCancel',{ticketId:fishGame.ticket});fishGame=null;fishingView.cancel();world.fishing='idle';showReel(false);if(was&&message)toast(message,icon);}
 /** Apply only actual changes: staying by the shore must not rebuild the avatar or save every frame. */
 function applyContextWeapon(id:M.ItemId|null){
   if((state.gear.weapon??null)===id)return;
   if(!(id?M.equip(state,id):M.unequip(state,'weapon')))return;
-  world.refreshPlayer();save();updateHud();
+  world.refreshPlayer();if(!actionHandler)save();updateHud();
 }
 function prepareCombatWeapon(){
   combatGearUntil=performance.now()+3000;
@@ -577,9 +620,26 @@ function fish(pond?:Entity|null){
   const {cast}=planCast(water,world.position,tap);lastCast={id:pond.id,...cast};
   const weights=M.FISH_WEIGHTS[fishingWater]??M.FISH_WEIGHTS.home,stats=M.activeStats(state),input=new FishingInput();input.ready=true;
   // Each fish that swims up is chosen then, with the worm/rod/luck bonus on rare and legendary fish.
-  const choose=(bonus:number):FishPick=>{const s=selectCatch(weights.map(([id,weight])=>{const f=M.FISH[id];return {id,weight:catchWeight(weight,f.rarity,bonus),min:f.size[0],max:f.size[1],junk:f.rarity==='junk'};}));return {...s,power:M.FISH[s.id].power};};
-  const simulation=new FishingSimulation<FishPick>({quality:rod.quality??.3,steady:rod.steady===true,bait:(state.bag.worm??0)>0,luck:stats.luck,choose,approachFrom:p=>fishingView.approachDistance(p.id),water,cast,player:{x:world.position.x,z:world.position.z}});
-  fishGame={input,simulation,lastPhase:'cast',seen:{missed:0,bait:0,early:0},tooEarlyUntil:0};
+  const choose=(bonus:number):FishPick|null=>{
+    const round=fishGame;if(!round)return null;
+    if(actionHandler){
+      if(round.ready){const pick=round.ready;delete round.ready;return pick;}
+      if(!round.pending){round.pending=true;const mystery=!!fishingView.mysteryNearCast();
+        void (async()=>{if(round.ticket){await perform('fishCancel',{ticketId:round.ticket});delete round.ticket;}
+          if(fishGame!==round)return;
+          const result=await perform<{ticketId:string;pick:FishPick}>('fishStart',{water:fishingWater,rodId,cast:simulation.cast??cast,mystery});
+          if(!result){if(fishGame===round)endFishing();return;}
+          if(fishGame!==round){void perform('fishCancel',{ticketId:result.ticketId});return;}
+          round.ticket=result.ticketId;round.proof=new FishingProof(performance.now());round.ready=result.pick;round.pending=false;
+        })();
+      }return null;
+    }
+    const mysteryId=fishingView.mysteryNearCast();
+    if(mysteryId){const f=M.FISH[mysteryId];return {id:mysteryId,power:f.power,size:0,huge:false,mystery:true};}
+    const selected=selectCatch(weights.map(([id,weight])=>{const f=M.FISH[id];return {id,weight:catchWeight(weight,f.rarity,bonus),min:f.size[0],max:f.size[1],junk:f.rarity==='junk'};}));return {...selected,power:M.FISH[selected.id].power};
+  };
+  const simulation=new FishingSimulation<FishPick>({quality:rod.quality??.3,steady:rod.steady===true,bait:(state.bag.worm??0)>0,luck:stats.luck,choose,approachFrom:p=>fishingView.approachDistance(p.id,!!p.mystery),water,cast,player:{x:world.position.x,z:world.position.z}});
+  fishGame={input,simulation,lastPhase:'cast',seen:{missed:0,bait:0,early:0},tooEarlyUntil:0,approach:0};
   world.destination=null;world.route=[];world.moving=false;world.selected=null;world.ring.visible=false;world.facing=Math.atan2(cast.x-world.position.x,cast.z-world.position.z);
   world.fishing='cast';world.castT=.5;showReel(true);
   fishingView.begin(pondView(pond),tipPosition(),cast);
@@ -587,10 +647,13 @@ function fish(pond?:Entity|null){
 const FISH_HINTS:Record<string,string>={cast:'Casting…',wait:'Wait for a fish…',approach:'A fish is coming… wait!',nibble:'A nibble… not yet!',bite:'Bite! Press Reel!'};
 function updateFishing(dt:number){
   const f=fishGame;if(!f)return;const sim=f.simulation;
-  if(world.destination||world.route.length||world.moving||world.keys.size){endFishing('Fishing line reeled in.');return;}
+  if(world.destination||world.route.length||world.moving||world.keys.size||world.joystickInput){endFishing('Fishing line reeled in.');return;}
   sim.update(dt,f.input.held);
+  if(f.proof&&(sim.phase==='hooked'||sim.phase==='caught'))f.proof.sample(performance.now(),f.input.held,sim.tension,sim.progress,sim.phase==='caught');
+  if(f.ticket&&sim.phase==='wait'&&f.lastPhase!=='wait'){const ticket=f.ticket;delete f.ticket;delete f.proof;void perform('fishCancel',{ticketId:ticket});}
+  if(f.proof&&performance.now()-f.proof.startedAt>175000){endFishing('This cast has expired. Cast again.');return;}
   // Worms are used at a missed bite, a snap, slack line and a catch (not when a fish just swims off).
-  if(sim.baitUsed>f.seen.bait){const used=sim.baitUsed-f.seen.bait;f.seen.bait=sim.baitUsed;change(()=>{for(let i=0;i<used;i++)M.removeItem(state.bag,'worm');});sim.setBait((state.bag.worm??0)>0);}
+  if(!actionHandler&&sim.baitUsed>f.seen.bait){const used=sim.baitUsed-f.seen.bait;f.seen.bait=sim.baitUsed;change(()=>{for(let i=0;i<used;i++)M.removeItem(state.bag,'worm');});sim.setBait((state.bag.worm??0)>0);}
   if(sim.missedBites>f.seen.missed){f.seen.missed=sim.missedBites;toast('Missed the bite — wait for the next fish.','🎣');}
   if(sim.earlyPresses>f.seen.early){f.seen.early=sim.earlyPresses;f.tooEarlyUntil=sim.time+1.5;}
   if(sim.phase!==f.lastPhase){if(sim.phase==='bite')vibrate(40);f.lastPhase=sim.phase;}
@@ -600,20 +663,29 @@ function updateFishing(dt:number){
   if(!sim.finished)return;
   fishGame=null;world.fishing='idle';
   if(sim.phase==='escaped'){
+    if(f.ticket&&actionHandler)void perform('fishCancel',{ticketId:f.ticket});
     if(sim.snapped){fishingView.snap();setTimeout(()=>floating('Line snapped! 💔',world.position.x,world.position.z,'hurt'),250);}else fishingView.cancel();
     showReel(true,'cast');recastUntil=performance.now()+6000;toast(sim.reason,'💧');return;
   }
-  const pick=sim.pick!,caught=M.FISH[pick.id],caughtState=state;showReel(false);
-  fishingView.land(()=>world.position,()=>{
-    if(state!==caughtState)return; // A delayed catch must never reward another account or a new adventure.
-    change(()=>M.grantCatch(state,pick.id,pick.size,pick.huge));tone('success');
-    world.fx?.burst(world.position,{n:18,color:['#bfe9ff','#ffffff','#ffe66d'],glow:true,speed:4,up:6});
-    floating(`${caught.rarity==='legendary'?'👑':caught.rarity==='rare'?'✨':caught.rarity==='junk'?'🥾':'🐟'} ${t(caught.name)}`,world.position.x,world.position.z,caught.rarity==='junk'?'item':'item big');
-    if(caught.rarity!=='junk')setTimeout(()=>floating(`${pick.huge?'💪 HUGE ':'📏 '}${formatSize(pick.size)}`,world.position.x,world.position.z,pick.huge?'crit big':'xp'),350);
-    if(pick.huge)world.fx?.shake(.3);
-    if(caught.rarity==='legendary')toast(`Legendary catch! ${t(caught.name)}, ${formatSize(pick.size)}.`,'👑');
-    if(!fishGame){showReel(true,'cast');recastUntil=performance.now()+6000;}
-  });
+  const pick=sim.pick!,caughtState=state;showReel(false);
+  void (async()=>{
+    let result:FishPick|undefined=pick;
+    if(actionHandler){result=await perform<FishPick>('fishFinish',{ticketId:f.ticket,telemetry:f.proof?.finish(performance.now())});}
+    else if(pick.mystery)result={...resolveMysteryCatch({id:pick.id,max:M.FISH[pick.id].size[1]}),power:pick.power};
+    if(state!==caughtState)return;if(!result){fishingView.cancel();return;}
+    const reward=result,item=M.ITEMS[reward.id],caught=M.FISH[reward.id];
+    fishingView.land(()=>world.position,()=>{
+      if(state!==caughtState)return;
+      if(!actionHandler)change(()=>reward.mystery?M.grantMysteryCatch(state,reward.id,reward.size,reward.supergiant):M.grantCatch(state,reward.id,reward.size,reward.huge));tone('success');
+      world.fx?.burst(world.position,{n:18,color:['#bfe9ff','#ffffff','#ffe66d'],glow:true,speed:4,up:6});
+      floating(item.icon+' '+t(item.name),world.position.x,world.position.z,reward.supergiant?'item big':'item');
+      if(caught&&caught.rarity!=='junk'&&reward.size>0)setTimeout(()=>floating((reward.supergiant?t('SUPERGIANT')+' ':reward.huge?t('HUGE')+' ':'📏 ')+formatSize(reward.size),world.position.x,world.position.z,reward.huge?'crit big':'xp'),350);
+      if(reward.huge)world.fx?.shake(.3);
+      if(reward.mystery)toast(reward.supergiant?'The mysterious shadow was a supergiant fish!':'A treasure was hiding beneath the question mark!',item.icon);
+      else if(caught?.rarity==='legendary')toast(t('Legendary catch! {name}, {size}.',{name:t(caught.name),size:formatSize(reward.size)}),'👑');
+      if(!fishGame){showReel(true,'cast');recastUntil=performance.now()+6000;}
+    },{id:reward.id,supergiant:reward.supergiant,icon:item.icon,fish:!!caught});
+  })();
 }
 
 
@@ -621,28 +693,44 @@ world.onAlert=()=>tone('alert');
 world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();minimap.invalidate();};
 stockPonds();
 // Fish models stream in after the first build; restock the ponds when they arrive.
-void fishKit.load().then(()=>{if(fishKit.ready)stockPonds();});
+void fishKit.load().then(()=>{if(fishKit.ready&&!fishGame)stockPonds();});
 // The Blender explorer, gear and pets stream in after the world is playable.
 // Gear and pet files load on demand as the explorer puts them on (see World.kitFor).
 void heroKit.load().then(()=>{if(heroKit.ready)world.refreshAvatars();});
-world.onInteract=(e)=>{
-  if(!started||uiBlocked())return;tone();if(visiting&&e.kind!=='travel'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
+world.onInteract=async(e)=>{
+  if(!started||uiBlocked())return;tone();if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
   else if(e.kind==='pen')penTap();
-  else if(e.kind==='home'){change(()=>state.hp=M.maxHp(state));toast('Home, sweet home. Your health is restored.','🏡');}
-  else if(e.kind==='dropped'){change(()=>M.recoverBag(state));world.syncDropped();toast('All your little treasures are back.','🎒');}
-  else if(e.kind==='mine'){const index=e.index;if(index===undefined||!M.mineAvailable(state,state.planet,index)){toast('This crystal needs a moment to regrow.','💎');return;}if(!change(()=>M.claimMine(state,index)))return;world.burst(e.x,e.z,'#d9c9f3');toast('A crystal for your crafting collection!','💎');}
-  else if(e.kind==='gift'){if(e.index===undefined)return;const outcome=change(()=>M.claimGift(state,e.index!));if(!outcome)return;e.mesh.visible=false;if(outcome.kind==='bomb'){for(const target of world.enemies)if(target.hp>0&&Math.hypot(target.x-e.x,target.z-e.z)<(outcome.radius??4.5))hit(target,Math.round(M.attack(state)*(outcome.damageMultiplier??3)));world.burst(e.x,e.z,'#ffb269',28);checkDefeat();}toast(outcome.label,'🎁');}
+  else if(e.kind==='home'){if(!await perform('rest'))return;toast('Home, sweet home. Your health is restored.','🏡');}
+  else if(e.kind==='dropped'){if(!await perform('recoverBag'))return;world.syncDropped();toast('All your little treasures are back.','🎒');}
+  else if(e.kind==='mine'){const index=e.index;if(index===undefined||!M.mineAvailable(state,state.planet,index)){toast('This crystal needs a moment to regrow.','💎');return;}if(!await perform('claimMine',{index}))return;world.burst(e.x,e.z,'#d9c9f3');toast('A crystal for your crafting collection!','💎');}
+  else if(e.kind==='gift'){if(e.index===undefined)return;const outcome=await perform<M.GiftOutcome>('claimGift',{index:e.index!});if(!outcome)return;e.mesh.visible=false;if(outcome.kind==='bomb'){for(const target of world.enemies)if(target.hp>0&&Math.hypot(target.x-e.x,target.z-e.z)<(outcome.radius??4.5))hit(target,Math.round(M.attack(state)*(outcome.damageMultiplier??3)));world.burst(e.x,e.z,'#ffb269',28);checkDefeat();}toast(outcome.label,'🎁');}
 };
 // Loot lands on the ground (drops.ts) and reaches the bag through the pickup magnet, with a '+n name' float.
 const drops=createDrops(world,{layer:$('#world-labels'),alive:()=>state.hp>0,item:id=>Object.hasOwn(M.ITEMS,id)?M.ITEMS[id]:undefined,
   iconUrl:id=>M.ITEMS[id]?.type==='decor'?decorIcon(id)||null:`${ICON_BASE}${Object.hasOwn(M.CROPS,id)?'crops':Object.hasOwn(M.FISH,id)?'fish':'items'}/${id}.webp`,
-  canAdd:(id,n)=>Number.isSafeInteger((state.bag[id]??0)+n),onPick:(d,stack)=>{if(!change(()=>M.addItem(state,d.item,d.count)))return;floating(`+${d.count} ${t(M.ITEMS[d.item].name)}`,world.position.x,world.position.z,'item',stack*.7);tone('coin');},
+  canAdd:(id,n)=>Number.isSafeInteger((state.bag[id]??0)+n),onPick:(d,stack)=>{
+    const feedback=(id:string,count:number)=>{floating('+'+count+' '+t(M.ITEMS[id].name),world.position.x,world.position.z,'item',stack*.7);tone('coin');};
+    if(actionHandler){const meta=networkDrops.get(d.uid);if(!meta)return;networkDrops.delete(d.uid);const collectingState=state,root=world.root;
+      void perform<{item:string;count:number}>('claimDrop',{ownerId:meta.drop.ownerId,id:meta.drop.id}).then(result=>{
+        if(state!==collectingState||world.root!==root||visiting)return;
+        if(result)feedback(result.item,result.count);else if(meta.drop.expiresAt>Date.now())spawnNetworkDrop(meta.drop,meta.actor);
+      });
+    }else if(change(()=>M.addItem(state,d.item,d.count)))feedback(d.item,d.count);
+  },
   onFull:()=>toast('Your backpack is full. Store or sell something first.','🎒'),onRare:(d,name)=>{floating(`${d.rarity==='legendary'?'👑':'✨'} ${name}`,d.x,d.z,'item');tone('level');},onExpire:d=>world.burst(d.x,d.z,'#cfd6e6',6)});
-frameListeners.add(dt=>drops.update(dt));
+const networkDrops=new Map<number,{drop:NetworkDrop;actor:string}>();
+function spawnNetworkDrop(drop:NetworkDrop,actor:string){
+  if(!drop||!M.ITEMS[drop.item]||drop.expiresAt<=Date.now()||drop.planet!==world.planet||visiting||[...networkDrops.values()].some(v=>v.drop.id===drop.id))return;
+  const d=drops.spawn(drop.item,drop.count,drop.x,drop.z,{thrown:!!drop.thrown&&drop.owner===actor});if(!d)return;
+  d.vx=d.vz=0;d.life=Math.max(0,(drop.expiresAt-Date.now())/1000);networkDrops.set(d.uid,{drop,actor});
+}
+function removeNetworkDrop(id:string){for(const [uid,meta]of networkDrops)if(meta.drop.id===id){drops.sim.drops=drops.sim.drops.filter(d=>d.uid!==uid);networkDrops.delete(uid);}}
+frameListeners.add(dt=>{for(const [uid,meta]of networkDrops){const d=drops.sim.drops.find(d=>d.uid===uid);if(!d){networkDrops.delete(uid);continue;}d.pickupLocked=meta.drop.owner!==meta.actor&&Date.now()<meta.drop.releaseAt;}drops.update(dt);});
 // Drawn on the next frame's render: a one-frame lag is invisible on a 0.5 m gardener.
 frameListeners.add(dt=>helperView.update(dt,{state:!flight&&world.planet==='home'?world.state:null,act:started&&!visiting&&world.state===state&&!document.hidden,now:Date.now(),harvest:helperHarvest,plant:helperPlant}));
 function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string;x?:number;z?:number}){
+  if(actionHandler)return;
   const loot=change(()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss,Math.random,false));
   // Experience flies in as cyan orbs; the loot is tossed onto the ground where the creature fell.
   const x=e.x??world.position.x,z=e.z??world.position.z;
@@ -653,12 +741,18 @@ function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:stri
   if(e.boss){toast(`${e.name??'Boss'} defeated!`,'👑');tone('level');}
 }
 function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=false){
-  if(e.hp<=0||(visiting&&!remote))return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;
+  if(e.hp<=0||(visiting&&!remote))return;if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;
   world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,damage,!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');
     const type=(e as Enemy&{type?:string}).type??'slime';if(network.onHostKill)network.onHostKill(e.id,e.xp,e.boss,type);else grantDefeat({...e,type});}
+}
+/** Devour finishes a weakened ordinary creature even through a defensive shell. */
+function executeEnemy(enemy:Enemy,healFraction:number){
+  if(actionHandler||visiting||enemy.boss||enemy.hp<=0||enemy.hp/enemy.maxHp>=.4||Math.hypot(enemy.x-world.position.x,enemy.z-world.position.z)>3.2+enemy.radius)return;
+  hit(enemy,enemy.hp+1,0,undefined,false,true);
+  if(enemy.hp<=0)change(()=>{state.hp=Math.min(M.maxHp(state),state.hp+M.maxHp(state)*Math.max(0,Math.min(.25,healFraction)));});
 }
 /** Ground slam impact, after the reference: flying dirt, two shockwaves and a heavy shake. */
 function slamImpact(){
@@ -683,7 +777,7 @@ function equipFeedback(id:string){
 function basicAttack(e?:Enemy){
   if(!started||uiBlocked()||visiting||combatTimers.attackCooldown>0)return;
   prepareCombatWeapon();
-  if(combat.basic(e)){const stats=M.activeStats(state),weapon=M.weaponStats(state);combatTimers.attackCooldown=(weapon.cd??.4)/Math.max(.2,1+stats.haste);world.playerAttack(weapon.kind);tone(weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic'});}
+  if(combat.basic(e)){const stats=M.activeStats(state),weapon=M.weaponStats(state);combatTimers.attackCooldown=(weapon.cd??.4)/Math.max(.2,1+stats.haste);world.playerAttack(weapon.kind);tone(weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
 }
 world.onAttackEnemy=basicAttack;
 function skillList(){const disguise=state.gear.disguise?M.DISGUISES[state.gear.disguise]:null;return disguise?.skills??[...BASE_SKILLS,SPECIALS[M.weaponStats(state).special??'fist']??SPECIALS.fist];}
@@ -693,12 +787,14 @@ function skill(index:number){
   const disguise=state.gear.disguise,weapon=M.weaponStats(state),skills=skillList();
   if(!(disguise?combat.disguise(disguise,index):combat.skill(index,weapon.special??'fist')))return;
   skillDurations[index]=skills[index].cd/Math.max(.2,1+M.activeStats(state).haste);cooldowns[index]=skillDurations[index];
-  change(()=>recordEvent(state,'skill'));if(index===0)world.spinT=2.2;else if(index===1)world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});tone(index===0?'swing':index===3?'crit':'punch');emitAction({kind:'skill',index,special:disguise??weapon.special});
+  if(!actionHandler)change(()=>recordEvent(state,'skill'));if(index===0)world.spinT=2.2;else if(index===1)world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});tone(index===0?'swing':index===3?'crit':'punch');emitAction({kind:'skill',index,special:disguise??weapon.special});
 }
-function checkDefeat(){if(!started||state.hp>0)return false;endFishing();resetCombat();change(()=>M.die(state,world.position.x,world.position.z));rebuildHomePresentation('home');world.refreshPlayer();openDialog('death','A little rest, then try again',`<div class="grow-illustration">🌷</div><p class="center">You’re safe at home. Your level, energy, and equipped gear are safe too.</p><p class="center muted">${state.dropped?'Your loose items are waiting where you fell.':'Nothing was dropped.'}</p><button class="primary wide" data-action="close">Back on my feet →</button>`,'EVERY EXPLORER TAKES A TUMBLE');return true;}
-world.onDamage=(amount,source='melee')=>{
+let dying=false;
+function checkDefeat(){if(!started||state.hp>0||dying)return false;if(actionHandler){dying=true;void perform('die',{x:world.position.x,z:world.position.z}).then(()=>{dying=false;endFishing();resetCombat();rebuildHomePresentation('home');world.refreshPlayer();toast('You are safe at home.','🏡');});return true;}endFishing();resetCombat();change(()=>M.die(state,world.position.x,world.position.z));rebuildHomePresentation('home');world.refreshPlayer();openDialog('death','A little rest, then try again',`<div class="grow-illustration">🌷</div><p class="center">You’re safe at home. Your level, energy, and equipped gear are safe too.</p><p class="center muted">${state.dropped?'Your loose items are waiting where you fell.':'Nothing was dropped.'}</p><button class="primary wide" data-action="close">Back on my feet →</button>`,'EVERY EXPLORER TAKES A TUMBLE');return true;}
+world.onDamage=(amount,source='melee',enemyId)=>{
+  if(actionHandler){if(enemyId&&network.role==='host')network.reportDamage?.(enemyId,source);return;}
   if(combatTimers.invulnerable>0||combat.invulnerable||(source==='melee'&&(combat.statuses.flight??0)>0)||!started||(!network.role&&uiBlocked())||visiting)return;
-  const defense=M.activeStats(state).defense+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
+  const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
   state.hp=Math.max(0,state.hp-damage);combatTimers.invulnerable=.55;world.hurtFeedback(damage);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
   checkDefeat();
@@ -715,10 +811,18 @@ function rebuildHomePresentation(planet:M.PlanetId){
 const sharedKills=new Set<string>();
 export const gameBridge:GameBridge={
   getState:()=>state,getWorld:()=>world,
-  getPresence:()=>({y:world.position.y,x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden}),
+  getPresence:()=>({y:world.position.y,x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot()}),
   getOfflineState:()=>{try{return M.parseSave(localStorage.getItem(M.SAVE_KEY));}catch{return null;}},
-  applyState(next){state=next;applyMovePad();const nameInput=document.querySelector<HTMLInputElement>('#name-input');if(nameInput)nameInput.value=state.name;visiting=null;visitHome=null;world.state=state;resetCombat();world.build(state.planet);world.refreshPlayer();if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal)closeDialog();updateHud();updateLabels();},
+  applyState(next){if(flight)exitSpace();shipSequence?.reset();arriving=false;autopilotTarget=null;state=next;applyMovePad();const nameInput=document.querySelector<HTMLInputElement>('#name-input');if(nameInput)nameInput.value=state.name;visiting=null;visitHome=null;world.state=state;resetCombat();world.build(state.planet);world.refreshPlayer();if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal)closeDialog();updateHud();updateLabels();},
   setPersistence(handler){persistence=handler;},
+  setActionHandler(handler){actionHandler=handler;world.authoritativeAction=handler?intent=>handler(intent).then(reply=>reply.result):undefined;},
+  applyAuthoritativeState(next){
+    const planetChanged=next.planet!==state.planet,wasDead=state.hp<=0;const previousGear=JSON.stringify(state.gear),wasFishing=!!world.fishing&&world.fishing!=='idle',plotsChanged=next.plots.length!==state.plots.length,decorChanged=JSON.stringify(next.decorations)!==JSON.stringify(state.decorations);
+    const beforeLevel=state.level;const current=state as unknown as Record<string,unknown>;for(const key of Object.keys(current))if(!Object.hasOwn(next,key))delete current[key];Object.assign(state,next);if(wasFishing&&!planetChanged){const rod=contextGear.forFishing(state);if(rod)state.gear.weapon=rod;}const gearChanged=JSON.stringify(state.gear)!==previousGear;levelCheck(beforeLevel);if(planetChanged){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();if(wasDead)toast('You are safe at home.','🏡');}if(!visiting){world.state=state;if(plotsChanged){const position=world.position.clone();rebuildHomePresentation(state.planet);world.position.copy(position);}else{world.syncCrops();if(decorChanged)world.syncDecorations();}if(gearChanged)world.refreshPlayer();world.syncDropped();}
+    updateHud();updateLabels();
+  },
+  spawnNetworkDrop,removeNetworkDrop,releaseNetworkDrop(id){for(const meta of networkDrops.values())if(meta.drop.id===id)meta.drop.releaseAt=0;},clearNetworkDrops(){networkDrops.clear();drops.clear();},
+  applyAuthorityHealth(delta,died){if(delta<0){world.hurtFeedback(-delta);tone('hurt');if(fishGame)endFishing('The fish got away when you were hit.');}if(died){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();closeDialog();toast('You are safe at home.','🏡');}updateHud();},
   setNetworkHooks(hooks){network=hooks;world.networkRole=hooks.role;},
   applyRemoteHit(id,damage,stun=0,impact){const enemy=world.enemies.find(e=>e.id===id);if(enemy)hit(enemy,damage,stun,impact,true);},
   applyRemoteStatus(id,kind,duration){const enemy=world.enemies.find(e=>e.id===id);if(enemy)world.statusEnemy(enemy,kind,Math.min(12,duration));},
@@ -729,13 +833,13 @@ export const gameBridge:GameBridge={
   setVisiting(owner,home){
     if(owner&&owner===visiting&&home&&visitHome){
       const expanded=home.plots&&home.plots.length!==visitHome.plots.length,decorChanged=JSON.stringify(home.decorations??[])!==JSON.stringify(visitHome.decorations);
-      visitHome.plots=structuredClone(home.plots??visitHome.plots);visitHome.decorations=structuredClone(home.decorations??visitHome.decorations);visitHome.farm=M.parseFarm((home as {farm?:unknown}).farm);visitHome.helper=M.parseHelper((home as {helper?:unknown}).helper);
+      if(home.name)visitHome.name=home.name;if(home.discovered)visitHome.discovered=[...home.discovered];visitHome.plots=structuredClone(home.plots??visitHome.plots);visitHome.decorations=structuredClone(home.decorations??visitHome.decorations);visitHome.farm=M.parseFarm((home as {farm?:unknown}).farm);visitHome.helper=M.parseHelper((home as {helper?:unknown}).helper);
       if(expanded){const position=world.position.clone();rebuildHomePresentation('home');world.position.copy(position);world.refreshPlayer();}
       else{world.syncCrops();if(decorChanged)world.syncDecorations();}
       updateLabels();return;
     }
     visiting=owner;resetCombat();closeDialog();
-    if(owner&&home){visitHome={...structuredClone(state),planet:'home',plots:structuredClone(home.plots??state.plots),decorations:structuredClone(home.decorations??[]),farm:M.parseFarm((home as {farm?:unknown}).farm),helper:M.parseHelper((home as {helper?:unknown}).helper)};world.state=visitHome;rebuildHomePresentation('home');}
+    if(owner&&home){visitHome={...structuredClone(state),name:home.name??state.name,planet:'home',discovered:[...(home.discovered??['home'])],plots:structuredClone(home.plots??state.plots),decorations:structuredClone(home.decorations??[]),farm:M.parseFarm((home as {farm?:unknown}).farm),helper:M.parseHelper((home as {helper?:unknown}).helper)};world.state=visitHome;rebuildHomePresentation('home');}
     else{visitHome=null;world.state=state;rebuildHomePresentation(state.planet);}
     world.refreshPlayer();$('#visit-banner').hidden=!owner;$('#visit-banner').textContent=t(owner?t('Visiting {owner} · look around their garden',{owner}):'');updateLabels();
   },
@@ -752,20 +856,23 @@ const spaceView=new SpaceView($('#space-labels'),spaceKit);
 const spaceKeys=new Set<string>();let spacePointer:{x:number;y:number}|null=null,boostHeld=false;
 const prefetch=(id:M.PlanetId)=>{for(const name of kitsFor(id))void SCENERY_KITS[name].load();};
 function leaveWorld(){closeDialog();resetCombat();cancelPlacement();endFishing();world.destination=null;world.route=[];world.selected=null;world.marker.visible=false;world.ring.visible=false;movement.clear();}
-function launch(){
-  if(ship.busy||flight||arriving)return;
-  if(!change(()=>M.launch(state))){toast(`The starship needs ϟ ${M.LAUNCH_COST} energy to fill its tank.`,'⛽');return;}
-  leaveWorld();toast('Lift-off in three, two, one…','🚀');
-  ship.launch(()=>warp(enterSpace));
+async function launch(){
+  if(ship.busy||flight||arriving||launchPending)return;launchPending=true;const launchingState=state;
+  try{
+    const paid=await perform('launch');if(state!==launchingState)return;
+    if(!paid){toast(`The starship needs ϟ ${M.LAUNCH_COST} energy to fill its tank.`,'⛽');return;}
+    leaveWorld();toast('Lift-off in three, two, one…','🚀');
+    ship.launch(()=>warp(()=>{if(state===launchingState)enterSpace();}));
+  }finally{launchPending=false;}
 }
 /** Star-map pick: pay the launch as usual, then the autopilot flies to the planet and lands. */
 let autopilotTarget:M.PlanetId|null=null;
-function flyTo(id:M.PlanetId){
-  if(ship.busy||flight||arriving)return;const r=starRoutes().find(r=>r.id===id);if(!r||r.lock)return;
-  autopilotTarget=id;launch();if(!ship.busy)autopilotTarget=null;
+async function flyTo(id:M.PlanetId){
+  if(ship.busy||flight||arriving||launchPending)return;const r=starRoutes().find(r=>r.id===id);if(!r||r.lock)return;
+  autopilotTarget=id;await launch();if(!ship.busy)autopilotTarget=null;
 }
 /** A quick trip home with the starship, without piloting: the old free ride back. */
-function flyHome(){if(ship.busy||flight||arriving)return;leaveWorld();ship.launch(()=>void arrive('home'));}
+function flyHome(){if(ship.busy||flight||arriving||launchPending)return;leaveWorld();ship.launch(()=>void arrive('home'));}
 function warp(then:()=>void){const flash=$('#warp-flash');flash.classList.add('show');setTimeout(()=>{then();setTimeout(()=>flash.classList.remove('show'),150);},600);}
 function enterSpace(){
   flight=new SpaceFlight(state.planet,state.discovered);flight.setAutopilot(autopilotTarget);autopilotTarget=null;spaceView.build(flight,graphics.level==='low');
@@ -782,33 +889,36 @@ function tryLanding(){
   if(!flight.land(id=>M.canLand(state,id))){const p=M.PLANETS[over.id];spaceHint(`🔒 The air on ${t(p.name)} is too rough. You need <b>level ${p.level}</b> to land.`,3);tone('hurt');return;}
   prefetch(over.id);tone('crit');$('#land-button').hidden=true;
 }
-function onSpaceEvent(event:SpaceEvent){
+async function onSpaceEvent(event:SpaceEvent){
   switch(event.kind){
     case 'boost':tone('swing');break;
     case 'bump':spaceView.shake=.5;tone('hit');break;
     case 'empty':spaceHint('⛽ Out of fuel! The starship can only crawl. Collect <b>stardust</b> ✨ to refuel.',5);break;
     case 'edge':spaceHint('🌌 This is the edge of the universe. Time to turn back!',3);break;
-    case 'dust':{const shard=M.collectStardust(state);spaceFloat(`✨ +14 fuel · +3 ϟ${shard?' · 🌟 Star shard!':''}`);tone(shard?'level':'coin');break;}
-    case 'discover':{M.discover(state,event.planet);save();prefetch(event.planet);const p=M.PLANETS[event.planet];
+    case 'dust':{const journey=flight,reward=await perform<{shard:boolean;nextDust?:{id:number;x:number;z:number}}>('collectStardust',{position:journey?{x:journey.x,z:journey.z}:undefined,dustId:event.id});if(!reward)break;if(journey&&flight===journey&&reward.nextDust){const dust=journey.layout.dust.find(d=>d.id===reward.nextDust!.id);if(dust)Object.assign(dust,reward.nextDust);}spaceFloat(`✨ +14 fuel · +3 ϟ${reward.shard?' · 🌟 Star shard!':''}`);tone(reward.shard?'level':'coin');break;}
+    case 'discover':{if(!await perform('discover',{id:event.planet,position:flight?{x:flight.x,z:flight.z}:undefined}))break;prefetch(event.planet);const p=M.PLANETS[event.planet];
       spaceHint(`🔭 New planet discovered: <b>${p.icon} ${t(p.name)}</b><br><small>Bosses: ${p.bosses.map(b=>t(ENEMY_TYPES[b]?.name)??b).join(', ')} · landing from level ${p.level}</small>`,6);tone('level');break;}
     case 'landed':void arrive(event.planet);break;
   }
 }
 /** Swaps worlds behind a flash, then brings the starship down onto the new pad. */
 async function arrive(id:M.PlanetId){
-  if(arriving)return;arriving=true;
+  if(arriving)return;arriving=true;const arrivingState=state,journey=flight;
   const flash=$('#warp-flash');flash.classList.add('show');
   await new Promise(resolve=>setTimeout(resolve,600));
   try{
-    M.travel(state,id);save();
+    if(state!==arrivingState)return;
+    const arrived=await perform(id==='home'?'returnHome':'travel',{id});if(state!==arrivingState)return;
+    if(!arrived){if(journey&&flight===journey){journey.landing=null;journey.autopilot=null;}else ship.reset();return;}
     await Promise.race([Promise.all(kitsFor(id).map(name=>SCENERY_KITS[name].load())),new Promise(resolve=>setTimeout(resolve,2500))]);
+    if(state!==arrivingState)return;
     if(flight)exitSpace();
     ship.reset();world.build(id);world.refreshPlayer();world.applyRefinedAssets();updateLabels();settle();
     // Compile the new world's shaders in the background, so the first frames after landing don't hitch.
     void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{});
     const p=M.PLANETS[id];
     ship.land(()=>{showZone(id==='home'?'Clover Village':t(p.name));floating(`${p.icon} ${t(p.name)}`,world.position.x,world.position.z,'level',1);toast(id==='home'?'Home, sweet home!':`Welcome to ${t(p.name)}! Watch out for its creatures.`,p.icon);});
-  }finally{arriving=false;setTimeout(()=>flash.classList.remove('show'),150);}
+  }finally{if(state===arrivingState){arriving=false;setTimeout(()=>flash.classList.remove('show'),150);}else flash.classList.remove('show');}
 }
 function updateSpace(dt:number){
   if(!flight)return;
@@ -830,54 +940,57 @@ for(const type of ['pointerup','pointercancel'])addEventListener(type,()=>{space
 const boostButton=$('#boost-button');
 boostButton.addEventListener('pointerdown',event=>{event.stopPropagation();event.preventDefault();boostHeld=true;});
 for(const type of ['pointerup','pointerleave','pointercancel'])boostButton.addEventListener(type,()=>{boostHeld=false;});
-app.addEventListener('click',event=>{
+app.addEventListener('click',async event=>{
   const button=(event.target as HTMLElement).closest<HTMLButtonElement>('button');if(!button||button.disabled)return;
   // A clicked HUD button gives up focus, so Space and other shortcuts cannot press it again.
   if((event as MouseEvent).detail>0&&button.closest('#hud,#world-labels'))button.blur();
   const action=button.dataset.action,id=button.dataset.item as M.ItemId,index=Number(button.dataset.index);if(action!=='reel')tone();
   switch(action){
-    case 'start':start();break;
-    case 'color':state.color=button.dataset.color!;document.querySelectorAll<HTMLButtonElement>('.color-picker button').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});world.refreshPlayer();break;
+    case 'start':start();break;case 'discovery':planets();break;
+    case 'color':await perform('settings',{color:button.dataset.color!});document.querySelectorAll<HTMLButtonElement>('.color-picker button').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});world.refreshPlayer();break;
+    case 'forge-menu':forgeMenu(id);break;
+    case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'level':'pop');}forgeMenu(id);break;}
+    case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
     case 'close':closeDialog();break;case 'bag':inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;
-    case 'claim':if(change(()=>M.claimQuest(state))){tone('success');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
-    case 'plant':if(change(()=>M.plant(state,activePlot,id as M.CropId))){plantBurst(activePlot);tone('pop');world.syncCrops();closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;
-    case 'cook-one':case 'cook-all':if(change(()=>M.cook(state,id,action==='cook-all'?(state.bag[id]||0):1))){tone('success');cooking();}break;
+    case 'claim':if(await perform('claimQuest')){tone('success');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
+    case 'plant':{const i=activePlot,opened=modal,root=world.root;if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
+    case 'cook-one':case 'cook-all':if(await perform('cook',{id,count:action==='cook-all'?(state.bag[id]||0):1})){tone('success');cooking();}break;
     // Reference: a fertilizer that ripens the crop closes the panel; one that only speeds it up refreshes it.
-    case 'fertilize-manure':case 'fertilize':if(change(()=>M.fertilize(state,activePlot,action==='fertilize'?'spore':'manure'))){world.syncCrops();const p=state.plots[activePlot];if(M.cropProgress(p)>=1){closeDialog();toast('Ready to harvest!','🌿');}else{plotDialog(activePlot);toast('Your crop will be ready sooner.','🌿');}}break;
+    case 'fertilize-manure':case 'fertilize':{const i=activePlot,opened=modal,root=world.root,generation=state.plots[i]?.generation;if(await perform('fertilize',{index:i,id:action==='fertilize'?'spore':'manure'})&&world.root===root&&!visiting){world.syncCrops();const p=state.plots[i];if(!p?.crop||p.generation!==generation)break;const active=modal===opened&&activePlot===i;if(M.cropProgress(p)>=1){if(active)closeDialog();toast('Ready to harvest!','🌿');}else{if(active)plotDialog(i);toast('Your crop will be ready sooner.','🌿');}}break;}
     case 'expand':buyPlot();break;
     case 'helper':helperDialog();break;
-    case 'helper-buy':{const r=change(()=>Helper.buyHelper(state));if(r==='bought'){tone('coin');helperView.reset();toast('Sprout joins your garden! It will tend the beds by itself.','🤖');}else if(r==='energy')toast(`You need ${Helper.HELPER_COST} energy to hire Sprout.`,'ϟ');else if(r==='away')toast('Garden beds belong at home. Return to your garden first.','🏡');helperDialog();break;}
-    case 'helper-pause':if(state.helper)change(()=>Helper.setHelperPaused(state,!state.helper!.paused));helperDialog();break;
-    case 'helper-seed':change(()=>Helper.setHelperSeed(state,id as M.CropId|'same'));helperDialog();break;
+    case 'helper-buy':{const r=await perform('buyHelper');if(r==='bought'){tone('coin');helperView.reset();toast('Sprout joins your garden! It will tend the beds by itself.','🤖');}else if(r==='energy')toast(`You need ${Helper.HELPER_COST} energy to hire Sprout.`,'ϟ');else if(r==='away')toast('Garden beds belong at home. Return to your garden first.','🏡');helperDialog();break;}
+    case 'helper-pause':if(state.helper)await perform('setHelperPaused',{paused:!state.helper!.paused});helperDialog();break;
+    case 'helper-seed':await perform('setHelperSeed',{id});helperDialog();break;
     case 'confirm-place':confirmPlacement();break;
-    case 'store-bed':{const i=activePlot;if(change(()=>M.storeBed(state,i))){closeDialog();world.dropPlotsFrom(i);tone('poof');toast('The bed is packed away. It is in your bag as a garden bed kit.','🎒');}break;}
+    case 'store-bed':{const i=activePlot;if(await perform('storeBed',{index:i})){closeDialog();world.dropPlotsFrom(i);tone('poof');toast('The bed is packed away. It is in your bag as a garden bed kit.','🎒');}break;}
     case 'shop-tab':shopTab=button.dataset.kind!;shop();break;
     case 'journal-tab':journalTab=button.dataset.kind as ProgressKind;quests();break;
-    case 'start-challenge':if(change(()=>startChallenge(state,button.dataset.kind!))){quests();toast('Quick challenge started!','⏱️');}break;
-    case 'reroll-daily':change(()=>rerollDaily(state,index));quests();break;
-    case 'progress-claim':if(change(()=>claimProgress(state,button.dataset.kind as ProgressKind,button.dataset.id!))){tone('success');toast('Reward collected.','🎁');}quests();break;
-    case 'plant-all':{const empty=state.plots.map((p,i)=>p.crop?-1:i).filter(i=>i>=0);const count=change(()=>M.plantAll(state,id));empty.filter(i=>state.plots[i]?.crop).slice(0,12).forEach(plantBurst);if(count)tone('pop');world.syncCrops();closeDialog();toast(`Planted ${count} garden beds.`,'🌱');break;}
-    case 'harvest-all':{const ready=state.plots.map((p,i)=>p.crop&&M.cropProgress(p)>=1?[i,p.crop] as const:null).filter(Boolean) as (readonly [number,M.CropId])[];const count=change(()=>M.harvestAll(state));ready.slice(0,12).forEach(([i,crop])=>harvestBurst(i,crop));world.syncCrops();closeDialog();toast(`Harvested ${typeof count==='number'?count:Array.isArray(count)?count.length:0} crops.`,'🌾');break;}
-    case 'unequip':{M.unequip(state,button.dataset.slot as M.GearSlot);world.refreshPlayer();save();inventory();break;}
+    case 'start-challenge':if(await perform('startChallenge',{kind:button.dataset.kind})){quests();toast('Quick challenge started!','⏱️');}break;
+    case 'reroll-daily':await perform('rerollDaily',{index});quests();break;
+    case 'progress-claim':if(await perform('claimProgress',{kind:button.dataset.kind,id:button.dataset.id})){tone('success');toast('Reward collected.','🎁');}quests();break;
+    case 'plant-all':{const empty=state.plots.map((p,i)=>p.crop?-1:i).filter(i=>i>=0);const count=await perform('plantAll',{id});if(count===undefined)break;empty.filter(i=>state.plots[i]?.crop).slice(0,12).forEach(plantBurst);if(count)tone('pop');world.syncCrops();closeDialog();toast(`Planted ${count} garden beds.`,'🌱');break;}
+    case 'harvest-all':{const ready=state.plots.map((p,i)=>p.crop&&M.cropProgress(p)>=1?[i,p.crop] as const:null).filter(Boolean) as (readonly [number,M.CropId])[];const count=await perform('harvestAll');if(count===undefined)break;ready.slice(0,12).forEach(([i,crop])=>harvestBurst(i,crop));world.syncCrops();closeDialog();toast(`Harvested ${typeof count==='number'?count:Array.isArray(count)?count.length:0} crops.`,'🌾');break;}
+    case 'unequip':{await perform('unequip',{slot:button.dataset.slot});world.refreshPlayer();save();inventory();break;}
     case 'craft-tab':craftTab=button.dataset.kind!;crafting();break;
     case 'decorations':decorations();break;
     case 'decor-shop':shopTab='Decor';shop();break;
     case 'place-decor':beginPlacement(id);break;
     case 'cancel-decor':cancelPlacement();break;
     case 'rotate-decor':rotatePlacement();break;
-    case 'remove-decor':if(change(()=>M.removeDecoration(state,button.dataset.id!))){world.syncDecorations();decorations();}break;
-    case 'buy':if(change(()=>M.buy(state,id))){
+    case 'remove-decor':if(await perform('removeDecoration',{uid:button.dataset.id})){world.syncDecorations();decorations();}break;
+    case 'buy':if(await perform('buy',{id})){
       // Gear goes straight onto the explorer, like picking up a fishing rod.
-      if(M.ITEMS[id].slot&&change(()=>M.equip(state,id)))equipFeedback(id);else{floating(`+ ${t(M.ITEMS[id].name)}`,world.position.x,world.position.z,'item');tone('success');}
+      if(M.ITEMS[id].slot&&await perform('equip',{id}))equipFeedback(id);else{floating(`+ ${t(M.ITEMS[id].name)}`,world.position.x,world.position.z,'item');tone('success');}
       shop();}break;
-    case 'equip':if(change(()=>M.equip(state,id))){equipFeedback(id);if(modal==='shop')shop();else inventory();}break;
-    case 'eat':change(()=>M.eat(state,id));inventory();break;
-    case 'sell-one':case 'sell-all':{const n=action==='sell-all'?M.looseQuantity(state,id):1;const value=change(()=>M.sell(state,id,n));if(value){tone('success');toast(`Sold for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
-    case 'sell-produce':{const value=change(()=>sellProduce(state));if(value){tone('success');floating(`+${value} ϟ`);toast(`Sold all your produce for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
+    case 'equip':if(await perform('equip',{id})){equipFeedback(id);if(modal==='shop')shop();else inventory();}break;
+    case 'eat':await perform('eat',{id});inventory();break;
+    case 'sell-one':case 'sell-all':{const n=action==='sell-all'?M.looseQuantity(state,id):1;const value=await perform('sell',{id,count:n});if(value){tone('success');toast(`Sold for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
+    case 'sell-produce':{const value=await perform('sellProduce');if(value){tone('success');floating(`+${value} ϟ`);toast(`Sold all your produce for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
     // A tap moves the whole stack, like the reference's chest (equipped gear stays in the backpack).
-    case 'transfer':{const store=button.dataset.direction==='store',n=store?M.looseQuantity(state,id):state.chest[id]??0;change(()=>{for(let i=0;i<n&&M.transfer(state,id,store);i++);});tone('click');storage();break;}
-    case 'upgrade':{const kind=button.dataset.kind as keyof typeof M.UPGRADES;if(change(()=>M.upgrade(state,kind))){upgradeFeedback(kind);upgrades();tone('success');}break;}
-    case 'craft':if(change(()=>M.craft(state,index))){crafting();toast('Made with your own two hands. Check your backpack!','🔨');}break;
+    case 'transfer':{const store=button.dataset.direction==='store',n=store?M.looseQuantity(state,id):state.chest[id]??0;await perform('transfer',{id,count:n,toChest:store});tone('click');storage();break;}
+    case 'upgrade':{const kind=button.dataset.kind as keyof typeof M.UPGRADES;if(await perform('upgrade',{kind})){upgradeFeedback(kind);upgrades();tone('success');}break;}
+    case 'craft':if(await perform('craft',{index})){crafting();toast('Made with your own two hands. Check your backpack!','🔨');}break;
     case 'launch':launch();break;case 'land':case 'autopilot-skip':tryLanding();break;case 'fly-to':flyTo(button.dataset.kind as M.PlanetId);break;
     case 'go':go(button.dataset.kind!);break;
     case 'wild':{closeDialog();const destinations:Record<string,[number,number]>={forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]};const destination=destinations[button.dataset.kind??'forest']??[0,-30];world.walkTo(destination[0],destination[1]);toast('Follow the path beyond the garden gate.','🍄');break;}
@@ -885,19 +998,23 @@ app.addEventListener('click',event=>{
     case 'interact':world.interactNearest();break;case 'attack':basicAttack();break;case 'skill':skill(index);break;
     case 'fish-again':fish(fishPond);break;
     case 'reel':if(fishGame){if(event.detail===0)fishGame.input.toggle();}else if(button.classList.contains('cast'))fish(fishPond);break;
-    case 'move-pad':state.settings.movePad=!state.settings.movePad;save();applyMovePad();settings();break;
-    case 'sound':state.settings.sound=!state.settings.sound;save();settings();break;
-    case 'place-beds':if(state.settings.placeBeds)delete state.settings.placeBeds;else state.settings.placeBeds=true;save();settings();break;
+    case 'move-pad':await perform('settings',{settings:{movePad:!joystickEnabled()}});applyMovePad();settings();break;
+    case 'joystick-side':await perform('settings',{settings:{joystickSide:button.dataset.kind}});applyMovePad();settings();break;
+    case 'sound':await perform('settings',{settings:{sound:!state.settings.sound}});settings();break;
+    case 'place-beds':await perform('settings',{settings:{placeBeds:!state.settings.placeBeds}});settings();break;
     case 'collect-farm':collectFarm();break;
+    case 'pen-menu':penDialog();break;
+    case 'collect-animal':collectFarm(Number(button.dataset.id));break;
+    case 'build-species-pen':if(await perform('buildSpeciesPen',{kind:button.dataset.kind})){tone('success');penDialog();}break;
     case 'buy-animal':buyAnimal(button.dataset.kind as M.AnimalKind);break;
-    case 'feed-animal':{const crop=change(()=>M.feedAnimal(state,Number(button.dataset.id)));if(crop){tone('pop');feedBurst(Number(button.dataset.id));toast(`Fed a ${t(M.ITEMS[crop].name).toLowerCase()}. It will be quicker now.`,M.ITEMS[crop].icon);}penDialog();break;}
-    case 'feed-all':{const before=new Set(M.farmOf(state).animals.filter(a=>M.canFeed(a)).map(a=>a.uid)),n=change(()=>M.feedAll(state));if(n){tone('pop');for(const uid of before)if(!M.canFeed(M.farmOf(state).animals.find(a=>a.uid===uid)!))feedBurst(uid);toast(`Fed ${n} animal${n>1?'s':''}.`,'🥕');}penDialog();break;}
+    case 'feed-animal':{const crop=await perform('feedAnimal',{uid:Number(button.dataset.id)});if(crop){tone('pop');feedBurst(Number(button.dataset.id));toast(`Fed a ${t(M.ITEMS[crop].name).toLowerCase()}. It will be quicker now.`,M.ITEMS[crop].icon);}penDialog();break;}
+    case 'feed-all':{const before=new Set(M.farmOf(state).animals.filter(a=>M.canFeed(a)).map(a=>a.uid)),n=await perform('feedAll');if(n){tone('pop');for(const uid of before){const animal=M.farmOf(state).animals.find(a=>a.uid===uid);if(animal&&!M.canFeed(animal))feedBurst(uid);}toast(`Fed ${n} animal${n>1?'s':''}.`,'🥕');}penDialog();break;}
     case 'build-pen':buildPenAction();break;
-    case 'expand-pen':if(change(()=>M.expandPen(state))){tone('success');toast('The pen is bigger: room for 3 more chickens and 4 more cows.','🐔');}else toast(`You need ${M.penExpandCost(state)??0} energy to make the pen bigger.`,'ϟ');penDialog();break;
-    case 'cook-dish':if(change(()=>M.cookDish(state,id))){tone('success');toast(`${t(M.ITEMS[id].name)} is ready. Enjoy!`,M.ITEMS[id].icon);cooking();}break;case 'graphics':graphics.choose(button.dataset.kind as QualitySetting);world.applyGraphics(graphics.profile,graphics.ratio);saveGraphics(graphics);state.settings.lowGraphics=graphics.level==='low';save();settings();break;
+    case 'expand-pen':if(await perform('expandPen')){tone('success');toast('The pen is bigger: room for 3 more chickens and 4 more cows.','🐔');}else toast(`You need ${M.penExpandCost(state)??0} energy to make the pen bigger.`,'ϟ');penDialog();break;
+    case 'cook-dish':if(await perform('cookDish',{id})){tone('success');toast(`${t(M.ITEMS[id].name)} is ready. Enjoy!`,M.ITEMS[id].icon);cooking();}break;case 'graphics':graphics.choose(button.dataset.kind as QualitySetting);world.applyGraphics(graphics.profile,graphics.ratio);saveGraphics(graphics);await perform('settings',{settings:{lowGraphics:graphics.level==='low'}});settings();break;
     case 'zoom-in':case 'zoom-out':world.zoom=clampZoom(Math.round((world.zoom+(action==='zoom-in'?-ZOOM.button:ZOOM.button))*100)/100,'wheel');world.resize();$('#zoom-value').textContent=t(`${Math.round(world.zoom*100)}%`);break;
     case 'reset-confirm':openDialog('reset','Begin a brand-new story?',`<p class="intro">This replaces your ${persistence?'online account adventure':'offline adventure in this browser'}, including your garden, items, and levels.</p><div class="button-row"><button class="soft-button" data-action="settings">Keep my adventure</button><button class="primary danger-button" data-action="reset">Start fresh</button></div>`,'A FRESH START');break;
-    case 'reset':{const settingsCopy={...state.settings};state=M.newGame(state.name,state.color);state.settings=settingsCopy;world.state=state;rebuildHomePresentation('home');world.refreshPlayer();resetCombat();selectedItem=null;save();closeDialog();updateHud();toast('Every adventure starts with a little seed.','🌱');break;}
+    case 'reset':{if(!await perform('reset'))break;state=structuredClone(state);world.state=state;rebuildHomePresentation('home');world.refreshPlayer();resetCombat();selectedItem=null;save();closeDialog();updateHud();toast('Every adventure starts with a little seed.','🌱');break;}
   }
 });
 $('#dialog-layer').addEventListener('click',e=>{if(e.target===$('#dialog-layer'))closeDialog();});
@@ -907,18 +1024,19 @@ $('#world').addEventListener('wheel',event=>{if(uiBlocked())return;const e=event
 
 $('#world').addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('keydown',event=>{
+  const pressed=gameplayKey(event);if(!pressed)return;
   if(document.querySelector('dialog[open]'))return;
-  if(flight){const key=event.code==='Space'?' ':event.key.toLowerCase();if(key===' '||key.startsWith('arrow'))event.preventDefault();if(!event.repeat&&['l','enter','f'].includes(key))tryLanding();else spaceKeys.add(key);return;}
+  if(flight){const key=pressed.toLowerCase();if(key===' '||key.startsWith('arrow'))event.preventDefault();if(!event.repeat&&['l','enter','f'].includes(key))tryLanding();else spaceKeys.add(key);return;}
   if(event.key==='Escape'){if(placement)cancelPlacement();else closeDialog();return;}if(placement&&event.key==='Enter'){confirmPlacement();return;}
   if(modal&&event.key==='Tab'){const controls=Array.from($('#dialog').querySelectorAll<HTMLElement>('button:not(:disabled),input,select,a,[tabindex="0"]'));const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}return;}
-  if((event.target as HTMLElement).matches('input,textarea,select')){if(event.key==='Enter'&&!started)start();return;}
+  if((event.target as HTMLElement).matches('input,textarea,select')||(event.target as HTMLElement).isContentEditable){if(pressed==='Enter'&&!started)start();return;}
   if(fishGame&&event.code==='Space'){event.preventDefault();fishGame.input.holdSpace();return;}
   if(!started||uiBlocked())return;
-  if(event.key.startsWith('Arrow')){event.preventDefault();movement.pressKey(event.key);}
+  if(pressed.startsWith('Arrow')){event.preventDefault();movement.pressKey(pressed);}
   if(event.repeat)return;
-  const key=event.key.toLowerCase();if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key==='j')quests();else if(key==='m')map();else if(key==='f')world.interactNearest();else if(['q','w','e','r'].includes(key))skill(['q','w','e','r'].indexOf(key));else if(event.code==='Space'){event.preventDefault();basicAttack();}
+  const key=pressed.toLowerCase();if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key==='j')quests();else if(key==='m')map();else if(key==='f')world.interactNearest();else if(['q','w','e','r'].includes(key))skill(['q','w','e','r'].indexOf(key));else if(pressed===' '){event.preventDefault();basicAttack();}
 });
-document.addEventListener('keyup',e=>{spaceKeys.delete(e.code==='Space'?' ':e.key.toLowerCase());movement.releaseKey(e.key);if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
+document.addEventListener('keyup',e=>{const key=gameplayKey({...e,code:e.code,key:e.key});spaceKeys.delete(key.toLowerCase());movement.releaseKey(e.code||e.key);if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
 document.addEventListener('pointerdown',e=>{const target=(e.target as HTMLElement).closest<HTMLElement>('button');if(target?.dataset.move){e.preventDefault();movement.pressPointer(e.pointerId,target.dataset.move);target.setPointerCapture(e.pointerId);}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}});
 const releasePointer=(e:PointerEvent)=>{gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);fishGame?.input.releasePointer(e.pointerId);};
 document.addEventListener('pointerup',releasePointer);document.addEventListener('pointercancel',releasePointer);document.addEventListener('lostpointercapture',releasePointer);
@@ -932,8 +1050,8 @@ function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt
   // Simulate in small steps, then draw once. Movement remains consistent when a
   // browser throttles rendering, and collisions do not tunnel at a low frame rate. At most four steps
   // run per frame; a longer stall turns into slow motion rather than a spiral of ever longer frames.
-  updateContextWeapon();
-  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);combat.update(step,combatActive);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerStealth=(combat.statuses.stealth??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);if(started&&!document.hidden)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
+  updateContextWeapon();joystick.update();
+  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);combat.update(step,combatActive);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerStealth=(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
   // Landing from the ground slam squashes the explorer and jolts the camera.
   const airborne=combat.airborne>0;if(wasAirborne&&!airborne){world.landT=.25;slamImpact();}wasAirborne=airborne;
   // The explorer's pose follows the weapon, skills, fishing line and hit invulnerability.
@@ -964,7 +1082,7 @@ onLanguageChange(()=>{
   updateHud();updateLabels();minimap.invalidate();
   if(started)showZone(world.lastZone||t(M.PLANETS[state.planet].name));
   if(modal==='settings'){settings();$<HTMLSelectElement>('#language-settings').focus({preventScroll:true});}
-  else if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal==='shop')shop();else if(modal==='sell')market();else if(modal==='chest')storage();else if(modal==='upgrade')upgrades();else if(modal==='cook')cooking();else if(modal==='craft')crafting();else if(modal==='decor')decorations();else if(modal==='map')map();else if(modal==='travel')planets();else if(modal==='help')help();else if(modal==='pen')penDialog();
+  else if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal==='shop')shop();else if(modal==='sell')market();else if(modal==='chest')storage();else if(modal==='upgrade')upgrades();else if(modal==='cook')cooking();else if(modal==='craft')crafting();else if(modal==='forge')forgeMenu();else if(modal==='decor')decorations();else if(modal==='map')map();else if(modal==='travel')planets();else if(modal==='help')help();else if(modal==='pen')penDialog();
 });
 initOnline(gameBridge);
 initPlatform(message=>toast(message));

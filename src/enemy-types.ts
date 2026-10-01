@@ -1,7 +1,8 @@
 import {PLANETS,type PlanetId} from './model.ts';
+import {TITANS} from './titan-content.ts';
 
 export type EnemyBehavior='hopper'|'melee'|'charger'|'rooted'|'shooter'|'boss';
-export interface EnemyDefinition {name:string;hp:number;damage:number;speed:number;reach:number;sight:number;xp:number;radius:number;behavior:EnemyBehavior;family:string;color:string;accent:string;cooldown:number;windup:number;boss:boolean;flying?:boolean;stealth?:number;aquatic?:boolean}
+export interface EnemyDefinition {name:string;hp:number;damage:number;speed:number;reach:number;sight:number;xp:number;radius:number;behavior:EnemyBehavior;family:string;color:string;accent:string;cooldown:number;windup:number;boss:boolean;titan?:boolean;flying?:boolean;stealth?:number;aquatic?:boolean}
 function creature(name:string,hp:number,damage:number,speed:number,xp:number,family:string,color:string,behavior:EnemyBehavior='melee',extra:Partial<EnemyDefinition>={}):EnemyDefinition{
   return {name,hp,damage,speed,xp,family,color,accent:'#fff1cf',behavior,reach:1.6,sight:10,radius:.7,cooldown:1.5,windup:.45,boss:false,...extra};
 }
@@ -70,6 +71,8 @@ export const ENEMY_TYPES:Record<string,EnemyDefinition>={
   demoneye:creature('Watchful Eye',220,26,0,66,'eye','#df739f','shooter',{reach:12}),
   shadowlord:boss('Shadow Lord',2800,42,1500,'biped','#58476f',{radius:1.7,reach:3,accent:'#be91e6'}),
 };
+
+Object.assign(ENEMY_TYPES,TITANS);
 
 export const HOME_SPAWNS:Record<string,Array<[string,number]>>={forest:[['mushroom',20],['boar',12],['bee',6]],meadow:[['mushroom',12],['boar',8],['bee',12]],swamp:[['chomper',14],['wolf',10],['frog',12],['mushroom',6]],canyon:[['cactus',14],['wolf',8],['crab',12]]};
 export const PLANET_SPAWNS=Object.fromEntries(Object.entries(PLANETS).map(([id,planet])=>[id,planet.spawns])) as Partial<Record<PlanetId,Array<[string,number]>>>;
@@ -814,4 +817,4 @@ export const ENEMY_SCALE:Readonly<Record<string,number>>={
   wisp:.73,spider:.99,demoneye:.84,
 };
 /** The scale a creature's model is drawn at: bosses 1.85, common creatures their ENEMY_SCALE. */
-export function enemyScale(type:string|undefined,boss=false){return boss?1.85:ENEMY_SCALE[type??'']??1;}
+export function enemyScale(type:string|undefined,boss=false){return type&&Object.hasOwn(TITANS,type)?TITANS[type as keyof typeof TITANS].scale:boss?1.85:ENEMY_SCALE[type??'']??1;}

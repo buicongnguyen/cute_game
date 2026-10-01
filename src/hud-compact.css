@@ -27,7 +27,8 @@
 .player-details { width: 176px; }
 .player-name { margin-bottom: 3px; font-size: var(--t-sm); }
 .meter { height: 16px; border-width: 2px; }
-.experience { height: 8px; margin-top: 3px; }
+.experience { height: 16px; margin-top: 3px; background: #fff2c8; border-width: 1px; }
+.experience > span { color: #49330b; font-size: 10px; line-height: 1; text-shadow: 0 1px 0 #ffffff99; }
 .location { margin-top: 3px; font-size: var(--t-xs); }
 
 /* Top-right menu: round buttons of --b and the energy pill at the same height */
@@ -46,7 +47,7 @@
 .minimap > small { top: calc(100% + 3px); padding: 1px 8px; font-size: 10px; letter-spacing: .6px; text-transform: uppercase; }
 
 /* Quest and bounty trackers */
-.tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 74px); width: 236px; gap: 6px; }
+.tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 82px); width: 236px; gap: 6px; }
 .quest-tracker { padding: 7px 10px 8px; }
 #quest-summary { padding: 4px 0 6px; gap: 8px; }
 .quest-icon { width: 30px; height: 30px; font-size: 17px; border-radius: 9px; }
@@ -93,13 +94,13 @@
   .avatar > span { font-size: 22px; }
   .player-details { width: min(130px, 34vw); }
   .meter { height: 14px; }
-  .experience { height: 7px; }
+  .experience { height: 14px; }
   .top-actions { max-width: 48vw; }
   .energy { padding: 0 9px 0 3px; }
   .icon-button, #social-slot .social-toggle, #platform-slot .platform-tools button { width: var(--b); height: var(--b); font-size: calc(var(--b) * .46); }
   .minimap { top: calc(var(--edge) + var(--safe-top) + var(--b) * 2 + var(--gap) + 6px); right: var(--edge); width: var(--mm); height: var(--mm); }
   .meter > span { font-size: 9.5px; line-height: 1; }
-  .tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 64px); width: min(196px, 50vw); gap: 4px; }
+  .tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 72px); width: min(196px, 50vw); gap: 4px; }
   .bottom-bar { left: var(--edge); right: var(--edge); bottom: calc(10px + var(--safe-bottom)); }
   .skills { gap: max(12px, calc(44px - var(--sk) + 6px)); bottom: 8px; }
   .skill { width: var(--sk); height: var(--sk); }
@@ -116,14 +117,14 @@
   .avatar > span { font-size: 20px; }
   .player-details { width: 140px; }
   .meter { height: 14px; }
-  .experience { height: 6px; margin-top: 2px; }
+  .experience { height: 14px; margin-top: 2px; }
   .location { margin-top: 1px; }
   .icon-button, #social-slot .social-toggle, #platform-slot .platform-tools button { width: var(--b); height: var(--b); font-size: calc(var(--b) * .46); }
   .energy { height: var(--b); }
   .energy > span { width: calc(var(--b) - 10px); height: calc(var(--b) - 10px); }
   .minimap { top: calc(var(--edge) + var(--safe-top) + var(--b) + 6px); right: var(--edge); width: var(--mm); height: var(--mm); }
   .meter > span { font-size: 9.5px; line-height: 1; }
-  .tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 54px); width: 184px; gap: 4px; }
+  .tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 62px); width: 184px; gap: 4px; }
   .bottom-bar { left: var(--edge); right: var(--edge); bottom: calc(var(--edge) + var(--safe-bottom)); }
   .skills { grid-template-columns: repeat(2, var(--sk)); gap: 10px; }
   .skill { width: var(--sk); height: var(--sk); }

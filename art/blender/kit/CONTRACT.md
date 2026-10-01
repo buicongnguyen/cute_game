@@ -648,13 +648,12 @@ and Shadow lit only around the explorer.
 ## Farm pen (`build_farm.py` → `farm.glb`)
 
 `public/assets/models/farm.glb` holds a farm-animal pen for beside the garden:
-four animals, six pen pieces and three products. Blender is Z up with the front
+nine animal models, eleven pen pieces and five products. Blender is Z up with the front
 facing -Y (glTF Y up, front +Z), 1 unit is 1 metre, and every top-level node
 sits at the origin with no transform. Its origin is the piece's ground centre.
 Materials are shared by name across the file (`Farm <name>`, for example
 `Farm feather`, `Farm cow patch`, `Farm wood dark`). They are flat colours,
-single sided, with no textures, UVs or glow. The file is about 272 KB (limit
-320 KB) and the game does not load it yet.
+single sided, with no textures, UVs or glow. The expanded file is about 439 KB (limit 640 KB). FarmPenView loads and batches its animated parts.
 
 ### Animals
 
@@ -740,7 +739,7 @@ The build fails when a piece breaks any of these rules:
 - a height or half extent is more than 12 % off its target;
 - a footprint is off its origin;
 - a material is not named `Farm …` or is emissive, or the file has textures;
-- the GLB is over 320 KB or an icon is over 8 KB.
+- the GLB is over 640 KB or an icon is over 8 KB.
 
 Output is deterministic. The manifest
 (`art/generated/kit/farm-manifest.json`, copied into `art/asset-manifest.json`
@@ -793,3 +792,11 @@ about 46 KB. The game shows it at 1.5x (0.8 m) so it reads at the game camera. T
 one geometry and draws all six with one shared toon material, with no shadow
 casting (a blob decal sits underneath). The build also renders
 `public/assets/icons/helper.webp` (160 × 160) for the hire panel.
+
+### October farm and fruit additions
+
+The farm generator imports build_farm_expansion.py. Duck and duckling use the bird hinges; pig, piglet and dog use the quadruped hinges. Each remains below 1,500 triangles. Duck eggs and truffles remain below 300 triangles and have transparent 160px WebP icons. Five species shelters are named chicken_shelter, duck_shelter, cow_shelter, pig_shelter and dog_shelter, each below the 800-triangle prop budget. Their saved anchors determine the five-metre species bonus; wandering never changes it.
+
+The separate build_fruit_crops.py generator exports fruit_crops.glb (limit 600 KB), with crop_apple, crop_grape, crop_mango, crop_pineapple, crop_coconut, crop_durian, crop_lychee and crop_peach. These are whole mature plants with grounded origins and identity root transforms, 0.98–1.27m high, below 2,600 triangles each. Grapes use a trellis, pineapple a leaf rosette, coconut a palm; other fruit has small orchard trees. Crop cards capture these nodes through the existing crop kit. Previews are art/previews/kit/farm-expansion.webp and fruit-crops.webp.
+
+The fruit generator also renders all eight harvested-fruit inventory icons to public/assets/icons/crops/ at 160 x 160 with transparent WebP backgrounds. The fruit-icons.webp contact sheet verifies full-size and 52px readability; the eight files total about 29 KB.

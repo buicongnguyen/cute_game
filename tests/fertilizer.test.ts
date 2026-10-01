@@ -31,26 +31,26 @@ test('two doses of either fertilizer ripen every crop from newly planted', () =>
 });
 
 test('fertilizer removes half the original duration after natural growth and caps at ripe', () => {
-  const state = garden('melon'); // Original duration is 120 seconds.
-  assert.equal(M.cropProgress(state.plots[0], plantedAt + 30_000), .25);
-  assert.equal(M.fertilize(state, 0, plantedAt + 30_000, 'manure'), true);
-  assert.equal(M.cropProgress(state.plots[0], plantedAt + 30_000), .75);
-  assert.equal(M.fertilize(state, 0, plantedAt + 30_000, 'spore'), true);
-  assert.equal(M.cropProgress(state.plots[0], plantedAt + 30_000), 1);
-  assert.equal(state.plots[0].plantedAt, plantedAt + 30_000 - M.CROPS.melon.duration, 'no excess progress');
-  assert.equal(M.harvest(state, 0, plantedAt + 30_000), 'melon');
-  assert.equal(M.plant(state, 0, 'carrot', plantedAt + 30_000), true);
-  assert.equal(M.cropProgress(state.plots[0], plantedAt + 30_000), 0, 'the next planting has a fresh timer');
+  const state = garden('melon'); // Original duration is 1,200 seconds.
+  assert.equal(M.cropProgress(state.plots[0], plantedAt + 300_000), .25);
+  assert.equal(M.fertilize(state, 0, plantedAt + 300_000, 'manure'), true);
+  assert.equal(M.cropProgress(state.plots[0], plantedAt + 300_000), .75);
+  assert.equal(M.fertilize(state, 0, plantedAt + 300_000, 'spore'), true);
+  assert.equal(M.cropProgress(state.plots[0], plantedAt + 300_000), 1);
+  assert.equal(state.plots[0].plantedAt, plantedAt + 300_000 - M.CROPS.melon.duration, 'no excess progress');
+  assert.equal(M.harvest(state, 0, plantedAt + 300_000), 'melon');
+  assert.equal(M.plant(state, 0, 'carrot', plantedAt + 300_000), true);
+  assert.equal(M.cropProgress(state.plots[0], plantedAt + 300_000), 0, 'the next planting has a fresh timer');
   const almostRipe = garden();
-  assert.equal(M.fertilize(almostRipe, 0, plantedAt + 9_999, 'manure'), true);
-  assert.equal(M.cropProgress(almostRipe.plots[0], plantedAt + 9_999), 1);
+  assert.equal(M.fertilize(almostRipe, 0, plantedAt + 99_999, 'manure'), true);
+  assert.equal(M.cropProgress(almostRipe.plots[0], plantedAt + 99_999), 1);
 });
 
 test('fixed fertilizer progress survives save reload and ordinary elapsed time', () => {
   let state = garden();
   assert.equal(M.fertilize(state, 0, plantedAt, 'manure'), true);
   state = M.parseSave(JSON.stringify(state))!;
-  assert.equal(M.cropProgress(state.plots[0], plantedAt + 1_000), .6);
+  assert.equal(M.cropProgress(state.plots[0], plantedAt + 1_000), .51);
   assert.equal(state.bag.manure, 2);
   assert.equal(M.fertilize(state, 0, plantedAt + 1_000, 'fertilizer'), true, 'legacy alias still uses spore');
   state = M.parseSave(JSON.stringify(state))!;

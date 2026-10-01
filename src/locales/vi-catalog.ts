@@ -1,3 +1,4 @@
+import { TITAN_VI } from '../titan-content.ts';
 /** Vietnamese catalog labels. Short reference terms matched by stable item IDs;
  * original descriptions and farm additions translated for this game. IDs and game rules stay unchanged.
  * Exact English keys also cover generated cooked names and catalog stat descriptions.
@@ -643,3 +644,93 @@ export const VI_CATALOG: Record<string, string> = {
   "Steady fishing rod": "Cần Câu Vững Chãi",
   "A sturdy rod whose line never snaps. It reels heavy fish in quickly; you still hook at the bite and keep the line from going slack.": "Cần câu chắc chắn, dây không bao giờ đứt. Kéo cá nặng lên rất nhanh; bạn vẫn cần giật cần khi cá cắn và không để dây chùng.",
 };
+
+// Farm and fruit update: original IDs stay unchanged.
+Object.assign(VI_CATALOG, {
+  "Grows in 150s. Harvest: 18 XP. Sell: 12 energy.": "Lớn trong 150 giây. Thu hoạch: 18 EXP. Bán: 12 năng lượng.",
+  "Grows in 100s. Harvest: 12 XP. Sell: 9 energy.": "Lớn trong 100 giây. Thu hoạch: 12 EXP. Bán: 9 năng lượng.",
+  "Grows in 300s. Harvest: 42 XP. Sell: 30 energy.": "Lớn trong 300 giây. Thu hoạch: 42 EXP. Bán: 30 năng lượng.",
+  "Grows in 350s. Harvest: 42 XP. Sell: 27 energy.": "Lớn trong 350 giây. Thu hoạch: 42 EXP. Bán: 27 năng lượng.",
+  "Grows in 400s. Harvest: 54 XP. Sell: 36 energy.": "Lớn trong 400 giây. Thu hoạch: 54 EXP. Bán: 36 năng lượng.",
+  "Grows in 500s. Harvest: 78 XP. Sell: 54 energy.": "Lớn trong 500 giây. Thu hoạch: 78 EXP. Bán: 54 năng lượng.",
+  "Grows in 600s. Harvest: 72 XP. Sell: 48 energy.": "Lớn trong 600 giây. Thu hoạch: 72 EXP. Bán: 48 năng lượng.",
+  "Grows in 800s. Harvest: 135 XP. Sell: 96 energy.": "Lớn trong 800 giây. Thu hoạch: 135 EXP. Bán: 96 năng lượng.",
+  "Grows in 700s. Harvest: 90 XP. Sell: 60 energy.": "Lớn trong 700 giây. Thu hoạch: 90 EXP. Bán: 60 năng lượng.",
+  "Grows in 600s. Harvest: 84 XP. Sell: 54 energy.": "Lớn trong 600 giây. Thu hoạch: 84 EXP. Bán: 54 năng lượng.",
+  "Grows in 900s. Harvest: 120 XP. Sell: 78 energy.": "Lớn trong 900 giây. Thu hoạch: 120 EXP. Bán: 78 năng lượng.",
+  "Grows in 1000s. Harvest: 132 XP. Sell: 90 energy.": "Lớn trong 1000 giây. Thu hoạch: 132 EXP. Bán: 90 năng lượng.",
+  "Grows in 1200s. Harvest: 240 XP. Sell: 180 energy.": "Lớn trong 1200 giây. Thu hoạch: 240 EXP. Bán: 180 năng lượng.",
+  "Grows in 1100s. Harvest: 150 XP. Sell: 102 energy.": "Lớn trong 1100 giây. Thu hoạch: 150 EXP. Bán: 102 năng lượng.",
+  "Grows in 1000s. Harvest: 144 XP. Sell: 90 energy.": "Lớn trong 1000 giây. Thu hoạch: 144 EXP. Bán: 90 năng lượng.",
+  "Grows in 1200s. Harvest: 180 XP. Sell: 120 energy.": "Lớn trong 1200 giây. Thu hoạch: 180 EXP. Bán: 120 năng lượng.",
+  "Grows in 1500s. Harvest: 210 XP. Sell: 330 energy.": "Lớn trong 1500 giây. Thu hoạch: 210 EXP. Bán: 330 năng lượng.",
+  "Grows in 1600s. Harvest: 270 XP. Sell: 210 energy.": "Lớn trong 1600 giây. Thu hoạch: 270 EXP. Bán: 210 năng lượng.",
+  "Grows in 2000s. Harvest: 360 XP. Sell: 270 energy.": "Lớn trong 2000 giây. Thu hoạch: 360 EXP. Bán: 270 năng lượng.",
+  "Magic Red Apple": "Táo Đỏ Phép Thuật",
+  "Roasted magic red apple": "Táo Đỏ Phép Thuật · Nướng",
+  "Grows in 28800s. Harvest: 400 XP. Sell: 600 energy.": "Lớn trong 28800 giây. Thu hoạch: 400 EXP. Bán: 600 năng lượng.",
+  "Juicy Purple Grapes": "Nho Tím Mọng Nước",
+  "Roasted juicy purple grapes": "Nho Tím Mọng Nước · Nướng",
+  "Grows in 28800s. Harvest: 450 XP. Sell: 700 energy.": "Lớn trong 28800 giây. Thu hoạch: 450 EXP. Bán: 700 năng lượng.",
+  "Golden Mango": "Xoài Vàng Óng",
+  "Roasted golden mango": "Xoài Vàng Óng · Nướng",
+  "Grows in 28800s. Harvest: 500 XP. Sell: 800 energy.": "Lớn trong 28800 giây. Thu hoạch: 500 EXP. Bán: 800 năng lượng.",
+  "Crown Pineapple": "Dứa Vương Miện",
+  "Roasted crown pineapple": "Dứa Vương Miện · Nướng",
+  "Grows in 43200s. Harvest: 750 XP. Sell: 1200 energy.": "Lớn trong 43200 giây. Thu hoạch: 750 EXP. Bán: 1200 năng lượng.",
+  "Refreshing Coconut": "Dừa Mát Lành",
+  "Roasted refreshing coconut": "Dừa Mát Lành · Nướng",
+  "Grows in 43200s. Harvest: 800 XP. Sell: 1300 energy.": "Lớn trong 43200 giây. Thu hoạch: 800 EXP. Bán: 1300 năng lượng.",
+  "Spiky Durian": "Sầu Riêng Gai",
+  "Roasted spiky durian": "Sầu Riêng Gai · Nướng",
+  "Grows in 43200s. Harvest: 950 XP. Sell: 1500 energy.": "Lớn trong 43200 giây. Thu hoạch: 950 EXP. Bán: 1500 năng lượng.",
+  "Ruby Lychee": "Vải Hồng Ngọc",
+  "Roasted ruby lychee": "Vải Hồng Ngọc · Nướng",
+  "Grows in 50400s. Harvest: 1100 XP. Sell: 1800 energy.": "Lớn trong 50400 giây. Thu hoạch: 1100 EXP. Bán: 1800 năng lượng.",
+  "Immortal Peach": "Đào Tiên",
+  "Roasted immortal peach": "Đào Tiên · Nướng",
+  "Grows in 50400s. Harvest: 1400 XP. Sell: 2200 energy.": "Lớn trong 50400 giây. Thu hoạch: 1400 EXP. Bán: 2200 năng lượng.",
+  "Duck": "Vịt",
+  "Duckling": "Vịt con",
+  "Pink pig": "Heo hồng",
+  "Piglet": "Heo con",
+  "Garden guard dog": "Chó Canh Vườn",
+  "Duck egg": "Trứng vịt",
+  "Garden truffle": "Nấm cục vườn",
+  "Garden protection": "Bảo vệ vườn",
+  "A rich duck egg. Collect from ducks or sell at the market.": "Trứng vịt béo ngậy. Thu từ vịt hoặc bán ở chợ.",
+  "A rare treat unearthed by pigs. Heals 90 and +20% luck for 120s.": "Món ngon quý do heo đào được. Hồi 90 máu và +20% may mắn trong 120 giây.",
+  "A guard dog protects ripe crops from visitors. It never becomes meat.": "Chó canh bảo vệ cây chín khỏi khách trộm. Chó không bao giờ biến thành thịt.",
+  "Pekin": "Vịt Bắc Kinh",
+  "Mallard": "Vịt cổ xanh",
+  "Khaki Campbell": "Vịt Khaki Campbell",
+  "Spotted pig": "Heo đốm",
+  "Ginger pig": "Heo nâu vàng",
+  "Golden guardian": "Chó vàng canh vườn",
+  "Black and tan guardian": "Chó đen vàng canh vườn",
+  "White guardian": "Chó trắng canh vườn"
+});
+
+Object.assign(VI_CATALOG, {
+  "Guarding crops · protected dog house · 30 bite damage": "Đang canh vườn · nhà chó bảo vệ · sát thương cắn 30",
+  "Guarding crops · 18 bite damage": "Đang canh vườn · sát thương cắn 18",
+  "{name} ×{count}/{capacity} ready! Tap to collect.": "{name} ×{count}/{capacity} đã sẵn sàng! Chạm để thu.",
+  "Build a welcoming farm for chickens, ducks, cows and pigs. A guard dog keeps visitors away from ripe crops.": "Xây trang trại cho gà, vịt, bò và heo. Chó canh giữ khách tránh xa cây chín.",
+  "Livestock produces while you are away and leaves meat after two real hours. Guard dogs stay with you.": "Gia súc, gia cầm vẫn cho sản phẩm khi bạn vắng mặt và để lại thịt sau hai giờ thực. Chó canh luôn ở bên bạn.",
+  "The farm is empty. Choose a new friend below.": "Trang trại đang trống. Chọn một người bạn mới bên dưới.",
+  "Protects ripe crops from theft. No feeding, products or lifespan limit.": "Bảo vệ cây chín khỏi trộm. Không cần cho ăn, không tạo sản phẩm và không giới hạn tuổi thọ.",
+  "{name} shelter": "Chuồng {name}",
+  "Guard bite damage rises from 18 to 30.": "Sát thương cắn của chó canh tăng từ 18 lên 30.",
+  "Stores 5 products instead of 3; production takes 70% of the normal time.": "Tích trữ 5 sản phẩm thay vì 3; thời gian sản xuất còn 70% so với bình thường.",
+  "Built": "Đã xây",
+  "Build · ϟ {price}": "Xây · ϟ {price}",
+  "SPECIES SHELTERS": "CHUỒNG RIÊNG",
+  "Farm clock: 1 game hour = 1 real minute. Production continues while you are away.": "Đồng hồ trang trại: 1 giờ trong game = 1 phút thực. Sản phẩm vẫn được tạo khi bạn vắng mặt.",
+  "duck egg": "trứng vịt",
+  "garden truffle": "nấm cục vườn"
+});
+
+Object.assign(VI_CATALOG, TITAN_VI);
+
+Object.assign(VI_CATALOG, {'duck eggs':'trứng vịt','garden truffles':'nấm cục vườn','Bigger pen: +{chickens} chickens, +{ducks} ducks, +{cows} cows, +{pigs} pigs (ϟ {cost})':'Mở rộng chuồng: +{chickens} gà, +{ducks} vịt, +{cows} bò, +{pigs} heo (ϟ {cost})'});
+Object.assign(VI_CATALOG, {'Collect ×{count}':'Thu ×{count}','Collect from {name} {number}':'Thu sản phẩm từ {name} {number}'});

@@ -2,8 +2,8 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bakeModel, farmKit } from './assets.ts';
 import { toonMaterial } from './toon.ts';
-import { ANIMALS, PEN, YARD, MAX_ANIMALS_PER_KIND, expired, isAdult, productReady, growth, coatOf, type Animal, type AnimalKind } from './farm.ts';
-import { newRoamer, spawnSpot, stepRoamer, RoamGrid, type RoamArea, type Roamer } from './farm-roam.ts';
+import { ANIMALS, ANIMAL_KINDS, PEN, YARD, MAX_ANIMALS_PER_KIND, expired, isAdult, productReady, growth, coatOf, type FarmState, type Animal, type AnimalKind } from './farm.ts';
+import { newRoamer, spawnSpot, stepRoamer, segmentClear, RoamGrid, type RoamArea, type Roamer } from './farm-roam.ts';
 
 /**
  * The animal pen at home, drawn cheaply: the fence, gate, coop, troughs, hay and floor are baked into a few merged
@@ -16,18 +16,19 @@ import { newRoamer, spawnSpot, stepRoamer, RoamGrid, type RoamArea, type Roamer 
  */
 export { farmKit };
 
-type ModelId = 'chicken' | 'chick' | 'cow' | 'calf';
+type ModelId = 'chicken' | 'chick' | 'duck' | 'duckling' | 'cow' | 'calf' | 'pig' | 'piglet' | 'dog';
+type ProductId = 'egg' | 'milk' | 'meat' | 'duck_egg' | 'truffle';
 type Role = 'body' | 'head' | 'wing_l' | 'wing_r' | 'leg_l' | 'leg_r' | 'leg_fl' | 'leg_fr' | 'leg_bl' | 'leg_br' | 'tail';
 const ROLES: readonly Role[] = ['body', 'head', 'wing_l', 'wing_r', 'leg_l', 'leg_r', 'leg_fl', 'leg_fr', 'leg_bl', 'leg_br', 'tail'];
 const PART_NAME = /_(body|head|wing_[lr]|leg_[lr]|leg_[fb][lr]|tail)(?:_\d+)?$/;
-const modelOf = (a: Animal, now: number): ModelId => isAdult(a, now) ? a.kind : a.kind === 'chicken' ? 'chick' : 'calf';
+const modelOf = (a: Animal, now: number): ModelId => isAdult(a, now) ? a.kind : a.kind === 'chicken' ? 'chick' : a.kind === 'cow' ? 'calf' : a.kind === 'duck' ? 'duckling' : a.kind === 'pig' ? 'piglet' : 'dog';
 /** Product per model; chicks and calves make nothing. */
-const PRODUCT: Record<AnimalKind, 'egg' | 'milk'> = { chicken: 'egg', cow: 'milk' };
+const PRODUCT: Record<AnimalKind, ProductId> = { chicken: 'egg', cow: 'milk', duck: 'duck_egg', pig: 'truffle', dog: 'meat' };
 /** Most animals of one model the pen can hold (cap at the largest pen); a model has up to four legs. */
-const MAX_PER_MODEL: Record<ModelId, number> = { chicken: MAX_ANIMALS_PER_KIND, chick: MAX_ANIMALS_PER_KIND, cow: MAX_ANIMALS_PER_KIND, calf: MAX_ANIMALS_PER_KIND };
-const MAX_LEGS = 4, MAX_PRODUCTS = MAX_ANIMALS_PER_KIND * 4;
+const MAX_PER_MODEL: Record<ModelId, number> = { chicken: MAX_ANIMALS_PER_KIND, chick: MAX_ANIMALS_PER_KIND, cow: MAX_ANIMALS_PER_KIND, calf: MAX_ANIMALS_PER_KIND, duck: MAX_ANIMALS_PER_KIND, duckling: MAX_ANIMALS_PER_KIND, pig: MAX_ANIMALS_PER_KIND, piglet: MAX_ANIMALS_PER_KIND, dog: 1 };
+const MAX_LEGS = 4, MAX_PRODUCTS = MAX_ANIMALS_PER_KIND * 24;
 /** Hens and chicks are drawn 1.3x their true size so they read at the game camera (a hen is then about 40 px tall, like a ripe crop). */
-const SHOWN: Record<AnimalKind, number> = { chicken: 1.3, cow: 1 };
+const SHOWN: Record<AnimalKind, number> = { chicken: 1.3, cow: 1, duck: 1.3, pig: 1, dog: 1 };
 
 /** Pen pieces inside the fence (pen-local metres, +z toward the gate and the garden), also the animals' keep-out circles. */
 export const PEN_PROPS: readonly { id: string; x: number; z: number; rot: number; r: number }[] = [
@@ -48,6 +49,11 @@ export const COATS: Record<ModelId, readonly (readonly [string, string, number])
   chick: [['#ffe27a', '#ffe27a', 0], ['#d4a265', '#7a4a26', .28], ['#4a4a50', '#f2e3a0', .16], ['#dcd3b0', '#857b6b', .3], ['#ffcf4a', '#f2b23a', .1]],
   cow: [['#fffaf0', '#3b3440', 0], ['#b97a42', '#8a5630', 0], ['#fffaf0', '#a03a24', 0], ['#2f2b32', '#222026', 0], ['#cc6a2a', '#b0561e', 0]],
   calf: [['#fffaf0', '#3b3440', 0], ['#c58a52', '#9a6438', 0], ['#fffaf0', '#a03a24', 0], ['#38343b', '#28252c', 0], ['#d4763a', '#bc6228', 0]],
+  duck: [['#fffaf0', '#d6e4d5', 0], ['#356d50', '#a87a49', .2], ['#b39168', '#72583c', .1]],
+  duckling: [['#ffde63', '#edbf35', 0], ['#b8a146', '#765c37', .2], ['#ccaa6b', '#72583c', .1]],
+  pig: [['#ffb4c0', '#e58f9d', 0], ['#ffb4c0', '#694d4a', .25], ['#ba794d', '#845035', .1]],
+  piglet: [['#ffc1cd', '#eaa0ae', 0], ['#ffc1cd', '#694d4a', .25], ['#cb8c61', '#845035', .1]],
+  dog: [['#c98d4c', '#fff0d3', 0], ['#3b3434', '#bd8954', .25], ['#fff7e3', '#ddc59d', .1]],
 };
 const COAT_COLORS = Object.fromEntries(Object.entries(COATS).map(([id, list]) => [id, list.map(([a, b, f]) => [new T.Color(a), new T.Color(b), f] as const)])) as unknown as Record<ModelId, readonly (readonly [T.Color, T.Color, number])[]>;
 /**
@@ -59,6 +65,11 @@ const COAT_PARTS: Record<ModelId, Record<string, [1 | 2, string]>> = {
   chick: { 'Farm chick': [1, '#ffd640'], 'Farm chick wing': [1, '#ffd640'], '#ffd84a': [1, '#ffd84a'] },
   cow: { 'Farm cow': [1, '#fffaf0'], 'Farm cow patch': [2, '#3b3440'], '#ffffff': [1, '#ffffff'], '#2f2a2e': [2, '#2f2a2e'] },
   calf: { 'Farm calf': [1, '#e89a52'], 'Farm cow': [2, '#fffaf0'], '#e8b07a': [1, '#e8b07a'], '#fff3e0': [2, '#fff3e0'] },
+  duck: { 'Farm duck': [1, '#fffaf0'], '#fffaf0': [1, '#fffaf0'] },
+  duckling: { 'Farm duckling': [1, '#ffde63'], '#ffde63': [1, '#ffde63'] },
+  pig: { 'Farm pig': [1, '#ffb4c0'], '#ffb4c0': [1, '#ffb4c0'] },
+  piglet: { 'Farm piglet': [1, '#ffc1cd'], '#ffc1cd': [1, '#ffc1cd'] },
+  dog: { 'Farm dog': [1, '#c98d4c'], '#c98d4c': [1, '#c98d4c'] },
 };
 
 /** A drawn piece: one geometry hung at one hinge (legs: at each leg's hinge, swinging by `sign`). */
@@ -113,13 +124,19 @@ function part(name: string, pivot: [number, number, number], ...meshes: T.Object
 /** Stand-in animals with the contract's part names and hinges, scaled to the contract's heights. */
 export function placeholderAnimal(id: ModelId): T.Group {
   const g = new T.Group(); g.name = id;
-  if (id === 'chicken' || id === 'chick') {
-    const s = id === 'chick' ? .52 : 1, body = id === 'chick' ? '#ffd84a' : '#fffaf0', beak = '#ffaa2b';
+  if (id === 'chicken' || id === 'chick' || id === 'duck' || id === 'duckling') {
+    const s = id === 'chick' || id === 'duckling' ? .52 : 1, body = id === 'duckling' ? '#ffde63' : id === 'chick' ? '#ffd84a' : '#fffaf0', beak = '#ffaa2b';
     g.add(part(`${id}_body`, [0, .2 * s, 0], ball(body, .17 * s, 0, .06 * s, 0, 1, .9, 1.2)));
-    g.add(part(`${id}_head`, [0, .34 * s, .1 * s], ball(body, .11 * s, 0, .08 * s, .03 * s), ball(beak, .035 * s, 0, .07 * s, .14 * s, 1, .7, 1.3), ...(id === 'chicken' ? [ball('#ff4a4a', .045 * s, 0, .19 * s, .02 * s, .7, 1, 1.2)] : []), ball('#2a1d1d', .02 * s, .06 * s, .1 * s, .1 * s), ball('#2a1d1d', .02 * s, -.06 * s, .1 * s, .1 * s)));
+    g.add(part(`${id}_head`, [0, .34 * s, .1 * s], ball(body, .11 * s, 0, .08 * s, .03 * s), ball(beak, .035 * s, 0, .07 * s, .14 * s, id.startsWith('duck') ? 1.8 : 1, .7, id.startsWith('duck') ? 2.3 : 1.3), ...(id === 'chicken' ? [ball('#ff4a4a', .045 * s, 0, .19 * s, .02 * s, .7, 1, 1.2)] : []), ball('#2a1d1d', .02 * s, .06 * s, .1 * s, .1 * s), ball('#2a1d1d', .02 * s, -.06 * s, .1 * s, .1 * s)));
     for (const side of [1, -1]) g.add(part(`${id}_wing_${side > 0 ? 'l' : 'r'}`, [side * .15 * s, .3 * s, 0], ball(body, .1 * s, side * .03 * s, -.06 * s, -.02 * s, .45, .8, 1.2)));
     for (const side of [1, -1]) g.add(part(`${id}_leg_${side > 0 ? 'l' : 'r'}`, [side * .06 * s, .12 * s, 0], cyl(beak, .018 * s, .12 * s, 0, -.06 * s, 0), box(beak, .07 * s, .02 * s, .08 * s, 0, -.115 * s, .02 * s)));
     g.add(part(`${id}_tail`, [0, .3 * s, -.16 * s], ball(id === 'chick' ? body : '#f3e5d0', .08 * s, 0, .05 * s, -.04 * s, .5, 1.2, .8)));
+  } else if (id === 'pig' || id === 'piglet' || id === 'dog') {
+    const dog = id === 'dog', s = id === 'piglet' ? .58 : 1, coat = dog ? '#c98d4c' : id === 'piglet' ? '#ffc1cd' : '#ffb4c0';
+    g.add(part(`${id}_body`, [0, .48*s, 0], ball(coat, .34*s, 0, 0, 0, 1, .85, 1.45)));
+    g.add(part(`${id}_head`, [0, .58*s, .36*s], ball(coat, .23*s, 0, .03*s, .10*s), ball(dog ? '#fff0d3' : '#ee8ca3', .12*s, 0, -.03*s, .29*s, 1.05, .75, .8), ball('#2a2028', .028*s, -.11*s, .12*s, .26*s), ball('#2a2028', .028*s, .11*s, .12*s, .26*s), ball(coat, .1*s, -.17*s, .22*s, .04*s, .55, 1.3, .5), ball(coat, .1*s, .17*s, .22*s, .04*s, .55, 1.3, .5)));
+    for (const [n,x,z] of [['fl',-.22,.3],['fr',.22,.3],['bl',-.22,-.3],['br',.22,-.3]] as const) g.add(part(`${id}_leg_${n}`, [x*s,.28*s,z*s], cyl(coat,.065*s,.28*s,0,-.14*s,0)));
+    g.add(part(`${id}_tail`, [0,.56*s,-.43*s], ball(coat,.065*s,0,.04*s,-.04*s,.8,dog?2.8:1.1,1)));
   } else {
     const s = id === 'calf' ? .66 : 1, coat = id === 'calf' ? '#e8b07a' : '#ffffff', spot = id === 'calf' ? '#fff3e0' : '#2f2a2e';
     g.add(part(`${id}_body`, [0, .95 * s, 0], box(coat, .9 * s, .62 * s, 1.5 * s, 0, 0, 0), box(spot, .92 * s, .3 * s, .4 * s, 0, .12 * s, -.25 * s), box('#ffc2cf', .3 * s, .14 * s, .3 * s, 0, -.36 * s, -.35 * s)));
@@ -140,8 +157,10 @@ export function placeholderProp(id: string): T.Group {
   if (id === 'water_trough') g.add(cyl('#a8714a', .55, .4, 0, .2, 0), cyl('#5cc8ff', .48, .05, 0, .4, 0));
   if (id === 'hay_bale') g.add(box('#f2cf5b', 1, .5, .6, 0, .26, 0), box('#d84a3c', .04, .52, .62, -.25, .26, 0), box('#d84a3c', .04, .52, .62, .25, .26, 0));
   if (id === 'meat') g.add(ball('#de8c92', .19, 0, .19, 0, 1.35, .7, 1), cyl('#fff0d6', .065, .13, .2, .19, 0), ball('#fff0d6', .065, .27, .19, .025), ball('#fff0d6', .065, .27, .19, -.025));
-  if (id === 'egg') g.add(ball('#fff0d6', .045, 0, .06, 0, 1, 1.3, 1));
+  if (id === 'egg' || id === 'duck_egg') g.add(ball('#fff0d6', .045, 0, .06, 0, 1, 1.3, 1));
   if (id === 'milk') g.add(cyl('#ffffff', .07, .22, 0, .11, 0), cyl('#2f9bef', .045, .05, 0, .25, 0), cyl('#ef3b3b', .072, .05, 0, .12, 0));
+  if (id.endsWith('_shelter')) { g.add(box('#c78a47',.72,.08,.64,0,.04,0),box('#edc85e',.59,.04,.52,0,.10,0)); if(id==='dog_shelter')g.add(box('#bc6242',.72,.44,.08,0,.22,-.3),box('#d9473b',.82,.12,.75,0,.48,0)); }
+  if (id === 'truffle') g.add(ball('#73503e', .12, 0, .12, 0, 1.2, .9, 1), ball('#a88655', .04, .07, .18, .07));
   return g;
 }
 function model(id: string, animal: boolean) { return (farmKit.ready ? farmKit.instance(id) : null) ?? (animal ? placeholderAnimal(id as ModelId) : placeholderProp(id)); }
@@ -219,10 +238,14 @@ export class FarmPenView {
   private rigs = new Map<ModelId, Rig>();
   private meshes = new Map<string, T.InstancedMesh>();
   private walkers = new Map<number, Walker>();
-  private flights: Array<{ product: 'egg' | 'milk' | 'meat'; x: number; y: number; z: number; t: number }> = [];
+  private flights: Array<{ product: ProductId; x: number; y: number; z: number; t: number }> = [];
+  private guard: { uid: number; target: { x: number; z: number }; follow?: () => { x: number; z: number } | null; remaining: number; bite: number; repath: number; route: { x: number; z: number }[] } | null = null;
+  private biteFlash?: T.Mesh<T.RingGeometry, T.MeshBasicMaterial>;
   private rng: () => number;
   private kitUsed = false;
   private built = true;
+  private speciesPens: FarmState['speciesPens'] = {};
+  private pensSignature = '';
   /** Seconds since the pen was built here (drives the pop-in of the yard); Infinity when it was already standing. */
   private buildT = Infinity;
   private area: RoamArea = yardArea();
@@ -244,7 +267,16 @@ export class FarmPenView {
   }
   get isBuilt() { return this.built; }
   /** Where the animals may roam (the world's village ground). */
-  setArea(area: RoamArea) { this.area = area; }
+  setArea(area: RoamArea) {
+    this.area = { ...area, blocked: (x,z,r) => area.blocked(x,z,r) || !!this.speciesPens?.dog && Math.hypot(x-this.speciesPens.dog.x,z-this.speciesPens.dog.z) < r+.45 };
+  }
+  /** Rebuild shelter props only when the saved placement changes, not every animation frame. */
+  setSpeciesPens(pens: FarmState['speciesPens']) {
+    const next = JSON.stringify(ANIMAL_KINDS.map(kind => [kind,pens?.[kind]?.x,pens?.[kind]?.z]));
+    if (next === this.pensSignature) return;
+    this.pensSignature = next; this.speciesPens = structuredClone(pens ?? {});
+    this.disposeStatics(); this.buildStatics();
+  }
   refresh() {
     if (this.kitUsed === farmKit.ready) return;
     this.disposeStatics(); this.disposeAnimals(); this.buildStatics();
@@ -260,6 +292,7 @@ export class FarmPenView {
     for (const x of BACK_FENCE) pieces.push(['pen_fence', x, BACK_FENCE_Z, 0]);
     for (const p of PEN_PROPS) pieces.push([p.id, p.x, p.z, p.rot]);
     for (const [id, x, z, rot] of pieces) { const piece = model(id, false); piece.position.set(x, 0, z); piece.rotation.y = rot; piece.traverse(o => { if (o instanceof T.Mesh) { o.castShadow = id !== 'pen_fence'; o.receiveShadow = true; } }); g.add(piece); }
+    for (const kind of ANIMAL_KINDS) { const at=this.speciesPens?.[kind]; if(at) { const shelter=model(`${kind}_shelter`,false); shelter.position.set(at.x-PEN.x,0,at.z-PEN.z);g.add(shelter); } }
     // A fresh copy so baking never touches the kit's shared meshes; same-look parts merge into a few draws.
     this.statics.add(bakeModel(g));
   }
@@ -284,6 +317,39 @@ export class FarmPenView {
   }
   /** Where an animal stands (world metres), for bursts and floating text; null if unknown. */
   positionOf(uid: number) { const w = this.walkers.get(uid); return w ? { x: w.x, z: w.z } : null; }
+  /** Presentation only: the server decides theft and damage before the guardian gives chase. */
+  guardBite(target: { x: number; z: number }, follow?: () => { x: number; z: number } | null) {
+    const dog = [...this.walkers.values()].find(w => w.kind === 'dog');
+    if (!dog || !Number.isFinite(target.x) || !Number.isFinite(target.z)) return false;
+    this.guard = { uid: dog.uid, target: { ...target }, follow, remaining: 6, bite: -1, repath: 0, route: [] };
+    dog.path=[]; dog.dest=null; dog.walking=true; dog.rest='none'; dog.restT=0; dog.flee=6;
+    return true;
+  }
+  /** Visual-only pursuit: never changes HP, rewards or theft permissions. */
+  private stepGuard(w: Walker, dt: number) {
+    const g=this.guard;if(!g||g.uid!==w.uid)return false;
+    const followed=g.follow?.();
+    if(g.follow&&(!followed||!Number.isFinite(followed.x)||!Number.isFinite(followed.z))){this.guard=null;w.walking=false;w.speed=0;return false;}
+    if(followed)g.target={...followed};
+    const dx=g.target.x-w.x,dz=g.target.z-w.z,d=Math.hypot(dx,dz);
+    g.remaining-=dt;
+    if(g.bite<0&&(d<1.15||g.remaining<=0)){g.bite=0;w.walking=false;w.speed=0;w.flee=.6;w.heading=Math.atan2(dx,dz);}
+    if(g.bite>=0){
+      g.bite+=dt;w.walking=false;w.speed=0;
+      if(g.bite>=.45){this.guard=null;w.rest='look';w.restT=2;w.flee=.6;}
+      return true;
+    }
+    // Stop short of the player's body. Refresh the bounded route as the thief moves.
+    const stop=Math.max(0,d-.9),goal={x:w.x+dx/Math.max(.001,d)*stop,z:w.z+dz/Math.max(.001,d)*stop};
+    g.repath-=dt;
+    if(segmentClear(this.area,w.x,w.z,goal.x,goal.z,.45))g.route=[goal];
+    else if(g.repath<=0){g.repath=.4;g.route=this.area.route?.(w.x,w.z,goal.x,goal.z,.45)??[];}
+    while(g.route.length&&Math.hypot(g.route[0].x-w.x,g.route[0].z-w.z)<.08)g.route.shift();
+    const next=g.route[0];w.walking=!!next;w.speed=next?3.8:0;w.rest='none';w.flee=1;
+    if(next){const gx=next.x-w.x,gz=next.z-w.z,dist=Math.hypot(gx,gz),step=Math.min(dist,3.8*dt),x=w.x+gx/Math.max(.001,dist)*step,z=w.z+gz/Math.max(.001,dist)*step;
+      if(segmentClear(this.area,w.x,w.z,x,z,.45)){w.x=x;w.z=z;w.heading=Math.atan2(gx,gz);}else{g.route=[];g.repath=0;w.speed=0;}}
+    return true;
+  }
   /** Every animal in world metres with its kind, so a tap on any animal can stand for a tap on the pen. */
   positions() { return [...this.walkers.values()].map(w => ({ uid: w.uid, kind: w.kind, adult: w.model === w.kind, expired: w.expired, x: w.x, z: w.z })); }
   /** What each animal is doing (for probes and tests): walking, or the kind of rest. */
@@ -292,7 +358,7 @@ export class FarmPenView {
   /** A collected product flies up from its animal and shrinks (like a harvested crop). */
   collect(uid: number, product?: string) {
     const w = this.walkers.get(uid); if (!w) return;
-    const item = product === 'meat' || product === 'egg' || product === 'milk' ? product : w.expired ? 'meat' : PRODUCT[w.kind];
+    const item = product === 'meat' || product === 'egg' || product === 'milk' || product === 'duck_egg' || product === 'truffle' ? product : w.expired ? 'meat' : PRODUCT[w.kind];
     this.flights.push({ product: item, x: w.x - PEN.x, y: item === 'meat' ? .3 : this.rigOf(w.model).height + .2, z: w.z - PEN.z, t: 0 });
   }
   private rigOf(id: ModelId) { let r = this.rigs.get(id); if (!r) { const src = model(id, true); r = rigOf(src, COAT_PARTS[id]); this.rigs.set(id, r); this.disposeSource(src); } return r; }
@@ -306,7 +372,7 @@ export class FarmPenView {
       m = new T.InstancedMesh(geometry, material, max); m.name = `farm-${key}`; m.castShadow = shadow; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; this.meshes.set(key, m); this.animals.add(m); }
     return m;
   }
-  private productMesh(product: 'egg' | 'milk' | 'meat') {
+  private productMesh(product: ProductId) {
     const key = `product:${product}`; if (this.meshes.has(key)) return this.meshes.get(key)!;
     const src = model(product, false), rig = rigOf(src); this.disposeSource(src);
     const moved = rig.parts.map(p => p.geometry.translate(p.pivots[0].at.x, p.pivots[0].at.y, p.pivots[0].at.z)), geometry = (moved.length > 1 ? mergeGeometries(moved, false) : null) ?? moved[0];
@@ -358,7 +424,7 @@ export class FarmPenView {
     // Far or offscreen animals think a few times a second with the gathered time (their walks stay on the same line).
     for (const w of walkers) {
       w.seen = this.onScreen(w); w.lodDt += dt; w.lodT -= dt; if (w.lodT > 0) continue;
-      w.lodT = this.lodStep(w, w.seen); stepRoamer(w, walkers, this.area, this.rng, Math.min(w.lodDt, .25), this.player, this.grid); w.lodDt = 0;
+      w.lodT = this.lodStep(w, w.seen); const step=Math.min(w.lodDt,.25);if(!this.stepGuard(w,step))stepRoamer(w, walkers, this.area, this.rng, step, this.player, this.grid); w.lodDt = 0;
     }
     for (const w of walkers) w.phase += dt * (w.kind === 'cow' ? 7 : 16) * Math.min(1, w.speed / .3);
     for (const m of this.meshes.values()) m.count = 0;
@@ -369,7 +435,7 @@ export class FarmPenView {
         if (i < MAX_PRODUCTS) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, .15 + Math.sin(time * 3 + w.seed) * .05, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, time * .7 + w.seed, 0)), this.s.setScalar(1.6))); marker.count = i + 1; }
         continue;
       }
-      const rig = this.rigOf(w.model), cow = a.kind === 'cow', young = w.model === 'chick' || w.model === 'calf';
+      const rig = this.rigOf(w.model), cow = a.kind === 'cow', young = w.model !== a.kind;
       w.pop = Math.min(1, w.pop + dt * 2.5);
       // Offscreen animals are not posed at all (no matrices written, nothing drawn).
       if (!w.seen) continue;
@@ -379,7 +445,8 @@ export class FarmPenView {
       const scale = SHOWN[a.kind] * w.size * pop * (young ? .85 + growth(a, now) * .3 : 1), moving = w.speed > .05;
       // Hens hop a little as they walk; a sitting or dust-bathing hen settles onto the ground (and wobbles in the dust).
       const bob = moving ? Math.abs(Math.sin(w.phase)) * (cow ? .03 : .05) : 0, settle = cow ? 0 : -w.sit * .13 * scale, dust = w.rest === 'dust' ? Math.sin(time * 13 + w.seed) * .18 * w.sit : 0;
-      this.root.compose(this.v.set(w.x - PEN.x, bob + settle, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, w.heading, dust)), this.s.setScalar(scale));
+      const bite=this.guard?.uid===w.uid&&this.guard.bite>=0?Math.sin(this.guard.bite/.45*Math.PI):0;
+      this.root.compose(this.v.set(w.x - PEN.x+Math.sin(w.heading)*bite*.35, bob + settle + bite*.2, w.z - PEN.z+Math.cos(w.heading)*bite*.35), this.q.setFromEuler(this.e.set(-bite*.22, w.heading, dust)), this.s.setScalar(scale));
       const swing = moving ? Math.sin(w.phase) * (cow ? .45 : .7) : 0;
       // A hop when a hen flaps; a little sway of the body while walking.
       for (const p of rig.parts) {
@@ -392,7 +459,7 @@ export class FarmPenView {
         for (const { at, sign } of p.pivots) {
           let rx = 0, ry = 0, rz = 0;
           // Grazing: head down to the grass with a slow chew; pecking: a quick dip.
-          if (p.draw === 'head') { rx = Math.max(w.peck * .9, w.graze * (cow ? .75 : .6)) + w.graze * Math.sin(time * 6 + w.seed) * .06 + Math.sin(time * 2 + w.seed) * .05; ry = Math.sin(time * .7 + w.seed) * .15 * (1 - w.graze * .6); }
+          if (p.draw === 'head') { rx = Math.max(w.peck * .9, w.graze * (cow ? .75 : .6)) + w.graze * Math.sin(time * 6 + w.seed) * .06 + Math.sin(time * 2 + w.seed) * .05 + bite*.75; ry = Math.sin(time * .7 + w.seed) * .15 * (1 - w.graze * .6); }
           else if (p.draw === 'legs') rx = sign * swing;
           else if (p.draw === 'tail') ry = Math.sin(time * 3 + w.seed) * .35;
           else rz = moving ? Math.sin(w.phase) * .04 : 0;
@@ -407,6 +474,11 @@ export class FarmPenView {
         if (i < MAX_PRODUCTS) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, y, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, time * 1.5 + w.seed, 0)), this.s.setScalar(1.6))); marker.count = i + 1; }
       }
     }
+    const biting=this.guard&&this.guard.bite>=0?this.walkers.get(this.guard.uid):null;
+    if(biting&&this.guard){
+      if(!this.biteFlash){this.biteFlash=new T.Mesh(new T.RingGeometry(.2,.35,12),new T.MeshBasicMaterial({color:'#ffbd65',transparent:true,opacity:.9,depthWrite:false,side:T.DoubleSide}));this.biteFlash.name='guard-bite-flash';this.biteFlash.rotation.x=-Math.PI/2;this.animals.add(this.biteFlash);}
+      const phase=this.guard.bite/.45;this.biteFlash.visible=true;this.biteFlash.position.set(biting.x-PEN.x+Math.sin(biting.heading)*.8,.55,biting.z-PEN.z+Math.cos(biting.heading)*.8);this.biteFlash.scale.setScalar(.7+phase*2.5);this.biteFlash.material.opacity=.9*(1-phase);
+    }else if(this.biteFlash)this.biteFlash.visible=false;
     for (let i = this.flights.length - 1; i >= 0; i--) {
       const f = this.flights[i]; f.t += dt; const k = f.t / .45;
       if (k >= 1) { this.flights.splice(i, 1); continue; }
@@ -430,5 +502,5 @@ export class FarmPenView {
     for (const m of this.meshes.values()) { m.removeFromParent(); m.dispose(); m.geometry.dispose(); if (m.material !== sharedMaterial) (m.material as T.Material).dispose(); }
     this.meshes.clear(); this.rigs.clear();
   }
-  dispose() { this.disposeStatics(); this.disposeAnimals(); this.statics.removeFromParent(); this.animals.removeFromParent(); this.walkers.clear(); this.flights = []; }
+  dispose() { this.disposeStatics(); this.disposeAnimals();if(this.biteFlash){this.biteFlash.geometry.dispose();this.biteFlash.material.dispose();this.biteFlash.removeFromParent();this.biteFlash=undefined;}this.guard=null; this.statics.removeFromParent(); this.animals.removeFromParent(); this.walkers.clear(); this.flights = []; }
 }
