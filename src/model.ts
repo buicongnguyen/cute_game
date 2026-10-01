@@ -171,21 +171,28 @@ export const HOME_CLEARANCE: readonly { x: number; z: number; r: number }[] = [
     ...Array.from({ length: 16 }, (_, i) => { const a = (i + .5) / 16 * Math.PI * 2; return { x: Math.cos(a) * 16.4, z: Math.sin(a) * 16.4, r: .8 }; }),
 ];
 /**
- * Beds are 80 % of the reference's 2.12 m frame (the user wanted more room in the garden): BED_SCALE shrinks the bed
- * model, its pick shape and the crops; frames are 1.7 m (half side BED_HALF) on a 1.8 m grid (BED_STEP), and two
- * square beds stand at least BED_GAP apart along an axis. TRAIL_HALF is the stepping-stone trails' half-width and
+ * Beds are drawn at 80 % (BED_SCALE shrinks the bed model, its pick shape and the crops). Layout 3 thinned the frame
+ * (7 cm planks, 10 cm posts instead of 15/22 cm) around the same 1.8 m soil square, so a frame is 1.94 m in model units,
+ * 1.55 m in the world (half side BED_HALF .78), on a 1.64 m grid (BED_STEP; was 1.8 m around 1.7 m frames): the same
+ * ~8-10 cm path between frames, (1.8 / 1.64)^2 = 1.20 times the beds per area. Two square beds stand at least BED_GAP
+ * (2 x BED_HALF + 2 cm) apart along an axis. TRAIL_HALF is the stepping-stone trails' half-width and
  * BED_REACH the farthest a bed corner may reach from the village centre.
  */
-export const BED_SCALE = .8, BED_HALF = .85, BED_STEP = 1.8, BED_GAP = 1.72, TRAIL_HALF = .55, BED_REACH = 17.4;
+export const BED_SCALE = .8, BED_HALF = .78, BED_STEP = 1.64, BED_GAP = 1.58, TRAIL_HALF = .55, BED_REACH = 17.4;
 /** Crops shrink less than their beds so they stay readable: a ripe crop is 35 px tall on a phone instead of 40. */
 export const CROP_SCALE = .88;
-/** Where starting bed `i` sits: a 3 x 3 block on the 1.8 m grid around the garden centre (-9.15, 1.85). */
-export function defaultBed(i: number) { return { x: +(-10.95 + (i % 3) * BED_STEP).toFixed(2), z: +(.05 + Math.floor(i / 3) * BED_STEP).toFixed(2) }; }
+/**
+ * Where starting bed `i` sits: a 3 x 3 block on the garden grid around GARDEN_CENTRE. Its south row stands just off
+ * the west stepping-stone trail (z >= BED_HALF + TRAIL_HALF); the thick layout-2 block reached over it.
+ */
+export function defaultBed(i: number) { return { x: +(GARDEN_CENTRE.x + (i % 3 - 1) * BED_STEP).toFixed(2), z: +(GARDEN_CENTRE.z + (Math.floor(i / 3) - 1) * BED_STEP).toFixed(2) }; }
+/** The starting grid of layout 2 (thick frames): 1.8 m apart from (-10.95, 0.05). */
+export function layout2Bed(i: number) { return { x: +(-10.95 + (i % 3) * 1.8).toFixed(2), z: +(.05 + Math.floor(i / 3) * 1.8).toFixed(2) }; }
 /** The starting grid of saves made before the beds shrank: 2.25 m apart from (-11.4, -0.4). */
 export function legacyBed(i: number) { return { x: -11.4 + (i % 3) * 2.25, z: -.4 + Math.floor(i / 3) * 2.25 }; }
 /** Saves on the current bed layout carry this; older ones are migrated by shrinkGarden. */
-export const GARDEN_LAYOUT = 2;
-/** Reach of a bed from its centre along the axes: 0.85 m square on, 1.2 m when turned 45°. */
+export const GARDEN_LAYOUT = 3;
+/** Reach of a bed from its centre along the axes: 0.78 m square on, 1.1 m when turned 45°. */
 const bedSpan = (rotation = 0) => BED_HALF * (Math.abs(Math.cos(rotation)) + Math.abs(Math.sin(rotation)));
 /**
  * Whether a bed centred here keeps off the home obstacles, the animal pen (with a path around it), the four trails
@@ -201,8 +208,8 @@ export function bedClear(x: number, z: number, rotation = 0) {
 function bedsApart(ax: number, az: number, ar: number, bx: number, bz: number, br: number) { return Math.max(Math.abs(ax - bx), Math.abs(az - bz)) >= Math.max(BED_GAP, bedSpan(ar) + bedSpan(br) + .02); }
 type BedSpot = { x: number; z: number; rotation?: number };
 const bedSpots = (s: SaveState): BedSpot[] => s.plots.map((p, i) => ({ ...bedPosition(s, i), rotation: p.rotation ?? 0 }));
-/** Centre of the starting garden; new beds grow outward from it on the 1.8 m garden grid. */
-const GARDEN_CENTRE = { x: -9.15, z: 1.85 };
+/** Centre of the starting garden; new beds grow outward from it on the BED_STEP garden grid. */
+export const GARDEN_CENTRE = { x: -9.15, z: 2.99 };
 const BED_GRID = Array.from({ length: 19 * 19 }, (_, i) => ({ x: +(GARDEN_CENTRE.x + (i % 19 - 9) * BED_STEP).toFixed(2), z: +(GARDEN_CENTRE.z + (Math.floor(i / 19) - 9) * BED_STEP).toFixed(2) }))
     .sort((a, b) => Math.hypot(a.x - GARDEN_CENTRE.x, a.z - GARDEN_CENTRE.z) - Math.hypot(b.x - GARDEN_CENTRE.x, b.z - GARDEN_CENTRE.z) || a.z - b.z || a.x - b.x);
 /** The free grid spot nearest the garden for a new square bed, given the beds already standing, or null. */
@@ -221,16 +228,17 @@ export function settleBeds(s: SaveState) {
     return moved;
 }
 /**
- * Saves from before the beds shrank (no gardenLayout): starting beds still on the old 2.25 m grid move to the new
- * 1.8 m one, and extra beds the game placed itself (unturned, on the old grid) are packed in again nearest the garden,
+ * Saves on an older bed layout (none: 2.25 m grid; 2: 1.8 m grid with thick frames): starting beds still on their
+ * old spots move to the current grid, and extra beds the game placed itself (unturned, on the old grid) are packed in again nearest the garden,
  * around the beds the player placed by hand, which keep their spots. settleBeds then clears any overlap that is left
  * (a hand-placed bed on the new pen, say). Crops and timers stay with their beds.
  */
-export function shrinkGarden(s: SaveState) {
-    const onOldGrid = (x: number, z: number) => [(x + 11.4) / 2.25, (z + .4) / 2.25].every(k => Math.abs(k - Math.round(k)) < .01);
+export function shrinkGarden(s: SaveState, from = 1) {
+    const [ox, oz, step] = from === 2 ? [-10.95, .05, 1.8] : [-11.4, -.4, 2.25], oldBed = from === 2 ? layout2Bed : legacyBed;
+    const onOldGrid = (x: number, z: number) => [(x - ox) / step, (z - oz) / step].every(k => Math.abs(k - Math.round(k)) < .01);
     const repack = new Set<number>();
     s.plots.forEach((p, i) => {
-        const { x, z } = bedPosition(s, i), old = legacyBed(i);
+        const { x, z } = bedPosition(s, i), old = oldBed(i);
         if (i < STARTING_PLOTS) { if (Math.abs(x - old.x) < .01 && Math.abs(z - old.z) < .01) Object.assign(p, defaultBed(i)); }
         else if (!p.rotation && onOldGrid(x, z)) repack.add(i);
     });
@@ -476,7 +484,7 @@ export function parseSave(raw: string | null): SaveState | null {
         if (!record(v) || v.version !== 1 || typeof v.name !== 'string' || typeof v.level !== 'number' || !Number.isFinite(v.level) || v.level < 1 || !planetId(v.planet) || !Array.isArray(v.plots))
             return null;
         const s = newGame(v.name, typeof v.color === 'string' && /^#[0-9a-f]{6}$/i.test(v.color) ? v.color : COLORS[0]);
-        const legacy = v.contentVersion !== 2, layoutBed = v.gardenLayout === GARDEN_LAYOUT ? defaultBed : legacyBed;
+        const legacy = v.contentVersion !== 2, layoutBed = v.gardenLayout === GARDEN_LAYOUT ? defaultBed : v.gardenLayout === 2 ? layout2Bed : legacyBed;
         const inventory = (data: unknown): Inventory => { const result: Inventory = {}; if (record(data))
             for (const [raw, n] of Object.entries(data)) {
                 const id = canonicalItem(raw);
@@ -561,7 +569,7 @@ export function parseSave(raw: string | null): SaveState | null {
                 if (ITEMS[id]?.type === 'decor' && Number.isFinite(d.x) && Number.isFinite(d.z) && Math.hypot(d.x, d.z) <= 16.6)
                     s.decorations.push({ uid: typeof d.uid === 'string' ? d.uid.slice(0, 80) : `decor-${s.nextDecorationId++}`, id, x: d.x, z: d.z, rotation: Number.isFinite(d.rotation) ? d.rotation : 0 });
             }
-        if (v.gardenLayout === GARDEN_LAYOUT) settleBeds(s); else shrinkGarden(s);
+        if (v.gardenLayout === GARDEN_LAYOUT) settleBeds(s); else shrinkGarden(s, v.gardenLayout === 2 ? 2 : 1);
         s.farm = parseFarm(v.farm);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
         if (record(v.collection))

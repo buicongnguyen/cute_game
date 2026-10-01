@@ -16,6 +16,7 @@ import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
 import { creatureKit, creatureArt, adoptCreatureModel } from './creature-art.ts';
+import type { RoamArea } from './farm-roam.ts';
 import { STARTING_PLOTS, MAX_EXTRA_PLOTS } from './content.ts';
 import { approach, blocked, clearSegment, findRoute, nearbyObstacles, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
 import { attackRange } from './combat.ts';
@@ -56,7 +57,7 @@ const matCache = new Map<string, T.MeshToonMaterial>();
 const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', sell: 'market', shop: 'outfitters', upgrade: 'crystal', chest: 'chest', craft: 'workshop', cook: 'kitchen' };
 // A bed's entity holds only this invisible shape, the bed slab plus a column where its crop card stands, so tap raycasts
 // find the bed and its crop but pass over it to the bed behind. GardenBeds draws the beds.
-const BED_PICK=mergeGeometries([new T.BoxGeometry(2.1*M.BED_SCALE,.32,2.1*M.BED_SCALE).translate(0,.16,0),new T.BoxGeometry(.8*M.CROP_SCALE,1.05*M.CROP_SCALE,.8*M.CROP_SCALE).translate(0,.75*M.CROP_SCALE,0)]),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
+const BED_PICK=mergeGeometries([new T.BoxGeometry(1.94*M.BED_SCALE,.32,1.94*M.BED_SCALE).translate(0,.16,0),new T.BoxGeometry(.8*M.CROP_SCALE,1.05*M.CROP_SCALE,.8*M.CROP_SCALE).translate(0,.75*M.CROP_SCALE,0)]),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
 // Planet palettes for the shared scenery kit (material name → colour). Home uses the kit's own colours.
 const SCENERY_KITS = { scenery: sceneryKit, wilds: wildsKit, bright: brightKit, harsh: harshKit };
 const KIT_TINTS: Partial<Record<PlanetId, Record<string, string>>> = {
@@ -382,7 +383,8 @@ export class World {
   }
   /** The simple bed until garden-bed.glb arrives: soil, a wooden frame and three furrows. */
   private bedBoxes(){
-    const p=group(box('#9b7355',1.96,.16,1.95,0,.12),box('#be9970',2.12,.17,.12,0,.2,-1),box('#be9970',2.12,.17,.12,0,.2,1),box('#be9970',.12,.17,2.12,-1,.2),box('#be9970',.12,.17,2.12,1,.2));
+    // The slim layout-3 frame (build_garden_bed): 7 cm planks around the 1.8 m soil square, 1.94 m outside.
+    const p=group(box('#9b7355',1.82,.16,1.82,0,.12),box('#be9970',1.94,.14,.07,0,.19,-.935),box('#be9970',1.94,.14,.07,0,.19,.935),box('#be9970',.07,.14,1.94,-.935,.19),box('#be9970',.07,.14,1.94,.935,.19));
     for(let j=0;j<3;j++) p.add(box('#795a47',1.8,.045,.08,0,.22,-.6+j*.6));
     return p;
   }
@@ -398,19 +400,52 @@ export class World {
    * walking; the explorer can stroll among the animals, which step aside.
    */
   private buildPen(){
-    const view=this.farmView=new FarmPenView(),{x,z}=M.PEN;
-    this.addEntity('pen','Animal pen','🐔',view.statics,x,z,2.6);
-    for(const p of PEN_PROPS)this.obstacle(x+p.x,z+p.z,p.r*.85);
-    for(const fx of BACK_FENCE)for(let i=-3;i<=3;i++)this.obstacle(x+fx+i/3,z+BACK_FENCE_Z,.3);
+    const view=this.farmView=new FarmPenView(),{x,z}=M.PEN,built=M.penBuilt(this.state);
+    // Until it is bought the pen is a marked plot with a sign (still one entity to tap); a visit shows the host's.
+    this.addEntity('pen',built?'Animal pen':'Animal pen site','🐔',view.statics,x,z,2.6);
+    view.setBuilt(built);if(built)this.penObstacles();
+    view.setArea(this.roamArea());this.roamKeep=[];
     this.penKeepClock=0;
     if(!farmKit.ready)void farmKit.load().then(()=>{if(farmKit.ready&&this.farmView===view)view.refresh();});
   }
-  private penKeepClock?:number;
-  /** What the animals walk around in the yard: beds (by their frame), decorations and other obstacles there, not the pen's own. */
+  private penObstacles(){
+    const {x,z}=M.PEN;
+    for(const p of PEN_PROPS)this.obstacle(x+p.x,z+p.z,p.r*.85);
+    for(const fx of BACK_FENCE)for(let i=-3;i<=3;i++)this.obstacle(x+fx+i/3,z+BACK_FENCE_Z,.3);
+  }
+  /** After the pen is bought: the yard, coop and props pop up in place and start blocking. */
+  showPenBuilt(){
+    const view=this.farmView;if(!view||view.isBuilt||!M.penBuilt(this.state))return false;
+    view.setBuilt(true,true);this.penObstacles();this.penKeepClock=0;
+    const e=this.entities.find(v=>v.kind==='pen');if(e)e.name='Animal pen';return true;
+  }
+  private penKeepClock?:number;private roamKeep:{x:number;z:number;r:number}[]=[];
+  /** The obstacles plus the animals' keep-out circles as one list (one grid index), rebuilt when either changes. */
+  private roamList?:{base:Obstacle[];length:number;keep:unknown;list:Obstacle[]};
+  private roamObstacles(){
+    const c=this.roamList;if(c&&c.base===this.obstacles&&c.length===this.obstacles.length&&c.keep===this.roamKeep)return c.list;
+    return (this.roamList={base:this.obstacles,length:this.obstacles.length,keep:this.roamKeep,list:this.obstacles.concat(this.roamKeep)}).list;
+  }
+  /**
+   * Where the farm animals may roam: open ground inside the village fence, off every building, the pond, the starship
+   * pad, beds, decorations and the pen's props (keep-out circles, refreshed each second) and off trees, the well and
+   * any other obstacle (the obstacle grid). Trails are fine to cross. Animals never block the player.
+   */
+  roamArea():RoamArea{
+    const {x,z}=M.PEN;
+    return {home:{x,z,rx:M.YARD.rx,rz:M.YARD.rz},radius:15.2,
+      blocked:(px,pz,r)=>{const list=this.roamObstacles();return someObstacleNear(list,px,pz,px,pz,r,o=>Math.hypot(px-o.x,pz-o.z)<o.r+r);},
+      // A long trip searches a 1 m grid once (bounded), like a creature's route.
+      route:(ax,az,bx,bz,r)=>findRoute({x:ax,z:az},{x:bx,z:bz},this.roamObstacles(),{clearance:r,bounds:16,gridSize:1,maxIterations:2500,walkable:p=>Math.hypot(p.x,p.z)<15.2-r})};
+  }
+  /** The animals' keep-out circles in the village: beds (by their frame), the pond with its bank, the pad, every building and decoration, the pen's props. */
   penKeepOut(){
-    const {x,z}=M.PEN,reach=Math.max(M.YARD.rx,M.YARD.rz)+1.5,out:{x:number;z:number;r:number}[]=[];
-    for(const e of this.entities)if((e.kind==='plot'||e.kind==='decoration')&&Math.hypot(e.x-x,e.z-z)<reach)out.push({x:e.x,z:e.z,r:e.kind==='plot'?M.BED_HALF*1.25:Math.max(.5,e.radius)});
-    for(const o of nearbyObstacles(this.obstacles,x,z,reach))if(M.inYard(o.x,o.z,o.r+.5)&&!PEN_PROPS.some(p=>Math.hypot(x+p.x-o.x,z+p.z-o.z)<.05))out.push(o);
+    const out:{x:number;z:number;r:number}[]=[];
+    for(const e of this.entities){
+      if(e.kind==='pen'||e.kind==='enemy'||e.kind==='dropped'||Math.hypot(e.x,e.z)>17)continue;
+      out.push({x:e.x,z:e.z,r:e.kind==='plot'?M.BED_HALF*1.45:e.kind==='fish'?e.radius+.6:e.kind==='travel'?e.radius+.8:e.kind==='decoration'?.75:e.radius*.9});
+    }
+    if(this.farmView?.isBuilt)for(const p of PEN_PROPS)out.push({x:M.PEN.x+p.x,z:M.PEN.z+p.z,r:p.r});
     return out;
   }
   /** The beds' draw calls, for tests and probes. */
@@ -1411,7 +1446,7 @@ export class World {
     this.followSun();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
     this.animateCrops(dt);
-    if(this.farmView&&this.planet==='home'){if((this.penKeepClock=(this.penKeepClock??0)-dt)<=0){this.penKeepClock=1;this.farmView.setKeepOut(this.penKeepOut());}this.farmView.update(this.state.farm?.animals??[],dt,this.time,Date.now(),this.position);}
+    if(this.farmView&&this.planet==='home'){if((this.penKeepClock=(this.penKeepClock??0)-dt)<=0){this.penKeepClock=1;this.roamKeep=this.penKeepOut();}this.farmView.update(this.state.farm?.animals??[],dt,this.time,Date.now(),this.position);}
     this.updateTarget(dt);
     this.fx?.update(dt);
     this.marker.scale.setScalar(1+Math.sin(this.time*5)*.12);if(draw)this.render();

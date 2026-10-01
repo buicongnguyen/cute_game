@@ -1,6 +1,6 @@
 import { ITEMS, type ItemDef, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
-import { ANIMALS, ANIMAL_KINDS, FARM_DISHES, animalCount, canBuyAnimal, canCookDish, canFeed, farmOf, feedCrop, growth, isAdult, penCapacity, penExpandCost, productProgress, productReady, timeLeft, type Animal, type Collected } from './farm.ts';
+import { ANIMALS, ANIMAL_KINDS, FARM_DISHES, PEN_BUILD, canBuildPen, penBuilt, animalCount, canBuyAnimal, canCookDish, canFeed, farmOf, feedCrop, growth, isAdult, penCapacity, penExpandCost, productProgress, productReady, timeLeft, type Animal, type Collected } from './farm.ts';
 
 /**
  * The animal pen's panel and the kitchen's farm recipes, as HTML (main.ts opens them and routes the buttons).
@@ -18,7 +18,7 @@ export function animalStatus(a: Animal, now = Date.now()) {
 }
 /** Changes when the panel needs drawing again (an animal grew up, a product became ready, feed or energy changed). */
 export function penSignature(s: SaveState, now = Date.now()) {
-  return [s.energy, s.level, feedCrop(s), feedCrop(s) ? s.bag[feedCrop(s)!] : 0, farmOf(s).penLevel, ...farmOf(s).animals.map(a => `${a.uid}:${isAdult(a, now)}:${productReady(a, now)}:${canFeed(a, now)}`)].join('|');
+  return [penBuilt(s), s.energy, s.level, feedCrop(s), feedCrop(s) ? s.bag[feedCrop(s)!] : 0, farmOf(s).penLevel, ...farmOf(s).animals.map(a => `${a.uid}:${isAdult(a, now)}:${productReady(a, now)}:${canFeed(a, now)}`)].join('|');
 }
 /** Moves the meters and times of an open pen panel without drawing it again. */
 export function tickPen(root: ParentNode, s: SaveState, now = Date.now()) {
@@ -28,7 +28,16 @@ export function tickPen(root: ParentNode, s: SaveState, now = Date.now()) {
     if (fill) fill.style.width = `${st.progress * 100}%`; if (text) text.textContent = st.text;
   }
 }
+/** The empty site's panel: what the pen gives, and the build button (level-gated, energy-priced). */
+export function sitePenHtml(s: SaveState) {
+  const check = canBuildPen(s);
+  const button = check === 'level' ? `<button class="soft-button wide" disabled>🔒 Reach level ${PEN_BUILD.level} to build</button>`
+    : `<button class="${check === 'ok' ? 'primary' : 'soft-button'} wide" data-action="build-pen">🔨 Build the animal pen · ϟ ${PEN_BUILD.price}</button>`;
+  const kinds = ANIMAL_KINDS.map(k => `<span class="chip">${ANIMALS[k].babyIcon} ${k === 'cow' ? 'calves' : 'chicks'} from level ${ANIMALS[k].level} · ϟ ${ANIMALS[k].price}</span>`).join('');
+  return `<p class="intro">A roped-off plot waits here for a coop, troughs and a sandy yard. Once it stands you can raise chicks and calves: they roam the village, graze and peck, and give you eggs and milk.</p><div class="chips farm-counts">${kinds}</div>${button}<p class="garden-tip">💡 Your animals are friends, never food: meat still comes from wild creatures.</p>`;
+}
 export function penHtml(s: SaveState, ui: FarmUi, now = Date.now()) {
+  if (!penBuilt(s)) return sitePenHtml(s);
   const farm = farmOf(s), ready = farm.animals.filter(a => productReady(a, now)), crop = feedCrop(s), hungry = farm.animals.filter(a => canFeed(a, now)).length;
   const counts = ANIMAL_KINDS.map(k => `<span class="chip">${ANIMALS[k].icon} ${animalCount(s, k)}/${penCapacity(s, k)} ${ANIMALS[k].name.toLowerCase()}s</span>`).join('');
   const gathered = ready.reduce<Record<string, number>>((n, a) => { const id = ANIMALS[a.kind].product; n[id] = (n[id] || 0) + 1; return n; }, {});
