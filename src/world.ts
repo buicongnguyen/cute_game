@@ -57,6 +57,12 @@ function box(color: string, w: number, h: number, d: number, x = 0, y = 0, z = 0
 function cyl(color: string, top: number, bottom: number, h: number, x = 0, y = 0, z = 0, sides = 12) { return mesh(new T.CylinderGeometry(top, bottom, h, sides), color, x, y, z); }
 function group(...children: T.Object3D[]) { const g = new T.Group(); if(children.length)g.add(...children); return g; }
 function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 15, 1 | seed); seed ^= seed + Math.imul(seed ^ seed >>> 7, 61 | seed); return ((seed ^ seed >>> 14) >>> 0) / 4294967296; }; }
+/**
+ * The explorer model stands 2.3 m, the reference's hero 1.79 m. At 0.84 (about 1.95 m, the head is
+ * bigger) the explorer is as tall on screen under the reference camera as the reference's hero in
+ * fights: 105-120 CSS px on a 1440x900 desktop, 73-87 px on a 390x844 phone. Explorers online match.
+ */
+export const HERO_SCALE = .84;
 
 export class World {
   scene = new T.Scene(); camera = new T.PerspectiveCamera(CAMERA.fov, 1, CAMERA.near, CAMERA.far); renderer: T.WebGLRenderer;
@@ -628,7 +634,7 @@ export class World {
     }}
   receiveRemoteHit(id:string,amount:number,stun=0){const e=this.enemies.find(e=>e.id===id);if(!e||e.hp<=0||!Number.isFinite(amount)||amount<0)return false;this.damageEnemy(e,amount,stun);return true;}
   addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear);avatar.userData.remoteId=id;this.remoteRoot.add(avatar);this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
-  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};remote.mesh.position.set(pose.x,pose.y??0,pose.z);remote.mesh.rotation.y=pose.facing??0;remote.mesh.visible=!pose.planet||pose.planet===this.planet;}
+  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};remote.mesh.position.set(pose.x,pose.y??0,pose.z);remote.mesh.rotation.y=pose.facing??0;remote.mesh.scale.setScalar(HERO_SCALE);remote.mesh.visible=!pose.planet||pose.planet===this.planet;}
   updateRemotePlayers(players:Array<RemotePose&{id:string}>){const ids=new Set(players.map(p=>p.id));for(const id of this.remotePlayers?.keys()??[])if(!ids.has(id))this.removeRemotePlayer(id);for(const pose of players)this.updateRemotePlayer(pose.id,pose);}
   removeRemotePlayer(id:string){const remote=this.remotePlayers?.get(id);if(!remote)return;this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);this.remotePlayers.delete(id);}
   /** Rebuild every explorer model, for example once the Blender explorer and gear have loaded. */
@@ -1046,7 +1052,7 @@ export class World {
     }
     const names={home:'Clover Village',forest:'Mushroom Forest',meadow:'Blue Lake Meadow',swamp:'Chomper Swamp',canyon:'Redrock Canyon'},zone=this.planet==='home'?names[zoneAt(this.position)]:PLANETS[this.planet].name;
     if(zone!==this.lastZone){this.lastZone=zone;this.onZone(zone);}if(active&&this.planet==='home'&&zoneAt(this.position)==='home')this.state.hp=Math.min(maxHp(this.state),this.state.hp+dt*4);
-    this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar(stats.sizeScale);
+    this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar(stats.sizeScale*HERO_SCALE);
     if(this.state.gear.pet){
       // The companion trails behind and to one side; flyers hover and flap, walkers hop.
       const back=new T.Vector3(this.position.x-Math.sin(this.facing)*1.1+Math.cos(this.facing)*.9,0,this.position.z-Math.cos(this.facing)*1.1-Math.sin(this.facing)*.9),c=this.companion,flying=!!c.userData.flying;

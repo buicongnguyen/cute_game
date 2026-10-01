@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import {World} from '../src/world.ts';
+import {World,HERO_SCALE} from '../src/world.ts';
 import {RefinedAssetLibrary} from '../src/assets.ts';
 import {attackRange} from '../src/combat.ts';
 import {claimGift,newGame,plant,weaponStats} from '../src/model.ts';
@@ -248,4 +248,9 @@ test('the camera follows the explorer at 9/s, looks straight at it, and the sun 
   const sun=(w as unknown as {sun:T.DirectionalLight}).sun;
   assert.ok(sun.target.position.distanceTo(new T.Vector3(w.cameraTarget.x,0,w.cameraTarget.z))<.05);
   w.build('shadow');assert.deepEqual([(w.scene.fog as T.Fog).near,(w.scene.fog as T.Fog).far],[14,55]);
+});
+
+test('explorers are drawn at the reference hero size, online ones too',()=>{
+  const w=world();w.update(.025,true,false);assert.ok(Math.abs(w.player.scale.x-HERO_SCALE)<1e-9);
+  w.addRemotePlayer('friend',{x:3,z:4});assert.equal(w.remotePlayers.get('friend')!.mesh.scale.x,HERO_SCALE);
 });
