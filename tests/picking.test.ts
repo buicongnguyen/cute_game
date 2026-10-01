@@ -42,9 +42,9 @@ test('pick circles use the reference radii, scaled by view height and zoom',()=>
   assert.deepEqual(pickCircle('enemy',1.6),{h:.6,r:88},'a big creature keeps at least its own footprint');
   assert.deepEqual(pickCircle('plot',1),{h:.3,r:42});
   assert.deepEqual(pickCircle('mine',1.4),{h:.7,r:77},'planet nodes: 55 px per metre of radius');
-  // At the default zoom the clone shows 900/21 = 42.9 px per metre across against the reference's 57: circles shrink to match.
-  assert.equal(pickScale(900,900/57),1);assert.ok(Math.abs(pickScale(900)-42.86/57)<.001);
-  assert.equal(pickScale(450,900/57),.5);assert.equal(pickScale(900,2*900/57),.5);
+  // Zoom is the reference camera multiplier: at its default (1) on a 900 px tall view the circles keep its pixel radii.
+  assert.equal(pickScale(900,1),1);assert.equal(pickScale(900),1);
+  assert.equal(pickScale(450,1),.5);assert.equal(pickScale(900,2),.5);assert.ok(pickScale(900,.65)>1.5,'zoomed in, circles grow');
 });
 
 test('a tap picks the nearest creature inside its pixel radius, raycasting only overlapping circles, and otherwise walks on the ground',()=>{
@@ -118,12 +118,12 @@ test('in a pack, a tap on a tall front creature\'s upper body picks it, not the 
   const camera=new T.PerspectiveCamera(40,800/600,.5,300);camera.position.set(0,17,13.5);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
   const w=world(camera);w.position.set(0,0,6);
   const creature=(name:string,x:number,z:number,height:number)=>{const g=new T.Group(),m=new T.Mesh(new T.BoxGeometry(1.2,height,1.2),new T.MeshBasicMaterial());m.position.y=height/2;g.add(m);const e=w.addEntity('enemy',name,'',g,x,z,.7);Object.assign(e,{hp:10,maxHp:10});return e;};
-  const front=creature('Bear',0,0,2.6),behind=creature('Frog',0,-1.5,.9);w.root.updateMatrixWorld(true);
+  const front=creature('Bear',0,0,2.6),behind=creature('Frog',.8,-1.5,.9);w.root.updateMatrixWorld(true);
   const screen=(x:number,y:number,z:number)=>{const v=new T.Vector3(x,y,z).project(camera);return {x:(v.x+1)*400,y:(1-v.y)*300};};
   // Upper chest and head of the bear: the frog's circle holds these taps too, and used to win them.
   for(const y of [1.9,2.3]){const p=screen(0,y,.6);assert.equal(w.pickEntity(p.x,p.y)?.name,front.name,`a tap at ${y} m on the bear`);}
-  // The top of the frog peeking out behind the bear still picks the frog.
-  const frog=screen(0,.85,-1.5);assert.equal(w.pickEntity(frog.x,frog.y)?.name,behind.name);
+  // The part of the frog peeking out beside the bear still picks the frog (its middle is hidden behind the bear's body).
+  const frog=screen(1.3,.6,-1.5);assert.equal(w.pickEntity(frog.x,frog.y)?.name,behind.name);
   // Tall creatures anchor their circle at half their model height.
   const anchor=(w as unknown as {modelHeight(e:Entity):number}).modelHeight(front);assert.ok(Math.abs(anchor-2.6)<.01);
   assert.deepEqual(pickCircle('enemy',.7,false,2.6),{h:1.3,r:55});assert.deepEqual(pickCircle('enemy',.7,false,1),{h:.6,r:55},'short ones keep the reference .6 m');
@@ -137,4 +137,10 @@ test('a finger held on the explorer stops a walk or a chase without a new path',
   w.steer(400,550);assert.equal(w.selected,null,'the chase ends');assert.equal(w.destination,null);
   // A walk ending under the finger is left to arrive.
   w.position.set(1.5,0,2);w.walkTo(1.6,2.5);const destination=w.destination;w.steer(400+1.6*PX,550);assert.equal(w.destination,destination);
+});
+test('at the default zoom of the reference camera, a tap on open ground several metres from a building walks instead of opening it',()=>{
+  const camera=new T.PerspectiveCamera(40,800/600,.5,300);camera.position.set(0,17,13.5);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
+  const w=Object.assign(world(camera),{zoom:1});w.addEntity('craft','Workshop','',block(2.4),7,4,1.6);w.root.updateMatrixWorld(true);
+  const v=new T.Vector3(-1,0,2).project(camera);w.pointer((v.x+1)*400,(1-v.y)*300);
+  assert.equal(w.selected,null,'the workshop 8.2 m away must not catch the tap');assert.ok(w.destination,'the tap walks');
 });

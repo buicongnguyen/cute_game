@@ -15,9 +15,8 @@ export const NODE_PX_PER_METRE=55,NODE_ANCHOR=.7;
 /** Ponds are flat ellipses and the cottage a big block: circles fit them badly, so only the raycast fallback picks them. */
 export const RAYCAST_ONLY:ReadonlySet<string>=new Set(['home','fish']);
 /**
- * Zoom here is the visible height in metres. At 900/57 ≈ 15.8 m the ground scale matches the reference's default view
- * (57 px per metre across a 900 px tall screen, CC-04), so circles cover the same ground as the reference's do; at the
- * default zoom 21 they are 0.75 of its pixel radii.
+ * Visible height in metres at which an orthographic view matches the reference's default ground scale (57 px per metre
+ * across a 900 px tall screen, CC-04). Kept for tests that use an orthographic camera.
  */
 export const REFERENCE_SPAN=900/57;
 /** A move re-target closer than this to the current walk target changes nothing worth a new path. */
@@ -27,8 +26,12 @@ export const HOLD_HERO_ZONE=.8;
 
 export interface PickCircle {x:number;y:number;z:number;radius:number}
 
-/** The reference scales its pixel radii by view height / 900 / zoom (its portrait pull-back excluded, as here). */
-export function pickScale(viewHeight:number,zoom=21){return viewHeight/900*REFERENCE_SPAN/zoom;}
+/**
+ * The reference scales its pixel radii by view height / 900 / zoom (its portrait pull-back excluded, as here). World.zoom is
+ * now the reference camera's multiplier (1 = its default view), so the radii are the reference's own. Passing the old
+ * orthographic view height (21) here made every circle about 16x too big: a tap on open grass picked the workshop.
+ */
+export function pickScale(viewHeight:number,zoom=1){return viewHeight/900/zoom;}
 
 /**
  * Anchor height and unscaled pixel radius of an entity's circle; big creatures keep at least their own footprint and
