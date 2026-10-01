@@ -16,6 +16,7 @@ import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatHit, type CombatEff
 import { CombatView } from './combat-view.ts';
 import { FishingSimulation, selectCatch } from './fishing.ts';
 import { GroundGestures } from './gestures.ts';
+import { ZOOM, clampZoom } from './camera-rig.ts';
 import {clearSegment,WORLD_BOUNDS} from './navigation.ts';
 import { progressEntries, claimProgress, recordEvent, rerollDaily, startChallenge, storyStep, challengeTitle, type ProgressKind } from './progression.ts';
 import { STORY_STEPS } from './content.ts';
@@ -99,7 +100,7 @@ const combat=new CombatSimulation({
   status:(target,kind,duration)=>{if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
   moveTarget:(target,x,z)=>{if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
 });
-const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(placement)return;const p=world.groundPoint(x,y);if(p)world.walkTo(p.x,p.z);},zoom:ratio=>{world.zoom=Math.max(13,Math.min(38,world.zoom*ratio));world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
+const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(placement)return;const p=world.groundPoint(x,y);if(p)world.walkTo(p.x,p.z);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 // Swings become additive slash trails and area skills become expanding rings with sparks.
 function showEffect(effect:CombatEffect){
   const fx=world.fx,at={x:effect.x,z:effect.z};
@@ -188,7 +189,8 @@ function updateHud() {
   const boss=world.enemies.find(e=>e.boss&&e.hp>0&&e.phase!=='idle'&&e.phase!=='return'&&Math.hypot(e.x-world.position.x,e.z-world.position.z)<30);
   $('#boss-bar').hidden=!boss||!started;if(boss){$('#boss-name').textContent=boss.name;$('#boss-fill').style.width=`${boss.hp/boss.maxHp*100}%`;}
   const bounty=progressEntries(state,'bounties')[0];$('#bounty-tracker').hidden=!bounty;if(bounty){$('#bounty-title').textContent=bounty.title;$('#bounty-task').textContent=`${bounty.progress}/${bounty.target} · ${bounty.claimed?'Complete':bounty.description}`;}
-  if(!dark.hidden){const holes=world.lightSources().map(light=>{const p=world.screen(light.x,.7,light.z),edge=world.screen(light.x+light.radius,.7,light.z);return `radial-gradient(circle ${Math.abs(edge.x-p.x)}px at ${p.x}px ${p.y}px, transparent 65%, black 100%)`;});dark.style.maskImage=holes.join(',');dark.style.maskComposite='intersect';}
+  // Light pools cut holes in the darkness; a lamp behind the perspective camera would project mirrored, so it is skipped.
+  if(!dark.hidden){const holes=world.lightSources().flatMap(light=>{const p=world.screen(light.x,.7,light.z),edge=world.screen(light.x+light.radius,.7,light.z);return p.front?[`radial-gradient(circle ${Math.abs(edge.x-p.x)}px at ${p.x}px ${p.y}px, transparent 65%, black 100%)`]:[];});dark.style.maskImage=holes.join(',');dark.style.maskComposite='intersect';}
 
   if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!e;$('#interact-text').textContent=e?e.kind==='enemy'?`Attack ${e.name}`:e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'';}else $('#context-prompt').hidden=true;
 }
@@ -205,7 +207,9 @@ function labelHeight(e:Entity){
 }
 interface LabelCandidate {e:Entity;x:number;y:number;wy:number;back:number;html:string;className:string;aria:string;rank:number;distance:number;width:number;anchor:string}
 // Where each visible label is pinned in the world; positions refresh every frame.
-const labelAnchors=new Map<string,{e:Entity;wy:number;back:number;anchor:string}>();
+const labelAnchors=new Map<string,{e:Entity;wy:number;back:number;anchor:string;width:number}>();
+// The portrait view is only about ±4.75 m wide, so labels near a side edge slide in rather than vanish.
+const labelX=(x:number,width:number)=>Math.min(innerWidth-4-width/2,Math.max(4+width/2,x));
 function updateLabels() {
   if(!started)return;
   const candidates:LabelCandidate[]=[];
@@ -233,14 +237,14 @@ function updateLabels() {
   candidates.sort((a,b)=>a.rank-b.rank||a.distance-b.distance);
   const placed:{left:number;right:number;top:number;bottom:number}[]=[],active=new Set<string>();
   for(const c of candidates){
-    const height=28,top=c.anchor.includes('-100%')?c.y-height:c.anchor.includes('-75%')?c.y-height*.75:c.y-height/2,box={left:c.x-c.width/2,right:c.x+c.width/2,top,bottom:top+height};
-    if(box.left<4||box.right>innerWidth-4||placed.some(o=>o.left<box.right&&box.left<o.right&&o.top<box.bottom&&box.top<o.bottom))continue;
+    const height=28,x=labelX(c.x,c.width),top=c.anchor.includes('-100%')?c.y-height:c.anchor.includes('-75%')?c.y-height*.75:c.y-height/2,box={left:x-c.width/2,right:x+c.width/2,top,bottom:top+height};
+    if(placed.some(o=>o.left<box.right&&box.left<o.right&&o.top<box.bottom&&box.top<o.bottom))continue;
     placed.push(box);active.add(c.e.id);
     let label=labelNodes.get(c.e.id);
     if(!label){label=document.createElement('button');label.dataset.entity=c.e.id;labelNodes.set(c.e.id,label);$('#world-labels').append(label);}
     if(label.className!==c.className)label.className=c.className;
     if(label.innerHTML!==c.html)label.innerHTML=c.html;label.setAttribute('aria-label',c.aria);
-    label.style.transform=`translate(${c.x.toFixed(1)}px,${c.y.toFixed(1)}px) ${c.anchor}`;label.hidden=!!modal;labelAnchors.set(c.e.id,{e:c.e,wy:c.wy,back:c.back,anchor:c.anchor});
+    label.style.transform=`translate(${x.toFixed(1)}px,${c.y.toFixed(1)}px) ${c.anchor}`;label.hidden=!!modal;labelAnchors.set(c.e.id,{e:c.e,wy:c.wy,back:c.back,anchor:c.anchor,width:c.width});
   }
   for(const[id,node]of labelNodes)if(!active.has(id)){node.remove();labelNodes.delete(id);labelAnchors.delete(id);}
   const canvas=$<HTMLCanvasElement>('#minimap'),ctx=canvas.getContext('2d')!;ctx.clearRect(0,0,160,160);ctx.fillStyle=state.planet==='home'?'#72d04c':M.PLANETS[state.planet].color;ctx.fillRect(0,0,160,160);
@@ -253,7 +257,7 @@ function updateLabels() {
 /** Re-project visible labels after each render so they move in step with the camera instead of trailing it. */
 function positionLabels(){
   if(!started||modal)return;
-  for(const [id,a] of labelAnchors){const node=labelNodes.get(id);if(!node)continue;const p=world.screen(a.e.x,a.wy,a.e.z-a.back);node.style.transform=`translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px) ${a.anchor}`;}
+  for(const [id,a] of labelAnchors){const node=labelNodes.get(id);if(!node)continue;const p=world.screen(a.e.x,a.wy,a.e.z-a.back);node.style.transform=`translate(${labelX(p.x,a.width).toFixed(1)}px,${p.y.toFixed(1)}px) ${a.anchor}`;}
 }
 /** Sparkles, the XP number and a few orbs flying into the bag when a crop comes up. */
 function harvestBurst(index:number,crop:M.CropId){
@@ -347,7 +351,7 @@ function planets(){
     <h3 class="starmap-title">🔭 Discovery log · ${state.discovered.length} / ${all}</h3><div class="planet-grid">${Object.entries(M.PLANETS).map(card).join('')}</div>`,'STAR MAP','🚀');
 }
 function map(){openDialog('map','Every path is a possibility',`<p class="intro">Choose a place and your explorer will walk there.</p><div class="map-illustration"><div class="map-path"></div><span class="map-house">🏡</span><span class="map-trees">🌳 🌲 🌳</span><span class="map-garden">🌱 🌱</span><span class="map-pond">🎣</span><span class="map-rocket">🚀</span><span class="map-stall">🧺</span><b>Clover Village</b></div><div class="map-destinations">${(state.planet==='home'?[['plot','🌱','Garden'],['sell','🧺','Market'],['shop','🛍️','Outfitters'],['fish','🎣','Pond'],['upgrade','💎','Crystal'],['craft','🔨','Workshop'],['chest','📦','Storage'],['travel','🚀','Rocket']]:[['mine','💎','Crystal vein'],['travel','🚀','Rocket']]).map(([kind,icon,name])=>`<button class="soft-button" data-action="go" data-kind="${kind}">${icon} ${name}</button>`).join('')}${(world.planet==='home'?[['forest','🍄 Mushroom Forest'],['meadow','🌊 Lake Meadow'],['swamp','🌿 Chomper Swamp'],['canyon','🏜️ Redrock Canyon']]:[['wild','Explore the wild']]).map(([kind,label])=>`<button class="soft-button" data-action="wild" data-kind="${kind}">${label}</button>`).join('')}</div><p class="fineprint">${state.visited.length} of 9 worlds discovered · Click the ground to choose your own path.</p>`,'YOUR EXPLORER’S MAP');}
-function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Gentle sound effects</strong><small>Soft notes for everyday discoveries</small></div><button class="toggle ${state.settings.sound?'on':''}" role="switch" aria-checked="${state.settings.sound}" aria-label="Sound effects" data-action="sound"></button></div><div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom)}</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
+function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Gentle sound effects</strong><small>Soft notes for everyday discoveries</small></div><button class="toggle ${state.settings.sound?'on':''}" role="switch" aria-checked="${state.settings.sound}" aria-label="Sound effects" data-action="sound"></button></div><div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
 function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${[['👣','Wander','Click or tap to walk; hold the ground to steer. Pinch or scroll to zoom. Arrow keys and the direction pad also move.'],['🌱','Grow','Click a garden bed, pick a free seed, and come back when it sparkles. Crops grow while you are away.'],['🧺','Trade','Sell your harvest at the pink market. Buy equipment at the blue stall. Equip it from your backpack (I).'],['⚔️','Be brave','Click a creature to follow and attack it. Space attacks nearby enemies. Q spins, W dashes, E stomps, and R uses your weapon’s special.'],['🎣','Catch a moment','Equip a fishing rod and walk up to a pond: you cast automatically. Let the fish nibble, press Reel the moment it bites, then hold Reel to pull it in and let go when it surges or the line turns red.'],['📖','Follow your curiosity','Complete story chapters, daily tasks, achievements, and collections. Collect rewards to level up. The rocket opens new worlds from level 5.'],['📦','Keep it safe','If you fall, loose items stay in a pink backpack where you fell. Your equipment, levels, and energy are safe. Store treasures in the chest.'],['⌨️','Handy shortcuts','I: backpack · J: journal · M: map · F: nearby interaction · Esc: close. The Home button brings you back safely.']].map(([icon,title,body])=>`<div><span>${icon}</span><h3>${title}</h3><p>${body}</p></div>`).join('')}</div>`,'MAKE YOURSELF AT HOME');}
 
 // Fishing happens in the world: no panel, just the pond, the line and a big Reel button.
@@ -648,7 +652,7 @@ app.addEventListener('click',event=>{
     case 'equip-rod':change(()=>M.equip(state,id));world.refreshPlayer();closeDialog();fish();break;case 'fish-again':fish(fishPond);break;
     case 'reel':if(fishGame){if(event.detail===0)fishGame.input.toggle();}else if(button.classList.contains('cast'))fish(fishPond);break;
     case 'sound':state.settings.sound=!state.settings.sound;save();settings();break;case 'graphics':graphics.choose(button.dataset.kind as QualitySetting);world.applyGraphics(graphics.profile,graphics.ratio);saveGraphics(graphics);state.settings.lowGraphics=graphics.level==='low';save();settings();break;
-    case 'zoom-in':world.zoom=Math.max(13,world.zoom-2);world.resize();$('#zoom-value').textContent=String(world.zoom);break;case 'zoom-out':world.zoom=Math.min(33,world.zoom+2);world.resize();$('#zoom-value').textContent=String(world.zoom);break;
+    case 'zoom-in':case 'zoom-out':world.zoom=clampZoom(Math.round((world.zoom+(action==='zoom-in'?-ZOOM.button:ZOOM.button))*100)/100,'wheel');world.resize();$('#zoom-value').textContent=`${Math.round(world.zoom*100)}%`;break;
     case 'reset-confirm':openDialog('reset','Begin a brand-new story?',`<p class="intro">This replaces your ${persistence?'online account adventure':'offline adventure in this browser'}, including your garden, items, and levels.</p><div class="button-row"><button class="soft-button" data-action="settings">Keep my adventure</button><button class="primary danger-button" data-action="reset">Start fresh</button></div>`,'A FRESH START');break;
     case 'reset':{const settingsCopy={...state.settings};state=M.newGame(state.name,state.color);state.settings=settingsCopy;world.state=state;rebuildHomePresentation('home');world.refreshPlayer();resetCombat();selectedItem=null;save();closeDialog();updateHud();toast('Every adventure starts with a little seed.','🌱');break;}
   }
@@ -656,7 +660,7 @@ app.addEventListener('click',event=>{
 $('#dialog-layer').addEventListener('click',e=>{if(e.target===$('#dialog-layer'))closeDialog();});
 $('#world').addEventListener('pointerdown',event=>{if(started&&!uiBlocked()){const e=event as PointerEvent;e.preventDefault();gestures.down(e.pointerId,e.clientX,e.clientY);$('#world').setPointerCapture(e.pointerId);}});
 $('#world').addEventListener('pointermove',event=>{const e=event as PointerEvent;gestures.move(e.pointerId,e.clientX,e.clientY);});
-$('#world').addEventListener('wheel',event=>{if(uiBlocked())return;const e=event as WheelEvent;e.preventDefault();world.zoom=Math.max(13,Math.min(38,world.zoom+e.deltaY*.015));world.resize();},{passive:false});
+$('#world').addEventListener('wheel',event=>{if(uiBlocked())return;const e=event as WheelEvent;e.preventDefault();world.zoom=clampZoom(world.zoom+e.deltaY*ZOOM.wheelStep,'wheel');world.resize();},{passive:false});
 
 $('#world').addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('keydown',event=>{

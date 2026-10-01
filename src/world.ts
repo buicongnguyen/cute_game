@@ -5,6 +5,7 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
+import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import type { QualityProfile } from './graphics.ts';
 import { approach, blocked, clearSegment, findRoute, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
 import { attackRange } from './combat.ts';
@@ -58,15 +59,17 @@ function group(...children: T.Object3D[]) { const g = new T.Group(); if(children
 function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 15, 1 | seed); seed ^= seed + Math.imul(seed ^ seed >>> 7, 61 | seed); return ((seed ^ seed >>> 14) >>> 0) / 4294967296; }; }
 
 export class World {
-  scene = new T.Scene(); camera = new T.OrthographicCamera(); renderer: T.WebGLRenderer;
+  scene = new T.Scene(); camera = new T.PerspectiveCamera(CAMERA.fov, 1, CAMERA.near, CAMERA.far); renderer: T.WebGLRenderer;
   root = new T.Group(); player = new T.Group(); companion = new T.Group(); entities: Entity[] = []; enemies: Enemy[] = [];
   position = new T.Vector3(0, 0, 1); destination: T.Vector3 | null = null; route: T.Vector3[] = [];
   selected: Entity | null = null; obstacles: Obstacle[] = []; particles: Particle[] = [];
-  keys = new Set<string>(); facing = 0; moving = false; time = 0; zoom = 21; planet: PlanetId = 'home';
+  keys = new Set<string>(); facing = 0; moving = false; time = 0; zoom = 1; planet: PlanetId = 'home';
   marker: T.Mesh; ring: T.Mesh; raycaster = new T.Raycaster(); plotMeshes: T.Group[] = []; cropSignatures: string[] = [];
   aim = new T.Vector3(); cameraTarget = new T.Vector3(); distanceToInteract = 2;
   /** While set, the camera follows this point (the starship) instead of the explorer. */
   cameraFocus: T.Vector3 | null = null;
+  /** Camera position relative to cameraTarget for the current screen and zoom (set by resize). */
+  viewOffset = cameraOffset(16 / 9);
   /** The explorer is inside the starship: hidden, with the companion. */
   boarded = false;
   onInteract: (e: Entity) => void = () => {}; onAttackEnemy: (e: Enemy) => void = () => {}; onDamage: (amount: number,source?:'melee'|'shot'|'hazard') => void = () => {};
@@ -89,7 +92,7 @@ export class World {
   // Player animation timers set by combat and fishing.
   punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; fishing:'idle'|'cast'|'wait'|'fight'='idle';
   walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
-  private shakeOffset=new T.Vector3(); private playerMaterials:T.MeshStandardMaterial[]=[]; private shadowTexel=72/1024;
+  private shakeOffset=new T.Vector3(); private playerMaterials:T.MeshStandardMaterial[]=[];
   canvas: HTMLCanvasElement; state: SaveState;
   constructor(canvas: HTMLCanvasElement, state: SaveState, options: { antialias?: boolean } = {}) {
     this.canvas=canvas;this.state=state;
@@ -101,9 +104,9 @@ export class World {
     this.renderer.toneMapping = T.NeutralToneMapping; this.renderer.toneMappingExposure = 1.0;
     this.scene.add(new T.HemisphereLight('#fff5df', '#7fa174', 1.75));
     this.sun = new T.DirectionalLight('#fff0d0', 2.25); this.sun.position.set(-15, 35, 18); this.sun.castShadow = true;
-    // The shadow box covers the visible area with a margin; a tighter box means sharper shadows.
-    this.sun.shadow.mapSize.set(1024, 1024); Object.assign(this.sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 90 }); this.shadowTexel = 52 / 1024;
-    this.sun.shadow.bias = -0.0003; this.sun.shadow.normalBias = 0.035;
+    // The shadow box covers the ground in view with a margin (resize fits it); a tighter box means sharper shadows.
+    this.sun.shadow.mapSize.set(1024, 1024); Object.assign(this.sun.shadow.camera, { near: SHADOW.near, far: SHADOW.far });
+    this.sun.shadow.bias = SHADOW.bias; this.sun.shadow.normalBias = SHADOW.normalBias;
     this.scene.add(this.sun, this.sun.target, this.root,this.remoteRoot);
     this.marker = mesh(new T.RingGeometry(0.22, 0.32, 32), '#ffffff'); this.marker.rotation.x = -Math.PI / 2; this.marker.position.y = 0.09; this.marker.visible = false; this.scene.add(this.marker);
     this.ring = mesh(new T.RingGeometry(0.7, 0.8, 32), '#fff09d'); this.ring.rotation.x = -Math.PI / 2; this.ring.position.y = 0.12; this.ring.visible = false; this.scene.add(this.ring);
@@ -112,13 +115,12 @@ export class World {
   }
   resize() {
     const w = innerWidth, h = innerHeight, aspect = w / h;
-    // Portrait phones see about 12 m across, so the cottage does not fill the screen.
-    const span = aspect < 0.8 ? this.zoom * Math.max(0.82, Math.min(1.35, 0.6 / aspect)) : this.zoom;
-    this.camera.left = -span * aspect / 2; this.camera.right = span * aspect / 2; this.camera.top = span / 2; this.camera.bottom = -span / 2;
-    this.camera.near = 0.1; this.camera.far = 180; this.camera.updateProjectionMatrix(); this.renderer.setSize(w, h);
-    // The shadow box follows the zoom: tight and sharp up close, wide enough when zoomed out.
+    // The reference camera (camera-rig.ts): portrait phones sit 1.3x further back and see about ±4.75 m across.
+    this.camera.aspect = aspect; this.camera.updateProjectionMatrix(); this.renderer.setSize(w, h);
+    cameraOffset(aspect, this.zoom, this.viewOffset);
+    // The shadow box hugs the ground in view, in the light's own axes: sharp up close, wide enough when zoomed out.
     const shadow=this.sun?.shadow?.camera;
-    if(shadow){const extent=Math.max(26,span*Math.max(1,aspect)*.8);if(Math.abs(shadow.right-extent)>.01){shadow.left=-extent;shadow.right=extent;shadow.top=extent;shadow.bottom=-extent;shadow.updateProjectionMatrix();this.shadowTexel=extent*2/this.sun.shadow.mapSize.x;}}
+    if(shadow){Object.assign(shadow,shadowBox(viewFootprint(aspect,this.zoom),this.sunAxes??=lightAxes(this.sunOffset)));shadow.updateProjectionMatrix();}
   }
   setQuality(low: boolean) { this.renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = !low; this.resize(); }
   /** Apply a graphics profile: render resolution, shadow map size (0 turns shadows off) and particle density. */
@@ -128,7 +130,6 @@ export class World {
     this.renderer.shadowMap.enabled = shadows; this.sun.castShadow = shadows;
     if (shadows && this.sun.shadow.mapSize.x !== size) {
       this.sun.shadow.mapSize.set(size, size); this.sun.shadow.map?.dispose(); (this.sun.shadow as { map: T.WebGLRenderTarget | null }).map = null;
-      this.shadowTexel = (this.sun.shadow.camera.right - this.sun.shadow.camera.left) / size;
     }
     // Switching shadows on or off changes every lit material's shader.
     if (toggled) this.scene.traverse(o => { if (o instanceof T.Mesh) for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.needsUpdate = true; });
@@ -281,7 +282,7 @@ export class World {
     for(const shot of this.enemyShots??[]){this.scene.remove(shot.mesh);shot.mesh.geometry.dispose();}this.enemyShots=[];
     this.environment=new EnvironmentSimulation(createEnvironmentLayout(planet));this.environmentView=new EnvironmentView(this.environment.layout);
     const theme=PLANETS[planet],rng=seeded(9281+Object.keys(PLANETS).indexOf(planet)*399);
-    this.scene.background=new T.Color(planet==='home'?'#aee4ff':theme.sky);this.scene.fog=new T.Fog(theme.sky,planet==='shadow'?14:65,planet==='shadow'?55:180);
+    this.scene.background=new T.Color(planet==='home'?'#aee4ff':theme.sky);this.scene.fog=new T.Fog(theme.sky,planet==='shadow'?14:FOG.near,planet==='shadow'?55:FOG.far);
     if(this.sun)this.sun.intensity=planet==='shadow'?.7:2.25;
     if(planet==='home'){
       this.addEntity('home','Your cottage','🏡',this.house(),0,-8,3.2);this.obstacle(0,-8,2.7);
@@ -658,7 +659,8 @@ export class World {
     const old=this.entities.find(e=>e.kind==='dropped');if(old){this.root.remove(old.mesh);this.disposeTree(old.mesh);this.entities=this.entities.filter(e=>e!==old);}
     const d=this.state.dropped;if(d&&d.planet===this.planet)this.addEntity('dropped','Your dropped backpack','🎒',group(ball('#dd94b6',.5,0,.5),cyl('#e5bad0',.17,.17,.25,0,1)),d.x,d.z,.8);
   }
-  screen(x:number,y:number,z:number) { const v=new T.Vector3(x,y,z).project(this.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2,visible:v.z<1&&Math.abs(v.x)<1.3&&Math.abs(v.y)<1.3}; }
+  /** CSS pixels of a world point. `front` is false behind the (perspective) camera, where x and y come out mirrored. */
+  screen(x:number,y:number,z:number) { const v=new T.Vector3(x,y,z).project(this.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2,visible:v.z<1&&Math.abs(v.x)<1.3&&Math.abs(v.y)<1.3,front:v.z<1}; }
   pointer(clientX:number,clientY:number) {
     this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);
     const hits=this.raycaster.intersectObjects(this.root.children,true);
@@ -1055,7 +1057,8 @@ export class World {
     }
     this.animatePlayer(dt);
     this.player.visible=!this.boarded;this.companion.visible=!this.boarded;
-    this.cameraTarget.lerp(this.cameraFocus??this.position,1-Math.exp(-dt*(this.cameraFocus?6:4)));this.camera.position.copy(this.cameraTarget).add(new T.Vector3(0,23,23));this.camera.lookAt(this.cameraTarget.x,this.cameraTarget.y,this.cameraTarget.z-2.4);
+    // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
+    this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);
     if(this.fx)this.camera.position.add(this.fx.shakeOffset(dt,this.shakeOffset));
     this.followSun();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
@@ -1079,14 +1082,15 @@ export class World {
   }
   private sunOffset=new T.Vector3(-15,35,18);private sunAxes:[T.Vector3,T.Vector3]|null=null;
   /**
-   * The sun follows the player, snapped to whole shadow texels along the shadow
-   * camera's own axes. Without the snap, shadow edges crawl every frame you walk.
+   * The sun follows the ground under the camera target, where resize fitted the shadow box to the
+   * view, snapped to whole shadow texels along the shadow camera's own axes (the box need not be
+   * square). Without the snap, shadow edges crawl every frame you walk.
    */
   private followSun(){
-    this.sunOffset??=new T.Vector3(-15,35,18);this.shadowTexel||=72/1024;
-    if(!this.sunAxes){const dir=this.sunOffset.clone().normalize(),x=new T.Vector3().crossVectors(new T.Vector3(0,1,0),dir).normalize();this.sunAxes=[x,new T.Vector3().crossVectors(dir,x)];}
-    const [x,y]=this.sunAxes,texel=this.shadowTexel,p=this.sun.target.position.copy(this.position);
-    const a=p.dot(x),b=p.dot(y);p.addScaledVector(x,Math.round(a/texel)*texel-a).addScaledVector(y,Math.round(b/texel)*texel-b);
+    this.sunOffset??=new T.Vector3(-15,35,18);
+    const [x,y]=this.sunAxes??=lightAxes(this.sunOffset),box=this.sun.shadow.camera,map=this.sun.shadow.mapSize;
+    const tx=(box.right-box.left)/map.x,ty=(box.top-box.bottom)/map.y,p=this.sun.target.position.set(this.cameraTarget.x,0,this.cameraTarget.z);
+    const a=p.dot(x),b=p.dot(y);p.addScaledVector(x,Math.round(a/tx)*tx-a).addScaledVector(y,Math.round(b/ty)*ty-b);
     this.sun.position.copy(p).add(this.sunOffset);
   }
   /**

@@ -11,7 +11,7 @@ import {lavaEvent} from '../src/lava-weather.ts';
 // Exercise actual world behavior with real Three objects; only WebGL is omitted.
 function world() {
   return Object.assign(Object.create(World.prototype), {
-    state:newGame(),scene:new T.Scene(),camera:new T.OrthographicCamera(-3,3,3,-3,.1,20),
+    state:newGame(),scene:new T.Scene(),camera:new T.PerspectiveCamera(40,4/3,.5,300),
     root:new T.Group(),player:new T.Group(),companion:new T.Group(),position:new T.Vector3(),
     destination:null,route:[],selected:null,obstacles:[],entities:[],enemies:[],plotMeshes:[],cropSignatures:[],
     particles:[],keys:new Set<string>(),facing:0,time:0,planet:'home',hazardTimer:0,
@@ -235,4 +235,17 @@ test('cloud lightning countdown and warnings survive peer snapshots and host mig
   const host=world();host.planet='cloud';host.environment=new EnvironmentSimulation(createEnvironmentLayout('cloud'));host.position.set(0,0,0);host.update(6.1,true,false);assert.equal(host.environment.lightning.bolts.length,1);
   const peer=world();peer.planet='cloud';peer.environment=new EnvironmentSimulation(createEnvironmentLayout('cloud'));peer.applyEnvironmentSnapshot(host.environmentSnapshot());assert.deepEqual(peer.environment.lightning,host.environment.lightning);
   peer.setNetworkRole('peer');peer.position.set(0,0,0);peer.update(.2,true,false);assert.ok(peer.environment.lightning.bolts[0].remaining<1.2);peer.setNetworkRole('host');peer.update(.2,true,false);assert.equal(peer.environment.lightning.sequence,1);
+});
+
+test('the camera follows the explorer at 9/s, looks straight at it, and the sun box sits under the camera target',()=>{
+  const w=world();w.build('home');
+  assert.deepEqual([(w.scene.fog as T.Fog).near,(w.scene.fog as T.Fog).far],[45,110]);
+  w.position.set(10,0,0);w.cameraTarget.set(0,0,0);w.update(.1,true,false);
+  assert.ok(Math.abs(w.cameraTarget.x-10*(1-Math.exp(-.9)))<1e-6);
+  assert.ok(w.camera.position.clone().sub(w.cameraTarget).distanceTo(new T.Vector3(0,17,13.5))<1e-9);
+  w.camera.updateMatrixWorld();const look=w.camera.getWorldDirection(new T.Vector3());
+  assert.ok(look.distanceTo(new T.Vector3(0,-17,-13.5).normalize())<1e-6);
+  const sun=(w as unknown as {sun:T.DirectionalLight}).sun;
+  assert.ok(sun.target.position.distanceTo(new T.Vector3(w.cameraTarget.x,0,w.cameraTarget.z))<.05);
+  w.build('shadow');assert.deepEqual([(w.scene.fog as T.Fog).near,(w.scene.fog as T.Fog).far],[14,55]);
 });
