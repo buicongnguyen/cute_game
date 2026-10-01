@@ -12,13 +12,14 @@ function drawnHeight(type:string){
   return new T.Box3().setFromObject(g).max.y;
 }
 
-test('every common creature stands 0.55-0.8x the explorer, as in the reference (CC-05, RC-04)',()=>{
+test('ordinary common creatures stand 0.55-0.8x the explorer; large forest quarry is an explicit exception',()=>{
   for(const [type,def] of Object.entries(ENEMY_TYPES)){
-    if(def.boss)continue;
+    if(def.boss||type==='forest_raptor')continue;
     assert.ok(ENEMY_SCALE[type],`${type} has a scale`);
     const ratio=drawnHeight(type)/explorer;
     assert.ok(ratio>=.55&&ratio<=.8,`${type}: ${ratio.toFixed(2)}x the explorer`);
   }
+  assert.ok(drawnHeight('forest_raptor')>explorer,'the special forest bird is larger than the explorer');
 });
 
 test('bosses keep their size and still tower over the explorer',()=>{

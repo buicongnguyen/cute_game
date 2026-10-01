@@ -19,15 +19,15 @@ function glb(path: string) {
 }
 
 test('creatures.glb has every redrawn creature with the parts its animation needs, within its triangle budget', () => {
-  const doc = glb(new URL('../public/assets/models/creatures.glb', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1'));
-  const roots = new Map(doc.scenes[0].nodes.map(i => [doc.nodes[i].name, doc.nodes[i]]));
+  const docs = ['creatures.glb','forest-birds.glb'].map(file=>glb(new URL(`../public/assets/models/${file}`, import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')));
+  const roots = new Map(docs.flatMap(doc=>doc.scenes[0].nodes.map(i => [doc.nodes[i].name, {root:doc.nodes[i],doc}] as const)));
   // Quantised positions and normals: GLTFLoader reads them without a decoder.
-  assert.ok(doc.extensionsRequired?.includes('KHR_mesh_quantization'));
+  assert.ok(docs[0].extensionsRequired?.includes('KHR_mesh_quantization'));
   assert.ok(Object.keys(CREATURE_PARTS).length >= 12);
   for (const [id, parts] of Object.entries(CREATURE_PARTS)) {
-    const def = ENEMY_TYPES[id], root = roots.get(id);
+    const def = ENEMY_TYPES[id], entry = roots.get(id), root=entry?.root, doc=entry?.doc;
     assert.ok(def, `${id} is a creature type`);
-    assert.ok(root, `${id} is in the kit`);
+    assert.ok(root&&doc, `${id} is in the kit`);
     const children = (root.children ?? []).map(i => doc.nodes[i]);
     assert.deepEqual(children.map(c => c.name).sort(), parts.map(p => `${id}_${p}`).sort(), `${id} parts`);
     let triangles = 0;

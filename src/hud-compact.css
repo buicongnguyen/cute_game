@@ -188,3 +188,43 @@
 @media (max-width: 600px), (max-height: 520px) {
   .world-label:not(.plot-label), .world-label:not(.plot-label) > span { font-size: 11px; }
 }
+
+/* Phone travel is separated from the thumb controls: Home sits beside the minimap,
+   while the four fight buttons stay close to the bottom corner. Hand swapping is preserved. */
+@media (orientation: portrait) and (max-width: 600px), (orientation: landscape) and (max-height: 520px) {
+  #hud .skills, #hud.joystick-on .skills {
+    position: fixed; display: grid; grid-template-columns: repeat(2, var(--sk));
+    left: auto; right: calc(18px + env(safe-area-inset-right)); bottom: calc(22px + var(--safe-bottom));
+    transform: none; gap: 12px 16px; max-width: none;
+  }
+  #hud .skill, #hud.joystick-on .skill { width: var(--sk); min-width: var(--sk); height: var(--sk); }
+  #hud.joystick-on.joystick-right .skills { right: auto; left: calc(18px + env(safe-area-inset-left)); }
+  #hud .home-button, #hud.joystick-on .home-button, #hud.joystick-on.joystick-right .home-button {
+    position: fixed; left: auto; right: calc(var(--edge) + var(--mm) + 8px + env(safe-area-inset-right));
+    top: calc(var(--edge) + var(--safe-top) + var(--b) + 8px); bottom: auto;
+    width: 44px; height: 44px; padding: 0; justify-content: center;
+  }
+  #hud .home-button span { display: none; }
+  #hud.fishing .home-button { visibility: visible; }
+  #reel-button {
+    position: fixed; right: calc(18px + env(safe-area-inset-right)); bottom: calc(104px + var(--sk) * 2 + var(--safe-bottom));
+    width: 56px; height: 56px; border-width: 3px; z-index: 31;
+  }
+  #reel-button .reel-icon { font-size: 22px; }
+  #reel-button #reel-text { font-size: 11px; }
+  #reel-button + #fish-hint {
+    right: calc(18px + env(safe-area-inset-right)); bottom: calc(52px + var(--sk) * 2 + var(--safe-bottom));
+    max-width: calc(var(--sk) * 2 + 16px); padding: 4px 6px; font-size: 10px; line-height: 1.2;
+    pointer-events: none;
+  }
+  #hud:has(#reel-button:not([hidden])) #context-prompt { display: none; }
+  #hud:has(#reel-button:not([hidden])) #discovery-progress { visibility: hidden; }
+  #hud.joystick-right #reel-button, #hud.joystick-right #reel-button + #fish-hint {
+    right: auto; left: calc(18px + env(safe-area-inset-left));
+  }
+}
+@media (orientation: portrait) and (max-width: 600px) {
+  #hud .home-button, #hud.joystick-on .home-button, #hud.joystick-on.joystick-right .home-button {
+    top: calc(var(--edge) + var(--safe-top) + var(--b) * 2 + var(--gap) + 6px);
+  }
+}

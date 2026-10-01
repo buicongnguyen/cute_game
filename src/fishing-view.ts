@@ -42,7 +42,8 @@ const FISH_LOOK: Record<string, [scale: number, top: number, wag: number]> = {
   fish_manta: [1.1, 0.0405, 0.5],
   boot: [1.4, 0.1864, 0.6],
 };
-const look = (species: string) => FISH_LOOK[species] ?? [1, .06, .5];
+export const fishLook = (species: string) => FISH_LOOK[species] ?? [1, .06, .5];
+const look = fishLook;
 /** Height of the bobber's antenna tip above its waterline, where the line ties on. */
 const LINE_ANCHOR = .134;
 // Fallback colours when the fish models are unavailable.
@@ -62,6 +63,8 @@ const FALLBACK: Record<string, [string, string]> = {
  */
 export class FishingView {
   active = false;
+  /** The hunting view supplies authoritative targets for this pond instead. */
+  huntingPondId: string | null = null;
   pond: PondView | null = null;
   readonly castTo = new T.Vector3();
   private root = new T.Group();
@@ -112,7 +115,7 @@ export class FishingView {
     group.add(top, bottom); return group;
   }
 
-  private makeFish(species: string): { obj: T.Group; tail: T.Object3D | null } {
+  makeFish(species: string): { obj: T.Group; tail: T.Object3D | null } {
     const model = this.kit.ready ? this.kit.instance(species) : null;
     if (model) {
       model.traverse(o => { o.castShadow = false; });
@@ -377,6 +380,7 @@ export class FishingView {
   }
 
   private updateFish(fish: Swimmer, dt: number, time: number, near: boolean) {
+    if (fish.pond.id === this.huntingPondId) { fish.obj.visible = false; return; }
     fish.obj.visible = near;
     if(fish.mark){fish.mark.position.y=1.1+Math.abs(Math.sin(time*3+fish.wig))*.25;fish.mark.material.opacity=fish.state==='swim'?1:.35;}
     if (!near && fish.state === 'swim') return;

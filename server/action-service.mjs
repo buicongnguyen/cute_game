@@ -2,11 +2,12 @@ import {createHash,randomUUID,randomInt} from 'node:crypto';
 import * as Game from '../src/model.ts';
 import {applyGameAction,ACTION_RULES_VERSION} from '../src/actions.ts';
 import {resolveMysteryCatch,catchWeight} from '../src/fishing.ts';
-import {createEnvironmentLayout,zoneAt} from '../src/environments.ts';
+import {createEnvironmentLayout} from '../src/environments.ts';
 import {environmentResourceNodes} from '../src/environment-resources.ts';
 import {LAVA_ORE_RULES} from '../src/lava-weather.ts';
 import {STAR_MAP,DISCOVER_RANGE,SPACE_EDGE,spaceLayout,dustSpot} from '../src/space.ts';
 import {clearJourney} from './adventure-lifecycle.mjs';
+import {huntingPonds,huntFish} from '../src/fish-hunting.ts';
 
 const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 const random=()=>randomInt(0,0x100000000)/0x100000000;
@@ -18,9 +19,7 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','helperHarvest','helperPlant','rest','cook','cookDish']);
 const farmHelperActions=new Set(['buyFarmHelper','setFarmHelperPaused','setFarmHelperAutoFeed','farmHelperCollect','farmHelperFeed','farmHelperCatchUp']);
 export function waterNodes(planet){
-  if(planet==='home')return [[-7.5,11.2,3.3],[10,52,9],[40,105,11],[-70,35,8],[-105,-30,7]].map(([x,z,r])=>({x,z,r,water:Math.hypot(x,z)<18?'home':zoneAt({x,z})==='swamp'?'swamp':'lake'}));
-  if(['candy','ice','toy','jungle','shadow'].includes(planet))return Array.from({length:4},(_,i)=>({x:Math.cos(i*Math.PI/2+.4)*(38+i*17),z:Math.sin(i*Math.PI/2+.4)*(38+i*17),r:6+i*.6,water:planet}));
-  return [];
+  return huntingPonds(planet).map(pond=>({x:pond.x,z:pond.z,r:pond.rx,water:pond.waterId}));
 }
 function requireNear(peer,at,range=4){if(!peer||peer.visit||!point(at)||distance(peer.pose,at)>range)fail(409,'Move closer to use that.');}
 function strike(account,key,required,now){account.resourceHits??={};const hit=account.resourceHits[key]||{hits:0,at:0};if(now-hit.at<250)fail(429,'Wait for your next strike.');hit.hits++;hit.at=now;if(hit.hits<required){account.resourceHits[key]=hit;return {hits:hit.hits,required};}delete account.resourceHits[key];return null;}
@@ -75,6 +74,10 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
           owner.profile=target;ledger.count++;account.theftLedger[owner.id]=ledger;
           result={blocked:false,ownerId:owner.id,index:p.index,item,count:1,remaining:6-ledger.count};
         }
+      }else if(data.type==='fishHunt'){
+        if(!peer?.active||peer.visit||account.journeyPaid||account.fishingTicket&&now-account.fishingTicket.startedAt<180000)fail(409,'Finish your cast and return to your own shore before hunting fish.');
+        result=huntFish(state,p,peer.pose,now);
+        if(!result)fail(409,'Equip your hunting harpoon and aim at an available nearby fish.');
       }else if(data.type==='fishStart'){
         const rod=Game.ITEMS[p.rodId]?.weapon;
         if(!peer||peer.visit||!rod||rod.kind!=='rod'||!state.bag[p.rodId]||!point(p.cast))fail(409,'Bring a fishing rod to the water.');
@@ -168,7 +171,10 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
       return result;
     }});
     if(reservation)reservation.world.environment.weather.collectOre(reservation.id);
-    await afterCommit(committed,{...intent,actorId,requestId:data.requestId});return committed.reply;
+    await afterCommit(committed,{...intent,actorId,requestId:data.requestId});
+    // Receipt replay retains the earned catch/deadlines, but clock synchronization needs response time.
+    if(data.type==='fishHunt')return {...committed.reply,result:{...committed.reply.result,serverNow:Date.now()}};
+    return committed.reply;
     } finally {if(reservation)reservation.world.oreClaims.delete(reservation.id);}
   };
 }

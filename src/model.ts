@@ -4,6 +4,7 @@ import { parseHelper, type HelperState } from './helper-state.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
 import { LEGACY_CROP_IDS } from './content.ts';
+import { parseHunting, type HuntingState } from './fish-hunting.ts';
 export * from './weapon-forge.ts';
 export * from './content.ts';
 export * from './farm.ts';
@@ -111,6 +112,8 @@ export interface SaveState {
     helper?: HelperState;
     forge?: Record<string, number>;
     nextPlantId?: number;
+    /** Harpoon cooldowns and individual pond restock deadlines survive reloads. */
+    hunting?: HuntingState;
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
@@ -647,6 +650,7 @@ export function parseSave(raw: string | null): SaveState | null {
             }
         if (v.gardenLayout === GARDEN_LAYOUT) settleBeds(s); else shrinkGarden(s, v.gardenLayout === 2 ? 2 : 1);
         s.farm = parseFarm(v.farm);
+        const hunting = parseHunting(v.hunting); if (hunting) s.hunting = hunting;
         if (record(v.helper)) s.helper = parseHelper(v.helper);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
         if (record(v.collection))

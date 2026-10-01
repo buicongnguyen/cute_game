@@ -106,3 +106,9 @@ Blender uses Z up with the front facing -Y. The GLBs are Y up with the front fac
 - `build_props.py` still writes `rocket.glb`; the game now uses the pad and ship from `space.glb`, so leave `rocket.glb` out of `public/`.
 
 No saved-game format was changed.
+
+## Forest hunting addition
+
+`forest-birds.glb` adds the Great Forest Hawk used for the six large forest enemies. Its Blender source is `blender/kit/build_forest_birds.py`, adapted from the local `3d_astra` project's procedural `birdGeometry` wing and tail layout. The source hash, four rigid-part pivots, dimensions, 1,452-triangle count and 45,504-byte budget are recorded in `forest-birds-manifest.json`. Runtime scale is 1.45, with two flapping wing hinges and a 0.8 m collision radius around the body. It uses no textures, skin or extra animation file; all six birds share the baked geometry and material.
+
+The Hunting harpoon aliases the already shipped `trident` held model and icon. Its flying fork is the single 84-triangle vertex-colored mesh from `src/harpoon-art.ts`, with no texture or shadow pass. There is no additional weapon model download. The [hunting guide](../docs/hunting.md) records gameplay, Vietnamese instructions, provenance and the existing horizontal combat-plane limitation.

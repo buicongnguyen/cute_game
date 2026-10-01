@@ -3862,3 +3862,9 @@ for(const id of Object.keys(PLANETS)as PlanetId[])PLANETS[id].description=worldD
 
 Object.assign(ITEMS, TITAN_ITEMS);
 Object.assign(LOOT_TABLES, TITAN_LOOT);
+
+// New recipes append after the reference catalog so saved/in-flight recipe indexes remain stable.
+ITEMS.harpoon={name:'Hunting harpoon',icon:'🔱',desc:'A reusable throwing fork for hunting fish near ponds and large forest birds. +20 attack. No ammunition needed.',type:'weapon',slot:'weapon',sell:250,price:650,materials:{},attack:20,stats:{atk:20},weapon:{kind:'gun',range:11,cd:1.3,shot:'harpoon',special:'wave',fx:'#c9f0ec'}};
+SHOP_CATEGORIES.find(category=>category.tab==='Weapons')!.items.push({id:'harpoon',cost:650});
+RECIPES.push({result:'harpoon',energy:650,materials:{},category:'Weapons',station:'shop'});
+LOOT_TABLES.forest_raptor=[['feather',1,1,2],['meat',.7,1,2]];

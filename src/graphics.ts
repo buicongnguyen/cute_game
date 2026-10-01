@@ -1,8 +1,9 @@
 /**
  * Adaptive graphics quality. The renderer's cost on phones is dominated by the
  * number of pixels drawn and by the shadow pass, not by triangle counts, so the
- * governor trades resolution first and shadows second, then recovers when the
- * frame rate allows. The choice is stored per device, never in the shared save.
+ * governor first removes costly shadows and decorative density on phones,
+ * preserving image sharpness before reducing resolution if still necessary.
+ * The choice is stored per device, never in the shared save.
  */
 export type QualityLevel = 'low' | 'medium' | 'high';
 export type QualitySetting = 'auto' | QualityLevel;
@@ -14,10 +15,19 @@ export const QUALITY: Record<QualityLevel, QualityProfile> = {
   medium: { label: 'Balanced', ratio: 1.25, shadow: 1024, particles: .75, outlines: true },
   high: { label: 'Sharp', ratio: 2, shadow: 2048, particles: 1, outlines: true },
 };
+/** Keep model detail, outlines and atlas/pixel resolution while relieving mobile rendering cost. */
+const MOBILE_REDUCED: Record<QualityLevel, QualityProfile> = {
+  low: QUALITY.low,
+  medium: { ...QUALITY.medium, shadow: 0, particles: .45 },
+  high: { ...QUALITY.high, shadow: 0, particles: .45 },
+};
 export const QUALITY_KEY = 'zoo-garden-graphics';
+/** Old mobile Auto levels were learned before the farm rendering optimizations and Sharp default. */
+export const AUTO_GRAPHICS_VERSION = 2;
+export interface StoredGraphics { setting?: QualitySetting; autoLevel?: QualityLevel | null; autoVersion?: number }
 
 export interface GraphicsEnvironment { mobile: boolean; devicePixelRatio: number }
-export type GraphicsChange = 'ratio' | 'level' | null;
+export type GraphicsChange = 'ratio' | 'level' | 'effects' | null;
 
 /** Seconds a level must hold before it is remembered, and the frame rate that counts as a good second. */
 const HOLD_SECONDS = 60, GOOD_FPS = 55;
@@ -33,28 +43,36 @@ export class GraphicsGovernor {
   /** The automatic level remembered for the next visit: only one that held for a minute of play. */
   private kept: QualityLevel | null;
   private goodSeconds = 0; private heldSeconds = 0; private upWait = 10; private upTrial = 0; private unsaved = false;
+  private effectsReduced = false;
 
-  constructor(env: GraphicsEnvironment, stored?: { setting?: QualitySetting; autoLevel?: QualityLevel | null } | null, legacyLow = false) {
+  constructor(env: GraphicsEnvironment, stored?: StoredGraphics | null, legacyLow = false) {
     this.env = env;
     const valid = (v: unknown): v is QualitySetting => v === 'auto' || v === 'low' || v === 'medium' || v === 'high';
     this.setting = valid(stored?.setting) ? stored!.setting! : legacyLow ? 'low' : 'auto';
     this.autoLevel = this.kept = stored?.autoLevel && stored.autoLevel in QUALITY ? stored.autoLevel : null;
+    if (env.mobile && this.setting === 'auto' && stored && stored.autoVersion !== AUTO_GRAPHICS_VERSION) {
+      this.autoLevel = this.kept = null; this.unsaved = true;
+    }
     this.ratio = this.targetRatio();
   }
 
   get mobile() { return this.env.mobile; }
   get level(): QualityLevel {
     if (this.setting !== 'auto') return this.setting;
-    return this.autoLevel ?? (this.env.mobile ? 'medium' : 'high');
+    return this.autoLevel ?? this.defaultLevel;
   }
-  get profile() { return QUALITY[this.level]; }
+  get profile() { return this.env.mobile && this.setting === 'auto' && this.effectsReduced ? MOBILE_REDUCED[this.level] : QUALITY[this.level]; }
   targetRatio() { return Math.min(this.env.devicePixelRatio, this.profile.ratio); }
 
-  choose(setting: QualitySetting) { this.setting = setting; if (setting === 'auto') this.autoLevel = this.kept = null; this.ratio = this.targetRatio(); }
+  choose(setting: QualitySetting) {
+    this.setting = setting; this.effectsReduced = false; this.slowSeconds = this.goodSeconds = 0;
+    if (setting === 'auto') this.autoLevel = this.kept = null; this.ratio = this.targetRatio();
+  }
 
   /**
    * Feed every frame's duration. Once per second in automatic mode: three slow
-   * seconds in a row (under 36 fps) lower resolution by a quarter step down to 1×,
+   * seconds in a row (under 36 fps) first remove shadows and extra decoration on
+   * mobile, then lower resolution by a quarter step down to 1×,
    * then the quality level, then resolution again down to 0.7×; a fast second
    * (over 57 fps) restores resolution toward the level's target, and ten good
    * seconds in a row (55 fps or more) at full resolution step back up a level.
@@ -73,6 +91,10 @@ export class GraphicsGovernor {
       this.goodSeconds = 0;
       if (++this.slowSeconds < 3) return null;
       this.slowSeconds = 0;
+      if (this.env.mobile && !this.effectsReduced && this.profile.shadow > 0) {
+        if (this.upTrial > 0) this.upWait = Math.min(160, this.upWait * 2);
+        this.effectsReduced = true; return 'effects';
+      }
       if (this.ratio > 1) { this.ratio = Math.max(1, this.ratio - .25); return 'ratio'; }
       const lower: Partial<Record<QualityLevel, QualityLevel>> = { high: 'medium', medium: 'low' };
       const next = lower[this.level];
@@ -87,15 +109,19 @@ export class GraphicsGovernor {
     const higher: Partial<Record<QualityLevel, QualityLevel>> = { low: 'medium', medium: 'high' };
     const up = higher[this.level];
     if (up && this.level !== this.defaultLevel && this.goodSeconds >= this.upWait && this.ratio >= target) { this.setAuto(up); this.goodSeconds = 0; this.upTrial = 20; return 'level'; }
+    // Restore expensive decoration only after resolution/level recovered and held steady.
+    if (this.effectsReduced && this.level === this.defaultLevel && this.ratio >= target && this.goodSeconds >= Math.max(20, this.upWait)) {
+      this.effectsReduced = false; this.goodSeconds = 0; this.upTrial = 20; return 'effects';
+    }
     return null;
   }
 
   /** True once after the remembered level changed; the caller then saves the settings. */
   takeSave() { const save = this.unsaved; this.unsaved = false; return save; }
 
-  toJSON() { return { setting: this.setting, autoLevel: this.kept }; }
+  toJSON() { return { setting: this.setting, autoLevel: this.kept, autoVersion: AUTO_GRAPHICS_VERSION }; }
 
-  private get defaultLevel(): QualityLevel { return this.env.mobile ? 'medium' : 'high'; }
+  private get defaultLevel(): QualityLevel { return 'high'; }
   private setAuto(level: QualityLevel) { this.autoLevel = level === this.defaultLevel ? null : level; this.heldSeconds = 0; }
 }
 
@@ -106,7 +132,7 @@ export function detectEnvironment(): GraphicsEnvironment {
 }
 
 export function loadGraphics(legacyLow: boolean) {
-  let stored: { setting?: QualitySetting; autoLevel?: QualityLevel | null } | null = null;
+  let stored: StoredGraphics | null = null;
   try { stored = JSON.parse(localStorage.getItem(QUALITY_KEY) ?? 'null'); } catch { /* Defaults apply. */ }
   return new GraphicsGovernor(detectEnvironment(), stored, legacyLow);
 }

@@ -24,6 +24,10 @@ const declarations = names.map(name => {
 const hints = ast.statements.find(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(item => item.name.getText(ast) === 'FISH_HINTS'));
 assert.ok(hints, 'main.ts must provide the actual fishing phase hints');
 const compiled = ts.transpileModule(hints.getText(ast) + '\n' + declarations, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+let returnHomeCase;
+function findHome(node) { if (ts.isCaseClause(node) && ts.isStringLiteral(node.expression) && node.expression.text === 'return-home') returnHomeCase = node; ts.forEachChild(node, findHome); }
+findHome(ast); assert.ok(returnHomeCase, 'main.ts must expose the actual Home action');
+const compiledHome = ts.transpileModule(`async function returnHomeControl(){${returnHomeCase.statements.filter(s => !ts.isBreakStatement(s)).map(s => s.getText(ast)).join('\n')}}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 
 function fixture(...items) {
   const state = M.newGame();
@@ -271,4 +275,17 @@ test('a previous catch may land during the next cast without replacing Reel cont
   assert.equal(f.state.bag[id], 1, 'the earned catch still belongs to this save');
   assert.equal(f.ctx.fishGame, nextSession); assert.equal(f.calls.reels.length, reels);
   assert.equal(f.ctx.recastUntil, 0, 'the old animation must not start a recast timer over the active fishing controls');
+});
+
+for (const online of [false, true]) test(`${online ? 'online' : 'offline'} Home recall cancels a stationary pond cast before teleporting`, async () => {
+  const f = fixture('rod'); f.ctx.fish(f.pond); const simulation = f.ctx.fishGame.simulation;
+  const cancels = [];
+  if (online) { f.ctx.actionHandler = () => {}; f.ctx.fishGame.ticket = 'pending-cast'; f.ctx.perform = async (type, payload) => { cancels.push({ type, payload, from: f.ctx.world.position.x }); return true; }; }
+  f.ctx.world.position.set = function (x, y, z) { Object.assign(this, { x, y, z }); };
+  Object.assign(f.ctx, { huntingPending: {}, movement: { clear() { f.ctx.world.keys.clear(); } }, closeDialog() {}, updateHunting() {}, flyHome() { assert.fail('already on the home planet'); } });
+  const epoch = f.ctx.fishingEpoch; vm.runInContext(compiledHome, f.ctx); await f.ctx.returnHomeControl();
+  assert.equal(f.ctx.fishGame, null); assert.equal(f.ctx.world.fishing, 'idle'); assert.equal(f.ctx.world.position.x, 0); assert.equal(f.ctx.world.position.z, 0);
+  assert.ok(f.ctx.fishingEpoch > epoch); assert.equal(f.ctx.huntingPending, null); assert.equal(f.calls.cancel, 1);
+  f.ctx.updateFishing(1); assert.equal(simulation.time, 0, 'the old cast cannot keep progressing at home');
+  if (online) { assert.equal(cancels.length, 1); assert.equal(cancels[0].type, 'fishCancel'); assert.equal(cancels[0].payload.ticketId, 'pending-cast'); assert.notEqual(cancels[0].from, 0, 'the cancellation is sent before teleport'); }
 });

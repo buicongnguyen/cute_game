@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 const url = process.env.HUD_LAYOUT_URL;
 const VIEWS = {
   'phone 390x844': { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
+  'small phone 320x568': { viewport: { width: 320, height: 568 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
   'desktop 1440x900': { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
   'landscape 844x390': { viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
 };
@@ -56,16 +57,53 @@ for (const [name, view] of Object.entries(VIEWS)) {
       assert.equal(r.panels.joystick.length,view.hasTouch?1:0,'joystick starts enabled on touch-first devices only');
       assert.ok(r.boss, 'the boss bar shows'); assert.ok(r.target, 'the target frame shows');
       const overlap = (a, b) => a.l < b.r - .5 && b.l < a.r - .5 && a.t < b.b - .5 && b.t < a.b - .5;
+      if (view.hasTouch) {
+        const home = r.panels.home[0], skills = r.panels.skills;
+        assert.ok(home && home.t < r.H / 3, 'Home is in the upper HUD, away from the combat thumb');
+        assert.ok(home.r - home.l >= 44 && home.b - home.t >= 44, 'Home has a full touch target');
+        assert.equal(skills.length, 4);
+        assert.ok(Math.max(...skills.map(b => b.b)) >= r.H - 30, 'fight buttons sit near the bottom edge');
+        assert.ok(Math.max(...skills.map(b => b.r)) >= r.W - 24, 'default fight buttons sit near the right edge');
+        for (const [panel, boxes] of Object.entries(r.panels)) if(panel !== 'home') for(const b of boxes) assert.ok(!overlap(home,b), `Home overlaps ${panel} at ${name}`);
+        assert.ok(skills.every(b=>!r.panels.joystick.some(j=>overlap(b,j))), 'fight buttons stay clear of movement');
+        // The alternate handedness remains usable after moving Home out of the thumb cluster.
+        const swapped = await page.evaluate(() => {
+          document.querySelector('#hud').classList.add('joystick-right');
+          return { skills:[...document.querySelectorAll('.skill')].map(el=>{const b=el.getBoundingClientRect();return {l:b.left,r:b.right};}), home:document.querySelector('.home-button').getBoundingClientRect().top };
+        });
+        assert.ok(Math.min(...swapped.skills.map(b=>b.l)) <= 24, 'swapped-hand fight buttons remain on the left');
+        assert.equal(swapped.home, home.t, 'hand swapping does not put Home back beside the fight buttons');
+      }
       for (const [what, frame] of [['boss bar', r.boss], ['target frame', r.target]]) {
         assert.ok(frame.l >= 0 && frame.r <= r.W && frame.t >= 0 && frame.b <= r.H, `${what} is on screen`);
         for (const [panel, boxes] of Object.entries(r.panels)) for (const b of boxes) assert.ok(!overlap(frame, b), `${what} overlaps ${panel} at ${name}`);
       }
       assert.ok(!overlap(r.boss, r.target), 'boss bar and target frame do not overlap');
       const mid = { l: r.W * .3, r: r.W * .7, t: r.H * .3, b: r.H * .7 };
-      assert.ok(!overlap(r.target, mid), 'the target frame stays out of the middle of the screen');
+      // Very small portraits have no clear corner between both thumb controls and the upper HUD;
+      // the target stays above the joystick there. Keep the original middle-space check for roomy views.
+      if (r.W > 360 || r.H > 650) assert.ok(!overlap(r.target, mid), 'the target frame stays out of the middle of the screen');
       // Wave 3: every touch target is at least 44 x 44 px (invisible hit areas around 32-34 px visuals), which costs about 2 points
       // of tappable area over the reference's 11%; the painted HUD itself shrank (see hud-compact.css).
       if (name.startsWith('landscape')) assert.ok(r.tappable <= .23, `tappable HUD ${(r.tappable * 100).toFixed(1)}% leaves most of the world clear with the requested default joystick`);
+      if (view.hasTouch) {
+        await page.evaluate(()=>{const w=window.__zoo.world,s=window.__zoo.state;s.bag.harpoon=1;s.gear.weapon='harpoon';delete s.gear.disguise;w.position.set(-7.5,0,15);w.cameraTarget.copy(w.position);w.destination=null;w.route=[];w.selected=null;document.querySelector('#hud').classList.remove('joystick-right');});
+        await page.waitForSelector('#reel-button.hunt:not([hidden])');await page.waitForTimeout(300);
+        for(const swapped of [false,true])for(const mode of ['hunt','cast','reel']){
+          const h=await page.evaluate(({swapped,mode})=>{
+            const hud=document.querySelector('#hud');hud.classList.toggle('joystick-right',swapped);hud.classList.toggle('fishing',mode==='reel');
+            const rect=el=>{const b=el.getBoundingClientRect();return {l:b.left,r:b.right,t:b.top,b:b.bottom};};
+            const hunt=document.querySelector('#reel-button'),hint=document.querySelector('#fish-hint'),skills=[...document.querySelectorAll('.skill')];
+            hunt.className='reel-hud'+(mode==='reel'?'':' '+mode);hunt.hidden=false;hunt.style.animation='none';hint.hidden=mode==='cast';
+            const receiver=el=>{const b=el.getBoundingClientRect();return document.elementFromPoint((b.left+b.right)/2,(b.top+b.bottom)/2)?.closest('button');};
+            return {hunt:rect(hunt),hint:rect(hint),skills:skills.map(rect),joystick:rect(document.querySelector('#movement-joystick')),huntTappable:receiver(hunt)===hunt,skillsTappable:skills.every(el=>receiver(el)===el),receivers:[hunt,...skills].map(el=>receiver(el)?.outerHTML.slice(0,160)),prompt:getComputedStyle(document.querySelector('#context-prompt')).display};
+          },{swapped,mode});
+          assert.ok(h.huntTappable&&(mode==='reel'||h.skillsTappable),`${mode} and every active combat skill remain independently tappable (${swapped?'swapped':'default'}): ${JSON.stringify(h)}`);
+          assert.equal(h.prompt,'none',`${mode} replaces the redundant pond context prompt`);
+          for(const box of [...h.skills,h.joystick]){assert.ok(!overlap(h.hunt,box),`${mode} clears both thumb controls`);if(mode!=='cast')assert.ok(!overlap(h.hint,box),`${mode} hint clears both thumb controls`);}
+          if(mode!=='cast')assert.ok(!overlap(h.hint,h.hunt),`${mode} hint clears its button`);
+        }
+      }
     } finally { await browser.close(); }
   });
 }

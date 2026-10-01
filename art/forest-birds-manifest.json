@@ -1,0 +1,103 @@
+{
+  "triangles": 1452,
+  "parts": {
+    "body": {
+      "triangles": 564,
+      "pivot_gltf": [
+        0.0,
+        1.0499999523162842,
+        -0.0
+      ],
+      "materials": [
+        "Forest raptor body",
+        "Forest raptor cream",
+        "Forest raptor tip",
+        "Forest raptor gold"
+      ]
+    },
+    "head": {
+      "triangles": 408,
+      "pivot_gltf": [
+        0.0,
+        1.3200000524520874,
+        0.47999998927116394
+      ],
+      "materials": [
+        "Forest raptor cream",
+        "Forest raptor body",
+        "Forest raptor eye",
+        "Forest raptor white",
+        "Forest raptor gold"
+      ]
+    },
+    "wing_l": {
+      "triangles": 240,
+      "pivot_gltf": [
+        -0.2199999988079071,
+        1.159999966621399,
+        -0.0
+      ],
+      "materials": [
+        "Forest raptor wing",
+        "Forest raptor tip",
+        "Forest raptor body"
+      ]
+    },
+    "wing_r": {
+      "triangles": 240,
+      "pivot_gltf": [
+        0.2199999988079071,
+        1.159999966621399,
+        -0.0
+      ],
+      "materials": [
+        "Forest raptor wing",
+        "Forest raptor tip",
+        "Forest raptor body"
+      ]
+    }
+  },
+  "bounds_blender": {
+    "min": [
+      -2.0480000972747803,
+      -0.9900000095367432,
+      0.5515958070755005
+    ],
+    "max": [
+      2.0480000972747803,
+      1.472000002861023,
+      1.703673243522644
+    ]
+  },
+  "size_gltf": [
+    4.0960001945495605,
+    1.1520774364471436,
+    2.462000012397766
+  ],
+  "recommended_body_radius": 0.72,
+  "recommended_scale": 1,
+  "flap_axis_gltf": "z",
+  "flap_range_radians": [
+    -0.85,
+    0.85
+  ],
+  "bytes": 45504,
+  "generator": "art/blender/kit/build_forest_birds.py",
+  "source": {
+    "project": "3d_astra",
+    "path": "github-io/src/ambient-life.js",
+    "function": "birdGeometry",
+    "sha256": "3642e5daeca3d48b68351098171bc60f275be0d83df8fa5ada1abcc0edafb179",
+    "reused": "Wing shoulder/elbow/tip topology, tail fan, hawk palette; enlarged with closed volumes and a new face."
+  },
+  "file": "public/assets/models/forest-birds.glb",
+  "root": "forest_raptor",
+  "runtime_parts": [
+    "body",
+    "head",
+    "wing_l",
+    "wing_r"
+  ],
+  "textures": 0,
+  "animations": "Rigid runtime flapping; no skin or baked animation clips."
+}

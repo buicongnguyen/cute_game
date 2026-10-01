@@ -734,3 +734,18 @@ Object.assign(VI_CATALOG, TITAN_VI);
 
 Object.assign(VI_CATALOG, {'duck eggs':'trứng vịt','garden truffles':'nấm cục vườn','Bigger pen: +{chickens} chickens, +{ducks} ducks, +{cows} cows, +{pigs} pigs (ϟ {cost})':'Mở rộng chuồng: +{chickens} gà, +{ducks} vịt, +{cows} bò, +{pigs} heo (ϟ {cost})'});
 Object.assign(VI_CATALOG, {'Collect ×{count}':'Thu ×{count}','Collect from {name} {number}':'Thu sản phẩm từ {name} {number}'});
+Object.assign(VI_CATALOG, {
+  'Hunting harpoon':'Lao săn ba chĩa',
+  'Great Forest Hawk':'Diều hâu rừng lớn',
+  'A reusable throwing fork for hunting fish near ponds and large forest birds. +20 attack. No ammunition needed.':'Lao ba chĩa dùng nhiều lần để săn cá gần ao và chim lớn trong rừng. +20 tấn công. Không cần đạn.',
+  'Hunt':'Săn',
+  'Hunt a fish':'Săn cá',
+  'Tap a fish to throw your harpoon.':'Chạm vào cá để phóng lao.',
+  'No fish in reach. Move along the shore.':'Không có cá trong tầm. Hãy đi dọc bờ ao.',
+  'Missed! Aim at a fish.':'Trượt rồi! Hãy nhắm vào cá.',
+  'Fish are returning soon.':'Cá sẽ sớm xuất hiện lại.',
+  'Harpoon ready. Tap pond fish or select a forest bird.':'Lao đã sẵn sàng. Chạm cá trong ao hoặc chọn chim rừng.',
+  'Use a rod from your backpack for line fishing.':'Trang bị cần câu từ túi đồ để câu bằng dây.',
+  'Finish your cast and return to your own shore before hunting fish.':'Hãy thu cần câu và trở về bờ ao của mình trước khi săn cá.',
+  'Equip your hunting harpoon and aim at an available nearby fish.':'Hãy trang bị lao săn và nhắm vào một con cá gần đó chưa bị bắt.',
+});

@@ -12,7 +12,7 @@ import { buildPond } from './pond-view.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
+import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
 import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
@@ -36,7 +36,8 @@ import {SUN_OFFSET,applyPlanetLight,isLit,toonMaterial,type LitMaterial} from '.
 import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
 import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
-import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,enemyScale,type EnemyDefinition} from './enemy-types.ts';
+import {createHarpoonProjectile} from './harpoon-art.ts';
+import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
@@ -205,7 +206,7 @@ export class World {
     if (this.fx) this.fx.density = profile.particles;
     setOutlinesEnabled(profile.outlines ?? true);
     // Crop cards: 256 px atlas cells on high, 128 px otherwise.
-    this.cardCellPx = profile === QUALITY.high ? 256 : 128; this.cropCards?.setCellPx(this.cardCellPx);
+    this.cardCellPx = profile.ratio >= QUALITY.high.ratio ? 256 : 128; this.cropCards?.setCellPx(this.cardCellPx);
     // Battery saver draws half of the grass and flowers; trees and rocks always stay.
     const detail = profile.particles < .6 ? .5 : 1;
     if (detail !== this.detail) { this.detail = detail; if (this.scatterGroup) this.refreshScenery(); }
@@ -565,6 +566,7 @@ export class World {
       const dragon=this.enemies.find(e=>e.type==='dragon');if(dragon){dragon.x=dragon.homeX=this.environment.layout.nest.x;dragon.z=dragon.homeZ=this.environment.layout.nest.z;dragon.hp=0;dragon.respawn=999999;dragon.mesh.visible=false;}
       for(let i=0;i<18;i++){const minion=this.spawnSpecies('minislime',30,30,enemyIndex++)!;minion.hp=0;minion.respawn=999999;minion.mesh.visible=false;}
     }
+    if(planet==='home')for(let i=0;i<FOREST_RAPTOR_COUNT;i++)placeEnemy('forest_raptor','forest');
     const free=(x:number,z:number,r:number)=>!someObstacleNear(this.obstacles,x,z,x,z,r,o=>Math.hypot(x-o.x,z-o.z)<o.r+r)&&!this.entities.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+r);
     this.decor=planDecor({planet,layout,random:rng,free,ponds,clearings:this.enemies.filter(e=>e.respawn<999999).map(e=>({x:e.homeX,z:e.homeZ,type:e.type}))});
     for(const piece of this.decor)if(piece.radius>0)this.obstacle(piece.x,piece.z,piece.radius);
@@ -616,7 +618,7 @@ export class World {
   }
   /** Puts a kit gear piece on the explorer; each piece rides the body part named by its tag. */
   private wearKit(hero:T.Object3D,id:string|undefined,fallback:string){
-    const kit=id?this.kitFor(id):null,item=kit&&heroKit.ready?kit.instance(id!):null;if(!item)return false;
+    const kit=id?this.kitFor(id):null,item=kit&&heroKit.ready?kit.instance(weaponModelName(id!)):null;if(!item)return false;
     hero.updateMatrixWorld(true);const toHero=hero.matrixWorld.clone().invert();
     for(const piece of [...item.children]){
       const part=hero.getObjectByName(piece.userData.tag??fallback)??hero;
@@ -640,7 +642,7 @@ export class World {
   private kitFor(id:string){
     const slot=M.ITEMS[id]?.slot,kit=/^(hat|pet)_t_/.test(id)?titanKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
     if(!kit.requested)void kit.load().then(()=>{if(kit.ready)this.refreshAvatars();});
-    return kit.ready&&kit.has(id)?kit:null;
+    return kit.ready&&kit.has(weaponModelName(id))?kit:null;
   }
   /**
    * The explorer in its gear. Each slot uses its Blender model when the kit has it and
@@ -692,7 +694,8 @@ export class World {
   }
   private simpleWeapon(c:T.Object3D,id:string){
     const weapon=M.ITEMS[id]?.weapon,hand=c.getObjectByName('hand-right')??c;
-    if(weapon?.kind==='sword'){
+    if(id==='harpoon'){const fork=createHarpoonProjectile();fork.name='weapon';fork.position.set(0,.06,.42);hand.add(fork);}
+    else if(weapon?.kind==='sword'){
       const bladeColor=/fire|lava/.test(id)?'#f1a65d':/crystal|ice/.test(id)?'#a9e8f1':'#d5dce1';
       const sword=group(box(bladeColor,.14,1.02,.13,0,.62),box('#c7a162',.42,.12,.18,0,.1),cyl('#8a5a34',.05,.05,.22,0,-.04));sword.name='weapon';sword.rotation.x=1.25;hand.add(sword);
     }else if(weapon?.kind==='gun'){const gun=group(box('#9dc7cb',.25,.3,.65,0,.05,.25),ball('#e7d997',.19,0,.06,.58));gun.name='weapon';hand.add(gun);}

@@ -57,6 +57,9 @@ export class ContextGearSelection {
   }
 
   choose(state: ContextGearState, context: GearContext): ItemId | null {
+    this.observe(state);
+    // An explicitly held hunting tool stays ready at the pond. Starting ordinary rod fishing still takes priority.
+    if (!context.fishing && state.gear.weapon === 'harpoon' && ownedCombat(state, 'harpoon')) return 'harpoon';
     if (!context.fighting && (context.fishing || context.nearWater)) {
       const rod = this.forFishing(state);
       if (rod) return rod;

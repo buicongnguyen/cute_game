@@ -14,6 +14,7 @@ export const ENEMY_TYPES:Record<string,EnemyDefinition>={
   mushroom:creature('Grumpy Mushroom',45,6,2.4,8,'mushroom','#ff4d5e','hopper',{radius:.55,reach:1.3,sight:8}),
   boar:creature('Wild Boar',85,10,3,14,'quadruped','#a9744f','charger',{radius:.8,cooldown:2.6,windup:.7}),
   bee:creature('Cross Wasp',55,8,3.8,12,'winged','#ffd23f','melee',{radius:.5,reach:1.4,flying:true,cooldown:1.1,windup:.3}),
+  forest_raptor:creature('Great Forest Hawk',160,14,4.2,36,'winged','#96714c','charger',{radius:.8,reach:1.9,sight:13,flying:true,accent:'#e8d2a6',cooldown:2.8,windup:.75}),
   wolf:creature('Grey Wolf',100,12,4.3,22,'quadruped','#8f9bb3','melee',{sight:12,cooldown:1.3,windup:.35}),
   chomper:creature('Snapping Flower',120,14,0,20,'flower','#58c24a','rooted',{radius:.8,reach:2.5,sight:7,accent:'#ff4f7a',cooldown:1.7,windup:.55}),
   frog:creature('Poison Frog',70,10,2.8,16,'frog','#6fd35a','hopper',{radius:.6,accent:'#b27dff',cooldown:1.3}),
@@ -75,6 +76,8 @@ export const ENEMY_TYPES:Record<string,EnemyDefinition>={
 Object.assign(ENEMY_TYPES,TITANS);
 
 export const HOME_SPAWNS:Record<string,Array<[string,number]>>={forest:[['mushroom',20],['boar',12],['bee',6]],meadow:[['mushroom',12],['boar',8],['bee',12]],swamp:[['chomper',14],['wolf',10],['frog',12],['mushroom',6]],canyon:[['cactus',14],['wolf',8],['crab',12]]};
+/** Append after existing bosses/Titan: their durable combat identities must not move. */
+export const FOREST_RAPTOR_COUNT=6;
 export const PLANET_SPAWNS=Object.fromEntries(Object.entries(PLANETS).map(([id,planet])=>[id,planet.spawns])) as Partial<Record<PlanetId,Array<[string,number]>>>;
 export const PLANET_BOSSES=Object.fromEntries(Object.entries(PLANETS).map(([id,planet])=>[id,planet.bosses])) as Partial<Record<PlanetId,string[]>>;
 
@@ -806,6 +809,8 @@ for(const [id,rule] of Object.entries(combatRules))if(ENEMY_TYPES[id])Object.ass
  * listed; the tiny magma slime that the magma slime splits into stays the smallest. Hit radii stay the reference's.
  */
 export const ENEMY_SCALE:Readonly<Record<string,number>>={
+  // Rare large quarry deliberately towers over the hero; ordinary common creatures retain their original sizes.
+  forest_raptor:1.45,
   mushroom:.49,boar:.91,bee:.73,wolf:.99,chomper:.67,frog:.73,cactus:.67,crab:.99,
   jelly:.73,gummy:.91,lollipop:.61,bunny:.51,chocobeetle:.99,
   snowball:.73,penguin:.85,icebloom:.67,seal:.99,owl:.73,

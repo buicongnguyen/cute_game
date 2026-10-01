@@ -35,6 +35,7 @@ export const KIT_FILES = {
   worldsDressing: `${assetBase}assets/models/worlds-dressing.glb`,
   farm: `${assetBase}assets/models/farm.glb`,
   creatures: `${assetBase}assets/models/creatures.glb`,
+  forestBirds: `${assetBase}assets/models/forest-birds.glb`,
   helper: `${assetBase}assets/models/helper.glb`,
 } as const;
 export const HERO_FILE = `${assetBase}assets/models/hero.glb`;
@@ -373,6 +374,8 @@ export const heroKit = new HeroLibrary();
 // Gear the explorer can wear or hold, one file per group so each downloads only when first worn.
 export const wearKit = new KitLibrary([KIT_FILES.wear]);
 export const weaponKit = new KitLibrary([KIT_FILES.weapons]);
+/** New gameplay item, existing Blender trident geometry; no duplicate weapon download. */
+export const weaponModelName = (id: string) => id === 'harpoon' ? 'trident' : id;
 export const disguiseKit = new KitLibrary([KIT_FILES.disguises]);
 export const petKit = new KitLibrary([KIT_FILES.pets]);
 /** The starship, its launch pad, stardust and asteroids. */

@@ -11,7 +11,7 @@ import { toToon } from './toon.ts';
  * names the animation already looks for (`leg0`-`leg3`, `wing-l`, `wing-r`). Creatures without art, and every
  * creature until the file arrives (or when it is missing), keep the procedural shapes.
  */
-export const creatureKit = new KitLibrary([KIT_FILES.creatures]);
+export const creatureKit = new KitLibrary([KIT_FILES.creatures,KIT_FILES.forestBirds]);
 
 const LEGGED = ['body', 'leg_fl', 'leg_fr', 'leg_bl', 'leg_br'] as const;
 const WINGED = ['body', 'wing_l', 'wing_r'] as const;
@@ -20,6 +20,7 @@ const SOLID = ['body'] as const;
 export const CREATURE_PARTS: Readonly<Record<string, readonly string[]>> = {
   mushroom: SOLID, mushking: SOLID, boar: LEGGED, bee: WINGED, wolf: LEGGED, frog: SOLID, crab: LEGGED, chomper: SOLID,
   cactus: SOLID, bear: SOLID, treant: SOLID, croc: LEGGED,
+  forest_raptor: ['body','head','wing_l','wing_r'],
   // The other planets.
   gummy: LEGGED, jelly: SOLID, snowball: SOLID, penguin: SOLID, icebloom: SOLID, magmaslime: SOLID, minislime: SOLID,
   firelizard: LEGGED, magmacrab: LEGGED, chameleon: LEGGED, flytrap: SOLID, cloudsheep: LEGGED, yeti: SOLID, mammoth: LEGGED,
