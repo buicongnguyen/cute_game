@@ -27,6 +27,8 @@ export const CREATURE_RANGE = 40;
 export interface MapThing { x: number; z: number; kind: string; mesh: { visible: boolean } }
 export interface MapCreature extends MapThing { hp: number; boss: boolean; phase?: string }
 export interface MapView {
+  /** False while the animal pen is only a marked plot (drawn as a small square, not the yard). */
+  penBuilt?: boolean;
   planet: PlanetId; layout: EnvironmentLayout; position: { x: number; z: number }; facing: number;
   entities: readonly (MapThing & { pond?: { rx: number; rz: number } })[]; enemies: readonly MapCreature[];
   /** Ready garden beds (world positions). */
@@ -79,6 +81,7 @@ export function drawMarkers(ctx: Ctx, view: MapView) {
   for (const e of view.entities) {
     if (e.kind === 'home') { const p = mapPoint(e.x, e.z); ctx.fillStyle = '#c47a3a'; ctx.fillRect(p.x - 3, p.y - 3, 6, 6); }
     else if (e.kind === 'dropped') { ctx.fillStyle = '#ff7ab0'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; const p = mapPoint(e.x, e.z); ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, TAU); ctx.fill(); ctx.stroke(); }
+    else if (e.kind === 'pen' && view.penBuilt === false) { const c = mapPoint(e.x, e.z); ctx.fillStyle = '#c9a46a'; ctx.fillRect(c.x - 2.5, c.y - 2.5, 5, 5); }
     else if (e.kind === 'pen') { const c = mapPoint(e.x, e.z); ctx.fillStyle = '#efc879'; ctx.strokeStyle = '#8a5a3b'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(c.x, c.y, YARD.rx * MAP_SCALE, YARD.rz * MAP_SCALE, 0, 0, TAU); ctx.fill(); ctx.stroke(); }
     else if (e.kind === 'travel') { const p = mapPoint(e.x, e.z); ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🚀', p.x, p.y); }
   }
