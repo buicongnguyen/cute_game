@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { buildDecoration } from './decorations-art.ts';
+import { planetLight } from './toon.ts';
 
 /**
  * Decoration icons drawn from the same 3D models the player places at home, the way
@@ -13,10 +14,12 @@ const box = new T.Box3(), centre = new T.Vector3(), size = new T.Vector3();
 function setup() {
   renderer = new T.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1); renderer.setSize(128, 128, false); renderer.outputColorSpace = T.SRGBColorSpace;
-  renderer.toneMapping = T.NeutralToneMapping; renderer.setClearColor(0x000000, 0);
+  // The world's look (RC-05): no tone mapping and the home lights, so an icon matches its model in the garden.
+  renderer.toneMapping = T.NoToneMapping; renderer.setClearColor(0x000000, 0);
   scene = new T.Scene();
-  scene.add(new T.HemisphereLight('#ffffff', '#b0c4a0', 2.2));
-  const sun = new T.DirectionalLight('#fff4de', 2.4); sun.position.set(2, 4, 3); scene.add(sun);
+  const light = planetLight('home');
+  scene.add(new T.HemisphereLight(light.sky, light.ground, light.hemi));
+  const sun = new T.DirectionalLight(light.sun, light.sunIntensity); sun.position.set(2, 4, 3); scene.add(sun);
   camera = new T.PerspectiveCamera(30, 1, .05, 60);
 }
 

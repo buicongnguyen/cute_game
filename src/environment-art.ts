@@ -1,15 +1,16 @@
 import * as T from 'three';
+import {toonMaterial} from './toon.ts';
 import {type EnvironmentLayout,EnvironmentSimulation,terrainHeight,thornRaised,tideHeight,trainPosition,ventPhase,raftPosition} from './environments.ts';
 
 export interface EnvironmentNode {kind:string;name:string;icon:string;index:number;x:number;z:number;radius:number;mesh:T.Group}
 export class EnvironmentView {
   staticRoot=new T.Group();dynamicRoot=new T.Group();nodes:EnvironmentNode[]=[];colliders:Array<{x:number;z:number;r:number;tag?:string}>=[];
-  private materials=new Map<string,T.MeshStandardMaterial>();private pools:T.Mesh[]=[];private trains:Array<{mesh:T.Group;track:number;car:number}>=[];
+  private materials=new Map<string,T.MeshToonMaterial>();private pools:T.Mesh[]=[];private trains:Array<{mesh:T.Group;track:number;car:number}>=[];
   private vents:Array<{ring:T.Mesh;fire:T.Group;id:number}>=[];private thorns:Array<{group:T.Group;index:number}>=[];private lamps=new Map<number,T.Group>();private turtles=new Map<number,T.Group>();
   private rafts:T.Group[]=[];private rain=new Map<string,T.Group>();private nestSea?:T.Mesh;
   layout:EnvironmentLayout;
   constructor(layout:EnvironmentLayout){this.layout=layout;this.dynamicRoot.userData.environment=true;this.build();}
-  private mat(color:string,glow=false){const key=color+glow;if(!this.materials.has(key))this.materials.set(key,new T.MeshStandardMaterial({color,roughness:.9,flatShading:true,...(glow?{emissive:color,emissiveIntensity:.65}:{})}));return this.materials.get(key)!;}
+  private mat(color:string,glow=false){const key=color+glow;if(!this.materials.has(key))this.materials.set(key,toonMaterial({color,flatShading:true,...(glow?{emissive:color,emissiveIntensity:.65}:{})}));return this.materials.get(key)!;}
   private mesh(geometry:T.BufferGeometry,color:string,x=0,y=0,z=0,glow=false){const m=new T.Mesh(geometry,this.mat(color,glow));m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;return m;}
   private box(color:string,w:number,h:number,d:number,x=0,y=0,z=0){return this.mesh(new T.BoxGeometry(w,h,d),color,x,y,z);}
   private ball(color:string,r:number,x=0,y=0,z=0){return this.mesh(new T.IcosahedronGeometry(r,1),color,x,y,z);}

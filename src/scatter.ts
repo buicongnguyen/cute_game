@@ -1,6 +1,7 @@
 import * as T from 'three';
 import type { KitPart } from './assets.ts';
 import { DECOR, type DecorPlacement } from './biomes.ts';
+import { toonMaterial } from './toon.ts';
 
 /**
  * Thousands of scenery pieces drawn as instances. Pieces are grouped into square tiles so the camera skips tiles that
@@ -100,7 +101,7 @@ export function disposeScatter(group: T.Object3D) { group.traverse(o => { if (o 
 /** Simple stand-ins, used for any piece whose model file has not arrived. */
 const fallbacks = new Map<string, KitPart[]>();
 const shared = <M extends T.Material | T.BufferGeometry>(resource: M) => { resource.userData.sharedKit = true; return resource; };
-const material = (color: string, emissive?: string) => shared(new T.MeshStandardMaterial({ color, roughness: .7, emissive: emissive ?? '#000000', emissiveIntensity: emissive ? 1.2 : 0 }));
+const material = (color: string, emissive?: string) => shared(toonMaterial({ color, emissive: emissive ?? '#000000', emissiveIntensity: emissive ? 1.2 : 0 }));
 const at = (x: number, y: number, z: number, sx = 1, sy = sx, sz = sx) => new T.Matrix4().compose(new T.Vector3(x, y, z), new T.Quaternion(), new T.Vector3(sx, sy, sz));
 const LOOK: Record<string, [string, string, 'tree' | 'pine' | 'rock' | 'blob' | 'spire' | 'tuft']> = {
   tree_round: ['#8a5a3b', '#6fbf5a', 'tree'], tree_blossom: ['#8a5a3b', '#f4a6c6', 'tree'], tree_pine: ['#8a5a3b', '#3f9a5a', 'pine'], tree_swamp: ['#5a4a3a', '#3f8a6a', 'tree'],

@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { toonMaterial } from './toon.ts';
 
 /**
  * A pond drawn as two smooth polar meshes instead of stacked discs, so the shore, the rim and the water
@@ -80,12 +81,13 @@ const bankMaterials = new Map<string, T.Material>(), waterMaterials = new Map<st
 /** Shared per look (several ponds, one program); flagged so world teardown leaves them alone. */
 function bankMaterial(key: string) {
   let m = bankMaterials.get(key);
-  if (!m) { m = new T.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 1, metalness: 0 }); m.userData.sharedKit = true; bankMaterials.set(key, m); }
+  if (!m) { m = toonMaterial({ vertexColors: true, transparent: true }); m.userData.sharedKit = true; bankMaterials.set(key, m); }
   return m;
 }
 function waterMaterial(key: string) {
   let m = waterMaterials.get(key);
-  if (!m) { m = new T.MeshStandardMaterial({ vertexColors: true, transparent: true, depthWrite: false, roughness: .25, metalness: 0 }); m.userData.sharedKit = true; waterMaterials.set(key, m); }
+  // Toon like everything else (the reference's water is a toon disc at 55% opacity, no depth write).
+  if (!m) { m = toonMaterial({ vertexColors: true, transparent: true, depthWrite: false }); m.userData.sharedKit = true; waterMaterials.set(key, m); }
   return m;
 }
 

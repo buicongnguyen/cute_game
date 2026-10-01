@@ -2,6 +2,7 @@ import * as T from 'three';
 import type { KitLibrary } from './assets.ts';
 import type { Effects } from './fx.ts';
 import { CAST, FISH_PER_WATER, RESTOCK_AFTER_CATCH, type FishingState, type Point } from './fishing.ts';
+import { toonMaterial } from './toon.ts';
 
 /** Swimmable water of one pond, in world units. */
 export interface PondView { id: string; x: number; z: number; rx: number; rz: number; surface: number; waterId: string }
@@ -96,8 +97,8 @@ export class FishingView {
     const kitBobber = this.kit.ready ? this.kit.instance('bobber') : null;
     if (kitBobber) return kitBobber;
     const group = new T.Group();
-    const top = new T.Mesh(new T.SphereGeometry(.09, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: '#ef3b3b', roughness: .4 }));
-    const bottom = new T.Mesh(new T.SphereGeometry(.09, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), new T.MeshStandardMaterial({ color: '#ffffff', roughness: .4 }));
+    const top = new T.Mesh(new T.SphereGeometry(.09, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), toonMaterial({ color: '#ef3b3b' }));
+    const bottom = new T.Mesh(new T.SphereGeometry(.09, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), toonMaterial({ color: '#ffffff' }));
     group.add(top, bottom); return group;
   }
 
@@ -109,9 +110,9 @@ export class FishingView {
       return { obj: model, tail: model.children.find(c => c.name.endsWith('_tail')) ?? null };
     }
     const [body, fin] = FALLBACK[species] ?? ['#ff9a3a', '#ffffff'], group = new T.Group();
-    const trunk = new T.Mesh(new T.SphereGeometry(.13, 12, 8), new T.MeshStandardMaterial({ color: body, roughness: .45 }));
+    const trunk = new T.Mesh(new T.SphereGeometry(.13, 12, 8), toonMaterial({ color: body }));
     trunk.scale.set(.85, .6, 1.7); group.add(trunk);
-    const tail = new T.Mesh(new T.ConeGeometry(.12, .2, 4), new T.MeshStandardMaterial({ color: fin, roughness: .45 }));
+    const tail = new T.Mesh(new T.ConeGeometry(.12, .2, 4), toonMaterial({ color: fin }));
     tail.rotation.x = Math.PI / 2; tail.position.z = -.3; tail.name = 'fallback_tail';
     const hinge = new T.Group(); hinge.position.z = -.22; tail.position.z = -.1; hinge.add(tail); hinge.name = `${species}_tail`; group.add(hinge);
     return { obj: group, tail: hinge };

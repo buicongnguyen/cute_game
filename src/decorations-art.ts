@@ -1,16 +1,17 @@
 import * as T from 'three';
 import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import {toonMaterial} from './toon.ts';
 
 // Templates never enter a scene. Each decoration owns its cloned palette so
 // disposing or recoloring one placed object cannot invalidate another one.
-const materialTemplates=new Map<string,T.MeshStandardMaterial>();
+const materialTemplates=new Map<string,T.MeshToonMaterial>();
 function materialTemplate(color:string,glow=0,opacity=1){
   const key=`${color}:${glow}:${opacity}`;let material=materialTemplates.get(key);
-  if(!material){material=new T.MeshStandardMaterial({color,roughness:.78,metalness:.04,emissive:glow?color:'#000000',emissiveIntensity:glow,transparent:opacity<1,opacity,depthWrite:opacity===1,side:opacity<1?T.DoubleSide:T.FrontSide});materialTemplates.set(key,material);}return material;
+  if(!material){material=toonMaterial({color,emissive:glow?color:'#000000',emissiveIntensity:glow,transparent:opacity<1,opacity,depthWrite:opacity===1,side:opacity<1?T.DoubleSide:T.FrontSide});materialTemplates.set(key,material);}return material;
 }
 type Vec=[number,number,number];
 class Sculptor {
-  root=new T.Group();private palette=new Map<string,T.MeshStandardMaterial>();
+  root=new T.Group();private palette=new Map<string,T.MeshToonMaterial>();
   material(color:string,glow=0,opacity=1){const key=`${color}:${glow}:${opacity}`;let material=this.palette.get(key);if(!material){material=materialTemplate(color,glow,opacity).clone();this.palette.set(key,material);}return material;}
   mesh(geometry:T.BufferGeometry,color:string,position:Vec=[0,0,0],parent:T.Object3D=this.root,glow=0,opacity=1){const mesh=new T.Mesh(geometry,this.material(color,glow,opacity));mesh.position.set(...position);mesh.castShadow=opacity===1;mesh.receiveShadow=true;parent.add(mesh);return mesh;}
   box(color:string,size:Vec,position:Vec,parent:T.Object3D=this.root,soft=false){return this.mesh(soft?new RoundedBoxGeometry(...size,2,Math.min(...size)*.18):new T.BoxGeometry(...size),color,position,parent);}

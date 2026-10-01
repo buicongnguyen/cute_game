@@ -2,6 +2,7 @@ import * as T from 'three';
 import { PLANETS, type PlanetId } from './model.ts';
 import { zoneAt, type EnvironmentLayout } from './environments.ts';
 import { trailDistance, smoothstep, RIM_START } from './biomes.ts';
+import { toonMaterial } from './toon.ts';
 
 /**
  * The ground is a grid of 40 m tiles shaded with vertex colours instead of one flat
@@ -66,7 +67,7 @@ function checker(a: string, b: string) {
 }
 
 export function buildGround({ planet, ponds, base, height, segments = 20 }: GroundOptions): T.Group {
-  const group = new T.Group(), material = new T.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, map: planet === 'toy' ? checker(PLANETS.toy.ground[0], PLANETS.toy.ground[1]) : null }), color = new T.Color();
+  const group = new T.Group(), material = toonMaterial({ vertexColors: true, map: planet === 'toy' ? checker(PLANETS.toy.ground[0], PLANETS.toy.ground[1]) : null }), color = new T.Color();
   group.name = 'ground'; group.userData.environment = true;
   for (let tx = -200; tx < 200; tx += 40) for (let tz = -200; tz < 200; tz += 40) {
     const geometry = new T.PlaneGeometry(40, 40, segments, segments).rotateX(-Math.PI / 2).translate(tx + 20, 0, tz + 20);

@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { toonMaterial } from './toon.ts';
 
 /**
  * Pooled visual feedback: particles, glow sparks, rings, flashes, slash arcs and
@@ -48,7 +49,7 @@ export class ParticlePool {
     const geometry = glow ? new T.PlaneGeometry(1, 1) : new T.IcosahedronGeometry(.5, 0);
     const material = glow
       ? new T.MeshBasicMaterial({ map: softDot(), transparent: true, depthWrite: false, blending: T.AdditiveBlending })
-      : new T.MeshLambertMaterial({ flatShading: true });
+      : toonMaterial({ flatShading: true });
     this.mesh = new T.InstancedMesh(geometry, material, max);
     this.mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
     this.mesh.setColorAt(0, tmpColor.set('#ffffff'));

@@ -88,10 +88,14 @@ test('kit instances share geometry and materials and are placed at their own ori
   const a = kit.instance('tree_round')!, b = kit.instance('tree_round')!;
   const crownA = a.children[1] as T.Mesh, crownB = b.children[1] as T.Mesh;
   assert.equal(crownA.geometry, crownB.geometry);
-  assert.equal(crownA.material, leaves);
+  // Kit materials become their toon twins (RC-05): one shared twin per source, same colour and name.
+  assert.equal(crownA.material, crownB.material);
+  assert.ok(crownA.material instanceof T.MeshToonMaterial);
+  assert.equal((crownA.material as T.MeshToonMaterial).color.getHex(), leaves.color.getHex());
+  assert.equal((crownA.material as T.MeshToonMaterial).name, leaves.name);
   assert.equal(crownA.position.y, 2);
   assert.equal(a.position.x, 0, 'the node offset inside the GLB is not baked into instances');
-  assert.ok(isShared(crownA.geometry) && isShared(leaves));
+  assert.ok(isShared(crownA.geometry) && isShared(crownA.material as T.Material));
 });
 
 test('kit tints are cached per colour and never alter the source material', async () => {

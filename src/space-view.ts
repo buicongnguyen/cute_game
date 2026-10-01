@@ -2,6 +2,7 @@ import * as T from 'three';
 import { PLANETS, type PlanetId } from './model.ts';
 import { STAR_MAP, type SpaceFlight, type AsteroidKind } from './space.ts';
 import { gatherPart, type KitLibrary, type KitPart } from './assets.ts';
+import { toonMaterial } from './toon.ts';
 
 /** Soft round glows for nebulae and planet halos, drawn once per colour. */
 const glowTextures = new Map<string, T.CanvasTexture>();
@@ -140,16 +141,16 @@ export class SpaceView {
   }
   private fallbackRock(kind: AsteroidKind): KitPart[] {
     const color = kind === 'ice' ? '#bfe6ff' : kind === 'lava' ? '#5a4048' : '#9a8a7e';
-    return [{ geometry: new T.DodecahedronGeometry(1, 0), material: new T.MeshStandardMaterial({ color, roughness: .8, flatShading: true, emissive: kind === 'lava' ? '#5a1a08' : '#000000' }), matrix: new T.Matrix4(), name: 'rock' }];
+    return [{ geometry: new T.DodecahedronGeometry(1, 0), material: toonMaterial({ color, flatShading: true, emissive: kind === 'lava' ? '#5a1a08' : '#000000' }), matrix: new T.Matrix4(), name: 'rock' }];
   }
   private fallbackStar(): KitPart[] {
     const shape = new T.Shape();
     for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 - Math.PI / 2, r = i % 2 ? .22 : .5; if (i) shape.lineTo(Math.cos(a) * r, Math.sin(a) * r); else shape.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
     const geometry = new T.ExtrudeGeometry(shape, { depth: .14, bevelEnabled: false }).center();
-    return [{ geometry, material: new T.MeshStandardMaterial({ color: '#ffe45c', emissive: '#ffcc33', emissiveIntensity: 1.6 }), matrix: new T.Matrix4(), name: 'stardust' }];
+    return [{ geometry, material: toonMaterial({ color: '#ffe45c', emissive: '#ffcc33', emissiveIntensity: 1.6 }), matrix: new T.Matrix4(), name: 'stardust' }];
   }
   private fallbackShip() {
-    const g = new T.Group(), white = new T.MeshStandardMaterial({ color: '#fffaf1' }), red = new T.MeshStandardMaterial({ color: '#ed3549' });
+    const g = new T.Group(), white = toonMaterial({ color: '#fffaf1' }), red = toonMaterial({ color: '#ed3549' });
     const body = new T.Mesh(new T.CylinderGeometry(.8, .95, 3.3, 16), white); body.position.y = 2.25;
     const nose = new T.Mesh(new T.ConeGeometry(.81, 1.4, 16), red); nose.position.y = 4.6;
     g.add(body, nose);
