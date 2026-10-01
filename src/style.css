@@ -1284,9 +1284,16 @@ h1 > span {
 .crop-row.garden-row p { margin-top: 0; font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .crop-row.garden-row .chips { margin-top: 3px; gap: 4px; }
 .crop-row.garden-row .chip { padding: 1px 7px; font-size: var(--t-xs); }
-.crop-row.garden-row .button-row { width: auto; flex-direction: column; gap: 4px; }
+/* Plant and All side by side: stacked buttons made each seed row two buttons tall. */
+.crop-row.garden-row { padding-block: 4px; }
+/* On phones, crops you can't plant yet show just name, chips and the unlock level: more rows fit. */
+@media (max-width: 600px) {
+  .crop-row.garden-row.locked p { display: none; }
+  .crop-row.garden-row .crop-art { width: 38px; height: 38px; }
+}
+.crop-row.garden-row .button-row { width: auto; flex-direction: row; align-items: center; gap: 4px; }
 .crop-row.garden-row .button-row > button,
-.crop-row.garden-row > button { flex: none; min-height: 30px; padding: 3px 12px; font-size: var(--t-sm); }
+.crop-row.garden-row > button { flex: none; min-height: 30px; padding: 3px 10px; font-size: var(--t-sm); }
 .crop-row.bed-status p, .crop-row.fertilizer-row p { white-space: normal; }
 .garden-actions > button { min-height: 32px; padding: 4px 12px; font-size: var(--t-sm); }
 
