@@ -1,5 +1,6 @@
 import * as T from 'three';
 import type {CombatAlly,CombatEffect,Projectile} from './combat.ts';
+import {toonMaterial} from './toon.ts';
 export class CombatView {
   private scene:T.Scene;private shots=new Map<number,T.Mesh>();private effects:Array<{mesh:T.Mesh;life:number;max:number;kind:string}>=[];
   private allies=new Map<number,T.Group>();
@@ -19,7 +20,7 @@ export class CombatView {
   }
   update(dt:number,projectiles:Projectile[],active=true,allies:CombatAlly[]=[]){
     const allyIds=new Set(allies.map(ally=>ally.id));for(const[id,model]of this.allies)if(!allyIds.has(id)){this.disposeAlly(model);this.allies.delete(id);}
-    for(const ally of allies){let model=this.allies.get(ally.id);if(!model){model=new T.Group();const color=ally.kind==='snowman'?'#ebfcff':ally.kind==='bat'?'#745278':ally.kind==='clone'?'#807db2':'#80909c';const mat=new T.MeshStandardMaterial({color,transparent:true,opacity:.88,flatShading:true});
+    for(const ally of allies){let model=this.allies.get(ally.id);if(!model){model=new T.Group();const color=ally.kind==='snowman'?'#ebfcff':ally.kind==='bat'?'#745278':ally.kind==='clone'?'#807db2':'#80909c';const mat=toonMaterial({color,transparent:true,opacity:.88,flatShading:true});
       const body=new T.Mesh(ally.kind==='turret'||ally.kind==='cannon'?new T.BoxGeometry(.8,.8,.8):new T.IcosahedronGeometry(ally.kind==='bat'?.3:.5,1),mat);body.position.y=.6;model.add(body);
       if(ally.kind==='turret'||ally.kind==='cannon'){const barrel=new T.Mesh(new T.CylinderGeometry(.14,.2,1,8),mat);barrel.rotation.x=Math.PI/2;barrel.position.set(0,.95,.45);model.add(barrel);}
       else if(ally.kind==='bat'){for(const side of [-1,1]){const wing=new T.Mesh(new T.ConeGeometry(.36,.75,3),mat);wing.rotation.z=side*Math.PI/2;wing.position.set(side*.4,.7,0);model.add(wing);}}

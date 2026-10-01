@@ -22,6 +22,7 @@ import {EnvironmentView} from './environment-art.ts';
 import {buildDecoration} from './decorations-art.ts';
 import {bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,CALLOUT_RANGE,CREATURE_TELEGRAPHS,telegraphProgress,type BossSkill} from './boss-patterns.ts';
 import {addOutlines,setOutlinesEnabled,showOutlines} from './outline.ts';
+import {SUN_OFFSET,applyPlanetLight,isLit,toonMaterial,type LitMaterial} from './toon.ts';
 import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
 import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
@@ -47,7 +48,7 @@ export interface EnvironmentAction {kind:'light-pillar'|'collect-ore';id:string;
 export interface EnvironmentReward {id:string;count:number}
 type Particle = { mesh: T.Mesh; velocity: T.Vector3; life: number; max: number };
 const UP = new T.Vector3(0, 1, 0);
-const matCache = new Map<string, T.MeshStandardMaterial>();
+const matCache = new Map<string, T.MeshToonMaterial>();
 const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', sell: 'market', shop: 'outfitters', upgrade: 'crystal', chest: 'chest', craft: 'workshop', cook: 'kitchen' };
 // A bed's entity holds only this invisible shape, the bed slab plus a column where its crop card stands, so tap raycasts
 // find the bed and its crop but pass over it to the bed behind. GardenBeds draws the beds.
@@ -65,7 +66,7 @@ const KIT_TINTS: Partial<Record<PlanetId, Record<string, string>>> = {
 };
 function material(color: string, flat = true) {
   const key = color + flat;
-  if (!matCache.has(key)) matCache.set(key, new T.MeshStandardMaterial({ color, flatShading: flat, roughness: 0.9 }));
+  if (!matCache.has(key)) matCache.set(key, toonMaterial({ color, flatShading: flat }));
   return matCache.get(key)!;
 }
 function mesh(geometry: T.BufferGeometry, color: string, x = 0, y = 0, z = 0) {
@@ -139,7 +140,7 @@ export class World {
   // Player animation timers set by combat and fishing.
   punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; fishing:'idle'|'cast'|'wait'|'fight'='idle';
   walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
-  private shakeOffset=new T.Vector3(); private playerMaterials:T.MeshStandardMaterial[]=[];
+  private shakeOffset=new T.Vector3(); private playerMaterials:LitMaterial[]=[];private hemi?:T.HemisphereLight;
   canvas: HTMLCanvasElement; state: SaveState;
   constructor(canvas: HTMLCanvasElement, state: SaveState, options: { antialias?: boolean } = {}) {
     this.canvas=canvas;this.state=state;
@@ -149,10 +150,10 @@ export class World {
     canvas.addEventListener('webglcontextrestored', () => { if (this.scatterGroup) this.refreshScenery(); });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap; this.renderer.outputColorSpace = T.SRGBColorSpace;
-    // Neutral tone mapping keeps the toy palette saturated; ACES washed the golds and pinks out.
-    this.renderer.toneMapping = T.NeutralToneMapping; this.renderer.toneMappingExposure = 1.0;
-    this.scene.add(new T.HemisphereLight('#fff5df', '#7fa174', 1.75));
-    this.sun = new T.DirectionalLight('#fff0d0', 2.25); this.sun.position.set(-15, 35, 18); this.sun.castShadow = true;
+    // The reference's pipeline (RC-05): no tone mapping, toon materials, per-planet hemisphere 1.5 + sun 2.4 (build sets the colours).
+    this.renderer.toneMapping = T.NoToneMapping;
+    this.hemi = new T.HemisphereLight('#e8f6ff', '#9ccf7a', 1.5); this.scene.add(this.hemi);
+    this.sun = new T.DirectionalLight('#fff4dd', 2.4); this.sun.position.set(...SUN_OFFSET); this.sun.castShadow = true;
     // The shadow box covers the ground in view with a margin (resize fits it); a tighter box means sharper shadows.
     this.sun.shadow.mapSize.set(1024, 1024); Object.assign(this.sun.shadow.camera, { near: SHADOW.near, far: SHADOW.far });
     this.sun.shadow.bias = SHADOW.bias; this.sun.shadow.normalBias = SHADOW.normalBias;
@@ -192,7 +193,7 @@ export class World {
     if (detail !== this.detail) { this.detail = detail; if (this.scatterGroup) this.refreshScenery(); }
     this.resize();
   }
-  disposeTree(g: T.Object3D) { g.traverse(o => { if (o instanceof T.Mesh) { if (!isShared(o.geometry)) o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (!isShared(material) && ![...matCache.values()].includes(material as T.MeshStandardMaterial)) material.dispose(); } }); }
+  disposeTree(g: T.Object3D) { g.traverse(o => { if (o instanceof T.Mesh) { if (!isShared(o.geometry)) o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (!isShared(material) && ![...matCache.values()].includes(material as T.MeshToonMaterial)) material.dispose(); } }); }
   applyRefinedAssets(assets: RefinedAssetLibrary = refinedAssets) {
     for (const entity of this.entities) { this.applyRefinedAsset(entity, assets); if (entity.kind === 'travel') this.dressRocket(entity); }
     this.syncBeds(assets);
@@ -396,7 +397,7 @@ export class World {
     this.environment=new EnvironmentSimulation(createEnvironmentLayout(planet));this.environmentView=new EnvironmentView(this.environment.layout);
     const theme=PLANETS[planet],rng=seeded(9281+Object.keys(PLANETS).indexOf(planet)*399);
     this.scene.background=new T.Color(planet==='home'?'#aee4ff':theme.sky);this.scene.fog=new T.Fog(theme.sky,planet==='shadow'?14:FOG.near,planet==='shadow'?55:FOG.far);
-    if(this.sun)this.sun.intensity=planet==='shadow'?.7:2.25;
+    applyPlanetLight(planet,this.hemi,this.sun);
     if(planet==='home'){
       this.addEntity('home','Your cottage','🏡',this.house(),0,-8,3.2);this.obstacle(0,-8,2.7);
       this.addEntity('sell','Harvest market','🧺',this.stall('#f291a9','sell'),9,2.5,2);this.obstacle(9,2.5,1.7);
@@ -477,12 +478,12 @@ export class World {
     this.onBuilt?.();
   }
 
-  private waterMaterial?:T.MeshStandardMaterial;
+  private waterMaterial?:T.MeshToonMaterial;
   makePond(x:number,z:number,radius=5.6,waterId?:string) {
     // Translucent water over a blue bed that deepens toward the middle, so the fish
     // swimming between them stay visible from above. Heights are in world units.
     const s=radius/5.6,pond=new T.Group(),flat=(m:T.Mesh,sz=.72)=>{m.scale.set(s,1,s*sz);return m;};
-    if(!this.waterMaterial){this.waterMaterial=new T.MeshStandardMaterial({color:'#6fd8fb',transparent:true,opacity:.38,roughness:.08,metalness:0,depthWrite:false});this.waterMaterial.userData.sharedKit=true;}
+    if(!this.waterMaterial){this.waterMaterial=toonMaterial({color:'#6fd8fb',transparent:true,opacity:.38,depthWrite:false});this.waterMaterial.userData.sharedKit=true;}
     // Layers from the bottom: sand rim (top .10), blue bed (.12–.135), swimming depth, glassy surface (.30), lily pads.
     const surface=.3,water=flat(new T.Mesh(new T.CylinderGeometry(5.2,5.2,.02,48),this.waterMaterial));water.position.y=surface;water.renderOrder=1;
     pond.add(flat(cyl('#f1d9a0',5.6,5.8,.1,0,.05,0,48),.73),flat(cyl('#2aa3dc',5.15,5.15,.02,0,.11,0,48)),flat(cyl('#1478c0',3.3,3.5,.02,0,.125,0,40),.7),water);
@@ -607,7 +608,7 @@ export class World {
   }
   refreshPlayer() {
     this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...this.state.gear,pet:undefined});this.player.rotation.order='YXZ';
-    this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();o.material.userData.sharedKit=false;this.playerMaterials.push(o.material);}});this.root.add(this.player);
+    this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;this.playerMaterials.push(o.material);}});this.root.add(this.player);
     this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=this.state.gear.pet?this.petFor(this.state.gear.pet):new T.Group();addOutlines(this.companion,{merge:true});this.root.add(this.companion);
   }
 
@@ -654,8 +655,8 @@ export class World {
     const zone=this.planet==='home'?zoneAt({x,z}):this.planet,difficulty=({home:0,forest:1,meadow:1,swamp:2,canyon:3,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,cloud:5,shadow:6} as Record<string,number>)[zone],scale=[1,1,1.7,2.6,3.6,4.8,6.2][difficulty];
     const health=Math.round(def.hp*scale*(def.boss&&type!=='dragon'?2.6:1)),damage=def.damage*scale*(def.boss?1.35:1),xp=Math.round(def.xp*(.6+scale*.4));
     // Plain body parts become one or two meshes; named parts (legs, wings, shell) keep animating on their own.
-    const model=bakeModel(this.speciesModel(def),{deep:false,keep:o=>!!o.name}),flash:T.MeshStandardMaterial[]=[];
-    model.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;model.scale.setScalar(enemyScale(type,def.boss));addOutlines(model);showOutlines(model,false);
+    const model=bakeModel(this.speciesModel(def),{deep:false,keep:o=>!!o.name}),flash:LitMaterial[]=[];
+    model.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;model.scale.setScalar(enemyScale(type,def.boss));addOutlines(model);showOutlines(model,false);
     const e=this.addEntity('enemy',def.name,def.boss?'👑':'⚔️',model,x,z,def.radius,index) as Enemy;
     Object.assign(e,{type,definition:def,hp:health,maxHp:health,baseMaxHp:health,baseDamage:damage,damage,xp,level:difficulty*3-2+(def.boss?6:0),homeX:x,homeZ:z,cooldown:0,respawn:0,boss:def.boss,stun:0,phase:'idle',phaseTime:0,route:[],routeTime:0,lift:0,liftVelocity:0,statuses:{}});this.enemies.push(e);return e;
   }
@@ -1227,7 +1228,7 @@ export class World {
     const scale=enemyScale(e.type,e.boss)*((e.statuses?.sheep??0)>0?.45:1);e.mesh.scale.setScalar(scale);
     // Hit reaction: a pop in the creature's own colour (emissive 0.35) and a ×1.15 squash, so the silhouette survives the hit.
     if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);const k=e.flash!/.14;e.mesh.scale.x*=1+k*.15;e.mesh.scale.z*=1+k*.15;e.mesh.scale.y*=1+k*.06;}
-    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as T.MeshStandardMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.emissive.set(e.definition?.color??'#ffffff');m.emissiveIntensity=.35;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=1;}}}
+    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as LitMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.set(e.definition?.color??'#ffffff');m.emissiveIntensity=.35;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}
     this.animateEnemy(e,dt);
     const shell=e.mesh.getObjectByName('shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
   }
@@ -1338,14 +1339,14 @@ export class World {
       if(ripe&&this.fx&&Math.random()<dt*2.5){const plot=g.parent;if(plot)this.fx.burst({x:plot.position.x,z:plot.position.z},{n:1,color:'#fff7a8',glow:true,size:.08,speed:1,up:2,y:1,gravity:0,life:.8});}
     });
   }
-  private sunOffset=new T.Vector3(-15,35,18);private sunAxes:[T.Vector3,T.Vector3]|null=null;
+  private sunOffset=new T.Vector3(...SUN_OFFSET);private sunAxes:[T.Vector3,T.Vector3]|null=null;
   /**
    * The sun follows the ground under the camera target, where resize fitted the shadow box to the
    * view, snapped to whole shadow texels along the shadow camera's own axes (the box need not be
    * square). Without the snap, shadow edges crawl every frame you walk.
    */
   private followSun(){
-    this.sunOffset??=new T.Vector3(-15,35,18);
+    this.sunOffset??=new T.Vector3(...SUN_OFFSET);
     const [x,y]=this.sunAxes??=lightAxes(this.sunOffset),box=this.sun.shadow.camera,map=this.sun.shadow.mapSize;
     const tx=(box.right-box.left)/map.x,ty=(box.top-box.bottom)/map.y,p=this.sun.target.position.set(this.cameraTarget.x,0,this.cameraTarget.z);
     const a=p.dot(x),b=p.dot(y);p.addScaledVector(x,Math.round(a/tx)*tx-a).addScaledVector(y,Math.round(b/ty)*ty-b);
@@ -1403,8 +1404,8 @@ export class World {
     if(pose?.kind==='dash'&&this.fx)this.fx.burst(this.position,{n:2,color:['#ffffff','#bfe9ff'],size:.13,speed:1,up:1,life:.4,y:.3});
     // Hurt flashes red; invulnerability after a hit blinks white.
     const flash=this.hurtT>0?'hurt':this.invulnerable&&Math.sin(this.time*30)>0?'blink':'';
-    for(const m of this.playerMaterials??[])if(m.userData.flash!==flash){m.userData.flash=flash;m.userData.baseEmissive??=m.emissive.getHex();
-      if(flash==='hurt'){m.emissive.setRGB(.8,.16,.16);m.emissiveIntensity=1;}else if(flash==='blink'){m.emissive.setRGB(.4,.4,.4);m.emissiveIntensity=1;}else{m.emissive.setHex(m.userData.baseEmissive);m.emissiveIntensity=1;}}
+    for(const m of this.playerMaterials??[])if(m.userData.flash!==flash){m.userData.flash=flash;m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;
+      if(flash==='hurt'){m.emissive.setRGB(.8,.16,.16);m.emissiveIntensity=1;}else if(flash==='blink'){m.emissive.setRGB(.4,.4,.4);m.emissiveIntensity=1;}else{m.emissive.setHex(m.userData.baseEmissive);m.emissiveIntensity=m.userData.baseGlow??1;}}
   }
 
 

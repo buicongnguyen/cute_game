@@ -2,6 +2,7 @@ import * as T from 'three';
 import type { KitPart } from './assets.ts';
 import type { DecorPlacement } from './biomes.ts';
 import { CAMERA } from './camera-rig.ts';
+import { TOON_RAMP } from './toon.ts';
 
 /**
  * Ground cover (grass tufts, flowers, toadstools, reeds, ferns, dry bushes, gumdrops, coral) drawn as 2D cards (G2D-7),
@@ -89,7 +90,8 @@ export function bakeCoverAtlas(renderer: T.WebGLRenderer, kinds: readonly string
 }
 
 function cardMaterial(map: T.Texture, cellUv: number) {
-  const material = new T.MeshLambertMaterial({ map, alphaTest: CARD.alphaTest });
+  // Toon-lit like the ground under it (RC-05), so a card matches the grass around it.
+  const material = new T.MeshToonMaterial({ map, alphaTest: CARD.alphaTest, gradientMap: TOON_RAMP });
   material.userData.sharedKit = true;
   material.onBeforeCompile = shader => {
     shader.uniforms.cardTime = time; shader.uniforms.cardUp = { value: cardUp }; shader.uniforms.cellUv = { value: cellUv };

@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { toToon, toonify } from './toon.ts';
 
 // Vite supplies the deployment prefix; direct Node tests use the root default.
 const assetBase = import.meta.env?.BASE_URL ?? '/';
@@ -93,17 +94,20 @@ function partTag(object: T.Object3D, stop: T.Object3D) {
  */
 const FINISHES = [.2, .42, .58];
 const finish = (roughness: number) => roughness < .3 ? FINISHES[0] : roughness < .5 ? FINISHES[1] : FINISHES[2];
+type Plain = T.MeshStandardMaterial | T.MeshToonMaterial;
 function plainSignature(material: T.Material) {
-  if (!(material instanceof T.MeshStandardMaterial) || material.transparent || material.map || material.vertexColors || material.alphaTest > 0) return null;
+  if (!(material instanceof T.MeshStandardMaterial || material instanceof T.MeshToonMaterial) || material.transparent || material.map || material.vertexColors || material.alphaTest > 0) return null;
   if (material.emissiveIntensity > 0 && material.emissive.getHex() !== 0) return null;
+  // Toon materials have no finish: one look per side and shading.
+  if (material instanceof T.MeshToonMaterial) return [material.constructor.name, 'toon', material.side, (material as { flatShading?: boolean }).flatShading].join('|');
   return [material.constructor.name, finish(material.roughness), material.metalness.toFixed(1), material.side, material.flatShading].join('|');
 }
-const baked = new Map<string, T.MeshStandardMaterial>();
-function bakedMaterial(signature: string, like: T.MeshStandardMaterial) {
+const refinish = (material: Plain, like: Plain) => { if (material instanceof T.MeshStandardMaterial && like instanceof T.MeshStandardMaterial) material.roughness = finish(like.roughness); };
+const baked = new Map<string, Plain>();
+function bakedMaterial(signature: string, like: Plain) {
   let material = baked.get(signature);
   if (!material) {
-    material = like instanceof T.MeshPhysicalMaterial ? new T.MeshPhysicalMaterial() : new T.MeshStandardMaterial();
-    material.copy(like); material.color.set('#ffffff'); material.vertexColors = true; material.roughness = finish(like.roughness); material.name = 'Baked colours'; material.userData.sharedKit = true;
+    material = like.clone(); material.color.set('#ffffff'); material.vertexColors = true; refinish(material, like); material.name = 'Baked colours'; material.userData.sharedKit = true;
     baked.set(signature, material);
   }
   return material;
@@ -117,7 +121,7 @@ function bakedMaterial(signature: string, like: T.MeshStandardMaterial) {
  */
 export function bakeModel<O extends T.Object3D>(node: O, { deep = true, keep = () => false }: { deep?: boolean; keep?: (mesh: T.Mesh) => boolean } = {}) {
   node.updateMatrixWorld(true);
-  const toNode = node.matrixWorld.clone().invert(), groups = new Map<string, { meshes: T.Mesh[]; like: T.MeshStandardMaterial }>();
+  const toNode = node.matrixWorld.clone().invert(), groups = new Map<string, { meshes: T.Mesh[]; like: Plain }>();
   const candidates: T.Mesh[] = [];
   if (deep) node.traverse(o => { if (o instanceof T.Mesh && !(o instanceof T.InstancedMesh)) candidates.push(o); });
   // Shallow: only meshes directly under the node, so named sub-parts (a sprout that hides) stay separate.
@@ -126,7 +130,7 @@ export function bakeModel<O extends T.Object3D>(node: O, { deep = true, keep = (
     if (Array.isArray(mesh.material) || keep(mesh) || !mesh.visible) continue;
     const signature = plainSignature(mesh.material);
     if (!signature) continue;
-    const group = groups.get(signature) ?? { meshes: [], like: mesh.material as T.MeshStandardMaterial }; group.meshes.push(mesh); groups.set(signature, group);
+    const group = groups.get(signature) ?? { meshes: [], like: mesh.material as Plain }; group.meshes.push(mesh); groups.set(signature, group);
   }
   for (const [signature, { meshes, like }] of groups) {
     if (meshes.length < 2) continue;
@@ -138,7 +142,7 @@ export function bakeModel<O extends T.Object3D>(node: O, { deep = true, keep = (
       if (mesh.geometry.index) geometry.setIndex(mesh.geometry.index.clone());
       if (!indexed && geometry.index) geometry = geometry.toNonIndexed();
       geometry.applyMatrix4(toNode.clone().multiply(mesh.matrixWorld));
-      const color = (mesh.material as T.MeshStandardMaterial).color, count = geometry.getAttribute('position').count, colors = new Float32Array(count * 3);
+      const color = (mesh.material as Plain).color, count = geometry.getAttribute('position').count, colors = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) colors.set([color.r, color.g, color.b], i * 3);
       geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
       return geometry;
@@ -146,14 +150,15 @@ export function bakeModel<O extends T.Object3D>(node: O, { deep = true, keep = (
     if (pieces.some(p => !p.getAttribute('normal')) && pieces.some(p => p.getAttribute('normal'))) { pieces.forEach(p => p.dispose()); continue; }
     const geometry = mergeGeometries(pieces, false); pieces.forEach(p => p.dispose());
     if (!geometry) continue;
-    const material = like.clone(); material.color.set('#ffffff'); material.vertexColors = true; material.roughness = finish(like.roughness); material.name = `Baked ${signature.split('|')[1]}`;
+    const material = like.clone(); material.color.set('#ffffff'); material.vertexColors = true; refinish(material, like); material.name = `Baked ${signature.split('|')[1]}`;
     const merged = new T.Mesh(geometry, material); merged.name = 'baked'; merged.castShadow = meshes.some(m => m.castShadow); merged.receiveShadow = true;
     // A one-material glTF node is a Mesh that can have children (sockets, limbs): hide it
     // rather than remove it, or its children would disappear with it.
     for (const mesh of meshes) { if (mesh.children.length) mesh.layers.disableAll(); else mesh.removeFromParent(); }
     node.add(merged);
   }
-  return node;
+  // Every prepared model draws with the reference's toon ramp (RC-05).
+  return toonify(node);
 }
 
 /**
@@ -203,6 +208,8 @@ export class KitLibrary {
             if (marker && !(object instanceof T.Mesh)) markers.push({ name: marker, matrix: inverse.clone().multiply(object.matrixWorld), tag: partTag(object, node) });
             if (!(object instanceof T.Mesh) || Array.isArray(object.material)) return;
             object.geometry.userData.sharedKit = true;
+            // Kit models draw with the toon ramp like everything else (RC-05).
+            object.material = toToon(object.material);
             object.material.userData.sharedKit = true;
             // A single-material child keeps its own name, so animated parts (a fish tail) can be found.
             const named = object.name || object.parent?.name || '';
@@ -276,7 +283,7 @@ export class KitLibrary {
         if (part.geometry.index) geometry.setIndex(part.geometry.index.clone());
         geometry.applyMatrix4(part.matrix);
         if (geometry.index && list.some(p => !p.geometry.index)) geometry = geometry.toNonIndexed();
-        const color = (part.material as T.MeshStandardMaterial).color, count = geometry.getAttribute('position').count, colors = new Float32Array(count * 3);
+        const color = (part.material as Plain).color, count = geometry.getAttribute('position').count, colors = new Float32Array(count * 3);
         for (let i = 0; i < count; i++) colors.set([color.r, color.g, color.b], i * 3);
         geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
         return geometry;
@@ -285,14 +292,14 @@ export class KitLibrary {
       pieces.forEach(p => p.dispose());
       if (!geometry) { result.push(...list); continue; }
       geometry.userData.sharedKit = true;
-      result.push({ geometry, material: bakedMaterial(signature, list[0].material as T.MeshStandardMaterial), matrix: new T.Matrix4(), name, tag: list[0].tag });
+      result.push({ geometry, material: bakedMaterial(signature, list[0].material as Plain), matrix: new T.Matrix4(), name, tag: list[0].tag });
     }
     this.merged.set(key, result);
     return result;
   }
 
   private material(source: T.Material, color?: string) {
-    if (!color || !(source instanceof T.MeshStandardMaterial)) return source;
+    if (!color || !(source instanceof T.MeshStandardMaterial || source instanceof T.MeshToonMaterial)) return source;
     const key = `${source.uuid}:${color}`;
     let tinted = this.tinted.get(key);
     if (!tinted) {
@@ -324,7 +331,7 @@ export class HeroLibrary {
       // Each posable part becomes one or two meshes; the shirt keeps its own material for recolouring.
       const shirt = (mesh: T.Mesh) => /^Hero shirt/.test((mesh.material as T.Material).name);
       for (const part of ['body', 'head', 'arm-left', 'arm-right', 'leg-left', 'leg-right']) { const node = hero.getObjectByName(part); if (node) bakeModel(node, { deep: false, keep: shirt }); }
-      hero.traverse(o => { if (o instanceof T.Mesh) o.geometry.userData.sharedKit = true; });
+      toonify(hero); hero.traverse(o => { if (o instanceof T.Mesh) o.geometry.userData.sharedKit = true; });
       this.source = hero; this.ready = true;
     }).catch(() => { /* The procedural explorer remains. */ });
     return this.loading;
@@ -342,8 +349,9 @@ export class HeroLibrary {
       o.castShadow = true; o.receiveShadow = true;
       o.material = (Array.isArray(o.material) ? o.material : [o.material]).map(m => {
         const copy = m.clone();
-        if (copy instanceof T.MeshStandardMaterial && m.name === 'Hero shirt') copy.color.set(color);
-        if (copy instanceof T.MeshStandardMaterial && m.name === 'Hero shirt shade') copy.color.copy(shade);
+        const shirt = copy instanceof T.MeshStandardMaterial || copy instanceof T.MeshToonMaterial ? copy : null;
+        if (shirt && m.name === 'Hero shirt') shirt.color.set(color);
+        if (shirt && m.name === 'Hero shirt shade') shirt.color.copy(shade);
         return copy;
       });
       if ((o.material as T.Material[]).length === 1) o.material = (o.material as T.Material[])[0];

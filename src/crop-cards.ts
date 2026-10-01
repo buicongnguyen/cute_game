@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { CAMERA } from './camera-rig.ts';
 import { cropKit } from './assets.ts';
+import { toonMaterial } from './toon.ts';
 
 /**
  * Garden crops as 2D cards (G2D-1/G2D-2). The crops are our own Blender models (crops.glb); once the kit has loaded
@@ -80,7 +81,7 @@ interface BedState { key: string; stage: CropStage; crop: string | null; pop: nu
 
 const INK = '#3a2433', COLS = 8, MAX_FLIGHTS = 12;
 
-/** Exactly three's Khronos PBR Neutral curve, applied in the bake because render targets skip tone mapping. */
+/** Exactly three's Khronos PBR Neutral curve, applied in the bake (render targets skip tone mapping) when the world uses it. */
 const NEUTRAL = `vec3 neutral(vec3 color){const float start=.76;const float desat=.15;color*=exposure;float x=min(color.r,min(color.g,color.b));
   float offset=x<.08?x-6.25*x*x:.04;color-=offset;float peak=max(color.r,max(color.g,color.b));if(peak<start)return color;
   float d=1.-start;float newPeak=1.-d*d/(peak+d-start);color*=newPeak/peak;float g=1.-1./(desat*(peak-newPeak)+1.);return mix(color,vec3(newPeak),g);}`;
@@ -152,7 +153,7 @@ export class CropCards {
       const entries: Array<{ id: string; model: T.Object3D; outline: boolean }> = [];
       const sprout = cropKit.instance('crop_sprout'); if (sprout) entries.push({ id: 'sprout', model: sprout, outline: false });
       for (const id of ids) { const model = cropKit.instance('crop_' + id); if (model) entries.push({ id, model, outline: true }); }
-      const star = new T.Mesh(new T.OctahedronGeometry(.07), new T.MeshStandardMaterial({ color: '#fff0a8', emissive: '#fff0a8', emissiveIntensity: .35, flatShading: true }));
+      const star = new T.Mesh(new T.OctahedronGeometry(.07), toonMaterial({ color: '#fff0a8', emissive: '#fff0a8', emissiveIntensity: .35, flatShading: true }));
       star.position.y = .07; entries.push({ id: 'sparkle', model: star, outline: false });
       if (entries.length < 3) return this.ready = false;
       const px = this.cellPx, rows = Math.ceil(entries.length / COLS), width = COLS * px, height = rows * px;
@@ -171,12 +172,12 @@ export class CropCards {
       // About 1.5 CSS px of ink on a phone: thinner lines break into dots without antialiasing.
       const outline = Math.max(2.5, px / 36), pad = (outline + 2) / px;
       const composite = new T.ShaderMaterial({
-        uniforms: { src: { value: scratch.texture }, texel: { value: new T.Vector2(1 / px, 1 / px) }, radius: { value: outline }, ink: { value: new T.Color(INK) }, outline: { value: 1 }, exposure: { value: renderer.toneMappingExposure } },
+        uniforms: { src: { value: scratch.texture }, texel: { value: new T.Vector2(1 / px, 1 / px) }, radius: { value: outline }, ink: { value: new T.Color(INK) }, outline: { value: 1 }, exposure: { value: renderer.toneMappingExposure }, toned: { value: renderer.toneMapping === T.NeutralToneMapping ? 1 : 0 } },
         vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
-        fragmentShader: `uniform sampler2D src;uniform vec2 texel;uniform float radius;uniform vec3 ink;uniform float outline;uniform float exposure;varying vec2 vUv;${NEUTRAL}
+        fragmentShader: `uniform sampler2D src;uniform vec2 texel;uniform float radius;uniform vec3 ink;uniform float outline;uniform float exposure;uniform float toned;varying vec2 vUv;${NEUTRAL}
           void main(){vec4 c=texture2D(src,vUv);float d=0.;
             if(outline>0.)for(int i=0;i<24;i++){float a=float(i)*.2617994;vec2 o=vec2(cos(a),sin(a))*radius*texel;d=max(d,max(texture2D(src,vUv+o).a,texture2D(src,vUv+o*.5).a));}
-            d=smoothstep(.15,.55,d);vec3 rgb=c.a>0.?neutral(c.rgb/c.a)*c.a:vec3(0.);
+            d=smoothstep(.15,.55,d);vec3 rgb=c.a>0.?(toned>.5?neutral(c.rgb/c.a):min(c.rgb/c.a,vec3(1.)))*c.a:vec3(0.);
             gl_FragColor=vec4(rgb+ink*(1.-c.a)*d,c.a+(1.-c.a)*d);}`,
         blending: T.NoBlending, depthTest: false, depthWrite: false,
       });

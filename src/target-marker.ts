@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addOutlines } from './outline.ts';
+import { toonMaterial } from './toon.ts';
 
 /**
  * The reference's target language: an open red ring under the creature you are fighting,
@@ -42,7 +43,7 @@ export class TargetMarker {
     );
     ring.renderOrder = 10; ring.raycast = () => {}; ring.name = 'target-ring';
     this.ring = ring;
-    const arrow = new T.Group(), body = new T.Mesh(arrowGeometry(), new T.MeshStandardMaterial({ color: TARGET_RED, emissive: '#7a0a18', emissiveIntensity: .6, flatShading: true, roughness: .6 }));
+    const arrow = new T.Group(), body = new T.Mesh(arrowGeometry(), toonMaterial({ color: TARGET_RED, emissive: '#7a0a18', emissiveIntensity: .6, flatShading: true }));
     body.raycast = () => {}; arrow.add(body); addOutlines(arrow, { merge: true });
     arrow.name = 'target-arrow'; this.arrow = arrow;
     this.root.add(ring, arrow);
