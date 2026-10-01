@@ -22,7 +22,7 @@ import * as M from './model.ts';
 import {EnvironmentSimulation,createEnvironmentLayout,environmentWalkable,inWater,terrainHeight,zoneAt,type EnvironmentStatus,type EnvironmentEvent,type LightningState} from './environments.ts';
 import {EnvironmentView} from './environment-art.ts';
 import {buildDecoration} from './decorations-art.ts';
-import {bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,CALLOUT_RANGE,CREATURE_TELEGRAPHS,telegraphProgress,type BossSkill} from './boss-patterns.ts';
+import {bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,CALLOUT_RANGE,CREATURE_TELEGRAPHS,telegraphProgress,hitControl,liftHeight,keepsChasing,BOSS_RESISTED,RESIST_SLOW,KNOCK_IMPULSE,BOSS_KNOCK,BOSS_REACH,BOSS_SKILLS,LEASH,type BossSkill} from './boss-patterns.ts';
 import {addOutlines,setOutlinesEnabled,showOutlines} from './outline.ts';
 import {SUN_OFFSET,applyPlanetLight,isLit,toonMaterial,type LitMaterial} from './toon.ts';
 import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
@@ -41,7 +41,7 @@ interface Obstacle { x: number; z: number; r: number;tag?:string }
  */
 export interface Enemy { resting?:boolean;lod?:{wait:number;age:number;x:number;z:number;slot:number} }
 /** windupTotal: the length of the current wind-up, so its telegraph fills exactly when the blow lands; enraged: below 30% HP (one toast). */
-export interface Enemy { windupTotal?:number;enraged?:boolean }
+export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;resistAt?:number }
 export interface RemotePose {id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
 export interface EnemySnapshot {id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
@@ -757,8 +757,11 @@ export class World {
     }
   }
   groundPoint(clientX:number,clientY:number){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const p=this.raycaster.ray.intersectPlane(new T.Plane(UP,0),new T.Vector3());return p?{x:p.x,z:p.z}:null;}
-  knockUpEnemy(e:Enemy,height=2,duration=.8){e.liftVelocity=Math.max(e.liftVelocity??0,Math.sqrt(Math.max(0,height)*24));e.stun=Math.max(e.stun,duration);}
-  statusEnemy(e:Enemy,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt',duration:number){e.statuses??={};e.statuses[kind]=Math.max(e.statuses[kind]??0,duration);}
+  knockUpEnemy(e:Enemy,height=2,duration=.8){e.liftVelocity=Math.max(e.liftVelocity??0,Math.sqrt(Math.max(0,liftHeight(e.boss,height))*24));e.stun=Math.max(e.stun,duration);}
+  statusEnemy(e:Enemy,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt',duration:number){e.statuses??={};
+    // Bosses shrug off sheep, charm and fear (the reference's 'Kháng!'): they are only slowed for 60% of it.
+    if(e.boss&&(BOSS_RESISTED as readonly string[]).includes(kind)){e.statuses.slow=Math.max(e.statuses.slow??0,duration*RESIST_SLOW);this.resistFeedback(e);return;}
+    e.statuses[kind]=Math.max(e.statuses[kind]??0,duration);}
   setNetworkRole(role:'host'|'peer'|null){this.networkRole=role;}
   environmentSnapshot():EnvironmentSnapshot{return {time:this.environment.time,lamps:[...this.environment.lamps],eclipseUntil:this.environment.eclipseUntil,...(this.planet==='lava'?{weather:this.environment.weather.snapshot(),nestLevel:this.environment.nestLevel,fireRain:this.environment.fireRain.map(p=>({...p}))}:{}),...(this.planet==='cloud'?{lightning:{...this.environment.lightning,bolts:this.environment.lightning.bolts.map(p=>({...p}))}}:{})};}
   applyEnvironmentSnapshot(snapshot:EnvironmentSnapshot){if(!this.environment||!Number.isFinite(snapshot.time)||snapshot.time<0)return;const offset=snapshot.time-this.environment.time;if(this.environment.riding)this.environment.rideUntil+=offset;this.environment.time=snapshot.time;this.environment.lamps=new Map(snapshot.lamps.filter(([id,until])=>Number.isInteger(id)&&Number.isFinite(until)));this.environment.eclipseUntil=snapshot.eclipseUntil??0;if(snapshot.weather)this.environment.weather.restore(snapshot.weather);if(Number.isFinite(snapshot.nestLevel))this.environment.nestLevel=Math.max(-.9,Math.min(.32,snapshot.nestLevel!));if(snapshot.fireRain)this.environment.fireRain=snapshot.fireRain.filter(p=>[p.x,p.z,p.duration,p.remaining].every(Number.isFinite)&&p.remaining>0&&p.duration>0).map(p=>({...p}));if(snapshot.lightning){const source=snapshot.lightning;this.environment.lightning={wait:Math.max(0,Math.min(13,source.wait||0)),sequence:Math.max(0,Math.floor(source.sequence||0)),bolts:source.bolts.filter(p=>[p.x,p.z,p.remaining,p.duration].every(Number.isFinite)&&p.remaining>0&&p.duration>0).map(p=>({...p}))};}this.syncWeatherNodes();}
@@ -949,7 +952,9 @@ export class World {
   damageEnemy(e:Enemy,amount:number,stun=0,hazard=false) {
     if(e.hp<=0)return;
     if(!hazard&&e.type==='magmaturtle')amount*=e.phase==='recover'?2:.12;
-    e.hp=Math.max(0,e.hp-amount);e.stun=Math.max(e.stun,stun,.17);this.burst(e.x,e.z,'#fff0bb',8);
+    // A hit never staggers a boss (its wind-up and skill go on, as in the reference); a hard stun only slows it.
+    const control=hitControl(e.boss,stun);if(!hazard)e.lastHitAt=this.time??0;
+    e.hp=Math.max(0,e.hp-amount);e.stun=Math.max(e.stun,control.stun);if(control.slow&&e.hp>0){e.statuses??={};e.statuses.slow=Math.max(e.statuses.slow??0,control.slow);this.resistFeedback(e);}this.burst(e.x,e.z,'#fff0bb',8);
     if(e.hp===0){e.respawn=e.type==='minislime'||e.type==='dragon'?999999:e.boss?90:22+Math.random()*10;e.dying=.3;e.knockVX=e.knockVZ=0;e.telegraphs=[];e.skillEffects=[];
       if(e.type==='magmaslime'&&this.networkRole!=='peer')this.enemies.filter(m=>m.type==='minislime'&&m.hp<=0).slice(0,3).forEach((minion,index)=>{const a=index*Math.PI*2/3;minion.x=e.x+Math.cos(a)*.9;minion.z=e.z+Math.sin(a)*.9;this.resolveOverlap(minion,this.collisionObstacles(),minion.radius);minion.homeX=minion.x;minion.homeZ=minion.z;minion.hp=minion.maxHp;minion.phase='idle';minion.stun=0;minion.respawn=0;});
       if(this.selected===e){this.selected=null;this.destination=null;this.route=[];this.ring.visible=false;}}
@@ -1054,13 +1059,27 @@ export class World {
    * 30% HP) is rare and changes the fight, so it alone keeps a toast, once per descent.
    */
   bossCallout(e:Enemy,skill:BossSkill){
-    const enraged=e.hp<e.maxHp*.3;
-    if(enraged&&!e.enraged)this.onEnvironmentEvent?.({kind:'boss-warning',message:`${e.name} is enraged! Its skills come faster.`});
-    e.enraged=enraged;
+    if(e.hp<e.maxHp*.3)this.enrageBoss(e);
     if(Math.hypot(e.x-this.position.x,e.z-this.position.z)>CALLOUT_RANGE)return;
     const fx=this.fx;if(!fx)return;const top=e.mesh.position.y+(this.modelHeight?.(e)??2.6)*.6-1.8;
     fx.text({x:e.x,y:top,z:e.z},BOSS_CALLOUTS[skill],'alert callout');
     fx.burst({x:e.x,y:top+1.2,z:e.z},{n:24,color:[BOSS_TELEGRAPH_COLORS[skill],'#ffffff'],glow:true,size:.12,speed:5,up:4,life:.5});
+  }
+  /** '🛡️ RESIST' over a boss that shrugged off a stun or a status, at most every 0.7 s like the reference's. */
+  private resistFeedback(e:Enemy){
+    const now=this.time??0;if(now-(e.resistAt??-1)<.7)return;e.resistAt=now;
+    this.fx?.text({x:e.x,y:e.mesh.position.y+1,z:e.z},'🛡️ RESIST','dmg');
+  }
+  /**
+   * Below 30% HP a boss enrages the moment it drops there (the reference checks in its chase step, not at the next
+   * skill): one toast, a '😡 ENRAGED!' float and a heavy shake within 30 m. It calms down once it walks home and heals.
+   */
+  enrageBoss(e:Enemy){
+    if(e.enraged)return;e.enraged=true;
+    this.onEnvironmentEvent?.({kind:'boss-warning',message:`${e.name} is enraged! Its skills come faster.`});
+    const fx=this.fx;if(!fx||Math.hypot(e.x-this.position.x,e.z-this.position.z)>=CALLOUT_RANGE)return;
+    fx.text({x:e.x,y:e.mesh.position.y+(this.modelHeight?.(e)??2.6)*.7-1.8,z:e.z},'😡 ENRAGED!','alert callout');fx.shake?.(.8);
+    fx.burst({x:e.x,z:e.z},{n:40,color:['#ff3b3b','#ff8a3d','#ffffff'],glow:true,speed:7,up:8,y:1});
   }
   private castBossSkill(e:Enemy){
     const skill=e.skill;if(!skill)return;
@@ -1129,6 +1148,7 @@ export class World {
     }else e.lod=undefined;
     if(e.boss){e.bossStage=e.type==='dragon'?bossPhase(e.hp,e.maxHp):1;for(const pulse of e.skillEffects??[]){pulse.remaining-=dt;if(pulse.remaining<=0){this.areaDamage(e,pulse.x,pulse.z,pulse.r,pulse.multiplier,pulse.inner);this.burst(pulse.x,pulse.z,'#edb875',12);}}e.skillEffects=e.skillEffects?.filter(p=>p.remaining>0);}
     const statuses=e.statuses??{},noAttack=(statuses.blind??0)>0||(statuses.sheep??0)>0||(statuses.fear??0)>0;
+    if(e.boss&&!e.enraged&&e.hp<e.maxHp*.3&&e.phase!=='idle'&&e.phase!=='return')this.enrageBoss(e);
     if(e.stun>0){e.phase='chase';e.telegraphs=[];return;}
     if(e.phase==='windup'){
       e.phaseTime=(e.phaseTime??0)-dt;
@@ -1139,7 +1159,7 @@ export class World {
         }
         if(def.behavior==='charger'&&!noAttack){e.phase='charge';e.phaseTime=.75;e.mesh.userData.chargeHit=false;if(target){const dx=target.x-e.x,dz=target.z-e.z,d=Math.hypot(dx,dz)||1;e.targetX=e.x+dx/d*13*.75;e.targetZ=e.z+dz/d*13*.75;}}
         else{
-          if(target&&!noAttack){const reach=e.mesh.userData.slam?5.5:def.reach;
+          if(target&&!noAttack){const reach=e.mesh.userData.slam?5.5:def.reach+(e.boss?BOSS_REACH.strike-.4:0);
             if(def.behavior==='shooter')this.shootEnemy(e,target);
             else if(distance<reach+.4&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1));
           }
@@ -1151,19 +1171,23 @@ export class World {
     if(e.phase==='charge'){
       const dx=(e.targetX??e.x)-e.x,dz=(e.targetZ??e.z)-e.z,d=Math.hypot(dx,dz);
       if(d>.1)this.moveCreature(e,dx/d*(e.skill==='charge'?18:13)*dt,dz/d*(e.skill==='charge'?18:13)*dt);
-      if(target&&distance<def.reach+.4&&!e.mesh.userData.chargeHit){this.hitEnemyTarget(target,e.damage*1.3);e.mesh.userData.chargeHit=true;}
+      if(target&&distance<(e.boss&&e.skill==='charge'?e.radius+.6:def.reach+.4)&&!e.mesh.userData.chargeHit){this.hitEnemyTarget(target,e.damage*1.3);e.mesh.userData.chargeHit=true;}
       e.phaseTime=(e.phaseTime??0)-dt;if((e.phaseTime??0)<=0||d<.3){e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown;}return;
     }
     if(e.phase==='recover'){e.phaseTime=(e.phaseTime??0)-dt;if(e.phaseTime!<=0)e.phase='chase';return;}
     const homeDistance=Math.hypot(e.x-e.homeX,e.z-e.homeZ),leash=e.type==='dragon'?75:30,wasChasing=e.phase==='chase'||e.hp<e.maxHp&&e.phase!=='return';
-    const chasing=!!target&&(distance<def.sight*(wasChasing?1.6:1)||(statuses.taunt??0)>0)&&homeDistance<(e.phase==='return'?20:leash);
+    // The reference's leash: past 1.6x sight or 30 m from home a chaser gives up, unless it was hit in the last 4 s
+    // (so kiting a boss out of its range does not reset it mid-fight); a hit also turns a returning creature round.
+    const sinceHit=(this.time??0)-(e.lastHitAt??-Infinity),taunted=(statuses.taunt??0)>0;
+    const chasing=!!target&&(sinceHit<LEASH.hitGrace||(e.phase==='return'?(distance<def.sight||taunted)&&homeDistance<20:wasChasing?keepsChasing(taunted?0:distance,def.sight,homeDistance,sinceHit,leash):(distance<def.sight||taunted)&&homeDistance<leash));
+    if(e.boss&&chasing&&!e.enraged&&e.hp<e.maxHp*.3)this.enrageBoss(e);
     let returning=!chasing&&(wasChasing||e.phase==='return');
-    if(returning){e.phase='return';e.hp=Math.min(e.maxHp,e.hp+e.maxHp*.3*dt);if(homeDistance<.8||def.speed===0){e.hp=e.maxHp;e.phase='idle';returning=false;}}
+    if(returning){e.phase='return';e.hp=Math.min(e.maxHp,e.hp+e.maxHp*.3*dt);if(homeDistance<.8||def.speed===0){e.hp=e.maxHp;e.phase='idle';returning=false;e.enraged=false;e.scaled=false;}}
     let goal:Point=chasing?target!:returning?{x:e.homeX,z:e.homeZ}:{x:e.homeX+Math.sin(this.time*.25+e.homeZ)*2,z:e.homeZ+Math.cos(this.time*.25+e.homeX)*2};
     if((statuses.fear??0)>0&&target)goal={x:e.x+(e.x-target.x),z:e.z+(e.z-target.z)};
-    const canWindup=distance<(e.type==='lavaworm'?1.2:def.reach)||(e.type==='boar'||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''))&&distance<8;
+    const canWindup=distance<(e.type==='lavaworm'?1.2:def.reach+(e.boss?BOSS_REACH.windup:0))||(e.type==='boar'||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''))&&distance<8;
     if(chasing&&canWindup&&!e.cooldown&&!noAttack){
-      e.phase='windup';e.phaseTime=def.windup;e.targetX=target!.x;e.targetZ=target!.z;e.mesh.userData.attackCount=(e.mesh.userData.attackCount??0)+1;e.mesh.userData.slam=e.boss&&e.mesh.userData.attackCount%3===0;
+      e.phase='windup';e.phaseTime=def.windup;e.targetX=target!.x;e.targetZ=target!.z;e.mesh.userData.attackCount=(e.mesh.userData.attackCount??0)+1;e.mesh.userData.slam=e.boss&&!BOSS_SKILLS[e.type??'']&&e.mesh.userData.attackCount%3===0;
       if(e.boss)this.beginBossSkill(e,target!);else e.skill=undefined;
       if(e.mesh.userData.slam&&!e.skill)e.phaseTime=1.1;e.windupTotal=e.phaseTime;e.mesh.rotation.y=Math.atan2(target!.x-e.x,target!.z-e.z);return;
     }
@@ -1173,7 +1197,7 @@ export class World {
       this.moveCreature(e,vx/n*speed*dt,vz/n*speed*dt);e.mesh.rotation.y=Math.atan2(vx,vz);e.phase='chase';return;
     }
     if(def.speed===0)return;
-    if(chasing&&distance<def.reach*.8&&!noAttack)return;
+    if(chasing&&distance<(e.boss?(def.reach+BOSS_REACH.windup)*.85:def.reach*.8)&&!noAttack)return;
     const obstacles=this.creatureObstacles(),options=this.navigationOptions(e.radius,true);
     options.walkable=p=>this.creatureWalkable(e,p);
     this.resolveOverlap(e,obstacles,options.clearance!);
@@ -1191,8 +1215,9 @@ export class World {
   }
   /** Push a creature back; it slides and slows like the reference's knockback, blocked by scenery. */
   knockEnemy(e:Enemy,dirX:number,dirZ:number,strength:number){
-    if(e.boss)strength*=.35;if(e.definition?.behavior==='rooted'||!(e.definition?.speed??1))return;
-    e.knockVX=(e.knockVX??0)+dirX*strength*8;e.knockVZ=(e.knockVZ??0)+dirZ*strength*8;
+    // The reference's impulse: 6 m/s per knock unit, x0.15 on a boss (a punch nudges a boss about 0.1 m).
+    if(e.boss)strength*=BOSS_KNOCK;if(e.definition?.behavior==='rooted'||!(e.definition?.speed??1))return;
+    e.knockVX=(e.knockVX??0)+dirX*strength*KNOCK_IMPULSE;e.knockVZ=(e.knockVZ??0)+dirZ*strength*KNOCK_IMPULSE;
   }
   /**
    * Creature body language: hoppers squash and stretch, walkers trot, flyers flap,

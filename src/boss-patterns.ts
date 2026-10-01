@@ -47,8 +47,8 @@ export function bossTelegraphs(skill:BossSkill,from:BossPoint,target:BossPoint,p
  * filled disc whose inner fill grows over the wind-up. Opacities and the 0.12 m edge are the reference's.
  */
 export const TELEGRAPH_LOOK={base:.18,fill:.35,edge:.8,edgeWidth:.12};
-/** Each boss skill has its own colour, so a glance tells a slam from falling rocks. */
-export const BOSS_TELEGRAPH_COLORS:Record<BossSkill,string>={slam:'#ff5a3b',quake:'#ffb13d',charge:'#ff3b3b',barrage:'#b06aff',rain:'#ff7a1f',spin:'#ff3bd0',eclipse:'#8a5aff'};
+/** Disc colours, the reference's (showSkillWindup): meteor rain orange, the charge lane amber, every other skill red. */
+export const BOSS_TELEGRAPH_COLORS:Record<BossSkill,string>={slam:'#ff3b3b',quake:'#ff3b3b',charge:'#ffb13d',barrage:'#ff3b3b',rain:'#ff7a1f',spin:'#ff3b3b',eclipse:'#ff3b3b'};
 /** The callout floated above a boss at the start of a wind-up (one per skill, never a toast). */
 export const BOSS_CALLOUTS:Record<BossSkill,string>={slam:'⚠️ SLAM',quake:'⚠️ QUAKE',charge:'⚠️ CHARGE',barrage:'⚠️ BARRAGE',rain:'⚠️ METEOR RAIN',spin:'⚠️ SPIN',eclipse:'⚠️ ECLIPSE'};
 /** Callouts show only to explorers this close to the boss (metres). */
@@ -61,5 +61,29 @@ export const CREATURE_TELEGRAPHS:Record<string,{r:number;at:'self'|'front'|'targ
   magmaturtle:{r:2.6,at:'self',color:'#ff3b3b'},lavaworm:{r:2,at:'self',color:'#ff3b3b'},
   firebat:{r:1.2,at:'target',color:'#ff3b3b'},chomper:{r:1.4,at:'front',color:'#ff3b3b'},
 };
+/**
+ * How bosses take hits, after the reference (apply/applyStatus/trap): a hit never staggers a boss, so its
+ * wind-up and skill go on; knockback is 6 m/s per knock unit, x0.15 on a boss; a launch (ground slam) lifts a
+ * boss at x0.25, which does interrupt it; sheep, charm and fear are resisted and become a slow (x0.6 duration),
+ * and a hard stun (ice, bubble, thunder) does the same. Ordinary creatures keep their short hit flinch.
+ */
+export const KNOCK_IMPULSE=6,BOSS_KNOCK=.15,BOSS_LIFT=.25,BOSS_RESISTED=['fear','charm','sheep'] as const,RESIST_SLOW=.6;
+/** The stagger and slow a hit leaves on a creature: bosses turn a stun of 0.5 s or more into a slow and ignore the rest. */
+export function hitControl(boss:boolean,stun:number,flinch=.17):{stun:number;slow:number}{
+  if(!boss)return {stun:Math.max(stun,flinch),slow:0};
+  return {stun:0,slow:stun>=.5?stun*RESIST_SLOW:0};
+}
+/** Launch height for a lift: velocity scales by BOSS_LIFT on a boss, so the height by its square. */
+export const liftHeight=(boss:boolean,height:number)=>boss?height*BOSS_LIFT*BOSS_LIFT:height;
+/**
+ * Leash, after the reference's chase rule: a creature gives up when the explorer is past 1.6x its sight or it is
+ * more than 30 m from home (75 m for the dragon, whose distance counts x0.4), unless it was hit in the last 4 s.
+ */
+export const LEASH={sight:1.6,home:30,hitGrace:4};
+export function keepsChasing(distance:number,sight:number,homeDistance:number,sinceHit:number,leash=LEASH.home){
+  return sinceHit<LEASH.hitGrace||distance<=sight*LEASH.sight&&homeDistance<=leash;
+}
+/** Boss melee reach, after the reference: it winds up within range + 0.2 m and the blow lands within range + 0.6 m. */
+export const BOSS_REACH={windup:.2,strike:.6};
 /** Fill of a telegraph: 0 when the wind-up starts, exactly 1 when the blow lands (remaining reaches 0). */
 export function telegraphProgress(remaining:number,total:number){if(!(total>0))return 1;return Math.min(1,Math.max(0,1-remaining/total));}

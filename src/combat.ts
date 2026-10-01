@@ -73,11 +73,11 @@ export class CombatSimulation {
     this.emit('ring',point,radius,color);
     for(const target of this.host.targets())if(target.hp>0&&Math.hypot(target.x-point.x,target.z-point.z)<=radius+target.radius)this.damage(target,multiplier,stun,lift,1.2);
   }
-  private arc(radius:number,multiplier:number,threshold:number,target?:CombatTarget){
+  private arc(radius:number,multiplier:number,threshold:number,target?:CombatTarget,knock=1.2){
     const p=this.host.position(),d=direction(this.host.facing());this.emit('arc',p,radius,this.host.weapon().fx??'#fff4c8');
     for(const enemy of this.host.targets()){
       const x=enemy.x-p.x,z=enemy.z-p.z,length=Math.hypot(x,z);
-      if(enemy.hp>0&&length<=radius+enemy.radius&&(enemy===target||length===0||(x*d.x+z*d.z)/length>=threshold))this.damage(enemy,multiplier,.15,0,1.2);
+      if(enemy.hp>0&&length<=radius+enemy.radius&&(enemy===target||length===0||(x*d.x+z*d.z)/length>=threshold))this.damage(enemy,multiplier,.15,0,knock);
     }
   }
   shoot(kind:string,angle:number,multiplier=1,range=11,extras:Partial<Projectile>={}){
@@ -92,7 +92,7 @@ export class CombatSimulation {
     if(weapon.kind==='gun'){
       const count=Math.max(1,weapon.spread??1);for(let i=0;i<count;i++)this.shoot(weapon.shot??'pea',angle+(count===1?0:(i/(count-1)-.5)*.6),count>1?.45:1,(weapon.range??8)+1);
     }else if(weapon.kind==='sword')this.arc(weapon.range??2,1.1,weapon.arc??.2,target);
-    else{this.combo=(this.combo+1)%3;this.arc(1.6,this.combo===0?1.5:1,.5,target);}
+    else{this.combo=(this.combo+1)%3;this.arc(1.6,this.combo===0?1.5:1,.5,target,this.combo===0?2.2:.8);}// the reference's punch knock: 0.8, 2.2 on the third
     return true;
   }
   private dash(multiplier=1.7,speed=30,duration=.24){
