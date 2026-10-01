@@ -240,8 +240,8 @@ function updateHud() {
   $('#world').dataset.status=JSON.stringify({position:[+world.position.x.toFixed(2),+world.position.z.toFixed(2)],route:world.route.length,next:world.route[0]?[world.route[0].x,world.route[0].z]:null,visibility:document.visibilityState,modal,started,frameMs:Math.round(frameTime),drawCalls:world.renderer.info.render.calls});
   $('#player-name').textContent=state.name;$('#level-badge').textContent=t(String(state.level));$('#level-text').textContent=t(`Lv. ${state.level}`);$('#energy').textContent=t(state.energy.toLocaleString());
   $('#hp-fill').style.width=`${state.hp/M.maxHp(state)*100}%`;$('#hp-text').textContent=t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`);$('#xp-fill').style.width=`${state.xp/M.xpNeeded(state.level)*100}%`;
-  $('#xp-text').textContent=`EXP ${state.xp} / ${M.xpNeeded(state.level)}`;
-  $('.experience').setAttribute('title',t(`${state.xp} / ${M.xpNeeded(state.level)} experience`));
+  $('#xp-text').textContent=`EXP ${Math.floor(state.xp)} / ${M.xpNeeded(state.level)}`;
+  $('.experience').setAttribute('title',t(`${Math.floor(state.xp)} / ${M.xpNeeded(state.level)} experience`));
   const q=progressEntries(state,'story')[0],progress=q?.progress??0;
   $('#quest-chapter').textContent=t(state.quest<M.QUESTS.length?`${state.quest+1} / ${M.QUESTS.length}`:'ONGOING');$('#quest-icon').textContent=t(q?.icon??'🚀');$('#quest-title').textContent=t(q?.title??'A world of possibilities');$('#quest-task').textContent=t(q?`${q.description} · ${progress} / ${q.target}`:'Your next chapter awaits.');$('#quest-count').textContent=t(q?`${progress}/${q.target}`:'');
   $('#quest-fill').style.width=`${q?progress/q.target*100:100}%`;$('#quick-claim').hidden=!q?.complete;$('#quest-dot').hidden=!q?.complete;
