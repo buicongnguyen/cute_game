@@ -55,7 +55,7 @@ const matCache = new Map<string, T.MeshToonMaterial>();
 const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', sell: 'market', shop: 'outfitters', upgrade: 'crystal', chest: 'chest', craft: 'workshop', cook: 'kitchen' };
 // A bed's entity holds only this invisible shape, the bed slab plus a column where its crop card stands, so tap raycasts
 // find the bed and its crop but pass over it to the bed behind. GardenBeds draws the beds.
-const BED_PICK=mergeGeometries([new T.BoxGeometry(2.1*M.BED_SCALE,.32,2.1*M.BED_SCALE).translate(0,.16,0),new T.BoxGeometry(.8*M.CROP_SCALE,1.05*M.CROP_SCALE,.8*M.CROP_SCALE).translate(0,.75*M.CROP_SCALE,0)]),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
+const BED_PICK=mergeGeometries([new T.BoxGeometry(1.94*M.BED_SCALE,.32,1.94*M.BED_SCALE).translate(0,.16,0),new T.BoxGeometry(.8*M.CROP_SCALE,1.05*M.CROP_SCALE,.8*M.CROP_SCALE).translate(0,.75*M.CROP_SCALE,0)]),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
 // Planet palettes for the shared scenery kit (material name → colour). Home uses the kit's own colours.
 const SCENERY_KITS = { scenery: sceneryKit, wilds: wildsKit, bright: brightKit, harsh: harshKit };
 const KIT_TINTS: Partial<Record<PlanetId, Record<string, string>>> = {
@@ -381,7 +381,8 @@ export class World {
   }
   /** The simple bed until garden-bed.glb arrives: soil, a wooden frame and three furrows. */
   private bedBoxes(){
-    const p=group(box('#9b7355',1.96,.16,1.95,0,.12),box('#be9970',2.12,.17,.12,0,.2,-1),box('#be9970',2.12,.17,.12,0,.2,1),box('#be9970',.12,.17,2.12,-1,.2),box('#be9970',.12,.17,2.12,1,.2));
+    // The slim layout-3 frame (build_garden_bed): 7 cm planks around the 1.8 m soil square, 1.94 m outside.
+    const p=group(box('#9b7355',1.82,.16,1.82,0,.12),box('#be9970',1.94,.14,.07,0,.19,-.935),box('#be9970',1.94,.14,.07,0,.19,.935),box('#be9970',.07,.14,1.94,-.935,.19),box('#be9970',.07,.14,1.94,.935,.19));
     for(let j=0;j<3;j++) p.add(box('#795a47',1.8,.045,.08,0,.22,-.6+j*.6));
     return p;
   }

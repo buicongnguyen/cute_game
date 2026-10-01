@@ -585,21 +585,24 @@ def build_equipment_stall():
 
 
 def build_garden_bed():
-    POST = 0.22
-    half = 1.05
+    # Garden layout 3: a slim frame (7 cm planks, 10 cm posts, lower) around the same 1.8 m soil square, so the
+    # game packs ~20 % more beds into the garden (model.ts BED_STEP). Outer side 1.94 m (was 2.12 m).
+    POST = 0.10
+    T = 0.07
+    half = 0.9 + T
     c = half - POST / 2
     for i, (sx, sy) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
-        box(f'Post {i}', (POST, POST, 0.335), (sx * c, sy * c, 0.1675), M('Wood'), bev=0.045, seg=1)
+        box(f'Post {i}', (POST, POST, 0.3), (sx * c, sy * c, 0.15), M('Wood'), bev=0.025, seg=1)
     span = 2 * c - POST
-    T = 0.15
     for i, (x, y, sx, sy) in enumerate(((0, -(half - T / 2), span, T), (0, half - T / 2, span, T),
                                         (-(half - T / 2), 0, T, span), (half - T / 2, 0, T, span))):
-        box(f'Plank {i}', (sx, sy, 0.3), (x, y, 0.15), M('Wood light'), bev=0.035, seg=2)
+        box(f'Plank {i}', (sx, sy, 0.26), (x, y, 0.13), M('Wood light'), bev=0.018, seg=2)
     inner = half - T
     box('Soil', (2 * inner + 0.02, 2 * inner + 0.02, 0.2), (0, 0, 0.12), M('Soil'), bev=0.0)
-    # Two rounded soil ridges along X at y = +-0.4 (crops stand at (+-0.4, +-0.4), soil top z 0.22).
+    # Two rounded soil ridges along X at y = +-0.4 (crops stand at (+-0.4, +-0.4), soil top z 0.22); they now run
+    # nearly to the slim planks.
     for y in (-0.4, 0.4):
-        mound(f'Ridge {y}', 1.66, 0.46, 0.075, (0, y, 0.205), M('Soil ridge'))
+        mound(f'Ridge {y}', 1.74, 0.5, 0.075, (0, y, 0.205), M('Soil ridge'))
 
 
 def crystal(name, base, height, radius, tilt=(0, 0), material='Crystal', tip='Crystal light', spin=0.0):
@@ -868,7 +871,7 @@ BUILDERS = {
     'market-stall': dict(file='market-stall.glb', build=build_market_stall, tris=5000, h=2.9, box=(3.2, 2.0)),
     'equipment-stall': dict(file='equipment-stall.glb', build=build_equipment_stall, tris=5000, h=2.9,
                             box=(3.2, 2.0)),
-    'garden-bed': dict(file='garden-bed.glb', build=build_garden_bed, tris=900, h=0.34, box=(2.12, 2.12)),
+    'garden-bed': dict(file='garden-bed.glb', build=build_garden_bed, tris=900, h=0.31, box=(1.94, 1.94)),
     'wishing-crystal': dict(file='wishing-crystal.glb', build=build_wishing_crystal, tris=2500, h=3.2, radius=1.35),
     'storage-chest': dict(file='storage-chest.glb', build=build_storage_chest, tris=1200, h=1.1, box=(1.3, 0.85)),
     'workshop': dict(file='workshop.glb', build=build_workshop, tris=4000, h=2.6, box=(2.4, 1.8)),
@@ -886,7 +889,7 @@ NOTES = {
                     'face -Y.',
     'equipment-stall': 'Counter (hat, helmet, clothes) under the teal canopy on the left; sword-and-shield '
                        'board and sword barrel on the right; all face -Y.',
-    'garden-bed': 'Soil top z 0.22, frame planks top z 0.30, corner posts z 0.335. Ridges run along X at '
+    'garden-bed': 'Slim frame, outer 1.94 m. Soil top z 0.22, frame planks top z 0.26, corner posts z 0.30. Ridges run along X at '
                   'y = +-0.4 and rise to z 0.28, so crops at (+-0.4, +-0.4) sit slightly into them.',
     'wishing-crystal': 'Crystal materials are emissive (Crystal, Crystal light, Crystal violet, Crystal pink); '
                        'water surface at z 0.47.',

@@ -253,7 +253,7 @@ function updateLabels() {
     if(e.kind==='plot'){
       // Compact crop labels (reference 29/09, RG-05): a ready badge or a 22x5 growth bar on the bed's front edge, nothing on
       // empty beds (the context button says "Plant a seed"); the seconds left are only in the bed panel.
-      const plot=world.state.plots[e.index!];if(!plot?.crop)continue;const progress=M.cropProgress(plot);y=.12;back=-.95*M.BED_SCALE;reach=22;text='';
+      const plot=world.state.plots[e.index!];if(!plot?.crop)continue;const progress=M.cropProgress(plot);y=.12;back=-.88*M.BED_SCALE;reach=22;text='';
       if(progress>=1){icon='👆';className+=' plot-label ready';rank=1;aria=`${M.CROPS[plot.crop].name} ready to harvest in garden bed ${e.index!+1}`;}
       else{icon=`<b style="width:${Math.round(progress*100)}%"></b>`;className+=' plot-label growing';rank=3;aria=`${M.CROPS[plot.crop].name} growing in garden bed ${e.index!+1}, ${Math.ceil((1-progress)*M.CROPS[plot.crop].duration/1000)} seconds left`;}
     }else if(e.kind==='fish'&&e.pond){

@@ -93,8 +93,8 @@ test('a full 33-bed garden keeps every bed off buildings, props, trees, the pond
     for(const e of w.entities)if(e.kind!=='plot'&&e.kind!=='enemy')assert.ok(square(b,e.x,e.z)>=Math.min(e.radius,3.6)-1e-9,`bed ${b.index} overlaps ${e.kind}`);
     for(const o of beds)if(o!==b)assert.ok(Math.max(Math.abs(o.x-b.x),Math.abs(o.z-b.z))>=M.BED_GAP);
     assert.ok(M.clearOfPen(b.x,b.z,M.BED_HALF),'beds keep off the animal pen and the path around it');
-    // The starting garden sits where the west trail would run (its stones skip it); new beds keep off every trail.
-    if(b.index!>=9)assert.ok(Math.abs(b.x)>=1.4&&Math.abs(b.z)>=1.4,'beds stay off the stepping-stone trails');
+    // Every bed, the starting garden too since layout 3, keeps off the stepping-stone trails.
+    assert.ok(Math.abs(b.x)>=M.BED_HALF+M.TRAIL_HALF&&Math.abs(b.z)>=M.BED_HALF+M.TRAIL_HALF,`bed ${b.index} stays off the stepping-stone trails`);
   }
   assert.equal(w.bedDraws>0,true);
 });
@@ -141,7 +141,7 @@ test('remote avatars are separate from obstacles and refresh equipment without d
 test('home includes nine plots and exact regional creature populations within full bounds',()=>{
   const w=world();w.build('home');assert.equal(w.plotMeshes.length,9);assert.equal(w.enemies.length,150);assert.equal(w.enemies.filter(e=>e.boss).length,4);
   assert.ok(w.enemies.some(e=>Math.hypot(e.x,e.z)>100));assert.equal(w.blocked(149,0),true);
-  assert.deepEqual(w.entities.filter(e=>e.kind==='plot').slice(0,3).map(e=>[e.x,e.z]),[[-10.95,.05],[-9.15,.05],[-7.35,.05]]);
+  assert.deepEqual(w.entities.filter(e=>e.kind==='plot').slice(0,3).map(e=>[e.x,e.z]),[[-10.79,1.35],[-9.15,1.35],[-7.51,1.35]]);
 });
 
 test('follow-up damage cannot shorten an active crowd-control stun',()=>{
