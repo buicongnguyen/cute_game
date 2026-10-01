@@ -415,7 +415,10 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 .boss-meter { height: 10px; margin-top: 4px; border-radius: 999px; background: rgba(0, 0, 0, .35); overflow: hidden; border: 2px solid rgba(255, 255, 255, .6); }
 .boss-meter > i { display: block; height: 100%; background: linear-gradient(180deg, #ff7b6b, #e2493f); transition: width .15s; }
 #boss-bar:not([hidden]) ~ #environment-bar { top: calc(72px + var(--safe-top)); }
-.float.alert { color: #ffe14d; font-size: 34px; -webkit-text-stroke-color: #6b1a1a; }
+/* Danger is red, rewards and crits are yellow: the aggro "!" and boss callouts warn, they never look like loot. */
+.float.alert { color: #ff3b3b; font-size: 34px; -webkit-text-stroke-color: #3a0a0a; }
+.float.callout { font-size: 24px; -webkit-text-stroke-width: 6px; letter-spacing: .02em; }
+@media (max-width: 600px) { .float.callout { font-size: 19px; } }
 #zone-banner {
   position: absolute;
   top: 17%;

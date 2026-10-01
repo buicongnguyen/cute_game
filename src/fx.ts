@@ -123,8 +123,30 @@ export class ParticlePool {
   clear() { this.count = 0; this.mesh.count = 0; this.targets.fill(null); this.arrive.fill(null); }
 }
 
-interface Transient { object: T.Object3D; material: T.Material & { opacity: number }; t: number; life: number; from: number; to: number; opacity: number; grow: 'ring' | 'flash' | 'arc' }
+type TransientKind = 'ring' | 'flash' | 'arc' | 'spark';
+interface Transient { kind: TransientKind; object: T.Mesh | T.Sprite; material: T.Material & { opacity: number }; t: number; life: number; from: number; to: number; opacity: number }
 interface Floater { el: HTMLElement; pos: T.Vector3; t: number; life: number }
+
+let sparkTexture: T.Texture | null = null;
+/**
+ * An impact star with a thin ink rim, drawn normally (not added): it reads on candy-pink and
+ * snow-white planets where an additive white bloom would vanish into the ground.
+ */
+function sparkCard() {
+  if (sparkTexture) return sparkTexture;
+  const canvas = typeof document === 'undefined' ? null : document.createElement('canvas');
+  if (!canvas) return (sparkTexture = new T.Texture());
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d')!, star = (outer: number, inner: number) => {
+    ctx.beginPath();
+    for (let i = 0; i < 16; i++) { const a = i / 16 * TAU - Math.PI / 2, r = i % 2 ? inner : (i % 4 ? outer * .62 : outer); ctx.lineTo(64 + Math.cos(a) * r, 64 + Math.sin(a) * r); }
+    ctx.closePath();
+  };
+  star(60, 17); ctx.fillStyle = '#3a2433'; ctx.fill();
+  star(52, 12); ctx.fillStyle = '#ffffff'; ctx.fill();
+  star(30, 8); ctx.fillStyle = '#fff6b8'; ctx.fill();
+  return (sparkTexture = new T.CanvasTexture(canvas));
+}
 
 /** Scene-level effects plus camera shake and hit-stop state shared by the game loop. */
 export class Effects {
@@ -135,12 +157,18 @@ export class Effects {
   shakeAmp = 0; shakeTime = 0; hitstop = 0;
   private root = new T.Group();
   private transients: Transient[] = [];
+  /**
+   * Finished rings, flashes, arcs and sparks wait here for the next hit instead of being
+   * disposed: creating and freeing a material per hit made the GPU relink a shader each time.
+   */
+  private free: Record<TransientKind, Transient[]> = { ring: [], flash: [], arc: [], spark: [] };
   private floaters: Floater[] = [];
   private layer: HTMLElement | null = null;
-  private ringGeometry = new T.RingGeometry(.82, 1, 48).rotateX(-Math.PI / 2);
+  private ringGeometries = new Map<string, T.BufferGeometry>();
   private arcGeometries = new Map<string, T.BufferGeometry>();
   private camera: T.Camera;
   private project = new T.Vector3();
+  private side = 1;
 
   constructor(scene: T.Scene, camera: T.Camera, layer?: HTMLElement | null) {
     this.camera = camera; this.layer = layer ?? null;
@@ -173,23 +201,44 @@ export class Effects {
     }
   }
 
-  ring(at: Point3, { color = '#ffffff', from = .3, to = 4, life = .5, y = .08, thick = .18, opacity = .9 }: RingOptions = {}) {
-    const material = new T.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: T.DoubleSide });
-    const geometry = thick === .18 ? this.ringGeometry : new T.RingGeometry(Math.max(.05, 1 - thick), 1, 40).rotateX(-Math.PI / 2);
-    const ring = new T.Mesh(geometry, material);
-    ring.position.set(at.x, y, at.z); ring.scale.setScalar(from); ring.renderOrder = 2;
-    if (geometry !== this.ringGeometry) ring.userData.ownGeometry = true;
-    this.root.add(ring);
-    this.transients.push({ object: ring, material, t: 0, life, from, to, opacity, grow: 'ring' });
+  /** A pooled effect object of this kind, made on first use and recycled after. */
+  private take(kind: TransientKind, make: () => Transient['object']) {
+    let fx = this.free[kind].pop();
+    if (!fx) { const object = make(); fx = { kind, object, material: object.material as Transient['material'], t: 0, life: 1, from: 1, to: 1, opacity: 1 }; }
+    fx.t = 0; fx.object.visible = true; fx.object.rotation.set(0, 0, 0);
+    this.root.add(fx.object); this.transients.push(fx);
+    return fx;
   }
 
-  /** A quick additive bloom at a point, used for impacts and magic. */
+  private ringGeometry(thick: number) {
+    const key = thick.toFixed(2);
+    let geometry = this.ringGeometries.get(key);
+    if (!geometry) { geometry = new T.RingGeometry(Math.max(.05, 1 - thick), 1, 48).rotateX(-Math.PI / 2); this.ringGeometries.set(key, geometry); }
+    return geometry;
+  }
+
+  ring(at: Point3, { color = '#ffffff', from = .3, to = 4, life = .5, y = .08, thick = .18, opacity = .9 }: RingOptions = {}) {
+    const fx = this.take('ring', () => { const mesh = new T.Mesh(this.ringGeometry(thick), new T.MeshBasicMaterial({ transparent: true, depthWrite: false, side: T.DoubleSide })); mesh.renderOrder = 2; return mesh; });
+    const ring = fx.object as T.Mesh; ring.geometry = this.ringGeometry(thick);
+    (fx.material as T.MeshBasicMaterial).color.set(color); fx.material.opacity = opacity;
+    ring.position.set(at.x, y, at.z); ring.scale.setScalar(from);
+    Object.assign(fx, { life, from, to, opacity });
+  }
+
+  /** A quick additive bloom at a point, used for magic and muzzle flashes. */
   flash(at: Point3, color = '#ffffff', size = 1.4, life = .12) {
-    const material = new T.SpriteMaterial({ map: softDot(), color, transparent: true, blending: T.AdditiveBlending, depthWrite: false });
-    const sprite = new T.Sprite(material);
-    sprite.position.set(at.x, at.y ?? 1, at.z); sprite.scale.setScalar(size); sprite.renderOrder = 3;
-    this.root.add(sprite);
-    this.transients.push({ object: sprite, material, t: 0, life, from: size, to: size * 1.6, opacity: 1, grow: 'flash' });
+    const fx = this.take('flash', () => { const sprite = new T.Sprite(new T.SpriteMaterial({ map: softDot(), transparent: true, blending: T.AdditiveBlending, depthWrite: false })); sprite.renderOrder = 3; return sprite; });
+    (fx.material as T.SpriteMaterial).color.set(color); fx.material.opacity = 1;
+    fx.object.position.set(at.x, at.y ?? 1, at.z); fx.object.scale.setScalar(size);
+    Object.assign(fx, { life, from: size, to: size * 1.6, opacity: 1 });
+  }
+
+  /** The impact star at the point of contact: a 1.2–1.6 m card for about a tenth of a second, turned at random. */
+  spark(at: Point3, size = 1.3, life = .1, color = '#ffffff') {
+    const fx = this.take('spark', () => { const sprite = new T.Sprite(new T.SpriteMaterial({ map: sparkCard(), transparent: true, depthWrite: false, depthTest: false })); sprite.renderOrder = 4; return sprite; });
+    const material = fx.material as T.SpriteMaterial; material.color.set(color); material.opacity = 1; material.rotation = Math.random() * TAU;
+    fx.object.position.set(at.x, at.y ?? 1, at.z); fx.object.scale.setScalar(size * .7);
+    Object.assign(fx, { life, from: size * .7, to: size, opacity: 1 });
   }
 
   /** The swoosh of a swing: a partial ring in front of the attacker. */
@@ -200,20 +249,27 @@ export class Effects {
       geometry = new T.RingGeometry(Math.max(.2, radius - thick), radius, 32, 1, -arc / 2, arc).rotateX(-Math.PI / 2);
       this.arcGeometries.set(key, geometry);
     }
-    const material = new T.MeshBasicMaterial({ color, transparent: true, opacity: .9, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide });
-    const mesh = new T.Mesh(geometry, material);
-    mesh.position.set(at.x, (at.y ?? 0) + y, at.z); mesh.rotation.y = facing - Math.PI / 2; mesh.renderOrder = 3;
-    this.root.add(mesh);
-    this.transients.push({ object: mesh, material, t: 0, life, from: .75, to: 1.08, opacity: .9, grow: 'arc' });
+    const shape = geometry;
+    const fx = this.take('arc', () => { const mesh = new T.Mesh(shape, new T.MeshBasicMaterial({ transparent: true, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide })); mesh.renderOrder = 3; return mesh; });
+    const mesh = fx.object as T.Mesh; mesh.geometry = shape;
+    (fx.material as T.MeshBasicMaterial).color.set(color); fx.material.opacity = .9;
+    mesh.position.set(at.x, (at.y ?? 0) + y, at.z); mesh.rotation.y = facing - Math.PI / 2;
+    Object.assign(fx, { life, from: .75, to: 1.08, opacity: .9 });
   }
 
-  /** Floating text anchored to a world point. Styles: dmg, crit, hurt, heal, xp, item, big. */
+  /**
+   * Floating text anchored to a world point. Styles: dmg, crit, hurt, heal, xp, item, big, alert, callout.
+   * Numbers land alternately left and right of the point, within ±0.3 m, so two creatures hit by
+   * one spin tick never stack their numbers.
+   */
   text(at: Point3, message: string, style = '') {
     if (!this.layer) return;
     const el = document.createElement('span');
     el.className = `float ${style}`; el.textContent = message;
     this.layer.append(el);
-    this.floaters.push({ el, pos: new T.Vector3(at.x + between(-.3, .3), (at.y ?? 0) + 1.8, at.z), t: 0, life: style.includes('big') ? 1.3 : 1 });
+    this.side = -this.side;
+    const centred = style.includes('callout') || style.includes('alert');
+    this.floaters.push({ el, pos: new T.Vector3(at.x + (centred ? 0 : this.side * between(.1, .3)), (at.y ?? 0) + 1.8, at.z + (centred ? 0 : between(-.3, .3))), t: 0, life: style.includes('callout') ? 1.6 : style.includes('big') ? 1.3 : 1 });
     if (this.floaters.length > 40) { const old = this.floaters.shift()!; old.el.remove(); }
   }
 
@@ -229,19 +285,18 @@ export class Effects {
     return out.set((Math.random() - .5) * 2 * k, (Math.random() - .5) * k, (Math.random() - .5) * 2 * k);
   }
 
+  private release(fx: Transient) { this.root.remove(fx.object); fx.object.visible = false; this.free[fx.kind].push(fx); }
+
   update(dt: number) {
     this.sparks.update(dt); this.glow.update(dt);
     for (let i = this.transients.length - 1; i >= 0; i--) {
       const fx = this.transients[i]; fx.t += dt;
       const r = Math.min(1, fx.t / fx.life), eased = 1 - (1 - r) ** 3;
-      const scale = fx.from + (fx.to - fx.from) * (fx.grow === 'flash' ? r : eased);
+      const scale = fx.from + (fx.to - fx.from) * (fx.kind === 'flash' ? r : eased);
       fx.object.scale.setScalar(scale);
-      fx.material.opacity = fx.opacity * (1 - r);
-      if (r >= 1) {
-        this.root.remove(fx.object); fx.material.dispose();
-        if (fx.object.userData.ownGeometry) (fx.object as T.Mesh).geometry.dispose();
-        this.transients.splice(i, 1);
-      }
+      // The impact star holds full strength, then snaps out; the rest fade over their life.
+      fx.material.opacity = fx.opacity * (fx.kind === 'spark' ? (r < .6 ? 1 : (1 - r) / .4) : 1 - r);
+      if (r >= 1) { this.release(fx); this.transients.splice(i, 1); }
     }
   }
 
@@ -260,7 +315,7 @@ export class Effects {
 
   clear() {
     this.sparks.clear(); this.glow.clear();
-    for (const fx of this.transients) { this.root.remove(fx.object); fx.material.dispose(); if (fx.object.userData.ownGeometry) (fx.object as T.Mesh).geometry.dispose(); }
+    for (const fx of this.transients) this.release(fx);
     this.transients = [];
     for (const f of this.floaters) f.el.remove();
     this.floaters = [];
@@ -268,4 +323,6 @@ export class Effects {
   }
 
   get activeCount() { return this.sparks.count + this.glow.count + this.transients.length; }
+  /** Finished effect objects waiting for reuse (tests). */
+  get pooledCount() { return this.free.ring.length + this.free.flash.length + this.free.arc.length + this.free.spark.length; }
 }

@@ -7,11 +7,12 @@
 export type QualityLevel = 'low' | 'medium' | 'high';
 export type QualitySetting = 'auto' | QualityLevel;
 
-export interface QualityProfile { label: string; ratio: number; shadow: number; particles: number }
+/** `outlines`: ink outlines on actors; they go last (only battery saver drops them), since they carry fight readability. */
+export interface QualityProfile { label: string; ratio: number; shadow: number; particles: number; outlines: boolean }
 export const QUALITY: Record<QualityLevel, QualityProfile> = {
-  low: { label: 'Battery saver', ratio: .85, shadow: 0, particles: .45 },
-  medium: { label: 'Balanced', ratio: 1.25, shadow: 1024, particles: .75 },
-  high: { label: 'Sharp', ratio: 2, shadow: 2048, particles: 1 },
+  low: { label: 'Battery saver', ratio: .85, shadow: 0, particles: .45, outlines: false },
+  medium: { label: 'Balanced', ratio: 1.25, shadow: 1024, particles: .75, outlines: true },
+  high: { label: 'Sharp', ratio: 2, shadow: 2048, particles: 1, outlines: true },
 };
 export const QUALITY_KEY = 'zoo-garden-graphics';
 

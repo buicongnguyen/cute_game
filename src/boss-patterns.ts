@@ -42,3 +42,24 @@ export function bossTelegraphs(skill:BossSkill,from:BossPoint,target:BossPoint,p
   }
   return [point(from,{slam:4.8,quake:9,barrage:2.2,spin:3.4,eclipse:7}[skill])];
 }
+/**
+ * Telegraph language, after the reference: red means "your target" (the open ring), so danger is a
+ * filled disc whose inner fill grows over the wind-up. Opacities and the 0.12 m edge are the reference's.
+ */
+export const TELEGRAPH_LOOK={base:.18,fill:.35,edge:.8,edgeWidth:.12};
+/** Each boss skill has its own colour, so a glance tells a slam from falling rocks. */
+export const BOSS_TELEGRAPH_COLORS:Record<BossSkill,string>={slam:'#ff5a3b',quake:'#ffb13d',charge:'#ff3b3b',barrage:'#b06aff',rain:'#ff7a1f',spin:'#ff3bd0',eclipse:'#8a5aff'};
+/** The callout floated above a boss at the start of a wind-up (one per skill, never a toast). */
+export const BOSS_CALLOUTS:Record<BossSkill,string>={slam:'⚠️ SLAM',quake:'⚠️ QUAKE',charge:'⚠️ CHARGE',barrage:'⚠️ BARRAGE',rain:'⚠️ METEOR RAIN',spin:'⚠️ SPIN',eclipse:'⚠️ ECLIPSE'};
+/** Callouts show only to explorers this close to the boss (metres). */
+export const CALLOUT_RANGE=30;
+/**
+ * The ordinary creatures the reference telegraphs on the ground; every other creature warns by
+ * pose alone (crouch, lean, tremble). `at`: around itself, in front of it, or where it will land.
+ */
+export const CREATURE_TELEGRAPHS:Record<string,{r:number;at:'self'|'front'|'target';color:string}>={
+  magmaturtle:{r:2.6,at:'self',color:'#ff3b3b'},lavaworm:{r:2,at:'self',color:'#ff3b3b'},
+  firebat:{r:1.2,at:'target',color:'#ff3b3b'},chomper:{r:1.4,at:'front',color:'#ff3b3b'},
+};
+/** Fill of a telegraph: 0 when the wind-up starts, exactly 1 when the blow lands (remaining reaches 0). */
+export function telegraphProgress(remaining:number,total:number){if(!(total>0))return 1;return Math.min(1,Math.max(0,1-remaining/total));}

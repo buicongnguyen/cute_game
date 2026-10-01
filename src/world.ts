@@ -15,7 +15,10 @@ import * as M from './model.ts';
 import {EnvironmentSimulation,createEnvironmentLayout,environmentWalkable,inWater,terrainHeight,zoneAt,type EnvironmentStatus,type EnvironmentEvent,type LightningState} from './environments.ts';
 import {EnvironmentView} from './environment-art.ts';
 import {buildDecoration} from './decorations-art.ts';
-import {bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,type BossSkill} from './boss-patterns.ts';
+import {bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,CALLOUT_RANGE,CREATURE_TELEGRAPHS,telegraphProgress,type BossSkill} from './boss-patterns.ts';
+import {addOutlines,setOutlinesEnabled,showOutlines} from './outline.ts';
+import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
+import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,type EnemyDefinition} from './enemy-types.ts';
 
@@ -29,6 +32,8 @@ interface Obstacle { x: number; z: number; r: number;tag?:string }
  * and is drawn gliding from (x, z), `age` steps after it last thought.
  */
 export interface Enemy { resting?:boolean;lod?:{wait:number;age:number;x:number;z:number;slot:number} }
+/** windupTotal: the length of the current wind-up, so its telegraph fills exactly when the blow lands; enraged: below 30% HP (one toast). */
+export interface Enemy { windupTotal?:number;enraged?:boolean }
 export interface RemotePose {id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
 export interface EnemySnapshot {id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
@@ -110,6 +115,10 @@ export class World {
   private sun: T.DirectionalLight; private cropMaterials: T.Material[] = [];
   /** Pooled particles, rings, flashes, floating text, camera shake and hit-stop. */
   fx?: Effects;
+  /** The red target ring and arrow, and the pooled danger discs. */
+  target?: TargetMarker; decals?: TelegraphDecals;
+  /** The creature last hit and when: it stays marked for TARGET_HOLD seconds. */
+  lastHit?: {e:Enemy;t:number}|null;
   // Player animation timers set by combat and fishing.
   punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; fishing:'idle'|'cast'|'wait'|'fight'='idle';
   walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
@@ -129,9 +138,10 @@ export class World {
     this.sun.shadow.mapSize.set(1024, 1024); Object.assign(this.sun.shadow.camera, { near: SHADOW.near, far: SHADOW.far });
     this.sun.shadow.bias = SHADOW.bias; this.sun.shadow.normalBias = SHADOW.normalBias;
     this.scene.add(this.sun, this.sun.target, this.root,this.remoteRoot);
-    this.marker = mesh(new T.RingGeometry(0.22, 0.32, 32), '#ffffff'); this.marker.rotation.x = -Math.PI / 2; this.marker.position.y = 0.09; this.marker.visible = false; this.scene.add(this.marker);
+    this.marker = new T.Mesh(new T.RingGeometry(0.22, 0.32, 32), new T.MeshBasicMaterial({ color: '#ffffff' })); this.marker.rotation.x = -Math.PI / 2; this.marker.position.y = 0.09; this.marker.visible = false; this.scene.add(this.marker);
     this.ring = mesh(new T.RingGeometry(0.7, 0.8, 32), '#fff09d'); this.ring.rotation.x = -Math.PI / 2; this.ring.position.y = 0.12; this.ring.visible = false; this.scene.add(this.ring);
     this.fx = new Effects(this.scene, this.camera);
+    this.target = new TargetMarker(); this.decals = new TelegraphDecals(); this.scene.add(this.target.root, this.decals.root);
     this.build(state.planet); this.refreshPlayer(); this.resize(); window.addEventListener('resize', () => this.resize());
   }
   resize() {
@@ -155,6 +165,7 @@ export class World {
     // Switching shadows on or off changes every lit material's shader.
     if (toggled) this.scene.traverse(o => { if (o instanceof T.Mesh) for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.needsUpdate = true; });
     if (this.fx) this.fx.density = profile.particles;
+    setOutlinesEnabled(profile.outlines ?? true);
     // Battery saver draws half of the grass and flowers; trees and rocks always stay.
     const detail = profile.particles < .6 ? .5 : 1;
     if (detail !== this.detail) { this.detail = detail; if (this.scatterGroup) this.refreshScenery(); }
@@ -472,6 +483,7 @@ export class World {
     if(kitDisguise)this.wearKit(c,id,'body');
     if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
     if(gear.pet){const pet=this.petFor(gear.pet);pet.name='remote-pet';pet.position.set(-1,0,-.6);c.add(pet);}
+    addOutlines(c,{merge:true});
     return c;
   }
   private simpleHat(c:T.Object3D,hat:string){
@@ -514,7 +526,7 @@ export class World {
   refreshPlayer() {
     this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...this.state.gear,pet:undefined});this.player.rotation.order='YXZ';
     this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();o.material.userData.sharedKit=false;this.playerMaterials.push(o.material);}});this.root.add(this.player);
-    this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=this.state.gear.pet?this.petFor(this.state.gear.pet):new T.Group();this.root.add(this.companion);
+    this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=this.state.gear.pet?this.petFor(this.state.gear.pet):new T.Group();addOutlines(this.companion,{merge:true});this.root.add(this.companion);
   }
 
   spawnEnemy(x:number,z:number,index:number,name:string,strong=false,boss=false) {
@@ -524,6 +536,7 @@ export class World {
     if(name.includes('Mushroom'))e.add(cyl('#d49c8c',0,.9,.55,0,1.42,0,12));
     else {const sprout=ball(boss?'#e5c479':'#719d61',.23,0,1.6);sprout.scale.x=1.5;e.add(sprout);}
     if(boss){e.scale.setScalar(1.9);e.add(cyl('#e9c876',.4,.35,.3,0,1.73,0,5));}
+    addOutlines(e);showOutlines(e,false);
     const health=(this.planet==='home'?(strong?65:42):theme.health)*(boss?5:1);
     const ent=this.addEntity('enemy',name,boss?'👑':'🍃',e,x,z,boss?1.7:.8,index) as Enemy;
     Object.assign(ent,{hp:health,maxHp:health,damage:theme.attack*(boss?2:strong?1.4:1),xp:theme.xp*(boss?7:1),homeX:x,homeZ:z,cooldown:0,respawn:0,boss,stun:0});this.enemies.push(ent);
@@ -560,7 +573,7 @@ export class World {
     const health=Math.round(def.hp*scale*(def.boss&&type!=='dragon'?2.6:1)),damage=def.damage*scale*(def.boss?1.35:1),xp=Math.round(def.xp*(.6+scale*.4));
     // Plain body parts become one or two meshes; named parts (legs, wings, shell) keep animating on their own.
     const model=bakeModel(this.speciesModel(def),{deep:false,keep:o=>!!o.name}),flash:T.MeshStandardMaterial[]=[];
-    model.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;
+    model.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;addOutlines(model);showOutlines(model,false);
     const e=this.addEntity('enemy',def.name,def.boss?'👑':'⚔️',model,x,z,def.radius,index) as Enemy;
     Object.assign(e,{type,definition:def,hp:health,maxHp:health,baseMaxHp:health,baseDamage:damage,damage,xp,level:difficulty*3-2+(def.boss?6:0),homeX:x,homeZ:z,cooldown:0,respawn:0,boss:def.boss,stun:0,phase:'idle',phaseTime:0,route:[],routeTime:0,lift:0,liftVelocity:0,statuses:{}});this.enemies.push(e);return e;
   }
@@ -726,7 +739,7 @@ export class World {
   private interactionRange(e:Entity) { return e.kind==='enemy'?attackRange(M.weaponStats(this.state),e.radius):e.radius+1.45; }
   select(e:Entity) {
     if(!this.validTarget(e))return;
-    this.selected=e;this.ring.visible=true;this.ring.scale.setScalar(e.radius);this.ring.position.set(e.x,.12,e.z);
+    this.selected=e;this.ring.visible=e.kind!=='enemy';this.ring.scale.setScalar(e.radius);this.ring.position.set(e.x,.12,e.z);
     if(this.position.distanceTo(new T.Vector3(e.x,0,e.z))<=this.interactionRange(e)){this.destination=null;this.route=[];this.marker.visible=false;if(e.kind==='enemy')this.onAttackEnemy(e as Enemy);else {this.selected=null;this.ring.visible=false;this.onInteract(e);}return;}
     const point=approach(this.position,e,e.radius,this.collisionObstacles(),e.kind==='enemy'?this.interactionRange(e)-.15:e.radius+1.1,this.navigationOptions());if(point)this.walkTo(point.x,point.z,true);
   }
@@ -759,6 +772,7 @@ export class World {
     const distance=Math.hypot(x,z);if(distance>WORLD_BOUNDS-1){x*=((WORLD_BOUNDS-1)/distance);z*=((WORLD_BOUNDS-1)/distance);}if(!keepSelected)this.selected=null;
     if(this.blocked(x,z)){const obstacle=this.collisionObstacles().find(o=>Math.hypot(x-o.x,z-o.z)<o.r+.36);if(obstacle){const d=this.position.clone().sub(new T.Vector3(obstacle.x,0,obstacle.z)).normalize();x=obstacle.x+d.x*(obstacle.r+.6);z=obstacle.z+d.z*(obstacle.r+.6);}}
     this.destination=new T.Vector3(x,0,z);this.route=this.findPath(this.destination);this.marker.position.set(x,.08,z);this.marker.visible=true;
+    (this.marker.material as T.MeshBasicMaterial).color?.set(keepSelected&&this.selected?.kind==='enemy'?TAP_RED:'#ffffff');
   }
   findPath(target:T.Vector3) {
     return findRoute(this.position,target,this.collisionObstacles(),this.navigationOptions()).map(p=>new T.Vector3(p.x,0,p.z));
@@ -772,23 +786,31 @@ export class World {
   skillEffect(radius:number,color:string) {
     const ring=mesh(new T.TorusGeometry(radius,.06,5,50),color,this.position.x,.4,this.position.z);ring.rotation.x=Math.PI/2;this.scene.add(ring);this.particles.push({mesh:ring,velocity:new T.Vector3(0,.5,0),life:.5,max:.5});this.burst(this.position.x,this.position.z,color,22);
   }
-  /** Visual response to a landed hit: flash, colour chips, sparks, an impact ring and the number. */
+  /**
+   * Visual response to a landed hit, after the reference: a pop in the creature's own colour (not a white
+   * wash, so its outline and shape stay readable), an impact star where the blow lands, a ring at chest
+   * height, chips in the creature's colours and the number. Crits are bigger and yellow, with a short
+   * hit-stop but no camera shake: shake stays the signal for "you got hit" and big slams.
+   */
   hitFeedback(e:Enemy,amount:number,critical:boolean){
-    e.flash=.14;const fx=this.fx;if(!fx)return;
-    const at={x:e.x,y:e.mesh.position.y,z:e.z},colors=[e.definition?.color??'#fff0bb',e.definition?.accent??'#ffffff'];
-    fx.burst(at,{n:critical?14:8,color:colors,size:.12,speed:5,up:4,y:.8});
-    fx.burst(at,{n:critical?12:5,color:['#ffffff','#fff7a8'],glow:true,size:critical?.16:.1,speed:critical?8:5,up:3,y:.8,life:.35});
-    fx.ring({x:e.x,z:e.z},{color:critical?'#ffe14d':'#ffffff',from:.2,to:critical?1.6:1,life:.2,thick:.35,y:at.y+.8});
+    e.flash=.14;this.lastHit={e,t:this.time??0};const fx=this.fx;if(!fx)return;
+    const at={x:e.x,y:e.mesh.position.y,z:e.z},colors=[e.definition?.color??'#fff0bb',e.definition?.accent??'#ffffff'],chest=at.y+.8*(e.boss?1.85:1);
+    // The contact point: the creature's surface on the explorer's side, at chest height.
+    const dx=this.position.x-e.x,dz=this.position.z-e.z,d=Math.hypot(dx,dz)||1,reach=Math.min(e.radius*.8,d*.5);
+    fx.spark({x:e.x+dx/d*reach,y:chest,z:e.z+dz/d*reach},critical?1.6:1.25,critical?.13:.1,critical?'#ffe14d':'#ffffff');
+    fx.burst(at,{n:critical?14:8,color:colors,size:.12,speed:5,up:4,y:chest-at.y});
+    fx.burst(at,{n:critical?12:5,color:['#ffffff','#fff7a8'],glow:true,size:critical?.16:.1,speed:critical?8:5,up:3,y:chest-at.y,life:.35});
+    fx.ring({x:e.x,z:e.z},{color:critical?'#ffe14d':'#ffffff',from:.2,to:critical?1.6:1,life:.2,thick:.35,y:chest});
     fx.text(at,critical?amount+'!':String(amount),critical?'crit big':'dmg');
-    if(critical){fx.flash({x:e.x,y:at.y+.9,z:e.z},'#fff3b0',1.6,.12);fx.freeze(.06);fx.shake(.12);}
+    if(critical)fx.freeze(.06);
   }
-  /** A defeated creature bursts into a puff instead of blinking out. */
+  /** A defeated creature bursts into a puff: a 2.5 m ring, about 25 particles in its colours and a short freeze. */
   defeatFeedback(e:Enemy){
     const fx=this.fx;if(!fx)return;const at={x:e.x,y:e.mesh.position.y,z:e.z},color=e.definition?.color??'#ffffff';
     fx.burst(at,{n:e.boss?40:16,color:[color,'#ffffff',e.definition?.accent??color],size:.16,speed:6,up:6,y:.6});
-    fx.burst(at,{n:e.boss?30:12,color:['#ffffff','#fff7a8'],glow:true,size:.18,speed:4,up:5,life:.7});
-    fx.ring({x:e.x,z:e.z},{color:'#ffffff',from:.3,to:e.boss?4:2,life:.45,y:.1});fx.flash({x:e.x,y:at.y+.8,z:e.z},'#ffffff',e.boss?3.2:1.8,.18);
-    if(e.boss)fx.shake(.45);
+    fx.burst(at,{n:e.boss?30:9,color:['#ffffff','#fff7a8'],glow:true,size:.18,speed:4,up:5,life:.7});
+    fx.ring({x:e.x,z:e.z},{color:'#ffffff',from:.3,to:e.boss?4:2.5,life:.45,y:.1});fx.spark({x:e.x,y:at.y+.8,z:e.z},e.boss?2.4:1.6,.14);
+    fx.freeze(.05);if(e.boss)fx.shake(.45);
   }
   /** The player flinches and briefly glows red. */
   hurtFeedback(amount:number){
@@ -903,8 +925,22 @@ export class World {
       const random=seeded(e.attackCount*9127),targets=[this.position,...[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&(r.pose.hp??1)>0).map(r=>r.pose)].filter(p=>Math.hypot(p.x-e.x,p.z-e.z)<=25);
       targets.forEach((p,index)=>{for(let i=0;i<((e.bossStage??1)>=3?5:3);i++){const angle=random()*Math.PI*2,r=random()*4;this.environment.addFireRain({x:p.x+Math.cos(angle)*r,z:p.z+Math.sin(angle)*r},`dragon:${e.attackCount}:${index}:${i}`);}});
     }
-    this.onEnvironmentEvent?.({kind:'boss-warning',message:`${e.name}: ${e.skill.toUpperCase()}! Move out of the warning marks.`});
+    this.bossCallout(e,e.skill);
     return true;
+  }
+  /**
+   * The wind-up warning, after the reference: '⚠️ SLAM' floats above the boss with a spark burst, for
+   * explorers within 30 m only; nothing goes to the toast stack, which covered the fight. Enrage (below
+   * 30% HP) is rare and changes the fight, so it alone keeps a toast, once per descent.
+   */
+  bossCallout(e:Enemy,skill:BossSkill){
+    const enraged=e.hp<e.maxHp*.3;
+    if(enraged&&!e.enraged)this.onEnvironmentEvent?.({kind:'boss-warning',message:`${e.name} is enraged! Its skills come faster.`});
+    e.enraged=enraged;
+    if(Math.hypot(e.x-this.position.x,e.z-this.position.z)>CALLOUT_RANGE)return;
+    const fx=this.fx;if(!fx)return;const top=e.mesh.position.y+(this.modelHeight?.(e)??2.6)*.6-1.8;
+    fx.text({x:e.x,y:top,z:e.z},BOSS_CALLOUTS[skill],'alert callout');
+    fx.burst({x:e.x,y:top+1.2,z:e.z},{n:24,color:[BOSS_TELEGRAPH_COLORS[skill],'#ffffff'],glow:true,size:.12,speed:5,up:4,life:.5});
   }
   private castBossSkill(e:Enemy){
     const skill=e.skill;if(!skill)return;
@@ -923,15 +959,34 @@ export class World {
     if(skill==='eclipse'){this.areaDamage(e,e.x,e.z,7,.9);this.environment.eclipseUntil=this.environment.time+6;}
     this.burst(e.x,e.z,e.definition?.accent??'#ffc17b',25);e.telegraphs=[];
   }
-  private updateBossTelegraphs(e:Enemy){
-    let root=e.mesh.userData.warningRoot as T.Group|undefined;
-    const marks=e.phase==='windup'?e.telegraphs??[]:[];
-    if(!root&&marks.length){root=new T.Group();root.userData.environment=true;e.mesh.userData.warningRoot=root;this.root.add(root);}
-    if(!root)return;root.visible=e.hp>0&&marks.length>0;
-    while(root.children.length<marks.length){const ring=mesh(new T.RingGeometry(.88,1,32),'#ed5b56');ring.rotation.x=-Math.PI/2;root.add(ring);}
-    root.children.forEach((ring,index)=>{const mark=marks[index];ring.visible=!!mark;if(mark){ring.position.set(mark.x,Math.max(.06,terrainHeight(this.environment.layout,mark)+.06),mark.z);ring.scale.setScalar(mark.r);}});
+  /** Wind-up progress 0–1 for an enemy's telegraph; it is 1 exactly on the step the blow lands. */
+  windupProgress(e:Enemy){return telegraphProgress(e.phaseTime??0,e.windupTotal??(e.skill?BOSS_WINDUPS[e.skill]:e.mesh.userData.slam?1.1:e.definition?.windup??.45));}
+  /**
+   * Danger discs, drawn every frame from the pool: every mark of a boss skill in the skill's colour, a
+   * plain boss slam, and the four creature kinds the reference telegraphs. Other creatures warn by pose
+   * only, so red on the ground stays rare and the red ring keeps meaning "your target".
+   */
+  private drawTelegraphs(e:Enemy){
+    const decals=this.decals;if(!decals||e.hp<=0||e.phase!=='windup')return;
+    const progress=this.windupProgress(e),ground=(p:{x:number;z:number})=>Math.max(.04,terrainHeight(this.environment.layout,p)+.04);
+    if(e.skill){for(const mark of e.telegraphs??[])decals.draw(mark.x,ground(mark),mark.z,mark.r,progress,BOSS_TELEGRAPH_COLORS[e.skill]);return;}
+    if(e.boss&&e.mesh.userData.slam){decals.draw(e.x,ground(e),e.z,4.8,progress,BOSS_TELEGRAPH_COLORS.slam);return;}
+    const look=CREATURE_TELEGRAPHS[e.type??''];if(!look)return;
+    const facing=e.mesh.rotation.y,at=look.at==='target'?{x:e.targetX??e.x,z:e.targetZ??e.z}:look.at==='front'?{x:e.x+Math.sin(facing)*1.2,z:e.z+Math.cos(facing)*1.2}:{x:e.x,z:e.z};
+    decals.draw(at.x,ground(at),at.z,look.r,progress,look.color);
   }
-
+  /** The red ring and arrow follow the selected creature, or the last one hit for TARGET_HOLD seconds. */
+  private updateTarget(dt:number){
+    const marker=this.target;if(!marker)return;
+    const live=(e:Entity|null|undefined):e is Enemy=>!!e&&e.kind==='enemy'&&(e as Enemy).hp>0&&e.mesh.visible&&this.entities.includes(e);
+    const recent=this.lastHit&&this.time-this.lastHit.t<TARGET_HOLD?this.lastHit.e:null,e=live(this.selected)?this.selected:live(recent)?recent:null;
+    if(!e){marker.update(dt,this.time,null);return;}
+    const data=e.mesh.userData;
+    // The drawn footprint, measured once at rest scale; a hit pop or squash would inflate it.
+    if(data.footprint===undefined){const box=heightBox.setFromObject(e.mesh),s=Math.max(.001,e.mesh.scale.x);data.footprint=Number.isFinite(box.max.x)?Math.max(box.max.x-box.min.x,box.max.z-box.min.z)/2/s:e.radius;}
+    const s=e.mesh.scale.x,ground=Math.max(0,terrainHeight(this.environment.layout,e));
+    marker.update(dt,this.time,{x:e.mesh.position.x,y:ground,z:e.mesh.position.z,footprint:data.footprint*s,height:e.mesh.position.y-ground+this.modelHeight(e)},e.radius);
+  }
   private updateEnemyAi(e:Enemy,dt:number){
     e.cooldown=Math.max(0,e.cooldown-dt);e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
     for(const key of Object.keys(e.statuses??{}))e.statuses![key]=Math.max(0,e.statuses![key]-dt);
@@ -990,7 +1045,7 @@ export class World {
     if(chasing&&canWindup&&!e.cooldown&&!noAttack){
       e.phase='windup';e.phaseTime=def.windup;e.targetX=target!.x;e.targetZ=target!.z;e.mesh.userData.attackCount=(e.mesh.userData.attackCount??0)+1;e.mesh.userData.slam=e.boss&&e.mesh.userData.attackCount%3===0;
       if(e.boss)this.beginBossSkill(e,target!);else e.skill=undefined;
-      if(e.mesh.userData.slam&&!e.skill)e.phaseTime=1.1;e.mesh.rotation.y=Math.atan2(target!.x-e.x,target!.z-e.z);return;
+      if(e.mesh.userData.slam&&!e.skill)e.phaseTime=1.1;e.windupTotal=e.phaseTime;e.mesh.rotation.y=Math.atan2(target!.x-e.x,target!.z-e.z);return;
     }
     if(chasing&&distance<8&&distance>.001&&['firebat','thunderbird','jellyzap','wisp'].includes(e.type??'')&&!noAttack){
       const side=(Number(e.id.split(':').at(-1))||0)%2?1:-1,dx=(target!.x-e.x)/distance,dz=(target!.z-e.z)/distance,radial=(distance-5)*.4;
@@ -1060,11 +1115,13 @@ export class World {
   private updateEnemyVisual(e:Enemy,dt:number){
     // Only creatures near the view cast shadows; the shadow box reaches well past the screen,
     // and distant creatures would otherwise double their draw cost for shadows nobody sees.
-    const near=Math.hypot(e.x-this.cameraTarget.x,e.z-this.cameraTarget.z)<16;
-    if(e.mesh.userData.castsShadow!==near){e.mesh.userData.castsShadow=near;e.mesh.traverse(o=>{if(o instanceof T.Mesh&&o.name!=='attack-telegraph')o.castShadow=near;});}
+    const view=Math.hypot(e.x-this.cameraTarget.x,e.z-this.cameraTarget.z),near=view<16;
+    if(e.mesh.userData.castsShadow!==near){e.mesh.userData.castsShadow=near;e.mesh.traverse(o=>{if(o instanceof T.Mesh&&!o.userData.outline)o.castShadow=near;});}
+    // Ink outlines, like the reference, only on creatures within 20 m of the view: one extra draw per part.
+    showOutlines(e.mesh,view<20);
     // A defeated creature swells and shrinks away instead of blinking out.
     if(e.hp<=0&&(e.dying??0)>0){e.dying=Math.max(0,e.dying!-dt);const t=1-e.dying/.3;e.mesh.visible=true;e.mesh.scale.setScalar((e.boss?1.85:1)*(1+t*.3)*Math.max(.001,1-t));if(!e.dying)e.mesh.visible=false;return;}
-    this.updateBossTelegraphs(e);
+    this.drawTelegraphs(e);
     // Gear stats only matter on the shadow planet; adding them up for every creature on every step was a measurable cost.
     const lightRadius=this.planet==='shadow'&&M.activeStats(this.state).light?7.5:3.6;
     e.mesh.visible=e.hp>0&&(this.planet!=='shadow'||this.environment.revealed(e,this.position,lightRadius))&&(!e.definition?.stealth||this.planet==='shadow'||Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.definition.stealth||e.stun>0);
@@ -1076,14 +1133,11 @@ export class World {
     e.mesh.position.set(drawX,ground+(e.lift??0)+(e.definition?.flying?1+Math.sin(this.time*4+e.homeX)*.15:Math.sin(this.time*3+e.homeX)*.06),drawZ);
     const scale=(e.boss?1.85:1)*((e.statuses?.sheep??0)>0?.45:1);e.mesh.scale.setScalar(scale);
     if(e.type==='minislime')e.mesh.scale.multiplyScalar(.55);
-    // Hit reaction: a white flash and a quick swell, like a squeezed toy.
-    if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);e.mesh.scale.multiplyScalar(1+e.flash!*1.2);}
-    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as T.MeshStandardMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.emissive.set('#ffffff');m.emissiveIntensity=.75;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=1;}}}
+    // Hit reaction: a pop in the creature's own colour (emissive 0.35) and a ×1.15 squash, so the silhouette survives the hit.
+    if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);const k=e.flash!/.14;e.mesh.scale.x*=1+k*.15;e.mesh.scale.z*=1+k*.15;e.mesh.scale.y*=1+k*.06;}
+    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as T.MeshStandardMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.emissive.set(e.definition?.color??'#ffffff');m.emissiveIntensity=.35;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=1;}}}
     this.animateEnemy(e,dt);
     const shell=e.mesh.getObjectByName('shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
-    let telegraph=e.mesh.getObjectByName('attack-telegraph') as T.Mesh|undefined;
-    if(e.phase==='windup'&&!telegraph){telegraph=mesh(new T.RingGeometry(.92,1,32),'#f15c58');telegraph.name='attack-telegraph';telegraph.rotation.x=-Math.PI/2;telegraph.position.y=.06;e.mesh.add(telegraph);}
-    if(telegraph){telegraph.visible=e.phase==='windup'&&!e.skill;const r=(e.type==='magmaturtle'?2.6:e.type==='lavaworm'?2:e.mesh.userData.slam?4.8:e.definition?.reach??1.8)/scale;telegraph.scale.setScalar(Math.min(r,5.5));}
   }
   update(dt:number,active:boolean,draw=true,simulateWorld=active||this.networkRole==='host') {
     this.environment??=new EnvironmentSimulation(createEnvironmentLayout(this.planet));this.enemyShots??=[];this.dynamicObstacles??=[];this.resourceTimers??=new Map();
@@ -1133,7 +1187,7 @@ export class World {
     if(simulateWorld&&this.networkRole!=='peer')for(const enemy of [...this.enemies]){if(!this.enemies.includes(enemy))break;this.updateEnemyAi(enemy,dt);}
     if(this.environment!==environmentForFrame)return;
     if(simulateWorld&&this.networkRole!=='peer')this.separateCreatures();
-    for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);
+    this.decals?.begin();for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);this.decals?.end();
     if(simulateWorld)for(let i=this.enemyShots.length-1;i>=0;i--){
       const shot=this.enemyShots[i],from={x:shot.mesh.position.x,z:shot.mesh.position.z};shot.mesh.position.x+=shot.vx*dt;shot.mesh.position.z+=shot.vz*dt;shot.life-=dt;
       if(this.networkRole!=='peer'){
@@ -1165,6 +1219,7 @@ export class World {
     this.followSun();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
     this.animateCrops(dt);
+    this.updateTarget(dt);
     this.fx?.update(dt);
     this.marker.scale.setScalar(1+Math.sin(this.time*5)*.12);if(draw)this.render();
   }
