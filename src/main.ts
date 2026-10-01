@@ -222,13 +222,13 @@ function updateLabels() {
   const candidates:LabelCandidate[]=[];measureHud();
   for(const e of world.entities){
     const distance=Math.hypot(e.x-world.position.x,e.z-world.position.z);
-    let text=e.name,icon=e.icon,y:number,back=0,className='world-label',rank=2,reach=world.selected===e?30:11,anchor='translate(-50%,-100%)';
+    let text=e.name,icon=e.icon,y:number,back=0,className='world-label',rank=2,reach=world.selected===e?30:11,anchor='translate(-50%,-100%)',aria='';
     if(e.kind==='plot'){
-      const plot=world.state.plots[e.index!];if(!plot)continue;y=.3;anchor='translate(-50%,-50%)';
-      // Crop labels sit on the bed's back edge so the plants stay visible.
-      if(plot.crop&&M.cropProgress(plot)>=1){text='';icon=art(plot.crop,M.CROPS[plot.crop].icon);className+=' plot-label ready';rank=1;reach=18;back=1;anchor='translate(-50%,-75%)';}
-      else if(plot.crop){back=1;anchor='translate(-50%,-75%)';text=`${Math.ceil((1-M.cropProgress(plot))*M.CROPS[plot.crop].duration/1000)}s`;icon='🌱';className+=' plot-label growing';rank=3;reach=10;}
-      else{text='Plant';icon='+';className+=' plot-label empty';rank=4;reach=4.5;}
+      // Compact crop labels (reference 29/09, RG-05): a ready badge or a 22x5 growth bar on the bed's front edge, nothing on
+      // empty beds (the context button says "Plant a seed"); the seconds left are only in the bed panel.
+      const plot=world.state.plots[e.index!];if(!plot?.crop)continue;const progress=M.cropProgress(plot);y=.12;back=-.95;reach=22;text='';anchor='translate(-50%,-50%)';
+      if(progress>=1){icon='👆';className+=' plot-label ready';rank=1;aria=`${M.CROPS[plot.crop].name} ready to harvest in garden bed ${e.index!+1}`;}
+      else{icon=`<b style="width:${Math.round(progress*100)}%"></b>`;className+=' plot-label growing';rank=3;aria=`${M.CROPS[plot.crop].name} growing in garden bed ${e.index!+1}, ${Math.ceil((1-progress)*M.CROPS[plot.crop].duration/1000)} seconds left`;}
     }else if(e.kind==='fish'&&e.pond){
       if(fishGame&&fishPond===e)continue;y=.35;back=e.pond.rz*1.02;
     }else if(e.kind==='enemy'){
@@ -238,7 +238,7 @@ function updateLabels() {
     const p=world.screen(e.x,y,e.z-back);if(!p.visible||p.y<-60||p.y>innerHeight-70||p.x<0||p.x>innerWidth)continue;
     const enemy=e.kind==='enemy'?e as Enemy:null;
     const html=enemy?`<span>${enemy.boss?'👑 ':''}${esc(text)}</span><i><b style="width:${enemy.hp/enemy.maxHp*100}%"></b></i>`:`<span>${icon}</span>${esc(text)}`;
-    candidates.push({e,x:p.x,y:p.y,wy:y,back,html,className,aria:e.kind==='plot'?`${text||'Ready to harvest'} in garden bed ${e.index!+1}`:text,rank,distance,width:enemy?72:34+text.length*7.4,anchor});
+    candidates.push({e,x:p.x,y:p.y,wy:y,back,html,className,aria:e.kind==='plot'?aria:text,rank,distance,width:e.kind==='plot'?24:enemy?72:34+text.length*7.4,anchor});
   }
   // Nearest and most important labels win; anything that would overlap them waits.
   candidates.sort((a,b)=>a.rank-b.rank||a.distance-b.distance);
@@ -250,7 +250,7 @@ function updateLabels() {
     let label=labelNodes.get(c.e.id);
     if(!label){label=document.createElement('button');label.dataset.entity=c.e.id;labelNodes.set(c.e.id,label);$('#world-labels').append(label);}
     if(label.className!==c.className)label.className=c.className;
-    if(label.innerHTML!==c.html){label.innerHTML=c.html;labelPx=label.offsetHeight||labelPx;}label.setAttribute('aria-label',c.aria);
+    if(label.innerHTML!==c.html){label.innerHTML=c.html;if(c.e.kind!=='plot')labelPx=label.offsetHeight||labelPx;}label.setAttribute('aria-label',c.aria);
     label.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) ${c.anchor}`;label.hidden=!!modal;labelAnchors.set(c.e.id,{e:c.e,wy:c.wy,back:c.back,anchor:c.anchor,width:c.width});
   }
   for(const[id,node]of labelNodes)if(!active.has(id)){node.remove();labelNodes.delete(id);labelAnchors.delete(id);}

@@ -7,7 +7,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
 import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
-import type { QualityProfile } from './graphics.ts';
+import { QUALITY, type QualityProfile } from './graphics.ts';
+import { CropCards, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
+import { GardenBeds } from './garden-beds.ts';
+import { STARTING_PLOTS, MAX_EXTRA_PLOTS } from './content.ts';
 import { approach, blocked, clearSegment, findRoute, nearbyObstacles, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
 import { attackRange } from './combat.ts';
 import { type SaveState, type PlanetId, PLANETS, cropProgress, giftAvailable, maxHp } from './model.ts';
@@ -38,7 +41,9 @@ export interface EnvironmentReward {id:string;count:number}
 type Particle = { mesh: T.Mesh; velocity: T.Vector3; life: number; max: number };
 const UP = new T.Vector3(0, 1, 0);
 const matCache = new Map<string, T.MeshStandardMaterial>();
-const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', sell: 'market', shop: 'outfitters', plot: 'garden', upgrade: 'crystal', chest: 'chest', craft: 'workshop', cook: 'kitchen' };
+const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', sell: 'market', shop: 'outfitters', upgrade: 'crystal', chest: 'chest', craft: 'workshop', cook: 'kitchen' };
+// A bed's entity holds only this invisible box (tap raycasts still find the bed and its crop); GardenBeds draws the beds.
+const BED_PICK=new T.BoxGeometry(2.1,1.2,2.1).translate(0,.6,0),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
 // Planet palettes for the shared scenery kit (material name → colour). Home uses the kit's own colours.
 const SCENERY_KITS = { scenery: sceneryKit, wilds: wildsKit, bright: brightKit, harsh: harshKit };
 const KIT_TINTS: Partial<Record<PlanetId, Record<string, string>>> = {
@@ -108,6 +113,11 @@ export class World {
   private dynamicObstacles:Obstacle[]=[];private environmentSignature='';private gateHits=0;private resourceTimers=new Map<string,number>();
   private enemyShots:Array<{id:string;ownerId:string;mesh:T.Mesh;vx:number;vz:number;life:number;damage:number;targetId?:string;targetEnemyId?:string}>=[];
   private sun: T.DirectionalLight; private cropMaterials: T.Material[] = [];
+  /** Garden crops as baked 2D cards (crop-cards.ts) once the crop kit has loaded; null until then. */
+  cropCards: CropCards|null = null;
+  /** Kill switch and A/B arm: draw the 3D crop models instead of the cards. */
+  cropCardsOff = false;
+  private cardCellPx = 128; private gardenBeds?: GardenBeds; private bedCrops: BedCrop[] = [];
   /** Pooled particles, rings, flashes, floating text, camera shake and hit-stop. */
   fx?: Effects;
   // Player animation timers set by combat and fishing.
@@ -155,6 +165,8 @@ export class World {
     // Switching shadows on or off changes every lit material's shader.
     if (toggled) this.scene.traverse(o => { if (o instanceof T.Mesh) for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.needsUpdate = true; });
     if (this.fx) this.fx.density = profile.particles;
+    // Crop cards: 256 px atlas cells on high, 128 px otherwise.
+    this.cardCellPx = profile === QUALITY.high ? 256 : 128; this.cropCards?.setCellPx(this.cardCellPx);
     // Battery saver draws half of the grass and flowers; trees and rocks always stay.
     const detail = profile.particles < .6 ? .5 : 1;
     if (detail !== this.detail) { this.detail = detail; if (this.scatterGroup) this.refreshScenery(); }
@@ -163,6 +175,7 @@ export class World {
   disposeTree(g: T.Object3D) { g.traverse(o => { if (o instanceof T.Mesh) { if (!isShared(o.geometry)) o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (!isShared(material) && ![...matCache.values()].includes(material as T.MeshStandardMaterial)) material.dispose(); } }); }
   applyRefinedAssets(assets: RefinedAssetLibrary = refinedAssets) {
     for (const entity of this.entities) { this.applyRefinedAsset(entity, assets); if (entity.kind === 'travel') this.dressRocket(entity); }
+    this.syncBeds(assets);
     // Props such as the well are scenery with their own model, kept out of batching.
     for (const prop of this.root.children.filter(o => o.userData.prop && o.userData.refinedAsset !== o.userData.prop)) {
       const visual = assets.clone(prop.userData.prop as RefinedAsset);
@@ -176,10 +189,8 @@ export class World {
     if (!asset || entity.mesh.userData.refinedAsset === asset) return;
     const visual = assets.clone(asset);
     if (!visual) return;
-    // Preserve the entity wrapper for targeting and the live crop group for growth.
-    const crops = entity.kind === 'plot' && entity.index !== undefined ? this.plotMeshes[entity.index] : undefined;
+    // Preserve the entity wrapper for targeting.
     for (const child of [...entity.mesh.children]) {
-      if (child === crops) continue;
       entity.mesh.remove(child);
       this.disposeTree(child);
     }
@@ -292,10 +303,23 @@ export class World {
   makePlot(index: number) {
     const saved=this.state.plots[index] as M.Plot&{x?:number;z?:number};
     const x=saved.x??-11.4+(index%3)*2.25,z=saved.z??-.4+Math.floor(index/3)*2.25;
+    const p=group(new T.Mesh(BED_PICK,BED_PICK_MATERIAL));
+    const crops=new T.Group();p.add(crops);this.plotMeshes[index]=crops;this.addEntity('plot','Garden bed','🌱',p,x,z,1,index);
+  }
+  /** The simple bed until garden-bed.glb arrives: soil, a wooden frame and three furrows. */
+  private bedBoxes(){
     const p=group(box('#9b7355',1.96,.16,1.95,0,.12),box('#be9970',2.12,.17,.12,0,.2,-1),box('#be9970',2.12,.17,.12,0,.2,1),box('#be9970',.12,.17,2.12,-1,.2),box('#be9970',.12,.17,2.12,1,.2));
     for(let j=0;j<3;j++) p.add(box('#795a47',1.8,.045,.08,0,.22,-.6+j*.6));
-    const crops=new T.Group();p.add(crops);this.plotMeshes[index]=crops;const entity=this.addEntity('plot','Garden bed','🌱',p,x,z,1,index);this.applyRefinedAsset(entity);
+    return p;
   }
+  /** Every bed of the garden as instances of one baked bed model (G2D-5); none away from home. */
+  private syncBeds(assets: RefinedAssetLibrary = refinedAssets){
+    const beds=this.gardenBeds??=new GardenBeds();if(beds.group.parent!==this.scene)this.scene.add(beds.group);
+    const plots=this.planet==='home'?this.entities.filter(e=>e.kind==='plot'):[],refined=assets.has('garden');
+    beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z})),refined);
+  }
+  /** The beds' draw calls, for tests and probes. */
+  get bedDraws(){return this.gardenBeds?.draws??0;}
   build(planet: PlanetId) {
     this.disposeTree(this.root);this.scene.remove(this.root);this.root=new T.Group();this.scene.add(this.root);
     this.entities=[];this.enemies=[];this.obstacles=[];this.dynamicObstacles=[];this.plotMeshes=[];this.cropSignatures=[];this.planet=planet;
@@ -378,7 +402,7 @@ export class World {
       const dragon=this.enemies.find(e=>e.type==='dragon');if(dragon){dragon.x=dragon.homeX=this.environment.layout.nest.x;dragon.z=dragon.homeZ=this.environment.layout.nest.z;dragon.hp=0;dragon.respawn=999999;dragon.mesh.visible=false;}
       for(let i=0;i<18;i++){const minion=this.spawnSpecies('minislime',30,30,enemyIndex++)!;minion.hp=0;minion.respawn=999999;minion.mesh.visible=false;}
     }
-    this.batchScenery();this.refreshScenery();this.root.add(this.player,this.companion);this.cameraTarget.copy(this.position);this.syncCrops();this.syncDropped();this.applyRefinedAssets();this.syncDecorations();this.refreshEnvironmentNodes();
+    this.batchScenery();this.refreshScenery();this.root.add(this.player,this.companion);this.cameraTarget.copy(this.position);this.cropCards?.reset();this.syncCrops();this.syncDropped();this.applyRefinedAssets();this.syncDecorations();this.refreshEnvironmentNodes();
     if(this.remoteRoot&&!this.remoteRoot.parent)this.scene.add(this.remoteRoot);
     for(const remote of this.remotePlayers?.values()??[])remote.mesh.visible=!remote.pose.planet||remote.pose.planet===planet;
     this.onBuilt?.();
@@ -657,24 +681,32 @@ export class World {
   clearRemotePlayers(){for(const id of [...this.remotePlayers?.keys()??[]])this.removeRemotePlayer(id);}
   syncCrops() {
     if(this.planet!=='home')return;
-    if(this.plotMeshes.length<this.state.plots.length)for(let i=this.plotMeshes.length;i<this.state.plots.length;i++)this.makePlot(i);
+    if(this.plotMeshes.length<this.state.plots.length){for(let i=this.plotMeshes.length;i<this.state.plots.length;i++)this.makePlot(i);this.syncBeds();}
+    const cards=this.cardsReady();
     this.state.plots.forEach((p,i)=>{
-      const progress=cropProgress(p),stage=p.crop?progress>=1?3:progress>.35?2:1:0,modelled=!!p.crop&&cropKit.has('crop_'+p.crop),signature=p.crop+':'+stage+(modelled?':kit':'');
+      // One crop per bed with the reference's stages (G2D-2); the cards draw it when they are baked, else a 3D model does.
+      const stage=cropStage(p.crop,cropProgress(p)),modelled=!!p.crop&&cropKit.has('crop_'+p.crop),signature=cards?'cards':p.crop+':'+stage+(modelled?':kit':'');
       if(this.cropSignatures[i]===signature)return;this.cropSignatures[i]=signature;const g=this.plotMeshes[i];this.disposeTree(g);g.clear();
-      if(!p.crop)return;
-      // Blender crops: a sprout, then a young plant, then the full crop with a sparkle.
-      if(modelled){for(let j=0;j<4;j++){const x=(j%2)*.8-.4,z=Math.floor(j/2)*.8-.4,plant=cropKit.instance(stage===1?'crop_sprout':'crop_'+p.crop);if(!plant)continue;
-        // Crops face the camera; a small turn keeps rows from looking stamped.
-        plant.position.set(x,.22,z);plant.rotation.y=(((j*37+i*17)%60)-30)*Math.PI/180;
+      if(cards||!p.crop)return;
+      if(modelled){const plant=cropKit.instance(stage===1?'crop_sprout':'crop_'+p.crop);if(!plant)return;
+        // Small and flat: crops never cast into the shadow map (C6).
+        plant.traverse(o=>{o.castShadow=false;});plant.position.set(0,SOIL_Y,0);plant.rotation.y=(((i*17)%60)-30)*Math.PI/180;
         // Crops pop in with a springy bounce each time they grow a stage.
-        plant.userData.target=stage===1?.9:stage===2?.58:1;plant.userData.stage=stage;plant.userData.pop=0;plant.userData.seed=i*3.1+j;plant.scale.setScalar(.01);g.add(plant);
-        if(stage===3){const star=mesh(new T.OctahedronGeometry(.07),'#fff0a8',x,1.05+Math.sin(j)*.12,z);g.add(star);}}return;}
-      for(let j=0;j<4;j++){const x=(j%2)*.8-.4,z=Math.floor(j/2)*.8-.4;const crop=group();
-        if(stage>=2)crop.add(ball(p.crop==='carrot'?'#e9a068':p.crop==='berry'?'#da7f88':'#e5c4d4',stage===3?.26:.15,0,.26,0,1));
-        for(let k=0;k<3;k++){const leaf=ball(k%2?'#8cb569':'#6c9953',stage===1?.11:.14,(k-1)*.1,.3+(stage*.05),0);leaf.scale.set(.8,2,.6);leaf.rotation.z=(k-1)*-.45;crop.add(leaf);}crop.position.set(x,.22,z);g.add(crop);
-        if(stage===3){const star=mesh(new T.OctahedronGeometry(.065),'#fff0a8',x,.9+Math.sin(j)*.15,z);g.add(star);}
-      }
+        plant.userData.target=stageScale(p.crop,stage);plant.userData.stage=stage;plant.userData.pop=0;plant.userData.seed=i*3.1;plant.scale.setScalar(.01);g.add(plant);return;}
+      const crop=group();
+      if(stage>=2)crop.add(ball(p.crop==='carrot'?'#e9a068':p.crop==='berry'?'#da7f88':'#e5c4d4',stage===3?.32:.2,0,.3,0,1));
+      for(let k=0;k<3;k++){const leaf=ball(k%2?'#8cb569':'#6c9953',stage===1?.13:.17,(k-1)*.12,.34+(stage*.06),0);leaf.scale.set(.8,2,.6);leaf.rotation.z=(k-1)*-.45;crop.add(leaf);}
+      crop.traverse(o=>{o.castShadow=false;});crop.position.set(0,SOIL_Y,0);g.add(crop);
     });
+  }
+  /** Creates and bakes the crop cards once the crop kit is in; false keeps the 3D crops (no renderer, bake failed, switched off). */
+  private cardsReady(){
+    if(this.cropCardsOff||!this.renderer||!cropKit.ready)return false;
+    if(!this.cropCards){
+      this.cropCards=new CropCards(this.renderer,()=>this.scene.children.filter((o):o is T.Light=>o instanceof T.Light),this.cardCellPx??128,STARTING_PLOTS+MAX_EXTRA_PLOTS);
+      this.scene.add(this.cropCards.group);this.cropCards.bake(Object.keys(M.CROPS).filter(id=>cropKit.has('crop_'+id)));
+    }
+    return this.cropCards.ready;
   }
   syncDropped() {
     const old=this.entities.find(e=>e.kind==='dropped');if(old){this.root.remove(old.mesh);this.disposeTree(old.mesh);this.entities=this.entities.filter(e=>e!==old);}
@@ -1169,17 +1201,25 @@ export class World {
     this.marker.scale.setScalar(1+Math.sin(this.time*5)*.12);if(draw)this.render();
   }
 
-  /** Pop-in, sway and the sparkle of ripe crops. */
+  /** Pop-in, sway and the sparkle of ripe crops, on the cards or on the 3D fallback. */
   private animateCrops(dt:number){
+    const cards=this.planet==='home'&&!this.cropCardsOff&&this.cropCards?.ready?this.cropCards:null;
+    if(this.cropCards)this.cropCards.group.visible=!!cards;
     if(this.planet!=='home')return;
+    if(cards){
+      const beds=this.bedCrops??=[];beds.length=0;
+      this.plotMeshes.forEach((g,i)=>{const plot=g.parent,p=this.state.plots[i];if(plot&&p)beds.push({x:plot.position.x,z:plot.position.z,crop:p.crop,progress:cropProgress(p)});});
+      cards.update(beds,this.time,dt);
+    }
     this.plotMeshes.forEach((g,i)=>{
-      let ripe:T.Object3D|null=null;
-      for(const plant of g.children){const u=plant.userData;if(u.target===undefined)continue;
-        if(u.pop<1){u.pop=Math.min(1,u.pop+dt*3);const k=u.pop,spring=1+Math.sin(k*Math.PI*2.5)*(1-k)*.4;plant.scale.setScalar(u.target*Math.min(1,k*2)*spring);}
+      let ripe=false;
+      if(cards)ripe=cropStage(this.state.plots[i]?.crop,cropProgress(this.state.plots[i]??{crop:null,plantedAt:0}))===3;
+      else for(const plant of g.children){const u=plant.userData;if(u.target===undefined)continue;
+        if(u.pop<1){u.pop=Math.min(1,u.pop+dt*3);plant.scale.setScalar(u.target*popScale(u.pop));}
         else plant.scale.setScalar(u.target*(u.stage===3?1+Math.sin(this.time*4+u.seed)*.04:1));
         plant.rotation.z=Math.sin(this.time*(u.stage===3?2.5:1.5)+u.seed)*(u.stage===3?.06:.04);
-        if(u.stage===3)ripe=plant;}
-      if(ripe&&this.fx&&Math.random()<dt*2.5){const plot=g.parent;if(plot)this.fx.burst({x:plot.position.x+ripe.position.x,z:plot.position.z+ripe.position.z},{n:1,color:'#fff7a8',glow:true,size:.08,speed:1,up:2,y:.9,gravity:0,life:.8});}
+        if(u.stage===3)ripe=true;}
+      if(ripe&&this.fx&&Math.random()<dt*2.5){const plot=g.parent;if(plot)this.fx.burst({x:plot.position.x,z:plot.position.z},{n:1,color:'#fff7a8',glow:true,size:.08,speed:1,up:2,y:1,gravity:0,life:.8});}
     });
   }
   private sunOffset=new T.Vector3(-15,35,18);private sunAxes:[T.Vector3,T.Vector3]|null=null;

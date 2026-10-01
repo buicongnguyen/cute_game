@@ -5,6 +5,7 @@ import {World,HERO_SCALE} from '../src/world.ts';
 import {RefinedAssetLibrary} from '../src/assets.ts';
 import {attackRange} from '../src/combat.ts';
 import {claimGift,newGame,plant,weaponStats} from '../src/model.ts';
+import * as M from '../src/model.ts';
 import {EnvironmentSimulation,createEnvironmentLayout} from '../src/environments.ts';
 import {lavaEvent} from '../src/lava-weather.ts';
 
@@ -63,13 +64,38 @@ test('a target removed while walking is cleared before interaction',()=>{
   assert.equal(w.selected,null);assert.equal(w.destination,null);assert.equal(w.ring.visible,false);assert.equal(interactions,0);
 });
 
-test('refining a planted garden preserves the crop group and target wrapper',async()=>{
+test('refining a planted garden preserves the crop group and target wrapper, and instances the beds',async()=>{
   const w=world();w.makePlot(0);plant(w.state,0,'carrot',Date.now()-30000);w.syncCrops();
   const plot=w.entities.find(e=>e.kind==='plot'&&e.index===0)!,crops=w.plotMeshes[0],count=crops.children.length;
   const source=new T.Group();source.add(new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial()));
   const assets=new RefinedAssetLibrary(async()=>source);await assets.loadAll();w.applyRefinedAssets(assets);
   assert.equal(plot.mesh.userData.entity,plot);assert.equal(crops.parent,plot.mesh);assert.equal(crops.children.length,count);
-  assert.ok(count>0);assert.ok(plot.mesh.getObjectByName('refined-garden'));
+  // No renderer here, so the 3D fallback draws ONE crop per bed (G2D-2), which never casts.
+  assert.equal(count,1);crops.traverse(o=>assert.equal(o.castShadow,false));
+  // The refined bed is drawn by the instanced bed meshes, not inside the entity (G2D-5).
+  assert.equal(plot.mesh.getObjectByName('refined-garden'),undefined);
+  const beds=w.scene.getObjectByName('garden-beds')!;assert.ok(beds.children.length>0);
+  for(const m of beds.children as T.InstancedMesh[]){assert.ok(m instanceof T.InstancedMesh);assert.equal(m.count,w.state.plots.length);assert.equal(m.castShadow,false);assert.equal(m.receiveShadow,true);}
+});
+
+test('a tap ray through a bed still finds the plot entity through its invisible pick box',()=>{
+  const w=world();w.build('home');const plot=w.entities.find(e=>e.kind==='plot')!;
+  w.raycaster.set(new T.Vector3(plot.x,10,plot.z+.3),new T.Vector3(0,-1,0));
+  assert.equal((w as unknown as {raycastEntity(m:T.Object3D[]):unknown}).raycastEntity([plot.mesh]),plot);
+});
+
+test('a full 33-bed garden keeps every bed off buildings, props, trees, the pond, the trails and other beds',()=>{
+  const w=world();w.state.energy=1e7;while(M.expandGarden(w.state));assert.equal(w.state.plots.length,33);
+  w.build('home');const beds=w.entities.filter(e=>e.kind==='plot');assert.equal(beds.length,33);
+  const square=(b:{x:number;z:number},x:number,z:number)=>Math.hypot(Math.max(0,Math.abs(b.x-x)-1.06),Math.max(0,Math.abs(b.z-z)-1.06));
+  for(const b of beds){
+    for(const o of w.obstacles)assert.ok(square(b,o.x,o.z)>=o.r-1e-9,`bed ${b.index} at ${b.x},${b.z} overlaps obstacle ${o.x},${o.z}`);
+    for(const e of w.entities)if(e.kind!=='plot'&&e.kind!=='enemy')assert.ok(square(b,e.x,e.z)>=Math.min(e.radius,3.6)-1e-9,`bed ${b.index} overlaps ${e.kind}`);
+    for(const o of beds)if(o!==b)assert.ok(Math.hypot(o.x-b.x,o.z-b.z)>=2.15);
+    // The starting garden sits where the west trail would run (its stones skip it); new beds keep off every trail.
+    if(b.index!>=9)assert.ok(Math.abs(b.x)>=1.61&&Math.abs(b.z)>=1.61,'beds stay off the stepping-stone trails');
+  }
+  assert.equal(w.bedDraws>0,true);
 });
 
 test('toy gifts retain stable IDs and positions across a cooldown and rebuild',()=>{

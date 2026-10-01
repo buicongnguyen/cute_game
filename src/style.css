@@ -714,21 +714,11 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
   background: var(--well);
   font-size: 15px;
 }
-.plot-label { padding: 3px 10px 3px 4px; font-size: var(--t-xs); }
-.plot-label > span { width: 20px; height: 20px; font-size: 13px; }
-.plot-label.empty { background: rgba(255, 255, 255, .88); color: var(--grass-deep); }
-.plot-label.empty > span { background: var(--grass); color: #fff; font-weight: 1000; }
-.plot-label.growing { background: var(--glass); border-color: var(--glass-line); color: #fff; font-variant-numeric: tabular-nums; }
-.plot-label.growing > span { background: rgba(255, 255, 255, .18); }
-.plot-label.ready {
-  background: linear-gradient(180deg, #ffe27a, var(--sun));
-  border-color: #fff;
-  color: #5a3a00;
-  box-shadow: 0 3px 0 var(--sun-deep);
-  animation: bounce 1.2s ease-in-out infinite;
-}
-.plot-label.ready { padding: 3px; gap: 0; }
-.plot-label.ready > span { width: 30px; height: 30px; background: #fff; font-size: 18px; overflow: hidden; }
+/* Compact crop labels on the bed's front edge (reference 29/09 update): a 20 px ready badge or a 22x5 px growth bar. */
+.plot-label, .plot-label.ready { padding: 0; gap: 0; border: 0; background: none; box-shadow: none; }
+.plot-label.ready > span { width: 20px; height: 20px; border: 2px solid #fff; background: var(--sun); box-shadow: 0 2px 0 var(--sun-deep); font-size: 10px; animation: bounce 1.2s ease-in-out infinite; }
+.plot-label.growing > span { display: block; width: 22px; height: 5px; border-radius: 3px; background: rgba(58, 36, 51, .55); box-shadow: 0 0 0 1px rgba(255, 255, 255, .85); overflow: hidden; }
+.plot-label.growing > span > b { display: block; height: 100%; border-radius: 3px; background: #9be36f; }
 .enemy-label {
   flex-direction: column;
   gap: 3px;
@@ -1615,8 +1605,6 @@ h1 > span {
   #zone-icon { width: 40px; height: 40px; font-size: 22px; }
   .world-label { font-size: var(--t-xs); padding: 3px 9px 3px 4px; }
   .world-label > span { width: 20px; height: 20px; font-size: 13px; }
-  .plot-label.ready { padding: 2px; }
-  .plot-label.ready > span { width: 22px; height: 22px; font-size: 14px; }
 
   /* Panels become bottom sheets. */
   #dialog-layer { align-items: flex-end; padding: 0; }

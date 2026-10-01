@@ -147,24 +147,57 @@ export function harvestAll(s: SaveState, now = Date.now()) { const harvested: Cr
     harvested.push(id); }); return harvested; }
 export function fertilize(s: SaveState, index: number, timeOrItem: number | string = Date.now(), raw = 'spore') { const now = typeof timeOrItem === 'number' ? timeOrItem : Date.now(), id = canonicalItem(typeof timeOrItem === 'string' ? timeOrItem : raw), p = s.plots[index], grow = ITEMS[id]?.grow; if (!p?.crop || !grow || cropProgress(p, now) >= 1 || !removeItem(s.bag, id))
     return false; const remaining = CROPS[p.crop].duration * (1 - cropProgress(p, now)); p.plantedAt -= remaining * grow; return true; }
+/**
+ * Ground at home that a garden bed must stay off (G2D-4), matching World.build: the cottage, stalls, chest, crystal,
+ * starship pad, workshop, kitchen, well, village trees (crown, not just trunk), the fence-side bushes and the pond.
+ */
+export const HOME_CLEARANCE: readonly { x: number; z: number; r: number }[] = [
+    { x: 0, z: -8, r: 3.2 }, { x: 9, z: 2.5, r: 2 }, { x: 9.6, z: 10.6, r: 2 }, { x: -3.3, z: -4.9, r: 1 }, { x: 8.5, z: -7, r: 1.5 },
+    { x: 13.5, z: -3, r: 2 }, { x: 5.5, z: 6.5, r: 1.3 }, { x: 1, z: 10.5, r: 1.4 }, { x: -7, z: -11, r: 1.4 }, { x: -7.5, z: 11.2, r: 3.6 },
+    ...[[-13, -8], [-14, 7], [3, -13], [10, -11], [14, 5], [-2, 15]].map(([x, z]) => ({ x, z, r: 1.2 })),
+    ...Array.from({ length: 16 }, (_, i) => { const a = (i + .5) / 16 * Math.PI * 2; return { x: Math.cos(a) * 16.4, z: Math.sin(a) * 16.4, r: .8 }; }),
+];
+/** Half the side of a bed's frame (2.12 m), the stepping-stone trails' half-width and the farthest a bed corner may reach. */
+export const BED_HALF = 1.06, TRAIL_HALF = .55, BED_REACH = 17.4;
+/** Whether a bed centred here keeps off the home obstacles, the four trails along the axes and the fence. */
+export function bedClear(x: number, z: number) {
+    if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(Math.abs(x) + BED_HALF, Math.abs(z) + BED_HALF) > BED_REACH) return false;
+    if (Math.abs(x) < BED_HALF + TRAIL_HALF || Math.abs(z) < BED_HALF + TRAIL_HALF) return false;
+    return HOME_CLEARANCE.every(o => Math.hypot(Math.max(0, Math.abs(o.x - x) - BED_HALF), Math.max(0, Math.abs(o.z - z) - BED_HALF)) >= o.r);
+}
+/** Centre of the starting garden; new beds grow outward from it on the 2.25 m garden grid. */
+const GARDEN_CENTRE = { x: -9.15, z: 1.85 };
+const BED_GRID = Array.from({ length: 15 * 15 }, (_, i) => ({ x: +(-11.4 + (i % 15 - 7) * 2.25).toFixed(2), z: +(-.4 + (Math.floor(i / 15) - 7) * 2.25).toFixed(2) }))
+    .sort((a, b) => Math.hypot(a.x - GARDEN_CENTRE.x, a.z - GARDEN_CENTRE.z) - Math.hypot(b.x - GARDEN_CENTRE.x, b.z - GARDEN_CENTRE.z) || a.z - b.z || a.x - b.x);
+/** The free grid spot nearest the garden for a new bed (the first `count` beds count as placed), or null. */
+function freeBedSpot(s: SaveState, count = s.plots.length) {
+    const placed = { ...s, plots: s.plots.slice(0, count) };
+    return BED_GRID.find(p => bedClear(p.x, p.z) && placementFree(placed, p.x, p.z, 2.15)) ?? null;
+}
+/** Moves saved beds that sit on an obstacle or on an earlier bed (older saves placed them blindly) to free ground. */
+export function settleBeds(s: SaveState) {
+    let moved = 0;
+    s.plots.forEach((p, i) => {
+        const x = p.x ?? (-11.4 + i % 3 * 2.25), z = p.z ?? (-.4 + Math.floor(i / 3) * 2.25);
+        const crowded = s.plots.slice(0, i).some((q, j) => Math.hypot(x - (q.x ?? (-11.4 + j % 3 * 2.25)), z - (q.z ?? (-.4 + Math.floor(j / 3) * 2.25))) < 2.15);
+        // The nine starting beds are laid out by hand; only check them against each other.
+        if (i < STARTING_PLOTS && !crowded || bedClear(x, z) && !crowded) return;
+        const spot = freeBedSpot(s, i); if (!spot) return;
+        p.x = spot.x; p.z = spot.z; moved++;
+    });
+    return moved;
+}
 export function gardenExpansionCost(s: SaveState) { return 60 + Math.max(0, s.plots.length - STARTING_PLOTS) * 20; }
 function placementFree(s: SaveState, x: number, z: number, radius: number, omit?: string) { return Number.isFinite(x) && Number.isFinite(z) && Math.hypot(x, z) <= 16.6 && !s.plots.some((p, i) => Math.hypot(x - (p.x ?? (-11.4 + i % 3 * 2.25)), z - (p.z ?? (-.4 + Math.floor(i / 3) * 2.25))) < radius) && !s.decorations.some(d => d.uid !== omit && Math.hypot(x - d.x, z - d.z) < (ITEMS[d.id]?.collider || .6) + radius * .5); }
 export function expandGarden(s: SaveState, x?: number, z?: number) { if (s.planet !== 'home' || s.plots.length >= STARTING_PLOTS + MAX_EXTRA_PLOTS)
     return false; const cost = gardenExpansionCost(s), kit = (s.bag.plot_kit || 0) > 0; if (!kit && s.energy < cost)
     return false; if (x === undefined || z === undefined) {
-    let found = false;
-    for (let row = 0; row < 12 && !found; row++)
-        for (let col = 0; col < 12 && !found; col++) {
-            const px = -12.5 + col * 2.25, pz = -12.5 + row * 2.25;
-            if (placementFree(s, px, pz, 2.15) && Math.hypot(px, pz + 8) > 5) {
-                x = px;
-                z = pz;
-                found = true;
-            }
-        }
-    if (!found)
+    const spot = freeBedSpot(s);
+    if (!spot)
         return false;
-} if (!placementFree(s, x!, z!, 2.15))
+    x = spot.x;
+    z = spot.z;
+} if (!bedClear(x, z) || !placementFree(s, x, z, 2.15))
     return false; if (kit)
     removeItem(s.bag, 'plot_kit');
 else
@@ -431,6 +464,7 @@ export function parseSave(raw: string | null): SaveState | null {
                 if (ITEMS[id]?.type === 'decor' && Number.isFinite(d.x) && Number.isFinite(d.z) && Math.hypot(d.x, d.z) <= 16.6)
                     s.decorations.push({ uid: typeof d.uid === 'string' ? d.uid.slice(0, 80) : `decor-${s.nextDecorationId++}`, id, x: d.x, z: d.z, rotation: Number.isFinite(d.rotation) ? d.rotation : 0 });
             }
+        settleBeds(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
         if (record(v.collection))
             for (const [id, n] of Object.entries(v.collection))
