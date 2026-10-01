@@ -1,6 +1,8 @@
 import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TABLES, UPGRADES, STARTING_PLOTS, MAX_EXTRA_PLOTS, MAX_DECORATIONS, STORY_STEPS, canonicalItem, type ItemId, type Inventory, type GearSlot, type CropId, type PlanetId, type BuffKey, type BuffDef, type WeaponDef } from './content.ts';
 import { createProgression, normalizeProgression, recordEvent, progressEntries, claimProgress, type ProgressionState } from './progression.ts';
+import { clearOfPen, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 export * from './content.ts';
+export * from './farm.ts';
 export { recordEvent, progressEntries, claimProgress, type ProgressKind, type ProgressEntry } from './progression.ts';
 export interface Plot {
     crop: CropId | null;
@@ -64,6 +66,8 @@ export interface SaveState {
     settings: {
         sound: boolean;
         lowGraphics: boolean;
+        /** "Place new beds myself": a bought bed opens the see-through placement instead of going down automatically. */
+        placeBeds?: boolean;
     };
     worldRewards: WorldRewards;
     buffs: Partial<Record<BuffKey, {
@@ -87,10 +91,14 @@ export interface SaveState {
         items: Inventory;
     } | null;
     savedAt: number;
+    /** The animal pen (farm.ts); older saves get an empty one. */
+    farm: FarmState;
+    /** Bed layout version (GARDEN_LAYOUT); saves without it are moved to the smaller beds by shrinkGarden. */
+    gardenLayout?: number;
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
-export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 2, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, x: -11.4 + (i % 3) * 2.25, z: -.4 + Math.floor(i / 3) * 2.25 })), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, lowGraphics: false }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now() }; }
+export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 2, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, lowGraphics: false }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now() }; }
 export function xpNeeded(level: number) { return Math.round(25 * Math.pow(Math.max(1, level), 1.55)); }
 function equipped(s: SaveState) { return Object.values(s.gear).map(id => ITEMS[id]).filter(Boolean); }
 function equipmentStat(s: SaveState, key: string) { return equipped(s).reduce((sum, item) => sum + ((item.stats as Record<string, number> | undefined)?.[key] || 0), 0); }
@@ -152,6 +160,7 @@ export function fertilize(s: SaveState, index: number, timeOrItem: number | stri
 /**
  * Ground at home that a garden bed must stay off (G2D-4), matching World.build: the cottage, stalls, chest, crystal,
  * starship pad, workshop, kitchen, well, village trees (crown, not just trunk), the fence-side bushes and the pond.
+ * The animal pen (farm.ts PEN) is checked as a rectangle in bedClear.
  */
 export const HOME_CLEARANCE: readonly { x: number; z: number; r: number }[] = [
     { x: 0, z: -8, r: 3.2 }, { x: 9, z: 2.5, r: 2 }, { x: 9.6, z: 10.6, r: 2 }, { x: -3.3, z: -4.9, r: 1 }, { x: 8.5, z: -7, r: 1.5 },
@@ -159,68 +168,103 @@ export const HOME_CLEARANCE: readonly { x: number; z: number; r: number }[] = [
     ...[[-13, -8], [-14, 7], [3, -13], [10, -11], [14, 5], [-2, 15]].map(([x, z]) => ({ x, z, r: 1.2 })),
     ...Array.from({ length: 16 }, (_, i) => { const a = (i + .5) / 16 * Math.PI * 2; return { x: Math.cos(a) * 16.4, z: Math.sin(a) * 16.4, r: .8 }; }),
 ];
-/** Half the side of a bed's frame (2.12 m), the stepping-stone trails' half-width and the farthest a bed corner may reach. */
-export const BED_HALF = 1.06, TRAIL_HALF = .55, BED_REACH = 17.4;
 /**
- * Whether a bed centred here keeps off the home obstacles, the four trails along the axes and the fence. A turned bed
- * is checked by the square that holds it (half side 1.06 m square, 1.5 m at 45°).
+ * Beds are 80 % of the reference's 2.12 m frame (the user wanted more room in the garden): BED_SCALE shrinks the bed
+ * model, its pick shape and the crops; frames are 1.7 m (half side BED_HALF) on a 1.8 m grid (BED_STEP), and two
+ * square beds stand at least BED_GAP apart along an axis. TRAIL_HALF is the stepping-stone trails' half-width and
+ * BED_REACH the farthest a bed corner may reach from the village centre.
+ */
+export const BED_SCALE = .8, BED_HALF = .85, BED_STEP = 1.8, BED_GAP = 1.72, TRAIL_HALF = .55, BED_REACH = 17.4;
+/** Crops shrink less than their beds so they stay readable: a ripe crop is 35 px tall on a phone instead of 40. */
+export const CROP_SCALE = .88;
+/** Where starting bed `i` sits: a 3 x 3 block on the 1.8 m grid around the garden centre (-9.15, 1.85). */
+export function defaultBed(i: number) { return { x: +(-10.95 + (i % 3) * BED_STEP).toFixed(2), z: +(.05 + Math.floor(i / 3) * BED_STEP).toFixed(2) }; }
+/** The starting grid of saves made before the beds shrank: 2.25 m apart from (-11.4, -0.4). */
+export function legacyBed(i: number) { return { x: -11.4 + (i % 3) * 2.25, z: -.4 + Math.floor(i / 3) * 2.25 }; }
+/** Saves on the current bed layout carry this; older ones are migrated by shrinkGarden. */
+export const GARDEN_LAYOUT = 2;
+/** Reach of a bed from its centre along the axes: 0.85 m square on, 1.2 m when turned 45°. */
+const bedSpan = (rotation = 0) => BED_HALF * (Math.abs(Math.cos(rotation)) + Math.abs(Math.sin(rotation)));
+/**
+ * Whether a bed centred here keeps off the home obstacles, the animal pen (with a path around it), the four trails
+ * along the axes and the fence. A turned bed is checked by the square that holds it.
  */
 export function bedClear(x: number, z: number, rotation = 0) {
-    const half = Number.isFinite(rotation) ? BED_HALF * (Math.abs(Math.cos(rotation)) + Math.abs(Math.sin(rotation))) : NaN;
+    const half = Number.isFinite(rotation) ? bedSpan(rotation) : NaN;
     if (!Number.isFinite(x) || !Number.isFinite(z) || !(Math.hypot(Math.abs(x) + half, Math.abs(z) + half) <= BED_REACH)) return false;
-    if (Math.abs(x) < half + TRAIL_HALF || Math.abs(z) < half + TRAIL_HALF) return false;
+    if (Math.abs(x) < half + TRAIL_HALF || Math.abs(z) < half + TRAIL_HALF || !clearOfPen(x, z, half)) return false;
     return HOME_CLEARANCE.every(o => Math.hypot(Math.max(0, Math.abs(o.x - x) - half), Math.max(0, Math.abs(o.z - z) - half)) >= o.r);
 }
-/** Centre of the starting garden; new beds grow outward from it on the 2.25 m garden grid. */
+/** Whether two beds' bounding squares keep apart (2 cm between square frames; a turned bed's square is larger). */
+function bedsApart(ax: number, az: number, ar: number, bx: number, bz: number, br: number) { return Math.max(Math.abs(ax - bx), Math.abs(az - bz)) >= Math.max(BED_GAP, bedSpan(ar) + bedSpan(br) + .02); }
+type BedSpot = { x: number; z: number; rotation?: number };
+const bedSpots = (s: SaveState): BedSpot[] => s.plots.map((p, i) => ({ ...bedPosition(s, i), rotation: p.rotation ?? 0 }));
+/** Centre of the starting garden; new beds grow outward from it on the 1.8 m garden grid. */
 const GARDEN_CENTRE = { x: -9.15, z: 1.85 };
-const BED_GRID = Array.from({ length: 15 * 15 }, (_, i) => ({ x: +(-11.4 + (i % 15 - 7) * 2.25).toFixed(2), z: +(-.4 + (Math.floor(i / 15) - 7) * 2.25).toFixed(2) }))
+const BED_GRID = Array.from({ length: 19 * 19 }, (_, i) => ({ x: +(GARDEN_CENTRE.x + (i % 19 - 9) * BED_STEP).toFixed(2), z: +(GARDEN_CENTRE.z + (Math.floor(i / 19) - 9) * BED_STEP).toFixed(2) }))
     .sort((a, b) => Math.hypot(a.x - GARDEN_CENTRE.x, a.z - GARDEN_CENTRE.z) - Math.hypot(b.x - GARDEN_CENTRE.x, b.z - GARDEN_CENTRE.z) || a.z - b.z || a.x - b.x);
-/** The free grid spot nearest the garden for a new bed (the first `count` beds count as placed), or null. */
-function freeBedSpot(s: SaveState, count = s.plots.length) {
-    const placed = { ...s, plots: s.plots.slice(0, count) };
-    return BED_GRID.find(p => bedClear(p.x, p.z) && placementFree(placed, p.x, p.z, 2.15)) ?? null;
-}
+/** The free grid spot nearest the garden for a new square bed, given the beds already standing, or null. */
+function freeBedSpot(s: SaveState, beds: readonly BedSpot[]) { return BED_GRID.find(p => bedClear(p.x, p.z) && bedRoom(s, p.x, p.z, 0, beds)) ?? null; }
 /** Moves saved beds that sit on an obstacle or on an earlier bed (older saves placed them blindly) to free ground. */
 export function settleBeds(s: SaveState) {
     let moved = 0;
     s.plots.forEach((p, i) => {
-        const x = p.x ?? (-11.4 + i % 3 * 2.25), z = p.z ?? (-.4 + Math.floor(i / 3) * 2.25);
-        const crowded = s.plots.slice(0, i).some((q, j) => Math.hypot(x - (q.x ?? (-11.4 + j % 3 * 2.25)), z - (q.z ?? (-.4 + Math.floor(j / 3) * 2.25))) < 2.15);
+        const { x, z } = bedPosition(s, i), r = p.rotation ?? 0;
+        const crowded = s.plots.slice(0, i).some((q, j) => { const b = bedPosition(s, j); return !bedsApart(x, z, r, b.x, b.z, q.rotation ?? 0); });
         // The nine starting beds are laid out by hand; only check them against each other.
-        if (i < STARTING_PLOTS && !crowded || bedClear(x, z, p.rotation ?? 0) && !crowded) return;
-        const spot = freeBedSpot(s, i); if (!spot) return;
-        p.x = spot.x; p.z = spot.z; moved++;
+        if (!crowded && (i < STARTING_PLOTS || bedClear(x, z, r))) return;
+        const spot = freeBedSpot(s, bedSpots(s).slice(0, i)); if (!spot) return;
+        p.x = spot.x; p.z = spot.z; delete p.rotation; moved++;
     });
     return moved;
 }
-/** Reach of a bed from its centre along the axes: 1.06 m square on, 1.5 m when turned 45°. */
-const bedSpan = (rotation = 0) => BED_HALF * (Math.abs(Math.cos(rotation)) + Math.abs(Math.sin(rotation)));
-/** Room for a new bed: 2.15 m from other beds and clear of decorations, more beside a bed when either is turned. */
-function bedRoom(s: SaveState, x: number, z: number, rotation = 0) {
-    // Square beds keep the reference's 2.15 m; a turned bed needs its bounding squares apart (a 45° bed reaches 1.5 m).
-    return placementFree(s, x, z, 2.15) && s.plots.every((p, i) => { const at = bedPosition(s, i), need = bedSpan(rotation) + bedSpan(p.rotation ?? 0); return need <= 2.15 || Math.max(Math.abs(at.x - x), Math.abs(at.z - z)) >= need; });
+/**
+ * Saves from before the beds shrank (no gardenLayout): starting beds still on the old 2.25 m grid move to the new
+ * 1.8 m one, and extra beds the game placed itself (unturned, on the old grid) are packed in again nearest the garden,
+ * around the beds the player placed by hand, which keep their spots. settleBeds then clears any overlap that is left
+ * (a hand-placed bed on the new pen, say). Crops and timers stay with their beds.
+ */
+export function shrinkGarden(s: SaveState) {
+    const onOldGrid = (x: number, z: number) => [(x + 11.4) / 2.25, (z + .4) / 2.25].every(k => Math.abs(k - Math.round(k)) < .01);
+    const repack = new Set<number>();
+    s.plots.forEach((p, i) => {
+        const { x, z } = bedPosition(s, i), old = legacyBed(i);
+        if (i < STARTING_PLOTS) { if (Math.abs(x - old.x) < .01 && Math.abs(z - old.z) < .01) Object.assign(p, defaultBed(i)); }
+        else if (!p.rotation && onOldGrid(x, z)) repack.add(i);
+    });
+    const standing = bedSpots(s).filter((_, i) => !repack.has(i));
+    for (const i of repack) { const spot = freeBedSpot(s, standing); if (!spot) continue; Object.assign(s.plots[i], spot); standing.push({ ...spot, rotation: 0 }); }
+    s.gardenLayout = GARDEN_LAYOUT;
+    return settleBeds(s);
+}
+/** Room for a new bed: apart from every other bed's square and clear of decorations, inside the fence. */
+function bedRoom(s: SaveState, x: number, z: number, rotation = 0, beds: readonly BedSpot[] = bedSpots(s)) {
+    return Number.isFinite(x) && Number.isFinite(z) && Math.hypot(x, z) <= 16.6 && !s.decorations.some(d => Math.hypot(x - d.x, z - d.z) < (ITEMS[d.id]?.collider || .6) + BED_GAP * .5)
+        && beds.every(b => bedsApart(x, z, rotation, b.x, b.z, b.rotation ?? 0));
 }
 export function gardenExpansionCost(s: SaveState) { return 60 + Math.max(0, s.plots.length - STARTING_PLOTS) * 20; }
-function placementFree(s: SaveState, x: number, z: number, radius: number, omit?: string) { return Number.isFinite(x) && Number.isFinite(z) && Math.hypot(x, z) <= 16.6 && !s.plots.some((p, i) => Math.hypot(x - (p.x ?? (-11.4 + i % 3 * 2.25)), z - (p.z ?? (-.4 + Math.floor(i / 3) * 2.25))) < radius) && !s.decorations.some(d => d.uid !== omit && Math.hypot(x - d.x, z - d.z) < (ITEMS[d.id]?.collider || .6) + radius * .5); }
+function placementFree(s: SaveState, x: number, z: number, radius: number, omit?: string) { return Number.isFinite(x) && Number.isFinite(z) && Math.hypot(x, z) <= 16.6 && !s.plots.some((_, i) => { const p = bedPosition(s, i); return Math.hypot(x - p.x, z - p.z) < radius; }) && !s.decorations.some(d => d.uid !== omit && Math.hypot(x - d.x, z - d.z) < (ITEMS[d.id]?.collider || .6) + radius * .5); }
+/** Adds a bed (a kit from the bag, else energy): at (x, z) when given, otherwise automatically at the free spot nearest the garden. */
 export function expandGarden(s: SaveState, x?: number, z?: number, rotation = 0) { if (s.planet !== 'home' || s.plots.length >= STARTING_PLOTS + MAX_EXTRA_PLOTS)
     return false; const cost = gardenExpansionCost(s), kit = (s.bag.plot_kit || 0) > 0; if (!kit && s.energy < cost)
     return false; if (x === undefined || z === undefined) {
-    const spot = freeBedSpot(s);
+    const spot = freeBedSpot(s, bedSpots(s));
     if (!spot)
         return false;
     x = spot.x;
     z = spot.z;
+    rotation = 0;
 } if (!bedClear(x, z, rotation) || !bedRoom(s, x, z, rotation))
     return false; if (kit)
     removeItem(s.bag, 'plot_kit');
 else
     s.energy -= cost; s.plots.push({ crop: null, plantedAt: 0, x: x!, z: z!, ...(rotation ? { rotation } : {}) }); recordEvent(s, 'expand'); return true; }
 /** Where bed `i` sits (saves from before free placement kept no position). */
-export function bedPosition(s: SaveState, i: number) { const p = s.plots[i]; return { x: p?.x ?? (-11.4 + i % 3 * 2.25), z: p?.z ?? (-.4 + Math.floor(i / 3) * 2.25) }; }
+export function bedPosition(s: SaveState, i: number) { const p = s.plots[i], d = defaultBed(i); return { x: p?.x ?? d.x, z: p?.z ?? d.z }; }
 /** Beds 10+ were added by the player and can be packed away again; the nine starting beds cannot. */
 export function isExtraBed(s: SaveState, i: number) { return i >= STARTING_PLOTS && i < s.plots.length; }
-/** Reach of a ripe tap: the reference harvests every ripe bed within 5 m of the tapped one. */
-export const HARVEST_REACH = 5;
+/** Reach of a ripe tap: the whole garden (the user's choice; the reference gathers only within 5 m of the tapped bed). */
+export const HARVEST_REACH = Infinity;
 /** Ripe beds a tap on ripe bed `index` gathers, nearest first (the tapped bed leads); empty if that bed is not ripe. */
 export function ripeNearby(s: SaveState, index: number, now = Date.now(), reach = HARVEST_REACH) {
     const at = bedPosition(s, index), ripe = (i: number) => !!s.plots[i]?.crop && cropProgress(s.plots[i], now) >= 1;
@@ -229,10 +273,10 @@ export function ripeNearby(s: SaveState, index: number, now = Date.now(), reach 
     const near = s.plots.map((_, i) => { const p = bedPosition(s, i); return { i, d: Math.round(Math.hypot(p.x - at.x, p.z - at.z) * 1000) / 1000 }; }).filter(b => b.d < reach && ripe(b.i));
     return near.sort((a, b) => a.d - b.d || a.i - b.i).map(b => b.i);
 }
-/** Whether a new bed may go here: clear of the cottage, trails and fence (bedClear) and of other beds and decorations. */
+/** Whether a new bed may go here: clear of the cottage, pen, trails and fence (bedClear) and of other beds and decorations. */
 export function bedSpotOk(s: SaveState, x: number, z: number, rotation = 0) { return s.planet === 'home' && bedClear(x, z, rotation) && bedRoom(s, x, z, rotation); }
-/** Whether a decoration may stand here (clear of beds and other decorations, inside the fence); obstacles are the world's. */
-export function decorSpotOk(s: SaveState, x: number, z: number) { return s.planet === 'home' && placementFree(s, x, z, 1.9); }
+/** Whether a decoration may stand here (clear of beds, other decorations and the animal pen, inside the fence); obstacles are the world's. */
+export function decorSpotOk(s: SaveState, x: number, z: number) { return s.planet === 'home' && placementFree(s, x, z, 1.9) && clearOfPen(x, z, .3, .2); }
 /**
  * "Expand garden" (reference buyPlot): at the cap nothing happens; with a garden bed kit already in the bag the player
  * just places it; otherwise 60 + 20 x extra beds of energy buys one. The kit is spent only when the bed is placed.
@@ -429,7 +473,7 @@ export function parseSave(raw: string | null): SaveState | null {
         if (!record(v) || v.version !== 1 || typeof v.name !== 'string' || typeof v.level !== 'number' || !Number.isFinite(v.level) || v.level < 1 || !planetId(v.planet) || !Array.isArray(v.plots))
             return null;
         const s = newGame(v.name, typeof v.color === 'string' && /^#[0-9a-f]{6}$/i.test(v.color) ? v.color : COLORS[0]);
-        const legacy = v.contentVersion !== 2;
+        const legacy = v.contentVersion !== 2, layoutBed = v.gardenLayout === GARDEN_LAYOUT ? defaultBed : legacyBed;
         const inventory = (data: unknown): Inventory => { const result: Inventory = {}; if (record(data))
             for (const [raw, n] of Object.entries(data)) {
                 const id = canonicalItem(raw);
@@ -454,14 +498,14 @@ export function parseSave(raw: string | null): SaveState | null {
                     s.gear[slot as GearSlot] = id;
             }
         s.hp = Math.min(typeof v.hp === 'number' && Number.isFinite(v.hp) && v.hp >= 0 ? v.hp : 100, maxHp(s));
-        s.plots = v.plots.slice(0, STARTING_PLOTS + MAX_EXTRA_PLOTS).map((p: unknown, i: number) => { const crop = record(p) && typeof p.crop === 'string' ? canonicalItem(p.crop) : null; const point = record(p) && Number.isFinite(p.x) && Number.isFinite(p.z) ? { x: p.x, z: p.z } : { x: -11.4 + (i % 3) * 2.25, z: -.4 + Math.floor(i / 3) * 2.25 }; const rotation = record(p) && typeof p.rotation === 'number' && Number.isFinite(p.rotation) && p.rotation ? { rotation: p.rotation } : {}; return { crop: crop && Object.hasOwn(CROPS, crop) ? crop : null, plantedAt: record(p) ? integer(p.plantedAt) : 0, ...point, ...rotation }; });
+        s.plots = v.plots.slice(0, STARTING_PLOTS + MAX_EXTRA_PLOTS).map((p: unknown, i: number) => { const crop = record(p) && typeof p.crop === 'string' ? canonicalItem(p.crop) : null; const point = record(p) && Number.isFinite(p.x) && Number.isFinite(p.z) ? { x: p.x, z: p.z } : layoutBed(i); const rotation = record(p) && typeof p.rotation === 'number' && Number.isFinite(p.rotation) && p.rotation ? { rotation: p.rotation } : {}; return { crop: crop && Object.hasOwn(CROPS, crop) ? crop : null, plantedAt: record(p) ? integer(p.plantedAt) : 0, ...point, ...rotation }; });
         if (legacy) {
             const target = Math.min(STARTING_PLOTS + MAX_EXTRA_PLOTS, s.plots.length + 3);
             while (s.plots.length < target)
-                s.plots.push({ crop: null, plantedAt: 0, x: -11.4 + (s.plots.length % 3) * 2.25, z: -.4 + Math.floor(s.plots.length / 3) * 2.25 });
+                s.plots.push({ crop: null, plantedAt: 0, ...layoutBed(s.plots.length) });
         }
         while (s.plots.length < STARTING_PLOTS)
-            s.plots.push({ crop: null, plantedAt: 0, x: -11.4 + (s.plots.length % 3) * 2.25, z: -.4 + Math.floor(s.plots.length / 3) * 2.25 });
+            s.plots.push({ crop: null, plantedAt: 0, ...layoutBed(s.plots.length) });
         for (const key of Object.keys(s.counters) as (keyof Counters)[])
             s.counters[key] = integer(record(v.counters) ? v.counters[key] : 0);
         s.quest = integer(v.quest, 0, 1e6);
@@ -470,6 +514,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.discovered = [...new Set<PlanetId>([...s.visited, ...(Array.isArray(v.discovered) ? v.discovered.map(planetId).filter((id: PlanetId | null): id is PlanetId => !!id) : [])])];
         const settings = record(v.settings) ? v.settings : {};
         s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true };
+        if (settings.placeBeds === true) s.settings.placeBeds = true;
         const rewards = record(v.worldRewards) ? v.worldRewards : {};
         if (record(rewards.mineReadyAt))
             for (const [key, times] of Object.entries(rewards.mineReadyAt)) {
@@ -513,7 +558,8 @@ export function parseSave(raw: string | null): SaveState | null {
                 if (ITEMS[id]?.type === 'decor' && Number.isFinite(d.x) && Number.isFinite(d.z) && Math.hypot(d.x, d.z) <= 16.6)
                     s.decorations.push({ uid: typeof d.uid === 'string' ? d.uid.slice(0, 80) : `decor-${s.nextDecorationId++}`, id, x: d.x, z: d.z, rotation: Number.isFinite(d.rotation) ? d.rotation : 0 });
             }
-        settleBeds(s);
+        if (v.gardenLayout === GARDEN_LAYOUT) settleBeds(s); else shrinkGarden(s);
+        s.farm = parseFarm(v.farm);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
         if (record(v.collection))
             for (const [id, n] of Object.entries(v.collection))

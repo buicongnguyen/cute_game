@@ -103,7 +103,7 @@ test('version1 migration aliases old inventory, gear, crops and dropped assets w
 test('the original six-bed save gains three fully positioned interactive beds and retains its color',()=>{
   const old={...M.newGame('Clover','#69c5ff'),contentVersion:undefined,plots:Array.from({length:6},(_,i)=>({crop:i===2?'carrot':null,plantedAt:i===2?1234:0})),bag:{rod:1,sword:1},energy:32,level:3};
   const r=M.parseSave(JSON.stringify(old))!;assert.equal(r.plots.length,9);assert.equal(r.color,'#69c5ff');assert.equal(r.energy,32);assert.equal(r.bag.rod,1);assert.equal(r.bag.sword_wood,1);assert.equal(r.plots[2].crop,'carrot');assert.equal(r.plots[2].plantedAt,1234);
-  for(let i=0;i<9;i++){assert.equal(r.plots[i].x,-11.4+(i%3)*2.25);assert.equal(r.plots[i].z,-.4+Math.floor(i/3)*2.25);}assert.equal(M.plant(r,8,'radish',now),true);
+  for(let i=0;i<9;i++){assert.deepEqual({x:r.plots[i].x,z:r.plots[i].z},M.defaultBed(i));}assert.equal(M.plant(r,8,'radish',now),true);
 });
 test('all public catalog labels use consistent English while identifiers remain unchanged',()=>{
   const names=[...Object.values(M.ITEMS).map(i=>i.name),...Object.values(M.CROPS).map(i=>i.name),...Object.values(M.PLANETS).map(i=>i.name),...Object.values(M.DISGUISES).flatMap(d=>[d.name,...d.skills.map(s=>s.name)]),...Object.values(M.COLLECTIONS).map(c=>c.name),...M.RECIPES.map(r=>r.category)];
@@ -143,9 +143,9 @@ test('new beds never land on village obstacles, and saved beds on top of them mo
   const t = M.newGame(); t.energy = 1e4;
   assert.equal(M.expandGarden(t, -7, -11), false); assert.equal(M.expandGarden(t, 0, -8), false); assert.equal(M.expandGarden(t, -13.65, 4.1), true);
   // An old save with a bed on the well and one stacked on a starting bed.
-  const old = M.newGame(); old.plots.push({ crop: 'radish', plantedAt: 5, x: -7, z: -11 }, { crop: null, plantedAt: 0, x: -11.4, z: -.4 });
+  const old = M.newGame(); old.plots.push({ crop: 'radish', plantedAt: 5, x: -7, z: -11 }, { crop: null, plantedAt: 0, x: -10.95, z: .05 });
   const r = reload(old), [well, stacked] = r.plots.slice(9);
   assert.ok(M.bedClear(well.x!, well.z!)); assert.equal(well.crop, 'radish'); assert.equal(well.plantedAt, 5);
-  assert.ok(r.plots.slice(0, 10).every(p => Math.hypot(p.x! - stacked.x!, p.z! - stacked.z!) >= 2.15));
+  assert.ok(r.plots.slice(0, 10).every(p => Math.max(Math.abs(p.x! - stacked.x!), Math.abs(p.z! - stacked.z!)) >= M.BED_GAP));
   assert.deepEqual(r.plots.slice(0, 9).map(p => [p.x, p.z]), M.newGame().plots.map(p => [p.x, p.z]));
 });

@@ -87,13 +87,14 @@ test('a tap ray through a bed still finds the plot entity through its invisible 
 test('a full 33-bed garden keeps every bed off buildings, props, trees, the pond, the trails and other beds',()=>{
   const w=world();w.state.energy=1e7;while(M.expandGarden(w.state));assert.equal(w.state.plots.length,33);
   w.build('home');const beds=w.entities.filter(e=>e.kind==='plot');assert.equal(beds.length,33);
-  const square=(b:{x:number;z:number},x:number,z:number)=>Math.hypot(Math.max(0,Math.abs(b.x-x)-1.06),Math.max(0,Math.abs(b.z-z)-1.06));
+  const square=(b:{x:number;z:number},x:number,z:number)=>Math.hypot(Math.max(0,Math.abs(b.x-x)-M.BED_HALF),Math.max(0,Math.abs(b.z-z)-M.BED_HALF));
   for(const b of beds){
     for(const o of w.obstacles)assert.ok(square(b,o.x,o.z)>=o.r-1e-9,`bed ${b.index} at ${b.x},${b.z} overlaps obstacle ${o.x},${o.z}`);
     for(const e of w.entities)if(e.kind!=='plot'&&e.kind!=='enemy')assert.ok(square(b,e.x,e.z)>=Math.min(e.radius,3.6)-1e-9,`bed ${b.index} overlaps ${e.kind}`);
-    for(const o of beds)if(o!==b)assert.ok(Math.hypot(o.x-b.x,o.z-b.z)>=2.15);
+    for(const o of beds)if(o!==b)assert.ok(Math.max(Math.abs(o.x-b.x),Math.abs(o.z-b.z))>=M.BED_GAP);
+    assert.ok(M.clearOfPen(b.x,b.z,M.BED_HALF),'beds keep off the animal pen and the path around it');
     // The starting garden sits where the west trail would run (its stones skip it); new beds keep off every trail.
-    if(b.index!>=9)assert.ok(Math.abs(b.x)>=1.61&&Math.abs(b.z)>=1.61,'beds stay off the stepping-stone trails');
+    if(b.index!>=9)assert.ok(Math.abs(b.x)>=1.4&&Math.abs(b.z)>=1.4,'beds stay off the stepping-stone trails');
   }
   assert.equal(w.bedDraws>0,true);
 });
@@ -140,7 +141,7 @@ test('remote avatars are separate from obstacles and refresh equipment without d
 test('home includes nine plots and exact regional creature populations within full bounds',()=>{
   const w=world();w.build('home');assert.equal(w.plotMeshes.length,9);assert.equal(w.enemies.length,150);assert.equal(w.enemies.filter(e=>e.boss).length,4);
   assert.ok(w.enemies.some(e=>Math.hypot(e.x,e.z)>100));assert.equal(w.blocked(149,0),true);
-  assert.deepEqual(w.entities.filter(e=>e.kind==='plot').slice(0,3).map(e=>[e.x,e.z]),[[-11.4,-.4],[-9.15,-.4],[-6.9,-.4]]);
+  assert.deepEqual(w.entities.filter(e=>e.kind==='plot').slice(0,3).map(e=>[e.x,e.z]),[[-10.95,.05],[-9.15,.05],[-7.35,.05]]);
 });
 
 test('follow-up damage cannot shorten an active crowd-control stun',()=>{

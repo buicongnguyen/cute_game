@@ -6,20 +6,21 @@ import * as M from '../src/model.ts';
 const reload = (s: M.SaveState) => M.parseSave(JSON.stringify(s))!;
 const crop = Object.keys(M.CROPS)[0] as M.CropId, grown = Date.now() - M.CROPS[crop].duration - 1000;
 
-test('a ripe tap gathers ripe beds within 5 m, nearest first, the tapped bed leading', () => {
+test('a ripe tap gathers every ripe bed in the garden, nearest first, the tapped bed leading', () => {
   const s = M.newGame();
-  // Starting beds sit 2.25 m apart: bed 4 is the centre of the 3x3 garden.
+  // Starting beds sit 1.8 m apart: bed 4 is the centre of the 3x3 garden.
   for (const i of [0, 1, 4, 5, 8]) Object.assign(s.plots[i], { crop, plantedAt: grown });
   s.plots[3].crop = crop; s.plots[3].plantedAt = Date.now(); // growing: never gathered
-  assert.deepEqual(M.ripeNearby(s, 4), [4, 1, 5, 0, 8], 'centre, then the 2.25 m neighbours, then the 3.18 m corners');
-  // From a corner the far corner is 6.36 m away: out of reach.
-  assert.deepEqual(M.ripeNearby(s, 0), [0, 1, 4], "bed 5 is 5.03 m away");
-  assert.ok(!M.ripeNearby(s, 0).includes(8));
+  assert.deepEqual(M.ripeNearby(s, 4), [4, 1, 5, 0, 8], 'centre, then the 1.8 m neighbours, then the 2.55 m corners');
+  // The user's rule: no reach limit, so the far corner comes too (the reference stops at 5 m).
+  assert.deepEqual(M.ripeNearby(s, 0), [0, 1, 4, 5, 8]);
   assert.deepEqual(M.ripeNearby(s, 3), [], 'a growing bed gathers nothing');
   assert.deepEqual(M.ripeNearby(s, 2), [], 'an empty bed gathers nothing');
-  // Exactly at the reach is out (reference: distance < 5).
-  s.plots.push({ crop, plantedAt: grown, x: -11.4 + 5, z: -.4 });
-  assert.ok(!M.ripeNearby(s, 0).includes(9)); assert.ok(M.ripeNearby(s, 0, Date.now(), 5.01).includes(9));
+  // A bed at the far side of the village still counts; an explicit reach still limits (for callers that want one).
+  s.energy = 1e7; while (M.expandGarden(s)); const far = s.plots.length - 1; Object.assign(s.plots[far], { crop, plantedAt: grown });
+  const all = M.ripeNearby(s, 0); assert.equal(all.length, 6); assert.equal(all.at(-1), far, 'the farthest bed comes last');
+  assert.deepEqual(M.ripeNearby(s, 0, Date.now(), 2), [0, 1], 'within 2 m of bed 0');
+  assert.equal(M.HARVEST_REACH, Infinity);
 });
 
 test('expand costs 60 + 20 per extra bed, prefers a kit in the bag and stops at 24 extra beds', () => {
@@ -30,7 +31,7 @@ test('expand costs 60 + 20 per extra bed, prefers a kit in the bag and stops at 
   // Owning a kit costs nothing more, however poor the explorer is.
   assert.equal(M.readyPlotKit(s), 'have'); assert.equal(s.bag.plot_kit, 1);
   // Placing spends the kit, not energy, and raises the next price by 20.
-  s.energy = 500; assert.ok(M.expandGarden(s, -13.65, 4.1)); assert.equal(s.bag.plot_kit, undefined); assert.equal(s.energy, 500);
+  s.energy = 500; assert.ok(M.expandGarden(s, -13.65, 3.65)); assert.equal(s.bag.plot_kit, undefined); assert.equal(s.energy, 500);
   assert.equal(M.gardenExpansionCost(s), 80);
   s.energy = 79; assert.equal(M.readyPlotKit(s), 'energy');
   // At the cap: nothing is bought or spent.
@@ -45,8 +46,11 @@ test('expand costs 60 + 20 per extra bed, prefers a kit in the bag and stops at 
 test('placement refuses blocked spots and spots outside the fence', () => {
   const s = M.newGame();
   assert.equal(M.bedSpotOk(s, -13.65, 4.1), true, 'open grass west of the garden');
+  assert.equal(M.bedSpotOk(s, -12.75, 1.85), true, 'one grid step west of the garden: smaller beds fit closer');
   assert.equal(M.bedSpotOk(s, -9.15, 1.85), false, 'on a starting bed');
-  assert.equal(M.bedSpotOk(s, -10.3, 1.85), false, 'overlapping a starting bed');
+  assert.equal(M.bedSpotOk(s, -12.6, 1.85), false, 'overlapping a starting bed');
+  assert.equal(M.bedSpotOk(s, M.PEN.x, M.PEN.z), false, 'the animal pen');
+  assert.equal(M.bedSpotOk(s, M.PEN.x, M.PEN.z + M.PEN.hd + .9), false, 'the path around the pen');
   assert.equal(M.bedSpotOk(s, 0, -8), false, 'the cottage');
   assert.equal(M.bedSpotOk(s, -7, -11), false, 'the well');
   assert.equal(M.bedSpotOk(s, 0, 5), false, 'a stepping-stone trail');
@@ -61,7 +65,7 @@ test('placement refuses blocked spots and spots outside the fence', () => {
 
 test('only an empty extra bed can be stored, and it comes back as a kit', () => {
   const s = M.newGame(); M.addItem(s, 'plot_kit'); M.addItem(s, 'plot_kit');
-  assert.ok(M.expandGarden(s, -13.65, 4.1)); assert.ok(M.expandGarden(s, -13.65, 1.85)); assert.equal(s.bag.plot_kit, undefined);
+  assert.ok(M.expandGarden(s, -13.65, 4.1)); assert.ok(M.expandGarden(s, -13.65, 2.3)); assert.equal(s.bag.plot_kit, undefined);
   assert.equal(M.isExtraBed(s, 8), false); assert.equal(M.isExtraBed(s, 9), true); assert.equal(M.isExtraBed(s, 11), false);
   assert.equal(M.storeBed(s, 4), false, 'starting beds stay'); assert.equal(s.plots.length, 11);
   s.plots[9].crop = crop; s.plots[9].plantedAt = Date.now();
@@ -82,7 +86,7 @@ test('old saves keep their beds: missing positions fall back to the starting gri
   const old = JSON.parse(JSON.stringify(s)); for (const p of old.plots.slice(0, 9)) { delete p.x; delete p.z; }
   const r = M.parseSave(JSON.stringify(old))!;
   assert.equal(r.plots.length, 11); assert.deepEqual(r.plots.slice(0, 9).map(p => [p.x, p.z]), M.newGame().plots.map(p => [p.x, p.z]));
-  assert.deepEqual(M.bedPosition(old as M.SaveState, 4), { x: -9.15, z: 1.85 });
+  assert.deepEqual(M.bedPosition(old as M.SaveState, 4), { x: -9.15, z: 1.85 }, 'the garden centre stays where it was');
   assert.equal(M.isExtraBed(r, 10), true); assert.equal(M.gardenExpansionCost(r), 100);
 });
 
@@ -93,16 +97,18 @@ test('the garden items explain themselves', () => {
 
 test('placed beds keep their 45° turn, turned beds need more room, and old saves stay square', () => {
   const s = M.newGame(); M.addItem(s, 'plot_kit'); M.addItem(s, 'plot_kit');
-  // A square bed fits 2.25 m from the starting garden's west column; turned 45° its corners reach the trail-free margin less.
+  // Turned 45° a bed's corners reach further, toward the trails and its neighbours.
   assert.equal(M.bedClear(-13.65, 4.1, 0), true);
-  assert.equal(M.bedClear(-1.7, 4.1, 0), true, 'square: 1.06 m half side clears the 0.55 m trail');
-  assert.equal(M.bedClear(-1.7, 4.1, Math.PI / 4), false, 'turned: 1.5 m half extent reaches the trail');
+  assert.equal(M.bedClear(-1.45, 4.1, 0), true, 'square: 0.85 m half side clears the 0.55 m trail');
+  assert.equal(M.bedClear(-1.45, 4.1, Math.PI / 4), false, 'turned: 1.2 m half extent reaches the trail');
   assert.equal(M.bedClear(-13.65, 4.1, NaN), false);
-  assert.equal(M.bedSpotOk(s, -9.75, -3), true, 'a square bed fits here on its own');
-  assert.ok(M.expandGarden(s, -12, -3, Math.PI / 4)); assert.equal(s.plots[9].rotation, Math.PI / 4);
-  assert.equal(M.bedSpotOk(s, -9.75, -3), false, '2.25 m beside a turned bed its corner would overlap');
-  assert.equal(M.bedSpotOk(s, -12, -.4 + 2.25 + 2.6, Math.PI / 4), false, 'nor on a starting bed');
-  assert.ok(M.placeDecoration(s, 'plot_kit', -13.65, 1.85, 0)); assert.equal('rotation' in s.plots[10], false, 'unturned beds save no rotation');
+  assert.equal(M.bedSpotOk(s, -13, 7.1), false, 'the tree west of the garden');
+  assert.equal(M.bedSpotOk(s, -9.6, 6.6), true, 'a square bed fits here on its own');
+  assert.ok(M.expandGarden(s, -11.5, 6.6, Math.PI / 4)); assert.equal(s.plots[9].rotation, Math.PI / 4);
+  assert.equal(M.bedSpotOk(s, -9.6, 6.6), false, '1.9 m beside a turned bed its corner would overlap');
+  assert.equal(M.bedSpotOk(s, -9.4, 6.6), true, '2.1 m is enough');
+  assert.equal(M.bedSpotOk(s, -10.95, 3.65 + 1.9, Math.PI / 4), false, 'nor on a starting bed');
+  assert.ok(M.placeDecoration(s, 'plot_kit', -13.65, 2.3, 0)); assert.equal('rotation' in s.plots[10], false, 'unturned beds save no rotation');
   const r = reload(s); assert.equal(r.plots[9].rotation, Math.PI / 4); assert.equal(r.plots[10].rotation, undefined);
   const old = JSON.parse(JSON.stringify(s)); old.plots[9].rotation = 'x'; assert.equal(M.parseSave(JSON.stringify(old))!.plots[9].rotation, undefined);
 });
@@ -116,4 +122,33 @@ test('decorations may stand on clear ground inside the fence, not on beds or oth
   const id = Object.keys(s.bag)[0]; assert.ok(M.placeDecoration(s, id, 4, 4, Math.PI / 4));
   assert.equal(M.decorSpotOk(s, 4.5, 4), false, 'another decoration');
   s.planet = 'candy'; assert.equal(M.decorSpotOk(s, 8, 8), false);
+});
+
+test('old saves move to the smaller beds: starting beds onto the new grid, game-placed beds packed again, hand-placed beds kept', () => {
+  const now = Date.now(), old = JSON.parse(JSON.stringify(M.newGame()));
+  delete old.gardenLayout;
+  old.plots = Array.from({ length: 9 }, (_, i) => ({ crop: i === 4 ? crop : null, plantedAt: i === 4 ? now : 0, ...M.legacyBed(i) }));
+  // Three beds the game placed on the old 2.25 m grid, a turned bed placed by hand, and a square one where the pen now stands.
+  old.plots.push({ crop, plantedAt: 5, x: -13.65, z: 4.1 }, { crop: null, plantedAt: 0, x: -6.9, z: 6.35 }, { crop: null, plantedAt: 0, x: -4.65, z: 1.85 },
+    { crop: null, plantedAt: 0, x: -4.1, z: 5.2, rotation: Math.PI / 4 }, { crop: null, plantedAt: 0, x: M.PEN.x, z: M.PEN.z });
+  const r = M.parseSave(JSON.stringify(old))!;
+  assert.equal(r.gardenLayout, M.GARDEN_LAYOUT); assert.equal(r.plots.length, 14);
+  assert.deepEqual(r.plots.slice(0, 9).map(p => ({ x: p.x, z: p.z })), Array.from({ length: 9 }, (_, i) => M.defaultBed(i)));
+  assert.equal(r.plots[4].crop, crop); assert.equal(r.plots[9].crop, crop); assert.equal(r.plots[9].plantedAt, 5, 'crops and timers stay with their beds');
+  assert.deepEqual([r.plots[12].x, r.plots[12].z, r.plots[12].rotation], [-4.1, 5.2, Math.PI / 4], 'a hand-placed bed keeps its spot');
+  assert.ok(M.clearOfPen(r.plots[13].x!, r.plots[13].z!, M.BED_HALF), 'the bed on the new pen moved');
+  const span = (p: M.Plot) => M.BED_HALF * (Math.abs(Math.cos(p.rotation ?? 0)) + Math.abs(Math.sin(p.rotation ?? 0)));
+  r.plots.forEach((a, i) => { if (i >= 9) assert.ok(M.bedClear(a.x!, a.z!, a.rotation ?? 0), `bed ${i} clear`); r.plots.forEach((b, j) => { if (j > i) assert.ok(Math.max(Math.abs(a.x! - b.x!), Math.abs(a.z! - b.z!)) >= Math.max(M.BED_GAP, span(a) + span(b)), `beds ${i} and ${j} apart`); }); });
+  // Game-placed beds now sit on the 1.8 m grid, nearer the garden than before.
+  for (const p of r.plots.slice(9, 12)) assert.ok(Math.hypot(p.x! + 9.15, p.z! - 1.85) <= 5.1, `${p.x},${p.z}`);
+  // A save on the new layout loads as it is.
+  assert.deepEqual(reload(r).plots, r.plots);
+});
+
+test('"Place new beds myself" is off by default and survives a reload', () => {
+  const s = M.newGame(); assert.equal(!!s.settings.placeBeds, false); assert.equal(reload(s).settings.placeBeds, undefined);
+  s.settings.placeBeds = true; assert.equal(reload(s).settings.placeBeds, true);
+  const odd = JSON.parse(JSON.stringify(s)); odd.settings.placeBeds = 'yes'; assert.equal(M.parseSave(JSON.stringify(odd))!.settings.placeBeds, undefined);
+  // Automatic placement: no spot given, the bed goes on the free grid spot nearest the garden.
+  s.energy = 60; assert.ok(M.expandGarden(s)); assert.deepEqual([s.plots[9].x, s.plots[9].z], [-12.75, 1.85]);
 });
