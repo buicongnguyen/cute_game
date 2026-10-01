@@ -125,6 +125,8 @@ export class World {
     this.canvas=canvas;this.state=state;
     // High-density phone screens skip multisampling; their pixels are already small.
     this.renderer = new T.WebGLRenderer({ canvas, antialias: options.antialias ?? true, alpha: false, powerPreference: 'high-performance' });
+    // The 2D cover atlas lives in a render target, which a lost WebGL context empties: bake it again on restore.
+    canvas.addEventListener('webglcontextrestored', () => { if (this.scatterGroup) this.refreshScenery(); });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap; this.renderer.outputColorSpace = T.SRGBColorSpace;
     // Neutral tone mapping keeps the toy palette saturated; ACES washed the golds and pinks out.

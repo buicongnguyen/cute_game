@@ -51,7 +51,7 @@ function built(planet:PlanetId){
 }
 
 test('creatures spawn in clearings: no tree or rock within 4.5 m, so wandering (2 m) keeps 2.5 m from tall decor (CC-06, CC-7)',()=>{
-  for(const planet of ['home','candy','jungle','shadow','ice'] as PlanetId[]){
+  for(const planet of ['home','candy','ice','lava','toy','jungle','ocean','cloud','shadow'] as PlanetId[]){
     const w=built(planet),homes=w.enemies.filter((e:any)=>e.respawn<999999);
     assert.ok(homes.length>10,planet);
     for(const e of homes)for(const p of w.decor){

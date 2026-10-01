@@ -70,16 +70,26 @@ export interface DecorContext {
  */
 export const CLEARING = { blocking: 4.5, low: 3.5, lookalike: 8 } as const;
 /**
- * Decor that looks like a creature of the same biome (C13), checked kind by kind against each biome's creatures:
- *   forest/meadow (mushroom, boar, bee; swamp adds chomper, wolf, frog): red-capped toadstools read as a small Grumpy
- *     Mushroom (red cap on a pale stalk), so they keep away from mushroom spawns and stay small (toadstools are cover:
- *     at most knee high, below the creature's 1.2 m); round green bushes are not mistaken (no face, wider than tall).
- *   swamp: reeds and ferns vs the Snapping Flower: thin stalks, no head. canyon: cacti are not used as decor; crystals
- *     and red rocks have no creature twin. Planets: candy gumdrops vs Jelly Jumper (both round, pink/green): gumdrops
- *     keep away from jelly spawns; ice snowmen vs Rolling Snowball (white balls): snowmen keep away from snowballs;
- *     jungle ferns vs Giant Flytrap: low, no head; shadow: dead trees and rocks only.
+ * Decor that looks like a creature of the same biome (C13). Every decor kind was listed next to its biome's creatures,
+ * with drawn heights (creatures now stand 1.1-1.4 m):
+ *   forest/meadow/swamp (mushroom, boar, bee, chomper, wolf, frog): toadstools 0.52 m, red caps on pale stalks = a small
+ *     Grumpy Mushroom; bushes 0.71 m, round and green = a Poison Frog at a glance. Trees 3.4-3.8 m, rocks 0.64 m, logs,
+ *     reeds, tufts and flowers have no twin. canyon (cactus, wolf, crab): red rocks 1.4 m, crystals 1.1 m, dead trees,
+ *     dry bushes: none.
+ *   candy (jelly, gummy, lollipop, bunny, beetle): gumdrops 0.44 m, round pink/green = Jelly Jumper. Candy trees, canes,
+ *     donuts and cupcakes: none.  ice (snowball, penguin, ice blossom, seal, owl): snowmen 1.64 m and snow rocks 0.9 m,
+ *     white and round = Rolling Snowball. lava: none (rocks, obsidian, ash trees, volcano cones vs slimes and lizards).
+ *   toy (soldier, mouse, jack-in-the-box): toy blocks 1.66 m = Jack-in-the-Box (a box). jungle: ferns and bushes vs the
+ *     flytrap and snake: none.  ocean (jellyfish, shark, urchin, crab): pink coral 0.82 m = Coral Urchin.
+ *   cloud (sheep, thunderbird, wind spirit): white sky rocks 1.3 m = Cloud Sheep. shadow (wisp, spider, eye): the
+ *     planet's purple-tinted rocks 0.64 m = Shadow Spider.
+ * Each lookalike keeps 8 m from the spawn points of its twin, so a creature never stands among its doubles; outlines
+ * on actors (the fx builder's work) separate the rest.
  */
-export const LOOKALIKES: Readonly<Record<string, readonly string[]>> = { toadstools: ['mushroom', 'mushking'], gumdrops: ['jelly'], snowman: ['snowball'] };
+export const LOOKALIKES: Readonly<Record<string, readonly string[]>> = {
+  toadstools: ['mushroom', 'mushking'], bush: ['frog'], gumdrops: ['jelly'], snowman: ['snowball'], snow_rock: ['snowball'],
+  toyblock: ['jackbox'], coral: ['urchin'], skyrock: ['cloudsheep'], rock: ['spider'],
+};
 /** Grid of spawn points for the clearing test. */
 function clearingGrid(points: readonly { x: number; z: number; type?: string }[]) {
   const cells = new Map<string, { x: number; z: number; type?: string }[]>(), key = (x: number, z: number) => `${Math.floor(x / 8)}|${Math.floor(z / 8)}`;
