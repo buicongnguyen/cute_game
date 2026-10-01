@@ -31,6 +31,7 @@ export const KIT_FILES = {
   wilds: `${assetBase}assets/models/wilds.glb`,
   worldsBright: `${assetBase}assets/models/worlds-bright.glb`,
   worldsHarsh: `${assetBase}assets/models/worlds-harsh.glb`,
+  worldsDressing: `${assetBase}assets/models/worlds-dressing.glb`,
   farm: `${assetBase}assets/models/farm.glb`,
   creatures: `${assetBase}assets/models/creatures.glb`,
 } as const;
@@ -378,5 +379,7 @@ export const spaceKit = new KitLibrary([KIT_FILES.space]);
 export const wildsKit = new KitLibrary([KIT_FILES.wilds]);
 export const brightKit = new KitLibrary([KIT_FILES.worldsBright]);
 export const harshKit = new KitLibrary([KIT_FILES.worldsHarsh]);
+/** Small ground dressing for every world (pebbles, sprinkles, shells...), baked into the 2D cover cards. */
+export const dressingKit = new KitLibrary([KIT_FILES.worldsDressing]);
 /** The animal pen (farm-view.ts), loaded the first time the home pen is built. */
 export const farmKit = new KitLibrary([KIT_FILES.farm]);
