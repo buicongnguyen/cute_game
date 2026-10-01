@@ -57,7 +57,9 @@ for (const [name, view] of Object.entries(VIEWS)) {
       assert.ok(!overlap(r.boss, r.target), 'boss bar and target frame do not overlap');
       const mid = { l: r.W * .3, r: r.W * .7, t: r.H * .3, b: r.H * .7 };
       assert.ok(!overlap(r.target, mid), 'the target frame stays out of the middle of the screen');
-      if (name.startsWith('landscape')) assert.ok(r.tappable <= .13, `tappable HUD ${(r.tappable * 100).toFixed(1)}% stays near 12% on a short screen`);
+      // Wave 3: every touch target is at least 44 x 44 px (invisible hit areas around 32-34 px visuals), which costs about 2 points
+      // of tappable area over the reference's 11%; the painted HUD itself shrank (see hud-compact.css).
+      if (name.startsWith('landscape')) assert.ok(r.tappable <= .15, `tappable HUD ${(r.tappable * 100).toFixed(1)}% stays near 13% on a short screen`);
     } finally { await browser.close(); }
   });
 }

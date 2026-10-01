@@ -1,0 +1,172 @@
+/* Compact HUD (wave 3): every corner cluster sized from a few variables, like the reference (index-CKat3O3O.css :root
+   --b 44px round buttons, --mm 150px minimap, --sk 82px skills, smaller on short and narrow screens), but a notch smaller so the
+   world gets more of the screen. Loaded after style.css and overrides its HUD sizes only.
+   Touch screens: a visual may be smaller than 44 px, but its hit area never is (an invisible ::after grows it), and the gap
+   between neighbours is at least 44 px minus the visual so hit areas do not overlap. */
+:root { --b: 40px; --mm: 150px; --sk: 60px; --edge: 14px; --gap: 8px; --pad: 30px; }
+@media (max-width: 1000px), (max-height: 700px) { :root { --b: 38px; --mm: 116px; --sk: 54px; --edge: 12px; } }
+@media (max-height: 520px) and (orientation: landscape) { :root { --b: 32px; --mm: 88px; --sk: 46px; --edge: 8px; } }
+@media (max-height: 380px) and (orientation: landscape) { :root { --mm: 76px; --sk: 44px; } }
+@media (orientation: portrait) and (max-width: 600px) { :root { --b: 34px; --mm: 92px; --sk: 50px; --edge: 8px; } }
+@media (pointer: coarse) { :root { --gap: max(6px, calc(44px - var(--b))); } }
+
+/* Hit areas: at least 44 x 44 CSS px around the visual on touch screens. */
+#touch-controls button, #interact-button, .tracker-chip { position: relative; }
+@media (pointer: coarse) {
+  .icon-button::after, #social-slot .social-toggle::after, #platform-slot .platform-tools button::after, .skill::after,
+  .home-button::after, #interact-button::after, .tracker-chip::after, .tracker-fold::after, #touch-controls button::after, .avatar::after {
+    content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
+  }
+}
+
+/* Player card */
+.player-card { left: var(--edge); top: calc(var(--edge) + var(--safe-top)); gap: 8px; }
+.avatar { width: calc(var(--b) + 12px); height: calc(var(--b) + 12px); border-width: 3px; }
+.avatar > span { font-size: calc(var(--b) * .6); }
+.avatar b { min-width: 20px; height: 20px; padding: 0 5px; border-width: 2px; font-size: 10px; right: -5px; bottom: -4px; }
+.player-details { width: 176px; }
+.player-name { margin-bottom: 3px; font-size: var(--t-sm); }
+.meter { height: 16px; border-width: 2px; }
+.experience { height: 8px; margin-top: 3px; }
+.location { margin-top: 3px; font-size: var(--t-xs); }
+
+/* Top-right menu: round buttons of --b and the energy pill at the same height */
+.top-actions, #social-slot, #platform-slot { gap: var(--gap); }
+.top-actions { right: var(--edge); top: calc(var(--edge) + var(--safe-top)); }
+.energy { height: var(--b); min-width: 0; padding: 0 12px 0 4px; gap: 6px; border-width: 2px; font-size: calc(var(--b) * .36); }
+.energy > span { width: calc(var(--b) - 10px); height: calc(var(--b) - 10px); font-size: calc(var(--b) * .4); }
+.icon-button, #social-slot .social-toggle, #platform-slot .platform-tools button { width: var(--b); height: var(--b); border-width: 2px; font-size: calc(var(--b) * .46); }
+.icon-button[data-action="help"], .icon-button[data-action="settings"] { font-size: calc(var(--b) * .48); }
+.icon-button > i { width: 12px; height: 12px; border-width: 2px; right: -2px; top: -2px; }
+#platform-slot .platform-tools button:not(:first-child)::before { font-size: calc(var(--b) * .42); }
+
+/* Minimap: --mm wide under the menu; the caption names the zone the explorer is in (desktop only). */
+.minimap { right: var(--edge); top: calc(var(--edge) + var(--safe-top) + var(--b) + 8px); width: var(--mm); height: var(--mm); border-width: calc(var(--mm) / 40 + 1px); }
+.minimap > span { pointer-events: none; left: calc(50% - 8px); top: -8px; width: 16px; height: 16px; border-width: 1.5px; font-size: 9px; }
+.minimap > small { top: calc(100% + 3px); padding: 1px 8px; font-size: 10px; letter-spacing: .6px; text-transform: uppercase; }
+
+/* Quest and bounty trackers */
+.tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 74px); width: 236px; gap: 6px; }
+.quest-tracker { padding: 7px 10px 8px; }
+#quest-summary { padding: 4px 0 6px; gap: 8px; }
+.quest-icon { width: 30px; height: 30px; font-size: 17px; border-radius: 9px; }
+#quest-summary strong { font-size: var(--t-sm); }
+#quest-summary small { font-size: var(--t-xs); }
+.bounty-tracker { padding: 6px 10px; gap: 8px; }
+.bounty-tracker > span { font-size: 18px; }
+.quest-tracker .eyebrow { white-space: nowrap; }
+#quest-summary strong, #quest-summary small, .bounty-tracker strong, .bounty-tracker small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tracker-chip { height: 30px; padding: 0 9px; font-size: var(--t-xs); }
+
+/* Skills, Home and the context button */
+.bottom-bar { left: var(--edge); right: var(--edge); }
+.skills { gap: 18px; }
+.skill { width: var(--sk); height: var(--sk); border-width: 3px; }
+.skill > span { font-size: calc(var(--sk) * .44); }
+.skill > kbd { width: 20px; height: 20px; right: -5px; top: -5px; font-size: 10px; }
+.skill > small { top: calc(100% - 8px); padding: 1px 6px; font-size: 10px; max-width: calc(var(--sk) + 30px); }
+.cooldown { font-size: calc(var(--sk) * .3); }
+.home-button { height: var(--b); padding: 0 12px 0 9px; gap: 4px; border-width: 2px; font-size: calc(var(--b) * .45); }
+.home-button span { font-size: var(--t-sm); }
+#context-prompt { bottom: calc(40px + var(--safe-bottom)); }
+#context-prompt button { gap: 6px; max-width: min(64vw, 260px); padding: 3px 12px 3px 3px; border-width: 2px; font-size: var(--t-sm); box-shadow: 0 3px 0 var(--grass-deep), 0 6px 14px rgba(20, 60, 20, .2); }
+#context-prompt kbd { flex: none; width: 24px; height: 24px; }
+#interact-text { overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-height: 720px) and (min-width: 601px) {
+  .skills { gap: 14px; }
+  .skill { width: var(--sk); height: var(--sk); }
+  .skill > span { font-size: calc(var(--sk) * .44); }
+  .minimap { width: var(--mm); height: var(--mm); }
+}
+@media (max-width: 900px) {
+  .icon-button, #social-slot .social-toggle, #platform-slot .platform-tools button { width: var(--b); height: var(--b); font-size: calc(var(--b) * .46); }
+  .energy { height: var(--b); min-width: 0; font-size: calc(var(--b) * .36); }
+  .minimap { top: calc(var(--edge) + var(--safe-top) + var(--b) + 8px); width: var(--mm); height: var(--mm); }
+  .player-details { width: 160px; }
+  .tracker-stack { width: 220px; }
+}
+
+/* Portrait phones: the menu wraps to two rows, so the minimap sits under both; the boss bar under the minimap. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .player-card { gap: 7px; }
+  .avatar > span { font-size: 22px; }
+  .player-details { width: min(130px, 34vw); }
+  .meter { height: 14px; }
+  .experience { height: 7px; }
+  .top-actions { max-width: 48vw; }
+  .energy { padding: 0 9px 0 3px; }
+  .icon-button, #social-slot .social-toggle, #platform-slot .platform-tools button { width: var(--b); height: var(--b); font-size: calc(var(--b) * .46); }
+  .minimap { top: calc(var(--edge) + var(--safe-top) + var(--b) * 2 + var(--gap) + 6px); right: var(--edge); width: var(--mm); height: var(--mm); }
+  .meter > span { font-size: 9.5px; line-height: 1; }
+  .tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 64px); width: min(196px, 50vw); gap: 4px; }
+  .bottom-bar { left: var(--edge); right: var(--edge); bottom: calc(10px + var(--safe-bottom)); }
+  .skills { gap: max(12px, calc(44px - var(--sk) + 6px)); bottom: 8px; }
+  .skill { width: var(--sk); height: var(--sk); }
+  .skill > span { font-size: calc(var(--sk) * .44); }
+  .skill > small { font-size: 9px; max-width: calc(var(--sk) + 16px); padding: 0 5px; white-space: nowrap; line-height: 1.35; }
+  .home-button { width: var(--b); height: var(--b); padding: 0; justify-content: center; bottom: 8px; }
+  #context-prompt { bottom: calc(86px + var(--safe-bottom)); }
+  #boss-bar { top: calc(var(--edge) + var(--safe-top) + var(--b) * 2 + var(--gap) + var(--mm) + 16px); }
+}
+/* Short landscape screens: one row of menu buttons, the 2x2 skill block, labels hidden. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .avatar > span { font-size: 20px; }
+  .player-details { width: 140px; }
+  .meter { height: 14px; }
+  .experience { height: 6px; margin-top: 2px; }
+  .location { margin-top: 1px; }
+  .icon-button, #social-slot .social-toggle, #platform-slot .platform-tools button { width: var(--b); height: var(--b); font-size: calc(var(--b) * .46); }
+  .energy { height: var(--b); }
+  .energy > span { width: calc(var(--b) - 10px); height: calc(var(--b) - 10px); }
+  .minimap { top: calc(var(--edge) + var(--safe-top) + var(--b) + 6px); right: var(--edge); width: var(--mm); height: var(--mm); }
+  .meter > span { font-size: 9.5px; line-height: 1; }
+  .tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 54px); width: 184px; gap: 4px; }
+  .bottom-bar { left: var(--edge); right: var(--edge); bottom: calc(var(--edge) + var(--safe-bottom)); }
+  .skills { grid-template-columns: repeat(2, var(--sk)); gap: 10px; }
+  .skill { width: var(--sk); height: var(--sk); }
+  .skill > span { font-size: calc(var(--sk) * .44); }
+  .home-button { width: var(--b); height: var(--b); padding: 0; justify-content: center; bottom: 0; }
+  #context-prompt { bottom: calc(var(--edge) + var(--safe-bottom)); }
+  #context-prompt kbd { width: 24px; height: 24px; }
+}
+
+/* Phones (both orientations): two slim tracker rows, like the reference's chapter and bounty lines. */
+@media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
+  .quest-tracker { padding: 4px 26px 5px 7px; border-radius: 12px; }
+  #quest-summary { padding: 1px 0 3px; gap: 6px; }
+  .quest-icon { width: 22px; height: 22px; font-size: 13px; border-radius: 7px; }
+  #quest-summary strong { font-size: var(--t-xs); line-height: 1.2; }
+  #quest-summary small { margin-top: 0; font-size: 10px; }
+  .quest-progress { display: none; }
+  .bounty-tracker { padding: 3px 7px; gap: 6px; border-radius: 12px; }
+  .bounty-tracker > span { font-size: 14px; }
+  .bounty-tracker strong { font-size: var(--t-xs); }
+  .bounty-tracker small { font-size: 10px; }
+}
+
+/* The touch pad: small light glass keys on a 44 px pitch (the hit areas meet, the visuals do not). */
+@media (pointer: coarse) {
+  #touch-controls { gap: calc(44px - var(--pad)); opacity: .85; }
+  #touch-controls > div { gap: calc(44px - var(--pad)); }
+  #touch-controls button { width: var(--pad); height: var(--pad); border-radius: 10px; border-width: 1.5px; background: rgba(27, 47, 35, .32); font-size: 12px; }
+  #touch-controls button[data-action="attack"] { background: rgba(226, 73, 63, .7); }
+  #context-prompt kbd::before { font-size: 13px; }
+}
+@media (pointer: coarse) and (orientation: portrait) and (max-width: 600px) { #touch-controls { right: var(--edge); bottom: calc(80px + var(--safe-bottom)); } }
+@media (pointer: coarse) and (max-height: 520px) and (orientation: landscape) { #touch-controls { right: var(--edge); bottom: calc(var(--b) + 16px + var(--safe-bottom)); } }
+
+/* Place names (main.ts updateLabels): small ink-outlined text pinned to the building, no pill, never taking taps.
+   A label that would leave the screen, hide under the HUD or cover a nearer one fades out where it is. */
+.world-label:not(.plot-label) {
+  padding: 0; gap: 3px; border: 0; border-radius: 0; background: none; box-shadow: none;
+  color: #fff; font-size: 13px; font-weight: 900; line-height: 1.1; letter-spacing: .1px;
+  -webkit-text-stroke: 3px #3a2433; paint-order: stroke fill; text-shadow: 0 1px 2px rgba(58, 36, 51, .45);
+}
+.world-label:not(.plot-label) > span { width: auto; height: auto; background: none; font-size: 13px; -webkit-text-stroke: 0; filter: drop-shadow(0 1px 1px rgba(58, 36, 51, .6)); }
+.world-label.near { color: #ffe27a; }
+.world-label { pointer-events: none; transition: opacity .15s; }
+.world-label[data-off] { opacity: 0; }
+@media (max-width: 600px), (max-height: 520px) {
+  .world-label:not(.plot-label), .world-label:not(.plot-label) > span { font-size: 11px; }
+}

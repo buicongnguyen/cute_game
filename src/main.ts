@@ -28,6 +28,9 @@ import { Sfx, type Sound } from './sfx.ts';
 import { loadGraphics, saveGraphics, QUALITY, type QualitySetting } from './graphics.ts';
 import { frameSteps } from './frame-steps.ts';
 import { createDrops } from './drops-view.ts';
+import { Minimap } from './minimap.ts';
+// Compact HUD sizes; imported last so it overrides style.css (and the online/platform styles) for the HUD only.
+import './hud-compact.css';
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 const esc = (value: string) => value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
@@ -57,7 +60,7 @@ app.innerHTML = `
     <header class="player-card"><button class="avatar" data-action="bag" aria-label="Open character and backpack"><span>🌱</span><b id="level-badge">1</b></button><div class="player-details"><div class="player-name"><strong id="player-name"></strong><span id="level-text">Lv. 1</span></div><div class="meter health"><div id="hp-fill"></div><span id="hp-text">100 / 100</span></div><div class="meter experience"><div id="xp-fill"></div></div><div class="location"><span class="location-dot"></span><span id="zone-name">Clover Village</span></div></div></header>
     <nav class="top-actions" aria-label="Game menu"><div class="energy"><span>ϟ</span><b id="energy">0</b></div><button class="icon-button" data-action="bag" title="Backpack · I" aria-label="Backpack">🎒</button><button class="icon-button" data-action="quests" title="Journal · J" aria-label="Quest journal">📖<i id="quest-dot"></i></button><div id="social-slot"></div><button class="icon-button secondary-icon" data-action="help" title="How to play" aria-label="How to play">?</button><button class="icon-button" data-action="settings" title="Settings" aria-label="Settings">⚙</button><div id="platform-slot"></div></nav>
     <div class="tracker-stack"><button id="tracker-chip" class="tracker-chip" data-action="trackers" aria-label="Show quest and bounty" hidden><span id="chip-quest">🥕 0/3</span><span id="chip-bounty">🎯</span><i>▸</i></button><div class="tracker-panels"><aside class="quest-tracker"><button class="tracker-fold" data-action="trackers" aria-label="Fold quest and bounty">▾ Fold</button><div class="eyebrow">YOUR LITTLE ADVENTURE <span id="quest-chapter">1 / 9</span></div><button id="quest-summary" data-action="quests"><span class="quest-icon" id="quest-icon">🥕</span><span><strong id="quest-title">A little green beginning</strong><small id="quest-task">Harvest 3 crops · 0 / 3</small></span><span class="chevron">›</span></button><div class="quest-progress"><i id="quest-fill"></i></div><button id="quick-claim" data-action="claim" hidden>Collect your reward ✨</button></aside>
-    <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div></button></div><div id="buff-bar" aria-label="Active effects"></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="160" height="160"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
+    <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div></button></div><div id="buff-bar" aria-label="Active effects"></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="150" height="150"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
     <div id="boss-bar" hidden><span id="boss-icon">👑</span><div><div class="boss-head"><strong id="boss-name"></strong><b id="boss-hp"></b></div><div class="boss-meter"><i id="boss-fill"></i></div></div></div>
     <div id="target-frame" hidden aria-live="off"><span class="target-icon"></span><div><div class="target-head"><strong></strong><span class="target-level">Lv 1</span></div><div class="target-meter"><i></i><b class="target-hp"></b></div></div></div>
     <div id="zone-banner" role="status"><strong id="banner-name">Clover Village</strong><small id="banner-detail">A little place to call home</small><span id="banner-chip"></span></div>
@@ -93,6 +96,9 @@ catch (error) { app.innerHTML = '<div class="fatal"><h1>Your garden needs WebGL<
 world.applyGraphics(graphics.profile, graphics.ratio);world.fx?.setTextLayer($('#floating-text'));
 // Over-head HP bars, target frame and boss bar; the trackers fold to a chip in fights ('auto'), or as the player asks.
 const combatHud=new CombatHud($('#world-labels'),(x,y,z)=>world.screen(x,y,z));let trackerMode:'auto'|'open'|'fold'='auto',wasFight=false;
+// The whole-world minimap (minimap.ts): terrain cached per world, markers redrawn five times a second.
+const minimap=new Minimap($<HTMLCanvasElement>('#minimap'),$('#map-caption'),()=>started?{planet:world.planet,layout:world.environment.layout,position:world.position,facing:world.facing,entities:world.entities,enemies:world.enemies,
+  ready:world.entities.filter(e=>e.kind==='plot'&&!!world.state.plots[e.index!]?.crop&&M.cropProgress(world.state.plots[e.index!])>=1),remotes:[...world.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh.position)}:null);
 const movement = new MovementControls(world.keys);
 const combatView=new CombatView(world.scene);
 const combat=new CombatSimulation({
@@ -204,42 +210,42 @@ function updateHud() {
     for(const g of world.eyeGlints()){const p=world.screen(g.x,g.y,g.z),edge=world.screen(g.x+g.radius,g.y,g.z);if(p.front)holes.push(`radial-gradient(circle ${Math.max(18,Math.abs(edge.x-p.x))}px at ${p.x}px ${p.y}px, transparent 45%, black 100%)`);}
     dark.style.maskImage=holes.join(',');dark.style.maskComposite='intersect';}
 
-  if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!e;$('#interact-text').textContent=e?e.kind==='enemy'?`Attack ${e.name}`:e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'';}else $('#context-prompt').hidden=true;
+  // The prompt stays short (the target frame names the creature) so the biggest tappable thing on a phone stays small.
+  if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!e;$('#interact-text').textContent=e?e.kind==='enemy'?'Attack':e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'';}else $('#context-prompt').hidden=true;
 }
 // The zone banner is outlined text with a difficulty chip and no card (C2): it plays once for 2.8 s and never blocks taps.
 let zoneTimer=0;
 function showZone(name:string) {const info=zoneInfo(name,state.planet),banner=$('#zone-banner');$('#zone-name').textContent=name;$('#banner-name').textContent=name;$('#banner-detail').textContent=info.detail;$('#banner-chip').textContent=info.chip;banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');clearTimeout(zoneTimer);zoneTimer=window.setTimeout(()=>banner.classList.remove('show'),2800);}
 world.onZone=showZone;
-const labelNodes=new Map<string,HTMLButtonElement>();
+const labelNodes=new Map<string,HTMLElement>();
 // Labels sit just above each model's real top. Heights are measured once per
 // model, and again when a Blender model replaces the procedural placeholder.
 const labelHeights=new WeakMap<object,{asset:unknown;height:number}>(),labelBox=new Box3();
 function labelHeight(e:Entity){
   const asset=e.mesh.userData.refinedAsset,cached=labelHeights.get(e.mesh);if(cached&&cached.asset===asset)return cached.height;
-  labelBox.setFromObject(e.mesh);const height=Number.isFinite(labelBox.max.y)?Math.min(8,labelBox.max.y+.3):3.3;
+  labelBox.setFromObject(e.mesh);const height=Number.isFinite(labelBox.max.y)?Math.min(8,labelBox.max.y+.15):3.3;
   labelHeights.set(e.mesh,{asset,height});return height;
 }
-interface LabelCandidate {e:Entity;x:number;y:number;wy:number;back:number;html:string;className:string;aria:string;rank:number;distance:number;width:number;anchor:string}
-// Where each visible label is pinned in the world; positions refresh every frame.
-const labelAnchors=new Map<string,{e:Entity;wy:number;back:number;anchor:string;width:number}>();
-// The portrait view is only about ±4.75 m wide, so labels near a side edge slide in rather than vanish.
-const labelX=(x:number,width:number)=>Math.min(innerWidth-4-width/2,Math.max(4+width/2,x));
-// Tall buildings near the explorer reach up behind the top HUD (player card, menu, quest tracker, minimap, boss bar), so their labels
-// slide down below whichever panel sits over them instead of hiding or sitting under it, like labelX at the sides.
-let hudPanels:{left:number;right:number;bottom:number}[]=[],labelPx=34;
-function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar,#target-frame').forEach(node=>{const r=node.getBoundingClientRect();if(r.height&&r.top<innerHeight/2)hudPanels.push({left:r.left,right:r.right,bottom:r.bottom});});}
-const labelLift=(anchor:string)=>labelPx*(anchor.includes('-100%')?1:anchor.includes('-75%')?.75:.5);
-function labelY(x:number,y:number,width:number,anchor:string){let top=12;for(const p of hudPanels)if(p.left<x+width/2+4&&x-width/2-4<p.right)top=Math.max(top,p.bottom+6);return Math.max(top+labelLift(anchor),y);}
+// Place names are pinned to one point on their building (wy above it, back towards the pond's far edge) and re-projected every
+// frame with no clamping or nudging, so they never slide around. A label that would leave the screen, sit under a HUD panel or
+// cover a more important label fades out where it is instead of moving. 'covered' is decided 8 times a second, the rest per frame.
+interface LabelAnchor {e:Entity;wy:number;back:number;centre:boolean;w:number;h:number;covered:boolean;off:boolean}
+const labelAnchors=new Map<string,LabelAnchor>();
+let hudPanels:{left:number;right:number;top:number;bottom:number}[]=[];
+function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
+/** The label's screen box at its anchor: bottom centre for buildings, centre for the small crop marks. */
+function labelRect(a:LabelAnchor){const p=world.screen(a.e.x,a.wy,a.e.z-a.back),top=p.y-(a.centre?a.h/2:a.h);return {x:p.x,y:p.y,front:p.front,left:p.x-a.w/2,right:p.x+a.w/2,top,bottom:top+a.h};}
+const boxesMeet=(a:{left:number;right:number;top:number;bottom:number},b:{left:number;right:number;top:number;bottom:number})=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
 function updateLabels() {
   if(!started)return;
-  const candidates:LabelCandidate[]=[];measureHud();
+  measureHud();const near=world.nearest(),candidates:{a:LabelAnchor;rank:number;distance:number}[]=[],active=new Set<string>();
   for(const e of world.entities){
     const distance=Math.hypot(e.x-world.position.x,e.z-world.position.z);
-    let text=e.name,icon=e.icon,y:number,back=0,className='world-label',rank=2,reach=world.selected===e?30:11,anchor='translate(-50%,-100%)',aria='';
+    let text=e.name,icon=e.icon,y:number,back=0,className='world-label',rank=2,reach=world.selected===e?30:11,aria='';
     if(e.kind==='plot'){
       // Compact crop labels (reference 29/09, RG-05): a ready badge or a 22x5 growth bar on the bed's front edge, nothing on
       // empty beds (the context button says "Plant a seed"); the seconds left are only in the bed panel.
-      const plot=world.state.plots[e.index!];if(!plot?.crop)continue;const progress=M.cropProgress(plot);y=.12;back=-.95;reach=22;text='';anchor='translate(-50%,-50%)';
+      const plot=world.state.plots[e.index!];if(!plot?.crop)continue;const progress=M.cropProgress(plot);y=.12;back=-.95;reach=22;text='';
       if(progress>=1){icon='👆';className+=' plot-label ready';rank=1;aria=`${M.CROPS[plot.crop].name} ready to harvest in garden bed ${e.index!+1}`;}
       else{icon=`<b style="width:${Math.round(progress*100)}%"></b>`;className+=' plot-label growing';rank=3;aria=`${M.CROPS[plot.crop].name} growing in garden bed ${e.index!+1}, ${Math.ceil((1-progress)*M.CROPS[plot.crop].duration/1000)} seconds left`;}
     }else if(e.kind==='fish'&&e.pond){
@@ -247,36 +253,37 @@ function updateLabels() {
     }else if(e.kind==='enemy')continue; // Creature HP bars take their own path (hud-combat.ts), which never drops a bar.
     else y=labelHeight(e);
     if(distance>reach)continue;
-    const p=world.screen(e.x,y,e.z-back);if(!p.visible||p.y<-60||p.y>innerHeight-70||p.x<0||p.x>innerWidth)continue;
-    const html=`<span>${icon}</span>${esc(text)}`;
-    candidates.push({e,x:p.x,y:p.y,wy:y,back,html,className,aria:e.kind==='plot'?aria:text,rank,distance,width:e.kind==='plot'?24:34+text.length*7.4,anchor});
-  }
-  // Nearest and most important labels win; anything that would overlap them waits.
-  candidates.sort((a,b)=>a.rank-b.rank||a.distance-b.distance);
-  const placed:{left:number;right:number;top:number;bottom:number}[]=[],active=new Set<string>();
-  for(const c of candidates){
-    const height=labelPx,x=labelX(c.x,c.width),y=labelY(x,c.y,c.width,c.anchor),top=y-labelLift(c.anchor),box={left:x-c.width/2,right:x+c.width/2,top,bottom:top+height};
-    if(placed.some(o=>o.left<box.right&&box.left<o.right&&o.top<box.bottom&&box.top<o.bottom))continue;
-    placed.push(box);active.add(c.e.id);
-    let label=labelNodes.get(c.e.id);
-    if(!label){label=document.createElement('button');label.dataset.entity=c.e.id;labelNodes.set(c.e.id,label);$('#world-labels').append(label);}
-    if(label.className!==c.className)label.className=c.className;
-    if(label.innerHTML!==c.html){label.innerHTML=c.html;if(c.e.kind!=='plot')labelPx=label.offsetHeight||labelPx;}label.setAttribute('aria-label',c.aria);
-    label.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) ${c.anchor}`;label.hidden=!!modal;labelAnchors.set(c.e.id,{e:c.e,wy:c.wy,back:c.back,anchor:c.anchor,width:c.width});
+    // The place the context button points at, or the selected one, always wins and is highlighted.
+    if(e===near||e===world.selected){rank=0;if(e.kind!=='plot')className+=' near';}
+    let label=labelNodes.get(e.id);
+    if(!label){label=document.createElement('div');label.dataset.entity=e.id;label.setAttribute('role','img');labelNodes.set(e.id,label);$('#world-labels').append(label);}
+    const html=e.kind==='plot'?`<span>${icon}</span>`:`<span>${icon}</span>${esc(text)}`;let a=labelAnchors.get(e.id);
+    if(label.className!==className){label.className=className;if(a)a.w=0;}
+    if(label.innerHTML!==html){label.innerHTML=html;if(a)a.w=0;}
+    label.setAttribute('aria-label',e.kind==='plot'?aria:text);label.hidden=!!modal;
+    if(!a){a={e,wy:y,back,centre:e.kind==='plot',w:0,h:0,covered:false,off:false};labelAnchors.set(e.id,a);}
+    a.e=e;a.wy=y;a.back=back;if(!a.w){a.w=label.offsetWidth;a.h=label.offsetHeight;}
+    active.add(e.id);candidates.push({a,rank,distance});
   }
   for(const[id,node]of labelNodes)if(!active.has(id)){node.remove();labelNodes.delete(id);labelAnchors.delete(id);}
-  const canvas=$<HTMLCanvasElement>('#minimap'),ctx=canvas.getContext('2d')!;ctx.clearRect(0,0,160,160);ctx.fillStyle=state.planet==='home'?'#72d04c':M.PLANETS[state.planet].color;ctx.fillRect(0,0,160,160);
-  const mx=(x:number)=>80+x*1.55,mz=(z:number)=>80+z*1.55;
-  if(state.planet==='home'){ctx.fillStyle='#8fe066';ctx.beginPath();ctx.arc(80,80,28,0,Math.PI*2);ctx.fill();ctx.fillStyle='#f4d58a';ctx.fillRect(77,0,6,150);ctx.fillRect(47,92,90,5);ctx.fillStyle='#35b6f2';ctx.beginPath();ctx.ellipse(mx(-7.5),mz(11.2),6,4,0,0,Math.PI*2);ctx.fill();}
-  for(const e of world.entities){if(e.kind==='plot')continue;ctx.fillStyle=e.kind==='enemy'?'#e2493f':e.kind==='home'?'#ffc93a':e.kind==='travel'?'#ffffff':'#fff4cc';ctx.beginPath();ctx.arc(mx(e.x),mz(e.z),e.kind==='home'?5:e.kind==='enemy'?2.2:3,0,Math.PI*2);ctx.fill();}
-  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(mx(world.position.x),mz(world.position.z),5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#1487c4';ctx.beginPath();ctx.arc(mx(world.position.x),mz(world.position.z),3,0,Math.PI*2);ctx.fill();$('#map-caption').textContent=M.PLANETS[state.planet].name.toUpperCase();
+  // Nearest and most important labels win; a label that would cover one of them fades out (it is never moved).
+  candidates.sort((p,q)=>p.rank-q.rank||p.distance-q.distance);
+  const placed:ReturnType<typeof labelRect>[]=[];
+  for(const c of candidates){const r=labelRect(c.a);c.a.covered=placed.some(o=>boxesMeet(o,r));if(!c.a.covered&&labelShows(r))placed.push(r);}
+  positionLabels();
 }
+/** On screen in full and clear of the HUD panels. */
+const labelShows=(r:ReturnType<typeof labelRect>)=>r.front&&r.left>=2&&r.right<=innerWidth-2&&r.top>=2&&r.bottom<=innerHeight-2&&!hudPanels.some(p=>boxesMeet(p,r));
 
-/** Re-project visible labels after each render so they move in step with the camera instead of trailing it. */
+/** Re-project the labels after each render so they move in step with the camera instead of trailing it. */
 function positionLabels(){
   combatHud.frame(world.enemies,world.selected,world.position.x,world.position.z,!started||!!modal);
   if(!started||modal)return;
-  for(const [id,a] of labelAnchors){const node=labelNodes.get(id);if(!node)continue;const p=world.screen(a.e.x,a.wy,a.e.z-a.back),x=labelX(p.x,a.width);node.style.transform=`translate(${x.toFixed(1)}px,${labelY(x,p.y,a.width,a.anchor).toFixed(1)}px) ${a.anchor}`;}
+  for(const [id,a] of labelAnchors){
+    const node=labelNodes.get(id);if(!node)continue;const r=labelRect(a),off=a.covered||!labelShows(r);
+    node.style.transform=`translate(${r.x.toFixed(1)}px,${r.y.toFixed(1)}px) translate(-50%,${a.centre?'-50%':'-100%'})`;
+    if(off!==a.off){a.off=off;node.toggleAttribute('data-off',off);}
+  }
 }
 /** Sparkles, the XP number and a few orbs flying into the bag when a crop comes up. */
 function harvestBurst(index:number,crop:M.CropId){
@@ -428,7 +435,7 @@ function updateFishing(dt:number){
 
 
 world.onAlert=()=>tone('alert');
-world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();};
+world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();minimap.invalidate();};
 stockPonds();
 // Fish models stream in after the first build; restock the ponds when they arrive.
 void fishKit.load().then(()=>{if(fishKit.ready)stockPonds();});
@@ -631,7 +638,6 @@ boostButton.addEventListener('pointerdown',event=>{event.stopPropagation();event
 for(const type of ['pointerup','pointerleave','pointercancel'])boostButton.addEventListener(type,()=>{boostHeld=false;});
 app.addEventListener('click',event=>{
   const button=(event.target as HTMLElement).closest<HTMLButtonElement>('button');if(!button||button.disabled)return;
-  if(button.dataset.entity){const e=world.entities.find(e=>e.id===button.dataset.entity);if(e&&!modal)world.select(e);return;}
   // A clicked HUD button gives up focus, so Space and other shortcuts cannot press it again.
   if((event as MouseEvent).detail>0&&button.closest('#hud,#world-labels'))button.blur();
   const action=button.dataset.action,id=button.dataset.item as M.ItemId,index=Number(button.dataset.index);if(action!=='reel')tone();
@@ -723,7 +729,7 @@ function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt
   autoAttack(weaponKind);
   fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.position,fishGame?.simulation??null);
   if(!fishGame&&!$('#reel-button').hidden&&(performance.now()>recastUntil||world.moving))showReel(false);
-  world.render();positionLabels();fx?.updateText(realDt,innerWidth,innerHeight);
+  world.render();positionLabels();minimap.frame(realDt);fx?.updateText(realDt,innerWidth,innerHeight);
   const graphicsChange=graphics.sample(realDt,started&&!document.hidden&&!uiBlocked()&&performance.now()>settledAt);if(graphicsChange)world.applyGraphics(graphics.profile,graphics.ratio);if(graphics.takeSave())saveGraphics(graphics);
   for(const listener of frameListeners)listener(dt);
   if(uiElapsed>.12){uiElapsed=0;world.syncCrops();updateHud();updateLabels();if(modal==='plot'){const p=state.plots[activePlot],progress=M.cropProgress(p);$('#grow-fill').style.width=`${progress*100}%`;$('#grow-time').textContent=progress>=1?'Ready! Close this window and tap the crop to harvest.':`${Math.ceil((1-progress)*M.CROPS[p.crop!].duration/1000)} seconds until harvest`;}}

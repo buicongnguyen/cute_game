@@ -111,9 +111,10 @@ function blocking(type: string) { return BLOCKING.has(type); }
 /** Where the home trails run: winding sand paths from the four gates out to the border. */
 export function trailDistance(x: number, z: number) {
   if (Math.hypot(x, z) < 17) return Infinity;
-  const wander = (t: number) => (Math.sin(t * .09) * 3 + Math.sin(t * .23) * 1.2) * smoothstep(t, 18, 30);
-  return Math.min(Math.abs(z - wander(Math.abs(x))), Math.abs(x - wander(Math.abs(z))));
+  return Math.min(Math.abs(z - trailOffset(Math.abs(x))), Math.abs(x - trailOffset(Math.abs(z))));
 }
+/** How far a trail wanders sideways at distance t from the village centre (the minimap draws the same line). */
+export const trailOffset = (t: number) => (Math.sin(t * .09) * 3 + Math.sin(t * .23) * 1.2) * smoothstep(t, 18, 30);
 export const smoothstep = (x: number, a: number, b: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 /** Sectors of the home wilds, as angles of atan2(z, x). */
