@@ -1,0 +1,40 @@
+/* Wave 4 UI: bigger item art in grids, the chest as tile grids, the market's sell-all button, the crystal's stat cards
+   and the opt-in movement pad. Loaded after menus.css, so these rules win over the compact-menu sizes. */
+
+/* The reference is tap-to-move only: the pad shows on touch screens only when Settings turns it on. */
+#hud:not(.move-pad) #touch-controls { display: none !important; }
+
+/* Item art fills about three quarters of its slot, like the reference's bag (.slot img 100% inside a 3 px border). */
+.item-tile > span { width: 80%; max-width: 58px; height: auto; aspect-ratio: 1; font-size: 32px; }
+.equipment > div > button:first-child span { width: 36px; height: 36px; font-size: 26px; }
+.shop-icon { width: 48px; height: 48px; font-size: 28px; }
+#dialog-body .item-hero { width: 54px; height: 54px; font-size: 32px; }
+@media (max-width: 600px) { .shop-icon { width: 44px; height: 44px; font-size: 26px; } }
+
+/* The chest: two grids of square tiles; a tap moves that stack across (the count sits bottom right). */
+.chest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 5px; padding: 2px 0 6px; }
+.chest-slot { position: relative; aspect-ratio: 1; min-width: 0; padding: 0; display: grid; place-items: center; border-radius: 11px; background: #fff; border: 2px solid var(--line); box-shadow: 0 2px 0 var(--line); font-size: 28px; line-height: 1; }
+.chest-slot > span { width: 78%; height: 78%; display: grid; place-items: center; }
+.chest-slot > b { position: absolute; right: 3px; bottom: 1px; font-size: 12px; font-weight: 1000; color: var(--ink); text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.chest-slot:hover:not(:disabled) { border-color: var(--grass, #7fcf5a); transform: translateY(-1px); }
+.chest-slot:disabled { opacity: .5; cursor: default; }
+#dialog-body .storage-columns > div { min-width: 0; }
+@media (pointer: coarse) { #dialog-body .chest-slot::before { display: none; } }
+
+/* Market: one wide button sells every crop and fish stack (the reference's "big-btn"). */
+#dialog:not([data-tone="garden"]) #dialog-body .sell-produce { width: 100%; min-height: 40px; font-size: 14px; }
+
+/* Wishing crystal: energy on top, then one compact card per stat. */
+.en-head { font-size: 13px; font-weight: 900; color: var(--ink-soft); }
+.en-head b { color: var(--ink); }
+.upgrade-cards { display: grid; gap: 6px; }
+.upgrade-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 5px 8px 5px 5px; border-radius: 14px; background: #fff; border: 2px solid var(--line); box-shadow: 0 2px 0 var(--line); }
+.upgrade-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; background: var(--well); font-size: 22px; }
+.upgrade-card strong { font-size: 14px; line-height: 1.2; }
+.upgrade-card strong small { margin-left: 4px; padding: 0 6px; border-radius: 999px; background: #eef7ff; color: #2f7fd6; font-size: 11px; font-weight: 900; }
+.upgrade-card p { margin: 1px 0 0; font-size: 12px; line-height: 1.3; color: var(--ink-soft); }
+.upgrade-card .primary { min-width: 64px; }
+@media (max-height: 500px) and (orientation: landscape) { .upgrade-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* "❤️ Health ↑" over the explorer after a wish. */
+.float.lvl { color: #8ef6ff; font-size: 22px; -webkit-text-stroke-color: #3b1f6b; }

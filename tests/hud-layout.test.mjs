@@ -48,6 +48,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
         for (let y = 4; y < H; y += 8) for (let x = 4; x < W; x += 8) { n++; const el = document.elementFromPoint(x, y); if (el && el.closest('#hud') && getComputedStyle(el).pointerEvents !== 'none') hits++; }
         return { boss: all('#boss-bar')[0] ?? null, target: all('#target-frame')[0] ?? null, panels, tappable: hits / n, W, H };
       });
+      assert.equal(r.panels.pad.length, 0, 'no movement pad by default: the reference is tap-to-move only (Settings can show it)');
       assert.ok(r.boss, 'the boss bar shows'); assert.ok(r.target, 'the target frame shows');
       const overlap = (a, b) => a.l < b.r - .5 && b.l < a.r - .5 && a.t < b.b - .5 && b.t < a.b - .5;
       for (const [what, frame] of [['boss bar', r.boss], ['target frame', r.target]]) {

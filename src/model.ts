@@ -64,6 +64,8 @@ export interface SaveState {
     settings: {
         sound: boolean;
         lowGraphics: boolean;
+        /** The on-screen movement pad; off by default because the reference is tap-to-move only. */
+        movePad?: boolean;
     };
     worldRewards: WorldRewards;
     buffs: Partial<Record<BuffKey, {
@@ -277,8 +279,9 @@ export function upgradeCost(s: SaveState, kind: keyof typeof UPGRADES) { const r
 export function upgrade(s: SaveState, kind: keyof typeof UPGRADES) { if (!Object.hasOwn(UPGRADES, kind) || kind === 'crit' && s.critUp >= 28)
     return false; const cost = upgradeCost(s, kind); if (s.energy < cost)
     return false; s.energy -= cost; if (kind === 'health') {
+    // Like the reference: +25 maximum health, and the same 25 healed at once (not a full heal).
     s.healthUp++;
-    s.hp = maxHp(s);
+    s.hp = Math.min(maxHp(s), s.hp + UPGRADES.health.step);
 }
 else if (kind === 'attack')
     s.attackUp++;
@@ -469,7 +472,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.visited = [...new Set<PlanetId>(['home', ...(Array.isArray(v.visited) ? v.visited.map(planetId).filter((id: PlanetId | null): id is PlanetId => !!id) : []), s.planet])];
         s.discovered = [...new Set<PlanetId>([...s.visited, ...(Array.isArray(v.discovered) ? v.discovered.map(planetId).filter((id: PlanetId | null): id is PlanetId => !!id) : [])])];
         const settings = record(v.settings) ? v.settings : {};
-        s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true };
+        s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true, ...(settings.movePad === true ? { movePad: true } : {}) };
         const rewards = record(v.worldRewards) ? v.worldRewards : {};
         if (record(rewards.mineReadyAt))
             for (const [key, times] of Object.entries(rewards.mineReadyAt)) {
