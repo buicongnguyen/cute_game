@@ -380,3 +380,267 @@ triangles, pieces (part, triangles, materials, and Blender and glTF bounds),
 the emissive materials and, for hats, face and head clearance. Budgets:
 hat 700, outfit 1,400, boots pair 600, whole file ≤ 700 KB. The current file
 is 680 KB. Icons are `public/assets/icons/items/<id>.webp`, each ≤ 6 KB.
+
+## Space kit (`build_space.py` → `space.glb`)
+
+`public/assets/models/space.glb` holds the piloted flight between planets. It
+has one top-level mesh node per piece, named exactly as below, and each
+transform is the identity. The ship and pad keep the rocket prop's material
+names (`Rocket white`, `Rocket red`, `Sun` band, `Gold`, `Glass`, `Charcoal`,
+`Pad`, `Pad dark`, `Hazard`, `Pad light`), so they match `rocket.glb`.
+
+| Node | Origin | Size | Triangles | Materials |
+| --- | --- | --- | ---: | --- |
+| `ship` | bottom of the engine bell, z 0 (the fin feet also touch z 0) | h 4.80, hull r 0.93, porthole rim r 0.99, fins r 1.42 | 2,080 + flame 280 (≤ 2,600) | rocket prop's |
+| `pad` | ground centre | r 2.64, h 0.345 | 1,576 (≤ 1,800) | `Pad`, `Pad dark`, `Hazard`, `Pad light` |
+| `stardust` | star centre | point tips at r 0.5, 0.42 thick | 100 (≤ 140) | `Stardust`, `Stardust rim` |
+| `asteroid_rock` | centre | about 2.1 × 1.9 × 1.8 | 148 (≤ 160) | `Asteroid rock`, `Asteroid crater` |
+| `asteroid_ice` | centre | about 2.1 × 1.9 × 2.0 | 104 (≤ 160) | `Asteroid ice`, `Asteroid frost` |
+| `asteroid_lava` | centre | about 2.0 × 1.8 × 1.8 | 144 (≤ 170) | `Basalt`, `Lava glow` |
+
+- **Ship.** It is the prop rocket without its pad, and its nose points up
+  (glTF +Y). The porthole faces glTF +Z. To fly level, rotate it −90° about
+  glTF X: the nose then points −Z and the porthole faces up.
+- **Flame.** `ship` has one child mesh, `flame`, with an identity transform.
+  Its origin is the bell exit (the ship origin). It is a yellow core
+  (`Rocket flame core`) inside a fluted orange flame (`Rocket flame`), both
+  emissive at strength 3. The flame hangs 1.6 below its origin (glTF y −1.6…0.1)
+  and is at most r 0.5. Toggle `flame.visible`, and scale `flame.scale.y` to
+  stretch it downward.
+- **Pad.** The ship stands on `pad_top` = **0.31** (the deck). Put the ship
+  origin there, e.g. `ship.position.y = pad.position.y + 0.31`. The lights are
+  low emissive domes (`Pad light`, 1.4), and a yellow centre target shows once
+  the ship has gone.
+- **Stardust.** A puffy five-point star lying flat (it faces glTF +Y). One
+  point aims at glTF −Z, which is screen-up from the game camera. Spin it
+  about Y. `Stardust` glows at 2.5 and `Stardust rim` at 1.2.
+- **Asteroids.** The game scales them by 1.6–4.5. The rock has four
+  raised-rim craters, mostly on top. The ice has scattered frost facets and
+  five crystals with frosted points. The lava rock is dark basalt with two
+  glowing pools and seams (`Lava glow`, 2.5).
+
+The game tone-maps with three.js Neutral, which pulls strong emission toward
+white. The emission colours therefore keep green low, so the flame still reads
+orange and the core yellow at strength 3. The manifest is
+`art/generated/kit/space-manifest.json`. Per node it lists triangles,
+materials, Blender and glTF bounds and the emissive materials, plus
+`pad_top`, the flame details and the file size (about 129 KB, limit 250 KB).
+The build fails on a missing node or flame, a broken budget, a ship base off
+z 0 (±0.02) or a pad top outside 0.1–0.35. Previews:
+`art/previews/kit/space.webp` and `space-flight.webp`.
+
+## Home wilds (`build_wilds.py` → `wilds.glb`)
+
+Swamp, forest-floor and canyon scenery for the home planet. The rules match
+the Scenery kit: one GLB with one top-level mesh node per piece, named exactly
+as below, with no transform. Each origin is the piece's own ground centre
+(z 0), and the front faces -Y in Blender (+Z in glTF). The game instances these
+pieces hundreds of times and batches them by material, so a material name
+always means the same material. `Bark` and `Mushroom cap/spots/stem` are the
+exact `scenery.glb` definitions. "A" is the darker shade and "B" the lighter.
+
+| Node | Look | Size (built) | Triangles (budget) | Materials |
+| --- | --- | --- | ---: | --- |
+| `tree_swamp` | squat swamp tree: twisted trunk on 4 root arches, 4 dark drooping lobes round a lighter crown, 8 hanging moss ribbons | h 3.41; canopy r ≈ 1.4 (1.63 to the diagonal lobes); trunk r 0.30 at the ground; roots land at r ≈ 1.0 | 496 (500) | `Swamp bark`, `Swamp leaf A`, `Swamp leaf B`, `Moss` |
+| `log` | fallen log along X; both ends sawn 16° toward the sky, showing a growth ring; two moss patches and a small pale mushroom on the front | 1.94 long (x ±0.97), r 0.28, h 0.56 | 158 (160) | `Bark`, `Log end`, `Moss` |
+| `toadstools` | 3 red toadstools with white spots, leaning apart | footprint r 0.41; h 0.52 / 0.36 / 0.23 | 156 (160) | `Mushroom cap`, `Mushroom spots`, `Mushroom stem` |
+| `rock_red` | canyon mesa with 3 strata (dark, light, dark) stepping in at two ledges, a sandy top, and a fallen chunk at its foot | r 1.32 (main mesa about 2.2 × 1.9), h 1.40 | 147 (160) | `Red rock A`, `Red rock B` |
+| `tree_dead` | bare, pale desert tree: the trunk becomes a central leader, 2 forked limbs (5 tips), 2 twigs and 3 root flares | h 2.98, branch spread r 1.08, trunk r 0.29 at the ground | 194 (220) | `Dead wood` |
+| `dry_bush` | dry straw-gold scrub: a fountain of 20 spiky blades | r 0.56, h 0.52 | 120 (120) | `Dry grass` |
+| `crystals` | 5 glowing violet hexagonal prisms on a dusky rock | h 1.12, footprint r 0.48 | 125 (160) | `Crystal`, `Crystal base` |
+| `fern` | 4 broad, arching dark fronds round 3 upright light ones, with notched edges | r 0.64, h 0.58 | 140 (160) | `Fern A`, `Fern B` |
+| `reeds` | 6 reed blades and 3 cattails (1.0 / 0.86 / 0.72) | h 1.00, footprint r 0.33 | 114 (120) | `Reed`, `Cattail` |
+
+Materials:
+
+- **Colours:** new materials use vivid toy colours:
+  - `Swamp bark` `#6B3D27`
+  - `Swamp leaf A` `#127A5B`, `Swamp leaf B` `#2AAE72`
+  - `Moss` `#9AD13A`
+  - `Log end` `#F0B46E`
+  - `Red rock A` `#D2482A`, `Red rock B` `#F58E3C`
+  - `Dead wood` `#C9BBAA`
+  - `Dry grass` `#EFBE3A`
+  - `Crystal` `#9F72FF`, `Crystal base` `#6B648F`
+  - `Fern A` `#1C9A47`, `Fern B` `#5BCB3A`
+  - `Reed` `#4FAE36`, `Cattail` `#8A4A22`
+- **Glow:** `Crystal` is the only emissive material: `#6A36FF` at strength 1.5, exported as `KHR_materials_emissive_strength`.
+- **Double sided:** the sheet materials `Moss`, `Dry grass`, `Fern A`, `Fern B` and `Reed`. Everything else is a closed or ground-sealed solid with back faces culled.
+
+`art/generated/kit/wilds-manifest.json` lists, per node:
+
+- triangles and materials
+- Blender and glTF bounds
+- footprint radius and trunk radius at the ground
+- emissive materials
+
+It also lists every material's colour, roughness and sidedness, and the file size. The file is 68 KB; the limit is 200 KB.
+
+The build exits non-zero on any of these:
+
+- a missing node
+- a broken triangle budget
+- a ground (min z) beyond ±0.02
+- an off-centre footprint
+- a size more than 15 % over its target (the toadstools also have a hard height cap of 0.55)
+- material names other than those listed
+- an unexpected emissive strength
+- a file over 200 KB
+
+It also reads the exported GLB back to check node names, transforms, materials and glTF bounds. The output is deterministic: two runs give byte-identical GLB and manifest files.
+
+Previews:
+
+- `art/previews/kit/wilds.webp`: every piece, labelled, next to the explorer.
+- `wilds-scene.webp`: a swamp, forest and canyon patch at the game camera and zoom, with `scenery.glb` trees for comparison.
+
+## Bright worlds (`build_worlds_bright.py` → `worlds-bright.glb`)
+
+Scenery for the Candy, Toy, Cloud, Jungle and Ocean planets, installed as
+`public/assets/models/worlds-bright.glb`. The rules match the Scenery kit: one
+top-level mesh node per piece, named exactly as below, with no transform. Each
+origin is the piece's own ground centre (z 0), and the front faces -Y in
+Blender (+Z in glTF). Pieces are instanced 40–270 times per planet and batched
+by material, so a material name always means the same material in this file.
+Collision r is the circle the game blocks at ground level. "Ground r" is the
+built radius of everything below z 0.3.
+
+| Node | Planet | Look | Size (built) | Collision r (ground r) | Triangles (budget) | Materials |
+| --- | --- | --- | --- | --- | ---: | --- |
+| `candy_tree` | candy | twisted white stick with pink stripes; round candy ball whose 8 pink/mint stripes pinwheel from the top; 8 sugar buttons | h 3.40, canopy r 1.27 | 0.35 (0.27) | 388 (420) | `Candy stick`, `Candy swirl A`, `Candy swirl B` |
+| `candy_cane` | candy | upright cane, 2 red and 2 white helical stripes, hook toward +X, sugar drift at the foot | h 2.18, x −0.30…0.76, y ±0.30 | 0.3 (0.31) | 246 (260) | `Candy red`, `Candy white` |
+| `gumdrops` | candy | 3 matte sugared gumdrops: pink, lime, orange | 0.85 × 0.79, h 0.44 | — | 150 (160) | `Gumdrop A`, `Gumdrop B`, `Gumdrop C` |
+| `donut` | candy | giant donut on its edge, leaning back 22° so the iced face looks at the camera; drippy pink icing, 10 sprinkles | 1.74 × 1.02, h 1.54 | 0.9 (0.74) | 395 (420) | `Donut dough`, `Donut icing`, `Sprinkle A`, `Sprinkle B` |
+| `cupcake` | candy | pleated wrapper (20 flat facets), 3-tier swirled frosting, cherry | 1.40 × 1.37, h 1.48 | 0.6 (0.47) | 298 (320) | `Cupcake wrapper`, `Frosting`, `Cherry` |
+| `toyblock` | toy | 2 blocks with 1 on top, each turned a little; painted faces with wooden chamfered edges; raised star, circle, heart and triangle emblems on the front, back, outer sides and top | 1.96 × 1.04, h 1.66 | 1.3 (1.02) | 213 (220) | `Toy red`, `Toy blue`, `Toy yellow`, `Toy wood` |
+| `toyball` | toy | beach ball, 6 segments (A B C A B C), pole tipped toward the camera | r 0.89, h 1.74 | 0.9 (0.66) | 252 (260) | `Ball A`, `Ball B`, `Ball C` |
+| `cloudtree` | cloud | slender leaning white trunk, a cloud wisp at its foot, crown plus 5 puffs (white tops over sky-blue bellies) | h 3.54, canopy 2.70 × 2.60 | 0.4 (0.40) | 435 (450) | `Cloud trunk`, `Cloud puff A`, `Cloud puff B` |
+| `skyrock` | cloud | faceted pale chunk, wider above its foot, with a rocky lip round a scalloped grass cap; 3 glowing crystals | 1.75 × 1.84, h 1.31 (grass top 0.99) | 0.8 (0.83) | 196 (220) | `Sky rock`, `Sky grass`, `Crystal` |
+| `jungletree` | jungle | trunk on 5 buttress roots; 3 scalloped canopy tiers (light tops, dark rims); 7 hanging vines | h 4.98, canopy 4.40 × 4.02 | 0.6 (0.66) | 523 (600) | `Jungle bark`, `Jungle leaf A`, `Jungle leaf B`, `Vine` |
+| `palm` | ocean | trunk of 7 stacked segments curving to +X; 8 serrated drooping fronds; 3 coconuts in the frond gaps | h 4.67, x −1.12…3.30, y ±2.1 | 0.35 (0.30) | 406 (450) | `Palm trunk`, `Palm leaf`, `Coconut` |
+| `coral` | ocean | branching coral (6 arms), lumpy brain coral, curved sea fan | 1.37 × 1.09, h 0.82 | — | 245 (260) | `Coral A`, `Coral B`, `Coral C` |
+
+Colours:
+
+- **Candy:**
+  - `Candy stick` `#FFF5EE`, `Candy swirl A` `#FF2E8C`, `Candy swirl B` `#2FE0B4`
+  - `Candy red` `#F0203A`, `Candy white` `#FFF7F1`
+  - `Gumdrop A/B/C` `#FF3A8C` / `#8CE01E` / `#FF8A12` (roughness 0.82)
+  - `Donut dough` `#E8963E`, `Donut icing` `#FF3FA0`, `Sprinkle A/B` `#2AA4FF` / `#FFE12A`
+  - `Cupcake wrapper` `#FFC02A`, `Frosting` `#4FE2BE`, `Cherry` `#E3102E`
+- **Toy:** `Toy red/blue/yellow` `#EE2D2D` / `#2462EA` / `#FFC21A`, `Toy wood` `#E6AE66`, `Ball A/B/C` `#F5333D` / `#FFD428` / `#1FA6F2`.
+- **Cloud:** `Cloud trunk` `#ECF2FF`, `Cloud puff A/B` `#FCFEFF` / `#8FD2FF`, `Sky rock` `#CBC2EC`, `Sky grass` `#5CD446`.
+- **Jungle:** `Jungle bark` `#8A5634`, `Jungle leaf A/B` `#14803A` / `#3FC23E`, `Vine` `#9BE03A`.
+- **Ocean:** `Palm trunk` `#C68646`, `Palm leaf` `#30C24A`, `Coconut` `#6E4226`, `Coral A/B/C` `#FF2A72` / `#FF6414` / `#9A36FF`.
+
+Other material rules:
+
+- **Glow:** `Crystal` is the only emissive material: `#5CE8FF` with emission `#6FF0FF` at strength 1.5, exported as `KHR_materials_emissive_strength`. `wilds.glb` has its own violet `Crystal`. The two are different materials in different files, so don't key a tint on that name across kits.
+- **Double sided:** `Palm leaf` and `Coral C` (the sea fan), which are sheets. Everything else is a closed or ground-sealed solid with back faces culled.
+- **Corals:** the coral sits on its foot, so place it on the sea floor. The deep pink, orange and violet were chosen to read under the game's water (`#6fd8fb`, opacity 0.38) over sand.
+
+The build exits non-zero on any of these:
+
+- a missing node
+- a broken triangle budget
+- a base (min z) beyond ±0.02
+- an x or y extent more than 15 % over the contract size, or a height outside ±15 %
+- ground r more than 15 % over the collision r
+- material names other than those listed
+- a file over 350 KB
+
+The checks run before install. `--only NODE[,NODE]` checks a subset and never writes the GLB or manifest.
+
+`art/generated/kit/worlds-bright-manifest.json` lists, per node:
+
+- planet, triangles, budget and materials
+- emissive materials
+- Blender and glTF bounds
+- ground radius, collision r and contract size
+
+It also lists every material's colour, roughness, sidedness and emission, and the file size. The file is 128,608 bytes for 3,747 triangles. Two runs give byte-identical GLB and manifest files.
+
+Previews (`--render`):
+
+- `art/previews/kit/worlds-bright.webp`: every piece, labelled, at true scale from the game camera.
+- `worlds-bright-scenes.webp`: one vignette per planet on that planet's ground colour, at the game camera and zoom (36 px per metre) with the explorer. The ocean vignette has an island and a coral lagoon under the game's water. A sixth panel shows every piece beside the explorer.
+
+## Harsh worlds (`build_worlds_harsh.py` → `worlds-harsh.glb`)
+
+`public/assets/models/worlds-harsh.glb` dresses the Ice, Lava and Shadow
+planets (Shadow is lit only around the player). It holds one top-level mesh
+node per piece, named exactly as below. Every node sits at the file origin with
+an identity transform, and its origin is its own ground centre (z 0). Pieces
+face -Y in Blender (glTF +Z), and the snowman's face looks that way. The game
+instances each piece 36–270 times, so materials are few and shared by name:
+the same name is the same material. `Bark` is identical to the one in
+`scenery.glb`, and the build checks this. Every material is single sided, with
+no textures or UVs.
+
+| Node | Planet | Size (h, overall r) | Ground r / collision r | Triangles | Materials |
+| --- | --- | --- | --- | ---: | --- |
+| `snow_pine` | ice | 4.00, 1.48 | 0.48 / 0.45 (snow drift) | 408 (≤ 420) | `Bark`, `Snow pine`, `Snow` |
+| `ice_spire` | ice | 2.76, 0.62 | 0.47 / 0.55 | 120 (≤ 160) | `Ice`, `Ice glow` |
+| `snow_rock` | ice | 0.90, 0.94 | 0.80 / 0.8 | 156 (≤ 160) | `Frost rock`, `Snow` |
+| `snowman` | ice | 1.64, 0.71 (arms); bottom ball r 0.45 | 0.26 / 0.45 | 416 (≤ 420) | `Snow`, `Coal`, `Carrot`, `Scarf`, `Twig` |
+| `lava_rock` | lava | 0.95, 0.91 | 0.84 / 0.85 | 133 (≤ 170) | `Basalt`, `Lava glow` |
+| `obsidian` | lava | 1.36, 0.57 | 0.38 / 0.5 | 132 (≤ 160) | `Obsidian`, `Obsidian edge` |
+| `ash_tree` | lava | 3.20, 0.91 (branches); trunk r 0.29 | 0.33 / 0.35 | 181 (≤ 260) | `Charcoal wood`, `Ember` |
+| `mini_volcano` | lava | 2.60, 2.14 (base r 2.0) | 2.13 / none | 320 (≤ 320) | `Basalt`, `Volcano slope`, `Lava glow` |
+| `deadtree` | shadow | 3.40, 1.19 (branches); trunk r 0.28 | 0.34 / 0.35 | 266 (≤ 280) | `Shadow wood`, `Shadow glow` |
+
+"Ground r" is the widest vertex at z ≤ 0.1. The snowman touches the ground
+only under its bottom ball, whose widest point (r 0.45 at z 0.42) matches its
+collision circle.
+
+- **Snow pine.** Three teal-green tiers. Each tier has a steep skirt and a thick
+  snow ledge whose rounded drips hang over the skirt, with a snowy tip and a
+  small snow drift round the trunk foot.
+- **Ice spire.** A six-sided crystal with four leaning side shards, flat
+  shaded. The pyramid tips are `Ice glow`.
+- **Snow rock.** A half-buried periwinkle boulder under a domed snow cap with
+  drips.
+- **Snowman.** Three balls, a coal face and buttons, a carrot nose, a red scarf
+  with one hanging end, and twig arms (the left one waving).
+- **Lava rock.** A faceted basalt boulder. Four zigzag cracks glow; they meet
+  in a star on top and taper to points lower down.
+- **Obsidian.** Five glossy black-purple shards. The vertical edges are narrow
+  violet chamfers (`Obsidian edge`) that run up to each tip.
+- **Ash tree.** A charcoal trunk with three limbs and two twigs. The leader and
+  two limb tips smoulder (`Ember`), as do a snapped stub and one crack low on
+  the trunk.
+- **Mini volcano.** A basalt rim and crater around a glowing pool. Four raised
+  lava drips spill through notches in the rim and end in points, and two
+  basalt boulders sit at the foot. It makes the world border ring (no
+  collision).
+- **Dead tree.** A twisted violet trunk. Three branches and the leader end in
+  curls, and three glowing teardrop buds hang from the curls.
+
+Glow (exported as `KHR_materials_emissive_strength`): `Lava glow` 2.5,
+`Ember` 2.0, `Shadow glow` 1.5, `Ice glow` 1.2. All other materials do not
+glow. To survive Neutral tone mapping, the warm glows keep green low.
+`Lava glow` uses `build_space.py`'s colours. `Basalt` is darker than
+`space.glb`'s so the rocks read on the lava ground (`#6e5a60`).
+
+The manifest is `art/generated/kit/worlds-harsh-manifest.json`. Per node it
+lists the planet, triangles, vertices, materials, emissive materials, Blender
+and glTF bounds, overall and ground radius, the collision radius and the
+budget. It also lists every material's colour, roughness and glow, and the
+file size (about 97 KB, limit 300 KB).
+
+The build fails on any of these:
+
+- a missing or extra node, a node with a transform, or wrong materials
+  (checked again in the exported GLB);
+- a broken triangle budget;
+- min z more than 0.02 from 0;
+- a height outside ±15%, or an overall or ground radius more than 15% over
+  size;
+- a wrong glow strength, a double-sided material, or a `Bark` that differs from
+  `scenery.glb`'s.
+
+Output is deterministic: two runs give byte-identical files. `--render` writes
+`art/previews/kit/worlds-harsh.webp` and `worlds-harsh-scenes.webp`. The first
+is a labelled contact sheet from the game camera on each planet's ground. The
+second shows one vignette per planet at game zoom, with the explorer for scale
+and Shadow lit only around the explorer.

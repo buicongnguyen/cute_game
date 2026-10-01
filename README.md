@@ -30,7 +30,9 @@ npm test        # gameplay, worlds, assets, save migration and real server tests
 - Plant, harvest and sell crops. Gear you buy is equipped straight away and appears on your explorer: weapons in hand, hats, outfits, boots, disguises and a pet that follows you. Swap gear from the backpack. The journal guides the first adventure and awards story, daily, weekly and achievement rewards.
 - Equip a fishing rod and walk up to a pond: the line casts itself and the fish swimming in the water come to investigate. Press **Reel** (or Space) the moment one bites, hold to pull it toward the shore, and let go when it surges or the line turns red. The catch leaps into your arms, and the journal's Collection tab keeps your record for every species.
 - Store valuables in the chest. If defeated, recover loose items from the dropped bag. A second defeat moves the previous bag's contents safely into storage.
-- Explore four regions around home, then use the rocket to visit eight other worlds. Watch environmental warnings and bring suitable equipment.
+- Explore four regions around home: a pine and toadstool forest, a flower meadow, a reedy swamp and a red-rock canyon, joined by winding sand trails. Each of the other eight worlds is dressed in its own scenery, from lollipop trees and giant donuts to snowy pines, glowing lava rocks and twisted night trees.
+- Fly between worlds yourself. Open the starship's star map, fill the tank for ϟ 20 and take off. In space, hold the screen (or the mouse, or **W A D**) to steer, hold **Boost** (or **Shift**) to go faster at five times the fuel, and **S** to brake. Collect ✨ stardust to refuel (+3 energy each, and now and then a star shard), bounce off the asteroid belts, and follow the **?** on the radar to discover new planets. Hover over a planet and press **Land** (or **L**); landing needs the planet's level. Running out of fuel never strands you: the ship just crawls until it reaches stardust. **Home** flies you straight back to Clover Village.
+- Watch environmental warnings and bring suitable equipment.
 
 ## Online play
 
@@ -48,7 +50,7 @@ The default server listens only on this computer. Internet play requires deploym
 
 - 19 crops; nine starting beds, expandable to 33; fertilizer, rare seeds, cooking and timed food effects.
 - Six equipment slots, ten disguises with four skills each, 64 shop offers, 30 workshop recipes, two furnace recipes and 21 distinct placeable decorations.
-- Nine full-size worlds; four home regions; species-specific creatures, bosses, loot, ranged attacks and status effects.
+- Nine full-size worlds, each with its own scenery mix, a three-row border and shaded ground; four home regions; a piloted starship flight with fuel, stardust, asteroid belts, planet discovery and landing; species-specific creatures, bosses, loot, ranged attacks and status effects.
 - Ice inertia, volcano warnings and tides, cave and furnace progression, special lava weather, toy trains and renewable gifts, jungle thorns and poison, ocean oxygen and turtles, cloud bounce routes and night-world light pillars.
 - 18 fish plus junk; water-specific catches, rare and huge fish, bait and collection records.
 - 29 story milestones and ongoing tasks, daily and weekly activities, achievements, monthly star pass, bounties, timed challenges and six collection groups.
@@ -60,6 +62,8 @@ The interface uses English and original artwork. Each panel has its own colour b
 ## Graphics and phones
 
 Settings → Graphics offers Auto, Sharp, Balanced and Battery saver. Auto starts phones on Balanced and desktops on Sharp, then watches the frame rate: if it stays under 36 fps it lowers the render resolution, then the shadow and particle quality, and it raises the resolution again when there is headroom. The choice is remembered per device. Models use flat colours rather than textures, scenery is merged into a few draw calls per area, and effects are pooled, so the game does not rely on normal maps or large textures.
+
+The dense worlds stay light: repeated scenery is drawn as instances in 64 m tiles, models whose parts differ only in colour are merged with baked vertex colours, small ground cover and distant creatures cast no shadows, collision and paths use a grid index, and each planet's scenery file downloads only when that planet is first reached. In the village on a phone-sized view this brought a frame from 344 WebGL draw calls to 219.
 
 ## GitHub Pages edition
 

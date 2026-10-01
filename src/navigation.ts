@@ -4,17 +4,49 @@ export interface NavigationOptions {clearance?:number;bounds?:number;gridSize?:n
 export const WORLD_BOUNDS=148;
 const CLEARANCE = .36;
 
+/*
+ * Worlds hold well over a thousand trees and rocks. A grid of small obstacles, built once per
+ * obstacle list, lets collision and path checks look only at nearby cells. Large obstacles,
+ * such as lava pools, are few and are always checked.
+ */
+const CELL=6,SMALL=3;
+interface ObstacleIndex {length:number;cells:Map<number,Obstacle[]>;large:Obstacle[]}
+const indexes=new WeakMap<Obstacle[],ObstacleIndex>();
+const cellKey=(cx:number,cz:number)=>(cx+4096)*8192+cz+4096;
+function indexOf(obstacles:Obstacle[]):ObstacleIndex|null{
+  if(obstacles.length<48)return null;
+  let index=indexes.get(obstacles);
+  if(index&&index.length===obstacles.length)return index;
+  index={length:obstacles.length,cells:new Map(),large:[]};
+  for(const o of obstacles){
+    if(o.r>SMALL){index.large.push(o);continue;}
+    const key=cellKey(Math.floor(o.x/CELL),Math.floor(o.z/CELL));let list=index.cells.get(key);if(!list)index.cells.set(key,list=[]);list.push(o);
+  }
+  indexes.set(obstacles,index);return index;
+}
+/** True when `test` holds for any obstacle that could reach the box grown by `pad`. */
+export function someObstacleNear(obstacles:Obstacle[],minX:number,minZ:number,maxX:number,maxZ:number,pad:number,test:(o:Obstacle)=>boolean){
+  const index=indexOf(obstacles);if(!index)return obstacles.some(test);
+  if(index.large.some(test))return true;
+  const r=pad+SMALL,x0=Math.floor((minX-r)/CELL),x1=Math.floor((maxX+r)/CELL),z0=Math.floor((minZ-r)/CELL),z1=Math.floor((maxZ+r)/CELL);
+  if((x1-x0+1)*(z1-z0+1)>index.cells.size)return obstacles.some(test);
+  for(let cx=x0;cx<=x1;cx++)for(let cz=z0;cz<=z1;cz++){const list=index.cells.get(cellKey(cx,cz));if(list)for(const o of list)if(test(o))return true;}
+  return false;
+}
+
 export function blocked(point: Point, obstacles: Obstacle[],options:NavigationOptions={}) {
-  return Math.abs(point.x)>(options.bounds??49) || Math.abs(point.z)>(options.bounds??49) || options.walkable?.(point)===false || obstacles.some(o=>Math.hypot(point.x-o.x,point.z-o.z)<o.r+(options.clearance??CLEARANCE));
+  const clearance=options.clearance??CLEARANCE;
+  return Math.abs(point.x)>(options.bounds??49) || Math.abs(point.z)>(options.bounds??49) || options.walkable?.(point)===false || someObstacleNear(obstacles,point.x,point.z,point.x,point.z,clearance,o=>Math.hypot(point.x-o.x,point.z-o.z)<o.r+clearance);
 }
 
 export function clearSegment(from: Point, to: Point, obstacles: Obstacle[],options:NavigationOptions={}) {
   if (blocked(from, obstacles,options) || blocked(to, obstacles,options)) return false;
   const dx = to.x-from.x, dz = to.z-from.z, lengthSquared = dx*dx+dz*dz;
   if(options.walkable){const steps=Math.ceil(Math.sqrt(lengthSquared)/.5);for(let i=1;i<steps;i++)if(!options.walkable({x:from.x+dx*i/steps,z:from.z+dz*i/steps}))return false;}
-  return obstacles.every(obstacle => {
+  const clearance=options.clearance??CLEARANCE;
+  return !someObstacleNear(obstacles,Math.min(from.x,to.x),Math.min(from.z,to.z),Math.max(from.x,to.x),Math.max(from.z,to.z),clearance,obstacle => {
     const t = lengthSquared ? Math.max(0, Math.min(1, ((obstacle.x-from.x)*dx+(obstacle.z-from.z)*dz)/lengthSquared)) : 0;
-    return Math.hypot(from.x+t*dx-obstacle.x, from.z+t*dz-obstacle.z) >= obstacle.r+(options.clearance??CLEARANCE);
+    return Math.hypot(from.x+t*dx-obstacle.x, from.z+t*dz-obstacle.z) < obstacle.r+clearance;
   });
 }
 

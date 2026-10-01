@@ -27,9 +27,10 @@ async function walk(directory) {
 }
 const files = (await walk(dist)).sort();
 const urls = files.map(file => base + path.relative(dist, file).split(path.sep).join('/'));
-// Gear models download only when something from them is first worn, so the worker keeps
-// each one the first time it is fetched instead of fetching them all at install.
-const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|disguises|pets)\.glb$/.test(url);
+// Gear models download only when something from them is first worn, and planet scenery only
+// when that planet is first visited, so the worker keeps each one the first time it is
+// fetched instead of fetching them all at install.
+const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|disguises|pets|worlds-[a-z]+)\.glb$/.test(url);
 const assets = urls.filter(url => !onDemand(url)), later = urls.filter(onDemand);
 const hash = createHash('sha256');
 for (let index = 0; index < files.length; index++) {
@@ -66,4 +67,4 @@ self.addEventListener('fetch',event=>{
     response.ok?cache.put(url.pathname,response.clone()).then(()=>response,()=>response):response))));
 });
 `);
-console.log(`Offline game cache prepared (${assets.length} files, ${later.length} gear models kept on first use, base ${base}).`);
+console.log(`Offline game cache prepared (${assets.length} files, ${later.length} on-demand models kept on first use, base ${base}).`);

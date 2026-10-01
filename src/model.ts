@@ -57,6 +57,8 @@ export interface SaveState {
     critUp: number;
     planet: PlanetId;
     visited: PlanetId[];
+    /** Planets spotted from the starship; only these show their names on the star map. */
+    discovered: PlanetId[];
     settings: {
         sound: boolean;
         lowGraphics: boolean;
@@ -86,7 +88,7 @@ export interface SaveState {
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
-export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 2, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, x: -11.4 + (i % 3) * 2.25, z: -.4 + Math.floor(i / 3) * 2.25 })), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], settings: { sound: true, lowGraphics: false }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now() }; }
+export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 2, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, x: -11.4 + (i % 3) * 2.25, z: -.4 + Math.floor(i / 3) * 2.25 })), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, lowGraphics: false }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now() }; }
 export function xpNeeded(level: number) { return Math.round(25 * Math.pow(Math.max(1, level), 1.55)); }
 function equipped(s: SaveState) { return Object.values(s.gear).map(id => ITEMS[id]).filter(Boolean); }
 function equipmentStat(s: SaveState, key: string) { return equipped(s).reduce((sum, item) => sum + ((item.stats as Record<string, number> | undefined)?.[key] || 0), 0); }
@@ -203,11 +205,22 @@ else if (kind === 'defense')
     s.defenseUp++;
 else
     s.critUp++; recordEvent(s, 'upgrade'); return true; }
-export function travel(s: SaveState, id: PlanetId) { if (!Object.hasOwn(PLANETS, id))
-    return false; const planet = PLANETS[id]; if (s.level < planet.level || s.energy < planet.fare)
-    return false; s.energy -= planet.fare; s.planet = id; if (!s.visited.includes(id))
+/** Filling the starship's tank costs the same from every world. */
+export const LAUNCH_COST = 20;
+export function launch(s: SaveState) { if (s.energy < LAUNCH_COST)
+    return false; s.energy -= LAUNCH_COST; return true; }
+/** Marks a planet as spotted from space; returns true the first time. */
+export function discover(s: SaveState, id: PlanetId) { if (!Object.hasOwn(PLANETS, id) || s.discovered.includes(id))
+    return false; s.discovered.push(id); return true; }
+export function canLand(s: SaveState, id: PlanetId) { return Object.hasOwn(PLANETS, id) && s.level >= PLANETS[id].level; }
+/** Touches down on a planet. The flight itself is paid for at launch. */
+export function travel(s: SaveState, id: PlanetId) { if (!canLand(s, id))
+    return false; s.planet = id; discover(s, id); if (!s.visited.includes(id))
     s.visited.push(id); if (id !== 'home')
     recordEvent(s, 'planet'); return true; }
+/** Stardust collected in space: a little energy and, now and then, a star shard. */
+export function collectStardust(s: SaveState, rng: () => number = Math.random) { s.energy += 3; const shard = rng() < .08; if (shard)
+    addItem(s, 'starshard'); return shard; }
 export const QUESTS = STORY_STEPS.map((q, i) => ({ title: q.title, task: q.title, target: q.target, icon: q.icon, counter: q.condition || q.event || 'level', energy: 0, xp: 0, hint: `Chapter ${q.chapter + 1} · Step ${i + 1}` }));
 export function questProgress(s: SaveState) { return progressEntries(s, 'story')[0]?.progress || 0; }
 export function claimQuest(s: SaveState) { return claimProgress(s, 'story', `story:${s.progression.story.index}`); }
@@ -372,6 +385,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.quest = integer(v.quest, 0, 1e6);
         s.planet = planetId(v.planet)!;
         s.visited = [...new Set<PlanetId>(['home', ...(Array.isArray(v.visited) ? v.visited.map(planetId).filter((id: PlanetId | null): id is PlanetId => !!id) : []), s.planet])];
+        s.discovered = [...new Set<PlanetId>([...s.visited, ...(Array.isArray(v.discovered) ? v.discovered.map(planetId).filter((id: PlanetId | null): id is PlanetId => !!id) : [])])];
         const settings = record(v.settings) ? v.settings : {};
         s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true };
         const rewards = record(v.worldRewards) ? v.worldRewards : {};

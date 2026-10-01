@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Vite supplies the deployment prefix; direct Node tests use the root default.
 const assetBase = import.meta.env?.BASE_URL ?? '/';
@@ -14,7 +15,6 @@ export const REFINED_ASSET_FILES = {
   workshop: `${assetBase}assets/models/workshop.glb`,
   kitchen: `${assetBase}assets/models/kitchen.glb`,
   well: `${assetBase}assets/models/well.glb`,
-  rocket: `${assetBase}assets/models/rocket.glb`,
 } as const;
 
 // Multi-model kits: one GLB holds many small named models (trees, flowers, crops).
@@ -26,6 +26,10 @@ export const KIT_FILES = {
   weapons: `${assetBase}assets/models/gear-weapons.glb`,
   disguises: `${assetBase}assets/models/disguises.glb`,
   pets: `${assetBase}assets/models/pets.glb`,
+  space: `${assetBase}assets/models/space.glb`,
+  wilds: `${assetBase}assets/models/wilds.glb`,
+  worldsBright: `${assetBase}assets/models/worlds-bright.glb`,
+  worldsHarsh: `${assetBase}assets/models/worlds-harsh.glb`,
 } as const;
 export const HERO_FILE = `${assetBase}assets/models/hero.glb`;
 
@@ -46,7 +50,7 @@ export class RefinedAssetLibrary {
   loadAll(): Promise<void> {
     // An unavailable optional model must never stop the procedural game loading.
     this.loading ??= Promise.all((Object.keys(REFINED_ASSET_FILES) as RefinedAsset[]).map(async name => {
-      try { this.scenes.set(name, await this.loadScene(REFINED_ASSET_FILES[name])); }
+      try { this.scenes.set(name, bakeModel(await this.loadScene(REFINED_ASSET_FILES[name]))); }
       catch { /* Keep this entity's original procedural model. */ }
     })).then(() => {});
     return this.loading;
@@ -71,7 +75,7 @@ export class RefinedAssetLibrary {
   }
 }
 
-interface KitPart { geometry: T.BufferGeometry; material: T.Material; matrix: T.Matrix4; name: string; tag?: string }
+export interface KitPart { geometry: T.BufferGeometry; material: T.Material; matrix: T.Matrix4; name: string; tag?: string }
 /** Empties that mark where effects start, such as a blaster's muzzle or a rod's tip. */
 interface KitMarker { name: string; matrix: T.Matrix4; tag?: string }
 const MARKERS = ['muzzle', 'rod-tip'];
@@ -79,6 +83,87 @@ const MARKERS = ['muzzle', 'rod-tip'];
 function partTag(object: T.Object3D, stop: T.Object3D) {
   for (let o: T.Object3D | null = object; o && o !== stop; o = o.parent) { const at = o.name.indexOf('@'); if (at >= 0) return o.name.slice(at + 1).replace(/_\d+$/, ''); }
   return undefined;
+}
+
+/**
+ * Plain, opaque, untextured, non-glowing standard materials can share one baked-colour material.
+ * Roughness is grouped into three finishes (glossy, satin, matte); finer steps are invisible at
+ * game zoom but would split one merged mesh into several.
+ */
+const FINISHES = [.2, .42, .58];
+const finish = (roughness: number) => roughness < .3 ? FINISHES[0] : roughness < .5 ? FINISHES[1] : FINISHES[2];
+function plainSignature(material: T.Material) {
+  if (!(material instanceof T.MeshStandardMaterial) || material.transparent || material.map || material.vertexColors || material.alphaTest > 0) return null;
+  if (material.emissiveIntensity > 0 && material.emissive.getHex() !== 0) return null;
+  return [material.constructor.name, finish(material.roughness), material.metalness.toFixed(1), material.side, material.flatShading].join('|');
+}
+const baked = new Map<string, T.MeshStandardMaterial>();
+function bakedMaterial(signature: string, like: T.MeshStandardMaterial) {
+  let material = baked.get(signature);
+  if (!material) {
+    material = like instanceof T.MeshPhysicalMaterial ? new T.MeshPhysicalMaterial() : new T.MeshStandardMaterial();
+    material.copy(like); material.color.set('#ffffff'); material.vertexColors = true; material.roughness = finish(like.roughness); material.name = 'Baked colours'; material.userData.sharedKit = true;
+    baked.set(signature, material);
+  }
+  return material;
+}
+
+/**
+ * Merges the plain meshes directly under `node` (or, with `deep`, anywhere under it) into one
+ * mesh per material look with the colours baked into the vertices. A prop made of a dozen
+ * coloured pieces then costs two or three draw calls instead of twelve. Glowing, see-through
+ * and textured meshes, and any that `keep` names, are left as they are.
+ */
+export function bakeModel<O extends T.Object3D>(node: O, { deep = true, keep = () => false }: { deep?: boolean; keep?: (mesh: T.Mesh) => boolean } = {}) {
+  node.updateMatrixWorld(true);
+  const toNode = node.matrixWorld.clone().invert(), groups = new Map<string, { meshes: T.Mesh[]; like: T.MeshStandardMaterial }>();
+  const candidates: T.Mesh[] = [];
+  if (deep) node.traverse(o => { if (o instanceof T.Mesh && !(o instanceof T.InstancedMesh)) candidates.push(o); });
+  // Shallow: only meshes directly under the node, so named sub-parts (a sprout that hides) stay separate.
+  else for (const child of node.children) if (child instanceof T.Mesh) candidates.push(child);
+  for (const mesh of candidates) {
+    if (Array.isArray(mesh.material) || keep(mesh) || !mesh.visible) continue;
+    const signature = plainSignature(mesh.material);
+    if (!signature) continue;
+    const group = groups.get(signature) ?? { meshes: [], like: mesh.material as T.MeshStandardMaterial }; group.meshes.push(mesh); groups.set(signature, group);
+  }
+  for (const [signature, { meshes, like }] of groups) {
+    if (meshes.length < 2) continue;
+    const indexed = meshes.every(m => m.geometry.index);
+    const pieces = meshes.map(mesh => {
+      let geometry = new T.BufferGeometry();
+      geometry.setAttribute('position', mesh.geometry.getAttribute('position').clone());
+      const normal = mesh.geometry.getAttribute('normal'); if (normal) geometry.setAttribute('normal', normal.clone());
+      if (mesh.geometry.index) geometry.setIndex(mesh.geometry.index.clone());
+      if (!indexed && geometry.index) geometry = geometry.toNonIndexed();
+      geometry.applyMatrix4(toNode.clone().multiply(mesh.matrixWorld));
+      const color = (mesh.material as T.MeshStandardMaterial).color, count = geometry.getAttribute('position').count, colors = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) colors.set([color.r, color.g, color.b], i * 3);
+      geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
+      return geometry;
+    });
+    if (pieces.some(p => !p.getAttribute('normal')) && pieces.some(p => p.getAttribute('normal'))) { pieces.forEach(p => p.dispose()); continue; }
+    const geometry = mergeGeometries(pieces, false); pieces.forEach(p => p.dispose());
+    if (!geometry) continue;
+    const material = like.clone(); material.color.set('#ffffff'); material.vertexColors = true; material.roughness = finish(like.roughness); material.name = `Baked ${signature.split('|')[1]}`;
+    const merged = new T.Mesh(geometry, material); merged.name = 'baked'; merged.castShadow = meshes.some(m => m.castShadow); merged.receiveShadow = true;
+    for (const mesh of meshes) mesh.removeFromParent();
+    node.add(merged);
+  }
+  return node;
+}
+
+/**
+ * Gathers every mesh named `name` (a two-material piece loads as `name` and `name_1`) into
+ * one group with that name at the model's origin, so it can be shown or scaled as a unit.
+ */
+export function gatherPart(model: T.Object3D, name: string) {
+  const pieces: T.Object3D[] = [];
+  model.traverse(o => { if (o !== model && o.name.replace(/_d+$/, '') === name) pieces.push(o); });
+  if (!pieces.length) return null;
+  const group = new T.Group(); group.name = name;
+  for (const piece of pieces) { piece.name = `${name}-part`; group.add(piece); }
+  model.add(group); return group;
 }
 
 /** Marks kit geometry and materials as shared so world disposal leaves them alive. */
@@ -93,6 +178,7 @@ export class KitLibrary {
   private models = new Map<string, KitPart[]>();
   private markers = new Map<string, KitMarker[]>();
   private tinted = new Map<string, T.Material>();
+  private merged = new Map<string, KitPart[]>();
   private loading: Promise<void> | null = null;
   private urls: string[];
   private loadScene: SceneLoader;
@@ -127,6 +213,13 @@ export class KitLibrary {
   }
 
   has(name: string) { return this.models.has(name); }
+  /**
+   * The meshes that make up `name`, placed inside the model, for drawing many copies as
+   * instances. `tint` maps material names to replacement colours, as in `instance`.
+   */
+  parts(name: string, tint?: Record<string, string>): KitPart[] | undefined {
+    return this.models.get(name)?.map(part => ({ ...part, material: this.material(part.material, tint?.[part.material.name]) }));
+  }
   /** True once `load` has been called, whether or not the file has arrived. */
   get requested() { return this.loading !== null; }
 
@@ -151,6 +244,48 @@ export class KitLibrary {
       group.add(empty);
     }
     return group;
+  }
+
+  /**
+   * The parts of `name` for drawing many copies, with every set of plain parts that differ
+   * only in colour merged into one mesh whose colours are baked into its vertices. A
+   * three-material tree then costs one draw call per batch instead of three. Glowing,
+   * transparent or textured parts stay separate so they keep their look.
+   */
+  mergedParts(name: string, tint?: Record<string, string>): KitPart[] | undefined {
+    const key = `${name}|${tint ? JSON.stringify(tint) : ''}`, known = this.merged.get(key);
+    if (known) return known;
+    const parts = this.parts(name, tint);
+    if (!parts) return undefined;
+    const groups = new Map<string, KitPart[]>(), kept: KitPart[] = [];
+    for (const part of parts) {
+      const signature = plainSignature(part.material);
+      if (!signature) { kept.push(part); continue; }
+      const list = groups.get(signature) ?? []; list.push(part); groups.set(signature, list);
+    }
+    const result = [...kept];
+    for (const [signature, list] of groups) {
+      if (list.length === 1) { result.push(list[0]); continue; }
+      const pieces = list.map(part => {
+        let geometry = new T.BufferGeometry();
+        geometry.setAttribute('position', part.geometry.getAttribute('position').clone());
+        const normal = part.geometry.getAttribute('normal'); if (normal) geometry.setAttribute('normal', normal.clone());
+        if (part.geometry.index) geometry.setIndex(part.geometry.index.clone());
+        geometry.applyMatrix4(part.matrix);
+        if (geometry.index && list.some(p => !p.geometry.index)) geometry = geometry.toNonIndexed();
+        const color = (part.material as T.MeshStandardMaterial).color, count = geometry.getAttribute('position').count, colors = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) colors.set([color.r, color.g, color.b], i * 3);
+        geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
+        return geometry;
+      });
+      const geometry = mergeGeometries(pieces, false);
+      pieces.forEach(p => p.dispose());
+      if (!geometry) { result.push(...list); continue; }
+      geometry.userData.sharedKit = true;
+      result.push({ geometry, material: bakedMaterial(signature, list[0].material as T.MeshStandardMaterial), matrix: new T.Matrix4(), name, tag: list[0].tag });
+    }
+    this.merged.set(key, result);
+    return result;
   }
 
   private material(source: T.Material, color?: string) {
@@ -183,6 +318,9 @@ export class HeroLibrary {
   load(): Promise<void> {
     this.loading ??= this.loadScene(this.url).then(scene => {
       const hero = scene.getObjectByName('hero') ?? scene;
+      // Each posable part becomes one or two meshes; the shirt keeps its own material for recolouring.
+      const shirt = (mesh: T.Mesh) => /^Hero shirt/.test((mesh.material as T.Material).name);
+      for (const part of ['body', 'head', 'arm-left', 'arm-right', 'leg-left', 'leg-right']) { const node = hero.getObjectByName(part); if (node) bakeModel(node, { deep: false, keep: shirt }); }
       hero.traverse(o => { if (o instanceof T.Mesh) o.geometry.userData.sharedKit = true; });
       this.source = hero; this.ready = true;
     }).catch(() => { /* The procedural explorer remains. */ });
@@ -221,3 +359,9 @@ export const wearKit = new KitLibrary([KIT_FILES.wear]);
 export const weaponKit = new KitLibrary([KIT_FILES.weapons]);
 export const disguiseKit = new KitLibrary([KIT_FILES.disguises]);
 export const petKit = new KitLibrary([KIT_FILES.pets]);
+/** The starship, its launch pad, stardust and asteroids. */
+export const spaceKit = new KitLibrary([KIT_FILES.space]);
+/** Scenery for the home wilds and the other planets, loaded the first time each is needed. */
+export const wildsKit = new KitLibrary([KIT_FILES.wilds]);
+export const brightKit = new KitLibrary([KIT_FILES.worldsBright]);
+export const harshKit = new KitLibrary([KIT_FILES.worldsHarsh]);

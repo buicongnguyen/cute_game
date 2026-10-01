@@ -67,9 +67,12 @@ export interface PlanetDef {
     name: string;
     icon: string;
     level: number;
-    fare: number;
     color: string;
     sky: string;
+    /** Three colours for the planet seen from space: lowland, highland and accent. */
+    grad: [string, string, string];
+    /** Ground colours: base, variation and the landing area (home uses its regions). */
+    ground: [string, string, string];
     description: string;
     enemy: string;
     health: number;
@@ -3686,7 +3689,7 @@ const basicEnemy: Record<string, [
 ]> = { home: ['mushroom', 45, 6, 8], candy: ['jelly', 60, 8, 12], ice: ['snowball', 70, 9, 16], lava: ['magmaslime', 80, 11, 20], toy: ['toysoldier', 70, 9, 16], jungle: ['monkey', 110, 13, 24], ocean: ['jellyzap', 110, 14, 28], cloud: ['cloudsheep', 140, 16, 34], shadow: ['wisp', 130, 18, 40] };
 for (const [raw, fact] of Object.entries(PLANET_FACTS)) {
     const id = sourcePlanet(raw) as PlanetId, [enemy, health, attack, xp] = basicEnemy[id];
-    PLANETS[id] = { name: fact.name, icon: fact.emoji, level: fact.lvl, fare: fact.fuel, color: fact.ground?.[0] || fact.grad[0], sky: fact.sky, description: `${fact.name} · Level ${fact.lvl} · ${fact.fuel} energy per flight.`, enemy, health, attack, xp, bosses: fact.bosses || ['bear', 'treant', 'croc', 'mushking'], spawns: fact.spawns || [['mushroom', 20], ['boar', 12], ['bee', 6], ['wolf', 10], ['chomper', 14], ['cactus', 14]] };
+    PLANETS[id] = { name: fact.name, icon: fact.emoji, level: fact.lvl, color: fact.ground?.[0] || fact.grad[0], sky: fact.sky, grad: fact.grad, ground: fact.ground || ['#86d25a', '#9be36f', '#e8cf92'], description: `${fact.name} · Landing from level ${fact.lvl}.`, enemy, health, attack, xp, bosses: fact.bosses || ['bear', 'treant', 'croc', 'mushking'], spawns: fact.spawns || [['mushroom', 20], ['boar', 12], ['bee', 6], ['wolf', 10], ['chomper', 14], ['cactus', 14]] };
 }
 export const FISH_WEIGHTS: Record<string, [
     string,
@@ -3788,7 +3791,7 @@ for (const [id, item] of Object.entries(ITEMS)) {
 const planetLabels: Record<PlanetId, string> = { home: 'Clover Village', candy: 'Candy Planet', ice: 'Frost Planet', lava: 'Volcano Planet', toy: 'Toybox Planet', jungle: 'Wild Jungle', ocean: 'Ocean Planet', cloud: 'Cloud Islands', shadow: 'Night Planet' };
 for (const [id, planet] of Object.entries(PLANETS)) {
     planet.name = planetLabels[id as PlanetId];
-    planet.description = `${planet.name} · Level ${planet.level} · ${planet.fare} energy per flight.`;
+    planet.description = `${planet.name} · Landing from level ${planet.level}.`;
 }
 const skillLabels: Record<string, string[]> = { dz_ninja: ['Shadow clones', 'Vanish', 'Shadow strike', 'Smoke bomb'], dz_mage: ['Great fireball', 'Blink', 'Sheep spell', 'Black hole'], dz_knight: ['Raise shield', 'Charge', 'Challenge', 'Holy blade'], dz_mecha: ['Tank mode', 'Turret', 'Homing missiles', 'Energy shield'], dz_dino: ['Devour', 'Tail sweep', 'Terrifying roar', 'Giant form'], dz_fairy: ['Healing flowers', 'Float', 'Charm', 'Binding tree'], dz_pirate: ['Cannon', 'Hook', 'Scout parrot', 'Broadside'], dz_superhero: ['Take flight', 'Meteor dive', 'Laser gaze', 'Boulder throw'], dz_vampire: ['Life drain', 'Bat form', 'Bat swarm', 'Blood moon'], dz_snowman: ['Rolling snowball', 'Snow decoy', 'Ice rink', 'Ice age'] };
 for (const [id, disguise] of Object.entries(DISGUISES)) {

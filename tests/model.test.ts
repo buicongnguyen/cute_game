@@ -66,8 +66,10 @@ test('twenty-four paid or kit garden expansions and decoration movement are loss
   const d=M.newGame();M.addItem(d,'deco_lamp');assert.equal(M.placeDecoration(d,'deco_lamp',50,0),false);assert.equal(M.placeDecoration(d,'deco_lamp',5,5),true);assert.equal(d.bag.deco_lamp,undefined);const uid=d.decorations[0].uid;
   assert.equal(M.moveDecoration(d,uid,7,5,.4),true);const restored=reload(d);assert.deepEqual(restored.decorations,d.decorations);assert.equal(M.removeDecoration(restored,uid),true);assert.equal(restored.bag.deco_lamp,1);assert.equal(M.removeDecoration(restored,uid),false);
 });
-test('travel uses reference level gates and fares and death bags survive multiple defeats',()=>{
-  const s=M.newGame();s.level=5;s.energy=1000;assert.equal(M.travel(s,'candy'),false);s.level=6;s.energy=39;assert.equal(M.travel(s,'candy'),false);s.energy=100;assert.equal(M.travel(s,'candy'),true);assert.equal(s.energy,60);
+test('a launch costs 20 energy, landing follows reference level gates and death bags survive multiple defeats',()=>{
+  const s=M.newGame();s.energy=19;assert.equal(M.launch(s),false);s.energy=100;assert.equal(M.launch(s),true);assert.equal(s.energy,80);
+  s.level=5;assert.equal(M.travel(s,'candy'),false);assert.equal(M.canLand(s,'candy'),false);s.level=6;assert.equal(M.travel(s,'candy'),true);assert.equal(s.energy,80,'landing itself is free');
+  assert.deepEqual(s.discovered,['home','candy']);assert.equal(M.discover(s,'candy'),false);assert.equal(M.discover(s,'ice'),true);
   M.addItem(s,'carrot',2);M.die(s,2,3);assert.equal(s.planet,'home');assert.equal(M.recoverBag(s),false);assert.equal(M.travel(s,'candy'),true);assert.equal(M.recoverBag(s),true);assert.equal(M.recoverBag(s),false);M.die(s,2,3);M.addItem(s,'wood',3);M.die(s,1,2);assert.equal(s.chest.carrot,2);assert.equal(s.dropped?.items.wood,3);assert.equal(M.travel(s,'home'),true);
 });
 test('defeats grant reference XP and probabilistic loot without an extra currency reward',()=>{
@@ -125,3 +127,9 @@ test('invalid world actions and numeric overflow leave valuable state unchanged'
   s.energy=100;s.bag.sword_wood=Number.MAX_SAFE_INTEGER;assert.equal(M.buy(s,'sword_wood'),false);assert.equal(s.energy,100);s.chest.sword_wood=Number.MAX_SAFE_INTEGER;assert.equal(M.transfer(s,'sword_wood',true),false);
 });
 
+test('stardust gives energy and sometimes a star shard; discovered planets survive reloads',()=>{
+  const s=M.newGame();assert.equal(M.collectStardust(s,()=>.5),false);assert.equal(s.energy,3);assert.equal(s.bag.starshard??0,0);
+  assert.equal(M.collectStardust(s,()=>.01),true);assert.equal(s.energy,6);assert.equal(s.bag.starshard,1);
+  M.discover(s,'ocean');const restored=M.parseSave(JSON.stringify(s))!;assert.deepEqual(restored.discovered,['home','ocean']);
+  const old=JSON.parse(JSON.stringify(s));delete old.discovered;old.visited=['home','toy'];assert.deepEqual(M.parseSave(JSON.stringify(old))!.discovered,['home','toy'],'older saves count visited planets as discovered');
+});

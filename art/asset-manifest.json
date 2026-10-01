@@ -11522,5 +11522,2423 @@
         "plot_kit"
       ]
     }
+  },
+  "wilds": {
+    "generator": "art/blender/kit/build_wilds.py",
+    "blender": "4.5.9 LTS",
+    "units": "metres",
+    "coordinates": "Blender: Z up, front -Y; glTF: Y up, front +Z; origin at each piece's ground centre",
+    "file": "wilds.glb",
+    "bytes": 68132,
+    "limit_bytes": 204800,
+    "nodes": {
+      "tree_swamp": {
+        "triangles": 496,
+        "vertices": 316,
+        "materials": [
+          "Swamp bark",
+          "Swamp leaf B",
+          "Swamp leaf A",
+          "Moss"
+        ],
+        "bounds": {
+          "min": [
+            -1.3189,
+            -1.3141,
+            0
+          ],
+          "max": [
+            1.3989,
+            1.4089,
+            3.4145
+          ],
+          "size": [
+            2.7177,
+            2.723,
+            3.4145
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -1.3189,
+            0,
+            -1.4089
+          ],
+          "max": [
+            1.3989,
+            3.4145,
+            1.3141
+          ]
+        },
+        "radius_xy": 1.6335,
+        "emissive": {},
+        "trunk_r_ground": 0.299,
+        "budget": 500
+      },
+      "log": {
+        "triangles": 158,
+        "vertices": 114,
+        "materials": [
+          "Bark",
+          "Log end",
+          "Moss"
+        ],
+        "bounds": {
+          "min": [
+            -0.9737,
+            -0.3092,
+            0
+          ],
+          "max": [
+            0.9715,
+            0.3011,
+            0.5569
+          ],
+          "size": [
+            1.9452,
+            0.6103,
+            0.5569
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.9737,
+            0,
+            -0.3011
+          ],
+          "max": [
+            0.9715,
+            0.5569,
+            0.3092
+          ]
+        },
+        "radius_xy": 0.9796,
+        "emissive": {},
+        "budget": 160
+      },
+      "toadstools": {
+        "triangles": 156,
+        "vertices": 120,
+        "materials": [
+          "Mushroom stem",
+          "Mushroom cap",
+          "Mushroom spots"
+        ],
+        "bounds": {
+          "min": [
+            -0.3852,
+            -0.2823,
+            0
+          ],
+          "max": [
+            0.3315,
+            0.3065,
+            0.518
+          ],
+          "size": [
+            0.7166,
+            0.5888,
+            0.518
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.3852,
+            0,
+            -0.3065
+          ],
+          "max": [
+            0.3315,
+            0.518,
+            0.2823
+          ]
+        },
+        "radius_xy": 0.4109,
+        "emissive": {},
+        "budget": 160
+      },
+      "rock_red": {
+        "triangles": 147,
+        "vertices": 83,
+        "materials": [
+          "Red rock A",
+          "Red rock B"
+        ],
+        "bounds": {
+          "min": [
+            -1.0968,
+            -0.8804,
+            0
+          ],
+          "max": [
+            1.1145,
+            1.088,
+            1.402
+          ],
+          "size": [
+            2.2113,
+            1.9684,
+            1.402
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -1.0968,
+            0,
+            -1.088
+          ],
+          "max": [
+            1.1145,
+            1.402,
+            0.8804
+          ]
+        },
+        "radius_xy": 1.3171,
+        "emissive": {},
+        "budget": 160
+      },
+      "tree_dead": {
+        "triangles": 194,
+        "vertices": 128,
+        "materials": [
+          "Dead wood"
+        ],
+        "bounds": {
+          "min": [
+            -1.06,
+            -0.32,
+            0
+          ],
+          "max": [
+            1.04,
+            0.2104,
+            2.98
+          ],
+          "size": [
+            2.1,
+            0.5304,
+            2.98
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -1.06,
+            0,
+            -0.2104
+          ],
+          "max": [
+            1.04,
+            2.98,
+            0.32
+          ]
+        },
+        "radius_xy": 1.0787,
+        "emissive": {},
+        "trunk_r_ground": 0.29,
+        "budget": 220
+      },
+      "dry_bush": {
+        "triangles": 120,
+        "vertices": 140,
+        "materials": [
+          "Dry grass"
+        ],
+        "bounds": {
+          "min": [
+            -0.4845,
+            -0.5371,
+            0
+          ],
+          "max": [
+            0.5427,
+            0.4683,
+            0.521
+          ],
+          "size": [
+            1.0272,
+            1.0054,
+            0.521
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.4845,
+            0,
+            -0.4683
+          ],
+          "max": [
+            0.5427,
+            0.521,
+            0.5371
+          ]
+        },
+        "radius_xy": 0.5562,
+        "emissive": {},
+        "budget": 120
+      },
+      "crystals": {
+        "triangles": 125,
+        "vertices": 87,
+        "materials": [
+          "Crystal base",
+          "Crystal"
+        ],
+        "bounds": {
+          "min": [
+            -0.4654,
+            -0.4679,
+            0
+          ],
+          "max": [
+            0.4581,
+            0.4066,
+            1.1157
+          ],
+          "size": [
+            0.9235,
+            0.8745,
+            1.1157
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.4654,
+            0,
+            -0.4066
+          ],
+          "max": [
+            0.4581,
+            1.1157,
+            0.4679
+          ]
+        },
+        "radius_xy": 0.4841,
+        "emissive": {
+          "Crystal": 1.5
+        },
+        "budget": 160
+      },
+      "fern": {
+        "triangles": 140,
+        "vertices": 119,
+        "materials": [
+          "Fern A",
+          "Fern B"
+        ],
+        "bounds": {
+          "min": [
+            -0.5369,
+            -0.5437,
+            0
+          ],
+          "max": [
+            0.5443,
+            0.6064,
+            0.5789
+          ],
+          "size": [
+            1.0812,
+            1.1501,
+            0.5789
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.5369,
+            0,
+            -0.6064
+          ],
+          "max": [
+            0.5443,
+            0.5789,
+            0.5437
+          ]
+        },
+        "radius_xy": 0.6408,
+        "emissive": {},
+        "budget": 160
+      },
+      "reeds": {
+        "triangles": 114,
+        "vertices": 96,
+        "materials": [
+          "Reed",
+          "Cattail"
+        ],
+        "bounds": {
+          "min": [
+            -0.2665,
+            -0.2254,
+            0
+          ],
+          "max": [
+            0.2902,
+            0.1943,
+            0.9993
+          ],
+          "size": [
+            0.5567,
+            0.4197,
+            0.9993
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.2665,
+            0,
+            -0.1943
+          ],
+          "max": [
+            0.2902,
+            0.9993,
+            0.2254
+          ]
+        },
+        "radius_xy": 0.3284,
+        "emissive": {},
+        "budget": 120
+      }
+    },
+    "materials": {
+      "Bark": {
+        "color": "#94562E",
+        "roughness": 0.7,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Cattail": {
+        "color": "#8A4A22",
+        "roughness": 0.6,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Crystal": {
+        "color": "#9F72FF",
+        "roughness": 0.2,
+        "metallic": 0,
+        "double_sided": false,
+        "emissive": "#6A36FF",
+        "emissive_strength": 1.5
+      },
+      "Crystal base": {
+        "color": "#6B648F",
+        "roughness": 0.6,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Dead wood": {
+        "color": "#C9BBAA",
+        "roughness": 0.7,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Dry grass": {
+        "color": "#EFBE3A",
+        "roughness": 0.65,
+        "metallic": 0,
+        "double_sided": true
+      },
+      "Fern A": {
+        "color": "#1C9A47",
+        "roughness": 0.55,
+        "metallic": 0,
+        "double_sided": true
+      },
+      "Fern B": {
+        "color": "#5BCB3A",
+        "roughness": 0.5,
+        "metallic": 0,
+        "double_sided": true
+      },
+      "Log end": {
+        "color": "#F0B46E",
+        "roughness": 0.6,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Moss": {
+        "color": "#9AD13A",
+        "roughness": 0.65,
+        "metallic": 0,
+        "double_sided": true
+      },
+      "Mushroom cap": {
+        "color": "#F2303A",
+        "roughness": 0.4,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Mushroom spots": {
+        "color": "#FFF7EA",
+        "roughness": 0.5,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Mushroom stem": {
+        "color": "#FFE8C4",
+        "roughness": 0.6,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Red rock A": {
+        "color": "#D2482A",
+        "roughness": 0.7,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Red rock B": {
+        "color": "#F58E3C",
+        "roughness": 0.65,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Reed": {
+        "color": "#4FAE36",
+        "roughness": 0.55,
+        "metallic": 0,
+        "double_sided": true
+      },
+      "Swamp bark": {
+        "color": "#6B3D27",
+        "roughness": 0.72,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Swamp leaf A": {
+        "color": "#127A5B",
+        "roughness": 0.55,
+        "metallic": 0,
+        "double_sided": false
+      },
+      "Swamp leaf B": {
+        "color": "#2AAE72",
+        "roughness": 0.5,
+        "metallic": 0,
+        "double_sided": false
+      }
+    },
+    "emissive": {
+      "Crystal": 1.5
+    }
+  },
+  "worldsBright": {
+    "generator": "art/blender/kit/build_worlds_bright.py",
+    "blender": "4.5.9 LTS",
+    "file": "worlds-bright.glb",
+    "bytes": 128608,
+    "triangles": 3747,
+    "coordinates": "Blender Z up, front -Y; glTF Y up, front +Z; bounds_gltf = (x, z, -y). Origin at each node's ground centre, metres.",
+    "emissive": {
+      "Crystal": 1.5
+    },
+    "materials": {
+      "Ball A": {
+        "color": "#F5333D",
+        "roughness": 0.25,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Ball B": {
+        "color": "#FFD428",
+        "roughness": 0.25,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Ball C": {
+        "color": "#1FA6F2",
+        "roughness": 0.25,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Candy red": {
+        "color": "#F0203A",
+        "roughness": 0.28,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Candy stick": {
+        "color": "#FFF5EE",
+        "roughness": 0.32,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Candy swirl A": {
+        "color": "#FF2E8C",
+        "roughness": 0.28,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Candy swirl B": {
+        "color": "#2FE0B4",
+        "roughness": 0.28,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Candy white": {
+        "color": "#FFF7F1",
+        "roughness": 0.3,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Cherry": {
+        "color": "#E3102E",
+        "roughness": 0.2,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Cloud puff A": {
+        "color": "#FCFEFF",
+        "roughness": 0.55,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Cloud puff B": {
+        "color": "#8FD2FF",
+        "roughness": 0.55,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Cloud trunk": {
+        "color": "#ECF2FF",
+        "roughness": 0.5,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Coconut": {
+        "color": "#6E4226",
+        "roughness": 0.5,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Coral A": {
+        "color": "#FF2A72",
+        "roughness": 0.45,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Coral B": {
+        "color": "#FF6414",
+        "roughness": 0.5,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Coral C": {
+        "color": "#9A36FF",
+        "roughness": 0.45,
+        "double_sided": true,
+        "emissive": null
+      },
+      "Crystal": {
+        "color": "#5CE8FF",
+        "roughness": 0.2,
+        "double_sided": false,
+        "emissive": {
+          "color": "#6FF0FF",
+          "strength": 1.5
+        }
+      },
+      "Cupcake wrapper": {
+        "color": "#FFC02A",
+        "roughness": 0.5,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Donut dough": {
+        "color": "#E8963E",
+        "roughness": 0.6,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Donut icing": {
+        "color": "#FF3FA0",
+        "roughness": 0.3,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Frosting": {
+        "color": "#4FE2BE",
+        "roughness": 0.35,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Gumdrop A": {
+        "color": "#FF3A8C",
+        "roughness": 0.82,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Gumdrop B": {
+        "color": "#8CE01E",
+        "roughness": 0.82,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Gumdrop C": {
+        "color": "#FF8A12",
+        "roughness": 0.82,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Jungle bark": {
+        "color": "#8A5634",
+        "roughness": 0.75,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Jungle leaf A": {
+        "color": "#14803A",
+        "roughness": 0.55,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Jungle leaf B": {
+        "color": "#3FC23E",
+        "roughness": 0.5,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Palm leaf": {
+        "color": "#30C24A",
+        "roughness": 0.5,
+        "double_sided": true,
+        "emissive": null
+      },
+      "Palm trunk": {
+        "color": "#C68646",
+        "roughness": 0.7,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Sky grass": {
+        "color": "#5CD446",
+        "roughness": 0.6,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Sky rock": {
+        "color": "#CBC2EC",
+        "roughness": 0.7,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Sprinkle A": {
+        "color": "#2AA4FF",
+        "roughness": 0.4,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Sprinkle B": {
+        "color": "#FFE12A",
+        "roughness": 0.4,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Toy blue": {
+        "color": "#2462EA",
+        "roughness": 0.38,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Toy red": {
+        "color": "#EE2D2D",
+        "roughness": 0.38,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Toy wood": {
+        "color": "#E6AE66",
+        "roughness": 0.6,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Toy yellow": {
+        "color": "#FFC21A",
+        "roughness": 0.38,
+        "double_sided": false,
+        "emissive": null
+      },
+      "Vine": {
+        "color": "#9BE03A",
+        "roughness": 0.55,
+        "double_sided": false,
+        "emissive": null
+      }
+    },
+    "nodes": {
+      "candy_tree": {
+        "planet": "candy",
+        "triangles": 388,
+        "vertices": 234,
+        "materials": [
+          "Candy stick",
+          "Candy swirl A",
+          "Candy swirl B"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -1.2732,
+            -1.2732,
+            0
+          ],
+          "max": [
+            1.2732,
+            1.2732,
+            3.4
+          ],
+          "size": [
+            2.5465,
+            2.5465,
+            3.4
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -1.2732,
+            0,
+            -1.2732
+          ],
+          "max": [
+            1.2732,
+            3.4,
+            1.2732
+          ]
+        },
+        "radius_xy": 1.3111,
+        "ground_radius": 0.27,
+        "limit": 420,
+        "collision_r": 0.35,
+        "size_contract": [
+          2.6,
+          2.6,
+          3.4
+        ]
+      },
+      "candy_cane": {
+        "planet": "candy",
+        "triangles": 246,
+        "vertices": 136,
+        "materials": [
+          "Candy red",
+          "Candy white"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -0.3038,
+            -0.3038,
+            0
+          ],
+          "max": [
+            0.7598,
+            0.3038,
+            2.1799
+          ],
+          "size": [
+            1.0636,
+            0.6076,
+            2.1799
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.3038,
+            0,
+            -0.3038
+          ],
+          "max": [
+            0.7598,
+            2.1799,
+            0.3038
+          ]
+        },
+        "radius_xy": 0.7598,
+        "ground_radius": 0.31,
+        "limit": 260,
+        "collision_r": 0.3,
+        "size_contract": [
+          1.05,
+          0.6,
+          2.2
+        ]
+      },
+      "gumdrops": {
+        "planet": "candy",
+        "triangles": 150,
+        "vertices": 93,
+        "materials": [
+          "Gumdrop A",
+          "Gumdrop B",
+          "Gumdrop C"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -0.4,
+            -0.438,
+            0
+          ],
+          "max": [
+            0.4543,
+            0.3568,
+            0.44
+          ],
+          "size": [
+            0.8543,
+            0.7948,
+            0.44
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.4,
+            0,
+            -0.3568
+          ],
+          "max": [
+            0.4543,
+            0.44,
+            0.438
+          ]
+        },
+        "radius_xy": 0.4692,
+        "ground_radius": 0.4692,
+        "limit": 160,
+        "collision_r": null,
+        "size_contract": [
+          1,
+          1,
+          0.45
+        ]
+      },
+      "donut": {
+        "planet": "candy",
+        "triangles": 395,
+        "vertices": 252,
+        "materials": [
+          "Donut dough",
+          "Donut icing",
+          "Sprinkle B",
+          "Sprinkle A"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -0.8676,
+            -0.546,
+            0
+          ],
+          "max": [
+            0.8676,
+            0.4694,
+            1.5357
+          ],
+          "size": [
+            1.7352,
+            1.0154,
+            1.5357
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.8676,
+            0,
+            -0.4694
+          ],
+          "max": [
+            0.8676,
+            1.5357,
+            0.546
+          ]
+        },
+        "radius_xy": 0.8883,
+        "ground_radius": 0.7409,
+        "limit": 420,
+        "collision_r": 0.9,
+        "size_contract": [
+          2,
+          1.1,
+          1.6
+        ]
+      },
+      "cupcake": {
+        "planet": "candy",
+        "triangles": 298,
+        "vertices": 179,
+        "materials": [
+          "Cupcake wrapper",
+          "Frosting",
+          "Cherry"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -0.6778,
+            -0.6458,
+            0
+          ],
+          "max": [
+            0.7222,
+            0.7288,
+            1.48
+          ],
+          "size": [
+            1.4,
+            1.3745,
+            1.48
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.6778,
+            0,
+            -0.7288
+          ],
+          "max": [
+            0.7222,
+            1.48,
+            0.6458
+          ]
+        },
+        "radius_xy": 0.748,
+        "ground_radius": 0.47,
+        "limit": 320,
+        "collision_r": 0.6,
+        "size_contract": [
+          1.4,
+          1.4,
+          1.5
+        ]
+      },
+      "toyblock": {
+        "planet": "toy",
+        "triangles": 213,
+        "vertices": 162,
+        "materials": [
+          "Toy red",
+          "Toy wood",
+          "Toy yellow",
+          "Toy blue"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -0.9834,
+            -0.531,
+            0
+          ],
+          "max": [
+            0.981,
+            0.5134,
+            1.657
+          ],
+          "size": [
+            1.9644,
+            1.0444,
+            1.657
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.9834,
+            0,
+            -0.5134
+          ],
+          "max": [
+            0.981,
+            1.657,
+            0.531
+          ]
+        },
+        "radius_xy": 1.0199,
+        "ground_radius": 1.0199,
+        "limit": 220,
+        "collision_r": 1.3,
+        "size_contract": [
+          2.2,
+          1.2,
+          1.6
+        ]
+      },
+      "toyball": {
+        "planet": "toy",
+        "triangles": 252,
+        "vertices": 128,
+        "materials": [
+          "Ball A",
+          "Ball B",
+          "Ball C"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -0.8751,
+            -0.891,
+            0
+          ],
+          "max": [
+            0.8751,
+            0.891,
+            1.7403
+          ],
+          "size": [
+            1.7502,
+            1.782,
+            1.7403
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.8751,
+            0,
+            -0.891
+          ],
+          "max": [
+            0.8751,
+            1.7403,
+            0.891
+          ]
+        },
+        "radius_xy": 0.8999,
+        "ground_radius": 0.6611,
+        "limit": 260,
+        "collision_r": 0.9,
+        "size_contract": [
+          1.8,
+          1.8,
+          1.8
+        ]
+      },
+      "cloudtree": {
+        "planet": "cloud",
+        "triangles": 435,
+        "vertices": 262,
+        "materials": [
+          "Cloud trunk",
+          "Cloud puff B",
+          "Cloud puff A"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -1.1847,
+            -1.2954,
+            0
+          ],
+          "max": [
+            1.5168,
+            1.3035,
+            3.5398
+          ],
+          "size": [
+            2.7015,
+            2.599,
+            3.5398
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -1.1847,
+            0,
+            -1.3035
+          ],
+          "max": [
+            1.5168,
+            3.5398,
+            1.2954
+          ]
+        },
+        "radius_xy": 1.5274,
+        "ground_radius": 0.398,
+        "limit": 450,
+        "collision_r": 0.4,
+        "size_contract": [
+          2.8,
+          2.8,
+          3.6
+        ]
+      },
+      "skyrock": {
+        "planet": "cloud",
+        "triangles": 196,
+        "vertices": 127,
+        "materials": [
+          "Sky rock",
+          "Sky grass",
+          "Crystal"
+        ],
+        "emissive": {
+          "Crystal": 1.5
+        },
+        "bounds": {
+          "min": [
+            -0.9045,
+            -0.909,
+            0
+          ],
+          "max": [
+            0.8431,
+            0.9302,
+            1.307
+          ],
+          "size": [
+            1.7476,
+            1.8392,
+            1.307
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.9045,
+            0,
+            -0.9302
+          ],
+          "max": [
+            0.8431,
+            1.307,
+            0.909
+          ]
+        },
+        "radius_xy": 0.9441,
+        "ground_radius": 0.8314,
+        "limit": 220,
+        "collision_r": 0.8,
+        "size_contract": [
+          1.8,
+          1.8,
+          1.2
+        ]
+      },
+      "jungletree": {
+        "planet": "jungle",
+        "triangles": 523,
+        "vertices": 322,
+        "materials": [
+          "Jungle bark",
+          "Jungle leaf A",
+          "Jungle leaf B",
+          "Vine"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -2.1916,
+            -2.0238,
+            0
+          ],
+          "max": [
+            2.2075,
+            1.9974,
+            4.981
+          ],
+          "size": [
+            4.3991,
+            4.0212,
+            4.981
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -2.1916,
+            0,
+            -1.9974
+          ],
+          "max": [
+            2.2075,
+            4.981,
+            2.0238
+          ]
+        },
+        "radius_xy": 2.2176,
+        "ground_radius": 0.66,
+        "limit": 600,
+        "collision_r": 0.6,
+        "size_contract": [
+          4.4,
+          4.4,
+          5
+        ]
+      },
+      "palm": {
+        "planet": "ocean",
+        "triangles": 406,
+        "vertices": 275,
+        "materials": [
+          "Palm trunk",
+          "Palm leaf",
+          "Coconut"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -1.1192,
+            -2.1761,
+            0
+          ],
+          "max": [
+            3.3044,
+            2.0723,
+            4.675
+          ],
+          "size": [
+            4.4236,
+            4.2484,
+            4.675
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -1.1192,
+            0,
+            -2.0723
+          ],
+          "max": [
+            3.3044,
+            4.675,
+            2.1761
+          ]
+        },
+        "radius_xy": 3.3213,
+        "ground_radius": 0.3,
+        "limit": 450,
+        "collision_r": 0.35,
+        "size_contract": [
+          4.4,
+          4.3,
+          4.5
+        ]
+      },
+      "coral": {
+        "planet": "ocean",
+        "triangles": 245,
+        "vertices": 154,
+        "materials": [
+          "Coral A",
+          "Coral B",
+          "Coral C"
+        ],
+        "emissive": {},
+        "bounds": {
+          "min": [
+            -0.6752,
+            -0.5967,
+            0
+          ],
+          "max": [
+            0.6943,
+            0.4969,
+            0.8224
+          ],
+          "size": [
+            1.3695,
+            1.0936,
+            0.8224
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.6752,
+            0,
+            -0.4969
+          ],
+          "max": [
+            0.6943,
+            0.8224,
+            0.5967
+          ]
+        },
+        "radius_xy": 0.7696,
+        "ground_radius": 0.7696,
+        "limit": 260,
+        "collision_r": null,
+        "size_contract": [
+          1.4,
+          1.1,
+          0.8
+        ]
+      }
+    }
+  },
+  "worldsHarsh": {
+    "generator": "art/blender/kit/build_worlds_harsh.py",
+    "blender": "4.5.9 LTS",
+    "file": "worlds-harsh.glb",
+    "bytes": 97076,
+    "coordinates": "Blender Z up, front -Y (glTF Y up, front +Z); metres; every node at the file origin with its own origin at its ground centre",
+    "planets": {
+      "ice": [
+        "snow_pine",
+        "ice_spire",
+        "snow_rock",
+        "snowman"
+      ],
+      "lava": [
+        "lava_rock",
+        "obsidian",
+        "ash_tree",
+        "mini_volcano"
+      ],
+      "shadow": [
+        "deadtree"
+      ]
+    },
+    "ground_colours": {
+      "ice": "#cfe6fb",
+      "lava": "#6e5a60",
+      "shadow": "#2a2440"
+    },
+    "materials": {
+      "Bark": {
+        "color": "#94562E",
+        "roughness": 0.7
+      },
+      "Basalt": {
+        "color": "#2E2836",
+        "roughness": 0.62
+      },
+      "Carrot": {
+        "color": "#FF7A1A",
+        "roughness": 0.45
+      },
+      "Charcoal wood": {
+        "color": "#3A2F31",
+        "roughness": 0.8
+      },
+      "Coal": {
+        "color": "#25232F",
+        "roughness": 0.35
+      },
+      "Ember": {
+        "color": "#FF6A22",
+        "roughness": 0.45,
+        "emissive": "#FF4612",
+        "strength": 2
+      },
+      "Frost rock": {
+        "color": "#6683C2",
+        "roughness": 0.6
+      },
+      "Ice": {
+        "color": "#36BDF2",
+        "roughness": 0.12
+      },
+      "Ice glow": {
+        "color": "#A8EEFF",
+        "roughness": 0.18,
+        "emissive": "#46CFFF",
+        "strength": 1.2
+      },
+      "Lava glow": {
+        "color": "#FF6A14",
+        "roughness": 0.45,
+        "emissive": "#FF4A00",
+        "strength": 2.5
+      },
+      "Obsidian": {
+        "color": "#26163E",
+        "roughness": 0.1
+      },
+      "Obsidian edge": {
+        "color": "#9C5CFF",
+        "roughness": 0.14
+      },
+      "Scarf": {
+        "color": "#EC2F4B",
+        "roughness": 0.55
+      },
+      "Shadow glow": {
+        "color": "#9E5CFF",
+        "roughness": 0.35,
+        "emissive": "#8A3DFF",
+        "strength": 1.5
+      },
+      "Shadow wood": {
+        "color": "#4D3579",
+        "roughness": 0.68
+      },
+      "Snow": {
+        "color": "#F2F8FF",
+        "roughness": 0.42
+      },
+      "Snow pine": {
+        "color": "#0E8C74",
+        "roughness": 0.6
+      },
+      "Twig": {
+        "color": "#7B4826",
+        "roughness": 0.7
+      },
+      "Volcano slope": {
+        "color": "#4F2A2C",
+        "roughness": 0.75
+      }
+    },
+    "emissive": {
+      "Ember": 2,
+      "Ice glow": 1.2,
+      "Lava glow": 2.5,
+      "Shadow glow": 1.5
+    },
+    "nodes": {
+      "snow_pine": {
+        "planet": "ice",
+        "triangles": 408,
+        "vertices": 224,
+        "materials": [
+          "Bark",
+          "Snow",
+          "Snow pine"
+        ],
+        "emissive": [],
+        "bounds": {
+          "blender": {
+            "min": [
+              -1.4766,
+              -1.4766,
+              0
+            ],
+            "max": [
+              1.4766,
+              1.4766,
+              4
+            ],
+            "size": [
+              2.9532,
+              2.9532,
+              4
+            ]
+          },
+          "gltf": {
+            "min": [
+              -1.4766,
+              0,
+              -1.4766
+            ],
+            "max": [
+              1.4766,
+              4,
+              1.4766
+            ],
+            "size": [
+              2.9532,
+              4,
+              2.9532
+            ]
+          }
+        },
+        "height": 4,
+        "radius_xy": 1.4766,
+        "ground_radius": 0.477,
+        "collision_radius": 0.45,
+        "nominal": {
+          "h": 4,
+          "r": 1.4,
+          "foot": 0.45
+        },
+        "budget": 420
+      },
+      "ice_spire": {
+        "planet": "ice",
+        "triangles": 120,
+        "vertices": 77,
+        "materials": [
+          "Ice",
+          "Ice glow"
+        ],
+        "emissive": [
+          "Ice glow"
+        ],
+        "bounds": {
+          "blender": {
+            "min": [
+              -0.5918,
+              -0.4915,
+              0
+            ],
+            "max": [
+              0.5698,
+              0.5564,
+              2.7602
+            ],
+            "size": [
+              1.1616,
+              1.0479,
+              2.7602
+            ]
+          },
+          "gltf": {
+            "min": [
+              -0.5918,
+              0,
+              -0.5564
+            ],
+            "max": [
+              0.5698,
+              2.7602,
+              0.4915
+            ],
+            "size": [
+              1.1616,
+              2.7602,
+              1.0479
+            ]
+          }
+        },
+        "height": 2.7602,
+        "radius_xy": 0.6182,
+        "ground_radius": 0.4686,
+        "collision_radius": 0.55,
+        "nominal": {
+          "h": 2.8,
+          "r": 0.6,
+          "foot": 0.55
+        },
+        "budget": 160
+      },
+      "snow_rock": {
+        "planet": "ice",
+        "triangles": 156,
+        "vertices": 85,
+        "materials": [
+          "Frost rock",
+          "Snow"
+        ],
+        "emissive": [],
+        "bounds": {
+          "blender": {
+            "min": [
+              -0.888,
+              -0.6997,
+              0
+            ],
+            "max": [
+              0.928,
+              0.7334,
+              0.9
+            ],
+            "size": [
+              1.816,
+              1.4331,
+              0.9
+            ]
+          },
+          "gltf": {
+            "min": [
+              -0.888,
+              0,
+              -0.7334
+            ],
+            "max": [
+              0.928,
+              0.9,
+              0.6997
+            ],
+            "size": [
+              1.816,
+              0.9,
+              1.4331
+            ]
+          }
+        },
+        "height": 0.9,
+        "radius_xy": 0.9426,
+        "ground_radius": 0.8001,
+        "collision_radius": 0.8,
+        "nominal": {
+          "h": 0.9,
+          "r": 0.9,
+          "foot": 0.8
+        },
+        "budget": 160
+      },
+      "snowman": {
+        "planet": "ice",
+        "triangles": 416,
+        "vertices": 265,
+        "materials": [
+          "Carrot",
+          "Coal",
+          "Scarf",
+          "Snow",
+          "Twig"
+        ],
+        "emissive": [],
+        "bounds": {
+          "blender": {
+            "min": [
+              -0.66,
+              -0.5078,
+              0
+            ],
+            "max": [
+              0.71,
+              0.4315,
+              1.64
+            ],
+            "size": [
+              1.37,
+              0.9393,
+              1.64
+            ]
+          },
+          "gltf": {
+            "min": [
+              -0.66,
+              0,
+              -0.4315
+            ],
+            "max": [
+              0.71,
+              1.64,
+              0.5078
+            ],
+            "size": [
+              1.37,
+              1.64,
+              0.9393
+            ]
+          }
+        },
+        "height": 1.64,
+        "radius_xy": 0.7111,
+        "ground_radius": 0.2581,
+        "collision_radius": 0.45,
+        "nominal": {
+          "h": 1.6,
+          "r": 0.8,
+          "foot": 0.45
+        },
+        "budget": 420
+      },
+      "lava_rock": {
+        "planet": "lava",
+        "triangles": 133,
+        "vertices": 77,
+        "materials": [
+          "Basalt",
+          "Lava glow"
+        ],
+        "emissive": [
+          "Lava glow"
+        ],
+        "bounds": {
+          "blender": {
+            "min": [
+              -0.8343,
+              -0.7366,
+              0
+            ],
+            "max": [
+              0.8351,
+              0.7859,
+              0.9508
+            ],
+            "size": [
+              1.6694,
+              1.5225,
+              0.9508
+            ]
+          },
+          "gltf": {
+            "min": [
+              -0.8343,
+              0,
+              -0.7859
+            ],
+            "max": [
+              0.8351,
+              0.9508,
+              0.7366
+            ],
+            "size": [
+              1.6694,
+              0.9508,
+              1.5225
+            ]
+          }
+        },
+        "height": 0.9508,
+        "radius_xy": 0.9121,
+        "ground_radius": 0.8382,
+        "collision_radius": 0.85,
+        "nominal": {
+          "h": 1,
+          "r": 1,
+          "foot": 0.85
+        },
+        "budget": 170
+      },
+      "obsidian": {
+        "planet": "lava",
+        "triangles": 132,
+        "vertices": 93,
+        "materials": [
+          "Obsidian",
+          "Obsidian edge"
+        ],
+        "emissive": [],
+        "bounds": {
+          "blender": {
+            "min": [
+              -0.5502,
+              -0.5044,
+              0
+            ],
+            "max": [
+              0.5465,
+              0.4814,
+              1.3598
+            ],
+            "size": [
+              1.0967,
+              0.9858,
+              1.3598
+            ]
+          },
+          "gltf": {
+            "min": [
+              -0.5502,
+              0,
+              -0.4814
+            ],
+            "max": [
+              0.5465,
+              1.3598,
+              0.5044
+            ],
+            "size": [
+              1.0967,
+              1.3598,
+              0.9858
+            ]
+          }
+        },
+        "height": 1.3598,
+        "radius_xy": 0.5656,
+        "ground_radius": 0.38,
+        "collision_radius": 0.5,
+        "nominal": {
+          "h": 1.4,
+          "r": 0.55,
+          "foot": 0.5
+        },
+        "budget": 160
+      },
+      "ash_tree": {
+        "planet": "lava",
+        "triangles": 181,
+        "vertices": 122,
+        "materials": [
+          "Charcoal wood",
+          "Ember"
+        ],
+        "emissive": [
+          "Ember"
+        ],
+        "bounds": {
+          "blender": {
+            "min": [
+              -0.88,
+              -0.32,
+              0
+            ],
+            "max": [
+              0.9,
+              0.36,
+              3.2
+            ],
+            "size": [
+              1.78,
+              0.68,
+              3.2
+            ]
+          },
+          "gltf": {
+            "min": [
+              -0.88,
+              0,
+              -0.36
+            ],
+            "max": [
+              0.9,
+              3.2,
+              0.32
+            ],
+            "size": [
+              1.78,
+              3.2,
+              0.68
+            ]
+          }
+        },
+        "height": 3.2,
+        "radius_xy": 0.9055,
+        "ground_radius": 0.33,
+        "collision_radius": 0.35,
+        "nominal": {
+          "h": 3.2,
+          "r": 1.2,
+          "foot": 0.35
+        },
+        "budget": 260
+      },
+      "mini_volcano": {
+        "planet": "lava",
+        "triangles": 320,
+        "vertices": 179,
+        "materials": [
+          "Basalt",
+          "Lava glow",
+          "Volcano slope"
+        ],
+        "emissive": [
+          "Lava glow"
+        ],
+        "bounds": {
+          "blender": {
+            "min": [
+              -1.9261,
+              -1.9566,
+              0
+            ],
+            "max": [
+              2.0282,
+              1.9431,
+              2.6
+            ],
+            "size": [
+              3.9543,
+              3.8997,
+              2.6
+            ]
+          },
+          "gltf": {
+            "min": [
+              -1.9261,
+              0,
+              -1.9431
+            ],
+            "max": [
+              2.0282,
+              2.6,
+              1.9566
+            ],
+            "size": [
+              3.9543,
+              2.6,
+              3.8997
+            ]
+          }
+        },
+        "height": 2.6,
+        "radius_xy": 2.143,
+        "ground_radius": 2.1257,
+        "collision_radius": null,
+        "nominal": {
+          "h": 2.6,
+          "r": 2,
+          "foot": 2
+        },
+        "budget": 320
+      },
+      "deadtree": {
+        "planet": "shadow",
+        "triangles": 266,
+        "vertices": 164,
+        "materials": [
+          "Shadow glow",
+          "Shadow wood"
+        ],
+        "emissive": [
+          "Shadow glow"
+        ],
+        "bounds": {
+          "blender": {
+            "min": [
+              -1.1008,
+              -0.3425,
+              0
+            ],
+            "max": [
+              1.1581,
+              0.7864,
+              3.3994
+            ],
+            "size": [
+              2.2589,
+              1.129,
+              3.3994
+            ]
+          },
+          "gltf": {
+            "min": [
+              -1.1008,
+              0,
+              -0.7864
+            ],
+            "max": [
+              1.1581,
+              3.3994,
+              0.3425
+            ],
+            "size": [
+              2.2589,
+              3.3994,
+              1.129
+            ]
+          }
+        },
+        "height": 3.3994,
+        "radius_xy": 1.1876,
+        "ground_radius": 0.34,
+        "collision_radius": 0.35,
+        "nominal": {
+          "h": 3.4,
+          "r": 1.3,
+          "foot": 0.35
+        },
+        "budget": 280
+      }
+    }
+  },
+  "space": {
+    "generator": "art/blender/kit/build_space.py",
+    "blender": "4.5.9 LTS",
+    "units": "metres",
+    "coordinates": "Blender: Z up, front faces -Y (glTF: Y up, front +Z). Ship and pad: origin at the ground centre (the ship at the bottom of its engine bell). Stardust and asteroids: centred.",
+    "file": "space.glb",
+    "bytes": 132468,
+    "limit_bytes": 256000,
+    "pad_top": 0.31,
+    "flame": {
+      "node": "flame",
+      "parent": "ship",
+      "origin": "bell exit (the ship origin)",
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "translation_gltf": [
+        0,
+        0,
+        0
+      ],
+      "length": 1.6,
+      "top": 0.1,
+      "max_radius": 0.4971,
+      "triangles": 280,
+      "materials": [
+        "Rocket flame",
+        "Rocket flame core"
+      ],
+      "emissive_materials": {
+        "Rocket flame": 3,
+        "Rocket flame core": 3
+      },
+      "bounds": {
+        "min": [
+          -0.4773,
+          -0.46,
+          -1.6
+        ],
+        "max": [
+          0.4678,
+          0.4968,
+          0.1
+        ],
+        "size": [
+          0.9451,
+          0.9568,
+          1.7
+        ]
+      },
+      "bounds_gltf": {
+        "min": [
+          -0.4773,
+          -1.6,
+          -0.4968
+        ],
+        "max": [
+          0.4678,
+          0.1,
+          0.46
+        ]
+      },
+      "stretch": "scale the flame node along glTF Y (Blender Z): it grows downward from the bell"
+    },
+    "emissive": {
+      "Lava glow": 2.5,
+      "Pad light": 1.4,
+      "Rocket flame": 3,
+      "Rocket flame core": 3,
+      "Stardust": 2.5,
+      "Stardust rim": 1.2
+    },
+    "materials": [
+      "Asteroid crater",
+      "Asteroid frost",
+      "Asteroid ice",
+      "Asteroid rock",
+      "Basalt",
+      "Charcoal",
+      "Glass",
+      "Gold",
+      "Hazard",
+      "Lava glow",
+      "Pad",
+      "Pad dark",
+      "Pad light",
+      "Rocket flame",
+      "Rocket flame core",
+      "Rocket red",
+      "Rocket white",
+      "Stardust",
+      "Stardust rim",
+      "Sun"
+    ],
+    "nodes": {
+      "ship": {
+        "triangles": {
+          "ship": 2080,
+          "flame": 280,
+          "total": 2360
+        },
+        "budget": 2600,
+        "vertices": 1149,
+        "materials": [
+          "Sun",
+          "Charcoal",
+          "Rocket white",
+          "Rocket red",
+          "Gold",
+          "Glass"
+        ],
+        "bounds": {
+          "min": [
+            -1.0382,
+            -1.0382,
+            0
+          ],
+          "max": [
+            1.0382,
+            1.0382,
+            4.8
+          ],
+          "size": [
+            2.0765,
+            2.0765,
+            4.8
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -1.0382,
+            0,
+            -1.0382
+          ],
+          "max": [
+            1.0382,
+            4.8,
+            1.0382
+          ]
+        },
+        "max_radius_xy": 1.4203,
+        "max_radius": 4.8,
+        "emissive_materials": {},
+        "notes": "The prop rocket without its pad. Origin at the bottom of the engine bell (fin feet also at z 0); nose up (+Z Blender, +Y glTF), porthole facing -Y (glTF +Z). To fly level, rotate it -90 deg about glTF X: the nose then points -Z and the porthole faces up. Child mesh `flame` hangs below the bell.",
+        "flame": {
+          "node": "flame",
+          "parent": "ship",
+          "origin": "bell exit (the ship origin)",
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "translation_gltf": [
+            0,
+            0,
+            0
+          ],
+          "length": 1.6,
+          "top": 0.1,
+          "max_radius": 0.4971,
+          "triangles": 280,
+          "materials": [
+            "Rocket flame",
+            "Rocket flame core"
+          ],
+          "emissive_materials": {
+            "Rocket flame": 3,
+            "Rocket flame core": 3
+          },
+          "bounds": {
+            "min": [
+              -0.4773,
+              -0.46,
+              -1.6
+            ],
+            "max": [
+              0.4678,
+              0.4968,
+              0.1
+            ],
+            "size": [
+              0.9451,
+              0.9568,
+              1.7
+            ]
+          },
+          "bounds_gltf": {
+            "min": [
+              -0.4773,
+              -1.6,
+              -0.4968
+            ],
+            "max": [
+              0.4678,
+              0.1,
+              0.46
+            ]
+          },
+          "stretch": "scale the flame node along glTF Y (Blender Z): it grows downward from the bell"
+        },
+        "height": 4.8,
+        "body_radius": 0.93,
+        "porthole_radius": 0.9936,
+        "fin_radius": 1.4203,
+        "porthole_centre": [
+          0,
+          -0.87,
+          2.02
+        ],
+        "porthole_centre_gltf": [
+          0,
+          2.02,
+          0.87
+        ]
+      },
+      "pad": {
+        "triangles": 1576,
+        "budget": 1800,
+        "vertices": 932,
+        "materials": [
+          "Hazard",
+          "Pad",
+          "Pad dark",
+          "Pad light"
+        ],
+        "bounds": {
+          "min": [
+            -2.64,
+            -2.64,
+            0
+          ],
+          "max": [
+            2.64,
+            2.64,
+            0.345
+          ],
+          "size": [
+            5.28,
+            5.28,
+            0.345
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -2.64,
+            0,
+            -2.64
+          ],
+          "max": [
+            2.64,
+            0.345,
+            2.64
+          ]
+        },
+        "max_radius_xy": 2.64,
+        "max_radius": 2.6409,
+        "emissive_materials": {
+          "Pad light": 1.4
+        },
+        "notes": "The prop launch pad on its own. Stand the ship (origin) on pad_top. Emissive Pad light domes; a yellow centre target shows once the ship has gone.",
+        "pad_top": 0.31
+      },
+      "stardust": {
+        "triangles": 100,
+        "budget": 140,
+        "vertices": 52,
+        "materials": [
+          "Stardust",
+          "Stardust rim"
+        ],
+        "bounds": {
+          "min": [
+            -0.4755,
+            -0.4045,
+            -0.21
+          ],
+          "max": [
+            0.4755,
+            0.5,
+            0.21
+          ],
+          "size": [
+            0.9511,
+            0.9045,
+            0.42
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.4755,
+            -0.21,
+            -0.5
+          ],
+          "max": [
+            0.4755,
+            0.21,
+            0.4045
+          ]
+        },
+        "max_radius_xy": 0.5,
+        "max_radius": 0.5,
+        "emissive_materials": {
+          "Stardust": 2.5,
+          "Stardust rim": 1.2
+        },
+        "notes": "Centred on its origin, lying flat (faces up, glTF +Y) with one point toward -Z glTF (screen-up from the game camera). Spin it about the up axis."
+      },
+      "asteroid_rock": {
+        "triangles": 148,
+        "budget": 160,
+        "vertices": 76,
+        "materials": [
+          "Asteroid rock",
+          "Asteroid crater"
+        ],
+        "bounds": {
+          "min": [
+            -1.0402,
+            -0.97,
+            -0.9239
+          ],
+          "max": [
+            1.0402,
+            0.97,
+            0.9239
+          ],
+          "size": [
+            2.0803,
+            1.94,
+            1.8478
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -1.0402,
+            -0.9239,
+            -0.97
+          ],
+          "max": [
+            1.0402,
+            0.9239,
+            0.97
+          ]
+        },
+        "max_radius_xy": 1.0948,
+        "max_radius": 1.1209,
+        "emissive_materials": {},
+        "notes": "Centred on its origin; four raised-rim craters, mostly on top."
+      },
+      "asteroid_ice": {
+        "triangles": 104,
+        "budget": 160,
+        "vertices": 54,
+        "materials": [
+          "Asteroid ice",
+          "Asteroid frost"
+        ],
+        "bounds": {
+          "min": [
+            -1.0411,
+            -0.958,
+            -1.0194
+          ],
+          "max": [
+            1.0411,
+            0.958,
+            1.0194
+          ],
+          "size": [
+            2.0822,
+            1.9159,
+            2.0388
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -1.0411,
+            -1.0194,
+            -0.958
+          ],
+          "max": [
+            1.0411,
+            1.0194,
+            0.958
+          ]
+        },
+        "max_radius_xy": 1.2873,
+        "max_radius": 1.3038,
+        "emissive_materials": {},
+        "notes": "Centred on its origin; faceted, frosted on top, five frost crystals."
+      },
+      "asteroid_lava": {
+        "triangles": 144,
+        "budget": 170,
+        "vertices": 74,
+        "materials": [
+          "Basalt",
+          "Lava glow"
+        ],
+        "bounds": {
+          "min": [
+            -1.0191,
+            -0.8887,
+            -0.8782
+          ],
+          "max": [
+            1.0191,
+            0.8887,
+            0.8782
+          ],
+          "size": [
+            2.0381,
+            1.7773,
+            1.7565
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -1.0191,
+            -0.8782,
+            -0.8887
+          ],
+          "max": [
+            1.0191,
+            0.8782,
+            0.8887
+          ]
+        },
+        "max_radius_xy": 1.026,
+        "max_radius": 1.091,
+        "emissive_materials": {
+          "Lava glow": 2.5
+        },
+        "notes": "Centred on its origin; two lava pools with glowing seams running out of them."
+      }
+    }
   }
 }

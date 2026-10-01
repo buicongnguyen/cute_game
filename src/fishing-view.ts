@@ -132,6 +132,8 @@ export class FishingView {
           const piece = this.kit.ready ? this.kit.instance(name) : null; if (!piece) continue;
           const a = (i + .3) / count2 * Math.PI * 2 + pond.x, r = onEdge ? .98 : .55;
           piece.position.set(pond.x + Math.cos(a) * pond.rx * r, onEdge ? 0 : pond.surface + .01, pond.z + Math.sin(a) * pond.rz * r);
+          // Lily pads and reeds lie flat or are thin: their shadows would cost a pass and add nothing.
+          piece.traverse(o => { o.castShadow = false; });
           piece.rotation.y = a; this.root.add(piece); this.dressing.push(piece);
         }
       }

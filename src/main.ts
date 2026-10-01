@@ -2,7 +2,12 @@ import '@fontsource-variable/nunito';
 import './style.css';
 import { Box3, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
-import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit } from './assets.ts';
+import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit } from './assets.ts';
+import { SpaceFlight, type SpaceEvent } from './space.ts';
+import { SpaceView } from './space-view.ts';
+import { ShipSequence } from './ship-sequence.ts';
+import { kitsFor } from './biomes.ts';
+import { ENEMY_TYPES } from './enemy-types.ts';
 import { FishingView, type PondView } from './fishing-view.ts';
 import { decorIcon } from './icons.ts';
 import * as M from './model.ts';
@@ -35,6 +40,11 @@ let fishingWater='home';
 let shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forge'='craft',craftTab='All';
 let placement:{id:string;rotation:number}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
 let persistence:((state:M.SaveState)=>void)|null=null,network:NetworkHooks={role:null};
+// The starship (set up once the world exists); while flying, space replaces the world.
+let shipSequence:ShipSequence|undefined,flight:SpaceFlight|null=null,arriving=false;
+// The graphics governor ignores the first seconds after starting or landing: model files are still
+// arriving and shaders compiling, and those hitches say nothing about how fast the device is.
+let settledAt=0;const settle=()=>{settledAt=performance.now()+4000;};
 const frameListeners=new Set<(dt:number)=>void>(),actionListeners=new Set<(action:GameAction)=>void>();
 const app = $('#app');
 app.innerHTML = `
@@ -53,6 +63,15 @@ app.innerHTML = `
     <div id="environment-bar" aria-label="Environment"></div><div id="placement-bar" hidden><strong id="placement-name"></strong><span>Tap an open spot near home · R rotates · Escape cancels</span><button class="soft-button" data-action="rotate-decor">Rotate ↻</button><button class="soft-button" data-action="cancel-decor">Cancel</button></div><div id="visit-banner" hidden></div>
     <div class="save-indicator" id="save-status">● Saved on this device</div>
   </div>
+  <div id="space-hud" hidden>
+    <div class="space-top"><div class="space-fuel" aria-label="Fuel"><span>⛽</span><div class="fuel-meter"><i id="fuel-fill"></i></div><b id="fuel-text">100</b></div><div class="space-speed"><b id="space-speed">0</b><small>km/s</small></div><div class="energy"><span>ϟ</span><b id="space-energy">0</b></div></div>
+    <canvas id="space-radar" width="150" height="150" aria-label="Radar: yellow dots are stardust, question marks are undiscovered planets"></canvas>
+    <div id="space-labels"></div><div id="space-hint" role="status"></div><div id="space-floats"></div>
+    <button id="land-button" data-action="land" hidden><span id="land-title">🛬 Land</span><small id="land-name"></small></button>
+    <button id="boost-button" aria-label="Boost (Shift or Space)"><span>🚀</span><small>Boost</small></button>
+    <div class="space-help">Hold to steer <i>•</i> <kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd> fly <i>•</i> <kbd>Shift</kbd> boost <i>•</i> <kbd>S</kbd> brake <i>•</i> <kbd>L</kbd> land</div>
+  </div>
+  <div id="warp-flash"></div>
   <div id="title-screen"><div class="title-shade"></div><div class="welcome-card"><div class="welcome-eyebrow"><span></span> YOUR NEXT LITTLE ADVENTURE</div><div class="brand-sprout">🌱</div><h1>Zoo <em>Garden</em><span>grow a little. wander a lot.</span></h1><p>A cozy home, a pocketful of seeds,<br>and a whole world waiting for you.</p><div class="welcome-form"><label for="name-input">WHAT SHOULD WE CALL YOU?</label><input id="name-input" aria-label="Your character name" maxlength="20" value="${esc(saved?.name ?? '')}" placeholder="Your name" autocomplete="off"><fieldset class="color-picker"><legend>Pick your favorite color</legend>${M.COLORS.map((c,i)=>`<button type="button" data-action="color" data-color="${c}" style="--swatch:${c}" class="${state.color===c?'selected':''}" aria-label="${['Sky blue','Rose pink','Leaf green','Honey yellow','Lavender','Terracotta'][i]}" aria-pressed="${state.color===c}"></button>`).join('')}</fieldset><button class="primary start-button" data-action="start">${saved?'Continue adventure':'Let’s play'} <span>→</span></button></div><div class="welcome-footer"><span>🌾 Grow</span><span>🎣 Discover</span><span>✨ Adventure</span></div><small class="local-note">${import.meta.env.VITE_STATIC_HOST==='true'?'Solo adventure · progress saved in this browser':'Play offline, or meet friends online'}</small></div><div class="title-caption"><span>🌿</span> WELCOME TO CLOVER VILLAGE</div></div>
   <div id="dialog-layer" hidden><section id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><header><span id="dialog-icon" aria-hidden="true"></span><div><span id="dialog-kicker" class="eyebrow">MAKE YOURSELF AT HOME</span><h2 id="dialog-title"></h2></div><button class="close-button" data-action="close" aria-label="Close dialog">×</button></header><div id="dialog-body"></div></section></div>
   <div id="toasts" role="status" aria-live="polite"></div><div id="floating-text"></div><div id="damage-flash"></div>
@@ -60,7 +79,7 @@ app.innerHTML = `
 // Scenery is batched when a world is built, so give the small scenery kit a moment
 // to arrive first. A slow connection starts with the simple shapes instead.
 $('#title-screen').inert=true;
-await Promise.race([sceneryKit.load(),new Promise(resolve=>setTimeout(resolve,4000))]);
+await Promise.race([Promise.all([sceneryKit.load(),wildsKit.load()]),new Promise(resolve=>setTimeout(resolve,4000))]);
 $('#title-screen').inert=false;
 const graphics=loadGraphics(state.settings.lowGraphics);
 let world: World;
@@ -92,6 +111,7 @@ function emitAction(action:Omit<GameAction,'x'|'z'|'facing'>){const value={...ac
 function moveEnemy(target:Enemy,x:number,z:number){if(!Number.isFinite(x)||!Number.isFinite(z)||Math.hypot(target.x-x,target.z-z)>12||world.blocked(x,z))return;target.x=x;target.z=z;target.mesh.position.x=x;target.mesh.position.z=z;}
 // Upgrade visuals in place when ready; playing and saved progress never wait on assets.
 void refinedAssets.loadAll().then(() => world.applyRefinedAssets());
+void spaceKit.load().then(() => world.applyRefinedAssets());
 void cropKit.load();
 // If the scenery kit arrived after the first build, rebuild while the title screen is still up.
 if(!sceneryKit.ready)void sceneryKit.load().then(()=>{if(sceneryKit.ready&&!started){world.build(state.planet);world.refreshPlayer();}});
@@ -137,7 +157,7 @@ const DIALOG_LOOK:Record<string,[string,string]>={
 function floating(text:string,x=world.position.x,z=world.position.z,style='item',rise=0) {world.fx?.text({x,y:rise,z},text,style);}
 function levelCheck(before:number) {if(state.level>before){toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);}}
 function change<T>(action:()=>T):T {const before=state.level;const result=action();levelCheck(before);save();updateHud();return result;}
-function uiBlocked(){return !!modal||!!document.querySelector('dialog[open]');}
+function uiBlocked(){return !!modal||!!document.querySelector('dialog[open]')||shipSequence?.busy||!!flight||arriving;}
 function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF AT HOME',icon?:string) {
   if(fishGame)endFishing();
   if(!modal)lastFocused=document.activeElement as HTMLElement;const reopened=modal===type;modal=type;movement.clear();gestures.clear();world.destination=null;world.route=[];
@@ -149,7 +169,7 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   $('.close-button').focus({preventScroll:true});
 }
 function closeDialog(){modal='';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
-function start() {state.name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;save();updateHud();updateLabels();toast(saved?`Welcome back, ${state.name}. Your garden missed you!`:'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
+function start() {settle();state.name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;save();updateHud();updateLabels();toast(saved?`Welcome back, ${state.name}. Your garden missed you!`:'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 function updateHud() {
   $('#world').dataset.status=JSON.stringify({position:[+world.position.x.toFixed(2),+world.position.z.toFixed(2)],route:world.route.length,next:world.route[0]?[world.route[0].x,world.route[0].z]:null,visibility:document.visibilityState,modal,started,frameMs:Math.round(frameTime),drawCalls:world.renderer.info.render.calls});
@@ -312,7 +332,20 @@ function placeAt(x:number,y:number){
   const {id,rotation}=placement;if(change(()=>M.placeDecoration(state,id,point.x,point.z,rotation))){cancelPlacement();world.syncDecorations();toast(`${M.ITEMS[id].name} placed.`,'🏡');}
 }
 
-function planets(){openDialog('travel','There’s a whole sky out there',`<p class="intro">Your village is always a free ride away.</p><div class="planet-grid">${Object.entries(M.PLANETS).map(([id,p])=>`<div class="planet-card ${id===state.planet?'here':''}"><span style="background:${p.sky}">${p.icon}</span><div><h3>${p.name}</h3><p>${p.description}</p><small>${state.visited.includes(id as M.PlanetId)?'✓ Discovered':`Level ${p.level}`}</small></div><button class="${id===state.planet?'soft-button':'primary'}" data-action="travel" data-planet="${id}" ${id===state.planet||state.level<p.level||state.energy<p.fare?'disabled':''}>${id===state.planet?'You are here':state.level<p.level?`🔒 Level ${p.level}`:p.fare?`Fly · ϟ ${p.fare}`:'Return home'}</button></div>`).join('')}</div>`,'STARSHIP STATION');}
+/** The starship's star map: fuel up, take off, and a log of every planet found so far. */
+function planets(){
+  const ready=state.energy>=M.LAUNCH_COST,all=Object.keys(M.PLANETS).length;
+  const card=([id,p]:[string,M.PlanetDef])=>{
+    const here=id===state.planet;
+    if(!state.discovered.includes(id as M.PlanetId))return `<div class="planet-card mystery"><span class="planet-ball">❓</span><div><h3>Mysterious planet</h3><p>Nobody has found it yet. Fly out into space and follow the <b>?</b> on your radar.</p></div></div>`;
+    const bosses=p.bosses.map(b=>ENEMY_TYPES[b]?.name??b).join(', ');
+    return `<div class="planet-card ${here?'here':''}"><span class="planet-ball" style="background:radial-gradient(circle at 32% 30%,${p.grad[0]},${p.grad[1]} 60%,${p.grad[2]})">${p.icon}</span><div><h3>${p.name}</h3><p>${p.description}</p><div class="planet-tags"><span>👑 ${bosses}</span><span class="${state.level<p.level?'miss':''}">⭐ Landing: level ${p.level}</span></div></div>${here?'<b class="planet-here">📍 You are here</b>':''}</div>`;
+  };
+  openDialog('travel','Starship Sprout',`<div class="starmap-fuel"><span>⛽</span><div><strong>Fill the tank: ϟ ${M.LAUNCH_COST}</strong><small>You have ϟ ${state.energy}</small></div></div>
+    <p class="intro">Pilot the starship yourself! Hold to steer toward your finger, collect ✨ stardust for fuel, and follow the <b>?</b> on the radar to discover new planets.</p>
+    <button class="primary launch-button" data-action="launch" ${ready?'':'disabled'}>${ready?'🚀 Take off!':`Needs ϟ ${M.LAUNCH_COST} energy`}</button>
+    <h3 class="starmap-title">🔭 Discovery log · ${state.discovered.length} / ${all}</h3><div class="planet-grid">${Object.entries(M.PLANETS).map(card).join('')}</div>`,'STAR MAP','🚀');
+}
 function map(){openDialog('map','Every path is a possibility',`<p class="intro">Choose a place and your explorer will walk there.</p><div class="map-illustration"><div class="map-path"></div><span class="map-house">🏡</span><span class="map-trees">🌳 🌲 🌳</span><span class="map-garden">🌱 🌱</span><span class="map-pond">🎣</span><span class="map-rocket">🚀</span><span class="map-stall">🧺</span><b>Clover Village</b></div><div class="map-destinations">${(state.planet==='home'?[['plot','🌱','Garden'],['sell','🧺','Market'],['shop','🛍️','Outfitters'],['fish','🎣','Pond'],['upgrade','💎','Crystal'],['craft','🔨','Workshop'],['chest','📦','Storage'],['travel','🚀','Rocket']]:[['mine','💎','Crystal vein'],['travel','🚀','Rocket']]).map(([kind,icon,name])=>`<button class="soft-button" data-action="go" data-kind="${kind}">${icon} ${name}</button>`).join('')}${(world.planet==='home'?[['forest','🍄 Mushroom Forest'],['meadow','🌊 Lake Meadow'],['swamp','🌿 Chomper Swamp'],['canyon','🏜️ Redrock Canyon']]:[['wild','Explore the wild']]).map(([kind,label])=>`<button class="soft-button" data-action="wild" data-kind="${kind}">${label}</button>`).join('')}</div><p class="fineprint">${state.visited.length} of 9 worlds discovered · Click the ground to choose your own path.</p>`,'YOUR EXPLORER’S MAP');}
 function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Gentle sound effects</strong><small>Soft notes for everyday discoveries</small></div><button class="toggle ${state.settings.sound?'on':''}" role="switch" aria-checked="${state.settings.sound}" aria-label="Sound effects" data-action="sound"></button></div><div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom)}</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
 function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${[['👣','Wander','Click or tap to walk; hold the ground to steer. Pinch or scroll to zoom. Arrow keys and the direction pad also move.'],['🌱','Grow','Click a garden bed, pick a free seed, and come back when it sparkles. Crops grow while you are away.'],['🧺','Trade','Sell your harvest at the pink market. Buy equipment at the blue stall. Equip it from your backpack (I).'],['⚔️','Be brave','Click a creature to follow and attack it. Space attacks nearby enemies. Q spins, W dashes, E stomps, and R uses your weapon’s special.'],['🎣','Catch a moment','Equip a fishing rod and walk up to a pond: you cast automatically. Let the fish nibble, press Reel the moment it bites, then hold Reel to pull it in and let go when it surges or the line turns red.'],['📖','Follow your curiosity','Complete story chapters, daily tasks, achievements, and collections. Collect rewards to level up. The rocket opens new worlds from level 5.'],['📦','Keep it safe','If you fall, loose items stay in a pink backpack where you fell. Your equipment, levels, and energy are safe. Store treasures in the chest.'],['⌨️','Handy shortcuts','I: backpack · J: journal · M: map · F: nearby interaction · Esc: close. The Home button brings you back safely.']].map(([icon,title,body])=>`<div><span>${icon}</span><h3>${title}</h3><p>${body}</p></div>`).join('')}</div>`,'MAKE YOURSELF AT HOME');}
@@ -488,7 +521,84 @@ export const gameBridge:GameBridge={
 };
 
 function go(kind:string){closeDialog();const entities=world.entities.filter(e=>e.kind===kind);const entity=kind==='plot'?entities.find(e=>!world.state.plots[e.index!]?.crop)||entities[0]:entities[0];if(entity){world.select(entity);toast(`Off to ${kind==='plot'?'the garden':entity.name.toLowerCase()}…`,'👣');}else toast('That place is back in Clover Village.','🏡');}
-function travelTo(id:M.PlanetId){if(!change(()=>M.travel(state,id))){toast('A little more energy or experience is needed.','🚀');return;}closeDialog();resetCombat();cancelPlacement();world.build(id);world.refreshPlayer();updateLabels();showZone(M.PLANETS[id].name);tone('level');}
+// ---- The starship: take-off, a piloted flight between planets, and landing ----
+const SCENERY_KITS={scenery:sceneryKit,wilds:wildsKit,bright:brightKit,harsh:harshKit};
+shipSequence=new ShipSequence(world,tone);const ship=shipSequence;
+const spaceView=new SpaceView($('#space-labels'),spaceKit);
+const spaceKeys=new Set<string>();let spacePointer:{x:number;y:number}|null=null,boostHeld=false;
+const prefetch=(id:M.PlanetId)=>{for(const name of kitsFor(id))void SCENERY_KITS[name].load();};
+function leaveWorld(){closeDialog();resetCombat();cancelPlacement();endFishing();world.destination=null;world.route=[];world.selected=null;world.marker.visible=false;world.ring.visible=false;movement.clear();}
+function launch(){
+  if(ship.busy||flight||arriving)return;
+  if(!change(()=>M.launch(state))){toast(`The starship needs ϟ ${M.LAUNCH_COST} energy to fill its tank.`,'⛽');return;}
+  leaveWorld();toast('Lift-off in three, two, one…','🚀');
+  ship.launch(()=>warp(enterSpace));
+}
+/** A quick trip home with the starship, without piloting: the old free ride back. */
+function flyHome(){if(ship.busy||flight||arriving)return;leaveWorld();ship.launch(()=>void arrive('home'));}
+function warp(then:()=>void){const flash=$('#warp-flash');flash.classList.add('show');setTimeout(()=>{then();setTimeout(()=>flash.classList.remove('show'),150);},600);}
+function enterSpace(){
+  flight=new SpaceFlight(state.planet,state.discovered);spaceView.build(flight,graphics.level==='low');
+  $('#hud').hidden=true;$('#world-labels').hidden=true;$('#space-hud').hidden=false;
+  spaceHint(matchMedia('(pointer: coarse)').matches?'Hold anywhere to steer toward your finger · hold <b>Boost</b> to speed up · fly close to a planet to land':'Hold the mouse to steer (or <kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd>) · <kbd>Shift</kbd> boosts · fly close to a planet to land',5);tone('cast');
+}
+function exitSpace(){flight=null;spaceView.hideLabels();spaceKeys.clear();spacePointer=null;boostHeld=false;$('#space-hud').hidden=true;$('#hud').hidden=false;$('#world-labels').hidden=false;}
+let hintTimer=0;
+function spaceHint(html:string,seconds=5){const hint=$('#space-hint');hint.innerHTML=html;hint.classList.add('show');clearTimeout(hintTimer);hintTimer=window.setTimeout(()=>hint.classList.remove('show'),seconds*1000);}
+function spaceFloat(html:string){const el=document.createElement('div');el.className='space-float';el.innerHTML=html;$('#space-floats').append(el);setTimeout(()=>el.remove(),1600);}
+function tryLanding(){
+  if(!flight||flight.landing)return;
+  const over=flight.over;if(!over){spaceHint('Fly over a planet to land on it.',2);return;}
+  if(!flight.land(id=>M.canLand(state,id))){const p=M.PLANETS[over.id];spaceHint(`🔒 The air on ${p.name} is too rough. You need <b>level ${p.level}</b> to land.`,3);tone('hurt');return;}
+  prefetch(over.id);tone('crit');$('#land-button').hidden=true;
+}
+function onSpaceEvent(event:SpaceEvent){
+  switch(event.kind){
+    case 'boost':tone('swing');break;
+    case 'bump':spaceView.shake=.5;tone('hit');break;
+    case 'empty':spaceHint('⛽ Out of fuel! The starship can only crawl. Collect <b>stardust</b> ✨ to refuel.',5);break;
+    case 'edge':spaceHint('🌌 This is the edge of the universe. Time to turn back!',3);break;
+    case 'dust':{const shard=M.collectStardust(state);spaceFloat(`✨ +14 fuel · +3 ϟ${shard?' · 🌟 Star shard!':''}`);tone(shard?'level':'coin');break;}
+    case 'discover':{M.discover(state,event.planet);save();prefetch(event.planet);const p=M.PLANETS[event.planet];
+      spaceHint(`🔭 New planet discovered: <b>${p.icon} ${p.name}</b><br><small>Bosses: ${p.bosses.map(b=>ENEMY_TYPES[b]?.name??b).join(', ')} · landing from level ${p.level}</small>`,6);tone('level');break;}
+    case 'landed':void arrive(event.planet);break;
+  }
+}
+/** Swaps worlds behind a flash, then brings the starship down onto the new pad. */
+async function arrive(id:M.PlanetId){
+  if(arriving)return;arriving=true;
+  const flash=$('#warp-flash');flash.classList.add('show');
+  await new Promise(resolve=>setTimeout(resolve,600));
+  try{
+    M.travel(state,id);save();
+    await Promise.race([Promise.all(kitsFor(id).map(name=>SCENERY_KITS[name].load())),new Promise(resolve=>setTimeout(resolve,2500))]);
+    if(flight)exitSpace();
+    ship.reset();world.build(id);world.refreshPlayer();world.applyRefinedAssets();updateLabels();settle();
+    // Compile the new world's shaders in the background, so the first frames after landing don't hitch.
+    void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{});
+    const p=M.PLANETS[id];
+    ship.land(()=>{showZone(id==='home'?'Clover Village':p.name);floating(`${p.icon} ${p.name}`,world.position.x,world.position.z,'level',1);toast(id==='home'?'Home, sweet home!':`Welcome to ${p.name}! Watch out for its creatures.`,p.icon);});
+  }finally{arriving=false;setTimeout(()=>flash.classList.remove('show'),150);}
+}
+function updateSpace(dt:number){
+  if(!flight)return;
+  const k=spaceKeys,input={turn:(k.has('d')||k.has('arrowright')?1:0)-(k.has('a')||k.has('arrowleft')?1:0),thrust:k.has('w')||k.has('arrowup')?1:0,brake:k.has('s')||k.has('arrowdown'),boost:k.has('shift')||k.has(' ')||boostHeld,
+    aim:spacePointer?spaceView.aimAt(spacePointer.x/innerWidth*2-1,-(spacePointer.y/innerHeight)*2+1):null};
+  for(let remaining=dt;remaining>0&&flight;){const step=Math.min(.025,remaining);remaining-=step;for(const event of flight.step(step,input))onSpaceEvent(event);}
+  if(!flight)return;
+  spaceView.update(dt,flight,flight.discovered,state.level,innerWidth,innerHeight);spaceView.render(world.renderer);
+  spaceView.drawRadar($<HTMLCanvasElement>('#space-radar').getContext('2d')!,flight,flight.discovered,flight.time);
+  $('#fuel-fill').style.width=`${flight.fuel}%`;$('#fuel-fill').classList.toggle('low',flight.fuel<20);$('#fuel-text').textContent=String(Math.round(flight.fuel));
+  $('#space-speed').textContent=String(Math.round(flight.speed*10));$('#space-energy').textContent=String(state.energy);
+  const land=$('#land-button'),over=flight.over;land.hidden=!over||!!flight.landing;
+  if(over&&!flight.landing){const p=M.PLANETS[over.id],locked=state.level<p.level;land.classList.toggle('locked',locked);$('#land-title').textContent=locked?`🔒 ${p.name}`:'🛬 Land';$('#land-name').textContent=locked?`Needs level ${p.level}`:`${p.icon} ${p.name}`;}
+}
+$('#world').addEventListener('pointerdown',event=>{if(!flight)return;const e=event as PointerEvent;spacePointer={x:e.clientX,y:e.clientY};});
+addEventListener('pointermove',event=>{if(flight&&spacePointer){const e=event as PointerEvent;spacePointer={x:e.clientX,y:e.clientY};}});
+for(const type of ['pointerup','pointercancel'])addEventListener(type,()=>{spacePointer=null;});
+const boostButton=$('#boost-button');
+boostButton.addEventListener('pointerdown',event=>{event.stopPropagation();event.preventDefault();boostHeld=true;});
+for(const type of ['pointerup','pointerleave','pointercancel'])boostButton.addEventListener(type,()=>{boostHeld=false;});
 app.addEventListener('click',event=>{
   const button=(event.target as HTMLElement).closest<HTMLButtonElement>('button');if(!button||button.disabled)return;
   if(button.dataset.entity){const e=world.entities.find(e=>e.id===button.dataset.entity);if(e&&!modal)world.select(e);return;}
@@ -530,10 +640,10 @@ app.addEventListener('click',event=>{
     case 'transfer':change(()=>M.transfer(state,id,button.dataset.direction==='store'));storage();break;
     case 'upgrade':if(change(()=>M.upgrade(state,button.dataset.kind as keyof typeof M.UPGRADES))){upgrades();tone('success');}break;
     case 'craft':if(change(()=>M.craft(state,index))){crafting();toast('Made with your own two hands. Check your backpack!','🔨');}break;
-    case 'travel':travelTo(button.dataset.planet as M.PlanetId);break;
+    case 'launch':launch();break;case 'land':tryLanding();break;
     case 'go':go(button.dataset.kind!);break;
     case 'wild':{closeDialog();const destinations:Record<string,[number,number]>={forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]};const destination=destinations[button.dataset.kind??'forest']??[0,-30];world.walkTo(destination[0],destination[1]);toast('Follow the path beyond the garden gate.','🍄');break;}
-    case 'return-home':if(state.planet!=='home')travelTo('home');else{closeDialog();world.position.set(0,0,0);world.destination=null;world.route=[];world.selected=null;toast('Home, sweet home.','🏡');}break;
+    case 'return-home':if(state.planet!=='home')flyHome();else{closeDialog();world.position.set(0,0,0);world.destination=null;world.route=[];world.selected=null;toast('Home, sweet home.','🏡');}break;
     case 'interact':world.interactNearest();break;case 'attack':basicAttack();break;case 'skill':skill(index);break;
     case 'equip-rod':change(()=>M.equip(state,id));world.refreshPlayer();closeDialog();fish();break;case 'fish-again':fish(fishPond);break;
     case 'reel':if(fishGame){if(event.detail===0)fishGame.input.toggle();}else if(button.classList.contains('cast'))fish(fishPond);break;
@@ -551,6 +661,7 @@ $('#world').addEventListener('wheel',event=>{if(uiBlocked())return;const e=event
 $('#world').addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('keydown',event=>{
   if(document.querySelector('dialog[open]'))return;
+  if(flight){const key=event.code==='Space'?' ':event.key.toLowerCase();if(key===' '||key.startsWith('arrow'))event.preventDefault();if(!event.repeat&&['l','enter','f'].includes(key))tryLanding();else spaceKeys.add(key);return;}
   if(event.key==='Escape'){if(placement)cancelPlacement();else closeDialog();return;}
   if(modal&&event.key==='Tab'){const controls=Array.from($('#dialog').querySelectorAll<HTMLElement>('button:not(:disabled),input,a,[tabindex="0"]'));const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}return;}
   if((event.target as HTMLElement).matches('input,textarea')){if(event.key==='Enter'&&!started)start();return;}
@@ -560,13 +671,15 @@ document.addEventListener('keydown',event=>{
   if(event.repeat)return;
   const key=event.key.toLowerCase();if(placement&&key==='r'){placement.rotation=(placement.rotation+Math.PI/2)%(Math.PI*2);return;}if(key==='i')inventory();else if(key==='j')quests();else if(key==='m')map();else if(key==='f')world.interactNearest();else if(['q','w','e','r'].includes(key))skill(['q','w','e','r'].indexOf(key));else if(event.code==='Space'){event.preventDefault();basicAttack();}
 });
-document.addEventListener('keyup',e=>{movement.releaseKey(e.key);if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
+document.addEventListener('keyup',e=>{spaceKeys.delete(e.code==='Space'?' ':e.key.toLowerCase());movement.releaseKey(e.key);if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
 document.addEventListener('pointerdown',e=>{const target=(e.target as HTMLElement).closest<HTMLElement>('button');if(target?.dataset.move){e.preventDefault();movement.pressPointer(e.pointerId,target.dataset.move);target.setPointerCapture(e.pointerId);}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}});
 const releasePointer=(e:PointerEvent)=>{gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);fishGame?.input.releasePointer(e.pointerId);};
 document.addEventListener('pointerup',releasePointer);document.addEventListener('pointercancel',releasePointer);document.addEventListener('lostpointercapture',releasePointer);
 window.addEventListener('blur',()=>{movement.clear();fishGame?.input.clear();gestures.clear();save();});window.addEventListener('beforeunload',save);document.addEventListener('visibilitychange',()=>{movement.clear();fishGame?.input.clear();gestures.clear();save();});
 let previous=performance.now(),wasAirborne=false;
 function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt=Math.min(1,(now-previous)/1000);previous=now;elapsed+=realDt;uiElapsed+=realDt;
+  if(flight&&!arriving){updateSpace(realDt);if(uiElapsed>.12){uiElapsed=0;updateHud();}if(elapsed>8){elapsed=0;save();}requestAnimationFrame(frame);return;}
+  ship.update(realDt,world.time);
   // Hit-stop: after a critical hit the world runs at a tenth of its speed for a heartbeat.
   let dt=realDt;const fx=world.fx;if(fx&&fx.hitstop>0){fx.hitstop-=realDt;dt*=.1;}
   // Simulate in small steps, then draw once. Movement remains consistent when a
@@ -580,7 +693,7 @@ function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt
   fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.position,fishGame?.simulation??null);
   if(!fishGame&&!$('#reel-button').hidden&&(performance.now()>recastUntil||world.moving))showReel(false);
   world.render();positionLabels();fx?.updateText(realDt,innerWidth,innerHeight);
-  const graphicsChange=graphics.sample(realDt,started&&!document.hidden&&!uiBlocked());if(graphicsChange){world.applyGraphics(graphics.profile,graphics.ratio);if(graphicsChange==='level')saveGraphics(graphics);}
+  const graphicsChange=graphics.sample(realDt,started&&!document.hidden&&!uiBlocked()&&performance.now()>settledAt);if(graphicsChange){world.applyGraphics(graphics.profile,graphics.ratio);if(graphicsChange==='level')saveGraphics(graphics);}
   for(const listener of frameListeners)listener(dt);
   if(uiElapsed>.12){uiElapsed=0;world.syncCrops();updateHud();updateLabels();if(modal==='plot'){const p=state.plots[activePlot],progress=M.cropProgress(p);$('#grow-fill').style.width=`${progress*100}%`;$('#grow-time').textContent=progress>=1?'Ready! Close this window and tap the crop to harvest.':`${Math.ceil((1-progress)*M.CROPS[p.crop!].duration/1000)} seconds until harvest`;}}
   if(elapsed>8){elapsed=0;if(started)save();}requestAnimationFrame(frame);
@@ -590,9 +703,5 @@ requestAnimationFrame(frame);
 
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
-
-
-
-
-
-
+// Development builds expose the game to browser tests; production builds leave this out.
+if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView}});
