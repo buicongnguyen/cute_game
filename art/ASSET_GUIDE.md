@@ -17,11 +17,12 @@ Built with Blender 4.5 LTS by headless generators. All geometry and materials ar
 - `blender/kit/build_worlds_bright.py`: candy, toy, cloud, jungle and ocean scenery.
 - `blender/kit/build_worlds_harsh.py`: ice, lava and night-world scenery.
 - `blender/kit/build_space.py`: the starship (with a separate flame), its launch pad, stardust and three asteroids.
+- `blender/kit/build_farm.py`: the farm pen: hen, chick, cow and calf with named parts for animation, fence segment, gate, feed and water troughs, coop, hay bale, and the egg, milk and egg-basket products with their icons.
 - `blender/kit/CONTRACT.md`: footprints, heights, triangle budgets, node names and material names that the game relies on. Both generators fail rather than export a model that breaks it.
 - `../public/assets/models/*.glb`: the models the game loads.
 - `../public/assets/icons/crops/*.webp`, `icons/fish/*.webp` and `icons/items/*.webp`: 160 px icons used in the seed picker, backpack, shop, market, crafting lists, garden labels and fish collection. Decoration icons are drawn by the game from the placed models instead.
 - `exports/unity-fbx/*.fbx`: prop exports for a possible Unity port. Unity import has not been tested.
-- `previews/kit/`: Blender renders of every prop, the scenery, the crops, the fish, the explorer in each hat, outfit, boot, weapon and disguise, the pets, and icon contact sheets.
+- `previews/kit/`: Blender renders of every prop, the scenery, the crops, the fish, the explorer in each hat, outfit, boot, weapon and disguise, the pets, the farm pen (`farm.webp`, `farm-pen.webp`, `farm-poses.webp`), and icon contact sheets.
 - `asset-manifest.json`: triangles, bounds, materials and file sizes from the last build.
 
 ## What the game uses
@@ -52,6 +53,14 @@ Built with Blender 4.5 LTS by headless generators. All geometry and materials ar
 
 The models total about 3.7 MB and the icons about 0.6 MB. A new player downloads the world models and `hero.glb` only; each gear file loads the first time something from it is worn.
 
+Ready but not loaded by the game yet:
+
+| File | Contents | Triangles | Size |
+| --- | --- | ---: | ---: |
+| `farm.glb` | Farm pen: hen, chick, cow and calf, each split into body, head, legs, tail (and wings for the birds) around their joints; a 2 m fence segment, a gate with a swinging door, feed and water troughs, a coop and a hay bale; egg, milk bottle and egg basket | 128–1,490 each | 272 KB |
+
+The egg, milk and egg-basket icons (`icons/items/egg.webp`, `milk.webp`, `egg_basket.webp`) come from the same build. The offline worker keeps `farm.glb` the first time it is fetched instead of downloading it at install.
+
 ## Rebuild
 
 From the project root, with Blender 4.5 on PATH:
@@ -68,6 +77,7 @@ blender -b --factory-startup --python art/blender/kit/build_wilds.py -- --instal
 blender -b --factory-startup --python art/blender/kit/build_worlds_bright.py -- --install --render
 blender -b --factory-startup --python art/blender/kit/build_worlds_harsh.py -- --install --render
 blender -b --factory-startup --python art/blender/kit/build_space.py -- --install --render
+blender -b --factory-startup --python art/blender/kit/build_farm.py -- --install --render
 ```
 
 - `--install` copies the results into `public/`. Without it, output stays in `art/generated/kit/`, which is not tracked.

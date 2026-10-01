@@ -644,3 +644,113 @@ Output is deterministic: two runs give byte-identical files. `--render` writes
 is a labelled contact sheet from the game camera on each planet's ground. The
 second shows one vignette per planet at game zoom, with the explorer for scale
 and Shadow lit only around the explorer.
+
+## Farm pen (`build_farm.py` → `farm.glb`)
+
+`public/assets/models/farm.glb` holds a farm-animal pen for beside the garden:
+four animals, six pen pieces and three products. Blender is Z up with the front
+facing -Y (glTF Y up, front +Z), 1 unit is 1 metre, and every top-level node
+sits at the origin with no transform. Its origin is the piece's ground centre.
+Materials are shared by name across the file (`Farm <name>`, for example
+`Farm feather`, `Farm cow patch`, `Farm wood dark`). They are flat colours,
+single sided, with no textures, UVs or glow. The file is about 272 KB (limit
+320 KB) and the game does not load it yet.
+
+### Animals
+
+Each animal is a root empty named the id, with one child mesh per part, named
+`<id>_<part>`. A child's translation is the part's **pivot**, and its vertices
+are relative to that pivot, so turning the child turns the part about its joint.
+Children have no rotation or scale. Multi-material parts load as several meshes
+in three.js (`GLTFLoader` may add `_1`, `_2` to the names). Each of them carries
+the same pivot, so match parts by the `<id>_<part>` prefix and turn them all.
+The right-hand parts (`_r`, `_fr`, `_br`) are on +X, as with `hand-right`.
+
+| Node | Parts | Size (w × l × h) | Triangles (≤ 1,500) |
+| --- | --- | --- | ---: |
+| `chicken` | `body`, `head`, `wing_l`, `wing_r`, `leg_l`, `leg_r`, `tail` | 0.38 × 0.59 × 0.58 (comb top; body top 0.40) | 1,332 |
+| `chick` | same as `chicken` | 0.24 × 0.33 × 0.32 | 1,074 |
+| `cow` | `body`, `head`, `leg_fl`, `leg_fr`, `leg_bl`, `leg_br`, `tail` | 0.97 × 2.16 × 1.75 (back 1.40, horn tips 1.75) | 1,490 |
+| `calf` | same as `cow` | 0.72 × 1.43 × 1.16 (back 0.87) | 1,420 |
+
+Pivots (glTF x, y, z):
+
+- `chicken`: body (0, 0.13, -0.04), head (0, 0.34, 0.08), wings
+  (±0.135, 0.31, 0.03), legs (±0.062, 0.13, -0.04), tail (0, 0.31, -0.19).
+- `chick`: body (0, 0.05, -0.02), head (0, 0.16, 0.03), wings
+  (±0.09, 0.14, 0.005), legs (±0.042, 0.05, -0.02), tail (0, 0.13, -0.1).
+- `cow`: body (0, 0.68, -0.06), head at the neck (0, 1.24, 0.6), front legs
+  (±0.25, 0.68, 0.36), back legs (±0.25, 0.68, -0.44), tail (0, 1.3, -0.72).
+- `calf`: body (0, 0.43, -0.05), head (0, 0.8, 0.38), front legs
+  (±0.15, 0.43, 0.21), back legs (±0.15, 0.43, -0.29), tail (0, 0.8, -0.46).
+
+Animation, in glTF/three.js terms:
+
+- **Head:** `rotation.x > 0` lowers it (pecking, grazing). `rotation.y` turns
+  it, and a nod of about 0.5 rad stays joined to the body.
+- **Legs:** `rotation.x > 0` swings the foot backward. Swing diagonal pairs
+  together for cattle, or alternate the two bird legs; ±0.4 rad reads as a walk.
+- **Wings:** as the pet wings. `wing_r.rotation.z = +a` and
+  `wing_l.rotation.z = -a` raise both; ±0.6–1.0 rad reads as a flap.
+- **Tail:** `rotation.y` wags it about the vertical.
+- **Body:** bob `position.y` or squash it about its pivot (hips height).
+
+The cow carries a bell under its chin and spots that hug the body. The calf has
+horn nubs, a cream forelock and cream spots. The heads and their eyes, blush
+and smile reuse the pets' chibi face (`build_weapons.py`).
+
+### Pen pieces
+
+| Node | Shape | Size (w × d × h) | Triangles (≤ 800) |
+| --- | --- | --- | ---: |
+| `pen_fence` | two posts at x = ±1.0 and rails at z 0.42 and 0.74; segments tile every 2.0 m, sharing their end posts | 2.13 × 0.13 × 0.97 | 128 |
+| `pen_gate` | one segment wide, posts at x = ±1.0. Children `pen_gate_frame` (posts with red ball caps, crossbeam at z 1.36, hanging egg sign) and `pen_gate_door` (red slats in a white frame, 1.8 wide, z 0.08–1.0). The door's pivot is its hinge at glTF (-0.9, 0, 0); `rotation.y` opens it. | 2.19 × 0.21 × 1.68 | 712 |
+| `feed_trough` | wooden trough on end boards, full of grain | 1.20 × 0.58 × 0.50 | 344 |
+| `water_trough` | oval tub of light and dark staves with two iron hoops; water at z 0.39 | 1.25 × 0.81 × 0.44 | 480 |
+| `coop` | red hen house on stilts with white corner trims, golden thatch roof, round window and an arched doorway (sill at z 0.37) with a ramp down to the front | 1.80 × 1.87 × 1.77 | 796 |
+| `hay_bale` | rounded bale with two red twine bands and a few loose straws; stacks at z 0.5 | 1.14 × 0.57 × 0.57 | 368 |
+
+The coop's footprint is centred on its origin, ramp included, so the house
+itself sits about 0.25 behind it.
+
+### Products
+
+| Node | Look | Size (w × h) | Triangles (≤ 300) | Icon |
+| --- | --- | --- | ---: | --- |
+| `egg` | cream egg with brown speckles | 0.09 × 0.12 | 216 | `icons/items/egg.webp` |
+| `milk` | glass bottle of milk with a red label and a blue cap | 0.15 × 0.30 | 280 | `icons/items/milk.webp` |
+| `egg_basket` | woven basket with three eggs and an arched handle | 0.34 × 0.30 | 294 | `icons/items/egg_basket.webp` |
+
+Products are single meshes with their base at z 0, at world scale (a hen is
+0.58 tall), so they can sit on the ground or in a hand as they are. Their icons
+are in `public/assets/icons/items/`: 160 × 160, transparent, 3/4 view, under
+8 KB, rendered as `build_items.py` renders its icons.
+
+### Build
+
+```powershell
+blender -b --factory-startup --python art/blender/kit/build_farm.py -- --install --render
+```
+
+The build fails when a piece breaks any of these rules:
+
+- names, parts or pivots in the GLB differ from the scene;
+- a piece goes over its triangle budget;
+- a piece leaves the ground (min z beyond ±0.02);
+- a height or half extent is more than 12 % off its target;
+- a footprint is off its origin;
+- a material is not named `Farm …` or is emissive, or the file has textures;
+- the GLB is over 320 KB or an icon is over 8 KB.
+
+Output is deterministic. The manifest
+(`art/generated/kit/farm-manifest.json`, copied into `art/asset-manifest.json`
+under `farm` by `--install`) lists triangles, bounds, parts, pivots (Blender
+and glTF) and material colours. `--render` writes:
+
+- `art/previews/kit/farm.webp`: every piece beside the explorer, from the game
+  camera.
+- `farm-pen.webp`: a 10 × 6 m pen with every piece in use.
+- `farm-poses.webp`: each animal at rest and posed through its parts.
+- `farm-icons.webp`: the icon sheet.
+
+`--debug DIR` adds close-ups of every piece.
