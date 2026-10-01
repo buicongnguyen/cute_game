@@ -92,3 +92,62 @@ test('flying near a planet discovers it once, and landing needs the level', () =
   assert.ok(flight.landingScale < .4);
   assert.ok(Math.hypot(flight.x - candy.x, flight.z - candy.z) < .5, 'the ship spirals onto the planet');
 });
+
+import { planRoutes, routeFuel, AUTOPILOT_CRUISE } from '../src/space.ts';
+import * as M from '../src/model.ts';
+const levels = Object.fromEntries(Object.entries(M.PLANETS).map(([id, p]) => [id, p.level])) as Record<M.PlanetId, number>;
+const allIds = Object.keys(STAR_MAP) as M.PlanetId[];
+
+test('star-map routes list every planet easiest first, then nearest', () => {
+  const routes = planRoutes({ from: 'home', level: 30, discovered: allIds, levels });
+  assert.equal(routes.length, allIds.length);
+  for (let i = 1; i < routes.length; i++) assert.ok(routes[i - 1].level < routes[i].level || routes[i - 1].level === routes[i].level && routes[i - 1].distance <= routes[i].distance);
+  assert.deepEqual(routes.map(r => r.id), ['home', 'toy', 'candy', 'jungle', 'ice', 'ocean', 'lava', 'cloud', 'shadow']);
+});
+
+test('routes lock the current planet, undiscovered planets and too-high levels', () => {
+  const routes = planRoutes({ from: 'home', level: 6, discovered: ['home', 'candy', 'toy', 'ice'], levels });
+  const lock = Object.fromEntries(routes.map(r => [r.id, r.lock]));
+  assert.equal(lock.home, 'here'); assert.equal(lock.toy, null); assert.equal(lock.candy, null);
+  assert.equal(lock.ice, 'level'); assert.equal(lock.jungle, 'undiscovered'); assert.equal(lock.shadow, 'undiscovered');
+  assert.equal(planRoutes({ from: 'home', level: 30, discovered: allIds, levels, fuel: 10 }).find(r => r.id === 'shadow')!.lock, 'fuel');
+});
+
+test('the recommended pick is the hardest open planet, falling back to home', () => {
+  const pick = (o: Parameters<typeof planRoutes>[0]) => planRoutes(o).filter(r => r.recommended).map(r => r.id);
+  assert.deepEqual(pick({ from: 'home', level: 6, discovered: ['home', 'candy', 'toy'], levels }), ['candy']);
+  assert.deepEqual(pick({ from: 'home', level: 5, discovered: ['home', 'candy', 'toy'], levels }), ['toy']);
+  assert.deepEqual(pick({ from: 'home', level: 3, discovered: ['home', 'candy', 'toy'], levels }), []);
+  assert.deepEqual(pick({ from: 'toy', level: 4, discovered: ['home', 'toy', 'candy'], levels }), ['home']);
+});
+
+test('the autopilot flies to the chosen planet, lands, and stays within its fuel estimate', () => {
+  for (const to of ['candy', 'shadow', 'jungle'] as M.PlanetId[]) {
+    const flight = new SpaceFlight('home', ['home'], spaceLayout());
+    flight.setAutopilot(to);
+    let landed: string | null = null, t = 0;
+    for (; t < 120 && !landed; t += 1 / 30) for (const e of flight.step(1 / 30)) if (e.kind === 'landed') landed = e.planet;
+    assert.equal(landed, to, `reaches ${to}`);
+    assert.ok(FUEL_MAX - flight.fuel <= routeFuel('home', to), `${to}: burned ${FUEL_MAX - flight.fuel} <= ${routeFuel('home', to)}`);
+    assert.ok(flight.discovered.has(to));
+  }
+});
+
+test('skipping the autopilot jumps straight to the landing and still burns the trip fuel', () => {
+  const flight = new SpaceFlight('home', ['home'], empty());
+  assert.equal(flight.skipAutopilot(), false, 'nothing to skip without a destination');
+  flight.setAutopilot('ocean'); flight.step(.1);
+  assert.equal(flight.skipAutopilot(), true);
+  assert.equal(flight.autopilot, null); assert.equal(flight.landing?.planet.id, 'ocean');
+  assert.ok(flight.fuel < FUEL_MAX - 10 && flight.fuel > FUEL_MAX - routeFuel('home', 'ocean'));
+  const events = fly(flight, 2); assert.ok(events.some(e => e.kind === 'landed' && e.planet === 'ocean'));
+  assert.ok(AUTOPILOT_CRUISE > 0);
+});
+
+test('a star-map trip still pays the ϟ launch and respects the landing level', () => {
+  const s = M.newGame(); s.energy = M.LAUNCH_COST - 1;
+  assert.equal(M.launch(s), false); s.energy = M.LAUNCH_COST + 5;
+  assert.equal(M.launch(s), true); assert.equal(s.energy, 5);
+  assert.equal(M.travel(s, 'candy'), false, 'level 1 cannot land on candy'); s.level = 6;
+  assert.equal(M.travel(s, 'candy'), true); assert.equal(s.planet, 'candy');
+});

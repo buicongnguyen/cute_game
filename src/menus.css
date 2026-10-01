@@ -234,3 +234,21 @@
   #title-screen .welcome-form { margin-top: 10px; gap: 6px; }
   #title-screen .welcome-footer { margin-top: 10px; padding-top: 8px; }
 }
+
+/* Star-map route list: whole-card buttons (>=56px tall), easiest first, locks explained. */
+#dialog-body .planet-grid.route-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.planet-card.route { width: 100%; min-width: 0; overflow: hidden; min-height: 56px; display: flex; align-items: center; text-align: left; font: inherit; color: inherit; background: var(--card, #fff); border: 2px solid var(--line); cursor: pointer; }
+.planet-card.route:disabled { cursor: default; opacity: 1; }
+.planet-card.route.locked:not(.here) { filter: saturate(.55); background: #f3f0f7; }
+.planet-card.route.recommended { border-color: #ffb627; box-shadow: 0 2px 0 #e08a00, 0 0 0 3px rgba(255, 182, 39, .28); }
+.planet-card.route:not(:disabled):hover { transform: translateY(-1px); }
+.planet-card.route > .route-info { flex: 1; min-width: 0; width: auto; height: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: 0; border-radius: 0; box-shadow: none; background: none; font-size: inherit; place-items: initial; }
+.route-name { font-size: 14px; line-height: 1.2; }
+.planet-card.route .route-info small { display: block; max-width: 100%; font-weight: 800; font-size: 11px; color: var(--ink-soft); line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.route-best { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #ffb627; color: #4a2a00; white-space: nowrap; }
+.route-go, .route-lock, .planet-card.route .planet-here { flex: none; min-height: 44px; display: grid; place-items: center; padding: 0 10px; border-radius: 12px; font-size: 12px; white-space: nowrap; }
+.route-go { background: var(--grass, #4cb83b); color: #fff; }
+.route-lock { background: #e7e2ef; color: #6a5f80; }
+.planet-card.route .planet-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+#autopilot-skip { position: absolute; left: 50%; bottom: calc(26px + var(--safe-bottom)); transform: translateX(-50%); min-width: 140px; min-height: 52px; border-radius: 18px; border: 3px solid #fff; background: linear-gradient(180deg, #7a6bff, #4b3bd0); color: #fff; font: inherit; font-weight: 1000; font-size: 18px; cursor: pointer; box-shadow: 0 5px 0 #2f2390; }
+@media (max-width: 480px) { .route-go, .route-lock, .planet-card.route .planet-here { padding: 0 7px; font-size: 11px; white-space: normal; max-width: 86px; text-align: center; } }

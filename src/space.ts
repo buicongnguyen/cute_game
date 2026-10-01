@@ -71,6 +71,34 @@ export interface SpaceInput {
 }
 export const IDLE_INPUT: SpaceInput = { turn: 0, thrust: 0, brake: false, boost: false, aim: null };
 
+/**
+ * Star-map routes (the clone's own addition: the reference's star map is a read-only log).
+ * Fuel is what the autopilot burns at cruise (thrust 1 drains 1.1/s at ~26 u/s) plus a
+ * small reserve for the approach, so a route that fits the tank always arrives.
+ */
+export const AUTOPILOT_CRUISE = 26;
+export const routeDistance = (from: PlanetId, to: PlanetId) => { const a = STAR_MAP[from], b = STAR_MAP[to]; return Math.max(0, Math.hypot(a.x - b.x, a.z - b.z) - a.r - b.r); };
+export const routeFuel = (from: PlanetId, to: PlanetId) => from === to ? 0 : Math.ceil(routeDistance(from, to) / AUTOPILOT_CRUISE * 1.1) + 4;
+export type RouteLock = 'here' | 'undiscovered' | 'level' | 'fuel' | null;
+export interface RouteOption { id: PlanetId; level: number; discovered: boolean; distance: number; fuel: number; lock: RouteLock; recommended: boolean }
+/**
+ * Every planet, easiest first (by landing level, then distance). Discovery still matters,
+ * as in the reference, which hides undiscovered planets as "mystery" cards: the autopilot
+ * only knows the way to planets already spotted. The recommended pick is the hardest
+ * planet you can land on (not the one you're on, and home only when nothing else is open).
+ */
+export function planRoutes(o: { from: PlanetId; level: number; discovered: Iterable<PlanetId>; levels: Record<PlanetId, number>; fuel?: number }): RouteOption[] {
+  const found = new Set(o.discovered), tank = o.fuel ?? FUEL_MAX;
+  const routes = (Object.keys(STAR_MAP) as PlanetId[]).map(id => {
+    const level = o.levels[id] ?? 1, discovered = found.has(id), distance = Math.round(routeDistance(o.from, id)), fuel = routeFuel(o.from, id);
+    const lock: RouteLock = id === o.from ? 'here' : !discovered ? 'undiscovered' : o.level < level ? 'level' : fuel > tank ? 'fuel' : null;
+    return { id, level, discovered, distance, fuel, lock, recommended: false };
+  }).sort((a, b) => a.level - b.level || a.distance - b.distance);
+  const open = routes.filter(r => !r.lock), best = open.filter(r => r.id !== 'home').at(-1) ?? open.at(-1);
+  if (best) best.recommended = true;
+  return routes;
+}
+
 export type SpaceEvent =
   | { kind: 'boost' }
   | { kind: 'bump'; strength: number }
@@ -98,6 +126,18 @@ export class SpaceFlight {
   /** The ship's scale while it spirals down to land. */
   get landingScale() { return this.landing ? Math.max(.15, 1 - this.landing.t * .45) : 1; }
 
+  /** A star-map destination: the ship steers itself there and lands (its level was checked when chosen). */
+  autopilot: StarPlanet | null = null;
+  setAutopilot(id: PlanetId | null) { this.autopilot = id ? STAR_MAP[id] : null; }
+  /** Skips the rest of an autopilot flight: the ship arrives over the target and starts landing. */
+  skipAutopilot() {
+    const p = this.autopilot; if (!p || this.landing) return false;
+    const a = Math.atan2(this.x - p.x, this.z - p.z), d = Math.max(0, Math.hypot(this.x - p.x, this.z - p.z) - p.r);
+    this.fuel = Math.max(0, this.fuel - d / AUTOPILOT_CRUISE * 1.1);
+    this.x = p.x + Math.sin(a) * p.r; this.z = p.z + Math.cos(a) * p.r; this.over = p;
+    this.landing = { planet: p, t: 0, done: false }; this.autopilot = null; return true;
+  }
+
   /** Begins the landing spiral when over a planet whose level is met. */
   land(levelMet: (id: PlanetId) => boolean) {
     if (!this.over || this.landing || !levelMet(this.over.id)) return false;
@@ -116,6 +156,8 @@ export class SpaceFlight {
       this.over = l.planet;
       return events;
     }
+    const auto = this.autopilot;
+    if (auto) input = { turn: 0, thrust: 1, brake: false, boost: false, aim: { x: auto.x, z: auto.z } };
     const boost = input.boost && this.fuel > 0;
     let thrust = Math.max(0, Math.min(1, input.thrust));
     this.yaw -= input.turn * dt * 2.8;
@@ -140,7 +182,8 @@ export class SpaceFlight {
     this.x += this.vx * dt; this.z += this.vz * dt;
 
     // Asteroids push the ship out and bounce it; a hard knock shakes the camera.
-    for (const rock of this.layout.asteroids) {
+    // The autopilot cruises above the belts, so a chosen route can't get stuck on a rock.
+    if (!auto) for (const rock of this.layout.asteroids) {
       const dx = this.x - rock.x, dz = this.z - rock.z, d = Math.hypot(dx, dz), min = rock.r + 1.4;
       if (d >= min || d < .01) continue;
       const nx = dx / d, nz = dz / d; this.x = rock.x + nx * min; this.z = rock.z + nz * min;
@@ -164,6 +207,7 @@ export class SpaceFlight {
       if (d < planet.r + DISCOVER_RANGE && !this.discovered.has(planet.id)) { this.discovered.add(planet.id); events.push({ kind: 'discover', planet: planet.id }); }
       if (d < planet.r * 1.3) this.over = planet;
     }
+    if (auto && this.over === auto) { this.landing = { planet: auto, t: 0, done: false }; this.autopilot = null; }
     return events;
   }
 }
