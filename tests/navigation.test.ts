@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { approach, blocked, clearSegment, findRoute } from '../src/navigation.ts';
+import { approach, blocked, clearSegment, findRoute, nearbyObstacles } from '../src/navigation.ts';
 
 test('approaching the outfitters avoids the neighboring market',()=>{
   const obstacles=[{x:8,z:-1,r:1.7},{x:12,z:-1,r:1.7}];
@@ -60,4 +60,15 @@ test('segment collision catches obstacles missed by endpoint and midpoint sample
 test('blocked and outside-world destinations never become route waypoints',()=>{
   assert.deepEqual(findRoute({x:0,z:0},{x:2,z:2},[{x:2,z:2,r:1}]),[]);
   assert.deepEqual(findRoute({x:0,z:0},{x:50,z:0},[]),[]);
+});
+
+test('nearby obstacles from the grid include every obstacle that can touch the point',()=>{
+  let seed=3;const random=()=>(seed=seed*16807%2147483647)/2147483647;
+  const obstacles=Array.from({length:600},()=>({x:random()*200-100,z:random()*200-100,r:random()<.02?4+random()*6:.2+random()*2.6}));
+  for(let i=0;i<300;i++){
+    const x=random()*200-100,z=random()*200-100,reach=random()*1.5,near=new Set(nearbyObstacles(obstacles,x,z,reach));
+    for(const o of obstacles)if(Math.hypot(x-o.x,z-o.z)<o.r+reach)assert.ok(near.has(o),'an obstacle within reach is never skipped');
+    assert.ok(near.size<obstacles.length/4,'only a small part of the list is looked at');
+  }
+  const few=obstacles.slice(0,10);assert.equal(nearbyObstacles(few,0,0,1),few,'short lists are used as they are');
 });
