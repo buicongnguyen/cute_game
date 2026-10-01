@@ -1,0 +1,236 @@
+/* Compact menus (wave 3): every panel shows about twice as many rows as before on phones and PCs.
+   Loaded after style.css and overrides it. Rules: one-line rows (icon, name, key chips, price or button), tight gaps,
+   a slim header band, a scrolling body. On touch screens small buttons keep a 44 px tall hit area through an invisible
+   ::before, never through visual padding. The garden dialogs' rows (.crop-row, plot panel) are left to garden-beds. */
+
+/* ---------------------------------------------------------------- Shell */
+#dialog { width: 600px; max-height: min(860px, calc(100dvh - 32px)); border-width: 3px; border-radius: 20px; }
+#dialog > header { gap: 10px; padding: 7px 8px 7px 10px; border-bottom-width: 2px; }
+#dialog-icon { width: 36px; height: 36px; border-radius: 11px; font-size: 20px; box-shadow: 0 2px 0 var(--tone-edge); overflow: hidden; }
+#dialog-kicker { font-size: 10px; letter-spacing: .9px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dialog h2 { margin-top: 0; font-size: 17px; line-height: 1.15; }
+#dialog .close-button { position: relative; width: 34px; height: 34px; border-width: 2px; font-size: 19px; }
+#dialog .close-button::before { content: ''; position: absolute; inset: -7px; }
+#dialog-body { padding: 10px 12px 14px; gap: 8px; }
+/* The body scrolls; its blocks never shrink (the backpack grid used to collapse to 13 px rows when a detail card opened). */
+#dialog-body > * { flex-shrink: 0; }
+#dialog-body > h3, #dialog-body .starmap-title { margin: 2px 0 0; font-size: 13px; color: var(--ink-soft); }
+#dialog:not([data-tone="garden"]) #dialog-body .intro { font-size: 12.5px; line-height: 1.35; }
+#dialog:not([data-tone="garden"]) #dialog-body .fineprint { font-size: 11px; line-height: 1.35; }
+#dialog:not([data-tone="garden"]) #dialog-body .section-label { font-size: 10px; letter-spacing: 1px; }
+#dialog:not([data-tone="garden"]) #dialog-body .empty-state { padding: 12px 10px; font-size: 12.5px; }
+#dialog:not([data-tone="garden"]) #dialog-body .empty-state > span { margin-bottom: 4px; font-size: 28px; }
+#dialog:not([data-tone="garden"]) #dialog-body .empty-state strong { font-size: 14px; }
+#dialog:not([data-tone="garden"]) #dialog-body .empty-state .primary { margin-top: 8px; }
+
+/* Buttons inside panels: 30-32 px tall pills. Generic rules skip the garden dialogs (garden-beds owns their contents). */
+#dialog:not([data-tone="garden"]) #dialog-body .primary,
+#dialog:not([data-tone="garden"]) #dialog-body .soft-button,
+#dialog:not([data-tone="garden"]) #dialog-body .sky-button { min-height: 32px; padding: 4px 12px; border-radius: 11px; font-size: 13px; gap: 4px; }
+#dialog:not([data-tone="garden"]) #dialog-body .primary { box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .1), 0 3px 0 var(--grass-deep); }
+#dialog:not([data-tone="garden"]) #dialog-body .sky-button { box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .1), 0 3px 0 var(--sky-deep); }
+#dialog:not([data-tone="garden"]) #dialog-body .soft-button { border-width: 2px; box-shadow: 0 2px 0 var(--line-strong); }
+#dialog:not([data-tone="garden"]) #dialog-body .primary:disabled, #dialog:not([data-tone="garden"]) #dialog-body .soft-button:disabled, #dialog:not([data-tone="garden"]) #dialog-body .sky-button:disabled { box-shadow: inset 0 0 0 2px #e4dcc6; }
+#dialog:not([data-tone="garden"]) #dialog-body .text-button { padding: 4px 2px; font-size: 12px; }
+#dialog:not([data-tone="garden"]) #dialog-body .button-row { gap: 6px; }
+
+/* Tabs: a slim pill strip that stays put while the list scrolls under it. */
+#dialog:not([data-tone="garden"]) #dialog-body .panel-tabs { position: sticky; top: -10px; z-index: 2; gap: 5px; margin: -10px -12px 0; padding: 8px 12px 6px; background: var(--paper); }
+#dialog:not([data-tone="garden"]) #dialog-body .panel-tabs button { min-height: 30px; padding: 3px 11px; border-width: 2px; font-size: 12px; box-shadow: 0 2px 0 var(--line); }
+#dialog:not([data-tone="garden"]) #dialog-body .panel-tabs button.active { box-shadow: 0 2px 0 var(--sun-deep); }
+
+/* Chips: small and tight; a red chip marks a missing material. */
+#dialog:not([data-tone="garden"]) #dialog-body .chips { gap: 4px; margin-top: 3px; }
+#dialog:not([data-tone="garden"]) #dialog-body .chip { gap: 2px; padding: 0 7px; font-size: 11px; line-height: 17px; }
+#dialog:not([data-tone="garden"]) #dialog-body .chip .mini-art { width: 15px; height: 15px; vertical-align: -3px; }
+.chip.chip-miss { background: #ffe0dc; color: #b0263a; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ------------------------------------------------- One-line row cards */
+#dialog-body .shop-grid, #dialog-body .quest-list, #dialog-body .planet-grid { gap: 6px; }
+.shop-item, .quest-row { gap: 10px; padding: 4px 8px 4px 4px; border-radius: 14px; box-shadow: 0 2px 0 var(--line); }
+.shop-icon, .quest-row > span { width: 40px; height: 40px; border-radius: 11px; font-size: 22px; }
+.quest-row > span { width: 38px; height: 38px; font-size: 20px; }
+.shop-item strong, .quest-row strong { font-size: 14px; line-height: 1.2; }
+.shop-item strong > small { margin: 0; display: inline; font-size: 12px; font-weight: 900; color: var(--ink-faint); }
+.shop-item p { margin-top: 0; font-size: 12px; line-height: 1.3; }
+/* The effect and the material chips share one line when they fit. */
+.shop-item > div:nth-child(2) { display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; row-gap: 1px; }
+.shop-item > div:nth-child(2) > strong { flex-basis: 100%; }
+.shop-item > div:nth-child(2) > .chips { margin-top: 0; }
+.shop-item small, .quest-row small { margin-top: 1px; font-size: 11.5px; line-height: 1.3; }
+.shop-item .button-row { flex-wrap: nowrap; gap: 5px; }
+/* style.css wraps two-button rows onto a second line on phones; they now stay beside the text. */
+.shop-item:has(> .button-row) { flex-wrap: nowrap; }
+.shop-item:has(> .button-row) > div:nth-child(2) { flex-basis: auto; }
+.shop-item > .button-row { margin-left: 0; }
+.shop-item > .primary { padding: 4px 12px; }
+.shop-item > .chip { white-space: nowrap; }
+@media (max-width: 600px) { .wide-label { display: none; } }
+
+/* Journal rows: icon | title, note, meter, chips | Collect (+ Reroll). */
+/* Reroll sits beside the title block and Collect spans both lines, so their touch areas never overlap. */
+.quest-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto auto; grid-template-areas: 'icon text act2 act' 'icon chips chips act'; column-gap: 8px; row-gap: 2px; align-items: center; }
+.quest-row > span { grid-area: icon; align-self: center; grid-row: 1 / span 2; }
+.quest-row > div:nth-child(2) { grid-area: text; }
+.quest-row .quest-reward { display: contents; }
+.quest-row .quest-reward > .chips { grid-area: chips; margin-top: 0; }
+.quest-row .quest-reward > .primary { grid-area: act; }
+.quest-row .quest-reward > .text-button { grid-area: act2; }
+.quest-row strong { display: flex; align-items: baseline; gap: 8px; }
+.quest-row strong > b { margin-left: auto; flex: none; font-size: 11.5px; font-weight: 900; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.quest-row .entry-meter { height: 4px; margin-top: 3px; }
+#dialog-body .chapter-banner { padding: 5px 10px; border-radius: 12px; font-size: 13px; }
+
+/* Fish collection: small tiles. */
+#dialog-body .fish-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 5px; }
+#dialog-body .fish-card { padding: 4px 3px 5px; border-radius: 12px; gap: 0; }
+#dialog-body .fish-card > span { width: 36px; height: 36px; font-size: 22px; }
+#dialog-body .fish-card strong { font-size: 10.5px; }
+
+/* ------------------------------------------------------------- Backpack */
+#dialog-body .stat-strip { flex-wrap: nowrap; gap: 4px; }
+#dialog-body .stat-strip > span { flex: 1 1 0; min-width: 0; justify-content: center; gap: 4px; padding: 3px 4px; border-radius: 9px; font-size: 12px; white-space: nowrap; }
+.equipment { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.equipment > div { flex-direction: row; align-items: stretch; border-radius: 11px; }
+.equipment > div > button:first-child { flex: 1; min-width: 0; min-height: 40px; padding: 3px 4px 3px 5px; flex-direction: row; justify-content: flex-start; gap: 5px; text-align: left; }
+.equipment > div > button:first-child span { flex: none; width: 28px; height: 28px; display: grid; place-items: center; font-size: 20px; }
+.equipment > div > button:first-child small { font-size: 10.5px; line-height: 1.15; }
+/* "Remove" becomes a slim ✕ column on the slot's right edge; it is as tall as the slot. */
+.unequip { flex: none; width: 24px; padding: 0; border-top: 0; border-left: 2px solid var(--line); font-size: 0; }
+.unequip::after { content: '✕'; font-size: 11px; }
+.inventory-grid { grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 5px; max-height: max(170px, calc(100dvh - 430px)); padding: 1px 1px 3px; }
+.item-tile { min-height: 0; padding: 4px 3px 5px; gap: 1px; border-radius: 11px; box-shadow: 0 2px 0 var(--line); }
+.item-tile > span { width: 34px; height: 34px; font-size: 24px; }
+.item-tile > b { right: 3px; top: 3px; min-width: 18px; padding: 0 4px; font-size: 10px; line-height: 15px; }
+.item-tile > small { font-size: 10.5px; line-height: 1.15; }
+/* "Equipped" shrinks to a ✓ badge (the word stays for screen readers). */
+.item-tile > i { position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; padding: 0; display: grid; place-items: center; border-radius: 50%; font-size: 0; }
+.item-tile > i::after { content: '✓'; font-size: 10px; }
+#dialog-body .item-detail { gap: 10px; padding: 6px 8px; border-radius: 14px; }
+#dialog-body .item-hero { width: 44px; height: 44px; border-radius: 12px; font-size: 26px; }
+#dialog-body .item-detail h3 { font-size: 14px; }
+#dialog-body .item-detail p { margin: 0 0 4px; font-size: 12px; line-height: 1.3; }
+
+/* ------------------------------------------ Market, chest, crystal, star map */
+#dialog-body .owl-note { gap: 8px; padding: 6px 10px; border-radius: 12px; }
+#dialog-body .owl-note > span { font-size: 22px; }
+#dialog-body .owl-note p { font-size: 12.5px; line-height: 1.35; }
+#dialog-body .owl-note strong { display: inline; margin: 0 4px 0 0; font-size: 13px; }
+#dialog-body .storage-columns { gap: 8px; }
+#dialog-body .storage-columns > div { padding: 4px 10px; border-radius: 12px; }
+#dialog-body .storage-columns h3 { margin: 2px 0; font-size: 13px; }
+#dialog-body .storage-columns .muted { font-size: 12px; padding: 2px 0 4px; }
+#dialog-body .storage-row { gap: 8px; padding: 3px 0; border-bottom-width: 1px; }
+#dialog-body .storage-row > span { font-size: 12.5px; line-height: 1.25; }
+#dialog-body .storage-row b { font-size: 11.5px; }
+#dialog:not([data-tone="garden"]) #dialog-body .storage-row .soft-button { min-height: 28px; padding: 2px 9px; font-size: 12px; }
+#dialog-body .shop-grid > .storage-row { padding: 3px 8px; border: 2px solid var(--line); border-radius: 12px; background: #fff; }
+#dialog-body .upgrade-grid { gap: 6px; }
+#dialog-body .upgrade-grid > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; align-items: center; padding: 6px 8px 6px 10px; text-align: left; border-radius: 14px; box-shadow: 0 2px 0 var(--line); }
+#dialog-body .upgrade-grid h3 { font-size: 14px; }
+#dialog-body .upgrade-grid p { grid-column: 1; margin: 0; font-size: 12px; line-height: 1.3; }
+#dialog-body .upgrade-grid .primary { grid-column: 2; grid-row: 1 / span 2; }
+#dialog-body .starmap-fuel { gap: 8px; padding: 6px 8px 6px 10px; border-radius: 12px; }
+#dialog-body .starmap-fuel > span { font-size: 20px; }
+#dialog-body .starmap-fuel > div { flex: 1; min-width: 0; }
+#dialog-body .starmap-fuel strong { font-size: 13.5px; }
+#dialog-body .starmap-fuel small { font-size: 11.5px; }
+#dialog-body .starmap-fuel .launch-button { flex: none; width: auto; min-height: 34px; margin: 0; font-size: 14px; }
+.planet-card { gap: 8px; padding: 5px 8px 5px 5px; border-radius: 14px; box-shadow: 0 2px 0 var(--line); }
+.planet-card .planet-ball, .planet-card > span { width: 40px; height: 40px; font-size: 20px; border-width: 2px; }
+.planet-card .planet-ball { border-radius: 50%; }
+.planet-card h3 { font-size: 14px; line-height: 1.2; }
+.planet-card p { margin: 0; font-size: 11.5px; line-height: 1.3; }
+.planet-tags { gap: 4px; margin-top: 2px; }
+.planet-tags span { padding: 0 7px; font-size: 10.5px; line-height: 16px; }
+.planet-here { font-size: 10.5px; }
+/* style.css wraps planet cards on phones; the "you are here" tag now sits in the tag row instead. */
+.planet-card { flex-wrap: nowrap; }
+.planet-card > div { flex-basis: auto; }
+
+/* ------------------------------------------------------- Map, settings, help */
+#dialog-body .map-destinations { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 5px; }
+#dialog-body .map-destinations .soft-button { min-height: 32px; padding: 4px 10px; border-radius: 11px; font-size: 13px; box-shadow: 0 2px 0 var(--line-strong); }
+#dialog-body .settings-row { gap: 10px; padding: 6px 10px; border-radius: 12px; flex-wrap: wrap; }
+#dialog-body .settings-row > div:first-child { flex: 1 1 150px; min-width: 0; }
+#dialog-body .settings-row strong { font-size: 13.5px; }
+#dialog-body .settings-row small { margin-top: 0; font-size: 11.5px; line-height: 1.3; }
+#dialog-body .segmented { gap: 2px; padding: 2px; border-radius: 11px; }
+#dialog-body .segmented button { min-height: 28px; padding: 2px 9px; border-radius: 9px; font-size: 12px; }
+#dialog-body .save-note { padding: 6px 10px; font-size: 12px; line-height: 1.35; }
+#dialog-body .help-grid { gap: 6px; }
+#dialog-body .help-grid > div { display: grid; grid-template-columns: 26px minmax(0, 1fr); column-gap: 8px; align-items: start; padding: 6px 10px 7px 8px; text-align: left; }
+#dialog-body .help-grid > div > span { grid-row: 1 / span 2; margin: 0; font-size: 20px; line-height: 1.2; }
+#dialog-body .help-grid h3 { font-size: 13.5px; line-height: 1.25; }
+#dialog-body .help-grid p { margin: 0; font-size: 12px; line-height: 1.35; }
+
+/* ---------------------------------------------------------------- Phones */
+@media (max-width: 600px) {
+  #dialog { max-height: calc(92dvh - var(--safe-top)); border-radius: 18px 18px 0 0; }
+  #dialog > header { padding: 5px 8px 5px 10px; }
+  #dialog-icon { width: 30px; height: 30px; font-size: 17px; border-radius: 9px; }
+  #dialog-body .shop-grid, #dialog-body .quest-list, #dialog-body .planet-grid { gap: 4px; }
+  .shop-icon { width: 36px; height: 36px; font-size: 20px; border-radius: 10px; }
+  #dialog h2 { font-size: 16px; }
+  #dialog-body { padding: 8px 10px calc(12px + var(--safe-bottom)); gap: 7px; }
+  #dialog:not([data-tone="garden"]) #dialog-body .panel-tabs { top: -8px; margin: -8px -10px 0; padding: 6px 10px 5px; }
+  .shop-item, .quest-row { gap: 8px; padding: 4px 6px 4px 4px; }
+  .quest-row { column-gap: 8px; }
+  .quest-row > span { width: 34px; height: 34px; font-size: 18px; }
+  .quest-row { grid-template-columns: 34px minmax(0, 1fr) auto auto; }
+  .shop-item:has(> .button-row) > div:nth-child(2), .quest-row > div:nth-child(2) { flex-basis: auto; }
+  .equipment > div > button:first-child { min-height: 38px; }
+  .inventory-grid { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); }
+  #dialog-body .storage-columns, #dialog-body .upgrade-grid, #dialog-body .help-grid { grid-template-columns: 1fr; }
+  .planet-card button { margin-left: 0; }
+}
+@media (max-width: 360px) {
+  #dialog:not([data-tone="garden"]) #dialog-body .primary, #dialog:not([data-tone="garden"]) #dialog-body .soft-button, #dialog:not([data-tone="garden"]) #dialog-body .sky-button { padding: 4px 9px; font-size: 12.5px; }
+  .shop-icon { width: 36px; height: 36px; }
+  #dialog-body .stat-strip > span { font-size: 11px; padding: 3px 2px; }
+}
+
+/* Short landscape phones: a wider sheet that uses the full height, with list rows in two columns. */
+@media (max-height: 500px) and (orientation: landscape) {
+  #dialog-layer { padding: 6px; }
+  #dialog { width: min(820px, 100%); max-height: calc(100dvh - 12px); }
+  #dialog-body .shop-grid, #dialog-body .quest-list, #dialog-body .planet-grid, #dialog-body .upgrade-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  #dialog-body .chapter-banner { grid-column: 1 / -1; }
+  #dialog-body .help-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #dialog-body .map-illustration { display: none; }
+  .inventory-grid { max-height: none; overflow: visible; }
+  .equipment { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+/* ------------------------------------------- Touch: 44 px hit areas, not padding */
+@media (pointer: coarse) {
+  #dialog-body button { position: relative; }
+  #dialog-body button::before { content: ''; position: absolute; left: 0; right: 0; top: min(0px, calc(50% - 22px)); bottom: min(0px, calc(50% - 22px)); }
+  /* The tab strip clips its children, so its own padding holds the taller hit area. */
+  #dialog:not([data-tone="garden"]) #dialog-body .panel-tabs { padding-top: 7px; padding-bottom: 7px; }
+  /* Equipment slots and their ✕ fill a 44 px cell; their hit areas are the cells themselves. */
+  .equipment > div > button:first-child, .unequip { min-height: 44px; }
+  .equipment > div > button::before { display: none; }
+  #dialog-body .storage-row { padding: 0; min-height: 45px; }
+  #dialog-body .item-tile::before { display: none; }
+  #dialog-body .map-destinations { gap: 8px; }
+  #dialog-body .map-destinations .soft-button { min-height: 36px; }
+}
+.planet-tags .planet-here { background: #e2f7d4; color: var(--grass-deep); }
+
+/* ------------------------------------------------------------ Title card */
+/* At 320 px the six colour swatches and the name field overflowed the card; they now shrink to fit. */
+@media (max-width: 400px) {
+  #title-screen { padding: 10px; }
+  #title-screen .welcome-card { padding: 18px 14px 14px; }
+  #title-screen .color-picker { gap: 8px; flex-wrap: wrap; }
+  #title-screen .welcome-form > input { padding: 10px 12px; }
+}
+@media (max-height: 600px) {
+  #title-screen .brand-sprout { font-size: 36px; margin-top: 6px; }
+  #title-screen h1 { font-size: 42px; }
+  #title-screen .welcome-card > p { margin-top: 6px; }
+  #title-screen .welcome-form { margin-top: 10px; gap: 6px; }
+  #title-screen .welcome-footer { margin-top: 10px; padding-top: 8px; }
+}
