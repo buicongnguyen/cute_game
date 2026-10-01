@@ -1793,3 +1793,6 @@ h1 > span {
   .planet-card { flex-wrap: wrap; }
 }
 @media (pointer: coarse) { .space-help { display: none; } }
+/* Ground-loot countdown pills, placed by drops-view.ts every frame (reference .droptag: dark pill, red under 10 s). */
+.droptag { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap; color: #fff; text-shadow: 0 1px #000; background: rgba(40, 28, 52, .7); border-radius: 8px; padding: 1px 6px; font-size: 11px; font-weight: 800; will-change: transform; }
+.droptag.warn { background: rgba(201, 60, 42, .85); }
