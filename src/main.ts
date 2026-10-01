@@ -5,7 +5,7 @@ import './menus.css';
 import { Box3, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
 import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit } from './assets.ts';
-import { SpaceFlight, type SpaceEvent } from './space.ts';
+import { SpaceFlight, planRoutes, type RouteOption, type SpaceEvent } from './space.ts';
 import { SpaceView } from './space-view.ts';
 import { ShipSequence } from './ship-sequence.ts';
 import { kitsFor } from './biomes.ts';
@@ -89,6 +89,7 @@ app.innerHTML = `
     <canvas id="space-radar" width="150" height="150" aria-label="Radar: yellow dots are stardust, question marks are undiscovered planets"></canvas>
     <div id="space-labels"></div><div id="space-hint" role="status"></div><div id="space-floats"></div>
     <button id="land-button" data-action="land" hidden><span id="land-title">🛬 Land</span><small id="land-name"></small></button>
+    <button id="autopilot-skip" data-action="autopilot-skip" hidden>⏭ Skip</button>
     <button id="boost-button" aria-label="Boost (Shift or Space)"><span>🚀</span><small>Boost</small></button>
     <div class="space-help">Hold to steer <i>•</i> <kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd> fly <i>•</i> <kbd>Shift</kbd> boost <i>•</i> <kbd>S</kbd> brake <i>•</i> <kbd>L</kbd> land</div>
   </div>
@@ -498,18 +499,23 @@ function confirmPlacement(){
 }
 function placeAt(x:number,y:number){const point=world.groundPoint(x,y);if(placement&&point)movePlacement(point.x,point.z);}
 
-/** The starship's star map: fuel up, take off, and a log of every planet found so far. */
+/** Star-map routes for the current save: easiest first, with locks and the recommended pick. */
+function starRoutes(){return planRoutes(starRouteInput());}
+function starRouteInput(){return ({from:state.planet,level:state.level,discovered:state.discovered,levels:Object.fromEntries(Object.entries(M.PLANETS).map(([id,p])=>[id,p.level])) as Record<M.PlanetId,number>});}
+/** The starship's star map: every planet easiest first; pick an open one and the autopilot flies you there. */
 function planets(){
-  const ready=state.energy>=M.LAUNCH_COST,all=Object.keys(M.PLANETS).length;
-  const card=([id,p]:[string,M.PlanetDef])=>{
-    const here=id===state.planet;
-    if(!state.discovered.includes(id as M.PlanetId))return `<div class="planet-card mystery"><span class="planet-ball">❓</span><div><h3>Mysterious planet</h3><p>Not found yet. Follow the <b>?</b> on your space radar.</p></div></div>`;
-    const bosses=p.bosses.map(b=>t(ENEMY_TYPES[b]?.name)??b).join(', ');
-    return `<div class="planet-card ${here?'here':''}"><span class="planet-ball" style="background:radial-gradient(circle at 32% 30%,${p.grad[0]},${p.grad[1]} 60%,${p.grad[2]})">${p.icon}</span><div><h3>${t(p.name)}</h3><p>${p.description}</p><div class="planet-tags"><span>👑 ${bosses}</span><span class="${state.level<p.level?'miss':''}">⭐ Land at Lv ${p.level}</span>${here?'<b class="planet-here">📍 You are here</b>':''}</div></div></div>`;
+  const ready=state.energy>=M.LAUNCH_COST,all=Object.keys(M.PLANETS).length,routes=planRoutes({from:state.planet,level:state.level,discovered:state.discovered,levels:Object.fromEntries(Object.entries(M.PLANETS).map(([id,p])=>[id,p.level])) as Record<M.PlanetId,number>});
+  const names=(ids:string[])=>ids.map(b=>t(ENEMY_TYPES[b]?.name??b)).join(', ');
+  const card=(r:RouteOption)=>{
+    const p=M.PLANETS[r.id],lv=`<span class="${state.level<r.level?'miss':''}">⭐ ${t('Lv {level}',{level:r.level})}</span>`;
+    const why=r.lock==='here'?`<b class="planet-here">📍 ${t('You are here')}</b>`:r.lock==='undiscovered'?`<b class="route-lock">🔭 ${t('Not discovered yet')}</b>`:r.lock==='level'?`<b class="route-lock">🔒 ${t('Needs level {level}',{level:r.level})}</b>`:r.lock==='fuel'?`<b class="route-lock">⛽ ${t('Too far for one tank')}</b>`:!ready?`<b class="route-lock">ϟ ${t('Needs ϟ {amount}',{amount:M.LAUNCH_COST})}</b>`:`<b class="route-go">🚀 ${t('Fly here')}</b>`;
+    const off=!!r.lock||!ready,cls=`planet-card route${r.lock?' locked':''}${r.recommended?' recommended':''}${r.lock==='here'?' here':''}`;
+    if(!r.discovered)return `<button class="${cls} mystery" data-action="fly-to" data-kind="${r.id}" disabled aria-label="${esc(t('Mysterious planet'))}"><span class="planet-ball">❓</span><span class="route-info"><b class="route-name">${t('Mysterious planet')}</b><span class="planet-tags">${lv}</span><small>${t('Fly out and follow the ? on the radar to find it.')}</small></span>${why}</button>`;
+    return `<button class="${cls}" data-action="fly-to" data-kind="${r.id}" ${off?'disabled':''} aria-label="${esc(t(p.name))}"><span class="planet-ball" style="background:radial-gradient(circle at 32% 30%,${p.grad[0]},${p.grad[1]} 60%,${p.grad[2]})">${p.icon}</span><span class="route-info"><b class="route-name">${t(p.name)}${r.recommended?` <i class="route-best">★ ${t('Recommended')}</i>`:''}</b><span class="planet-tags">${lv}${r.lock==='here'?'':`<span>📏 ${r.distance} · ⛽ ${r.fuel}</span>`}</span><small>🐾 ${names([...new Set(p.spawns.map(s=>s[0]))])}</small><small>👑 ${names(p.bosses)}</small></span>${why}</button>`;
   };
   openDialog('travel','Starship Sprout',`<div class="starmap-fuel"><span>⛽</span><div><strong>Tank: ϟ ${M.LAUNCH_COST}</strong><small>You have ϟ ${state.energy}</small></div><button class="primary launch-button" data-action="launch" ${ready?'':'disabled'}>${ready?'🚀 Take off!':`Needs ϟ ${M.LAUNCH_COST}`}</button></div>
-    <p class="intro">Fly it yourself: hold to steer, grab ✨ stardust for fuel and follow the <b>?</b> on the radar to find planets.</p>
-    <h3 class="starmap-title">🔭 Discovery log · ${state.discovered.length} / ${all}</h3><div class="planet-grid">${Object.entries(M.PLANETS).map(card).join('')}</div>`,'STAR MAP','🚀');
+    <p class="intro">${t('Pick a planet and the autopilot flies you there and lands, or take off and fly it yourself.')}</p>
+    <h3 class="starmap-title">🔭 Discovery log · ${state.discovered.length} / ${all} · ${t('easiest first')}</h3><div class="planet-grid route-list">${routes.map(card).join('')}</div>`,'STAR MAP','🚀');
 }
 function map(){openDialog('map','Every path is a possibility',`<p class="intro">Choose a place and your explorer will walk there.</p><div class="map-illustration"><div class="map-path"></div><span class="map-house">🏡</span><span class="map-trees">🌳 🌲 🌳</span><span class="map-garden">🌱 🌱</span><span class="map-pond">🎣</span><span class="map-rocket">🚀</span><span class="map-stall">🧺</span><b>Clover Village</b></div><div class="map-destinations">${(state.planet==='home'?[['plot','🌱','Garden'],['sell','🧺','Market'],['shop','🛍️','Outfitters'],['fish','🎣','Pond'],['upgrade','💎','Crystal'],['craft','🔨','Workshop'],['chest','📦','Storage'],['travel','🚀','Rocket']]:[['mine','💎','Crystal vein'],['travel','🚀','Rocket']]).map(([kind,icon,name])=>`<button class="soft-button" data-action="go" data-kind="${kind}">${icon} ${name}</button>`).join('')}${(world.planet==='home'?[['forest','🍄 Mushroom Forest'],['meadow','🌊 Lake Meadow'],['swamp','🌿 Chomper Swamp'],['canyon','🏜️ Redrock Canyon']]:[['wild','Explore the wild']]).map(([kind,label])=>`<button class="soft-button" data-action="wild" data-kind="${kind}">${label}</button>`).join('')}</div><p class="fineprint">${state.visited.length} of 9 worlds discovered · Click the ground to choose your own path.</p>`,'YOUR EXPLORER’S MAP');}
 function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Gentle sound effects</strong><small>Soft notes for everyday discoveries</small></div><button class="toggle ${state.settings.sound?'on':''}" role="switch" aria-checked="${state.settings.sound}" aria-label="Sound effects" data-action="sound"></button></div><div class="settings-row"><div><strong>Show movement pad</strong><small>Arrow buttons on touch screens. Tapping the ground always works.</small></div><button class="toggle ${state.settings.movePad?'on':''}" role="switch" aria-checked="${!!state.settings.movePad}" aria-label="Show movement pad" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
@@ -739,20 +745,26 @@ function launch(){
   leaveWorld();toast('Lift-off in three, two, one…','🚀');
   ship.launch(()=>warp(enterSpace));
 }
+/** Star-map pick: pay the launch as usual, then the autopilot flies to the planet and lands. */
+let autopilotTarget:M.PlanetId|null=null;
+function flyTo(id:M.PlanetId){
+  if(ship.busy||flight||arriving)return;const r=starRoutes().find(r=>r.id===id);if(!r||r.lock)return;
+  autopilotTarget=id;launch();if(!ship.busy)autopilotTarget=null;
+}
 /** A quick trip home with the starship, without piloting: the old free ride back. */
 function flyHome(){if(ship.busy||flight||arriving)return;leaveWorld();ship.launch(()=>void arrive('home'));}
 function warp(then:()=>void){const flash=$('#warp-flash');flash.classList.add('show');setTimeout(()=>{then();setTimeout(()=>flash.classList.remove('show'),150);},600);}
 function enterSpace(){
-  flight=new SpaceFlight(state.planet,state.discovered);spaceView.build(flight,graphics.level==='low');
+  flight=new SpaceFlight(state.planet,state.discovered);flight.setAutopilot(autopilotTarget);autopilotTarget=null;spaceView.build(flight,graphics.level==='low');
   $('#hud').hidden=true;$('#world-labels').hidden=true;$('#space-hud').hidden=false;
-  spaceHint(matchMedia('(pointer: coarse)').matches?'Hold anywhere to steer toward your finger · hold <b>Boost</b> to speed up · fly close to a planet to land':'Hold the mouse to steer (or <kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd>) · <kbd>Shift</kbd> boosts · fly close to a planet to land',5);tone('cast');
+  if(flight.autopilot){const p=M.PLANETS[flight.autopilot.id];spaceHint(t('🧭 Autopilot to {planet}: sit back, or press Skip.',{planet:`${p.icon} ${t(p.name)}`}),5);}else spaceHint(matchMedia('(pointer: coarse)').matches?'Hold anywhere to steer toward your finger · hold <b>Boost</b> to speed up · fly close to a planet to land':'Hold the mouse to steer (or <kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd>) · <kbd>Shift</kbd> boosts · fly close to a planet to land',5);tone('cast');
 }
 function exitSpace(){flight=null;spaceView.hideLabels();spaceKeys.clear();spacePointer=null;boostHeld=false;$('#space-hud').hidden=true;$('#hud').hidden=false;$('#world-labels').hidden=false;}
 let hintTimer=0;
 function spaceHint(html:string,seconds=5){const hint=$('#space-hint');hint.innerHTML=localizeHtml(html);hint.classList.add('show');clearTimeout(hintTimer);hintTimer=window.setTimeout(()=>hint.classList.remove('show'),seconds*1000);}
 function spaceFloat(html:string){const el=document.createElement('div');el.className='space-float';el.innerHTML=localizeHtml(html);$('#space-floats').append(el);setTimeout(()=>el.remove(),1600);}
 function tryLanding(){
-  if(!flight||flight.landing)return;
+  if(!flight||flight.landing)return;if(flight.autopilot){flight.skipAutopilot();prefetch(flight.landing!.planet.id);tone('crit');return;}
   const over=flight.over;if(!over){spaceHint('Fly over a planet to land on it.',2);return;}
   if(!flight.land(id=>M.canLand(state,id))){const p=M.PLANETS[over.id];spaceHint(`🔒 The air on ${t(p.name)} is too rough. You need <b>level ${p.level}</b> to land.`,3);tone('hurt');return;}
   prefetch(over.id);tone('crit');$('#land-button').hidden=true;
@@ -789,13 +801,14 @@ function updateSpace(dt:number){
   if(!flight)return;
   const k=spaceKeys,input={turn:(k.has('d')||k.has('arrowright')?1:0)-(k.has('a')||k.has('arrowleft')?1:0),thrust:k.has('w')||k.has('arrowup')?1:0,brake:k.has('s')||k.has('arrowdown'),boost:k.has('shift')||k.has(' ')||boostHeld,
     aim:spacePointer?spaceView.aimAt(spacePointer.x/innerWidth*2-1,-(spacePointer.y/innerHeight)*2+1):null};
-  for(let remaining=dt;remaining>0&&flight;){const step=Math.min(.025,remaining);remaining-=step;for(const event of flight.step(step,input))onSpaceEvent(event);}
+  // The autopilot flight plays sped up (4x), so a chosen trip takes seconds.
+  for(let remaining=dt*(flight.autopilot?4:1);remaining>0&&flight;){const step=Math.min(.025,remaining);remaining-=step;for(const event of flight.step(step,input))onSpaceEvent(event);}
   if(!flight)return;
   spaceView.update(dt,flight,flight.discovered,state.level,innerWidth,innerHeight);spaceView.render(world.renderer);
   spaceView.drawRadar($<HTMLCanvasElement>('#space-radar').getContext('2d')!,flight,flight.discovered,flight.time);
   $('#fuel-fill').style.width=`${flight.fuel}%`;$('#fuel-fill').classList.toggle('low',flight.fuel<20);$('#fuel-text').textContent=t(String(Math.round(flight.fuel)));
   $('#space-speed').textContent=t(String(Math.round(flight.speed*10)));$('#space-energy').textContent=t(String(state.energy));
-  const land=$('#land-button'),over=flight.over;land.hidden=!over||!!flight.landing;
+  $('#autopilot-skip').hidden=!flight.autopilot;$('#boost-button').hidden=!!flight.autopilot;const land=$('#land-button'),over=flight.autopilot?null:flight.over;land.hidden=!over||!!flight.landing;
   if(over&&!flight.landing){const p=M.PLANETS[over.id],locked=state.level<p.level;land.classList.toggle('locked',locked);$('#land-title').textContent=t(locked?`🔒 ${t(p.name)}`:'🛬 Land');$('#land-name').textContent=t(locked?`Needs level ${p.level}`:`${p.icon} ${t(p.name)}`);}
 }
 $('#world').addEventListener('pointerdown',event=>{if(!flight)return;const e=event as PointerEvent;spacePointer={x:e.clientX,y:e.clientY};});
@@ -848,7 +861,7 @@ app.addEventListener('click',event=>{
     case 'transfer':{const store=button.dataset.direction==='store',n=store?M.looseQuantity(state,id):state.chest[id]??0;change(()=>{for(let i=0;i<n&&M.transfer(state,id,store);i++);});tone('click');storage();break;}
     case 'upgrade':{const kind=button.dataset.kind as keyof typeof M.UPGRADES;if(change(()=>M.upgrade(state,kind))){upgradeFeedback(kind);upgrades();tone('success');}break;}
     case 'craft':if(change(()=>M.craft(state,index))){crafting();toast('Made with your own two hands. Check your backpack!','🔨');}break;
-    case 'launch':launch();break;case 'land':tryLanding();break;
+    case 'launch':launch();break;case 'land':case 'autopilot-skip':tryLanding();break;case 'fly-to':flyTo(button.dataset.kind as M.PlanetId);break;
     case 'go':go(button.dataset.kind!);break;
     case 'wild':{closeDialog();const destinations:Record<string,[number,number]>={forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]};const destination=destinations[button.dataset.kind??'forest']??[0,-30];world.walkTo(destination[0],destination[1]);toast('Follow the path beyond the garden gate.','🍄');break;}
     case 'return-home':if(state.planet!=='home')flyHome();else{closeDialog();world.position.set(0,0,0);world.destination=null;world.route=[];world.selected=null;toast('Home, sweet home.','🏡');}break;
