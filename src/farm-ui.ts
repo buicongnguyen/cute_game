@@ -1,7 +1,7 @@
 import { t, localizeHtml } from './i18n.ts';
 import { ITEMS, type ItemDef, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
-import { ANIMALS, ANIMAL_KINDS, ANIMAL_LIFESPAN_MS, FARM_DISHES, PEN_BUILD, expired, lifetimeLeft, productFor, canBuildPen, penBuilt, animalCount, canBuyAnimal, canCookDish, canFeed, farmOf, feedCrop, growth, isAdult, penCapacity, penExpandCost, productProgress, productReady, timeLeft, type Animal, type Collected } from './farm.ts';
+import { BREEDS, coatOf, ANIMALS, ANIMAL_KINDS, ANIMAL_LIFESPAN_MS, FARM_DISHES, PEN_BUILD, expired, lifetimeLeft, productFor, canBuildPen, penBuilt, animalCount, canBuyAnimal, canCookDish, canFeed, farmOf, feedCrop, growth, isAdult, penCapacity, penExpandCost, productProgress, productReady, timeLeft, type Animal, type Collected } from './farm.ts';
 
 /**
  * The animal pen's panel and the kitchen's farm recipes, as HTML (main.ts opens them and routes the buttons).
@@ -48,7 +48,7 @@ export function penHtml(s: SaveState, ui: FarmUi, now = Date.now()) {
   const feed = `<div class="garden-actions farm-feed"><span>${crop ? `${t('Feed:')} ${ui.mini(crop)} ${ui.esc(t(ITEMS[crop].name))} ×${s.bag[crop]} ${t('(your cheapest crop)')}` : 'Bring a crop from the garden to feed them: fed animals grow and produce twice as fast.'}</span>${crop && hungry ? `<button class="sky-button" data-action="feed-all">${t('Feed all ({count})', { count: hungry })}</button>` : ''}</div>`;
   const rows = farm.animals.map((a, i) => {
     const d = ANIMALS[a.kind], adult = isAdult(a, now), dead = expired(a, now), product = productFor(a, now), st = animalStatus(a, now), name = dead ? t('{name} · Meat ready', { name: t(d.name) }) : t(adult ? d.name : d.baby);
-    return `<div class="crop-row garden-row animal-row${st.ready ? ' ready' : ''}" data-animal="${a.uid}"><span class="crop-art">${dead ? ITEMS.meat.icon : adult ? d.icon : d.babyIcon}</span><div><strong>${name} ${i + 1}${st.ready ? ` <span class="chip chip-energy">${ui.mini(product)} ready</span>` : ''}</strong><div class="grow-meter"><i style="width:${st.progress * 100}%"></i></div><p class="muted animal-time">${ui.esc(st.text)}</p></div><button class="soft-button" data-action="feed-animal" data-id="${a.uid}" ${crop && canFeed(a, now) ? '' : 'disabled'} aria-label="${ui.esc(t('Feed {name} {number}', { name, number: i + 1 }))}">Feed</button></div>`;
+    return `<div class="crop-row garden-row animal-row${st.ready ? ' ready' : ''}" data-animal="${a.uid}"><span class="crop-art">${dead ? ITEMS.meat.icon : adult ? d.icon : d.babyIcon}</span><div><strong>${name} ${i + 1} <span class="muted">· ${ui.esc(t(BREEDS[a.kind][coatOf(a)]))}</span>${st.ready ? ` <span class="chip chip-energy">${ui.mini(product)} ready</span>` : ''}</strong><div class="grow-meter"><i style="width:${st.progress * 100}%"></i></div><p class="muted animal-time">${ui.esc(st.text)}</p></div><button class="soft-button" data-action="feed-animal" data-id="${a.uid}" ${crop && canFeed(a, now) ? '' : 'disabled'} aria-label="${ui.esc(t('Feed {name} {number}', { name, number: i + 1 }))}">Feed</button></div>`;
   }).join('') || '<p class="empty-state">The pen is empty. A chick or a calf will grow up here and give you eggs or milk.</p>';
   const shop = ANIMAL_KINDS.map(k => {
     const d = ANIMALS[k], check = canBuyAnimal(s, k), product = ITEMS[d.product];

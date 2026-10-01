@@ -172,4 +172,15 @@ export const VI_GAMEPLAY: Record<string, string> = {
   "Bigger pen: +{chickens} chickens, +{cows} cows (ϟ {cost})": "Mở rộng chuồng: +{chickens} gà, +{cows} bò (ϟ {cost})",
   "💡 Animals give eggs or milk during their lifespan, then leave meat to collect.": "💡 Vật nuôi cho trứng hoặc sữa khi còn sống, rồi để lại thịt để thu hoạch khi hết tuổi thọ.",
   "💡 Animals give eggs or milk during their lifespan, then leave meat to collect. Sell the products at the market or cook them at the kitchen.": "💡 Vật nuôi cho trứng hoặc sữa khi còn sống, rồi để lại thịt để thu hoạch khi hết tuổi thọ. Bán sản phẩm ở chợ hoặc dùng để nấu ăn.",
+  // Farm breeds (coat colours).
+  "White Leghorn": "Gà Leghorn trắng",
+  "Rhode Island Red": "Gà Rhode Island đỏ",
+  "Black Australorp": "Gà Australorp đen",
+  "Speckled Sussex": "Gà Sussex lốm đốm",
+  "Buff Orpington": "Gà Orpington vàng",
+  "Holstein": "Bò Holstein lang đen trắng",
+  "Jersey": "Bò Jersey nâu",
+  "Red and white": "Bò lang đỏ trắng",
+  "Black Angus": "Bò Angus đen",
+  "Highland": "Bò Highland lông hung",
 };

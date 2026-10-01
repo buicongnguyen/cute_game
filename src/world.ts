@@ -405,7 +405,7 @@ export class World {
     // Until it is bought the pen is a marked plot with a sign (still one entity to tap); a visit shows the host's.
     this.addEntity('pen',built?'Animal pen':'Animal pen site','🐔',view.statics,x,z,2.6);
     view.setBuilt(built);if(built)this.penObstacles();
-    view.setArea(this.roamArea());this.roamKeep=[];
+    view.setArea(this.roamArea());view.setCamera(this.camera);this.roamKeep=[];
     this.penKeepClock=0;
     if(!farmKit.ready)void farmKit.load().then(()=>{if(farmKit.ready&&this.farmView===view)view.refresh();});
   }

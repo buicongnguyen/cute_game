@@ -22,6 +22,8 @@ export interface Animal {
   /** Fed while young / during the current product cycle (one feed each). */
   fedYoung?: boolean;
   fed?: boolean;
+  /** Breed (coat colour) index into BREEDS[kind]: picked once at purchase, kept for life (the young wear it too). */
+  coat?: number;
 }
 export interface FarmState { animals: Animal[]; nextId: number; penLevel: number; /** The pen has been built (a marked plot until then). */ built: boolean }
 export interface AnimalDef {
@@ -33,6 +35,19 @@ export const ANIMALS: Record<AnimalKind, AnimalDef> = {
   cow: { name: 'Cow', baby: 'Calf', icon: '🐄', babyIcon: '🐮', level: 5, price: 70, growMs: 120_000, productMs: 75_000, product: 'milk', xp: 10, cap: 2, capStep: 4 },
 };
 export const ANIMAL_KINDS = Object.keys(ANIMALS) as AnimalKind[];
+/** Coat breeds per kind (index = Animal.coat); farm-view.ts holds the matching colours. */
+export const BREEDS: Record<AnimalKind, readonly string[]> = {
+  chicken: ['White Leghorn', 'Rhode Island Red', 'Black Australorp', 'Speckled Sussex', 'Buff Orpington'],
+  cow: ['Holstein', 'Jersey', 'Red and white', 'Black Angus', 'Highland'],
+};
+/** A stable breed: a hash of the animal's id and arrival second, so a purchase always gets the same coat. */
+export function coatPick(kind: AnimalKind, uid: number, at = 0) {
+  let h = (Math.imul(uid | 0, 0x9e3779b1) ^ Math.imul(Math.floor(at / 1000) | 0, 0x85ebca6b)) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0; h = (h ^ (h >>> 13)) >>> 0;
+  return h % BREEDS[kind].length;
+}
+/** The animal's breed index; a missing or bad one falls back to the id's stable pick. */
+export function coatOf(a: Pick<Animal, 'kind' | 'uid' | 'coat'>) { const n = BREEDS[a.kind].length, c = a.coat; return typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < n ? c : coatPick(a.kind, a.uid); }
 /** A crop given as feed halves the time the animal still needs to grow up or to make its next product. */
 export const FEED_SHARE = .5;
 /** Each kind has its own cap; the two upgrades reach 10 chickens and 10 cows. */
@@ -153,7 +168,7 @@ export function buyAnimal(s: SaveState, kind: AnimalKind, now = Date.now()): Ani
   if (canBuyAnimal(s, kind) !== 'ok' || !validTime(now)) return null;
   const farm = farmOf(s);
   if (!Number.isSafeInteger(farm.nextId) || farm.nextId < 1 || farm.nextId >= Number.MAX_SAFE_INTEGER) return null;
-  const a: Animal = { uid: farm.nextId++, kind, bornAt: now, acquiredAt: now, cycleAt: now + ANIMALS[kind].growMs };
+  const a: Animal = { uid: farm.nextId++, kind, bornAt: now, acquiredAt: now, cycleAt: now + ANIMALS[kind].growMs, coat: coatPick(kind, farm.nextId - 1, now) };
   s.energy -= ANIMALS[kind].price; farm.animals.push(a); return a;
 }
 /** The crop the farm feeds by default: the cheapest one in the bag (ties by name), or null. */
@@ -235,7 +250,9 @@ export function parseFarm(raw: unknown): FarmState {
     const cycleAt = a.cycleAt === undefined ? bornAt + ANIMALS[kind].growMs : a.cycleAt;
     if (!validTime(cycleAt)) continue;
     seen.add(uid); room[kind]++;
-    farm.animals.push({ uid, kind, bornAt, acquiredAt, cycleAt, ...(a.fedYoung === true ? { fedYoung: true } : {}), ...(a.fed === true ? { fed: true } : {}) });
+    // Saves from before breeds get a stable coat from the animal's id (the same one on every load).
+    const coat = coatOf({ kind, uid, coat: a.coat as number | undefined });
+    farm.animals.push({ uid, kind, bornAt, acquiredAt, cycleAt, coat, ...(a.fedYoung === true ? { fedYoung: true } : {}), ...(a.fed === true ? { fed: true } : {}) });
   }
   // Saves from before building: a pen with animals or an expansion was already standing.
   farm.built = v.built === true || farm.animals.length > 0 || farm.penLevel > 0;
