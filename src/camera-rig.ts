@@ -12,10 +12,10 @@ export const ZOOM = { wheel: [.65, 1.5], pinch: [.6, 1.6], wheelStep: .001, butt
 /** Linear fog in the sky colour from 45 m, well beyond the fight radius, so fights are never hazy. */
 export const FOG = { near: 45, far: 110 } as const;
 /**
- * The sun's shadow box: depth range around the target, biases, the tallest receiver kept inside it at
- * the far edges of the view (tree tops, roofs), and slack for texel snapping and filtering.
+ * The sun's shadow box: depth range around the target, biases, and slack around the ground in view for
+ * tall things at its edges (with the game's sun an 8 m tree top lies at most 0.7 m outside) and snapping.
  */
-export const SHADOW = { near: 10, far: 70, bias: -.0008, normalBias: .03, lift: 6, margin: 2 } as const;
+export const SHADOW = { near: 10, far: 70, bias: -.0008, normalBias: .03, margin: 2 } as const;
 
 export function clampZoom(value: number, kind: 'wheel' | 'pinch') { const [low, high] = ZOOM[kind]; return Math.min(high, Math.max(low, value)); }
 
@@ -51,14 +51,13 @@ export function lightAxes(sunOffset: T.Vector3): [T.Vector3, T.Vector3] {
 /**
  * The shadow box that just covers the ground in view, in the light's axes, around the camera target.
  * A caster outside the view that throws a shadow into it lies on the same light ray as that shadow, so
- * it is inside too; things up to `lift` metres tall standing at the edges still receive shadows. Narrow
- * and deep in portrait, wide in landscape, and smaller than a square box, so the shadow pass draws less
- * and the texels are finer.
+ * it is inside too. Narrow and deep in portrait, wide in landscape, and smaller than a square box, so
+ * the shadow pass draws less and the texels are finer.
  */
-export function shadowBox(footprint: readonly { x: number; z: number }[], axes: readonly [T.Vector3, T.Vector3], lift: number = SHADOW.lift, margin: number = SHADOW.margin) {
+export function shadowBox(footprint: readonly { x: number; z: number }[], axes: readonly [T.Vector3, T.Vector3], margin: number = SHADOW.margin) {
   let left = Infinity, right = -Infinity, bottom = Infinity, top = -Infinity;
-  for (const p of footprint) for (const y of [0, lift]) {
-    const a = p.x * axes[0].x + y * axes[0].y + p.z * axes[0].z, b = p.x * axes[1].x + y * axes[1].y + p.z * axes[1].z;
+  for (const p of footprint) {
+    const a = p.x * axes[0].x + p.z * axes[0].z, b = p.x * axes[1].x + p.z * axes[1].z;
     left = Math.min(left, a); right = Math.max(right, a); bottom = Math.min(bottom, b); top = Math.max(top, b);
   }
   return { left: left - margin, right: right + margin, bottom: bottom - margin, top: top + margin };

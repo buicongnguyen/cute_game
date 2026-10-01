@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import {SHADOW,cameraOffset,clampZoom,followBlend,groundAt,lightAxes,shadowBox,viewFootprint} from '../src/camera-rig.ts';
+import {cameraOffset,clampZoom,followBlend,groundAt,lightAxes,shadowBox,viewFootprint} from '../src/camera-rig.ts';
 
 const near=(a:number,b:number,eps=.05)=>assert.ok(Math.abs(a-b)<=eps,`${a} should be ${b} ±${eps}`);
 const DESKTOP=1440/900,PHONE=390/844,LANDSCAPE=844/390;
@@ -33,13 +33,17 @@ test('light axes are the ones three gives the shadow camera, wherever the sun ta
   const [ax,ay]=lightAxes(offset);near(x.distanceTo(ax),0,1e-9);near(y.distanceTo(ay),0,1e-9);
 });
 
-test('the shadow box covers the ground in view and what stands on it, and is far smaller than the old square box',()=>{
-  const axes=lightAxes(new T.Vector3(-15,35,18));
+test('the shadow box holds every surface in view up to 6 m tall, and is far smaller than the old square box',()=>{
+  const axes=lightAxes(new T.Vector3(-15,35,18)),caster=new T.Raycaster(),hit=new T.Vector3();
   for(const aspect of [DESKTOP,PHONE,LANDSCAPE])for(const zoom of [.6,1,1.6]){
-    const footprint=viewFootprint(aspect,zoom),box=shadowBox(footprint,axes);
-    for(const p of footprint)for(const y of [0,SHADOW.lift/2,SHADOW.lift]){
-      const point=new T.Vector3(p.x,y,p.z),a=point.dot(axes[0]),b=point.dot(axes[1]);
-      assert.ok(a>=box.left+SHADOW.margin-1e-9&&a<=box.right-SHADOW.margin+1e-9&&b>=box.bottom+SHADOW.margin-1e-9&&b<=box.top-SHADOW.margin+1e-9);
+    const box=shadowBox(viewFootprint(aspect,zoom),axes),lens=new T.PerspectiveCamera(40,aspect,.5,300);
+    lens.position.copy(cameraOffset(aspect,zoom));lens.lookAt(0,0,0);lens.updateMatrixWorld();
+    // What a pixel shows at height h (the ground, a back, a roof, a tree top) must be inside the box.
+    for(let i=0;i<=20;i++)for(let j=0;j<=20;j++)for(const h of [0,2,4,6]){
+      caster.setFromCamera(new T.Vector2(i/10-1,j/10-1),lens);
+      if(!caster.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),-h),hit))continue;
+      const a=hit.dot(axes[0]),b=hit.dot(axes[1]);
+      assert.ok(a>=box.left&&a<=box.right&&b>=box.bottom&&b<=box.top,`aspect ${aspect.toFixed(2)} zoom ${zoom} h ${h}: ${a.toFixed(1)},${b.toFixed(1)} outside`);
     }
     if(zoom!==1)continue;
     // The orthographic camera's box: max(26, span x aspect x 0.8) each way from the explorer.
