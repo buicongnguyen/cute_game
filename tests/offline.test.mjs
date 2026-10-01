@@ -7,6 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import vm from 'node:vm';
 import ts from 'typescript';
+import {VI_ONLINE} from '../src/locales/vi-online.ts';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const origin='https://garden.example';
@@ -129,17 +130,29 @@ class EventTargetStub {
   async dispatch(name,event={}){for(const handler of this.listeners.get(name)||[])await handler(event);}
 }
 
-async function platform({production=true,basePath='/',supportFullscreen=true,register=async()=>({})}={}) {
+async function platform({production=true,basePath='/',supportFullscreen=true,register=async()=>({}),language='en'}={}) {
   const source=(await readFile(path.join(root,'src/platform.ts'),'utf8')).replace(/import '\.\/platform\.css';/,'').replaceAll('import.meta.env.PROD',String(production)).replaceAll('import.meta.env.BASE_URL',JSON.stringify(basePath));
   const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const window=new EventTargetStub(),slot=new EventTargetStub(),document={createElement:()=>new EventTargetStub(),querySelector:()=>slot,body:new EventTargetStub(),documentElement:{},fullscreenElement:null};
   let entered=0,exited=0;const registered=[],notices=[];
   if(supportFullscreen) document.documentElement.requestFullscreen=async()=>{entered++;document.fullscreenElement=document.documentElement;};
   document.exitFullscreen=async()=>{exited++;document.fullscreenElement=null;};
-  const exports={};vm.runInNewContext(js,{exports,window,document,navigator:{serviceWorker:{register:async url=>{registered.push(url);return register(url);}}}});
+  const languageListeners=[],i18n={t:source=>language==='vi'?VI_ONLINE[source]||source:source,onLanguageChange:handler=>{languageListeners.push(handler);return()=>{};}};
+  const exports={};vm.runInNewContext(js,{exports,window,document,require:name=>{assert.equal(name,'./i18n.ts');return i18n;},navigator:{serviceWorker:{register:async url=>{registered.push(url);return register(url);}}}});
   exports.initPlatform(message=>notices.push(message));
-  return {window,document,registered,notices,fullscreen:slot.children[0].children[0],install:slot.children[0].children[1],get entered(){return entered;},get exited(){return exited;}};
+  return {window,document,registered,notices,fullscreen:slot.children[0].children[0],install:slot.children[0].children[1],get entered(){return entered;},get exited(){return exited;},setLanguage:value=>{language=value;for(const handler of languageListeners)handler();}};
 }
+
+test('platform language changes preserve an available install invitation and localize feedback',async()=>{
+  const app=await platform({supportFullscreen:false});let prompted=0;
+  await app.window.dispatch('beforeinstallprompt',{preventDefault(){},prompt:async()=>{prompted++;},userChoice:Promise.resolve({outcome:'accepted'})});
+  app.setLanguage('vi');assert.equal(app.fullscreen.title,'Toàn màn hình');assert.equal(app.fullscreen.attributes.get('aria-label'),'Bật/tắt toàn màn hình');
+  assert.equal(app.install.textContent,'Cài đặt trò chơi');assert.equal(app.install.hidden,false);
+  await app.fullscreen.dispatch('click');assert.equal(app.notices.at(-1),'Hãy dùng tùy chọn toàn màn hình của trình duyệt trên thiết bị này.');
+  await app.install.dispatch('click');assert.equal(prompted,1);assert.equal(app.install.hidden,true);
+  app.setLanguage('en');assert.equal(app.install.textContent,'Install game');assert.equal(app.fullscreen.title,'Fullscreen');
+  assert.deepEqual(app.registered,['/sw.js'],'changing language must not register another worker');
+});
 
 test('platform registers offline support only in production; registration errors do not stop play',async()=>{
   assert.deepEqual((await platform({production:false})).registered,[]);

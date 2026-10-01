@@ -2,7 +2,7 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bakeModel, farmKit } from './assets.ts';
 import { toonMaterial } from './toon.ts';
-import { ANIMALS, PEN, YARD, isAdult, productReady, growth, type Animal, type AnimalKind } from './farm.ts';
+import { ANIMALS, PEN, YARD, MAX_ANIMALS_PER_KIND, expired, isAdult, productReady, growth, type Animal, type AnimalKind } from './farm.ts';
 import { newRoamer, spawnSpot, stepRoamer, type RoamArea, type Roamer } from './farm-roam.ts';
 
 /**
@@ -24,8 +24,8 @@ const modelOf = (a: Animal, now: number): ModelId => isAdult(a, now) ? a.kind : 
 /** Product per model; chicks and calves make nothing. */
 const PRODUCT: Record<AnimalKind, 'egg' | 'milk'> = { chicken: 'egg', cow: 'milk' };
 /** Most animals of one model the pen can hold (cap at the largest pen); a model has up to four legs. */
-const MAX_PER_MODEL: Record<ModelId, number> = { chicken: 8, chick: 8, cow: 4, calf: 4 };
-const MAX_LEGS = 4;
+const MAX_PER_MODEL: Record<ModelId, number> = { chicken: MAX_ANIMALS_PER_KIND, chick: MAX_ANIMALS_PER_KIND, cow: MAX_ANIMALS_PER_KIND, calf: MAX_ANIMALS_PER_KIND };
+const MAX_LEGS = 4, MAX_PRODUCTS = MAX_ANIMALS_PER_KIND * 4;
 /** Hens and chicks are drawn 1.3x their true size so they read at the game camera (a hen is then about 40 px tall, like a ripe crop). */
 const SHOWN: Record<AnimalKind, number> = { chicken: 1.3, cow: 1 };
 
@@ -41,7 +41,7 @@ export const PEN_PROPS: readonly { id: string; x: number; z: number; rot: number
 interface Part { draw: 'body' | 'head' | 'tail' | 'legs'; geometry: T.BufferGeometry; pivots: { at: T.Vector3; sign: number }[] }
 interface Rig { parts: Part[]; height: number }
 /** A roaming animal (world metres, farm-roam.ts) plus how it is drawn. */
-interface Walker extends Roamer { model: ModelId; phase: number; pop: number; size: number; seed: number }
+interface Walker extends Roamer { expired: boolean; model: ModelId; phase: number; pop: number; size: number; seed: number }
 /** The low fence behind the yard: 2 m segments centred at these pen-local x, along BACK_FENCE_Z (outside the oval). */
 export const BACK_FENCE = [-2, 0, 2] as const, BACK_FENCE_Z = -(YARD.rz + .35);
 /** A keep-out circle in pen-local metres (beds, decorations, anything else standing in the yard). */
@@ -91,6 +91,7 @@ export function placeholderProp(id: string): T.Group {
   if (id === 'feed_trough') g.add(box('#a8714a', 1.2, .3, .5, 0, .25, 0), box('#f0cf5a', 1.08, .06, .38, 0, .4, 0));
   if (id === 'water_trough') g.add(cyl('#a8714a', .55, .4, 0, .2, 0), cyl('#5cc8ff', .48, .05, 0, .4, 0));
   if (id === 'hay_bale') g.add(box('#f2cf5b', 1, .5, .6, 0, .26, 0), box('#d84a3c', .04, .52, .62, -.25, .26, 0), box('#d84a3c', .04, .52, .62, .25, .26, 0));
+  if (id === 'meat') g.add(ball('#de8c92', .19, 0, .19, 0, 1.35, .7, 1), cyl('#fff0d6', .065, .13, .2, .19, 0), ball('#fff0d6', .065, .27, .19, .025), ball('#fff0d6', .065, .27, .19, -.025));
   if (id === 'egg') g.add(ball('#fff0d6', .045, 0, .06, 0, 1, 1.3, 1));
   if (id === 'milk') g.add(cyl('#ffffff', .07, .22, 0, .11, 0), cyl('#2f9bef', .045, .05, 0, .25, 0), cyl('#ef3b3b', .072, .05, 0, .12, 0));
   return g;
@@ -166,7 +167,7 @@ export class FarmPenView {
   private rigs = new Map<ModelId, Rig>();
   private meshes = new Map<string, T.InstancedMesh>();
   private walkers = new Map<number, Walker>();
-  private flights: Array<{ product: 'egg' | 'milk'; x: number; y: number; z: number; t: number }> = [];
+  private flights: Array<{ product: 'egg' | 'milk' | 'meat'; x: number; y: number; z: number; t: number }> = [];
   private rng: () => number;
   private kitUsed = false;
   private built = true;
@@ -232,14 +233,15 @@ export class FarmPenView {
   /** Where an animal stands (world metres), for bursts and floating text; null if unknown. */
   positionOf(uid: number) { const w = this.walkers.get(uid); return w ? { x: w.x, z: w.z } : null; }
   /** Every animal in world metres with its kind, so a tap on any animal can stand for a tap on the pen. */
-  positions() { return [...this.walkers.values()].map(w => ({ uid: w.uid, kind: w.kind, adult: w.model === w.kind, x: w.x, z: w.z })); }
+  positions() { return [...this.walkers.values()].map(w => ({ uid: w.uid, kind: w.kind, adult: w.model === w.kind, expired: w.expired, x: w.x, z: w.z })); }
   /** What each animal is doing (for probes and tests): walking, or the kind of rest. */
-  activities() { return [...this.walkers.values()].map(w => ({ uid: w.uid, kind: w.kind, young: w.young, walking: w.walking, rest: w.rest, x: w.x, z: w.z })); }
+  activities() { return [...this.walkers.values()].map(w => ({ uid: w.uid, kind: w.kind, young: w.young, expired: w.expired, walking: w.walking, rest: w.rest, x: w.x, z: w.z })); }
   private player: { x: number; z: number } | null = null;
   /** A collected product flies up from its animal and shrinks (like a harvested crop). */
-  collect(uid: number) {
+  collect(uid: number, product?: string) {
     const w = this.walkers.get(uid); if (!w) return;
-    this.flights.push({ product: PRODUCT[w.kind], x: w.x - PEN.x, y: this.rigOf(w.model).height + .2, z: w.z - PEN.z, t: 0 });
+    const item = product === 'meat' || product === 'egg' || product === 'milk' ? product : w.expired ? 'meat' : PRODUCT[w.kind];
+    this.flights.push({ product: item, x: w.x - PEN.x, y: item === 'meat' ? .3 : this.rigOf(w.model).height + .2, z: w.z - PEN.z, t: 0 });
   }
   private rigOf(id: ModelId) { let r = this.rigs.get(id); if (!r) { const src = model(id, true); r = rigOf(src); this.rigs.set(id, r); this.disposeSource(src); } return r; }
   /** Frees a stand-in model once its parts are merged; a kit instance shares the kit's geometry and materials. */
@@ -249,14 +251,14 @@ export class FarmPenView {
     if (!m) { m = new T.InstancedMesh(geometry, material, max); m.name = `farm-${key}`; m.castShadow = shadow; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; this.meshes.set(key, m); this.animals.add(m); }
     return m;
   }
-  private productMesh(product: 'egg' | 'milk') {
+  private productMesh(product: 'egg' | 'milk' | 'meat') {
     const key = `product:${product}`; if (this.meshes.has(key)) return this.meshes.get(key)!;
     const src = model(product, false), rig = rigOf(src); this.disposeSource(src);
     const moved = rig.parts.map(p => p.geometry.translate(p.pivots[0].at.x, p.pivots[0].at.y, p.pivots[0].at.z)), geometry = (moved.length > 1 ? mergeGeometries(moved, false) : null) ?? moved[0];
     for (const g of moved) if (g !== geometry) g.dispose(); geometry.userData.sharedKit = true;
     // Products glow a little so a waiting egg reads against the sand.
     const material = toonMaterial({ vertexColors: true, emissive: '#fff4c2', emissiveIntensity: .25 }); material.userData.sharedKit = true;
-    return this.mesh(key, geometry, 16, false, material);
+    return this.mesh(key, geometry, MAX_PRODUCTS, false, material);
   }
   /** Keeps a walker per animal (new ones pop in at the gate side); forgets the ones that left. */
   private syncWalkers(list: readonly Animal[], now: number) {
@@ -265,9 +267,11 @@ export class FarmPenView {
       keep.add(a.uid); const model = modelOf(a, now); let w = this.walkers.get(a.uid);
       if (!w) {
         const young = model !== a.kind, spot = spawnSpot(this.area, this.rng, a.kind, young);
-        w = { ...newRoamer(a.uid, a.kind, young, spot, this.rng), model, phase: this.rng() * 6, pop: 0, size: .94 + this.rng() * .12, seed: this.rng() * 10 };
+        w = { ...newRoamer(a.uid, a.kind, young, spot, this.rng), model, expired: expired(a, now), phase: this.rng() * 6, pop: 0, size: .94 + this.rng() * .12, seed: this.rng() * 10 };
         this.walkers.set(a.uid, w);
       }
+      w.expired = expired(a, now);
+      if (w.expired) { w.walking = false; w.speed = 0; w.rest = 'none'; w.path = []; }
       if (w.model !== model) { w.model = model; w.young = model !== a.kind; w.pop = 0; }
     }
     for (const uid of this.walkers.keys()) if (!keep.has(uid)) this.walkers.delete(uid);
@@ -277,11 +281,17 @@ export class FarmPenView {
     this.player = player ? { x: player.x, z: player.z } : null;
     if (this.buildT < 1) { this.buildT += dt; const k = Math.min(1, this.buildT / .6), s = k < 1 ? k * (1 + Math.sin(k * Math.PI) * .25) : 1; for (const c of this.statics.children) if (c !== this.animals) c.scale.set(1, Math.max(.01, s), 1); }
     this.syncWalkers(list, now);
-    const counts = new Map<string, number>(), walkers = [...this.walkers.values()];
+    const counts = new Map<string, number>(), walkers = [...this.walkers.values()].filter(w => !w.expired);
     for (const w of walkers) { stepRoamer(w, walkers, this.area, this.rng, dt, this.player); w.phase += dt * (w.kind === 'cow' ? 7 : 16) * Math.min(1, w.speed / .3); }
     for (const m of this.meshes.values()) m.count = 0;
     for (const a of list) {
-      const w = this.walkers.get(a.uid)!, rig = this.rigOf(w.model), cow = a.kind === 'cow', young = w.model === 'chick' || w.model === 'calf';
+      const w = this.walkers.get(a.uid)!;
+      if (w.expired) {
+        const marker = this.productMesh('meat'), i = marker.count;
+        if (i < MAX_PRODUCTS) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, .15 + Math.sin(time * 3 + w.seed) * .05, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, time * .7 + w.seed, 0)), this.s.setScalar(1.6))); marker.count = i + 1; }
+        continue;
+      }
+      const rig = this.rigOf(w.model), cow = a.kind === 'cow', young = w.model === 'chick' || w.model === 'calf';
       w.pop = Math.min(1, w.pop + dt * 2.5);
       const pop = w.pop < 1 ? Math.min(1, w.pop * 2) * (1 + Math.sin(w.pop * Math.PI * 2.5) * (1 - w.pop) * .35) : 1;
       // Young ones grow a little toward adult size before they change model.
@@ -307,13 +317,13 @@ export class FarmPenView {
       }
       if (productReady(a, now)) {
         const marker = this.productMesh(PRODUCT[a.kind]), i = marker.count, y = rig.height * scale + .25 + Math.sin(time * 3 + w.seed) * .06;
-        if (i < 16) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, y, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, time * 1.5 + w.seed, 0)), this.s.setScalar(1.6))); marker.count = i + 1; }
+        if (i < MAX_PRODUCTS) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, y, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, time * 1.5 + w.seed, 0)), this.s.setScalar(1.6))); marker.count = i + 1; }
       }
     }
     for (let i = this.flights.length - 1; i >= 0; i--) {
       const f = this.flights[i]; f.t += dt; const k = f.t / .45;
       if (k >= 1) { this.flights.splice(i, 1); continue; }
-      const marker = this.productMesh(f.product), n = marker.count; if (n >= 16) continue;
+      const marker = this.productMesh(f.product), n = marker.count; if (n >= MAX_PRODUCTS) continue;
       const s = 1.6 * (1.4 - k * 1.2);
       marker.setMatrixAt(n, this.m.compose(this.v.set(f.x, f.y + Math.sin(k * Math.PI) * 1.6, f.z), this.q.setFromEuler(this.e.set(0, k * 12, 0)), this.s.setScalar(s))); marker.count = n + 1;
     }

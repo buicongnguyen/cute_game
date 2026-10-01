@@ -1,3 +1,4 @@
+import { t } from './i18n.ts';
 import type {PlanetId} from './model.ts';
 import type {Point,Obstacle} from './navigation.ts';
 import {LavaWeather,lavaEvent,LAVA_EVENT_INFO} from './lava-weather.ts';
@@ -127,7 +128,7 @@ export class EnvironmentSimulation {
   }
   enemyLightObstacles():Obstacle[]{return this.layout.lamps.filter(l=>(this.lamps.get(l.id)??0)>this.time).map(l=>({x:l.x,z:l.z,r:l.r}));}
   private tick(key:string,period:number,dt:number){const remaining=(this.timers.get(key)??0)-dt;if(remaining<=0){this.timers.set(key,period);return true;}this.timers.set(key,remaining);return false;}
-  private warning(key:string,value:string,message:string,events:EnvironmentEvent[]){if(this.warnings.get(key)!==value){this.warnings.set(key,value);if(value==='warning')events.push({kind:key,message});}}
+  private warning(key:string,value:string,message:string,events:EnvironmentEvent[]){if(this.warnings.get(key)!==value){this.warnings.set(key,value);if(value==='warning')events.push({kind:key,message:t(message)});}}
   step(dt:number,player:Point&{y?:number},input:Point,traits:EnvironmentTraits,enemies:EnvironmentActor[]):EnvironmentStep{
     const previousTime=this.time;
     this.time+=dt;
@@ -142,7 +143,7 @@ export class EnvironmentSimulation {
     }else{this.velocity={x:input.x*speed,z:input.z*speed};out.motion={x:this.velocity.x*dt,z:this.velocity.z*dt};}
     if(this.flight){
       const flight=this.flight;flight.t+=dt;const progress=Math.min(1,flight.t/flight.duration);out.airborne=true;out.motion={x:0,z:0};
-      if(flight.fall){out.relocate={x:flight.from.x,z:flight.from.z,y:-22*progress*progress};if(progress===1){out.relocate={...this.lastSafe,y:0};if(!traits.featherFall)out.damage+=traits.maxHp*.12;out.events.push({kind:'fall',message:traits.featherFall?'Your cloud gear carries you safely back.':'You fell! Returned to the last safe platform.'});}}
+      if(flight.fall){out.relocate={x:flight.from.x,z:flight.from.z,y:-22*progress*progress};if(progress===1){out.relocate={...this.lastSafe,y:0};if(!traits.featherFall)out.damage+=traits.maxHp*.12;out.events.push({kind:'fall',message:t(traits.featherFall?'Your cloud gear carries you safely back.':'You fell! Returned to the last safe platform.')});}}
       else out.relocate={x:flight.from.x+(flight.to.x-flight.from.x)*progress,z:flight.from.z+(flight.to.z-flight.from.z)*progress,y:Math.sin(Math.PI*progress)*flight.height};
       if(progress===1){this.flight=null;this.lastSafe={...flight.to};}return out;
     }
@@ -151,7 +152,7 @@ export class EnvironmentSimulation {
       const height=terrainHeight(this.layout,player),resistance=1-Math.max(0,Math.min(1,traits.fireResistance??0));
       const previousEvent=this.weather.snapshot().eventKey,weather=this.weather.step(dt,player,(x,z)=>terrainHeight(this.layout,{x,z}),{time:this.time,blocked:this.weatherBlocked,vents:this.layout.vents,nearbyPlayers:this.nearbyPlayers,authority:this.authoritative});
       out.dragonDismiss=this.authoritative&&weather.changed&&previousEvent.endsWith(':dragon');
-      if(weather.changed)out.events.push({kind:'weather',message:`${LAVA_EVENT_INFO[weather.event.id].icon} ${LAVA_EVENT_INFO[weather.event.id].name}: ${Math.ceil(weather.event.left)} seconds remaining.`});out.dragonSummon=weather.dragonSummon;
+      if(weather.changed)out.events.push({kind:'weather',message:t('{icon} {name}: {count} seconds remaining.', { icon: LAVA_EVENT_INFO[weather.event.id].icon, name: t(LAVA_EVENT_INFO[weather.event.id].name), count: Math.ceil(weather.event.left) })});out.dragonSummon=weather.dragonSummon;
       for(const impact of weather.impacts){if(length(player,impact)<impact.radius&&!traits.flying)out.damage+=traits.maxHp*impact.playerFraction*resistance;for(const enemy of enemies)if(enemy.hp>0&&length(enemy,impact)<impact.radius)out.enemyHits.push({id:enemy.id,amount:enemy.maxHp*impact.enemyFraction});}
       let onRaft=false;
       for(const pool of this.layout.pools){const previous=raftPosition(pool,previousTime);if(length(player,previous)<1.3){const next=raftPosition(pool,this.time);out.push.x+=next.x-previous.x;out.push.z+=next.z-previous.z;out.y=next.y+this.weather.tideOffset;onRaft=true;break;}}
@@ -194,7 +195,7 @@ export class EnvironmentSimulation {
     if(this.layout.planet==='cloud'){
       this.lightning.wait=Math.max(0,this.lightning.wait-dt);
       for(let i=this.lightning.bolts.length-1;i>=0;i--){const bolt=this.lightning.bolts[i];bolt.remaining-=dt;if(bolt.remaining>0)continue;if(!traits.flying&&length(player,bolt)<1.8)out.damage+=traits.maxHp*.12;for(const e of enemies)if(e.hp>0&&length(e,bolt)<1.8)out.enemyHits.push({id:e.id,amount:e.maxHp*.2});this.lightning.bolts.splice(i,1);}
-      if(this.lightning.wait===0&&this.authoritative){const random=rng(++this.lightning.sequence*85717),angle=random()*Math.PI*2,r=2+random()*7,point={x:player.x+Math.cos(angle)*r,z:player.z+Math.sin(angle)*r};this.lightning.wait=7+random()*6;if(environmentWalkable(this.layout,point)){this.lightning.bolts.push({...point,id:'cloud:bolt:'+this.lightning.sequence,remaining:1.2,duration:1.2});out.events.push({kind:'lightning',message:'Lightning is gathering! Leave the yellow circle.'});}}
+      if(this.lightning.wait===0&&this.authoritative){const random=rng(++this.lightning.sequence*85717),angle=random()*Math.PI*2,r=2+random()*7,point={x:player.x+Math.cos(angle)*r,z:player.z+Math.sin(angle)*r};this.lightning.wait=7+random()*6;if(environmentWalkable(this.layout,point)){this.lightning.bolts.push({...point,id:'cloud:bolt:'+this.lightning.sequence,remaining:1.2,duration:1.2});out.events.push({kind:'lightning',message:t('Lightning is gathering! Leave the yellow circle.')});}}
       if(!environmentWalkable(this.layout,player)&&!traits.flying){this.flight={from:{...player},to:{...this.lastSafe},t:0,duration:.8,height:0,fall:true};out.motion={x:0,z:0};}
       else if(this.layout.islands.some(i=>length(i,player)<i.r-1.5))this.lastSafe={...player};
       const cycle=Math.floor(this.time/25),phase=this.time%25,angle=cycle*2.399;
@@ -208,13 +209,14 @@ export class EnvironmentSimulation {
     if(this.layout.planet==='shadow'&&this.inLight(player))out.heal=traits.maxHp*.03*dt;
     return out;
   }
-  status(point:Point):EnvironmentStatus[]{
+  status(point:Point):EnvironmentStatus[]{return this.statusSource(point).map(status=>({...status,label:t(status.label),value:t(status.value)}));}
+  private statusSource(point:Point):EnvironmentStatus[]{
     switch(this.layout.planet){
       case 'ice':return[{icon:'❄️',label:'Ice',value:Math.hypot(point.x,point.z)>13?'Slippery — release early to brake':'Safe landing pad'}];
-      case 'lava':return[{icon:'🌋',label:'Lava tide',value:tideHeight(this.time+1)>tideHeight(this.time)?'Rising — use high stones':'Falling',fraction:(tideHeight(this.time)+.82)/.42},(()=>{const event=lavaEvent(this.time),info=LAVA_EVENT_INFO[event.id];return{icon:info.icon,label:'Weather',value:`${info.name} · ${Math.ceil(event.left)} seconds`};})()];
+      case 'lava':return[{icon:'🌋',label:'Lava tide',value:tideHeight(this.time+1)>tideHeight(this.time)?'Rising — use high stones':'Falling',fraction:(tideHeight(this.time)+.82)/.42},(()=>{const event=lavaEvent(this.time),info=LAVA_EVENT_INFO[event.id];return{icon:info.icon,label:'Weather',value:t('{name} · {count} seconds', { name: t(info.name), count: Math.ceil(event.left) })};})()];
       case 'toy':return[{icon:'🚂',label:'Toy railway',value:'Moving trains hurt explorers and creatures'}];
       case 'jungle':return[{icon:'🌿',label:'Jungle',value:this.layout.poison.some(p=>length(p,point)<p.r)?'Poison gas! Leave the purple ground':'Thorn walls rise for 16 of every 36 seconds'}];
-      case 'ocean':return[{icon:'🫧',label:'Oxygen',value:Math.ceil(this.oxygen)+'%',fraction:this.oxygen/100},...(this.riding?[{icon:'🐢',label:'Turtle ride',value:Math.ceil(this.rideUntil-this.time)+' seconds'}]:[])];
+      case 'ocean':return[{icon:'🫧',label:'Oxygen',value:Math.ceil(this.oxygen)+'%',fraction:this.oxygen/100},...(this.riding?[{icon:'🐢',label:'Turtle ride',value:t('{count} seconds', { count: Math.ceil(this.rideUntil-this.time) })}]:[])];
       case 'cloud':return[{icon:'☁️',label:'Sky islands',value:this.flight?'Airborne':this.time%25>=20&&this.time%25<23.5?'Strong gust — watch the edge':'Use bounce clouds to cross gaps'}];
       case 'shadow':return[{icon:'🏮',label:'Light',value:this.inLight(point)?'Safe light — healing':'Light pillars reveal and repel shadow creatures'}];
       default:return[];

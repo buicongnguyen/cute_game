@@ -1,3 +1,4 @@
+import { t } from './i18n.ts';
 /**
  * Draws ground loot cheaply: every drop is a camera-facing card cut from a runtime atlas of our own
  * 160 px item icons (public/assets/icons), all in ONE InstancedMesh, over ONE instanced rarity-ring mesh.
@@ -116,7 +117,7 @@ export class DropView {
       this.v.set(d.x, d.y + CARD - .2, d.z).project(camera); if (this.v.z >= 1) continue;
       seen.add(d.uid);
       let tag = this.tags.get(d.uid); if (!tag) { const el = document.createElement('div'); el.className = 'droptag'; this.layer.append(el); tag = { el, text: '', warn: false }; this.tags.set(d.uid, tag); }
-      const { text, warn } = dropLabel(d);
+      const { text: sourceText, warn } = dropLabel(d); const text = t(sourceText);
       if (tag.text !== text) { tag.el.textContent = text; tag.text = text; }
       if (tag.warn !== warn) { tag.el.classList.toggle('warn', warn); tag.warn = warn; }
       tag.el.style.transform = `translate(${((this.v.x * .5 + .5) * width).toFixed(1)}px,${((-this.v.y * .5 + .5) * height).toFixed(1)}px) translate(-50%,-100%)`;

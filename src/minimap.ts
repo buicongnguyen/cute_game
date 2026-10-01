@@ -1,3 +1,4 @@
+import { t } from './i18n.ts';
 import { PLANETS, YARD, type PlanetId } from './model.ts';
 import { zoneAt, type EnvironmentLayout } from './environments.ts';
 import { trailOffset } from './biomes.ts';
@@ -17,7 +18,7 @@ export const ZONE_COLORS = { home: '#93e06a', forest: '#5cbf57', meadow: '#a6e07
 export const ZONE_NAMES = { home: 'Clover Village', forest: 'Mushroom Forest', meadow: 'Blue Lake Meadow', swamp: 'Chomper Swamp', canyon: 'Redrock Canyon' } as const;
 /** Where the explorer stands, for the caption: the home zone by position, otherwise the planet (fixes "CLOVER VILLAGE" in the wilds). */
 export function mapCaption(planet: PlanetId, x: number, z: number): string {
-  return planet === 'home' ? ZONE_NAMES[zoneAt({ x, z })] : PLANETS[planet]?.name ?? '';
+  return t(planet === 'home' ? ZONE_NAMES[zoneAt({ x, z })] : PLANETS[planet]?.name ?? '');
 }
 /** World metres to canvas pixels. */
 export const mapPoint = (x: number, z: number) => ({ x: MAP_C + x * MAP_SCALE, y: MAP_C + z * MAP_SCALE });

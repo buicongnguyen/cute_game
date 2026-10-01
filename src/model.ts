@@ -157,8 +157,24 @@ export function harvest(s: SaveState, index: number, now = Date.now()): CropId |
     return null; p.crop = null; p.plantedAt = 0; gainXp(s, CROPS[id].xp, now); recordEvent(s, 'harvest', 1, id, now); return id; }
 export function harvestAll(s: SaveState, now = Date.now()) { const harvested: CropId[] = []; s.plots.forEach((_, i) => { const id = harvest(s, i, now); if (id)
     harvested.push(id); }); return harvested; }
-export function fertilize(s: SaveState, index: number, timeOrItem: number | string = Date.now(), raw = 'spore') { const now = typeof timeOrItem === 'number' ? timeOrItem : Date.now(), id = canonicalItem(typeof timeOrItem === 'string' ? timeOrItem : raw), p = s.plots[index], grow = ITEMS[id]?.grow; if (!p?.crop || !grow || cropProgress(p, now) >= 1 || !removeItem(s.bag, id))
-    return false; const remaining = CROPS[p.crop].duration * (1 - cropProgress(p, now)); p.plantedAt -= remaining * grow; return true; }
+export function fertilize(s: SaveState, index: number, timeOrItem: number | string = Date.now(), raw = 'spore') {
+    const now = typeof timeOrItem === 'number' ? timeOrItem : Date.now();
+    const id = canonicalItem(typeof timeOrItem === 'string' ? timeOrItem : raw);
+    const plot = s.plots[index];
+    const crop = plot?.crop && Object.hasOwn(CROPS, plot.crop) ? CROPS[plot.crop] : undefined;
+    const grow = Object.hasOwn(ITEMS, id) ? ITEMS[id].grow : undefined;
+    if (!crop || !grow || !Number.isFinite(grow) || grow <= 0 ||
+        !Number.isFinite(now) || now < 0 || now > Number.MAX_SAFE_INTEGER ||
+        !Number.isFinite(plot.plantedAt) || Math.abs(plot.plantedAt) > Number.MAX_SAFE_INTEGER || plot.plantedAt > now ||
+        !Number.isFinite(crop.duration) || crop.duration <= 0)
+        return false;
+    const elapsed = Math.max(0, now - plot.plantedAt);
+    if (elapsed >= crop.duration || !removeItem(s.bag, id))
+        return false;
+    // Each dose advances a fixed share of the original timer; excess never carries into the next crop.
+    plot.plantedAt = now - Math.min(crop.duration, elapsed + crop.duration * grow);
+    return true;
+}
 /**
  * Ground at home that a garden bed must stay off (G2D-4), matching World.build: the cottage, stalls, chest, crystal,
  * starship pad, workshop, kitchen, well, village trees (crown, not just trunk), the fence-side bushes and the pond.

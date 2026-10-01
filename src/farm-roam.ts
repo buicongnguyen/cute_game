@@ -34,6 +34,8 @@ export interface Roamer {
   path: { x: number; z: number }[];
   /** Seconds left for the walk under way: a walk that cannot finish (circling its goal, pushed by a neighbour) gives up. */
   walkT: number;
+  /** Cow/calf grazing still owed: three seconds for each second spent walking, retained across interruptions. */
+  grazeDebt: number;
 }
 /** Body radius kept off obstacles. */
 export const roamRadius = (w: { kind: RoamKind; young: boolean }) => w.kind === 'cow' ? (w.young ? .5 : .75) : (w.young ? .2 : .28);
@@ -68,15 +70,14 @@ export function spawnSpot(area: RoamArea, rng: () => number, kind: RoamKind, you
 }
 export function newRoamer(uid: number, kind: RoamKind, young: boolean, at: { x: number; z: number }, rng: () => number): Roamer {
   return { uid, kind, young, x: at.x, z: at.z, heading: rng() * TAU, goalX: at.x, goalZ: at.z, speed: 0, walking: false, rest: kind === 'cow' ? 'graze' : 'peck', restT: 1 + rng() * 4,
-    peck: 0, peckT: 1 + rng() * 3, graze: 0, sit: 0, flap: 0, flee: 0, trip: 0, tripLimit: kind === 'cow' ? 200 + rng() * 200 : 90 + rng() * 90, shuffle: 0, shuffleT: 2 + rng() * 4, checkT: rng(), dest: null, homeward: false, path: [], walkT: 0 };
+    peck: 0, peckT: 1 + rng() * 3, graze: 0, sit: 0, flap: 0, flee: 0, trip: 0, tripLimit: kind === 'cow' ? 200 + rng() * 200 : 90 + rng() * 90, shuffle: 0, shuffleT: 2 + rng() * 4, checkT: rng(), dest: null, homeward: false, path: [], walkT: 0, grazeDebt: 0 };
 }
 
 /** Starts a rest where the animal stands: what it does and for how long (long rests make the field feel calm). */
-function startRest(w: Roamer, rng: () => number, area?: RoamArea) {
+function startRest(w: Roamer, rng: () => number, _area?: RoamArea) {
   w.walking = false; const k = rng();
-  // Back in the sandy yard a cow stands and chews rather than grazing on sand.
-  if (w.kind === 'cow' && area && inHomeYard(area, w.x, w.z)) { w.rest = 'look'; w.restT = 4 + rng() * 6; }
-  else if (w.kind === 'cow') { w.rest = k < .85 ? 'graze' : 'look'; w.restT = w.rest === 'graze' ? (w.young ? 5 : 9) + rng() * (w.young ? 8 : 15) : 3 + rng() * 4; }
+  // Cattle graze and chew for three times their actual walking time, including interrupted trips.
+  if (w.kind === 'cow') { w.rest = 'graze'; w.restT = Math.max(.3, w.grazeDebt); }
   else if (w.young) { w.rest = k < .75 ? 'peck' : 'sit'; w.restT = w.rest === 'sit' ? 5 + rng() * 8 : 1.5 + rng() * 3.5; }
   else { w.rest = k < .62 ? 'peck' : k < .8 ? 'sit' : k < .92 ? 'dust' : 'look'; w.restT = w.rest === 'peck' ? 2.5 + rng() * 5 : w.rest === 'look' ? 1.5 + rng() * 2 : 8 + rng() * 14; }
 }
@@ -122,7 +123,7 @@ function pickGoal(w: Roamer, all: readonly Roamer[], area: RoamArea, rng: () => 
     if (mom && best > 1.6) g = best > 6 ? legToward(w, area, mom.x, mom.z) : spotNear(area, rng, w, mom.x, mom.z, .8, 1.8);
   }
   if (!g) g = w.kind === 'cow' ? spotNear(area, rng, w, w.x, w.z, 1.5, 5) : spotNear(area, rng, w, w.x, w.z, .7, 3);
-  if (!g) { startRest(w, rng, area); w.restT = Math.min(w.restT, 2); return; }
+  if (!g) { startRest(w, rng, area); if (w.kind !== 'cow') w.restT = Math.min(w.restT, 2); return; }
   w.goalX = g.x; w.goalZ = g.z; w.walking = true; w.rest = 'none'; w.walkT = 4 + Math.hypot(g.x - w.x, g.z - w.z) * (w.kind === 'cow' ? 5 : 3);
 }
 
@@ -143,6 +144,10 @@ export function stepRoamer(w: Roamer, all: readonly Roamer[], area: RoamArea, rn
   w.trip = inHomeYard(area, w.x, w.z) ? 0 : w.trip + dt;
   // Head: grazing holds it down with a chew; pecking is a quick dip now and then.
   const grazing = !w.walking && w.rest === 'graze';
+  if (cow) {
+    if (w.walking) w.grazeDebt += dt * 3;
+    else if (grazing) w.grazeDebt = Math.max(0, w.grazeDebt - dt);
+  }
   w.graze += ((grazing ? 1 : 0) - w.graze) * Math.min(1, dt * 2.5);
   w.sit += ((!w.walking && (w.rest === 'sit' || w.rest === 'dust') ? 1 : 0) - w.sit) * Math.min(1, dt * 3);
   w.peckT -= dt; if (w.peckT <= 0) { const pecking = !w.walking && w.rest === 'peck'; w.peckT = pecking ? .5 + rng() * 1.2 : 2 + rng() * 4; w.peck = cow ? 0 : 1; }
@@ -180,6 +185,6 @@ export function stepRoamer(w: Roamer, all: readonly Roamer[], area: RoamArea, rn
   // The world wins: a move into anything (a bed just placed, an arc off the checked line) is undone and the walk ends;
   // one already standing somewhere blocked may walk out.
   if ((w.x !== px || w.z !== pz) && (Math.hypot(w.x, w.z) > area.radius - r || area.blocked(w.x, w.z, r)) && !area.blocked(px, pz, r)) {
-    w.x = px; w.z = pz; w.speed = 0; if (w.walking) { startRest(w, rng, area); w.restT = Math.min(w.restT, .6 + rng()); } else w.shuffle = 0;
+    w.x = px; w.z = pz; w.speed = 0; if (w.walking) { startRest(w, rng, area); if (!cow) w.restT = Math.min(w.restT, .6 + rng()); } else w.shuffle = 0;
   }
 }

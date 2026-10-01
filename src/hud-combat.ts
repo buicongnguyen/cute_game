@@ -1,3 +1,4 @@
+import { t } from './i18n.ts';
 import * as T from 'three';
 import type { Enemy, Entity } from './world.ts';
 import { ENEMY_TYPES, HOME_SPAWNS, PLANET_SPAWNS, PLANET_BOSSES } from './enemy-types.ts';
@@ -54,23 +55,23 @@ export const fightNear = (enemies: readonly Enemy[], x: number, z: number, r = 1
  */
 export function lootText(items: readonly { icon: string; name: string; count: number }[]): string {
   if (!items.length) return '';
-  if (items.length === 1) return `${items[0].icon} ${items[0].name} ×${items[0].count}`;
-  return `${items.slice(0, 3).map(i => i.icon).join('')} +${items.reduce((n, i) => n + i.count, 0)} items`;
+  if (items.length === 1) return `${items[0].icon} ${t(items[0].name)} ×${items[0].count}`;
+  return t('{icons} +{count} items', { icons: items.slice(0, 3).map(i => i.icon).join(''), count: items.reduce((n, i) => n + i.count, 0) });
 }
 
 /** Difficulty by home zone or planet; creature levels are difficulty × 3 − 2 (world.spawnSpecies). */
 export const ZONE_DIFFICULTY: Record<string, number> = { home: 0, forest: 1, meadow: 1, swamp: 2, canyon: 3, candy: 3, ice: 4, lava: 5, toy: 2, jungle: 3, ocean: 4, cloud: 5, shadow: 6 };
 const HOME_ZONES: Record<string, { id: string; boss: string }> = { 'Mushroom Forest': { id: 'forest', boss: 'treant' }, 'Blue Lake Meadow': { id: 'meadow', boss: 'mushking' }, 'Chomper Swamp': { id: 'swamp', boss: 'croc' }, 'Redrock Canyon': { id: 'canyon', boss: 'bear' } };
-const names = (types: readonly string[]) => types.map(t => ENEMY_TYPES[t]?.name).filter(Boolean).slice(0, 3).join(', ');
+const names = (types: readonly string[]) => types.map(type => t(ENEMY_TYPES[type]?.name ?? '')).filter(Boolean).slice(0, 3).join(', ');
 /** Zone banner text: the detail names what lives there, the chip rates it ('★★ · Lv 4+ · King Bear'). */
 export function zoneInfo(name: string, planet: PlanetId | string): { detail: string; chip: string } {
-  if (planet === 'home' && name === 'Clover Village') return { detail: 'A peaceful place · health restores here', chip: 'Safe' };
+  if (planet === 'home' && name === 'Clover Village') return { detail: t('A peaceful place · health restores here'), chip: t('Safe') };
   const home = planet === 'home' ? HOME_ZONES[name] : undefined, id = home?.id ?? planet, level = Math.max(1, (ZONE_DIFFICULTY[id] ?? 1) * 3 - 2);
   const spawns = home ? HOME_SPAWNS[home.id] : PLANET_SPAWNS[planet as PlanetId], bosses = home ? [home.boss] : PLANET_BOSSES[planet as PlanetId] ?? [];
   const stars = '★'.repeat(Math.max(1, Math.min(5, Math.ceil((ZONE_DIFFICULTY[id] ?? 1) / 1.3))));
-  const detail = home ? `Wild creatures: ${names((spawns ?? []).map(s => s[0]))}` : PLANETS[planet as PlanetId]?.description ?? '';
-  const boss = bosses[0] ? ENEMY_TYPES[bosses[0]]?.name : '';
-  return { detail, chip: `${stars} · Lv ${level}+${boss ? ` · 👑 ${boss}` : ''}` };
+  const detail = home ? t('Wild creatures: {names}', { names: names((spawns ?? []).map(s => s[0])) }) : t(PLANETS[planet as PlanetId]?.description ?? '');
+  const boss = bosses[0] ? t(ENEMY_TYPES[bosses[0]]?.name ?? '') : '';
+  return { detail, chip: `${stars} · ${t('Lv {level}', { level })}+${boss ? ` · 👑 ${boss}` : ''}` };
 }
 
 /** Where a creature's bar sits: just above its own model, measured once per model (and again when Blender art replaces it). */
@@ -146,15 +147,17 @@ export class CombatHud {
     const target = on ? targetOf(selected, this.lastHit, performance.now()) : null, frame = document.getElementById('target-frame')!;
     frame.hidden = !target;
     if (target) {
-      if (target.id !== this.targetId) { const icon = portrait(target); frame.querySelector('.target-icon')!.innerHTML = icon ?? ''; frame.querySelector('strong')!.textContent = target.name; if (icon !== null) this.targetId = target.id; }
-      frame.querySelector('.target-level')!.textContent = `Lv ${target.level ?? 1}`;
+      if (target.id !== this.targetId) { const icon = portrait(target); frame.querySelector('.target-icon')!.innerHTML = icon ?? ''; frame.querySelector('strong')!.textContent = t(target.name); if (icon !== null) this.targetId = target.id; }
+      frame.querySelector('strong')!.textContent = t(target.name);
+      frame.querySelector('.target-level')!.textContent = t('Lv {level}', { level: target.level ?? 1 });
       (frame.querySelector('.target-meter i') as HTMLElement).style.width = `${target.hp / target.maxHp * 100}%`;
       frame.querySelector('.target-hp')!.textContent = `${Math.ceil(target.hp)} / ${target.maxHp}`;
     } else this.targetId = '';
     const boss = on ? bossFor(enemies, px, pz) : null, bar = document.getElementById('boss-bar')!;
     bar.hidden = !boss;
     if (boss) {
-      if (boss.id !== this.bossId) { const icon = portrait(boss); document.getElementById('boss-icon')!.innerHTML = icon ?? '👑'; document.getElementById('boss-name')!.textContent = `👑 ${boss.name}`; if (icon !== null) this.bossId = boss.id; }
+      if (boss.id !== this.bossId) { const icon = portrait(boss); document.getElementById('boss-icon')!.innerHTML = icon ?? '👑'; document.getElementById('boss-name')!.textContent = `👑 ${t(boss.name)}`; if (icon !== null) this.bossId = boss.id; }
+      document.getElementById('boss-name')!.textContent = `👑 ${t(boss.name)}`;
       document.getElementById('boss-fill')!.style.width = `${boss.hp / boss.maxHp * 100}%`;
     } else this.bossId = '';
     return { target: !!target, boss: !!boss };

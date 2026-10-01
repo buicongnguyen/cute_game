@@ -28,9 +28,9 @@ test('level formula, carry-over, health restoration and stat upgrade costs match
   assert.equal(M.attack(s),16);assert.equal(M.defense(s),6);assert.equal(M.activeStats(s).critChance,.07500000000000001);
   s.critUp=28;const before=s.energy;assert.equal(M.upgrade(s,'crit'),false);assert.equal(s.energy,before);
 });
-test('manure halves remaining growth and spore ripens exactly one growing crop',()=>{
+test('manure and spore each advance half the original growth timer',()=>{
   const s=M.newGame();M.addItem(s,'manure',2);M.addItem(s,'spore',2);assert.equal(M.fertilize(s,0,now),false);M.plant(s,0,'carrot',now);
-  assert.equal(M.fertilize(s,0,now+2000,'manure'),true);assert.equal(M.cropProgress(s.plots[0],now+2000),.6);assert.equal(s.bag.manure,1);
+  assert.equal(M.fertilize(s,0,now+2000,'manure'),true);assert.equal(M.cropProgress(s.plots[0],now+2000),.7);assert.equal(s.bag.manure,1);
   assert.equal(M.fertilize(s,0,now+2000),true);assert.equal(M.fertilize(s,0,now+2000),false);assert.equal(s.bag.spore,1);assert.equal(M.harvest(s,0,now+2000),'carrot');
 });
 test('food buffs work at full HP, reapplication extends half remaining time, and expiry persists',()=>{

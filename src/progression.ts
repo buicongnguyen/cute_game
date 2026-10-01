@@ -1,3 +1,4 @@
+import { t } from './i18n.ts';
 import { ITEMS, PLANETS, COLLECTIONS, STORY_STEPS, type Inventory } from './content.ts';
 import { addItem, gainXp, xpNeeded, type SaveState } from './model.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
@@ -168,7 +169,7 @@ export function recordEvent(s: SaveState, event: string, amount = 1, detail?: st
     if (p.challenge?.type === event && !p.challenge.claimed)
         p.challenge.progress = Math.min(p.challenge.target, p.challenge.progress + amount);
 }
-function rewardLabel(r: Reward) { return [r.energy ? `${r.energy} energy` : '', r.xp ? `${r.xp} XP` : '', r.stars ? `${r.stars} stars` : '', ...Object.entries(r.items || {}).map(([id, n]) => `${ITEMS[id]?.name || id} ×${n}`)].filter(Boolean).join(' · '); }
+function rewardLabel(r: Reward) { return [r.energy ? t('{count} energy', { count: r.energy }) : '', r.xp ? `${r.xp} XP` : '', r.stars ? t('{count} stars', { count: r.stars }) : '', ...Object.entries(r.items || {}).map(([id, n]) => `${t(ITEMS[id]?.name || id)} ×${n}`)].filter(Boolean).join(' · '); }
 function give(s: SaveState, r: Reward, now: number) { s.energy += r.energy || 0; if (r.xp)
     gainXp(s, r.xp, now); for (const [id, n] of Object.entries(r.items || {}))
     addItem(s, id, n); refreshProgress(s, now); s.progression.pass.stars += r.stars || 0; }
@@ -183,38 +184,38 @@ function loginReward(s: SaveState, now: number): Reward { const streak = s.progr
 function bountyReward(s: SaveState): Reward { return { energy: 40 + s.level * 8, xp: Math.round(xpNeeded(s.level) * .15), items: { [BONUS[hash(s.progression.bounty?.key || '') % BONUS.length]]: 1 }, stars: 15 }; }
 function achievementReward(tier: number, target: number): Reward { return { energy: 40 * (tier + 1) + Math.min(300, Math.round(target / 10)), xp: 30 * (tier + 1), stars: 10 }; }
 /** Player-facing name of a challenge type (the daily task titles), never the internal id. */
-export function challengeTitle(type: string): string { return DAILY[type]?.title ?? type; }
-function entry(id: string, title: string, progress: number, target: number, claimed: boolean, reward: Reward = {}, icon = '📜', description = ''): ProgressEntry { return { id, title, description, progress: Math.min(progress, target), target, complete: progress >= target, claimed, rewardLabel: rewardLabel(reward), icon }; }
+export function challengeTitle(type: string): string { return t(DAILY[type]?.title ?? type); }
+function entry(id: string, title: string, progress: number, target: number, claimed: boolean, reward: Reward = {}, icon = '📜', description = ''): ProgressEntry { return { id, title: t(title), description: t(description), progress: Math.min(progress, target), target, complete: progress >= target, claimed, rewardLabel: rewardLabel(reward), icon }; }
 export function progressEntries(s: SaveState, kind: ProgressKind, now = Date.now()): ProgressEntry[] {
     refreshProgress(s, now);
     const p = s.progression;
     if (kind === 'story') {
         const step = storyStep(p.story.index);
-        return [entry(`story:${p.story.index}`, step.title, step.condition ? condition(s, step.condition) : p.story.progress, step.target, false, storyReward(s), step.icon, `Chapter ${step.chapter + 1} · Step ${p.story.index + 1}`)];
+        return [entry(`story:${p.story.index}`, step.title, step.condition ? condition(s, step.condition) : p.story.progress, step.target, false, storyReward(s), step.icon, t('Chapter {chapter} · Step {step}', { chapter: step.chapter + 1, step: p.story.index + 1 }))];
     }
     if (kind === 'daily' || kind === 'weekly') {
         const weekly = kind === 'weekly', state = weekly ? p.weekly : p.daily, specs = weekly ? WEEKLY : DAILY;
         const result = state.tasks.map((task, i) => entry(`${state.key}:${i}`, specs[task.type].title, task.progress, task.target, task.claimed, taskReward(s, task, weekly), specs[task.type].icon));
         result.push(entry(`${state.key}:chest`, weekly ? 'Weekly chest' : 'Daily chest', state.tasks.filter(t => t.claimed).length, state.tasks.length, state.chest, weekly ? weeklyChest(s) : dailyChest(s, now), '🎁'));
         if (!weekly)
-            result.unshift(entry(`${day(now)}:login`, 'Daily check-in', 1, 1, p.login.day === day(now), loginReward(s, now), '🗓️', `${p.login.streak} consecutive days`));
+            result.unshift(entry(`${day(now)}:login`, 'Daily check-in', 1, 1, p.login.day === day(now), loginReward(s, now), '🗓️', t('{count} consecutive days', { count: p.login.streak })));
         return result;
     }
     if (kind === 'achievements')
-        return ACHIEVEMENTS.map(([id, key, targets, title, icon]) => { const tier = p.achievements[id] || 0, target = targets[Math.min(tier, targets.length - 1)], done = tier >= targets.length; return entry(`${id}:${tier}`, `${title} · ${Math.min(tier + 1, targets.length)}/${targets.length}`, condition(s, key), target, done, done ? {} : achievementReward(tier, target), icon); });
+        return ACHIEVEMENTS.map(([id, key, targets, title, icon]) => { const tier = p.achievements[id] || 0, target = targets[Math.min(tier, targets.length - 1)], done = tier >= targets.length; return entry(`${id}:${tier}`, `${t(title)} · ${Math.min(tier + 1, targets.length)}/${targets.length}`, condition(s, key), target, done, done ? {} : achievementReward(tier, target), icon); });
     if (kind === 'pass')
-        return PASS_REWARDS.map((reward, i) => entry(`${p.pass.season}:${i}`, `Star pass · Tier ${i + 1}`, p.pass.stars, (i + 1) * 50, p.pass.claimed.includes(i), reward, '⭐', `Season ${p.pass.season}`));
+        return PASS_REWARDS.map((reward, i) => entry(`${p.pass.season}:${i}`, t('Star pass · Tier {tier}', { tier: i + 1 }), p.pass.stars, (i + 1) * 50, p.pass.claimed.includes(i), reward, '⭐', t('Season {season}', { season: p.pass.season })));
     if (kind === 'bounties') {
         const b = p.bounty;
-        return b ? [entry(b.key, `Wanted: ${ENEMY_TYPES[b.type]?.name ?? b.type}`, b.progress, b.target, b.claimed, bountyReward(s), '🎯', `${Math.max(0, Math.ceil((b.ends - now) / 60000))} minutes remaining`)] : [];
+        return b ? [entry(b.key, t('Wanted: {name}', { name: t(ENEMY_TYPES[b.type]?.name ?? b.type) }), b.progress, b.target, b.claimed, bountyReward(s), '🎯', t('{count} minutes remaining', { count: Math.max(0, Math.ceil((b.ends - now) / 60000)) }))] : [];
     }
     if (kind === 'collection')
-        return Object.entries(COLLECTIONS).map(([id, group]) => { const found = group.items.filter(item => s.collection[item]).length; return entry(id, group.name, found, group.items.length, true, {}, group.emoji, group.items.map(item => `${s.collection[item] ? '✓' : '?'} ${ITEMS[item].name}`).join(' · ')); });
+        return Object.entries(COLLECTIONS).map(([id, group]) => { const found = group.items.filter(item => s.collection[item]).length; return entry(id, group.name, found, group.items.length, true, {}, group.emoji, group.items.map(item => `${s.collection[item] ? '✓' : '?'} ${t(ITEMS[item].name)}`).join(' · ')); });
     const c = p.challenge;
     if (!c)
         return [];
     const mult = 1 + Math.min(p.streak, 8) * .25;
-    return [entry(`challenge:${c.ends}`, `Quick challenge: ${challengeTitle(c.type)}`, c.progress, c.target, c.claimed, { energy: Math.round((15 + s.level * 4) * mult), xp: Math.round(xpNeeded(s.level) * .07 * mult), stars: 6 }, '⏱️', `${Math.ceil((c.ends - now) / 1000)} seconds remaining`)];
+    return [entry(`challenge:${c.ends}`, t('Quick challenge: {name}', { name: challengeTitle(c.type) }), c.progress, c.target, c.claimed, { energy: Math.round((15 + s.level * 4) * mult), xp: Math.round(xpNeeded(s.level) * .07 * mult), stars: 6 }, '⏱️', t('{count} seconds remaining', { count: Math.ceil((c.ends - now) / 1000) }))];
 }
 export function claimProgress(s: SaveState, kind: ProgressKind, id: string, now = Date.now()): boolean {
     const available = progressEntries(s, kind, now).find(e => e.id === id);

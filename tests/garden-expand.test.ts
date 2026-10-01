@@ -92,7 +92,11 @@ test('old saves keep their beds: missing positions fall back to the starting gri
 
 test('the garden items explain themselves', () => {
   assert.match(M.ITEMS.plot_kit.desc, /tap a garden bed.*Expand garden/i);
-  assert.match(M.ITEMS.manure.desc, /halves/i); assert.match(M.ITEMS.spore.desc, /ripens/i);
+  for (const id of ['manure', 'spore']) {
+    assert.match(M.ITEMS[id].desc, /half.*original growing time/i, id + ' describes a fixed share of the original timer');
+    assert.match(M.ITEMS[id].desc, /two uses.*ripen.*newly planted/i, id + ' explains how to fully ripen a new crop');
+    assert.equal(M.ITEMS[id].grow, .5, id + ' agrees with the crop model');
+  }
 });
 
 test('placed beds keep their 45° turn, turned beds need more room, and old saves stay square', () => {

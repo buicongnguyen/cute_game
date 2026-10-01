@@ -340,7 +340,7 @@ const ITEM_FACTS: Record<string, any> = {
         "name": "Bào Tử Kỳ Diệu",
         "type": "farm",
         "sell": 25,
-        "grow": 1,
+        "grow": 0.5,
         "rare": true
     },
     "tusk": {
@@ -3790,8 +3790,9 @@ for (const [id, item] of Object.entries(ITEMS)) {
 }
 // The garden items say what they do (the growing-bed panel shows these lines beside its Use buttons).
 ITEMS.plot_kit.desc = 'One more garden bed for home. Place it from your backpack, or tap a garden bed and choose ➕ Expand garden.';
-ITEMS.manure.desc = 'Halves the time a growing crop still needs.';
-ITEMS.spore.desc = 'Ripens a growing crop right away.';
+// Both fertilizers advance half the original timer, as requested for the updated game.
+ITEMS.manure.desc = "Removes half of the crop's original growing time. Two uses ripen a newly planted crop.";
+ITEMS.spore.desc = ITEMS.manure.desc;
 const planetLabels: Record<PlanetId, string> = { home: 'Clover Village', candy: 'Candy Planet', ice: 'Frost Planet', lava: 'Volcano Planet', toy: 'Toybox Planet', jungle: 'Wild Jungle', ocean: 'Ocean Planet', cloud: 'Cloud Islands', shadow: 'Night Planet' };
 for (const [id, planet] of Object.entries(PLANETS)) {
     planet.name = planetLabels[id as PlanetId];
@@ -3813,7 +3814,7 @@ WORKSHOP_CATEGORIES.forEach((category, i) => { const label = ['Volcano equipment
 for (const recipe of RECIPES)
     recipe.category = categoryLabels.get(recipe.category) || recipe.category;
 // Explain how to use specialist equipment where a stat line alone is not enough.
-ITEMS.rod.desc='Equip this rod and visit a pond. Hook at the bite, then balance reeling with line tension.';
+ITEMS.rod.desc='Keep this rod in your backpack. It is held automatically near a pond; your combat weapon returns away from water. Hook at the bite, then balance reeling with line tension.';
 ITEMS.rod_gold.desc='A stronger rod that makes difficult fish easier to land and improves rare catches.';
 const worldDescriptions:Record<PlanetId,string>={home:'Your garden and four trails: forest, meadow, swamp and canyon.',candy:'Sweet forests, springy surprises and powerful candy creatures.',ice:'Slippery ice, frozen ponds and snowbound bosses. Plan your stopping distance.',lava:'Eruptions, rising lava, meteors and a hidden cave furnace. Watch the warning circles.',toy:'Ride the moving trains and open surprise gifts among giant toys.',jungle:'Changing thorn walls, poisonous plants and restorative fruit.',ocean:'Swim between islands. Refill your air at bubbles or ride a sea turtle.',cloud:'Bounce between floating islands and watch the wind near their edges.',shadow:'Explore the darkness, light ancient pillars and face the Night Lord.'};
 for(const id of Object.keys(PLANETS)as PlanetId[])PLANETS[id].description=worldDescriptions[id];

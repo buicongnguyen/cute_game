@@ -1,3 +1,4 @@
+import { t } from './i18n.ts';
 import * as T from 'three';
 import { PLANETS, type PlanetId } from './model.ts';
 import { STAR_MAP, type SpaceFlight, type AsteroidKind } from './space.ts';
@@ -203,7 +204,7 @@ export class SpaceView {
       p.label.style.display = shown ? 'block' : 'none';
       if (!shown) continue;
       p.label.style.transform = `translate(${(this.point.x * .5 + .5) * width}px,${(-this.point.y * .5 + .5) * height}px) translate(-50%,-100%)`;
-      const known = discovered.has(p.id), text = known ? `${def.icon} ${def.name}${level < def.level ? ` <span>🔒 Level ${def.level}</span>` : ''}` : '❓ Mysterious planet';
+      const known = discovered.has(p.id), text = known ? `${def.icon} ${t(def.name)}${level < def.level ? ` <span>🔒 ${t('Level {level}', { level: def.level })}</span>` : ''}` : `❓ ${t('Mysterious planet')}`;
       if (p.label.innerHTML !== text) p.label.innerHTML = text;
       p.label.classList.toggle('unknown', !known);
     }

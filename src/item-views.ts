@@ -1,3 +1,4 @@
+import { t } from './i18n.ts';
 import * as M from './model.ts';
 import { UPGRADES } from './content.ts';
 
@@ -24,7 +25,7 @@ export function sellProduce(s: M.SaveState) {
 }
 
 /** Defence as the reference shows it: "N (−X% damage)", X = def / (def + 60), the same curve the hit formula uses. */
-export const defenseText = (def: number) => `${def} (−${Math.round(def / (def + 60) * 100)}% damage)`;
+export const defenseText = (def: number) => t('{defense} (−{percent}% damage)', { defense: def, percent: Math.round(def / (def + 60) * 100) });
 
 export type UpgradeKind = keyof typeof UPGRADES;
 export interface UpgradeCard { kind: UpgradeKind; icon: string; name: string; level: number; now: string; gain: string; cost: number; max: boolean; affordable: boolean }
@@ -38,6 +39,6 @@ export function upgradeCards(s: M.SaveState): UpgradeCard[] {
   const now: Record<UpgradeKind, string> = { health: `${Math.round(stats.maxHp)}`, attack: stats.attack.toFixed(1), defense: defenseText(stats.defense), crit: `${Math.round(stats.critChance * 100)}%` };
   return (Object.keys(UPGRADES) as UpgradeKind[]).map(kind => {
     const def = UPGRADES[kind], level = rank(s, kind), max = 'max' in def && level >= def.max, cost = M.upgradeCost(s, kind);
-    return { kind, icon: def.icon, name: def.name, level, now: now[kind], gain: GAIN[kind], cost, max, affordable: !max && s.energy >= cost };
+    return { kind, icon: def.icon, name: t(def.name), level, now: now[kind], gain: t(GAIN[kind]), cost, max, affordable: !max && s.energy >= cost };
   });
 }

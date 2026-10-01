@@ -6,8 +6,8 @@ import { recordEvent } from './progression.ts';
  * The animal pen beside the garden (our extension: the reference has no farm animals). It runs on the crop rules:
  * a chick or calf is bought with energy (level-gated like seeds) and grows up on a timer; adults make one egg or one
  * jug of milk per cycle, which waits until collected (like a ripe crop); a crop from the bag halves the time still
- * needed, once per stage; one tap collects everything that is ready. Animals are never sold or turned into meat: meat
- * keeps coming from wild creatures. Times are wall-clock milliseconds, so the farm keeps going while the game is closed.
+ * needed, once per stage; one tap collects everything that is ready. After their lifetime, animals become a meat
+ * pickup that waits until collected. Arrival time is independent of growth boosts. Timers also run while closed.
  */
 export type AnimalKind = 'chicken' | 'cow';
 export interface Animal {
@@ -15,6 +15,8 @@ export interface Animal {
   kind: AnimalKind;
   /** When it arrived as a chick or calf (moved earlier when fed while young). */
   bornAt: number;
+  /** Arrival time never changes when fed. Optional only for legacy in-memory animals; saves always fill it. */
+  acquiredAt?: number;
   /** Start of the product cycle under way: set to the moment it grows up when bought, moved by feeding and collecting. */
   cycleAt: number;
   /** Fed while young / during the current product cycle (one feed each). */
@@ -27,13 +29,17 @@ export interface AnimalDef {
   growMs: number; productMs: number; product: ItemId; xp: number; cap: number; capStep: number;
 }
 export const ANIMALS: Record<AnimalKind, AnimalDef> = {
-  chicken: { name: 'Chicken', baby: 'Chick', icon: '🐔', babyIcon: '🐤', level: 2, price: 25, growMs: 60_000, productMs: 40_000, product: 'egg', xp: 5, cap: 4, capStep: 2 },
-  cow: { name: 'Cow', baby: 'Calf', icon: '🐄', babyIcon: '🐮', level: 5, price: 70, growMs: 120_000, productMs: 75_000, product: 'milk', xp: 10, cap: 2, capStep: 1 },
+  chicken: { name: 'Chicken', baby: 'Chick', icon: '🐔', babyIcon: '🐤', level: 2, price: 25, growMs: 60_000, productMs: 40_000, product: 'egg', xp: 5, cap: 4, capStep: 3 },
+  cow: { name: 'Cow', baby: 'Calf', icon: '🐄', babyIcon: '🐮', level: 5, price: 70, growMs: 120_000, productMs: 75_000, product: 'milk', xp: 10, cap: 2, capStep: 4 },
 };
 export const ANIMAL_KINDS = Object.keys(ANIMALS) as AnimalKind[];
 /** A crop given as feed halves the time the animal still needs to grow up or to make its next product. */
 export const FEED_SHARE = .5;
-/** Energy for each pen expansion (+2 chickens and +1 cow each). */
+/** Each kind has its own cap; the two upgrades reach 10 chickens and 10 cows. */
+export const MAX_ANIMALS_PER_KIND = 10;
+/** Wall-clock time from arrival until an animal becomes collectible meat. */
+export const ANIMAL_LIFESPAN_MS = 2 * 60 * 60 * 1000;
+/** Energy for each pen expansion (+3 chickens and +4 cows each). */
 export const PEN_EXPANSIONS = [140, 280] as const;
 export const MAX_PEN_LEVEL = PEN_EXPANSIONS.length;
 /**
@@ -98,18 +104,40 @@ export function canBuildPen(s: SaveState): BuildCheck {
 }
 /** Builds the pen on its marked plot: the yard, coop and troughs appear and animals can be bought. */
 export function buildPen(s: SaveState) { if (canBuildPen(s) !== 'ok') return false; s.energy -= PEN_BUILD.price; farmOf(s).built = true; return true; }
-export function adultAt(a: Animal) { return a.bornAt + ANIMALS[a.kind].growMs; }
-export function isAdult(a: Animal, now = Date.now()) { return now >= adultAt(a); }
-/** 0 → 1 while young. */
-export function growth(a: Animal, now = Date.now()) { return Math.max(0, Math.min(1, (now - a.bornAt) / ANIMALS[a.kind].growMs)); }
-/** 0 → 1 through the current product cycle; 0 while young. */
-export function productProgress(a: Animal, now = Date.now()) { return isAdult(a, now) ? Math.max(0, Math.min(1, (now - a.cycleAt) / ANIMALS[a.kind].productMs)) : 0; }
-export function productReady(a: Animal, now = Date.now()) { return productProgress(a, now) >= 1; }
-/** Milliseconds until it grows up (young) or until its product is ready (adult); 0 when a product waits. */
-export function timeLeft(a: Animal, now = Date.now()) {
-  return isAdult(a, now) ? Math.max(0, a.cycleAt + ANIMALS[a.kind].productMs - now) : adultAt(a) - now;
+// Leave room for timer additions; corrupt clocks cannot create rewards or consume feed.
+const MAX_FARM_TIME = Number.MAX_SAFE_INTEGER - ANIMAL_LIFESPAN_MS - 120_000;
+function validTime(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= MAX_FARM_TIME; }
+function arrival(a: Animal) { return a.acquiredAt ?? a.bornAt; }
+function validAnimalTime(a: Animal, now: number) {
+  return Object.hasOwn(ANIMALS, a.kind) && validTime(now) && validTime(arrival(a)) && now >= arrival(a) &&
+    Number.isFinite(a.bornAt) && Math.abs(a.bornAt) <= MAX_FARM_TIME && validTime(a.cycleAt);
 }
-export function penCapacity(s: SaveState, kind: AnimalKind) { const d = ANIMALS[kind]; return d.cap + farmOf(s).penLevel * d.capStep; }
+export function expiresAt(a: Animal) { return validTime(arrival(a)) ? arrival(a) + ANIMAL_LIFESPAN_MS : Infinity; }
+export function expired(a: Animal, now = Date.now()) { return validTime(now) && now >= expiresAt(a); }
+/** Milliseconds until meat is ready; arrival is independent of the feeding-adjusted growth timer. */
+export function lifetimeLeft(a: Animal, now = Date.now()) { return validTime(now) ? Math.max(0, expiresAt(a) - now) : Infinity; }
+export function productFor(a: Animal, now = Date.now()): ItemId { return expired(a, now) ? 'meat' : ANIMALS[a.kind].product; }
+export function adultAt(a: Animal) { return a.bornAt + ANIMALS[a.kind].growMs; }
+export function isAdult(a: Animal, now = Date.now()) { return validAnimalTime(a, now) && now >= adultAt(a); }
+/** 0 → 1 while young. */
+export function growth(a: Animal, now = Date.now()) { return validAnimalTime(a, now) ? Math.max(0, Math.min(1, (now - a.bornAt) / ANIMALS[a.kind].growMs)) : 0; }
+/** 0 → 1 through the product cycle; expired animals have a waiting meat pickup. */
+export function productProgress(a: Animal, now = Date.now()) {
+  if (!validAnimalTime(a, now)) return 0;
+  return expired(a, now) ? 1 : isAdult(a, now) ? Math.max(0, Math.min(1, (now - a.cycleAt) / ANIMALS[a.kind].productMs)) : 0;
+}
+export function productReady(a: Animal, now = Date.now()) { return productProgress(a, now) >= 1; }
+/** Milliseconds until growth or production finishes; 0 while a product or meat pickup waits. */
+export function timeLeft(a: Animal, now = Date.now()) {
+  if (!validAnimalTime(a, now)) return Infinity;
+  const next = isAdult(a, now) ? a.cycleAt + ANIMALS[a.kind].productMs - now : adultAt(a) - now;
+  return expired(a, now) ? 0 : Math.max(0, next);
+}
+function capacity(kind: AnimalKind, level: number) {
+  const d = ANIMALS[kind], safeLevel = Number.isFinite(level) ? Math.max(0, Math.min(MAX_PEN_LEVEL, Math.floor(level))) : 0;
+  return Math.min(MAX_ANIMALS_PER_KIND, d.cap + safeLevel * d.capStep);
+}
+export function penCapacity(s: SaveState, kind: AnimalKind) { return capacity(kind, farmOf(s).penLevel); }
 export function animalCount(s: SaveState, kind: AnimalKind) { return farmOf(s).animals.filter(a => a.kind === kind).length; }
 export type BuyCheck = 'ok' | 'away' | 'unbuilt' | 'level' | 'full' | 'energy';
 export function canBuyAnimal(s: SaveState, kind: AnimalKind): BuyCheck {
@@ -122,8 +150,10 @@ export function canBuyAnimal(s: SaveState, kind: AnimalKind): BuyCheck {
 }
 /** Buys a chick or a calf; it arrives young and grows up on its own. */
 export function buyAnimal(s: SaveState, kind: AnimalKind, now = Date.now()): Animal | null {
-  if (canBuyAnimal(s, kind) !== 'ok' || !Number.isFinite(now) || now < 0) return null;
-  const farm = farmOf(s), a: Animal = { uid: farm.nextId++, kind, bornAt: now, cycleAt: now + ANIMALS[kind].growMs };
+  if (canBuyAnimal(s, kind) !== 'ok' || !validTime(now)) return null;
+  const farm = farmOf(s);
+  if (!Number.isSafeInteger(farm.nextId) || farm.nextId < 1 || farm.nextId >= Number.MAX_SAFE_INTEGER) return null;
+  const a: Animal = { uid: farm.nextId++, kind, bornAt: now, acquiredAt: now, cycleAt: now + ANIMALS[kind].growMs };
   s.energy -= ANIMALS[kind].price; farm.animals.push(a); return a;
 }
 /** The crop the farm feeds by default: the cheapest one in the bag (ties by name), or null. */
@@ -133,11 +163,12 @@ export function feedCrop(s: SaveState): ItemId | null {
   return crops[0] ?? null;
 }
 /** Whether this animal would take feed now: once while young, once per product cycle, never while a product waits. */
-export function canFeed(a: Animal, now = Date.now()) { return isAdult(a, now) ? !a.fed && !productReady(a, now) : !a.fedYoung; }
+export function canFeed(a: Animal, now = Date.now()) { return validAnimalTime(a, now) && !expired(a, now) && (isAdult(a, now) ? !a.fed && !productReady(a, now) : !a.fedYoung); }
 /** Feeds one crop to an animal; returns the crop used, or null (no such animal, already fed, nothing to feed). */
 export function feedAnimal(s: SaveState, uid: number, now = Date.now(), raw?: ItemId): ItemId | null {
   const a = farmOf(s).animals.find(x => x.uid === uid), crop = raw ? canonicalItem(raw) : feedCrop(s);
   if (!a || !crop || !Object.hasOwn(CROPS, crop) || !Number.isFinite(now) || !canFeed(a, now) || looseQuantity(s, crop) < 1 || !removeItem(s.bag, crop)) return null;
+  a.acquiredAt ??= a.bornAt; // Freeze the legacy arrival before feeding changes bornAt.
   const skip = timeLeft(a, now) * FEED_SHARE;
   if (isAdult(a, now)) { a.cycleAt -= skip; a.fed = true; }
   else { a.bornAt -= skip; a.cycleAt -= skip; a.fedYoung = true; }
@@ -147,24 +178,29 @@ export function feedAnimal(s: SaveState, uid: number, now = Date.now(), raw?: It
 export function feedAll(s: SaveState, now = Date.now()) { let fed = 0; for (const a of farmOf(s).animals) if (canFeed(a, now) && feedAnimal(s, a.uid, now)) fed++; return fed; }
 export interface Collected { uid: number; kind: AnimalKind; item: ItemId }
 /**
- * Collects every waiting product (or only those of `uids`) into the bag, with XP; each animal starts its next cycle
- * now. The order is the given one, so the view can gather nearest first.
+ * Collects waiting products or expired animals as meat, with XP. Meat is granted only on collection, then the
+ * expired animal is removed. Failed inventory grants preserve it. Given UID order supports nearest-first collection.
  */
 export function collectProducts(s: SaveState, now = Date.now(), uids?: readonly number[]): Collected[] {
-  if (s.planet !== 'home') return [];
-  const animals = farmOf(s).animals, picked = uids ? uids.map(uid => animals.find(a => a.uid === uid)).filter((a): a is Animal => !!a) : animals;
+  if (s.planet !== 'home' || !validTime(now)) return [];
+  const animals = farmOf(s).animals, picked = new Set(uids ?? animals.map(a => a.uid));
   const out: Collected[] = [];
-  for (const a of picked) {
-    if (!productReady(a, now)) continue;
-    const item = ANIMALS[a.kind].product;
+  for (const uid of picked) {
+    const a = animals.find(animal => animal.uid === uid);
+    if (!a || !productReady(a, now)) continue;
+    const item = productFor(a, now);
     if (!addItem(s, item)) continue;
-    a.cycleAt = now; a.fed = false; gainXp(s, ANIMALS[a.kind].xp, now); out.push({ uid: a.uid, kind: a.kind, item });
+    if (expired(a, now)) {
+      // Duplicate requested IDs or malformed in-memory copies can never grant the same animal twice.
+      for (let index = animals.length - 1; index >= 0; index--) if (animals[index].uid === uid) animals.splice(index, 1);
+    } else { a.cycleAt = now; a.fed = false; }
+    gainXp(s, ANIMALS[a.kind].xp, now); out.push({ uid: a.uid, kind: a.kind, item });
   }
   return out;
 }
 export function readyAnimals(s: SaveState, now = Date.now()) { return farmOf(s).animals.filter(a => productReady(a, now)); }
 export function penExpandCost(s: SaveState) { const level = farmOf(s).penLevel; return level < MAX_PEN_LEVEL ? PEN_EXPANSIONS[level] : null; }
-/** Room for two more chickens and one more cow. */
+/** Room for three more chickens and four more cows, up to ten of each. */
 export function expandPen(s: SaveState) {
   const cost = penExpandCost(s);
   if (cost === null || s.planet !== 'home' || !penBuilt(s) || s.energy < cost) return false;
@@ -180,7 +216,7 @@ export function cookDish(s: SaveState, id: ItemId) {
   for (const [m, n] of Object.entries(FARM_DISHES.find(d => d.id === id)!.materials)) removeItem(s.bag, m, n);
   addItem(s, id); recordEvent(s, 'cook', 1); return true;
 }
-function count(value: unknown, fallback = 0) { return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback; }
+function count(value: unknown, fallback = 0) { return typeof value === 'number' && Number.isSafeInteger(Math.floor(value)) && value >= 0 ? Math.floor(value) : fallback; }
 /** The farm from a save: unknown kinds and bad times are dropped, the pen keeps its caps; missing = an empty pen. */
 export function parseFarm(raw: unknown): FarmState {
   const farm = emptyFarm();
@@ -191,11 +227,15 @@ export function parseFarm(raw: unknown): FarmState {
   for (const item of Array.isArray(v.animals) ? v.animals : []) {
     if (!item || typeof item !== 'object') continue;
     const a = item as Record<string, unknown>, kind = a.kind as AnimalKind, uid = count(a.uid, -1);
-    if (!Object.hasOwn(ANIMALS, kind) || uid < 1 || seen.has(uid) || !Number.isFinite(a.bornAt) || (a.bornAt as number) < 0) continue;
-    if (room[kind] >= ANIMALS[kind].cap + farm.penLevel * ANIMALS[kind].capStep) continue;
-    const bornAt = a.bornAt as number, cycleAt = Number.isFinite(a.cycleAt) ? a.cycleAt as number : bornAt + ANIMALS[kind].growMs;
+    if (!Object.hasOwn(ANIMALS, kind) || uid < 1 || uid >= Number.MAX_SAFE_INTEGER || seen.has(uid) ||
+      typeof a.bornAt !== 'number' || !Number.isFinite(a.bornAt) || Math.abs(a.bornAt) > MAX_FARM_TIME) continue;
+    if (room[kind] >= capacity(kind, farm.penLevel)) continue;
+    const bornAt = a.bornAt, acquiredAt = a.acquiredAt === undefined ? bornAt : a.acquiredAt;
+    if (!validTime(acquiredAt) || bornAt < acquiredAt - ANIMALS[kind].growMs || bornAt > acquiredAt) continue;
+    const cycleAt = a.cycleAt === undefined ? bornAt + ANIMALS[kind].growMs : a.cycleAt;
+    if (!validTime(cycleAt)) continue;
     seen.add(uid); room[kind]++;
-    farm.animals.push({ uid, kind, bornAt, cycleAt, ...(a.fedYoung === true ? { fedYoung: true } : {}), ...(a.fed === true ? { fed: true } : {}) });
+    farm.animals.push({ uid, kind, bornAt, acquiredAt, cycleAt, ...(a.fedYoung === true ? { fedYoung: true } : {}), ...(a.fed === true ? { fed: true } : {}) });
   }
   // Saves from before building: a pen with animals or an expansion was already standing.
   farm.built = v.built === true || farm.animals.length > 0 || farm.penLevel > 0;

@@ -24,10 +24,10 @@ test('chicks and calves cost energy, are level-gated like seeds and fill the pen
   assert.deepEqual(new Set(s.farm.animals.map(x => x.uid)).size, 6, 'every animal has its own id');
 });
 
-test('the pen grows: +2 chickens and +1 cow per expansion, twice, for energy', () => {
+test('the pen grows to ten chickens and ten cows over two paid expansions', () => {
   const s = home(10, 140 + 280);
-  assert.equal(M.penExpandCost(s), 140); assert.ok(M.expandPen(s)); assert.equal(M.penCapacity(s, 'chicken'), 6); assert.equal(M.penCapacity(s, 'cow'), 3);
-  assert.ok(M.expandPen(s)); assert.equal(s.energy, 0); assert.equal(M.penCapacity(s, 'chicken'), 8); assert.equal(M.penCapacity(s, 'cow'), 4);
+  assert.equal(M.penExpandCost(s), 140); assert.ok(M.expandPen(s)); assert.equal(M.penCapacity(s, 'chicken'), 7); assert.equal(M.penCapacity(s, 'cow'), 6);
+  assert.ok(M.expandPen(s)); assert.equal(s.energy, 0); assert.equal(M.penCapacity(s, 'chicken'), 10); assert.equal(M.penCapacity(s, 'cow'), 10);
   s.energy = 1e6; assert.equal(M.penExpandCost(s), null); assert.equal(M.expandPen(s), false); assert.equal(s.energy, 1e6);
   const poor = home(10, 139); assert.equal(M.expandPen(poor), false); assert.equal(poor.farm.penLevel, 0);
 });
@@ -92,7 +92,7 @@ test('products sell at the market and cook into dishes with buffs like the roast
   for (const d of M.FARM_DISHES) { const item = M.ITEMS[d.id]; assert.equal(item.type, 'food'); assert.ok(item.heal! >= 40 && item.buff && item.buff.time >= 90 && item.sell > 0, d.id); }
   s.hp = 1; assert.ok(M.eat(s, 'omelette')); assert.equal(s.buffs.def?.value, 10);
   const away = home(); M.addItem(away, 'egg', 2); away.planet = 'toy'; assert.equal(M.cookDish(away, 'omelette'), false);
-  // No slaughter: no farm animal is an item, nothing turns an animal into meat.
+  // Live farm animals are not inventory items; kitchen recipes use their products.
   assert.ok(!('chicken' in M.ITEMS) && !('cow' in M.ITEMS)); assert.ok(!M.FARM_DISHES.some(d => 'meat' in d.materials));
 });
 
@@ -104,7 +104,7 @@ test('the farm saves and loads; old saves get an empty pen; bad entries are drop
   const odd = JSON.parse(JSON.stringify(s)); odd.farm = { penLevel: 99, nextId: -4, animals: [{ uid: 1, kind: 'pig', bornAt: 1 }, { uid: 2, kind: 'cow', bornAt: 'x' }, { uid: 3, kind: 'cow', bornAt: 5 }, { uid: 3, kind: 'cow', bornAt: 6 }, ...Array.from({ length: 12 }, (_, i) => ({ uid: 10 + i, kind: 'chicken', bornAt: 7 }))] };
   const f = M.parseSave(JSON.stringify(odd))!.farm;
   assert.equal(f.penLevel, M.MAX_PEN_LEVEL); assert.deepEqual(f.animals.filter(a => a.kind === 'cow').map(a => a.uid), [3], 'unknown kinds, bad times and repeated ids go');
-  assert.equal(f.animals.filter(a => a.kind === 'chicken').length, 8, 'never more than the pen holds'); assert.ok(f.nextId > Math.max(...f.animals.map(a => a.uid)));
+  assert.equal(f.animals.filter(a => a.kind === 'chicken').length, 10, 'never more than the pen holds'); assert.ok(f.nextId > Math.max(...f.animals.map(a => a.uid)));
   assert.equal(f.animals[0].cycleAt, 5 + M.ANIMALS.cow.growMs, 'a missing cycle starts at adulthood');
   const garbage = JSON.parse(JSON.stringify(s)); garbage.farm = 'nope'; assert.deepEqual(M.parseSave(JSON.stringify(garbage))!.farm, M.emptyFarm());
 });

@@ -1,3 +1,4 @@
+import { t } from './i18n.ts';
 import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
 import { buildScatter, disposeScatter, fallbackParts, updateScatterShadows } from './scatter.ts';
 import { OccluderFade } from './occluders.ts';
@@ -776,35 +777,35 @@ export class World {
   grantEnvironmentReward(eventId:string,rewards:EnvironmentReward[]){
     const valid=rewards.filter(r=>Object.hasOwn(M.ITEMS,r.id)&&Number.isSafeInteger(r.count)&&r.count>0&&r.count<=100);if(!valid.length)return false;
     if(!M.claimEnvironmentResource(this.state,'loot:'+eventId,valid[0].id,Date.now(),86400000))return false;
-    valid.forEach((reward,index)=>M.addItem(this.state,reward.id,reward.count-(index===0?1:0)));this.onEnvironmentEvent?.({kind:'resource-collected',message:'Meteor minerals collected.'});return true;
+    valid.forEach((reward,index)=>M.addItem(this.state,reward.id,reward.count-(index===0?1:0)));this.onEnvironmentEvent?.({kind:'resource-collected',message:t('Meteor minerals collected.')});return true;
   }
   interactEnvironment(e:Entity):{message:string;openCrafting?:boolean}|null{
     const env=this.environment,index=e.index??0;if(!env)return null;
-    if(e.kind==='bounce'){const target=e.mesh.userData.bounceTo as Point;env.launch(this.position,target);this.destination=null;this.route=[];return {message:'Up you go! Jumping to the next cloud island.'};}
-    if(e.kind==='turtle'){env.rideUntil=env.time+45;e.mesh.visible=false;e.mesh.userData.ridden=true;return {message:'Sea turtle ride: faster swimming and no oxygen loss for 45 seconds.'};}
-    if(e.kind==='light-pillar'){env.lightPillar(index);if(this.networkRole)this.onEnvironmentAction?.({kind:'light-pillar',id:e.id,index});this.burst(e.x,e.z,'#ffe69a');return {message:'Light pillar lit for 150 seconds. Its light heals and repels shadow creatures.'};}
+    if(e.kind==='bounce'){const target=e.mesh.userData.bounceTo as Point;env.launch(this.position,target);this.destination=null;this.route=[];return {message:t('Up you go! Jumping to the next cloud island.')};}
+    if(e.kind==='turtle'){env.rideUntil=env.time+45;e.mesh.visible=false;e.mesh.userData.ridden=true;return {message:t('Sea turtle ride: faster swimming and no oxygen loss for 45 seconds.')};}
+    if(e.kind==='light-pillar'){env.lightPillar(index);if(this.networkRole)this.onEnvironmentAction?.({kind:'light-pillar',id:e.id,index});this.burst(e.x,e.z,'#ffe69a');return {message:t('Light pillar lit for 150 seconds. Its light heals and repels shadow creatures.')};}
     if(e.kind==='meteor-ore'){
       const hits=LAVA_ORE_RULES[e.mesh.userData.lootKind==='meteor'?'meteor':'ore_magma'].hits;e.mesh.userData.hits=(e.mesh.userData.hits??0)+1;this.burst(e.x,e.z,'#ffbe6e',8);
-      if(e.mesh.userData.hits<hits)return {message:`Mining ${e.mesh.userData.hits}/${hits} strikes.`};e.mesh.userData.hits=0;
-      const action:EnvironmentAction={kind:'collect-ore',id:e.id};if(this.networkRole){this.onEnvironmentAction?.(action);return {message:'Collecting shared meteor minerals…'};}
-      const result=this.applyEnvironmentAction(action);if(result.ok)this.grantEnvironmentReward(action.id+':'+Date.now(),result.rewards??[]);return {message:result.ok?'Meteor minerals collected!':'This meteor was already collected.'};
+      if(e.mesh.userData.hits<hits)return {message:t('Mining {count}/{total} strikes.', { count: e.mesh.userData.hits, total: hits })};e.mesh.userData.hits=0;
+      const action:EnvironmentAction={kind:'collect-ore',id:e.id};if(this.networkRole){this.onEnvironmentAction?.(action);return {message:t('Collecting shared meteor minerals…')};}
+      const result=this.applyEnvironmentAction(action);if(result.ok)this.grantEnvironmentReward(action.id+':'+Date.now(),result.rewards??[]);return {message:t(result.ok?'Meteor minerals collected!':'This meteor was already collected.')};
     }
-    if(e.kind==='fruit'){if((this.resourceTimers.get(e.id)??0)>env.time)return {message:'This tree needs a minute to grow more fruit.'};this.resourceTimers.set(e.id,env.time+60);this.state.hp=Math.min(maxHp(this.state),this.state.hp+Math.round(maxHp(this.state)*.3));M.addBuff(this.state,Math.random()<.5?{regen:4,time:30}:{haste:.3,time:30},'jungle-fruit');if(Math.random()<.35)M.addItem(this.state,'vine');this.refreshEnvironmentNodes();return {message:'Jungle fruit restores health and grants a 30-second boost.'};}
-    if(e.kind==='brazier'){const success=M.lightBrazier(this.state,index);this.refreshEnvironmentNodes();return {message:success?M.furnaceReady(this.state)?'All three flames are lit. The ancient furnace is awake!':`Brazier lit: ${this.state.worldRewards.lava.braziers.length}/3.`:this.state.worldRewards.lava.braziers.includes(index)?'This brazier is already burning.':'Bring one fire crystal from the cave entrance.'};}
-    if(e.kind==='furnace')return {message:M.furnaceReady(this.state)?'The ancient furnace is ready to smelt.':'Light all three braziers with fire crystals first.',openCrafting:M.furnaceReady(this.state)};
+    if(e.kind==='fruit'){if((this.resourceTimers.get(e.id)??0)>env.time)return {message:t('This tree needs a minute to grow more fruit.')};this.resourceTimers.set(e.id,env.time+60);this.state.hp=Math.min(maxHp(this.state),this.state.hp+Math.round(maxHp(this.state)*.3));M.addBuff(this.state,Math.random()<.5?{regen:4,time:30}:{haste:.3,time:30},'jungle-fruit');if(Math.random()<.35)M.addItem(this.state,'vine');this.refreshEnvironmentNodes();return {message:t('Jungle fruit restores health and grants a 30-second boost.')};}
+    if(e.kind==='brazier'){const success=M.lightBrazier(this.state,index);this.refreshEnvironmentNodes();return {message:t(success?M.furnaceReady(this.state)?'All three flames are lit. The ancient furnace is awake!':t('Brazier lit: {count}/3.', { count: this.state.worldRewards.lava.braziers.length }):this.state.worldRewards.lava.braziers.includes(index)?'This brazier is already burning.':'Bring one fire crystal from the cave entrance.')};}
+    if(e.kind==='furnace')return {message:t(M.furnaceReady(this.state)?'The ancient furnace is ready to smelt.':'Light all three braziers with fire crystals first.'),openCrafting:M.furnaceReady(this.state)};
     if(e.kind==='cave-gate'){
       this.gateHits++;this.burst(e.x,e.z,'#a798ba',7);
-      if(this.gateHits<8)return {message:`Cracks spread through the gate. ${8-this.gateHits} more strikes.`};
-      M.openCave(this.state);this.root.remove(e.mesh);this.disposeTree(e.mesh);this.entities=this.entities.filter(v=>v!==e);this.obstacles=this.obstacles.filter(o=>o.tag!=='cave-gate');return {message:'The obsidian gate breaks open. Carry a fire crystal to light the cave.'};
+      if(this.gateHits<8)return {message:t('Cracks spread through the gate. {count} more strikes.', { count: 8-this.gateHits })};
+      M.openCave(this.state);this.root.remove(e.mesh);this.disposeTree(e.mesh);this.entities=this.entities.filter(v=>v!==e);this.obstacles=this.obstacles.filter(o=>o.tag!=='cave-gate');return {message:t('The obsidian gate breaks open. Carry a fire crystal to light the cave.')};
     }
-    if(e.kind==='cave-chest')return {message:M.claimCaveChest(this.state)?'Ancient cave treasure collected. The chest replenishes tomorrow.':'The chest is empty for today.'};
+    if(e.kind==='cave-chest')return {message:t(M.claimCaveChest(this.state)?'Ancient cave treasure collected. The chest replenishes tomorrow.':'The chest is empty for today.')};
     if(['fire-crystal','clam','magma-ore','obsidian-ore'].includes(e.kind)){
-      if((this.state.worldRewards.resourceReadyAt[e.id]??0)>Date.now())return {message:'This resource is regrowing.'};
+      if((this.state.worldRewards.resourceReadyAt[e.id]??0)>Date.now())return {message:t('This resource is regrowing.')};
       const rules=e.kind==='clam'?undefined:LAVA_ORE_RULES[e.kind==='fire-crystal'?'ore_fire':e.kind==='magma-ore'?'ore_magma':'ore_obsidian'];
-      if(rules){e.mesh.userData.hits=(e.mesh.userData.hits??0)+1;this.burst(e.x,e.z,'#d3bc88',5);if(e.mesh.userData.hits<rules.hits)return {message:`Mining ${e.mesh.userData.hits}/${rules.hits} strikes.`};e.mesh.userData.hits=0;}
+      if(rules){e.mesh.userData.hits=(e.mesh.userData.hits??0)+1;this.burst(e.x,e.z,'#d3bc88',5);if(e.mesh.userData.hits<rules.hits)return {message:t('Mining {count}/{total} strikes.', { count: e.mesh.userData.hits, total: rules.hits })};e.mesh.userData.hits=0;}
       const item=e.kind==='fire-crystal'?'fcrystal':e.kind==='magma-ore'?'mcrystal':e.kind==='obsidian-ore'?'obsidian':'coral';const success=M.claimEnvironmentResource(this.state,e.id,item,Date.now(),e.kind==='obsidian-ore'?180000:e.kind==='fire-crystal'?120000:150000);
       if(success){this.burst(e.x,e.z,e.kind==='clam'?'#d3f5fa':'#ffc76b');if(e.kind==='clam'&&Math.random()<.3)M.addItem(this.state,'pearl');if(rules)for(const [id,chance,min,max] of rules.loot)if(Math.random()<chance)M.addItem(this.state,id,min+Math.floor(Math.random()*(max-min+1))-(id===item?1:0));}
-      this.refreshEnvironmentNodes();return {message:success?e.kind==='clam'?'Clam opened: coral and a chance of a pearl.':`${M.ITEMS[item]?.name??item} collected.`:'This resource is regrowing.'};
+      this.refreshEnvironmentNodes();return {message:t(success?e.kind==='clam'?'Clam opened: coral and a chance of a pearl.':t('{name} collected.', { name: t(M.ITEMS[item]?.name??item) }):'This resource is regrowing.')};
     }
     return null;
   }
@@ -897,7 +898,7 @@ export class World {
     for(const e of this.entities)if(!RAYCAST_ONLY.has(e.kind)&&this.validTarget(e)){const c=pickCircle(e.kind,e.radius,(e as Enemy).boss,e.kind==='enemy'?this.modelHeight(e):0);circles.push({x:e.x,y:e.mesh.position.y+c.h,z:e.z,radius:c.r*scale,entity:e});}
     // A tap on any animal in the yard stands for a tap on the pen (collect everything ready, or open the panel).
     const pen=this.farmView&&this.entities.find(e=>e.kind==='pen');
-    if(pen)for(const a of this.farmView!.positions()){const cow=a.kind==='cow';circles.push({x:a.x,y:cow?.8:.3,z:a.z,radius:(cow?(a.adult?70:52):(a.adult?42:32))*scale,entity:pen});}
+    if(pen)for(const a of this.farmView!.positions()){const cow=a.kind==='cow';circles.push({x:a.x,y:a.expired?.3:cow?.8:.3,z:a.z,radius:(a.expired?36:cow?(a.adult?70:52):(a.adult?42:32))*scale,entity:pen});}
     const held=circlesAt(circles,this.camera,innerWidth,innerHeight,clientX,clientY);
     this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);
     // A ripe crop stands up toward the bed behind, whose circle can hold its top: the bed or crop under the finger wins.
@@ -1128,13 +1129,13 @@ export class World {
     if(e.hp<e.maxHp*.3)this.enrageBoss(e);
     if(Math.hypot(e.x-this.position.x,e.z-this.position.z)>CALLOUT_RANGE)return;
     const fx=this.fx;if(!fx)return;const top=e.mesh.position.y+(this.modelHeight?.(e)??2.6)*.6-1.8;
-    fx.text({x:e.x,y:top,z:e.z},BOSS_CALLOUTS[skill],'alert callout');
+    fx.text({x:e.x,y:top,z:e.z},t(BOSS_CALLOUTS[skill]),'alert callout');
     fx.burst({x:e.x,y:top+1.2,z:e.z},{n:24,color:[BOSS_TELEGRAPH_COLORS[skill],'#ffffff'],glow:true,size:.12,speed:5,up:4,life:.5});
   }
   /** '🛡️ RESIST' over a boss that shrugged off a stun or a status, at most every 0.7 s like the reference's. */
   private resistFeedback(e:Enemy){
     const now=this.time??0;if(now-(e.resistAt??-1)<.7)return;e.resistAt=now;
-    this.fx?.text({x:e.x,y:e.mesh.position.y+1,z:e.z},'🛡️ RESIST','dmg');
+    this.fx?.text({x:e.x,y:e.mesh.position.y+1,z:e.z},t('🛡️ RESIST'),'dmg');
   }
   /**
    * Below 30% HP a boss enrages the moment it drops there (the reference checks in its chase step, not at the next
@@ -1142,9 +1143,9 @@ export class World {
    */
   enrageBoss(e:Enemy){
     if(e.enraged)return;e.enraged=true;
-    this.onEnvironmentEvent?.({kind:'boss-warning',message:`${e.name} is enraged! Its skills come faster.`});
+    this.onEnvironmentEvent?.({kind:'boss-warning',message:t('{name} is enraged! Its skills come faster.', { name: t(e.name) })});
     const fx=this.fx;if(!fx||Math.hypot(e.x-this.position.x,e.z-this.position.z)>=CALLOUT_RANGE)return;
-    fx.text({x:e.x,y:e.mesh.position.y+(this.modelHeight?.(e)??2.6)*.7-1.8,z:e.z},'😡 ENRAGED!','alert callout');fx.shake?.(.8);
+    fx.text({x:e.x,y:e.mesh.position.y+(this.modelHeight?.(e)??2.6)*.7-1.8,z:e.z},t('😡 ENRAGED!'),'alert callout');fx.shake?.(.8);
     fx.burst({x:e.x,z:e.z},{n:40,color:['#ff3b3b','#ff8a3d','#ffffff'],glow:true,speed:7,up:8,y:1});
   }
   private castBossSkill(e:Enemy){
@@ -1382,8 +1383,8 @@ export class World {
       if(step.damage>0)this.onDamage(step.damage,'hazard');
       if(this.environment!==environmentAtStart)return;
       for(const event of step.events)this.onEnvironmentEvent?.(event);
-      if(step.dragonDismiss&&this.networkRole!=='peer'){const dragon=this.enemies.find(e=>e.type==='dragon'&&e.hp>0);if(dragon){dragon.hp=0;dragon.respawn=999999;dragon.mesh.visible=false;dragon.skillEffects=[];dragon.telegraphs=[];dragon.phase='idle';this.burst(dragon.x,dragon.z,'#ffc971',32);this.onEnvironmentEvent?.({kind:'dragon',message:'The dragon event has ended. The volcano dragon flies away.'});}}
-      if(step.dragonSummon&&this.networkRole!=='peer'){const dragon=this.enemies.find(e=>e.type==='dragon');if(dragon&&dragon.hp<=0){dragon.x=dragon.homeX;dragon.z=dragon.homeZ;dragon.maxHp=dragon.baseMaxHp??dragon.maxHp;dragon.damage=dragon.baseDamage??dragon.damage;dragon.hp=dragon.maxHp;dragon.respawn=0;dragon.stun=0;dragon.statuses={};dragon.cooldown=0;dragon.attackCount=0;dragon.skillCount=0;dragon.skill=undefined;dragon.phase='idle';dragon.bossStage=1;dragon.mesh.visible=true;dragon.scaled=false;this.onEnvironmentEvent?.({kind:'dragon',message:'The volcano dragon has arrived! Look for the crown on your map.'});}}
+      if(step.dragonDismiss&&this.networkRole!=='peer'){const dragon=this.enemies.find(e=>e.type==='dragon'&&e.hp>0);if(dragon){dragon.hp=0;dragon.respawn=999999;dragon.mesh.visible=false;dragon.skillEffects=[];dragon.telegraphs=[];dragon.phase='idle';this.burst(dragon.x,dragon.z,'#ffc971',32);this.onEnvironmentEvent?.({kind:'dragon',message:t('The dragon event has ended. The volcano dragon flies away.')});}}
+      if(step.dragonSummon&&this.networkRole!=='peer'){const dragon=this.enemies.find(e=>e.type==='dragon');if(dragon&&dragon.hp<=0){dragon.x=dragon.homeX;dragon.z=dragon.homeZ;dragon.maxHp=dragon.baseMaxHp??dragon.maxHp;dragon.damage=dragon.baseDamage??dragon.damage;dragon.hp=dragon.maxHp;dragon.respawn=0;dragon.stun=0;dragon.statuses={};dragon.cooldown=0;dragon.attackCount=0;dragon.skillCount=0;dragon.skill=undefined;dragon.phase='idle';dragon.bossStage=1;dragon.mesh.visible=true;dragon.scaled=false;this.onEnvironmentEvent?.({kind:'dragon',message:t('The volcano dragon has arrived! Look for the crown on your map.')});}}
       if(this.networkRole!=='peer')for(const hit of step.enemyHits){const enemy=this.enemies.find(e=>e.id===hit.id);if(enemy&&enemy.hp>0)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(enemy,hit.amount);}
       if(this.networkRole!=='peer')for(const push of step.enemyPushes){const enemy=this.enemies.find(e=>e.id===push.id);if(enemy&&enemy.hp>0)this.moveCreature(enemy,push.x,push.z,true);}
       this.environmentView?.update(this.environment);this.refreshEnvironmentNodes();this.syncWeatherNodes();
