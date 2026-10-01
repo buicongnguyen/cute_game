@@ -699,26 +699,36 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 #hud.fishing #touch-controls { display: none !important; }
 #hud.fishing #context-prompt { display: none !important; }
 #hud.fishing .home-button { visibility: hidden; }
+/* Reference placement bar: one line naming the item, a refusal note while the spot is bad, three small buttons. It sits
+   above the toast stack so the placement toasts never cover ✔ Place. */
 #placement-bar {
   position: absolute;
   left: 50%;
-  bottom: calc(100px + var(--safe-bottom));
+  bottom: calc(158px + var(--safe-bottom));
   transform: translateX(-50%);
   width: max-content;
   max-width: calc(100vw - 32px);
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 10px 14px;
   border-radius: var(--radius-md);
   background: var(--paper);
   border: 3px solid var(--sun);
   box-shadow: var(--float);
-  font-size: var(--t-md);
+  font-size: var(--t-sm);
+  text-align: center;
   pointer-events: auto;
 }
-#placement-bar span { font-size: var(--t-sm); color: var(--ink-soft); max-width: 260px; }
+#placement-bar p { margin: 0; color: var(--ink-soft); }
+#placement-hint { display: block; color: #b4302a; font-weight: 800; }
+#placement-hint:empty { display: none; }
+#placement-bar.bad { border-color: #e2493f; }
+/* While placing, toasts rise above the bar instead of covering its buttons. */
+body.placing #toasts { bottom: calc(262px + var(--safe-bottom)); }
+.placement-buttons { display: flex; gap: 8px; }
+.placement-buttons > button { min-height: 38px; padding: 6px 14px; font-size: var(--t-sm); }
 #visit-banner {
   position: absolute;
   top: calc(18px + var(--safe-top));
@@ -1258,6 +1268,27 @@ h1 > span {
 }
 .grow-meter { height: 14px; border-radius: 999px; background: #efe8d4; overflow: hidden; border: 2px solid #fff; box-shadow: 0 0 0 2px var(--line); }
 .grow-meter > i { display: block; height: 100%; background: linear-gradient(90deg, #7eea52, var(--grass)); }
+/* Bed panels: the growing bar, the fertilizer tip and the big grow button, like the reference. */
+.grow-meter.big { height: 16px; margin: 4px 0 2px; }
+.garden-tip { margin: 0; padding: 6px 12px; border-radius: 14px; background: #fff8dc; font-size: var(--t-sm); color: var(--ink-soft); }
+.grow-button { min-height: 40px; padding: 6px 14px; font-size: var(--t-md); justify-content: center; }
+.grow-button.soft-button { color: var(--ink-soft); }
+/* Compact garden panels (seed picker, growing bed): small art, one-line text, small buttons beside the text, so many
+   seed rows fit on a phone and a PC. Rows never wrap their buttons under the text. */
+.crop-list:has(> .garden-row) { gap: 6px; }
+.crop-row.garden-row { gap: 10px; padding: 6px 10px 6px 6px; box-shadow: 0 2px 0 var(--line); }
+.crop-row.garden-row:not(.locked) { flex-wrap: nowrap; }
+.crop-row.garden-row > div:nth-child(2), .crop-row.garden-row:not(.locked) > div:nth-child(2) { flex: 1 1 auto; min-width: 0; }
+.crop-row.garden-row .crop-art { width: 44px; height: 44px; border-radius: 12px; font-size: 24px; }
+.crop-row.garden-row strong { font-size: var(--t-md); }
+.crop-row.garden-row p { margin-top: 0; font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crop-row.garden-row .chips { margin-top: 3px; gap: 4px; }
+.crop-row.garden-row .chip { padding: 1px 7px; font-size: var(--t-xs); }
+.crop-row.garden-row .button-row { width: auto; flex-direction: column; gap: 4px; }
+.crop-row.garden-row .button-row > button,
+.crop-row.garden-row > button { flex: none; min-height: 30px; padding: 3px 12px; font-size: var(--t-sm); }
+.crop-row.bed-status p, .crop-row.fertilizer-row p { white-space: normal; }
+.garden-actions > button { min-height: 32px; padding: 4px 12px; font-size: var(--t-sm); }
 
 /* Backpack */
 .stat-strip { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1725,6 +1756,8 @@ h1 > span {
 }
 @media (pointer: coarse) and (max-width: 600px) {
   #touch-controls { bottom: calc(84px + var(--safe-bottom)); }
+  #placement-bar { bottom: calc(212px + var(--safe-bottom)); }
+  body.placing #toasts { bottom: calc(330px + var(--safe-bottom)); }
   #touch-controls button { width: 34px; height: 34px; }
   #context-prompt { left: 10px; transform: none; bottom: calc(96px + var(--safe-bottom)); }
   #toasts { left: 10px; transform: none; align-items: flex-start; max-width: calc(100vw - 140px); bottom: calc(150px + var(--safe-bottom)); }
