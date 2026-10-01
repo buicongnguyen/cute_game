@@ -8,7 +8,7 @@ import { penHtml, collectText, dishesHtml, penSignature, type FarmUi } from '../
 
 // The animal pen (our extension: the reference has no farm animals), built on the crop rules.
 const t0 = 1_000_000;
-const home = (level = 10, energy = 1000) => { const s = M.newGame(); s.level = level; s.energy = energy; return s; };
+const home = (level = 10, energy = 1000, built = true) => { const s = M.newGame(); s.level = level; s.energy = energy; s.farm.built = built; return s; };
 const reload = (s: M.SaveState) => M.parseSave(JSON.stringify(s))!;
 
 test('chicks and calves cost energy, are level-gated like seeds and fill the pen up to its caps', () => {
@@ -99,6 +99,7 @@ test('products sell at the market and cook into dishes with buffs like the roast
 test('the farm saves and loads; old saves get an empty pen; bad entries are dropped', () => {
   const s = home(); M.expandPen(s); M.buyAnimal(s, 'chicken', t0); const cow = M.buyAnimal(s, 'cow', t0)!; M.addItem(s, 'carrot'); M.feedAnimal(s, cow.uid, t0 + 1000);
   const r = reload(s); assert.deepEqual(r.farm, s.farm);
+  assert.equal(r.farm.built, true);
   const old = JSON.parse(JSON.stringify(s)); delete old.farm; assert.deepEqual(M.parseSave(JSON.stringify(old))!.farm, M.emptyFarm());
   const odd = JSON.parse(JSON.stringify(s)); odd.farm = { penLevel: 99, nextId: -4, animals: [{ uid: 1, kind: 'pig', bornAt: 1 }, { uid: 2, kind: 'cow', bornAt: 'x' }, { uid: 3, kind: 'cow', bornAt: 5 }, { uid: 3, kind: 'cow', bornAt: 6 }, ...Array.from({ length: 12 }, (_, i) => ({ uid: 10 + i, kind: 'chicken', bornAt: 7 }))] };
   const f = M.parseSave(JSON.stringify(odd))!.farm;
@@ -106,6 +107,24 @@ test('the farm saves and loads; old saves get an empty pen; bad entries are drop
   assert.equal(f.animals.filter(a => a.kind === 'chicken').length, 8, 'never more than the pen holds'); assert.ok(f.nextId > Math.max(...f.animals.map(a => a.uid)));
   assert.equal(f.animals[0].cycleAt, 5 + M.ANIMALS.cow.growMs, 'a missing cycle starts at adulthood');
   const garbage = JSON.parse(JSON.stringify(s)); garbage.farm = 'nope'; assert.deepEqual(M.parseSave(JSON.stringify(garbage))!.farm, M.emptyFarm());
+});
+
+test('the pen is bought first: level 2 and ϟ40 on a marked plot; older saves with animals or a bigger pen count as built', () => {
+  const s = home(1, 1000, false);
+  assert.equal(M.penBuilt(s), false); assert.equal(M.canBuyAnimal(s, 'chicken'), 'unbuilt'); assert.equal(M.expandPen(s), false);
+  assert.equal(M.canBuildPen(s), 'level'); assert.equal(M.buildPen(s), false); assert.equal(s.energy, 1000);
+  s.level = 2; s.energy = M.PEN_BUILD.price - 1; assert.equal(M.canBuildPen(s), 'energy'); assert.equal(M.buildPen(s), false);
+  const away = home(5, 1000, false); away.planet = 'ice'; assert.equal(M.canBuildPen(away), 'away');
+  s.energy = 100; assert.ok(M.buildPen(s)); assert.equal(s.energy, 100 - M.PEN_BUILD.price); assert.equal(M.canBuildPen(s), 'built'); assert.equal(M.buildPen(s), false);
+  assert.ok(M.PEN_BUILD.price > M.ANIMALS.chicken.price && M.PEN_BUILD.price < M.PEN_EXPANSIONS[0], 'between a chick and the first expansion');
+  assert.equal(M.canBuyAnimal(s, 'chicken'), 'ok'); assert.equal(reload(s).farm.built, true, 'saved');
+  assert.equal(M.newGame().farm.built, false, 'a new game starts with the plot');
+  const raw = (farm: unknown) => { const o = JSON.parse(JSON.stringify(M.newGame())); o.farm = farm; return M.parseSave(JSON.stringify(o))!.farm.built; };
+  assert.equal(raw({ animals: [], nextId: 1, penLevel: 0 }), false, 'an empty old pen is a plot');
+  assert.equal(raw({ animals: [{ uid: 1, kind: 'chicken', bornAt: 5 }], nextId: 2, penLevel: 0 }), true, 'animals mean it stood');
+  assert.equal(raw({ animals: [], nextId: 1, penLevel: 1 }), true, 'so does an expansion');
+  const ui: FarmUi = { art: (id, icon) => icon, esc: x => x, mini: id => id, chips: () => '', effect: () => '' };
+  assert.match(penHtml(home(1, 0, false), ui), /Reach level 2/); assert.match(penHtml(home(2, 0, false), ui), /data-action="build-pen"[^>]*>🔨 Build the animal pen · ϟ 40/);
 });
 
 test('the pen stands on clear ground: off the trails, the fence, the cottage, the well, the chest and the trees', () => {
@@ -149,24 +168,43 @@ test('home builds the pen as one entity with a fence of obstacles, and animals d
   assert.ok(meshes.length <= 13, `${meshes.length} animal draws`); assert.ok(view.draws <= 18, `${view.draws} pen draws`);
   const hens = meshes.find(m => m.name === 'farm-chicken:body')!; assert.equal(hens.count, 4, 'four hens share one body draw');
   assert.ok(meshes.some(m => m.name === 'farm-product:egg' && m.count === 4), 'a ready egg bobs over each hen');
-  // Roaming: a long while of wandering spreads them over the yard (wider than the old fence), never out of it nor onto a bed.
+  // Roaming: 15 minutes of game time spread them over the whole village, never into an obstacle, the pond, a bed,
+  // a building or the starship pad, with real rests (cows mostly grazing).
   w.state.plots.push({ crop: null, plantedAt: 0, x: M.PEN.x + 3, z: M.PEN.z + 2.6 }); w.syncCrops();
-  let wide = false; const start = view.positions().map(p => [p.x, p.z]);
-  for (let i = 0; i < 1200; i++) {
-    w.update(.05, false, false);
-    for (const p of view.positions()) { assert.ok(M.inYard(p.x, p.z, .01), `in the yard ${p.x.toFixed(2)},${p.z.toFixed(2)}`); if (Math.abs(p.x - M.PEN.x) > M.PEN.hw || Math.abs(p.z - M.PEN.z) > M.PEN.hd) wide = true; }
+  const pond = w.entities.find(e => e.kind === 'fish' && Math.hypot(e.x, e.z) < 18)!, pad = w.entities.find(e => e.kind === 'travel')!, beds = w.entities.filter(e => e.kind === 'plot');
+  const solid = w.entities.filter(e => ['home', 'sell', 'shop', 'chest', 'upgrade', 'craft', 'cook'].includes(e.kind));
+  let farN = 0, steps = 0, still = 0, cowSteps = 0, grazing = 0; const cells = new Set<string>(), t0w = performance.now();
+  for (let i = 0; i < 9000; i++) {
+    w.update(.1, false, false);
+    if (i < 200) continue; // 20 s to walk off the bed placed on the yard
+    for (const a of view.activities()) {
+      const r = a.kind === 'cow' ? (a.young ? .5 : .75) : (a.young ? .2 : .28), at = `${a.x.toFixed(2)},${a.z.toFixed(2)}`;
+      assert.ok(Math.hypot(a.x, a.z) < 15.3, `inside the village ${at}`);
+      assert.ok(Math.hypot(a.x - pond.x, a.z - pond.z) > pond.radius + .5, `out of the pond ${at}`);
+      assert.ok(Math.hypot(a.x - pad.x, a.z - pad.z) > pad.radius + .7, `off the starship pad ${at}`);
+      assert.ok(beds.every(b => Math.abs(a.x - b.x) > M.BED_HALF || Math.abs(a.z - b.z) > M.BED_HALF), `off the beds ${at}`);
+      assert.ok(solid.every(b => Math.hypot(a.x - b.x, a.z - b.z) > b.radius * .9), `out of buildings ${at}`);
+      assert.ok(w.obstacles.every(o => Math.hypot(a.x - o.x, a.z - o.z) >= o.r + r * .9), `out of trees and props ${at}`);
+      if (Math.hypot(a.x - M.PEN.x, a.z - M.PEN.z) > 8) farN++;
+      cells.add(`${Math.floor(a.x / 4)},${Math.floor(a.z / 4)}`); steps++; if (!a.walking) still++;
+      if (a.kind === 'cow' && !a.young) { cowSteps++; if (a.rest === 'graze') grazing++; }
+    }
   }
-  const bed = w.entities.find(e => e.kind === 'plot' && Math.abs(e.x - (M.PEN.x + 3)) < .01)!;
-  assert.ok(bed && view.positions().every(p => Math.hypot(p.x - bed.x, p.z - bed.z) > M.BED_HALF), 'they keep off a bed at the yard edge');
-  assert.ok(wide, 'they roam past the old fence line'); assert.ok(view.positions().some((p, i) => Math.hypot(p.x - start[i][0], p.z - start[i][1]) > 1), 'and move about');
+  const ms = performance.now() - t0w;
+  console.log(`roam: ${(still / steps * 100).toFixed(0)}% resting, cows grazing ${(grazing / cowSteps * 100).toFixed(0)}%, ${(farN / steps * 100).toFixed(0)}% beyond 8 m of the pen, ${cells.size} 4 m cells visited, ${(ms / 9000).toFixed(3)} ms per frame (whole world update)`);
+  assert.ok(farN / steps > .1, 'they wander far beyond the yard'); assert.ok(cells.size >= 25, `over much of the village (${cells.size} cells)`);
+  assert.ok(still / steps > .45 && still / steps < .9, `rests are a real share (${still / steps})`); assert.ok(grazing / cowSteps > .45, `cows mostly graze (${grazing / cowSteps})`);
   // The hens scurry off when the explorer walks up.
   const hen = view.positions().find(p => p.kind === 'chicken')!; w.position.set(hen.x + .3, 0, hen.z);
   for (let i = 0; i < 20; i++) w.update(.05, false, false);
   const after = view.positionOf(hen.uid)!; assert.ok(Math.hypot(after.x - w.position.x, after.z - w.position.z) > .9, 'a hen steps away from the explorer');
   // A tap on an animal picks the pen.
-  w.position.set(M.PEN.x, 0, M.PEN.z + 6); w.cameraTarget.copy(w.position); for (let i = 0; i < 3; i++) w.update(.05, false, false);
+  // Out in the village too: the camera follows the explorer to the animal farthest from the pen.
+  let far = view.positions().sort((a, b) => Math.hypot(b.x - M.PEN.x, b.z - M.PEN.z) - Math.hypot(a.x - M.PEN.x, a.z - M.PEN.z))[0];
+  assert.ok(Math.hypot(far.x - M.PEN.x, far.z - M.PEN.z) > 4, 'the tapped animal is out in the village');
+  w.position.set(far.x, 0, far.z + 5); w.cameraTarget.copy(w.position); for (let i = 0; i < 3; i++) w.update(.05, false, false);
   Object.assign(globalThis, { innerWidth: 1440, innerHeight: 900 }); w.camera.aspect = 1440 / 900; w.camera.updateProjectionMatrix(); w.camera.updateMatrixWorld();
-  const far = view.positions().sort((a, b) => Math.hypot(b.x - M.PEN.x, b.z - M.PEN.z) - Math.hypot(a.x - M.PEN.x, a.z - M.PEN.z))[0];
+  far = { ...far, ...view.positionOf(far.uid)! };
   const sp = new T.Vector3(far.x, far.kind === 'cow' ? .8 : .3, far.z).project(w.camera);
   assert.equal(w.pickEntity((sp.x + 1) / 2 * 1440, (1 - sp.y) / 2 * 900)?.kind, 'pen', 'tapping the farthest animal opens the pen');
   w.build('ice'); assert.equal(w.farmView, undefined); assert.ok(!w.entities.some(e => e.kind === 'pen'));

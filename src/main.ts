@@ -414,7 +414,16 @@ function cooking(){const ingredients=Object.entries(state.bag).filter(([id,n])=>
  * bottle of milk, nearest first and 140 ms apart like the harvest; with nothing waiting it opens the pen panel.
  */
 const farmUi:FarmUi={art,esc,mini,chips:materialChips,effect:effectText};let penShown='';
-function penDialog(){if(visiting)return;penShown=penSignature(state);openDialog('pen','Your animal pen',penHtml(state,farmUi),'ANIMAL PEN','🐔');}
+function penDialog(){if(visiting)return;penShown=penSignature(state);const built=M.penBuilt(state);openDialog('pen',built?'Your animal pen':'A spot for an animal pen',penHtml(state,farmUi),built?'ANIMAL PEN':'PEN SITE',built?'🐔':'🪧');}
+/** Buys the pen: the yard and coop pop up on the plot with a burst, then the panel offers animals. */
+function buildPenAction(){
+  const check=M.canBuildPen(state);
+  if(check==='energy'){toast(`You need ${M.PEN_BUILD.price} energy to build the pen.`,'ϟ');return;}
+  if(!change(()=>M.buildPen(state)))return;
+  world.showPenBuilt();tone('success');world.fx?.burst({x:M.PEN.x,z:M.PEN.z},{n:22,color:['#ffe66d','#f2cf5b','#ffffff','#ff9ec4'],glow:true,speed:3.2,up:5,y:.5});
+  // Close the panel so the yard is seen popping up, then offer the animals.
+  closeDialog();toast('The animal pen is built! Buy a chick to get started.','🐔');setTimeout(()=>{if(!modal)penDialog();},1100);
+}
 function penTap(){if(M.readyAnimals(state).length)collectFarm();else penDialog();}
 function feedBurst(uid:number){const p=world.farmView?.positionOf(uid);if(p)world.fx?.burst({x:p.x,z:p.z},{n:6,color:['#9be36f','#ffe66d'],size:.08,speed:1.5,up:3,y:.4});}
 function collectFarm(){
@@ -817,6 +826,7 @@ app.addEventListener('click',event=>{
     case 'buy-animal':buyAnimal(button.dataset.kind as M.AnimalKind);break;
     case 'feed-animal':{const crop=change(()=>M.feedAnimal(state,Number(button.dataset.id)));if(crop){tone('pop');feedBurst(Number(button.dataset.id));toast(`Fed a ${M.ITEMS[crop].name.toLowerCase()}. It will be quicker now.`,M.ITEMS[crop].icon);}penDialog();break;}
     case 'feed-all':{const before=new Set(M.farmOf(state).animals.filter(a=>M.canFeed(a)).map(a=>a.uid)),n=change(()=>M.feedAll(state));if(n){tone('pop');for(const uid of before)if(!M.canFeed(M.farmOf(state).animals.find(a=>a.uid===uid)!))feedBurst(uid);toast(`Fed ${n} animal${n>1?'s':''}.`,'🥕');}penDialog();break;}
+    case 'build-pen':buildPenAction();break;
     case 'expand-pen':if(change(()=>M.expandPen(state))){tone('success');toast('The pen is bigger: room for 2 more chickens and 1 more cow.','🐔');}else toast(`You need ${M.penExpandCost(state)??0} energy to make the pen bigger.`,'ϟ');penDialog();break;
     case 'cook-dish':if(change(()=>M.cookDish(state,id))){tone('success');toast(`${M.ITEMS[id].name} is ready. Enjoy!`,M.ITEMS[id].icon);cooking();}break;case 'graphics':graphics.choose(button.dataset.kind as QualitySetting);world.applyGraphics(graphics.profile,graphics.ratio);saveGraphics(graphics);state.settings.lowGraphics=graphics.level==='low';save();settings();break;
     case 'zoom-in':case 'zoom-out':world.zoom=clampZoom(Math.round((world.zoom+(action==='zoom-in'?-ZOOM.button:ZOOM.button))*100)/100,'wheel');world.resize();$('#zoom-value').textContent=`${Math.round(world.zoom*100)}%`;break;

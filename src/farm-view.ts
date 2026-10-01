@@ -3,15 +3,16 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bakeModel, farmKit } from './assets.ts';
 import { toonMaterial } from './toon.ts';
 import { ANIMALS, PEN, YARD, isAdult, productReady, growth, type Animal, type AnimalKind } from './farm.ts';
+import { newRoamer, spawnSpot, stepRoamer, type RoamArea, type Roamer } from './farm-roam.ts';
 
 /**
  * The animal pen at home, drawn cheaply: the fence, gate, coop, troughs, hay and floor are baked into a few merged
  * meshes, and the animals are rigid named parts (farm.glb, CONTRACT.md "Farm pen": <id>_body, _head, _wing_l/_r,
  * _leg_l/_r or _leg_fl/fr/bl/br, _tail, each with its origin at its hinge) drawn as one InstancedMesh per kind and part,
  * so eight chickens cost the same draws as one. Until farm.glb loads (or if it is missing) simple shapes with the same
- * part names stand in. Animals roam the open yard oval (farm.ts YARD) like fish in a pond: each walks to a spot with a
- * turn limit, pecks or grazes there and moves on, steps around the coop, beds and decorations, and the hens scurry off
- * when the explorer comes close. A ready egg or milk bottle bobs over the animal that made it; a collected product flies up and shrinks like a harvested crop.
+ * part names stand in. Animals roam the whole home village (farm-roam.ts: clear straight walks, long rests, grazing,
+ * dust baths, back to the yard after a long trip) and scurry off when the explorer comes close. Until the pen is built
+ * the statics are only a marked plot with a sign. A ready egg or milk bottle bobs over the animal that made it; a collected product flies up and shrinks like a harvested crop.
  */
 export { farmKit };
 
@@ -39,12 +40,8 @@ export const PEN_PROPS: readonly { id: string; x: number; z: number; rot: number
 /** A drawn piece: one geometry hung at one hinge (legs: at each leg's hinge, swinging by `sign`). */
 interface Part { draw: 'body' | 'head' | 'tail' | 'legs'; geometry: T.BufferGeometry; pivots: { at: T.Vector3; sign: number }[] }
 interface Rig { parts: Part[]; height: number }
-interface Walker {
-  uid: number; kind: AnimalKind; model: ModelId; x: number; z: number; heading: number; goalX: number; goalZ: number;
-  wait: number; phase: number; speed: number; peck: number; peckT: number; flap: number; pop: number; size: number; seed: number;
-  /** Seconds left of a scurry away from the explorer (faster, no pecking). */
-  flee: number;
-}
+/** A roaming animal (world metres, farm-roam.ts) plus how it is drawn. */
+interface Walker extends Roamer { model: ModelId; phase: number; pop: number; size: number; seed: number }
 /** The low fence behind the yard: 2 m segments centred at these pen-local x, along BACK_FENCE_Z (outside the oval). */
 export const BACK_FENCE = [-2, 0, 2] as const, BACK_FENCE_Z = -(YARD.rz + .35);
 /** A keep-out circle in pen-local metres (beds, decorations, anything else standing in the yard). */
@@ -155,6 +152,12 @@ export function penGoal(rng: () => number, margin = .45, keep: readonly KeepOut[
   return { x: 0, z: .6 };
 }
 
+/** Where animals may go when no world says otherwise (tests, a bare view): the yard oval off the pen's props. */
+export function yardArea(): RoamArea {
+  return { home: { x: PEN.x, z: PEN.z, rx: YARD.rx, rz: YARD.rz }, radius: 16,
+    blocked: (x, z, r) => ((x - PEN.x) / (YARD.rx - r)) ** 2 + ((z - PEN.z) / (YARD.rz - r)) ** 2 > 1 || PEN_PROPS.some(p => Math.hypot(x - PEN.x - p.x, z - PEN.z - p.z) < p.r + r) };
+}
+
 export class FarmPenView {
   /** The baked fence, gate, coop, troughs, hay and floor; the world uses it as the pen entity's mesh. */
   readonly statics = new T.Group();
@@ -166,6 +169,10 @@ export class FarmPenView {
   private flights: Array<{ product: 'egg' | 'milk'; x: number; y: number; z: number; t: number }> = [];
   private rng: () => number;
   private kitUsed = false;
+  private built = true;
+  /** Seconds since the pen was built here (drives the pop-in of the yard); Infinity when it was already standing. */
+  private buildT = Infinity;
+  private area: RoamArea = yardArea();
   private m = new T.Matrix4(); private q = new T.Quaternion(); private e = new T.Euler(); private v = new T.Vector3(); private one = new T.Vector3(1, 1, 1);
   private root = new T.Matrix4(); private local = new T.Matrix4(); private s = new T.Vector3(); private v2 = new T.Vector3();
   constructor(seed = 7) {
@@ -177,6 +184,14 @@ export class FarmPenView {
   /** True once farm.glb is drawn (false while the stand-ins show). */
   get usesKit() { return this.kitUsed; }
   /** Re-dress with farm.glb once it has loaded. */
+  /** Marked plot (false) or the built yard; `animate` pops the yard up as it is built. */
+  setBuilt(built: boolean, animate = false) {
+    if (built === this.built) return;
+    this.built = built; this.buildT = animate && built ? 0 : Infinity; this.disposeStatics(); this.buildStatics();
+  }
+  get isBuilt() { return this.built; }
+  /** Where the animals may roam (the world's village ground). */
+  setArea(area: RoamArea) { this.area = area; }
   refresh() {
     if (this.kitUsed === farmKit.ready) return;
     this.disposeStatics(); this.disposeAnimals(); this.buildStatics();
@@ -184,6 +199,7 @@ export class FarmPenView {
   private buildStatics() {
     this.kitUsed = farmKit.ready;
     const g = new T.Group();
+    if (!this.built) { this.statics.add(bakeModel(this.plotMarker())); return; }
     // A sandy floor the size of the yard oval and a low fence behind it only (BACK_FENCE): the front and sides stay
     // open so the animals roam freely and nothing hides them from the camera.
     const floor = new T.Mesh(new T.CircleGeometry(1, 36), new T.MeshStandardMaterial({ color: '#efc879' })); floor.rotation.x = -Math.PI / 2; floor.scale.set(YARD.rx + .2, YARD.rz + .2, 1); floor.position.y = .015; floor.receiveShadow = true; g.add(floor);
@@ -194,18 +210,36 @@ export class FarmPenView {
     // A fresh copy so baking never touches the kit's shared meshes; same-look parts merge into a few draws.
     this.statics.add(bakeModel(g));
   }
+  /**
+   * The unbuilt site: a pale dirt patch roped off by four stakes, and a sign with a hen on it, so the spot reads as
+   * "something goes here" without looking like a building.
+   */
+  private plotMarker() {
+    const g = new T.Group(), mat = (color: string) => new T.MeshStandardMaterial({ color });
+    const patch = new T.Mesh(new T.CircleGeometry(1, 28), mat('#e3cf9a')); patch.rotation.x = -Math.PI / 2; patch.scale.set(PEN.hw * .9, PEN.hd * .9, 1); patch.position.y = .012; patch.receiveShadow = true; g.add(patch);
+    const hw = PEN.hw * .8, hd = PEN.hd * .8, corners: Array<[number, number]> = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]];
+    for (const [x, z] of corners) g.add(box('#a8714a', .1, .55, .1, x, .27, z), box('#ff7a59', .14, .08, .14, x, .55, z));
+    for (let i = 0; i < 4; i++) {
+      const [ax, az] = corners[i], [bx, bz] = corners[(i + 1) % 4], len = Math.hypot(bx - ax, bz - az), rope = box('#f6e3b4', len, .035, .035, (ax + bx) / 2, .42, (az + bz) / 2);
+      rope.rotation.y = -Math.atan2(bz - az, bx - ax); g.add(rope);
+    }
+    // The sign faces the garden (south, toward the camera).
+    g.add(box('#8a5a3b', .12, 1.1, .12, 0, .55, hd * .2), box('#f2cf5b', 1.15, .62, .08, 0, 1.08, hd * .2 + .07), box('#c98f5a', 1.25, .08, .1, 0, 1.42, hd * .2 + .07));
+    g.add(ball('#fffaf0', .17, 0, 1.05, hd * .2 + .14, 1.1, .9, .4), ball('#ff4a4a', .05, .08, 1.24, hd * .2 + .15, .8, 1, .5), ball('#ffaa2b', .04, .18, 1.08, hd * .2 + .16, 1.2, .7, .5));
+    g.traverse(o => { if (o instanceof T.Mesh) { o.castShadow = o !== patch; o.receiveShadow = true; } });
+    return g;
+  }
   /** Where an animal stands (world metres), for bursts and floating text; null if unknown. */
-  positionOf(uid: number) { const w = this.walkers.get(uid); return w ? { x: PEN.x + w.x, z: PEN.z + w.z } : null; }
+  positionOf(uid: number) { const w = this.walkers.get(uid); return w ? { x: w.x, z: w.z } : null; }
   /** Every animal in world metres with its kind, so a tap on any animal can stand for a tap on the pen. */
-  positions() { return [...this.walkers.values()].map(w => ({ uid: w.uid, kind: w.kind, adult: w.model === w.kind, x: PEN.x + w.x, z: PEN.z + w.z })); }
-  /** Keep-out circles in world metres (beds, decorations…), refreshed by the world now and then. */
-  setKeepOut(list: readonly KeepOut[]) { this.keep = list.map(k => ({ x: k.x - PEN.x, z: k.z - PEN.z, r: k.r })); }
-  private keep: KeepOut[] = [];
+  positions() { return [...this.walkers.values()].map(w => ({ uid: w.uid, kind: w.kind, adult: w.model === w.kind, x: w.x, z: w.z })); }
+  /** What each animal is doing (for probes and tests): walking, or the kind of rest. */
+  activities() { return [...this.walkers.values()].map(w => ({ uid: w.uid, kind: w.kind, young: w.young, walking: w.walking, rest: w.rest, x: w.x, z: w.z })); }
   private player: { x: number; z: number } | null = null;
   /** A collected product flies up from its animal and shrinks (like a harvested crop). */
   collect(uid: number) {
     const w = this.walkers.get(uid); if (!w) return;
-    this.flights.push({ product: PRODUCT[w.kind], x: w.x, y: this.rigOf(w.model).height + .2, z: w.z, t: 0 });
+    this.flights.push({ product: PRODUCT[w.kind], x: w.x - PEN.x, y: this.rigOf(w.model).height + .2, z: w.z - PEN.z, t: 0 });
   }
   private rigOf(id: ModelId) { let r = this.rigs.get(id); if (!r) { const src = model(id, true); r = rigOf(src); this.rigs.set(id, r); this.disposeSource(src); } return r; }
   /** Frees a stand-in model once its parts are merged; a kit instance shares the kit's geometry and materials. */
@@ -230,20 +264,21 @@ export class FarmPenView {
     for (const a of list) {
       keep.add(a.uid); const model = modelOf(a, now); let w = this.walkers.get(a.uid);
       if (!w) {
-        const spot = penGoal(this.rng, .6, this.keep);
-        w = { flee: 0, uid: a.uid, kind: a.kind, model, x: spot.x, z: spot.z, heading: this.rng() * Math.PI * 2, goalX: spot.x, goalZ: spot.z, wait: this.rng() * 2, phase: this.rng() * 6, speed: 0, peck: 0, peckT: 1 + this.rng() * 3, flap: 0, pop: 0, size: .94 + this.rng() * .12, seed: this.rng() * 10 };
+        const young = model !== a.kind, spot = spawnSpot(this.area, this.rng, a.kind, young);
+        w = { ...newRoamer(a.uid, a.kind, young, spot, this.rng), model, phase: this.rng() * 6, pop: 0, size: .94 + this.rng() * .12, seed: this.rng() * 10 };
         this.walkers.set(a.uid, w);
       }
-      if (w.model !== model) { w.model = model; w.pop = 0; }
+      if (w.model !== model) { w.model = model; w.young = model !== a.kind; w.pop = 0; }
     }
     for (const uid of this.walkers.keys()) if (!keep.has(uid)) this.walkers.delete(uid);
   }
   /** Moves and poses every animal and its product marker for this frame. */
   update(list: readonly Animal[], dt: number, time: number, now = Date.now(), player?: { x: number; z: number }) {
-    this.player = player ? { x: player.x - PEN.x, z: player.z - PEN.z } : null;
+    this.player = player ? { x: player.x, z: player.z } : null;
+    if (this.buildT < 1) { this.buildT += dt; const k = Math.min(1, this.buildT / .6), s = k < 1 ? k * (1 + Math.sin(k * Math.PI) * .25) : 1; for (const c of this.statics.children) if (c !== this.animals) c.scale.set(1, Math.max(.01, s), 1); }
     this.syncWalkers(list, now);
     const counts = new Map<string, number>(), walkers = [...this.walkers.values()];
-    for (const w of walkers) this.step(w, walkers, dt);
+    for (const w of walkers) { stepRoamer(w, walkers, this.area, this.rng, dt, this.player); w.phase += dt * (w.kind === 'cow' ? 7 : 16) * Math.min(1, w.speed / .3); }
     for (const m of this.meshes.values()) m.count = 0;
     for (const a of list) {
       const w = this.walkers.get(a.uid)!, rig = this.rigOf(w.model), cow = a.kind === 'cow', young = w.model === 'chick' || w.model === 'calf';
@@ -251,15 +286,17 @@ export class FarmPenView {
       const pop = w.pop < 1 ? Math.min(1, w.pop * 2) * (1 + Math.sin(w.pop * Math.PI * 2.5) * (1 - w.pop) * .35) : 1;
       // Young ones grow a little toward adult size before they change model.
       const scale = SHOWN[a.kind] * w.size * pop * (young ? .85 + growth(a, now) * .3 : 1), moving = w.speed > .05;
-      const bob = moving ? Math.abs(Math.sin(w.phase)) * (cow ? .03 : .025) : 0;
-      this.root.compose(this.v.set(w.x, bob, w.z), this.q.setFromEuler(this.e.set(0, w.heading, 0)), this.s.setScalar(scale));
+      // Hens hop a little as they walk; a sitting or dust-bathing hen settles onto the ground (and wobbles in the dust).
+      const bob = moving ? Math.abs(Math.sin(w.phase)) * (cow ? .03 : .05) : 0, settle = cow ? 0 : -w.sit * .13 * scale, dust = w.rest === 'dust' ? Math.sin(time * 13 + w.seed) * .18 * w.sit : 0;
+      this.root.compose(this.v.set(w.x - PEN.x, bob + settle, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, w.heading, dust)), this.s.setScalar(scale));
       const swing = moving ? Math.sin(w.phase) * (cow ? .45 : .7) : 0;
       // A hop when a hen flaps; a little sway of the body while walking.
       for (const p of rig.parts) {
         const key = `${w.model}:${p.draw}`, max = MAX_PER_MODEL[w.model] * (p.draw === 'legs' ? MAX_LEGS : 1), mesh = this.mesh(key, p.geometry, max, p.draw === 'body' || p.draw === 'head');
         for (const { at, sign } of p.pivots) {
           let rx = 0, ry = 0, rz = 0;
-          if (p.draw === 'head') { rx = w.peck * (cow ? .55 : .9) + Math.sin(time * 2 + w.seed) * .05; ry = Math.sin(time * .7 + w.seed) * .15; }
+          // Grazing: head down to the grass with a slow chew; pecking: a quick dip.
+          if (p.draw === 'head') { rx = Math.max(w.peck * .9, w.graze * (cow ? .75 : .6)) + w.graze * Math.sin(time * 6 + w.seed) * .06 + Math.sin(time * 2 + w.seed) * .05; ry = Math.sin(time * .7 + w.seed) * .15 * (1 - w.graze * .6); }
           else if (p.draw === 'legs') rx = sign * swing;
           else if (p.draw === 'tail') ry = Math.sin(time * 3 + w.seed) * .35;
           else rz = moving ? Math.sin(w.phase) * .04 : 0;
@@ -270,7 +307,7 @@ export class FarmPenView {
       }
       if (productReady(a, now)) {
         const marker = this.productMesh(PRODUCT[a.kind]), i = marker.count, y = rig.height * scale + .25 + Math.sin(time * 3 + w.seed) * .06;
-        if (i < 16) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x, y, w.z), this.q.setFromEuler(this.e.set(0, time * 1.5 + w.seed, 0)), this.s.setScalar(1.6))); marker.count = i + 1; }
+        if (i < 16) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, y, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, time * 1.5 + w.seed, 0)), this.s.setScalar(1.6))); marker.count = i + 1; }
       }
     }
     for (let i = this.flights.length - 1; i >= 0; i--) {
@@ -281,43 +318,6 @@ export class FarmPenView {
       marker.setMatrixAt(n, this.m.compose(this.v.set(f.x, f.y + Math.sin(k * Math.PI) * 1.6, f.z), this.q.setFromEuler(this.e.set(0, k * 12, 0)), this.s.setScalar(s))); marker.count = n + 1;
     }
     for (const m of this.meshes.values()) { m.instanceMatrix.needsUpdate = true; m.visible = m.count > 0; }
-  }
-  /**
-   * Roam like a fish: stroll to a spot (usually a short way from here, now and then across the yard) with a turn limit,
-   * pause to peck or graze, flap now and then, keep a little apart; scurry off when the explorer walks up close.
-   */
-  private step(w: Walker, all: readonly Walker[], dt: number) {
-    const cow = w.kind === 'cow', young = w.model === 'chick' || w.model === 'calf', margin = cow ? .8 : .45;
-    const p = this.player, shy = cow ? 1.5 : 1.3;
-    w.flee = Math.max(0, w.flee - dt);
-    if (p && w.flee <= 0) {
-      const dx = w.x - p.x, dz = w.z - p.z, d = Math.hypot(dx, dz);
-      if (d < shy) {
-        const away = d > 1e-3 ? { x: dx / d, z: dz / d } : { x: 0, z: 1 }, run = cow ? 1.6 : 2.2;
-        const g = intoYard(w.x + away.x * run, w.z + away.z * run, margin);
-        w.goalX = g.x; w.goalZ = g.z; w.wait = 0; w.flee = cow ? 1.2 : .8; w.peck = 0; if (!cow) w.flap = 1;
-      }
-    }
-    w.peckT -= dt; if (w.peckT <= 0) { w.peckT = (cow ? 3 : 1.4) + this.rng() * (cow ? 5 : 3); w.peck = 1; }
-    w.peck = Math.max(0, w.peck - dt * (cow ? .35 : 1.6));
-    w.flap = Math.max(0, w.flap - dt * 2.5); if (!cow && this.rng() < dt * .08) w.flap = 1;
-    if (w.wait > 0) { w.wait -= dt; w.speed = Math.max(0, w.speed - dt * 3); }
-    else {
-      const dx = w.goalX - w.x, dz = w.goalZ - w.z, d = Math.hypot(dx, dz);
-      if (d < .15) { w.wait = w.flee > 0 ? .2 : (cow ? 2.5 : 1) + this.rng() * (cow ? 4 : 2.5); const g = penGoal(this.rng, margin, this.keep, this.rng() < .7 ? w : undefined); w.goalX = g.x; w.goalZ = g.z; }
-      else {
-        const want = Math.atan2(dx, dz), turn = Math.atan2(Math.sin(want - w.heading), Math.cos(want - w.heading)), rate = cow ? 1.6 : 4;
-        w.heading += Math.max(-rate * dt, Math.min(rate * dt, turn));
-        const top = (cow ? .45 : .8) * (young ? 1.15 : 1) * (w.flee > 0 ? (cow ? 1.8 : 2.4) : 1);
-        w.speed = Math.min(top, w.speed + dt * 2) * (Math.abs(turn) > 1.2 ? .4 : 1);
-        w.x += Math.sin(w.heading) * w.speed * dt; w.z += Math.cos(w.heading) * w.speed * dt;
-      }
-    }
-    // Personal space, the props and keep-outs (beds, decorations), and the yard oval as hard limits.
-    for (const o of all) { if (o === w) continue; const dx = w.x - o.x, dz = w.z - o.z, d = Math.hypot(dx, dz), need = (cow || o.kind === 'cow' ? .9 : .35); if (d > 1e-3 && d < need) { const push = (need - d) * .5; w.x += dx / d * push; w.z += dz / d * push; } }
-    for (const k of [...PEN_PROPS, ...this.keep]) { const dx = w.x - k.x, dz = w.z - k.z, d = Math.hypot(dx, dz), need = k.r + (cow ? .45 : .15); if (d < need) { const f = d > 1e-3 ? need / d : 0; w.x = k.x + dx * f || k.x + need; w.z = k.z + dz * f; } }
-    const inside = intoYard(w.x, w.z, cow ? .7 : .3); w.x = inside.x; w.z = inside.z;
-    w.phase += dt * (cow ? 7 : 16) * Math.min(1, w.speed / .3);
   }
   /** Draw calls the pen costs this frame (statics + visible instanced parts). */
   get draws() { let n = 0; this.statics.traverse(o => { if (o instanceof T.Mesh && !(o instanceof T.InstancedMesh) && o.visible && o.layers.isEnabled(0)) n++; }); for (const m of this.meshes.values()) if (m.visible) n++; return n; }
