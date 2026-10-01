@@ -60,7 +60,54 @@ export interface DecorContext {
   free: (x: number, z: number, r: number) => boolean;
   /** Fishing ponds, ringed with reeds. */
   ponds?: readonly { x: number; z: number; r: number }[];
+  /** Creature spawn points, planned first: scenery leaves a clearing around each (CC-7). */
+  clearings?: readonly { x: number; z: number; type?: string }[];
 }
+/**
+ * Clearings around creature spawn points. A creature wanders up to 2 m from its spawn point, so trees and rocks (pieces
+ * that block) keep 4.5 m away and the creature never comes within 2.5 m of one; bushes and logs keep 3.5 m. Ground cover
+ * may grow in a clearing. Decor that could be mistaken for the creature spawning there keeps 8 m away (C13).
+ */
+export const CLEARING = { blocking: 4.5, low: 3.5, lookalike: 8 } as const;
+/**
+ * Decor that looks like a creature of the same biome (C13). Every decor kind was listed next to its biome's creatures,
+ * with drawn heights (creatures now stand 1.1-1.4 m):
+ *   forest/meadow/swamp (mushroom, boar, bee, chomper, wolf, frog): toadstools 0.52 m, red caps on pale stalks = a small
+ *     Grumpy Mushroom; bushes 0.71 m, round and green = a Poison Frog at a glance. Trees 3.4-3.8 m, rocks 0.64 m, logs,
+ *     reeds, tufts and flowers have no twin. canyon (cactus, wolf, crab): red rocks 1.4 m, crystals 1.1 m, dead trees,
+ *     dry bushes: none.
+ *   candy (jelly, gummy, lollipop, bunny, beetle): gumdrops 0.44 m, round pink/green = Jelly Jumper. Candy trees, canes,
+ *     donuts and cupcakes: none.  ice (snowball, penguin, ice blossom, seal, owl): snowmen 1.64 m and snow rocks 0.9 m,
+ *     white and round = Rolling Snowball. lava: none (rocks, obsidian, ash trees, volcano cones vs slimes and lizards).
+ *   toy (soldier, mouse, jack-in-the-box): toy blocks 1.66 m = Jack-in-the-Box (a box). jungle: ferns and bushes vs the
+ *     flytrap and snake: none.  ocean (jellyfish, shark, urchin, crab): pink coral 0.82 m = Coral Urchin.
+ *   cloud (sheep, thunderbird, wind spirit): white sky rocks 1.3 m = Cloud Sheep. shadow (wisp, spider, eye): the
+ *     planet's purple-tinted rocks 0.64 m = Shadow Spider.
+ * Each lookalike keeps 8 m from the spawn points of its twin, so a creature never stands among its doubles; outlines
+ * on actors (the fx builder's work) separate the rest.
+ */
+export const LOOKALIKES: Readonly<Record<string, readonly string[]>> = {
+  toadstools: ['mushroom', 'mushking'], bush: ['frog'], gumdrops: ['jelly'], snowman: ['snowball'], snow_rock: ['snowball'],
+  toyblock: ['jackbox'], coral: ['urchin'], skyrock: ['cloudsheep'], rock: ['spider'],
+};
+/** Grid of spawn points for the clearing test. */
+function clearingGrid(points: readonly { x: number; z: number; type?: string }[]) {
+  const cells = new Map<string, { x: number; z: number; type?: string }[]>(), key = (x: number, z: number) => `${Math.floor(x / 8)}|${Math.floor(z / 8)}`;
+  for (const p of points) { const k = key(p.x, p.z); const list = cells.get(k) ?? []; list.push(p); cells.set(k, list); }
+  return (type: string, x: number, z: number) => {
+    const kind = DECOR[type], twins = LOOKALIKES[type];
+    if (kind?.cover && !twins) return false;
+    for (let i = Math.floor(x / 8) - 1; i <= Math.floor(x / 8) + 1; i++) for (let j = Math.floor(z / 8) - 1; j <= Math.floor(z / 8) + 1; j++)
+      for (const p of cells.get(`${i}|${j}`) ?? []) {
+        const d = Math.hypot(p.x - x, p.z - z);
+        if (twins?.includes(p.type ?? '') ? d < CLEARING.lookalike : !kind?.cover && d < (blocking(type) ? CLEARING.blocking : CLEARING.low)) return true;
+      }
+    return false;
+  };
+}
+/** Pieces that block movement (trees, rocks, spires): the rules give them a collision radius. */
+const BLOCKING = new Set([...Object.values(HOME_DECOR).flat(), ...Object.values(PLANET_DECOR).flatMap(p => p?.decor ?? [])].filter(r => (r[2] ?? 0) > 0).map(r => r[0]));
+function blocking(type: string) { return BLOCKING.has(type); }
 /** Where the home trails run: winding sand paths from the four gates out to the border. */
 export function trailDistance(x: number, z: number) {
   if (Math.hypot(x, z) < 17) return Infinity;
@@ -107,8 +154,8 @@ class Occupancy {
   add(x: number, z: number, r: number) { const k = this.key(Math.floor(x / 4), Math.floor(z / 4)); const list = this.cells.get(k) ?? []; list.push({ x, z, r: Math.min(r, 4) }); this.cells.set(k, list); }
 }
 
-export function planDecor({ planet, layout, random, free, ponds = [] }: DecorContext): DecorPlacement[] {
-  const out: DecorPlacement[] = [], taken = new Occupancy(), between = (a: number, b: number) => a + random() * (b - a);
+export function planDecor({ planet, layout, random, free, ponds = [], clearings = [] }: DecorContext): DecorPlacement[] {
+  const out: DecorPlacement[] = [], taken = new Occupancy(), between = (a: number, b: number) => a + random() * (b - a), cleared = clearingGrid(clearings);
   // Sea pieces (coral) sit on the sea floor; everything else stands on the land.
   const place = (type: string, x: number, z: number, radius: number, scale = between(.8, 1.25), sea = false) => {
     out.push({ type, x, z, y: sea ? terrainHeight(layout, { x, z }) : Math.max(0, terrainHeight(layout, { x, z })), rotation: random() * Math.PI * 2, scale, radius: radius * scale });
@@ -120,7 +167,7 @@ export function planDecor({ planet, layout, random, free, ponds = [] }: DecorCon
       const a = angles ? between(angles[0], angles[1]) : random() * Math.PI * 2, d = Math.sqrt(between((minR / 140) ** 2, 1)) * 138, x = Math.cos(a) * d, z = Math.sin(a) * d;
       if (zone && zoneAt({ x, z }) !== zone) continue;
       if (planet === 'home' && trailDistance(x, z) < 2.6 + spacing) continue;
-      if (taken.taken(x, z, spacing) || !free(x, z, spacing)) continue;
+      if (taken.taken(x, z, spacing) || !free(x, z, spacing) || cleared(type, x, z)) continue;
       if (planet === 'ocean' ? (where === 'sea') !== (terrainHeight(layout, { x, z }) < -.3) : hazardAt(layout, x, z, spacing)) continue;
       if (planet === 'ocean' && where !== 'sea' && !layout.islands.some(i => Math.hypot(x - i.x, z - i.z) < i.r - spacing - .5)) continue;
       place(type, x, z, radius, undefined, where === 'sea'); placed++;

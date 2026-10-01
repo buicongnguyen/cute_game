@@ -3,39 +3,99 @@ import type { KitPart } from './assets.ts';
 import { DECOR, type DecorPlacement } from './biomes.ts';
 
 /**
- * Thousands of scenery pieces drawn as instances. Pieces are grouped into square tiles so
- * the camera skips tiles that are off screen, and each tile draws one batch per model part.
+ * Thousands of scenery pieces drawn as instances. Pieces are grouped into square tiles so the camera skips tiles that
+ * are off screen, and each tile draws one batch per model part. Tiles were 64 m, so about 95% of the scenery triangles
+ * drawn lay off screen (CP-3); at 32 m (the reference uses 36) the frustum trims far more, for a few more batches.
  */
-export const SCATTER_TILE = 64;
+export const SCATTER_TILE = 32;
+/** Pieces lower than this never cast shadows: flowers, toadstools, logs, small rocks (G2D-6). */
+export const LOW_DECOR = 1;
+/** Pieces taller than this can hide the explorer at the game's pitch, so they are indexed for the occluder fade (CC-06). */
+export const TALL_DECOR = 1.2;
+/** Taller pieces cast shadows only from tiles whose bounds come this close to the camera target (CP-3). */
+export const SHADOW_REACH = 20;
+/** Cell size of the tall-piece index. */
+export const TALL_CELL = 8;
 export type PartSource = (type: string) => KitPart[] | undefined;
+/** One tall piece: where it stands, its upright extent and the instance slots that draw it (one per model part). */
+export interface TallPiece { x: number; z: number; y: number; height: number; radius: number; meshes: T.InstancedMesh[]; index: number }
+/** Builds the 2D ground-cover cards for one tile's cover pieces (or null to draw them as models). */
+export type CoverBuilder = (pieces: DecorPlacement[]) => T.Object3D | null;
 
-export function buildScatter(placements: readonly DecorPlacement[], parts: PartSource, detail = 1): T.Group {
-  const group = new T.Group(), buckets = new Map<string, DecorPlacement[]>();
+const extents = new WeakMap<KitPart[], { height: number; radius: number }>(), box = new T.Box3(), part = new T.Box3();
+/** Height above the base and horizontal reach of a model at scale 1, measured once per part list. */
+export function partsExtent(parts: KitPart[]) {
+  let known = extents.get(parts);
+  if (!known) {
+    box.makeEmpty();
+    for (const p of parts) { if (!p.geometry.boundingBox) p.geometry.computeBoundingBox(); box.union(part.copy(p.geometry.boundingBox!).applyMatrix4(p.matrix)); }
+    known = box.isEmpty() ? { height: 0, radius: 0 } : { height: Math.max(0, box.max.y), radius: Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z) };
+    extents.set(parts, known);
+  }
+  return known;
+}
+
+export function buildScatter(placements: readonly DecorPlacement[], parts: PartSource, detail = 1, cover?: CoverBuilder): T.Group {
+  const group = new T.Group(), buckets = new Map<string, DecorPlacement[]>(), coverTiles = new Map<string, DecorPlacement[]>();
   group.name = 'scatter'; group.userData.scatter = true;
+  const casters: T.InstancedMesh[] = [], tall = new Map<string, TallPiece[]>();
   let coverIndex = 0;
   for (const p of placements) {
+    const isCover = !!DECOR[p.type]?.cover;
     // Low graphics keeps every other blade of grass and flower; nothing that blocks is skipped.
-    if (detail < 1 && DECOR[p.type]?.cover && coverIndex++ % 2) continue;
+    if (detail < 1 && isCover && coverIndex++ % 2) continue;
     // Tiles are centred on the origin so the village sits inside a single tile.
-    const key = `${p.type}|${Math.floor(p.x / SCATTER_TILE + .5)}|${Math.floor(p.z / SCATTER_TILE + .5)}`;
-    let list = buckets.get(key); if (!list) buckets.set(key, list = []); list.push(p);
+    const tile = `${Math.floor(p.x / SCATTER_TILE + .5)}|${Math.floor(p.z / SCATTER_TILE + .5)}`;
+    const target = cover && isCover ? coverTiles : buckets, key = cover && isCover ? tile : `${p.type}|${tile}`;
+    let list = target.get(key); if (!list) target.set(key, list = []); list.push(p);
   }
   const matrix = new T.Matrix4(), rotation = new T.Quaternion(), scale = new T.Vector3(), position = new T.Vector3(), up = new T.Vector3(0, 1, 0);
   for (const [key, list] of buckets) {
-    const type = key.slice(0, key.indexOf('|')), source = parts(type) ?? fallbackParts(type);
-    for (const part of source) {
+    const type = key.slice(0, key.indexOf('|')), source = parts(type) ?? fallbackParts(type), extent = partsExtent(source);
+    const meshes = source.map(part => {
       const mesh = new T.InstancedMesh(part.geometry, part.material, list.length);
       list.forEach((p, i) => { rotation.setFromAxisAngle(up, p.rotation); scale.setScalar(p.scale); mesh.setMatrixAt(i, matrix.compose(position.set(p.x, p.y, p.z), rotation, scale).multiply(part.matrix)); });
       mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
-      mesh.castShadow = !DECOR[type]?.cover; mesh.receiveShadow = true; mesh.userData.scatter = type;
+      // Ground cover and low pieces never cast; taller ones cast only near the camera target (updateScatterShadows).
+      mesh.castShadow = false; mesh.receiveShadow = true; mesh.userData.scatter = type;
+      if (!DECOR[type]?.cover && extent.height >= LOW_DECOR) casters.push(mesh);
       group.add(mesh);
-    }
+      return mesh;
+    });
+    list.forEach((p, index) => {
+      const height = extent.height * p.scale;
+      if (DECOR[type]?.cover || height <= TALL_DECOR) return;
+      const cell = `${Math.floor(p.x / TALL_CELL)}|${Math.floor(p.z / TALL_CELL)}`;
+      let pieces = tall.get(cell); if (!pieces) tall.set(cell, pieces = []);
+      pieces.push({ x: p.x, z: p.z, y: p.y, height, radius: extent.radius * p.scale, meshes, index });
+    });
   }
+  for (const list of coverTiles.values()) { const cards = cover!(list); if (cards) group.add(cards); }
+  group.userData.casters = casters; group.userData.tall = tall;
   return group;
 }
 
-/** Frees the instance buffers; the shared kit geometry and materials stay alive. */
-export function disposeScatter(group: T.Object3D) { group.traverse(o => { if (o instanceof T.InstancedMesh) o.dispose(); }); }
+/** Turns shadows on for the tall-piece batches whose bounds come within `reach` of (x, z), and off for the rest. */
+export function updateScatterShadows(group: T.Object3D, x: number, z: number, reach = SHADOW_REACH) {
+  for (const mesh of (group.userData.casters ?? []) as T.InstancedMesh[]) {
+    const s = mesh.boundingSphere; if (!s) continue;
+    const near = Math.hypot(s.center.x - x, s.center.z - z) - s.radius < reach;
+    if (mesh.castShadow !== near) mesh.castShadow = near;
+  }
+}
+
+/** Tall pieces standing within `radius` of (x, z), from the index built with the scatter. */
+export function tallPiecesNear(group: T.Object3D, x: number, z: number, radius: number, out: TallPiece[] = []) {
+  const cells = group.userData.tall as Map<string, TallPiece[]> | undefined; out.length = 0;
+  if (!cells) return out;
+  for (let i = Math.floor((x - radius) / TALL_CELL); i <= Math.floor((x + radius) / TALL_CELL); i++)
+    for (let j = Math.floor((z - radius) / TALL_CELL); j <= Math.floor((z + radius) / TALL_CELL); j++)
+      for (const p of cells.get(`${i}|${j}`) ?? []) if (Math.hypot(p.x - x, p.z - z) < radius + p.radius) out.push(p);
+  return out;
+}
+
+/** Frees the instance buffers; the shared kit geometry and materials stay alive. Card meshes free their own. */
+export function disposeScatter(group: T.Object3D) { group.traverse(o => { if (o instanceof T.InstancedMesh) { o.dispose(); if (o.userData.ownGeometry) o.geometry.dispose(); } }); }
 
 /** Simple stand-ins, used for any piece whose model file has not arrived. */
 const fallbacks = new Map<string, KitPart[]>();

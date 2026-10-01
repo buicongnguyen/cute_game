@@ -89,7 +89,8 @@ test('fifty aggro creatures around the explorer outside the forest gate cost und
   const w=world();w.build('home');w.position.set(-22,0,2);
   // A crowded fight: the fifty nearest creatures live 6-25 m from the explorer (outside the fence) and all
   // chase it (taunted, so none gives up), pressing around it every step.
-  const awake=w.enemies.filter(e=>e.hp>0&&!e.boss).sort((a,b)=>distance(a,w.position)-distance(b,w.position)).slice(0,50);
+  // Rooted creatures (speed 0) cannot come to the fight, so they are not among the fifty.
+  const awake=w.enemies.filter(e=>e.hp>0&&!e.boss&&(e.definition?.speed??1)>0).sort((a,b)=>distance(a,w.position)-distance(b,w.position)).slice(0,50);
   let seed=7;const random=()=>(seed=seed*16807%2147483647)/2147483647;
   for(const e of awake){
     for(let i=0;i<50;i++){const a=random()*Math.PI*2,r=6+random()*19,x=w.position.x+Math.cos(a)*r,z=w.position.z+Math.sin(a)*r;if(Math.hypot(x,z)>20&&!w.blocked(x,z)){e.x=e.homeX=x;e.z=e.homeZ=z;break;}}

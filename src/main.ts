@@ -199,7 +199,10 @@ function updateHud() {
   const bounty=progressEntries(state,'bounties')[0];$('#bounty-tracker').hidden=!bounty;if(bounty){$('#bounty-title').textContent=bounty.title;$('#bounty-task').textContent=`${bounty.progress}/${bounty.target} · ${bounty.claimed?'Complete':bounty.description}`;}
   if(folded){$('#chip-quest').textContent=q?`${q.icon} ${progress}/${q.target}`:'🚀';$('#chip-bounty').textContent=bounty?`🎯 ${bounty.progress}/${bounty.target}`:'';}
   // Light pools cut holes in the darkness; a lamp behind the perspective camera would project mirrored, so it is skipped.
-  if(!dark.hidden){const holes=world.lightSources().flatMap(light=>{const p=world.screen(light.x,.7,light.z),edge=world.screen(light.x+light.radius,.7,light.z);return p.front?[`radial-gradient(circle ${Math.abs(edge.x-p.x)}px at ${p.x}px ${p.y}px, transparent 65%, black 100%)`]:[];});dark.style.maskImage=holes.join(',');dark.style.maskComposite='intersect';}
+  if(!dark.hidden){const holes=world.lightSources().flatMap(light=>{const p=world.screen(light.x,.7,light.z),edge=world.screen(light.x+light.radius,.7,light.z);return p.front?[`radial-gradient(circle ${Math.abs(edge.x-p.x)}px at ${p.x}px ${p.y}px, transparent 65%, black 100%)`]:[];});
+    // Creatures' glowing eyes show through small holes outside the light (C8).
+    for(const g of world.eyeGlints()){const p=world.screen(g.x,g.y,g.z),edge=world.screen(g.x+g.radius,g.y,g.z);if(p.front)holes.push(`radial-gradient(circle ${Math.max(18,Math.abs(edge.x-p.x))}px at ${p.x}px ${p.y}px, transparent 45%, black 100%)`);}
+    dark.style.maskImage=holes.join(',');dark.style.maskComposite='intersect';}
 
   if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!e;$('#interact-text').textContent=e?e.kind==='enemy'?`Attack ${e.name}`:e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'';}else $('#context-prompt').hidden=true;
 }
