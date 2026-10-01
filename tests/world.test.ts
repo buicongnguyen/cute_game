@@ -289,3 +289,22 @@ test('explorers are drawn at the reference hero size, online ones too',()=>{
   const w=world();w.update(.025,true,false);assert.ok(Math.abs(w.player.scale.x-HERO_SCALE)<1e-9);
   w.addRemotePlayer('friend',{x:3,z:4});assert.equal(w.remotePlayers.get('friend')!.mesh.scale.x,HERO_SCALE);
 });
+
+test('a host message for another planet cannot leave undefeatable creatures on the minimap (wave 4 minimap bug)',()=>{
+  // A late 'enemies' message from the home host lands after the explorer built the candy world.
+  const home=world();home.planet='home';home.environment=new EnvironmentSimulation(createEnvironmentLayout('home'));home.spawnSpecies('slime',10,0,0);home.spawnSpecies('gummy',12,0,1);
+  const peer=world();peer.planet='candy';peer.environment=new EnvironmentSimulation(createEnvironmentLayout('candy'));const own=peer.spawnSpecies('gummy',30,0,0)!;peer.setNetworkRole('peer');
+  peer.applyEnemySnapshots(home.enemySnapshots());
+  assert.deepEqual(peer.enemies.map(e=>e.id),['candy:enemy:0'],'no home creatures are spawned into the candy world');
+  // The candy host's own reports still apply: a defeat hides the creature and its marker.
+  peer.applyEnemySnapshots([{...peer.enemySnapshots()[0],hp:0,respawn:20}]);
+  assert.equal(own.hp,0);assert.equal(own.mesh.visible,false);
+  assert.equal(peer.enemies.filter(e=>e.hp>0).length,0,'nothing alive is left for the minimap to draw');
+});
+
+test('the well by the storage chest is scenery only, like the reference: no entity, prompt or label',()=>{
+  const w=world();w.build('home');
+  let well:T.Object3D|undefined;w.root.traverse(o=>{if(o.userData.prop==='well')well=o;});
+  assert.ok(well,'the well is built');assert.equal(well!.userData.entity,undefined);
+  assert.ok(!w.entities.some(e=>Math.hypot(e.x-well!.position.x,e.z-well!.position.z)<1.5),'no interactive entity sits on the well');
+});
