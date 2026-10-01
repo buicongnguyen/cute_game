@@ -117,7 +117,8 @@ export class CombatHud {
     if (!hidden) for (const e of enemies) {
       if (!e.mesh.visible || !engaged(e, selected)) continue;
       const d = Math.hypot(e.x - px, e.z - pz); if (d > 18) continue;
-      const p = this.screen(e.x, barHeight(e), e.z);
+      // The target's bobbing arrow (target-marker.ts) rises to model height + 0.7 m: its bar sits above the arrow, not on it.
+      const p = this.screen(e.x, barHeight(e) + (targetOf(selected, this.lastHit, performance.now()) === e ? .95 : 0), e.z);
       if (!p.front || p.x < -40 || p.x > innerWidth + 40 || p.y < -60 || p.y > innerHeight + 20) continue;
       items.push({ id: e.id, x: p.x, y: p.y, e, d });
     }
