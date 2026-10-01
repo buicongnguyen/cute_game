@@ -33,6 +33,7 @@ export const KIT_FILES = {
   worldsHarsh: `${assetBase}assets/models/worlds-harsh.glb`,
   farm: `${assetBase}assets/models/farm.glb`,
   creatures: `${assetBase}assets/models/creatures.glb`,
+  helper: `${assetBase}assets/models/helper.glb`,
 } as const;
 export const HERO_FILE = `${assetBase}assets/models/hero.glb`;
 
@@ -380,3 +381,5 @@ export const brightKit = new KitLibrary([KIT_FILES.worldsBright]);
 export const harshKit = new KitLibrary([KIT_FILES.worldsHarsh]);
 /** The animal pen (farm-view.ts), loaded the first time the home pen is built. */
 export const farmKit = new KitLibrary([KIT_FILES.farm]);
+/** The garden helper (helper-view.ts), loaded once a helper is owned or seen. */
+export const helperKit = new KitLibrary([KIT_FILES.helper]);

@@ -4,7 +4,7 @@ import './online.css';
 import { t, onLanguageChange } from './i18n.ts';
 
 interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string }
-interface Home extends Explorer { plots:SaveState['plots'];placed?:unknown[];decorations?:unknown[] }
+interface Home extends Explorer { plots:SaveState['plots'];placed?:unknown[];decorations?:unknown[];helper?:unknown }
 interface EnemyState { id:string;x:number;z:number;hp:number;maxHp:number;[key:string]:unknown }
 interface NetworkWorld {
   updateRemotePlayers(players:Explorer[]):void;clearRemotePlayers():void;
@@ -135,9 +135,9 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='friends'){friends=message.friends||[];requests=message.requests||[];if(dialog.open&&tab==='friends')render();}
       else if(message.type==='visit'){
         visiting=message.home?.id||null;
-        if(message.home){const home=message.home as Home;const state={...newGame(home.name,home.color),plots:home.plots,gear:home.gear,...(home.placed?{placed:home.placed}:{}),...(home.decorations?{decorations:home.decorations}:{})};game.setVisiting(home.name,state as SaveState);}
+        if(message.home){const home=message.home as Home;const state={...newGame(home.name,home.color),plots:home.plots,gear:home.gear,...(home.placed?{placed:home.placed}:{}),...(home.decorations?{decorations:home.decorations}:{}),...(home.helper?{helper:home.helper}:{})};game.setVisiting(home.name,state as SaveState);}
         else game.setVisiting(null);renderPlayers();announce(visiting?"Visiting {name}'s garden":'Back in your garden',{name:message.home?.name||''});if(dialog.open)render();
-      }else if(message.type==='home'&&message.home?.id===visiting)game.setVisiting(message.home.name,{plots:message.home.plots,decorations:message.home.decorations});
+      }else if(message.type==='home'&&message.home?.id===visiting)game.setVisiting(message.home.name,{plots:message.home.plots,decorations:message.home.decorations,helper:message.home.helper} as Partial<SaveState>);
       else if(message.type==='effect'){if(message.visual)game.applyRemoteEffect(message.visual);else world().burst(message.x,message.z,message.color,8);}
       else if(message.type==='party'){party=message.code;announce('Party code: {code}',{code:party||''});if(dialog.open)render();}
       else if(message.type==='error'){if(restoring&&fallbackJoin){desiredParty=null;restoring=false;joined(fallbackJoin);}announce(message.message||'That action was unavailable.');}

@@ -12,8 +12,13 @@ export interface Water extends Point { r:number }
 /** The next fish to come, chosen when it sets off toward the bobber, like the reference's attract(). */
 export interface FishPick { id:string; power:number }
 export interface FishingOptions<P extends FishPick=FishPick> {
-  /** Rod quality: bamboo 0.3, golden 0.7. */
+  /** Rod quality: bamboo 0.3, golden 0.7, steady 0.9. */
   quality:number;
+  /**
+   * A steady rod (rod_steady): the line never snaps at any tension, heavy fish barely slow the reel, and the bite
+   * window is 0.4 s longer. Still interactive: you must hook at the bite, and 4 s of slack still loses the fish.
+   */
+  steady?:boolean;
   /** True while the bag holds a worm. */
   bait:boolean;
   /** Picks the fish that comes, given the rare-fish bonus of bait, rod and luck. */
@@ -76,6 +81,12 @@ export const catchBonus=(bait:boolean,quality:number,luck=0)=>(bait?.8:0)+qualit
 /** A species' weight under that bonus (wp @723637): legendary × (1 + 1.5 b), rare × (1 + b). */
 export const catchWeight=(weight:number,rarity:string,bonus:number)=>weight*(rarity==='legendary'?1+bonus*1.5:rarity==='rare'?1+bonus:1);
 
+/**
+ * The steady rod's numbers. Heavy fish (power up to 0.97) count as 40 % as heavy; reeling is 1.4x and still 0.5x (not
+ * 0.2x) during a surge, so a whale lands in about 5 s of holding instead of a long fight with snaps.
+ */
+export const STEADY={bite:.4,heavy:.4,reel:1.4,surge:.5,maxTension:.95} as const;
+
 export class FishingSimulation<P extends FishPick=FishPick> {
   phase:FishingPhase='cast'; tension=0; progress=0; time=0; surge=0;
   /** The fish now coming or on the line. */
@@ -89,11 +100,11 @@ export class FishingSimulation<P extends FishPick=FishPick> {
   reason=''; holding=false;
   private t=0; private waitT=0; private nibblesLeft=0; private nibT=0; private touched=false;
   private biteT=0; private slack=0; private surgeCd=0; private power=.2; private lastHeld=false;
-  private readonly quality:number; private bait:boolean; private readonly random:()=>number;
+  private readonly quality:number; private readonly steady:boolean; private bait:boolean; private readonly random:()=>number;
   private readonly options:FishingOptions<P>;
   constructor(options:FishingOptions<P>){
     this.options=options;
-    this.quality=Math.max(0,options.quality);this.bait=options.bait;this.random=options.random??Math.random;
+    this.quality=Math.max(0,options.quality);this.steady=options.steady===true;this.bait=options.bait;this.random=options.random??Math.random;
     this.cast=options.cast?{...options.cast}:null;this.waitT=this.nextWait();
   }
   private between(min:number,max:number){return min+this.random()*(max-min);}
@@ -105,7 +116,7 @@ export class FishingSimulation<P extends FishPick=FishPick> {
   get usingBait(){return this.bait;}
   /** Wait for the next fish (nextWait @863574): 2–5.5 s, ÷ 1.7 with a worm, ÷ (1 + quality / 2). */
   nextWait(){return this.between(2,5.5)/(this.bait?1.7:1)/(1+this.quality*.5);}
-  get biteWindow(){return .6+this.quality*.4;}
+  get biteWindow(){return .6+this.quality*.4+(this.steady?STEADY.bite:0);}
   private useBait(){if(this.bait)this.baitUsed++;}
   private toWait(extra=0){this.phase='wait';this.t=0;this.waitT=this.nextWait()+extra;this.pick=null;this.fishDistance=0;this.dart=0;}
 
@@ -171,18 +182,20 @@ export class FishingSimulation<P extends FishPick=FishPick> {
 
   /** updateReel @871900: hold to gain line, let go during surges; too much tension snaps it, 4 s of slack loses the fish. */
   private reel(dt:number){
-    const q=this.quality,p=this.power;
+    const q=this.quality,p=this.steady?this.power*STEADY.heavy:this.power;
     this.surgeCd-=dt;
     if(this.surge>0)this.surge-=dt;else if(this.surgeCd<=0){this.surge=this.between(.4,.8+p);this.surgeCd=this.between(.8,2.2)*(1.2-p*.5);}
     const surging=this.surge>0;
     if(this.holding){
-      this.progress+=dt*.2*(1.15-p*.55)*(surging?.2:1);
+      this.progress+=dt*.2*(1.15-p*.55)*(surging?(this.steady?STEADY.surge:.2):1)*(this.steady?STEADY.reel:1);
       this.tension+=dt*(1.2-q*.45)*(.16+(surging?1.25*p+.25:.05));
-      if(surging&&this.random()<dt*Math.max(0,p-q)*.25){this.snap();return;}
+      if(!this.steady&&surging&&this.random()<dt*Math.max(0,p-q)*.25){this.snap();return;}
       this.slack=0;
     }else{this.tension-=dt*.6;this.progress-=dt*.05*p*(surging?2.5:1);this.slack+=dt;}
     this.tension=Math.max(0,this.tension);this.progress=Math.max(0,this.progress);
-    if(this.tension>=1){this.snap();return;}
+    // A steady line flexes instead of snapping: tension stops just short of the break.
+    if(this.steady)this.tension=Math.min(this.tension,STEADY.maxTension);
+    else if(this.tension>=1){this.snap();return;}
     if(this.slack>4){this.useBait();this.phase='escaped';this.reason='The line went slack and the fish slipped away.';return;}
     if(this.progress>=1){this.progress=1;this.useBait();this.phase='caught';this.reason='A lovely catch!';}
   }

@@ -1,0 +1,9 @@
+/* Garden helper panel (helper-ui.ts). */
+#dialog-body .helper-picture { display: flex; justify-content: center; margin: 2px 0 6px; }
+#dialog-body .helper-picture img { width: 96px; height: 96px; filter: drop-shadow(0 4px 6px rgba(60, 40, 20, .18)); }
+#dialog-body .helper-points { margin: 6px 0 10px; padding-left: 20px; font-size: 13px; line-height: 1.45; }
+#dialog-body .helper-seeds { margin: 4px 0 8px; }
+#dialog-body .helper-seeds button { display: inline-flex; align-items: center; gap: 4px; }
+#dialog-body .helper-seeds .mini-art img, #dialog-body .helper-seeds .mini-art { width: 18px; height: 18px; }
+#dialog-body .helper-seed-row { border-bottom: 0; padding-bottom: 0; }
+.helper-button { margin-top: 6px; }

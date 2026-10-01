@@ -10,6 +10,7 @@ import {ENEMY_TYPES} from '../src/enemy-types.ts';
 import {produceLots,upgradeCards} from '../src/item-views.ts';
 import {dishesHtml,penHtml,penSignature} from '../src/farm-ui.ts';
 import {QUALITY} from '../src/graphics.ts';
+import {helperRow} from '../src/helper-ui.ts';
 
 afterEach(()=>setLanguage('en'));
 
@@ -35,7 +36,7 @@ function fixture(advanced=true){
   P.refreshProgress(state);
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
-  const context={M,...P,STORY_STEPS:P.STORY_STEPS,t,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,ZOOM:{},state,saved:state,app:{innerHTML:''},visiting:null,activePlot:0,selectedItem:advanced?'manure':null,shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60},world:{zoom:1,planet:'home'},saveFailed:false,persistence:null,
+  const context={M,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,ZOOM:{},state,saved:state,app:{innerHTML:''},visiting:null,activePlot:0,selectedItem:advanced?'manure':null,shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60},world:{zoom:1,planet:'home'},saveFailed:false,persistence:null,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},
     farmUi:{art,esc,mini,chips:()=>'',effect:item=>t(item.desc)},

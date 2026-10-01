@@ -1,8 +1,10 @@
 import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TABLES, UPGRADES, STARTING_PLOTS, MAX_EXTRA_PLOTS, MAX_DECORATIONS, STORY_STEPS, canonicalItem, type ItemId, type Inventory, type GearSlot, type CropId, type PlanetId, type BuffKey, type BuffDef, type WeaponDef } from './content.ts';
 import { createProgression, normalizeProgression, recordEvent, progressEntries, claimProgress, type ProgressionState } from './progression.ts';
+import { parseHelper, type HelperState } from './helper-state.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 export * from './content.ts';
 export * from './farm.ts';
+export * from './helper-state.ts';
 export { recordEvent, progressEntries, claimProgress, type ProgressKind, type ProgressEntry } from './progression.ts';
 export interface Plot {
     crop: CropId | null;
@@ -97,6 +99,8 @@ export interface SaveState {
     farm: FarmState;
     /** Bed layout version (GARDEN_LAYOUT); saves without it are moved to the smaller beds by shrinkGarden. */
     gardenLayout?: number;
+    /** The garden helper (helper.ts); older saves have none and parse as not owned. */
+    helper?: HelperState;
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
@@ -587,6 +591,7 @@ export function parseSave(raw: string | null): SaveState | null {
             }
         if (v.gardenLayout === GARDEN_LAYOUT) settleBeds(s); else shrinkGarden(s, v.gardenLayout === 2 ? 2 : 1);
         s.farm = parseFarm(v.farm);
+        if (record(v.helper)) s.helper = parseHelper(v.helper);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
         if (record(v.collection))
             for (const [id, n] of Object.entries(v.collection))
