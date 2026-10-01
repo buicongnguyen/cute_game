@@ -40,14 +40,24 @@ export const MAX_PEN_LEVEL = PEN_EXPANSIONS.length;
 /**
  * Where the pen stands at home: north of the garden (behind it on screen), on open grass between the storage chest,
  * the well and the west trees, clear of the trails and the fence. hw/hd are the half width (x) and half depth (z) of
- * its fence; the gate faces the garden (south).
+ * its sandy floor, which keeps garden beds off; the open side faces the garden (south).
  */
 export const PEN = { x: -8.6, z: -5, hw: 3.4, hd: 2.2 } as const;
+/**
+ * The open farmyard the animals roam, like fish in a pond: an oval around the pen a little wider than its old fence
+ * (rx/rz are the half axes, centred on PEN). Only a low fence behind it remains, so nothing hides the animals from the
+ * camera; decorations keep out of it, and the animals step around beds and anything else standing in it.
+ */
+export const YARD = { rx: 4.3, rz: 2.9 } as const;
+/** Whether a point lies inside the yard oval grown by `pad` metres. */
+export function inYard(x: number, z: number, pad = 0) { return ((x - PEN.x) / (YARD.rx + pad)) ** 2 + ((z - PEN.z) / (YARD.rz + pad)) ** 2 < 1; }
 /** Distance from a point to the pen's fence rectangle (0 inside). */
 export function penDistance(x: number, z: number) { return Math.hypot(Math.max(0, Math.abs(x - PEN.x) - PEN.hw), Math.max(0, Math.abs(z - PEN.z) - PEN.hd)); }
 /** Whether a square of half side `half` centred here keeps `margin` metres off the pen (a path around the fence). */
 export function clearOfPen(x: number, z: number, half: number, margin = .5) {
-  return Math.abs(x - PEN.x) >= PEN.hw + half + margin || Math.abs(z - PEN.z) >= PEN.hd + half + margin;
+  // North, the yard's back fence stands past the old fence line (farm-view BACK_FENCE_Z, plus its posts).
+  const dz = z - PEN.z, depth = dz < 0 ? YARD.rz + .7 : PEN.hd;
+  return Math.abs(x - PEN.x) >= PEN.hw + half + margin || Math.abs(dz) >= depth + half + margin;
 }
 
 // The products and the kitchen dishes made from them. Buffs follow the cooked foods: a raw product only heals.

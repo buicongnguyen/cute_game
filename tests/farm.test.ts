@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import * as M from '../src/model.ts';
 import { World } from '../src/world.ts';
-import { FarmPenView, PEN_PROPS, penGoal, placeholderAnimal, rigOf } from '../src/farm-view.ts';
+import { FarmPenView, PEN_PROPS, BACK_FENCE_Z, penGoal, placeholderAnimal, rigOf } from '../src/farm-view.ts';
 import { penHtml, collectText, dishesHtml, penSignature, type FarmUi } from '../src/farm-ui.ts';
 
 // The animal pen (our extension: the reference has no farm animals), built on the crop rules.
@@ -115,12 +115,21 @@ test('the pen stands on clear ground: off the trails, the fence, the cottage, th
     assert.ok(Math.abs(cx) > 1.4 && Math.abs(cz) > 1.4, 'off the stepping-stone trails');
   }
   for (const o of M.HOME_CLEARANCE) assert.ok(M.penDistance(o.x, o.z) >= o.r, `clear of ${o.x},${o.z}`);
+  // The roaming yard is wider than the old fence but still clear of the trails, the village fence and everything above.
+  for (let i = 0; i < 72; i++) {
+    const a = i / 72 * Math.PI * 2, px = x + Math.cos(a) * M.YARD.rx, pz = z + Math.sin(a) * M.YARD.rz;
+    assert.ok(Math.hypot(px, pz) < 15.5 && Math.abs(px) > 1.4 && Math.abs(pz) > 1.4, `yard edge ${px.toFixed(1)},${pz.toFixed(1)}`);
+    for (const o of M.HOME_CLEARANCE) assert.ok(Math.hypot(px - o.x, pz - o.z) >= o.r * .9, `yard edge clear of ${o.x},${o.z}`);
+  }
+  assert.ok(M.YARD.rx > hw && M.YARD.rz > hd, 'a little wider than the old fence');
   // The starting garden keeps a path to the gate.
   for (let i = 0; i < 9; i++) { const b = M.defaultBed(i); assert.ok(M.clearOfPen(b.x, b.z, M.BED_HALF, 1.4), `bed ${i}`); }
   for (const p of PEN_PROPS) assert.ok(Math.abs(p.x) + p.r * .5 < hw && Math.abs(p.z) + p.r * .5 < hd, `${p.id} inside the fence`);
   let n = 1; const rng = () => (n = (n * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 200; i++) { const g = penGoal(rng); assert.ok(Math.abs(g.x) < hw && Math.abs(g.z) < hd && PEN_PROPS.every(p => Math.hypot(g.x - p.x, g.z - p.z) > p.r)); }
+  const keep = [{ x: 3.4, z: 1.5, r: 1 }];
+  for (let i = 0; i < 200; i++) { const g = penGoal(rng, .45, keep, i % 2 ? { x: 1, z: 1 } : undefined); assert.ok(M.inYard(x + g.x, z + g.z) && PEN_PROPS.every(p => Math.hypot(g.x - p.x, g.z - p.z) > p.r) && Math.hypot(g.x - 3.4, g.z - 1.5) > 1); }
   assert.equal(M.decorSpotOk(M.newGame(), x, z), false, 'no decorations in the pen');
+  assert.equal(M.decorSpotOk(M.newGame(), x + M.YARD.rx - .3, z), false, 'nor anywhere in the yard');
 });
 
 test('home builds the pen as one entity with a fence of obstacles, and animals draw as a few instanced parts', () => {
@@ -131,16 +140,35 @@ test('home builds the pen as one entity with a fence of obstacles, and animals d
   }) as World;
   w.build('home');
   const pens = w.entities.filter(e => e.kind === 'pen'); assert.equal(pens.length, 1); assert.deepEqual([pens[0].x, pens[0].z], [M.PEN.x, M.PEN.z]);
-  assert.ok(w.blocked(M.PEN.x, M.PEN.z + M.PEN.hd), 'the gate side is fenced'); assert.ok(w.blocked(M.PEN.x - M.PEN.hw, M.PEN.z));
-  assert.ok(!w.blocked(M.PEN.x, M.PEN.z + M.PEN.hd + 1.2), 'the path in front of the gate is open');
+  assert.ok(!w.blocked(M.PEN.x, M.PEN.z + M.PEN.hd), 'the yard is open toward the garden'); assert.ok(!w.blocked(M.PEN.x - M.PEN.hw, M.PEN.z), 'and at the sides');
+  assert.ok(w.blocked(M.PEN.x, M.PEN.z + BACK_FENCE_Z), 'the back fence blocks'); assert.ok(w.blocked(M.PEN.x + PEN_PROPS[0].x, M.PEN.z + PEN_PROPS[0].z), 'the coop blocks');
   const now = Date.now(); for (let i = 0; i < 4; i++) M.buyAnimal(w.state, 'chicken', now - 3e5); M.buyAnimal(w.state, 'cow', now); M.buyAnimal(w.state, 'cow', now - 1e6);
   for (let i = 0; i < 30; i++) w.update(.05, true, false);
   const view = w.farmView!, meshes: T.InstancedMesh[] = []; view.animals.traverse(o => { if (o instanceof T.InstancedMesh && o.visible) meshes.push(o); });
   // Hens 3 + cow 4 + calf 4 + egg and milk markers 2, whatever the head count; the fence and props bake into a few more.
   assert.ok(meshes.length <= 13, `${meshes.length} animal draws`); assert.ok(view.draws <= 18, `${view.draws} pen draws`);
   const hens = meshes.find(m => m.name === 'farm-chicken:body')!; assert.equal(hens.count, 4, 'four hens share one body draw');
-  for (const a of w.state.farm.animals) { const p = view.positionOf(a.uid)!; assert.ok(Math.abs(p.x - M.PEN.x) < M.PEN.hw && Math.abs(p.z - M.PEN.z) < M.PEN.hd, 'animals stay inside'); }
   assert.ok(meshes.some(m => m.name === 'farm-product:egg' && m.count === 4), 'a ready egg bobs over each hen');
+  // Roaming: a long while of wandering spreads them over the yard (wider than the old fence), never out of it nor onto a bed.
+  w.state.plots.push({ crop: null, plantedAt: 0, x: M.PEN.x + 3, z: M.PEN.z + 2.6 }); w.syncCrops();
+  let wide = false; const start = view.positions().map(p => [p.x, p.z]);
+  for (let i = 0; i < 1200; i++) {
+    w.update(.05, false, false);
+    for (const p of view.positions()) { assert.ok(M.inYard(p.x, p.z, .01), `in the yard ${p.x.toFixed(2)},${p.z.toFixed(2)}`); if (Math.abs(p.x - M.PEN.x) > M.PEN.hw || Math.abs(p.z - M.PEN.z) > M.PEN.hd) wide = true; }
+  }
+  const bed = w.entities.find(e => e.kind === 'plot' && Math.abs(e.x - (M.PEN.x + 3)) < .01)!;
+  assert.ok(bed && view.positions().every(p => Math.hypot(p.x - bed.x, p.z - bed.z) > M.BED_HALF), 'they keep off a bed at the yard edge');
+  assert.ok(wide, 'they roam past the old fence line'); assert.ok(view.positions().some((p, i) => Math.hypot(p.x - start[i][0], p.z - start[i][1]) > 1), 'and move about');
+  // The hens scurry off when the explorer walks up.
+  const hen = view.positions().find(p => p.kind === 'chicken')!; w.position.set(hen.x + .3, 0, hen.z);
+  for (let i = 0; i < 20; i++) w.update(.05, false, false);
+  const after = view.positionOf(hen.uid)!; assert.ok(Math.hypot(after.x - w.position.x, after.z - w.position.z) > .9, 'a hen steps away from the explorer');
+  // A tap on an animal picks the pen.
+  w.position.set(M.PEN.x, 0, M.PEN.z + 6); w.cameraTarget.copy(w.position); for (let i = 0; i < 3; i++) w.update(.05, false, false);
+  Object.assign(globalThis, { innerWidth: 1440, innerHeight: 900 }); w.camera.aspect = 1440 / 900; w.camera.updateProjectionMatrix(); w.camera.updateMatrixWorld();
+  const far = view.positions().sort((a, b) => Math.hypot(b.x - M.PEN.x, b.z - M.PEN.z) - Math.hypot(a.x - M.PEN.x, a.z - M.PEN.z))[0];
+  const sp = new T.Vector3(far.x, far.kind === 'cow' ? .8 : .3, far.z).project(w.camera);
+  assert.equal(w.pickEntity((sp.x + 1) / 2 * 1440, (1 - sp.y) / 2 * 900)?.kind, 'pen', 'tapping the farthest animal opens the pen');
   w.build('ice'); assert.equal(w.farmView, undefined); assert.ok(!w.entities.some(e => e.kind === 'pen'));
 });
 

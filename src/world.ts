@@ -14,7 +14,7 @@ import { QUALITY, type QualityProfile } from './graphics.ts';
 import { CropCards, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
 import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
-import { FarmPenView, farmKit } from './farm-view.ts';
+import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
 import { STARTING_PLOTS, MAX_EXTRA_PLOTS } from './content.ts';
 import { approach, blocked, clearSegment, findRoute, nearbyObstacles, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
 import { attackRange } from './combat.ts';
@@ -392,14 +392,25 @@ export class World {
     beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z,rotation:e.mesh.rotation.y})),refined,M.BED_SCALE);
   }
   /**
-   * The animal pen north of the garden (farm.ts PEN): one entity to tap (its baked fence, coop and troughs are the
-   * entity's mesh, the animals ride inside it) and a ring of fence obstacles, so nobody walks through the rails.
+   * The animal yard north of the garden (farm.ts PEN, YARD): one entity to tap (its baked back fence, coop and troughs
+   * are the entity's mesh, the animals ride inside it). The yard is open, so only the props and the back fence block
+   * walking; the explorer can stroll among the animals, which step aside.
    */
   private buildPen(){
-    const view=this.farmView=new FarmPenView(),{x,z,hw,hd}=M.PEN;
+    const view=this.farmView=new FarmPenView(),{x,z}=M.PEN;
     this.addEntity('pen','Animal pen','🐔',view.statics,x,z,2.6);
-    for(const [ax,az,bx,bz] of [[-hw,-hd,hw,-hd],[-hw,hd,hw,hd],[-hw,-hd,-hw,hd],[hw,-hd,hw,hd]]){const n=Math.ceil(Math.hypot(bx-ax,bz-az)/.6);for(let i=0;i<=n;i++)this.obstacle(x+ax+(bx-ax)*i/n,z+az+(bz-az)*i/n,.35);}
+    for(const p of PEN_PROPS)this.obstacle(x+p.x,z+p.z,p.r*.85);
+    for(const fx of BACK_FENCE)for(let i=-3;i<=3;i++)this.obstacle(x+fx+i/3,z+BACK_FENCE_Z,.3);
+    this.penKeepClock=0;
     if(!farmKit.ready)void farmKit.load().then(()=>{if(farmKit.ready&&this.farmView===view)view.refresh();});
+  }
+  private penKeepClock?:number;
+  /** What the animals walk around in the yard: beds (by their frame), decorations and other obstacles there, not the pen's own. */
+  penKeepOut(){
+    const {x,z}=M.PEN,reach=Math.max(M.YARD.rx,M.YARD.rz)+1.5,out:{x:number;z:number;r:number}[]=[];
+    for(const e of this.entities)if((e.kind==='plot'||e.kind==='decoration')&&Math.hypot(e.x-x,e.z-z)<reach)out.push({x:e.x,z:e.z,r:e.kind==='plot'?M.BED_HALF*1.25:Math.max(.5,e.radius)});
+    for(const o of nearbyObstacles(this.obstacles,x,z,reach))if(M.inYard(o.x,o.z,o.r+.5)&&!PEN_PROPS.some(p=>Math.hypot(x+p.x-o.x,z+p.z-o.z)<.05))out.push(o);
+    return out;
   }
   /** The beds' draw calls, for tests and probes. */
   get bedDraws(){return this.gardenBeds?.draws??0;}
@@ -849,6 +860,9 @@ export class World {
   pickEntity(clientX:number,clientY:number):Entity|null {
     const scale=pickScale(innerHeight,this.zoom),circles:Array<PickCircle&{entity:Entity}>=[];
     for(const e of this.entities)if(!RAYCAST_ONLY.has(e.kind)&&this.validTarget(e)){const c=pickCircle(e.kind,e.radius,(e as Enemy).boss,e.kind==='enemy'?this.modelHeight(e):0);circles.push({x:e.x,y:e.mesh.position.y+c.h,z:e.z,radius:c.r*scale,entity:e});}
+    // A tap on any animal in the yard stands for a tap on the pen (collect everything ready, or open the panel).
+    const pen=this.farmView&&this.entities.find(e=>e.kind==='pen');
+    if(pen)for(const a of this.farmView!.positions()){const cow=a.kind==='cow';circles.push({x:a.x,y:cow?.8:.3,z:a.z,radius:(cow?(a.adult?70:52):(a.adult?42:32))*scale,entity:pen});}
     const held=circlesAt(circles,this.camera,innerWidth,innerHeight,clientX,clientY);
     this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);
     // A ripe crop stands up toward the bed behind, whose circle can hold its top: the bed or crop under the finger wins.
@@ -1381,7 +1395,7 @@ export class World {
     this.followSun();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
     this.animateCrops(dt);
-    if(this.farmView&&this.planet==='home')this.farmView.update(this.state.farm?.animals??[],dt,this.time);
+    if(this.farmView&&this.planet==='home'){if((this.penKeepClock=(this.penKeepClock??0)-dt)<=0){this.penKeepClock=1;this.farmView.setKeepOut(this.penKeepOut());}this.farmView.update(this.state.farm?.animals??[],dt,this.time,Date.now(),this.position);}
     this.updateTarget(dt);
     this.fx?.update(dt);
     this.marker.scale.setScalar(1+Math.sin(this.time*5)*.12);if(draw)this.render();
