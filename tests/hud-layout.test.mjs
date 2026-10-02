@@ -48,7 +48,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
       const r = await page.evaluate(() => {
         const box = el => { const b = el.getBoundingClientRect(); return b.width && b.height && getComputedStyle(el).visibility !== 'hidden' ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
         const all = sel => [...document.querySelectorAll(sel)].filter(el => !el.closest('[hidden]')).map(box).filter(Boolean);
-        const panels = { player: all('.player-card'), buttons: all('.top-actions button'), minimap: all('.minimap'), trackers: all('.tracker-stack > :not([hidden])'), skills: all('.skill'), toasts: all('.toast'), prompt: all('#context-prompt button'), pad: all('#touch-controls button'), joystick:all('#movement-joystick'), home: all('.home-button') };
+        const panels = { player: all('.player-card'), buttons: all('.top-actions button'), minimap: all('.minimap'), trackers: all('.tracker-stack > :not([hidden]):not(.quick-eat)'), skills: all('.skill'), toasts: all('.toast'), prompt: all('#context-prompt button'), pad: all('#touch-controls button'), joystick:all('#movement-joystick'), home: all('.home-button') };
         const W = innerWidth, H = innerHeight; let hits = 0, n = 0;
         for (let y = 4; y < H; y += 8) for (let x = 4; x < W; x += 8) { n++; const el = document.elementFromPoint(x, y); if (el && el.closest('#hud') && getComputedStyle(el).pointerEvents !== 'none') hits++; }
         return { boss: all('#boss-bar')[0] ?? null, target: all('#target-frame')[0] ?? null, panels, tappable: hits / n, W, H };
@@ -79,6 +79,15 @@ for (const [name, view] of Object.entries(VIEWS)) {
         for (const [panel, boxes] of Object.entries(r.panels)) for (const b of boxes) assert.ok(!overlap(frame, b), `${what} overlaps ${panel} at ${name}`);
       }
       assert.ok(!overlap(r.boss, r.target), 'boss bar and target frame do not overlap');
+      // Quick eat sits under the portrait: on screen, a full touch target, clear of every other HUD control.
+      const eat = await page.evaluate(() => { const b = document.querySelector('#quick-eat').getBoundingClientRect(), p = document.querySelector('.quick-eat-pick').getBoundingClientRect(); const hit = el => { const c = el.getBoundingClientRect(); return document.elementFromPoint((c.left + c.right) / 2, (c.top + c.bottom) / 2)?.closest('button') === el; }; const at = [...document.querySelectorAll('#quick-eat,.quick-eat-pick')].map(el => { const c = el.getBoundingClientRect(); return document.elementFromPoint((c.left + c.right) / 2, (c.top + c.bottom) / 2)?.outerHTML.slice(0, 120); }); return { at, eat: { l: b.left, r: b.right, t: b.top, b: b.bottom }, pick: { l: p.left, r: p.right, t: p.top, b: p.bottom }, tappable: hit(document.querySelector('#quick-eat')) && hit(document.querySelector('.quick-eat-pick')) }; });
+      assert.ok(eat.tappable, `quick eat and its picker receive taps at ${name}: ${JSON.stringify(eat)}`);
+      assert.ok(eat.eat.r - eat.eat.l >= 44 && eat.eat.b - eat.eat.t >= 44, 'quick eat has a full touch target');
+      for (const box of [eat.eat, eat.pick]) {
+        assert.ok(box.l >= 0 && box.r <= r.W && box.t >= 0 && box.b <= r.H, 'quick eat is on screen');
+        for (const [panel, boxes] of Object.entries(r.panels)) if (panel !== 'player') for (const b of boxes) assert.ok(!overlap(box, b), `quick eat overlaps ${panel} at ${name}`);
+        for (const [what, frame] of [['boss bar', r.boss], ['target frame', r.target]]) assert.ok(!overlap(box, frame), `quick eat overlaps the ${what} at ${name}`);
+      }
       const mid = { l: r.W * .3, r: r.W * .7, t: r.H * .3, b: r.H * .7 };
       // Very small portraits have no clear corner between both thumb controls and the upper HUD;
       // the target stays above the joystick there. Keep the original middle-space check for roomy views.

@@ -6,6 +6,7 @@ import ts from 'typescript';
 import * as M from '../src/model.ts';
 import * as P from '../src/progression.ts';
 import {t,localizeHtml,setLanguage,getLanguage} from '../src/i18n.ts';
+import {canTryOn} from '../src/try-on.ts';
 import {ENEMY_TYPES} from '../src/enemy-types.ts';
 import {produceLots,upgradeCards} from '../src/item-views.ts';
 import {dishesHtml,penHtml,penSignature} from '../src/farm-ui.ts';
@@ -20,7 +21,7 @@ afterEach(()=>setLanguage('en'));
 // are their production modules. We intercept only the dialog/DOM display boundary.
 const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
 const ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
-const renderers=['languageSelector','effectText','growText','expandButton','plotDialog','inventory','rewardChips','materialChips','quests','shop','market','storage','upgrades','cooking','crafting','decorations','planets','map','settings','help','penDialog'];
+const renderers=['languageSelector','tryOnButton','effectText','growText','expandButton','plotDialog','inventory','rewardChips','materialChips','quests','shop','market','storage','upgrades','cooking','crafting','decorations','planets','map','settings','help','penDialog'];
 const functions=ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&renderers.includes(node.name?.text)).map(node=>node.getText(ast)).join('\n');
 const globals=['BUFF_WORDS','JOURNAL_TABS','SHOP_TABS'];
 const declarations=ast.statements.filter(node=>ts.isVariableStatement(node)&&node.declarationList.declarations.some(item=>globals.includes(item.name.getText(ast)))).map(node=>node.getText(ast)).join('\n');
@@ -38,7 +39,7 @@ function fixture(advanced=true){
   P.refreshProgress(state);
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
-  const context={M,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,ZOOM:{},state,saved:state,app:{innerHTML:''},visiting:null,activePlot:0,selectedItem:advanced?'manure':null,shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60},world:{zoom:1,planet:'home'},saveFailed:false,persistence:null,
+  const context={M,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:advanced?'manure':null,shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60},world:{zoom:1,planet:'home'},saveFailed:false,persistence:null,
     HELP_TOPICS,joystickEnabled:()=>state.settings.movePad??false,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},

@@ -23,6 +23,9 @@ import { CombatHud, fightNear, lootText, zoneInfo } from './hud-combat.ts';
 import * as M from './model.ts';
 import {applyGameAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
+import { quickEatView, healingFoods, type FoodChoice } from './quick-eat.ts';
+import { previewGear, canTryOn } from './try-on.ts';
+import './quick-eat.css';
 import { CombatTimers, FishingInput, MovementControls, gameplayKey } from './gameplay-controls.ts';
 import {mountJoystick} from './joystick.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatHit, type CombatEffect } from './combat.ts';
@@ -100,7 +103,7 @@ app.innerHTML = `
     <header class="player-card"><button class="avatar" data-action="bag" aria-label="Open character and backpack"><span>🌱</span><b id="level-badge">1</b></button><div class="player-details"><div class="player-name"><strong id="player-name"></strong><span id="level-text">Lv. 1</span></div><div class="meter health"><div id="hp-fill"></div><span id="hp-text">100 / 100</span></div><div class="meter experience"><div id="xp-fill"></div><span id="xp-text">EXP 0 / 32</span></div><div class="location"><span class="location-dot"></span><span id="zone-name">Clover Village</span></div></div></header>
     <nav class="top-actions" aria-label="Game menu"><div class="energy"><span>ϟ</span><b id="energy">0</b></div><button class="icon-button" data-action="bag" title="Backpack · I" aria-label="Backpack">🎒</button><button class="icon-button" data-action="quests" title="Journal · J" aria-label="Quest journal">📖<i id="quest-dot"></i></button><div id="social-slot"></div><button class="icon-button secondary-icon" data-action="help" title="How to play" aria-label="How to play">?</button><button class="icon-button" data-action="settings" title="Settings" aria-label="Settings">⚙</button><div id="platform-slot"></div></nav>
     <div class="tracker-stack"><button id="tracker-chip" class="tracker-chip" data-action="trackers" aria-label="Show quest and bounty" hidden><span id="chip-quest">🥕 0/3</span><span id="chip-bounty">🎯</span><i>▸</i></button><div class="tracker-panels"><aside class="quest-tracker"><button class="tracker-fold" data-action="trackers" aria-label="Fold quest and bounty">▾ Fold</button><div class="eyebrow">ADVENTURE <span id="quest-chapter">1 / 9</span></div><button id="quest-summary" data-action="quests"><span class="quest-icon" id="quest-icon">🥕</span><span><strong id="quest-title">A little green beginning</strong><small id="quest-task">Harvest 3 crops · 0 / 3</small></span><b class="tracker-count" id="quest-count"></b><span class="chevron">›</span></button><div class="quest-progress"><i id="quest-fill"></i></div><button id="quick-claim" data-action="claim" hidden>Collect your reward ✨</button></aside>
-    <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div><b class="tracker-count" id="bounty-count"></b></button></div><div id="buff-bar" aria-label="Active effects"></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="150" height="150"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
+    <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div><b class="tracker-count" id="bounty-count"></b></button></div><div id="buff-bar" aria-label="Active effects"></div><div class="quick-eat"><button id="quick-eat" class="idle" data-action="quick-eat" title="Eat · H" aria-label="Eat"><span id="quick-eat-icon" aria-hidden="true">🍽️</span><b id="quick-eat-count">0</b></button><button class="quick-eat-pick" data-action="quick-eat-pick" aria-label="Choose food" aria-expanded="false">▾</button><div id="quick-eat-menu" hidden></div></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="150" height="150"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
     <div id="boss-bar" hidden><span id="boss-icon">👑</span><div><div class="boss-head"><strong id="boss-name"></strong></div><div class="boss-meter"><i id="boss-fill"></i></div></div></div>
     <div id="target-frame" hidden aria-live="off"><span class="target-icon"></span><div><div class="target-head"><strong></strong><span class="target-level">Lv 1</span></div><div class="target-meter"><i></i><b class="target-hp"></b></div></div></div>
     <div id="zone-banner" role="status"><strong id="banner-name">Clover Village</strong><small id="banner-detail">A little place to call home</small><span id="banner-chip"></span></div>
@@ -230,7 +233,7 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   bodyNode.scrollTop=reopened&&bodyNode.querySelector('.panel-tabs .active')?.textContent===tab?scroll:0;
   $('.close-button').focus({preventScroll:true});
 }
-function closeDialog(){modal='';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
+function closeDialog(){endTryOn();modal='';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
 async function start() {settle();void helperCatchUp();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
@@ -242,6 +245,7 @@ function updateHud() {
   $('#world').dataset.status=JSON.stringify({position:[+world.position.x.toFixed(2),+world.position.z.toFixed(2)],route:world.route.length,next:world.route[0]?[world.route[0].x,world.route[0].z]:null,visibility:document.visibilityState,modal,started,frameMs:Math.round(frameTime),drawCalls:world.renderer.info.render.calls});
   $('#player-name').textContent=state.name;$('#level-badge').textContent=t(String(state.level));$('#level-text').textContent=t(`Lv. ${state.level}`);$('#energy').textContent=t(state.energy.toLocaleString());
   $('#hp-fill').style.width=`${state.hp/M.maxHp(state)*100}%`;$('#hp-text').textContent=t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`);$('#xp-fill').style.width=`${state.xp/M.xpNeeded(state.level)*100}%`;
+  updateQuickEat();
   $('#xp-text').textContent=`EXP ${Math.floor(state.xp)} / ${M.xpNeeded(state.level)}`;
   $('.experience').setAttribute('title',t(`${Math.floor(state.xp)} / ${M.xpNeeded(state.level)} experience`));
   const q=progressEntries(state,'story')[0],progress=q?.progress??0;
@@ -418,7 +422,7 @@ function inventory() {
   const slots:[M.GearSlot,string,string][]=[['weapon','⚔️','Weapon'],['hat','👒','Hat'],['outfit','🧥','Outfit'],['boots','👟','Boots'],['pet','🐾','Pet'],['disguise','🎭','Disguise']];
   if(selectedItem&&!state.bag[selectedItem])selectedItem=null;
   const item=selectedItem?M.ITEMS[selectedItem]:null,stats=M.activeStats(state),slot=item?.slot;
-  openDialog('bag','Your explorer & backpack',`<div class="stat-strip"><span>❤️ <b>${Math.ceil(state.hp)}/${Math.round(stats.maxHp)}</b></span><span>⚔️ <b>${stats.attack.toFixed(1)}</b></span><span>🛡️ <b>${stats.defense}</b></span><span>💨 <b>${stats.speed.toFixed(1)}</b></span><span>✨ <b>${Math.round(stats.critChance*100)}% crit</b></span></div><div class="equipment">${slots.map(([key,icon,name])=>`<div><button data-action="inspect" data-item="${state.gear[key]||''}" ${!state.gear[key]?'disabled':''}><span>${state.gear[key]?art(state.gear[key]!,M.ITEMS[state.gear[key]!].icon):icon}</span><small>${state.gear[key]?esc(t(M.ITEMS[state.gear[key]!].name)):name}</small></button>${state.gear[key]?`<button class="unequip" data-action="unequip" data-slot="${key}" aria-label="Unequip ${name}">Remove</button>`:''}</div>`).join('')}</div><div class="section-label">BACKPACK <span>${entries.reduce((n,[,q])=>n+q,0)} items</span></div><div class="inventory-grid">${entries.map(([id,count])=>`<button class="item-tile ${id===selectedItem?'selected':''}" data-action="inspect" data-item="${id}" aria-label="${esc(t(M.ITEMS[id].name))}, ${count}"><span>${art(id,M.ITEMS[id].icon)}</span><b>${count}</b><small>${esc(t(M.ITEMS[id].name))}</small>${Object.values(state.gear).includes(id)?'<i>Equipped</i>':''}</button>`).join('')||'<div class="empty-state"><span>🎒</span><strong>Your first harvest belongs here.</strong></div>'}</div>${item?`<div class="item-detail"><span class="item-hero">${art(selectedItem!,item.icon)}</span><div><h3>${esc(t(item.name))}</h3><p>${esc(item.desc)}</p><div class="button-row">${slot?`<button class="primary" data-action="equip" data-item="${selectedItem}" ${state.gear[slot]===selectedItem?'disabled':''}>${state.gear[slot]===selectedItem?'Equipped':'Equip'}</button>`:''}${item.heal||item.buff?`<button class="primary" data-action="eat" data-item="${selectedItem}">Use${item.heal?` · +${item.heal} HP`:''}</button>`:''}${item.weapon&&item.weapon.kind!=='rod'?`<button class="soft-button" data-action="forge-menu" data-item="${selectedItem}">🔨 Forge +${M.forgeLevel(state,selectedItem!)}</button>`:''}${M.looseQuantity(state,selectedItem!)>0?`<button class="soft-button" data-action="drop-item" data-item="${selectedItem}">Drop one</button>`:''}${item.type==='decor'||item.type==='placeable'?`<button class="primary" data-action="place-decor" data-item="${selectedItem}">Place</button>`:''}</div></div></div>`:''}<div class="button-row"><button class="soft-button" data-action="go" data-kind="cook">🔥 Kitchen</button><button class="soft-button" data-action="decorations">🏡 Decorate</button><button class="soft-button" data-action="journal-tab" data-kind="collection">🐟 Fish log</button></div>`,'CHARACTER');
+  openDialog('bag','Your explorer & backpack',`<div class="stat-strip"><span>❤️ <b>${Math.ceil(state.hp)}/${Math.round(stats.maxHp)}</b></span><span>⚔️ <b>${stats.attack.toFixed(1)}</b></span><span>🛡️ <b>${stats.defense}</b></span><span>💨 <b>${stats.speed.toFixed(1)}</b></span><span>✨ <b>${Math.round(stats.critChance*100)}% crit</b></span></div><div class="equipment">${slots.map(([key,icon,name])=>`<div><button data-action="inspect" data-item="${state.gear[key]||''}" ${!state.gear[key]?'disabled':''}><span>${state.gear[key]?art(state.gear[key]!,M.ITEMS[state.gear[key]!].icon):icon}</span><small>${state.gear[key]?esc(t(M.ITEMS[state.gear[key]!].name)):name}</small></button>${state.gear[key]?`<button class="unequip" data-action="unequip" data-slot="${key}" aria-label="Unequip ${name}">Remove</button>`:''}</div>`).join('')}</div><div class="section-label">BACKPACK <span>${entries.reduce((n,[,q])=>n+q,0)} items</span></div><div class="inventory-grid">${entries.map(([id,count])=>`<button class="item-tile ${id===selectedItem?'selected':''}" data-action="inspect" data-item="${id}" aria-label="${esc(t(M.ITEMS[id].name))}, ${count}"><span>${art(id,M.ITEMS[id].icon)}</span><b>${count}</b><small>${esc(t(M.ITEMS[id].name))}</small>${Object.values(state.gear).includes(id)?'<i>Equipped</i>':''}</button>`).join('')||'<div class="empty-state"><span>🎒</span><strong>Your first harvest belongs here.</strong></div>'}</div>${item?`<div class="item-detail"><span class="item-hero">${art(selectedItem!,item.icon)}</span><div><h3>${esc(t(item.name))}</h3><p>${esc(item.desc)}</p><div class="button-row">${slot?`<button class="primary" data-action="equip" data-item="${selectedItem}" ${state.gear[slot]===selectedItem?'disabled':''}>${state.gear[slot]===selectedItem?'Equipped':'Equip'}</button>`:''}${slot&&state.gear[slot]!==selectedItem?tryOnButton(selectedItem!):''}${item.heal||item.buff?`<button class="primary" data-action="eat" data-item="${selectedItem}">Use${item.heal?` · +${item.heal} HP`:''}</button>`:''}${item.weapon&&item.weapon.kind!=='rod'?`<button class="soft-button" data-action="forge-menu" data-item="${selectedItem}">🔨 Forge +${M.forgeLevel(state,selectedItem!)}</button>`:''}${M.looseQuantity(state,selectedItem!)>0?`<button class="soft-button" data-action="drop-item" data-item="${selectedItem}">Drop one</button>`:''}${item.type==='decor'||item.type==='placeable'?`<button class="primary" data-action="place-decor" data-item="${selectedItem}">Place</button>`:''}</div></div></div>`:''}<div class="button-row"><button class="soft-button" data-action="go" data-kind="cook">🔥 Kitchen</button><button class="soft-button" data-action="decorations">🏡 Decorate</button><button class="soft-button" data-action="journal-tab" data-kind="collection">🐟 Fish log</button></div>`,'CHARACTER');
 }
 // "36 energy · 6 XP · 15 stars" becomes three coloured chips.
 function rewardChips(label:string){return label.split(' · ').filter(Boolean).map(part=>{const kind=/energy|năng lượng/i.test(part)?'energy':/xp/i.test(part)?'xp':/star|sao/i.test(part)?'star':'';return `<span class="chip${kind?` chip-${kind}`:''}">${kind==='energy'?'ϟ ':kind==='xp'?'✨ ':kind==='star'?'⭐ ':''}${esc(kind?part.replace(/\s*(energy|stars?|năng lượng|sao)$/i,''):part)}</span>`;}).join('');}
@@ -444,10 +448,12 @@ function quests(){
   }
 }
 const SHOP_TABS=['Weapons','Clothing','Pets','Disguises','Supplies','Decor'];
+/** "Try on" for wearable gear not already worn; pressed while the explorer is wearing it as a preview. */
+function tryOnButton(id:M.ItemId){return canTryOn(id)&&!Object.values(state.gear).includes(id)?`<button class="soft-button try-on" data-action="try-on" data-item="${id}" aria-pressed="${tryingOn===id}">${tryingOn===id?'👀 Trying on':'👕 Try on'}</button>`:'';}
 function shop(){
   const matches=(item:M.ItemDef)=>shopTab==='Weapons'?item.slot==='weapon':shopTab==='Clothing'?['hat','outfit','boots'].includes(item.slot??''):shopTab==='Pets'?item.slot==='pet':shopTab==='Disguises'?item.slot==='disguise':shopTab==='Decor'?item.type==='decor':!item.slot&&item.type!=='decor';
   const entries=Object.entries(M.ITEMS).filter(([,item])=>item.price!==undefined&&matches(item));
-  openDialog('shop','Little outfitters',`<nav class="panel-tabs" aria-label="Shop categories">${SHOP_TABS.map(tab=>`<button class="${shopTab===tab?'active':''}" aria-pressed="${shopTab===tab}" data-action="shop-tab" data-kind="${tab}">${tab}</button>`).join('')}</nav><div class="shop-grid">${entries.map(([id,item])=>`<div class="shop-item"><span class="shop-icon">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))}${state.bag[id]?` <small>×${state.bag[id]}</small>`:''}</strong><p>${esc(item.desc)}</p>${materialChips(item.materials)}</div><button class="primary" data-action="buy" data-item="${id}" ${state.energy<item.price!||Object.entries(item.materials??{}).some(([id,n])=>M.looseQuantity(state,id)<n!)?'disabled':''}>ϟ ${item.price}</button>${item.weapon?.kind==='rod'&&state.bag[id]?'<span class="chip">Used automatically near ponds</span>':item.slot?Object.values(state.gear).includes(id)?'<span class="chip chip-seed">✓ Equipped</span>':state.bag[id]?`<button class="sky-button" data-action="equip" data-item="${id}">Equip</button>`:'':''}</div>`).join('')||'<p class="empty-state">Visit the workshop for this collection.</p>'}</div>`,'ϟ '+state.energy+' ENERGY');
+  openDialog('shop','Little outfitters',`<nav class="panel-tabs" aria-label="Shop categories">${SHOP_TABS.map(tab=>`<button class="${shopTab===tab?'active':''}" aria-pressed="${shopTab===tab}" data-action="shop-tab" data-kind="${tab}">${tab}</button>`).join('')}</nav><div class="shop-grid">${entries.map(([id,item])=>`<div class="shop-item"><span class="shop-icon">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))}${state.bag[id]?` <small>×${state.bag[id]}</small>`:''}</strong><p>${esc(item.desc)}</p>${materialChips(item.materials)}</div><button class="primary" data-action="buy" data-item="${id}" ${state.energy<item.price!||Object.entries(item.materials??{}).some(([id,n])=>M.looseQuantity(state,id)<n!)?'disabled':''}>ϟ ${item.price}</button>${item.weapon?.kind==='rod'&&state.bag[id]?'<span class="chip">Used automatically near ponds</span>':item.slot?Object.values(state.gear).includes(id)?'<span class="chip chip-seed">✓ Equipped</span>':state.bag[id]?`<button class="sky-button" data-action="equip" data-item="${id}">Equip</button>`:'':''}${tryOnButton(id)}</div>`).join('')||'<p class="empty-state">Visit the workshop for this collection.</p>'}</div>`,'ϟ '+state.energy+' ENERGY');
   if(shopTab==='Pets'&&state.planet==='home'&&!visiting)$('#dialog-body').insertAdjacentHTML('beforeend',localizeHtml('<div class="button-row"><button class="soft-button" data-action="pen-menu">🐔 Animal pen</button></div>'));
 }
 
@@ -854,6 +860,48 @@ function equipFeedback(id:string){
   floating(`${t(M.ITEMS[id].name)} ↑`,world.position.x,world.position.z,'item big');tone('level');
   if(id==='harpoon')toast('Harpoon ready. Tap pond fish or select a forest bird.','🔱');
 }
+/** Eating from the bag or the HUD button: one path, with "+N ❤️" over the explorer like the reference's useItem. */
+async function eatFood(id:M.ItemId){
+  const before=state.hp,ok=await perform<boolean>('eat',{id});
+  if(ok){const healed=Math.round(state.hp-before);if(healed>0)floating(`+${healed} ❤️`,world.position.x,world.position.z,'item');tone('pop');}
+  return !!ok;
+}
+const QUICK_EAT_KEY='zoo-garden-quick-eat';
+let quickEatChoice:FoodChoice=(()=>{try{return (localStorage.getItem(QUICK_EAT_KEY)||'auto') as FoodChoice;}catch{return 'auto';}})(),quickEatShown='';
+/** The quick-eat button: tap eats the best fit (or the picked food); greyed out but still tappable when it cannot help. */
+async function quickEat(){
+  if(!started)return;const view=quickEatView(state,quickEatChoice);
+  if(view.reason){toast(view.reason==='none'?'No food in your backpack. Harvest crops, fish or cook a meal.':'Your health is already full.',view.reason==='none'?'🎒':'❤️');return;}
+  await eatFood(view.id!);
+}
+function updateQuickEat(){
+  const view=quickEatView(state,quickEatChoice),key=`${view.id}|${view.count}|${view.idle}|${quickEatChoice}|${getLanguage()}`;if(key===quickEatShown)return;quickEatShown=key;
+  const button=$('#quick-eat'),name=view.id?t(M.ITEMS[view.id].name):'';button.classList.toggle('idle',view.idle);button.classList.toggle('picked',quickEatChoice!=='auto');
+  $('#quick-eat-icon').innerHTML=view.id?art(view.id,M.ITEMS[view.id].icon):'🍽️';$('#quick-eat-count').textContent=String(view.count);
+  button.setAttribute('aria-label',view.id?`${t('Eat')} ${name} · +${M.ITEMS[view.id].heal} HP · ×${view.count}`:t('Eat'));button.title=view.id?`${t('Eat · H')} · ${name}`:t('Eat · H');
+}
+/** Long-press or the chevron: pick a food to always use, or Auto (smallest heal that covers the missing health). */
+function quickEatMenu(open:boolean){
+  const menu=$('#quick-eat-menu');if(!open&&menu.hidden)return;menu.hidden=!open;$('.quick-eat-pick').setAttribute('aria-expanded',String(open));if(!open)return;
+  const row=(id:string,label:string,icon:string,extra='')=>`<button data-action="quick-eat-choose" data-item="${id}" aria-pressed="${quickEatChoice===id}"><span>${icon}</span><small>${esc(label)}</small>${extra}</button>`;
+  menu.innerHTML=localizeHtml(row('auto',t('Auto'),'✨')+healingFoods(state).map(id=>row(id,t(M.ITEMS[id].name),art(id,M.ITEMS[id].icon),`<b>+${M.ITEMS[id].heal! >999?'∞':M.ITEMS[id].heal} · ×${state.bag[id]}</b>`)).join(''));
+}
+{let timer=0,held=false;const button=$('#quick-eat');
+  button.addEventListener('pointerdown',()=>{held=false;clearTimeout(timer);timer=window.setTimeout(()=>{held=true;quickEatMenu(true);},450);});
+  for(const type of ['pointerup','pointerleave','pointercancel'])button.addEventListener(type,()=>clearTimeout(timer));
+  // A long press opens the picker; the click that follows must not also eat.
+  button.addEventListener('click',event=>{if(held){held=false;event.stopImmediatePropagation();}},true);
+  button.addEventListener('contextmenu',event=>event.preventDefault());}
+let tryingOn:M.ItemId|null=null;
+/**
+ * Try-on: the explorer wears the item at once (World.tryOnGear, never saved or sent online) while the menu
+ * steps aside so the avatar stays in view; tapping again, another action or closing the menu reverts it.
+ */
+function tryOn(id:M.ItemId){
+  if(tryingOn===id){endTryOn();}else{tryingOn=id;world.tryOnGear=previewGear(state.gear,id);world.refreshPlayer();$('#dialog-layer').classList.add('trying-on');world.fx?.burst(world.position,{n:10,color:['#ffe66d','#ffffff'],glow:true,speed:2.5,up:5});}
+  if(modal==='shop')shop();else if(modal==='bag')inventory();
+}
+function endTryOn(){if(!tryingOn&&!world.tryOnGear)return;tryingOn=null;world.tryOnGear=null;$('#dialog-layer').classList.remove('trying-on');world.refreshPlayer();}
 function basicAttack(e?:Enemy){
   if(!started||uiBlocked()||visiting||combatTimers.attackCooldown>0)return;
   prepareCombatWeapon();
@@ -1025,6 +1073,9 @@ app.addEventListener('click',async event=>{
   // A clicked HUD button gives up focus, so Space and other shortcuts cannot press it again.
   if((event as MouseEvent).detail>0&&button.closest('#hud,#world-labels'))button.blur();
   const action=button.dataset.action,id=button.dataset.item as M.ItemId,index=Number(button.dataset.index);if(action!=='reel')tone();
+  // Any other menu action (another item, a tab, buying, equipping) ends the try-on first.
+  if(tryingOn&&action!=='try-on')endTryOn();
+  if(action!=='quick-eat-pick'&&action!=='quick-eat-choose')quickEatMenu(false);
   switch(action){
     case 'start':start();break;case 'discovery':planets();break;
     case 'color':await perform('settings',{color:button.dataset.color!});document.querySelectorAll<HTMLButtonElement>('.color-picker button').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});world.refreshPlayer();break;
@@ -1068,7 +1119,11 @@ app.addEventListener('click',async event=>{
       if(M.ITEMS[id].slot&&await perform('equip',{id}))equipFeedback(id);else{floating(`+ ${t(M.ITEMS[id].name)}`,world.position.x,world.position.z,'item');tone('success');}
       shop();}break;
     case 'equip':if(await perform('equip',{id})){equipFeedback(id);if(modal==='shop')shop();else inventory();}break;
-    case 'eat':await perform('eat',{id});inventory();break;
+    case 'eat':await eatFood(id);inventory();break;
+    case 'quick-eat':await quickEat();break;
+    case 'quick-eat-pick':quickEatMenu($('#quick-eat-menu').hidden);break;
+    case 'quick-eat-choose':quickEatChoice=id as FoodChoice;try{localStorage.setItem(QUICK_EAT_KEY,quickEatChoice);}catch{}quickEatMenu(false);updateQuickEat();break;
+    case 'try-on':tryOn(id);break;
     case 'sell-one':case 'sell-all':{const n=action==='sell-all'?M.looseQuantity(state,id):1;const value=await perform('sell',{id,count:n});if(value){tone('success');toast(`Sold for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
     case 'sell-produce':{const value=await perform('sellProduce');if(value){tone('success');floating(`+${value} ϟ`);toast(`Sold all your produce for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
     // A tap moves the whole stack, like the reference's chest (equipped gear stays in the backpack).
@@ -1118,7 +1173,7 @@ document.addEventListener('keydown',event=>{
   if(!started||uiBlocked())return;
   if(pressed.startsWith('Arrow')){event.preventDefault();movement.pressKey(pressed);}
   if(event.repeat)return;
-  const key=pressed.toLowerCase();if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key==='j')quests();else if(key==='m')map();else if(key==='f')world.interactNearest();else if(['q','w','e','r'].includes(key))skill(['q','w','e','r'].indexOf(key));else if(pressed===' '){event.preventDefault();basicAttack();}
+  const key=pressed.toLowerCase();if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key==='j')quests();else if(key==='m')map();else if(key==='f')world.interactNearest();else if(key==='h')void quickEat();else if(['q','w','e','r'].includes(key))skill(['q','w','e','r'].indexOf(key));else if(pressed===' '){event.preventDefault();basicAttack();}
 });
 document.addEventListener('keyup',e=>{const key=gameplayKey({...e,code:e.code,key:e.key});spaceKeys.delete(key.toLowerCase());movement.releaseKey(e.code||e.key);if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
 document.addEventListener('pointerdown',e=>{const target=(e.target as HTMLElement).closest<HTMLElement>('button');if(target?.dataset.move){e.preventDefault();movement.pressPointer(e.pointerId,target.dataset.move);target.setPointerCapture(e.pointerId);}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}});

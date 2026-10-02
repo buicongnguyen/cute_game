@@ -509,4 +509,11 @@ export const VI_UI: Record<string, string> = {
   "Back to animal pen": "Về chuồng vật nuôi",
   "Your animal helper collected {count} products and fed {fed} animals.": "Rô-bốt đã thu {count} sản phẩm và cho {fed} vật nuôi ăn.",
   "Your animal helper is ready! Automatic feeding starts off.": "Rô-bốt chăm vật nuôi đã sẵn sàng! Tự động cho ăn đang tắt.",
+  "Eat · H": "Ăn · H",
+  "Eat": "Ăn",
+  "Choose food": "Chọn món ăn",
+  "No food in your backpack. Harvest crops, fish or cook a meal.": "Túi không còn đồ ăn. Hãy thu hoạch, câu cá hoặc nấu một món nhé.",
+  "Your health is already full.": "Máu của bạn đã đầy rồi.",
+  "Try on": "Mặc thử",
+  "Trying on": "Đang mặc thử",
 };

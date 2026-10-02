@@ -704,10 +704,13 @@ export class World {
       const tip=new T.Object3D();tip.name='rod-tip';tip.position.set(0,1.85,0);rod.add(tip);hand.add(rod);
     }
   }
+  /** Gear shown on the explorer while trying something on in a menu: local only, never saved or sent online. */
+  tryOnGear?:SaveState['gear']|null;
   refreshPlayer() {
-    this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...this.state.gear,pet:undefined});this.player.rotation.order='YXZ';
+    const gear=this.tryOnGear??this.state.gear;
+    this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...gear,pet:undefined});this.player.rotation.order='YXZ';
     this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;this.playerMaterials.push(o.material);}});this.root.add(this.player);
-    this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=this.state.gear.pet?this.petFor(this.state.gear.pet):new T.Group();addOutlines(this.companion,{merge:true});this.root.add(this.companion);
+    this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=gear.pet?this.petFor(gear.pet):new T.Group();addOutlines(this.companion,{merge:true});this.root.add(this.companion);
   }
 
   spawnEnemy(x:number,z:number,index:number,name:string,strong=false,boss=false) {

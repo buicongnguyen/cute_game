@@ -1,0 +1,54 @@
+/* Quick eat: under the quest trackers, just below the health bar it fills and far from the fight buttons and joystick. */
+.quick-eat { position: relative; align-self: flex-start; margin-top: 2px; display: flex; align-items: center; gap: 3px; }
+#quick-eat {
+  position: relative; width: 50px; height: 50px; padding: 0; border-radius: 50%; border: 3px solid #fff;
+  background: radial-gradient(circle at 35% 30%, #ffd1d6, #ff6f86 72%); box-shadow: var(--lift), 0 6px 14px rgba(60, 20, 30, .22);
+  display: grid; place-items: center; touch-action: manipulation; -webkit-touch-callout: none; user-select: none;
+}
+#quick-eat > span { display: grid; place-items: center; width: 32px; height: 32px; font-size: 24px; line-height: 1; }
+#quick-eat > span img, #quick-eat > span .art-icon { width: 32px; height: 32px; }
+#quick-eat > b {
+  position: absolute; right: -6px; bottom: -4px; min-width: 22px; height: 22px; padding: 0 5px; border: 2px solid #fff; border-radius: 999px;
+  background: #3a2433; color: #fff; font-size: 11px; font-weight: 1000; display: grid; place-items: center;
+}
+#quick-eat.picked::after { content: ''; position: absolute; left: -2px; top: -2px; width: 12px; height: 12px; border-radius: 50%; background: #ffe66d; border: 2px solid #fff; }
+/* Greyed out when there is nothing to eat or health is full; it still answers a tap with a hint. */
+#quick-eat.idle { filter: grayscale(.85) brightness(.95); opacity: .72; }
+.quick-eat-pick {
+  width: 26px; height: 34px; padding: 0; border-radius: 12px; border: 2px solid #fff; background: #fff6e6; color: #3a2433;
+  font-size: 13px; font-weight: 1000; box-shadow: var(--lift); position: relative;
+}
+.quick-eat-pick::before { content: ''; position: absolute; inset: -6px -4px; }
+#quick-eat-menu {
+  /* Opens beside the button, above the joystick and fight buttons while it is up. */
+  position: absolute; left: calc(100% + 6px); top: 0; z-index: 30; display: grid; gap: 4px; width: 200px; max-height: min(320px, calc(100dvh - 200px)); overflow: auto;
+  padding: 6px; border-radius: 16px; border: 3px solid #fff; background: #fffaf0; box-shadow: 0 10px 26px rgba(30, 30, 20, .28);
+}
+#quick-eat-menu[hidden] { display: none; }
+#quick-eat-menu button {
+  display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 6px; min-height: 40px; padding: 4px 8px; border-radius: 11px;
+  border: 2px solid transparent; background: #fff; color: var(--ink, #3a2433); text-align: left; font-weight: 800;
+}
+#quick-eat-menu button[aria-pressed="true"] { border-color: #ff6f86; background: #fff0f2; }
+#quick-eat-menu button > span { display: grid; place-items: center; width: 28px; height: 28px; font-size: 20px; }
+#quick-eat-menu button > span img { width: 28px; height: 28px; }
+#quick-eat-menu small { font-size: 12px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
+#quick-eat-menu b { font-size: 11px; color: #c0425a; white-space: nowrap; }
+@media (max-width: 600px), (max-height: 500px) {
+  #quick-eat { width: 46px; height: 46px; }
+  #quick-eat > span, #quick-eat > span img, #quick-eat > span .art-icon { width: 28px; height: 28px; font-size: 21px; }
+}
+
+/*
+ * Try-on: the menu steps aside so the explorer stays in view and the world is not dimmed. Wide screens dock
+ * the panel to the right half (the camera keeps the hero at screen centre); portrait phones lower the sheet
+ * to the bottom ~44% so the hero, who stands at the centre, shows above it.
+ */
+#dialog-layer.trying-on { background: transparent; backdrop-filter: none; justify-content: flex-end; }
+#dialog-layer.trying-on #dialog { width: min(600px, 46vw); }
+#dialog-layer.trying-on #dialog-body .shop-grid { grid-template-columns: 1fr; }
+@media (orientation: portrait) {
+  #dialog-layer.trying-on { align-items: flex-end; justify-content: center; padding: 0; }
+  #dialog-layer.trying-on #dialog { width: 100%; max-height: 44dvh; }
+}
+#dialog-body .try-on[aria-pressed="true"] { background: #ffe9a8; border-color: #f1b93a; }
