@@ -1,5 +1,8 @@
 import * as M from './model.ts';
 import { RECIPES, PLANETS, ITEMS, type PlanetId } from './content.ts';
+import { FARM_DISHES } from './farm.ts';
+import { MAX_FORGE_LEVEL } from './weapon-forge.ts';
+export { MAX_FORGE_LEVEL };
 import { FRIENDS, FRIEND_IDS, type FriendId } from './friends-state.ts';
 import { t } from './i18n.ts';
 
@@ -51,13 +54,53 @@ export function exitTester(s: M.SaveState) { if (!isTester(s)) return false; del
 export const isTester = (s: M.SaveState) => s.settings.tester === true;
 export function unlockTester(s: M.SaveState) { s.settings.tester = true; s.energy = Math.max(s.energy, TESTER_ENERGY); return true; }
 
-/** Every buyable or craftable item once, at its cheapest energy price (at least 1), ignoring materials and level. */
+/** Kitchen results: every cooked_ food (cook()) and every farm dish (cookDish()). Cooking is free in normal play. */
+export const KITCHEN_COOKED = 'Kitchen: cooked food', KITCHEN_DISHES = 'Kitchen: farm dishes';
+export const COOKABLE: { id: string; category: string }[] = [
+  ...Object.keys(ITEMS).filter(id => id.startsWith('cooked_')).map(id => ({ id, category: KITCHEN_COOKED })),
+  ...FARM_DISHES.map(d => ({ id: d.id, category: KITCHEN_DISHES })),
+];
+/** Every buyable, crafted, furnace-made or cooked item once, at its cheapest energy price (at least 1), ignoring materials and level. */
 export const TESTER_ITEMS: { id: string; price: number; category: string }[] = (() => {
   const best = new Map<string, { id: string; price: number; category: string }>();
   for (const r of RECIPES) { if (!Object.hasOwn(ITEMS, r.result)) continue; const price = Math.max(1, r.energy), had = best.get(r.result); if (!had || price < had.price) best.set(r.result, { id: r.result, price, category: r.category }); }
+  for (const c of COOKABLE) if (Object.hasOwn(ITEMS, c.id) && !best.has(c.id)) best.set(c.id, { ...c, price: 1 });
   return [...best.values()];
 })();
 export const FRIEND_PRICE = 500;
+
+// Crafting panels in tester mode (main.ts crafting/cooking/forgeMenu): make any result without ingredients, level,
+// station or furnace gates. Workshop/forge recipes still cost their energy; kitchen food stays free as in normal play.
+/** Tester workshop/furnace craft: the recipe's energy only. */
+export function testerCraft(s: M.SaveState, index: number) {
+  const r = isTester(s) ? RECIPES[index] : undefined, n = r?.count || 1;
+  if (!r || !Object.hasOwn(ITEMS, r.result) || s.energy < r.energy || !Number.isSafeInteger((s.bag[r.result] || 0) + n)) return false;
+  s.energy -= r.energy; M.addItem(s, r.result, n); return true;
+}
+/** Tester kitchen: any cooked food or farm dish, free, without the raw food or the kitchen level. */
+export function testerCook(s: M.SaveState, id: string) {
+  if (!isTester(s) || !COOKABLE.some(c => c.id === id) || !Number.isSafeInteger((s.bag[id] || 0) + 1)) return false;
+  M.addItem(s, id, 1); return true;
+}
+const forgeable = (id: string) => Object.hasOwn(ITEMS, id) && ITEMS[id].slot === 'weapon' && !!ITEMS[id].weapon && ITEMS[id].weapon!.kind !== 'rod';
+/** Tester forge: an owned weapon straight to +15, no roll, energy or materials. */
+export function testerForgeMax(s: M.SaveState, id: string) {
+  if (!isTester(s) || !forgeable(id) || !(s.bag[id]! > 0) || (s.forge?.[id] ?? 0) >= MAX_FORGE_LEVEL) return false;
+  (s.forge ??= {})[id] = MAX_FORGE_LEVEL; return true;
+}
+export const TESTER_TAG = '<span class="tester-tag">🧪 Tester</span>';
+/** A tester make button for a crafting panel row (empty outside tester mode). */
+export function testerMakeButton(s: M.SaveState, action: 'tester-craft' | 'tester-cook' | 'tester-forge', key: string | number, energy = 0) {
+  if (!isTester(s)) return '';
+  const attr = action === 'tester-craft' ? `data-index="${key}"` : `data-item="${esc(String(key))}"`;
+  return `<button class="soft-button tester-make" data-action="${action}" ${attr} ${s.energy < energy ? 'disabled' : ''}>🧪 ${energy ? `ϟ ${energy.toLocaleString()}` : esc(t(action === 'tester-forge' ? 'Max' : 'Make'))}</button>`;
+}
+/** Tester kitchen section: every cooked food and dish, with or without ingredients. */
+export function testerKitchenHtml(s: M.SaveState) {
+  if (!isTester(s)) return '';
+  return `<div class="section-label">${TESTER_TAG} ${esc(t('Cook anything, no ingredients'))}</div><div class="tester-grid">${COOKABLE.map(c => { const it = ITEMS[c.id], have = s.bag[c.id] || 0;
+    return `<div class="tester-card"><span>${it.icon}</span><strong>${esc(t(it.name))}</strong>${have ? `<small>×${have}</small>` : ''}${testerMakeButton(s, 'tester-cook', c.id)}</div>`; }).join('')}</div>`;
+}
 
 export function testerBuy(s: M.SaveState, id: string) {
   const item = isTester(s) ? TESTER_ITEMS.find(i => i.id === id) : undefined;
@@ -72,7 +115,7 @@ export function testerFriend(s: M.SaveState, id: FriendId, now = Date.now()) {
 export function testerPlanets(s: M.SaveState) { if (!isTester(s)) return false; for (const id of Object.keys(PLANETS) as PlanetId[]) if (!s.discovered.includes(id)) s.discovered.push(id); return true; }
 export function testerMaxLevel(s: M.SaveState) { if (!isTester(s) || s.level >= TESTER_LEVEL) return false; s.level = TESTER_LEVEL; s.xp = 0; s.hp = M.maxHp(s); return true; }
 
-const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+function esc(v: string): string { return v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!)); }
 export function testerShopHtml(s: M.SaveState) {
   const friends = FRIEND_IDS.map(id => {
     const has = (s.friends ?? []).some(f => f.id === id);
@@ -81,8 +124,9 @@ export function testerShopHtml(s: M.SaveState) {
   const groups = new Map<string, string[]>();
   for (const i of TESTER_ITEMS) { const it = ITEMS[i.id], have = s.bag[i.id] || 0;
     (groups.get(i.category) ?? groups.set(i.category, []).get(i.category)!).push(`<div class="tester-card"><span>${it.icon}</span><strong>${esc(t(it.name))}</strong>${have ? `<small>×${have}</small>` : ''}<button class="soft-button" data-action="tester-buy" data-item="${i.id}" ${s.energy < i.price ? 'disabled' : ''}>ϟ ${i.price.toLocaleString()}</button></div>`); }
-  const items = [...groups].map(([cat, cards]) => `<h3>${esc(t(cat))}</h3><div class="tester-grid">${cards.join('')}</div>`).join('');
-  return `<p class="intro">${esc(t('Tester mode: every item without materials or level, still paid with energy.'))} ϟ ${s.energy.toLocaleString()}</p>`
+  const items = [...groups].map(([cat, cards], i) => `<h3 id="tester-cat-${i}">${esc(t(cat))}</h3><div class="tester-grid">${cards.join('')}</div>`).join('');
+  return `<p class="intro">${esc(t('Tester mode: every item, crafted, forged and cooked ones too, without materials or level, still paid with energy.'))} ϟ ${s.energy.toLocaleString()}</p>`
     + `<div class="button-row"><button class="soft-button" data-action="tester-planets">${esc(t('Unlock all planets'))}</button><button class="soft-button" data-action="tester-level">${esc(t('Max level'))}</button></div>`
+    + `<nav class="tester-jump" aria-label="${esc(t('Categories'))}">${[...groups.keys()].map((cat, i) => `<a href="#tester-cat-${i}">${esc(t(cat))}</a>`).join('')}</nav>`
     + `<h3>${esc(t('Rescue friends'))}</h3><div class="tester-grid">${friends}</div>${items}`;
 }

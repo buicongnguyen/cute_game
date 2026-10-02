@@ -73,3 +73,53 @@ test('the shared (server) action rules know nothing about tester mode', () => {
   for (const type of ['tester', 'testerBuy', 'unlockTester']) assert.throws(() => applyGameAction(s, { type, payload: { code: 'garden-sample' } }));
   applyGameAction(s, { type: 'settings', payload: { settings: { tester: true } } }); assert.equal(s.settings.tester, undefined, 'settings cannot switch it on');
 });
+
+/** Every item normal play only gets by combining others: workshop/furnace recipes with materials, the kitchen's cooked_
+ *  foods and farm dishes. Kept independent of tester.ts so a new crafting source shows up here as a missing item. */
+function combinables() {
+  const ids = new Set<string>();
+  for (const r of RECIPES) if (r.station !== 'shop' || Object.keys(r.materials).length) ids.add(r.result);
+  for (const id of Object.keys(M.ITEMS)) if (id.startsWith('cooked_')) ids.add(id);
+  for (const d of M.FARM_DISHES) ids.add(d.id);
+  return [...ids];
+}
+
+test('every combinable item is in the tester shop and buyable for energy alone', () => {
+  const shop = new Set(X.TESTER_ITEMS.map(i => i.id)), all = combinables();
+  assert.ok(all.length > 100); assert.deepEqual(all.filter(id => !shop.has(id)), []);
+  const s = M.newGame(); X.unlockTester(s);
+  for (const id of all) assert.equal(X.testerBuy(s, id), true, id);
+  for (const id of all) assert.ok(s.bag[id]! >= 1, id);
+  for (const cat of [X.KITCHEN_COOKED, X.KITCHEN_DISHES]) assert.ok(X.TESTER_ITEMS.some(i => i.category === cat), cat);
+});
+
+test('tester crafting panels make any recipe or dish without ingredients; normal mode still needs them', () => {
+  const s = M.newGame(); s.energy = 1_000_000;
+  const furnace = RECIPES.findIndex(r => r.station === 'forge'), gated = RECIPES.findIndex(r => r.station === 'craft' && Object.keys(r.materials).length);
+  // Normal rules: no materials, no furnace, no kitchen level -> nothing.
+  assert.equal(M.canCraft(s, gated), false); assert.equal(M.craft(s, gated), false); assert.equal(M.canCraft(s, furnace), false);
+  assert.equal(M.cook(s, 'meat'), false); assert.equal(M.cookDish(s, 'cheese'), false);
+  assert.equal(X.testerCraft(s, gated), false); assert.equal(X.testerCook(s, 'cheese'), false, 'tester rules are off outside tester mode');
+  X.unlockTester(s); const before = s.energy;
+  for (let i = 0; i < RECIPES.length; i++) assert.equal(X.testerCraft(s, i), true, RECIPES[i].result);
+  assert.equal(s.energy, before - RECIPES.reduce((n, r) => n + r.energy, 0), 'only each recipe\'s energy is paid');
+  for (const r of RECIPES) assert.ok(s.bag[r.result]! >= (r.count || 1), r.result);
+  const energy = s.energy; for (const c of X.COOKABLE) assert.equal(X.testerCook(s, c.id), true, c.id);
+  assert.equal(s.energy, energy, 'kitchen food stays free'); assert.equal(X.testerCook(s, 'meat'), false, 'only kitchen results');
+  s.energy = 0; assert.equal(X.testerCraft(s, RECIPES.findIndex(r => r.energy > 0)), false, 'workshop still costs energy');
+});
+
+test('tester forge maxes an owned weapon; normal forging keeps its costs and roll', () => {
+  const s = M.newGame(), sword = Object.keys(M.ITEMS).find(id => M.ITEMS[id].slot === 'weapon' && M.ITEMS[id].weapon && M.ITEMS[id].weapon!.kind !== 'rod')!;
+  M.addItem(s, sword); s.energy = 1_000_000;
+  assert.equal(X.testerForgeMax(s, sword), false); assert.equal(M.canForge(s, sword), false, 'no materials, no forging');
+  X.unlockTester(s); assert.equal(X.testerForgeMax(s, 'rod'), false);
+  assert.equal(X.testerForgeMax(s, sword), true); assert.equal(M.forgeLevel(s, sword), X.MAX_FORGE_LEVEL); assert.equal(X.testerForgeMax(s, sword), false);
+  assert.equal(M.parseSave(JSON.stringify(s))!.forge?.[sword], X.MAX_FORGE_LEVEL);
+});
+
+test('tester buttons and the kitchen section render only in tester mode', () => {
+  const s = M.newGame(); assert.equal(X.testerKitchenHtml(s), ''); assert.equal(X.testerMakeButton(s, 'tester-craft', 0, 5), '');
+  X.unlockTester(s); const html = X.testerKitchenHtml(s);
+  assert.equal((html.match(/data-action="tester-cook"/g) ?? []).length, X.COOKABLE.length); assert.match(html, /🧪 Tester/);
+});

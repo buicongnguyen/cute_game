@@ -12,6 +12,8 @@ export const VI_TESTER: Record<string, string> = {
   'That code is not quite right.': 'Mã này chưa đúng rồi.',
   'Tester mode on: {count} energy': 'Đã bật kiểm thử: {count} năng lượng',
   'Tester mode: every item without materials or level, still paid with energy.': 'Chế độ kiểm thử: mọi vật phẩm không cần nguyên liệu hay cấp độ, vẫn trả bằng năng lượng.',
+  'Tester mode: every item, crafted, forged and cooked ones too, without materials or level, still paid with energy.': 'Chế độ kiểm thử: mọi vật phẩm, kể cả đồ chế tạo, rèn và nấu, không cần nguyên liệu hay cấp độ, vẫn trả bằng năng lượng.',
+  'Categories': 'Danh mục',
   'Unlock all planets': 'Mở mọi hành tinh',
   'Max level': 'Cấp tối đa',
   'Rescue friends': 'Giải cứu bạn bè',
@@ -19,4 +21,9 @@ export const VI_TESTER: Record<string, string> = {
   '{name} is home!': '{name} đã về nhà!',
   'Tap again to confirm': 'Chạm lần nữa để xác nhận',
   'All planets unlocked': 'Đã mở mọi hành tinh',
+  'Kitchen: cooked food': 'Bếp: món nấu chín',
+  'Kitchen: farm dishes': 'Bếp: món từ trang trại',
+  'Cook anything, no ingredients': 'Nấu mọi món, không cần nguyên liệu',
+  'Make': 'Làm',
+  'Max': 'Tối đa',
 };
