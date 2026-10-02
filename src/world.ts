@@ -470,7 +470,7 @@ export class World {
   /** The animals' keep-out circles in the village: beds (by their frame), the pond with its bank, the pad, every building and decoration, the pen's props. */
   penKeepOut(){
     const out:{x:number;z:number;r:number}[]=[];
-    for(const e of this.entities){
+    for(const e of this.outdoorEntities){
       if(e.kind==='pen'||e.kind==='enemy'||e.kind==='dropped'||Math.hypot(e.x,e.z)>17)continue;
       out.push({x:e.x,z:e.z,r:e.kind==='plot'?M.BED_HALF*1.45:e.kind==='fish'?e.radius+.6:e.kind==='travel'?e.radius+.8:e.kind==='decoration'?.75:e.radius*.9});
     }
@@ -746,7 +746,7 @@ export class World {
     const gear=this.tryOnGear??this.state.gear;
     this.disposeTree(this.player);this.player.removeFromParent();this.player=this.avatar(this.state.color,{...gear,pet:undefined},this.tryOnLook??lookOf(this.state));this.player.rotation.order='YXZ';
     this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;this.playerMaterials.push(o.material);}});this.root.add(this.player);
-    this.disposeTree(this.companion);this.companion.removeFromParent();this.companion=gear.pet?this.petFor(gear.pet):new T.Group();addOutlines(this.companion,{merge:true});this.root.add(this.companion);
+    const pet=this.companion;this.disposeTree(pet);pet.removeFromParent();this.companion=gear.pet?this.petFor(gear.pet):new T.Group();this.companion.position.copy(pet.position);this.companion.rotation.copy(pet.rotation);addOutlines(this.companion,{merge:true});this.root.add(this.companion);
     this.interior?.adopt();
   }
 

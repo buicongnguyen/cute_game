@@ -8,7 +8,8 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { KitLibrary, heroKit, wearKit, weaponKit, petKit, modelUrl } from './assets.ts';
 import { toonMaterial } from './toon.ts';
-import { FURNITURE, FRIEND_SPOTS, HOUSE, ROOMS, WALL, WALLS, roomAt, type Placement } from './house.ts';
+import { FURNITURE, FRIEND_SPOTS, HOUSE, ROOMS, WALL, WALLS, roomAt, walkable, type Placement, type Point } from './house.ts';
+import { findRoute } from './navigation.ts';
 import { buildFriend } from './friend-view.ts';
 import { dropTree } from './dispose-tree.ts';
 import { friendStage } from './growth.ts';
@@ -92,7 +93,9 @@ export class HouseView {
   doorOpen = 0; doorTarget = 0;
   private statics: T.Mesh[] = [];
   /** Save-driven pieces (trophies, photos, paintings) merged into the same batch; see setDecor. */
-  private decor: DecorPlacement[] = []; private decorSig = '';
+  // Built empty in the constructor, so the signature starts as an empty save's (house-activities.ts decorSignature):
+  // with '' the first indoor frame rebuilt the whole interior for nothing.
+  private decor: DecorPlacement[] = []; private decorSig = '0||0';
   /** Live bits, one draw each: the fire's flames, steam and bubbles, and the ring under the thing you can use. */
   flame: T.Mesh; puffs: T.InstancedMesh; highlight: T.Mesh;
   private readonly m4 = new T.Matrix4(); private readonly q = new T.Quaternion(); private readonly v = new T.Vector3(); private readonly sc = new T.Vector3();
@@ -102,6 +105,15 @@ export class HouseView {
   /** Friends' hangouts changed this update (every SCHEDULE_SECONDS): the session then moves their tap circles. */
   moved = false;
   private kitBuilt = false;
+  /**
+   * Each friend's walk to its next hangout, round the walls and through the doorways (house.ts walkable): planned once
+   * per move (every SCHEDULE_SECONDS), so friends no longer cross walls on a straight line between rooms.
+   */
+  private walks = new Map<FriendId, { to: FriendView['spot']; points: Point[]; next: number }>();
+  private planWalk(v: FriendView) {
+    const from = { x: v.group.position.x, z: v.group.position.z }, route = findRoute(from, v.spot, [], { walkable, gridSize: .5, bounds: 16, clearance: 0, maxIterations: 4000 });
+    const walk = { to: v.spot, points: route.length ? route : [{ x: v.spot.x, z: v.spot.z }], next: 0 }; this.walks.set(v.id, walk); return walk;
+  }
   constructor() {
     this.scene.background = new T.Color('#2a1d1a');
     this.hemi = new T.HemisphereLight('#fff3df', '#b07a52', 1.55);
@@ -140,7 +152,7 @@ export class HouseView {
   }
   /** (Re)builds the static interior; uses the kit once it has loaded. */
   build() {
-    for (const mesh of this.statics) { this.root.remove(mesh); mesh.geometry.dispose(); }
+    for (const mesh of this.statics) { this.root.remove(mesh); mesh.geometry.dispose(); (mesh.material as T.Material).dispose(); }
     this.statics = [];
     const kit = houseKit.ready ? houseKit : null, plain: T.BufferGeometry[] = shellPieces(), glow: T.BufferGeometry[] = [];
     for (const p of [...FURNITURE, ...this.decor] as Array<Placement & { tint?: string }>) {
@@ -172,7 +184,7 @@ export class HouseView {
     this.build(); return true;
   }
   private buildDoor(kit: KitLibrary | null) {
-    for (const child of [...this.door.children]) { this.door.remove(child); (child as T.Mesh).geometry?.dispose(); }
+    for (const child of [...this.door.children]) { this.door.remove(child); (child as T.Mesh).geometry?.dispose(); ((child as T.Mesh).material as T.Material | undefined)?.dispose(); }
     // The hinge sits at the left post seen from inside; the panel's own hinge edge is its x = 0.
     this.door.position.set(.53, 0, HOUSE.bounds.z1);
     const parts = kit?.parts('door'), pieces = parts ? parts.map(part => baked(part.geometry, (part.material as T.MeshToonMaterial).color, part.matrix)) : [slab(1.06, 1.95, .08, .53, .975, 0, '#d8643c')];
@@ -231,12 +243,20 @@ export class HouseView {
     this.doorOpen += (this.doorTarget - this.doorOpen) * (1 - Math.exp(-dt * 10));
     this.door.rotation.y = -this.doorOpen * 1.7;
     for (const v of this.friends.values()) {
-      const body = v.group.children[0], t = time + v.seed, g = v.group, dx = v.spot.x - g.position.x, dz = v.spot.z - g.position.z, far = Math.hypot(dx, dz);
-      // Walk to the next hangout with a little bounce, then settle into its pose.
-      if (far > .05) { const step = Math.min(far, dt * 1.6); g.position.x += dx / far * step; g.position.z += dz / far * step; g.position.y = 0; g.rotation.y = Math.atan2(dx, dz); if (body) { body.position.y = Math.abs(Math.sin(t * 9)) * .07; body.rotation.z = 0; } continue; }
+      const body = v.group.children[0], t = time + v.seed, g = v.group;
+      let walk = this.walks.get(v.id); if (!walk || walk.to !== v.spot) walk = this.planWalk(v);
+      // Waypoint by waypoint; the last one is the hangout itself.
+      let goal = walk.points[Math.min(walk.next, walk.points.length - 1)], dx = goal.x - g.position.x, dz = goal.z - g.position.z, far = Math.hypot(dx, dz);
+      while (far <= .05 && walk.next < walk.points.length - 1) { walk.next++; goal = walk.points[walk.next]; dx = goal.x - g.position.x; dz = goal.z - g.position.z; far = Math.hypot(dx, dz); }
+      const arm = body && part(body, 'arm-right'), legL = body && part(body, 'leg-left'), legR = body && part(body, 'leg-right');
+      // Walk to the next hangout with a little bounce and swinging legs (not the seated or raised-arm pose it left), then settle into its pose.
+      if (far > .05) {
+        const step = Math.min(far, dt * 1.6); g.position.x += dx / far * step; g.position.z += dz / far * step; g.position.y = 0; g.rotation.y = Math.atan2(dx, dz);
+        if (body) { body.position.y = Math.abs(Math.sin(t * 9)) * .07; body.rotation.z = 0; body.rotation.x = 0; const swing = Math.sin(t * 9) * .5; if (legL) legL.rotation.x = swing; if (legR) legR.rotation.x = -swing; if (arm) armPose(arm, 'walk', t); }
+        continue;
+      }
       g.position.y = v.spot.y ?? 0;
       if (!body) continue;
-      const arm = part(body, 'arm-right'), legL = part(body, 'leg-left'), legR = part(body, 'leg-right');
       if (v.spot.pose !== 'sit') { if (legL) legL.rotation.x = 0; if (legR) legR.rotation.x = 0; body.rotation.z = 0; }
       body.rotation.x = v.spot.pose === 'read' ? .12 : 0;
       if (v.spot.pose === 'sit') { if (legL) legL.rotation.x = -1.35; if (legR) legR.rotation.x = -1.35; body.position.y = -.55 + Math.sin(t * 2) * .02; body.rotation.z = Math.sin(t * .7) * .04; }

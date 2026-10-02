@@ -113,10 +113,11 @@ export interface LogRow { id: string; label: string; icon: string; have: number;
 const ZONE_BOSSES = new Set(Object.entries(PLANETS).flatMap(([id, p]) => p.bosses.map(b => `${id}:${b}`)));
 const TITAN_IDS = Object.keys(TITANS);
 /** Items the log counts: real things a player can still get (not effects such as the guard dog's protection, not keepsakes). */
-export const COLLECTIBLE_ITEMS = Object.keys(ITEMS).filter(id => ITEMS[id].type !== 'effect' && !ITEMS[id].keepsake);
+// A function, not a constant: farm.ts adds its products to ITEMS when it loads, which may be after this module.
+export const collectibleItems = () => Object.keys(ITEMS).filter(id => ITEMS[id].type !== 'effect' && !ITEMS[id].keepsake);
 /** The study's collection log: what you have found of each kind, as counts and a percentage. */
 export function collectionLog(s: Game.SaveState): { rows: LogRow[]; pct: number } {
-  const fish = Object.keys(FISH), items = COLLECTIBLE_ITEMS, beaten = s.bosses ?? [];
+  const fish = Object.keys(FISH), items = collectibleItems(), beaten = s.bosses ?? [];
   const row = (id: string, label: string, icon: string, have: number, total: number): LogRow => ({ id, label, icon, have: Math.min(have, total), total, pct: total ? Math.round(Math.min(have, total) / total * 100) : 0 });
   const rows = [
     row('fish', 'Fish caught', '🐟', fish.filter(f => (s.fishRecords[f] ?? 0) > 0 || s.collection[f]).length, fish.length),

@@ -12,6 +12,7 @@ import { World, type Entity, type Enemy } from './world.ts';
 import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, KIT_FILES } from './assets.ts';
 import { onArtLoaded } from './art-retry.ts';
 import { LateArtQueue } from './late-art.ts';
+import { parseHouse } from './house-activities.ts';
 import { HOUSE_FILE } from './house-view.ts';
 import { initArtNote } from './art-status.ts';
 import { SpaceFlight, planRoutes, type RouteOption, type SpaceEvent } from './space.ts';
@@ -84,7 +85,8 @@ const $ = <T extends HTMLElement = HTMLElement>(selector: string) => {let el=$fo
 const setText=(el:Element,v:string)=>{if(el.textContent!==v)el.textContent=v;};
 const lastHtml=new WeakMap<Element,string>();
 const setHtml=(el:Element,v:string)=>{if(lastHtml.get(el)===v)return false;lastHtml.set(el,v);el.innerHTML=v;return true;};
-const setWidth=(el:HTMLElement,v:string)=>{if(el.style.width!==v)el.style.width=v;};
+const lastWidth=new WeakMap<Element,string>();
+const setWidth=(el:HTMLElement,v:string)=>{if(lastWidth.get(el)===v)return;lastWidth.set(el,v);el.style.width=v;};
 /** The discovery pill's size, measured once per text change (its text is set in one place); 0 = measure again. */
 const discoverySize={w:0,h:0};
 // Sized by a ResizeObserver (after layout) instead of offsetWidth: reading it when the pill appears forced a ~60 ms layout on slow phones.
@@ -1054,7 +1056,7 @@ export const gameBridge:GameBridge={
   getState:()=>state,getWorld:()=>world,
   getPresence:()=>({y:house.poseY(world.position.y),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot()}),
   getOfflineState:()=>{try{return M.parseSave(localStorage.getItem(M.SAVE_KEY));}catch{return null;}},
-  applyState(next){fishingEpoch++;fishingView.resetMysteryAvailability();if(flight)exitSpace();shipSequence?.reset();arriving=false;autopilotTarget=null;state=next;applyMovePad();const nameInput=document.querySelector<HTMLInputElement>('#name-input');if(nameInput)nameInput.value=state.name;visiting=null;visitHome=null;world.state=state;resetCombat();world.build(state.planet);world.refreshPlayer();if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal)closeDialog();updateHud();updateLabels();},
+  applyState(next){fishingEpoch++;fishingView.resetMysteryAvailability();if(flight)exitSpace();shipSequence?.reset();arriving=false;autopilotTarget=null;homeQueued=false;state=next;applyMovePad();const nameInput=document.querySelector<HTMLInputElement>('#name-input');if(nameInput)nameInput.value=state.name;visiting=null;visitHome=null;world.state=state;resetCombat();world.build(state.planet);world.refreshPlayer();if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal)closeDialog();updateHud();updateLabels();},
   setPersistence(handler){persistence=handler;},
   setActionHandler(handler){actionHandler=handler;world.authoritativeAction=handler?intent=>handler(intent).then(reply=>reply.result):undefined;},
   applyAuthoritativeState(next){
@@ -1080,7 +1082,7 @@ export const gameBridge:GameBridge={
       updateLabels();return;
     }
     visiting=owner;resetCombat();closeDialog();
-    if(owner&&home){visitHome={...structuredClone(state),name:home.name??state.name,planet:'home',discovered:[...(home.discovered??['home'])],plots:structuredClone(home.plots??state.plots),decorations:structuredClone(home.decorations??[]),farm:M.parseFarm((home as {farm?:unknown}).farm),helper:M.parseHelper((home as {helper?:unknown}).helper),friends:M.parseFriends((home as {friends?:unknown}).friends),bosses:M.parseBosses((home as {bosses?:unknown}).bosses)};world.state=visitHome;rebuildHomePresentation('home');}
+    if(owner&&home){visitHome={...structuredClone(state),name:home.name??state.name,planet:'home',discovered:[...(home.discovered??['home'])],plots:structuredClone(home.plots??state.plots),decorations:structuredClone(home.decorations??[]),farm:M.parseFarm((home as {farm?:unknown}).farm),helper:M.parseHelper((home as {helper?:unknown}).helper),friends:M.parseFriends((home as {friends?:unknown}).friends),bosses:M.parseBosses((home as {bosses?:unknown}).bosses),house:parseHouse((home as {house?:unknown}).house)};world.state=visitHome;rebuildHomePresentation('home');}
     else{visitHome=null;world.state=state;rebuildHomePresentation(state.planet);}
     world.refreshPlayer();$('#visit-banner').hidden=!owner;$('#visit-banner').textContent=t(owner?t('Visiting {owner} · look around their garden',{owner}):'');updateLabels();
   },
@@ -1162,7 +1164,7 @@ async function arrive(id:M.PlanetId){
     const p=M.PLANETS[id];
     ship.land(()=>{showZone(id==='home'?'Clover Village':t(p.name));floating(`${p.icon} ${t(p.name)}`,world.position.x,world.position.z,'level',1);toast(id==='home'?'Home, sweet home!':t('Welcome to {planet}! Watch out for its creatures.',{planet:t(p.name)}),p.icon);
       if(homeQueued){homeQueued=false;if(state.planet!=='home')flyHome();}});
-  }finally{if(state===arrivingState){arriving=false;setTimeout(()=>flash.classList.remove('show'),150);}else flash.classList.remove('show');}
+  }finally{if(state===arrivingState){arriving=false;setTimeout(()=>flash.classList.remove('show'),150);}else{homeQueued=false;flash.classList.remove('show');}}
 }
 function updateSpace(dt:number){
   if(!flight)return;
@@ -1315,8 +1317,8 @@ let previous=performance.now(),wasAirborne=false;
 function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt=Math.min(1,(now-previous)/1000);previous=now;elapsed+=realDt;uiElapsed+=realDt;
   // HUD panel boxes are read at the top of the frame, while layout is still clean from the last one; read after
   // this frame's HUD writes they forced a synchronous layout eight times a second (PERF-ANALYSIS.md).
-  if(uiElapsed>.12&&started){measureHud();hudFresh=true;}
   if(flight&&!arriving){updateSpace(realDt);if(uiElapsed>.12){uiElapsed=0;updateHud();}if(elapsed>8){elapsed=0;save();}requestAnimationFrame(frame);return;}
+  if(uiElapsed>.12&&started){measureHud();hudFresh=true;}
   ship.update(realDt,world.time);
   // Hit-stop: after a critical hit the world runs at a tenth of its speed for a heartbeat.
   let dt=realDt;const fx=world.fx;if(fx&&fx.hitstop>0){fx.hitstop-=realDt;dt*=.1;}
