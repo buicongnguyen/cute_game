@@ -10,6 +10,7 @@ import { KitLibrary, heroKit, wearKit, weaponKit, petKit } from './assets.ts';
 import { toonMaterial } from './toon.ts';
 import { FURNITURE, FRIEND_SPOTS, HOUSE, ROOMS, WALL, WALLS, roomAt, type Placement } from './house.ts';
 import { buildFriend } from './friend-view.ts';
+import { friendStage } from './growth.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends.ts';
 
 const assetBase = import.meta.env?.BASE_URL ?? '/';
@@ -144,11 +145,11 @@ export class HouseView {
     list = list.filter(f => f.home); // only friends who reached home stand in the big room; followers are still out with the explorer
     const seen = new Set<FriendId>();
     list.forEach((friend, index) => {
-      const spot = FRIEND_SPOTS[index % FRIEND_SPOTS.length], signature = JSON.stringify(friend.gear) + index + kitStamp(), known = this.friends.get(friend.id);
+      const spot = FRIEND_SPOTS[index % FRIEND_SPOTS.length], signature = JSON.stringify(friend.gear) + index + kitStamp() + friendStage(friend), known = this.friends.get(friend.id);
       seen.add(friend.id);
       if (known && known.signature === signature) return;
       if (known) this.dropFriend(known);
-      const group = buildFriend(friend.id, friend.gear); group.userData.friendId = friend.id;
+      const group = buildFriend(friend.id, friend.gear, friendStage(friend)); group.userData.friendId = friend.id;
       // Friends are small and keep still: they skip the shadow pass (it would cost a draw per part).
       group.traverse(o => { o.castShadow = false; });
       group.position.set(spot.x, spot.y ?? 0, spot.z); group.rotation.y = spot.facing;

@@ -1,11 +1,12 @@
 import type { GameBridge, NetworkDrop } from './game-bridge.ts';
 import { newGame, type SaveState, type PlanetId } from './model.ts';
+import type { LookId } from './looks.ts';
 import './online.css';
 import { t, onLanguageChange } from './i18n.ts';
 import {gameplayKey} from './gameplay-controls.ts';
 import type {GameIntent,ActionReply} from './actions.ts';
 
-interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string }
+interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];look?:LookId;online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string }
 interface Home extends Explorer { discovered?:PlanetId[]; plots:SaveState['plots'];farm?:SaveState['farm'];placed?:unknown[];decorations?:unknown[];helper?:unknown;friends?:unknown[] }
 interface EnemyState { id:string;x:number;z:number;hp:number;maxHp:number;[key:string]:unknown }
 interface NetworkWorld {

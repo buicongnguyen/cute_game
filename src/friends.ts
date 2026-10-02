@@ -1,3 +1,4 @@
+import { growUp } from './growth.ts';
 import * as M from './model.ts';
 import { seedFor } from './helper.ts';
 import { CAGES, FRIENDS, FRIEND_IDS, FRIEND_SLOTS, friendSlot, type Friend, type FriendId, type FriendRole, type FriendSlot } from './friends-state.ts';
@@ -28,6 +29,7 @@ import { CAGES, FRIENDS, FRIEND_IDS, FRIEND_SLOTS, friendSlot, type Friend, type
 export type { Friend, FriendId, FriendRole, FriendSlot };
 export { FRIENDS, FRIEND_IDS, CAGES };
 
+export { growUp, friendStage, friendHeight, GROWTH } from './growth.ts';
 export function friendsOf(s: M.SaveState): Friend[] { return s.friends ?? []; }
 export const friendOf = (s: M.SaveState, id: FriendId) => friendsOf(s).find(f => f.id === id);
 
@@ -79,7 +81,7 @@ export interface WorkResult { kind: FriendTask['kind']; raw: Record<string, numb
 const dist = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
 const ripe = (p: M.Plot, now: number) => !!p.crop && M.cropProgress(p, now) >= 1;
 const UTC_DAY = 86_400_000;
-function tally(f: Friend, n: number, now: number) { const day = Math.floor(now / UTC_DAY); if (f.day !== day) { f.day = day; f.done = 0; } f.done = (f.done ?? 0) + n; }
+function tally(f: Friend, n: number, now: number) { const day = Math.floor(now / UTC_DAY); if (f.day !== day) { f.day = day; f.done = 0; } f.done = (f.done ?? 0) + n; f.jobs = (f.jobs ?? 0) + n; growUp(f, now); }
 /** Work done today, for the status line. */
 export const doneToday = (f: Friend, now = Date.now()) => f.day === Math.floor(now / UTC_DAY) ? f.done ?? 0 : 0;
 
@@ -173,7 +175,8 @@ export function friendsCatchUp(s: M.SaveState, now = Date.now(), cap = FRIEND_CA
   const out: Partial<Record<FriendId, { jobs: number; cooked: number }>> = {};
   if (s.planet !== 'home') return out;
   for (const id of FRIEND_IDS) {
-    const f = friendOf(s, id); if (!working(s, f)) continue;
+    const f = friendOf(s, id); if (f?.home) growUp(f, now); // days at home count even for a friend on a break
+    if (!working(s, f)) continue;
     let jobs = 0, cooked = 0;
     const run = (task: FriendTask) => { if (jobs >= cap) return; const r = friendWork(s, id, task, now); if (r) { jobs++; cooked += Object.values(r.cooked).reduce((a, b) => a + b, 0); } };
     if (f.role !== 'farm') for (let i = 0; i < s.plots.length; i++) {

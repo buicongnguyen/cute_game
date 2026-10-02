@@ -2,6 +2,7 @@ import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TAB
 import { createProgression, normalizeProgression, recordEvent, progressEntries, claimProgress, type ProgressionState } from './progression.ts';
 import { parseHelper, type HelperState } from './helper-state.ts';
 import { parseFriends, parseBosses, noteBossDefeat, type Friend } from './friends-state.ts';
+import { parseLooks, type Looks } from './looks.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
 import { LEGACY_CROP_IDS } from './content.ts';
@@ -120,6 +121,8 @@ export interface SaveState {
     friends?: Friend[];
     /** Bosses defeated at least once, as planet:type: they unlock the prisoners' cages for good (a respawn never re-locks one). */
     bosses?: string[];
+    /** Explorer body styles bought at the mirror (looks.ts); missing in older saves = the default look only. */
+    looks?: Looks;
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
@@ -659,6 +662,7 @@ export function parseSave(raw: string | null): SaveState | null {
         const hunting = parseHunting(v.hunting); if (hunting) s.hunting = hunting;
         if (record(v.helper)) s.helper = parseHelper(v.helper);
         const friends = parseFriends(v.friends), bosses = parseBosses(v.bosses); if (friends.length) s.friends = friends; if (bosses.length) s.bosses = bosses;
+        const looks = parseLooks(v.looks); if (looks) s.looks = looks;
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
         if (record(v.collection))
             for (const [id, n] of Object.entries(v.collection))

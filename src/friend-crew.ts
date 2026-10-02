@@ -2,7 +2,7 @@ import * as T from 'three';
 import * as M from './model.ts';
 import { cageKit, heroKit, wearKit, weaponKit, petKit } from './assets.ts';
 import { buildFriend, poseFriend, FRIEND_SCALE, type FriendPose } from './friend-view.ts';
-import { CAGES, FRIENDS, FRIEND_IDS, cageState, friendsOf, inVillage, nextFriendTask, type CageState, type Friend, type FriendId, type FriendTask, type WorkResult } from './friends.ts';
+import { CAGES, FRIENDS, FRIEND_IDS, cageState, friendsOf, inVillage, nextFriendTask, friendStage, friendHeight, type CageState, type Friend, type FriendId, type FriendTask, type WorkResult } from './friends.ts';
 import type { World, Entity } from './world.ts';
 
 /**
@@ -46,6 +46,8 @@ export interface CrewHost {
   locked(id: FriendId): void;
   worked(id: FriendId, task: FriendTask, result: WorkResult, at: { x: number; z: number }): void;
   arrived(ids: FriendId[]): void;
+  /** A friend reached a new growth stage (optional: tests and older hosts leave it out). */
+  grew?(id: FriendId, stage: number): void;
 }
 
 interface Actor {
@@ -148,19 +150,26 @@ export class FriendCrew {
   // ---- Friends ----
   private actor(id: FriendId, f: Friend): Actor {
     let a = this.actors.get(id);
-    const sig = JSON.stringify(f.gear) + this.kitSig();
-    if (a && a.sig !== sig) { a.root.removeFromParent(); a.root = this.dress(id, f); a.sig = sig; this.group.add(a.root); }
+    const stage = friendStage(f), sig = JSON.stringify(f.gear) + this.kitSig() + stage;
+    if (a && a.sig !== sig) {
+      const grew = stage > (a.root.userData.stage ?? 0);
+      a.root.removeFromParent(); a.root = this.dress(id, f); a.sig = sig; this.group.add(a.root); this.fitProxy(a.entity.mesh, stage);
+      // The "grew up!" moment: a cheer, a sparkle and a line (main.ts shows it) when the saved stage rises.
+      if (grew) { a.cheerT = 1.8; this.host.world.fx?.burst(new T.Vector3(a.x, 1, a.z), { n: 16, color: ['#ffe66d', '#ffffff', '#9be15d'], glow: true, speed: 3, up: 6 }); this.host.grew?.(id, stage); }
+    }
     if (a) return a;
     const proxy = new T.Group(); proxy.name = 'friend-proxy-' + id;
     // An undrawn box of the friend's height, so the name label (main.ts labelHeight) sits just above its head.
     PROXY_BOX ??= new T.BoxGeometry(.5, 1.05, .5).translate(0, .52, 0); PROXY_BOX.userData.sharedKit = true;
-    const box = new T.Mesh(PROXY_BOX); box.visible = false; proxy.add(box);
+    const box = new T.Mesh(PROXY_BOX); box.visible = false; proxy.add(box); this.fitProxy(proxy, stage);
     a = { id, root: this.dress(id, f), sig, entity: { id: 'friend:' + id, kind: 'friend', name: FRIENDS[id].name, icon: ICONS[f.role], mesh: proxy, x: 0, z: 0, radius: .35, index: FRIEND_IDS.indexOf(id) },
       x: POSTS[id].x, z: POSTS[id].z, facing: 0, t: Math.random() * 9, stride: 0, pose: 'idle', task: null, workT: 0, think: 0, cookT: 0, cheerT: 0, pending: false, wander: 0 };
     this.group.add(a.root); this.actors.set(id, a); return a;
   }
   /** Freed friends wear a work hat (display only, never saved) unless the player gave them one; prisoners have none. */
-  private dress(id: FriendId, f: Friend) { const r = buildFriend(id, { hat: WORK_HATS[id], ...f.gear }); r.userData.friend = id; return r; }
+  private dress(id: FriendId, f: Friend) { const r = buildFriend(id, { hat: WORK_HATS[id], ...f.gear }, friendStage(f)); r.userData.friend = id; return r; }
+  /** The label box grows with the friend, so the name stays just above its head. */
+  private fitProxy(proxy: T.Object3D, stage: number) { proxy.scale.set(1, friendHeight(stage) / friendHeight(0), 1); }
   private hide(a: Actor) { a.root.visible = false; this.setEntity(a, false); }
   private setEntity(a: Actor, on: boolean) {
     const w = this.host.world, has = w.entities.includes(a.entity);

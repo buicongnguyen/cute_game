@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toonMaterial } from './toon.ts';
 import { HERO_SCALE } from './world.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends-state.ts';
+import { friendHeight } from './growth.ts';
 import type { SaveState } from './model.ts';
 
 /**
@@ -14,6 +15,8 @@ import type { SaveState } from './model.ts';
  * and the hero kit's baked-colour parts; only the head geometry is copied, to recolour the baked hair.
  */
 export const FRIEND_SCALE = HERO_SCALE * .5;
+/** The root scale at a growth stage (growth.ts): 0.5, 0.75 or 0.8 of the explorer's height. */
+export const friendScale = (stage = 0) => HERO_SCALE * friendHeight(stage);
 type Dresser = (color: string, gear: SaveState['gear']) => T.Group;
 let dresser: Dresser | null = null;
 /** main.ts registers World.friendAvatar here once the world exists. */
@@ -84,18 +87,18 @@ function standIn(tint: string, hair: string, wear: SaveState['gear'] = {}) {
 }
 
 /** The friend's model: hero kit, tinted, dressed, at half the explorer's size; stands on y = 0, faces +z. */
-export function buildFriend(id: FriendId, gear: Friend['gear'] = {}): T.Group {
+export function buildFriend(id: FriendId, gear: Friend['gear'] = {}, stage = 0): T.Group {
   const look = FRIENDS[id], wear: SaveState['gear'] = { hat: gear.hat, outfit: gear.outfit, boots: gear.boots, weapon: gear.weapon, pet: gear.pet };
   for (const k of Object.keys(wear) as (keyof typeof wear)[]) if (!wear[k]) delete wear[k];
   const model = dresser ? dresser(look.tint, wear) : standIn(look.tint, look.hair, wear);
   recolourHair(model, look.hair); mergeParts(model);
   model.rotation.order = 'YXZ';
   model.traverse(o => { if (o instanceof T.Mesh) { o.castShadow = false; o.receiveShadow = false; } });
-  const pet = model.getObjectByName('remote-pet'); if (pet) pet.scale.setScalar(1.4); // a pet stays readable beside a half-size friend
-  const root = new T.Group(); root.name = 'friend-' + id; root.scale.setScalar(FRIEND_SCALE); root.add(model);
+  const pet = model.getObjectByName('remote-pet'); if (pet) pet.scale.setScalar(.7 / friendHeight(stage)); // a pet stays readable beside a small friend (1.4 at half size)
+  const scale = friendScale(stage), root = new T.Group(); root.name = 'friend-' + id; root.scale.setScalar(scale); root.add(model); root.userData.stage = stage;
   blobGeometry ??= new T.CircleGeometry(.36, 14); blobMaterial ??= new T.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: .2, depthWrite: false });
   blobGeometry.userData.sharedKit = true; blobMaterial.userData.sharedKit = true;
-  const blob = new T.Mesh(blobGeometry, blobMaterial); blob.scale.setScalar(1 / FRIEND_SCALE); blob.rotation.x = -Math.PI / 2; blob.position.y = .03 / FRIEND_SCALE; blob.name = 'friend-blob'; root.add(blob);
+  const blob = new T.Mesh(blobGeometry, blobMaterial); blob.scale.setScalar(1 / FRIEND_SCALE) /* grows with the friend: .36 m at half size */; blob.rotation.x = -Math.PI / 2; blob.position.y = .03 / scale; blob.name = 'friend-blob'; root.add(blob);
   root.userData.model = model;
   return root;
 }
@@ -124,5 +127,5 @@ export function poseFriend(root: T.Group, pose: FriendPose, t: number, stride = 
     case 'cheer': { const k = Math.abs(Math.sin(t * 8)); armL?.rotation.set(-2.6, 0, -.4); armR?.rotation.set(-2.6, 0, .4); lift = k * .12; break; }
     default: armL?.rotation.set(0, 0, -.3 - Math.sin(t * 2) * .05); armR?.rotation.set(0, 0, .3 + Math.sin(t * 2) * .05); head?.rotation.set(0, Math.sin(t * .6) * .3, 0); lift = Math.sin(t * 2.4) * .004;
   }
-  model.rotation.x = lean; model.rotation.z = roll; model.position.y = lift / FRIEND_SCALE; // the root carries the half scale
+  model.rotation.x = lean; model.rotation.z = roll; model.position.y = lift / (root.scale.x || FRIEND_SCALE); // the root carries the friend's scale
 }

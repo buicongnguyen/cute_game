@@ -13,7 +13,7 @@ import { buildPond } from './pond-view.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
+import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, heroKitFor, tuckEars, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
 import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
@@ -39,6 +39,7 @@ import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
+import {FIT,isLook,lookOf,type Fit,type LookId} from './looks.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
@@ -54,7 +55,7 @@ export interface Enemy { resting?:boolean;lod?:{wait:number;age:number;x:number;
 export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;resistAt?:number }
 export interface AvatarVisual {size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
 export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
-export interface RemotePose {visual?:Partial<AvatarVisual>;id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];hp?:number;level?:number}
+export interface RemotePose {visual?:Partial<AvatarVisual>;id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
 export interface EnemySnapshot {titanAttacks?:TitanAttack[];titanLift?:number;chaseGrace?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
 export interface EnvironmentSnapshot {time:number;lamps:Array<[number,number]>;eclipseUntil?:number;weather?:LavaWeatherSnapshot;nestLevel?:number;fireRain?:EnvironmentSimulation['fireRain'];lightning?:LightningState}
@@ -99,6 +100,8 @@ function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 
 export const HERO_SCALE = .84;
 /** The explorer model's height before HERO_SCALE (hero.glb), so the explorer stands about 1.93 m. */
 export const HERO_MODEL_HEIGHT = 2.3;
+/** hero_spec.PIVOTS (and HANDS) in three.js space: where gear is modelled, before a body style's FIT moves it. */
+export const DEFAULT_PIVOTS:Record<string,[number,number,number]>={body:[0,.85,0],head:[0,1.12,0],'arm-left':[-.37,1.08,-.02],'arm-right':[.37,1.08,-.02],'leg-left':[-.18,.52,0],'leg-right':[.18,.52,0],'hand-left':[-.37,.72,.05],'hand-right':[.37,.72,.05]};
 // Creature AI level of detail, as in the reference: calm creatures farther than this from every explorer do not think.
 const AI_REST_RANGE=48,EXPLORER_RADIUS=.45;
 /** A* steps for a creature walking home (about a 35 m square of 1 m cells): enough around fences and ponds, never a long stall. */
@@ -622,11 +625,14 @@ export class World {
   /** Puts a kit gear piece on the explorer; each piece rides the body part named by its tag. */
   private wearKit(hero:T.Object3D,id:string|undefined,fallback:string){
     const kit=id?this.kitFor(id):null,item=kit&&heroKit.ready?kit.instance(weaponModelName(id!)):null;if(!item)return false;
-    hero.updateMatrixWorld(true);const toHero=hero.matrixWorld.clone().invert();
+    hero.updateMatrixWorld(true);const toHero=hero.matrixWorld.clone().invert(),fits=hero.userData.fit as Partial<Record<string,Fit>>|undefined;
     for(const piece of [...item.children]){
-      const part=hero.getObjectByName(piece.userData.tag??fallback)??hero;
-      // Pieces are modelled in explorer space; re-express them in the part's own space.
-      piece.applyMatrix4(toHero.clone().multiply(part.matrixWorld).invert());part.add(piece);
+      const tag=piece.userData.tag??fallback,part=hero.getObjectByName(tag)??hero,fit=part!==hero?fits?.[tag]:undefined;
+      // Pieces are modelled in explorer space; re-express them in the part's own space. A body style that moves its
+      // pivots (looks.ts FIT) places the piece relative to the default pivot, then scales and shifts it to the new part.
+      if(fit){piece.applyMatrix4(new T.Matrix4().makeTranslation(-DEFAULT_PIVOTS[tag][0],-DEFAULT_PIVOTS[tag][1],-DEFAULT_PIVOTS[tag][2]));piece.applyMatrix4(new T.Matrix4().makeScale(...fit.scale).premultiply(new T.Matrix4().makeTranslation(...fit.offset)));}
+      else piece.applyMatrix4(toHero.clone().multiply(part.matrixWorld).invert());
+      part.add(piece);
     }
     return true;
   }
@@ -651,12 +657,15 @@ export class World {
    * The explorer in its gear. Each slot uses its Blender model when the kit has it and
    * falls back to simple shapes otherwise, so a missing file never leaves a slot empty.
    */
-  private avatar(color:string,gear:SaveState['gear']={}){
+  private avatar(color:string,gear:SaveState['gear']={},look:LookId='default'){
     const disguise=gear.disguise?M.DISGUISES[gear.disguise]:undefined,id=gear.disguise??'';
     const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready;
-    const tint=disguise&&!kitDisguise?disguise.color:color,c=heroKit.instance(tint)??this.chibi(tint);
+    // A body style downloads on first use; the default explorer stands in until it arrives.
+    const styled=isLook(look)?heroKitFor(look):heroKit;if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
+    const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint)??this.chibi(tint);
+    c.userData.look=base===heroKit?'default':look;if(base!==heroKit&&Object.keys(FIT[look]).length)c.userData.fit=FIT[look];
     // The sprout pokes through hats and most costumes; the fairy crown and hero mask leave it showing.
-    const leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=!gear.hat&&(!id||(kitDisguise&&['dz_fairy','dz_superhero'].includes(id)));
+    const top=!gear.hat&&(!id||(kitDisguise&&['dz_fairy','dz_superhero'].includes(id))),leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=top;tuckEars(c,!top);
     if(id){if(!kitDisguise)this.simpleDisguise(c,id,disguise!.color);}
     else{
       if(gear.hat&&!this.wearKit(c,gear.hat,'head'))this.simpleHat(c,gear.hat);
@@ -709,13 +718,17 @@ export class World {
   }
   /** A rescued friend's body (friend-view.ts buildFriend): the explorer's model and wear-kit path, in the friend's colour. */
   friendAvatar(color:string,gear:SaveState['gear']){return this.avatar(color,gear);}
+  /** An explorer in a body style, for the mirror's portraits (look-shop.ts). */
+  lookAvatar(color:string,gear:SaveState['gear'],look:LookId){return this.avatar(color,gear,look);}
+  /** A body style shown while previewing at the mirror: local only, never saved or sent online. */
+  tryOnLook?:LookId|null;
   /** The cottage interior while the explorer is inside (house-session.ts): its own scene, walkable plan, and hooks to re-home the explorer and to drop it on a rebuild. */
   interior?:{scene:T.Scene;root:T.Group;walkable:(p:Point)=>boolean;drop:()=>void;adopt:()=>void}|null;
   /** Gear shown on the explorer while trying something on in a menu: local only, never saved or sent online. */
   tryOnGear?:SaveState['gear']|null;
   refreshPlayer() {
     const gear=this.tryOnGear??this.state.gear;
-    this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...gear,pet:undefined});this.player.rotation.order='YXZ';
+    this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...gear,pet:undefined},this.tryOnLook??lookOf(this.state));this.player.rotation.order='YXZ';
     this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;this.playerMaterials.push(o.material);}});this.root.add(this.player);
     this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=gear.pet?this.petFor(gear.pet):new T.Group();addOutlines(this.companion,{merge:true});this.root.add(this.companion);
     this.interior?.adopt();
@@ -903,8 +916,8 @@ export class World {
       if(snapshot.shots){this.enemyShots??=[];const ids=new Set(snapshot.shots.map(s=>s.id));for(let i=this.enemyShots.length-1;i>=0;i--)if(this.enemyShots[i].ownerId===e.id&&!ids.has(this.enemyShots[i].id)){const old=this.enemyShots[i];this.scene.remove(old.mesh);old.mesh.geometry.dispose();this.enemyShots.splice(i,1);}for(const source of snapshot.shots){if(![source.x,source.y,source.z,source.vx,source.vz,source.life,source.damage].every(Number.isFinite)||source.life<=0)continue;let shot=this.enemyShots.find(s=>s.id===source.id);if(!shot){const model=ball(e.definition?.accent??'#ffbb72',.17);this.scene.add(model);shot={...source,ownerId:e.id,mesh:model};this.enemyShots.push(shot);}Object.assign(shot,{vx:source.vx,vz:source.vz,life:source.life,damage:source.damage,targetEnemyId:source.targetEnemyId});shot.mesh.position.set(source.x,source.y,source.z);}}
     }}
   receiveRemoteHit(id:string,amount:number,stun=0){const e=this.enemies.find(e=>e.id===id);if(!e||e.hp<=0||!Number.isFinite(amount)||amount<0)return false;this.damageEnemy(e,amount,stun);return true;}
-  addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear);avatar.userData.remoteId=id;this.remoteRoot.add(avatar);this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
-  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;remote.mesh.position.set(current.x,(current.y??0)-(indoor?INDOOR_Y:0),current.z);remote.mesh.rotation.y=current.facing??0;this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
+  addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear,pose.look);avatar.userData.remoteId=id;this.remoteRoot.add(avatar);this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
+  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear,pose.look??remote.pose.look);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;remote.mesh.position.set(current.x,(current.y??0)-(indoor?INDOOR_Y:0),current.z);remote.mesh.rotation.y=current.facing??0;this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
   visualSnapshot():AvatarVisual{return {size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
     const opacity=visual?.stealth?.25:1;

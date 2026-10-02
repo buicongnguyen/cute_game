@@ -13,6 +13,7 @@ import { HouseSession, type FriendEntity } from './house-session.ts';
 import { houseKit } from './house-view.ts';
 import { FRIENDS, friendsOf, type FriendId } from './friends.ts';
 import { buildFriend } from './friend-view.ts';
+import { friendStage } from './growth.ts';
 import { modelIcon } from './icons.ts';
 import { toonMaterial } from './toon.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -25,6 +26,8 @@ export interface HouseDeps {
   closeDialog(): void; modal(): string | null;
   toast(message: string, icon?: string): void; tone(kind?: string): void;
   ownGear(): void; iconUrl(id: string): string;
+  /** The mirror's Look shop (look-shop.ts); without it the mirror opens your gear like the wardrobe. */
+  looks?(): void;
 }
 /** A save made inside resumes inside: this device remembers the explorer was in the cottage. */
 const INSIDE_KEY = 'zoo-garden-indoors';
@@ -113,7 +116,7 @@ export function initHouse(d: HouseDeps) {
       if (!pending && !d.blocked() && world.moving && world.position.z > HOUSE.spawn.z + .65 && Math.abs(world.position.x) < .75 && Math.cos(world.facing) > .5) leave();
     } else if (!pending && !d.blocked() && world.planet === 'home' && world.moving && Math.hypot(world.position.x - HOUSE.outdoorDoor.x, world.position.z - HOUSE.outdoorDoor.z) < 1.45 && Math.cos(world.facing) < -.5) enter();
   };
-  const portrait = (id: FriendId) => { const f = friendList().find(x => x.id === id); return f ? modelIcon(`friend:${id}:${JSON.stringify(f.gear)}:${houseKit.ready}`, () => buildFriend(id, f.gear)) : ''; };
+  const portrait = (id: FriendId) => { const f = friendList().find(x => x.id === id); return f ? modelIcon(`friend:${id}:${JSON.stringify(f.gear)}:${houseKit.ready}:${friendStage(f)}`, () => buildFriend(id, f.gear, friendStage(f))) : ''; };
   const dress = (id: FriendId) => {
     dressing = id;
     d.openDialog('dress', t('Dress {name}', { name: t(FRIENDS[id].name) }), dressHtml(world.state, id, { readOnly: d.visiting(), portrait: portrait(id), iconUrl: d.iconUrl }), t('A FRIEND AT HOME'), '👗');
@@ -132,7 +135,7 @@ export function initHouse(d: HouseDeps) {
   const interact = (e: Entity) => {
     if (e.kind === 'home') { if (!d.visiting()) void d.perform('rest').then(ok => { if (ok) d.toast('Home, sweet home. Your health is restored.', '🏡'); }); enter(); return true; }
     if (e.kind === 'house-door') { leave(); return true; }
-    if (e.kind === 'house-wardrobe' || e.kind === 'house-mirror') { if (d.visiting()) d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷'); else d.ownGear(); return true; }
+    if (e.kind === 'house-wardrobe' || e.kind === 'house-mirror') { if (d.visiting()) d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷'); else if (e.kind === 'house-mirror' && d.looks) d.looks(); else d.ownGear(); return true; }
     // Indoor friends carry friendId; the outdoor workers (friend-crew.ts) open their status panel in main.ts instead.
     if (e.kind === 'friend' && (e as FriendEntity).friendId) { dress((e as FriendEntity).friendId); return true; }
     return false;

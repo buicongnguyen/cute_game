@@ -2,6 +2,7 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toToon, toonify } from './toon.ts';
+import { LOOKS, type LookId } from './looks.ts';
 
 // Vite supplies the deployment prefix; direct Node tests use the root default.
 const assetBase = import.meta.env?.BASE_URL ?? '/';
@@ -320,6 +321,28 @@ export class KitLibrary {
   }
 }
 
+const EARLESS = new WeakMap<T.BufferGeometry, T.BufferGeometry>();
+/**
+ * A body style's ears (hero-<look>.glb `head-leaf`, build_hero_styles.py) join the head's baked mesh, so they cost no
+ * draw of their own (the default hero's sprout bakes into its head the same way). The head without them is kept too:
+ * tuckEars swaps it in under a hat, the way the sprout is hidden.
+ */
+function mergeEars(hero: T.Object3D) {
+  const leaf = hero.getObjectByName('head-leaf'), head = hero.getObjectByName('head');
+  const ears = leaf?.children.find((o): o is T.Mesh => o instanceof T.Mesh), target = head?.children.find((o): o is T.Mesh => o instanceof T.Mesh && !Array.isArray(o.material) && (o.material as Plain).vertexColors && !!o.geometry.getAttribute('color'));
+  if (!leaf || !ears || !target || !ears.geometry.getAttribute('color')) return;
+  hero.updateMatrixWorld(true);
+  let base = target.geometry, extra = ears.geometry.clone().applyMatrix4(target.matrixWorld.clone().invert().multiply(ears.matrixWorld));
+  if (!base.index || !extra.index) { if (base.index) base = base.toNonIndexed(); if (extra.index) extra = extra.toNonIndexed(); }
+  for (const name of Object.keys(extra.attributes)) if (!base.getAttribute(name)) extra.deleteAttribute(name);
+  const merged = mergeGeometries([base, extra], false); extra.dispose(); if (!merged) return;
+  EARLESS.set(merged, target.geometry); target.geometry = merged; leaf.removeFromParent();
+}
+/** Hides (or shows) a styled explorer's ears: they tuck under hats and most disguises, as the sprout does. */
+export function tuckEars(model: T.Object3D, hide: boolean) {
+  model.traverse(o => { if (o instanceof T.Mesh) { const earless = EARLESS.get(o.geometry); if (hide && earless) o.geometry = earless; } });
+}
+
 /**
  * The explorer model: named parts (body, head, arms, legs) keep their hierarchy so
  * they can be animated and dressed. Geometry is shared; each instance gets its own
@@ -332,12 +355,14 @@ export class HeroLibrary {
   private url: string;
   private loadScene: SceneLoader;
   constructor(url = HERO_FILE, loadScene: SceneLoader = loadGltfScene) { this.url = url; this.loadScene = loadScene; }
+  get requested() { return this.loading !== null; }
   load(): Promise<void> {
     this.loading ??= this.loadScene(this.url).then(scene => {
       const hero = scene.getObjectByName('hero') ?? scene;
       // Each posable part becomes one or two meshes; the shirt keeps its own material for recolouring.
       const shirt = (mesh: T.Mesh) => /^Hero shirt/.test((mesh.material as T.Material).name);
-      for (const part of ['body', 'head', 'arm-left', 'arm-right', 'leg-left', 'leg-right']) { const node = hero.getObjectByName(part); if (node) bakeModel(node, { deep: false, keep: shirt }); }
+      for (const part of ['body', 'head', 'arm-left', 'arm-right', 'leg-left', 'leg-right', 'head-leaf']) { const node = hero.getObjectByName(part); if (node) bakeModel(node, { deep: false, keep: shirt }); }
+      mergeEars(hero);
       toonify(hero); hero.traverse(o => { if (o instanceof T.Mesh) o.geometry.userData.sharedKit = true; });
       this.source = hero; this.ready = true;
     }).catch(() => { /* The procedural explorer remains. */ });
@@ -372,6 +397,13 @@ export const sceneryKit = new KitLibrary([KIT_FILES.scenery]);
 export const cropKit = new KitLibrary([KIT_FILES.crops,KIT_FILES.fruitCrops]);
 export const fishKit = new KitLibrary([KIT_FILES.fish]);
 export const heroKit = new HeroLibrary();
+/** Body styles (looks.ts): each its own hero file, downloaded the first time someone wears it. */
+const heroStyleKits = new Map<string, HeroLibrary>();
+export function heroKitFor(look: LookId): HeroLibrary {
+  const file = LOOKS[look]?.file; if (!file) return heroKit;
+  let kit = heroStyleKits.get(look); if (!kit) { kit = new HeroLibrary(`${assetBase}assets/models/${file}`); heroStyleKits.set(look, kit); }
+  return kit;
+}
 // Gear the explorer can wear or hold, one file per group so each downloads only when first worn.
 export const wearKit = new KitLibrary([KIT_FILES.wear]);
 export const weaponKit = new KitLibrary([KIT_FILES.weapons]);
