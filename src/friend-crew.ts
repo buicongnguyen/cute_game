@@ -5,6 +5,7 @@ import { buildFriend, poseFriend, FRIEND_SCALE, type FriendPose } from './friend
 import { CAGES, FRIENDS, FRIEND_IDS, cageState, friendsOf, inVillage, nextFriendTask, friendStage, friendHeight, type CageState, type Friend, type FriendId, type FriendTask, type WorkResult } from './friends.ts';
 import type { World, Entity } from './world.ts';
 import { dropTree } from './dispose-tree.ts';
+import { HIP, gaitSwing, newGait, stepGait, type Gait } from './walk-cycle.ts';
 import { RESCUE_REACH, cageCandidates } from './cage-spots.ts';
 
 /**
@@ -51,7 +52,7 @@ export interface CrewHost {
 }
 
 interface Actor {
-  id: FriendId; root: T.Group; sig: string; entity: Entity; x: number; z: number; facing: number; t: number; stride: number;
+  id: FriendId; root: T.Group; sig: string; entity: Entity; x: number; z: number; facing: number; t: number; gait: Gait; swing: number; walked?: boolean;
   pose: FriendPose; task: FriendTask | null; workT: number; think: number; cookT: number; cheerT: number; pending: boolean; wander: number;
 }
 interface Cage { id: FriendId; group: T.Group; door: T.Object3D | null; prisoner: T.Group | null; entity: Entity; x: number; z: number; state: CageState; pop?: { t: number; vx: number; vz: number } }
@@ -62,7 +63,7 @@ export class FriendCrew {
   readonly cages = new Map<FriendId, Cage>();
   private host: CrewHost;
   private builtFor: T.Object3D | null = null; private cageSig = ''; private check = 0;
-  private spots = new Map<FriendId, { x: number; z: number }>(); private rescuing = new Set<FriendId>(); private arriving = false;
+  private spots = new Map<FriendId, { x: number; z: number }>(); private rescuing = new Set<FriendId>(); private arriving = false; private dt = 0;
   constructor(host: CrewHost) { this.host = host; this.group.name = 'friends'; host.world.scene.add(this.group); }
 
   private kitSig() { return `${heroKit.ready}${wearKit.ready}${weaponKit.ready}${petKit.ready}`; }
@@ -160,7 +161,7 @@ export class FriendCrew {
     PROXY_BOX ??= new T.BoxGeometry(.5, 1.05, .5).translate(0, .52, 0); PROXY_BOX.userData.sharedKit = true;
     const box = new T.Mesh(PROXY_BOX); box.visible = false; proxy.add(box); this.fitProxy(proxy, stage);
     a = { id, root: this.dress(id, f), sig, entity: { id: 'friend:' + id, kind: 'friend', name: FRIENDS[id].name, icon: ICONS[f.role], mesh: proxy, x: 0, z: 0, radius: .35, index: FRIEND_IDS.indexOf(id) },
-      x: POSTS[id].x, z: POSTS[id].z, facing: 0, t: Math.random() * 9, stride: 0, pose: 'idle', task: null, workT: 0, think: 0, cookT: 0, cheerT: 0, pending: false, wander: 0 };
+      x: POSTS[id].x, z: POSTS[id].z, facing: 0, t: Math.random() * 9, gait: newGait(), swing: .6, pose: 'idle', task: null, workT: 0, think: 0, cookT: 0, cheerT: 0, pending: false, wander: 0 };
     this.group.add(a.root); this.actors.set(id, a); return a;
   }
   /** Freed friends wear a work hat (display only, never saved) unless the player gave them one; prisoners have none. */
@@ -177,6 +178,7 @@ export class FriendCrew {
   }
 
   update(dt: number) {
+    this.dt = dt;
     const w = this.host.world, s = w.state, own = this.host.own(), visiting = this.host.visiting(), mine = s === own && !visiting;
     this.group.visible = !this.host.flying();
     if (!this.host.flying()) this.updateCages(dt);
@@ -210,13 +212,15 @@ export class FriendCrew {
     // A margin, not d > stand: the stand point moves with the walker, so stepping exactly d - stand would approach it forever.
     if (d > stand + .02) {
       const step = Math.min(d - stand, Math.max(speed * .5, Math.min(speed, d * 2.5)) * dt); a.x += dx / d * step; a.z += dz / d * step;
-      a.stride += dt * 13; this.turn(a, Math.atan2(dx, dz), dt); this.place(a, 'walk'); return false;
+      const leg = HIP * a.root.scale.x; stepGait(a.gait, step, dt, leg); a.swing = gaitSwing(step / Math.max(dt, 1e-4), leg); a.walked = true;
+      this.turn(a, Math.atan2(dx, dz), dt); this.place(a, 'walk'); return false;
     }
     return true;
   }
   private turn(a: Actor, to: number, dt: number) { a.facing += Math.atan2(Math.sin(to - a.facing), Math.cos(to - a.facing)) * Math.min(1, dt * 10); }
   private place(a: Actor, pose: FriendPose) {
-    a.pose = pose; a.root.position.set(a.x, 0, a.z); a.root.rotation.y = a.facing; poseFriend(a.root, pose, a.t, a.stride);
+    a.pose = pose; a.root.position.set(a.x, 0, a.z); a.root.rotation.y = a.facing; if (!a.walked) stepGait(a.gait, 0, this.dt, 1); a.walked = false; // standing still: the last steps fade out
+    poseFriend(a.root, pose, a.t, a.gait, a.swing);
     if (this.host.world.entities.includes(a.entity)) { a.entity.x = a.x; a.entity.z = a.z; a.entity.mesh.position.set(a.x, 0, a.z); }
   }
   private target(s: M.SaveState, a: Actor, task: FriendTask) {

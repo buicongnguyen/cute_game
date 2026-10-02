@@ -1,29 +1,37 @@
-"""Zoo Garden explorer body styles ("looks"): Tall, Cat boy and Bunny girl, beside the default hero.
+"""Zoo Garden character builder: body (boy/girl) x height (chibi/teen/tall) x ears (none/cat/bunny).
 
-Every style is built from the default hero's own pieces (build_hero.hero_pieces), so it keeps the
-same part names, the same ten `Hero ...` materials and the same draw structure: one mesh per
-part plus `head-leaf`. Gear is never re-modelled: each style publishes a FIT table, the per-part
-transform the game applies to a gear piece after expressing it relative to the DEFAULT pivot
-(`piece' = fit.offset + fit.scale * piece`, in that part's space). The game mirrors FIT in
-src/looks.ts and a test checks the two agree (art/generated/kit/hero-styles.json).
+Combinations must not multiply files, so the art is modular:
 
-- tall: a slimmer, longer body (torso x0.82 wide, x1.15 tall; shins +0.36; arms x1.45) and a
-  smaller head (x0.8), so the head is about a third of the height instead of half. Still toon.
-- catboy: the default chibi with cat ears and a curling tail.
-- bunny: the default chibi with long bunny ears, a puff tail, twin tails with ribbons, a back
-  bob of hair and eyelashes.
+- six BODY files, one per body x height: hero.glb (boy chibi, from build_hero.py), hero-teen.glb,
+  hero-tall.glb, hero-girl.glb, hero-girl-teen.glb, hero-girl-tall.glb. Each is built from the
+  default hero's own pieces (build_hero.hero_pieces), so it keeps the same part names, the same ten
+  `Hero ...` materials and the same draw structure: one mesh per part plus `head-leaf` (the sprout).
+- one PARTS file, hero-parts.glb: `ears-cat`, `ears-bunny`, `tail-cat`, `tail-bunny`, modelled on the
+  DEFAULT (chibi) hero in explorer space. The game (src/assets.ts heroKitFor) places them on any
+  height with the same FIT the gear uses (ears follow the head's fit, tails the body's), then merges
+  the ears into the head mesh and the tail into the body mesh at load: no extra draw.
 
-Ears live in `head-leaf` in place of the sprout, so they follow the sprout's rule: hidden under
-any hat (and most disguises). Nineteen hats of every shape are modelled tight over the hair cap,
-so ears poking through brims would clash with all of them; tucking them under is the one rule
-that fits every hat, costs no extra draw, and reuses the tested leaf path.
+FIT is the per-part transform the game applies to a gear piece (and to ears/tails) after expressing
+it relative to the DEFAULT pivot (`piece' = fit.offset + fit.scale * piece`, in that part's space).
+It depends on height only; src/looks.ts mirrors it and tests/looks.test.ts checks it against the
+GLB pivots.
+
+The girl: twin tails with ribbons, a back bob, eyelashes and a short flared skirt in the shirt's
+shade (so it takes the player's colour). The boy keeps the default short hair cap.
+
+Heights (tall is the "human-like" shape: slimmer, longer legs, smaller head):
+  chibi  the default proportions, head about half the height
+  teen   shins +0.2, torso x1.08 tall, arms x1.22, head x0.9
+  tall   shins +0.46, torso x1.2 tall and x0.8 wide, arms x1.55, head x0.76 (about a third of the height)
+
+Ears replace the sprout in `head-leaf`, so they follow its rule: hidden under any hat and most
+disguises (nineteen hats are modelled tight over the hair cap; ears poking through would clash).
 
 Run from the repository root:
 
     blender -b --factory-startup --python art/blender/kit/build_hero_styles.py -- [--install] [--render]
 
-Outputs art/generated/kit/models/hero-<style>.glb, art/generated/kit/hero-styles.json and,
-with --render, art/previews/kit/hero-styles.webp (four styles wearing a hat and an outfit).
+--render writes art/previews/kit/hero-styles.webp: every combination, bare-headed and in a hat.
 """
 import bpy
 import json
@@ -40,47 +48,53 @@ import build_hero as BH  # noqa: E402
 import hero_spec as HS  # noqa: E402
 from style import export_glb, reset_scene  # noqa: E402
 
-STYLES = ('default', 'tall', 'catboy', 'bunny')
-E = 0.36            # tall: extra shin length (the whole body rises by this much)
-TORSO_W, TORSO_H = 0.82, 1.15
-ARM_W, ARM_L = 0.88, 1.45
-HEAD_S = 0.8
-NECK_LIFT = 0.06    # tall: a hint of neck above the slimmer shoulders
-LEG_X = 0.16        # tall: hips a little closer together under the slimmer torso
-TRI_LIMIT = 3850    # the default hero is 3,304; a style may add ears, tail and hair (bunny 3,808, +15 %)
+BODIES = ('boy', 'girl')
+EARS = ('none', 'cat', 'bunny')
+# Height shapes: E extra shin length (the whole body rises by it), torso width/height, arm width/length,
+# head scale, a hint of neck, hip half-spacing.
+HEIGHTS = {
+    'chibi': None,
+    'teen': dict(E=0.2, TW=0.9, TH=1.08, AW=0.94, AL=1.22, HEAD=0.9, NECK=0.03, LEG_X=0.17),
+    'tall': dict(E=0.46, TW=0.8, TH=1.2, AW=0.86, AL=1.55, HEAD=0.76, NECK=0.07, LEG_X=0.155),
+}
+TRI_LIMIT = 4200    # the default hero is 3,304; the girl adds hair, lashes and a skirt, ears and tail come on top
 
 
-def tall_z(z):
+def body_file(body, height):
+    if body == 'boy' and height == 'chibi':
+        return 'hero.glb'
+    return 'hero-' + '-'.join(([body] if body == 'girl' else []) + ([] if height == 'chibi' else [height])) + '.glb'
+
+
+def torso_z(z, p):
     """Torso height map (Blender z): stretched from the hem up, then lifted by E."""
-    return 0.508 + (z - 0.508) * TORSO_H + E
+    return 0.508 + (z - 0.508) * p['TH'] + p['E']
 
 
-def tall_layout():
-    sh = {s: Vector((0.37 * s * TORSO_W + 0.02 * s, 0.02, tall_z(1.08))) for s in (-1, 1)}
-    neck = Vector((0, 0, tall_z(1.12) + NECK_LIFT))
-    pivots = {'body': Vector((0, 0, tall_z(0.85))), 'head': neck,
-              'arm-left': sh[-1], 'arm-right': sh[1],
-              'leg-left': Vector((-LEG_X, 0, 0.52 + E)), 'leg-right': Vector((LEG_X, 0, 0.52 + E))}
-    return pivots
+def layout(p):
+    sh = {s: Vector((0.37 * s * p['TW'] + 0.02 * s, 0.02, torso_z(1.08, p))) for s in (-1, 1)}
+    neck = Vector((0, 0, torso_z(1.12, p) + p['NECK']))
+    return {'body': Vector((0, 0, torso_z(0.85, p))), 'head': neck, 'arm-left': sh[-1], 'arm-right': sh[1],
+            'leg-left': Vector((-p['LEG_X'], 0, 0.52 + p['E'])), 'leg-right': Vector((p['LEG_X'], 0, 0.52 + p['E']))}
 
 
-def arm_rel_z(rz):
+def arm_rel_z(rz, p):
     """Arm length map relative to the shoulder: the sleeve stretches, the hand keeps its size."""
     knee = 0.86 - 1.08
-    return rz * ARM_L if rz >= knee else knee * ARM_L + (rz - knee)
+    return rz * p['AL'] if rz >= knee else knee * p['AL'] + (rz - knee)
 
 
-def deform_tall(P):
-    pv = tall_layout()
+def deform(P, p):
+    pv, E = layout(p), p['E']
     for v in P['body'].verts:
-        v.x *= TORSO_W
-        v.y *= TORSO_W
-        v.z = tall_z(v.z)
-    for name, s in (('arm-left', -1), ('arm-right', 1)):
+        v.x *= p['TW']
+        v.y *= p['TW']
+        v.z = torso_z(v.z, p)
+    for name in ('arm-left', 'arm-right'):
         old = Vector(HS.PIVOTS[name])
         for v in P[name].verts:
             r = v - old
-            v.x, v.y, v.z = pv[name].x + r.x * ARM_W, pv[name].y + r.y * ARM_W, pv[name].z + arm_rel_z(r.z)
+            v.x, v.y, v.z = pv[name].x + r.x * p['AW'], pv[name].y + r.y * p['AW'], pv[name].z + arm_rel_z(r.z, p)
     for name, s in (('leg-left', -1), ('leg-right', 1)):
         for v in P[name].verts:
             dx = v.x - 0.18 * s
@@ -90,20 +104,21 @@ def deform_tall(P):
                 skin = v.z < 0.43
                 v.z = 0.565 - (0.565 - v.z) * (0.565 - 0.26 + E) / (0.565 - 0.26)
                 if skin:
-                    dx *= 1.15
-                    v.y *= 1.15
-            v.x = LEG_X * s + dx
+                    k = 1 + 0.15 * E / 0.36
+                    dx *= k
+                    v.y *= k
+            v.x = p['LEG_X'] * s + dx
             v.z += E
     old, new = Vector(HS.PIVOTS['head']), pv['head']
     for key in ('head', 'head-leaf'):
         for v in P[key].verts:
-            r = (v - old) * HEAD_S
+            r = (v - old) * p['HEAD']
             v.x, v.y, v.z = new.x + r.x, new.y + r.y, new.z + r.z
     hands = {}
     for hand, arm in (('hand-left', 'arm-left'), ('hand-right', 'arm-right')):
         r = Vector(HS.HANDS[hand]) - Vector(HS.PIVOTS[arm])
-        hands[hand] = pv[arm] + Vector((r.x * ARM_W, r.y * ARM_W, arm_rel_z(r.z)))
-    leaf = new + (BH.LEAF_ORIGIN - old) * HEAD_S
+        hands[hand] = pv[arm] + Vector((r.x * p['AW'], r.y * p['AW'], arm_rel_z(r.z, p)))
+    leaf = new + (BH.LEAF_ORIGIN - old) * p['HEAD']
     return pv, hands, leaf
 
 
@@ -151,7 +166,7 @@ def bunny_tail(M):
     return BH.ellipsoid((0, 0.43, 0.6), (0.11, 0.1, 0.1), segs=10, rings=6).retag(M['pants'])
 
 
-def bunny_hair(M):
+def girl_hair(M):
     geos = [BH.ellipsoid((0, 0.2, 1.47), (0.52, 0.42, 0.4), segs=12, rings=6).retag(M['hair'])]  # a bob behind and below the cap
     for s in (-1, 1):
         top = Vector((0.52 * s, 0.12, 1.66))
@@ -166,33 +181,40 @@ def lashes(M):
     geos = []
     for s in (-1, 1):
         pts = []
-        for k, (x, z) in enumerate(((0.262, 1.678), (0.3, 1.668), (0.33, 1.684))):
+        for x, z in ((0.262, 1.678), (0.3, 1.668), (0.33, 1.684)):
             y = -math.sqrt(max(0.0, 0.6 ** 2 - x * x - (z - BH.C.z) ** 2))
             pts.append(Vector((x * s, y, z)))
         geos.append(BH.tube(pts, [0.014, 0.011, 0.0], sides=5, cap_start=True).retag(M['eye']))
     return BH.join(*geos)
 
 
-def build_pieces(style, M):
+def skirt(M):
+    """A short flared skirt over the shorts, in the shirt's shade so it takes the player's colour."""
+    return BH.lathe([(0.0, 0.47), (0.47, 0.47), (0.49, 0.49), (0.43, 0.6), (0.41, 0.64), (0.0, 0.64)], 18,
+                    tag=lambda j: M['shade'])
+
+
+def build_pieces(body, height, M, ears='none'):
+    """The pieces of one combination. The game files never carry ears (they come from hero-parts.glb);
+    `ears` is only for the render sheet, added before the height deform exactly as FIT places them."""
     P = BH.hero_pieces(M)
+    if body == 'girl':
+        P['head'].add(girl_hair(M))
+        P['head'].add(lashes(M))
+        P['body'].add(skirt(M))
+    if ears != 'none':
+        P['head-leaf'] = BH.Piece('head-leaf').add(cat_ears(M) if ears == 'cat' else bunny_ears(M))
+        P['body'].add(cat_tail(M) if ears == 'cat' else bunny_tail(M))
     pivots = {k: Vector(v) for k, v in HS.PIVOTS.items()}
     hands = {k: Vector(v) for k, v in HS.HANDS.items()}
     leaf = Vector(BH.LEAF_ORIGIN)
-    if style == 'tall':
-        pivots, hands, leaf = deform_tall(P)
-    elif style == 'catboy':
-        P['head-leaf'] = BH.Piece('head-leaf').add(cat_ears(M))
-        P['body'].add(cat_tail(M))
-    elif style == 'bunny':
-        P['head-leaf'] = BH.Piece('head-leaf').add(bunny_ears(M))
-        P['head'].add(bunny_hair(M))
-        P['head'].add(lashes(M))
-        P['body'].add(bunny_tail(M))
+    if HEIGHTS[height]:
+        pivots, hands, leaf = deform(P, HEIGHTS[height])
     return P, pivots, hands, leaf
 
 
-def make_style(style, M, prefix=''):
-    P, pivots, hands, leaf = build_pieces(style, M)
+def make_combo(body, height, M, prefix='', ears='none'):
+    P, pivots, hands, leaf = build_pieces(body, height, M, ears)
     scene = bpy.context.scene
     root = bpy.data.objects.new(prefix + 'hero', None)
     scene.collection.objects.link(root)
@@ -218,6 +240,20 @@ def make_style(style, M, prefix=''):
     return objs, pivots, hands
 
 
+def make_parts(M):
+    """hero-parts.glb: ears and tails on the default hero, in explorer space (object origins at 0)."""
+    root = bpy.data.objects.new('hero-parts', None)
+    bpy.context.scene.collection.objects.link(root)
+    objs = [root]
+    for name, geo in (('ears-cat', cat_ears(M)), ('ears-bunny', bunny_ears(M)), ('tail-cat', cat_tail(M)), ('tail-bunny', bunny_tail(M))):
+        o = BH.Piece(name).add(geo).build((0, 0, 0), name)
+        o.data.name = name
+        o.parent = root
+        objs.append(o)
+    bpy.context.view_layer.update()
+    return objs
+
+
 def g3(v):
     """Blender (x, y, z) to three.js (x, z, -y)."""
     return [round(v[0], 4), round(v[2], 4), round(-v[1] + 0.0, 4)]
@@ -227,17 +263,18 @@ def s3(v):
     return [round(v[0], 4), round(v[2], 4), round(v[1], 4)]
 
 
-def fit_table(style):
-    """Gear transform per part, in three.js part space (scale, then offset), relative to the default pivot."""
-    if style != 'tall':
+def fit_table(height):
+    """Gear (and ears/tail) transform per part, in three.js part space (scale, then offset), relative to the default pivot."""
+    p = HEIGHTS[height]
+    if not p:
         return {}
     return {
-        'head': dict(scale=[HEAD_S] * 3, offset=[0, 0, 0]),
-        'body': dict(scale=s3((TORSO_W, TORSO_W, TORSO_H)), offset=[0, 0, 0]),
-        'arm-left': dict(scale=s3((ARM_W, ARM_W, ARM_L)), offset=[0, 0, 0]),
-        'arm-right': dict(scale=s3((ARM_W, ARM_W, ARM_L)), offset=[0, 0, 0]),
-        'leg-left': dict(scale=[1, 1, 1], offset=[0, round(-E, 4), 0]),
-        'leg-right': dict(scale=[1, 1, 1], offset=[0, round(-E, 4), 0]),
+        'head': dict(scale=[p['HEAD']] * 3, offset=[0, 0, 0]),
+        'body': dict(scale=s3((p['TW'], p['TW'], p['TH'])), offset=[0, 0, 0]),
+        'arm-left': dict(scale=s3((p['AW'], p['AW'], p['AL'])), offset=[0, 0, 0]),
+        'arm-right': dict(scale=s3((p['AW'], p['AW'], p['AL'])), offset=[0, 0, 0]),
+        'leg-left': dict(scale=[1, 1, 1], offset=[0, round(-p['E'], 4), 0]),
+        'leg-right': dict(scale=[1, 1, 1], offset=[0, round(-p['E'], 4), 0]),
         'hand-right': dict(scale=[1, 1, 1], offset=[0, 0, 0]),
     }
 
@@ -256,9 +293,9 @@ def import_gear():
     return [o for o in bpy.data.objects if o not in before]
 
 
-def wear(objs, style, imported, item, prefix):
-    """Copy a gear item's pieces onto a built style, applying the style's fit like World.wearKit does."""
-    fit = fit_table(style)
+def wear(objs, height, imported, item, prefix):
+    """Copy a gear item's pieces onto a built combination, applying the height's fit like World.wearKit does."""
+    fit = fit_table(height)
     root = next(o for o in imported if o.name == item)
     out = []
     for src in root.children_recursive:
@@ -284,61 +321,72 @@ def wear(objs, style, imported, item, prefix):
 
 
 def render_sheet():
+    """Rows: body x height (6). Columns: ears (3) bare-headed, then the same three in a straw hat."""
     tmp = os.path.join(BH.GEN, '_tmp')
     os.makedirs(tmp, exist_ok=True)
     imported = import_gear()
     for o in imported:
         o.hide_render = True
-    paths, layout = [], []
-    looks = [('default', 'hat_straw', 'armor_leather'), ('tall', 'hat_cowboy', 'armor_kimono'),
-             ('catboy', 'hat_straw', 'armor_hawaii'), ('bunny', 'hat_chef', 'armor_angel')]
-    for row, dressed in enumerate((False, True)):
-        for i, (style, hat, outfit) in enumerate(looks):
-            M = BH.hero_materials(BH.PLAYER_COLORS[i], ' ' + BH.PLAYER_COLORS[i])
-            objs, _, _ = make_style(style, M, prefix=f'{style}{row} ')
+    paths, layout_ = [], []
+    W, H = 220, 300
+    rows = [(b, h) for b in BODIES for h in HEIGHTS]
+    for r, (body, height) in enumerate(rows):
+        for c in range(6):
+            ears, hat = EARS[c % 3], c >= 3
+            colour = BH.PLAYER_COLORS[(r + c) % len(BH.PLAYER_COLORS)]
+            M = BH.hero_materials(colour, ' ' + colour)
+            prefix = f'{body}{height}{c} '
+            objs, _, _ = make_combo(body, height, M, prefix=prefix, ears=ears)
             extra = []
-            if dressed:
-                extra = wear(objs, style, imported, hat, f'{style}{row} ') + wear(objs, style, imported, outfit, f'{style}{row} ')
+            if hat:
+                extra = wear(objs, height, imported, 'hat_straw', prefix)
                 objs['head-leaf'].hide_render = True
             BH.pose(objs, yaw=math.radians(-25))
-            BH.stage((360, 520), ground='#8FE06A')
-            cam = BH.camera(12, -25, target=(0, 0, 1.2))
-            meshes = [o for o in list(objs.values()) + extra if o.type == 'MESH']
-            BH.fit(cam, meshes, 1.12)
-            cam.data.ortho_scale = 3.3
-            paths.append(BH.render_png(os.path.join(tmp, f'style_{style}_{row}.png')))
-            layout.append((i * 360, (1 - row) * 520))
+            BH.stage((W, H), ground='#8FE06A')
+            cam = BH.camera(12, -25, target=(0, 0, 1.25))
+            cam.data.ortho_scale = 3.6
+            paths.append(BH.render_png(os.path.join(tmp, f'combo_{r}_{c}.png')))
+            layout_.append((c * W, (len(rows) - 1 - r) * H))
             bpy.data.objects.remove(cam, do_unlink=True)
             for o in extra:
                 bpy.data.objects.remove(o, do_unlink=True)
             BH.remove_tree(objs['hero'])
-    BH.composite(paths, layout, (1440, 1040), os.path.join(BH.PREVIEWS, 'hero-styles.webp'))
+    BH.composite(paths, layout_, (6 * W, len(rows) * H), os.path.join(BH.PREVIEWS, 'hero-styles.webp'))
 
 
 def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
-    out, failures = {}, []
-    for style in STYLES:
-        reset_scene()
-        objs, pivots, hands = make_style(style, BH.hero_materials())
-        st = stats(objs)
-        if st['triangles'] > TRI_LIMIT:
-            failures.append(f'{style}: {st["triangles"]} triangles (> {TRI_LIMIT})')
-        if set(st['materials']) - set(BH.HERO_MATERIALS):
-            failures.append(f'{style}: extra materials {st["materials"]}')
-        entry = dict(st, pivots={k: g3(v) for k, v in pivots.items()},
-                     hands={k: g3(v - pivots['arm-left' if k == 'hand-left' else 'arm-right']) for k, v in hands.items()},
-                     fit=fit_table(style))
-        if style != 'default':
-            name = f'hero-{style}.glb'
-            path = os.path.join(BH.MODELS, name)
-            entry['file'] = name
-            entry['bytes'] = export_glb(BH.tree(objs['hero']), path)
-            if argv and '--install' in argv:
-                os.makedirs(BH.PUBLIC_MODELS, exist_ok=True)
-                shutil.copy2(path, os.path.join(BH.PUBLIC_MODELS, name))
-        out[style] = entry
-        print(f"{style:8s} {st['triangles']:5d} tris  height {st['height']}  {entry.get('bytes', '')}  {st['parts']}")
+    out, failures = {'fit': {h: fit_table(h) for h in HEIGHTS}, 'bodies': {}}, []
+    for body in BODIES:
+        for height in HEIGHTS:
+            reset_scene()
+            objs, pivots, hands = make_combo(body, height, BH.hero_materials())
+            st = stats(objs)
+            if set(st['materials']) - set(BH.HERO_MATERIALS):
+                failures.append(f'{body}-{height}: extra materials {st["materials"]}')
+            name = body_file(body, height)
+            entry = dict(st, file=name, pivots={k: g3(v) for k, v in pivots.items()},
+                         hands={k: g3(v - pivots['arm-left' if k == 'hand-left' else 'arm-right']) for k, v in hands.items()})
+            if name != 'hero.glb':     # the boy chibi is build_hero.py's own file
+                path = os.path.join(BH.MODELS, name)
+                entry['bytes'] = export_glb(BH.tree(objs['hero']), path)
+                if '--install' in argv:
+                    os.makedirs(BH.PUBLIC_MODELS, exist_ok=True)
+                    shutil.copy2(path, os.path.join(BH.PUBLIC_MODELS, name))
+            out['bodies'][f'{body}-{height}'] = entry
+            print(f"{body}-{height:6s} {st['triangles']:5d} tris  height {st['height']}  {entry.get('bytes', '')}  {st['parts']}")
+    reset_scene()
+    parts = make_parts(BH.hero_materials())
+    tris = {o.name: BH.mesh_tris(o) for o in parts[1:]}
+    path = os.path.join(BH.MODELS, 'hero-parts.glb')
+    out['parts'] = dict(triangles=tris, bytes=export_glb(parts, path))
+    if '--install' in argv:
+        shutil.copy2(path, os.path.join(BH.PUBLIC_MODELS, 'hero-parts.glb'))
+    print('parts', out['parts'])
+    for key, b in out['bodies'].items():
+        worst = b['triangles'] - b['parts']['head-leaf'] + max(tris['ears-cat'] + tris['tail-cat'], tris['ears-bunny'] + tris['tail-bunny'])
+        if worst > TRI_LIMIT:
+            failures.append(f'{key}: {worst} triangles with ears and tail (> {TRI_LIMIT})')
     with open(os.path.join(BH.GEN, 'hero-styles.json'), 'w', encoding='utf-8') as fh:
         json.dump(out, fh, indent=1)
     if failures:

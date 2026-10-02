@@ -6,6 +6,7 @@ import { randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as Game from '../src/model.ts';
+import { lookOf } from '../src/looks.ts';
 import { createAccountStore } from './account-store.mjs';
 import { createActionService } from './action-service.mjs';
 import { createCombatAuthority } from './combat-authority.mjs';
@@ -24,7 +25,7 @@ const sameString = (a, b) => {
   return first.length === second.length && timingSafeEqual(first, second);
 };
 const cookieValue = request => (request.headers.cookie || '').split(';').map(value => value.trim()).find(value => value.startsWith(COOKIE + '='))?.slice(COOKIE.length + 1);
-const publicAccount = account => ({ id: account.id, username: account.username, name: account.profile.name, color: account.profile.color, level: account.profile.level, gear: account.profile.gear, look: account.profile.looks?.style ?? 'default' });
+const publicAccount = account => ({ id: account.id, username: account.username, name: account.profile.name, color: account.profile.color, level: account.profile.level, gear: account.profile.gear, look: lookOf(account.profile) });
 const publicHome = account => {
   const source = account.profile;
   return { ...publicAccount(account), discovered:source.discovered||['home'], plots: source.plots, decorations: source.decorations || [], farm: source.farm || null, helper: source.helper || null, friends: Array.isArray(source.friends) ? source.friends : [], home: source.home || null, placed: source.placed || [],

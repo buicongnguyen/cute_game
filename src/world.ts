@@ -43,7 +43,8 @@ import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
-import {FIT,isLook,lookOf,type Fit,type LookId} from './looks.ts';
+import {HIP,applyGait,gaitSwing,limbsOf,newGait,stepGait,type Gait} from './walk-cycle.ts';
+import {DEFAULT_PIVOTS,FIT,lookOf,splitLook,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {part} from './part-cache.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
@@ -108,8 +109,7 @@ function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 
 export const HERO_SCALE = .84;
 /** The explorer model's height before HERO_SCALE (hero.glb), so the explorer stands about 1.93 m. */
 export const HERO_MODEL_HEIGHT = 2.3;
-/** hero_spec.PIVOTS (and HANDS) in three.js space: where gear is modelled, before a body style's FIT moves it. */
-export const DEFAULT_PIVOTS:Record<string,[number,number,number]>={body:[0,.85,0],head:[0,1.12,0],'arm-left':[-.37,1.08,-.02],'arm-right':[.37,1.08,-.02],'leg-left':[-.18,.52,0],'leg-right':[.18,.52,0],'hand-left':[-.37,.72,.05],'hand-right':[.37,.72,.05]};
+export {DEFAULT_PIVOTS};
 // Creature AI level of detail, as in the reference: calm creatures farther than this from every explorer do not think.
 const AI_REST_RANGE=48,EXPLORER_RADIUS=.45;
 /** A* steps for a creature walking home (about a 35 m square of 1 m cells): enough around fences and ponds, never a long stall. */
@@ -670,13 +670,13 @@ export class World {
    * The explorer in its gear. Each slot uses its Blender model when the kit has it and
    * falls back to simple shapes otherwise, so a missing file never leaves a slot empty.
    */
-  private avatar(color:string,gear:SaveState['gear']={},look:LookId='default'){
+  private avatar(color:string,gear:SaveState['gear']={},look:LookId|string=DEFAULT_LOOK){
     const disguise=gear.disguise?M.DISGUISES[gear.disguise]:undefined,id=gear.disguise??'';
     const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready;
     // A body style downloads on first use; the default explorer stands in until it arrives.
-    const styled=isLook(look)?heroKitFor(look):heroKit;if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
+    const combo=toLook(look)??DEFAULT_LOOK,styled=heroKitFor(combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
     const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint)??this.chibi(tint);
-    c.userData.look=base===heroKit?'default':look;if(base!==heroKit&&Object.keys(FIT[look]).length)c.userData.fit=FIT[look];
+    c.userData.look=base===heroKit?DEFAULT_LOOK:combo;const fit=FIT[splitLook(combo).height];if(base!==heroKit&&Object.keys(fit).length)c.userData.fit=fit;
     // The sprout pokes through hats and most costumes; the fairy crown and hero mask leave it showing.
     // A hat kept under a costume is not drawn (below), so only the costume decides then.
     const top=id?kitDisguise&&['dz_fairy','dz_superhero'].includes(id):!gear.hat,leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=top;tuckEars(c,!top);
@@ -935,6 +935,21 @@ export class World {
   applyEnemySnapshots(snapshots:EnemySnapshot[]){const own=`${this.planet}:`;for(const snapshot of snapshots){if(typeof snapshot.id!=='string'||!snapshot.id.startsWith(own)||!Number.isFinite(snapshot.x)||!Number.isFinite(snapshot.z)||!Number.isFinite(snapshot.hp))continue;let e=this.enemies.find(e=>e.id===snapshot.id);if(!e&&snapshot.type&&ENEMY_TYPES[snapshot.type]){e=this.spawnSpecies(snapshot.type,snapshot.x,snapshot.z,this.enemies.length)??undefined;if(e)e.id=snapshot.id;}if(!e)continue;e.x=snapshot.x;e.z=snapshot.z;e.hp=Math.max(0,snapshot.hp);e.maxHp=snapshot.maxHp;e.respawn=snapshot.respawn;e.phase=snapshot.phase;e.lift=snapshot.lift??0;e.stun=snapshot.stun??0;e.phaseTime=snapshot.phaseTime??0;if(Number.isFinite(snapshot.chaseGrace))e.lastHitAt=this.time-4+Math.max(0,Math.min(4,snapshot.chaseGrace!));e.cooldown=snapshot.cooldown??0;e.statuses={...snapshot.statuses};e.targetX=snapshot.targetX;e.targetZ=snapshot.targetZ;e.bossStage=snapshot.bossStage;e.skill=snapshot.skill;e.attackCount=snapshot.attackCount;e.skillCount=snapshot.skillCount;e.telegraphs=snapshot.telegraphs?.map(p=>({...p}));e.skillEffects=snapshot.skillEffects?.map(p=>({...p}));e.spinTick=snapshot.spinTick;e.damage=snapshot.damage??e.damage;e.titanAttacks=sanitizeTitanAttacks(snapshot.titanAttacks);e.titanLift=snapshot.titanLift??0;e.scaled=true;e.mesh.position.set(e.x,terrainHeight(this.environment.layout,e)+(e.lift??0),e.z);e.mesh.rotation.y=snapshot.facing??0;e.mesh.visible=e.hp>0;
       if(snapshot.shots){this.enemyShots??=[];const ids=new Set(snapshot.shots.map(s=>s.id));for(let i=this.enemyShots.length-1;i>=0;i--)if(this.enemyShots[i].ownerId===e.id&&!ids.has(this.enemyShots[i].id)){const old=this.enemyShots[i];this.scene.remove(old.mesh);old.mesh.geometry.dispose();this.enemyShots.splice(i,1);}for(const source of snapshot.shots){if(![source.x,source.y,source.z,source.vx,source.vz,source.life,source.damage].every(Number.isFinite)||source.life<=0)continue;let shot=this.enemyShots.find(s=>s.id===source.id);if(!shot){const model=ball(e.definition?.accent??'#ffbb72',.17);this.scene.add(model);shot={...source,ownerId:e.id,mesh:model};this.enemyShots.push(shot);}Object.assign(shot,{vx:source.vx,vz:source.vz,life:source.life,damage:source.damage,targetEnemyId:source.targetEnemyId});shot.mesh.position.set(source.x,source.y,source.z);}}
     }}
+  /**
+   * Online explorers walk on their legs too (walk-cycle.ts). Poses arrive about 15 times a second, so the ground they
+   * cover comes in jumps: it is smoothed into a speed that drives the cadence, and the cycle fades out when they stop.
+   */
+  private animateRemotes(dt:number){
+    for(const remote of this.remotePlayers?.values()??[]){
+      const m=remote.mesh,u=m.userData,g:Gait=u.gait??=newGait(),p=m.position,last=u.lastPos as T.Vector3|undefined;
+      let dist=last?Math.hypot(p.x-last.x,p.z-last.z):0;if(dist>3)dist=0;if(last)last.copy(p);else u.lastPos=p.clone(); // a teleport is not a step
+      u.speed=(u.speed??0)+((dt>0?dist/dt:0)-(u.speed??0))*(1-Math.exp(-dt*6));
+      const moving=remote.pose.moving??u.speed>.3,leg=HIP*m.scale.x,l=limbsOf(m);
+      stepGait(g,moving?Math.max(u.speed,1.5)*dt:0,dt,leg);
+      if(l.legL)l.legL.rotation.x=0;if(l.legR)l.legR.rotation.x=0;if(l.armL)l.armL.rotation.x=0;if(l.armR)l.armR.rotation.x=0;
+      const bob=applyGait(l,g,gaitSwing(u.speed,leg)),body=m.children[0];if(body)body.position.y=bob;
+    }
+  }
   receiveRemoteHit(id:string,amount:number,stun=0){const e=this.enemies.find(e=>e.id===id);if(!e||e.hp<=0||!Number.isFinite(amount)||amount<0)return false;this.damageEnemy(e,amount,stun);return true;}
   addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear,pose.look);avatar.userData.remoteId=id;this.remoteRoot.add(avatar);this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
   updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear,pose.look??remote.pose.look);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;remote.mesh.position.set(current.x,(current.y??0)-(indoor?INDOOR_Y:0),current.z);remote.mesh.rotation.y=current.facing??0;this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
@@ -1602,7 +1617,7 @@ export class World {
       const dx=c.position.x-before.x,dz=c.position.z-before.z;if(dx*dx+dz*dz>1e-5)c.rotation.y=Math.atan2(dx,dz);c.rotation.z=flying?Math.sin(this.time*2.5)*.1:0;
       for(const wing of (c.userData.wings??[]) as {node:T.Object3D;base:number;side:number}[])wing.node.rotation.z=wing.base+wing.side*Math.sin(this.time*18)*.6;
     }
-    this.animatePlayer(dt);
+    this.animatePlayer(dt);this.animateRemotes(dt);
     this.player.visible=!this.boarded;this.companion.visible=!this.boarded;
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);

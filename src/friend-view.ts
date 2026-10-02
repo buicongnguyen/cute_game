@@ -5,6 +5,7 @@ import { HERO_SCALE } from './world.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends-state.ts';
 import { friendHeight } from './growth.ts';
 import type { SaveState } from './model.ts';
+import { applyGait, limbsOf, type Gait } from './walk-cycle.ts';
 
 /**
  * A rescued friend's look (FRIENDS-CONTRACT.md "Look"): the explorer's own hero kit at half the explorer's size, with
@@ -106,16 +107,17 @@ export function buildFriend(id: FriendId, gear: Friend['gear'] = {}, stage = 0):
 export type FriendPose = 'idle' | 'walk' | 'sad' | 'harvest' | 'plant' | 'collect' | 'feed' | 'cook' | 'cheer';
 /**
  * Small rigid poses on the hero's named parts (arm-left/right, leg-left/right, head) and a lean of the whole model.
- * `t` is the friend's clock in seconds; `stride` its walk phase.
+ * `t` is the friend's clock in seconds. `gait` (walk-cycle.ts) swings the legs and arms over the pose while it walks and
+ * fades out when it stops; `swing` is its amplitude (gaitSwing, by speed).
  */
-export function poseFriend(root: T.Group, pose: FriendPose, t: number, stride = 0) {
+export function poseFriend(root: T.Group, pose: FriendPose, t: number, gait?: Gait, swing = .6) {
   const model = root.userData.model as T.Object3D | undefined; if (!model) return;
   const parts = (root.userData.parts ??= ['arm-left', 'arm-right', 'leg-left', 'leg-right', 'head'].map(n => model.getObjectByName(n) ?? null)) as (T.Object3D | null)[];
-  const [armL, armR, legL, legR, head] = parts, s = Math.sin(stride);
+  const [armL, armR, legL, legR, head] = parts;
   armL?.rotation.set(0, 0, -.3); armR?.rotation.set(0, 0, .3); legL?.rotation.set(0, 0, 0); legR?.rotation.set(0, 0, 0); head?.rotation.set(0, 0, 0);
   let lean = 0, lift = 0, roll = 0;
   switch (pose) {
-    case 'walk': armL?.rotation.set(-s * .8, 0, -.3); armR?.rotation.set(s * .8, 0, .3); legL?.rotation.set(s * .7, 0, 0); legR?.rotation.set(-s * .7, 0, 0); lift = Math.abs(Math.cos(stride)) * .05; lean = .1; break;
+    case 'walk': lean = .1 * (gait?.blend ?? 1); break; // the limbs are the gait's (below)
     case 'sad': // head hung, arms limp in front, a slow sway and a sigh every few seconds
       head?.rotation.set(.45 + Math.max(0, Math.sin(t * .9)) * .15, Math.sin(t * .4) * .25, 0); armL?.rotation.set(-.25, 0, -.08); armR?.rotation.set(-.25, 0, .08); roll = Math.sin(t * 1.1) * .05; lean = .08; break;
     case 'harvest': { const k = Math.sin(t * 9); lean = .35; head?.rotation.set(.3, 0, 0); armL?.rotation.set(-1.2 + k * .3, 0, -.15); armR?.rotation.set(-1.2 - k * .3, 0, .15); legL?.rotation.set(-.3, 0, 0); legR?.rotation.set(-.3, 0, 0); break; }
@@ -127,5 +129,6 @@ export function poseFriend(root: T.Group, pose: FriendPose, t: number, stride = 
     case 'cheer': { const k = Math.abs(Math.sin(t * 8)); armL?.rotation.set(-2.6, 0, -.4); armR?.rotation.set(-2.6, 0, .4); lift = k * .12; break; }
     default: armL?.rotation.set(0, 0, -.3 - Math.sin(t * 2) * .05); armR?.rotation.set(0, 0, .3 + Math.sin(t * 2) * .05); head?.rotation.set(0, Math.sin(t * .6) * .3, 0); lift = Math.sin(t * 2.4) * .004;
   }
-  model.rotation.x = lean; model.rotation.z = roll; model.position.y = lift / (root.scale.x || FRIEND_SCALE); // the root carries the friend's scale
+  const bob = gait ? applyGait(limbsOf(model), gait, swing) : 0;
+  model.rotation.x = lean; model.rotation.z = roll; model.position.y = lift / (root.scale.x || FRIEND_SCALE) + bob; // the root carries the friend's scale
 }

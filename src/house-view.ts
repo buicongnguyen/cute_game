@@ -15,6 +15,7 @@ import { dropTree } from './dispose-tree.ts';
 import { friendStage } from './growth.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends.ts';
 import { part } from './part-cache.ts';
+import { HIP, applyGait, gaitSwing, limbsOf, newGait, stepGait, type Gait } from './walk-cycle.ts';
 import { HANGOUTS, SCHEDULE_SECONDS, assignHangouts, type DecorPlacement, type Hangout } from './house-activities.ts';
 
 export const HOUSE_FILE = modelUrl('house.glb');
@@ -78,7 +79,7 @@ function fallbackPiece(p: Placement): { plain: T.BufferGeometry[]; glow: T.Buffe
 
 /** Which look kits have arrived: a friend is rebuilt when one lands (the hero, or a kit for its gear). */
 const kitStamp = () => [heroKit, wearKit, weaponKit, petKit].map(k => k.ready ? 1 : 0).join('');
-export interface FriendView { id: FriendId; group: T.Group; signature: string; spot: (typeof FRIEND_SPOTS)[number] | Hangout; seed: number; role: string; stage: number }
+export interface FriendView { id: FriendId; group: T.Group; signature: string; spot: (typeof FRIEND_SPOTS)[number] | Hangout; seed: number; role: string; stage: number; gait?: Gait }
 /** Steam puffs over the kettle and the stove's pot, bubbles over the bath: [x, y, z, rise, spread]. */
 const PUFF_SOURCES: Array<[number, number, number, number, number]> = [[-9.5, 1.15, -.13, .7, .06], [-9.38, 1.12, 2.27, .8, .08], [-.75, .62, -6.4, .45, .55]];
 const PUFFS_EACH = 5;
@@ -248,13 +249,21 @@ export class HouseView {
       // Waypoint by waypoint; the last one is the hangout itself.
       let goal = walk.points[Math.min(walk.next, walk.points.length - 1)], dx = goal.x - g.position.x, dz = goal.z - g.position.z, far = Math.hypot(dx, dz);
       while (far <= .05 && walk.next < walk.points.length - 1) { walk.next++; goal = walk.points[walk.next]; dx = goal.x - g.position.x; dz = goal.z - g.position.z; far = Math.hypot(dx, dz); }
-      const arm = body && part(body, 'arm-right'), legL = body && part(body, 'leg-left'), legR = body && part(body, 'leg-right');
-      // Walk to the next hangout with a little bounce and swinging legs (not the seated or raised-arm pose it left), then settle into its pose.
+      const arm = body && part(body, 'arm-right'), legL = body && part(body, 'leg-left'), legR = body && part(body, 'leg-right'), armL = body && part(body, 'arm-left');
+      // Walk to the next hangout on its legs (walk-cycle.ts: cadence from the ground covered, arms counter-swinging, a
+      // small bob), out of the seated or raised-arm pose it left; the last steps fade into the next pose.
+      const gait = v.gait ??= newGait(), leg = HIP * g.scale.x;
       if (far > .05) {
         const step = Math.min(far, dt * 1.6); g.position.x += dx / far * step; g.position.z += dz / far * step; g.position.y = 0; g.rotation.y = Math.atan2(dx, dz);
-        if (body) { body.position.y = Math.abs(Math.sin(t * 9)) * .07; body.rotation.z = 0; body.rotation.x = 0; const swing = Math.sin(t * 9) * .5; if (legL) legL.rotation.x = swing; if (legR) legR.rotation.x = -swing; if (arm) armPose(arm, 'walk', t); }
+        stepGait(gait, step, dt, leg);
+        if (body) {
+          body.rotation.z = 0; body.rotation.x = .08 * gait.blend;
+          if (legL) legL.rotation.x = 0; if (legR) legR.rotation.x = 0; if (armL) armL.rotation.x = 0; if (arm) { arm.rotation.x = 0; arm.rotation.z = .1; }
+          body.position.y = applyGait(limbsOf(body), gait, gaitSwing(1.6, leg));
+        }
         continue;
       }
+      stepGait(gait, 0, dt, leg);
       g.position.y = v.spot.y ?? 0;
       if (!body) continue;
       if (v.spot.pose !== 'sit') { if (legL) legL.rotation.x = 0; if (legR) legR.rotation.x = 0; body.rotation.z = 0; }
@@ -262,6 +271,8 @@ export class HouseView {
       if (v.spot.pose === 'sit') { if (legL) legL.rotation.x = -1.35; if (legR) legR.rotation.x = -1.35; body.position.y = -.55 + Math.sin(t * 2) * .02; body.rotation.z = Math.sin(t * .7) * .04; }
       else body.position.y = Math.abs(Math.sin(t * 2.2)) * .05;
       if (arm) armPose(arm, v.spot.pose, t);
+      if (armL) armL.rotation.x = 0;
+      if (gait.blend > 0) body.position.y += applyGait(limbsOf(body), gait, .5, false);
       if (v.spot.pose !== 'stand') v.group.rotation.y = v.spot.facing;
       if (v.spot.pose === 'stand') v.group.rotation.y = v.spot.facing + Math.sin(t * .4) * .35;
     }

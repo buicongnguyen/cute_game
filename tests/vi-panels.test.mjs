@@ -135,7 +135,7 @@ test('friends, helpers, pen, tester, dress panel, look shop and difficulty texts
   const site=M.newGame('Pip');site.level=10;leftovers('sitePenHtml',localizeHtml(sitePenHtml(site)),found);
   leftovers('collectText',t(collectText([{item:'egg'},{item:'egg'},{item:'milk'},{item:'duck_egg'},{item:'duck_egg'},{item:'truffle'},{item:'truffle'}])),found);
   leftovers('testerShop',localizeHtml(Tester.testerShopHtml(state)),found);
-  leftovers('lookShop',localizeHtml(lookShopHtml(state,null,()=>'')),found);
+  leftovers('lookShop',localizeHtml(lookShopHtml(state,'boy-chibi-none')),found);leftovers('lookShop draft',localizeHtml(lookShopHtml(state,'girl-tall-cat')),found);leftovers('lookShop owned',localizeHtml(lookShopHtml({...state,looks:{owned:['tall'],style:'boy-chibi-none'}},'girl-tall-none')),found);
   for(const level of M.DIFFICULTIES)leftovers('difficulty '+level,t(M.DIFFICULTY_LABEL[level])+' '+t(M.DIFFICULTY_NOTE[level]),found);
   assert.deepEqual([...new Set(found)],[]);
 });

@@ -1,12 +1,25 @@
-/* The mirror's Look shop (look-shop.ts). */
-.look-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.look-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px; border-radius: 20px; background: #fffaf0; border: 3px solid #fff; box-shadow: var(--lift); text-align: center; }
-.look-card.worn { border-color: #8fd36a; }
-.look-card.trying { border-color: #ffc23a; }
-.look-card strong { font-size: 16px; }
-.look-card p { margin: 2px 0 0; font-size: 12px; color: var(--ink-soft); line-height: 1.25; }
-.look-portrait { width: 96px; height: 96px; border-radius: 22px; background: radial-gradient(circle at 50% 40%, #fff7e2, #ffd9a8); display: grid; place-items: center; font-size: 44px; }
-.look-portrait img { width: 100%; height: 100%; object-fit: contain; }
-.look-buttons { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-#dialog-layer.trying-on .look-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (max-width: 520px) { .look-portrait { width: 72px; height: 72px; font-size: 34px; } .look-card { padding: 8px; } }
+/* The mirror's character builder (look-shop.ts): three rows of option chips and a buy/wear footer. */
+.look-builder { display: grid; gap: 10px; }
+.look-row { display: grid; gap: 5px; }
+.look-row-name { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.look-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.look-chip { display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 64px; padding: 6px 4px; border-radius: 16px; background: #fffaf0; border: 3px solid #fff; box-shadow: var(--lift); font: inherit; font-size: 13px; font-weight: 700; color: inherit; cursor: pointer; }
+.look-chip.on { border-color: #8fd36a; background: #f1ffe6; }
+.look-chip-icon { font-size: 24px; line-height: 1.1; }
+.look-price { font-size: 11px; font-weight: 800; color: #b07a00; }
+.look-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; border-top: 2px dashed #f0dfc0; }
+.look-name { font-size: 15px; }
+.look-buttons { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+@media (max-width: 520px) { .look-chip { min-height: 54px; font-size: 12px; } .look-chip-icon { font-size: 20px; } .look-builder { gap: 6px; } }
+/* Friends' chat bubbles would sit on top of the chips while the builder is open. */
+body:has(#dialog-layer.trying-on) #house-bubble { display: none; }
+/* Phones: the builder is a bottom sheet under the explorer, so it stays short: one-line chips, no intro, and the
+   buy/wear footer pinned to the sheet's bottom edge. */
+@media (max-width: 520px) {
+  #dialog-body:has(.look-builder) .store-purpose, #dialog-body:has(.look-builder) > .intro { display: none; }
+  .look-chip { flex-direction: row; flex-wrap: wrap; justify-content: center; min-height: 42px; gap: 0 4px; padding: 4px; }
+  .look-chip-icon { font-size: 18px; }
+  .look-price { flex-basis: 100%; text-align: center; line-height: 1; }
+  .look-row { gap: 3px; }
+  .look-footer { position: sticky; bottom: 0; margin-top: 8px; padding: 8px 0 2px; background: #fffaf0; }
+}

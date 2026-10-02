@@ -2,7 +2,7 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toToon, toonify } from './toon.ts';
-import { LOOKS, type LookId } from './looks.ts';
+import { DEFAULT_LOOK, DEFAULT_PIVOTS, FIT, bodyFile, splitLook, type Fit, type LookId } from './looks.ts';
 import { loadWithRetry, DEFAULT_POLICY, type RetryPolicy } from './art-retry.ts';
 
 // Vite supplies the deployment prefix; direct Node tests use the root default.
@@ -376,7 +376,9 @@ export class HeroLibrary {
   private url: string;
   private loadScene: SceneLoader;
   private policy: RetryPolicy;
-  constructor(url = HERO_FILE, loadScene: SceneLoader = loadGltfScene, policy = DEFAULT_POLICY) { this.url = url; this.loadScene = loadScene; this.policy = policy; }
+  private dress?: (hero: T.Object3D, scene: T.Group) => void;
+  /** `dress` runs after each part is baked and before the ears merge: the character builder adds ears and a tail there. */
+  constructor(url = HERO_FILE, loadScene: SceneLoader = loadGltfScene, policy = DEFAULT_POLICY, dress?: (hero: T.Object3D, scene: T.Group) => void) { this.url = url; this.loadScene = loadScene; this.policy = policy; this.dress = dress; }
   get requested() { return this.loading !== null; }
   load(): Promise<void> {
     // Until the file arrives (a retry may bring it later) the procedural explorer stands in.
@@ -385,7 +387,7 @@ export class HeroLibrary {
       // Each posable part becomes one or two meshes; the shirt keeps its own material for recolouring.
       const shirt = (mesh: T.Mesh) => /^Hero shirt/.test((mesh.material as T.Material).name);
       for (const part of ['body', 'head', 'arm-left', 'arm-right', 'leg-left', 'leg-right', 'head-leaf']) { const node = hero.getObjectByName(part); if (node) bakeModel(node, { deep: false, keep: shirt }); }
-      mergeEars(hero);
+      this.dress?.(hero, scene); mergeEars(hero);
       toonify(hero); hero.traverse(o => { if (o instanceof T.Mesh) o.geometry.userData.sharedKit = true; });
       this.source = hero; this.ready = true;
     };
@@ -421,11 +423,71 @@ export const sceneryKit = new KitLibrary([KIT_FILES.scenery]);
 export const cropKit = new KitLibrary([KIT_FILES.crops,KIT_FILES.fruitCrops]);
 export const fishKit = new KitLibrary([KIT_FILES.fish]);
 export const heroKit = new HeroLibrary();
-/** Body styles (looks.ts): each its own hero file, downloaded the first time someone wears it. */
+/**
+ * Character-builder combinations (looks.ts): body x height is its own hero file; ears and tails come from
+ * hero-parts.glb (modelled on the default hero), placed with the height's FIT like gear, then baked into the head
+ * and body meshes, so every combination draws exactly what the default explorer draws. Raw files are fetched and
+ * parsed once and shared between the combinations that use them.
+ */
+const rawScenes = new Map<string, Promise<T.Group>>();
+let heroLoader: SceneLoader = loadGltfScene;
+/** Tests load the combination files from disk (Node has no fetch for model URLs); this also forgets cached kits. */
+export function useHeroLoader(load: SceneLoader) { heroLoader = load; rawScenes.clear(); heroStyleKits.clear(); }
+const rawScene = (file: string) => {
+  let p = rawScenes.get(file); if (!p) { p = heroLoader(modelUrl(file)); rawScenes.set(file, p); p.catch(() => rawScenes.delete(file)); }
+  return p.then(scene => scene.clone(true));
+};
+/** One vertex-coloured geometry from a parts-file piece, moved from default-hero space into a part's space. */
+export function bakePart(piece: T.Object3D, pivot: [number, number, number], fit?: Fit) {
+  piece.updateMatrixWorld(true);
+  const toPart = new T.Matrix4().makeTranslation(-pivot[0], -pivot[1], -pivot[2]);
+  if (fit) toPart.premultiply(new T.Matrix4().makeScale(...fit.scale)).premultiply(new T.Matrix4().makeTranslation(...fit.offset));
+  const pieces: T.BufferGeometry[] = [];
+  piece.traverse(o => {
+    if (!(o instanceof T.Mesh)) return;
+    let g = new T.BufferGeometry(); g.setAttribute('position', o.geometry.getAttribute('position').clone());
+    const n = o.geometry.getAttribute('normal'); if (n) g.setAttribute('normal', n.clone());
+    if (o.geometry.index) { g.setIndex(o.geometry.index.clone()); const flat = g.toNonIndexed(); g.dispose(); g = flat; }
+    g.applyMatrix4(toPart.clone().multiply(o.matrixWorld)); if (!n) g.computeVertexNormals();
+    const c = (o.material as Plain).color ?? new T.Color('#ffffff'), count = g.getAttribute('position').count, colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) colors.set([c.r, c.g, c.b], i * 3);
+    g.setAttribute('color', new T.BufferAttribute(colors, 3)); pieces.push(g);
+  });
+  const merged = pieces.length ? mergeGeometries(pieces, false) : null; pieces.forEach(p => p.dispose()); return merged;
+}
+/** Merges a baked geometry (part space) into the part's vertex-coloured mesh; false when the part has none. */
+export function mergeIntoPart(part: T.Object3D, extra: T.BufferGeometry) {
+  const target = part.children.find((o): o is T.Mesh => o instanceof T.Mesh && !Array.isArray(o.material) && !!(o.material as Plain).vertexColors && !!o.geometry.getAttribute('color'));
+  if (!target) return false;
+  let base = target.geometry, add = extra.clone().applyMatrix4(target.matrix.clone().invert());
+  if (base.index) base = base.toNonIndexed();
+  for (const name of Object.keys(add.attributes)) if (!base.getAttribute(name)) add.deleteAttribute(name);
+  const merged = mergeGeometries([base, add], false); add.dispose(); if (base !== target.geometry) base.dispose();
+  if (!merged) return false; target.geometry = merged; return true;
+}
+/** Puts a combination's ears (as the head-leaf, which mergeEars bakes into the head) and tail on a baked hero. */
+function dressEars(hero: T.Object3D, parts: T.Object3D, ears: string, fit: Partial<Record<string, Fit>>) {
+  const head = hero.getObjectByName('head'), body = hero.getObjectByName('body'); if (!head || !body) return;
+  const earPiece = parts.getObjectByName('ears-' + ears), tailPiece = parts.getObjectByName('tail-' + ears);
+  const earGeo = earPiece && bakePart(earPiece, DEFAULT_PIVOTS.head, fit.head), tailGeo = tailPiece && bakePart(tailPiece, DEFAULT_PIVOTS.body, fit.body);
+  if (tailGeo) { mergeIntoPart(body, tailGeo); tailGeo.dispose(); }
+  const like = head.children.find((o): o is T.Mesh => o instanceof T.Mesh && !!(o.material as Plain).vertexColors);
+  if (!earGeo || !like) return;
+  head.getObjectByName('head-leaf')?.removeFromParent(); // ears take the sprout's place (and its tuck-under-hats rule)
+  const leaf = new T.Group(); leaf.name = 'head-leaf'; leaf.add(new T.Mesh(earGeo, like.material)); head.add(leaf);
+}
 const heroStyleKits = new Map<string, HeroLibrary>();
 export function heroKitFor(look: LookId): HeroLibrary {
-  const file = LOOKS[look]?.file; if (!file) return heroKit;
-  let kit = heroStyleKits.get(look); if (!kit) { kit = new HeroLibrary(modelUrl(file)); heroStyleKits.set(look, kit); }
+  if (look === DEFAULT_LOOK) return heroKit;
+  let kit = heroStyleKits.get(look);
+  if (!kit) {
+    const l = splitLook(look), file = bodyFile(l.body, l.height); let parts: T.Group | null = null;
+    const load: SceneLoader = async () => { const [scene, p] = await Promise.all([rawScene(file), l.ears === 'none' ? null : rawScene('hero-parts.glb')]); parts = p;
+      if (p) scene.getObjectByName('head-leaf')?.removeFromParent(); // before baking, or the head bake would swallow the sprout beside the ears
+      return scene; };
+    kit = new HeroLibrary(modelUrl(file), load, DEFAULT_POLICY, hero => { if (parts) dressEars(hero, parts, l.ears, FIT[l.height]); });
+    heroStyleKits.set(look, kit);
+  }
   return kit;
 }
 // Gear the explorer can wear or hold, one file per group so each downloads only when first worn.
