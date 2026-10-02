@@ -57,6 +57,10 @@ import { FarmHelperView } from './farm-helper-view.ts';
 import { FarmHelperController } from './farm-helper-controller.ts';
 import { farmHelperPanel } from './farm-helper-ui.ts';
 import './helper.css';
+import { FriendCrew, postFor } from './friend-crew.ts';
+import { setFriendDresser } from './friend-view.ts';
+import { FRIENDS, FRIEND_IDS, type FriendId } from './friends.ts';
+import { friendPanel, lockedHint, RESCUE_LINES } from './friend-ui.ts';
 import './language.css';
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
@@ -609,6 +613,23 @@ const farmHelperController=new FarmHelperController({state:()=>state,context:far
   if(catchUp&&(result.collected.length||result.fed.length))toast(t('Your animal helper collected {count} products and fed {fed} animals.',{count:result.collected.length,fed:result.fed.length}),'🤖');
   if(modal==='pen')penDialog();
 }});
+// Rescued friends (friends.ts rules, friend-crew.ts cages/following/jobs, friend-view.ts looks, friend-ui.ts panel).
+setFriendDresser((color,gear)=>world.friendAvatar(color,gear));
+const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
+  robotBed:()=>helperView.task?.index,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform,
+  rescued(id,at){const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
+  locked(id){toast(lockedHint(id),'🔒');},
+  worked(id,task,r,at){
+    if(task.kind==='harvest'){harvestBurst(task.index,Object.keys(r.raw)[0]??'carrot');world.syncCrops();}else if(task.kind==='plant'){plantBurst(task.index);world.syncCrops();}
+    else if(task.kind==='feed')feedBurst(task.uid);else farmCollectFeedback(r.collected??[],at);
+    for(const [item,n] of Object.entries(r.cooked))floating('+'+n+' '+t(M.ITEMS[item]?.name??item),postFor(id).x,postFor(id).z,'item',1);
+    if(Object.keys(r.cooked).length)tone('pop');
+  },
+  arrived(ids){toast(t('{names} reached Clover Village and went to work!',{names:ids.map(id=>FRIENDS[id].name).join(', ')}),'🏡');void friendsCatchUp();}});
+frameListeners.add(dt=>crew.update(dt));
+function friendDialog(id:FriendId){openDialog('friend',FRIENDS[id].name,friendPanel(world.state,id),'RESCUED FRIEND',{garden:'🌱',farm:'🐄',cook:'🍳'}[FRIENDS[id].role]);}
+async function friendsCatchUp(){if(!(state.friends??[]).some(f=>f.home&&!f.paused))return;const r=await perform<Partial<Record<FriendId,{jobs:number;cooked:number}>>>('friendsCatchUp');const jobs=Object.values(r??{}).reduce((n,v)=>n+(v?.jobs??0),0);if(jobs)setTimeout(()=>toast(t('While you were away, your friends did {count} jobs.',{count:jobs}),'🤝'),3200);}
+let friendsHome=false;frameListeners.add(()=>{const home=started&&!visiting&&!flight&&world.planet==='home';if(home&&!friendsHome)void friendsCatchUp();friendsHome=home;});
 let farmHelperSettingsPending=false;
 async function farmHelperSetting(type:'buyFarmHelper'|'setFarmHelperPaused'|'setFarmHelperAutoFeed',payload:Record<string,unknown>={}){
   if(farmHelperSettingsPending||!farmHelperContext())return;
@@ -784,6 +805,8 @@ world.onInteract=async(e)=>{
   if(!started||uiBlocked())return;tone();if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
   else if(e.kind==='pen')penTap();
+  else if(e.kind==='cage')crew.tapCage(e);
+  else if(e.kind==='friend'&&e.index!==undefined)friendDialog(FRIEND_IDS[e.index]);
   else if(e.kind==='animal'){if(M.readyAnimals(state).some(a=>a.uid===e.animalUid))collectFarm(e.animalUid);else penDialog();}
   else if(e.kind==='home'){if(!await perform('rest'))return;toast('Home, sweet home. Your health is restored.','🏡');}
   else if(e.kind==='dropped'){if(!await perform('recoverBag'))return;world.syncDropped();toast('All your little treasures are back.','🎒');}
@@ -1150,6 +1173,7 @@ app.addEventListener('click',async event=>{
     case 'feed-all':{const before=new Set(M.farmOf(state).animals.filter(a=>M.canFeed(a)).map(a=>a.uid)),n=await perform('feedAll');if(n){tone('pop');for(const uid of before){const animal=M.farmOf(state).animals.find(a=>a.uid===uid);if(animal&&!M.canFeed(animal))feedBurst(uid);}toast(`Fed ${n} animal${n>1?'s':''}.`,'🥕');}penDialog();break;}
     case 'build-pen':buildPenAction();break;
     case 'expand-pen':if(await perform('expandPen')){tone('success');toast('The pen is bigger: room for 3 more chickens and 4 more cows.','🐔');}else toast(`You need ${M.penExpandCost(state)??0} energy to make the pen bigger.`,'ϟ');penDialog();break;
+    case 'friend-pause':{const id=button.dataset.kind as FriendId,f=state.friends?.find(f=>f.id===id);if(f&&await perform('setFriendPaused',{id,paused:!f.paused}))friendDialog(id);break;}
     case 'cook-dish':if(await perform('cookDish',{id})){tone('success');toast(`${t(M.ITEMS[id].name)} is ready. Enjoy!`,M.ITEMS[id].icon);cooking();}break;case 'graphics':graphics.choose(button.dataset.kind as QualitySetting);world.applyGraphics(graphics.profile,graphics.ratio);saveGraphics(graphics);await perform('settings',{settings:{lowGraphics:graphics.level==='low'}});settings();break;
     case 'zoom-in':case 'zoom-out':world.zoom=clampZoom(Math.round((world.zoom+(action==='zoom-in'?-ZOOM.button:ZOOM.button))*100)/100,'wheel');world.resize();$('#zoom-value').textContent=t(`${Math.round(world.zoom*100)}%`);break;
     case 'reset-confirm':openDialog('reset','Begin a brand-new story?',`<p class="intro">This replaces your ${persistence?'online account adventure':'offline adventure in this browser'}, including your garden, items, and levels.</p><div class="button-row"><button class="soft-button" data-action="settings">Keep my adventure</button><button class="primary danger-button" data-action="reset">Start fresh</button></div>`,'A FRESH START');break;
@@ -1227,4 +1251,4 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,drops,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone}});
+if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone}});

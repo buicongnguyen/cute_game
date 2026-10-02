@@ -37,6 +37,7 @@ export const KIT_FILES = {
   creatures: `${assetBase}assets/models/creatures.glb`,
   forestBirds: `${assetBase}assets/models/forest-birds.glb`,
   helper: `${assetBase}assets/models/helper.glb`,
+  cage: `${assetBase}assets/models/cage.glb`,
 } as const;
 export const HERO_FILE = `${assetBase}assets/models/hero.glb`;
 
@@ -390,3 +391,5 @@ export const dressingKit = new KitLibrary([KIT_FILES.worldsDressing]);
 export const farmKit = new KitLibrary([KIT_FILES.farm]);
 /** The garden helper (helper-view.ts), loaded once a helper is owned or seen. */
 export const helperKit = new KitLibrary([KIT_FILES.helper]);
+/** The prisoners' cages (cage-view.ts), loaded the first time a cage is shown. */
+export const cageKit = new KitLibrary([KIT_FILES.cage]);

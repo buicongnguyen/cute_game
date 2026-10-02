@@ -1,6 +1,7 @@
 import * as Game from './model.ts';
 import * as Helper from './helper.ts';
 import * as FarmHelper from './farm-helper.ts';
+import * as Friends from './friends.ts';
 import { huntFish } from './fish-hunting.ts';
 import { claimProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 
@@ -83,6 +84,18 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'farmHelperCollect': result = FarmHelper.helperCollect(state, integer(p.uid), now); if (!(result as unknown[]).length) return invalid(); break;
     case 'farmHelperFeed': result = FarmHelper.helperFeed(state, integer(p.uid), now); break;
     case 'farmHelperCatchUp': if (!FarmHelper.canWork(state)) return invalid(); result = FarmHelper.catchUp(state, now); break;
+    case 'rescueFriend': result = Friends.rescue(state, string(p.id, 20) as Friends.FriendId, now); break;
+    case 'friendsArrive': result = Friends.arriveHome(state, { x: number(p.x), z: number(p.z) }); break;
+    case 'setFriendPaused': if (typeof p.paused !== 'boolean') return invalid(); result = Friends.setFriendPaused(state, string(p.id, 20) as Friends.FriendId, p.paused); break;
+    case 'friendWork': {
+      const task = p.index !== undefined ? { kind: string(p.kind, 10), index: index() } : { kind: string(p.kind, 10), uid: integer(p.uid) };
+      if (!['harvest', 'plant', 'collect', 'feed'].includes(task.kind) || ('index' in task) !== (task.kind === 'harvest' || task.kind === 'plant')) return invalid();
+      // Another worker (the robot, the player, a friend) getting there first is normal: report it quietly, not as an error.
+      result = Friends.friendWork(state, string(p.id, 20) as Friends.FriendId, task as Friends.FriendTask, now) ?? { kind: task.kind, raw: {}, cooked: {}, skipped: true }; break;
+    }
+    case 'friendsCatchUp': result = Friends.friendsCatchUp(state, now); break;
+    case 'giveFriendGear': result = Friends.giveGear(state, string(p.friend, 20) as Friends.FriendId, id()); break;
+    case 'takeFriendGear': result = Friends.takeGear(state, string(p.friend, 20) as Friends.FriendId, string(p.slot, 10)); break;
     case 'fishHunt': result = huntFish(state, { weaponId: string(p.weaponId), pondId: string(p.pondId), slot: integer(p.slot), aim: p.aim as { x: number; z: number } }, p.from as { x: number; z: number }, now); break;
     case 'claimProgress': result = claimProgress(state, kind() as ProgressKind, id(), now); break;
     case 'claimQuest': result = claimProgress(state, 'story', `story:${state.progression.story.index}`, now); break;

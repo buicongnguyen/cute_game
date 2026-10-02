@@ -1,6 +1,7 @@
 import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TABLES, UPGRADES, STARTING_PLOTS, MAX_EXTRA_PLOTS, MAX_DECORATIONS, STORY_STEPS, canonicalItem, type ItemId, type Inventory, type GearSlot, type CropId, type PlanetId, type BuffKey, type BuffDef, type WeaponDef } from './content.ts';
 import { createProgression, normalizeProgression, recordEvent, progressEntries, claimProgress, type ProgressionState } from './progression.ts';
 import { parseHelper, type HelperState } from './helper-state.ts';
+import { parseFriends, parseBosses, noteBossDefeat, type Friend } from './friends-state.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
 import { LEGACY_CROP_IDS } from './content.ts';
@@ -9,6 +10,7 @@ export * from './weapon-forge.ts';
 export * from './content.ts';
 export * from './farm.ts';
 export * from './helper-state.ts';
+export * from './friends-state.ts';
 export { recordEvent, progressEntries, claimProgress, type ProgressKind, type ProgressEntry } from './progression.ts';
 export interface Plot {
     crop: CropId | null;
@@ -114,6 +116,10 @@ export interface SaveState {
     nextPlantId?: number;
     /** Harpoon cooldowns and individual pond restock deadlines survive reloads. */
     hunting?: HuntingState;
+    /** Rescued friends (friends.ts); missing in older saves = nobody rescued. */
+    friends?: Friend[];
+    /** Bosses defeated at least once, as planet:type: they unlock the prisoners' cages for good (a respawn never re-locks one). */
+    bosses?: string[];
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
@@ -416,7 +422,7 @@ export function rollLoot(type: string, luck = 0, rng: () => number = Math.random
 /** bank=false leaves the loot out of the bag: the game tosses it onto the ground instead (drops.ts). */
 export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true) { gainXp(s, xp); const loot = rollLoot(type, activeStats(s).luck, rng); if (bank) for (const item of loot)
     addItem(s, item.id, item.count); recordEvent(s, 'kill', 1, type); if (boss)
-    recordEvent(s, 'boss', 1, type); return loot; }
+    { recordEvent(s, 'boss', 1, type); noteBossDefeat(s, type); } return loot; }
 export function chooseFish(s: SaveState, water: string = s.planet, rng: () => number = Math.random) { const choices = FISH_WEIGHTS[water] || FISH_WEIGHTS.home, luck = activeStats(s).luck, weighted = choices.map(([id, weight]) => [id, weight * (ITEMS[id].legend ? 1 + luck * 1.5 : ITEMS[id].rare ? 1 + luck : 1)] as const); let draw = rng() * weighted.reduce((sum, [, w]) => sum + w, 0); for (const [id, weight] of weighted) {
     draw -= weight;
     if (draw <= 0)
@@ -652,6 +658,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.farm = parseFarm(v.farm);
         const hunting = parseHunting(v.hunting); if (hunting) s.hunting = hunting;
         if (record(v.helper)) s.helper = parseHelper(v.helper);
+        const friends = parseFriends(v.friends), bosses = parseBosses(v.bosses); if (friends.length) s.friends = friends; if (bosses.length) s.bosses = bosses;
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
         if (record(v.collection))
             for (const [id, n] of Object.entries(v.collection))

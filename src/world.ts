@@ -704,6 +704,8 @@ export class World {
       const tip=new T.Object3D();tip.name='rod-tip';tip.position.set(0,1.85,0);rod.add(tip);hand.add(rod);
     }
   }
+  /** A rescued friend's body (friend-view.ts buildFriend): the explorer's model and wear-kit path, in the friend's colour. */
+  friendAvatar(color:string,gear:SaveState['gear']){return this.avatar(color,gear);}
   /** Gear shown on the explorer while trying something on in a menu: local only, never saved or sent online. */
   tryOnGear?:SaveState['gear']|null;
   refreshPlayer() {
