@@ -6,7 +6,7 @@
  */
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { KitLibrary, heroKit, wearKit, weaponKit, petKit } from './assets.ts';
+import { KitLibrary, heroKit, wearKit, weaponKit, petKit, modelUrl } from './assets.ts';
 import { toonMaterial } from './toon.ts';
 import { FURNITURE, FRIEND_SPOTS, HOUSE, ROOMS, WALL, WALLS, roomAt, type Placement } from './house.ts';
 import { buildFriend } from './friend-view.ts';
@@ -16,8 +16,7 @@ import { FRIENDS, type Friend, type FriendId } from './friends.ts';
 import { part } from './part-cache.ts';
 import { HANGOUTS, SCHEDULE_SECONDS, assignHangouts, type DecorPlacement, type Hangout } from './house-activities.ts';
 
-const assetBase = import.meta.env?.BASE_URL ?? '/';
-export const HOUSE_FILE = `${assetBase}assets/models/house.glb`;
+export const HOUSE_FILE = modelUrl('house.glb');
 /** The interior kit, loaded the first time someone opens the cottage door. */
 export const houseKit = new KitLibrary([HOUSE_FILE]);
 

@@ -1,0 +1,11 @@
+/* Small, unobtrusive notices (art-status.ts): above the bottom hint bar, out of the HUD's corners. */
+.art-pill {
+  position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 30;
+  max-width: calc(100vw - 32px); padding: 6px 14px; border: 2px solid rgba(255, 255, 255, .9); border-radius: 999px;
+  background: rgba(52, 64, 46, .82); color: #fff; font: 800 13px 'Nunito Variable', sans-serif; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; cursor: pointer; box-shadow: 0 3px 0 rgba(44, 58, 38, .2);
+}
+.art-pill[hidden] { display: none; }
+.update-note { background: linear-gradient(180deg, #8fe06a, #4cc93a); bottom: calc(122px + env(safe-area-inset-bottom)); }
+/* Portrait phones: the bottom holds the joystick, skills and the action prompt; open sky sits under the quest cards. */
+@media (max-width: 620px) { .art-pill { bottom: auto; top: calc(205px + env(safe-area-inset-top)); font-size: 12px; } .update-note { bottom: auto; top: calc(241px + env(safe-area-inset-top)); } }

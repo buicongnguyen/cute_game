@@ -1,5 +1,6 @@
 import './platform.css';
 import { t, onLanguageChange } from './i18n.ts';
+import { registerWorker } from './art-status.ts';
 interface InstallPrompt extends Event {prompt():Promise<void>;userChoice:Promise<{outcome:string}>}
 export async function toggleFullscreen(notice:(message:string)=>void){
   try {
@@ -23,7 +24,7 @@ export function initPlatform(notice:(message:string)=>void){
   });
   window.addEventListener('appinstalled',()=>{install.hidden=true;notice(t('Zoo Garden is installed. Your offline adventure is ready anywhere.'));});dock.append(install);const slot=document.querySelector('#platform-slot');if(slot)slot.append(dock);else document.body.append(dock);
   onLanguageChange(()=>{fullscreen.title=t('Fullscreen');fullscreen.setAttribute('aria-label',t('Toggle fullscreen'));install.textContent=t('Install game');});
-  if('serviceWorker' in navigator&&import.meta.env.PROD)void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(()=>{});
+  if(import.meta.env.PROD)registerWorker(`${import.meta.env.BASE_URL}sw.js`);
 }
 
 

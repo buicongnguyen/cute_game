@@ -9,7 +9,9 @@ import { t, localizeHtml, getLanguage, setLanguage, onLanguageChange, bindLangua
 import './menus.css';
 import { Box3, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
-import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit } from './assets.ts';
+import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, KIT_FILES } from './assets.ts';
+import { onArtLoaded } from './art-retry.ts';
+import { initArtNote } from './art-status.ts';
 import { SpaceFlight, planRoutes, type RouteOption, type SpaceEvent } from './space.ts';
 import { SpaceView } from './space-view.ts';
 import { ShipSequence } from './ship-sequence.ts';
@@ -201,6 +203,8 @@ void spaceKit.load().then(() => world.applyRefinedAssets());
 void cropKit.load();
 // If the scenery kit arrived after the first build, rebuild while the title screen is still up.
 if(!sceneryKit.ready)void sceneryKit.load().then(()=>{if(sceneryKit.ready&&!started){world.build(state.planet);world.refreshPlayer();}});
+// Models that only arrive after their retries (art-retry.ts) swap in without a reload; before Play a rebuild also brings in late trees.
+initArtNote();onArtLoaded(url=>{if(!started){world.build(state.planet);world.refreshPlayer();}else world.refreshArt();if(url===KIT_FILES.fish&&!fishGame)stockPonds();});
 
 const sfx=new Sfx();
 function tone(kind: Sound = 'click') { sfx.enabled = state.settings.sound; sfx.play(kind); }
@@ -691,7 +695,7 @@ async function farmHelperSetting(type:'buyFarmHelper'|'setFarmHelperPaused'|'set
 const rodTip=new Vector3();
 function tipPosition(){const tip=world.player.getObjectByName('rod-tip');if(tip){world.player.updateWorldMatrix(true,true);tip.getWorldPosition(rodTip);}else rodTip.set(world.position.x,1.4,world.position.z);return rodTip;}
 function pondView(e:Entity):PondView{return {id:e.id,x:e.x,z:e.z,rx:e.pond!.rx,rz:e.pond!.rz,surface:e.pond!.surface,waterId:e.waterId??state.planet};}
-function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.entities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
+function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.outdoorEntities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
 // Rod fish follow the harpoon slots' species so picking up hunting gear by the shore keeps the pond's look.
 function pondStock(pond:PondView){const hunt=huntingPondAt(state.planet,pond.x,pond.z);return hunt?fishHuntTargets(hunt,0).map(t=>t.id):null;}
 const formatSize=(cm:number)=>cm>=100?`${(cm/100).toFixed(2).replace(/\.?0+$/,'')} m`:`${cm} cm`;
