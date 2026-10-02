@@ -277,7 +277,7 @@ async function start() {settle();showTrimNote();const name=$<HTMLInputElement>('
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
-async function helperCatchUp(){const r=actionHandler?await workPerform<ReturnType<typeof Helper.catchUp>>('helperCatchUp'):change(()=>applyGameAction(state,{type:'helperCatchUp',payload:{away:explorerOut()}}) as ReturnType<typeof Helper.catchUp>);if(r&&(r.harvested.length||r.planted.length))setTimeout(()=>toast(t('While you were away, Bolt harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
+async function helperCatchUp(){const r=actionHandler?await workPerform<ReturnType<typeof Helper.catchUp>>('helperCatchUp'):change(()=>applyGameAction(state,{type:'helperCatchUp',payload:{away:catchUpAway()}}) as ReturnType<typeof Helper.catchUp>);if(r&&(r.harvested.length||r.planted.length))setTimeout(()=>toast(t('While you were away, Bolt harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
 function updateHud() {
   const known=new Set(world.state.discovered),discoveryCount=t('Discovered {count}/{total} planets',{count:known.size,total:Object.keys(M.PLANETS).length});
   if(setHtml($('#discovery-text'),`<strong>🔭 ${esc(world.state.name)}</strong><span>${esc(discoveryCount)}</span><small aria-hidden="true">${Object.entries(M.PLANETS).map(([id,planet])=>known.has(id as M.PlanetId)?planet.icon:'❔').join(' ')}</small>`)){$('#discovery-progress').setAttribute('aria-label',`${world.state.name} · ${discoveryCount} · ${t('Discovery log')}`);}
@@ -400,8 +400,11 @@ function positionLabels(){
 }
 /** The explorer is in the wilds or off home: the workers' harvest goes to the house chest (delivery.ts). */
 function explorerOut(){return explorerAway(world.planet,world.position.x,world.position.z);}
+/** Helpers only work at home while the explorer is on this planet: the catch-up right after a trip (another planet or a visit) is work done while away, so it goes to the chest too. */
+let tripBackUntil=0,tripSeen=false;
+function catchUpAway(){return explorerOut()||Date.now()<tripBackUntil;}
 /** perform() for the workers' jobs: tells the rules whether the explorer is out (the server uses its own pose). */
-function workPerform<T=any>(type:string,payload:Record<string,unknown>={}){return perform<T>(type,WORK_ACTIONS.has(type)||CATCH_UP_ACTIONS.has(type)?{...payload,away:explorerOut()}:payload);}
+function workPerform<T=any>(type:string,payload:Record<string,unknown>={}){return perform<T>(type,CATCH_UP_ACTIONS.has(type)?{...payload,away:catchUpAway()}:WORK_ACTIONS.has(type)?{...payload,away:explorerOut()}:payload);}
 /** A save from before the 24-bed cap lost its extra beds (model.ts trimGarden): say once what came back. */
 function showTrimNote(){const n=state.gardenTrim;if(!n)return;void perform('ackTrim');setTimeout(()=>toast(t('Your garden now holds {max} beds: {beds} extra beds were refunded for ϟ {energy}.',{max:M.MAX_PLOTS,beds:n.beds,energy:n.energy})+(Object.keys(n.items).length?' '+t('Their crops are in your bag.'):''),'🌱'),1800);}
 /** Harvest orbs fly to the bag, or into the chest when the harvest is stored there (never across the map). */
@@ -710,7 +713,7 @@ frameListeners.add(dt=>crew.update(dt));
 function friendDialog(id:FriendId){openDialog('friend',FRIENDS[id].name,friendPanel(world.state,id),'RESCUED FRIEND',{garden:'🌱',farm:'🐄',cook:'🍳'}[FRIENDS[id].role]);}
 async function friendsCatchUp(){if(!(state.friends??[]).some(f=>f.home&&!f.paused))return;const r=await workPerform<Partial<Record<FriendId,{jobs:number;cooked:number}>>>('friendsCatchUp');const jobs=Object.values(r??{}).reduce((n,v)=>n+(v?.jobs??0),0);if(jobs)setTimeout(()=>toast(t('While you were away, your friends did {count} jobs.',{count:jobs}),'🤝'),3200);}
 const storedNote=initStoredNote({state:()=>state,home:()=>started&&!visiting&&!flight&&world.planet==='home'&&world.state===state&&!explorerOut(),perform,openChest:()=>storage(),t,name:id=>t(M.ITEMS[id as M.ItemId]?.name??id),took:n=>{tone('click');toast(t('Took {count} items from the chest.',{count:n}),'📦');}},app);frameListeners.add(dt=>storedNote.frame(dt));
-let friendsHome=false;frameListeners.add(()=>{const home=started&&!visiting&&!flight&&world.planet==='home';if(home&&!friendsHome){void friendsCatchUp();void helperCatchUp();}friendsHome=home;});
+let friendsHome=false;frameListeners.add(()=>{const home=started&&!visiting&&!flight&&world.planet==='home';if(started&&!home)tripSeen=true;if(home&&!friendsHome){if(tripSeen){tripBackUntil=Date.now()+120_000;tripSeen=false;}void friendsCatchUp();void helperCatchUp();}friendsHome=home;});
 let farmHelperSettingsPending=false;
 async function farmHelperSetting(type:'buyFarmHelper'|'setFarmHelperPaused'|'setFarmHelperAutoFeed',payload:Record<string,unknown>={}){
   if(farmHelperSettingsPending||!farmHelperContext())return;

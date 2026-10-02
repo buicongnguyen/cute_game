@@ -270,8 +270,13 @@ test('14. catch-ups go to the chest only when away or after a minute idle; a tab
   assert.equal(deliversToChest('helperCatchUp', { away: true }, 0), true); assert.equal(deliversToChest('helperHarvest', {}, 1e9), false, 'live work follows the pose only');
   const s = M.newGame(); s.level = 30; s.energy = 5000; H.buyHelper(s); s.plots[0].crop = 'carrot'; s.plots[0].plantedAt = T0 - M.CROPS.carrot.duration - 1; s.savedAt = T0 - 2000;
   act(s, 'helperCatchUp'); assert.equal(s.bag.carrot, 1); assert.equal(s.chest.carrot, undefined);
-  // The robot's catch-up runs on every arrival home, like the friends'.
-  assert.match(src('main.ts'), /if\(home&&!friendsHome\)\{void friendsCatchUp\(\);void helperCatchUp\(\);\}/);
+  // The robot's catch-up runs on every arrival home, like the friends'; right after a trip (another planet or a visit)
+  // it counts as work done while away, so the client asks for the chest and the server agrees from its own trip clock.
+  const main = src('main.ts');
+  assert.match(main, /if\(home&&!friendsHome\)\{if\(tripSeen\)\{tripBackUntil=Date\.now\(\)\+120_000;tripSeen=false;\}void friendsCatchUp\(\);void helperCatchUp\(\);\}/);
+  assert.match(main, /CATCH_UP_ACTIONS\.has\(type\)\?\{\.\.\.payload,away:catchUpAway\(\)\}/);
+  assert.match(src('../server/action-service.mjs'), /CATCH_UP_ACTIONS\.has\(data\.type\)&&now-\(peer\.tripAt\|\|0\)<120000/);
+  assert.match(src('../server/server.mjs'), /peer\.tripAt = now/);
 });
 test('14. LOW: the cook\'s pot holds back only what it took in this action', () => {
   const s = M.newGame(); s.friends = [{ id: 'pepper', role: 'cook', rescuedAt: 1, gear: {}, home: true, pot: { egg: 4 } }];

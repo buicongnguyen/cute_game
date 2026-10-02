@@ -169,6 +169,7 @@ export async function createGameServer(options = {}) {
     leave(peer);
     const room = existing || { id: key, members: new Set(), host: null, enemies: [], environment:null, requests:new Map(), epoch: 0, killed: new Set(), contributors: new Map(), lastSnapshot: 0 };
     rooms.set(key, room); room.members.add(peer.account.id);
+    if (peer.planet && peer.planet !== 'home' || peer.visit) peer.tripAt = Date.now(); // leaving a trip: delivery.ts catch-ups go to the chest
     peer.planet = planet; peer.party = party; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9 };
     elect(room);
     send(peer.socket, { type: 'joined', id: peer.account.id, room: key, party, host: room.host, planet, visiting:visitId, players: roster(room), enemies: room.enemies, environment:room.environment, epoch: room.epoch });
@@ -310,7 +311,7 @@ export async function createGameServer(options = {}) {
           const distance = Math.hypot(x - peer.pose.x, z - peer.pose.z);
           if (peer.poseAt && distance > 55 * elapsed + 8 && !(Math.hypot(x, z) < 2)) return;
           const combat=combatAuthority.engineFor(peer).sim;
-          peer.poseAt = now; peer.pose = { x, z, y: number(message.y, 0, -30, 50), facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0} };
+          peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; peer.pose = { x, z, y: number(message.y, 0, -30, 50), facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0} };
           broadcast(room, { type: 'pose', player: presence(peer) }, account.id);
         } else if (message.type === 'chat') {
           if (!room) throw failure(409, 'Join a world before sending a message.');
