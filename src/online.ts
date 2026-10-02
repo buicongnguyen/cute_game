@@ -1,17 +1,19 @@
 import type { GameBridge, NetworkDrop } from './game-bridge.ts';
-import { newGame, type SaveState, type PlanetId } from './model.ts';
+import { newGame, type SaveState, type PlanetId, type Difficulty } from './model.ts';
 import type { LookId } from './looks.ts';
 import './online.css';
 import { t, onLanguageChange } from './i18n.ts';
 import {gameplayKey} from './gameplay-controls.ts';
 import type {GameIntent,ActionReply} from './actions.ts';
 
-interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];look?:LookId;online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string }
+interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];look?:LookId;online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string;difficulty?:string }
 interface Home extends Explorer { discovered?:PlanetId[]; plots:SaveState['plots'];farm?:SaveState['farm'];placed?:unknown[];decorations?:unknown[];helper?:unknown;friends?:unknown[] }
 interface EnemyState { id:string;x:number;z:number;hp:number;maxHp:number;[key:string]:unknown }
 interface NetworkWorld {
   updateRemotePlayers(players:Explorer[]):void;clearRemotePlayers():void;
   setNetworkRole(role:'host'|'peer'|null):void;
+  /** The host's difficulty while someone else hosts the room (creature scale, the Settings note); null otherwise. */
+  roomDifficulty:Difficulty|null;
   enemySnapshots():EnemyState[];applyEnemySnapshots(enemies:EnemyState[]):void;
   environmentSnapshot():{time:number;lamps:[number,number][]};applyEnvironmentSnapshot(snapshot:{time:number;lamps:[number,number][]}):void;
   onRemoteDamage:(id:string,amount:number,source?:string,enemyId?:string)=>void;
@@ -127,12 +129,15 @@ export function initOnline(game:GameBridge) {
     authority(null);world().clearRemotePlayers();game.setVisiting(null);game.setPersistence(null);game.setActionHandler(null);const previousOffline=offline||game.getOfflineState();if(previousOffline)game.applyState(previousOffline);offline=null;
     status='Play together';setSaveStatus('● Offline adventure restored');refreshButton();render();announce('Your online session ended. Sign in again to continue; pending online progress is kept on this device.');
   }
+  /** Mirrors the host's difficulty into the world (server.mjs presence carries it). */
+  function syncRoomDifficulty(){const d=host&&host!==account?.id?players.get(host)?.difficulty:null;world().roomDifficulty=d==='easy'||d==='normal'||d==='hard'?d:null;}
   function renderPlayers(){
+    syncRoomDifficulty();
     const local=game.getPresence();const space=visiting?`home:${visiting}`:local.planet==='home'&&Math.hypot(local.x,local.z)<18?`home:${account?.id}`:'wild';
     world().updateRemotePlayers([...players.values()].filter(player=>player.id!==account?.id&&player.planet===local.planet&&(player.space==='wild'||player.space===space)));
   }
   function authority(next:string|null,enemies?:EnemyState[]){
-    const becomingHost=next===account?.id&&host!==next;host=next;
+    const becomingHost=next===account?.id&&host!==next;host=next;syncRoomDifficulty();
     if(enemies?.length&&(becomingHost||host!==account?.id))world().applyEnemySnapshots(enemies);
     const role=account&&socket?.readyState===WebSocket.OPEN?(host===account.id?'host':'peer'):null;
     world().setNetworkRole(role);

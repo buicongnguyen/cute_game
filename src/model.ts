@@ -6,7 +6,7 @@ import { parseLooks, type Looks } from './looks.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
 import { LEGACY_CROP_IDS } from './content.ts';
-import { cropLevel, cropXp, sellPrice, kitchenOpen, isDifficulty, type Difficulty } from './difficulty.ts';
+import { cropLevel, cropXp, sellPrice, kitchenOpen, isDifficulty, difficultyOf, rewardScale, type Difficulty } from './difficulty.ts';
 import { parseHunting, type HuntingState } from './fish-hunting.ts';
 export * from './weapon-forge.ts';
 export * from './content.ts';
@@ -25,6 +25,8 @@ export interface Plot {
     growDuration?: number;
     /** Changes on every planting so delayed harvest/theft requests cannot target a replacement crop. */
     generation?: string;
+    /** The difficulty at planting: the harvest's XP and value follow it, so switching never re-prices a growing crop. */
+    difficulty?: Difficulty;
 }
 export interface Decoration {
     uid: string;
@@ -87,6 +89,8 @@ export interface SaveState {
         placeBeds?: boolean;
         /** Easy (default; every old save), Normal or Hard: difficulty.ts reads prices and rules through it. */
         difficulty?: Difficulty;
+        /** When the difficulty was last lowered (difficulty.ts LOWER_COOLDOWN_MS: once a day). */
+        difficultyLoweredAt?: number;
     };
     worldRewards: WorldRewards;
     buffs: Partial<Record<BuffKey, {
@@ -175,7 +179,7 @@ export function removeItem(inv: Inventory, raw: ItemId, count = 1) { const id = 
     return false; inv[id]! -= count; if (!inv[id])
     delete inv[id]; return true; }
 export function gainXp(s: SaveState, amount: number, now = Date.now()): number { if (!Number.isFinite(amount) || amount <= 0)
-    return 0; const before = s.level; const gained = amount * (1 + activeStats(s, now).xp); if (!Number.isFinite(gained))
+    return 0; const before = s.level; const gained = amount * (1 + activeStats(s, now).xp) * rewardScale(s); /* Hard: +15% */ if (!Number.isFinite(gained))
     return 0; if (!Number.isFinite(s.xp + gained))
     return 0; s.xp += gained; let guard = 0; while (s.xp >= xpNeeded(s.level) && guard++ < 10000) {
     s.xp -= xpNeeded(s.level);
@@ -184,14 +188,16 @@ export function gainXp(s: SaveState, amount: number, now = Date.now()): number {
 } return s.level - before; }
 export function plant(s: SaveState, index: number, raw: CropId, now = Date.now()) { const crop = canonicalItem(raw), p = s.plots[index], def = Object.hasOwn(CROPS, crop) ? CROPS[crop] : undefined; if (!p || p.crop || !def || cropLevel(s, crop) > s.level || !Number.isFinite(now) || now < 0)
     return false; if (def.seed && !removeItem(s.bag, def.seed))
-    return false; p.crop = crop; p.plantedAt = now; p.growDuration = def.duration; s.nextPlantId = (s.nextPlantId || 0) + 1; p.generation = `${now}-${s.nextPlantId}`; return true; }
+    return false; p.crop = crop; p.plantedAt = now; p.growDuration = def.duration; p.difficulty = difficultyOf(s); s.nextPlantId = (s.nextPlantId || 0) + 1; p.generation = `${now}-${s.nextPlantId}`; return true; }
 export function plantAll(s: SaveState, crop: CropId, now = Date.now()) { let count = 0; s.plots.forEach((_, i) => { if (plant(s, i, crop, now))
     count++; }); return count; }
 export function cropDuration(p: Plot) { const def = p.crop && Object.hasOwn(CROPS, p.crop) ? CROPS[p.crop] : undefined; return def ? (Number.isFinite(p.growDuration) && p.growDuration! > 0 ? p.growDuration! : def.duration) : 0; }
 export function cropProgress(p: Plot, now = Date.now()) { const duration = cropDuration(p); return duration ? Math.max(0, Math.min(1, (now - p.plantedAt) / duration)) : 0; }
 export function harvest(s: SaveState, index: number, now = Date.now()): CropId | null { const p = s.plots[index]; if (!Number.isFinite(now) || now < 0 || !p?.crop || !(cropProgress(p, now) >= 1))
     return null; const id = p.crop; if (!addItem(s, id))
-    return null; p.crop = null; p.plantedAt = 0; delete p.growDuration; delete p.generation; gainXp(s, cropXp(s, id), now); recordEvent(s, 'harvest', 1, id, now); return id; }
+    return null; const at = isDifficulty(p.difficulty) ? { settings: { difficulty: p.difficulty } } : s; p.crop = null; p.plantedAt = 0; delete p.growDuration; delete p.generation; delete p.difficulty;
+    // Priced as planted: a tree planted on Easy and picked on Normal pays the Easy XP, and the price gap at once.
+    gainXp(s, cropXp(at, id), now); s.energy += Math.max(0, sellPrice(at, id) - sellPrice(s, id)); recordEvent(s, 'harvest', 1, id, now); return id; }
 export function harvestAll(s: SaveState, now = Date.now()) { const harvested: CropId[] = []; s.plots.forEach((_, i) => { const id = harvest(s, i, now); if (id)
     harvested.push(id); }); return harvested; }
 export function fertilize(s: SaveState, index: number, timeOrItem: number | string = Date.now(), raw = 'spore') {
@@ -419,15 +425,16 @@ export function collectStardust(s: SaveState, rng: () => number = Math.random) {
 export const QUESTS = STORY_STEPS.map((q, i) => ({ title: q.title, task: q.title, target: q.target, icon: q.icon, counter: q.condition || q.event || 'level', energy: 0, xp: 0, hint: `Chapter ${q.chapter + 1} · Step ${i + 1}` }));
 export function questProgress(s: SaveState) { return progressEntries(s, 'story')[0]?.progress || 0; }
 export function claimQuest(s: SaveState) { return claimProgress(s, 'story', `story:${s.progression.story.index}`); }
-export function rollLoot(type: string, luck = 0, rng: () => number = Math.random) { const loot: {
+/** boost scales every drop chance (Hard: rewardScale). */
+export function rollLoot(type: string, luck = 0, rng: () => number = Math.random, boost = 1) { const loot: {
     id: string;
     count: number;
 }[] = []; for (const [id, chance, min, max] of LOOT_TABLES[type] || []) {
-    if (rng() < Math.min(1, chance * (chance < .5 ? 1 + Math.max(0, luck) : 1)))
+    if (rng() < Math.min(1, boost * chance * (chance < .5 ? 1 + Math.max(0, luck) : 1)))
         loot.push({ id, count: min + Math.min(max - min, Math.floor(rng() * (max - min + 1))) });
 } return loot; }
 /** bank=false leaves the loot out of the bag: the game tosses it onto the ground instead (drops.ts). */
-export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true) { gainXp(s, xp); const loot = rollLoot(type, activeStats(s).luck, rng); if (bank) for (const item of loot)
+export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true) { gainXp(s, xp); const loot = rollLoot(type, activeStats(s).luck, rng, rewardScale(s)); if (bank) for (const item of loot)
     addItem(s, item.id, item.count); recordEvent(s, 'kill', 1, type); if (boss)
     { recordEvent(s, 'boss', 1, type); noteBossDefeat(s, type); } return loot; }
 export function chooseFish(s: SaveState, water: string = s.planet, rng: () => number = Math.random) { const choices = FISH_WEIGHTS[water] || FISH_WEIGHTS.home, luck = activeStats(s).luck, weighted = choices.map(([id, weight]) => [id, weight * (ITEMS[id].legend ? 1 + luck * 1.5 : ITEMS[id].rare ? 1 + luck : 1)] as const); let draw = rng() * weighted.reduce((sum, [, w]) => sum + w, 0); for (const [id, weight] of weighted) {
@@ -599,7 +606,7 @@ export function parseSave(raw: string | null): SaveState | null {
             const duration = crop ? CROPS[crop].duration / (oldCropTimers && LEGACY_CROP_IDS.includes(crop) ? 10 : 1) : 0;
             const growDuration = crop && record(p) && typeof p.growDuration === 'number' && Number.isFinite(p.growDuration) && p.growDuration > 0 && p.growDuration <= 14 * 86400000 ? p.growDuration : duration;
             const generation = crop ? record(p) && typeof p.generation === 'string' && /^[a-zA-Z0-9:_-]{1,100}$/.test(p.generation) ? p.generation : `legacy:${i}:${plantedAt}:${crop}` : undefined;
-            return { crop, plantedAt, ...point, ...rotation, ...(crop ? { growDuration, generation } : {}) };
+            return { crop, plantedAt, ...point, ...rotation, ...(crop ? { growDuration, generation, ...(record(p) && isDifficulty(p.difficulty) ? { difficulty: p.difficulty as Difficulty } : {}) } : {}) };
         });
         if (legacy) {
             const target = Math.min(STARTING_PLOTS + MAX_EXTRA_PLOTS, s.plots.length + 3);
@@ -619,6 +626,7 @@ export function parseSave(raw: string | null): SaveState | null {
         if(settings.joystickSide==='left'||settings.joystickSide==='right')s.settings.joystickSide=settings.joystickSide;
         if (settings.placeBeds === true) s.settings.placeBeds = true;
         s.settings.difficulty = isDifficulty(settings.difficulty) ? settings.difficulty : 'easy'; // saves from before the setting play on Easy
+        if (typeof settings.difficultyLoweredAt === 'number' && Number.isFinite(settings.difficultyLoweredAt) && settings.difficultyLoweredAt > 0) s.settings.difficultyLoweredAt = settings.difficultyLoweredAt;
         const rewards = record(v.worldRewards) ? v.worldRewards : {};
         if (record(rewards.mineReadyAt))
             for (const [key, times] of Object.entries(rewards.mineReadyAt)) {

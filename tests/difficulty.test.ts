@@ -28,7 +28,7 @@ test('Easy keeps every current value', () => {
   assert.equal(M.priceOf(s, 'chicken'), 25); assert.equal(M.priceOf(s, 'cow'), 70); assert.equal(M.priceOf(s, 'duck'), 220); assert.equal(M.priceOf(s, 'pig'), 380);
   assert.equal(M.kitchenOpen(s), true); s.bag.carrot = 1; assert.equal(M.cook(s, 'carrot'), true);
   const c = M.buyAnimal(game('easy'), 'chicken', T0)!; assert.equal(c.pace, undefined); assert.equal(M.productDuration(c), M.ANIMALS.chicken.productMs);
-  assert.deepEqual(M.creatureScale('easy'), { hp: 1, damage: 1 });
+  assert.deepEqual(M.hardScale('easy'), { hp: 1, damage: 1 });
 });
 
 for (const d of ['normal', 'hard'] as const) test(`${d}: kitchen at level 14 (Pepper only gathers before), leaner later fruit trees, dearer slower livestock`, () => {
@@ -43,7 +43,7 @@ for (const d of ['normal', 'hard'] as const) test(`${d}: kitchen at level 14 (Pe
   assert.equal(M.cropLevel(s, 'peach'), 23); assert.equal(M.sellPrice(s, 'peach'), 550); assert.equal(M.cropXp(s, 'peach'), 420);
   assert.equal(M.cropLevel(s, 'carrot'), 1); assert.equal(M.sellPrice(s, 'carrot'), M.ITEMS.carrot.sell, 'ordinary crops unchanged');
   const g = game(d, 7); assert.equal(M.plant(g, 0, 'apple', T0), false); g.level = 8; assert.equal(M.plant(g, 0, 'apple', T0), true);
-  const xp = g.xp; assert.equal(M.harvest(g, 0, T0 + M.CROPS.apple.duration), 'apple'); assert.equal(g.xp - xp, 120);
+  const xp = g.xp; assert.equal(M.harvest(g, 0, T0 + M.CROPS.apple.duration), 'apple'); assert.equal(g.xp - xp, d === 'hard' ? 138 : 120, 'Hard pays +15% XP');
   const e = g.energy; assert.equal(M.sell(g, 'apple'), 150); assert.equal(g.energy - e, 150);
   // Livestock
   const f = game(d); assert.equal(M.priceOf(f, 'chicken'), 60); assert.equal(M.priceOf(f, 'cow'), 120); assert.equal(M.priceOf(f, 'duck'), 370); assert.equal(M.priceOf(f, 'pig'), 650); assert.equal(M.priceOf(f, 'dog'), 450);
@@ -53,7 +53,7 @@ for (const d of ['normal', 'hard'] as const) test(`${d}: kitchen at level 14 (Pe
 });
 
 test('only Hard makes creatures tougher (+25% health, +20% damage), bosses too, in the client world', () => {
-  assert.deepEqual(M.creatureScale('normal'), { hp: 1, damage: 1 }); assert.deepEqual(M.creatureScale('hard'), { hp: 1.25, damage: 1.2 });
+  assert.deepEqual(M.hardScale('normal'), { hp: 1, damage: 1 }); assert.deepEqual(M.hardScale('hard'), { hp: 1.25, damage: 1.2 });
   const spawn = (d: M.Difficulty, type: string) => {
     const w = Object.assign(Object.create(World.prototype), { state: game(d), scene: new T.Scene(), root: new T.Group(), entities: [], enemies: [], obstacles: [], planet: 'home', time: 0 }) as World;
     w.environment = new EnvironmentSimulation(createEnvironmentLayout('home'));

@@ -100,16 +100,33 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     if(c.elapsed>3)c.done=true;
   }
   function segmentDistance(p,a,b){const x=b.x-a.x,z=b.z-a.z,l=x*x+z*z,f=l?Math.max(0,Math.min(1,((p.x-a.x)*x+(p.z-a.z)*z)/l)):0;return Math.hypot(p.x-a.x-x*f,p.z-a.z-z*f);}
+  /** The spawn point a creature returns to (rescue checks, respawns): the host's reported homeX/homeZ, taken once, only
+   * when it lies within the creature's leash of where it is now, inside the world and in its own zone; else where it was
+   * first seen. A peer reconnecting mid-chase thus still gets the true spawn instead of a point along the chase. */
+  function spawnHome(roster,raw,planet){
+    const home={x:raw.homeX,z:raw.homeZ},leash=roster.type==='dragon'?75:30;
+    if(!Number.isFinite(home.x)||!Number.isFinite(home.z)||Math.hypot(home.x,home.z)>155||dist(home,raw)>leash+2)return {x:raw.x,z:raw.z};
+    if(!roster.dormant&&(Math.hypot(home.x,home.z)<22||planet==='home'&&zoneAt(home)!==roster.zone))return {x:raw.x,z:raw.z};
+    return home;
+  }
+  /** Hard difficulty follows the room host (difficulty.ts hardScale): when the host or the host's setting changes, the
+   * live creatures are rescaled by the ratio, keeping each one's share of health. */
+  function rescale(room,s){
+    const next=Game.hardScale(peers.get(room.host)?.account.profile),old=s.scale??next;s.scale=next;
+    if(old.hp===next.hp&&old.damage===next.damage)return;
+    const hp=next.hp/old.hp,damage=next.damage/old.damage;
+    for(const enemy of s.enemies.values()){enemy.baseMaxHp=Math.round(enemy.baseMaxHp*hp);enemy.maxHp=Math.round(enemy.maxHp*hp);enemy.hp=Math.min(enemy.maxHp,Math.round(enemy.hp*hp));enemy.baseDamage*=damage;enemy.damage*=damage;if(enemy.hp>0)health(room,enemy);}
+  }
   function acceptSnapshots(room,incoming){
-    const s=state(room),now=Date.now();
+    const s=state(room),now=Date.now();rescale(room,s);
     for(const raw of incoming.slice(0,300)){
       const roster=s.roster.get(raw?.id);if(!roster||raw.type!==roster.type||!Number.isFinite(raw.x)||!Number.isFinite(raw.z)||Math.hypot(raw.x,raw.z)>155)continue;
       let enemy=s.enemies.get(roster.id);
       if(!enemy){
         if(!roster.dormant&&(Math.hypot(raw.x,raw.z)<22||s.planet==='home'&&zoneAt(raw)!==roster.zone))continue;
         // Hard difficulty: the room host's save (whose browser spawns the creatures) sets health and damage (difficulty.ts).
-        const scale=Game.creatureScale(peers.get(room.host)?.account.profile),baseMaxHp=Math.round(roster.baseMaxHp*scale.hp),baseDamage=roster.baseDamage*scale.damage;
-        enemy={...roster,roster,baseMaxHp,baseDamage,home:{x:raw.x,z:raw.z},x:raw.x,z:raw.z,hp:roster.dormant?0:baseMaxHp,maxHp:baseMaxHp,damage:baseDamage,respawn:roster.dormant?999999:0,deadUntil:roster.dormant?Infinity:0,generation:0,contributors:new Map(),changedAt:now,statuses:{},shots:[]};s.enemies.set(roster.id,enemy);
+        const scale=s.scale,baseMaxHp=Math.round(roster.baseMaxHp*scale.hp),baseDamage=roster.baseDamage*scale.damage;
+        enemy={...roster,roster,baseMaxHp,baseDamage,home:spawnHome(roster,raw,s.planet),x:raw.x,z:raw.z,hp:roster.dormant?0:baseMaxHp,maxHp:baseMaxHp,damage:baseDamage,respawn:roster.dormant?999999:0,deadUntil:roster.dormant?Infinity:0,generation:0,contributors:new Map(),changedAt:now,statuses:{},shots:[]};s.enemies.set(roster.id,enemy);
       }
       const elapsed=Math.max(.1,(now-enemy.changedAt)/1000),maximum=(ENEMY_TYPES[roster.type].speed+16)*elapsed+2;
       if(dist(enemy,raw)<=maximum){enemy.x=raw.x;enemy.z=raw.z;}

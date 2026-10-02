@@ -133,7 +133,7 @@ export async function createGameServer(options = {}) {
     const room = rooms.get(peer.room); if (room) broadcast(room, { type: 'pose', player: presence(peer) }, peer.account.id);
   }
   function presence(peer) {
-    return { ...publicAccount(peer.account), ...peer.pose, id: peer.account.id, planet: peer.planet, space: peer.visit ? `home:${peer.visit}` : peer.planet === 'home' && Math.hypot(peer.pose.x, peer.pose.z) < 18 ? `home:${peer.account.id}` : 'wild', active: peer.active };
+    return { ...publicAccount(peer.account), ...peer.pose, difficulty: Game.difficultyOf(peer.account.profile), id: peer.account.id, planet: peer.planet, space: peer.visit ? `home:${peer.visit}` : peer.planet === 'home' && Math.hypot(peer.pose.x, peer.pose.z) < 18 ? `home:${peer.account.id}` : 'wild', active: peer.active };
   }
   function roster(room) { return [...room.members].map(id => peers.get(id)).filter(Boolean).map(presence); }
   function elect(room) {

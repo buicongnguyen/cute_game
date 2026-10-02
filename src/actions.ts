@@ -4,6 +4,7 @@ import * as FarmHelper from './farm-helper.ts';
 import * as Friends from './friends.ts';
 import { buyLook, wearLook } from './looks.ts';
 import { huntFish } from './fish-hunting.ts';
+import { sellProduce } from './item-views.ts';
 import { claimProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 
 export const ACTION_RULES_VERSION = 1;
@@ -34,9 +35,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
   switch (intent.type) {
     case 'buy': result = Game.buy(state, id()); break;
     case 'sell': result = Game.sell(state, id(), integer(p.count, 1)); if (!result) return invalid(); break;
-    case 'sellProduce': {
-      result = Object.keys(state.bag).reduce((total, id) => total + (Game.ITEMS[id]?.type === 'crop' || Game.ITEMS[id]?.type === 'fish' ? Game.sell(state, id, Game.looseQuantity(state, id)) : 0), 0); break;
-    }
+    // The same crop, fish and junk stacks (item-views.ts PRODUCE_TYPES) whose total the button shows.
+    case 'sellProduce': result = sellProduce(state); break;
     case 'craft': result = Game.craft(state, index()); break;
     case 'cook': result = Game.cook(state, id(), integer(p.count, 1)); break;
     case 'cookDish': result = Game.cookDish(state, id()); break;
@@ -122,7 +122,12 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'settings': {
       const settings = p.settings;
       if (settings && typeof settings === 'object' && !Array.isArray(settings)) for (const key of ['sound', 'lowGraphics', 'movePad', 'placeBeds'] as const) if (typeof (settings as Record<string, unknown>)[key] === 'boolean') state.settings[key] = (settings as Record<string, boolean>)[key];
-      if (settings && typeof settings === 'object' && Game.isDifficulty((settings as Record<string, unknown>).difficulty)) state.settings.difficulty = (settings as { difficulty: Game.Difficulty }).difficulty;
+      const level = settings && typeof settings === 'object' ? (settings as Record<string, unknown>).difficulty : undefined;
+      // Raising is free; lowering works once a day (difficulty.ts), so the Normal rules cannot be dodged per action.
+      if (Game.isDifficulty(level) && level !== Game.difficultyOf(state)) {
+        if (Game.isLowering(Game.difficultyOf(state), level)) { if (Game.lowerReadyAt(state) > now) return invalid(); state.settings.difficultyLoweredAt = now; }
+        state.settings.difficulty = level;
+      }
       if(settings&&typeof settings==='object'&&['left','right'].includes((settings as Record<string,string>).joystickSide))state.settings.joystickSide=(settings as {joystickSide:'left'|'right'}).joystickSide;
       if (p.name !== undefined) state.name = string(p.name, 20).trim() || state.name;
       if (p.color !== undefined) { if (!Game.COLORS.includes(string(p.color))) return invalid(); state.color = string(p.color); }
