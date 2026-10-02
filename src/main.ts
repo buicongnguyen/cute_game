@@ -24,7 +24,7 @@ import * as M from './model.ts';
 import {applyGameAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
 import { quickEatView, healingFoods, type FoodChoice } from './quick-eat.ts';
-import { previewGear, canTryOn } from './try-on.ts';
+import { previewGear, canTryOn, autoHeld } from './try-on.ts';
 import './quick-eat.css';
 import { CombatTimers, FishingInput, MovementControls, gameplayKey } from './gameplay-controls.ts';
 import {mountJoystick} from './joystick.ts';
@@ -64,6 +64,8 @@ import { friendPanel, lockedHint, RESCUE_LINES } from './friend-ui.ts';
 import './language.css';
 import './house.css';
 import { initHouse } from './house-ui.ts';
+import { indoorStore, purposeHtml, wardrobeItem } from './house-stores.ts';
+import { showsGain, type GainSource } from './work-effects.ts';
 import { initLookShop } from './look-shop.ts';
 import { GROWTH } from './growth.ts';
 import * as Tester from './tester.ts';
@@ -205,7 +207,7 @@ if(!sceneryKit.ready)void sceneryKit.load().then(()=>{if(sceneryKit.ready&&!star
 const sfx=new Sfx();
 function tone(kind: Sound = 'click') { sfx.enabled = state.settings.sound; sfx.play(kind); }
 const vibrate=(ms:number)=>{try{if(state.settings.sound&&matchMedia('(pointer: coarse)').matches)navigator.vibrate?.(ms);}catch{/* Optional. */}};
-function save() { if(!started)return;if(persistence){persistence(state);return;}try { state.savedAt=Date.now();localStorage.setItem(M.SAVE_KEY,JSON.stringify(state));saveFailed=false;$('#save-status').textContent=t('● Saved on this device'); } catch { saveFailed=true;$('#save-status').textContent=t('○ Saving unavailable'); } }
+function save() { if(!started)return;if(persistence){persistence(state);return;}try { state.savedAt=Date.now();localStorage.setItem(M.SAVE_KEY,JSON.stringify(contextGear.persisted(state)));saveFailed=false;$('#save-status').textContent=t('● Saved on this device'); } catch { saveFailed=true;$('#save-status').textContent=t('○ Saving unavailable'); } }
 // Keep at most three messages on screen (two on phones, where they also leave sooner); older ones fade out instead of stacking up the view.
 const phoneScreen=matchMedia('(max-width: 600px), (max-height: 520px)');
 function toast(message: string, icon='✨') {
@@ -246,8 +248,12 @@ function floating(text:string,x=world.position.x,z=world.position.z,style='item'
 function levelCheck(before:number) {if(state.level>before){toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);}}
 function change<T>(action:()=>T):T {const before=state.level;const result=action();levelCheck(before);save();updateHud();return result;}
 function uiBlocked(){return !!modal||!!document.querySelector('dialog[open]')||shipSequence?.busy||!!flight||arriving;}
+/** 'wardrobe' while the bag was opened from the bedroom wardrobe: it then lists only things to wear (house-stores.ts). */
+let bagMode:'bag'|'wardrobe'='bag';
 function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF AT HOME',icon?:string) {
   if(fishGame)endFishing();
+  // Inside the cottage the stove, workbench, globe, wardrobe and mirror are their own places, not the village shops (house-stores.ts).
+  const store=indoorStore(type,!!world.interior,bagMode==='wardrobe');if(store){title=store.title;kicker=store.kicker;icon=store.icon;body=purposeHtml(store)+body;}$('#dialog').dataset.station=store?type:'';
   if(!modal)lastFocused=document.activeElement as HTMLElement;const reopened=modal===type;modal=type;movement.clear();gestures.clear();world.destination=null;world.route=[];
   const [defaultIcon,look]=DIALOG_LOOK[type]??['✨','garden'];$('#dialog').dataset.tone=look;$('#dialog-icon').innerHTML=localizeHtml(icon??defaultIcon);
   // Re-rendering the same panel (a tab, a purchase) keeps the reader's scroll position.
@@ -256,7 +262,7 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   bodyNode.scrollTop=reopened&&bodyNode.querySelector('.panel-tabs .active')?.textContent===tab?scroll:0;
   $('.close-button').focus({preventScroll:true});
 }
-function closeDialog(){endTryOn();modal='';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
+function closeDialog(){endTryOn();modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
 async function start() {settle();void helperCatchUp();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{}); // warm the village's shaders off the first walk
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
@@ -311,13 +317,14 @@ function labelHeight(e:Entity){
 // Place names are pinned to one point on their building (wy above it, back towards the pond's far edge) and re-projected every
 // frame with no clamping or nudging, so they never slide around. A label that would leave the screen, sit under a HUD panel or
 // cover a more important label fades out where it is instead of moving. 'covered' is decided 8 times a second, the rest per frame.
-interface LabelAnchor {e:Entity;wy:number;back:number;centre:boolean;w:number;h:number;covered:boolean;off:boolean;tf?:string}
+interface LabelAnchor {e:Entity;wy:number;back:number;dx:number;centre:boolean;w:number;h:number;covered:boolean;off:boolean;tf?:string}
 const labelAnchors=new Map<string,LabelAnchor>();
 let hudPanels:{left:number;right:number;top:number;bottom:number}[]=[];
 let hudFresh=false;
 function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
 /** The label's screen box at its anchor: bottom centre for buildings, centre for the small crop marks. */
-function labelRect(a:LabelAnchor){const p=world.screen(a.e.x,a.wy,a.e.z-a.back),top=p.y-(a.centre?a.h/2:a.h);return {x:p.x,y:p.y,front:p.front,left:p.x-a.w/2,right:p.x+a.w/2,top,bottom:top+a.h};}
+function labelRect(a:LabelAnchor){const p=world.screen(a.e.x+a.dx,a.wy,a.e.z-a.back),top=p.y-(a.centre?a.h/2:a.h);return {x:p.x,y:p.y,front:p.front,left:p.x-a.w/2,right:p.x+a.w/2,top,bottom:top+a.h};}
+const smallLabels=()=>innerWidth<=600||innerHeight<=520;
 const boxesMeet=(a:{left:number;right:number;top:number;bottom:number},b:{left:number;right:number;top:number;bottom:number})=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
 /** True when a box touches none of the HUD panels (measureHud). */
 const clearOfHud=(r:{left:number;right:number;top:number;bottom:number},panels:typeof hudPanels)=>!panels.some(p=>boxesMeet(p,r));
@@ -326,7 +333,7 @@ function updateLabels() {
   if(hudFresh)hudFresh=false;else measureHud();const near=world.nearest(),candidates:{a:LabelAnchor;rank:number;distance:number}[]=[],active=new Set<string>();
   for(const e of world.entities){
     const distance=Math.hypot(e.x-world.position.x,e.z-world.position.z);
-    let text=t(e.name),icon=e.icon,y:number,back=0,className='world-label',rank=2,reach=world.selected===e?30:11,aria='';
+    let text=t(e.name),icon=e.icon,y:number,back=0,dx=0,centre=e.kind==='plot',className='world-label',rank=2,reach=world.selected===e?30:11,aria='',spot:ReturnType<typeof house.house.labelAt>;
     if(e.kind==='plot'){
       // Compact crop labels (reference 29/09, RG-05): a ready badge or a 22x5 growth bar on the bed's front edge, nothing on
       // empty beds (the context button says "Plant a seed"); the seconds left are only in the bed panel.
@@ -336,6 +343,8 @@ function updateLabels() {
     }else if(e.kind==='fish'&&e.pond){
       if(fishGame&&fishPond===e)continue;y=.35;back=e.pond.rz*1.02;
     }else if(e.kind==='enemy')continue; // Creature HP bars take their own path (hud-combat.ts), which never drops a bar.
+    // Indoors each label sits low on the middle of the thing it names, which is also its tap box (house-hotspots.ts); phones show nearer ones only.
+    else if(world.interior&&(spot=house.house.labelAt(e))){y=spot.y;back=e.z-spot.z;dx=spot.x-e.x;centre=true;reach=smallLabels()?6:30;if(house.hovered()===e)className+=' hover';}
     else y=labelHeight(e);
     if(distance>reach)continue;
     // The place the context button points at, or the selected one, always wins and is highlighted.
@@ -346,15 +355,15 @@ function updateLabels() {
     if(label.className!==className){label.className=className;if(a)a.w=0;}
     if(label.innerHTML!==html){label.innerHTML=html;if(a)a.w=0;}
     label.setAttribute('aria-label',t(e.kind==='plot'?aria:text));label.hidden=!!modal;
-    if(!a){a={e,wy:y,back,centre:e.kind==='plot',w:0,h:0,covered:false,off:false};labelAnchors.set(e.id,a);}
-    a.e=e;a.wy=y;a.back=back;if(!a.w){a.w=label.offsetWidth;a.h=label.offsetHeight;}
+    if(!a){a={e,wy:y,back,dx,centre,w:0,h:0,covered:false,off:false};labelAnchors.set(e.id,a);}
+    a.e=e;a.wy=y;a.back=back;a.dx=dx;a.centre=centre;if(!a.w){a.w=label.offsetWidth;a.h=label.offsetHeight;}
     active.add(e.id);candidates.push({a,rank,distance});
   }
   for(const[id,node]of labelNodes)if(!active.has(id)){node.remove();labelNodes.delete(id);labelAnchors.delete(id);}
   // Nearest and most important labels win; a label that would cover one of them fades out (it is never moved).
   candidates.sort((p,q)=>p.rank-q.rank||p.distance-q.distance);
-  const placed:ReturnType<typeof labelRect>[]=[];
-  for(const c of candidates){const r=labelRect(c.a);c.a.covered=placed.some(o=>boxesMeet(o,r));if(!c.a.covered&&labelShows(r))placed.push(r);}
+  const placed:ReturnType<typeof labelRect>[]=[],cap=world.interior&&smallLabels()?5:Infinity; // a phone indoors shows the five nearest things at most
+  for(const c of candidates){const r=labelRect(c.a);c.a.covered=placed.length>=cap||placed.some(o=>boxesMeet(o,r));if(!c.a.covered&&labelShows(r))placed.push(r);}
   positionLabels();
 }
 /** On screen in full and clear of the HUD panels. */
@@ -384,15 +393,17 @@ function explorerOut(){return explorerAway(world.planet,world.position.x,world.p
 /** perform() for the workers' jobs: tells the rules whether the explorer is out (the server uses its own pose). */
 function workPerform<T=any>(type:string,payload:Record<string,unknown>={}){return perform<T>(type,WORK_ACTIONS.has(type)?{...payload,away:explorerOut()}:payload);}
 /** Harvest orbs fly to the bag, or into the chest when the harvest is stored there (never across the map). */
+/** Whether a gain effect shows now: the workers' only outdoors in the home village, the explorer's own always (work-effects.ts). */
+function gainShows(source:GainSource){return showsGain(source,{planet:world.planet,indoors:!!world.interior,away:explorerOut()});}
 function orbTarget(){if(!explorerOut())return ()=>world.position;const c=world.entities.find(x=>x.kind==='chest'),at=world.position.clone().set(c?.x??0,0,c?.z??0);return ()=>at;}
 /** Sparkles, the XP number and a few orbs flying into the bag when a crop comes up. */
-function harvestBurst(index:number,crop:M.CropId){
-  const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(!e)return;
+function harvestBurst(index:number,crop:M.CropId,source:GainSource='own'){
+  if(!gainShows(source))return;const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(!e)return;
   world.fx?.burst({x:e.x,z:e.z},{n:10,color:['#9be36f','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.4});
   world.fx?.orbs({x:e.x,z:e.z},2,'#9be36f',orbTarget());
   floating('+'+M.CROPS[crop].xp+' XP',e.x,e.z,'xp');tone('harvest');
 }
-function plantBurst(index:number){const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(e)world.fx?.burst({x:e.x,z:e.z},{n:6,color:['#8a5a3a','#6a3f2a'],size:.1,speed:2,up:3,y:.25});}
+function plantBurst(index:number,source:GainSource='own'){if(!gainShows(source))return;const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(e)world.fx?.burst({x:e.x,z:e.z},{n:6,color:['#8a5a3a','#6a3f2a'],size:.1,speed:2,up:3,y:.25});}
 /** Ripe tap: harvest every ripe bed in the garden (the user's rule; the reference stops at 5 m), nearest first, 140 ms apart, then one summary toast. */
 async function harvestNearby(index:number){
   // Hold the beds themselves: storing a bed meanwhile shifts the indices.
@@ -456,11 +467,11 @@ function plotDialog(index:number) {
   }).join('')}</div>`,'YOUR GARDEN');
 }
 function inventory() {
-  const entries=Object.entries(state.bag).filter(([,n])=>n!>0) as [M.ItemId,number][];
+  const entries=Object.entries(state.bag).filter(([id,n])=>n!>0&&(bagMode!=='wardrobe'||wardrobeItem(M.ITEMS[id]))) as [M.ItemId,number][];
   const slots:[M.GearSlot,string,string][]=[['weapon','⚔️','Weapon'],['hat','👒','Hat'],['outfit','🧥','Outfit'],['boots','👟','Boots'],['pet','🐾','Pet'],['disguise','🎭','Disguise']];
   if(selectedItem&&!state.bag[selectedItem])selectedItem=null;
   const item=selectedItem?M.ITEMS[selectedItem]:null,stats=M.activeStats(state),slot=item?.slot;
-  openDialog('bag','Your explorer & backpack',`<div class="stat-strip"><span>❤️ <b>${Math.ceil(state.hp)}/${Math.round(stats.maxHp)}</b></span><span>⚔️ <b>${stats.attack.toFixed(1)}</b></span><span>🛡️ <b>${stats.defense}</b></span><span>💨 <b>${stats.speed.toFixed(1)}</b></span><span>✨ <b>${Math.round(stats.critChance*100)}% crit</b></span></div><div class="equipment">${slots.map(([key,icon,name])=>`<div><button data-action="inspect" data-item="${state.gear[key]||''}" ${!state.gear[key]?'disabled':''}><span>${state.gear[key]?art(state.gear[key]!,M.ITEMS[state.gear[key]!].icon):icon}</span><small>${state.gear[key]?esc(t(M.ITEMS[state.gear[key]!].name)):name}</small></button>${state.gear[key]?`<button class="unequip" data-action="unequip" data-slot="${key}" aria-label="Unequip ${name}">Remove</button>`:''}</div>`).join('')}</div><div class="section-label">BACKPACK <span>${entries.reduce((n,[,q])=>n+q,0)} items</span></div><div class="inventory-grid">${entries.map(([id,count])=>`<button class="item-tile ${id===selectedItem?'selected':''}" data-action="inspect" data-item="${id}" aria-label="${esc(t(M.ITEMS[id].name))}, ${count}"><span>${art(id,M.ITEMS[id].icon)}</span><b>${count}</b><small>${esc(t(M.ITEMS[id].name))}</small>${Object.values(state.gear).includes(id)?'<i>Equipped</i>':''}</button>`).join('')||'<div class="empty-state"><span>🎒</span><strong>Your first harvest belongs here.</strong></div>'}</div>${item?`<div class="item-detail"><span class="item-hero">${art(selectedItem!,item.icon)}</span><div><h3>${esc(t(item.name))}</h3><p>${esc(item.desc)}</p><div class="button-row">${slot?`<button class="primary" data-action="equip" data-item="${selectedItem}" ${state.gear[slot]===selectedItem?'disabled':''}>${state.gear[slot]===selectedItem?'Equipped':'Equip'}</button>`:''}${slot&&state.gear[slot]!==selectedItem?tryOnButton(selectedItem!):''}${item.heal||item.buff?`<button class="primary" data-action="eat" data-item="${selectedItem}">Use${item.heal?` · +${item.heal} HP`:''}</button>`:''}${item.weapon&&item.weapon.kind!=='rod'?`<button class="soft-button" data-action="forge-menu" data-item="${selectedItem}">🔨 Forge +${M.forgeLevel(state,selectedItem!)}</button>`:''}${M.looseQuantity(state,selectedItem!)>0?`<button class="soft-button" data-action="drop-item" data-item="${selectedItem}">Drop one</button>`:''}${item.type==='decor'||item.type==='placeable'?`<button class="primary" data-action="place-decor" data-item="${selectedItem}">Place</button>`:''}</div></div></div>`:''}<div class="button-row"><button class="soft-button" data-action="go" data-kind="cook">🔥 Kitchen</button><button class="soft-button" data-action="decorations">🏡 Decorate</button><button class="soft-button" data-action="journal-tab" data-kind="collection">🐟 Fish log</button></div>`,'CHARACTER');
+  openDialog('bag','Your explorer & backpack',`<div class="stat-strip"><span>❤️ <b>${Math.ceil(state.hp)}/${Math.round(stats.maxHp)}</b></span><span>⚔️ <b>${stats.attack.toFixed(1)}</b></span><span>🛡️ <b>${stats.defense}</b></span><span>💨 <b>${stats.speed.toFixed(1)}</b></span><span>✨ <b>${Math.round(stats.critChance*100)}% crit</b></span></div><div class="equipment">${slots.map(([key,icon,name])=>`<div><button data-action="inspect" data-item="${state.gear[key]||''}" ${!state.gear[key]?'disabled':''}><span>${state.gear[key]?art(state.gear[key]!,M.ITEMS[state.gear[key]!].icon):icon}</span><small>${state.gear[key]?esc(t(M.ITEMS[state.gear[key]!].name)):name}</small></button>${state.gear[key]&&!autoHeld(state.gear[key]!)?`<button class="unequip" data-action="unequip" data-slot="${key}" aria-label="Unequip ${name}">Remove</button>`:''}</div>`).join('')}</div><div class="section-label">${bagMode==='wardrobe'?'TO WEAR':'BACKPACK'} <span>${entries.reduce((n,[,q])=>n+q,0)} items</span></div><div class="inventory-grid">${entries.map(([id,count])=>`<button class="item-tile ${id===selectedItem?'selected':''}" data-action="inspect" data-item="${id}" aria-label="${esc(t(M.ITEMS[id].name))}, ${count}"><span>${art(id,M.ITEMS[id].icon)}</span><b>${count}</b><small>${esc(t(M.ITEMS[id].name))}</small>${Object.values(state.gear).includes(id)?'<i>Equipped</i>':''}</button>`).join('')||'<div class="empty-state"><span>🎒</span><strong>Your first harvest belongs here.</strong></div>'}</div>${item?`<div class="item-detail"><span class="item-hero">${art(selectedItem!,item.icon)}</span><div><h3>${esc(t(item.name))}</h3><p>${esc(item.desc)}</p><div class="button-row">${slot&&autoHeld(selectedItem!)?'<span class="chip">Used automatically near ponds</span>':slot?`<button class="primary" data-action="equip" data-item="${selectedItem}" ${state.gear[slot]===selectedItem?'disabled':''}>${state.gear[slot]===selectedItem?'Equipped':'Equip'}</button>`:''}${slot&&state.gear[slot]!==selectedItem?tryOnButton(selectedItem!):''}${item.heal||item.buff?`<button class="primary" data-action="eat" data-item="${selectedItem}">Use${item.heal?` · +${item.heal} HP`:''}</button>`:''}${item.weapon&&item.weapon.kind!=='rod'?`<button class="soft-button" data-action="forge-menu" data-item="${selectedItem}">🔨 Forge +${M.forgeLevel(state,selectedItem!)}</button>`:''}${M.looseQuantity(state,selectedItem!)>0?`<button class="soft-button" data-action="drop-item" data-item="${selectedItem}">Drop one</button>`:''}${item.type==='decor'||item.type==='placeable'?`<button class="primary" data-action="place-decor" data-item="${selectedItem}">Place</button>`:''}</div></div></div>`:''}${bagMode==='wardrobe'?'':'<div class="button-row"><button class="soft-button" data-action="go" data-kind="cook">🔥 Kitchen</button><button class="soft-button" data-action="decorations">🏡 Decorate</button><button class="soft-button" data-action="journal-tab" data-kind="collection">🐟 Fish log</button></div>'}`,'CHARACTER');
 }
 // "36 energy · 6 XP · 15 stars" becomes three coloured chips.
 function rewardChips(label:string){return label.split(' · ').filter(Boolean).map(part=>{const kind=/energy|năng lượng/i.test(part)?'energy':/xp/i.test(part)?'xp':/star|sao/i.test(part)?'star':'';return `<span class="chip${kind?` chip-${kind}`:''}">${kind==='energy'?'ϟ ':kind==='xp'?'✨ ':kind==='star'?'⭐ ':''}${esc(kind?part.replace(/\s*(energy|stars?|năng lượng|sao)$/i,''):part)}</span>`;}).join('');}
@@ -526,8 +537,9 @@ async function buildPenAction(){
   closeDialog();toast('The animal pen is built! Buy a chick to get started.','🐔');setTimeout(()=>{if(!modal)penDialog();},1100);
 }
 function penTap(){if(M.readyAnimals(state).length)collectFarm();else penDialog();}
-function feedBurst(uid:number){const p=world.farmView?.positionOf(uid);if(p)world.fx?.burst({x:p.x,z:p.z},{n:6,color:['#9be36f','#ffe66d'],size:.08,speed:1.5,up:3,y:.4});}
-function farmCollectFeedback(collected:readonly M.Collected[],origin?:{x:number;z:number}){
+function feedBurst(uid:number,source:GainSource='own'){if(!gainShows(source))return;const p=world.farmView?.positionOf(uid);if(p)world.fx?.burst({x:p.x,z:p.z},{n:6,color:['#9be36f','#ffe66d'],size:.08,speed:1.5,up:3,y:.4});}
+function farmCollectFeedback(collected:readonly M.Collected[],origin?:{x:number;z:number},source:GainSource='own'){
+  if(!gainShows(source))return; // the products are already in the bag or chest: only the flight, orbs and floats are skipped
   const groups=new Map<number,M.Collected[]>();for(const product of collected){const list=groups.get(product.uid)??[];list.push(product);groups.set(product.uid,list);world.farmView?.collect(product.uid,product.item,origin??world.farmView?.positionOf(product.uid)??M.PEN);}
   for(const [uid,list]of groups){const p=world.farmView?.positionOf(uid)??origin??M.PEN;world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',orbTarget());floating('+'+M.ANIMALS[list[0].kind].xp*list.length+' XP',p.x,p.z,'xp');}
   if(collected.length)tone('harvest');
@@ -645,7 +657,7 @@ const helperView=new HelperView();world.scene.add(helperView.group);
 function helperDialog(){if(visiting)return;openDialog('helper','Garden helper',helperPanel(state,{esc,mini,picture:`${ICON_BASE}helper.webp`}),'GARDEN HELPER','🤖');}
 const helperPending=new Set<string>();
 function helperAction(kind:'helperHarvest'|'helperPlant',i:number){
-  const effect=(crop:M.CropId|undefined|null)=>{if(crop){if(kind==='helperHarvest')harvestBurst(i,crop);else{plantBurst(i);tone('pop');}world.syncCrops();}return !!crop;};
+  const effect=(crop:M.CropId|undefined|null)=>{if(crop){if(kind==='helperHarvest')harvestBurst(i,crop,'worker');else{plantBurst(i,'worker');if(gainShows('worker'))tone('pop');}world.syncCrops();}return !!crop;};
   if(!actionHandler)return effect(change(()=>{try{return applyGameAction(state,{type:kind,payload:{index:i,away:explorerOut()}}) as M.CropId;}catch{return null;}}));
   const key=kind+':'+i;if(helperPending.has(key))return false;helperPending.add(key);
   void perform<M.CropId>(kind,{index:i,away:explorerOut()}).then(effect).finally(()=>helperPending.delete(key));return true;
@@ -656,8 +668,8 @@ const farmHelperView=new FarmHelperView();world.scene.add(farmHelperView.group);
 function farmHelperContext(){return started&&!document.hidden&&!flight&&!visiting&&(!actionHandler||network.role!==null)&&world.planet==='home'&&world.state===state?world.root:null;}
 function farmHelperDialog(){if(visiting||world.planet!=='home'||!M.penBuilt(state))return;openDialog('farm-helper','Animal pen helper',farmHelperPanel(state,`${ICON_BASE}helper.webp`),'ANIMAL PEN','🤖');}
 const farmHelperController=new FarmHelperController({state:()=>state,context:farmHelperContext,perform:workPerform,completed(result,catchUp){
-  farmCollectFeedback(result.collected);for(const uid of result.fed)feedBurst(uid);
-  if(result.fed.length)tone('pop');
+  farmCollectFeedback(result.collected,undefined,'worker');for(const uid of result.fed)feedBurst(uid,'worker');
+  if(result.fed.length&&gainShows('worker'))tone('pop');
   if(catchUp&&(result.collected.length||result.fed.length))toast(t('Your animal helper collected {count} products and fed {fed} animals.',{count:result.collected.length,fed:result.fed.length}),'🤖');
   if(modal==='pen')penDialog();
 }});
@@ -668,8 +680,9 @@ const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()
   rescued(id,at){const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
   locked(id){toast(lockedHint(id),'🔒');},
   worked(id,task,r,at){
-    if(task.kind==='harvest'){harvestBurst(task.index,Object.keys(r.raw)[0]??'carrot');world.syncCrops();}else if(task.kind==='plant'){plantBurst(task.index);world.syncCrops();}
-    else if(task.kind==='feed')feedBurst(task.uid);else farmCollectFeedback(r.collected??[],at);
+    if(task.kind==='harvest'){harvestBurst(task.index,Object.keys(r.raw)[0]??'carrot','worker');world.syncCrops();}else if(task.kind==='plant'){plantBurst(task.index,'worker');world.syncCrops();}
+    else if(task.kind==='feed')feedBurst(task.uid,'worker');else farmCollectFeedback(r.collected??[],at,'worker');
+    if(!gainShows('worker'))return;
     for(const [item,n] of Object.entries(r.cooked))floating('+'+n+' '+t(M.ITEMS[item]?.name??item),postFor(id).x,postFor(id).z,'item',1);
     if(Object.keys(r.cooked).length)tone('pop');
   },
@@ -690,6 +703,8 @@ async function farmHelperSetting(type:'buyFarmHelper'|'setFarmHelperPaused'|'set
   }finally{farmHelperSettingsPending=false;}
 }
 const rodTip=new Vector3();
+/** Indoors the ponds are "far away": no ambient ripples (fx draws in the cottage's scene then, so they would ring among the furniture). */
+const FAR_AWAY=new Vector3(1e4,0,1e4);
 function tipPosition(){const tip=world.player.getObjectByName('rod-tip');if(tip){world.player.updateWorldMatrix(true,true);tip.getWorldPosition(rodTip);}else rodTip.set(world.position.x,1.4,world.position.z);return rodTip;}
 function pondView(e:Entity):PondView{return {id:e.id,x:e.x,z:e.z,rx:e.pond!.rx,rz:e.pond!.rz,surface:e.pond!.surface,waterId:e.waterId??state.planet};}
 function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.entities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
@@ -854,8 +869,10 @@ void fishKit.load().then(()=>{if(fishKit.ready&&!fishGame)stockPonds();});
 // Gear and pet files load on demand as the explorer puts them on (see World.kitFor).
 void heroKit.load().then(()=>{if(heroKit.ready)world.refreshAvatars();});
 // The cottage interior (house-ui.ts): the door, walking in and out, friends and their Dress panel.
-const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked:uiBlocked,perform:(type,payload)=>perform(type,payload),openDialog,closeDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ownGear:inventory,looks:()=>lookShop.open(),quests,soundOn:()=>state.settings.sound,iconUrl:id=>`${ICON_BASE}items/${id}.webp`});
+const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked:uiBlocked,perform:(type,payload)=>perform(type,payload),openDialog,closeDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ownGear:()=>{bagMode='wardrobe';inventory();},looks:()=>lookShop.open(),quests,soundOn:()=>state.settings.sound,iconUrl:id=>`${ICON_BASE}items/${id}.webp`});
 // The bedroom mirror's Look shop (look-shop.ts): body styles bought with energy, previewed like gear try-on.
+// A tap on an indoor label picks its thing, like a tap on the thing (labels themselves never take pointer events).
+house.house.labelBox=id=>{const a=labelAnchors.get(id);return a&&!a.off&&!modal&&labelNodes.get(id)?.hidden===false?labelRect(a):null;};
 const lookShop=initLookShop({world,perform:(type,payload)=>perform(type,payload),openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),endGearTryOn:()=>{if(tryingOn){tryingOn=null;world.tryOnGear=null;}}});
 frameListeners.add(dt=>house.frame(dt));
 world.onInteract=async(e)=>{
@@ -871,7 +888,7 @@ world.onInteract=async(e)=>{
   else if(e.kind==='gift'){if(e.index===undefined)return;const outcome=await perform<M.GiftOutcome>('claimGift',{index:e.index!});if(!outcome)return;e.mesh.visible=false;if(outcome.kind==='bomb'){for(const target of world.enemies)if(target.hp>0&&Math.hypot(target.x-e.x,target.z-e.z)<(outcome.radius??4.5))hit(target,Math.round(M.attack(state)*(outcome.damageMultiplier??3)));world.burst(e.x,e.z,'#ffb269',28);checkDefeat();}toast(outcome.label,'🎁');}
 };
 // Loot lands on the ground (drops.ts) and reaches the bag through the pickup magnet, with a '+n name' float.
-const drops=createDrops(world,{layer:$('#world-labels'),alive:()=>state.hp>0,item:id=>Object.hasOwn(M.ITEMS,id)?M.ITEMS[id]:undefined,
+const drops=createDrops(world,{layer:$('#world-labels'),alive:()=>state.hp>0&&!world.interior,item:id=>Object.hasOwn(M.ITEMS,id)?M.ITEMS[id]:undefined,
   iconUrl:id=>M.ITEMS[id]?.type==='decor'?decorIcon(id)||null:`${ICON_BASE}${Object.hasOwn(M.CROPS,id)?'crops':Object.hasOwn(M.FISH,id)?'fish':'items'}/${id}.webp`,
   canAdd:(id,n)=>Number.isSafeInteger((state.bag[id]??0)+n),onPick:(d,stack)=>{
     const feedback=(id:string,count:number)=>{floating('+'+count+' '+t(M.ITEMS[id].name),world.position.x,world.position.z,'item',stack*.7);tone('coin');};
@@ -1087,7 +1104,7 @@ function warp(then:()=>void){const flash=$('#warp-flash');flash.classList.add('s
 function enterSpace(){
   flight=new SpaceFlight(state.planet,state.discovered);flight.setAutopilot(autopilotTarget);autopilotTarget=null;spaceView.build(flight,graphics.level==='low');
   $('#hud').hidden=true;$('#world-labels').hidden=true;$('#space-hud').hidden=false;
-  if(flight.autopilot){const p=M.PLANETS[flight.autopilot.id];spaceHint(t('🧭 Autopilot to {planet}: sit back, or press Skip.',{planet:`${p.icon} ${t(p.name)}`}),5);}else spaceHint(matchMedia('(pointer: coarse)').matches?'Hold anywhere to steer toward your finger · hold <b>Boost</b> to speed up · fly close to a planet to land':'Hold the mouse to steer (or <kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd>) · <kbd>Shift</kbd> boosts · fly close to a planet to land',5);tone('cast');
+  if(flight.autopilot){const p=M.PLANETS[flight.autopilot.id];spaceHint(t('🧭 Autopilot to {planet}: sit back, or press Skip.',{planet:`${p.icon} ${t(p.name)}`}),5);}else spaceHint(matchMedia('(pointer: coarse)').matches?t('Hold anywhere to steer toward your finger · hold {boost} to speed up · fly close to a planet to land',{boost:`<b>${t('Boost')}</b>`}):t('Hold the mouse to steer (or {keys}) · {shift} boosts · fly close to a planet to land',{keys:'<kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd>',shift:'<kbd>Shift</kbd>'}),5);tone('cast');
 }
 function exitSpace(){flight=null;spaceView.hideLabels();spaceKeys.clear();spacePointer=null;boostHeld=false;$('#space-hud').hidden=true;$('#hud').hidden=false;$('#world-labels').hidden=false;}
 let hintTimer=0;
@@ -1165,7 +1182,7 @@ app.addEventListener('click',async event=>{
     case 'forge-menu':forgeMenu(id);break;
     case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'level':'pop');}forgeMenu(id);break;}
     case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
-    case 'close':closeDialog();break;case 'bag':inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'fullscreen':void toggleFullscreen(message=>toast(message));break;
+    case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'fullscreen':void toggleFullscreen(message=>toast(message));break;
     case 'claim':if(await perform('claimQuest')){tone('success');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
     case 'plant':{const i=activePlot,opened=modal,root=world.root;if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
     case 'cook-one':case 'cook-all':if(await perform('cook',{id,count:action==='cook-all'?(state.bag[id]||0):1})){tone('success');cooking();}break;
@@ -1187,9 +1204,9 @@ app.addEventListener('click',async event=>{
     case 'start-challenge':if(await perform('startChallenge',{kind:button.dataset.kind})){quests();toast('Quick challenge started!','⏱️');}break;
     case 'reroll-daily':await perform('rerollDaily',{index});quests();break;
     case 'progress-claim':if(await perform('claimProgress',{kind:button.dataset.kind,id:button.dataset.id})){tone('success');toast('Reward collected.','🎁');}quests();break;
-    case 'plant-all':{const empty=state.plots.map((p,i)=>p.crop?-1:i).filter(i=>i>=0);const count=await perform('plantAll',{id});if(count===undefined)break;empty.filter(i=>state.plots[i]?.crop).slice(0,12).forEach(plantBurst);if(count)tone('pop');world.syncCrops();closeDialog();toast(`Planted ${count} garden beds.`,'🌱');break;}
+    case 'plant-all':{const empty=state.plots.map((p,i)=>p.crop?-1:i).filter(i=>i>=0);const count=await perform('plantAll',{id});if(count===undefined)break;empty.filter(i=>state.plots[i]?.crop).slice(0,12).forEach(i=>plantBurst(i));if(count)tone('pop');world.syncCrops();closeDialog();toast(`Planted ${count} garden beds.`,'🌱');break;}
     case 'harvest-all':{const ready=state.plots.map((p,i)=>p.crop&&M.cropProgress(p)>=1?[i,p.crop] as const:null).filter(Boolean) as (readonly [number,M.CropId])[];const count=await perform('harvestAll');if(count===undefined)break;ready.slice(0,12).forEach(([i,crop])=>harvestBurst(i,crop));world.syncCrops();closeDialog();toast(`Harvested ${typeof count==='number'?count:Array.isArray(count)?count.length:0} crops.`,'🌾');break;}
-    case 'unequip':{await perform('unequip',{slot:button.dataset.slot});world.refreshPlayer();save();inventory();break;}
+    case 'unequip':{if(await perform('unequip',{slot:button.dataset.slot})&&button.dataset.slot==='weapon')contextGear.holdFists(state);world.refreshPlayer();save();inventory();break;}
     case 'craft-tab':craftTab=button.dataset.kind!;crafting();break;
     case 'decorations':decorations();break;
     case 'decor-shop':shopTab='Decor';shop();break;
@@ -1199,7 +1216,7 @@ app.addEventListener('click',async event=>{
     case 'remove-decor':if(await perform('removeDecoration',{uid:button.dataset.id})){world.syncDecorations();decorations();}break;
     case 'buy':if(await perform('buy',{id})){
       // Gear goes straight onto the explorer, like picking up a fishing rod.
-      if(M.ITEMS[id].slot&&await perform('equip',{id}))equipFeedback(id);else{floating(`+ ${t(M.ITEMS[id].name)}`,world.position.x,world.position.z,'item');tone('success');}
+      if(M.ITEMS[id].slot&&!autoHeld(id)&&await perform('equip',{id}))equipFeedback(id);else{floating(`+ ${t(M.ITEMS[id].name)}`,world.position.x,world.position.z,'item');tone('success');}
       shop();}break;
     case 'equip':if(await perform('equip',{id})){equipFeedback(id);if(modal==='shop')shop();else inventory();}break;
     case 'eat':await eatFood(id);inventory();break;
@@ -1240,7 +1257,7 @@ app.addEventListener('click',async event=>{
     case 'build-species-pen':if(await perform('buildSpeciesPen',{kind:button.dataset.kind})){tone('success');penDialog();}break;
     case 'buy-animal':buyAnimal(button.dataset.kind as M.AnimalKind);break;
     case 'feed-animal':{const choice=chosenFeed(state),target=M.farmOf(state).animals.find(a=>a.uid===Number(button.dataset.id));if(choice&&target&&!button.dataset.sure&&M.feedLoses(state,choice,target)){feedConfirm(choice,'feed-animal',button.dataset.id);break;}const crop=await perform('feedAnimal',{uid:Number(button.dataset.id),...(choice?{id:choice}:{})});if(crop){tone('pop');feedBurst(Number(button.dataset.id));toast(`Fed a ${t(M.ITEMS[crop].name).toLowerCase()}. It will be quicker now.`,M.ITEMS[crop].icon);}penDialog();break;}
-    case 'feed-all':{const pick=chosenFeed(state);if(pick&&!button.dataset.sure&&M.farmOf(state).animals.some(a=>M.playerCanFeed(a)&&M.feedLoses(state,pick,a))){feedConfirm(pick,'feed-all');break;}const before=new Set(M.farmOf(state).animals.filter(a=>M.canFeed(a)).map(a=>a.uid)),choice=chosenFeed(state),n=await perform('feedAll',choice?{id:choice}:{});if(n){tone('pop');for(const uid of before){const animal=M.farmOf(state).animals.find(a=>a.uid===uid);if(animal&&!M.canFeed(animal))feedBurst(uid);}toast(`Fed ${n} animal${n>1?'s':''}.`,'🥕');}penDialog();break;}
+    case 'feed-all':{const pick=chosenFeed(state);if(pick&&!button.dataset.sure&&M.farmOf(state).animals.some(a=>M.playerCanFeed(a)&&M.feedLoses(state,pick,a))){feedConfirm(pick,'feed-all');break;}const before=new Set(M.farmOf(state).animals.filter(a=>M.canFeed(a)).map(a=>a.uid)),choice=chosenFeed(state),n=await perform('feedAll',choice?{id:choice}:{});if(n){tone('pop');for(const uid of before){const animal=M.farmOf(state).animals.find(a=>a.uid===uid);if(animal&&!M.canFeed(animal))feedBurst(uid);}toast(t(n>1?'Fed {count} animals.':'Fed {count} animal.',{count:n}),'🥕');}penDialog();break;}
     case 'build-pen':buildPenAction();break;
     case 'expand-pen':if(await perform('expandPen')){tone('success');toast('The pen is bigger: room for 3 more chickens and 4 more cows.','🐔');}else toast(`You need ${M.penExpandCost(state)??0} energy to make the pen bigger.`,'ϟ');penDialog();break;
     case 'friend-feed':{const id=button.dataset.kind as FriendId,f=state.friends?.find(f=>f.id===id);if(f&&await perform('setFriendAutoFeed',{id,autoFeed:!f.autoFeed}))friendDialog(id);break;}
@@ -1295,7 +1312,7 @@ function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt
   const weaponKind=M.weaponStats(state).kind;world.weaponKind=state.gear.weapon&&M.ITEMS[state.gear.weapon]?.weapon?.kind==='rod'?'rod':state.gear.disguise?'fist':weaponKind;world.pose=combat.pose;world.invulnerable=combatTimers.invulnerable>0;world.fishTension=fishGame?.simulation.tension??0;
   autoAttack(weaponKind);
   updateHunting(dt);
-  fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.position,fishGame?.simulation??null);
+  fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);
   if(!fishGame&&!$('#reel-button').hidden&&!$('#reel-button').classList.contains('hunt')&&(performance.now()>recastUntil||world.moving))showReel(false);
   // Resizing the WebGL canvas clears its drawing buffer. Apply automatic quality changes
   // before drawing, so the browser never presents an empty frame during a quality transition.

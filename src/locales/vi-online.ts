@@ -177,4 +177,9 @@ export const VI_ONLINE: Record<string, string> = {
   "Travel to the volcano first.": "Hãy đến núi lửa trước.",
   "Your adventure is still alive.": "Nhân vật của bạn vẫn còn sống.",
   "This dropped item belongs to a private garden.": "Món đồ rơi này thuộc về một khu vườn riêng.",
+  // Messages the client or server raise while online (shown through toast(t(message))).
+  "This online adventure is active in another tab.": "Chuyến phiêu lưu trực tuyến này đang mở ở một tab khác.",
+  "The reward could not be saved. Please try again.": "Chưa lưu được phần thưởng. Bạn thử lại nhé.",
+  "Pending health could not be saved. Please try again.": "Chưa lưu được máu hiện tại. Bạn thử lại nhé.",
+  "Account storage is unavailable.": "Kho tài khoản tạm thời không dùng được.",
 };

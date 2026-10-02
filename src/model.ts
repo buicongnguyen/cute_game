@@ -385,10 +385,17 @@ export function craft(s: SaveState, index: number) { if (!canCraft(s, index))
     return false; const r = RECIPES[index]; s.energy -= r.energy; for (const [id, n] of Object.entries(r.materials))
     removeItem(s.bag, id, n); addItem(s, r.result, r.count || 1); recordEvent(s, 'craft'); return true; }
 export function buy(s: SaveState, raw: ItemId) { const id = canonicalItem(raw), index = RECIPES.findIndex(r => r.station === 'shop' && r.result === id); return index >= 0 && craft(s, index); }
+/** Clothes: drawn on the explorer only without a disguise. */
+export const WEARABLE_SLOTS: readonly GearSlot[] = ['hat', 'outfit', 'boots'];
 export function equip(s: SaveState, raw: ItemId) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item?.slot || !s.bag[id])
-    return false; s.gear[item.slot] = id; s.hp = Math.min(s.hp, maxHp(s)); if (item.slot === 'weapon' || item.slot === 'disguise')
+    return false; s.gear[item.slot] = id;
+    // A disguise covers clothes (World.avatar draws none under it): putting clothes on takes it off, as the try-on
+    // preview shows (try-on.ts previewGear). Otherwise the equipped hat stayed invisible under the costume.
+    if (WEARABLE_SLOTS.includes(item.slot)) delete s.gear.disguise;
+    s.hp = Math.min(s.hp, maxHp(s)); if (item.slot === 'weapon' || item.slot === 'disguise')
     s.counters.equipped++; return true; }
-export function unequip(s: SaveState, slot: GearSlot) { if (!s.gear[slot])
+// Own slots only: 'constructor' or '__proto__' from a client read Object.prototype and "succeeded" on the server.
+export function unequip(s: SaveState, slot: GearSlot) { if (!Object.hasOwn(s.gear, slot) || !s.gear[slot])
     return false; delete s.gear[slot]; s.hp = Math.min(s.hp, maxHp(s)); return true; }
 export function eat(s: SaveState, raw: ItemId, now = Date.now()) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item || !item.heal && !item.buff || !item.buff && s.hp >= maxHp(s) || !removeItem(s.bag, id))
     return false; if (item.heal)

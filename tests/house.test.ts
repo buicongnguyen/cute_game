@@ -179,8 +179,9 @@ test('draw budget: the whole interior from the Blender kit is two batches (plus 
   assert.equal(view.staticDraws, 2);
   let meshes = 0, triangles = 0, casters = 0;
   view.root.traverse(o => { if (o instanceof T.Mesh) { meshes++; triangles += o.geometry.getAttribute('position').count / 3; if (o.castShadow) casters++; } });
-  // Two batches, the door, and the live flame, puffs (one instanced draw) and highlight ring.
-  assert.ok(meshes <= 6, `${meshes} meshes`); assert.ok(casters <= 2);
+  // Two batches, the door, and the live flame, puffs (one instanced draw) and highlight ring; plus the hover ring and glow,
+  // which are hidden (no draw) until a mouse is over something.
+  assert.ok(meshes <= 8, `${meshes} meshes`); assert.ok(casters <= 2);
   assert.ok(triangles < 60_000, `${triangles} triangles`);
   // Glow (lamps, flames, window light) is unlit and separate; everything else is one vertex-coloured toon mesh.
   const shell = view.root.getObjectByName('house-shell') as T.Mesh, glow = view.root.getObjectByName('house-glow') as T.Mesh;

@@ -33,7 +33,7 @@ function fixture(holdResponse = false) {
   let closed = 0, release;
   const context = {
     M: { ...M, collectProducts(...args) { calls.push(args); return M.collectProducts(...args); } },
-    state, visiting: null, modal: 'pen', Date: { now: () => now }, collectText,
+    state, visiting: null, modal: 'pen', Date: { now: () => now }, collectText, gainShows: () => true,
     world: {
       planet: 'home', position: { x: 0, z: 0 },
       farmView: {

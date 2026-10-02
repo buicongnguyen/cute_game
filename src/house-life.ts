@@ -12,6 +12,7 @@ import type { HouseSession, ActivityEntity } from './house-session.ts';
 import { ACTIVITIES, HANGOUTS, activity, collectionLog, cooldownLeft, decorPlacements, decorSignature, friendLabel, trophies, photos, type Activity, type UseResult } from './house-activities.ts';
 import { PLANETS, type BuffDef } from './content.ts';
 import * as T from 'three';
+import { activityBox } from './house-hotspots.ts';
 
 export interface LifeDeps {
   world: World; house: HouseSession;
@@ -137,7 +138,8 @@ export function initHouseLife(d: LifeDeps) {
         shown = label; prompt.hidden = !near;
         if (near) { prompt.innerHTML = `<span class="hp-icon">${near.icon}</span><span class="hp-text"><span class="hp-verb">${esc(near.id === 'radio' && music.playing ? t('Stop music') : t(near.verb))}</span>${left > 0 ? `<small>⏳ ${mmss(left)}</small>` : near.buff ? `<small>${esc(buffText(near.buff))}</small>` : ''}</span>`; prompt.classList.toggle('cooling', left > 0); prompt.setAttribute('aria-label', t(near.verb)); }
       }
-      view.highlight.visible = !!near; if (near) view.highlight.position.set(near.at.x, .03, near.at.z);
+      // The ring goes round the thing itself (its footprint), not the spot where you stand to use it.
+      view.placeRing(view.highlight, near ? activityBox(near.id) ?? { x0: near.at.x - .5, x1: near.at.x + .5, z0: near.at.z - .5, z1: near.at.z + .5 } : null);
     }
     // Friends chat now and then: one bubble at a time, above whoever is settled.
     if (chatLeft > 0) {

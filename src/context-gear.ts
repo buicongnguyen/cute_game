@@ -29,12 +29,31 @@ const attack = (item: ItemDef) => item.stats?.atk ?? item.attack ?? 0;
 export class ContextGearSelection {
   private state: ContextGearState | null = null;
   private combat: ItemId | null = null;
+  /** The player took the weapon off by hand: fists until a weapon is equipped again. */
+  private fists = false;
 
   private observe(state: ContextGearState) {
-    if (this.state !== state) { this.state = state; this.combat = null; }
+    if (this.state !== state) { this.state = state; this.combat = null; this.fists = false; }
     const equipped = Object.hasOwn(state.gear, 'weapon') ? state.gear.weapon : undefined;
-    if (ownedCombat(state, equipped)) this.combat = equipped!;
+    if (ownedCombat(state, equipped)) { this.combat = equipped!; this.fists = false; }
     else if (this.combat && !ownedCombat(state, this.combat)) this.combat = null;
+  }
+
+  /**
+   * A manual Remove of the weapon. Without it the remembered (or strongest) weapon came straight back on the next
+   * frame, so the slot could never be emptied. Rods still come out by the water; leaving it gives fists again.
+   */
+  holdFists(state: ContextGearState) { this.observe(state); if (!state.gear.weapon) { this.fists = true; this.combat = null; } }
+
+  /**
+   * The state to write to the save: a rod held only because of the water is stored as the combat choice it replaced
+   * (no weapon for fists), so a reload away from the pond restores the player's pick rather than the strongest weapon.
+   */
+  persisted<S extends ContextGearState>(state: S): S {
+    this.observe(state);
+    if (ownedWeapon(state, state.gear.weapon)?.weapon?.kind !== 'rod' || !this.combat && !this.fists) return state;
+    const gear = { ...state.gear }; if (this.combat) gear.weapon = this.combat; else delete gear.weapon;
+    return { ...state, gear };
   }
 
   /** Best owned rod, regardless of which weapon is currently held. */
@@ -45,9 +64,10 @@ export class ContextGearSelection {
     return rods[0] ?? null;
   }
 
-  /** Manual combat choice first, then remembered choice, then strongest owned weapon; null means fists. */
+  /** Manual combat choice first (a manual Remove means fists), then remembered choice, then strongest owned weapon; null means fists. */
   forCombat(state: ContextGearState): ItemId | null {
     this.observe(state);
+    if (this.fists) return null;
     if (this.combat) return this.combat;
     const weapons = Object.keys(state.bag).filter(id => ownedCombat(state, id));
     weapons.sort((a, b) => attack(ITEMS[b]) - attack(ITEMS[a]) ||

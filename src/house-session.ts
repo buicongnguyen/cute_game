@@ -12,9 +12,10 @@ import { FRIEND_SPOTS, HOUSE, furnitureObstacles, walkable } from './house.ts';
 import { ACTIVITIES, type ActivityId } from './house-activities.ts';
 import { HouseView, friendName } from './house-view.ts';
 import { friendsOf, type Friend, type FriendId } from './friends.ts';
+import { activityBox, doorBox, friendBox, labelSpot, pickHotspot, screenRect, type Box3D, type Hotspot, type ScreenRect } from './house-hotspots.ts';
 
 /** The parts of World the house touches (tests pass a real World built without WebGL). */
-export type HouseHost = Pick<World, 'scene' | 'root' | 'player' | 'companion' | 'marker' | 'ring' | 'remoteRoot' | 'fx' | 'entities' | 'obstacles' | 'position' | 'destination' | 'route' | 'selected' | 'cameraTarget' | 'cameraFocus' | 'zoom' | 'facing' | 'interior' | 'state'> & { resize(): void };
+export type HouseHost = Pick<World, 'scene' | 'root' | 'player' | 'companion' | 'marker' | 'ring' | 'remoteRoot' | 'fx' | 'entities' | 'obstacles' | 'position' | 'destination' | 'route' | 'selected' | 'cameraTarget' | 'cameraFocus' | 'zoom' | 'facing' | 'interior' | 'state'> & Partial<Pick<World, 'camera'>> & { resize(): void };
 export interface FriendEntity extends Entity { friendId: FriendId }
 export interface ActivityEntity extends Entity { activity: ActivityId }
 
@@ -50,7 +51,7 @@ export class HouseSession {
     this.saved = { entities: host.entities, obstacles: host.obstacles, zoom: host.zoom };
     this.syncFriends();
     host.entities = this.entities(); host.obstacles = this.obstacles();
-    host.interior = { scene: this.view.scene, root: this.view.root, walkable, drop: () => this.drop(), adopt: () => this.adopt() };
+    host.interior = { scene: this.view.scene, root: this.view.root, walkable, drop: () => this.drop(), adopt: () => this.adopt(), pick: (x, y) => this.pick(x, y) };
     this.adopt();
     this.view.scene.add(host.marker, host.ring, host.remoteRoot); host.fx?.attach(this.view.scene);
     host.position.set(HOUSE.spawn.x, 0, HOUSE.spawn.z); host.facing = Math.PI; host.destination = null; host.route = []; host.selected = null;
@@ -98,6 +99,26 @@ export class HouseSession {
     return out;
   }
   private anchors = new Map<string, T.Group>();
+  /** The visible box of a tappable thing inside (house-hotspots.ts): furniture from the kit, the door, a friend where they stand. */
+  boxOf(e: Entity): Box3D | null {
+    const a = (e as ActivityEntity).activity; if (a) return activityBox(a);
+    if (e.kind === 'house-door') return doorBox();
+    return e.kind === 'friend' ? friendBox(e.mesh) : null;
+  }
+  /** Where its label sits: low on the middle of that box. */
+  labelAt(e: Entity) { const b = this.boxOf(e); return b ? labelSpot(b) : null; }
+  /** Its box on screen (CSS pixels), grown to a finger's width for small things. */
+  screenBox(e: Entity): ScreenRect | null { const b = this.boxOf(e), cam = this.host?.camera; return b && cam ? screenRect(b, cam, innerWidth, innerHeight) : null; }
+  /** The label's screen box for an entity id while it shows (main.ts sets this; labels never take taps themselves). */
+  labelBox: (id: string) => ScreenRect | null = () => null;
+  private spots: Array<Hotspot<Entity>> = [];
+  /** What a tap or the mouse at (x, y) is on: a label, else the smallest object box holding it, else nothing (a walk). */
+  pick(x: number, y: number): Entity | null {
+    const h = this.host; if (!h || !this.saved) return null;
+    this.spots.length = 0;
+    for (const e of h.entities) this.spots.push({ e, rect: this.screenBox(e), label: this.labelBox(e.id) });
+    return pickHotspot(this.spots, x, y);
+  }
   /** Furniture only: friends walk between hangouts, so they are not fixed obstacles. */
   private obstacles() { return furnitureObstacles(); }
   /** Friends shown match the save; re-run after a give or take, or a rescue. */

@@ -59,6 +59,12 @@ function translate(source: string, depth = 0): string {
   }
   // Decorations and separators are layout, not prose. Translate each known phrase,
   // leaving unknown text intact; no substring replacement of arbitrary player text.
+  // " · " joins whole sentences, so split there first: stripping the final "." of
+  // "3 of 9 worlds discovered · Click the ground…" would leave the last phrase unmatched.
+  if (/\s[·•]\s/.test(core)) {
+    const joined = core.split(/(\s+[·•]\s+)/).map((piece, i) => i % 2 ? piece : translate(piece, depth + 1)).join('');
+    if (joined !== core) return prefix + joined + suffix;
+  }
   const decorated = core.match(/^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u);
   if (decorated && (decorated[1] || decorated[3]) && decorated[2]) {
     // First remove only one edge. Parentheses and punctuation can belong to a
@@ -66,6 +72,12 @@ function translate(source: string, depth = 0): string {
     if (decorated[1]) {
       const rest = decorated[2] + decorated[3], changed = translate(rest, depth + 1);
       if (changed !== rest) return prefix + decorated[1] + changed + suffix;
+      // An icon then a signed amount ("✨ +14 fuel"): keep the sign with its template.
+      const gap = decorated[1].search(/\s\S+$/);
+      if (gap >= 0) {
+        const lead = decorated[1].slice(0, gap + 1), signed = core.slice(lead.length), moved = translate(signed, depth + 1);
+        if (moved !== signed) return prefix + lead + moved + suffix;
+      }
     }
     if (decorated[3]) {
       const rest = decorated[1] + decorated[2], changed = translate(rest, depth + 1);

@@ -151,7 +151,8 @@ export class FriendCrew {
       const grew = stage > (a.root.userData.stage ?? 0);
       dropTree(a.root); a.root = this.dress(id, f); a.sig = sig; this.group.add(a.root); this.fitProxy(a.entity.mesh, stage);
       // The "grew up!" moment: a cheer, a sparkle and a line (main.ts shows it) when the saved stage rises.
-      if (grew) { a.cheerT = 1.8; this.host.world.fx?.burst(new T.Vector3(a.x, 1, a.z), { n: 16, color: ['#ffe66d', '#ffffff', '#9be15d'], glow: true, speed: 3, up: 6 }); this.host.grew?.(id, stage); }
+      // Indoors the effects layer draws in the cottage's scene: an outdoor friend's sparkles would pop up among the furniture.
+      if (grew) { a.cheerT = 1.8; if (!this.host.world.interior) this.host.world.fx?.burst(new T.Vector3(a.x, 1, a.z), { n: 16, color: ['#ffe66d', '#ffffff', '#9be15d'], glow: true, speed: 3, up: 6 }); this.host.grew?.(id, stage); }
     }
     if (a) return a;
     const proxy = new T.Group(); proxy.name = 'friend-proxy-' + id;

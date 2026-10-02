@@ -39,7 +39,8 @@ export interface HouseDeps {
 const INSIDE_KEY = 'zoo-garden-indoors';
 const remember = (inside: boolean) => { try { if (inside) localStorage.setItem(INSIDE_KEY, '1'); else localStorage.removeItem(INSIDE_KEY); } catch { /* optional */ } };
 const remembered = () => { try { return localStorage.getItem(INSIDE_KEY) === '1'; } catch { return false; } };
-export const DRESS_SLOTS: Array<[string, string, string]> = [['hat', '👒', 'Hat'], ['armor', '🧥', 'Outfit'], ['boots', '👟', 'Boots'], ['weapon', '⚔️', 'Weapon'], ['pet', '🐾', 'Pet']];
+// Keys are FRIEND_SLOTS (Friend.gear): 'outfit', not the item type 'armor', or a given outfit never showed and could not be taken back.
+export const DRESS_SLOTS: Array<[string, string, string]> = [['hat', '👒', 'Hat'], ['outfit', '🧥', 'Outfit'], ['boots', '👟', 'Boots'], ['weapon', '⚔️', 'Weapon'], ['pet', '🐾', 'Pet']];
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 /** Things in the bag a friend can wear (not disguises). */
 export function wearables(s: SaveState) { return Object.entries(s.bag).filter(([id, n]) => (n ?? 0) > 0 && ['hat', 'outfit', 'boots', 'weapon', 'pet'].includes(ITEMS[id]?.slot ?? '')).map(([id, n]) => ({ id, count: n as number })); }
@@ -69,8 +70,10 @@ export function initHouse(d: HouseDeps) {
   const out = document.createElement('button'); out.className = 'home-button house-out'; out.dataset.houseAction = 'leave'; out.title = t('Outside');
   /** The HUD's place name says where you are: the cottage indoors, the village zone again outside. */
   const zoneName = () => { const el = document.getElementById('zone-name'); if (el) el.textContent = house.inside ? t('Cottage') : t(world.lastZone || 'Clover Village'); };
-  const label = () => { zoneName(); out.innerHTML = `🚪 <span>${t('Outside')}</span>`; out.title = t('Outside'); out.setAttribute('aria-label', t('Outside')); };
-  label(); document.querySelector('.home-button')?.after(out); onLanguageChange(label);
+  // Indoors the outdoor hint ("Space attack") makes no sense: the cottage has its own (house.css swaps them).
+  const hint = document.createElement('div'); hint.className = 'control-hint house-hint';
+  const label = () => { zoneName(); out.innerHTML = `🚪 <span>${t('Outside')}</span>`; out.title = t('Outside'); out.setAttribute('aria-label', t('Outside')); hint.innerHTML = `<span>${t('Click a glowing thing to use it')}</span><i>•</i> ${t('Arrows to move')}`; };
+  label(); document.querySelector('.home-button')?.after(out); document.querySelector('.control-hint')?.after(hint); onLanguageChange(label);
   /** Fade to the warm dark, swap, fade back. */
   const transition = (swap: () => void) => { if (pending) return; pending = swap; fadeTarget = 1; };
   const sync = () => { document.body.classList.toggle('indoors', house.inside); zoneName(); remember(house.inside && !d.visiting()); };
@@ -113,7 +116,18 @@ export function initHouse(d: HouseDeps) {
   let dimHold = 0;
   const life = initHouseLife({ world, house, visiting: d.visiting, blocked: d.blocked, perform: d.perform, openDialog: d.openDialog, toast: d.toast, tone: d.tone, ownGear: d.ownGear, looks: d.looks, quests: d.quests, soundOn: () => d.soundOn?.() ?? true,
     dim: seconds => { dimHold = seconds; }, route: e => world.onInteract(e) });
+  // Desktop hover: the thing under the mouse glows and the cursor turns into a hand, so you see what a click will use
+  // before clicking. Touch has no hover: there the ring round the nearest thing (house-life.ts) does that job.
+  const canvas = document.getElementById('world');
+  let mouse: { x: number; y: number } | null = null, hovered: Entity | null = null, hoverScan = 0;
+  canvas?.addEventListener('pointermove', ev => { mouse = ev.pointerType === 'mouse' ? { x: ev.clientX, y: ev.clientY } : null; });
+  canvas?.addEventListener('pointerleave', () => { mouse = null; });
+  const hover = (e: Entity | null) => {
+    if (e !== hovered) { hovered = e; if (canvas) canvas.style.cursor = e ? 'pointer' : ''; }
+    house.view.setHover(e ? house.boxOf(e) : null); // friends walk: their glow follows them
+  };
   const frame = (dt: number) => {
+    if ((hoverScan -= dt) <= 0) { hoverScan = .05; const e = house.inside && mouse && !d.blocked() && !pending ? house.pick(mouse.x, mouse.y) : null; if (e || hovered) hover(e); }
     if (!d.started()) return;
     if (!resumed) { resumed = true; if (remembered() && !d.visiting() && world.planet === 'home') enter(true); }
     if (house.inside && !world.interior) { sync(); } // the world rebuilt (travel, visit, reset)
@@ -167,6 +181,8 @@ export function initHouse(d: HouseDeps) {
   return {
     house, life, interact, enter, leave, dress, label,
     get inside() { return house.inside; },
+    /** The thing under the mouse indoors (desktop), for the label's hover look. */
+    hovered: () => hovered,
     /** Pose height for other clients: raised while inside (see house.ts). */
     poseY: (y: number) => y + (house.inside ? INDOOR_Y : 0),
     frame,
