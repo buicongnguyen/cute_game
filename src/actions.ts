@@ -7,7 +7,7 @@ import { buyLook, wearLook } from './looks.ts';
 import { huntFish } from './fish-hunting.ts';
 import { useActivity } from './house-activities.ts';
 import { sellProduce } from './item-views.ts';
-import { claimProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
+import { claimProgress, refreshProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 
 export const ACTION_RULES_VERSION = 1;
 export interface GameIntent { type: string; payload?: Record<string, unknown> }
@@ -138,6 +138,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
       if (Game.isDifficulty(level) && level !== Game.difficultyOf(state)) {
         if (Game.isLowering(Game.difficultyOf(state), level)) { if (Game.lowerReadyAt(state) > now) return invalid(); state.settings.difficultyLoweredAt = now; }
         state.settings.difficulty = level;
+        refreshProgress(state, now); // a cook task or story step the new kitchen lock makes impossible swaps at once
       }
       if(settings&&typeof settings==='object'&&['left','right'].includes((settings as Record<string,string>).joystickSide))state.settings.joystickSide=(settings as {joystickSide:'left'|'right'}).joystickSide;
       if (p.name !== undefined) state.name = string(p.name, 20).trim() || state.name;

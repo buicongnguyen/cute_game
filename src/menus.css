@@ -252,3 +252,9 @@
 .planet-card.route .planet-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 #autopilot-skip { position: absolute; left: 50%; bottom: calc(26px + var(--safe-bottom)); transform: translateX(-50%); min-width: 140px; min-height: 52px; border-radius: 18px; border: 3px solid #fff; background: linear-gradient(180deg, #7a6bff, #4b3bd0); color: #fff; font: inherit; font-weight: 1000; font-size: 18px; cursor: pointer; box-shadow: 0 5px 0 #2f2390; }
 @media (max-width: 480px) { .route-go, .route-lock, .planet-card.route .planet-here { padding: 0 7px; font-size: 11px; white-space: normal; max-width: 86px; text-align: center; } }
+/* A phone shop row with its price, Equip and Try on squeezed the name to one word per line: the buttons wrap under it. */
+@media (max-width: 600px) {
+  .shop-item:has(> [data-action="equip"]) { flex-wrap: wrap; row-gap: 4px; }
+  .shop-item:has(> [data-action="equip"]) > div:nth-child(2) { flex: 1 1 calc(100% - 52px); }
+  .shop-item:has(> [data-action="equip"]) > [data-action="buy"] { margin-left: 44px; }
+}

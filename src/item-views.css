@@ -23,6 +23,9 @@
 
 /* Market: one wide button sells every crop and fish stack (the reference's "big-btn"). */
 #dialog:not([data-tone="garden"]) #dialog-body .sell-produce { width: 100%; min-height: 40px; font-size: 14px; }
+/* "12 from the chest": at home Sell all also sells what the helpers stored (item-views.ts produceLots). */
+#dialog-body .sell-produce:has(.from-chest) { flex-wrap: wrap; row-gap: 0; }
+#dialog-body .sell-produce .from-chest { display: block; flex-basis: 100%; margin-top: 1px; font-size: 12px; font-weight: 800; opacity: .9; }
 
 /* Wishing crystal: energy on top, then one compact card per stat. */
 .en-head { font-size: 13px; font-weight: 900; color: var(--ink-soft); }
