@@ -6,7 +6,7 @@ import * as M from './model.ts';
 import { nextTask, rememberPlantings, type HelperTask } from './helper.ts';
 
 /**
- * Sprout, the garden helper, in the world: helper.glb's six rigid parts (CONTRACT.md "Garden helper"), each merged
+ * Bolt, the garden helper, in the world: helper.glb's six rigid parts (CONTRACT.md "Garden helper"), each merged
  * with its colours baked into one geometry around its joint, all drawn with one shared vertex-colour toon material:
  * six small draws and no shadow pass (a soft blob sits under it instead). Until the kit loads, simple shapes with the
  * same parts stand in.

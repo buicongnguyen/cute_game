@@ -1,4 +1,4 @@
-"""Zoo Garden garden helper: a tiny gardening robot ("Sprout") that tends the beds at home.
+"""Zoo Garden garden helper: a tiny gardening robot ("Bolt") that tends the beds at home.
 
 About a quarter of the explorer's height (0.52 m to the leaf tip against the explorer's ~1.93 m), in the shared
 chunky toy style (style.py): a round sunny-yellow body with a leaf-green apron, a dome head with a dark face screen and two

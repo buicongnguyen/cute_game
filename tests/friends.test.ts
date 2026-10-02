@@ -120,7 +120,7 @@ test('gear moves between the bag and a friend', () => {
   const s = rescued('clover'); s.bag.hat_straw = 1; const hat = Object.keys(M.ITEMS).find(id => M.ITEMS[id].slot === 'hat')!; s.bag[hat] = 1;
   assert.equal(F.giveGear(s, 'clover', hat), true); assert.equal(s.bag[hat] ?? 0, 0); assert.equal(F.friendOf(s, 'clover')!.gear.hat, hat);
   assert.equal(F.giveGear(s, 'clover', 'carrot'), false); assert.equal(F.takeGear(s, 'clover', 'hat'), true); assert.equal(s.bag[hat], 1);
-  s.gear.hat = hat; assert.equal(F.giveGear(s, 'clover', hat), false, 'never the one the explorer wears');
+  s.gear.hat = hat; assert.equal(F.giveGear(s, 'clover', hat), true); assert.equal(s.gear.hat, undefined, 'the explorer takes off its last copy'); F.takeGear(s, 'clover', 'hat');
   s.bag.armor_chef = 1; assert.equal(F.giveGear(s, 'clover', 'armor_chef'), true); assert.deepEqual(F.friendOf(s, 'clover')!.gear, { outfit: 'armor_chef' }, 'same slot keys as SaveState.gear');
   assert.deepEqual(M.parseSave(JSON.stringify(s))!.friends!.find(f => f.id === 'clover')!.gear, { outfit: 'armor_chef' });
 });

@@ -3,10 +3,11 @@ import { VI_GAMEPLAY } from './locales/vi-gameplay.ts';
 import { VI_ONLINE } from './locales/vi-online.ts';
 import { VI_UI } from './locales/vi-ui.ts';
 import { VI_FRIENDS } from './locales/vi-friends.ts';
+import { VI_HOUSE } from './locales/vi-house.ts';
 
 export type Language = 'en' | 'vi';
 export const LANGUAGE_KEY = 'cute-game-language';
-const vi: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS);
+const vi: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS, VI_HOUSE);
 const folded = new Map(Object.entries(vi).map(([key, value]) => [key.toLowerCase(), value]));
 const listeners = new Set<() => void>();
 const cache = new Map<string, string>();

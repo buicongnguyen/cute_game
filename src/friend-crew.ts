@@ -164,6 +164,7 @@ export class FriendCrew {
   private hide(a: Actor) { a.root.visible = false; this.setEntity(a, false); }
   private setEntity(a: Actor, on: boolean) {
     const w = this.host.world, has = w.entities.includes(a.entity);
+    on &&= !w.interior; // indoors the house shows its own friends; outdoor labels and taps would leak through
     if (on && !has) { w.entities.push(a.entity); w.root.add(a.entity.mesh); }
     else if (!on && has) { w.entities = w.entities.filter(e => e !== a.entity); a.entity.mesh.removeFromParent(); }
     if (on) { a.entity.x = a.x; a.entity.z = a.z; a.entity.mesh.position.set(a.x, 0, a.z); }

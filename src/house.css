@@ -1,0 +1,29 @@
+/* The cottage interior: fade veil, the Outside button, indoor HUD and the Dress panel (house-ui.ts). */
+#house-veil { position: fixed; inset: 0; z-index: 40; display: none; opacity: 0; pointer-events: none; background: radial-gradient(circle at 50% 55%, #4a2f24, #1d1310 70%); }
+.house-out { display: none; }
+body.indoors .home-button:not(.house-out) { display: none; }
+body.indoors .house-out { display: flex; }
+/* Indoors there is nothing to fight and no outdoor map. */
+body.indoors #hud .minimap, body.indoors #hud .skills { display: none; }
+
+.dress-panel { display: flex; flex-direction: column; gap: 8px; }
+.dress-head { display: flex; align-items: center; gap: 12px; }
+.dress-head strong { display: block; font-size: 18px; }
+.dress-head small { color: var(--ink-soft); font-weight: 800; }
+.dress-portrait { width: 84px; height: 84px; flex: none; border-radius: 22px; background: radial-gradient(circle at 50% 40%, #fff7e2, #ffd9a8); border: 3px solid #fff; box-shadow: var(--lift); display: grid; place-items: center; font-size: 40px; object-fit: contain; }
+.dress-panel h4 { margin: 4px 0 0; font-size: 13px; color: var(--ink-soft); }
+.dress-slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.dress-slot { min-height: 76px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px; border-radius: 16px; font-size: 11px; font-weight: 800; text-align: center; line-height: 1.1; color: var(--ink); }
+.dress-slot.empty { border: 2px dashed rgba(86, 100, 77, .35); color: var(--ink-faint); }
+.dress-slot.empty b { font-size: 22px; opacity: .6; }
+.dress-slot.worn { border: 3px solid #fff; background: linear-gradient(180deg, #fffdf4, #ffe9c2); box-shadow: var(--lift); cursor: pointer; }
+.dress-slot.worn small { color: #c2553f; font-size: 10px; }
+.dress-slot img, .dress-item img { width: 40px; height: 40px; object-fit: contain; }
+.dress-bag { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; max-height: 240px; overflow-y: auto; padding: 2px; }
+.dress-item { position: relative; min-height: 76px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 4px 6px; border-radius: 16px; border: 3px solid #fff; background: linear-gradient(180deg, #ffffff, #eef7e4); box-shadow: var(--lift); font-size: 11px; font-weight: 800; line-height: 1.1; color: var(--ink); cursor: pointer; }
+.dress-item b { position: absolute; top: 3px; right: 6px; font-size: 10px; color: var(--ink-soft); }
+@media (max-width: 600px) {
+  .dress-slots { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .dress-slot { min-height: 64px; font-size: 10px; }
+  .dress-portrait { width: 64px; height: 64px; }
+}

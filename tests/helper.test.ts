@@ -81,7 +81,7 @@ test('the bed panel row and the helper panel are localized without changing acti
   setLanguage('vi');
   try {
     const row = localizeHtml(helperRow(s, false)); assert.match(row, /Người giúp vườn · Thuê với ϟ 1000/);
-    const buy = localizeHtml(helperPanel(s, ui)); assert.match(buy, /Thuê Sprout \(ϟ 1000\)/); assert.doesNotMatch(buy, /never buys|Hire Sprout/);
+    const buy = localizeHtml(helperPanel(s, ui)); assert.match(buy, /Thuê Bolt \(ϟ 1000\)/); assert.doesNotMatch(buy, /never buys|Hire Bolt/);
     H.buyHelper(s); const panel = localizeHtml(helperPanel(s, ui));
     assert.match(panel, /data-action="helper-pause"/); assert.match(panel, /data-action="helper-seed" data-item="same"/); assert.match(panel, /Như trước/);
     assert.doesNotMatch(panel, /Seed to plant|Helper at work|Same as before/);

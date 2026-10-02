@@ -31,13 +31,15 @@ export { FRIENDS, FRIEND_IDS, CAGES };
 export function friendsOf(s: M.SaveState): Friend[] { return s.friends ?? []; }
 export const friendOf = (s: M.SaveState, id: FriendId) => friendsOf(s).find(f => f.id === id);
 
-/** Gives one of an item from the bag to a friend (never the copy the explorer wears); the item it had goes back. */
+/** Gives one of an item from the bag to a friend (the explorer stops wearing it if that was its last copy); the item it had goes back. */
 export function giveGear(s: M.SaveState, id: FriendId, raw: M.ItemId): boolean {
   const f = friendOf(s, id), item = M.canonicalItem(raw), slot = friendSlot(item);
-  if (!f || !slot || M.looseQuantity(s, item) < 1) return false;
+  if (!f || !slot || (s.bag[item] ?? 0) < 1) return false;
   const old = f.gear[slot]; if (old && !Number.isSafeInteger((s.bag[old] ?? 0) + 1)) return false;
   if (!M.removeItem(s.bag, item)) return false;
   if (old) M.addItem(s, old);
+  // Giving away the explorer's only copy takes it off the explorer (the house dress panel relies on this).
+  if ((s.bag[item] ?? 0) < 1) for (const k of Object.keys(s.gear) as M.GearSlot[]) if (s.gear[k] === item) delete s.gear[k];
   f.gear[slot] = item; return true;
 }
 export function takeGear(s: M.SaveState, id: FriendId, slot: string): boolean {
