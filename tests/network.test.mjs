@@ -21,6 +21,10 @@ function connect(url, cookie) {
   });
 }
 
+// The server's combat tick also broadcasts `enemies` every 250 ms, including an empty list
+// before the host's first snapshot is accepted, so wait for the snapshot that carries the ids.
+const enemiesWith=(...ids)=>m=>m.type==='enemies'&&Array.isArray(m.enemies)&&ids.every(id=>m.enemies.some(e=>e.id===id));
+
 test('local multiplayer: accounts, saves, friendship, privacy, rooms and host migration', async t => {
   const dataDir=await mkdtemp(path.join(os.tmpdir(),'zoo-garden-network-test-'));
   const game=await createGameServer({port:0,dataDir,databaseUrl:'',databaseRequired:false});
@@ -48,7 +52,7 @@ test('local multiplayer: accounts, saves, friendship, privacy, rooms and host mi
   const a=await connect(game.url,alice.cookie);sockets.push(a);const initialA=await a.next(m=>m.type==='joined');assert.equal(initialA.host,alice.data.account.id);
   const b=await connect(game.url,bob.cookie);sockets.push(b);const initialB=await b.next(m=>m.type==='joined');assert.equal(initialB.host,alice.data.account.id);assert.equal(initialB.players.length,2);
   const enemy=enemyRoster('home').find(e=>e.zone==='forest'&&!e.boss);a.send({type:'enemies',enemies:[{id:enemy.id,type:enemy.type,x:-30,z:0,hp:1,maxHp:1}]});
-  assert.equal((await b.next(m=>m.type==='enemies')).enemies[0].hp,enemy.baseMaxHp);
+  assert.equal((await b.next(enemiesWith(enemy.id))).enemies.find(e=>e.id===enemy.id).hp,enemy.baseMaxHp);
   b.send({type:'chat',message:'Hello, explorer!'});assert.equal((await a.next(m=>m.type==='chat')).message,'Hello, explorer!');
   a.send({type:'active',active:false});assert.equal((await b.next(m=>m.type==='authority'&&m.host===bob.data.account.id)).host,bob.data.account.id);
   b.send({type:'visit',id:alice.data.account.id});assert.equal((await b.next(m=>m.type==='visit')).home.id,alice.data.account.id);
@@ -114,7 +118,7 @@ test('combat quantities and rewards are authoritative while canonical boss visua
   const canonical=enemyRoster('home').find(e=>e.type==='treant');
   const boss={id:canonical.id,type:canonical.type,x:-40,z:3,hp:1,maxHp:1,damage:999999,phase:'windup',phaseTime:.8,skill:'rain',bossStage:2,attackCount:6,skillCount:3,spinTick:.2,lift:1,liftVelocity:3,cooldown:1.4,targetX:-38,targetZ:2,statuses:{charm:999},telegraphs:[{x:-38,z:2,r:2,delay:1.3}],skillEffects:[{x:-40,z:3,r:6,inner:3.6,remaining:.44,multiplier:1.1}]};
   host.send({type:'enemies',enemies:[boss,{...boss,id:'invented-enemy'}]});
-  const received=(await peer.next(m=>m.type==='enemies')).enemies;assert.equal(received.length,1);const snapshot=received[0];
+  const received=(await peer.next(enemiesWith(canonical.id))).enemies;assert.equal(received.length,1);const snapshot=received[0];
   for(const key of ['phase','phaseTime','skill','bossStage','attackCount','skillCount','spinTick','lift','liftVelocity','cooldown','targetX','targetZ'])assert.equal(snapshot[key],boss[key],key);
   assert.equal(snapshot.hp,canonical.baseMaxHp);assert.equal(snapshot.maxHp,canonical.baseMaxHp);assert.equal(snapshot.damage,canonical.baseDamage);assert.ok(!snapshot.statuses.charm);
   assert.deepEqual(snapshot.telegraphs.map(({x,z,r,delay})=>({x,z,r,delay})),boss.telegraphs);
@@ -126,7 +130,7 @@ test('combat quantities and rewards are authoritative while canonical boss visua
 test('one server-simulated basic kill commits once and forged raw attacks cannot award progress',async t=>{
   const {host,peer,barrier,game}=await protocolRoom(t,{configure:(profile,name)=>{if(name==='peer_player')profile.attackUp=1000;}});
   const enemy=enemyRoster('home').find(e=>e.zone==='forest'&&!e.boss),spawn={id:enemy.id,type:enemy.type,x:-30,z:0,hp:999999,maxHp:999999};
-  host.send({type:'enemies',enemies:[spawn]});await peer.next(m=>m.type==='enemies');peer.send({type:'pose',x:-30,z:1});await host.next(m=>m.type==='pose'&&m.player.id===peer.id);
+  host.send({type:'enemies',enemies:[spawn]});await peer.next(enemiesWith(spawn.id));peer.send({type:'pose',x:-30,z:1});await host.next(m=>m.type==='pose'&&m.player.id===peer.id);
   const before=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();
   peer.send({type:'basic',targetId:enemy.id});const death=await peer.next(m=>m.type==='defeat'&&m.id===enemy.id);assert.deepEqual(death.by,[peer.id]);
   const saved=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();assert.equal(saved.profile.counters.kills,before.profile.counters.kills+1);assert.equal(saved.profile.xp-before.profile.xp,enemy.xp);assert.ok(saved.revision>before.revision);
@@ -139,7 +143,7 @@ test('healing settles buffered combat damage and preserves food on a stale revis
   t.mock.timers.enable({apis:['setInterval']});
   const {host,peer,barrier,store,action}=await protocolRoom(t,{configure:profile=>{profile.hp=50;profile.bag.carrot=1;}});
   const enemy=enemyRoster('home').find(value=>value.zone==='forest'&&!value.boss);
-  host.send({type:'enemies',enemies:[{id:enemy.id,type:enemy.type,x:-30,z:0}]});await peer.next(message=>message.type==='enemies');
+  host.send({type:'enemies',enemies:[{id:enemy.id,type:enemy.type,x:-30,z:0}]});await peer.next(enemiesWith(enemy.id));
   peer.send({type:'pose',x:-30,z:1});await host.next(message=>message.type==='pose'&&message.player.id===peer.id);
   host.send({type:'damage',id:peer.id,enemyId:enemy.id});await barrier(host,peer);
   assert.equal((await store.get(peer.id)).profile.hp,50,'damage is still buffered before the action');
@@ -173,7 +177,7 @@ test('late join and host migration retain bounded projectiles and Titan attack v
   const attack=beginTitanAttack('lines',source,titanTelegraphs('lines',source,targets[0],targets,()=>.5),targets);
   const enemy={id:first.id,type:first.type,x:-30,z:2,hp:1,shots:[{id:'shot:one',x:-29,y:1.2,z:2,vx:13,vz:0,life:.8,damage:999999,targetEnemyId:titan.id}]};
   const boss={id:titan.id,type:titan.type,x:100,z:0,hp:1,phase:'windup',skill:'lines',phaseTime:.8,titanAttacks:[attack],telegraphs:attack.marks,titanLift:2,shots:Array.from({length:35},(_,i)=>({id:`titan:shot:${i}`,x:98,y:999,z:1,vx:500,vz:-500,life:500,damage:1e8}))};
-  host.send({type:'enemies',enemies:[enemy,boss]});const received=(await peer.next(m=>m.type==='enemies')).enemies;
+  host.send({type:'enemies',enemies:[enemy,boss]});const received=(await peer.next(enemiesWith(enemy.id,boss.id))).enemies;
   const shot=received[0].shots[0];assert.equal(shot.targetEnemyId,titan.id);assert.equal(shot.damage,first.baseDamage);assert.equal(shot.vx,13);
   assert.equal(received[1].shots.length,30);assert.equal(received[1].shots[0].damage,titan.baseDamage);assert.equal(received[1].shots[0].vx,100);assert.equal(received[1].shots[0].y,50);assert.equal(received[1].shots[0].life,60);assert.deepEqual(received[1].titanAttacks,[attack]);assert.equal(received[1].telegraphs.length,42);
   const late=await explorer('projectile_viewer');assert.deepEqual(late.joined.enemies.map(e=>e.shots),received.map(e=>e.shots));assert.deepEqual(late.joined.enemies[1].titanAttacks,[attack]);
