@@ -2,7 +2,7 @@ import * as Game from './model.ts';
 import * as Helper from './helper.ts';
 import * as FarmHelper from './farm-helper.ts';
 import * as Friends from './friends.ts';
-import { deliversToChest, storeGains, takeStored } from './delivery.ts';
+import { deliversToChest, potItems, storeGains, takeFromChest, takeStored } from './delivery.ts';
 import { buyLook, wearLook } from './looks.ts';
 import { huntFish } from './fish-hunting.ts';
 import { useActivity } from './house-activities.ts';
@@ -34,7 +34,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
   if (!p || typeof p !== 'object' || Array.isArray(p)) return invalid();
   const id = () => string(p.id), index = () => integer(p.index), kind = () => string(p.kind), now = context.now, random = context.random;
   // Workers' harvest while the explorer is out goes to the house chest (delivery.ts).
-  const before = deliversToChest(intent.type, p) ? { ...state.bag } : null;
+  const before = deliversToChest(intent.type, p, now - state.savedAt) ? { ...state.bag } : null, potBefore = before ? potItems(state) : {};
   let result: unknown;
   switch (intent.type) {
     case 'buy': result = Game.buy(state, id()); break;
@@ -104,6 +104,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'wearLook': result = wearLook(state, string(p.id, 20)); break;
     case 'friendsCatchUp': result = Friends.friendsCatchUp(state, now); break;
     case 'ackStored': result = takeStored(state); break;
+    case 'ackTrim': result = Game.takeTrimNote(state); break;
+    case 'takeChest': result = takeFromChest(state, p.items); break;
     case 'giveFriendGear': result = Friends.giveGear(state, string(p.friend, 20) as Friends.FriendId, id()); break;
     case 'takeFriendGear': result = Friends.takeGear(state, string(p.friend, 20) as Friends.FriendId, string(p.slot, 10)); break;
     case 'fishHunt': result = huntFish(state, { weaponId: string(p.weaponId), pondId: string(p.pondId), slot: integer(p.slot), aim: p.aim as { x: number; z: number } }, p.from as { x: number; z: number }, now); break;
@@ -143,5 +145,5 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     }
     default: return invalid();
   }
-  success(result); if (before) storeGains(state, before); state.savedAt = now; return result;
+  success(result); if (before) storeGains(state, before, potBefore); state.savedAt = now; return result;
 }

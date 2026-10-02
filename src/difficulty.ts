@@ -19,7 +19,7 @@ export const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: 'Easy', norm
 /** The Settings panel's one-line description of each difficulty. */
 export const DIFFICULTY_NOTE: Record<Difficulty, string> = {
   easy: 'The relaxed economy: every price and creature as it always was.',
-  normal: 'A slower economy: kitchen at level 14, leaner fruit trees, dearer livestock.',
+  normal: 'A slower economy: kitchen at level 14, fruit trees later and twice as slow with less XP, dearer livestock.',
   hard: 'Normal’s economy, creatures with more health and harder hits, and +15% XP and drop chance as the reward.',
 };
 const harsh = (s: WithSettings | null | undefined) => difficultyOf(s) !== 'easy';
@@ -29,20 +29,23 @@ export const KITCHEN_LEVEL = 14;
 export const kitchenLevel = (s: WithSettings) => harsh(s) ? KITCHEN_LEVEL : 0;
 export const kitchenOpen = (s: WithSettings & { level: number }) => s.level >= kitchenLevel(s);
 
-/** Fruit trees (the 8-14 hour crops): later and leaner off Easy — apple L3 600/400 becomes L8 sell 150, 120 XP. */
-export const TREE_LEVEL_STEP = 5, TREE_LEVEL_CAP = 25, TREE_SELL = .25, TREE_XP = .3;
+/**
+ * Fruit trees (the 8-14 hour crops) off Easy: unlocked 5 levels later, twice the grow time and 0.3x the XP — apple L3
+ * (8 h, 400 XP) becomes L8 (16 h, 120 XP). Both are fixed at planting (model.ts plant: plot.growDuration and
+ * plot.difficulty), so switching the difficulty never re-prices a growing tree. The sell price is the same on every
+ * difficulty: a price that followed the current setting let a raise-harvest-lower round trip pay the gap (review w15).
+ */
+export const TREE_LEVEL_STEP = 5, TREE_LEVEL_CAP = 25, TREE_GROW = 2, TREE_XP = .3;
 export const isFruitTree = (id: string) => Object.hasOwn(CROPS, id) && CROPS[id].duration >= 8 * 3_600_000;
 export function cropLevel(s: WithSettings, id: string) {
   const c = CROPS[id]; if (!c) return Infinity;
   return harsh(s) && isFruitTree(id) ? Math.min(TREE_LEVEL_CAP, c.level + TREE_LEVEL_STEP) : c.level;
 }
 export function cropXp(s: WithSettings, id: string) { const c = CROPS[id]; return !c ? 0 : harsh(s) && isFruitTree(id) ? Math.round(c.xp * TREE_XP) : c.xp; }
-/** What one item sells for at the market. */
-export function sellPrice(s: WithSettings, id: ItemId): number {
-  // Roasted food is priced from its raw crop (content.ts: 2.2 x sell + 2), so the tree cut reaches cooked fruit too.
-  const item = ITEMS[id], raw = item?.cooked ? item.base : undefined;
-  if (raw && ITEMS[raw]) return Math.round(sellPrice(s, raw) * 2.2) + 2;
-  const base = item?.sell ?? 0; return harsh(s) && isFruitTree(id) ? Math.round(base * TREE_SELL) : base; }
+/** A crop's grow time when planted now, before the bed's own speed-up (model.ts bedGrowTime). */
+export function cropGrowTime(s: WithSettings, id: string) { const c = CROPS[id]; return !c ? 0 : harsh(s) && isFruitTree(id) ? c.duration * TREE_GROW : c.duration; }
+/** What one item sells for at the market: the same on every difficulty. */
+export function sellPrice(_s: WithSettings, id: ItemId): number { return ITEMS[id]?.sell ?? 0; }
 
 /** Livestock off Easy: chicken 60 (was 25), cow 120 (was 70), duck and pig about 1.7x; products come 1.5x less often. */
 const ANIMAL_PRICE: Record<string, number> = { chicken: 60, cow: 120 };
@@ -57,6 +60,8 @@ export const productPace = (s: WithSettings) => harsh(s) ? PRODUCT_PACE : 1;
 /** Hard rewards for choosing it: +15% XP (model.ts gainXp) and +15% drop chance (rollLoot). */
 export const HARD_BONUS = 1.15;
 export const rewardScale = (s: WithSettings | null | undefined) => difficultyOf(s) === 'hard' ? HARD_BONUS : 1;
+/** The kill bonus follows the creatures fought (a co-op room's hardScale, set by its host), not the killer's own setting. */
+export const scaleReward = (scale: { hp: number } | null | undefined) => (scale?.hp ?? 1) > 1 ? HARD_BONUS : 1;
 const RANK: Record<Difficulty, number> = { easy: 0, normal: 1, hard: 2 };
 /** Lowering the difficulty works once per this long (stored settings.difficultyLoweredAt). */
 export const LOWER_COOLDOWN_MS = 24 * 3_600_000;

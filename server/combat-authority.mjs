@@ -146,9 +146,10 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     const contributors=[...enemy.contributors].filter(([id,at])=>now-at<30000&&room.members.has(id)&&peers.get(id)?.planet===state(room).planet).map(([id])=>id);
     if(!contributors.includes(killer.account.id))contributors.push(killer.account.id);
     internal(killer.account.id,'combatKill',contributors,records=>{
-      let loot=[];
+      // The Hard bonus follows the room's creatures (the host's scale), not each contributor's own setting.
+      let loot=[];const bonus=Game.scaleReward(state(room).scale);
       for(const id of contributors){const account=records.get(id);if(!account||(account.adventureEpoch||0)!==contributorEpochs.get(id))continue;const profile=Game.parseSave(JSON.stringify(account.profile));if(!profile)continue;
-        const rolled=Game.grantDefeat(profile,enemy.type,enemy.roster.xp,enemy.boss,Math.random,false);if(id===killer.account.id)loot=rolled;
+        const rolled=Game.grantDefeat(profile,enemy.type,enemy.roster.xp,enemy.boss,Math.random,false,bonus);if(id===killer.account.id)loot=rolled;
         if(execute&&id===killer.account.id&&(account.lifeEpoch||0)===killerEpoch.life)profile.hp=Math.min(Game.maxHp(profile),profile.hp+Game.maxHp(profile)*.25);
         account.profile=profile;
       }

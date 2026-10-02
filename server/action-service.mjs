@@ -9,7 +9,7 @@ import {STAR_MAP,DISCOVER_RANGE,SPACE_EDGE,spaceLayout,dustSpot} from '../src/sp
 import {clearJourney} from './adventure-lifecycle.mjs';
 import {huntingPonds,huntFish} from '../src/fish-hunting.ts';
 import {CAGES} from '../src/friends-state.ts';
-import {WORK_ACTIONS,explorerAway} from '../src/delivery.ts';
+import {WORK_ACTIONS,CATCH_UP_ACTIONS,explorerAway} from '../src/delivery.ts';
 import {cageCandidates,RESCUE_REACH} from '../src/cage-spots.ts';
 
 const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
@@ -167,7 +167,8 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         if(data.type==='travel'&&!account.journeyPaid)fail(409,'Launch your starship first.');
         if(data.type==='die'){if(!peer||peer.visit||state.hp>0)fail(409,'Your adventure is still alive.');p.x=peer.pose.x;p.z=peer.pose.z;}
         // Workers' harvest goes to the chest while the server sees the explorer outside the home circle (delivery.ts).
-        if(WORK_ACTIONS.has(data.type)&&p&&typeof p==='object')p.away=peer&&!peer.visit?explorerAway(peer.planet,peer.pose.x,peer.pose.z):p.away===true;
+        // The server's own pose decides; without a game socket the explorer is not away (a bare HTTP client cannot choose the chest).
+        if((WORK_ACTIONS.has(data.type)||CATCH_UP_ACTIONS.has(data.type))&&p&&typeof p==='object')p.away=peer&&!peer.visit?explorerAway(peer.planet,peer.pose.x,peer.pose.z):false;
         result=applyGameAction(state,intent,{now,random});
         if(data.type==='rest'||data.type==='houseUse')account.healthBoundaryAt=now;
         if(data.type==='reset'){account.adventureEpoch=(account.adventureEpoch||0)+1;account.lifeEpoch=(account.lifeEpoch||0)+1;clearJourney(account);for(const key of ['resourceHits','drops','mysteryReadyAt'])delete account[key];}

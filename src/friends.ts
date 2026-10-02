@@ -104,8 +104,8 @@ function bedTask(s: M.SaveState, from: { x: number; z: number }, now: number, pl
   });
   return best;
 }
-/** The farmer's feed for this animal (farm.ts autoFeedCrop: cheap crops, adults, worth it), always leaving the player one. */
-const keepOne = (s: M.SaveState, a: M.Animal | undefined, now: number) => { const crop = a && M.autoFeedCrop(s, a, now); return crop && M.looseQuantity(s, crop) > 1 ? crop : null; };
+/** The farmer's feed for this animal (farm.ts autoFeedCrop: cheap crops, adults, worth it; bag or, at home, chest), always leaving the player one. */
+const keepOne = (s: M.SaveState, a: M.Animal | undefined, now: number) => { const crop = a && M.autoFeedCrop(s, a, now); return crop && M.pantry(s, crop) > 1 ? crop : null; };
 function animalTask(s: M.SaveState, from: { x: number; z: number }, now: number, feed: boolean): FriendTask | null {
   if (!M.penBuilt(s)) return null;
   let best: FriendTask | null = null, bestD = Infinity, ready = false;

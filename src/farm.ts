@@ -1,5 +1,5 @@
 import { ITEMS, CROPS, canonicalItem, type ItemId, type Inventory } from './content.ts';
-import { addItem, removeItem, gainXp, looseQuantity, type SaveState } from './model.ts';
+import { addItem, gainXp, pantry, pantryIds, usePantry, type SaveState } from './model.ts';
 import { gameHours } from './farm-clock.ts';
 import { recordEvent } from './progression.ts';
 import { newFarmHelper, parseFarmHelper, type FarmHelperState } from './farm-helper-state.ts';
@@ -236,11 +236,12 @@ export function buyAnimal(s: SaveState, kind: AnimalKind, now = Date.now()): Ani
 export const FEED_MAX_SELL = 30, FEED_MAX_MS = 10 * 60_000;
 export const isFeedCrop = (id: ItemId) => Object.hasOwn(CROPS, id) && !CROPS[id].seed && CROPS[id].duration <= FEED_MAX_MS && (ITEMS[id]?.sell ?? Infinity) <= FEED_MAX_SELL;
 const cheapest = (s: SaveState, keep: (id: ItemId) => boolean) => {
-  const crops = Object.keys(s.bag).filter(id => Object.hasOwn(CROPS, id) && keep(id) && looseQuantity(s, id) > 0);
+  // At home the chest counts too (model.ts pantry): the workers store their harvest there while the explorer is out.
+  const crops = pantryIds(s).filter(id => Object.hasOwn(CROPS, id) && keep(id));
   crops.sort((a, b) => ITEMS[a].sell - ITEMS[b].sell || a.localeCompare(b));
   return crops[0] ?? null;
 };
-/** The crop the farm feeds by default: the cheapest feed crop in the bag (ties by name), or null. */
+/** The crop the farm feeds by default: the cheapest feed crop in the bag or, at home, the chest (ties by name), or null. */
 export function feedCrop(s: SaveState): ItemId | null { return cheapest(s, isFeedCrop); }
 /** The Feed buttons' default: a feed crop only, never a dearer crop (the player may still pick any crop themselves). */
 export function playerFeedCrop(s: SaveState): ItemId | null { return feedCrop(s); }
@@ -266,7 +267,7 @@ export function canFeed(a: Animal, now = Date.now()) { return a.kind !== 'dog' &
 /** Feeds one crop to an animal; returns the crop used, or null (no such animal, already fed, nothing to feed). */
 export function feedAnimal(s: SaveState, uid: number, now = Date.now(), raw?: ItemId): ItemId | null {
   const a = farmOf(s).animals.find(x => x.uid === uid), crop = raw ? canonicalItem(raw) : playerFeedCrop(s);
-  if (!a || !crop || !Object.hasOwn(CROPS, crop) || !Number.isFinite(now) || !canFeed(a, now) || looseQuantity(s, crop) < 1 || !removeItem(s.bag, crop)) return null;
+  if (!a || !crop || !Object.hasOwn(CROPS, crop) || !Number.isFinite(now) || !canFeed(a, now) || !usePantry(s, crop)) return null;
   a.acquiredAt ??= a.bornAt; // Freeze the legacy arrival before feeding changes bornAt.
   const skip = timeLeft(a, now) * FEED_SHARE;
   if (isAdult(a, now)) { a.cycleAt -= skip; a.fed = true; }
@@ -308,12 +309,12 @@ export function expandPen(s: SaveState) {
 }
 export function canCookDish(s: SaveState, id: ItemId) {
   const dish = FARM_DISHES.find(d => d.id === id);
-  return !!dish && s.planet === 'home' && kitchenOpen(s) && Number.isSafeInteger((s.bag[id] || 0) + 1) && Object.entries(dish.materials).every(([m, n]) => looseQuantity(s, m) >= n!);
+  return !!dish && s.planet === 'home' && kitchenOpen(s) && Number.isSafeInteger((s.bag[id] || 0) + 1) && Object.entries(dish.materials).every(([m, n]) => pantry(s, m) >= n!);
 }
 /** Cooks one farm dish at the kitchen (free, counts as a meal for the journal). */
 export function cookDish(s: SaveState, id: ItemId) {
   if (!canCookDish(s, id)) return false;
-  for (const [m, n] of Object.entries(FARM_DISHES.find(d => d.id === id)!.materials)) removeItem(s.bag, m, n);
+  for (const [m, n] of Object.entries(FARM_DISHES.find(d => d.id === id)!.materials)) usePantry(s, m, n);
   addItem(s, id); recordEvent(s, 'cook', 1); return true;
 }
 function count(value: unknown, fallback = 0) { return typeof value === 'number' && Number.isSafeInteger(Math.floor(value)) && value >= 0 ? Math.floor(value) : fallback; }

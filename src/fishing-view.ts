@@ -198,9 +198,18 @@ export class FishingView {
 
   /** Where this pond's ordinary fish are, in stocking order, so a hunting handover starts from them. */
   ordinaryPoses(pondId: string) { return this.fish.filter(f => f.pond.id === pondId && !f.mystery).map(f => ({ x: f.obj.position.x, z: f.obj.position.z, heading: f.obj.rotation.y })); }
-  /** Hand the fish back where the hunting view left them, so leaving the shore does not teleport them. */
-  adoptPoses(pondId: string, poses: Array<{ x: number; z: number; heading: number }>) {
-    this.fish.filter(f => f.pond.id === pondId && !f.mystery).forEach((f, i) => { const p = poses[i]; if (!p) return; const at = this.inside(f.pond, p.x, p.z, 1); f.obj.position.x = at.x; f.obj.position.z = at.z; f.heading = p.heading; f.obj.rotation.y = p.heading; f.goal = null; });
+  /**
+   * Hand the fish back where the hunting view left them, so leaving the shore does not teleport them. `id` is the slot's
+   * species now: a harpoon catch restocks its slot with a new one, and the rod view takes it over (one stock per pond).
+   */
+  adoptPoses(pondId: string, poses: Array<{ x: number; z: number; heading: number; id?: string }>) {
+    this.fish.filter(f => f.pond.id === pondId && !f.mystery).forEach((f, i) => { const p = poses[i]; if (!p) return;
+      if (p.id && p.id !== f.species && f !== this.interest) {
+        const { obj, tail } = this.makeFish(p.id), [scale, top, wag] = this.kit.ready ? look(p.id) : [1, .06, .5];
+        this.root.remove(f.obj); this.root.add(obj); Object.assign(f, { obj, tail, species: p.id, depth: top * scale + .015, wag });
+        obj.position.y = f.pond.surface - f.depth;
+      }
+      const at = this.inside(f.pond, p.x, p.z, 1); f.obj.position.x = at.x; f.obj.position.z = at.z; f.heading = p.heading; f.obj.rotation.y = p.heading; f.goal = null; });
   }
 
   private inside(pond: PondView, x: number, z: number, margin = .82) {

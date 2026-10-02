@@ -7,7 +7,7 @@ import { parseLooks, type Looks } from './looks.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
 import { LEGACY_CROP_IDS } from './content.ts';
-import { cropLevel, cropXp, sellPrice, kitchenOpen, isDifficulty, difficultyOf, rewardScale, bedUpgradeScale, type Difficulty } from './difficulty.ts';
+import { cropLevel, cropXp, cropGrowTime, sellPrice, kitchenOpen, isDifficulty, difficultyOf, rewardScale, bedUpgradeScale, type Difficulty } from './difficulty.ts';
 import { parseHunting, type HuntingState } from './fish-hunting.ts';
 export * from './weapon-forge.ts';
 export * from './content.ts';
@@ -129,6 +129,8 @@ export interface SaveState {
     awayStore?: Inventory;
     forge?: Record<string, number>;
     nextPlantId?: number;
+    /** The beds a save from before the 24-bed cap lost and what it got back (trimGarden), until the note is shown. */
+    gardenTrim?: TrimNote;
     /** Harpoon cooldowns and individual pond restock deadlines survive reloads. */
     hunting?: HuntingState;
     /** Rescued friends (friends.ts); missing in older saves = nobody rescued. */
@@ -167,6 +169,8 @@ export function addBuff(s: SaveState, buff: BuffDef, source = 'effect', now = Da
         if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
             continue;
         const old = s.buffs[key], remaining = Math.max(0, (old?.expiresAt || 0) - now) / 1000;
+        // A weaker effect never lengthens a stronger one still running (a nap must not stretch a cooked-berry XP buff).
+        if (remaining && old!.value > value) continue;
         s.buffs[key] = { value: Math.max(value, remaining ? old!.value : 0), expiresAt: now + Math.min(600, buff.time + remaining * .5) * 1000, source };
     }
 }
@@ -187,8 +191,9 @@ const validRoll = (value: number) => Number.isFinite(value) && value >= 0 && val
 export function removeItem(inv: Inventory, raw: ItemId, count = 1) { const id = canonicalItem(raw); if (!Object.hasOwn(ITEMS, id) || !Number.isSafeInteger(count) || count < 1 || (inv[id] || 0) < count)
     return false; inv[id]! -= count; if (!inv[id])
     delete inv[id]; return true; }
-export function gainXp(s: SaveState, amount: number, now = Date.now()): number { if (!Number.isFinite(amount) || amount <= 0)
-    return 0; const before = s.level; const gained = amount * (1 + activeStats(s, now).xp) * rewardScale(s); /* Hard: +15% */ if (!Number.isFinite(gained))
+/** `bonus` is the Hard reward (+15%): the save's own by default; kills pass the room's creature scale, harvests the planting difficulty. */
+export function gainXp(s: SaveState, amount: number, now = Date.now(), bonus = rewardScale(s)): number { if (!Number.isFinite(amount) || amount <= 0)
+    return 0; const before = s.level; const gained = amount * (1 + activeStats(s, now).xp) * bonus; /* Hard: +15% */ if (!Number.isFinite(gained))
     return 0; if (!Number.isFinite(s.xp + gained))
     return 0; s.xp += gained; let guard = 0; while (s.xp >= xpNeeded(s.level) && guard++ < 10000) {
     s.xp -= xpNeeded(s.level);
@@ -197,7 +202,7 @@ export function gainXp(s: SaveState, amount: number, now = Date.now()): number {
 } return s.level - before; }
 export function plant(s: SaveState, index: number, raw: CropId, now = Date.now()) { const crop = canonicalItem(raw), p = s.plots[index], def = Object.hasOwn(CROPS, crop) ? CROPS[crop] : undefined; if (!p || p.crop || !def || cropLevel(s, crop) > s.level || !Number.isFinite(now) || now < 0)
     return false; if (def.seed && !removeItem(s.bag, def.seed))
-    return false; p.crop = crop; p.plantedAt = now; p.growDuration = bedGrowTime(p, def.duration); p.difficulty = difficultyOf(s); s.nextPlantId = (s.nextPlantId || 0) + 1; p.generation = `${now}-${s.nextPlantId}`; return true; }
+    return false; p.crop = crop; p.plantedAt = now; p.growDuration = bedGrowTime(p, cropGrowTime(s, crop)); p.difficulty = difficultyOf(s); s.nextPlantId = (s.nextPlantId || 0) + 1; p.generation = `${now}-${s.nextPlantId}`; return true; }
 export function plantAll(s: SaveState, crop: CropId, now = Date.now()) { let count = 0; s.plots.forEach((_, i) => { if (plant(s, i, crop, now))
     count++; }); return count; }
 export function cropDuration(p: Plot) { const def = p.crop && Object.hasOwn(CROPS, p.crop) ? CROPS[p.crop] : undefined; return def ? (Number.isFinite(p.growDuration) && p.growDuration! > 0 ? p.growDuration! : def.duration) : 0; }
@@ -205,8 +210,8 @@ export function cropProgress(p: Plot, now = Date.now()) { const duration = cropD
 export function harvest(s: SaveState, index: number, now = Date.now()): CropId | null { const p = s.plots[index]; if (!Number.isFinite(now) || now < 0 || !p?.crop || !(cropProgress(p, now) >= 1))
     return null; const id = p.crop; if (!addItem(s, id))
     return null; const at = isDifficulty(p.difficulty) ? { settings: { difficulty: p.difficulty } } : s; p.crop = null; p.plantedAt = 0; delete p.growDuration; delete p.generation; delete p.difficulty;
-    // Priced as planted: a tree planted on Easy and picked on Normal pays the Easy XP, and the price gap at once.
-    gainXp(s, cropXp(at, id), now); s.energy += Math.max(0, sellPrice(at, id) - sellPrice(s, id)); recordEvent(s, 'harvest', 1, id, now); return id; }
+    // XP as planted (tree XP and the Hard bonus): switching after planting changes neither. The price is the same on every difficulty.
+    gainXp(s, cropXp(at, id), now, rewardScale(at)); recordEvent(s, 'harvest', 1, id, now); return id; }
 export function harvestAll(s: SaveState, now = Date.now()) { const harvested: CropId[] = []; s.plots.forEach((_, i) => { const id = harvest(s, i, now); if (id)
     harvested.push(id); }); return harvested; }
 export function fertilize(s: SaveState, index: number, timeOrItem: number | string = Date.now(), raw = 'spore') {
@@ -339,26 +344,39 @@ export function shrinkGarden(s: SaveState, from = 1, now = Date.now()) {
 export const MAX_PLOTS = STARTING_PLOTS + MAX_EXTRA_PLOTS;
 /** What the bed at index `i` cost to add (gardenExpansionCost when the garden had `i` beds). */
 export const bedPrice = (i: number) => 60 + Math.max(0, i - STARTING_PLOTS) * 20;
+/** What trimGarden did, kept for a one-time note (main.ts; the 'ackTrim' action clears it). */
+export interface TrimNote { beds: number; energy: number; items: Inventory }
 /**
- * Saves from before the 24-bed cap may hold up to 33 beds. The extra beds over the cap go (empty ones first, then the
- * newest) and are refunded at what they cost: a kit in the bag would be useless at the cap. A ripe crop on a removed
- * bed is harvested into the bag; a growing one comes back as its seed (to the chest if the bag is full). Bed upgrades
- * on removed beds are refunded too. Returns the energy refunded.
+ * Saves from before the 24-bed cap may hold up to 33 beds. The beds over the cap go, least grown first (empty ones,
+ * then the youngest crops); the nine starting beds always stay. The refund is what the most expensive beds cost (the
+ * last N bought, whichever beds go: a kit in the bag would be useless at the cap), plus the removed beds' upgrades.
+ * A crop on a removed bed moves, timers and all, to an empty bed that stays; failing that a ripe one is harvested,
+ * one more than half grown comes back as the crop itself, and a younger one as its seed, or as its value pro rata
+ * when it has none (the bag, else the chest). Returns the energy refunded; the totals go to s.gardenTrim.
  */
 export function trimGarden(s: SaveState, now = Date.now()) {
-    let refund = 0;
-    while (s.plots.length > MAX_PLOTS) {
-        let i = -1;
-        for (let j = s.plots.length - 1; j >= STARTING_PLOTS; j--) if (!s.plots[j].crop) { i = j; break; }
-        if (i < 0) i = s.plots.length - 1;
-        const p = s.plots[i], give = (id: ItemId) => { if (!addItem(s, id)) s.chest[id] = (s.chest[id] || 0) + 1; };
-        if (p.crop && cropProgress(p, now) >= 1) { if (!harvest(s, i, now)) give(p.crop); }
-        else if (p.crop) { const seed = CROPS[p.crop]?.seed; if (seed) give(seed); }
+    const excess = s.plots.length - MAX_PLOTS; if (excess <= 0) return 0;
+    const items: Inventory = {}, grown = (i: number) => s.plots[i].crop ? cropProgress(s.plots[i], now) : -1;
+    const give = (id: ItemId) => { if (!addItem(s, id)) s.chest[id] = (s.chest[id] || 0) + 1; items[id] = (items[id] || 0) + 1; };
+    let refund = 0; for (let k = 1; k <= excess; k++) refund += bedPrice(s.plots.length - k);
+    const extra = s.plots.map((_, i) => i).filter(i => i >= STARTING_PLOTS), removed = new Set(extra.sort((a, b) => grown(a) - grown(b) || b - a).slice(0, excess));
+    const empty = s.plots.map((_, i) => i).filter(i => !removed.has(i) && !s.plots[i].crop);
+    // The most grown crops get the free beds first.
+    for (const i of [...removed].sort((a, b) => grown(b) - grown(a))) {
+        const p = s.plots[i], crop = p.crop, progress = grown(i);
         for (let level = 0; level < bedLevel(p); level++) refund += bedUpgradeCost(s, level);
-        refund += bedPrice(i); s.plots.splice(i, 1);
+        if (!crop) continue;
+        const to = empty.shift();
+        if (to !== undefined) { Object.assign(s.plots[to], { crop, plantedAt: p.plantedAt, growDuration: cropDuration(p), ...(p.generation ? { generation: p.generation } : {}), ...(p.difficulty ? { difficulty: p.difficulty } : {}) }); continue; }
+        if (progress >= 1) { if (harvest(s, i, now)) items[crop] = (items[crop] || 0) + 1; else give(crop); }
+        else if (progress > .5) give(crop);
+        else { const seed = CROPS[crop]?.seed; if (seed) give(seed); else refund += Math.round(sellPrice(s, crop) * progress); }
     }
-    s.energy += refund; return refund;
+    s.plots = s.plots.filter((_, i) => !removed.has(i));
+    s.energy += refund; s.gardenTrim = { beds: excess, energy: refund, items }; return refund;
 }
+/** The trim note, once: reading it clears it. */
+export function takeTrimNote(s: SaveState): TrimNote | Record<string, never> { const note = s.gardenTrim ?? {}; delete s.gardenTrim; return note; }
 /**
  * Bed upgrades: each level cuts that bed's grow time by 10 % (BED_LEVEL_CUT), up to BED_MAX_LEVEL 5 = half the time.
  * Five stops there because the fastest crops already ripen in seconds and a half-time bed doubles a bed's yield; more
@@ -457,7 +475,12 @@ export function canCraft(s: SaveState, index: number) { const r = RECIPES[index]
 export function craft(s: SaveState, index: number) { if (!canCraft(s, index))
     return false; const r = RECIPES[index]; s.energy -= r.energy; for (const [id, n] of Object.entries(r.materials))
     removeItem(s.bag, id, n); addItem(s, r.result, r.count || 1); recordEvent(s, 'craft'); return true; }
-export function buy(s: SaveState, raw: ItemId) { const id = canonicalItem(raw), index = RECIPES.findIndex(r => r.station === 'shop' && r.result === id); return index >= 0 && craft(s, index); }
+export function buy(s: SaveState, raw: ItemId) { const id = canonicalItem(raw); if (id === 'plot_kit') return buyPlotKit(s); const index = RECIPES.findIndex(r => r.station === 'shop' && r.result === id); return index >= 0 && craft(s, index); }
+/** A garden bed kit costs what the bed it adds would cost by Expand (gardenExpansionCost, counting kits already held); none at the 24-bed cap. */
+export function kitPrice(s: SaveState): number | null { const beds = s.plots.length + (s.bag.plot_kit || 0); return beds >= MAX_PLOTS ? null : bedPrice(beds); }
+/** The shop's price for an item now; null = not on sale (a bed kit at the cap). */
+export function shopPrice(s: SaveState, id: ItemId): number | null { return id === 'plot_kit' ? kitPrice(s) : ITEMS[id]?.price ?? null; }
+function buyPlotKit(s: SaveState) { const price = kitPrice(s); if (price === null || s.energy < price || !addItem(s, 'plot_kit')) return false; s.energy -= price; recordEvent(s, 'craft'); return true; }
 export function equip(s: SaveState, raw: ItemId) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item?.slot || !s.bag[id])
     return false; s.gear[item.slot] = id; s.hp = Math.min(s.hp, maxHp(s)); if (item.slot === 'weapon' || item.slot === 'disguise')
     s.counters.equipped++; return true; }
@@ -467,7 +490,20 @@ export function eat(s: SaveState, raw: ItemId, now = Date.now()) { const id = ca
     return false; if (item.heal)
     s.hp = Math.min(maxHp(s), s.hp + item.heal); if (item.buff)
     addBuff(s, item.buff, id, now); return true; }
-export function cook(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw), result = `cooked_${id}`; if (!Object.hasOwn(ITEMS, result) || s.planet !== 'home' || !kitchenOpen(s) || !Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger((s.bag[result] || 0) + count) || !removeItem(s.bag, id, count))
+/**
+ * Ingredients within reach: the loose bag stack, plus the house chest when at home. The workers store their harvest
+ * in the chest while the explorer is out (delivery.ts), so the kitchen, the farm dishes and the feeders reach into it.
+ */
+export function pantry(s: SaveState, raw: ItemId) { const id = canonicalItem(raw); return looseQuantity(s, id) + (s.planet === 'home' ? s.chest[id] || 0 : 0); }
+/** The ids within reach (pantry > 0), bag first. */
+export function pantryIds(s: SaveState) { return [...new Set([...Object.keys(s.bag), ...(s.planet === 'home' ? Object.keys(s.chest) : [])])].filter(id => pantry(s, id) > 0); }
+/** Takes `count` from the bag first, then the chest (home only); false (and nothing taken) when there is not enough. */
+export function usePantry(s: SaveState, raw: ItemId, count = 1) {
+    const id = canonicalItem(raw); if (!Object.hasOwn(ITEMS, id) || !Number.isSafeInteger(count) || count < 1 || pantry(s, id) < count) return false;
+    const fromBag = Math.min(count, looseQuantity(s, id)); if (fromBag) removeItem(s.bag, id, fromBag);
+    return fromBag === count || removeItem(s.chest, id, count - fromBag);
+}
+export function cook(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw), result = `cooked_${id}`; if (!Object.hasOwn(ITEMS, result) || s.planet !== 'home' || !kitchenOpen(s) || !Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger((s.bag[result] || 0) + count) || !usePantry(s, id, count))
     return false; addItem(s, result, count); recordEvent(s, 'cook', count); return true; }
 export function transfer(s: SaveState, raw: ItemId, toChest: boolean) { const id = canonicalItem(raw); if (toChest && looseQuantity(s, id) < 1)
     return false; const from = toChest ? s.bag : s.chest, to = toChest ? s.chest : s.bag; if (!Number.isSafeInteger((to[id] || 0) + 1) || !removeItem(from, id))
@@ -513,8 +549,9 @@ export function rollLoot(type: string, luck = 0, rng: () => number = Math.random
     if (rng() < Math.min(1, boost * chance * (chance < .5 ? 1 + Math.max(0, luck) : 1)))
         loot.push({ id, count: min + Math.min(max - min, Math.floor(rng() * (max - min + 1))) });
 } return loot; }
-/** bank=false leaves the loot out of the bag: the game tosses it onto the ground instead (drops.ts). */
-export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true) { gainXp(s, xp); const loot = rollLoot(type, activeStats(s).luck, rng, rewardScale(s)); if (bank) for (const item of loot)
+/** bank=false leaves the loot out of the bag: the game tosses it onto the ground instead (drops.ts). `bonus`: the Hard
+ * reward of the creatures fought (co-op: the room's scale, difficulty.ts scaleReward); solo it is the save's own. */
+export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true, bonus = rewardScale(s)) { gainXp(s, xp, Date.now(), bonus); const loot = rollLoot(type, activeStats(s).luck, rng, bonus); if (bank) for (const item of loot)
     addItem(s, item.id, item.count); recordEvent(s, 'kill', 1, type); if (boss)
     { recordEvent(s, 'boss', 1, type); noteBossDefeat(s, type); } return loot; }
 export function chooseFish(s: SaveState, water: string = s.planet, rng: () => number = Math.random) { const choices = FISH_WEIGHTS[water] || FISH_WEIGHTS.home, luck = activeStats(s).luck, weighted = choices.map(([id, weight]) => [id, weight * (ITEMS[id].legend ? 1 + luck * 1.5 : ITEMS[id].rare ? 1 + luck : 1)] as const); let draw = rng() * weighted.reduce((sum, [, w]) => sum + w, 0); for (const [id, weight] of weighted) {
@@ -753,10 +790,17 @@ export function parseSave(raw: string | null): SaveState | null {
                     s.decorations.push({ uid: typeof d.uid === 'string' ? d.uid.slice(0, 80) : `decor-${s.nextDecorationId++}`, id, x: d.x, z: d.z, rotation: Number.isFinite(d.rotation) ? d.rotation : 0 });
             }
         // Layout 4 (24-bed cap): older saves are trimmed to 24 and their beds moved onto the 6 x 4 grid (shrinkGarden).
+        const bedKey = (i: number) => { const p = bedPosition(s, i); return `${p.x.toFixed(2)},${p.z.toFixed(2)}`; }, oldKeys = new Map(s.plots.map((p, i) => [p, bedKey(i)]));
         if (v.gardenLayout === GARDEN_LAYOUT) { trimGarden(s); settleBeds(s); } else shrinkGarden(s, v.gardenLayout === 3 ? 3 : v.gardenLayout === 2 ? 2 : 1);
+        if (!s.gardenTrim && record(v.gardenTrim) && Number.isSafeInteger(v.gardenTrim.beds) && v.gardenTrim.beds > 0) s.gardenTrim = { beds: Math.min(99, v.gardenTrim.beds), energy: integer(v.gardenTrim.energy), items: inventory(v.gardenTrim.items) };
         s.farm = parseFarm(v.farm);
         const hunting = parseHunting(v.hunting); if (hunting) s.hunting = hunting;
-        if (record(v.helper)) s.helper = parseHelper(v.helper);
+        if (record(v.helper)) {
+            s.helper = parseHelper(v.helper);
+            // The robot's "replant the same" memory is keyed by bed position (helper.ts bedKey): follow the beds that moved.
+            const last = { ...s.helper.last };
+            s.plots.forEach((p, i) => { const crop = last[oldKeys.get(p) ?? ''] ?? last[bedKey(i)]; if (crop) s.helper!.last[bedKey(i)] = crop; });
+        }
         const awayStore = inventory(v.awayStore); if (Object.keys(awayStore).length) s.awayStore = awayStore;
         const friends = parseFriends(v.friends), bosses = parseBosses(v.bosses); if (friends.length) s.friends = friends; if (bosses.length) s.bosses = bosses; const house = parseHouse(v.house); if (house) s.house = house;
         const looks = parseLooks(v.looks); if (looks) s.looks = looks;
