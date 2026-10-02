@@ -91,6 +91,8 @@ export interface SaveState {
         difficulty?: Difficulty;
         /** When the difficulty was last lowered (difficulty.ts LOWER_COOLDOWN_MS: once a day). */
         difficultyLoweredAt?: number;
+        /** Tester mode (tester.ts): set only by the solo tester code; opens the Tester shop. */
+        tester?: boolean;
     };
     worldRewards: WorldRewards;
     buffs: Partial<Record<BuffKey, {
@@ -625,6 +627,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true, ...(typeof settings.movePad === 'boolean' ? { movePad: settings.movePad } : {}) };
         if(settings.joystickSide==='left'||settings.joystickSide==='right')s.settings.joystickSide=settings.joystickSide;
         if (settings.placeBeds === true) s.settings.placeBeds = true;
+        if (settings.tester === true) s.settings.tester = true;
         s.settings.difficulty = isDifficulty(settings.difficulty) ? settings.difficulty : 'easy'; // saves from before the setting play on Easy
         if (typeof settings.difficultyLoweredAt === 'number' && Number.isFinite(settings.difficultyLoweredAt) && settings.difficultyLoweredAt > 0) s.settings.difficultyLoweredAt = settings.difficultyLoweredAt;
         const rewards = record(v.worldRewards) ? v.worldRewards : {};
