@@ -197,7 +197,8 @@ test('home builds the pen as one entity with a fence of obstacles, and animals d
   assert.ok(still / steps > .45 && still / steps < .9, `rests are a real share (${still / steps})`); assert.ok(grazing / cowSteps > .45, `cows mostly graze (${grazing / cowSteps})`);
   // The hens scurry off when the explorer walks up.
   const hen = view.positions().find(p => p.kind === 'chicken')!; w.position.set(hen.x + .3, 0, hen.z);
-  for (let i = 0; i < 20; i++) w.update(.05, false, false);
+  // Two seconds: an animal off the explorer's LOD tier may notice a beat late (the 24-bed garden changed where they roam).
+  for (let i = 0; i < 40; i++) w.update(.05, false, false);
   const after = view.positionOf(hen.uid)!; assert.ok(Math.hypot(after.x - w.position.x, after.z - w.position.z) > .9, 'a hen steps away from the explorer');
   // A tap preserves the individual animal, including one far from the pen.
   // Out in the village too: the camera follows the explorer to the animal farthest from the pen.

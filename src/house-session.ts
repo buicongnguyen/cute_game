@@ -51,7 +51,7 @@ export class HouseSession {
     this.saved = { entities: host.entities, obstacles: host.obstacles, zoom: host.zoom };
     this.syncFriends();
     host.entities = this.entities(); host.obstacles = this.obstacles();
-    host.interior = { scene: this.view.scene, root: this.view.root, walkable, drop: () => this.drop(), adopt: () => this.adopt(), pick: (x, y) => this.pick(x, y) };
+    host.interior = { scene: this.view.scene, root: this.view.root, walkable, drop: () => this.drop(), adopt: () => this.adopt(), outdoor: this.saved.entities, pick: (x, y) => this.pick(x, y) };
     this.adopt();
     this.view.scene.add(host.marker, host.ring, host.remoteRoot); host.fx?.attach(this.view.scene);
     host.position.set(HOUSE.spawn.x, 0, HOUSE.spawn.z); host.facing = Math.PI; host.destination = null; host.route = []; host.selected = null;

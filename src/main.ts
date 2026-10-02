@@ -9,7 +9,9 @@ import { t, localizeHtml, getLanguage, setLanguage, onLanguageChange, bindLangua
 import './menus.css';
 import { Box3, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
-import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit } from './assets.ts';
+import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, KIT_FILES } from './assets.ts';
+import { onArtLoaded } from './art-retry.ts';
+import { initArtNote } from './art-status.ts';
 import { SpaceFlight, planRoutes, type RouteOption, type SpaceEvent } from './space.ts';
 import { SpaceView } from './space-view.ts';
 import { ShipSequence } from './ship-sequence.ts';
@@ -203,6 +205,8 @@ void spaceKit.load().then(() => world.applyRefinedAssets());
 void cropKit.load();
 // If the scenery kit arrived after the first build, rebuild while the title screen is still up.
 if(!sceneryKit.ready)void sceneryKit.load().then(()=>{if(sceneryKit.ready&&!started){world.build(state.planet);world.refreshPlayer();}});
+// Models that only arrive after their retries (art-retry.ts) swap in without a reload; before Play a rebuild also brings in late trees.
+initArtNote();onArtLoaded(url=>{if(!started){world.build(state.planet);world.refreshPlayer();}else world.refreshArt();if(url===KIT_FILES.fish&&!fishGame)stockPonds();});
 
 const sfx=new Sfx();
 function tone(kind: Sound = 'click') { sfx.enabled = state.settings.sound; sfx.play(kind); }
@@ -424,7 +428,7 @@ function growText(plot:M.Plot){const progress=M.cropProgress(plot);return progre
 function expandButton(growing:boolean){
   if(visiting||state.planet!=='home')return '';
   const kits=state.bag.plot_kit||0,cost=M.gardenExpansionCost(state);
-  if(state.plots.length>=M.STARTING_PLOTS+M.MAX_EXTRA_PLOTS)return `<button class="soft-button wide grow-button" data-action="expand">🌱 Your garden has the maximum ${M.MAX_EXTRA_PLOTS} extra beds</button>`;
+  if(state.plots.length>=M.MAX_PLOTS)return `<button class="soft-button wide grow-button" data-action="expand">🌱 Your garden has the maximum ${M.MAX_PLOTS} beds</button>`;
   const label=growing?`➕ Expand garden: add 1 bed (${kits?'one in your bag':`ϟ ${cost}`})`:kits?`➕ Place another bed (${kits} in your bag)`:`➕ Expand garden: add 1 bed (ϟ ${cost})`;
   return `<button class="${kits||state.energy>=cost?'primary':'soft-button'} wide grow-button" data-action="expand">${label}</button>`;
 }
@@ -434,7 +438,7 @@ function expandButton(growing:boolean){
  */
 async function buyPlot(){
   const result=await perform('buyBedKit');if(!result)return;
-  if(result==='max')toast(`Your garden already has the maximum ${M.MAX_EXTRA_PLOTS} extra beds.`,'🌱');
+  if(result==='max')toast(`Your garden already has the maximum ${M.MAX_PLOTS} beds.`,'🌱');
   else if(result==='away')toast('Garden beds belong at home. Return to your garden first.','🏡');
   else if(result==='energy')toast(`You need ${M.gardenExpansionCost(state)} energy to expand the garden.`,'ϟ');
   else{if(result==='bought')tone('coin');beginPlacement('plot_kit');}
@@ -446,6 +450,12 @@ async function autoPlaceBed(){
   world.fx?.burst({x:p.x,z:p.z},{n:10,color:['#9be36f','#ffe66d'],glow:true,speed:2.5,up:4,y:.3});
   toast('A new garden bed! Tap it to plant.','🌱');
 }
+/** The bed panel's upgrade row: level stars, the speed-up so far and the button for the next level (model.ts upgradeBed). */
+function bedUpgradeRow(index:number){
+  if(visiting||state.planet!=='home'||!state.plots[index])return '';
+  const level=M.bedLevel(state.plots[index]),max=M.BED_MAX_LEVEL,cost=level<max?M.bedUpgradeCost(state,level):0,stars='★'.repeat(level)+'☆'.repeat(max-level);
+  return `<div class="garden-actions bed-upgrade"><span><b class="bed-stars" aria-hidden="true">${stars}</b> ${esc(t('Bed level {level} of {max}',{level,max}))}${level?` · ${esc(t('Grows {percent}% faster',{percent:level*10}))}`:''}</span>${level<max?`<button class="${state.energy>=cost?'primary':'soft-button'}" data-action="upgrade-bed" title="${esc(t('Each level makes crops in this bed grow 10% faster.'))}">⬆ ${esc(t('Upgrade bed (ϟ {cost})',{cost}))}</button>`:`<span class="chip">${esc(t('Fully upgraded'))}</span>`}</div>`;
+}
 function plotDialog(index:number) {
   if(visiting){network.visitCrop?.(index);return;}
   activePlot=index;const plot=state.plots[index];if(!plot)return;
@@ -454,16 +464,16 @@ function plotDialog(index:number) {
     // Reference openPlot: the crop with a big progress bar, a card per fertilizer, a tip when there is none, then expand.
     const crop=M.CROPS[plot.crop],progress=M.cropProgress(plot),fertilizer=(['manure','spore'] as const).map(id=>{const n=state.bag[id]||0,item=M.ITEMS[id];
       return `<div class="crop-row garden-row fertilizer-row"><span class="crop-art">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))} <span class="chip">×${n}</span></strong><p>${esc(item.desc)}</p></div><button class="primary" data-action="${id==='spore'?'fertilize':'fertilize-manure'}" ${n?'':'disabled'}>Use</button></div>`;}).join('');
-    openDialog('plot','Growing bed',`<div class="crop-row garden-row bed-status"><span class="crop-art">${art(plot.crop,crop.icon)}</span><div><strong>${esc(t(crop.name))}</strong><div class="grow-meter big"><i id="grow-fill" style="width:${progress*100}%"></i></div><p class="muted" id="grow-time">${growText(plot)}</p></div></div>${fertilizer}${!state.bag.manure&&!state.bag.spore?'<p class="garden-tip">💡 Defeat Grumpy Mushrooms, Wild Boars, Snapping Flowers… to collect fertilizer, or buy it at the equipment shop.</p>':''}${expandButton(true)}${helperRow(state,!!visiting)}`,'GARDEN BED '+(index+1),art(plot.crop,crop.icon));return;
+    openDialog('plot','Growing bed',`<div class="crop-row garden-row bed-status"><span class="crop-art">${art(plot.crop,crop.icon)}</span><div><strong>${esc(t(crop.name))}</strong><div class="grow-meter big"><i id="grow-fill" style="width:${progress*100}%"></i></div><p class="muted" id="grow-time">${growText(plot)}</p></div></div>${fertilizer}${!state.bag.manure&&!state.bag.spore?'<p class="garden-tip">💡 Defeat Grumpy Mushrooms, Wild Boars, Snapping Flowers… to collect fertilizer, or buy it at the equipment shop.</p>':''}${bedUpgradeRow(index)}${expandButton(true)}${helperRow(state,!!visiting)}`,'GARDEN BED '+(index+1),art(plot.crop,crop.icon));return;
   }
   const empty=state.plots.filter(p=>!p.crop).length;
   // Unlocked crops first, then locked ones by the level that opens them.
   const crops=Object.entries(M.CROPS).sort(([,a],[,b])=>Number(state.level<a.level)-Number(state.level<b.level)||a.level-b.level);
   // Reference openSeeds: the grow button first, "store this bed" on an extra bed, then the seeds. A ripe tap gathers the
   // ripe beds around it, so the old "Harvest all" button is gone from here.
-  openDialog('plant','Choose a seed',`${expandButton(false)}${helperRow(state,!!visiting)}<div class="garden-actions">${M.isExtraBed(state,index)?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.STARTING_PLOTS+M.MAX_EXTRA_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
+  openDialog('plant','Choose a seed',`${expandButton(false)}${helperRow(state,!!visiting)}<div class="garden-actions">${bedUpgradeRow(index)}${M.isExtraBed(state,index)&&!M.bedLevel(state.plots[index])?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.MAX_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
     const level=M.cropLevel(state,id),locked=state.level<level,needsSeed=!!c.seed&&!state.bag[c.seed],item=M.ITEMS[id],effect=item?effectText(item):'';
-    return `<div class="crop-row garden-row ${locked?'locked':''}"><span class="crop-art">${art(id,c.icon)}</span><div><strong>${esc(t(c.name))}</strong>${effect?`<p>${esc(effect)}</p>`:''}<div class="chips"><span class="chip chip-time">⏱ ${c.duration/1000}s</span><span class="chip chip-xp">✨ ${M.cropXp(state,id)} XP</span>${item?`<span class="chip chip-energy">ϟ ${M.sellPrice(state,id)}</span>`:''}${c.seed?`<span class="chip chip-seed">${M.ITEMS[c.seed]?mini(c.seed):'🌰'} ${state.bag[c.seed]||0} seeds</span>`:''}</div></div>${locked?`<span class="chip chip-lock">🔒 Level ${level}</span>`:`<div class="button-row"><button class="primary" data-action="plant" data-item="${id}" ${needsSeed?'disabled':''}>Plant</button><button class="sky-button" data-action="plant-all" data-item="${id}" ${needsSeed||!empty?'disabled':''}>All (${c.seed?Math.min(empty,state.bag[c.seed]||0):empty})</button></div>`}</div>`;
+    return `<div class="crop-row garden-row ${locked?'locked':''}"><span class="crop-art">${art(id,c.icon)}</span><div><strong>${esc(t(c.name))}</strong>${effect?`<p>${esc(effect)}</p>`:''}<div class="chips"><span class="chip chip-time">⏱ ${M.bedGrowTime(state.plots[index],c.duration)/1000}s</span><span class="chip chip-xp">✨ ${M.cropXp(state,id)} XP</span>${item?`<span class="chip chip-energy">ϟ ${M.sellPrice(state,id)}</span>`:''}${c.seed?`<span class="chip chip-seed">${M.ITEMS[c.seed]?mini(c.seed):'🌰'} ${state.bag[c.seed]||0} seeds</span>`:''}</div></div>${locked?`<span class="chip chip-lock">🔒 Level ${level}</span>`:`<div class="button-row"><button class="primary" data-action="plant" data-item="${id}" ${needsSeed?'disabled':''}>Plant</button><button class="sky-button" data-action="plant-all" data-item="${id}" ${needsSeed||!empty?'disabled':''}>All (${c.seed?Math.min(empty,state.bag[c.seed]||0):empty})</button></div>`}</div>`;
   }).join('')}</div>`,'YOUR GARDEN');
 }
 function inventory() {
@@ -584,7 +594,7 @@ function decorations(){
  */
 function beginPlacement(id:string){if(visiting)return;if(state.planet!=='home'){toast('Decorations belong at home. Return to your garden first.','🏡');return;}
   const item=M.ITEMS[id],bed=item?.type==='placeable';if(!item||!state.bag[id])return;
-  if(bed&&state.plots.length>=M.STARTING_PLOTS+M.MAX_EXTRA_PLOTS){toast(`Your garden already has the maximum ${M.MAX_EXTRA_PLOTS} extra beds.`,'🌱');return;}
+  if(bed&&state.plots.length>=M.MAX_PLOTS){toast(`Your garden already has the maximum ${M.MAX_PLOTS} beds.`,'🌱');return;}
   if(!bed&&state.decorations.length>=M.MAX_DECORATIONS){toast(`Your garden already holds ${M.MAX_DECORATIONS} decorations.`,'🏡');return;}
   if(bed&&!state.settings.placeBeds){autoPlaceBed();return;}
   closeDialog();const step=Math.PI/4;
@@ -707,7 +717,7 @@ const rodTip=new Vector3();
 const FAR_AWAY=new Vector3(1e4,0,1e4);
 function tipPosition(){const tip=world.player.getObjectByName('rod-tip');if(tip){world.player.updateWorldMatrix(true,true);tip.getWorldPosition(rodTip);}else rodTip.set(world.position.x,1.4,world.position.z);return rodTip;}
 function pondView(e:Entity):PondView{return {id:e.id,x:e.x,z:e.z,rx:e.pond!.rx,rz:e.pond!.rz,surface:e.pond!.surface,waterId:e.waterId??state.planet};}
-function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.entities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
+function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.outdoorEntities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
 // Rod fish follow the harpoon slots' species so picking up hunting gear by the shore keeps the pond's look.
 function pondStock(pond:PondView){const hunt=huntingPondAt(state.planet,pond.x,pond.z);return hunt?fishHuntTargets(hunt,0).map(t=>t.id):null;}
 const formatSize=(cm:number)=>cm>=100?`${(cm/100).toFixed(2).replace(/\.?0+$/,'')} m`:`${cm} cm`;
@@ -1198,6 +1208,7 @@ app.addEventListener('click',async event=>{
     case 'farm-helper-pause':await farmHelperSetting('setFarmHelperPaused',{paused:!FarmHelper.helperOf(state).paused});break;
     case 'farm-helper-feed':await farmHelperSetting('setFarmHelperAutoFeed',{autoFeed:!FarmHelper.helperOf(state).autoFeed});break;
     case 'confirm-place':confirmPlacement();break;
+    case 'upgrade-bed':{const i=activePlot,cost=M.bedUpgradeCost(state,M.bedLevel(state.plots[i]));if(state.energy<cost){toast(`You need ${cost} energy to upgrade this bed.`,'ϟ');break;}if(await perform('upgradeBed',{index:i})){const level=M.bedLevel(state.plots[i]),p=M.bedPosition(state,i);world.syncCrops();world.fx?.burst({x:p.x,z:p.z},{n:14,color:['#ffd84d','#fff3a8'],glow:true,speed:2.5,up:4,y:.3});tone('success');toast(`Bed upgraded to level ${level}! Crops here grow ${level*10}% faster.`,'⭐');plotDialog(i);}break;}
     case 'store-bed':{const i=activePlot;if(await perform('storeBed',{index:i})){closeDialog();world.dropPlotsFrom(i);tone('poof');toast('The bed is packed away. It is in your bag as a garden bed kit.','🎒');}break;}
     case 'shop-tab':shopTab=button.dataset.kind!;shop();break;
     case 'journal-tab':journalTab=button.dataset.kind as ProgressKind;quests();break;

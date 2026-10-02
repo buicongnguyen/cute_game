@@ -227,7 +227,8 @@ export class World {
   }
   disposeTree(g: T.Object3D) { g.traverse(o => { if (o instanceof T.Mesh) { if (!isShared(o.geometry)) o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (!isShared(material) && ![...matCache.values()].includes(material as T.MeshToonMaterial)) material.dispose(); } }); }
   applyRefinedAssets(assets: RefinedAssetLibrary = refinedAssets) {
-    for (const entity of this.entities) { this.applyRefinedAsset(entity, assets); if (entity.kind === 'travel') this.dressRocket(entity); }
+    // Indoors the entity list is the interior's: a model that lands then must still dress the outdoor buildings.
+    for (const entity of this.outdoorEntities) { this.applyRefinedAsset(entity, assets); if (entity.kind === 'travel') this.dressRocket(entity); }
     this.syncBeds(assets);
     // Props such as the well are scenery with their own model, kept out of batching.
     for (const prop of this.root.children.filter(o => o.userData.prop && o.userData.refinedAsset !== o.userData.prop)) {
@@ -416,8 +417,8 @@ export class World {
   /** Every bed of the garden as instances of one baked bed model (G2D-5); none away from home. */
   private syncBeds(assets: RefinedAssetLibrary = refinedAssets){
     const beds=this.gardenBeds??=new GardenBeds();if(beds.group.parent!==this.scene)this.scene.add(beds.group);
-    const plots=this.planet==='home'?this.entities.filter(e=>e.kind==='plot'):[],refined=assets.has('garden');
-    beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z,rotation:e.mesh.rotation.y})),refined,M.BED_SCALE);
+    const plots=this.planet==='home'?this.outdoorEntities.filter(e=>e.kind==='plot'):[],refined=assets.has('garden');
+    beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z,rotation:e.mesh.rotation.y,level:M.bedLevel(this.state?.plots?.[e.index!])})),refined,M.BED_SCALE);
   }
   /**
    * The animal yard north of the garden (farm.ts PEN, YARD): one entity to tap (its baked back fence, coop and troughs
@@ -733,7 +734,9 @@ export class World {
   /** A body style shown while previewing at the mirror: local only, never saved or sent online. */
   tryOnLook?:LookId|null;
   /** The cottage interior while the explorer is inside (house-session.ts): its own scene, walkable plan, and hooks to re-home the explorer and to drop it on a rebuild. */
-  interior?:{scene:T.Scene;root:T.Group;walkable:(p:Point)=>boolean;drop:()=>void;adopt:()=>void;pick?:(clientX:number,clientY:number)=>Entity|null}|null;
+  interior?:{scene:T.Scene;root:T.Group;walkable:(p:Point)=>boolean;drop:()=>void;adopt:()=>void;outdoor?:Entity[];pick?:(clientX:number,clientY:number)=>Entity|null}|null;
+  /** The outdoor entities, also while the interior's list stands in for them (late art must dress the real buildings). */
+  get outdoorEntities(){return this.interior?.outdoor??this.entities;}
   /** Gear shown on the explorer while trying something on in a menu: local only, never saved or sent online. */
   tryOnGear?:SaveState['gear']|null;
   refreshPlayer() {
@@ -946,10 +949,12 @@ export class World {
   removeRemotePlayer(id:string){const remote=this.remotePlayers?.get(id);if(!remote)return;this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);this.remotePlayers.delete(id);}
   /** Rebuild every explorer model, for example once the Blender explorer and gear have loaded. */
   refreshAvatars(){this.refreshPlayer();for(const [id,remote] of [...this.remotePlayers??[]]){const pose=remote.pose;this.removeRemotePlayer(id);this.addRemotePlayer(id,pose);}}
+  /** A model that only arrived after its retries (art-retry.ts) replaces its stand-in in place: buildings, scatter, avatars, creatures, the pen. */
+  refreshArt(){this.applyRefinedAssets();this.refreshScenery();this.refreshAvatars();this.restyleCreatures();this.farmView?.refresh();}
   clearRemotePlayers(){for(const id of [...this.remotePlayers?.keys()??[]])this.removeRemotePlayer(id);}
   syncCrops() {
     if(this.planet!=='home')return;
-    if(this.plotMeshes.length<this.state.plots.length){for(let i=this.plotMeshes.length;i<this.state.plots.length;i++)this.makePlot(i);this.syncBeds();}
+    if(this.plotMeshes.length<this.state.plots.length){for(let i=this.plotMeshes.length;i<this.state.plots.length;i++)this.makePlot(i);this.syncBeds();}else this.syncBeds();// level pips (signature-checked)
     const cards=this.cardsReady();
     this.state.plots.forEach((p,i)=>{
       // One crop per bed with the reference's stages (G2D-2); the cards draw it when they are baked, else a 3D model does.

@@ -69,3 +69,6 @@ export function hardScale(d: Difficulty | WithSettings | null | undefined) {
   const level = typeof d === 'string' ? d : difficultyOf(d);
   return level === 'hard' ? { hp: 1.25, damage: 1.2 } : { hp: 1, damage: 1 };
 }
+/** Bed upgrades (model.ts upgradeBed) cost 1.5x off Easy, like the dearer livestock. */
+export const BED_UPGRADE_SCALE = 1.5;
+export const bedUpgradeScale = (s: WithSettings | null | undefined) => harsh(s) ? BED_UPGRADE_SCALE : 1;

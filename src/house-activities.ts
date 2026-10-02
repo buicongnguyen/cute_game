@@ -124,23 +124,32 @@ export const friendLabel = (id: string) => (FRIENDS as Record<string, { name: st
  * shifts a little each visit without anyone wandering about every frame.
  */
 export const SCHEDULE_SECONDS = 40;
-export interface Hangout extends Point { facing: number; pose: 'sit' | 'stand' | 'wave'; y?: number; room: RoomId; say: string[] }
+/** What a friend does at a hangout: arm/leg poses on the hero rig (house-view.ts), no extra meshes. */
+export type HangoutPose = 'sit' | 'stand' | 'wave' | 'stir' | 'sip' | 'paint' | 'read' | 'stretch' | 'brush';
+export interface Hangout extends Point { facing: number; pose: HangoutPose; y?: number; room: RoomId; say: string[] }
 export const HANGOUTS: Hangout[] = [
   { x: -2.4, z: -1.32, facing: 0, pose: 'sit', y: .5, room: 'living', say: ['This sofa is the best.', 'Welcome home!', 'Sit with us a while.'] },
   { x: -1.4, z: -1.32, facing: 0, pose: 'sit', y: .5, room: 'living', say: ['I could nap right here.', 'Tell me about your trip!'] },
   { x: -3.55, z: 2.85, facing: .5, pose: 'stand', room: 'living', say: ['The fire is so cosy.', 'Warm your paws!'] },
   { x: 2.0, z: 3.9, facing: 0, pose: 'wave', room: 'living', say: ['Hello again!', 'You look strong today!'] },
-  { x: -8.2, z: 2.4, facing: -Math.PI / 2, pose: 'stand', room: 'kitchen', say: ['Something smells tasty!', 'Bring me more veggies!', 'Soup is nearly ready.'] },
-  { x: 7.8, z: 2.2, facing: Math.PI / 2, pose: 'stand', room: 'craft', say: ['Look at my painting!', 'So many colours…'] },
-  { x: 6.0, z: -3.6, facing: 0, pose: 'stand', room: 'study', say: ['This book is about fish!', 'So many worlds to visit.'] },
+  { x: -8.2, z: 2.4, facing: -Math.PI / 2, pose: 'stir', room: 'kitchen', say: ['Something smells tasty!', 'Bring me more veggies!', 'Soup is nearly ready.'] },
+  { x: 7.8, z: 2.2, facing: Math.PI / 2, pose: 'paint', room: 'craft', say: ['Look at my painting!', 'So many colours…'] },
+  { x: 6.0, z: -3.6, facing: 0, pose: 'read', room: 'study', say: ['This book is about fish!', 'So many worlds to visit.'] },
+// Round 14: a spot in the bedroom and the bathroom, a second in the kitchen and study, each with its own pose.
+  { x: -5.4, z: -3.4, facing: -2.25, pose: 'stretch', room: 'bedroom', say: ['Time for a nap.'] },
+  { x: 1.2, z: -4.6, facing: 2.49, pose: 'brush', room: 'bath', say: ['Squeaky clean!'] },
+  { x: -7.4, z: .3, facing: -1.69, pose: 'sip', room: 'kitchen', say: ['Mm, tea.'] },
+  { x: 8.0, z: -4.4, facing: Math.PI / 2, pose: 'read', room: 'study', say: ['One more page.'] },
 ];
+/** Where friends without a role errand drift, in turn: around the house rather than only the living room. */
+const ROTATION = [0, 7, 1, 8, 2, 9, 3, 10];
 /** The hangout index for friend number `index` (role first) at world time `time`. */
 export function hangoutFor(index: number, role: string, time: number): number {
   const phase = Math.floor(time / SCHEDULE_SECONDS);
   if (role === 'cook' && phase % 2 === 0) return 4;
   if (role === 'garden' && phase % 3 === 1) return 6;
   if (role === 'farm' && phase % 3 === 2) return 5;
-  return (index + phase) % 4;
+  return ROTATION[(index * 3 + phase) % ROTATION.length];
 }
 /** Hangouts for the friends at home, one each (a taken spot passes to the next free one); writes into `out`. */
 export function assignHangouts(roles: readonly string[], time: number, out: number[] = []): number[] {

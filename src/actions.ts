@@ -63,6 +63,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'expandGarden': result = Game.expandGarden(state, p.x === undefined ? undefined : number(p.x), p.z === undefined ? undefined : number(p.z), p.rotation === undefined ? 0 : number(p.rotation)); break;
     case 'buyBedKit': result = Game.readyPlotKit(state); if (!['bought', 'have'].includes(result as string)) return invalid(); break;
     case 'storeBed': result = Game.storeBed(state, index()); break;
+    case 'upgradeBed': result = Game.upgradeBed(state, index(), now); break;
     case 'moveBed': result = Game.moveBed(state, index(), number(p.x), number(p.z), p.rotation === undefined ? undefined : number(p.rotation)); break;
     case 'placeDecoration': result = Game.placeDecoration(state, id(), number(p.x), number(p.z), p.rotation === undefined ? 0 : number(p.rotation)); break;
     case 'moveDecoration': result = Game.moveDecoration(state, string(p.uid), number(p.x), number(p.z), p.rotation === undefined ? undefined : number(p.rotation)); break;

@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import vm from 'node:vm';
+import {createHash} from 'node:crypto';
 import ts from 'typescript';
 import {VI_ONLINE} from '../src/locales/vi-online.ts';
 
@@ -40,8 +41,9 @@ function cacheStorage() {
       if(!entries.has(name)) entries.set(name,new Map());
       const data=entries.get(name);
       return {
-        async addAll(urls) { requests.push(...urls); for(const url of urls)data.set(key(url),new Response(`cached:${url}`)); },
-        async match(request) {return data.get(key(request))?.clone();},
+        async addAll(urls) { for(const url of urls)await this.add(url); },
+        async add(request) { const url=typeof request==='string'?request:new URL(request.url).pathname+new URL(request.url).search; requests.push(url); data.set(key(request),new Response(`cached:${url}`)); },
+        async match(request,{ignoreSearch=false}={}) {const want=key(request),bare=u=>u.split('?')[0];for(const [k,v]of data)if(k===want||ignoreSearch&&bare(k)===bare(want))return v.clone();},
         async put(request,response) {data.set(key(request),response.clone());},
       };
     },
@@ -53,14 +55,14 @@ function cacheStorage() {
 
 function worker(source, caches=cacheStorage()) {
   const listeners=new Map(),network=[];
-  let responder=async request=>new Response(`network:${typeof request==='string'?request:request.url}`),claimed=0;
+  let responder=async request=>new Response(`network:${typeof request==='string'?request:request.url}`),claimed=0,skipped=0;const messages=[];
   vm.runInNewContext(source,{
-    URL,caches,
+    URL,caches,Request:class{constructor(url,init={}){this.url=new URL(url,origin).href;this.cache=init.cache;}},
     fetch:async request=>{network.push(request);return responder(request);},
-    self:{location:{origin},clients:{claim:async()=>{claimed++;}},addEventListener:(name,handler)=>listeners.set(name,handler)},
+    self:{location:{origin},skipWaiting:async()=>{skipped++;},clients:{claim:async()=>{claimed++;},matchAll:async()=>[{postMessage:message=>messages.push(message)}]},addEventListener:(name,handler)=>listeners.set(name,handler)},
   });
   return {
-    caches,network,get claimed(){return claimed;},setNetwork(fn){responder=fn;},
+    caches,network,messages,get claimed(){return claimed;},get skipped(){return skipped;},setNetwork(fn){responder=fn;},
     async lifecycle(name) {let promise;listeners.get(name)({waitUntil:value=>{promise=value;}});assert.ok(promise);await promise;},
     request(url,{method='GET',mode='cors'}={}) {
       let response;
@@ -74,7 +76,8 @@ test('generated cache includes complete nested build output, excludes itself, an
   const files={'index.html':'<html>Garden</html>','assets/game.js':'game v1','assets/fonts/nunito.woff2':'font','assets/models/cottage.glb':'model','sw.js':'old worker'};
   const source=await buildFixture(t,files),app=worker(source);
   await app.lifecycle('install');
-  assert.deepEqual(app.caches.requests.slice().sort(),['/assets/fonts/nunito.woff2','/assets/game.js','/assets/models/cottage.glb','/index.html']);
+  assert.deepEqual(app.caches.requests.map(url=>url.replace(/\?v=[a-f0-9]{10}$/,'')).sort(),['/assets/fonts/nunito.woff2','/assets/game.js','/assets/models/cottage.glb','/index.html']);
+  assert.ok(app.caches.requests.includes('/assets/models/cottage.glb?v='+createHash('sha256').update('model').digest('hex').slice(0,10)),'models install under their content hash');
   assert.equal(source,await buildFixture(t,files));
 });
 
@@ -89,18 +92,18 @@ test('API, sockets, writes, cross-origin and unknown resources are never interce
 });
 
 test('navigation is network-first with an offline shell fallback; cached assets work without network',async t=>{
-  const app=worker(await buildFixture(t,{'index.html':'v1','assets/game.js':'game'}));
+  const app=worker(await buildFixture(t,{'index.html':'v1','assets/game-AbCd12_x.js':'game'}));
   await app.lifecycle('install');
   assert.equal(await(await app.request('/adventure',{mode:'navigate'})).text(),`network:${origin}/adventure`);
   app.setNetwork(async()=>{throw new Error('offline');});
   assert.equal(await(await app.request('/adventure',{mode:'navigate'})).text(),'cached:/index.html');
   const calls=app.network.length;
-  assert.equal(await(await app.request('/assets/game.js?cache-bust=1')).text(),'cached:/assets/game.js');
+  assert.equal(await(await app.request('/assets/game-AbCd12_x.js')).text(),'cached:/assets/game-AbCd12_x.js','hashed build files are cache-first');
   assert.equal(app.network.length,calls);
   const active=await app.caches.open((await app.caches.keys())[0]);
-  app.caches.entries.values().next().value.delete(`${origin}/assets/game.js`);
+  app.caches.entries.values().next().value.delete(`${origin}/assets/game-AbCd12_x.js`);
   app.setNetwork(async()=>new Response('restored asset'));
-  assert.equal(await(await app.request('/assets/game.js')).text(),'restored asset');
+  assert.equal(await(await app.request('/assets/game-AbCd12_x.js')).text(),'restored asset');
   assert.equal(await active.match('/missing'),undefined);
 });
 
@@ -138,7 +141,9 @@ async function platform({production=true,basePath='/',supportFullscreen=true,reg
   if(supportFullscreen) document.documentElement.requestFullscreen=async()=>{entered++;document.fullscreenElement=document.documentElement;};
   document.exitFullscreen=async()=>{exited++;document.fullscreenElement=null;};
   const languageListeners=[],i18n={t:source=>language==='vi'?VI_ONLINE[source]||source:source,onLanguageChange:handler=>{languageListeners.push(handler);return()=>{};}};
-  const exports={};vm.runInNewContext(js,{exports,window,document,require:name=>{assert.equal(name,'./i18n.ts');return i18n;},navigator:{serviceWorker:{register:async url=>{registered.push(url);return register(url);}}}});
+  // Registration lives in art-status.ts (update prompt); stand in for it with a plain register call.
+  const serviceWorker={register:async url=>{registered.push(url);return register(url);}},artStatus={registerWorker:url=>{void serviceWorker.register(url).catch(()=>{});}};
+  const exports={};vm.runInNewContext(js,{exports,window,document,require:name=>{if(name==='./art-status.ts')return artStatus;assert.equal(name,'./i18n.ts');return i18n;},navigator:{serviceWorker}});
   exports.initPlatform(message=>notices.push(message));
   return {window,document,registered,notices,fullscreen:slot.children[0].children[0],install:slot.children[0].children[1],get entered(){return entered;},get exited(){return exited;},setLanguage:value=>{language=value;for(const handler of languageListeners)handler();}};
 }
@@ -244,10 +249,47 @@ test('install manifest resolves its identity, launch URL, scope and icons within
 test('gear, planet scenery, the farm pen and the creatures are kept the first time they are needed instead of downloading at install',async t=>{
   const app=worker(await buildFixture(t,{'index.html':'shell','assets/models/cottage.glb':'cottage','assets/models/gear-wear.glb':'hats','assets/models/pets.glb':'pets','assets/models/worlds-harsh.glb':'ice','assets/models/farm.glb':'farm','assets/models/creatures.glb':'creatures'},{base:'/cute_game/'}));
   await app.lifecycle('install');
-  assert.deepEqual(app.caches.requests.slice().sort(),['/cute_game/assets/models/cottage.glb','/cute_game/index.html']);
+  assert.deepEqual(app.caches.requests.map(url=>url.replace(/\?v=[a-f0-9]{10}$/,'')).sort(),['/cute_game/assets/models/cottage.glb','/cute_game/index.html']);
   assert.equal(await(await app.request('/cute_game/assets/models/gear-wear.glb')).text(),`network:${origin}/cute_game/assets/models/gear-wear.glb`);
   app.setNetwork(async()=>{throw new Error('offline');});
   assert.equal(await(await app.request('/cute_game/assets/models/gear-wear.glb')).text(),`network:${origin}/cute_game/assets/models/gear-wear.glb`,'the first download is kept for offline play');
   await assert.rejects(async()=>app.request('/cute_game/assets/models/pets.glb'),/offline/,'unworn gear needs the network; the game shows simple shapes instead');
   await assert.rejects(async()=>app.request('/cute_game/assets/models/creatures.glb'),/offline/,'creatures never seen online keep their simple shapes offline');
+});
+
+const glbHash=bytes=>createHash('sha256').update(bytes).digest('hex').slice(0,10);
+test('models are cache-first only under this build\'s content hash; any other copy comes from the network first',async t=>{
+  const app=worker(await buildFixture(t,{'index.html':'shell','assets/models/cottage.glb':'cottage v2','assets/models/farm.glb':'farm v2'}));
+  await app.lifecycle('install');
+  const mine=`/assets/models/cottage.glb?v=${glbHash('cottage v2')}`;
+  let calls=app.network.length;
+  assert.equal(await(await app.request(mine)).text(),`cached:${mine}`);assert.equal(app.network.length,calls,'matching hash: no network');
+  assert.equal(await(await app.request('/assets/models/cottage.glb?v=0123456789')).text(),`network:${origin}/assets/models/cottage.glb?v=0123456789`,'another build asked for its own copy');
+  assert.equal(await(await app.request('/assets/models/cottage.glb')).text(),`network:${origin}/assets/models/cottage.glb`,'unversioned: network first');
+  // An on-demand model with this build's hash is kept on first use and then served offline.
+  const farm=`/assets/models/farm.glb?v=${glbHash('farm v2')}`;
+  assert.equal(await(await app.request(farm)).text(),`network:${origin}${farm}`);
+  app.setNetwork(async()=>{throw new Error('offline');});calls=app.network.length;
+  assert.equal(await(await app.request(farm)).text(),`network:${origin}${farm}`);assert.equal(app.network.length,calls);
+  assert.equal(await(await app.request('/assets/models/cottage.glb?v=0123456789')).text(),`cached:${mine}`,'offline, any copy beats a stand-in');
+});
+
+test('a new build never gets the previous build\'s cached models (the stale-worker mix seen after deploys)',async t=>{
+  const storage=cacheStorage(),old=worker(await buildFixture(t,{'index.html':'old','assets/models/cottage.glb':'cottage v1'}),storage);
+  await old.lifecycle('install');await old.lifecycle('activate');
+  // The old worker still controls the tab when the new index.html and scripts arrive from the network.
+  const fresh=`/assets/models/cottage.glb?v=${glbHash('cottage v2')}`;
+  assert.equal(await(await old.request(fresh)).text(),`network:${origin}${fresh}`);
+  assert.equal(await(await old.request('/adventure',{mode:'navigate'})).text(),`network:${origin}/adventure`);
+});
+
+test('a new worker installs past the HTTP cache, takes over at once, drops old caches and tells pages its scripts',async t=>{
+  const storage=cacheStorage(),old=worker(await buildFixture(t,{'index.html':'old','assets/index-AAAAAAAA.js':'old'}),storage);
+  await old.lifecycle('install');await old.lifecycle('activate');const oldName=(await storage.keys())[0];
+  const source=await buildFixture(t,{'index.html':'new','assets/index-BBBBBBBB.js':'new'}),next=worker(source,storage);
+  await next.lifecycle('install');assert.equal(next.skipped,1);
+  assert.match(source,/cache:'reload'/);
+  await next.lifecycle('activate');
+  assert.equal((await storage.keys()).includes(oldName),false);
+  assert.deepEqual(JSON.parse(JSON.stringify(next.messages.map(m=>({...m,version:typeof m.version})))),[{type:'zoo-sw-ready',version:'string',scripts:['/assets/index-BBBBBBBB.js']}]);
 });

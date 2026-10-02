@@ -3,44 +3,50 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toToon, toonify } from './toon.ts';
 import { LOOKS, type LookId } from './looks.ts';
+import { loadWithRetry, DEFAULT_POLICY, type RetryPolicy } from './art-retry.ts';
 
 // Vite supplies the deployment prefix; direct Node tests use the root default.
 const assetBase = import.meta.env?.BASE_URL ?? '/';
+// Model files keep fixed names, so builds add each file's content hash (vite.config.ts) as ?v=. The
+// service worker serves a model cache-first only when that hash matches the copy it holds, so a new
+// game build never draws an older build's models (or the reverse).
+const MODEL_VERSIONS: Record<string, string> = typeof __ZOO_MODEL_VERSIONS__ === 'undefined' ? {} : __ZOO_MODEL_VERSIONS__ ?? {};
+export const modelUrl = (file: string) => `${assetBase}assets/models/${file}${MODEL_VERSIONS[file] ? `?v=${MODEL_VERSIONS[file]}` : ''}`;
 
 export const REFINED_ASSET_FILES = {
-  cottage: `${assetBase}assets/models/cottage.glb`,
-  market: `${assetBase}assets/models/market-stall.glb`,
-  outfitters: `${assetBase}assets/models/equipment-stall.glb`,
-  garden: `${assetBase}assets/models/garden-bed.glb`,
-  crystal: `${assetBase}assets/models/wishing-crystal.glb`,
-  chest: `${assetBase}assets/models/storage-chest.glb`,
-  workshop: `${assetBase}assets/models/workshop.glb`,
-  kitchen: `${assetBase}assets/models/kitchen.glb`,
-  well: `${assetBase}assets/models/well.glb`,
+  cottage: modelUrl('cottage.glb'),
+  market: modelUrl('market-stall.glb'),
+  outfitters: modelUrl('equipment-stall.glb'),
+  garden: modelUrl('garden-bed.glb'),
+  crystal: modelUrl('wishing-crystal.glb'),
+  chest: modelUrl('storage-chest.glb'),
+  workshop: modelUrl('workshop.glb'),
+  kitchen: modelUrl('kitchen.glb'),
+  well: modelUrl('well.glb'),
 } as const;
 
 // Multi-model kits: one GLB holds many small named models (trees, flowers, crops).
 export const KIT_FILES = {
-  scenery: `${assetBase}assets/models/scenery.glb`,
-  crops: `${assetBase}assets/models/crops.glb`,
-  fruitCrops: `${assetBase}assets/models/fruit_crops.glb`,
-  fish: `${assetBase}assets/models/fish.glb`,
-  wear: `${assetBase}assets/models/gear-wear.glb`,
-  weapons: `${assetBase}assets/models/gear-weapons.glb`,
-  disguises: `${assetBase}assets/models/disguises.glb`,
-  pets: `${assetBase}assets/models/pets.glb`,
-  space: `${assetBase}assets/models/space.glb`,
-  wilds: `${assetBase}assets/models/wilds.glb`,
-  worldsBright: `${assetBase}assets/models/worlds-bright.glb`,
-  worldsHarsh: `${assetBase}assets/models/worlds-harsh.glb`,
-  worldsDressing: `${assetBase}assets/models/worlds-dressing.glb`,
-  farm: `${assetBase}assets/models/farm.glb`,
-  creatures: `${assetBase}assets/models/creatures.glb`,
-  forestBirds: `${assetBase}assets/models/forest-birds.glb`,
-  helper: `${assetBase}assets/models/helper.glb`,
-  cage: `${assetBase}assets/models/cage.glb`,
+  scenery: modelUrl('scenery.glb'),
+  crops: modelUrl('crops.glb'),
+  fruitCrops: modelUrl('fruit_crops.glb'),
+  fish: modelUrl('fish.glb'),
+  wear: modelUrl('gear-wear.glb'),
+  weapons: modelUrl('gear-weapons.glb'),
+  disguises: modelUrl('disguises.glb'),
+  pets: modelUrl('pets.glb'),
+  space: modelUrl('space.glb'),
+  wilds: modelUrl('wilds.glb'),
+  worldsBright: modelUrl('worlds-bright.glb'),
+  worldsHarsh: modelUrl('worlds-harsh.glb'),
+  worldsDressing: modelUrl('worlds-dressing.glb'),
+  farm: modelUrl('farm.glb'),
+  creatures: modelUrl('creatures.glb'),
+  forestBirds: modelUrl('forest-birds.glb'),
+  helper: modelUrl('helper.glb'),
+  cage: modelUrl('cage.glb'),
 } as const;
-export const HERO_FILE = `${assetBase}assets/models/hero.glb`;
+export const HERO_FILE = modelUrl('hero.glb');
 
 export type RefinedAsset = keyof typeof REFINED_ASSET_FILES;
 type SceneLoader = (url: string) => Promise<T.Group>;
@@ -51,16 +57,19 @@ export class RefinedAssetLibrary {
   private scenes = new Map<RefinedAsset, T.Group>();
   private loading: Promise<void> | null = null;
   private loadScene: SceneLoader;
+  private policy: RetryPolicy;
 
-  constructor(loadScene: SceneLoader = loadGltfScene) {
-    this.loadScene = loadScene;
+  constructor(loadScene: SceneLoader = loadGltfScene, policy = DEFAULT_POLICY) {
+    this.loadScene = loadScene; this.policy = policy;
   }
 
   loadAll(): Promise<void> {
-    // An unavailable optional model must never stop the procedural game loading.
+    // An unavailable optional model must never stop the procedural game loading: the entity keeps
+    // its procedural model until a later retry brings the file in (art-retry.ts).
     this.loading ??= Promise.all((Object.keys(REFINED_ASSET_FILES) as RefinedAsset[]).map(async name => {
-      try { this.scenes.set(name, bakeModel(await this.loadScene(REFINED_ASSET_FILES[name]))); }
-      catch { /* Keep this entity's original procedural model. */ }
+      const url = REFINED_ASSET_FILES[name], keep = (scene: T.Group) => { this.scenes.set(name, bakeModel(scene)); };
+      const scene = await loadWithRetry(url, () => this.loadScene(url), keep, this.policy);
+      if (scene) keep(scene);
     })).then(() => {});
     return this.loading;
   }
@@ -198,36 +207,42 @@ export class KitLibrary {
   private loading: Promise<void> | null = null;
   private urls: string[];
   private loadScene: SceneLoader;
+  private policy: RetryPolicy;
 
-  constructor(urls: string[], loadScene: SceneLoader = loadGltfScene) {
+  constructor(urls: string[], loadScene: SceneLoader = loadGltfScene, policy = DEFAULT_POLICY) {
     this.urls = urls;
-    this.loadScene = loadScene;
+    this.loadScene = loadScene; this.policy = policy;
   }
 
   load(): Promise<void> {
+    // A file that still fails after its quick retries leaves the procedural stand-ins; a later
+    // retry adds its models and turns the kit ready (art-retry.ts announces it).
+    const keep = (scene: T.Group) => { this.ingest(scene); this.ready = this.models.size > 0; };
     this.loading ??= Promise.all(this.urls.map(async url => {
-      try {
-        const scene = await this.loadScene(url);
-        scene.updateMatrixWorld(true);
-        for (const node of scene.children) {
-          const inverse = node.matrixWorld.clone().invert(), parts: KitPart[] = [], markers: KitMarker[] = [];
-          node.traverse(object => {
-            const marker = MARKERS.find(m => object.name.startsWith(m));
-            if (marker && !(object instanceof T.Mesh)) markers.push({ name: marker, matrix: inverse.clone().multiply(object.matrixWorld), tag: partTag(object, node) });
-            if (!(object instanceof T.Mesh) || Array.isArray(object.material)) return;
-            object.geometry.userData.sharedKit = true;
-            // Kit models draw with the toon ramp like everything else (RC-05).
-            object.material = toToon(object.material);
-            object.material.userData.sharedKit = true;
-            // A single-material child keeps its own name, so animated parts (a fish tail) can be found.
-            const named = object.name || object.parent?.name || '';
-            parts.push({ geometry: object.geometry, material: object.material, matrix: inverse.clone().multiply(object.matrixWorld), name: named, tag: partTag(object, node) });
-          });
-          if (node.name && parts.length) { this.models.set(node.name, parts); if (markers.length) this.markers.set(node.name, markers); }
-        }
-      } catch { /* The procedural scenery remains. */ }
+      const scene = await loadWithRetry(url, () => this.loadScene(url), keep, this.policy);
+      if (scene) { try { this.ingest(scene); } catch { /* The procedural scenery remains. */ } }
     })).then(() => { this.ready = this.models.size > 0; });
     return this.loading;
+  }
+
+  private ingest(scene: T.Group) {
+    scene.updateMatrixWorld(true);
+    for (const node of scene.children) {
+      const inverse = node.matrixWorld.clone().invert(), parts: KitPart[] = [], markers: KitMarker[] = [];
+      node.traverse(object => {
+        const marker = MARKERS.find(m => object.name.startsWith(m));
+        if (marker && !(object instanceof T.Mesh)) markers.push({ name: marker, matrix: inverse.clone().multiply(object.matrixWorld), tag: partTag(object, node) });
+        if (!(object instanceof T.Mesh) || Array.isArray(object.material)) return;
+        object.geometry.userData.sharedKit = true;
+        // Kit models draw with the toon ramp like everything else (RC-05).
+        object.material = toToon(object.material);
+        object.material.userData.sharedKit = true;
+        // A single-material child keeps its own name, so animated parts (a fish tail) can be found.
+        const named = object.name || object.parent?.name || '';
+        parts.push({ geometry: object.geometry, material: object.material, matrix: inverse.clone().multiply(object.matrixWorld), name: named, tag: partTag(object, node) });
+      });
+      if (node.name && parts.length) { this.models.set(node.name, parts); if (markers.length) this.markers.set(node.name, markers); }
+    }
   }
 
   has(name: string) { return this.models.has(name); }
@@ -357,10 +372,12 @@ export class HeroLibrary {
   private loading: Promise<void> | null = null;
   private url: string;
   private loadScene: SceneLoader;
-  constructor(url = HERO_FILE, loadScene: SceneLoader = loadGltfScene) { this.url = url; this.loadScene = loadScene; }
+  private policy: RetryPolicy;
+  constructor(url = HERO_FILE, loadScene: SceneLoader = loadGltfScene, policy = DEFAULT_POLICY) { this.url = url; this.loadScene = loadScene; this.policy = policy; }
   get requested() { return this.loading !== null; }
   load(): Promise<void> {
-    this.loading ??= this.loadScene(this.url).then(scene => {
+    // Until the file arrives (a retry may bring it later) the procedural explorer stands in.
+    const keep = (scene: T.Group) => {
       const hero = scene.getObjectByName('hero') ?? scene;
       // Each posable part becomes one or two meshes; the shirt keeps its own material for recolouring.
       const shirt = (mesh: T.Mesh) => /^Hero shirt/.test((mesh.material as T.Material).name);
@@ -368,7 +385,8 @@ export class HeroLibrary {
       mergeEars(hero);
       toonify(hero); hero.traverse(o => { if (o instanceof T.Mesh) o.geometry.userData.sharedKit = true; });
       this.source = hero; this.ready = true;
-    }).catch(() => { /* The procedural explorer remains. */ });
+    };
+    this.loading ??= loadWithRetry(this.url, () => this.loadScene(this.url), keep, this.policy).then(scene => { if (scene) keep(scene); }).catch(() => { /* The procedural explorer remains. */ });
     return this.loading;
   }
   instance(color: string): T.Group | null {
@@ -404,7 +422,7 @@ export const heroKit = new HeroLibrary();
 const heroStyleKits = new Map<string, HeroLibrary>();
 export function heroKitFor(look: LookId): HeroLibrary {
   const file = LOOKS[look]?.file; if (!file) return heroKit;
-  let kit = heroStyleKits.get(look); if (!kit) { kit = new HeroLibrary(`${assetBase}assets/models/${file}`); heroStyleKits.set(look, kit); }
+  let kit = heroStyleKits.get(look); if (!kit) { kit = new HeroLibrary(modelUrl(file)); heroStyleKits.set(look, kit); }
   return kit;
 }
 // Gear the explorer can wear or hold, one file per group so each downloads only when first worn.

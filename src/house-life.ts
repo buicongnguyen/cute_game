@@ -9,7 +9,9 @@
 import { t } from './i18n.ts';
 import type { Entity, World } from './world.ts';
 import type { HouseSession, ActivityEntity } from './house-session.ts';
-import { ACTIVITIES, HANGOUTS, activity, collectionLog, cooldownLeft, decorPlacements, decorSignature, friendLabel, trophies, photos, type Activity, type UseResult } from './house-activities.ts';
+import { TalkBag, lineFor, exchangeFor } from './house-talk.ts';
+import type { RoomId } from './house.ts';
+import { ACTIVITIES, activity, collectionLog, cooldownLeft, decorPlacements, decorSignature, friendLabel, trophies, photos, type Activity, type UseResult } from './house-activities.ts';
 import { PLANETS, type BuffDef } from './content.ts';
 import * as T from 'three';
 import { activityBox } from './house-hotspots.ts';
@@ -71,7 +73,7 @@ export function initHouseLife(d: LifeDeps) {
   const bubble = document.createElement('div'); bubble.id = 'house-bubble'; bubble.hidden = true; document.body.append(bubble);
   const music = new MusicBox();
   let near: Activity | null = null, shown = '', scan = 0, chatClock = 4, chatLeft = 0, chatFriend: T.Object3D | null = null, decorClock = 0;
-  const v = new T.Vector3();
+  const v = new T.Vector3(), talk = new TalkBag(), queue: { who: T.Object3D; text: string }[] = [];
   const fx = (a: Activity) => ({ x: a.at.x, y: a.y, z: a.at.z });
 
   const feedback = (a: Activity, r: UseResult) => {
@@ -146,11 +148,20 @@ export function initHouseLife(d: LifeDeps) {
       chatLeft -= dt;
       if (chatLeft <= 0 || !chatFriend) { bubble.hidden = true; chatFriend = null; }
       else { const p = chatFriend.position, [x, y] = project(p.x, p.y + 1.9, p.z); bubble.style.visibility = x < 90 || x > innerWidth - 90 || y < 60 ? 'hidden' : ''; bubble.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -100%)`; }
+    } else if (queue.length) {
+      // The reply of a two-friend exchange follows the first line.
+      const next = queue.shift()!; bubble.textContent = next.text; bubble.hidden = false; chatFriend = next.who; chatLeft = 3.2;
     } else if ((chatClock -= dt) <= 0) {
-      chatClock = 6 + Math.random() * 5;
+      chatClock = 5 + Math.random() * 5;
       const settled = [...view.friends.values()].filter(f => Math.hypot(f.spot.x - f.group.position.x, f.spot.z - f.group.position.z) < .1);
       const pick = settled[Math.floor(Math.random() * settled.length)];
-      if (pick) { const lines = (pick.spot as { say?: string[] }).say ?? HANGOUTS[0].say; bubble.textContent = t(lines[Math.floor(Math.random() * lines.length)]); bubble.hidden = false; chatFriend = pick.group; chatLeft = 3.2; }
+      if (pick) {
+        const room = ((pick.spot as { room?: RoomId }).room ?? 'living'), mate = settled.find(f => f !== pick && (f.spot as { room?: RoomId }).room === room);
+        const pair = mate && Math.random() < .35 ? exchangeFor(talk, room) : null;
+        if (pair && mate) { queue.push({ who: mate.group, text: t(pair[1]) }); bubble.textContent = t(pair[0]); }
+        else bubble.textContent = t(lineFor(talk, { room, stage: pick.stage, role: pick.role }));
+        bubble.hidden = false; chatFriend = pick.group; chatLeft = 3.4;
+      }
     }
   };
   prompt.addEventListener('click', () => { if (near && !d.blocked()) void use(near); });

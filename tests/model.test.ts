@@ -60,9 +60,9 @@ test('all ten disguises provide four skill definitions and override weapon metad
   for(const[id,d]of Object.entries(M.DISGUISES)){assert.equal(d.skills.length,4);M.addItem(s,id);assert.equal(M.equip(s,id),true);assert.equal(M.weaponStats(s).kind,d.weapon.kind);assert.ok(M.weaponStats(s).range>0);assert.ok(M.weaponStats(s).cd>0);}
   assert.equal(M.unequip(s,'disguise'),true);M.addItem(s,'rod');M.equip(s,'rod');assert.equal(M.weaponStats(s).kind,'rod');
 });
-test('twenty-four paid or kit garden expansions and decoration movement are lossless',()=>{
+test('fifteen paid or kit garden expansions and decoration movement are lossless',()=>{
   const s=M.newGame();M.addItem(s,'plot_kit');assert.equal(M.expandGarden(s),true);assert.equal(s.energy,0);assert.equal(M.gardenExpansionCost(s),80);s.energy=100000;
-  for(let i=1;i<24;i++)assert.equal(M.expandGarden(s),true,`expansion ${i}`);assert.equal(s.plots.length,33);assert.equal(M.expandGarden(s),false);
+  for(let i=1;i<15;i++)assert.equal(M.expandGarden(s),true,`expansion ${i}`);assert.equal(s.plots.length,24);assert.equal(M.expandGarden(s),false);
   const d=M.newGame();M.addItem(d,'deco_lamp');assert.equal(M.placeDecoration(d,'deco_lamp',50,0),false);assert.equal(M.placeDecoration(d,'deco_lamp',5,5),true);assert.equal(d.bag.deco_lamp,undefined);const uid=d.decorations[0].uid;
   assert.equal(M.moveDecoration(d,uid,7,5,.4),true);const restored=reload(d);assert.deepEqual(restored.decorations,d.decorations);assert.equal(M.removeDecoration(restored,uid),true);assert.equal(restored.bag.deco_lamp,1);assert.equal(M.removeDecoration(restored,uid),false);
 });
@@ -137,7 +137,7 @@ test('stardust gives energy and sometimes a star shard; discovered planets survi
 test('new beds never land on village obstacles, and saved beds on top of them move on load', () => {
   const s = M.newGame(); s.energy = 1e7;
   while (M.expandGarden(s));
-  assert.equal(s.plots.length, 33);
+  assert.equal(s.plots.length, 24);
   for (const p of s.plots.slice(9)) assert.ok(M.bedClear(p.x!, p.z!), `${p.x},${p.z}`);
   // Explicit spots: the well and the cottage are refused.
   const t = M.newGame(); t.energy = 1e4;
