@@ -228,3 +228,19 @@
     top: calc(var(--edge) + var(--safe-top) + var(--b) * 2 + var(--gap) + 6px);
   }
 }
+
+/* Device QA (wave 11): the last small controls on touch screens get a 44 px hit area without growing their look.
+   The start button and settings/craft segments only need a few px, so they simply get a 44 px minimum. */
+@media (pointer: coarse) {
+  #title-screen [data-action="color"], .quick-eat-pick { position: relative; }
+  #title-screen [data-action="color"]::before { /* ::after is the selected tick */
+    content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%);
+  }
+  .quick-eat-pick::before { inset: auto; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+  #title-screen .start-button { min-height: 44px; }
+  [data-action="joystick-side"], [data-action="difficulty"], [data-action="zoom-in"], [data-action="zoom-out"], [data-action="craft-tab"] { min-width: 44px; min-height: 44px; }
+}
+/* Narrow phones: a long skill name ("Ground slam", "Punch flurry") wraps onto two short lines instead of being cut. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .skill > small { white-space: normal; text-overflow: clip; overflow: visible; text-wrap: balance; max-width: calc(var(--sk) + 10px); width: max-content; text-align: center; line-height: 1.15; padding: 1px 5px; }
+}

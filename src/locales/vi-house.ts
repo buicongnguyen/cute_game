@@ -26,4 +26,5 @@ export const VI_HOUSE: Record<string, string> = {
   'Bedroom': 'Phòng ngủ',
   'Bathroom': 'Phòng tắm',
   'Study': 'Phòng đọc sách',
+  'Cottage': 'Nhà nhỏ',
 };

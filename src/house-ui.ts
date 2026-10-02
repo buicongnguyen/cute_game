@@ -4,6 +4,7 @@
  * panel where you give a rescued friend things to wear. main.ts wires it with a few lines.
  */
 import * as T from 'three';
+import { dropTree } from './dispose-tree.ts';
 import { t, onLanguageChange } from './i18n.ts';
 import { ITEMS } from './content.ts';
 import type { SaveState } from './model.ts';
@@ -17,6 +18,7 @@ import { friendStage } from './growth.ts';
 import { modelIcon } from './icons.ts';
 import { toonMaterial } from './toon.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { part } from './part-cache.ts';
 
 export interface HouseDeps {
   world: World;
@@ -58,14 +60,16 @@ export function dressHtml(s: SaveState, id: FriendId, { readOnly = false, portra
 
 export function initHouse(d: HouseDeps) {
   const house = new HouseSession(), world = d.world;
-  let fade = 0, fadeTarget = 0, pending: (() => void) | null = null, friendClock = 0, dressing: FriendId | null = null, resumed = false, outdoorDoor: T.Group | null = null, doorOpen = 0;
+  let fade = 0, fadeTarget = 0, pending: (() => void) | null = null, friendClock = 0, dressing: FriendId | null = null, resumed = false, outdoorDoor: T.Group | null = null, doorOpen = 0, prewarmed = false, veilFade = -1;
   const veil = document.createElement('div'); veil.id = 'house-veil'; document.body.append(veil);
   const out = document.createElement('button'); out.className = 'home-button house-out'; out.dataset.houseAction = 'leave'; out.title = t('Outside');
-  const label = () => { out.innerHTML = `🚪 <span>${t('Outside')}</span>`; out.title = t('Outside'); out.setAttribute('aria-label', t('Outside')); };
+  /** The HUD's place name says where you are: the cottage indoors, the village zone again outside. */
+  const zoneName = () => { const el = document.getElementById('zone-name'); if (el) el.textContent = house.inside ? t('Cottage') : t(world.lastZone || 'Clover Village'); };
+  const label = () => { zoneName(); out.innerHTML = `🚪 <span>${t('Outside')}</span>`; out.title = t('Outside'); out.setAttribute('aria-label', t('Outside')); };
   label(); document.querySelector('.home-button')?.after(out); onLanguageChange(label);
   /** Fade to the warm dark, swap, fade back. */
   const transition = (swap: () => void) => { if (pending) return; pending = swap; fadeTarget = 1; };
-  const sync = () => { document.body.classList.toggle('indoors', house.inside); remember(house.inside && !d.visiting()); };
+  const sync = () => { document.body.classList.toggle('indoors', house.inside); zoneName(); remember(house.inside && !d.visiting()); };
   const enter = (instant = false) => {
     if (house.inside || world.planet !== 'home') return;
     void houseKit.load();
@@ -79,9 +83,11 @@ export function initHouse(d: HouseDeps) {
   };
   /** A swinging door in front of the cottage's painted one (the cottage model is one baked piece). */
   const ensureOutdoorDoor = () => {
+    if (house.inside || world.interior) return; // indoors the entity list is the interior's: keep the door we have
     const home = world.planet === 'home' ? world.entities.find(e => e.kind === 'home') : null;
-    if (!home) { outdoorDoor = null; return; }
-    if (outdoorDoor?.parent === home.mesh) return;
+    if (home && outdoorDoor?.parent === home.mesh) return;
+    if (outdoorDoor) { dropTree(outdoorDoor); outdoorDoor = null; } // the cottage was rebuilt or left behind: free the old door
+    if (!home) return;
     const parts = houseKit.ready ? ['doorway', 'door'].map(n => houseKit.parts(n) ?? []) : null;
     if (!parts) { void houseKit.load(); return; }
     const group = new T.Group(); group.name = 'cottage-door';
@@ -91,7 +97,7 @@ export function initHouse(d: HouseDeps) {
     home.mesh.add(group); outdoorDoor = group;
   };
   const stepDoors = (dt: number) => {
-    const hinge = outdoorDoor?.getObjectByName('hinge');
+    const hinge = outdoorDoor && part(outdoorDoor, 'hinge');
     if (hinge) {
       const near = !house.inside && Math.hypot(world.position.x - HOUSE.outdoorDoor.x, world.position.z - HOUSE.outdoorDoor.z) < 2.2;
       const target = near || fadeTarget > 0 ? 1 : 0; doorOpen += (target - doorOpen) * (1 - Math.exp(-dt * 8));
@@ -104,11 +110,17 @@ export function initHouse(d: HouseDeps) {
     if (!resumed) { resumed = true; if (remembered() && !d.visiting() && world.planet === 'home') enter(true); }
     if (house.inside && !world.interior) { sync(); } // the world rebuilt (travel, visit, reset)
     ensureOutdoorDoor(); stepDoors(dt);
+    // Build the kit interior and compile its shaders in idle time outside: on a slow phone the first entry used to
+    // stall for 100-150 ms (merging the furniture, then a synchronous shader link on the first indoor frame).
+    if (!prewarmed && !house.inside && houseKit.ready) {
+      prewarmed = true; const idle = (globalThis as { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback ?? ((f: () => void) => setTimeout(f, 200));
+      idle(() => { void house.view.refine().then(() => world.renderer.compileAsync(house.view.scene, world.camera)).catch(() => {}); }, { timeout: 3000 });
+    }
     if (fadeTarget !== fade) {
       fade = fadeTarget > fade ? Math.min(1, fade + dt * 5) : Math.max(0, fade - dt * 4);
       if (fade >= 1 && pending) { const swap = pending; pending = null; swap(); fadeTarget = 0; }
     }
-    veil.style.opacity = String(fade); veil.style.display = fade > 0 ? 'block' : 'none';
+    if (fade !== veilFade) { veilFade = fade; veil.style.opacity = String(fade); veil.style.display = fade > 0 ? 'block' : 'none'; }
     if (house.inside) {
       house.frame(innerWidth / innerHeight); house.view.update(dt, world.time);
       if ((friendClock -= dt) <= 0) { friendClock = .25; house.syncFriends(friendList()); }

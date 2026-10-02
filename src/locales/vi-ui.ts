@@ -424,6 +424,7 @@ export const VI_UI: Record<string, string> = {
   'Home, sweet home.': 'Về nhà thật ấm áp.',
   'Welcome to {planet}! Watch out for its creatures.': 'Chào mừng đến {planet}! Cẩn thận với các quái vật ở đây.',
   'Needs level {level}': 'Cần cấp {level}',
+  'Heading home once we land…': 'Hạ cánh xong sẽ bay về nhà…',
   'A little milestone. A lovely reward!': 'Một cột mốc nhỏ, một phần thưởng xinh!',
   '{crop} planted. Let the sunshine do its thing.': 'Đã trồng {crop}. Giờ để nắng chăm cây nhé.',
   'Ready to harvest!': 'Đã sẵn sàng thu hoạch!',

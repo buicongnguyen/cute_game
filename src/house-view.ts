@@ -13,6 +13,7 @@ import { buildFriend } from './friend-view.ts';
 import { dropTree } from './dispose-tree.ts';
 import { friendStage } from './growth.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends.ts';
+import { part } from './part-cache.ts';
 
 const assetBase = import.meta.env?.BASE_URL ?? '/';
 export const HOUSE_FILE = `${assetBase}assets/models/house.glb`;
@@ -168,7 +169,7 @@ export class HouseView {
     for (const v of this.friends.values()) {
       const body = v.group.children[0], t = time + v.seed;
       if (!body) continue;
-      const arm = body.getObjectByName('arm-right'), legL = body.getObjectByName('leg-left'), legR = body.getObjectByName('leg-right');
+      const arm = part(body, 'arm-right'), legL = part(body, 'leg-left'), legR = part(body, 'leg-right');
       if (v.spot.pose === 'sit') { if (legL) legL.rotation.x = -1.35; if (legR) legR.rotation.x = -1.35; body.position.y = -.55 + Math.sin(t * 2) * .02; body.rotation.z = Math.sin(t * .7) * .04; }
       else body.position.y = Math.abs(Math.sin(t * 2.2)) * .05;
       if (arm) { arm.rotation.x = v.spot.pose === 'wave' ? -2.6 : 0; arm.rotation.z = v.spot.pose === 'wave' ? .4 + Math.sin(t * 7) * .45 : .1 + Math.sin(t * 1.5) * .05; }

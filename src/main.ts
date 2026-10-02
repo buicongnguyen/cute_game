@@ -67,9 +67,18 @@ import { initHouse } from './house-ui.ts';
 import { initLookShop } from './look-shop.ts';
 import { GROWTH } from './growth.ts';
 
-const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
+// The HUD asks for the same ~40 elements several times a second: remember them while they stay in the page.
+const $found=new Map<string,HTMLElement>();
+const $ = <T extends HTMLElement = HTMLElement>(selector: string) => {let el=$found.get(selector);if(!el?.isConnected){el=document.querySelector<HTMLElement>(selector)??undefined;if(el)$found.set(selector,el);}return el as T;};
+/** Write only what changed: an unchanged write still dirties style and layout, 8 times a second on a slow phone. */
+const setText=(el:Element,v:string)=>{if(el.textContent!==v)el.textContent=v;};
+const lastHtml=new WeakMap<Element,string>();
+const setHtml=(el:Element,v:string)=>{if(lastHtml.get(el)===v)return false;lastHtml.set(el,v);el.innerHTML=v;return true;};
+const setWidth=(el:HTMLElement,v:string)=>{if(el.style.width!==v)el.style.width=v;};
 /** The discovery pill's size, measured once per text change (its text is set in one place); 0 = measure again. */
 const discoverySize={w:0,h:0};
+// Sized by a ResizeObserver (after layout) instead of offsetWidth: reading it when the pill appears forced a ~60 ms layout on slow phones.
+let discoveryObserver:ResizeObserver|null=null;
 const esc = (value: string) => value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 let saved: M.SaveState | null = null;
 try { saved = M.parseSave(localStorage.getItem(M.SAVE_KEY)); } catch { /* Play remains available without storage. */ }
@@ -244,28 +253,27 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   $('.close-button').focus({preventScroll:true});
 }
 function closeDialog(){endTryOn();modal='';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
-async function start() {settle();void helperCatchUp();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
+async function start() {settle();void helperCatchUp();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{}); // warm the village's shaders off the first walk
+  applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
 async function helperCatchUp(){const r=actionHandler?await perform<ReturnType<typeof Helper.catchUp>>('helperCatchUp'):change(()=>Helper.catchUp(state));if(r&&(r.harvested.length||r.planted.length))setTimeout(()=>toast(t('While you were away, Bolt harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
 function updateHud() {
   const known=new Set(world.state.discovered),discoveryCount=t('Discovered {count}/{total} planets',{count:known.size,total:Object.keys(M.PLANETS).length});
-  $('#discovery-text').innerHTML=`<strong>🔭 ${esc(world.state.name)}</strong><span>${esc(discoveryCount)}</span><small aria-hidden="true">${Object.entries(M.PLANETS).map(([id,planet])=>known.has(id as M.PlanetId)?planet.icon:'❔').join(' ')}</small>`;
-  discoverySize.w=0;
-  $('#discovery-progress').setAttribute('aria-label',`${world.state.name} · ${discoveryCount} · ${t('Discovery log')}`);
+  if(setHtml($('#discovery-text'),`<strong>🔭 ${esc(world.state.name)}</strong><span>${esc(discoveryCount)}</span><small aria-hidden="true">${Object.entries(M.PLANETS).map(([id,planet])=>known.has(id as M.PlanetId)?planet.icon:'❔').join(' ')}</small>`)){$('#discovery-progress').setAttribute('aria-label',`${world.state.name} · ${discoveryCount} · ${t('Discovery log')}`);}
   $('#world').dataset.status=JSON.stringify({position:[+world.position.x.toFixed(2),+world.position.z.toFixed(2)],route:world.route.length,next:world.route[0]?[world.route[0].x,world.route[0].z]:null,visibility:document.visibilityState,modal,started,frameMs:Math.round(frameTime),drawCalls:world.renderer.info.render.calls});
-  $('#player-name').textContent=state.name;$('#level-badge').textContent=t(String(state.level));$('#level-text').textContent=t(`Lv. ${state.level}`);$('#energy').textContent=t(state.energy.toLocaleString());
-  $('#hp-fill').style.width=`${state.hp/M.maxHp(state)*100}%`;$('#hp-text').textContent=t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`);$('#xp-fill').style.width=`${state.xp/M.xpNeeded(state.level)*100}%`;
+  setText($('#player-name'),state.name);setText($('#level-badge'),t(String(state.level)));setText($('#level-text'),t(`Lv. ${state.level}`));setText($('#energy'),t(state.energy.toLocaleString()));
+  setWidth($('#hp-fill'),`${state.hp/M.maxHp(state)*100}%`);setText($('#hp-text'),t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`));setWidth($('#xp-fill'),`${state.xp/M.xpNeeded(state.level)*100}%`);
   updateQuickEat();
-  $('#xp-text').textContent=`EXP ${Math.floor(state.xp)} / ${M.xpNeeded(state.level)}`;
+  setText($('#xp-text'),`EXP ${Math.floor(state.xp)} / ${M.xpNeeded(state.level)}`);
   $('.experience').setAttribute('title',t(`${Math.floor(state.xp)} / ${M.xpNeeded(state.level)} experience`));
   const q=progressEntries(state,'story')[0],progress=q?.progress??0;
-  $('#quest-chapter').textContent=t(state.quest<M.QUESTS.length?`${state.quest+1} / ${M.QUESTS.length}`:'ONGOING');$('#quest-icon').textContent=t(q?.icon??'🚀');$('#quest-title').textContent=t(q?.title??'A world of possibilities');$('#quest-task').textContent=t(q?`${q.description} · ${progress} / ${q.target}`:'Your next chapter awaits.');$('#quest-count').textContent=t(q?`${progress}/${q.target}`:'');
-  $('#quest-fill').style.width=`${q?progress/q.target*100:100}%`;$('#quick-claim').hidden=!q?.complete;$('#quest-dot').hidden=!q?.complete;
+  setText($('#quest-chapter'),t(state.quest<M.QUESTS.length?`${state.quest+1} / ${M.QUESTS.length}`:'ONGOING'));setText($('#quest-icon'),t(q?.icon??'🚀'));setText($('#quest-title'),t(q?.title??'A world of possibilities'));setText($('#quest-task'),t(q?`${q.description} · ${progress} / ${q.target}`:'Your next chapter awaits.'));setText($('#quest-count'),t(q?`${progress}/${q.target}`:''));
+  setWidth($('#quest-fill'),`${q?progress/q.target*100:100}%`);$('#quick-claim').hidden=!q?.complete;$('#quest-dot').hidden=!q?.complete;
   const skills=skillList();
-  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i];button.querySelector('span')!.textContent=t(skill.icon);button.querySelector('small')!.textContent=t(skill.name);button.setAttribute('aria-label',t(`${['Q','W','E','R'][i]} ${t(skill.name)}`));button.setAttribute('title',t(skill.name));button.classList.toggle('on-cooldown',cooldowns[i]>0);button.querySelector('.cooldown')!.textContent=t(cooldowns[i]>0?Math.ceil(cooldowns[i]).toString():'');button.style.setProperty('--cooldown',`${cooldowns[i]/skillDurations[i]*100}%`);});
-  $('#buff-bar').innerHTML=localizeHtml(M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,t])=>`<span>✨ ${esc(name)} <b>${Math.ceil(t)}s</b></span>`).join(''));
-  $('#environment-bar').innerHTML=localizeHtml(world.environmentStatus().map(e=>`<span>${e.icon??''} ${esc(e.label)} <b>${esc(String(e.value))}</b></span>`).join(''));
+  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i];setText(button.querySelector('span')!,t(skill.icon));setText(button.querySelector('small')!,t(skill.name));button.setAttribute('aria-label',t(`${['Q','W','E','R'][i]} ${t(skill.name)}`));button.setAttribute('title',t(skill.name));button.classList.toggle('on-cooldown',cooldowns[i]>0);setText(button.querySelector('.cooldown')!,t(cooldowns[i]>0?Math.ceil(cooldowns[i]).toString():''));const cd=`${cooldowns[i]/skillDurations[i]*100}%`;if(button.style.getPropertyValue('--cooldown')!==cd)button.style.setProperty('--cooldown',cd);});
+  setHtml($('#buff-bar'),localizeHtml(M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,t])=>`<span>✨ ${esc(name)} <b>${Math.ceil(t)}s</b></span>`).join('')));
+  setHtml($('#environment-bar'),localizeHtml(world.environmentStatus().map(e=>`<span>${e.icon??''} ${esc(e.label)} <b>${esc(String(e.value))}</b></span>`).join('')));
   const dark=$('#darkness');dark.hidden=!world.darknessActive()||!started;
   // Target frame and boss bar (hud-combat.ts). While a fight is near (or on a phone in the wild) the trackers fold into one chip.
   const hud=app,shown=combatHud.panels(world.enemies,world.selected,world.position.x,world.position.z,started);hud.classList.toggle('boss-on',shown.boss);hud.classList.toggle('target-on',shown.target);
@@ -299,7 +307,7 @@ function labelHeight(e:Entity){
 // Place names are pinned to one point on their building (wy above it, back towards the pond's far edge) and re-projected every
 // frame with no clamping or nudging, so they never slide around. A label that would leave the screen, sit under a HUD panel or
 // cover a more important label fades out where it is instead of moving. 'covered' is decided 8 times a second, the rest per frame.
-interface LabelAnchor {e:Entity;wy:number;back:number;centre:boolean;w:number;h:number;covered:boolean;off:boolean}
+interface LabelAnchor {e:Entity;wy:number;back:number;centre:boolean;w:number;h:number;covered:boolean;off:boolean;tf?:string}
 const labelAnchors=new Map<string,LabelAnchor>();
 let hudPanels:{left:number;right:number;top:number;bottom:number}[]=[];
 function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
@@ -350,17 +358,19 @@ const labelShows=(r:ReturnType<typeof labelRect>)=>r.front&&r.left>=2&&r.right<=
 /** Re-project the labels after each render so they move in step with the camera instead of trailing it. */
 function positionLabels(){
   const discovery=$('#discovery-progress'),point=world.screen(2.6,2.7,14.5);
-  discovery.hidden=!started||world.planet!=='home'||Math.hypot(world.position.x-2.6,world.position.z-14.5)>16||!point.front||!!modal;
+  const hide=!started||world.planet!=='home'||Math.hypot(world.position.x-2.6,world.position.z-14.5)>16||!point.front||!!modal||!!world.interior; // indoors the well is out of sight
+  if(discovery.hidden!==hide)discovery.hidden=hide; // writes only on change: each one dirties style for the whole HUD
   // Its rect comes from the left/top it is given plus the cached size (translateX(-50%) centres it): no layout read per frame.
   let pill={left:0,right:0,top:0,bottom:0};
-  if(!discovery.hidden){if(!discoverySize.w){discoverySize.w=discovery.offsetWidth;discoverySize.h=discovery.offsetHeight;}const width=discoverySize.w,left=Math.max(width/2+8,Math.min(innerWidth-width/2-8,point.x)),top=Math.max(90,Math.min(innerHeight-42,point.y));pill={left:left-width/2,right:left+width/2,top,bottom:top+discoverySize.h};discovery.style.left=left+'px';discovery.style.top=top+'px';discovery.style.bottom='auto';}
+  if(!discoveryObserver){discoveryObserver=new ResizeObserver(([e])=>{const b=e.borderBoxSize?.[0];discoverySize.w=b?b.inlineSize:(e.target as HTMLElement).offsetWidth;discoverySize.h=b?b.blockSize:(e.target as HTMLElement).offsetHeight;});discoveryObserver.observe(discovery,{box:'border-box'});}
+  if(!discovery.hidden&&discoverySize.w){const width=discoverySize.w,left=Math.max(width/2+8,Math.min(innerWidth-width/2-8,point.x)),top=Math.max(90,Math.min(innerHeight-discoverySize.h-8,point.y));pill={left:left-width/2,right:left+width/2,top,bottom:top+discoverySize.h};const l=left.toFixed(1)+'px',tp=top.toFixed(1)+'px';if(discovery.style.left!==l){discovery.style.left=l;discovery.style.bottom='auto';}if(discovery.style.top!==tp)discovery.style.top=tp;}
   // Never over the fight buttons, the stick or any other HUD panel (phones): hide it while they meet.
-  discovery.style.visibility=!discovery.hidden&&clearOfHud(pill,hudPanels)?'':'hidden';
-  combatHud.frame(world.enemies,world.selected,world.position.x,world.position.z,!started||!!modal);
+  const vis=!discovery.hidden&&discoverySize.w>0&&clearOfHud(pill,hudPanels)?'':'hidden';if(discovery.style.visibility!==vis)discovery.style.visibility=vis;
+  combatHud.frame(world.enemies,world.selected,world.position.x,world.position.z,!started||!!modal||!!world.interior);
   if(!started||modal)return;
   for(const [id,a] of labelAnchors){
     const node=labelNodes.get(id);if(!node)continue;const r=labelRect(a),off=a.covered||!labelShows(r);
-    node.style.transform=`translate(${r.x.toFixed(1)}px,${r.y.toFixed(1)}px) translate(-50%,${a.centre?'-50%':'-100%'})`;
+    const tf=`translate(${r.x.toFixed(1)}px,${r.y.toFixed(1)}px) translate(-50%,${a.centre?'-50%':'-100%'})`;if(!off&&a.tf!==tf){a.tf=tf;node.style.transform=tf;} // a hidden label stays put: no style work for it
     if(off!==a.off){a.off=off;node.toggleAttribute('data-off',off);}
   }
 }
@@ -1044,7 +1054,9 @@ async function flyTo(id:M.PlanetId){
   autopilotTarget=id;await launch();if(!ship.busy)autopilotTarget=null;
 }
 /** A quick trip home with the starship, without piloting: the old free ride back. */
-function flyHome(){if(ship.busy||flight||arriving||launchPending)return;leaveWorld();ship.launch(()=>void arrive('home'));}
+/** Set when "return home" is pressed while the ship is still coming down: it takes off again once landed. */
+let homeQueued=false;
+function flyHome(){if(ship.phase==='land'||arriving){if(!homeQueued){homeQueued=true;toast('Heading home once we land…','🚀');}return;}if(ship.busy||flight||launchPending)return;leaveWorld();ship.launch(()=>void arrive('home'));}
 function warp(then:()=>void){const flash=$('#warp-flash');flash.classList.add('show');setTimeout(()=>{then();setTimeout(()=>flash.classList.remove('show'),150);},600);}
 function enterSpace(){
   flight=new SpaceFlight(state.planet,state.discovered);flight.setAutopilot(autopilotTarget);autopilotTarget=null;spaceView.build(flight,graphics.level==='low');
@@ -1081,7 +1093,7 @@ async function arrive(id:M.PlanetId){
   try{
     if(state!==arrivingState)return;
     const arrived=await perform(id==='home'?'returnHome':'travel',{id});if(state!==arrivingState)return;
-    if(!arrived){if(journey&&flight===journey){journey.landing=null;journey.autopilot=null;}else ship.reset();return;}
+    if(!arrived){homeQueued=false;if(journey&&flight===journey){journey.landing=null;journey.autopilot=null;}else ship.reset();return;}
     await Promise.race([Promise.all(kitsFor(id).map(name=>SCENERY_KITS[name].load())),new Promise(resolve=>setTimeout(resolve,2500))]);
     if(state!==arrivingState)return;
     if(flight)exitSpace();
@@ -1089,7 +1101,8 @@ async function arrive(id:M.PlanetId){
     // Compile the new world's shaders in the background, so the first frames after landing don't hitch.
     void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{});
     const p=M.PLANETS[id];
-    ship.land(()=>{showZone(id==='home'?'Clover Village':t(p.name));floating(`${p.icon} ${t(p.name)}`,world.position.x,world.position.z,'level',1);toast(id==='home'?'Home, sweet home!':`Welcome to ${t(p.name)}! Watch out for its creatures.`,p.icon);});
+    ship.land(()=>{showZone(id==='home'?'Clover Village':t(p.name));floating(`${p.icon} ${t(p.name)}`,world.position.x,world.position.z,'level',1);toast(id==='home'?'Home, sweet home!':t('Welcome to {planet}! Watch out for its creatures.',{planet:t(p.name)}),p.icon);
+      if(homeQueued){homeQueued=false;if(state.planet!=='home')flyHome();}});
   }finally{if(state===arrivingState){arriving=false;setTimeout(()=>flash.classList.remove('show'),150);}else flash.classList.remove('show');}
 }
 function updateSpace(dt:number){
@@ -1278,4 +1291,4 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,house,lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone}});
+if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,house,lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,settings,quests,help,map,upgrades,crafting,decorations,storage}}});

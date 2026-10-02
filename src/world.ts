@@ -42,6 +42,7 @@ import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
 import {FIT,isLook,lookOf,type Fit,type LookId} from './looks.ts';
+import {part} from './part-cache.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
@@ -378,9 +379,9 @@ export class World {
   }
   /** The starship on this world's pad, with its flame and resting height, for launches and landings. */
   launchRocket(){
-    const e=this.entities.find(e=>e.kind==='travel'),ship=e?.mesh.getObjectByName('ship');
+    const e=this.entities.find(e=>e.kind==='travel'),ship=e&&part(e.mesh,'ship');
     if(!e||!ship)return null;
-    return {ship,flame:ship.getObjectByName('flame')??null,x:e.x,z:e.z,rest:(ship.userData.rest as number|undefined)??.2};
+    return {ship,flame:part(ship,'flame')??null,x:e.x,z:e.z,rest:(ship.userData.rest as number|undefined)??.2};
   }
   /** Replaces the simple rocket with the Blender pad and ship once the space kit has loaded. */
   private dressRocket(entity:Entity){
@@ -976,7 +977,8 @@ export class World {
     const d=this.state.dropped;if(d&&d.planet===this.planet)this.addEntity('dropped','Your dropped backpack','🎒',group(ball('#dd94b6',.5,0,.5),cyl('#e5bad0',.17,.17,.25,0,1)),d.x,d.z,.8);
   }
   /** CSS pixels of a world point. `front` is false behind the (perspective) camera, where x and y come out mirrored. */
-  screen(x:number,y:number,z:number) { const v=new T.Vector3(x,y,z).project(this.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2,visible:v.z<1&&Math.abs(v.x)<1.3&&Math.abs(v.y)<1.3,front:v.z<1}; }
+  private screenPoint=new T.Vector3();
+  screen(x:number,y:number,z:number) { const v=(this.screenPoint??=new T.Vector3()).set(x,y,z).project(this.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2,visible:v.z<1&&Math.abs(v.x)<1.3&&Math.abs(v.y)<1.3,front:v.z<1}; }
   /** A tap: an entity picked in screen space (or by the short raycast fallback), else a walk unless it would change nothing. */
   pointer(clientX:number,clientY:number) {
     if(this.onRemotePlayerClick&&this.remotePlayers?.size){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const meshes=[...this.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh);for(const hit of this.raycaster.intersectObjects(meshes,true)){let o:T.Object3D|null=hit.object;while(o&&!o.userData.remoteId)o=o.parent;if(o){this.destination=null;this.route=[];this.selected=null;this.onRemotePlayerClick(o.userData.remoteId);return;}}}
@@ -1488,7 +1490,7 @@ export class World {
     if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);const k=e.flash!/.14;e.mesh.scale.x*=1+k*.15;e.mesh.scale.z*=1+k*.15;e.mesh.scale.y*=1+k*.06;}
     const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as LitMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.set(e.definition?.color??'#ffffff');m.emissiveIntensity=.35;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}
     this.animateEnemy(e,dt);
-    const shell=e.mesh.getObjectByName('shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
+    const shell=part(e.mesh,'shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
   }
   update(dt:number,active:boolean,draw=true,simulateWorld=active||this.networkRole==='host') {
     this.environment??=new EnvironmentSimulation(createEnvironmentLayout(this.planet));this.enemyShots??=[];this.dynamicObstacles??=[];this.resourceTimers??=new Map();
@@ -1539,7 +1541,8 @@ export class World {
     if(this.environment!==environmentForFrame)return;
     if(simulateWorld&&this.networkRole!=='peer')this.separateCreatures();
     if(simulateWorld&&this.networkRole==='peer')for(const enemy of this.enemies)this.updateTitanAttacks(enemy,dt,false);
-    this.drawTitanAttacks();this.decals?.begin();for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);this.decals?.end();
+    // Indoors the outdoor scene is not drawn: posing every creature there was a third of the cottage's frame on slow phones.
+    if(!this.interior){this.drawTitanAttacks();this.decals?.begin();for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);this.decals?.end();}
     if(simulateWorld)for(let i=this.enemyShots.length-1;i>=0;i--){
       const shot=this.enemyShots[i],from={x:shot.mesh.position.x,z:shot.mesh.position.z};shot.mesh.position.x+=shot.vx*dt;shot.mesh.position.z+=shot.vz*dt;shot.life-=dt;
       if(this.networkRole!=='peer'){
@@ -1623,7 +1626,7 @@ export class World {
     for(const key of ['punchT','swingT','aimT','hurtT','spinT','landT','castT'] as const)this[key]=Math.max(0,(this[key]||0)-dt);
     this.walkClock=(this.walkClock||0)+dt*(this.moving?11:3);
     const o=this.walkClock,c=Math.sin(o),p=this.player;
-    const armL=p.getObjectByName('arm-left'),armR=p.getObjectByName('arm-right'),legL=p.getObjectByName('leg-left'),legR=p.getObjectByName('leg-right'),head=p.getObjectByName('head');
+    const armL=part(p,'arm-left'),armR=part(p,'arm-right'),legL=part(p,'leg-left'),legR=part(p,'leg-right'),head=part(p,'head');
     const kind=this.weaponKind??'fist',pose=this.pose;
     let twist=0,lean=0,lift=0,sx=1,sy=1,sz=1;
     // Base: walk cycle or idle breathing.
@@ -1635,7 +1638,7 @@ export class World {
       else if(kind==='gun'){if(this.aimT>0){armR.rotation.set(-1.5,0,.05);armL?.rotation.set(-1.3,0,.45);twist=.12;}else{armR.rotation.x=this.moving?-.25+c*.2:-.35;armR.rotation.z=.2;}}
       else if(kind==='rod')armR.rotation.x=this.moving?-.2+c*.2:-.3;
     }
-    const hand=p.getObjectByName('hand-right');if(hand)hand.rotation.x=kind==='gun'&&this.aimT>0?1.45:0;
+    const hand=part(p,'hand-right');if(hand)hand.rotation.x=kind==='gun'&&this.aimT>0?1.45:0;
     // Attacks: an overhead chop with the sword, recoil with a blaster, alternating punches otherwise.
     if(this.punchT>0&&armR){
       const t=1-this.punchT/.25,e=Math.sin(t*Math.PI);
