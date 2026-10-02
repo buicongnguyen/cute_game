@@ -6,6 +6,7 @@ import {TitanAttackView} from './titan-view.ts';
 import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
 import { buildScatter, disposeScatter, fallbackParts, updateScatterShadows } from './scatter.ts';
 import { OccluderFade } from './occluders.ts';
+import { INDOOR_Y } from './house.ts';
 import { bakeCoverAtlas, coverCards, tickCoverCards, type CoverAtlas } from './cover-cards.ts';
 import { buildGround } from './ground.ts';
 import { buildPond } from './pond-view.ts';
@@ -482,6 +483,8 @@ export class World {
     this.syncCrops();this.syncBeds();
   }
   build(planet: PlanetId) {
+    // A rebuild (travel, visiting, reset) always lands outdoors.
+    if(this.interior){const inside=this.interior;this.interior=null;inside.drop();}
     this.farmView?.dispose();this.farmView=undefined;this.titanView?.clear();this.joystickInput=null;
     this.disposeTree(this.root);this.scene.remove(this.root);this.root=new T.Group();this.scene.add(this.root);
     this.entities=[];this.enemies=[];this.obstacles=[];this.dynamicObstacles=[];this.plotMeshes=[];this.cropSignatures=[];this.planet=planet;
@@ -704,6 +707,8 @@ export class World {
       const tip=new T.Object3D();tip.name='rod-tip';tip.position.set(0,1.85,0);rod.add(tip);hand.add(rod);
     }
   }
+  /** The cottage interior while the explorer is inside (house-session.ts): its own scene, walkable plan, and hooks to re-home the explorer and to drop it on a rebuild. */
+  interior?:{scene:T.Scene;root:T.Group;walkable:(p:Point)=>boolean;drop:()=>void;adopt:()=>void}|null;
   /** Gear shown on the explorer while trying something on in a menu: local only, never saved or sent online. */
   tryOnGear?:SaveState['gear']|null;
   refreshPlayer() {
@@ -711,6 +716,7 @@ export class World {
     this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...gear,pet:undefined});this.player.rotation.order='YXZ';
     this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;this.playerMaterials.push(o.material);}});this.root.add(this.player);
     this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=gear.pet?this.petFor(gear.pet):new T.Group();addOutlines(this.companion,{merge:true});this.root.add(this.companion);
+    this.interior?.adopt();
   }
 
   spawnEnemy(x:number,z:number,index:number,name:string,strong=false,boss=false) {
@@ -896,7 +902,7 @@ export class World {
     }}
   receiveRemoteHit(id:string,amount:number,stun=0){const e=this.enemies.find(e=>e.id===id);if(!e||e.hp<=0||!Number.isFinite(amount)||amount<0)return false;this.damageEnemy(e,amount,stun);return true;}
   addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear);avatar.userData.remoteId=id;this.remoteRoot.add(avatar);this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
-  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose;remote.mesh.position.set(current.x,current.y??0,current.z);remote.mesh.rotation.y=current.facing??0;this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=!current.planet||current.planet===this.planet;}
+  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;remote.mesh.position.set(current.x,(current.y??0)-(indoor?INDOOR_Y:0),current.z);remote.mesh.rotation.y=current.facing??0;this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
   visualSnapshot():AvatarVisual{return {size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
     const opacity=visual?.stealth?.25:1;
@@ -969,10 +975,10 @@ export class World {
     const scale=pickScale(innerHeight,this.zoom),circles:Array<PickCircle&{entity:Entity}>=[];
     for(const e of this.entities)if(!RAYCAST_ONLY.has(e.kind)&&this.validTarget(e)){const c=pickCircle(e.kind,e.radius,(e as Enemy).boss,e.kind==='enemy'?this.modelHeight(e):0);circles.push({x:e.x,y:e.mesh.position.y+c.h,z:e.z,radius:c.r*scale,entity:e});}
     // Instanced animals have independent identities even though their body meshes are shared.
-    if(this.farmView)for(const a of this.farmView.positions()){const cow=a.kind==='cow',entity=this.animalTarget(a.uid);if(entity)circles.push({x:a.x,y:a.expired?.3:cow?.8:.3,z:a.z,radius:(a.expired?36:cow?(a.adult?70:52):(a.adult?42:32))*scale,entity});}
+    if(this.farmView&&!this.interior)for(const a of this.farmView.positions()){const cow=a.kind==='cow',entity=this.animalTarget(a.uid);if(entity)circles.push({x:a.x,y:a.expired?.3:cow?.8:.3,z:a.z,radius:(a.expired?36:cow?(a.adult?70:52):(a.adult?42:32))*scale,entity});}
     const held=circlesAt(circles,this.camera,innerWidth,innerHeight,clientX,clientY);
     this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);
-    const animalUid=this.farmView?.pickAnimal(this.raycaster);if(animalUid!==undefined&&animalUid!==null){const animal=this.animalTarget(animalUid);if(animal)return animal;}
+    const animalUid=this.interior?undefined:this.farmView?.pickAnimal(this.raycaster);if(animalUid!==undefined&&animalUid!==null){const animal=this.animalTarget(animalUid);if(animal)return animal;}
     // A ripe crop stands up toward the bed behind, whose circle can hold its top: the bed or crop under the finger wins.
     if(held[0]?.entity.kind==='plot'){const beds=this.entities.filter(e=>e.kind==='plot'&&nearRay(this.raycaster.ray,e.x,0,e.z,e.radius)).map(e=>e.mesh);const bed=beds.length?this.raycastEntity(beds):null;if(bed)return bed;}
     // Circles of a pack overlap: when several hold the tap, a real body under the finger beats the deepest circle.
@@ -1005,9 +1011,9 @@ export class World {
   private validTarget(e:Entity) {
     if(e.kind==='animal'){
       const at=e.animalUid===undefined?null:this.farmView?.positionOf(e.animalUid);if(!at||!this.state.farm?.animals.some(a=>a.uid===e.animalUid))return false;
-      e.x=at.x;e.z=at.z;e.mesh.position.set(e.x,0,e.z);return this.planet==='home';
+      e.x=at.x;e.z=at.z;e.mesh.position.set(e.x,0,e.z);return this.planet==='home'&&!this.interior;
     }
-    return this.entities.includes(e)&&e.mesh.parent===this.root&&e.mesh.visible&&(e.kind!=='enemy'||(e as Enemy).hp>0);
+    return this.entities.includes(e)&&e.mesh.parent===(this.interior?.root??this.root)&&e.mesh.visible&&(e.kind!=='enemy'||(e as Enemy).hp>0);
   }
   private interactionRange(e:Entity) { return e.kind==='enemy'?attackRange(M.weaponStats(this.state),e.radius):e.radius+1.45; }
   select(e:Entity) {
@@ -1039,7 +1045,7 @@ export class World {
     if(cached&&cached.base===base&&cached.lit===lit)return cached.list;
     const list=base.concat(light);this.creatureObstacleCache={base,lit,list};return list;
   }
-  private navigationOptions(clearance=.36,allowVoid=false):NavigationOptions{return {bounds:WORLD_BOUNDS,clearance,walkable:p=>Math.hypot(p.x,p.z)<=WORLD_BOUNDS&&(allowVoid||this.playerFlying||!this.environment||environmentWalkable(this.environment.layout,p))};}
+  private navigationOptions(clearance=.36,allowVoid=false):NavigationOptions{if(this.interior)return {bounds:WORLD_BOUNDS,clearance,gridSize:.5,walkable:this.interior.walkable};return {bounds:WORLD_BOUNDS,clearance,walkable:p=>Math.hypot(p.x,p.z)<=WORLD_BOUNDS&&(allowVoid||this.playerFlying||!this.environment||environmentWalkable(this.environment.layout,p))};}
   blocked(x:number,z:number) {return blocked({x,z},this.collisionObstacles(),this.navigationOptions());}
   walkTo(x:number,z:number,keepSelected=false) {
     const distance=Math.hypot(x,z);if(distance>WORLD_BOUNDS-1){x*=((WORLD_BOUNDS-1)/distance);z*=((WORLD_BOUNDS-1)/distance);}if(!keepSelected)this.selected=null;
@@ -1639,5 +1645,5 @@ export class World {
   }
 
 
-  render(){this.renderer.render(this.scene,this.camera);}
+  render(){this.renderer.render(this.interior?.scene??this.scene,this.camera);}
 }

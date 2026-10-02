@@ -2,6 +2,7 @@ import * as Game from './model.ts';
 import * as Helper from './helper.ts';
 import * as FarmHelper from './farm-helper.ts';
 import { huntFish } from './fish-hunting.ts';
+import * as Friends from './friends.ts';
 import { claimProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 
 export const ACTION_RULES_VERSION = 1;
@@ -100,6 +101,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'claimCaveChest': result = Game.claimCaveChest(state, now, random); break;
     case 'recoverBag': result = Game.recoverBag(state); break;
     case 'die': Game.die(state, number(p.x), number(p.z)); result = true; break;
+    case 'giveFriendGear': result = Friends.giveGear(state, string(p.friend) as Friends.FriendId, id()); break;
+    case 'takeFriendGear': result = Friends.takeGear(state, string(p.friend) as Friends.FriendId, string(p.slot)); break;
     case 'rest': if (state.planet !== 'home') return invalid(); state.hp = Game.maxHp(state); result = true; break;
     case 'reset': { const fresh=Game.newGame(state.name,state.color); fresh.settings={...state.settings}; for(const key of Object.keys(state))delete (state as unknown as Record<string,unknown>)[key]; Object.assign(state,fresh); result=true; break; }
     case 'settings': {
