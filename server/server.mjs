@@ -16,7 +16,7 @@ const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_BODY = 256 * 1024;
 const COOKIE = 'zoo_session';
 // Direct health actions use the latest durable damage and normal revision conflicts.
-const HEALTH_ACTIONS = new Set(['eat','jungleFruit','rest','equip','unequip']);
+const HEALTH_ACTIONS = new Set(['eat','jungleFruit','rest','houseUse','equip','unequip']);
 const text = (value, limit = 160) => typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, limit) : '';
 const number = (value, fallback = 0, min = -1000, max = 1000) => typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
 const sameString = (a, b) => {

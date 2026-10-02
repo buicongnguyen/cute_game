@@ -18,7 +18,7 @@ export const commandHash=value=>createHash('sha256').update(JSON.stringify(canon
 const validId=value=>typeof value==='string'&&/^[a-zA-Z0-9:_-]{1,100}$/.test(value)&&!['constructor','prototype','__proto__'].includes(value);
 const point=value=>value&&Number.isFinite(value.x)&&Number.isFinite(value.z);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
-const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','helperHarvest','helperPlant','rest','cook','cookDish','friendsArrive','setFriendPaused','setFriendAutoFeed','friendWork','friendsCatchUp','helperCatchUp','giveFriendGear','takeFriendGear']);
+const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','helperHarvest','helperPlant','rest','houseUse','cook','cookDish','friendsArrive','setFriendPaused','setFriendAutoFeed','friendWork','friendsCatchUp','helperCatchUp','giveFriendGear','takeFriendGear']);
 const farmHelperActions=new Set(['buyFarmHelper','setFarmHelperPaused','setFarmHelperAutoFeed','farmHelperCollect','farmHelperFeed','farmHelperCatchUp']);
 export function waterNodes(planet){
   return huntingPonds(planet).map(pond=>({x:pond.x,z:pond.z,r:pond.rx,water:pond.waterId}));
@@ -166,7 +166,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         if(data.type==='travel'&&!account.journeyPaid)fail(409,'Launch your starship first.');
         if(data.type==='die'){if(!peer||peer.visit||state.hp>0)fail(409,'Your adventure is still alive.');p.x=peer.pose.x;p.z=peer.pose.z;}
         result=applyGameAction(state,intent,{now,random});
-        if(data.type==='rest')account.healthBoundaryAt=now;
+        if(data.type==='rest'||data.type==='houseUse')account.healthBoundaryAt=now;
         if(data.type==='reset'){account.adventureEpoch=(account.adventureEpoch||0)+1;account.lifeEpoch=(account.lifeEpoch||0)+1;clearJourney(account);for(const key of ['resourceHits','drops','mysteryReadyAt'])delete account[key];}
         if(data.type==='die'){account.lifeEpoch=(account.lifeEpoch||0)+1;clearJourney(account);}
         if(data.type==='claimGift'&&state.hp<=0){Game.die(state,peer.pose.x,peer.pose.z);account.lifeEpoch=(account.lifeEpoch||0)+1;clearJourney(account);result={...result,died:true};}

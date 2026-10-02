@@ -19,6 +19,7 @@ import { modelIcon } from './icons.ts';
 import { toonMaterial } from './toon.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { part } from './part-cache.ts';
+import { initHouseLife } from './house-life.ts';
 
 export interface HouseDeps {
   world: World;
@@ -30,6 +31,9 @@ export interface HouseDeps {
   ownGear(): void; iconUrl(id: string): string;
   /** The mirror's Look shop (look-shop.ts); without it the mirror opens your gear like the wardrobe. */
   looks?(): void;
+  /** The diary opens today's tasks (main.ts quests). */
+  quests?(): void;
+  soundOn?(): boolean;
 }
 /** A save made inside resumes inside: this device remembers the explorer was in the cottage. */
 const INSIDE_KEY = 'zoo-garden-indoors';
@@ -105,6 +109,10 @@ export function initHouse(d: HouseDeps) {
     }
   };
   const friendList = () => friendsOf(world.state);
+  // Activities, prompts, chatter and music (house-life.ts).
+  let dimHold = 0;
+  const life = initHouseLife({ world, house, visiting: d.visiting, blocked: d.blocked, perform: d.perform, openDialog: d.openDialog, toast: d.toast, tone: d.tone, ownGear: d.ownGear, looks: d.looks, quests: d.quests, soundOn: () => d.soundOn?.() ?? true,
+    dim: seconds => { dimHold = seconds; }, route: e => world.onInteract(e) });
   const frame = (dt: number) => {
     if (!d.started()) return;
     if (!resumed) { resumed = true; if (remembered() && !d.visiting() && world.planet === 'home') enter(true); }
@@ -120,7 +128,10 @@ export function initHouse(d: HouseDeps) {
       fade = fadeTarget > fade ? Math.min(1, fade + dt * 5) : Math.max(0, fade - dt * 4);
       if (fade >= 1 && pending) { const swap = pending; pending = null; swap(); fadeTarget = 0; }
     }
-    if (fade !== veilFade) { veilFade = fade; veil.style.opacity = String(fade); veil.style.display = fade > 0 ? 'block' : 'none'; }
+    // Sleep: the veil dims for a moment, then lifts.
+    if (dimHold > 0) { dimHold -= dt; const v = Math.min(.85, Math.min(dimHold, 1.4 - dimHold + .3) * 2); if (v > fade) { veil.style.display = 'block'; veil.style.opacity = String(Math.max(0, v)); veilFade = -1; } }
+    if (fade !== veilFade && dimHold <= 0) { veilFade = fade; veil.style.opacity = String(fade); veil.style.display = fade > 0 ? 'block' : 'none'; }
+    life.frame(dt);
     if (house.inside) {
       house.frame(innerWidth / innerHeight); house.view.update(dt, world.time);
       if ((friendClock -= dt) <= 0) { friendClock = .25; house.syncFriends(friendList()); }
@@ -145,6 +156,7 @@ export function initHouse(d: HouseDeps) {
   });
   /** Taps on house things; true when handled (main.ts calls this first in world.onInteract). */
   const interact = (e: Entity) => {
+    if (life.interact(e)) return true;
     if (e.kind === 'home') { if (!d.visiting()) void d.perform('rest').then(ok => { if (ok) d.toast('Home, sweet home. Your health is restored.', '🏡'); }); enter(); return true; }
     if (e.kind === 'house-door') { leave(); return true; }
     if (e.kind === 'house-wardrobe' || e.kind === 'house-mirror') { if (d.visiting()) d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷'); else if (e.kind === 'house-mirror' && d.looks) d.looks(); else d.ownGear(); return true; }
@@ -153,7 +165,7 @@ export function initHouse(d: HouseDeps) {
     return false;
   };
   return {
-    house, interact, enter, leave, dress, label,
+    house, life, interact, enter, leave, dress, label,
     get inside() { return house.inside; },
     /** Pose height for other clients: raised while inside (see house.ts). */
     poseY: (y: number) => y + (house.inside ? INDOOR_Y : 0),

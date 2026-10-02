@@ -14,6 +14,7 @@ import { dropTree } from './dispose-tree.ts';
 import { friendStage } from './growth.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends.ts';
 import { part } from './part-cache.ts';
+import { HANGOUTS, SCHEDULE_SECONDS, assignHangouts, type DecorPlacement, type Hangout } from './house-activities.ts';
 
 const assetBase = import.meta.env?.BASE_URL ?? '/';
 export const HOUSE_FILE = `${assetBase}assets/models/house.glb`;
@@ -77,7 +78,10 @@ function fallbackPiece(p: Placement): { plain: T.BufferGeometry[]; glow: T.Buffe
 
 /** Which look kits have arrived: a friend is rebuilt when one lands (the hero, or a kit for its gear). */
 const kitStamp = () => [heroKit, wearKit, weaponKit, petKit].map(k => k.ready ? 1 : 0).join('');
-export interface FriendView { id: FriendId; group: T.Group; signature: string; spot: (typeof FRIEND_SPOTS)[number]; seed: number }
+export interface FriendView { id: FriendId; group: T.Group; signature: string; spot: (typeof FRIEND_SPOTS)[number] | Hangout; seed: number; role: string }
+/** Steam puffs over the kettle and the stove's pot, bubbles over the bath: [x, y, z, rise, spread]. */
+const PUFF_SOURCES: Array<[number, number, number, number, number]> = [[-9.5, 1.15, -.13, .7, .06], [-9.38, 1.12, 2.27, .8, .08], [-.75, .62, -6.4, .45, .55]];
+const PUFFS_EACH = 5;
 
 export class HouseView {
   scene = new T.Scene(); root = new T.Group(); hemi: T.HemisphereLight; sun: T.DirectionalLight;
@@ -88,6 +92,16 @@ export class HouseView {
   staticDraws = 0;
   doorOpen = 0; doorTarget = 0;
   private statics: T.Mesh[] = [];
+  /** Save-driven pieces (trophies, photos, paintings) merged into the same batch; see setDecor. */
+  private decor: DecorPlacement[] = []; private decorSig = '';
+  /** Live bits, one draw each: the fire's flames, steam and bubbles, and the ring under the thing you can use. */
+  flame: T.Mesh; puffs: T.InstancedMesh; highlight: T.Mesh;
+  private readonly m4 = new T.Matrix4(); private readonly q = new T.Quaternion(); private readonly v = new T.Vector3(); private readonly sc = new T.Vector3();
+  private hangouts: number[] = []; private roles: string[] = []; private schedulePhase = -1;
+  /** The world clock the schedule runs on (set each update). */
+  private clock = 0;
+  /** Friends' hangouts changed this update (every SCHEDULE_SECONDS): the session then moves their tap circles. */
+  moved = false;
   private kitBuilt = false;
   constructor() {
     this.scene.background = new T.Color('#2a1d1a');
@@ -98,6 +112,14 @@ export class HouseView {
     void b;
     this.scene.add(this.hemi, this.sun, this.sun.target, this.root);
     this.door.name = 'house-door'; this.root.add(this.door);
+    const fire = new T.ConeGeometry(.16, .42, 6); fire.translate(0, .21, 0); const core = new T.ConeGeometry(.09, .28, 5); core.translate(0, .14, .02);
+    const flames = mergeGeometries([baked(fire, '#ff8a2a'), baked(core, '#ffe36b')], false)!; fire.dispose(); core.dispose();
+    this.flame = new T.Mesh(flames, new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false })); this.flame.name = 'house-flame'; this.flame.position.set(-4.42, .12, 1.7);
+    const puff = new T.IcosahedronGeometry(.07, 0);
+    this.puffs = new T.InstancedMesh(puff, new T.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), PUFF_SOURCES.length * PUFFS_EACH); this.puffs.name = 'house-puffs'; this.puffs.frustumCulled = false;
+    const ring = new T.RingGeometry(.5, .62, 28); ring.rotateX(-Math.PI / 2);
+    this.highlight = new T.Mesh(ring, new T.MeshBasicMaterial({ color: '#fff3a0', transparent: true, opacity: .85, depthWrite: false, toneMapped: false })); this.highlight.name = 'house-highlight'; this.highlight.visible = false; this.highlight.renderOrder = 2;
+    this.root.add(this.flame, this.puffs, this.highlight);
     this.build();
   }
   /** (Re)builds the static interior; uses the kit once it has loaded. */
@@ -105,14 +127,14 @@ export class HouseView {
     for (const mesh of this.statics) { this.root.remove(mesh); mesh.geometry.dispose(); }
     this.statics = [];
     const kit = houseKit.ready ? houseKit : null, plain: T.BufferGeometry[] = shellPieces(), glow: T.BufferGeometry[] = [];
-    for (const p of FURNITURE) {
+    for (const p of [...FURNITURE, ...this.decor] as Array<Placement & { tint?: string }>) {
       const parts = kit?.parts(p.kit);
       if (!parts) { const f = fallbackPiece(p); plain.push(...f.plain); glow.push(...f.glow); continue; }
       const m = placementMatrix(p);
       for (const part of parts) {
         const world = m.clone().multiply(part.matrix), mat = part.material as T.MeshToonMaterial;
         if (glowing(mat)) glow.push(baked(part.geometry, mat.emissive.clone().lerp(mat.color, .35), world));
-        else plain.push(baked(part.geometry, mat.color, world));
+        else plain.push(baked(part.geometry, p.tint && /canvas/.test(part.name) ? p.tint : mat.color, world));
       }
     }
     const solid = mergeGeometries(plain, false); plain.forEach(g => g.dispose());
@@ -124,6 +146,8 @@ export class HouseView {
     this.buildDoor(kit);
     this.kitBuilt = !!kit;
   }
+  /** Hangs the save's trophies, photos and paintings; rebuilds the batch only when they changed. */
+  setDecor(signature: string, list: DecorPlacement[]) { if (signature === this.decorSig) return false; this.decorSig = signature; this.decor = list; this.build(); return true; }
   /** Loads the kit if needed; resolves true when a rebuild with it happened. */
   async refine() {
     if (this.kitBuilt) return false;
@@ -143,20 +167,21 @@ export class HouseView {
     panel.rotation.y = Math.PI; panel.castShadow = true; this.door.add(panel);
   }
   /** Friends in the big room, rebuilt only when someone arrives, leaves or changes clothes. */
-  syncFriends(list: Friend[]) {
-    list = list.filter(f => f.home); // only friends who reached home stand in the big room; followers are still out with the explorer
+  syncFriends(list: Friend[], time = this.clock) {
+    list = list.filter(f => f.home); // only friends who reached home are in the house; followers are still out with the explorer
     const seen = new Set<FriendId>();
+    assignHangouts(list.map(f => f.role), time, this.hangouts); this.schedulePhase = Math.floor(time / SCHEDULE_SECONDS);
     list.forEach((friend, index) => {
-      const spot = FRIEND_SPOTS[index % FRIEND_SPOTS.length], signature = JSON.stringify(friend.gear) + index + kitStamp() + friendStage(friend), known = this.friends.get(friend.id);
+      const spot = HANGOUTS[this.hangouts[index]] ?? FRIEND_SPOTS[index % FRIEND_SPOTS.length], signature = JSON.stringify(friend.gear) + index + kitStamp() + friendStage(friend), known = this.friends.get(friend.id);
       seen.add(friend.id);
-      if (known && known.signature === signature) return;
+      if (known && known.signature === signature) { known.spot = spot; return; }
       if (known) this.dropFriend(known);
       const group = buildFriend(friend.id, friend.gear, friendStage(friend)); group.userData.friendId = friend.id;
       // Friends are small and keep still: they skip the shadow pass (it would cost a draw per part).
       group.traverse(o => { o.castShadow = false; });
       group.position.set(spot.x, spot.y ?? 0, spot.z); group.rotation.y = spot.facing;
       this.root.add(group);
-      this.friends.set(friend.id, { id: friend.id, group, signature, spot, seed: index * 1.7 });
+      this.friends.set(friend.id, { id: friend.id, group, signature, spot, seed: index * 1.7, role: friend.role });
     });
     for (const view of [...this.friends.values()]) if (!seen.has(view.id)) { this.dropFriend(view); this.friends.delete(view.id); }
   }
@@ -164,15 +189,42 @@ export class HouseView {
   /** Rebuild every friend (a gear kit has loaded). */
   refreshFriends(list: Friend[]) { for (const view of this.friends.values()) view.signature = ''; this.syncFriends(list); }
   update(dt: number, time: number) {
+    this.clock = time; this.moved = false;
+    if (Math.floor(time / SCHEDULE_SECONDS) !== this.schedulePhase && this.friends.size) {
+      this.schedulePhase = Math.floor(time / SCHEDULE_SECONDS); let i = 0;
+      for (const v of this.friends.values()) this.roles[i++] = v.role;
+      this.roles.length = i; i = 0; assignHangouts(this.roles, time, this.hangouts);
+      for (const v of this.friends.values()) v.spot = HANGOUTS[this.hangouts[i++]];
+      this.moved = true;
+    }
+    // Fire flicker, steam and bubbles: a few matrices a frame, no allocation.
+    const f = 1 + Math.sin(time * 13) * .08 + Math.sin(time * 7.3) * .06; this.flame.scale.set(1 + Math.sin(time * 9) * .05, f, 1);
+    let k = 0;
+    for (const src of PUFF_SOURCES) {
+      const x = src[0], y = src[1], z = src[2], rise = src[3], spread = src[4], bath = spread > .3;
+      for (let i = 0; i < PUFFS_EACH; i++) {
+        const life = (time * .45 + i / PUFFS_EACH + x * .13) % 1, a = i * 2.4 + x, w = bath ? 1 : life;
+        this.v.set(x + Math.cos(a) * spread * w, y + life * rise, z + Math.sin(a) * spread * w * (bath ? .5 : 1));
+        const r = Math.sin(life * Math.PI) * (bath ? 1.1 : .9); this.sc.set(r, r, r);
+        this.puffs.setMatrixAt(k++, this.m4.compose(this.v, this.q, this.sc));
+      }
+    }
+    this.puffs.instanceMatrix.needsUpdate = true;
+    if (this.highlight.visible) { const p = 1 + Math.sin(time * 5) * .08; this.highlight.scale.set(p, 1, p); }
     this.doorOpen += (this.doorTarget - this.doorOpen) * (1 - Math.exp(-dt * 10));
     this.door.rotation.y = -this.doorOpen * 1.7;
     for (const v of this.friends.values()) {
-      const body = v.group.children[0], t = time + v.seed;
+      const body = v.group.children[0], t = time + v.seed, g = v.group, dx = v.spot.x - g.position.x, dz = v.spot.z - g.position.z, far = Math.hypot(dx, dz);
+      // Walk to the next hangout with a little bounce, then settle into its pose.
+      if (far > .05) { const step = Math.min(far, dt * 1.6); g.position.x += dx / far * step; g.position.z += dz / far * step; g.position.y = 0; g.rotation.y = Math.atan2(dx, dz); if (body) { body.position.y = Math.abs(Math.sin(t * 9)) * .07; body.rotation.z = 0; } continue; }
+      g.position.y = v.spot.y ?? 0;
       if (!body) continue;
       const arm = part(body, 'arm-right'), legL = part(body, 'leg-left'), legR = part(body, 'leg-right');
+      if (v.spot.pose !== 'sit') { if (legL) legL.rotation.x = 0; if (legR) legR.rotation.x = 0; body.rotation.z = 0; }
       if (v.spot.pose === 'sit') { if (legL) legL.rotation.x = -1.35; if (legR) legR.rotation.x = -1.35; body.position.y = -.55 + Math.sin(t * 2) * .02; body.rotation.z = Math.sin(t * .7) * .04; }
       else body.position.y = Math.abs(Math.sin(t * 2.2)) * .05;
       if (arm) { arm.rotation.x = v.spot.pose === 'wave' ? -2.6 : 0; arm.rotation.z = v.spot.pose === 'wave' ? .4 + Math.sin(t * 7) * .45 : .1 + Math.sin(t * 1.5) * .05; }
+      if (v.spot.pose !== 'stand') v.group.rotation.y = v.spot.facing;
       if (v.spot.pose === 'stand') v.group.rotation.y = v.spot.facing + Math.sin(t * .4) * .35;
     }
   }

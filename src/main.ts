@@ -844,7 +844,7 @@ void fishKit.load().then(()=>{if(fishKit.ready&&!fishGame)stockPonds();});
 // Gear and pet files load on demand as the explorer puts them on (see World.kitFor).
 void heroKit.load().then(()=>{if(heroKit.ready)world.refreshAvatars();});
 // The cottage interior (house-ui.ts): the door, walking in and out, friends and their Dress panel.
-const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked:uiBlocked,perform:(type,payload)=>perform(type,payload),openDialog,closeDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ownGear:inventory,looks:()=>lookShop.open(),iconUrl:id=>`${ICON_BASE}items/${id}.webp`});
+const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked:uiBlocked,perform:(type,payload)=>perform(type,payload),openDialog,closeDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ownGear:inventory,looks:()=>lookShop.open(),quests,soundOn:()=>state.settings.sound,iconUrl:id=>`${ICON_BASE}items/${id}.webp`});
 // The bedroom mirror's Look shop (look-shop.ts): body styles bought with energy, previewed like gear try-on.
 const lookShop=initLookShop({world,perform:(type,payload)=>perform(type,payload),openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),endGearTryOn:()=>{if(tryingOn){tryingOn=null;world.tryOnGear=null;}}});
 frameListeners.add(dt=>house.frame(dt));

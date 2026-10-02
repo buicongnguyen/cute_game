@@ -136,6 +136,11 @@ export const FURNITURE: Placement[] = [
   { kit: 'globe', x: 3.8, z: -6.4, block: [.45, .45] },
   { kit: 'armchair', x: 8.2, z: -2.9, rot: Math.PI * 1.15, block: [.9, .8] },
   { kit: 'floor_lamp', x: 9.3, z: -6.45, block: [.45, .45] },
+  // Activities (house-activities.ts): the trophy shelf, a radio on the dining table, the kettle, the diary on the study desk.
+  { kit: 'trophy_shelf', x: 2.25, z: -1.9, y: -.695 },
+  { kit: 'radio', x: 3.0, z: .85, y: .8, rot: -.3 },
+  { kit: 'kettle', x: -9.5, z: .05, y: .92, rot: Q },
+  { kit: 'books', x: 6.95, z: -6.5, y: .8, rot: .3 },
 ];
 
 /** Friends in the big room: two on the sofa, one warming by the fire, one waving at the door, then more standing about. */

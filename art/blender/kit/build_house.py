@@ -538,6 +538,78 @@ def build_welcome_mat():
     return piece('welcome_mat', p)
 
 
+# ------------------------------------------------------------------ house activities (src/house-activities.ts)
+def build_trophy():
+    """A small gold cup on a wooden plinth: one per boss beaten, on the living-room trophy shelf."""
+    p = [box('tr plinth', (.2, .2, .07), (0, 0, .035), M['Wood dark'], bev=.01, seg=1),
+         cyl('tr stem', .025, .08, (0, 0, .11), M['Gold'], verts=8, bev=0),
+         lathe('tr cup', [(.0, .15), (.05, .15), (.1, .22), (.11, .3), (.0, .3)], (0, 0, 0), M['Gold'], segments=12, cap_top=False),
+         torus('tr handle l', .045, .012, (-.11, 0, .24), M['Gold'], 10, 4, rot=(RAD(90), 0, 0)),
+         torus('tr handle r', .045, .012, (.11, 0, .24), M['Gold'], 10, 4, rot=(RAD(90), 0, 0))]
+    return piece('trophy', p)
+
+
+def build_trophy_shelf():
+    """A wall shelf for trophies (hangs at 1.35 m), with brackets."""
+    p = [box('ts board', (1.5, .3, .05), (0, 0, 1.35), M['Wood'], bev=.015, seg=1),
+         box('ts lip', (1.5, .03, .06), (0, -.15, 1.38), M['Wood dark'], bev=0)]
+    for i, x in enumerate((-.6, .6)):
+        p.append(box(f'ts bracket {i}', (.05, .26, .2), (x, .02, 1.23), M['Wood dark'], bev=.01, seg=1))
+    return piece('trophy_shelf', p)
+
+
+def build_photo():
+    """A little framed photo for each rescued friend (the canvas is tinted per friend in the game)."""
+    p = [box('ph frame', (.42, .04, .36), (0, 0, 1.7), M['Wood light'], bev=.015, seg=1),
+         box('ph canvas', (.32, .02, .26), (0, -.022, 1.7), M['Canvas'], bev=0),
+         sphere('ph face', .06, (0, -.03, 1.68), M['Paint sun'], segs=8, rings=5, scale=(1, .3, 1))]
+    return piece('photo', p)
+
+
+def build_painting():
+    """A painting from the easel, hung in the craft room (the canvas is tinted per painting in the game)."""
+    p = [box('pa frame', (.62, .05, .5), (0, 0, 1.65), M['Gold'], bev=.015, seg=1),
+         box('pa canvas', (.52, .02, .4), (0, -.025, 1.65), M['Canvas'], bev=0),
+         box('pa hill', (.52, .025, .12), (0, -.03, 1.51), M['Paint green'], bev=0),
+         cyl('pa sun', .06, .02, (.14, -.035, 1.75), M['Paint pink'], verts=10, bev=0, rot=(RAD(90), 0, 0))]
+    return piece('painting', p)
+
+
+def build_kettle():
+    """A round kettle for the tea buff (sits on the kitchen counter)."""
+    p = [lathe('ke body', [(.0, 0), (.12, 0), (.15, .08), (.13, .17), (.05, .2), (.0, .2)], (0, 0, 0), M['Sky paint'], segments=12),
+         cone('ke spout', .035, .14, (0, -.16, .11), M['Sky paint'], verts=6, rot=(RAD(-60), 0, 0)),
+         torus('ke handle', .08, .015, (0, 0, .24), M['Charcoal'], 12, 4, rot=(0, RAD(90), 0)),
+         sphere('ke knob', .025, (0, 0, .22), M['Charcoal'], segs=6, rings=4)]
+    return piece('kettle', p)
+
+
+def build_radio():
+    """A cosy wooden radio that plays a music box tune."""
+    p = [box('ra body', (.5, .26, .34), (0, 0, .17), M['Wood'], bev=.05, seg=2),
+         box('ra grille', (.24, .02, .2), (-.08, -.13, .17), M['Cream fabric'], bev=0),
+         cyl('ra dial', .055, .03, (.14, -.135, .2), M['Gold'], verts=12, bev=0, rot=(RAD(90), 0, 0)),
+         cyl('ra knob', .025, .03, (.14, -.135, .08), M['Charcoal'], verts=8, bev=0, rot=(RAD(90), 0, 0)),
+         cyl('ra aerial', .008, .3, (.18, .06, .46), M['Steel'], verts=4, bev=0, rot=(0, RAD(-20), 0))]
+    return piece('radio', p)
+
+
+def build_books():
+    """A diary on a stack of books, for the study desk."""
+    p = []
+    for i, (m, w, rot) in enumerate((('Book red', .3, 0), ('Book blue', .27, 8), ('Book green', .28, -6))):
+        p.append(box(f'bk book {i}', (w, .2, .05), (0, 0, .025 + i * .052), M[m], bev=.008, seg=1, rot=(0, 0, RAD(rot))))
+    p.append(box('bk diary', (.24, .18, .04), (0, 0, .176), M['Book purple'], bev=.008, seg=1, rot=(0, 0, RAD(12))))
+    p.append(box('bk ribbon', (.02, .01, .1), (.03, -.1, .14), M['Gold'], bev=0))
+    return piece('books', p)
+
+
+CONTRACT.update({
+    'trophy': (0.4, 0.25, 0.35, 360), 'trophy_shelf': (1.55, 0.35, 1.45, 200), 'photo': (0.45, 0.1, 1.9, 150),
+    'painting': (0.65, 0.1, 1.95, 150), 'kettle': (0.35, 0.5, 0.36, 400), 'radio': (0.55, 0.3, 0.65, 300), 'books': (0.35, 0.3, 0.25, 200),
+})
+
+
 BUILDERS = dict(
     sofa=lambda: build_sofa(), armchair=lambda: build_sofa('armchair', 1.0, 'Sun fabric', 'Teal fabric'),
     coffee_table=build_coffee_table, fireplace=build_fireplace, rug_round=build_rug_round,
@@ -548,7 +620,8 @@ BUILDERS = dict(
     bathtub=build_bathtub, sink=build_sink, towel_rack=build_towel_rack, desk=build_desk, globe=build_globe,
     workbench=build_workbench, easel=build_easel, yarn_basket=build_yarn_basket, door_frame=build_door_frame,
     door=build_door, doorway=build_doorway, duck=build_duck, stool=build_stool, round_table=build_round_table,
-    welcome_mat=build_welcome_mat,
+    welcome_mat=build_welcome_mat, trophy=build_trophy, trophy_shelf=build_trophy_shelf, photo=build_photo,
+    painting=build_painting, kettle=build_kettle, radio=build_radio, books=build_books,
 )
 
 

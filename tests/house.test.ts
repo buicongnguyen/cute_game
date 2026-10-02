@@ -13,6 +13,7 @@ import { HouseSession, houseFocus } from '../src/house-session.ts';
 import { HouseView, houseKit } from '../src/house-view.ts';
 import { friendsOf, giveGear, takeGear, type Friend } from '../src/friends.ts';
 import { dressHtml, wearables } from '../src/house-ui.ts';
+import { ACTIVITIES } from '../src/house-activities.ts';
 
 type Seeded = SaveState & { friends?: Friend[] };
 const seeded = (): Seeded => {
@@ -82,7 +83,8 @@ test('entering swaps in the interior and leaving restores the village, in front 
   assert.deepEqual([w.position.x, w.position.z], [HOUSE.spawn.x, HOUSE.spawn.z]);
   assert.ok(w.zoom < 1);
   const kinds = w.entities.map(e => e.kind).sort();
-  assert.deepEqual(kinds, ['friend', 'friend', 'friend', 'house-door', 'house-mirror', 'house-wardrobe']);
+  // The door, three friends and every activity (house-activities.ts; stove, workbench and globe use main.ts's own kinds).
+  assert.deepEqual(kinds, ['friend', 'friend', 'friend', 'house-door', ...ACTIVITIES.map(a => a.entity)].sort());
   assert.ok(!w.entities.includes(outdoor[0]), 'no outdoor things are tappable inside');
   // Creatures stay outdoors: nothing hostile in the interior's entities or scene.
   assert.ok(w.entities.every(e => e.kind !== 'enemy'));
@@ -159,7 +161,8 @@ test('friends sit in the big room wearing what they were given, and change at on
   giveGear(s, 'sprout', 'hat_cowboy'); view.syncFriends(friendsOf(s));
   assert.notEqual(view.friends.get('sprout')!.group, before); assert.deepEqual(gearOn('sprout'), ['hat_cowboy']);
   assert.equal(before.parent, null, 'the old look is gone');
-  for (const v of view.friends.values()) { assert.equal(v.group.parent, view.root); assert.equal(roomAt(v.group.position)?.id, 'living'); }
+  // Friends keep a schedule around the house (house-activities.ts HANGOUTS): each stands in some room.
+  for (const v of view.friends.values()) { assert.equal(v.group.parent, view.root); assert.ok(roomAt(v.group.position)); }
   // Half the explorer's size.
   assert.ok(Math.abs(view.friends.get('clover')!.group.scale.x - .42) < 1e-9);
 });
@@ -176,7 +179,8 @@ test('draw budget: the whole interior from the Blender kit is two batches (plus 
   assert.equal(view.staticDraws, 2);
   let meshes = 0, triangles = 0, casters = 0;
   view.root.traverse(o => { if (o instanceof T.Mesh) { meshes++; triangles += o.geometry.getAttribute('position').count / 3; if (o.castShadow) casters++; } });
-  assert.ok(meshes <= 3, `${meshes} meshes`); assert.ok(casters <= 2);
+  // Two batches, the door, and the live flame, puffs (one instanced draw) and highlight ring.
+  assert.ok(meshes <= 6, `${meshes} meshes`); assert.ok(casters <= 2);
   assert.ok(triangles < 60_000, `${triangles} triangles`);
   // Glow (lamps, flames, window light) is unlit and separate; everything else is one vertex-coloured toon mesh.
   const shell = view.root.getObjectByName('house-shell') as T.Mesh, glow = view.root.getObjectByName('house-glow') as T.Mesh;

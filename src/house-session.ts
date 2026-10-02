@@ -8,13 +8,15 @@
 import * as T from 'three';
 import { groundAt } from './camera-rig.ts';
 import type { Entity, World } from './world.ts';
-import { FRIEND_SPOTS, HOUSE, furnitureObstacles, useSpots, walkable } from './house.ts';
+import { FRIEND_SPOTS, HOUSE, furnitureObstacles, walkable } from './house.ts';
+import { ACTIVITIES, type ActivityId } from './house-activities.ts';
 import { HouseView, friendName } from './house-view.ts';
 import { friendsOf, type Friend, type FriendId } from './friends.ts';
 
 /** The parts of World the house touches (tests pass a real World built without WebGL). */
 export type HouseHost = Pick<World, 'scene' | 'root' | 'player' | 'companion' | 'marker' | 'ring' | 'remoteRoot' | 'fx' | 'entities' | 'obstacles' | 'position' | 'destination' | 'route' | 'selected' | 'cameraTarget' | 'cameraFocus' | 'zoom' | 'facing' | 'interior' | 'state'> & { resize(): void };
 export interface FriendEntity extends Entity { friendId: FriendId }
+export interface ActivityEntity extends Entity { activity: ActivityId }
 
 /**
  * Where the camera looks indoors: at the explorer, but slid so the view never runs far past the house
@@ -35,7 +37,11 @@ export class HouseSession {
   /** The camera's indoor target (houseFocus), followed through world.cameraFocus. */
   focus = new T.Vector3();
   /** Re-aims the camera; call once a frame while inside. */
-  frame(aspect: number) { const h = this.host; if (!h || !this.saved) return; houseFocus(h.position, aspect, h.zoom, this.focus); h.cameraFocus = this.focus; }
+  frame(aspect: number) {
+    const h = this.host; if (!h || !this.saved) return; houseFocus(h.position, aspect, h.zoom, this.focus); h.cameraFocus = this.focus;
+    // Friends walk between hangouts: their tap circles follow them (no allocation).
+    for (const e of h.entities) if (e.kind === 'friend') { const p = e.mesh.position; e.x = p.x; e.z = p.z; }
+  }
   /** Moves the explorer and its pet (rebuilt on every gear change) back under the interior. */
   private adopt() { const h = this.host; if (!h || !this.saved) return; this.view.root.add(h.player, h.companion); }
   enter(host: HouseHost) {
@@ -78,9 +84,10 @@ export class HouseSession {
       const e: Entity = { id, kind, name, icon, mesh, x, z, radius }; mesh.userData.entity = e; out.push(e); return e;
     };
     add('house-door', 'Outside', '🚪', this.view.door, HOUSE.door.x, HOUSE.door.z, .8, 'house:door');
-    for (const spot of useSpots()) {
-      const anchor = this.anchors.get(spot.use!) ?? new T.Group(); this.anchors.set(spot.use!, anchor);
-      add('house-' + spot.use, spot.use === 'wardrobe' ? 'Wardrobe' : 'Mirror', spot.use === 'wardrobe' ? '👗' : '🪞', anchor, spot.x, spot.z, .8, 'house:' + spot.use);
+    // Every activity (house-activities.ts) is tappable; stove, workbench and globe carry main.ts's own kinds.
+    for (const a of ACTIVITIES) {
+      const anchor = this.anchors.get(a.id) ?? new T.Group(); this.anchors.set(a.id, anchor); anchor.position.y = a.y;
+      (add(a.entity, a.name, a.icon, anchor, a.at.x, a.at.z, .7, 'house:' + a.id) as ActivityEntity).activity = a.id;
     }
     for (const view of this.view.friends.values()) {
       const e = add('friend', friendName(view.id), '🧑‍🌾', view.group, view.spot.x, view.spot.z, .55, 'house:friend:' + view.id) as FriendEntity;
@@ -91,7 +98,8 @@ export class HouseSession {
     return out;
   }
   private anchors = new Map<string, T.Group>();
-  private obstacles() { return [...furnitureObstacles(), ...[...this.view.friends.values()].map(v => ({ x: v.spot.x, z: v.spot.z, r: .3 }))]; }
+  /** Furniture only: friends walk between hangouts, so they are not fixed obstacles. */
+  private obstacles() { return furnitureObstacles(); }
   /** Friends shown match the save; re-run after a give or take, or a rescue. */
   syncFriends(list: Friend[] = this.host ? friendsOf(this.host.state).filter(f => f.home) : []) {
     const before = [...this.view.friends.values()].map(v => v.group);
