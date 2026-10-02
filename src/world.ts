@@ -675,7 +675,8 @@ export class World {
     const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint)??this.chibi(tint);
     c.userData.look=base===heroKit?'default':look;if(base!==heroKit&&Object.keys(FIT[look]).length)c.userData.fit=FIT[look];
     // The sprout pokes through hats and most costumes; the fairy crown and hero mask leave it showing.
-    const top=!gear.hat&&(!id||(kitDisguise&&['dz_fairy','dz_superhero'].includes(id))),leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=top;tuckEars(c,!top);
+    // A hat kept under a costume is not drawn (below), so only the costume decides then.
+    const top=id?kitDisguise&&['dz_fairy','dz_superhero'].includes(id):!gear.hat,leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=top;tuckEars(c,!top);
     if(id){if(!kitDisguise)this.simpleDisguise(c,id,disguise!.color);}
     else{
       if(gear.hat&&!this.wearKit(c,gear.hat,'head'))this.simpleHat(c,gear.hat);
@@ -733,7 +734,7 @@ export class World {
   /** A body style shown while previewing at the mirror: local only, never saved or sent online. */
   tryOnLook?:LookId|null;
   /** The cottage interior while the explorer is inside (house-session.ts): its own scene, walkable plan, and hooks to re-home the explorer and to drop it on a rebuild. */
-  interior?:{scene:T.Scene;root:T.Group;walkable:(p:Point)=>boolean;drop:()=>void;adopt:()=>void;outdoor?:Entity[]}|null;
+  interior?:{scene:T.Scene;root:T.Group;walkable:(p:Point)=>boolean;drop:()=>void;adopt:()=>void;outdoor?:Entity[];pick?:(clientX:number,clientY:number)=>Entity|null}|null;
   /** The outdoor entities, also while the interior's list stands in for them (late art must dress the real buildings). */
   get outdoorEntities(){return this.interior?.outdoor??this.entities;}
   /** Gear shown on the explorer while trying something on in a menu: local only, never saved or sent online. */
@@ -1006,6 +1007,8 @@ export class World {
   }
   /** What a tap at this pixel picks: the reference's screen-space circles, then a raycast over the few entities near the tap ray. */
   pickEntity(clientX:number,clientY:number):Entity|null {
+    // Indoors a tap picks by each thing's own screen box or its label (house-hotspots.ts), not the outdoor buildings' circles.
+    if(this.interior?.pick){const e=this.interior.pick(clientX,clientY);return e&&this.validTarget(e)?e:null;}
     const scale=pickScale(innerHeight,this.zoom),circles:Array<PickCircle&{entity:Entity}>=[];
     for(const e of this.entities)if(!RAYCAST_ONLY.has(e.kind)&&this.validTarget(e)){const c=pickCircle(e.kind,e.radius,(e as Enemy).boss,e.kind==='enemy'?this.modelHeight(e):0);circles.push({x:e.x,y:e.mesh.position.y+c.h,z:e.z,radius:c.r*scale,entity:e});}
     // Instanced animals have independent identities even though their body meshes are shared.
@@ -1566,7 +1569,7 @@ export class World {
       if(shot.life<=0){this.scene.remove(shot.mesh);shot.mesh.geometry.dispose();this.enemyShots.splice(i,1);}
     }
     const names={home:'Clover Village',forest:'Mushroom Forest',meadow:'Blue Lake Meadow',swamp:'Chomper Swamp',canyon:'Redrock Canyon'},zone=this.planet==='home'?names[zoneAt(this.position)]:PLANETS[this.planet].name;
-    if(zone!==this.lastZone){this.lastZone=zone;this.onZone(zone);}if(!this.authoritativeAction&&active&&this.planet==='home'&&zoneAt(this.position)==='home')this.state.hp=Math.min(maxHp(this.state),this.state.hp+dt*4);
+    if(zone!==this.lastZone&&!this.interior){this.lastZone=zone;this.onZone(zone);} // indoors x/z are the cottage's: no village zone bannerif(!this.authoritativeAction&&active&&this.planet==='home'&&zoneAt(this.position)==='home')this.state.hp=Math.min(maxHp(this.state),this.state.hp+dt*4);
     this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
     if(this.state.gear.pet){
       // The companion trails behind and to one side; flyers hover and flap, walkers hop.
@@ -1609,7 +1612,7 @@ export class World {
         else plant.scale.setScalar(u.target*(u.stage===3?1+Math.sin(this.time*4+u.seed)*.04:1));
         plant.rotation.z=Math.sin(this.time*(u.stage===3?2.5:1.5)+u.seed)*(u.stage===3?.06:.04);
         if(u.stage===3)ripe=true;}
-      if(ripe&&this.fx&&Math.random()<dt*2.5){const plot=g.parent;if(plot)this.fx.burst({x:plot.position.x,z:plot.position.z},{n:1,color:'#fff7a8',glow:true,size:.08,speed:1,up:2,y:1,gravity:0,life:.8});}
+      if(ripe&&this.fx&&!this.interior&&Math.random()<dt*2.5){const plot=g.parent;/* indoors fx draws in the cottage: no garden sparkles there */if(plot)this.fx.burst({x:plot.position.x,z:plot.position.z},{n:1,color:'#fff7a8',glow:true,size:.08,speed:1,up:2,y:1,gravity:0,life:.8});}
     });
   }
   private sunOffset=new T.Vector3(...SUN_OFFSET);private sunAxes:[T.Vector3,T.Vector3]|null=null;

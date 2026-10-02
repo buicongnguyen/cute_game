@@ -219,4 +219,12 @@ export const VI_GAMEPLAY: Record<string, string> = {
   "Right": "Phải",
   "You have discovered 1 planet": "Bạn đã khám phá 1 hành tinh",
   "There is no room for this catch.": "Không còn chỗ để nhận vật vừa câu được.",
+  // Toybox surprise gifts (model.ts claimGift labels, shown as toasts).
+  "Giant power!": "Sức mạnh khổng lồ!",
+  "Tiny speed!": "Tí hon mà nhanh ghê!",
+  "Energy shower!": "Mưa năng lượng!",
+  "Fully healed!": "Hồi đầy máu rồi!",
+  "Surprise explosion!": "Bùm! Nổ bất ngờ!",
+  "Toy parts!": "Linh kiện đồ chơi!",
+  "Sticky feet!": "Dính chân mất rồi!",
 };

@@ -14,7 +14,7 @@ const ROLE_LINE: Record<string, string> = {
 };
 /** "Sprout · gardening · tended 12 beds today" (or following / resting). */
 export function friendStatus(s: SaveState, id: FriendId, now = Date.now()) {
-  const f = friendOf(s, id), name = FRIENDS[id].name;
+  const f = friendOf(s, id), name = t(FRIENDS[id].name); // {name} values are inserted untranslated
   if (!f) return t('{name} is still waiting in a cage.', { name });
   if (!f.home) return t('{name} · following you home', { name });
   if (f.paused) return t('{name} · resting (paused)', { name });

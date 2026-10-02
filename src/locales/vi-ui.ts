@@ -9,6 +9,16 @@ export const VI_UI: Record<string, string> = {
   'Retrying…': 'Đang thử lại…',
   'A new version is ready': 'Đã có phiên bản mới',
   'Reload': 'Tải lại',
+  // Bed upgrades and the 24-bed garden (round 14 garden; caught by tests/vi-panels.test.mjs after the merge).
+  'Bed level {level} of {max}': 'Luống cấp {level}/{max}',
+  'Grows {percent}% faster': 'Lớn nhanh hơn {percent}%',
+  'Each level makes crops in this bed grow 10% faster.': 'Mỗi cấp giúp cây trong luống này lớn nhanh hơn 10%.',
+  'Upgrade bed (ϟ {cost})': 'Nâng cấp luống (ϟ {cost})',
+  'Fully upgraded': 'Đã nâng cấp tối đa',
+  'You need {cost} energy to upgrade this bed.': 'Bạn cần {cost} năng lượng để nâng cấp luống này.',
+  'Bed upgraded to level {level}! Crops here grow {percent}% faster.': 'Luống đã lên cấp {level}! Cây ở đây lớn nhanh hơn {percent}%.',
+  'Your garden already has the maximum {count} beds.': 'Vườn của bạn đã có tối đa {count} luống.',
+  'Your garden has the maximum {count} beds': 'Vườn đã có tối đa {count} luống',
   'Nearby places': 'Địa điểm gần đây',
   'Open character and backpack': 'Mở nhân vật và ba lô',
   'Game menu': 'Menu trò chơi',
@@ -542,4 +552,10 @@ export const VI_UI: Record<string, string> = {
   "Keep it": "Giữ lại",
   "Feed anyway": "Vẫn cho ăn",
   "Pick a crop": "Chọn nông sản",
+  // Vietnamese review pass (w14): strings that still showed in English.
+  "Interactive 3D garden. Click the ground to walk, or use arrow keys. Press F to interact with nearby objects.": "Khu vườn 3D. Nhấp vào mặt đất để đi, hoặc dùng phím mũi tên. Nhấn F để tương tác với đồ vật ở gần.",
+  "Effect": "Hiệu ứng",
+  "Livestock produces while you are away and leaves meat after two real hours. Guard dogs stay with you. Sell the products at the market or cook them at the kitchen.": "Gia súc, gia cầm vẫn cho sản phẩm khi bạn vắng mặt và để lại thịt sau hai giờ thực. Chó canh luôn ở bên bạn. Bán sản phẩm ở chợ hoặc nấu món ngon trong bếp nhé.",
+  "Hold anywhere to steer toward your finger · hold {boost} to speed up · fly close to a planet to land": "Giữ ở bất cứ đâu để lái theo ngón tay · giữ nút {boost} để bay nhanh hơn · bay gần hành tinh để hạ cánh",
+  "Hold the mouse to steer (or {keys}) · {shift} boosts · fly close to a planet to land": "Giữ chuột để lái (hoặc {keys}) · {shift} để tăng tốc · bay gần hành tinh để hạ cánh",
 };

@@ -43,6 +43,8 @@ export function giveGear(s: M.SaveState, id: FriendId, raw: M.ItemId): boolean {
   if (old && !M.addItem(s, old)) { s.bag[item] = (s.bag[item] ?? 0) + 1; return false; }
   // Giving away the explorer's only copy takes it off the explorer (the house dress panel relies on this).
   if ((s.bag[item] ?? 0) < 1) for (const k of Object.keys(s.gear) as M.GearSlot[]) if (s.gear[k] === item) delete s.gear[k];
+  // Like M.unequip: a given +health item lowers the maximum, and health must not stay above it.
+  s.hp = Math.min(s.hp, M.maxHp(s));
   f.gear[slot] = item; return true;
 }
 export function takeGear(s: M.SaveState, id: FriendId, slot: string): boolean {

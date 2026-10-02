@@ -118,8 +118,25 @@ export class HouseView {
     this.puffs = new T.InstancedMesh(puff, new T.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), PUFF_SOURCES.length * PUFFS_EACH); this.puffs.name = 'house-puffs'; this.puffs.frustumCulled = false;
     const ring = new T.RingGeometry(.5, .62, 28); ring.rotateX(-Math.PI / 2);
     this.highlight = new T.Mesh(ring, new T.MeshBasicMaterial({ color: '#fff3a0', transparent: true, opacity: .85, depthWrite: false, toneMapped: false })); this.highlight.name = 'house-highlight'; this.highlight.visible = false; this.highlight.renderOrder = 2;
-    this.root.add(this.flame, this.puffs, this.highlight);
+    // Hover (desktop): a warm glow over the thing under the mouse and a ring around its footprint, so you see what a click will use.
+    this.hoverRing = new T.Mesh(ring, new T.MeshBasicMaterial({ color: '#ffe066', transparent: true, opacity: .95, depthWrite: false, toneMapped: false })); this.hoverRing.name = 'house-hover-ring'; this.hoverRing.visible = false; this.hoverRing.renderOrder = 2;
+    const glowBox = new T.BoxGeometry(1, 1, 1); glowBox.translate(0, .5, 0);
+    this.hoverGlow = new T.Mesh(glowBox, new T.MeshBasicMaterial({ color: '#ffd84a', transparent: true, opacity: .22, depthWrite: false, toneMapped: false, blending: T.AdditiveBlending })); this.hoverGlow.name = 'house-hover-glow'; this.hoverGlow.visible = false; this.hoverGlow.renderOrder = 3;
+    this.root.add(this.flame, this.puffs, this.highlight, this.hoverRing, this.hoverGlow);
     this.build();
+  }
+  hoverRing: T.Mesh; hoverGlow: T.Mesh;
+  /** Lays a ring (ring geometry, mid radius .56) on the floor around a footprint; null hides it. */
+  placeRing(ring: T.Mesh, b: { x0: number; x1: number; z0: number; z1: number } | null) {
+    ring.visible = !!b; if (!b) return;
+    const sx = Math.max(.5, (b.x1 - b.x0) / 2 + .32) / .56, sz = Math.max(.5, (b.z1 - b.z0) / 2 + .32) / .56;
+    ring.position.set((b.x0 + b.x1) / 2, .03, (b.z0 + b.z1) / 2); ring.userData.base = [sx, sz]; ring.scale.set(sx, 1, sz);
+  }
+  private pulseRing(ring: T.Mesh, p: number) { if (!ring.visible) return; const base = ring.userData.base as number[] | undefined; ring.scale.set((base?.[0] ?? 1) * p, 1, (base?.[1] ?? 1) * p); }
+  /** The hover glow and ring around a box (house-hotspots.ts), or off. */
+  setHover(b: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number } | null) {
+    this.placeRing(this.hoverRing, b); this.hoverGlow.visible = !!b; if (!b) return;
+    this.hoverGlow.position.set((b.x0 + b.x1) / 2, b.y0, (b.z0 + b.z1) / 2); this.hoverGlow.scale.set(b.x1 - b.x0 + .08, b.y1 - b.y0 + .06, b.z1 - b.z0 + .08);
   }
   /** (Re)builds the static interior; uses the kit once it has loaded. */
   build() {
@@ -209,7 +226,8 @@ export class HouseView {
       }
     }
     this.puffs.instanceMatrix.needsUpdate = true;
-    if (this.highlight.visible) { const p = 1 + Math.sin(time * 5) * .08; this.highlight.scale.set(p, 1, p); }
+    const pulse = 1 + Math.sin(time * 5) * .08; this.pulseRing(this.highlight, pulse); this.pulseRing(this.hoverRing, pulse);
+    if (this.hoverGlow.visible) (this.hoverGlow.material as T.MeshBasicMaterial).opacity = .18 + Math.sin(time * 6) * .07;
     this.doorOpen += (this.doorTarget - this.doorOpen) * (1 - Math.exp(-dt * 10));
     this.door.rotation.y = -this.doorOpen * 1.7;
     for (const v of this.friends.values()) {

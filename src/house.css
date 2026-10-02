@@ -5,6 +5,23 @@ body.indoors .home-button:not(.house-out) { display: none; }
 body.indoors .house-out { display: flex; }
 /* Indoors there is nothing to fight and no outdoor map. */
 body.indoors #hud .minimap, body.indoors #hud .skills { display: none; }
+/* Nor outdoor quests and bounties ("Wanted: Grey Wolf" in the bedroom): the study's diary has today's tasks. Buffs and quick eat stay. */
+body.indoors #hud .tracker-panels, body.indoors #tracker-chip { display: none; }
+/* The cottage's own control hint replaces the outdoor one ("Space attack"); phones hide both, as before. */
+body:not(.indoors) .house-hint, body.indoors .control-hint:not(.house-hint) { display: none; }
+/* Indoor labels sit on the thing they name (house-hotspots.ts): a soft pill so they read over furniture; the hovered one lights up. */
+body.indoors .world-label:not(.plot-label) { padding: 2px 8px 2px 5px; border-radius: 999px; background: rgba(58, 36, 51, .42); -webkit-text-stroke: 2px #3a2433; }
+body.indoors .world-label.hover:not(.plot-label) { background: rgba(255, 196, 40, .95); color: #3a2433; -webkit-text-stroke: 0; box-shadow: 0 0 0 2px #fff, 0 4px 12px rgba(255, 190, 40, .55); }
+body.indoors .world-label.near:not(.plot-label):not(.hover) { background: rgba(58, 36, 51, .66); }
+/* Indoor stores (house-stores.ts): the purpose line under the title says what this place is and where its village twin is. */
+.store-purpose { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 8px 12px; border-radius: 14px; background: linear-gradient(180deg, #fff8e4, #ffeec4); border: 2px solid #fff; box-shadow: var(--lift); color: #6b4a1c; font-size: 13px; font-weight: 800; line-height: 1.25; }
+.store-purpose > span:first-child { flex: none; font-size: 22px; }
+/* The study globe plans trips; take-off, wild walks and errands to village buildings start outside. */
+#dialog[data-station="travel"] :is([data-action="launch"], [data-action="wild"], [data-action="go"], [data-action="fly-to"]) { display: none; }
+@media (max-width: 600px), (max-height: 520px) {
+  body.indoors .world-label:not(.plot-label), body.indoors .world-label:not(.plot-label) > span { font-size: 10px; }
+  body.indoors .world-label:not(.plot-label) { padding: 1px 6px 1px 4px; -webkit-text-stroke: 1.5px #3a2433; }
+}
 
 .dress-panel { display: flex; flex-direction: column; gap: 8px; }
 .dress-head { display: flex; align-items: center; gap: 12px; }

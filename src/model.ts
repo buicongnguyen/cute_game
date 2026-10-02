@@ -481,10 +481,17 @@ export function kitPrice(s: SaveState): number | null { const beds = s.plots.len
 /** The shop's price for an item now; null = not on sale (a bed kit at the cap). */
 export function shopPrice(s: SaveState, id: ItemId): number | null { return id === 'plot_kit' ? kitPrice(s) : ITEMS[id]?.price ?? null; }
 function buyPlotKit(s: SaveState) { const price = kitPrice(s); if (price === null || s.energy < price || !addItem(s, 'plot_kit')) return false; s.energy -= price; recordEvent(s, 'craft'); return true; }
+/** Clothes: drawn on the explorer only without a disguise. */
+export const WEARABLE_SLOTS: readonly GearSlot[] = ['hat', 'outfit', 'boots'];
 export function equip(s: SaveState, raw: ItemId) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item?.slot || !s.bag[id])
-    return false; s.gear[item.slot] = id; s.hp = Math.min(s.hp, maxHp(s)); if (item.slot === 'weapon' || item.slot === 'disguise')
+    return false; s.gear[item.slot] = id;
+    // A disguise covers clothes (World.avatar draws none under it): putting clothes on takes it off, as the try-on
+    // preview shows (try-on.ts previewGear). Otherwise the equipped hat stayed invisible under the costume.
+    if (WEARABLE_SLOTS.includes(item.slot)) delete s.gear.disguise;
+    s.hp = Math.min(s.hp, maxHp(s)); if (item.slot === 'weapon' || item.slot === 'disguise')
     s.counters.equipped++; return true; }
-export function unequip(s: SaveState, slot: GearSlot) { if (!s.gear[slot])
+// Own slots only: 'constructor' or '__proto__' from a client read Object.prototype and "succeeded" on the server.
+export function unequip(s: SaveState, slot: GearSlot) { if (!Object.hasOwn(s.gear, slot) || !s.gear[slot])
     return false; delete s.gear[slot]; s.hp = Math.min(s.hp, maxHp(s)); return true; }
 export function eat(s: SaveState, raw: ItemId, now = Date.now()) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item || !item.heal && !item.buff || !item.buff && s.hp >= maxHp(s) || !removeItem(s.bag, id))
     return false; if (item.heal)
