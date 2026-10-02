@@ -19,6 +19,10 @@ export interface Friend {
   paused?: boolean;
   /** The farmer only feeds animals when the player turns this on (off by default, like the pen robot's autoFeed). */
   autoFeed?: boolean;
+  /** Jobs done since the rescue (growth.ts counts them); older saves start from today's count. */
+  jobs?: number;
+  /** Growth stage reached (0 = half the explorer's height, 1 = 0.75, 2 = 0.8). It never goes back. */
+  grown?: number;
   /** Work done "today" (UTC day number `day`), for the status line. */
   day?: number; done?: number;
   /** The cook's odd items waiting for a partner (0 or 1 per item), so "half, rounded down" holds across batches. */
@@ -75,6 +79,9 @@ export function parseFriends(raw: unknown): Friend[] {
     if (r.gear && typeof r.gear === 'object' && !Array.isArray(r.gear))
       for (const [slot, item] of Object.entries(r.gear)) if (typeof item === 'string' && friendSlot(item) === slot) f.gear[slot as FriendSlot] = canonicalItem(item);
     const day = count(r.day, 1e7); if (day) { f.day = day; f.done = count(r.done, 1e6); }
+    // Growth (growth.ts): saves from before it have no counter, so they start from today's work.
+    const jobs = r.jobs === undefined ? f.done ?? 0 : count(r.jobs, 1e9); if (jobs) f.jobs = jobs;
+    const grown = count(r.grown, 2); if (grown) f.grown = grown;
     if (id === 'pepper') { f.carry = smallCounts(r.carry, 1); f.pot = smallCounts(r.pot, 3); }
     out.push(f);
   }

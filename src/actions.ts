@@ -2,6 +2,7 @@ import * as Game from './model.ts';
 import * as Helper from './helper.ts';
 import * as FarmHelper from './farm-helper.ts';
 import * as Friends from './friends.ts';
+import { buyLook, wearLook } from './looks.ts';
 import { huntFish } from './fish-hunting.ts';
 import { claimProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 
@@ -94,6 +95,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
       // Another worker (the robot, the player, a friend) getting there first is normal: report it quietly, not as an error.
       result = Friends.friendWork(state, string(p.id, 20) as Friends.FriendId, task as Friends.FriendTask, now) ?? { kind: task.kind, raw: {}, cooked: {}, skipped: true }; break;
     }
+    case 'buyLook': result = buyLook(state, string(p.id, 20)); break;
+    case 'wearLook': result = wearLook(state, string(p.id, 20)); break;
     case 'friendsCatchUp': result = Friends.friendsCatchUp(state, now); break;
     case 'giveFriendGear': result = Friends.giveGear(state, string(p.friend, 20) as Friends.FriendId, id()); break;
     case 'takeFriendGear': result = Friends.takeGear(state, string(p.friend, 20) as Friends.FriendId, string(p.slot, 10)); break;

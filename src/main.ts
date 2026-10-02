@@ -64,6 +64,8 @@ import { friendPanel, lockedHint, RESCUE_LINES } from './friend-ui.ts';
 import './language.css';
 import './house.css';
 import { initHouse } from './house-ui.ts';
+import { initLookShop } from './look-shop.ts';
+import { GROWTH } from './growth.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 const esc = (value: string) => value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
@@ -631,6 +633,7 @@ const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()
     for(const [item,n] of Object.entries(r.cooked))floating('+'+n+' '+t(M.ITEMS[item]?.name??item),postFor(id).x,postFor(id).z,'item',1);
     if(Object.keys(r.cooked).length)tone('pop');
   },
+  grew(id,stage){toast(t('{name} grew up! Now {share} of your height.',{name:FRIENDS[id].name,share:String(GROWTH[stage].height)}),'🌱');tone('success');},
   arrived(ids){toast(t('{names} reached Clover Village and went to work!',{names:ids.map(id=>FRIENDS[id].name).join(', ')}),'🏡');void friendsCatchUp();}});
 frameListeners.add(dt=>crew.update(dt));
 function friendDialog(id:FriendId){openDialog('friend',FRIENDS[id].name,friendPanel(world.state,id),'RESCUED FRIEND',{garden:'🌱',farm:'🐄',cook:'🍳'}[FRIENDS[id].role]);}
@@ -808,7 +811,9 @@ void fishKit.load().then(()=>{if(fishKit.ready&&!fishGame)stockPonds();});
 // Gear and pet files load on demand as the explorer puts them on (see World.kitFor).
 void heroKit.load().then(()=>{if(heroKit.ready)world.refreshAvatars();});
 // The cottage interior (house-ui.ts): the door, walking in and out, friends and their Dress panel.
-const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked:uiBlocked,perform:(type,payload)=>perform(type,payload),openDialog,closeDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ownGear:inventory,iconUrl:id=>`${ICON_BASE}items/${id}.webp`});
+const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked:uiBlocked,perform:(type,payload)=>perform(type,payload),openDialog,closeDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ownGear:inventory,looks:()=>lookShop.open(),iconUrl:id=>`${ICON_BASE}items/${id}.webp`});
+// The bedroom mirror's Look shop (look-shop.ts): body styles bought with energy, previewed like gear try-on.
+const lookShop=initLookShop({world,perform:(type,payload)=>perform(type,payload),openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),endGearTryOn:()=>{if(tryingOn){tryingOn=null;world.tryOnGear=null;}}});
 frameListeners.add(dt=>house.frame(dt));
 world.onInteract=async(e)=>{
   if(!started||uiBlocked())return;tone();if(house.interact(e))return;if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
@@ -933,7 +938,7 @@ function tryOn(id:M.ItemId){
   if(tryingOn===id){endTryOn();}else{tryingOn=id;world.tryOnGear=previewGear(state.gear,id);world.refreshPlayer();$('#dialog-layer').classList.add('trying-on');world.fx?.burst(world.position,{n:10,color:['#ffe66d','#ffffff'],glow:true,speed:2.5,up:5});}
   if(modal==='shop')shop();else if(modal==='bag')inventory();
 }
-function endTryOn(){if(!tryingOn&&!world.tryOnGear)return;tryingOn=null;world.tryOnGear=null;$('#dialog-layer').classList.remove('trying-on');world.refreshPlayer();}
+function endTryOn(){if(!tryingOn&&!world.tryOnGear&&!world.tryOnLook)return;tryingOn=null;world.tryOnGear=null;world.tryOnLook=null;$('#dialog-layer').classList.remove('trying-on');world.refreshPlayer();}
 function basicAttack(e?:Enemy){
   if(!started||uiBlocked()||visiting||combatTimers.attackCooldown>0)return;
   prepareCombatWeapon();
@@ -1262,4 +1267,4 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,house,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone}});
+if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,house,lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone}});
