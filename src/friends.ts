@@ -122,6 +122,7 @@ export function nextFriendTask(s: M.SaveState, id: FriendId, from: { x: number; 
 /** Cooks half of what the cook gathered (with the carried odd ones); returns what was cooked, the rest stays raw. */
 export function cookHalf(s: M.SaveState, f: Friend, gathered: Record<string, number>): Record<string, number> {
   const cooked: Record<string, number> = {}; f.carry ??= {}; f.pot ??= {};
+  if (!M.kitchenOpen(s)) return cooked; // a locked kitchen (Normal/Hard below level 14): she only gathers
   const add = (id: string, n: number) => { if (n > 0) cooked[id] = (cooked[id] ?? 0) + n; };
   for (const [id, n] of Object.entries(gathered)) {
     const dish = M.FARM_DISHES.some(d => id in d.materials), cookable = dish || Object.hasOwn(M.ITEMS, `cooked_${id}`);

@@ -2,7 +2,8 @@ import { t, localizeHtml } from './i18n.ts';
 import { ITEMS, type ItemDef, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
 import { farmHelperRow } from './farm-helper-ui.ts';
-import { BREEDS, coatOf, ANIMALS, ANIMAL_KINDS, ANIMAL_LIFESPAN_MS, productCount, productCapacity, productDuration, speciesPenCost, FARM_DISHES, PEN_BUILD, expired, lifetimeLeft, productFor, canBuildPen, penBuilt, animalCount, canBuyAnimal, canCookDish, canFeed, farmOf, playerFeedCrop, growth, isAdult, penCapacity, penExpandCost, productProgress, productReady, timeLeft, type Animal, type Collected } from './farm.ts';
+import { productPace } from './difficulty.ts';
+import { BREEDS, coatOf, ANIMALS, ANIMAL_KINDS, ANIMAL_LIFESPAN_MS, productCount, productCapacity, productDuration, speciesPenCost, FARM_DISHES, PEN_BUILD, expired, lifetimeLeft, productFor, canBuildPen, penBuilt, animalCount, canBuyAnimal, canCookDish, canFeed, farmOf, playerFeedCrop, priceOf, growth, isAdult, penCapacity, penExpandCost, productProgress, productReady, timeLeft, type Animal, type Collected } from './farm.ts';
 
 /**
  * The animal pen's panel and the kitchen's farm recipes, as HTML (main.ts opens them and routes the buttons).
@@ -59,8 +60,8 @@ export function penHtml(s: SaveState, ui: FarmUi, now = Date.now()) {
   }).join('') || '<p class="empty-state">The farm is empty. Choose a new friend below.</p>';
   const shop = ANIMAL_KINDS.map(k => {
     const d = ANIMALS[k], check = canBuyAnimal(s, k), product = ITEMS[d.product];
-    const label = check === 'level' ? `🔒 ${t('Level {level}', { level: d.level })}` : check === 'full' ? 'Pen full' : t('Buy · ϟ {price}', { price: d.price });
-    const description = k === 'dog' ? t('Protects ripe crops from theft. No feeding, products or lifespan limit.') : t('Grows up in {time}, then gives {product} every {interval}.', { time: seconds(d.growMs), product: `${ui.mini(d.product)} ${t(product.name).toLowerCase()}`, interval: seconds(d.productMs) });
+    const label = check === 'level' ? `🔒 ${t('Level {level}', { level: d.level })}` : check === 'full' ? 'Pen full' : t('Buy · ϟ {price}', { price: priceOf(s, k) });
+    const description = k === 'dog' ? t('Protects ripe crops from theft. No feeding, products or lifespan limit.') : t('Grows up in {time}, then gives {product} every {interval}.', { time: seconds(d.growMs), product: `${ui.mini(d.product)} ${t(product.name).toLowerCase()}`, interval: seconds(d.productMs * productPace(s)) });
     return `<div class="crop-row garden-row farm-shop-row${check === 'level' ? ' locked' : ''}"><span class="crop-art">${d.babyIcon}</span><div><strong>${t(d.baby)}${d.baby !== d.name ? ' → ' + t(d.name) : ''}</strong><p>${description}</p>${k === 'dog' ? '' : `<p class="muted">${t('Lifespan: {time}. Collect meat when it ends.', { time: seconds(ANIMAL_LIFESPAN_MS) })}</p><div class="chips"><span class="chip chip-xp">✨ ${t('{count} XP each', { count: d.xp })}</span><span class="chip chip-energy">${ui.mini(d.product)} ϟ ${product.sell}</span></div>`}</div><button class="${check === 'ok' ? 'primary' : 'soft-button'}" data-action="buy-animal" data-kind="${k}" ${check === 'ok' || check === 'energy' ? '' : 'disabled'}>${label}</button></div>`;
   }).join('');
   const cost = penExpandCost(s);

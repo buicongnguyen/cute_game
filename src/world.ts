@@ -14,6 +14,7 @@ import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, R
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { keepAlive } from './dispose-tree.ts';
+import { creatureScale } from './difficulty.ts';
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
 import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
@@ -784,7 +785,8 @@ export class World {
   spawnSpecies(type:string,x:number,z:number,index:number){
     const def=ENEMY_TYPES[type];if(!def)return null;
     const zone=this.planet==='home'?zoneAt({x,z}):this.planet,difficulty=({home:0,forest:1,meadow:1,swamp:2,canyon:3,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,cloud:5,shadow:6} as Record<string,number>)[zone],scale=[1,1,1.7,2.6,3.6,4.8,6.2][difficulty];
-    const health=Math.round(def.hp*scale*(def.titan?7:def.boss&&type!=='dragon'?2.6:1)),damage=def.damage*scale*(def.titan?1.6:def.boss?1.35:1),xp=Math.round(def.xp*(.6+scale*.4));
+    // Hard difficulty (difficulty.ts creatureScale): the same multipliers the server applies to its roster.
+    const hard=creatureScale(this.state),health=Math.round(def.hp*scale*(def.titan?7:def.boss&&type!=='dragon'?2.6:1)*hard.hp),damage=def.damage*scale*(def.titan?1.6:def.boss?1.35:1)*hard.damage,xp=Math.round(def.xp*(.6+scale*.4));
     const model=this.enemyModel(type,def);
     const e=this.addEntity('enemy',def.name,def.boss?'👑':'⚔️',model,x,z,def.radius,index) as Enemy;
     Object.assign(e,{type,definition:def,hp:health,maxHp:health,baseMaxHp:health,baseDamage:damage,damage,xp,level:difficulty*3-2+(def.boss?6:0),homeX:x,homeZ:z,cooldown:0,respawn:0,boss:def.boss,stun:0,phase:'idle',phaseTime:0,route:[],routeTime:0,lift:0,liftVelocity:0,statuses:{}});this.enemies.push(e);return e;

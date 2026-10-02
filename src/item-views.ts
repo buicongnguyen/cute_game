@@ -14,7 +14,7 @@ export function produceLots(s: M.SaveState) {
   const lots = (Object.keys(s.bag) as M.ItemId[])
     .filter(id => (PRODUCE_TYPES as readonly string[]).includes(M.ITEMS[id]?.type) && M.ITEMS[id].sell > 0)
     .map(id => ({ id, n: M.looseQuantity(s, id) })).filter(l => l.n > 0);
-  return { lots, total: lots.reduce((sum, l) => sum + l.n * M.ITEMS[l.id].sell, 0) };
+  return { lots, total: lots.reduce((sum, l) => sum + l.n * M.sellPrice(s, l.id), 0) };
 }
 
 /** Sells every produce stack; returns the energy gained (0 when there was nothing to sell). */

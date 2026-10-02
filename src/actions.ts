@@ -119,6 +119,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'settings': {
       const settings = p.settings;
       if (settings && typeof settings === 'object' && !Array.isArray(settings)) for (const key of ['sound', 'lowGraphics', 'movePad', 'placeBeds'] as const) if (typeof (settings as Record<string, unknown>)[key] === 'boolean') state.settings[key] = (settings as Record<string, boolean>)[key];
+      if (settings && typeof settings === 'object' && Game.isDifficulty((settings as Record<string, unknown>).difficulty)) state.settings.difficulty = (settings as { difficulty: Game.Difficulty }).difficulty;
       if(settings&&typeof settings==='object'&&['left','right'].includes((settings as Record<string,string>).joystickSide))state.settings.joystickSide=(settings as {joystickSide:'left'|'right'}).joystickSide;
       if (p.name !== undefined) state.name = string(p.name, 20).trim() || state.name;
       if (p.color !== undefined) { if (!Game.COLORS.includes(string(p.color))) return invalid(); state.color = string(p.color); }

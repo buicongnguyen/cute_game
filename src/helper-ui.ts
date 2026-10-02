@@ -25,7 +25,7 @@ export function helperPanel(s: M.SaveState, ui: HelperUi) {
       + `<button class="${short ? 'soft-button' : 'primary'} wide" data-action="helper-buy" ${short ? 'disabled' : ''}>Hire Bolt (ϟ ${HELPER_COST})</button>`
       + (short ? `<p class="muted center">You need ${short} more energy.</p>` : '');
   }
-  const crops = Object.entries(M.CROPS).filter(([, c]) => c.level <= s.level);
+  const crops = Object.entries(M.CROPS).filter(([id]) => M.cropLevel(s, id) <= s.level);
   const seedButton = (id: string, label: string, extra = '') => `<button role="radio" aria-checked="${h.seed === id}" class="${h.seed === id ? 'on' : ''}" data-action="helper-seed" data-item="${id}">${label}${extra}</button>`;
   return `${picture}<div class="settings-row"><div><strong>Helper at work</strong><small>Off: Bolt rests beside the garden</small></div><button class="toggle ${h.paused ? '' : 'on'}" role="switch" aria-checked="${!h.paused}" aria-label="Helper at work" data-action="helper-pause"></button></div>`
     + `<div class="settings-row helper-seed-row"><div><strong>Seed to plant</strong><small>Same as before: each bed gets what grew there last, otherwise the cheapest seed you have</small></div></div>`

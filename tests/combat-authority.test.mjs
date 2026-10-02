@@ -188,3 +188,10 @@ test('online lava burns ordinary ground creatures but preserves the burrowing la
  const worm=f.spawn('lavaworm',pool.x,pool.z),slime=f.spawn('magmaslime',pool.x,pool.z),hp=worm.hp;t.mock.timers.tick(50);
  assert.equal(worm.hp,hp);assert.ok(slime.hp<slime.maxHp);
 });
+
+test('Hard difficulty: the room host save gives server creatures +25% health and +20% damage, Easy keeps the roster',async t=>{
+ const roster=enemyRoster('home').find(e=>e.type==='mushroom');
+ const hard=await fixture(t,{profile:p=>{p.settings.difficulty='hard';}}),h=hard.spawn('mushroom');
+ assert.equal(h.maxHp,Math.round(roster.baseMaxHp*1.25));assert.equal(h.hp,h.maxHp);assert.ok(Math.abs(h.damage-roster.baseDamage*1.2)<1e-9);
+ const easy=await fixture(t),e=easy.spawn('mushroom');assert.equal(e.maxHp,roster.baseMaxHp);assert.equal(e.damage,roster.baseDamage);
+});

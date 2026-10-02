@@ -516,4 +516,12 @@ export const VI_UI: Record<string, string> = {
   "Your health is already full.": "Máu của bạn đã đầy rồi.",
   "Try on": "Mặc thử",
   "Trying on": "Đang mặc thử",
+  "Difficulty": "Độ khó",
+  "Easy": "Dễ",
+  "Normal": "Thường",
+  "Hard": "Khó",
+  "The relaxed economy: every price and creature as it always was.": "Kinh tế thoải mái: giá cả và sinh vật giữ nguyên như trước.",
+  "A slower economy: kitchen at level 14, leaner fruit trees, dearer livestock.": "Kinh tế chậm hơn: bếp mở ở cấp 14, cây ăn quả ít lời hơn, vật nuôi đắt hơn.",
+  "Normal’s economy, and creatures with more health and harder hits.": "Kinh tế như mức Thường, và sinh vật nhiều máu hơn, đánh đau hơn.",
+  "Unlocks at level {level}": "Mở khóa ở cấp {level}",
 };

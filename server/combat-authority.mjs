@@ -107,7 +107,9 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       let enemy=s.enemies.get(roster.id);
       if(!enemy){
         if(!roster.dormant&&(Math.hypot(raw.x,raw.z)<22||s.planet==='home'&&zoneAt(raw)!==roster.zone))continue;
-        enemy={...roster,roster,home:{x:raw.x,z:raw.z},x:raw.x,z:raw.z,hp:roster.dormant?0:roster.baseMaxHp,maxHp:roster.baseMaxHp,damage:roster.baseDamage,respawn:roster.dormant?999999:0,deadUntil:roster.dormant?Infinity:0,generation:0,contributors:new Map(),changedAt:now,statuses:{},shots:[]};s.enemies.set(roster.id,enemy);
+        // Hard difficulty: the room host's save (whose browser spawns the creatures) sets health and damage (difficulty.ts).
+        const scale=Game.creatureScale(peers.get(room.host)?.account.profile),baseMaxHp=Math.round(roster.baseMaxHp*scale.hp),baseDamage=roster.baseDamage*scale.damage;
+        enemy={...roster,roster,baseMaxHp,baseDamage,home:{x:raw.x,z:raw.z},x:raw.x,z:raw.z,hp:roster.dormant?0:baseMaxHp,maxHp:baseMaxHp,damage:baseDamage,respawn:roster.dormant?999999:0,deadUntil:roster.dormant?Infinity:0,generation:0,contributors:new Map(),changedAt:now,statuses:{},shots:[]};s.enemies.set(roster.id,enemy);
       }
       const elapsed=Math.max(.1,(now-enemy.changedAt)/1000),maximum=(ENEMY_TYPES[roster.type].speed+16)*elapsed+2;
       if(dist(enemy,raw)<=maximum){enemy.x=raw.x;enemy.z=raw.z;}
@@ -146,7 +148,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   }
   function hit(peer,enemy,impact,execute=false,hazard=false){
     const room=rooms.get(peer.room);if(!room||peer.visit||enemy.hp<=0||enemy.pending)return 0;
-    if(!enemy.scaled&&enemy.boss){const players=[...room.members].map(id=>peers.get(id)).filter(p=>p&&!p.visit&&dist(p.pose,enemy)<28),level=Math.max(...players.map(p=>p.account.profile.level),1),difference=Math.max(0,level-enemy.roster.level);enemy.maxHp=Math.round(enemy.roster.baseMaxHp*(1+.6*Math.max(0,players.length-1))*(enemy.type==='dragon'?1:1+difference*.12));enemy.hp=enemy.maxHp;enemy.damage=enemy.roster.baseDamage*(enemy.type==='dragon'?1:(1+difference*.07)*(1+.1*Math.max(0,players.length-1)));enemy.scaled=true;}
+    if(!enemy.scaled&&enemy.boss){const players=[...room.members].map(id=>peers.get(id)).filter(p=>p&&!p.visit&&dist(p.pose,enemy)<28),level=Math.max(...players.map(p=>p.account.profile.level),1),difference=Math.max(0,level-enemy.roster.level);enemy.maxHp=Math.round(enemy.baseMaxHp*(1+.6*Math.max(0,players.length-1))*(enemy.type==='dragon'?1:1+difference*.12));enemy.hp=enemy.maxHp;enemy.damage=enemy.baseDamage*(enemy.type==='dragon'?1:(1+difference*.07)*(1+.1*Math.max(0,players.length-1)));enemy.scaled=true;}
     const control=hitControl(enemy.boss,impact.stun||0);
     if(!hazard&&!execute&&enemy.type==='magmaturtle')impact={...impact,amount:impact.amount*(enemy.phase==='recover'?2:.12)};
     const dealt=Math.min(enemy.hp,Math.max(0,impact.amount));enemy.contributors.set(peer.account.id,Date.now());enemy.lastHitAt=Date.now();enemy.hp-=dealt;enemy.stun=Math.max(enemy.stun||0,control.stun);
@@ -248,7 +250,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
         if(enemy.hp>0&&!enemy.pending&&enemy.phase==='return'&&now-(enemy.lastHitAt||0)>4000){enemy.hp=Math.min(enemy.maxHp,enemy.hp+enemy.maxHp*.3*dt);if(enemy.hp===enemy.maxHp)enemy.scaled=false;}
         updateCast(room,enemy,dt,now);
         enemy.stun=Math.max(0,(enemy.stun||0)-dt);for(const key of STATUS)enemy.statuses[key]=Math.max(0,(enemy.statuses[key]||0)-dt);
-        if(enemy.hp<=0&&!enemy.pending&&Number.isFinite(enemy.deadUntil)){enemy.respawn=Math.max(0,(enemy.deadUntil-now)/1000);if(enemy.respawn===0&&active.every(p=>dist(p.pose,enemy.home)>22)){enemy.x=enemy.home.x;enemy.z=enemy.home.z;enemy.hp=enemy.maxHp=enemy.roster.baseMaxHp;enemy.damage=enemy.roster.baseDamage;enemy.scaled=false;enemy.contributors.clear();enemy.generation++;room.killed.delete(enemy.id);health(room,enemy);}}
+        if(enemy.hp<=0&&!enemy.pending&&Number.isFinite(enemy.deadUntil)){enemy.respawn=Math.max(0,(enemy.deadUntil-now)/1000);if(enemy.respawn===0&&active.every(p=>dist(p.pose,enemy.home)>22)){enemy.x=enemy.home.x;enemy.z=enemy.home.z;enemy.hp=enemy.maxHp=enemy.baseMaxHp;enemy.damage=enemy.baseDamage;enemy.scaled=false;enemy.contributors.clear();enemy.generation++;room.killed.delete(enemy.id);health(room,enemy);}}
       }
       room.environment=environmentSnapshot(s.environment);
       if(now-s.lastBroadcast>250){s.lastBroadcast=now;publish(room);broadcast(room,{type:'enemies',enemies:room.enemies});broadcast(room,{type:'environment',snapshot:room.environment});}

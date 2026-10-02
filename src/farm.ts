@@ -3,6 +3,7 @@ import { addItem, removeItem, gainXp, looseQuantity, type SaveState } from './mo
 import { gameHours } from './farm-clock.ts';
 import { recordEvent } from './progression.ts';
 import { newFarmHelper, parseFarmHelper, type FarmHelperState } from './farm-helper-state.ts';
+import { animalPrice, productPace, kitchenOpen, PRODUCT_PACE } from './difficulty.ts';
 
 /** Livestock production uses the offline farm clock; aging uses two real hours. */
 export type AnimalKind = 'chicken' | 'duck' | 'cow' | 'pig' | 'dog';
@@ -27,6 +28,8 @@ export interface Animal {
   /** Stable release point; wandering never changes the nearby species-pen bonus. */
   home?: { x: number; z: number };
   pen?: boolean;
+  /** Product-interval multiplier fixed at purchase (difficulty.ts productPace: 1.5 on Normal/Hard); missing = 1. */
+  pace?: number;
 }
 export interface FarmState { animals: Animal[]; nextId: number; penLevel: number; /** The pen has been built (a marked plot until then). */ built: boolean; speciesPens?: Partial<Record<AnimalKind, { x: number; z: number }>>; helper?: FarmHelperState }
 export interface AnimalDef {
@@ -150,7 +153,9 @@ export function isAdult(a: Animal, now = Date.now()) { return validAnimalTime(a,
 export function growth(a: Animal, now = Date.now()) { return validAnimalTime(a, now) ? a.kind === 'dog' ? 1 : Math.max(0, Math.min(1, (now - a.bornAt) / ANIMALS[a.kind].growMs)) : 0; }
 /** Three products wait freely; a matching nearby pen stores five and makes production 30% faster. */
 export function productCapacity(a: Animal) { return a.kind === 'dog' ? 0 : a.pen ? 5 : 3; }
-export function productDuration(a: Animal) { return ANIMALS[a.kind].productMs * (a.pen ? .7 : 1); }
+export function productDuration(a: Animal) { return ANIMALS[a.kind].productMs * (a.pen ? .7 : 1) * (a.pace ?? 1); }
+/** What an animal costs now (difficulty.ts). */
+export const priceOf = (s: SaveState, kind: AnimalKind) => animalPrice(s, kind, ANIMALS[kind].price);
 const legacyDuration = (kind: AnimalKind) => kind === 'chicken' ? 40_000 : kind === 'cow' ? 75_000 : ANIMALS[kind].productMs;
 function firstDuration(a: Animal) { return a.legacyFirstCycleMs ?? (a.timerVersion === 2 ? productDuration(a) : legacyDuration(a.kind)); }
 /** Integer stock, including one meat pickup at end of life. No mutation or repeated offline credit. */
@@ -215,7 +220,7 @@ export function canBuyAnimal(s: SaveState, kind: AnimalKind): BuyCheck {
   if (!penBuilt(s)) return 'unbuilt';
   if (s.level < d.level) return 'level';
   if (animalCount(s, kind) >= penCapacity(s, kind)) return 'full';
-  return s.energy < d.price ? 'energy' : 'ok';
+  return s.energy < priceOf(s, kind) ? 'energy' : 'ok';
 }
 /** Buys a chick or a calf; it arrives young and grows up on its own. */
 export function buyAnimal(s: SaveState, kind: AnimalKind, now = Date.now()): Animal | null {
@@ -224,7 +229,8 @@ export function buyAnimal(s: SaveState, kind: AnimalKind, now = Date.now()): Ani
   if (!Number.isSafeInteger(farm.nextId) || farm.nextId < 1 || farm.nextId >= Number.MAX_SAFE_INTEGER) return null;
   const a: Animal = { uid: farm.nextId++, kind, bornAt: now, acquiredAt: now, cycleAt: now + ANIMALS[kind].growMs, coat: coatPick(kind, farm.nextId - 1, now), timerVersion: 2, home: releasePoint(kind) };
   a.pen = nearbyPen(farm, a);
-  s.energy -= ANIMALS[kind].price; farm.animals.push(a); return a;
+  const pace = productPace(s); if (pace !== 1 && kind !== 'dog') a.pace = pace;
+  s.energy -= priceOf(s, kind); farm.animals.push(a); return a;
 }
 /** Cheap, quick crops are animal feed (radish, carrot, pumpkin, mint); fruit trees and seed crops never are. */
 export const FEED_MAX_SELL = 30, FEED_MAX_MS = 10 * 60_000;
@@ -296,7 +302,7 @@ export function expandPen(s: SaveState) {
 }
 export function canCookDish(s: SaveState, id: ItemId) {
   const dish = FARM_DISHES.find(d => d.id === id);
-  return !!dish && s.planet === 'home' && Number.isSafeInteger((s.bag[id] || 0) + 1) && Object.entries(dish.materials).every(([m, n]) => looseQuantity(s, m) >= n!);
+  return !!dish && s.planet === 'home' && kitchenOpen(s) && Number.isSafeInteger((s.bag[id] || 0) + 1) && Object.entries(dish.materials).every(([m, n]) => looseQuantity(s, m) >= n!);
 }
 /** Cooks one farm dish at the kitchen (free, counts as a meal for the journal). */
 export function cookDish(s: SaveState, id: ItemId) {
@@ -332,7 +338,7 @@ export function parseFarm(raw: unknown): FarmState {
     const coat = coatOf({ kind, uid, coat: a.coat as number | undefined });
     const h = a.home as { x?: unknown; z?: unknown } | undefined;
     const home = h && typeof h.x === 'number' && typeof h.z === 'number' && Number.isFinite(h.x) && Number.isFinite(h.z) && Math.abs(h.x) <= 200 && Math.abs(h.z) <= 200 ? { x: h.x, z: h.z } : releasePoint(kind);
-    const animal: Animal = { uid, kind, bornAt, acquiredAt, cycleAt, coat, home, timerVersion: 2, ...(a.fedYoung === true ? { fedYoung: true } : {}), ...(a.fed === true ? { fed: true } : {}) };
+    const animal: Animal = { uid, kind, bornAt, acquiredAt, cycleAt, coat, home, timerVersion: 2, ...(a.pace === PRODUCT_PACE ? { pace: PRODUCT_PACE } : {}), ...(a.fedYoung === true ? { fedYoung: true } : {}), ...(a.fed === true ? { fed: true } : {}) };
     // First legacy deadline stays exact; subsequent cycles use the new shared clock, even after reload.
     if (kind !== 'dog') {
       const legacy = a.timerVersion === 2 ? a.legacyFirstCycleMs : legacyDuration(kind);

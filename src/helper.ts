@@ -41,7 +41,7 @@ export function rememberPlantings(s: M.SaveState) {
 /** True when the crop can be planted now from what the player has (level reached, seed in the bag if it needs one). */
 export function canPlant(s: M.SaveState, crop: M.CropId) {
   const c = Object.hasOwn(M.CROPS, crop) ? M.CROPS[crop] : undefined;
-  return !!c && c.level <= s.level && (!c.seed || (s.bag[c.seed] ?? 0) > 0);
+  return !!c && M.cropLevel(s, crop) <= s.level && (!c.seed || (s.bag[c.seed] ?? 0) > 0);
 }
 /** What a seed costs to use: nothing for crops without a seed item, else the seed's shop price or sell value. */
 export const seedCost = (crop: M.CropId) => { const seed = M.CROPS[crop]?.seed; if (!seed) return 0; const item = M.ITEMS[seed]; return item?.price ?? item?.sell ?? 0; };
