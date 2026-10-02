@@ -68,6 +68,8 @@ import { initLookShop } from './look-shop.ts';
 import { GROWTH } from './growth.ts';
 import * as Tester from './tester.ts';
 import './tester.css';
+import { WORK_ACTIONS, explorerAway } from './delivery.ts';
+import { initStoredNote } from './delivery-ui.ts';
 
 // The HUD asks for the same ~40 elements several times a second: remember them while they stay in the page.
 const $found=new Map<string,HTMLElement>();
@@ -259,7 +261,7 @@ async function start() {settle();void helperCatchUp();const name=$<HTMLInputElem
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
-async function helperCatchUp(){const r=actionHandler?await perform<ReturnType<typeof Helper.catchUp>>('helperCatchUp'):change(()=>Helper.catchUp(state));if(r&&(r.harvested.length||r.planted.length))setTimeout(()=>toast(t('While you were away, Bolt harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
+async function helperCatchUp(){const r=actionHandler?await perform<ReturnType<typeof Helper.catchUp>>('helperCatchUp'):change(()=>applyGameAction(state,{type:'helperCatchUp'}) as ReturnType<typeof Helper.catchUp>);if(r&&(r.harvested.length||r.planted.length))setTimeout(()=>toast(t('While you were away, Bolt harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
 function updateHud() {
   const known=new Set(world.state.discovered),discoveryCount=t('Discovered {count}/{total} planets',{count:known.size,total:Object.keys(M.PLANETS).length});
   if(setHtml($('#discovery-text'),`<strong>🔭 ${esc(world.state.name)}</strong><span>${esc(discoveryCount)}</span><small aria-hidden="true">${Object.entries(M.PLANETS).map(([id,planet])=>known.has(id as M.PlanetId)?planet.icon:'❔').join(' ')}</small>`)){$('#discovery-progress').setAttribute('aria-label',`${world.state.name} · ${discoveryCount} · ${t('Discovery log')}`);}
@@ -376,11 +378,17 @@ function positionLabels(){
     if(off!==a.off){a.off=off;node.toggleAttribute('data-off',off);}
   }
 }
+/** The explorer is in the wilds or off home: the workers' harvest goes to the house chest (delivery.ts). */
+function explorerOut(){return explorerAway(world.planet,world.position.x,world.position.z);}
+/** perform() for the workers' jobs: tells the rules whether the explorer is out (the server uses its own pose). */
+function workPerform<T=any>(type:string,payload:Record<string,unknown>={}){return perform<T>(type,WORK_ACTIONS.has(type)?{...payload,away:explorerOut()}:payload);}
+/** Harvest orbs fly to the bag, or into the chest when the harvest is stored there (never across the map). */
+function orbTarget(){if(!explorerOut())return ()=>world.position;const c=world.entities.find(x=>x.kind==='chest'),at=world.position.clone().set(c?.x??0,0,c?.z??0);return ()=>at;}
 /** Sparkles, the XP number and a few orbs flying into the bag when a crop comes up. */
 function harvestBurst(index:number,crop:M.CropId){
   const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(!e)return;
   world.fx?.burst({x:e.x,z:e.z},{n:10,color:['#9be36f','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.4});
-  world.fx?.orbs({x:e.x,z:e.z},2,'#9be36f',()=>world.position);
+  world.fx?.orbs({x:e.x,z:e.z},2,'#9be36f',orbTarget());
   floating('+'+M.CROPS[crop].xp+' XP',e.x,e.z,'xp');tone('harvest');
 }
 function plantBurst(index:number){const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(e)world.fx?.burst({x:e.x,z:e.z},{n:6,color:['#8a5a3a','#6a3f2a'],size:.1,speed:2,up:3,y:.25});}
@@ -520,7 +528,7 @@ function penTap(){if(M.readyAnimals(state).length)collectFarm();else penDialog()
 function feedBurst(uid:number){const p=world.farmView?.positionOf(uid);if(p)world.fx?.burst({x:p.x,z:p.z},{n:6,color:['#9be36f','#ffe66d'],size:.08,speed:1.5,up:3,y:.4});}
 function farmCollectFeedback(collected:readonly M.Collected[],origin?:{x:number;z:number}){
   const groups=new Map<number,M.Collected[]>();for(const product of collected){const list=groups.get(product.uid)??[];list.push(product);groups.set(product.uid,list);world.farmView?.collect(product.uid,product.item,origin??world.farmView?.positionOf(product.uid)??M.PEN);}
-  for(const [uid,list]of groups){const p=world.farmView?.positionOf(uid)??origin??M.PEN;world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',()=>world.position);floating('+'+M.ANIMALS[list[0].kind].xp*list.length+' XP',p.x,p.z,'xp');}
+  for(const [uid,list]of groups){const p=world.farmView?.positionOf(uid)??origin??M.PEN;world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',orbTarget());floating('+'+M.ANIMALS[list[0].kind].xp*list.length+' XP',p.x,p.z,'xp');}
   if(collected.length)tone('harvest');
 }
 function collectFarm(uid?:number){
@@ -637,16 +645,16 @@ function helperDialog(){if(visiting)return;openDialog('helper','Garden helper',h
 const helperPending=new Set<string>();
 function helperAction(kind:'helperHarvest'|'helperPlant',i:number){
   const effect=(crop:M.CropId|undefined|null)=>{if(crop){if(kind==='helperHarvest')harvestBurst(i,crop);else{plantBurst(i);tone('pop');}world.syncCrops();}return !!crop;};
-  if(!actionHandler)return effect(change(()=>kind==='helperHarvest'?Helper.helperHarvest(state,i):Helper.helperPlant(state,i)));
+  if(!actionHandler)return effect(change(()=>{try{return applyGameAction(state,{type:kind,payload:{index:i,away:explorerOut()}}) as M.CropId;}catch{return null;}}));
   const key=kind+':'+i;if(helperPending.has(key))return false;helperPending.add(key);
-  void perform<M.CropId>(kind,{index:i}).then(effect).finally(()=>helperPending.delete(key));return true;
+  void perform<M.CropId>(kind,{index:i,away:explorerOut()}).then(effect).finally(()=>helperPending.delete(key));return true;
 }
 const helperHarvest=(i:number)=>helperAction('helperHarvest',i),helperPlant=(i:number)=>helperAction('helperPlant',i);
 
 const farmHelperView=new FarmHelperView();world.scene.add(farmHelperView.group);
 function farmHelperContext(){return started&&!document.hidden&&!flight&&!visiting&&(!actionHandler||network.role!==null)&&world.planet==='home'&&world.state===state?world.root:null;}
 function farmHelperDialog(){if(visiting||world.planet!=='home'||!M.penBuilt(state))return;openDialog('farm-helper','Animal pen helper',farmHelperPanel(state,`${ICON_BASE}helper.webp`),'ANIMAL PEN','🤖');}
-const farmHelperController=new FarmHelperController({state:()=>state,context:farmHelperContext,perform,completed(result,catchUp){
+const farmHelperController=new FarmHelperController({state:()=>state,context:farmHelperContext,perform:workPerform,completed(result,catchUp){
   farmCollectFeedback(result.collected);for(const uid of result.fed)feedBurst(uid);
   if(result.fed.length)tone('pop');
   if(catchUp&&(result.collected.length||result.fed.length))toast(t('Your animal helper collected {count} products and fed {fed} animals.',{count:result.collected.length,fed:result.fed.length}),'🤖');
@@ -655,7 +663,7 @@ const farmHelperController=new FarmHelperController({state:()=>state,context:far
 // Rescued friends (friends.ts rules, friend-crew.ts cages/following/jobs, friend-view.ts looks, friend-ui.ts panel).
 setFriendDresser((color,gear)=>world.friendAvatar(color,gear));
 const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
-  robotBed:()=>helperView.task?.index,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform,
+  robotBed:()=>helperView.task?.index,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform:workPerform,
   rescued(id,at){const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
   locked(id){toast(lockedHint(id),'🔒');},
   worked(id,task,r,at){
@@ -669,6 +677,7 @@ const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()
 frameListeners.add(dt=>crew.update(dt));
 function friendDialog(id:FriendId){openDialog('friend',FRIENDS[id].name,friendPanel(world.state,id),'RESCUED FRIEND',{garden:'🌱',farm:'🐄',cook:'🍳'}[FRIENDS[id].role]);}
 async function friendsCatchUp(){if(!(state.friends??[]).some(f=>f.home&&!f.paused))return;const r=await perform<Partial<Record<FriendId,{jobs:number;cooked:number}>>>('friendsCatchUp');const jobs=Object.values(r??{}).reduce((n,v)=>n+(v?.jobs??0),0);if(jobs)setTimeout(()=>toast(t('While you were away, your friends did {count} jobs.',{count:jobs}),'🤝'),3200);}
+const storedNote=initStoredNote({state:()=>state,home:()=>started&&!visiting&&!flight&&world.planet==='home'&&world.state===state&&!explorerOut(),perform,openChest:()=>storage(),t,name:id=>t(M.ITEMS[id as M.ItemId]?.name??id)},app);frameListeners.add(dt=>storedNote.frame(dt));
 let friendsHome=false;frameListeners.add(()=>{const home=started&&!visiting&&!flight&&world.planet==='home';if(home&&!friendsHome)void friendsCatchUp();friendsHome=home;});
 let farmHelperSettingsPending=false;
 async function farmHelperSetting(type:'buyFarmHelper'|'setFarmHelperPaused'|'setFarmHelperAutoFeed',payload:Record<string,unknown>={}){
