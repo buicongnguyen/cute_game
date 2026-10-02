@@ -18,6 +18,9 @@ export class FishHuntingView {
   private makeFish: (id: string) => FishModel;
   private fishing: FishingView;
   private offset = 0;
+  /** The rod view's fish poses at handover; targets ease in from them instead of popping. */
+  private from: Array<{ x: number; z: number; heading: number }> = [];
+  private blend = 1;
   private world: unknown;
   private owner: unknown;
 
@@ -44,6 +47,8 @@ export class FishHuntingView {
       this.clearFish(); this.pond = null;
     }
     if (pond?.id !== this.pond?.id || this.kitReady !== kitReady) {
+      if (this.pond && pond?.id !== this.pond.id) this.fishing.adoptPoses?.(this.pond.id, this.fish.map(f => ({ x: f.obj.position.x, z: f.obj.position.z, heading: f.obj.rotation.y })));
+      if (pond && pond.id !== this.pond?.id) { this.from = this.fishing.ordinaryPoses?.(pond.id) ?? []; this.blend = this.from.length ? 0 : 1; }
       this.clearFish(); this.pond = pond; this.kitReady = kitReady;
       if (!pond) { this.shot = null; this.projectile.visible = false; }
       if (pond) for (const target of fishHuntTargets(pond, this.now())) {
@@ -51,14 +56,17 @@ export class FishHuntingView {
       }
     }
     this.fishing.huntingPondId = pond?.id ?? null;
-    const now = this.now();
+    const now = this.now(); this.blend = Math.min(1, this.blend + dt / .6);
+    const k = this.blend * this.blend * (3 - 2 * this.blend);
     this.targets = pond ? fishHuntTargets(pond, now) : [];
     for (const target of this.targets) {
       const f = this.fish[target.slot]; if (!f) continue;
       f.obj.visible = now >= (hunting?.readyAt[fishHuntKey(pond!.id, target.slot)] ?? 0);
       const [scale, top, wag] = fishLook(target.id);
-      f.obj.position.set(target.x, pond!.surface - top * scale - .02, target.z);
-      f.obj.rotation.y = target.facing;
+      // Same swim depth as the rod view's fish (FishingView.addFish), so the pond looks the same with either gear.
+      const start = k < 1 ? this.from[target.slot] : undefined;
+      f.obj.position.set(start ? start.x + (target.x - start.x) * k : target.x, pond!.surface - top * scale - .015, start ? start.z + (target.z - start.z) * k : target.z);
+      f.obj.rotation.y = start ? start.heading + Math.atan2(Math.sin(target.facing - start.heading), Math.cos(target.facing - start.heading)) * k : target.facing;
       if (f.tail) f.tail.rotation.y = Math.sin(now / 200 + target.slot) * wag;
     }
     this.targets = this.targets.filter(t => this.fish[t.slot]?.obj.visible);

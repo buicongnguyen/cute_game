@@ -17,7 +17,7 @@ import { kitsFor } from './biomes.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import { FishingView, type PondView } from './fishing-view.ts';
 import { FishHuntingView } from './fish-hunting-view.ts';
-import { FISH_HUNT_COOLDOWN_MS, huntingPondAt, type FishHuntResult } from './fish-hunting.ts';
+import { FISH_HUNT_COOLDOWN_MS, fishHuntTargets, huntingPondAt, type FishHuntResult } from './fish-hunting.ts';
 import { decorIcon } from './icons.ts';
 import { CombatHud, fightNear, lootText, zoneInfo } from './hud-combat.ts';
 import * as M from './model.ts';
@@ -668,7 +668,9 @@ async function farmHelperSetting(type:'buyFarmHelper'|'setFarmHelperPaused'|'set
 const rodTip=new Vector3();
 function tipPosition(){const tip=world.player.getObjectByName('rod-tip');if(tip){world.player.updateWorldMatrix(true,true);tip.getWorldPosition(rodTip);}else rodTip.set(world.position.x,1.4,world.position.z);return rodTip;}
 function pondView(e:Entity):PondView{return {id:e.id,x:e.x,z:e.z,rx:e.pond!.rx,rz:e.pond!.rz,surface:e.pond!.surface,waterId:e.waterId??state.planet};}
-function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.entities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';});}
+function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.entities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
+// Rod fish follow the harpoon slots' species so picking up hunting gear by the shore keeps the pond's look.
+function pondStock(pond:PondView){const hunt=huntingPondAt(state.planet,pond.x,pond.z);return hunt?fishHuntTargets(hunt,0).map(t=>t.id):null;}
 const formatSize=(cm:number)=>cm>=100?`${(cm/100).toFixed(2).replace(/\.?0+$/,'')} m`:`${cm} cm`;
 function showReel(on:boolean,mode:'reel'|'cast'|'hunt'='reel'){const button=$('#reel-button');button.hidden=!on;button.classList.toggle('cast',mode==='cast');button.classList.toggle('hunt',mode==='hunt');button.classList.remove('bite','down');button.removeAttribute('aria-pressed');button.setAttribute('aria-label',t(mode==='hunt'?'Hunt a fish':mode==='cast'?'Cast':'Reel in the line'));$('#reel-text').textContent=t(mode==='hunt'?'Hunt':mode==='cast'?'Cast':'Reel');$('.reel-icon').textContent=mode==='hunt'?'🔱':'🎣';$('#hud').classList.toggle('fishing',on&&mode==='reel');$('#fish-hint').hidden=!(on&&mode!=='cast');}
 function endFishing(message?:string,icon='🎣'){fishingEpoch++;const was=!!fishGame;if(fishGame?.ticket&&actionHandler)void perform('fishCancel',{ticketId:fishGame.ticket});fishGame=null;fishingView.cancel();world.fishing='idle';showReel(false);if(was&&message)toast(message,icon);}
