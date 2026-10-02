@@ -696,8 +696,8 @@ const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()
     for(const [item,n] of Object.entries(r.cooked))floating('+'+n+' '+t(M.ITEMS[item]?.name??item),postFor(id).x,postFor(id).z,'item',1);
     if(Object.keys(r.cooked).length)tone('pop');
   },
-  grew(id,stage){toast(t('{name} grew up! Now {share} of your height.',{name:FRIENDS[id].name,share:String(GROWTH[stage].height)}),'🌱');tone('success');},
-  arrived(ids){toast(t('{names} reached Clover Village and went to work!',{names:ids.map(id=>FRIENDS[id].name).join(', ')}),'🏡');void friendsCatchUp();}});
+  grew(id,stage){toast(t('{name} grew up! Now {share} of your height.',{name:t(FRIENDS[id].name),share:String(GROWTH[stage].height)}),'🌱');tone('success');},
+  arrived(ids){toast(t('{names} reached Clover Village and went to work!',{names:ids.map(id=>t(FRIENDS[id].name)).join(', ')}),'🏡');void friendsCatchUp();}});
 frameListeners.add(dt=>crew.update(dt));
 function friendDialog(id:FriendId){openDialog('friend',FRIENDS[id].name,friendPanel(world.state,id),'RESCUED FRIEND',{garden:'🌱',farm:'🐄',cook:'🍳'}[FRIENDS[id].role]);}
 async function friendsCatchUp(){if(!(state.friends??[]).some(f=>f.home&&!f.paused))return;const r=await perform<Partial<Record<FriendId,{jobs:number;cooked:number}>>>('friendsCatchUp');const jobs=Object.values(r??{}).reduce((n,v)=>n+(v?.jobs??0),0);if(jobs)setTimeout(()=>toast(t('While you were away, your friends did {count} jobs.',{count:jobs}),'🤝'),3200);}
