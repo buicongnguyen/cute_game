@@ -3754,7 +3754,8 @@ for (const [id, item] of Object.entries(ITEMS))
         const power = item.power || .15;
         FISH[id] = { id, name: item.name, icon: item.icon, rarity: item.legend ? 'legendary' : item.rare ? 'rare' : id === 'boot' ? 'junk' : 'common', speed: power, power, stamina: power, sell: item.sell, xp: Math.round((4 + power * 25) * (item.legend ? 4 : 1)), size: item.size || [10, 60], planet: Object.entries(FISH_WEIGHTS).filter(([, items]) => items.some(([key]) => key === id)).map(([key]) => key) };
     }
-export const STARTING_PLOTS = 9, MAX_EXTRA_PLOTS = 24, MAX_DECORATIONS = 40;
+/** The garden holds at most 24 beds (a 6 x 4 grid): the 9 starting beds and 15 more. Saves made before the cap had 33 (LEGACY_MAX_PLOTS). */
+export const STARTING_PLOTS = 9, MAX_EXTRA_PLOTS = 15, MAX_DECORATIONS = 40, LEGACY_MAX_PLOTS = 33;
 export const UPGRADES = { health: { name: 'Health', icon: '❤️', base: 12, step: 25 }, attack: { name: 'Attack', icon: '👊', base: 15, step: 3 }, defense: { name: 'Defense', icon: '🛡️', base: 14, step: 4 }, crit: { name: 'Critical chance', icon: '💥', base: 18, step: .025, max: 28 } } as const;
 export const STORY_STEPS: {
     title: string;

@@ -78,7 +78,7 @@ function fallbackPiece(p: Placement): { plain: T.BufferGeometry[]; glow: T.Buffe
 
 /** Which look kits have arrived: a friend is rebuilt when one lands (the hero, or a kit for its gear). */
 const kitStamp = () => [heroKit, wearKit, weaponKit, petKit].map(k => k.ready ? 1 : 0).join('');
-export interface FriendView { id: FriendId; group: T.Group; signature: string; spot: (typeof FRIEND_SPOTS)[number] | Hangout; seed: number; role: string }
+export interface FriendView { id: FriendId; group: T.Group; signature: string; spot: (typeof FRIEND_SPOTS)[number] | Hangout; seed: number; role: string; stage: number }
 /** Steam puffs over the kettle and the stove's pot, bubbles over the bath: [x, y, z, rise, spread]. */
 const PUFF_SOURCES: Array<[number, number, number, number, number]> = [[-9.5, 1.15, -.13, .7, .06], [-9.38, 1.12, 2.27, .8, .08], [-.75, .62, -6.4, .45, .55]];
 const PUFFS_EACH = 5;
@@ -174,14 +174,14 @@ export class HouseView {
     list.forEach((friend, index) => {
       const spot = HANGOUTS[this.hangouts[index]] ?? FRIEND_SPOTS[index % FRIEND_SPOTS.length], signature = JSON.stringify(friend.gear) + index + kitStamp() + friendStage(friend), known = this.friends.get(friend.id);
       seen.add(friend.id);
-      if (known && known.signature === signature) { known.spot = spot; return; }
+      if (known && known.signature === signature) { known.spot = spot; known.stage = friendStage(friend); return; }
       if (known) this.dropFriend(known);
       const group = buildFriend(friend.id, friend.gear, friendStage(friend)); group.userData.friendId = friend.id;
       // Friends are small and keep still: they skip the shadow pass (it would cost a draw per part).
       group.traverse(o => { o.castShadow = false; });
       group.position.set(spot.x, spot.y ?? 0, spot.z); group.rotation.y = spot.facing;
       this.root.add(group);
-      this.friends.set(friend.id, { id: friend.id, group, signature, spot, seed: index * 1.7, role: friend.role });
+      this.friends.set(friend.id, { id: friend.id, group, signature, spot, seed: index * 1.7, role: friend.role, stage: friendStage(friend) });
     });
     for (const view of [...this.friends.values()]) if (!seen.has(view.id)) { this.dropFriend(view); this.friends.delete(view.id); }
   }
@@ -221,14 +221,30 @@ export class HouseView {
       if (!body) continue;
       const arm = part(body, 'arm-right'), legL = part(body, 'leg-left'), legR = part(body, 'leg-right');
       if (v.spot.pose !== 'sit') { if (legL) legL.rotation.x = 0; if (legR) legR.rotation.x = 0; body.rotation.z = 0; }
+      body.rotation.x = v.spot.pose === 'read' ? .12 : 0;
       if (v.spot.pose === 'sit') { if (legL) legL.rotation.x = -1.35; if (legR) legR.rotation.x = -1.35; body.position.y = -.55 + Math.sin(t * 2) * .02; body.rotation.z = Math.sin(t * .7) * .04; }
       else body.position.y = Math.abs(Math.sin(t * 2.2)) * .05;
-      if (arm) { arm.rotation.x = v.spot.pose === 'wave' ? -2.6 : 0; arm.rotation.z = v.spot.pose === 'wave' ? .4 + Math.sin(t * 7) * .45 : .1 + Math.sin(t * 1.5) * .05; }
+      if (arm) armPose(arm, v.spot.pose, t);
       if (v.spot.pose !== 'stand') v.group.rotation.y = v.spot.facing;
       if (v.spot.pose === 'stand') v.group.rotation.y = v.spot.facing + Math.sin(t * .4) * .35;
     }
   }
   /** Draw calls the interior costs on its own (static batches, door, friends' meshes), as a rough budget. */
   meshCount() { let n = 0; this.root.traverse(o => { if (o instanceof T.Mesh && o.visible) n++; }); return n; }
+}
+/**
+ * The right arm tells what a friend is doing at each hangout (no props, no extra draws): stirring a pot, sipping tea,
+ * painting strokes, holding a book (with a page flip now and then), stretching up, brushing teeth, waving.
+ */
+function armPose(arm: T.Object3D, pose: string, t: number) {
+  let x = 0, z = .1 + Math.sin(t * 1.5) * .05;
+  if (pose === 'wave') { x = -2.6; z = .4 + Math.sin(t * 7) * .45; }
+  else if (pose === 'stir') { x = -1.1 + Math.sin(t * 5) * .18; z = .35 + Math.cos(t * 5) * .25; }
+  else if (pose === 'sip') { const up = Math.max(0, Math.sin(t * .9) - .5) * 2; x = -1.2 - up * .9; z = .5 + up * .3; }
+  else if (pose === 'paint') { x = -1.6 + Math.sin(t * 3) * .4; z = .2 + Math.sin(t * 1.3) * .15; }
+  else if (pose === 'read') { x = -1.0; z = .45 + (Math.sin(t * .6) > .95 ? .4 : 0); }
+  else if (pose === 'stretch') { x = -2.9 + Math.sin(t * .8) * .25; z = .2; }
+  else if (pose === 'brush') { x = -1.9; z = .95 + Math.sin(t * 14) * .15; }
+  arm.rotation.x = x; arm.rotation.z = z;
 }
 export function friendName(id: FriendId) { return FRIENDS[id]?.name ?? id; }

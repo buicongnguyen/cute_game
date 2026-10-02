@@ -414,7 +414,7 @@ export class World {
   private syncBeds(assets: RefinedAssetLibrary = refinedAssets){
     const beds=this.gardenBeds??=new GardenBeds();if(beds.group.parent!==this.scene)this.scene.add(beds.group);
     const plots=this.planet==='home'?this.entities.filter(e=>e.kind==='plot'):[],refined=assets.has('garden');
-    beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z,rotation:e.mesh.rotation.y})),refined,M.BED_SCALE);
+    beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z,rotation:e.mesh.rotation.y,level:M.bedLevel(this.state?.plots?.[e.index!])})),refined,M.BED_SCALE);
   }
   /**
    * The animal yard north of the garden (farm.ts PEN, YARD): one entity to tap (its baked back fence, coop and troughs
@@ -945,7 +945,7 @@ export class World {
   clearRemotePlayers(){for(const id of [...this.remotePlayers?.keys()??[]])this.removeRemotePlayer(id);}
   syncCrops() {
     if(this.planet!=='home')return;
-    if(this.plotMeshes.length<this.state.plots.length){for(let i=this.plotMeshes.length;i<this.state.plots.length;i++)this.makePlot(i);this.syncBeds();}
+    if(this.plotMeshes.length<this.state.plots.length){for(let i=this.plotMeshes.length;i<this.state.plots.length;i++)this.makePlot(i);this.syncBeds();}else this.syncBeds();// level pips (signature-checked)
     const cards=this.cardsReady();
     this.state.plots.forEach((p,i)=>{
       // One crop per bed with the reference's stages (G2D-2); the cards draw it when they are baked, else a 3D model does.

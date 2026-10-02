@@ -7,6 +7,10 @@ import { bakeModel } from './assets.ts';
  * they are flat, and 33 casting beds cost a shadow-pass draw each. Each bed keeps its own entity group, which now holds
  * only an invisible pick box (and the 3D crops, if the crop cards could not be baked).
  */
+/** Bed-level pips (model.ts upgradeBed): one gold gem per level along the bed's front plank, in bed model units. */
+const PIP = new T.OctahedronGeometry(.2, 0).scale(1, 1.25, .7), PIP_MATERIAL = new T.MeshBasicMaterial({ color: '#ffd23f' });
+PIP.userData.sharedKit = true;
+export const pipSpot = (k: number, levels: number) => ({ x: (k - (levels - 1) / 2) * .36, y: .5, z: .97 });
 export class GardenBeds {
   readonly group = new T.Group();
   private key = '';
@@ -16,8 +20,8 @@ export class GardenBeds {
    * Rebuild when the bed model or the bed positions change; `key` names the model. The beds own the template's
    * geometry, and its materials too when `ownsMaterials` (a refined clone); merged materials are always theirs.
    */
-  sync(make: () => T.Object3D | null, key: string, beds: readonly { x: number; z: number; rotation?: number }[], ownsMaterials = false, scale = 1) {
-    const signature = key + '|' + scale + '|' + beds.map(b => `${b.x},${b.z},${b.rotation ?? 0}`).join(';');
+  sync(make: () => T.Object3D | null, key: string, beds: readonly { x: number; z: number; rotation?: number; level?: number }[], ownsMaterials = false, scale = 1) {
+    const signature = key + '|' + scale + '|' + beds.map(b => `${b.x},${b.z},${b.rotation ?? 0},${b.level ?? 0}`).join(';');
     if (signature === this.key) return;
     this.key = signature; this.clear();
     const template = beds.length ? make() : null;
@@ -37,6 +41,18 @@ export class GardenBeds {
       beds.forEach((b, i) => mesh.setMatrixAt(i, each.multiplyMatrices(place.makeTranslation(b.x, 0, b.z).multiply(turn.makeRotationY(b.rotation ?? 0)).multiply(size), o.matrixWorld)));
       mesh.computeBoundingSphere(); this.group.add(mesh);
     });
+    // Upgraded beds show their level as gold pips: every pip of the garden is one instance of one mesh, so the
+    // markers cost a single draw call in all (none until a bed is upgraded), never one per bed.
+    const levels = beds.reduce((n, b) => n + (b.level ?? 0), 0);
+    if (levels) {
+      const pips = new T.InstancedMesh(PIP, PIP_MATERIAL, levels), local = new T.Matrix4(); let n = 0;
+      pips.castShadow = false; pips.receiveShadow = false; pips.name = 'garden-bed-level-pips';
+      for (const b of beds) for (let k = 0; k < (b.level ?? 0); k++) {
+        const at = pipSpot(k, b.level!);
+        pips.setMatrixAt(n++, each.copy(place.makeTranslation(b.x, 0, b.z)).multiply(turn.makeRotationY(b.rotation ?? 0)).multiply(size).multiply(local.makeTranslation(at.x, at.y, at.z)));
+      }
+      pips.computeBoundingSphere(); this.group.add(pips);
+    }
   }
   /** Number of draw calls the beds cost (one per material finish). */
   get draws() { return this.group.children.length; }
