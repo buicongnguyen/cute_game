@@ -12,6 +12,7 @@ import { buildGround } from './ground.ts';
 import { buildPond } from './pond-view.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
+import { manageSceneMatrices, updateSceneMatrices } from './scene-matrices.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { keepAlive } from './dispose-tree.ts';
 import { hardScale, type Difficulty } from './difficulty.ts';
@@ -169,7 +170,7 @@ export class World {
   // Player animation timers set by combat and fishing.
   punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; /** The last tap on a pond's water, for the cast point. */ pondTap:{id:string;x:number;z:number}|null=null; fishing:'idle'|'cast'|'wait'|'fight'='idle';
   walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
-  private shakeOffset=new T.Vector3(); private playerMaterials:LitMaterial[]=[];private hemi?:T.HemisphereLight;
+  private shakeOffset=new T.Vector3();/** Ground distance the view reaches from the camera target (resize). */ viewReach?:number; private playerMaterials:LitMaterial[]=[];private hemi?:T.HemisphereLight;
   canvas: HTMLCanvasElement; state: SaveState;
   constructor(canvas: HTMLCanvasElement, state: SaveState, options: { antialias?: boolean } = {}) {
     this.canvas=canvas;this.state=state;
@@ -178,7 +179,7 @@ export class World {
     // The 2D cover atlas lives in a render target, which a lost WebGL context empties: bake it again on restore.
     canvas.addEventListener('webglcontextrestored', () => { if (this.scatterGroup) this.refreshScenery(); });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = T.PCFSoftShadowMap; this.renderer.outputColorSpace = T.SRGBColorSpace;
+    this.renderer.shadowMap.type = T.PCFShadowMap; // what the reference really gets: its three.js turns PCFSoft into PCF (renderer.shadowMap.type reads 1 there) this.renderer.outputColorSpace = T.SRGBColorSpace;
     // The reference's pipeline (RC-05): no tone mapping, toon materials, per-planet hemisphere 1.5 + sun 2.4 (build sets the colours).
     this.renderer.toneMapping = T.NoToneMapping;
     this.hemi = new T.HemisphereLight('#e8f6ff', '#9ccf7a', 1.5); this.scene.add(this.hemi);
@@ -200,6 +201,8 @@ export class World {
     cameraOffset(aspect, this.zoom, this.viewOffset);
     // The shadow box hugs the ground in view, in the light's own axes: sharp up close, wide enough when zoomed out.
     const shadow=this.sun?.shadow?.camera;
+    // How far from the camera target the ground in view reaches, plus a creature's size: beyond it nothing can be seen.
+    this.viewReach=Math.max(...viewFootprint(aspect,this.zoom).map(p=>Math.hypot(p.x,p.z)))+6;
     if(shadow){Object.assign(shadow,shadowBox(viewFootprint(aspect,this.zoom),this.sunAxes??=lightAxes(this.sunOffset)));shadow.updateProjectionMatrix();}
   }
   setQuality(low: boolean) { this.renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = !low; this.resize(); }
@@ -1479,6 +1482,8 @@ export class World {
     // Gear stats only matter on the shadow planet; adding them up for every creature on every step was a measurable cost.
     const lightRadius=this.planet==='shadow'&&M.activeStats(this.state).light?7.5:3.6;
     e.mesh.visible=e.hp>0&&(this.planet!=='shadow'||e.definition?.titan||this.environment.revealed(e,this.position,lightRadius))&&(!e.definition?.stealth||this.planet==='shadow'||Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.definition.stealth||e.stun>0);
+    // Out of sight and past the minimap's 40 m creature range: no animation, matrices or culling tests (the reference stops at its viewDist too).
+    if(e.mesh.visible&&view>Math.max(this.viewReach??Infinity,46))e.mesh.visible=false;
     if(!e.mesh.visible)return;
     e.liftVelocity=Math.max(-15,(e.liftVelocity??0)-24*dt);e.lift=Math.max(0,(e.lift??0)+(e.liftVelocity??0)*dt);if(!e.lift)e.liftVelocity=0;
     const ground=this.planet==='ocean'&&inWater(this.environment.layout,e)?-.5:Math.max(-.7,terrainHeight(this.environment.layout,e));
@@ -1672,5 +1677,5 @@ export class World {
   }
 
 
-  render(){this.renderer.render(this.interior?.scene??this.scene,this.camera);}
+  render(){const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);}this.renderer.render(scene,this.camera);}
 }
