@@ -1,7 +1,7 @@
 import {createHash,randomUUID,randomInt} from 'node:crypto';
 import * as Game from '../src/model.ts';
 import {applyGameAction,ACTION_RULES_VERSION} from '../src/actions.ts';
-import {resolveMysteryCatch,catchWeight} from '../src/fishing.ts';
+import {resolveMysteryCatch,catchWeight,STEADY} from '../src/fishing.ts';
 import {createEnvironmentLayout} from '../src/environments.ts';
 import {environmentResourceNodes} from '../src/environment-resources.ts';
 import {LAVA_ORE_RULES} from '../src/lava-weather.ts';
@@ -34,7 +34,7 @@ function validateFishingProof(proof,ticket,now){
     if(sample.held)held+=sample.t-previous;
     previous=sample.t;lastProgress=sample.progress;
   }
-  const power=ticket.power*(ticket.steady?.4:1),minimum=1/(.3*(1.15-power*.45)*(ticket.steady?1.4:1));
+  const power=ticket.power*(ticket.steady?STEADY.heavy:1),minimum=1/(.3*(1.15-power*.45)*(ticket.steady?STEADY.reel:1));
   if(lastProgress<1||held+.25<minimum||proof.elapsed-proof.hookAt+.25<minimum)fail(409,'Reel the fish in before collecting it.');
 }
 function saveDrop(account,item,count,peer,now,{owner=account.id,priority=0,life=30000}={}){

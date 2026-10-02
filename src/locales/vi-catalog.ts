@@ -642,7 +642,7 @@ export const VI_CATALOG: Record<string, string> = {
 
   "Keep this rod in your backpack. It is held automatically near a pond; your combat weapon returns away from water. Hook at the bite, then balance reeling with line tension.": "Giữ cần câu này trong ba lô. Bạn tự động cầm cần khi đến gần ao và chuyển lại sang vũ khí khi rời xa mặt nước. Giật cần khi cá cắn, rồi vừa thu dây vừa giữ độ căng phù hợp.",
   "Steady fishing rod": "Cần Câu Vững Chãi",
-  "A sturdy rod whose line never snaps. It reels heavy fish in quickly; you still hook at the bite and keep the line from going slack.": "Cần câu chắc chắn, dây không bao giờ đứt. Kéo cá nặng lên rất nhanh; bạn vẫn cần giật cần khi cá cắn và không để dây chùng.",
+  "A sturdy rod with a forgiving line: tension builds slowly and heavy fish feel lighter. It can still snap, so let go of Reel when the fish surges.": "Cần câu chắc chắn với dây dẻo: lực căng tăng chậm và cá nặng nhẹ hơn. Dây vẫn có thể đứt, nên nhả nút Kéo cần khi cá vùng vẫy.",
 };
 
 // Farm and fruit update: original IDs stay unchanged.

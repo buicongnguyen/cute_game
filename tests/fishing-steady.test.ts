@@ -11,6 +11,8 @@ const whale={id:'fish_whale',power:heaviest};
 const steadyRod=ITEMS.rod_steady.weapon!;
 function sim(o:Partial<FishingOptions>={}){return new FishingSimulation({quality:steadyRod.quality!,steady:true,bait:false,choose:()=>whale,random:seeded(11),...o});}
 /** Waits for the bite, hooks it, then returns the simulation in the fight. */
+/** A careful player: holds Reel, lets go while the fish surges or the line is tight. */
+const careful=(f:FishingSimulation)=>f.surge<=0&&f.tension<.75;
 function hooked(f:FishingSimulation){for(let t=0;t<60&&f.phase!=='bite';t+=.025)f.update(.025,false);assert.equal(f.phase,'bite');f.update(.025,true);assert.equal(f.phase,'hooked');return f;}
 
 test('the steady rod is a third, dearer rod with ocean materials and the best quality',()=>{
@@ -18,27 +20,29 @@ test('the steady rod is a third, dearer rod with ocean materials and the best qu
   assert.equal(steadyRod.kind,'rod');assert.equal(steadyRod.steady,true);
   assert.ok(steadyRod.quality!>ITEMS.rod_gold.weapon!.quality!);
   assert.ok(price('rod_steady').energy>price('rod_gold').energy*3);
-  assert.deepEqual(price('rod_steady').materials,{coral:4,pearl:1});
+  assert.equal(price('rod_steady').energy,900);assert.deepEqual(price('rod_steady').materials,{coral:4,pearl:2});
   // The automatic rod choice near water prefers it over the golden rod.
   const s=M.newGame();s.bag.rod_gold=1;s.bag.rod_steady=1;s.bag.rod=1;
   assert.equal(new ContextGearSelection().forFishing(s),'rod_steady');
 });
 
-test('the steady line never snaps, whatever the tension and however long Reel is held',()=>{
-  for(let seed=1;seed<=40;seed++){
-    const f=hooked(sim({random:seeded(seed)}));let peak=0;
-    for(let t=0;t<30&&!f.finished;t+=.025){f.update(.025,true);peak=Math.max(peak,f.tension);}
-    assert.equal(f.snapped,false,`seed ${seed}`);assert.ok(peak<=STEADY.maxTension+1e-9);
-    assert.equal(f.phase,'caught',`seed ${seed}: holding Reel lands the heaviest fish`);
+test('the steady line can snap again: a careful player lands heavy fish, but just holding Reel no longer guarantees it',()=>{
+  assert.deepEqual({heavy:STEADY.heavy,reel:STEADY.reel,tension:STEADY.tension},{heavy:.6,reel:1.2,tension:.6});
+  let landed=0,held=0,heldSnaps=0;const N=200;
+  for(let seed=1;seed<=N;seed++){
+    const f=hooked(sim({random:seeded(seed)}));for(let t=0;t<60&&!f.finished;t+=.025)f.update(.025,careful(f));if(f.phase==='caught')landed++;
+    const g=hooked(sim({random:seeded(seed)}));for(let t=0;t<60&&!g.finished;t+=.025)g.update(.025,true);if(g.phase==='caught')held++;if(g.snapped)heldSnaps++;
   }
+  assert.ok(landed/N>.95,`careful player landed ${landed}/${N}`);
+  assert.ok(held<N&&heldSnaps>0,`holding Reel landed ${held}/${N}, snapped ${heldSnaps}`);
   // The same fight with the golden rod snaps: holding through every surge is what breaks a normal line.
   let snaps=0;for(let seed=1;seed<=40;seed++){const f=hooked(sim({steady:false,quality:.7,random:seeded(seed)}));for(let t=0;t<30&&!f.finished;t+=.025)f.update(.025,true);if(f.snapped)snaps++;}
   assert.ok(snaps>30,`golden rod snapped ${snaps}/40`);
 });
 
 test('heavy fish land quickly, but fishing stays interactive (hook at the bite, no long slack)',()=>{
-  const f=hooked(sim());let t=0;for(;t<30&&!f.finished;t+=.025)f.update(.025,true);
-  assert.equal(f.phase,'caught');assert.ok(t<8,`whale landed in ${t.toFixed(1)} s`);
+  const f=hooked(sim());let t=0;for(;t<30&&!f.finished;t+=.025)f.update(.025,careful(f));
+  assert.equal(f.phase,'caught');assert.ok(t<15,`whale landed in ${t.toFixed(1)} s`);
   // Its bite window is 0.4 s longer than a plain rod of the same quality.
   const plain=sim({steady:false});assert.ok(Math.abs(sim().biteWindow-plain.biteWindow-STEADY.bite)<1e-9);
   // Missing the bite still loses the fish.

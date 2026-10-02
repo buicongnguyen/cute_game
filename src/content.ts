@@ -18,7 +18,7 @@ export interface WeaponDef {
     shot?: string;
     arc?: number;
     quality?: number;
-    /** Steady rods (rod_steady): the line never snaps, and the reel pulls heavy fish in faster. */
+    /** Steady rods (rod_steady): tension builds slower, and the reel pulls heavy fish in faster. */
     steady?: boolean;
     spread?: number;
     fx?: string;
@@ -2607,10 +2607,10 @@ const SHOP_FACTS: {
             },
             {
                 "id": "rod_steady",
-                "cost": 600,
+                "cost": 900,
                 "mats": {
                     "coral": 4,
-                    "pearl": 1
+                    "pearl": 2
                 }
             },
             {
@@ -3856,7 +3856,7 @@ for (const recipe of RECIPES)
 // Explain how to use specialist equipment where a stat line alone is not enough.
 ITEMS.rod.desc='Keep this rod in your backpack. It is held automatically near a pond; your combat weapon returns away from water. Hook at the bite, then balance reeling with line tension.';
 ITEMS.rod_gold.desc='A stronger rod that makes difficult fish easier to land and improves rare catches.';
-ITEMS.rod_steady.desc='A sturdy rod whose line never snaps. It reels heavy fish in quickly; you still hook at the bite and keep the line from going slack.';
+ITEMS.rod_steady.desc='A sturdy rod with a forgiving line: tension builds slowly and heavy fish feel lighter. It can still snap, so let go of Reel when the fish surges.';
 const worldDescriptions:Record<PlanetId,string>={home:'Your garden and four trails: forest, meadow, swamp and canyon.',candy:'Sweet forests, springy surprises and powerful candy creatures.',ice:'Slippery ice, frozen ponds and snowbound bosses. Plan your stopping distance.',lava:'Eruptions, rising lava, meteors and a hidden cave furnace. Watch the warning circles.',toy:'Ride the moving trains and open surprise gifts among giant toys.',jungle:'Changing thorn walls, poisonous plants and restorative fruit.',ocean:'Swim between islands. Refill your air at bubbles or ride a sea turtle.',cloud:'Bounce between floating islands and watch the wind near their edges.',shadow:'Explore the darkness, light ancient pillars and face the Night Lord.'};
 for(const id of Object.keys(PLANETS)as PlanetId[])PLANETS[id].description=worldDescriptions[id];
 
