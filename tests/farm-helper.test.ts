@@ -58,20 +58,24 @@ test('catch-up gathers existing capped stock once, never invents cycles, buys re
   assert.equal(H.catchUp(limited, cappedAt, 2).collected.length, 6);
 });
 
-test('feeding requires opt-in, consumes only available crops once per eligible cycle, and never feeds dogs', () => {
-  const s = game(), chicken = M.buyAnimal(s, 'chicken', T0)!, dog = M.buyAnimal(s, 'dog', T0)!; s.bag.carrot = 2;
-  assert.equal(H.helperFeed(s, chicken.uid, T0), false); assert.equal(s.bag.carrot, 2);
+test('feeding requires opt-in, feeds only adults worth a crop, once per eligible cycle, and never dogs', () => {
+  // A pig's truffle (80) for half a 6-minute cycle is worth a carrot (9); a chicken's egg (6) never is.
+  const s = game(), pig = M.buyAnimal(s, 'pig', T0)!, chicken = M.buyAnimal(s, 'chicken', T0)!, dog = M.buyAnimal(s, 'dog', T0)!; s.bag.carrot = 2;
+  const adult = M.adultAt(pig);
+  assert.equal(H.helperFeed(s, pig.uid, adult), false); assert.equal(s.bag.carrot, 2);
   H.setFarmHelperAutoFeed(s, true); const energy = s.energy;
-  assert.deepEqual(H.nextTask(s, M.PEN, T0), { kind: 'feed', uid: chicken.uid });
-  assert.equal(H.helperFeed(s, chicken.uid, T0), true); assert.equal(H.helperFeed(s, chicken.uid, T0), false); assert.equal(H.helperFeed(s, dog.uid, T0), false);
+  assert.equal(H.helperFeed(s, pig.uid, T0), false, 'young animals are not fed automatically');
+  assert.deepEqual(H.nextTask(s, M.PEN, adult), { kind: 'feed', uid: pig.uid });
+  assert.equal(H.helperFeed(s, chicken.uid, adult), false, 'an egg is worth less than the carrot');
+  assert.equal(H.helperFeed(s, pig.uid, adult), true); assert.equal(H.helperFeed(s, pig.uid, adult), false); assert.equal(H.helperFeed(s, dog.uid, adult), false);
   assert.equal(s.bag.carrot, 1); assert.equal(s.energy, energy);
-  const ready = M.adultAt(chicken) + M.productDuration(chicken);
-  const result = H.catchUp(s, ready); assert.equal(result.collected.length, 1); assert.deepEqual(result.fed, [chicken.uid]); assert.equal(s.bag.carrot, undefined);
+  const ready = adult + M.productDuration(pig);
+  const result = H.catchUp(s, ready); assert.ok(result.collected.some(c => c.uid === pig.uid)); assert.deepEqual(result.fed, [pig.uid]); assert.equal(s.bag.carrot, undefined);
   assert.deepEqual(H.catchUp(s, ready), { collected: [], fed: [] });
 });
 
 test('ready collection beats nearer feeding, uses stable UIDs, and skips full inventory without losing stock', () => {
-  const s = game(), chicken = M.buyAnimal(s, 'chicken', T0)!, duck = M.buyAnimal(s, 'duck', T0)!;
+  const s = game(), chicken = M.buyAnimal(s, 'chicken', T0)!, duck = M.buyAnimal(s, 'pig', T0)!; // the pig is worth feeding
   H.setFarmHelperAutoFeed(s, true); s.bag.carrot = 1; chicken.home = { x: 30, z: 30 }; duck.home = { x: 0, z: 0 };
   const now = M.adultAt(chicken) + M.productDuration(chicken);
   assert.deepEqual(H.nextTask(s, { x: 0, z: 0 }, now), { kind: 'collect', uid: chicken.uid });

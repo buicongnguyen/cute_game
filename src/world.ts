@@ -13,6 +13,7 @@ import { buildPond } from './pond-view.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { keepAlive } from './dispose-tree.ts';
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
 import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
@@ -52,6 +53,9 @@ interface Obstacle { x: number; z: number; r: number;tag?:string }
 export interface Enemy { resting?:boolean;lod?:{wait:number;age:number;x:number;z:number;slot:number} }
 /** windupTotal: the length of the current wind-up, so its telegraph fills exactly when the blow lands; enraged: below 30% HP (one toast). */
 export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;resistAt?:number }
+/** A boss attacks faster as it weakens, like the reference (bundle @837714): ×0.7 below half health, ×0.6 once enraged.
+ * Applies to its skills and its basic attacks and charges alike. */
+export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
 export interface AvatarVisual {size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
 export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
 export interface RemotePose {visual?:Partial<AvatarVisual>;id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];hp?:number;level?:number}
@@ -80,7 +84,7 @@ const KIT_TINTS: Partial<Record<PlanetId, Record<string, string>>> = {
 };
 function material(color: string, flat = true) {
   const key = color + flat;
-  if (!matCache.has(key)) matCache.set(key, toonMaterial({ color, flatShading: flat }));
+  if (!matCache.has(key)) { const m = toonMaterial({ color, flatShading: flat }); keepAlive.add(m); matCache.set(key, m); }
   return matCache.get(key)!;
 }
 function mesh(geometry: T.BufferGeometry, color: string, x = 0, y = 0, z = 0) {
@@ -1267,7 +1271,7 @@ export class World {
   }
   private castBossSkill(e:Enemy){
     const skill=e.skill;if(!skill)return;
-    e.phase='recover';e.phaseTime=.7;e.cooldown=(e.definition?.cooldown??2)*(e.hp<e.maxHp*.5?.7:1)*(e.hp<e.maxHp*.3?.6:1)*((e.bossStage??1)>=3?.8:1);
+    e.phase='recover';e.phaseTime=.7;e.cooldown=(e.definition?.cooldown??2)*bossCooldownScale(e)*((e.bossStage??1)>=3?.8:1);
     if(isTitanSkill(skill)){e.titanAttacks??=[];e.titanAttacks.push(beginTitanAttack(skill,{x:e.x,z:e.z,radius:e.radius,facing:e.mesh.rotation.y},e.telegraphs as TitanMark[]??[],this.titanTargets()));if(skill==='leap'){e.phase='titan-leap';e.phaseTime=.8;}e.telegraphs=[];return;}
     if(skill==='slam')this.areaDamage(e,e.x,e.z,4.8,1.6);
     if(skill==='quake')e.skillEffects=[3,6,9].map((r,index)=>({x:e.x,z:e.z,r:r+.4,inner:r-2.4,remaining:.12+index*.32,multiplier:1.1}));
@@ -1314,7 +1318,7 @@ export class World {
   private updateEnemyAi(e:Enemy,dt:number){
     e.cooldown=Math.max(0,e.cooldown-dt);this.updateTitanAttacks(e,dt);if(e.phase==='titan-leap'&&e.titanAttacks?.some(a=>a.skill==='leap'))return;e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
     for(const key of Object.keys(e.statuses??{}))e.statuses![key]=Math.max(0,e.statuses![key]-dt);
-    if(e.hp<=0){e.respawn=Math.max(0,e.respawn-dt);if(this.authoritativeAction)return;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];}return;}
+    if(e.hp<=0){e.respawn=Math.max(0,e.respawn-dt);if(this.authoritativeAction)return;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.enraged=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];}return;}
     const def=e.definition??{speed:2.4,reach:1.8,sight:e.boss?11:6,behavior:'melee',cooldown:1.3,windup:.35,flying:false,titan:false};
     const target=this.enemyTarget(e),distance=target?Math.hypot(target.x-e.x,target.z-e.z):Infinity;
     if(!this.authoritativeAction&&e.boss&&!e.scaled&&distance<def.sight&&e.hp===e.maxHp){
@@ -1340,7 +1344,7 @@ export class World {
       if(e.phaseTime<=0){
         if(e.skill&&!noAttack){this.castBossSkill(e);return;}
         if(e.type==='magmaturtle'||e.type==='lavaworm'){
-          if(!noAttack)this.areaDamage(e,e.x,e.z,e.type==='magmaturtle'?2.6:2,e.type==='magmaturtle'?1.1:1.3);e.phase='recover';e.phaseTime=e.type==='magmaturtle'?3:3.2;e.cooldown=def.cooldown;this.burst(e.x,e.z,'#ffc976',18);return;
+          if(!noAttack)this.areaDamage(e,e.x,e.z,e.type==='magmaturtle'?2.6:2,e.type==='magmaturtle'?1.1:1.3);e.phase='recover';e.phaseTime=e.type==='magmaturtle'?3:3.2;e.cooldown=def.cooldown*bossCooldownScale(e);this.burst(e.x,e.z,'#ffc976',18);return;
         }
         if(def.behavior==='charger'&&!noAttack){e.phase='charge';e.phaseTime=.75;e.mesh.userData.chargeHit=false;if(target){const dx=target.x-e.x,dz=target.z-e.z,d=Math.hypot(dx,dz)||1;e.targetX=e.x+dx/d*13*.75;e.targetZ=e.z+dz/d*13*.75;}}
         else{
@@ -1348,7 +1352,7 @@ export class World {
             if(def.behavior==='shooter')this.shootEnemy(e,target);
             else if(distance<reach+.4&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1),'melee',e.id);
           }
-          e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown;
+          e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);
         }
       }return;
     }
@@ -1357,7 +1361,7 @@ export class World {
       const dx=(e.targetX??e.x)-e.x,dz=(e.targetZ??e.z)-e.z,d=Math.hypot(dx,dz);
       if(d>.1)this.moveCreature(e,dx/d*(e.skill==='charge'?18:13)*dt,dz/d*(e.skill==='charge'?18:13)*dt);
       if(target&&distance<(e.boss&&e.skill==='charge'?e.radius+.6:def.reach+.4)&&!e.mesh.userData.chargeHit){this.hitEnemyTarget(target,e.damage*1.3,'melee',e.id);e.mesh.userData.chargeHit=true;}
-      e.phaseTime=(e.phaseTime??0)-dt;if((e.phaseTime??0)<=0||d<.3){e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown;}return;
+      e.phaseTime=(e.phaseTime??0)-dt;if((e.phaseTime??0)<=0||d<.3){e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);}return;
     }
     if(e.phase==='recover'){e.phaseTime=(e.phaseTime??0)-dt;if(e.phaseTime!<=0)e.phase='chase';return;}
     const homeDistance=Math.hypot(e.x-e.homeX,e.z-e.homeZ),leash=e.type==='dragon'?75:30,wasChasing=e.phase==='chase'||e.hp<e.maxHp&&e.phase!=='return';
@@ -1502,7 +1506,7 @@ export class World {
       if(this.environment!==environmentAtStart)return;
       for(const event of step.events)this.onEnvironmentEvent?.(event);
       if(step.dragonDismiss&&this.networkRole!=='peer'){const dragon=this.enemies.find(e=>e.type==='dragon'&&e.hp>0);if(dragon){dragon.hp=0;dragon.respawn=999999;dragon.mesh.visible=false;dragon.skillEffects=[];dragon.telegraphs=[];dragon.phase='idle';this.burst(dragon.x,dragon.z,'#ffc971',32);this.onEnvironmentEvent?.({kind:'dragon',message:t('The dragon event has ended. The volcano dragon flies away.')});}}
-      if(step.dragonSummon&&this.networkRole!=='peer'){const dragon=this.enemies.find(e=>e.type==='dragon');if(dragon&&dragon.hp<=0){dragon.x=dragon.homeX;dragon.z=dragon.homeZ;dragon.maxHp=dragon.baseMaxHp??dragon.maxHp;dragon.damage=dragon.baseDamage??dragon.damage;dragon.hp=dragon.maxHp;dragon.respawn=0;dragon.stun=0;dragon.statuses={};dragon.cooldown=0;dragon.attackCount=0;dragon.skillCount=0;dragon.skill=undefined;dragon.phase='idle';dragon.bossStage=1;dragon.mesh.visible=true;dragon.scaled=false;this.onEnvironmentEvent?.({kind:'dragon',message:t('The volcano dragon has arrived! Look for the crown on your map.')});}}
+      if(step.dragonSummon&&this.networkRole!=='peer'){const dragon=this.enemies.find(e=>e.type==='dragon');if(dragon&&dragon.hp<=0){dragon.x=dragon.homeX;dragon.z=dragon.homeZ;dragon.maxHp=dragon.baseMaxHp??dragon.maxHp;dragon.damage=dragon.baseDamage??dragon.damage;dragon.hp=dragon.maxHp;dragon.enraged=false;dragon.respawn=0;dragon.stun=0;dragon.statuses={};dragon.cooldown=0;dragon.attackCount=0;dragon.skillCount=0;dragon.skill=undefined;dragon.phase='idle';dragon.bossStage=1;dragon.mesh.visible=true;dragon.scaled=false;this.onEnvironmentEvent?.({kind:'dragon',message:t('The volcano dragon has arrived! Look for the crown on your map.')});}}
       if(this.networkRole!=='peer')for(const hit of step.enemyHits){const enemy=this.enemies.find(e=>e.id===hit.id);if(enemy&&enemy.hp>0)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(enemy,hit.amount);}
       if(this.networkRole!=='peer')for(const push of step.enemyPushes){const enemy=this.enemies.find(e=>e.id===push.id);if(enemy&&enemy.hp>0)this.moveCreature(enemy,push.x,push.z,true);}
       this.environmentView?.update(this.environment);this.refreshEnvironmentNodes();this.syncWeatherNodes();

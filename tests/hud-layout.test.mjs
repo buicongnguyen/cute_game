@@ -116,3 +116,34 @@ for (const [name, view] of Object.entries(VIEWS)) {
     } finally { await browser.close(); }
   });
 }
+
+// The discovery pill follows a point near the well and used to sit over the fight buttons on phones (wave-9 review).
+test('the discovery pill never shows over the fight buttons or the stick at phone 390x844', { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 120000 }, async () => {
+  const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  try {
+    const page = await (await browser.newContext(VIEWS['phone 390x844'])).newPage();
+    await page.routeWebSocket(socketUrl=>new URL(socketUrl).searchParams.has('token'),()=>{});
+    await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+    await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
+    await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
+    await page.fill('#name-input', 'Pill'); await page.click('#title-screen button.primary');
+    await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(3000);
+    let shown = 0, bad = [];
+    // Sweep the explorer around the pill's anchor (2.6, 14.5) so its projection crosses the whole lower screen.
+    for (let dx = -6; dx <= 6; dx += 2) for (let dz = -12; dz <= 2; dz += 2) {
+      const r = await page.evaluate(async ([dx, dz]) => {
+        const w = window.__zoo.world; w.position.set(2.6 + dx, 0, 14.5 + dz); w.cameraTarget.copy(w.position);
+        await new Promise(r => setTimeout(r, 450));
+        const rect = el => { const b = el.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; };
+        const pill = document.querySelector('#discovery-progress'), visible = !pill.hidden && getComputedStyle(pill).visibility !== 'hidden' && pill.getBoundingClientRect().width > 0;
+        return { visible, pill: rect(pill), others: [...document.querySelectorAll('.skill,#movement-joystick,.home-button')].filter(e => e.getBoundingClientRect().width).map(rect) };
+      }, [dx, dz]);
+      if (!r.visible) continue; shown++;
+      const overlap = (a, b) => a.l < b.r - .5 && b.l < a.r - .5 && a.t < b.b - .5 && b.t < a.b - .5;
+      if (r.others.some(o => overlap(r.pill, o))) bad.push([dx, dz, r.pill]);
+    }
+    assert.ok(shown > 0, 'the pill shows somewhere near the well');
+    assert.deepEqual(bad, [], 'the pill never covers a thumb control');
+    if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/discovery-390x844.png` });
+  } finally { await browser.close(); }
+});

@@ -76,12 +76,15 @@ test('Sprout gardens like the robot; with the robot both work and never double-h
 });
 
 test('Clover collects products and feeds from crops, always leaving the player one', () => {
-  const s = rescued('clover'); s.farm.built = true; const a = M.buyAnimal(s, 'chicken', T0)!; const now = M.adultAt(a) + M.productDuration(a);
+  const s = rescued('clover'); s.farm.built = true; const a = M.buyAnimal(s, 'pig', T0)!; const now = M.adultAt(a) + M.productDuration(a);
   assert.deepEqual(F.nextFriendTask(s, 'clover', { x: 0, z: 0 }, now), { kind: 'collect', uid: a.uid });
-  const r = F.friendWork(s, 'clover', { kind: 'collect', uid: a.uid }, now)!; assert.ok(r.raw.egg >= 1); assert.equal(s.bag.egg, r.raw.egg);
+  const r = F.friendWork(s, 'clover', { kind: 'collect', uid: a.uid }, now)!; assert.ok(r.raw.truffle >= 1); assert.equal(s.bag.truffle, r.raw.truffle);
   assert.equal(F.friendWork(s, 'clover', { kind: 'harvest', index: 0 }, now), null, 'a farmer does not garden');
   s.bag.carrot = 1; assert.equal(F.nextFriendTask(s, 'clover', { x: 0, z: 0 }, now), null, 'keeps the last carrot');
-  s.bag.carrot = 2; assert.deepEqual(F.nextFriendTask(s, 'clover', { x: 0, z: 0 }, now), { kind: 'feed', uid: a.uid });
+  s.bag.carrot = 2; assert.equal(F.nextFriendTask(s, 'clover', { x: 0, z: 0 }, now), null, 'feeding is off by default');
+  assert.equal(F.friendWork(s, 'clover', { kind: 'feed', uid: a.uid }, now), null);
+  assert.equal(F.setFriendAutoFeed(s, 'clover', true), true); assert.equal(F.setFriendAutoFeed(s, 'sprout', true), false);
+  assert.deepEqual(F.nextFriendTask(s, 'clover', { x: 0, z: 0 }, now), { kind: 'feed', uid: a.uid });
   assert.ok(F.friendWork(s, 'clover', { kind: 'feed', uid: a.uid }, now)); assert.equal(s.bag.carrot, 1);
 });
 

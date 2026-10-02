@@ -13,7 +13,7 @@ async function fixture(t, owned = false) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'zoo-farm-helper-')), store = await createAccountStore({ dataDir: dir });
   t.after(async () => { await store.close(); await rm(dir, { recursive: true, force: true }); });
   const profile = M.newGame('Alice'); profile.level = 20; profile.energy = 5000; profile.farm.built = true; profile.bag.carrot = 5;
-  const at = Date.now() - 30 * 60_000, animal = M.buyAnimal(profile, 'chicken', at);
+  const at = Date.now() - 30 * 60_000, animal = M.buyAnimal(profile, 'pig', at); // a truffle is worth a carrot (auto-feed skips cheaper products)
   if (owned) profile.farm.helper = { owned: true, paused: false, autoFeed: false };
   await store.create({ id: 'alice', username: 'alice', hash: 'test-hash', salt: 'test-salt', friends: [], requests: [], profile });
   let peer = { active: true, planet: 'home', room: 'public:home', visit: null, pose: { x: 0, z: 0 } };
@@ -31,8 +31,8 @@ test('online farm helper purchase and catch-up use durable receipts without dupl
   const bought = await f.command('buyFarmHelper', {}, purchase); assert.equal(bought.profile.energy, before - 1000); assert.equal(bought.profile.farm.helper.autoFeed, false);
   const replay = await f.command('buyFarmHelper', {}, purchase); assert.equal(replay.replayed, true); assert.equal(replay.profile.energy, before - 1000);
   const collection = randomUUID(), caught = await f.command('farmHelperCatchUp', {}, collection);
-  assert.equal(caught.result.collected.length, 3); assert.equal(caught.profile.bag.egg, 3); assert.deepEqual(caught.result.fed, []);
-  assert.equal((await f.command('farmHelperCatchUp', {}, collection)).profile.bag.egg, 3);
+  assert.equal(caught.result.collected.length, 3); assert.equal(caught.profile.bag.truffle, 3); assert.deepEqual(caught.result.fed, []);
+  assert.equal((await f.command('farmHelperCatchUp', {}, collection)).profile.bag.truffle, 3);
   assert.equal((await f.command('farmHelperCatchUp')).result.collected.length, 0);
   await f.edit(account => { const a = account.profile.farm.animals[0]; a.bornAt = a.acquiredAt = Date.now() - M.ANIMAL_LIFESPAN_MS - 1000; a.cycleAt = M.adultAt(a); });
   const meatId = randomUUID(), meat = await f.command('farmHelperCollect', { uid: f.animal.uid }, meatId);

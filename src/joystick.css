@@ -2,7 +2,9 @@
 .movement-joystick[hidden]{display:none!important}.joystick-knob{position:absolute;width:50px;height:50px;left:36px;top:36px;background:#f3fff0c9;border:3px solid white;border-radius:50%;box-shadow:0 3px 0 #4b706760;pointer-events:none}
 #hud.joystick-on #touch-controls{display:none!important}#hud.joystick-on .skills{position:fixed;left:auto;right:max(18px,env(safe-area-inset-right));transform:none;bottom:80px}
 #hud.joystick-on .control-hint{display:none}
-#discovery-progress{position:fixed;bottom:calc(6px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;border:0;border-radius:20px;padding:4px 10px;background:#fff8e5df;color:#294b3a;font:800 11px Nunito,sans-serif;pointer-events:auto;white-space:nowrap;max-width:90vw;z-index:25}
+#discovery-progress{position:fixed;bottom:calc(6px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;border:0;border-radius:20px;padding:4px 10px;background:#fff8e5df;color:#294b3a;font:800 11px Nunito,sans-serif;pointer-events:auto;white-space:nowrap;max-width:90vw;z-index:2}
+/* The fight buttons stay above the discovery pill (main.ts also hides the pill where they meet). */
+#hud .skills{z-index:3}
 #discovery-progress b{display:inline-grid;place-items:center;width:20px;height:20px;background:#c7e2fc;color:#275375;border-radius:50%;font-size:15px}
 #discovery-text{display:grid;gap:1px;text-align:center}#discovery-text strong{font-size:10px;max-width:190px;overflow:hidden;text-overflow:ellipsis}#discovery-text small{font-size:12px;letter-spacing:-1px}
 #hud.fishing #discovery-progress{display:none}

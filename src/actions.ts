@@ -65,7 +65,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'buildPen': result = Game.buildPen(state); break;
     case 'buyAnimal': result = Game.buyAnimal(state, kind() as Game.AnimalKind, now); break;
     case 'feedAnimal': result = Game.feedAnimal(state, integer(p.uid), now, p.id === undefined ? undefined : id()); break;
-    case 'feedAll': result = Game.feedAll(state, now); break;
+    case 'feedAll': result = Game.feedAll(state, now, p.id === undefined ? undefined : id()); break;
     case 'collectProducts': {
       if (p.uids !== undefined && (!Array.isArray(p.uids) || p.uids.length > 100 || p.uids.some(v => !Number.isSafeInteger(v) || v < 1))) return invalid();
       result = Game.collectProducts(state, now, p.uids as number[] | undefined); break;
@@ -86,6 +86,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'farmHelperCatchUp': if (!FarmHelper.canWork(state)) return invalid(); result = FarmHelper.catchUp(state, now); break;
     case 'rescueFriend': result = Friends.rescue(state, string(p.id, 20) as Friends.FriendId, now); break;
     case 'friendsArrive': result = Friends.arriveHome(state, { x: number(p.x), z: number(p.z) }); break;
+    case 'setFriendAutoFeed': if (typeof p.autoFeed !== 'boolean') return invalid(); result = Friends.setFriendAutoFeed(state, string(p.id, 20) as Friends.FriendId, p.autoFeed); break;
     case 'setFriendPaused': if (typeof p.paused !== 'boolean') return invalid(); result = Friends.setFriendPaused(state, string(p.id, 20) as Friends.FriendId, p.paused); break;
     case 'friendWork': {
       const task = p.index !== undefined ? { kind: string(p.kind, 10), index: index() } : { kind: string(p.kind, 10), uid: integer(p.uid) };

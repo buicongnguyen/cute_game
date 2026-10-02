@@ -17,6 +17,8 @@ export interface Friend {
   home?: boolean;
   /** The per-friend pause: a paused friend stands at its post and touches nothing. */
   paused?: boolean;
+  /** The farmer only feeds animals when the player turns this on (off by default, like the pen robot's autoFeed). */
+  autoFeed?: boolean;
   /** Work done "today" (UTC day number `day`), for the status line. */
   day?: number; done?: number;
   /** The cook's odd items waiting for a partner (0 or 1 per item), so "half, rounded down" holds across batches. */
@@ -69,6 +71,7 @@ export function parseFriends(raw: unknown): Friend[] {
     const r = v as Record<string, unknown>, id = r.id as FriendId;
     if (!FRIEND_IDS.includes(id) || out.some(f => f.id === id)) continue;
     const f: Friend = { id, role: FRIENDS[id].role, rescuedAt: Number.isFinite(r.rescuedAt) ? r.rescuedAt as number : 0, gear: {}, home: r.home === true, paused: r.paused === true };
+    if (r.autoFeed === true) f.autoFeed = true;
     if (r.gear && typeof r.gear === 'object' && !Array.isArray(r.gear))
       for (const [slot, item] of Object.entries(r.gear)) if (typeof item === 'string' && friendSlot(item) === slot) f.gear[slot as FriendSlot] = canonicalItem(item);
     const day = count(r.day, 1e7); if (day) { f.day = day; f.done = count(r.done, 1e6); }

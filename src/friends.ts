@@ -37,7 +37,8 @@ export function giveGear(s: M.SaveState, id: FriendId, raw: M.ItemId): boolean {
   if (!f || !slot || (s.bag[item] ?? 0) < 1) return false;
   const old = f.gear[slot]; if (old && !Number.isSafeInteger((s.bag[old] ?? 0) + 1)) return false;
   if (!M.removeItem(s.bag, item)) return false;
-  if (old) M.addItem(s, old);
+  // The old item must fit back in the bag, or the swap is undone (nothing is lost).
+  if (old && !M.addItem(s, old)) { s.bag[item] = (s.bag[item] ?? 0) + 1; return false; }
   // Giving away the explorer's only copy takes it off the explorer (the house dress panel relies on this).
   if ((s.bag[item] ?? 0) < 1) for (const k of Object.keys(s.gear) as M.GearSlot[]) if (s.gear[k] === item) delete s.gear[k];
   f.gear[slot] = item; return true;
@@ -71,6 +72,7 @@ export function arriveHome(s: M.SaveState, at: { x: number; z: number }): Friend
 }
 export const following = (s: M.SaveState) => friendsOf(s).filter(f => !f.home);
 export function setFriendPaused(s: M.SaveState, id: FriendId, paused: boolean) { const f = friendOf(s, id); if (!f || typeof paused !== 'boolean') return false; f.paused = paused; return true; }
+export function setFriendAutoFeed(s: M.SaveState, id: FriendId, on: boolean) { const f = friendOf(s, id); if (!f || f.role !== 'farm' || typeof on !== 'boolean') return false; f.autoFeed = on; return true; }
 export const working = (s: M.SaveState, f: Friend | undefined): f is Friend => !!f && f.home === true && !f.paused && s.planet === 'home';
 
 // ---- Jobs ----
@@ -94,13 +96,13 @@ function bedTask(s: M.SaveState, from: { x: number; z: number }, now: number, pl
   });
   return best;
 }
-const keepOne = (s: M.SaveState) => { const crop = M.feedCrop(s); return crop && M.looseQuantity(s, crop) > 1 ? crop : null; };
+/** The farmer's feed for this animal (farm.ts autoFeedCrop: cheap crops, adults, worth it), always leaving the player one. */
+const keepOne = (s: M.SaveState, a: M.Animal | undefined, now: number) => { const crop = a && M.autoFeedCrop(s, a, now); return crop && M.looseQuantity(s, crop) > 1 ? crop : null; };
 function animalTask(s: M.SaveState, from: { x: number; z: number }, now: number, feed: boolean): FriendTask | null {
   if (!M.penBuilt(s)) return null;
   let best: FriendTask | null = null, bestD = Infinity, ready = false;
-  const food = feed && keepOne(s) !== null;
   for (const a of M.farmOf(s).animals) {
-    const r = M.productCount(a, now) > 0; if (!r && !(food && M.canFeed(a, now))) continue;
+    const r = M.productCount(a, now) > 0; if (!r && !(feed && keepOne(s, a, now))) continue;
     const d = dist(a.home ?? M.PEN, from);
     if (r && !ready || r === ready && d < bestD) { best = { kind: r ? 'collect' : 'feed', uid: a.uid }; bestD = d; ready = r; }
   }
@@ -110,7 +112,7 @@ function animalTask(s: M.SaveState, from: { x: number; z: number }, now: number,
 export function nextFriendTask(s: M.SaveState, id: FriendId, from: { x: number; z: number }, now = Date.now(), skipBed?: number): FriendTask | null {
   const f = friendOf(s, id); if (!working(s, f)) return null;
   if (f.role === 'garden') return bedTask(s, from, now, true, skipBed);
-  if (f.role === 'farm') return animalTask(s, from, now, true);
+  if (f.role === 'farm') return animalTask(s, from, now, f.autoFeed === true);
   const bed = bedTask(s, from, now, false, skipBed), animal = animalTask(s, from, now, false);
   if (!bed || !animal) return bed ?? animal;
   const b = bed as { index: number }, u = (animal as { uid: number }).uid;
@@ -155,7 +157,7 @@ export function friendWork(s: M.SaveState, id: FriendId, task: FriendTask, now =
   } else {
     if (f.role === 'garden' || task.kind === 'feed' && f.role !== 'farm' || !Number.isSafeInteger(task.uid)) return null;
     if (task.kind === 'collect') { collected = M.collectProducts(s, now, [task.uid]); if (!collected.length) return null; collected.forEach(c => got(c.item)); }
-    else { const crop = keepOne(s); if (!crop || !M.feedAnimal(s, task.uid, now, crop)) return null; }
+    else { const crop = f.autoFeed ? keepOne(s, M.farmOf(s).animals.find(a => a.uid === task.uid), now) : null; if (!crop || !M.feedAnimal(s, task.uid, now, crop)) return null; }
   }
   tally(f, 1, now);
   const cooked = f.role === 'cook' ? cookHalf(s, f, raw) : {};

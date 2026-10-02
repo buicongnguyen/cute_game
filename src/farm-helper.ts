@@ -28,11 +28,11 @@ export interface FarmHelperTask { kind: 'collect' | 'feed'; uid: number }
 export function nextTask(s: M.SaveState, from: { x: number; z: number }, now = Date.now()): FarmHelperTask | null {
   if (!canWork(s) || !Number.isFinite(from.x) || !Number.isFinite(from.z)) return null;
   let task: FarmHelperTask | null = null, nearest = Infinity, collecting = false;
-  const feed = helperOf(s).autoFeed && M.feedCrop(s) !== null;
+  const feed = helperOf(s).autoFeed;
   for (const animal of s.farm.animals) {
     const count = M.productCount(animal, now), ready = count > 0;
     // Do not stall forever on an overflowing stack while another animal can be tended.
-    if (ready ? !Number.isSafeInteger((s.bag[M.productFor(animal, now)] ?? 0) + count) : !feed || !M.canFeed(animal, now)) continue;
+    if (ready ? !Number.isSafeInteger((s.bag[M.productFor(animal, now)] ?? 0) + count) : !feed || !M.autoFeedCrop(s, animal, now)) continue;
     const home = animal.home ?? M.PEN, distance = Math.hypot(home.x - from.x, home.z - from.z);
     if (ready && !collecting || ready === collecting && distance < nearest) {
       task = { kind: ready ? 'collect' : 'feed', uid: animal.uid }; nearest = distance; collecting = ready;
@@ -45,7 +45,8 @@ export function helperCollect(s: M.SaveState, uid: number, now = Date.now()): M.
   return canWork(s) && Number.isSafeInteger(uid) && uid > 0 ? M.collectProducts(s, now, [uid]) : [];
 }
 export function helperFeed(s: M.SaveState, uid: number, now = Date.now()): boolean {
-  return canWork(s) && helperOf(s).autoFeed && Number.isSafeInteger(uid) && uid > 0 && M.feedAnimal(s, uid, now) !== null;
+  const a = canWork(s) && helperOf(s).autoFeed && Number.isSafeInteger(uid) && uid > 0 ? s.farm.animals.find(x => x.uid === uid) : undefined, crop = a && M.autoFeedCrop(s, a, now);
+  return !!crop && M.feedAnimal(s, uid, now, crop) !== null;
 }
 export const FARM_HELPER_CATCH_UP_CAP = M.MAX_ANIMALS_PER_KIND * 4 + 1;
 /** Collect only stock already waiting, once per animal. Never simulate missed cycles or replace livestock. */

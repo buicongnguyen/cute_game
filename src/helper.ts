@@ -45,9 +45,13 @@ export function canPlant(s: M.SaveState, crop: M.CropId) {
 }
 /** What a seed costs to use: nothing for crops without a seed item, else the seed's shop price or sell value. */
 export const seedCost = (crop: M.CropId) => { const seed = M.CROPS[crop]?.seed; if (!seed) return 0; const item = M.ITEMS[seed]; return item?.price ?? item?.sell ?? 0; };
+/** Crops longer than this are never an automatic pick (fruit trees, slow rare crops): only the player's own choice. */
+export const FALLBACK_MAX_MS = 30 * 60_000;
+const rate = (id: M.CropId) => ((M.ITEMS[id]?.sell ?? 0) - seedCost(id)) / M.CROPS[id].duration; // a used-up seed counts against the crop
+/** The automatic pick for a bed with no remembered crop (robot and Sprout): the best energy per minute (sell less seed) among quick crops, cheapest seed on ties. */
 export function cheapestSeed(s: M.SaveState): M.CropId | null {
-  const options = Object.keys(M.CROPS).filter(id => canPlant(s, id));
-  options.sort((a, b) => seedCost(a) - seedCost(b) || M.CROPS[b].level - M.CROPS[a].level || (a < b ? -1 : 1));
+  const options = Object.keys(M.CROPS).filter(id => M.CROPS[id].duration <= FALLBACK_MAX_MS && canPlant(s, id));
+  options.sort((a, b) => rate(b) - rate(a) || seedCost(a) - seedCost(b) || (a < b ? -1 : 1));
   return options[0] ?? null;
 }
 /** The crop the helper would plant in bed `i`, or null (out of the chosen seed: it waits rather than guessing). */
@@ -95,7 +99,7 @@ export function helperPlant(s: M.SaveState, i: number, now = Date.now()) {
 export const HELPER_CATCH_UP_CAP = M.STARTING_PLOTS + M.MAX_EXTRA_PLOTS;
 export function catchUp(s: M.SaveState, now = Date.now(), cap = HELPER_CATCH_UP_CAP) {
   const harvested: M.CropId[] = [], planted: M.CropId[] = [];
-  if (!s.helper?.owned || s.helper.paused) return { harvested, planted };
+  if (!s.helper?.owned || s.helper.paused || s.planet !== 'home') return { harvested, planted }; // the garden is on the home planet
   rememberPlantings(s);
   for (let i = 0; i < s.plots.length && harvested.length + planted.length < cap * 2; i++) {
     const p = s.plots[i];

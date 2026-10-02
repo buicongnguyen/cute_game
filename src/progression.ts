@@ -119,11 +119,13 @@ function tasks(specs: Record<string, TaskSpec>, count: number, seed: number, tie
 } return result; }
 export function refreshProgress(s: SaveState, now = Date.now()) {
     const p = s.progression, today = day(now), monday = week(now), season = today.slice(0, 7);
-    if (p.daily.key !== today)
+    // ISO date keys sort by time: only a newer day or week replaces the tasks, so winding the clock back and forth
+    // cannot re-roll (and re-claim) them. The newest key seen is kept.
+    if (!(p.daily.key >= today))
         p.daily = { key: today, tasks: tasks(DAILY, 3, hash(today + s.name), Math.floor(s.level / 7), s.level), chest: false, rerolled: false };
-    if (p.weekly.key !== monday)
+    if (!(p.weekly.key >= monday))
         p.weekly = { key: monday, tasks: tasks(WEEKLY, 4, hash(monday + 'w' + s.name), Math.floor(s.level / 10), s.level), chest: false };
-    if (p.pass.season !== season)
+    if (!(p.pass.season >= season))
         p.pass = { season, stars: 0, claimed: [] };
     const key = `${s.planet}:${Math.floor(now / 1800000)}`;
     if (p.bounty?.key !== key) {
@@ -198,7 +200,7 @@ export function progressEntries(s: SaveState, kind: ProgressKind, now = Date.now
         const result = state.tasks.map((task, i) => entry(`${state.key}:${i}`, specs[task.type].title, task.progress, task.target, task.claimed, taskReward(s, task, weekly), specs[task.type].icon));
         result.push(entry(`${state.key}:chest`, weekly ? 'Weekly chest' : 'Daily chest', state.tasks.filter(t => t.claimed).length, state.tasks.length, state.chest, weekly ? weeklyChest(s) : dailyChest(s, now), '🎁'));
         if (!weekly)
-            result.unshift(entry(`${day(now)}:login`, 'Daily check-in', 1, 1, p.login.day === day(now), loginReward(s, now), '🗓️', t('{count} consecutive days', { count: p.login.streak })));
+            result.unshift(entry(`${day(now)}:login`, 'Daily check-in', 1, 1, p.login.day >= day(now), loginReward(s, now), '🗓️', t('{count} consecutive days', { count: p.login.streak })));
         return result;
     }
     if (kind === 'achievements')

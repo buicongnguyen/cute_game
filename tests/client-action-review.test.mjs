@@ -16,7 +16,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(){
   const state=M.newGame(),calls=[],animations=[],panels=[],notices=[];let resolveAction;
   const flash={classList:{add(){},remove(){}}},ctx=vm.createContext({
-    M,state,flight:null,arriving:false,launchPending:false,visiting:null,activePlot:0,modal:'plant',
+    M,state,chosenFeed:()=>null,flight:null,arriving:false,launchPending:false,visiting:null,activePlot:0,modal:'plant',
     actionHandler:null,world:{root:{},position:{x:0,z:0},syncCrops(){},build:id=>calls.push(['build',id]),refreshPlayer(){},applyRefinedAssets(){},renderer:{compileAsync:()=>Promise.resolve()}},
     ship:{busy:false,launch:fn=>calls.push(['launch',fn]),reset:()=>calls.push(['reset'])},
     perform:(...args)=>{calls.push(args);return new Promise(resolve=>{resolveAction=resolve;});},

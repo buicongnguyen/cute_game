@@ -10,6 +10,7 @@ import { KitLibrary, heroKit, wearKit, weaponKit, petKit } from './assets.ts';
 import { toonMaterial } from './toon.ts';
 import { FURNITURE, FRIEND_SPOTS, HOUSE, ROOMS, WALL, WALLS, roomAt, type Placement } from './house.ts';
 import { buildFriend } from './friend-view.ts';
+import { dropTree } from './dispose-tree.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends.ts';
 
 const assetBase = import.meta.env?.BASE_URL ?? '/';
@@ -157,7 +158,7 @@ export class HouseView {
     });
     for (const view of [...this.friends.values()]) if (!seen.has(view.id)) { this.dropFriend(view); this.friends.delete(view.id); }
   }
-  private dropFriend(view: FriendView) { this.root.remove(view.group); }
+  private dropFriend(view: FriendView) { dropTree(view.group); }
   /** Rebuild every friend (a gear kit has loaded). */
   refreshFriends(list: Friend[]) { for (const view of this.friends.values()) view.signature = ''; this.syncFriends(list); }
   update(dt: number, time: number) {

@@ -88,3 +88,14 @@ test('all29 story milestones are reachable using real farming, reward, purchase 
   assert.equal(s.quest,29);assert.ok(s.level>=25);assert.equal(s.visited.length,9);assert.equal(s.decorations.length,2);assert.ok(s.bag.seed_star);assert.ok(harvests>0);assert.ok(kills>150);assert.equal(P.progressEntries(s,'story')[0].description,'Chapter 5 · Step 30');
   const r=reload(s);assert.equal(r.quest,29);assert.equal(r.level,s.level);assert.equal(r.gear.disguise,'dz_ninja');
 });
+
+test('winding the clock back never re-rolls or re-pays dailies: the newest date key is kept',()=>{
+  const s=M.newGame();P.refreshProgress(s,start);const today=JSON.stringify(s.progression.daily),week=s.progression.weekly.key;
+  const login=P.progressEntries(s,'daily',start).find(e=>e.id.endsWith('login'))!;assert.equal(P.claimProgress(s,'daily',login.id,start),true);const energy=s.energy;
+  const yesterday=start-86400000,lastWeek=start-7*86400000;
+  P.refreshProgress(s,yesterday);P.refreshProgress(s,lastWeek);
+  assert.equal(JSON.stringify(s.progression.daily),today,'an earlier day keeps today\'s tasks');assert.equal(s.progression.weekly.key,week);
+  const back=P.progressEntries(s,'daily',yesterday).find(e=>e.id.endsWith('login'))!;assert.equal(back.claimed,true);assert.equal(P.claimProgress(s,'daily',back.id,yesterday),false);assert.equal(s.energy,energy);
+  P.refreshProgress(s,start);assert.equal(JSON.stringify(s.progression.daily),today,'returning to today does not re-roll');
+  P.refreshProgress(s,start+86400000);assert.notEqual(s.progression.daily.key,JSON.parse(today).key,'a real new day still rolls');
+});

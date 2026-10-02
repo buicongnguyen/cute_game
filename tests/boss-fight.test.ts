@@ -134,3 +134,25 @@ test('knock distances match the reference: a punch slides a creature about 0.6 m
   assert.ok(Math.abs(third-2.2*6/8)<.2,`third punch slide ${third.toFixed(3)} m`);
   assert.ok(Math.abs(bear-.8*6*.15/8)<.03,`boss slide ${bear.toFixed(3)} m`);
 });
+
+test('boss cooldowns: x0.7 below half health and x0.6 once enraged, for plain blows as well as skills (bundle @837714)',async()=>{
+  const {bossCooldownScale}=await import('../src/world.ts');
+  const b=(hp:number,enraged=false)=>bossCooldownScale({boss:true,hp,maxHp:100,enraged});
+  assert.equal(b(100),1);assert.equal(b(40),.7);assert.ok(Math.abs(b(40,true)-.42)<1e-12);assert.equal(b(80,true),.6,'keyed on enraged, not on a health line');
+  assert.equal(bossCooldownScale({boss:false,hp:10,maxHp:100,enraged:true}),1);
+  // A plain blow (3rd attack above half health: no skill) from an enraged boss.
+  const w=world();w.fx=quietFx();w.position.set(32.7,0,0);const e=w.spawnSpecies('bear',30,0,0)!;
+  e.attackCount=2;e.mesh.userData.attackCount=2;e.scaled=true;e.hp=e.maxHp*.8;e.enraged=true;
+  step(w);assert.equal(e.phase,'windup');assert.equal(e.skill,undefined,'a plain blow');
+  for(let i=0;i<40&&e.phase==='windup';i++)step(w);
+  assert.equal(e.phase,'recover');assert.ok(Math.abs(e.cooldown-e.definition!.cooldown*.6)<.03,`cooldown ${e.cooldown} vs ${e.definition!.cooldown*.6}`);
+});
+
+test('a respawned boss is calm again: enraged clears on respawn and on the dragon summon',async()=>{
+  const w=world();w.position.set(32,0,0);const e=w.spawnSpecies('bear',30,0,0)!;e.enraged=true;w.damageEnemy(e,e.hp);
+  w.position.set(60,0,0);for(let i=0;i<3700&&e.hp<=0;i++)step(w);assert.equal(e.hp,e.maxHp);assert.equal(e.enraged,false);
+  const {lavaEvent}=await import('../src/lava-weather.ts');
+  const v=world();v.planet='lava';v.environment=new EnvironmentSimulation(createEnvironmentLayout('lava'));let cycle=0;while(lavaEvent(cycle*360).id!=='dragon')cycle++;
+  const dragon=v.spawnSpecies('dragon',-96,58,0)!;dragon.hp=0;dragon.respawn=999999;dragon.enraged=true;
+  v.environment.time=cycle*360+239.9;v.update(.01,true,false);assert.equal(dragon.hp,dragon.maxHp);assert.equal(dragon.enraged,false);
+});

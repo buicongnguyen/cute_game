@@ -46,7 +46,7 @@ import { createDrops } from './drops-view.ts';
 import { Minimap } from './minimap.ts';
 import { produceLots, sellProduce, upgradeCards } from './item-views.ts';
 import './item-views.css';
-import { penHtml, penSignature, tickPen, collectText, dishesHtml, type FarmUi } from './farm-ui.ts';
+import { penHtml, penSignature, tickPen, collectText, dishesHtml, chosenFeed, feedChoice, type FarmUi } from './farm-ui.ts';
 // Compact HUD sizes; imported last so it overrides style.css (and the online/platform styles) for the HUD only.
 import './hud-compact.css';
 import { HelperView } from './helper-view.ts';
@@ -301,6 +301,8 @@ function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,
 /** The label's screen box at its anchor: bottom centre for buildings, centre for the small crop marks. */
 function labelRect(a:LabelAnchor){const p=world.screen(a.e.x,a.wy,a.e.z-a.back),top=p.y-(a.centre?a.h/2:a.h);return {x:p.x,y:p.y,front:p.front,left:p.x-a.w/2,right:p.x+a.w/2,top,bottom:top+a.h};}
 const boxesMeet=(a:{left:number;right:number;top:number;bottom:number},b:{left:number;right:number;top:number;bottom:number})=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
+/** True when a box touches none of the HUD panels (measureHud). */
+const clearOfHud=(r:{left:number;right:number;top:number;bottom:number},panels:typeof hudPanels)=>!panels.some(p=>boxesMeet(p,r));
 function updateLabels() {
   if(!started)return;
   measureHud();const near=world.nearest(),candidates:{a:LabelAnchor;rank:number;distance:number}[]=[],active=new Set<string>();
@@ -345,6 +347,8 @@ function positionLabels(){
   const discovery=$('#discovery-progress'),point=world.screen(2.6,2.7,14.5);
   discovery.hidden=!started||world.planet!=='home'||Math.hypot(world.position.x-2.6,world.position.z-14.5)>16||!point.front||!!modal;
   if(!discovery.hidden){const width=discovery.offsetWidth;discovery.style.left=Math.max(width/2+8,Math.min(innerWidth-width/2-8,point.x))+'px';discovery.style.top=Math.max(90,Math.min(innerHeight-42,point.y))+'px';discovery.style.bottom='auto';}
+  // Never over the fight buttons, the stick or any other HUD panel (phones): hide it while they meet.
+  discovery.style.visibility=!discovery.hidden&&clearOfHud(discovery.getBoundingClientRect(),hudPanels)?'':'hidden';
   combatHud.frame(world.enemies,world.selected,world.position.x,world.position.z,!started||!!modal);
   if(!started||modal)return;
   for(const [id,a] of labelAnchors){
@@ -1174,10 +1178,11 @@ app.addEventListener('click',async event=>{
     case 'collect-animal':collectFarm(Number(button.dataset.id));break;
     case 'build-species-pen':if(await perform('buildSpeciesPen',{kind:button.dataset.kind})){tone('success');penDialog();}break;
     case 'buy-animal':buyAnimal(button.dataset.kind as M.AnimalKind);break;
-    case 'feed-animal':{const crop=await perform('feedAnimal',{uid:Number(button.dataset.id)});if(crop){tone('pop');feedBurst(Number(button.dataset.id));toast(`Fed a ${t(M.ITEMS[crop].name).toLowerCase()}. It will be quicker now.`,M.ITEMS[crop].icon);}penDialog();break;}
-    case 'feed-all':{const before=new Set(M.farmOf(state).animals.filter(a=>M.canFeed(a)).map(a=>a.uid)),n=await perform('feedAll');if(n){tone('pop');for(const uid of before){const animal=M.farmOf(state).animals.find(a=>a.uid===uid);if(animal&&!M.canFeed(animal))feedBurst(uid);}toast(`Fed ${n} animal${n>1?'s':''}.`,'🥕');}penDialog();break;}
+    case 'feed-animal':{const choice=chosenFeed(state),crop=await perform('feedAnimal',{uid:Number(button.dataset.id),...(choice?{id:choice}:{})});if(crop){tone('pop');feedBurst(Number(button.dataset.id));toast(`Fed a ${t(M.ITEMS[crop].name).toLowerCase()}. It will be quicker now.`,M.ITEMS[crop].icon);}penDialog();break;}
+    case 'feed-all':{const before=new Set(M.farmOf(state).animals.filter(a=>M.canFeed(a)).map(a=>a.uid)),choice=chosenFeed(state),n=await perform('feedAll',choice?{id:choice}:{});if(n){tone('pop');for(const uid of before){const animal=M.farmOf(state).animals.find(a=>a.uid===uid);if(animal&&!M.canFeed(animal))feedBurst(uid);}toast(`Fed ${n} animal${n>1?'s':''}.`,'🥕');}penDialog();break;}
     case 'build-pen':buildPenAction();break;
     case 'expand-pen':if(await perform('expandPen')){tone('success');toast('The pen is bigger: room for 3 more chickens and 4 more cows.','🐔');}else toast(`You need ${M.penExpandCost(state)??0} energy to make the pen bigger.`,'ϟ');penDialog();break;
+    case 'friend-feed':{const id=button.dataset.kind as FriendId,f=state.friends?.find(f=>f.id===id);if(f&&await perform('setFriendAutoFeed',{id,autoFeed:!f.autoFeed}))friendDialog(id);break;}
     case 'friend-pause':{const id=button.dataset.kind as FriendId,f=state.friends?.find(f=>f.id===id);if(f&&await perform('setFriendPaused',{id,paused:!f.paused}))friendDialog(id);break;}
     case 'cook-dish':if(await perform('cookDish',{id})){tone('success');toast(`${t(M.ITEMS[id].name)} is ready. Enjoy!`,M.ITEMS[id].icon);cooking();}break;case 'graphics':graphics.choose(button.dataset.kind as QualitySetting);world.applyGraphics(graphics.profile,graphics.ratio);saveGraphics(graphics);await perform('settings',{settings:{lowGraphics:graphics.level==='low'}});settings();break;
     case 'zoom-in':case 'zoom-out':world.zoom=clampZoom(Math.round((world.zoom+(action==='zoom-in'?-ZOOM.button:ZOOM.button))*100)/100,'wheel');world.resize();$('#zoom-value').textContent=t(`${Math.round(world.zoom*100)}%`);break;
@@ -1244,7 +1249,7 @@ function refreshDocumentLanguage(){
   document.querySelector('meta[name="description"]')?.setAttribute('content',t('A cozy little 3D world. Plant a garden, catch fish, battle monsters, and explore new planets.'));
 }
 refreshDocumentLanguage();
-app.addEventListener('change',event=>{const input=event.target;if(input instanceof HTMLSelectElement&&input.hasAttribute('data-language'))setLanguage(input.value==='vi'?'vi':'en');});
+app.addEventListener('change',event=>{const input=event.target;if(input instanceof HTMLSelectElement&&input.hasAttribute('data-language'))setLanguage(input.value==='vi'?'vi':'en');if(input instanceof HTMLSelectElement&&input.hasAttribute('data-feed-choice'))feedChoice.id=input.value;});
 onLanguageChange(()=>{
   refreshStaticLanguage();refreshWorldLanguage();refreshDocumentLanguage();
   app.querySelectorAll<HTMLSelectElement>('[data-language]').forEach(input=>{input.value=getLanguage();});

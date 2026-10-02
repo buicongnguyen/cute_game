@@ -8,6 +8,8 @@ import {LAVA_ORE_RULES} from '../src/lava-weather.ts';
 import {STAR_MAP,DISCOVER_RANGE,SPACE_EDGE,spaceLayout,dustSpot} from '../src/space.ts';
 import {clearJourney} from './adventure-lifecycle.mjs';
 import {huntingPonds,huntFish} from '../src/fish-hunting.ts';
+import {CAGES} from '../src/friends-state.ts';
+import {cageCandidates,RESCUE_REACH} from '../src/cage-spots.ts';
 
 const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 const random=()=>randomInt(0,0x100000000)/0x100000000;
@@ -16,7 +18,7 @@ export const commandHash=value=>createHash('sha256').update(JSON.stringify(canon
 const validId=value=>typeof value==='string'&&/^[a-zA-Z0-9:_-]{1,100}$/.test(value)&&!['constructor','prototype','__proto__'].includes(value);
 const point=value=>value&&Number.isFinite(value.x)&&Number.isFinite(value.z);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
-const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','helperHarvest','helperPlant','rest','cook','cookDish','friendsArrive','setFriendPaused','friendWork','friendsCatchUp']);
+const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','helperHarvest','helperPlant','rest','cook','cookDish','friendsArrive','setFriendPaused','setFriendAutoFeed','friendWork','friendsCatchUp','helperCatchUp','giveFriendGear','takeFriendGear']);
 const farmHelperActions=new Set(['buyFarmHelper','setFarmHelperPaused','setFarmHelperAutoFeed','farmHelperCollect','farmHelperFeed','farmHelperCatchUp']);
 export function waterNodes(planet){
   return huntingPonds(planet).map(pond=>({x:pond.x,z:pond.z,r:pond.rx,water:pond.waterId}));
@@ -157,6 +159,10 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         if(['openCave','lightBrazier','claimCaveChest'].includes(data.type)){
           const layout=createEnvironmentLayout('lava');if(state.planet!=='lava')fail(409,'Travel to the volcano first.');requireNear(peer,data.type==='openCave'?layout.cave.gate:data.type==='lightBrazier'?layout.braziers[p.index]:{x:layout.cave.x,z:layout.cave.z-8});
         }
+        // A rescue happens at the cage: within reach of a spot it can stand on around its boss's reported spawn (cage-spots.ts).
+        if(data.type==='rescueFriend'){const cage=typeof p.id==='string'&&Object.hasOwn(CAGES,p.id)?CAGES[p.id]:null,boss=cage&&peer&&!peer.visit?[...(getWorld(peer.room)?.enemies?.values()??[])].find(e=>e.boss&&e.type===cage.boss&&point(e.home)):null;if(!boss||!cageCandidates(boss.home.x,boss.home.z).some(spot=>distance(peer.pose,spot)<=RESCUE_REACH+2.6))fail(409,'Move closer to use that.');}
+        // Friends arrive where the server saw the explorer, not where the client says it is.
+        if(data.type==='friendsArrive'){if(!peer||peer.visit)fail(409,'Return to your own garden first.');p.x=peer.pose.x;p.z=peer.pose.z;}
         if(data.type==='travel'&&!account.journeyPaid)fail(409,'Launch your starship first.');
         if(data.type==='die'){if(!peer||peer.visit||state.hp>0)fail(409,'Your adventure is still alive.');p.x=peer.pose.x;p.z=peer.pose.z;}
         result=applyGameAction(state,intent,{now,random});

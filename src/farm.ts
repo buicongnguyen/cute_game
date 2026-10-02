@@ -226,17 +226,34 @@ export function buyAnimal(s: SaveState, kind: AnimalKind, now = Date.now()): Ani
   a.pen = nearbyPen(farm, a);
   s.energy -= ANIMALS[kind].price; farm.animals.push(a); return a;
 }
-/** The crop the farm feeds by default: the cheapest one in the bag (ties by name), or null. */
-export function feedCrop(s: SaveState): ItemId | null {
-  const crops = Object.keys(s.bag).filter(id => Object.hasOwn(CROPS, id) && looseQuantity(s, id) > 0);
+/** Cheap, quick crops are animal feed (radish, carrot, pumpkin, mint); fruit trees and seed crops never are. */
+export const FEED_MAX_SELL = 30, FEED_MAX_MS = 10 * 60_000;
+export const isFeedCrop = (id: ItemId) => Object.hasOwn(CROPS, id) && !CROPS[id].seed && CROPS[id].duration <= FEED_MAX_MS && (ITEMS[id]?.sell ?? Infinity) <= FEED_MAX_SELL;
+const cheapest = (s: SaveState, keep: (id: ItemId) => boolean) => {
+  const crops = Object.keys(s.bag).filter(id => Object.hasOwn(CROPS, id) && keep(id) && looseQuantity(s, id) > 0);
   crops.sort((a, b) => ITEMS[a].sell - ITEMS[b].sell || a.localeCompare(b));
   return crops[0] ?? null;
+};
+/** The crop the farm feeds by default: the cheapest feed crop in the bag (ties by name), or null. */
+export function feedCrop(s: SaveState): ItemId | null { return cheapest(s, isFeedCrop); }
+/** The Feed buttons' default: a feed crop, else the player's cheapest crop (they may still pick any crop themselves). */
+export function playerFeedCrop(s: SaveState): ItemId | null { return feedCrop(s) ?? cheapest(s, () => true); }
+/** What feeding saves, in product value: the share of the cycle it skips times one product's sell. */
+export function feedGain(a: Animal, now = Date.now()) {
+  const left = timeLeft(a, now), duration = productDuration(a), product = ITEMS[ANIMALS[a.kind].product]?.sell ?? 0;
+  return Number.isFinite(left) && duration > 0 ? product * Math.min(1, left * FEED_SHARE / duration) : 0;
+}
+/** The crop a helper (Clover, the pen robot) would feed this animal: adults only, and only when the time saved is
+ * worth at least the crop; else null (selling the crop is better). */
+export function autoFeedCrop(s: SaveState, a: Animal, now = Date.now()): ItemId | null {
+  const crop = feedCrop(s); if (!crop || !isAdult(a, now) || !canFeed(a, now)) return null;
+  return feedGain(a, now) >= ITEMS[crop].sell ? crop : null;
 }
 /** Whether this animal would take feed now: once while young, once per product cycle, never while a product waits. */
 export function canFeed(a: Animal, now = Date.now()) { return a.kind !== 'dog' && validAnimalTime(a, now) && !expired(a, now) && (isAdult(a, now) ? !a.fed && !productReady(a, now) : !a.fedYoung); }
 /** Feeds one crop to an animal; returns the crop used, or null (no such animal, already fed, nothing to feed). */
 export function feedAnimal(s: SaveState, uid: number, now = Date.now(), raw?: ItemId): ItemId | null {
-  const a = farmOf(s).animals.find(x => x.uid === uid), crop = raw ? canonicalItem(raw) : feedCrop(s);
+  const a = farmOf(s).animals.find(x => x.uid === uid), crop = raw ? canonicalItem(raw) : playerFeedCrop(s);
   if (!a || !crop || !Object.hasOwn(CROPS, crop) || !Number.isFinite(now) || !canFeed(a, now) || looseQuantity(s, crop) < 1 || !removeItem(s.bag, crop)) return null;
   a.acquiredAt ??= a.bornAt; // Freeze the legacy arrival before feeding changes bornAt.
   const skip = timeLeft(a, now) * FEED_SHARE;
@@ -245,7 +262,7 @@ export function feedAnimal(s: SaveState, uid: number, now = Date.now(), raw?: It
   return crop;
 }
 /** Feeds every animal that would take feed while crops last; returns how many ate. */
-export function feedAll(s: SaveState, now = Date.now()) { let fed = 0; for (const a of farmOf(s).animals) if (canFeed(a, now) && feedAnimal(s, a.uid, now)) fed++; return fed; }
+export function feedAll(s: SaveState, now = Date.now(), raw?: ItemId) { let fed = 0; for (const a of farmOf(s).animals) if (canFeed(a, now) && feedAnimal(s, a.uid, now, raw)) fed++; return fed; }
 export interface Collected { uid: number; kind: AnimalKind; item: ItemId }
 /**
  * Collects waiting products or expired animals as meat, with XP. Meat is granted only on collection, then the
