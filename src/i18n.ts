@@ -5,11 +5,12 @@ import { VI_UI } from './locales/vi-ui.ts';
 import { VI_FRIENDS } from './locales/vi-friends.ts';
 import { VI_LOOKS } from './locales/vi-looks.ts';
 import { VI_HOUSE } from './locales/vi-house.ts';
+import { VI_HOUSE_TALK } from './locales/vi-house-talk.ts';
 import { VI_TESTER } from './locales/vi-tester.ts';
 
 export type Language = 'en' | 'vi';
 export const LANGUAGE_KEY = 'cute-game-language';
-const vi: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS, VI_HOUSE, VI_LOOKS, VI_TESTER);
+const vi: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS, VI_HOUSE, VI_HOUSE_TALK, VI_LOOKS, VI_TESTER);
 const folded = new Map(Object.entries(vi).map(([key, value]) => [key.toLowerCase(), value]));
 const listeners = new Set<() => void>();
 const cache = new Map<string, string>();

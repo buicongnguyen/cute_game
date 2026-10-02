@@ -86,9 +86,9 @@ test('a tap ray through a bed still finds the plot entity through its invisible 
   assert.equal((w as unknown as {raycastEntity(m:T.Object3D[]):unknown}).raycastEntity([plot.mesh]),plot);
 });
 
-test('a full 33-bed garden keeps every bed off buildings, props, trees, the pond, the trails and other beds',()=>{
-  const w=world();w.state.energy=1e7;while(M.expandGarden(w.state));assert.equal(w.state.plots.length,33);
-  w.build('home');const beds=w.entities.filter(e=>e.kind==='plot');assert.equal(beds.length,33);
+test('a full 24-bed garden keeps every bed off buildings, props, trees, the pond, the trails and other beds',()=>{
+  const w=world();w.state.energy=1e7;while(M.expandGarden(w.state));assert.equal(w.state.plots.length,24);
+  w.build('home');const beds=w.entities.filter(e=>e.kind==='plot');assert.equal(beds.length,24);
   const square=(b:{x:number;z:number},x:number,z:number)=>Math.hypot(Math.max(0,Math.abs(b.x-x)-M.BED_HALF),Math.max(0,Math.abs(b.z-z)-M.BED_HALF));
   for(const b of beds){
     for(const o of w.obstacles)assert.ok(square(b,o.x,o.z)>=o.r-1e-9,`bed ${b.index} at ${b.x},${b.z} overlaps obstacle ${o.x},${o.z}`);
@@ -166,7 +166,7 @@ test('a farm animal tap carries only its own UID while the pen remains a separat
 test('home includes nine plots and exact regional creature populations within full bounds',()=>{
   const w=world();w.build('home');assert.equal(w.plotMeshes.length,9);assert.equal(w.enemies.length,151+FOREST_RAPTOR_COUNT);assert.equal(w.enemies.filter(e=>e.type==='forest_raptor').length,FOREST_RAPTOR_COUNT);assert.equal(w.enemies.filter(e=>e.boss).length,5);assert.equal(w.enemies.filter(e=>e.definition?.titan).length,1);
   assert.ok(w.enemies.some(e=>Math.hypot(e.x,e.z)>100));assert.equal(w.blocked(149,0),true);
-  assert.deepEqual(w.entities.filter(e=>e.kind==='plot').slice(0,3).map(e=>[e.x,e.z]),[[-10.79,1.35],[-9.15,1.35],[-7.51,1.35]]);
+  assert.deepEqual(w.entities.filter(e=>e.kind==='plot').slice(0,3).map(e=>[e.x,e.z]),[[-12.23,1.16],[-11,1.16],[-9.77,1.16]]);
 });
 
 test('follow-up damage cannot shorten an active crowd-control stun',()=>{
