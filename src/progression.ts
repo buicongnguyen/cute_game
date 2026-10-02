@@ -2,6 +2,7 @@ import { t } from './i18n.ts';
 import { ITEMS, PLANETS, COLLECTIONS, STORY_STEPS, type Inventory } from './content.ts';
 import { addItem, gainXp, xpNeeded, type SaveState } from './model.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
+import { kitchenLevel } from './difficulty.ts';
 export { STORY_STEPS } from './content.ts';
 export type ProgressKind = 'story' | 'daily' | 'weekly' | 'achievements' | 'pass' | 'bounties' | 'collection' | 'challenges';
 export interface ProgressEntry {
@@ -106,11 +107,14 @@ const CHALLENGES: Record<string, {
     seconds: number;
 }> = { kill: { target: 4, seconds: 75 }, skill: { target: 8, seconds: 45 }, harvest: { target: 4, seconds: 100 }, fish: { target: 2, seconds: 120 }, boss: { target: 1, seconds: 150 } };
 export function createProgression(): ProgressionState { return { story: { index: 0, progress: 0 }, totals: {}, daily: { key: '', tasks: [], chest: false, rerolled: false }, weekly: { key: '', tasks: [], chest: false }, pass: { season: '', stars: 0, claimed: [] }, achievements: {}, login: { day: '', streak: 0 }, bounty: null, challenge: null, streak: 0, bestStreak: 0 }; }
+const DAY = 86400000;
 function day(now: number) { return new Date(now).toISOString().slice(0, 10); }
 function week(now: number) { const d = new Date(now); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); }
 function hash(text: string) { let value = 2166136261; for (const c of text)
     value = Math.imul(value ^ c.charCodeAt(0), 16777619); return value >>> 0; }
-function tasks(specs: Record<string, TaskSpec>, count: number, seed: number, tier: number, level: number): Task[] { const eligible = Object.keys(specs).filter(k => level >= (specs[k].level || 1)), result: Task[] = []; for (let i = 0; i < 80 && result.length < count; i++) {
+/** The level a task unlocks at: cooking also waits for the kitchen (difficulty.ts: level 14 on Normal and Hard). */
+function specLevel(s: SaveState, spec: TaskSpec) { return spec.event === 'cook' ? Math.max(spec.level || 1, kitchenLevel(s)) : spec.level || 1; }
+function tasks(s: SaveState, specs: Record<string, TaskSpec>, count: number, seed: number, tier: number, level: number): Task[] { const eligible = Object.keys(specs).filter(k => level >= specLevel(s, specs[k])), result: Task[] = []; for (let i = 0; i < 80 && result.length < count; i++) {
     const type = eligible[(seed + i * 7919) % eligible.length];
     if (result.some(t => t.type === type))
         continue;
@@ -120,11 +124,23 @@ function tasks(specs: Record<string, TaskSpec>, count: number, seed: number, tie
 export function refreshProgress(s: SaveState, now = Date.now()) {
     const p = s.progression, today = day(now), monday = week(now), season = today.slice(0, 7);
     // ISO date keys sort by time: only a newer day or week replaces the tasks, so winding the clock back and forth
-    // cannot re-roll (and re-claim) them. The newest key seen is kept.
+    // cannot re-roll (and re-claim) them. The newest key seen is kept, unless it lies in the future (more than a day
+    // ahead for dailies, a week for weeks and the pass): then the clock was wound forward and back, and keeping the
+    // future key would freeze the lists until that date. Such a key is re-rolled for today with a fresh chest and fresh
+    // claims, but marked spent: today's own claims were overwritten by the jump, so the lists resume on the next real
+    // day (or week) and nothing can be claimed twice. Pass stars earned "in the future" are dropped with that season.
+    const soon = day(now + DAY), nextWeek = day(now + 7 * DAY), futureDay = p.daily.key > soon, futureWeek = p.weekly.key > nextWeek;
+    if (futureDay) p.daily.key = '';
+    if (futureWeek) p.weekly.key = '';
+    if (p.pass.season > nextWeek.slice(0, 7)) p.pass.season = '';
+    if (p.login.day > soon) p.login = { day: today, streak: 1 };
     if (!(p.daily.key >= today))
-        p.daily = { key: today, tasks: tasks(DAILY, 3, hash(today + s.name), Math.floor(s.level / 7), s.level), chest: false, rerolled: false };
+        p.daily = { key: today, tasks: tasks(s, DAILY, 3, hash(today + s.name), Math.floor(s.level / 7), s.level), chest: false, rerolled: false };
     if (!(p.weekly.key >= monday))
-        p.weekly = { key: monday, tasks: tasks(WEEKLY, 4, hash(monday + 'w' + s.name), Math.floor(s.level / 10), s.level), chest: false };
+        p.weekly = { key: monday, tasks: tasks(s, WEEKLY, 4, hash(monday + 'w' + s.name), Math.floor(s.level / 10), s.level), chest: false };
+    for (const [list, future] of [[p.daily, futureDay], [p.weekly, futureWeek]] as const)
+        if (future) { list.chest = true; for (const task of list.tasks) task.claimed = true; }
+    if (futureDay) p.daily.rerolled = true;
     if (!(p.pass.season >= season))
         p.pass = { season, stars: 0, claimed: [] };
     const key = `${s.planet}:${Math.floor(now / 1800000)}`;
@@ -137,8 +153,13 @@ export function refreshProgress(s: SaveState, now = Date.now()) {
         p.streak = 0;
     }
 }
-export function storyStep(index: number) { if (index < STORY_STEPS.length)
-    return STORY_STEPS[index]; const round = index - STORY_STEPS.length, [event, base, title, icon] = ENDLESS[round % ENDLESS.length]; return { event, target: Math.round(base * (1 + Math.floor(round / ENDLESS.length) * .5)), title, icon, chapter: 4, condition: undefined, end: undefined }; }
+/** Stands in for "Cook three meals" while the kitchen is still locked (Normal and Hard open it at level 14, long after chapter 2). */
+const NO_KITCHEN_STEP = { title: 'Harvest ten crops', event: 'harvest', target: 10, icon: '🌾' };
+/** The story step at index; pass the save so a cooking step becomes a doable one while its kitchen is locked. */
+export function storyStep(index: number, s?: SaveState | null) { if (index < STORY_STEPS.length) {
+    const step = STORY_STEPS[index];
+    return step.event === 'cook' && s && s.level < kitchenLevel(s) ? { ...step, ...NO_KITCHEN_STEP } : step;
+} const round = index - STORY_STEPS.length, [event, base, title, icon] = ENDLESS[round % ENDLESS.length]; return { event, target: Math.round(base * (1 + Math.floor(round / ENDLESS.length) * .5)), title, icon, chapter: 4, condition: undefined, end: undefined }; }
 function condition(s: SaveState, key: string) { switch (key) {
     case 'level': return s.level;
     case 'visited': return s.visited.length;
@@ -163,7 +184,7 @@ export function recordEvent(s: SaveState, event: string, amount = 1, detail?: st
         for (const task of list)
             if (specs[task.type]?.event === event)
                 task.progress = Math.min(task.target, task.progress + amount);
-    const step = storyStep(p.story.index);
+    const step = storyStep(p.story.index, s);
     if (step.event === event)
         p.story.progress = Math.min(step.target, p.story.progress + amount);
     if (event === 'kill' && p.bounty && p.bounty.type === detail && !p.bounty.claimed)
@@ -175,7 +196,7 @@ function rewardLabel(r: Reward) { return [r.energy ? t('{count} energy', { count
 function give(s: SaveState, r: Reward, now: number) { s.energy += r.energy || 0; if (r.xp)
     gainXp(s, r.xp, now); for (const [id, n] of Object.entries(r.items || {}))
     addItem(s, id, n); refreshProgress(s, now); s.progression.pass.stars += r.stars || 0; }
-function storyReward(s: SaveState): Reward { const index = s.progression.story.index, step = storyStep(index); return { energy: 30 + s.level * 6 + Math.min(index, 40) * 4, xp: Math.round(xpNeeded(s.level) * (index >= 29 ? .3 : .25)), items: step.end, stars: 15 + (step.end ? 40 : 0) }; }
+function storyReward(s: SaveState): Reward { const index = s.progression.story.index, step = storyStep(index, s); return { energy: 30 + s.level * 6 + Math.min(index, 40) * 4, xp: Math.round(xpNeeded(s.level) * (index >= 29 ? .3 : .25)), items: step.end, stars: 15 + (step.end ? 40 : 0) }; }
 function taskReward(s: SaveState, t: Task, weekly = false): Reward { if (weekly) {
     const bonus = ['seed_star', 'spore', 'seed_fire', 'seed_ice'][hash(t.type) % 4];
     return { energy: 150 + s.level * 20, xp: Math.round(xpNeeded(s.level) * .35), items: { starshard: 1, [bonus]: 2 }, stars: 30 };
@@ -192,7 +213,7 @@ export function progressEntries(s: SaveState, kind: ProgressKind, now = Date.now
     refreshProgress(s, now);
     const p = s.progression;
     if (kind === 'story') {
-        const step = storyStep(p.story.index);
+        const step = storyStep(p.story.index, s);
         return [entry(`story:${p.story.index}`, step.title, step.condition ? condition(s, step.condition) : p.story.progress, step.target, false, storyReward(s), step.icon, t('Chapter {chapter} · Step {step}', { chapter: step.chapter + 1, step: p.story.index + 1 }))];
     }
     if (kind === 'daily' || kind === 'weekly') {
@@ -275,7 +296,7 @@ export function claimProgress(s: SaveState, kind: ProgressKind, id: string, now 
     return true;
 }
 export function rerollDaily(s: SaveState, index: number, now = Date.now()): boolean { refreshProgress(s, now); const d = s.progression.daily, old = d.tasks[index]; if (d.rerolled || !old || old.claimed)
-    return false; const choices = Object.keys(DAILY).filter(k => s.level >= (DAILY[k].level || 1) && !d.tasks.some(t => t.type === k)); if (!choices.length)
+    return false; const choices = Object.keys(DAILY).filter(k => s.level >= specLevel(s, DAILY[k]) && !d.tasks.some(t => t.type === k)); if (!choices.length)
     return false; const type = choices[hash(d.key + s.name) % choices.length], spec = DAILY[type]; d.tasks[index] = { type, target: spec.targets[Math.min(Math.floor(s.level / 7), spec.targets.length - 1)], progress: 0, claimed: false, bonus: old.bonus }; d.rerolled = true; return true; }
 export function startChallenge(s: SaveState, type = 'kill', now = Date.now()): boolean { refreshProgress(s, now); const spec = Object.hasOwn(CHALLENGES, type) ? CHALLENGES[type] : undefined; if (!spec || s.level < 2 || s.progression.challenge && !s.progression.challenge.claimed)
     return false; s.progression.challenge = { type, target: spec.target + (type === 'kill' ? Math.floor(s.level / 8) : 0), progress: 0, ends: now + spec.seconds * 1000, claimed: false }; return true; }
@@ -283,12 +304,14 @@ export function normalizeProgression(raw: unknown, s: SaveState): ProgressionSta
     const record = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
     const number = (v: unknown, max = 1e12) => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.min(max, Math.floor(v)) : 0;
     const text = (v: unknown) => typeof v === 'string' ? v.slice(0, 100) : '';
+    /** Day and week keys are ISO dates; anything else (a hand-edited "9999" sorts after every date) starts over. */
+    const dateKey = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
     const p = createProgression();
     if (!record(raw)) {
         p.story.index = s.quest;
         const old: Record<string, number> = { kill: s.counters.kills, harvest: s.counters.harvests, sell: s.counters.sold, craft: s.counters.bought, fish: s.counters.fish, skill: s.counters.skills, upgrade: s.counters.upgrades };
         p.totals = old;
-        const step = storyStep(s.quest);
+        const step = storyStep(s.quest, s);
         p.story.progress = Math.min(step.target, old[step.event || ''] || 0);
         return p;
     }
@@ -307,20 +330,20 @@ export function normalizeProgression(raw: unknown, s: SaveState): ProgressionSta
             for (const t of r.tasks.slice(0, key === 'daily' ? 3 : 4))
                 if (record(t) && typeof t.type === 'string' && Object.hasOwn(specs, t.type) && specs[t.type].targets.includes(t.target))
                     list.push({ type: t.type, target: t.target, progress: Math.min(number(t.progress), t.target), claimed: t.claimed === true, bonus: typeof t.bonus === 'string' && BONUS.includes(t.bonus) ? t.bonus : 'potion' });
-        Object.assign(p[key], { key: text(r.key), tasks: list, chest: r.chest === true });
+        Object.assign(p[key], { key: dateKey(r.key), tasks: list, chest: r.chest === true });
         if (list.length !== (key === 'daily' ? 3 : 4) || new Set(list.map(t => t.type)).size !== list.length)
             p[key].key = '';
         if (key === 'daily')
             p.daily.rerolled = r.rerolled === true;
     }
     if (record(raw.pass))
-        p.pass = { season: text(raw.pass.season), stars: number(raw.pass.stars), claimed: Array.isArray(raw.pass.claimed) ? [...new Set<number>(raw.pass.claimed.filter((x: any) => Number.isInteger(x) && x >= 0 && x < PASS_REWARDS.length))] : [] };
+        p.pass = { season: typeof raw.pass.season === 'string' && /^\d{4}-\d{2}$/.test(raw.pass.season) ? raw.pass.season : '', stars: number(raw.pass.stars), claimed: Array.isArray(raw.pass.claimed) ? [...new Set<number>(raw.pass.claimed.filter((x: any) => Number.isInteger(x) && x >= 0 && x < PASS_REWARDS.length))] : [] };
     if (record(raw.achievements))
         for (const [id, , tiers] of ACHIEVEMENTS)
             if (Object.hasOwn(raw.achievements, id))
                 p.achievements[id] = number(raw.achievements[id], tiers.length);
     if (record(raw.login))
-        p.login = { day: text(raw.login.day), streak: number(raw.login.streak) };
+        p.login = { day: dateKey(raw.login.day), streak: number(raw.login.streak) };
     const b = raw.bounty;
     if (record(b) && typeof b.type === 'string' && Object.values(PLANETS).some(p => p.spawns.some(([type]) => type === b.type)))
         p.bounty = { key: text(b.key), type: b.type, target: Math.max(3, Math.min(5, number(b.target))), progress: Math.min(number(b.progress), number(b.target)), claimed: b.claimed === true, ends: number(b.ends, Number.MAX_SAFE_INTEGER) };

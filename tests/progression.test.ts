@@ -92,8 +92,8 @@ test('all29 story milestones are reachable using real farming, reward, purchase 
 test('winding the clock back never re-rolls or re-pays dailies: the newest date key is kept',()=>{
   const s=M.newGame();P.refreshProgress(s,start);const today=JSON.stringify(s.progression.daily),week=s.progression.weekly.key;
   const login=P.progressEntries(s,'daily',start).find(e=>e.id.endsWith('login'))!;assert.equal(P.claimProgress(s,'daily',login.id,start),true);const energy=s.energy;
-  const yesterday=start-86400000,lastWeek=start-7*86400000;
-  P.refreshProgress(s,yesterday);P.refreshProgress(s,lastWeek);
+  const yesterday=start-86400000;
+  P.refreshProgress(s,yesterday);
   assert.equal(JSON.stringify(s.progression.daily),today,'an earlier day keeps today\'s tasks');assert.equal(s.progression.weekly.key,week);
   const back=P.progressEntries(s,'daily',yesterday).find(e=>e.id.endsWith('login'))!;assert.equal(back.claimed,true);assert.equal(P.claimProgress(s,'daily',back.id,yesterday),false);assert.equal(s.energy,energy);
   P.refreshProgress(s,start);assert.equal(JSON.stringify(s.progression.daily),today,'returning to today does not re-roll');

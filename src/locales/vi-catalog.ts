@@ -56,6 +56,7 @@ export const VI_CATALOG: Record<string, string> = {
   "Defense": "Giáp",
   "Critical chance": "Tỉ lệ chí mạng",
   "Harvest three crops": "Thu hoạch 3 cây",
+  "Harvest ten crops": "Thu hoạch 10 cây",
   "Earn 20 energy at the market": "Kiếm 20 năng lượng tại chợ",
   "Buy or craft one item": "Mua hoặc chế tạo 1 vật phẩm",
   "Equip a weapon": "Trang bị vũ khí",
