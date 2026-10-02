@@ -328,8 +328,7 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
   border: 2px solid var(--glass-line);
   color: #fff;
   box-shadow: 0 6px 18px rgba(10, 30, 10, .18);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  /* No backdrop blur: over the WebGL canvas it is redone on the GPU every frame, and behind 74% glass it barely shows. */
 }
 .quest-tracker { padding: 10px 12px 11px; }
 .quest-tracker .eyebrow { display: flex; justify-content: space-between; gap: 10px; color: #ffe08a; font-size: var(--t-xs); }

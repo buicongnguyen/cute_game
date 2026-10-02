@@ -314,6 +314,7 @@ function labelHeight(e:Entity){
 interface LabelAnchor {e:Entity;wy:number;back:number;centre:boolean;w:number;h:number;covered:boolean;off:boolean;tf?:string}
 const labelAnchors=new Map<string,LabelAnchor>();
 let hudPanels:{left:number;right:number;top:number;bottom:number}[]=[];
+let hudFresh=false;
 function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
 /** The label's screen box at its anchor: bottom centre for buildings, centre for the small crop marks. */
 function labelRect(a:LabelAnchor){const p=world.screen(a.e.x,a.wy,a.e.z-a.back),top=p.y-(a.centre?a.h/2:a.h);return {x:p.x,y:p.y,front:p.front,left:p.x-a.w/2,right:p.x+a.w/2,top,bottom:top+a.h};}
@@ -322,7 +323,7 @@ const boxesMeet=(a:{left:number;right:number;top:number;bottom:number},b:{left:n
 const clearOfHud=(r:{left:number;right:number;top:number;bottom:number},panels:typeof hudPanels)=>!panels.some(p=>boxesMeet(p,r));
 function updateLabels() {
   if(!started)return;
-  measureHud();const near=world.nearest(),candidates:{a:LabelAnchor;rank:number;distance:number}[]=[],active=new Set<string>();
+  if(hudFresh)hudFresh=false;else measureHud();const near=world.nearest(),candidates:{a:LabelAnchor;rank:number;distance:number}[]=[],active=new Set<string>();
   for(const e of world.entities){
     const distance=Math.hypot(e.x-world.position.x,e.z-world.position.z);
     let text=t(e.name),icon=e.icon,y:number,back=0,className='world-label',rank=2,reach=world.selected===e?30:11,aria='';
@@ -1283,6 +1284,9 @@ document.addEventListener('pointerup',releasePointer);document.addEventListener(
 window.addEventListener('blur',()=>{movement.clear();fishGame?.input.clear();gestures.clear();save();});window.addEventListener('beforeunload',save);document.addEventListener('visibilitychange',()=>{movement.clear();fishGame?.input.clear();gestures.clear();save();});
 let previous=performance.now(),wasAirborne=false;
 function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt=Math.min(1,(now-previous)/1000);previous=now;elapsed+=realDt;uiElapsed+=realDt;
+  // HUD panel boxes are read at the top of the frame, while layout is still clean from the last one; read after
+  // this frame's HUD writes they forced a synchronous layout eight times a second (PERF-ANALYSIS.md).
+  if(uiElapsed>.12&&started){measureHud();hudFresh=true;}
   if(flight&&!arriving){updateSpace(realDt);if(uiElapsed>.12){uiElapsed=0;updateHud();}if(elapsed>8){elapsed=0;save();}requestAnimationFrame(frame);return;}
   ship.update(realDt,world.time);
   // Hit-stop: after a critical hit the world runs at a tenth of its speed for a heartbeat.
@@ -1328,4 +1332,4 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV)Object.assign(window,{__zoo:{world,house,lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,settings,quests,help,map,upgrades,crafting,decorations,storage}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,house,lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,settings,quests,help,map,upgrades,crafting,decorations,storage}}});
