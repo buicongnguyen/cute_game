@@ -31,8 +31,8 @@ test('online farm helper purchase and catch-up use durable receipts without dupl
   const bought = await f.command('buyFarmHelper', {}, purchase); assert.equal(bought.profile.energy, before - 1000); assert.equal(bought.profile.farm.helper.autoFeed, false);
   const replay = await f.command('buyFarmHelper', {}, purchase); assert.equal(replay.replayed, true); assert.equal(replay.profile.energy, before - 1000);
   const collection = randomUUID(), caught = await f.command('farmHelperCatchUp', {}, collection);
-  assert.equal(caught.result.collected.length, 3); assert.equal(caught.profile.bag.truffle, 3); assert.deepEqual(caught.result.fed, []);
-  assert.equal((await f.command('farmHelperCatchUp', {}, collection)).profile.bag.truffle, 3);
+  assert.equal(caught.result.collected.length, 3); assert.equal(caught.profile.chest.truffle, 3); assert.equal(caught.profile.bag.truffle, undefined, "catch-up work is stored in the house chest"); assert.deepEqual(caught.result.fed, []);
+  assert.equal((await f.command('farmHelperCatchUp', {}, collection)).profile.chest.truffle, 3);
   assert.equal((await f.command('farmHelperCatchUp')).result.collected.length, 0);
   await f.edit(account => { const a = account.profile.farm.animals[0]; a.bornAt = a.acquiredAt = Date.now() - M.ANIMAL_LIFESPAN_MS - 1000; a.cycleAt = M.adultAt(a); });
   const meatId = randomUUID(), meat = await f.command('farmHelperCollect', { uid: f.animal.uid }, meatId);

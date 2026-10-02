@@ -1,0 +1,22 @@
+/** Tester mode (tester.ts, main.ts settings "More"). */
+export const VI_TESTER: Record<string, string> = {
+  'More': 'Thêm',
+  'Tester code': 'Mã kiểm thử',
+  'Tester code works in solo play': 'Mã kiểm thử chỉ dùng khi chơi một mình',
+  'Tester mode is on': 'Chế độ kiểm thử đang bật',
+  'For testing items and performance': 'Để thử vật phẩm và hiệu năng',
+  'Apply': 'Áp dụng',
+  'Tester shop': 'Cửa hàng kiểm thử',
+  'TESTER': 'KIỂM THỬ',
+  'Too many tries. Wait a minute and try again.': 'Thử quá nhiều lần. Hãy chờ một phút rồi thử lại.',
+  'That code is not quite right.': 'Mã này chưa đúng rồi.',
+  'Tester mode on: {count} energy': 'Đã bật kiểm thử: {count} năng lượng',
+  'Tester mode: every item without materials or level, still paid with energy.': 'Chế độ kiểm thử: mọi vật phẩm không cần nguyên liệu hay cấp độ, vẫn trả bằng năng lượng.',
+  'Unlock all planets': 'Mở mọi hành tinh',
+  'Max level': 'Cấp tối đa',
+  'Rescue friends': 'Giải cứu bạn bè',
+  'Rescued': 'Đã giải cứu',
+  '{name} is home!': '{name} đã về nhà!',
+  'Tap again to confirm': 'Chạm lần nữa để xác nhận',
+  'All planets unlocked': 'Đã mở mọi hành tinh',
+};

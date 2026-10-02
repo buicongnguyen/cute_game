@@ -2,6 +2,7 @@ import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TAB
 import { createProgression, normalizeProgression, recordEvent, progressEntries, claimProgress, type ProgressionState } from './progression.ts';
 import { parseHelper, type HelperState } from './helper-state.ts';
 import { parseFriends, parseBosses, noteBossDefeat, type Friend } from './friends-state.ts';
+import { parseHouse, type HouseState } from './house-activities.ts';
 import { parseLooks, type Looks } from './looks.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
@@ -91,6 +92,8 @@ export interface SaveState {
         difficulty?: Difficulty;
         /** When the difficulty was last lowered (difficulty.ts LOWER_COOLDOWN_MS: once a day). */
         difficultyLoweredAt?: number;
+        /** Tester mode (tester.ts): set only by the solo tester code; opens the Tester shop. */
+        tester?: boolean;
     };
     worldRewards: WorldRewards;
     buffs: Partial<Record<BuffKey, {
@@ -120,6 +123,8 @@ export interface SaveState {
     gardenLayout?: number;
     /** The garden helper (helper.ts); older saves have none and parse as not owned. */
     helper?: HelperState;
+    /** What the workers stored in the chest while the explorer was out (delivery.ts), until the note is read. */
+    awayStore?: Inventory;
     forge?: Record<string, number>;
     nextPlantId?: number;
     /** Harpoon cooldowns and individual pond restock deadlines survive reloads. */
@@ -130,6 +135,8 @@ export interface SaveState {
     bosses?: string[];
     /** Explorer body styles bought at the mirror (looks.ts); missing in older saves = the default look only. */
     looks?: Looks;
+    /** Cottage activities (house-activities.ts): when each was last used, paintings made. */
+    house?: HouseState;
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
@@ -625,6 +632,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true, ...(typeof settings.movePad === 'boolean' ? { movePad: settings.movePad } : {}) };
         if(settings.joystickSide==='left'||settings.joystickSide==='right')s.settings.joystickSide=settings.joystickSide;
         if (settings.placeBeds === true) s.settings.placeBeds = true;
+        if (settings.tester === true) s.settings.tester = true;
         s.settings.difficulty = isDifficulty(settings.difficulty) ? settings.difficulty : 'easy'; // saves from before the setting play on Easy
         if (typeof settings.difficultyLoweredAt === 'number' && Number.isFinite(settings.difficultyLoweredAt) && settings.difficultyLoweredAt > 0) s.settings.difficultyLoweredAt = settings.difficultyLoweredAt;
         const rewards = record(v.worldRewards) ? v.worldRewards : {};
@@ -674,7 +682,8 @@ export function parseSave(raw: string | null): SaveState | null {
         s.farm = parseFarm(v.farm);
         const hunting = parseHunting(v.hunting); if (hunting) s.hunting = hunting;
         if (record(v.helper)) s.helper = parseHelper(v.helper);
-        const friends = parseFriends(v.friends), bosses = parseBosses(v.bosses); if (friends.length) s.friends = friends; if (bosses.length) s.bosses = bosses;
+        const awayStore = inventory(v.awayStore); if (Object.keys(awayStore).length) s.awayStore = awayStore;
+        const friends = parseFriends(v.friends), bosses = parseBosses(v.bosses); if (friends.length) s.friends = friends; if (bosses.length) s.bosses = bosses; const house = parseHouse(v.house); if (house) s.house = house;
         const looks = parseLooks(v.looks); if (looks) s.looks = looks;
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
         if (record(v.collection))

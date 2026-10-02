@@ -63,7 +63,7 @@ const FALLBACK: Record<string, [string, string]> = {
  */
 export class FishingView {
   active = false;
-  /** The hunting view supplies authoritative targets for this pond instead. */
+  /** The hunting view draws this pond's ordinary fish at their authoritative targets; the mystery fish stays ours. */
   huntingPondId: string | null = null;
   pond: PondView | null = null;
   readonly castTo = new T.Vector3();
@@ -132,7 +132,7 @@ export class FishingView {
   }
 
   /** Stock the ponds of a freshly built world with the reference's count per kind of water. `pool` lists species by weight for each water. */
-  populate(ponds: PondView[], pool: (waterId: string) => string[], mysterySpecies?:(waterId:string)=>string) {
+  populate(ponds: PondView[], pool: (waterId: string) => string[], mysterySpecies?:(waterId:string)=>string, stock?:(pond:PondView)=>string[]|null) {
     this.cancel();
     for (const f of this.fish) this.root.remove(f.obj);
     for (const d of this.dressing) this.root.remove(d);
@@ -144,7 +144,9 @@ export class FishingView {
     for (const pond of ponds) {
       const species = pool(pond.waterId).filter(id => id !== 'boot');
       const count = FISH_PER_WATER[pond.waterId] ?? 4;
-      for (let i = 0; i < count && species.length; i++) this.addFish(pond, species[Math.floor(Math.random() * species.length)]);
+      // Stocking from the harpoon slots keeps the same species in the pond when hunting gear takes over its fish.
+      const slots = stock?.(pond);
+      for (let i = 0; i < count && species.length; i++) this.addFish(pond, slots?.[i] ?? species[Math.floor(Math.random() * species.length)]);
       if(count&&species.length)this.mysterySpawns.push({pond,at:this.mysteryDeadlines.get(pond.id)??this.monotonicNow()+between(MYSTERY.firstMin,MYSTERY.firstMax)});
       // Reeds on the sandy lip and lily flowers on the water, from the kit.
       for (const [name, count2, onEdge] of [['reeds', 3, true], ['lily_flower', 2, false]] as const) {
@@ -192,6 +194,13 @@ export class FishingView {
     this.root.add(obj);
     const fish: Swimmer = { obj, tail, pond, species, heading: Math.random() * 6.28, speed: between(.5, 1.1), goal: null, state: 'swim', t: 0, wig: Math.random() * 10, depth, wag };
     this.fish.push(fish); return fish;
+  }
+
+  /** Where this pond's ordinary fish are, in stocking order, so a hunting handover starts from them. */
+  ordinaryPoses(pondId: string) { return this.fish.filter(f => f.pond.id === pondId && !f.mystery).map(f => ({ x: f.obj.position.x, z: f.obj.position.z, heading: f.obj.rotation.y })); }
+  /** Hand the fish back where the hunting view left them, so leaving the shore does not teleport them. */
+  adoptPoses(pondId: string, poses: Array<{ x: number; z: number; heading: number }>) {
+    this.fish.filter(f => f.pond.id === pondId && !f.mystery).forEach((f, i) => { const p = poses[i]; if (!p) return; const at = this.inside(f.pond, p.x, p.z, 1); f.obj.position.x = at.x; f.obj.position.z = at.z; f.heading = p.heading; f.obj.rotation.y = p.heading; f.goal = null; });
   }
 
   private inside(pond: PondView, x: number, z: number, margin = .82) {
@@ -380,7 +389,7 @@ export class FishingView {
   }
 
   private updateFish(fish: Swimmer, dt: number, time: number, near: boolean) {
-    if (fish.pond.id === this.huntingPondId) { fish.obj.visible = false; return; }
+    if (fish.pond.id === this.huntingPondId && !fish.mystery) { fish.obj.visible = false; return; }
     fish.obj.visible = near;
     if(fish.mark){fish.mark.position.y=1.1+Math.abs(Math.sin(time*3+fish.wig))*.25;fish.mark.material.opacity=fish.state==='swim'?1:.35;}
     if (!near && fish.state === 'swim') return;

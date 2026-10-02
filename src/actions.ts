@@ -2,8 +2,10 @@ import * as Game from './model.ts';
 import * as Helper from './helper.ts';
 import * as FarmHelper from './farm-helper.ts';
 import * as Friends from './friends.ts';
+import { deliversToChest, storeGains, takeStored } from './delivery.ts';
 import { buyLook, wearLook } from './looks.ts';
 import { huntFish } from './fish-hunting.ts';
+import { useActivity } from './house-activities.ts';
 import { sellProduce } from './item-views.ts';
 import { claimProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 
@@ -31,6 +33,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
   const p = intent.payload ?? {};
   if (!p || typeof p !== 'object' || Array.isArray(p)) return invalid();
   const id = () => string(p.id), index = () => integer(p.index), kind = () => string(p.kind), now = context.now, random = context.random;
+  // Workers' harvest while the explorer is out goes to the house chest (delivery.ts).
+  const before = deliversToChest(intent.type, p) ? { ...state.bag } : null;
   let result: unknown;
   switch (intent.type) {
     case 'buy': result = Game.buy(state, id()); break;
@@ -98,6 +102,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'buyLook': result = buyLook(state, string(p.id, 20)); break;
     case 'wearLook': result = wearLook(state, string(p.id, 20)); break;
     case 'friendsCatchUp': result = Friends.friendsCatchUp(state, now); break;
+    case 'ackStored': result = takeStored(state); break;
     case 'giveFriendGear': result = Friends.giveGear(state, string(p.friend, 20) as Friends.FriendId, id()); break;
     case 'takeFriendGear': result = Friends.takeGear(state, string(p.friend, 20) as Friends.FriendId, string(p.slot, 10)); break;
     case 'fishHunt': result = huntFish(state, { weaponId: string(p.weaponId), pondId: string(p.pondId), slot: integer(p.slot), aim: p.aim as { x: number; z: number } }, p.from as { x: number; z: number }, now); break;
@@ -117,6 +122,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'claimCaveChest': result = Game.claimCaveChest(state, now, random); break;
     case 'recoverBag': result = Game.recoverBag(state); break;
     case 'die': Game.die(state, number(p.x), number(p.z)); result = true; break;
+    // Cottage activities: rests and buffs with cooldowns (house-activities.ts).
+    case 'houseUse': result = useActivity(state, id(), now); break;
     case 'rest': if (state.planet !== 'home') return invalid(); state.hp = Game.maxHp(state); result = true; break;
     case 'reset': { const fresh=Game.newGame(state.name,state.color); fresh.settings={...state.settings}; for(const key of Object.keys(state))delete (state as unknown as Record<string,unknown>)[key]; Object.assign(state,fresh); result=true; break; }
     case 'settings': {
@@ -135,5 +142,5 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     }
     default: return invalid();
   }
-  success(result); state.savedAt = now; return result;
+  success(result); if (before) storeGains(state, before); state.savedAt = now; return result;
 }

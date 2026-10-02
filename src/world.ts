@@ -737,9 +737,9 @@ export class World {
   tryOnGear?:SaveState['gear']|null;
   refreshPlayer() {
     const gear=this.tryOnGear??this.state.gear;
-    this.disposeTree(this.player);this.root.remove(this.player);this.player=this.avatar(this.state.color,{...gear,pet:undefined},this.tryOnLook??lookOf(this.state));this.player.rotation.order='YXZ';
+    this.disposeTree(this.player);this.player.removeFromParent();this.player=this.avatar(this.state.color,{...gear,pet:undefined},this.tryOnLook??lookOf(this.state));this.player.rotation.order='YXZ';
     this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;this.playerMaterials.push(o.material);}});this.root.add(this.player);
-    this.disposeTree(this.companion);this.root.remove(this.companion);this.companion=gear.pet?this.petFor(gear.pet):new T.Group();addOutlines(this.companion,{merge:true});this.root.add(this.companion);
+    this.disposeTree(this.companion);this.companion.removeFromParent();this.companion=gear.pet?this.petFor(gear.pet):new T.Group();addOutlines(this.companion,{merge:true});this.root.add(this.companion);
     this.interior?.adopt();
   }
 

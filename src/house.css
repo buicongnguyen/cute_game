@@ -27,3 +27,29 @@ body.indoors #hud .minimap, body.indoors #hud .skills { display: none; }
   .dress-slot { min-height: 64px; font-size: 10px; }
   .dress-portrait { width: 64px; height: 64px; }
 }
+
+/* Activities (house-life.ts): the prompt for the nearest thing to use, friends' speech bubbles, the log panels. */
+#house-prompt { position: fixed; z-index: 30; right: 16px; bottom: 100px; display: flex; align-items: center; gap: 8px; min-height: 52px; min-width: 150px; max-width: calc(100vw - 32px); padding: 6px 18px 6px 8px; border-radius: 999px; border: 3px solid #fff; background: linear-gradient(180deg, #fff9e6, #ffd98a); box-shadow: 0 6px 0 #c98a2b, 0 10px 22px rgba(60, 30, 10, .3); color: #5a3416; font: 900 16px/1.1 inherit; cursor: pointer; }
+#house-prompt[hidden] { display: none; }
+#house-prompt .hp-icon { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border-radius: 50%; background: #fff; font-size: 22px; }
+#house-prompt small { font-size: 11px; font-weight: 800; color: #8a5a2a; white-space: nowrap; }
+#house-prompt .hp-verb { white-space: nowrap; }
+#house-prompt .hp-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+#house-prompt .hp-text small { white-space: normal; text-align: left; }
+#house-prompt.cooling { background: linear-gradient(180deg, #f4f1ea, #ddd6c8); box-shadow: 0 6px 0 #a59b8a, 0 10px 22px rgba(60, 30, 10, .25); color: #6d6253; }
+#house-prompt:active { transform: translateY(3px); box-shadow: 0 3px 0 #c98a2b; }
+#house-bubble { position: fixed; left: 0; top: 0; z-index: 25; pointer-events: none; max-width: 180px; padding: 7px 12px; border-radius: 16px; background: #fff; color: #5a3416; font: 800 13px/1.2 inherit; box-shadow: 0 4px 12px rgba(60, 30, 10, .25); }
+#house-bubble::after { content: ''; position: absolute; left: 50%; bottom: -7px; margin-left: -7px; border: 7px solid transparent; border-bottom: 0; border-top-color: #fff; }
+#house-bubble[hidden] { display: none; }
+.house-h { margin: 10px 0 4px; font-size: 14px; }
+.house-list { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.house-list li { padding: 8px 10px; border-radius: 14px; background: linear-gradient(180deg, #fffdf4, #ffe9c2); font-weight: 800; }
+.house-list small { display: block; color: var(--ink-soft); font-size: 11px; }
+.house-log-total { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.house-log-total b { font-size: 34px; color: #c2553f; }
+.house-log-row { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 10px; padding: 6px 0; }
+.house-log-icon { font-size: 26px; text-align: center; }
+.house-bar { height: 12px; margin-top: 4px; border-radius: 99px; background: rgba(86, 100, 77, .15); overflow: hidden; }
+.house-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #7edb55, #3fb53a); }
+@media (pointer: coarse) and (orientation: portrait) { #house-prompt { left: auto; right: 12px; bottom: 318px; transform: none; max-width: 200px; } #house-prompt:active { transform: translateY(3px); } }
+@media (pointer: coarse) and (orientation: landscape) { #house-prompt { left: auto; right: 150px; bottom: 12px; transform: none; max-width: 240px; } #house-prompt:active { transform: translateY(3px); } }

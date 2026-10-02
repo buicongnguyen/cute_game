@@ -17,7 +17,7 @@ import { kitsFor } from './biomes.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import { FishingView, type PondView } from './fishing-view.ts';
 import { FishHuntingView } from './fish-hunting-view.ts';
-import { FISH_HUNT_COOLDOWN_MS, huntingPondAt, type FishHuntResult } from './fish-hunting.ts';
+import { FISH_HUNT_COOLDOWN_MS, fishHuntTargets, huntingPondAt, type FishHuntResult } from './fish-hunting.ts';
 import { decorIcon } from './icons.ts';
 import { CombatHud, fightNear, lootText, zoneInfo } from './hud-combat.ts';
 import * as M from './model.ts';
@@ -66,6 +66,10 @@ import './house.css';
 import { initHouse } from './house-ui.ts';
 import { initLookShop } from './look-shop.ts';
 import { GROWTH } from './growth.ts';
+import * as Tester from './tester.ts';
+import './tester.css';
+import { WORK_ACTIONS, explorerAway } from './delivery.ts';
+import { initStoredNote } from './delivery-ui.ts';
 
 // The HUD asks for the same ~40 elements several times a second: remember them while they stay in the page.
 const $found=new Map<string,HTMLElement>();
@@ -257,7 +261,7 @@ async function start() {settle();void helperCatchUp();const name=$<HTMLInputElem
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
-async function helperCatchUp(){const r=actionHandler?await perform<ReturnType<typeof Helper.catchUp>>('helperCatchUp'):change(()=>Helper.catchUp(state));if(r&&(r.harvested.length||r.planted.length))setTimeout(()=>toast(t('While you were away, Bolt harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
+async function helperCatchUp(){const r=actionHandler?await perform<ReturnType<typeof Helper.catchUp>>('helperCatchUp'):change(()=>applyGameAction(state,{type:'helperCatchUp'}) as ReturnType<typeof Helper.catchUp>);if(r&&(r.harvested.length||r.planted.length))setTimeout(()=>toast(t('While you were away, Bolt harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
 function updateHud() {
   const known=new Set(world.state.discovered),discoveryCount=t('Discovered {count}/{total} planets',{count:known.size,total:Object.keys(M.PLANETS).length});
   if(setHtml($('#discovery-text'),`<strong>🔭 ${esc(world.state.name)}</strong><span>${esc(discoveryCount)}</span><small aria-hidden="true">${Object.entries(M.PLANETS).map(([id,planet])=>known.has(id as M.PlanetId)?planet.icon:'❔').join(' ')}</small>`)){$('#discovery-progress').setAttribute('aria-label',`${world.state.name} · ${discoveryCount} · ${t('Discovery log')}`);}
@@ -375,11 +379,17 @@ function positionLabels(){
     if(off!==a.off){a.off=off;node.toggleAttribute('data-off',off);}
   }
 }
+/** The explorer is in the wilds or off home: the workers' harvest goes to the house chest (delivery.ts). */
+function explorerOut(){return explorerAway(world.planet,world.position.x,world.position.z);}
+/** perform() for the workers' jobs: tells the rules whether the explorer is out (the server uses its own pose). */
+function workPerform<T=any>(type:string,payload:Record<string,unknown>={}){return perform<T>(type,WORK_ACTIONS.has(type)?{...payload,away:explorerOut()}:payload);}
+/** Harvest orbs fly to the bag, or into the chest when the harvest is stored there (never across the map). */
+function orbTarget(){if(!explorerOut())return ()=>world.position;const c=world.entities.find(x=>x.kind==='chest'),at=world.position.clone().set(c?.x??0,0,c?.z??0);return ()=>at;}
 /** Sparkles, the XP number and a few orbs flying into the bag when a crop comes up. */
 function harvestBurst(index:number,crop:M.CropId){
   const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(!e)return;
   world.fx?.burst({x:e.x,z:e.z},{n:10,color:['#9be36f','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.4});
-  world.fx?.orbs({x:e.x,z:e.z},2,'#9be36f',()=>world.position);
+  world.fx?.orbs({x:e.x,z:e.z},2,'#9be36f',orbTarget());
   floating('+'+M.CROPS[crop].xp+' XP',e.x,e.z,'xp');tone('harvest');
 }
 function plantBurst(index:number){const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(e)world.fx?.burst({x:e.x,z:e.z},{n:6,color:['#8a5a3a','#6a3f2a'],size:.1,speed:2,up:3,y:.25});}
@@ -519,7 +529,7 @@ function penTap(){if(M.readyAnimals(state).length)collectFarm();else penDialog()
 function feedBurst(uid:number){const p=world.farmView?.positionOf(uid);if(p)world.fx?.burst({x:p.x,z:p.z},{n:6,color:['#9be36f','#ffe66d'],size:.08,speed:1.5,up:3,y:.4});}
 function farmCollectFeedback(collected:readonly M.Collected[],origin?:{x:number;z:number}){
   const groups=new Map<number,M.Collected[]>();for(const product of collected){const list=groups.get(product.uid)??[];list.push(product);groups.set(product.uid,list);world.farmView?.collect(product.uid,product.item,origin??world.farmView?.positionOf(product.uid)??M.PEN);}
-  for(const [uid,list]of groups){const p=world.farmView?.positionOf(uid)??origin??M.PEN;world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',()=>world.position);floating('+'+M.ANIMALS[list[0].kind].xp*list.length+' XP',p.x,p.z,'xp');}
+  for(const [uid,list]of groups){const p=world.farmView?.positionOf(uid)??origin??M.PEN;world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',orbTarget());floating('+'+M.ANIMALS[list[0].kind].xp*list.length+' XP',p.x,p.z,'xp');}
   if(collected.length)tone('harvest');
 }
 function collectFarm(uid?:number){
@@ -610,7 +620,19 @@ function planets(){
     <h3 class="starmap-title">🔭 Discovery log · ${state.discovered.length} / ${all} · ${t('easiest first')}</h3><div class="planet-grid route-list">${routes.map(card).join('')}</div>`,'STAR MAP','🚀');
 }
 function map(){openDialog('map','Every path is a possibility',`<p class="intro">Choose a place and your explorer will walk there.</p><div class="map-illustration"><div class="map-path"></div><span class="map-house">🏡</span><span class="map-trees">🌳 🌲 🌳</span><span class="map-garden">🌱 🌱</span><span class="map-pond">🎣</span><span class="map-rocket">🚀</span><span class="map-stall">🧺</span><b>Clover Village</b></div><div class="map-destinations">${(state.planet==='home'?[['plot','🌱','Garden'],['sell','🧺','Market'],['shop','🛍️','Outfitters'],['fish','🎣','Pond'],['upgrade','💎','Crystal'],['craft','🔨','Workshop'],['chest','📦','Storage'],['travel','🚀','Rocket']]:[['mine','💎','Crystal vein'],['travel','🚀','Rocket']]).map(([kind,icon,name])=>`<button class="soft-button" data-action="go" data-kind="${kind}">${icon} ${name}</button>`).join('')}${(world.planet==='home'?[['forest','🍄 Mushroom Forest'],['meadow','🌊 Lake Meadow'],['swamp','🌿 Chomper Swamp'],['canyon','🏜️ Redrock Canyon']]:[['wild','Explore the wild']]).map(([kind,label])=>`<button class="soft-button" data-action="wild" data-kind="${kind}">${label}</button>`).join('')}</div><p class="fineprint">${state.discovered.length} of 9 worlds discovered · Click the ground to choose your own path.</p>`,'YOUR EXPLORER’S MAP');}
-function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Gentle sound effects</strong><small>Soft notes for everyday discoveries</small></div><button class="toggle ${state.settings.sound?'on':''}" role="switch" aria-checked="${state.settings.sound}" aria-label="Sound effects" data-action="sound"></button></div><div class="settings-row"><div><strong>Show joystick</strong><small>Drag the stick to walk in any direction. Skill buttons move to the opposite side.</small></div><button class="toggle ${joystickEnabled()?'on':''}" role="switch" aria-checked="${joystickEnabled()}" aria-label="Show joystick" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Joystick side</strong><small>Choose the hand you use to move</small></div><div class="segmented" role="radiogroup" aria-label="Joystick side">${(['left','right'] as const).map(side=>`<button role="radio" aria-checked="${(state.settings.joystickSide??'left')===side}" data-action="joystick-side" data-kind="${side}">${side==='left'?'Left':'Right'}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Difficulty</strong><small>${M.DIFFICULTY_NOTE[M.difficultyOf(state)]}${world.roomDifficulty&&world.roomDifficulty!==M.difficultyOf(state)?` <span class="host-difficulty">${esc(t('Host difficulty: {level}',{level:t(M.DIFFICULTY_LABEL[world.roomDifficulty])}))}</span>`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Difficulty">${M.DIFFICULTIES.map(d=>`<button role="radio" aria-checked="${M.difficultyOf(state)===d}" class="${M.difficultyOf(state)===d?'on':''}" data-action="difficulty" data-kind="${d}">${M.DIFFICULTY_LABEL[d]}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
+// Tester code (tester.ts): solo only, so the online server never sees these rules.
+function testerOnline(){return !!actionHandler||!!persistence;}
+const testerTry=Tester.attemptLimiter();let testerOpen=false;
+function testerMore(){return `<details class="settings-more"${testerOpen||Tester.isTester(state)?' open':''}><summary>More</summary><div class="settings-row"><div><strong>Tester code</strong><small>${testerOnline()?'Tester code works in solo play':Tester.isTester(state)?'Tester mode is on':'For testing items and performance'}</small></div><div class="button-row tester-code"><input id="tester-code" type="password" autocomplete="off" maxlength="64" aria-label="Tester code" ${testerOnline()?'disabled':''}><button class="soft-button" data-action="tester-apply" ${testerOnline()?'disabled':''}>Apply</button></div></div>${Tester.isTester(state)&&!testerOnline()?'<button class="primary" data-action="tester-shop">🧪 <span>Tester shop</span></button>':''}</details>`;}
+function testerShop(){openDialog('tester','Tester shop',Tester.testerShopHtml(state),'TESTER','🧪');}
+/** Runs a tester rule on the solo save, then saves and redraws like perform() does offline. */
+function testerDo(rule:(s:M.SaveState)=>boolean){if(testerOnline()){toast(t('Tester code works in solo play'),'💭');return false;}const before=state.level;if(!rule(state))return false;state.savedAt=Date.now();levelCheck(before);save();updateHud();tone('success');return true;}
+async function testerApply(){testerOpen=true;if(testerOnline()){toast(t('Tester code works in solo play'),'💭');return;}
+  const input=document.querySelector<HTMLInputElement>('#tester-code'),code=input?.value??'';if(!code.trim())return;
+  if(!testerTry()){toast(t('Too many tries. Wait a minute and try again.'),'⏳');return;}
+  if(!(await Tester.codeMatches(code))){if(input)input.value='';toast(t('That code is not quite right.'),'💭');return;}
+  testerDo(Tester.unlockTester);toast(t('Tester mode on: {count} energy',{count:Tester.TESTER_ENERGY.toLocaleString()}),'🧪');settings();}
+function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Gentle sound effects</strong><small>Soft notes for everyday discoveries</small></div><button class="toggle ${state.settings.sound?'on':''}" role="switch" aria-checked="${state.settings.sound}" aria-label="Sound effects" data-action="sound"></button></div><div class="settings-row"><div><strong>Show joystick</strong><small>Drag the stick to walk in any direction. Skill buttons move to the opposite side.</small></div><button class="toggle ${joystickEnabled()?'on':''}" role="switch" aria-checked="${joystickEnabled()}" aria-label="Show joystick" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Joystick side</strong><small>Choose the hand you use to move</small></div><div class="segmented" role="radiogroup" aria-label="Joystick side">${(['left','right'] as const).map(side=>`<button role="radio" aria-checked="${(state.settings.joystickSide??'left')===side}" data-action="joystick-side" data-kind="${side}">${side==='left'?'Left':'Right'}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Difficulty</strong><small>${M.DIFFICULTY_NOTE[M.difficultyOf(state)]}${world.roomDifficulty&&world.roomDifficulty!==M.difficultyOf(state)?` <span class="host-difficulty">${esc(t('Host difficulty: {level}',{level:t(M.DIFFICULTY_LABEL[world.roomDifficulty])}))}</span>`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Difficulty">${M.DIFFICULTIES.map(d=>`<button role="radio" aria-checked="${M.difficultyOf(state)===d}" class="${M.difficultyOf(state)===d?'on':''}" data-action="difficulty" data-kind="${d}">${M.DIFFICULTY_LABEL[d]}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div>${testerMore()}<div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
 function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div><div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
 
 // Fishing happens in the world: no panel, just the pond, the line and a big Reel button.
@@ -624,16 +646,16 @@ function helperDialog(){if(visiting)return;openDialog('helper','Garden helper',h
 const helperPending=new Set<string>();
 function helperAction(kind:'helperHarvest'|'helperPlant',i:number){
   const effect=(crop:M.CropId|undefined|null)=>{if(crop){if(kind==='helperHarvest')harvestBurst(i,crop);else{plantBurst(i);tone('pop');}world.syncCrops();}return !!crop;};
-  if(!actionHandler)return effect(change(()=>kind==='helperHarvest'?Helper.helperHarvest(state,i):Helper.helperPlant(state,i)));
+  if(!actionHandler)return effect(change(()=>{try{return applyGameAction(state,{type:kind,payload:{index:i,away:explorerOut()}}) as M.CropId;}catch{return null;}}));
   const key=kind+':'+i;if(helperPending.has(key))return false;helperPending.add(key);
-  void perform<M.CropId>(kind,{index:i}).then(effect).finally(()=>helperPending.delete(key));return true;
+  void perform<M.CropId>(kind,{index:i,away:explorerOut()}).then(effect).finally(()=>helperPending.delete(key));return true;
 }
 const helperHarvest=(i:number)=>helperAction('helperHarvest',i),helperPlant=(i:number)=>helperAction('helperPlant',i);
 
 const farmHelperView=new FarmHelperView();world.scene.add(farmHelperView.group);
 function farmHelperContext(){return started&&!document.hidden&&!flight&&!visiting&&(!actionHandler||network.role!==null)&&world.planet==='home'&&world.state===state?world.root:null;}
 function farmHelperDialog(){if(visiting||world.planet!=='home'||!M.penBuilt(state))return;openDialog('farm-helper','Animal pen helper',farmHelperPanel(state,`${ICON_BASE}helper.webp`),'ANIMAL PEN','🤖');}
-const farmHelperController=new FarmHelperController({state:()=>state,context:farmHelperContext,perform,completed(result,catchUp){
+const farmHelperController=new FarmHelperController({state:()=>state,context:farmHelperContext,perform:workPerform,completed(result,catchUp){
   farmCollectFeedback(result.collected);for(const uid of result.fed)feedBurst(uid);
   if(result.fed.length)tone('pop');
   if(catchUp&&(result.collected.length||result.fed.length))toast(t('Your animal helper collected {count} products and fed {fed} animals.',{count:result.collected.length,fed:result.fed.length}),'🤖');
@@ -642,7 +664,7 @@ const farmHelperController=new FarmHelperController({state:()=>state,context:far
 // Rescued friends (friends.ts rules, friend-crew.ts cages/following/jobs, friend-view.ts looks, friend-ui.ts panel).
 setFriendDresser((color,gear)=>world.friendAvatar(color,gear));
 const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
-  robotBed:()=>helperView.task?.index,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform,
+  robotBed:()=>helperView.task?.index,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform:workPerform,
   rescued(id,at){const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
   locked(id){toast(lockedHint(id),'🔒');},
   worked(id,task,r,at){
@@ -656,6 +678,7 @@ const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()
 frameListeners.add(dt=>crew.update(dt));
 function friendDialog(id:FriendId){openDialog('friend',FRIENDS[id].name,friendPanel(world.state,id),'RESCUED FRIEND',{garden:'🌱',farm:'🐄',cook:'🍳'}[FRIENDS[id].role]);}
 async function friendsCatchUp(){if(!(state.friends??[]).some(f=>f.home&&!f.paused))return;const r=await perform<Partial<Record<FriendId,{jobs:number;cooked:number}>>>('friendsCatchUp');const jobs=Object.values(r??{}).reduce((n,v)=>n+(v?.jobs??0),0);if(jobs)setTimeout(()=>toast(t('While you were away, your friends did {count} jobs.',{count:jobs}),'🤝'),3200);}
+const storedNote=initStoredNote({state:()=>state,home:()=>started&&!visiting&&!flight&&world.planet==='home'&&world.state===state&&!explorerOut(),perform,openChest:()=>storage(),t,name:id=>t(M.ITEMS[id as M.ItemId]?.name??id)},app);frameListeners.add(dt=>storedNote.frame(dt));
 let friendsHome=false;frameListeners.add(()=>{const home=started&&!visiting&&!flight&&world.planet==='home';if(home&&!friendsHome)void friendsCatchUp();friendsHome=home;});
 let farmHelperSettingsPending=false;
 async function farmHelperSetting(type:'buyFarmHelper'|'setFarmHelperPaused'|'setFarmHelperAutoFeed',payload:Record<string,unknown>={}){
@@ -669,7 +692,9 @@ async function farmHelperSetting(type:'buyFarmHelper'|'setFarmHelperPaused'|'set
 const rodTip=new Vector3();
 function tipPosition(){const tip=world.player.getObjectByName('rod-tip');if(tip){world.player.updateWorldMatrix(true,true);tip.getWorldPosition(rodTip);}else rodTip.set(world.position.x,1.4,world.position.z);return rodTip;}
 function pondView(e:Entity):PondView{return {id:e.id,x:e.x,z:e.z,rx:e.pond!.rx,rz:e.pond!.rz,surface:e.pond!.surface,waterId:e.waterId??state.planet};}
-function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.entities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';});}
+function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.entities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
+// Rod fish follow the harpoon slots' species so picking up hunting gear by the shore keeps the pond's look.
+function pondStock(pond:PondView){const hunt=huntingPondAt(state.planet,pond.x,pond.z);return hunt?fishHuntTargets(hunt,0).map(t=>t.id):null;}
 const formatSize=(cm:number)=>cm>=100?`${(cm/100).toFixed(2).replace(/\.?0+$/,'')} m`:`${cm} cm`;
 function showReel(on:boolean,mode:'reel'|'cast'|'hunt'='reel'){const button=$('#reel-button');button.hidden=!on;button.classList.toggle('cast',mode==='cast');button.classList.toggle('hunt',mode==='hunt');button.classList.remove('bite','down');button.removeAttribute('aria-pressed');button.setAttribute('aria-label',t(mode==='hunt'?'Hunt a fish':mode==='cast'?'Cast':'Reel in the line'));$('#reel-text').textContent=t(mode==='hunt'?'Hunt':mode==='cast'?'Cast':'Reel');$('.reel-icon').textContent=mode==='hunt'?'🔱':'🎣';$('#hud').classList.toggle('fishing',on&&mode==='reel');$('#fish-hint').hidden=!(on&&mode!=='cast');}
 function endFishing(message?:string,icon='🎣'){fishingEpoch++;const was=!!fishGame;if(fishGame?.ticket&&actionHandler)void perform('fishCancel',{ticketId:fishGame.ticket});fishGame=null;fishingView.cancel();world.fishing='idle';showReel(false);if(was&&message)toast(message,icon);}
@@ -829,7 +854,7 @@ void fishKit.load().then(()=>{if(fishKit.ready&&!fishGame)stockPonds();});
 // Gear and pet files load on demand as the explorer puts them on (see World.kitFor).
 void heroKit.load().then(()=>{if(heroKit.ready)world.refreshAvatars();});
 // The cottage interior (house-ui.ts): the door, walking in and out, friends and their Dress panel.
-const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked:uiBlocked,perform:(type,payload)=>perform(type,payload),openDialog,closeDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ownGear:inventory,looks:()=>lookShop.open(),iconUrl:id=>`${ICON_BASE}items/${id}.webp`});
+const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked:uiBlocked,perform:(type,payload)=>perform(type,payload),openDialog,closeDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ownGear:inventory,looks:()=>lookShop.open(),quests,soundOn:()=>state.settings.sound,iconUrl:id=>`${ICON_BASE}items/${id}.webp`});
 // The bedroom mirror's Look shop (look-shop.ts): body styles bought with energy, previewed like gear try-on.
 const lookShop=initLookShop({world,perform:(type,payload)=>perform(type,payload),openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),endGearTryOn:()=>{if(tryingOn){tryingOn=null;world.tryOnGear=null;}}});
 frameListeners.add(dt=>house.frame(dt));
@@ -1203,6 +1228,11 @@ app.addEventListener('click',async event=>{
       if(M.isLowering(from,d)){const wait=M.lowerReadyAt(state)-Date.now();if(wait>0){toast(t('You can lower the difficulty again in {hours} h.',{hours:Math.ceil(wait/3_600_000)}),'⏳');break;}
         if(!button.dataset.sure){openDialog('difficulty-confirm','Lower the difficulty?',`<p class="intro">${esc(t('Switch to {level}? You can lower the difficulty only once a day; raising it is always free. Crops already planted keep their value.',{level:t(M.DIFFICULTY_LABEL[d])}))}</p><div class="button-row"><button class="soft-button" data-action="settings">${esc(t('Keep {level}',{level:t(M.DIFFICULTY_LABEL[from])}))}</button><button class="primary" data-action="difficulty" data-kind="${d}" data-sure="1">${esc(t('Lower to {level}',{level:t(M.DIFFICULTY_LABEL[d])}))}</button></div>`,'SETTINGS','⚖️');break;}}
       await perform('settings',{settings:{difficulty:d}});settings();break;}
+    case 'tester-apply':await testerApply();break;case 'tester-shop':testerShop();break;
+    case 'tester-buy':if(id&&testerDo(s=>Tester.testerBuy(s,id)))toast(t(M.ITEMS[id].name),M.ITEMS[id].icon);testerShop();break;
+    case 'tester-friend':if(id&&testerDo(s=>Tester.testerFriend(s,id as FriendId)))toast(t('{name} is home!',{name:t(FRIENDS[id as FriendId].name)}),'🏡');testerShop();break;
+    case 'tester-planets':if(!button.dataset.sure){button.dataset.sure='1';button.textContent=t('Tap again to confirm');break;}if(testerDo(Tester.testerPlanets))toast(t('All planets unlocked'),'🪐');testerShop();break;
+    case 'tester-level':if(!button.dataset.sure){button.dataset.sure='1';button.textContent=t('Tap again to confirm');break;}if(testerDo(Tester.testerMaxLevel))world.refreshPlayer();testerShop();break;
     case 'place-beds':await perform('settings',{settings:{placeBeds:!state.settings.placeBeds}});settings();break;
     case 'collect-farm':collectFarm();break;
     case 'pen-menu':penDialog();break;
