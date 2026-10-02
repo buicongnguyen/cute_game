@@ -1,7 +1,13 @@
 import type { SaveState } from './model.ts';
 import { t, localizeHtml } from './i18n.ts';
 import { HELPER_COST, helperOf } from './farm-helper.ts';
-import { penBuilt } from './farm.ts';
+import { penBuilt, worthFeeding } from './farm.ts';
+
+/** The automatic-feeding switch's line (pen robot and Clover): it feeds only when the time saved is worth more than the
+ * crop (farm.ts autoFeedCrop), which in practice means pigs and ducks; when on and nothing qualifies, it says so. */
+export function autoFeedNote(s: SaveState, on: boolean, now = Date.now()) {
+  return t('Feeds pigs and ducks from your bag when that pays off. Turn off to keep every crop.') + (on && !worthFeeding(s, now) ? ' ' + t('Nothing worth feeding now.') : '');
+}
 
 export function farmHelperRow(s: SaveState, visiting = false) {
   if (visiting || s.planet !== 'home' || !penBuilt(s)) return '';
@@ -18,6 +24,6 @@ export function farmHelperPanel(s: SaveState, picture: string) {
     return localizeHtml(`${art}${intro}<button class="${short ? 'soft-button' : 'primary'} wide" data-action="farm-helper-buy" ${short ? 'disabled' : ''}>${t('Hire animal helper (ϟ {cost})', { cost: HELPER_COST })}</button>${short ? `<p class="muted center">${t('You need {need} more energy.', { need: short })}</p>` : ''}`);
   }
   return localizeHtml(`${art}${intro}<div class="settings-row"><div><strong>Animal helper at work</strong><small>Off: the robot rests beside the animal pen.</small></div><button class="toggle ${h.paused ? '' : 'on'}" role="switch" aria-checked="${!h.paused}" aria-label="Animal helper at work" data-action="farm-helper-pause"></button></div>`
-    + `<div class="settings-row"><div><strong>Automatic feeding</strong><small>Uses crops from your bag only. Turn off to keep every crop.</small></div><button class="toggle ${h.autoFeed ? 'on' : ''}" role="switch" aria-checked="${h.autoFeed}" aria-label="Automatic feeding" data-action="farm-helper-feed"></button></div>`
+    + `<div class="settings-row"><div><strong>Automatic feeding</strong><small>${autoFeedNote(s, h.autoFeed)}</small></div><button class="toggle ${h.autoFeed ? 'on' : ''}" role="switch" aria-checked="${h.autoFeed}" aria-label="Automatic feeding" data-action="farm-helper-feed"></button></div>`
     + '<button class="soft-button wide" data-action="pen-menu">Back to animal pen</button>');
 }

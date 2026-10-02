@@ -79,7 +79,7 @@ export const VI_GAMEPLAY: Record<string, string> = {
   'Collect {count}:': 'Thu hoạch {count}:',
   'Feed:': 'Thức ăn:',
   '(your cheapest crop)': '(cây trồng rẻ nhất của bạn)',
-  'Bring a crop from the garden to feed them: fed animals grow and produce twice as fast.': 'Mang cây trồng từ vườn đến cho ăn: vật nuôi đã ăn lớn và cho sản phẩm nhanh gấp đôi.',
+  'Bring a crop from the garden to feed them: a fed animal finishes its current wait twice as fast.': 'Mang cây trồng từ vườn đến cho ăn: vật nuôi đã ăn sẽ xong lượt chờ hiện tại nhanh gấp đôi.',
   'Feed all ({count})': 'Cho tất cả ăn ({count})',
   'Feed {name} {number}': 'Cho {name} {number} ăn',
   'Feed': 'Cho ăn',

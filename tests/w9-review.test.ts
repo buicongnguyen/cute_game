@@ -27,7 +27,7 @@ test('feed crops are only cheap quick ones: radish, carrot, pumpkin, mint; never
   assert.deepEqual(feed, ['carrot', 'mint', 'pumpkin', 'radish']);
   const s = home(); s.bag = { apple: 3, iceberry: 2, melon: 4 };
   assert.equal(M.feedCrop(s), null, 'no automatic feed from valuable crops');
-  assert.equal(M.playerFeedCrop(s), 'iceberry', 'the Feed button still offers the cheapest crop the player has');
+  assert.equal(M.playerFeedCrop(s), null, 'the Feed buttons never default to a valuable crop (the player may still pick one)');
   s.bag.mint = 1; s.bag.radish = 1; assert.equal(M.feedCrop(s), 'radish');
 });
 

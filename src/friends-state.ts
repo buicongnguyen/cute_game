@@ -25,6 +25,8 @@ export interface Friend {
   grown?: number;
   /** Work done "today" (UTC day number `day`), for the status line. */
   day?: number; done?: number;
+  /** Of today's work, the jobs that counted toward growth (growth.ts GROWTH_JOBS_PER_DAY caps it). */
+  grew?: number;
   /** The cook's odd items waiting for a partner (0 or 1 per item), so "half, rounded down" holds across batches. */
   carry?: Record<string, number>;
   /** The cook's share of farm products set aside for a dish (they stay in the bag until the dish is made). */
@@ -78,7 +80,7 @@ export function parseFriends(raw: unknown): Friend[] {
     if (r.autoFeed === true) f.autoFeed = true;
     if (r.gear && typeof r.gear === 'object' && !Array.isArray(r.gear))
       for (const [slot, item] of Object.entries(r.gear)) if (typeof item === 'string' && friendSlot(item) === slot) f.gear[slot as FriendSlot] = canonicalItem(item);
-    const day = count(r.day, 1e7); if (day) { f.day = day; f.done = count(r.done, 1e6); }
+    const day = count(r.day, 1e7); if (day) { f.day = day; f.done = count(r.done, 1e6); const grew = count(r.grew, 1e6); if (grew) f.grew = grew; }
     // Growth (growth.ts): saves from before it have no counter, so they start from today's work.
     const jobs = r.jobs === undefined ? f.done ?? 0 : count(r.jobs, 1e9); if (jobs) f.jobs = jobs;
     const grown = count(r.grown, 2); if (grown) f.grown = grown;

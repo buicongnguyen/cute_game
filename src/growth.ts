@@ -4,8 +4,9 @@ import type { Friend } from './friends-state.ts';
  * Rescued friends grow up: half the explorer's height when freed, then 0.75, then 0.8 (never taller than the explorer,
  * so the explorer still reads as the hero). A stage is reached by EITHER time at home OR work done, whichever comes first:
  * - time (1 day, then 3 days after the rescue) so a player who checks in daily sees them grow even on a slow farm;
- * - jobs (40, then 150) so a busy session is rewarded: a gardener on 8-16 beds does roughly 15-30 jobs an hour,
- *   so the first step comes in the second or third session and the last in about a week of normal play.
+ * - jobs (40, then 150) so a busy session is rewarded. Only harvests and collects count (planting and feeding are
+ *   cheap repeats), and at most GROWTH_JOBS_PER_DAY a day (friends.ts tally), so the jobs path takes at least two
+ *   days to the first step and five to the last: never faster than a couple of days of steady play.
  * Stages are saved (`grown`) and never go back, so a friend that grew stays grown after a reset of the day counter.
  */
 export const GROWTH = [
@@ -14,6 +15,8 @@ export const GROWTH = [
   { height: .8, days: 3, jobs: 150 },
 ] as const;
 const DAY = 86_400_000;
+/** Most jobs a day that count toward growth. */
+export const GROWTH_JOBS_PER_DAY = 30;
 /** The stage the friend has earned by now (from its rescue time and jobs). */
 export function earnedStage(f: Pick<Friend, 'rescuedAt' | 'jobs'>, now: number) {
   const days = f.rescuedAt > 0 && now > f.rescuedAt ? (now - f.rescuedAt) / DAY : 0, jobs = f.jobs ?? 0;

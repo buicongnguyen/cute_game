@@ -1,4 +1,4 @@
-import { growUp } from './growth.ts';
+import { growUp, GROWTH_JOBS_PER_DAY } from './growth.ts';
 import * as M from './model.ts';
 import { seedFor } from './helper.ts';
 import { CAGES, FRIENDS, FRIEND_IDS, FRIEND_SLOTS, friendSlot, type Friend, type FriendId, type FriendRole, type FriendSlot } from './friends-state.ts';
@@ -83,7 +83,13 @@ export interface WorkResult { kind: FriendTask['kind']; raw: Record<string, numb
 const dist = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
 const ripe = (p: M.Plot, now: number) => !!p.crop && M.cropProgress(p, now) >= 1;
 const UTC_DAY = 86_400_000;
-function tally(f: Friend, n: number, now: number) { const day = Math.floor(now / UTC_DAY); if (f.day !== day) { f.day = day; f.done = 0; } f.done = (f.done ?? 0) + n; f.jobs = (f.jobs ?? 0) + n; growUp(f, now); }
+/** Counts a job for the status line; harvests and collects also count toward growth, up to GROWTH_JOBS_PER_DAY a day. */
+function tally(f: Friend, n: number, now: number, grows: boolean) {
+  const day = Math.floor(now / UTC_DAY); if (f.day !== day) { f.day = day; f.done = 0; f.grew = 0; }
+  f.done = (f.done ?? 0) + n;
+  if (grows) { const k = Math.max(0, Math.min(n, GROWTH_JOBS_PER_DAY - (f.grew ?? 0))); f.grew = (f.grew ?? 0) + k; f.jobs = (f.jobs ?? 0) + k; }
+  growUp(f, now);
+}
 /** Work done today, for the status line. */
 export const doneToday = (f: Friend, now = Date.now()) => f.day === Math.floor(now / UTC_DAY) ? f.done ?? 0 : 0;
 
@@ -162,7 +168,7 @@ export function friendWork(s: M.SaveState, id: FriendId, task: FriendTask, now =
     if (task.kind === 'collect') { collected = M.collectProducts(s, now, [task.uid]); if (!collected.length) return null; collected.forEach(c => got(c.item)); }
     else { const crop = f.autoFeed ? keepOne(s, M.farmOf(s).animals.find(a => a.uid === task.uid), now) : null; if (!crop || !M.feedAnimal(s, task.uid, now, crop)) return null; }
   }
-  tally(f, 1, now);
+  tally(f, 1, now, task.kind === 'harvest' || task.kind === 'collect');
   const cooked = f.role === 'cook' ? cookHalf(s, f, raw) : {};
   for (const [k, n] of Object.entries(cooked)) { const base = k.replace(/^cooked_/, ''); if (raw[base]) raw[base] = Math.max(0, raw[base] - n); }
   return { kind: task.kind, raw, cooked, ...(collected ? { collected } : {}) };

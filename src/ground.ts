@@ -63,13 +63,18 @@ export function groundColor(planet: PlanetId, x: number, z: number, ponds: reado
 }
 
 export const GROUND_TILE = 80;
+/** One checker texture per colour pair for the session: every toy-planet visit reuses it instead of leaking a new one
+ * (ground materials are disposed with the world, their maps are not). */
+const checkers = new Map<string, T.DataTexture>();
 /** A 2 × 2 pixel checker repeated so each square is 4 m, drawn crisp with nearest filtering. */
-function checker(a: string, b: string) {
+export function checker(a: string, b: string) {
+  const key = a + '|' + b, cached = checkers.get(key); if (cached) return cached;
   // Raw pixels rather than a canvas, so worlds can also be built outside a browser (tests).
   const bytes = (hex: string) => { const c = new T.Color(hex); return [Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255), 255]; };
   const [pa, pb] = [bytes(a), bytes(b)], texture = new T.DataTexture(new Uint8Array([...pa, ...pb, ...pb, ...pa]), 2, 2);
   texture.colorSpace = T.SRGBColorSpace; texture.magFilter = T.NearestFilter; texture.minFilter = T.NearestFilter; texture.generateMipmaps = false; texture.needsUpdate = true;
   texture.wrapS = texture.wrapT = T.RepeatWrapping; texture.repeat.set(GROUND_TILE / 8, GROUND_TILE / 8);
+  texture.userData.sharedKit = true; checkers.set(key, texture);
   return texture;
 }
 

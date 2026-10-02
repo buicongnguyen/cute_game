@@ -25,7 +25,7 @@ test('farm localization changes visible copy without altering animal IDs, classe
   M.addItem(state, 'carrot', 2);
   const saved = JSON.stringify(state);
   setLanguage('vi');
-  const panel = penHtml(state, ui, time);
+  const panel = penHtml(state, ui, time + M.ANIMALS.chicken.growMs + 1); // grown: Feed all skips young ones
   assert.match(panel, /BẠN MỚI/);
   assert.match(panel, /Cho tất cả ăn \(1\)/);
   assert.match(panel, /data-action="feed-animal"/);

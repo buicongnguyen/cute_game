@@ -3,7 +3,7 @@ import { addItem, removeItem, gainXp, looseQuantity, type SaveState } from './mo
 import { gameHours } from './farm-clock.ts';
 import { recordEvent } from './progression.ts';
 import { newFarmHelper, parseFarmHelper, type FarmHelperState } from './farm-helper-state.ts';
-import { animalPrice, productPace, kitchenOpen, PRODUCT_PACE } from './difficulty.ts';
+import { animalPrice, productPace, kitchenOpen, sellPrice, PRODUCT_PACE } from './difficulty.ts';
 
 /** Livestock production uses the offline farm clock; aging uses two real hours. */
 export type AnimalKind = 'chicken' | 'duck' | 'cow' | 'pig' | 'dog';
@@ -242,8 +242,8 @@ const cheapest = (s: SaveState, keep: (id: ItemId) => boolean) => {
 };
 /** The crop the farm feeds by default: the cheapest feed crop in the bag (ties by name), or null. */
 export function feedCrop(s: SaveState): ItemId | null { return cheapest(s, isFeedCrop); }
-/** The Feed buttons' default: a feed crop, else the player's cheapest crop (they may still pick any crop themselves). */
-export function playerFeedCrop(s: SaveState): ItemId | null { return feedCrop(s) ?? cheapest(s, () => true); }
+/** The Feed buttons' default: a feed crop only, never a dearer crop (the player may still pick any crop themselves). */
+export function playerFeedCrop(s: SaveState): ItemId | null { return feedCrop(s); }
 /** What feeding saves, in product value: the share of the cycle it skips times one product's sell. */
 export function feedGain(a: Animal, now = Date.now()) {
   const left = timeLeft(a, now), duration = productDuration(a), product = ITEMS[ANIMALS[a.kind].product]?.sell ?? 0;
@@ -255,6 +255,12 @@ export function autoFeedCrop(s: SaveState, a: Animal, now = Date.now()): ItemId 
   const crop = feedCrop(s); if (!crop || !isAdult(a, now) || !canFeed(a, now)) return null;
   return feedGain(a, now) >= ITEMS[crop].sell ? crop : null;
 }
+/** Feeding this crop to this animal loses energy: the crop sells for more than the time it saves (the Feed confirm). */
+export const feedLoses = (s: SaveState, crop: ItemId, a: Animal, now = Date.now()) => sellPrice(s, crop) > feedGain(a, now);
+/** The player's Feed buttons: adults only (a young animal's feed brings no product sooner). */
+export const playerCanFeed = (a: Animal, now = Date.now()) => isAdult(a, now) && canFeed(a, now);
+/** Whether any animal is worth feeding now (the helpers' rule, autoFeedCrop). */
+export const worthFeeding = (s: SaveState, now = Date.now()) => farmOf(s).animals.some(a => autoFeedCrop(s, a, now) !== null);
 /** Whether this animal would take feed now: once while young, once per product cycle, never while a product waits. */
 export function canFeed(a: Animal, now = Date.now()) { return a.kind !== 'dog' && validAnimalTime(a, now) && !expired(a, now) && (isAdult(a, now) ? !a.fed && !productReady(a, now) : !a.fedYoung); }
 /** Feeds one crop to an animal; returns the crop used, or null (no such animal, already fed, nothing to feed). */
@@ -267,8 +273,8 @@ export function feedAnimal(s: SaveState, uid: number, now = Date.now(), raw?: It
   else { a.bornAt -= skip; a.cycleAt -= skip; a.fedYoung = true; }
   return crop;
 }
-/** Feeds every animal that would take feed while crops last; returns how many ate. */
-export function feedAll(s: SaveState, now = Date.now(), raw?: ItemId) { let fed = 0; for (const a of farmOf(s).animals) if (canFeed(a, now) && feedAnimal(s, a.uid, now, raw)) fed++; return fed; }
+/** Feeds every adult that would take feed while crops last (young ones are skipped); returns how many ate. */
+export function feedAll(s: SaveState, now = Date.now(), raw?: ItemId) { let fed = 0; for (const a of farmOf(s).animals) if (playerCanFeed(a, now) && feedAnimal(s, a.uid, now, raw)) fed++; return fed; }
 export interface Collected { uid: number; kind: AnimalKind; item: ItemId }
 /**
  * Collects waiting products or expired animals as meat, with XP. Meat is granted only on collection, then the

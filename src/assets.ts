@@ -327,7 +327,7 @@ const EARLESS = new WeakMap<T.BufferGeometry, T.BufferGeometry>();
  * draw of their own (the default hero's sprout bakes into its head the same way). The head without them is kept too:
  * tuckEars swaps it in under a hat, the way the sprout is hidden.
  */
-function mergeEars(hero: T.Object3D) {
+export function mergeEars(hero: T.Object3D) {
   const leaf = hero.getObjectByName('head-leaf'), head = hero.getObjectByName('head');
   const ears = leaf?.children.find((o): o is T.Mesh => o instanceof T.Mesh), target = head?.children.find((o): o is T.Mesh => o instanceof T.Mesh && !Array.isArray(o.material) && (o.material as Plain).vertexColors && !!o.geometry.getAttribute('color'));
   if (!leaf || !ears || !target || !ears.geometry.getAttribute('color')) return;
@@ -336,6 +336,9 @@ function mergeEars(hero: T.Object3D) {
   if (!base.index || !extra.index) { if (base.index) base = base.toNonIndexed(); if (extra.index) extra = extra.toNonIndexed(); }
   for (const name of Object.keys(extra.attributes)) if (!base.getAttribute(name)) extra.deleteAttribute(name);
   const merged = mergeGeometries([base, extra], false); extra.dispose(); if (!merged) return;
+  // The earless head is kit geometry too (tuckEars swaps it in): disposing it with one explorer would make every
+  // later hat re-upload it.
+  target.geometry.userData.sharedKit = true;
   EARLESS.set(merged, target.geometry); target.geometry = merged; leaf.removeFromParent();
 }
 /** Hides (or shows) a styled explorer's ears: they tuck under hats and most disguises, as the sprout does. */

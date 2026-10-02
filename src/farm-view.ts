@@ -57,6 +57,8 @@ export const COATS: Record<ModelId, readonly (readonly [string, string, number])
   dog: [['#c98d4c', '#fff0d3', 0], ['#3b3434', '#bd8954', .25], ['#fff7e3', '#ddc59d', .1]],
 };
 const COAT_COLORS = Object.fromEntries(Object.entries(COATS).map(([id, list]) => [id, list.map(([a, b, f]) => [new T.Color(a), new T.Color(b), f] as const)])) as unknown as Record<ModelId, readonly (readonly [T.Color, T.Color, number])[]>;
+/** The two instanced coat attributes, as one constant list (no array literal per frame). */
+const COAT_ATTRS = ['coatA', 'coatB'] as const;
 /**
  * Which materials are coat (1) or patch (2), by farm.glb material name or a stand-in's colour, with the colour the
  * mask's shading is measured against (a chick's darker wing stays a shade darker in every breed).
@@ -373,6 +375,8 @@ export class FarmPenView {
   /** What each animal is doing (for probes and tests): walking, or the kind of rest. */
   activities() { return [...this.walkers.values()].map(w => ({ uid: w.uid, kind: w.kind, young: w.young, expired: w.expired, walking: w.walking, rest: w.rest, x: w.x, z: w.z })); }
   private player: { x: number; z: number } | null = null;
+  /** Scratch for `player`, so update() allocates nothing per frame. */
+  private playerAt = { x: 0, z: 0 };
   /** A collected product flies up from its animal and shrinks (like a harvested crop). */
   collect(uid: number, product?: string, origin?: { x: number; z: number }) {
     const w = this.walkers.get(uid),at=w??origin;if(!at||!Number.isFinite(at.x)||!Number.isFinite(at.z))return;
@@ -446,22 +450,22 @@ export class FarmPenView {
     if (this.mobile && !changed && !this.poseDirty && this.poseDt < interval - 1e-9) return;
     dt = this.poseDt; this.poseDt = 0; this.poseDirty = false;
     const calm = this.mobile ? .45 : 1, idleTime = time * (this.mobile ? .6 : 1);
-    this.player = player ? { x: player.x, z: player.z } : null;
+    if (player) { this.playerAt.x = player.x; this.playerAt.z = player.z; } this.player = player ? this.playerAt : null;
     if (this.camera) { this.camera.updateMatrixWorld(); this.frustum.setFromProjectionMatrix(this.m.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse)); }
     if (this.buildT < 1) { this.buildT += dt; const k = Math.min(1, this.buildT / .6), s = k < 1 ? k * (1 + Math.sin(k * Math.PI) * .25) : 1; for (const c of this.statics.children) if (c !== this.animals) c.scale.set(1, Math.max(.01, s), 1); }
     const walkers = this.live; walkers.length = 0; for (const w of this.walkers.values()) if (!w.expired) walkers.push(w);
     this.grid.build(walkers);
     // Far or offscreen animals think a few times a second with the gathered time (their walks stay on the same line).
-    for (const w of walkers) {
-      w.seen = this.onScreen(w); w.lodDt += dt; w.lodT -= dt; if (w.lodT > 0) continue;
+    for (let n = 0; n < walkers.length; n++) {
+      const w = walkers[n]; w.seen = this.onScreen(w); w.lodDt += dt; w.lodT -= dt; if (w.lodT > 0) continue;
       w.lodT = this.lodStep(w, w.seen); const step=Math.min(w.lodDt,.25);
       // Casual roaming is calmer on phones; fleeing and guard pursuit retain their normal pace.
       if(!this.stepGuard(w,step))stepRoamer(w, walkers, this.area, this.rng, step * (this.mobile && w.flee <= 0 ? .6 : 1), this.player, this.grid); w.lodDt = 0;
     }
-    for (const w of walkers) w.phase += dt * (w.kind === 'cow' ? 7 : 16) * Math.min(1, w.speed / .3) * (this.mobile && w.flee <= 0 ? .6 : 1);
+    for (let n = 0; n < walkers.length; n++) { const w = walkers[n]; w.phase += dt * (w.kind === 'cow' ? 7 : 16) * Math.min(1, w.speed / .3) * (this.mobile && w.flee <= 0 ? .6 : 1); }
     for (const m of this.meshes.values()) { m.count = 0; m.userData.animalUids.length=0; }
-    for (const a of list) {
-      const w = this.walkers.get(a.uid)!;
+    for (let n = 0; n < list.length; n++) {
+      const a = list[n], w = this.walkers.get(a.uid)!;
       if (w.expired) {
         const marker = this.productMesh('meat'), i = marker.count;
         if (i < MAX_PRODUCTS) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, .15 + Math.sin(idleTime * 3 + w.seed) * .05 * calm, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, idleTime * .7 + w.seed, 0)), this.s.setScalar(1.6))); marker.userData.animalUids[i]=a.uid; marker.count = i + 1; }
@@ -471,7 +475,7 @@ export class FarmPenView {
       w.pop = Math.min(1, w.pop + dt * 2.5);
       // Offscreen animals are not posed at all (no matrices written, nothing drawn).
       if (!w.seen) continue;
-      const [coatA, coatB, fleck] = this.coatColors(w.model, w.coat);
+      const coat = this.coatColors(w.model, w.coat), coatA = coat[0], coatB = coat[1], fleck = coat[2];
       const pop = w.pop < 1 ? Math.min(1, w.pop * 2) * (1 + Math.sin(w.pop * Math.PI * 2.5) * (1 - w.pop) * .35) : 1;
       // Young ones grow a little toward adult size before they change model.
       const scale = SHOWN[a.kind] * w.size * pop * (young ? .85 + growth(a, now) * .3 : 1), moving = w.speed > .05;
@@ -481,14 +485,14 @@ export class FarmPenView {
       this.root.compose(this.v.set(w.x - PEN.x+Math.sin(w.heading)*bite*.35, bob + settle + bite*.2, w.z - PEN.z+Math.cos(w.heading)*bite*.35), this.q.setFromEuler(this.e.set(-bite*.22, w.heading, dust)), this.s.setScalar(scale));
       const swing = moving ? Math.sin(w.phase) * (cow ? .45 : .7) : 0;
       // A hop when a hen flaps; a little sway of the body while walking.
-      for (const p of rig.parts) {
+      for (let k = 0; k < rig.parts.length; k++) { const p = rig.parts[k];
         if (!p.mesh) {
           // Only bodies cast shadows: a head's shadow merges into the body's at this camera, and it saves a shadow draw per model.
           p.mesh = this.mesh(`${w.model}:${p.draw}`, p.geometry, MAX_PER_MODEL[w.model] * (p.draw === 'legs' ? MAX_LEGS : 1), p.draw === 'body');
           p.coatA = p.geometry.getAttribute('coatA') as T.InstancedBufferAttribute; p.coatB = p.geometry.getAttribute('coatB') as T.InstancedBufferAttribute;
         }
         const mesh = p.mesh, max = mesh.instanceMatrix.count;
-        for (const { at, sign } of p.pivots) {
+        for (let j = 0; j < p.pivots.length; j++) { const at = p.pivots[j].at, sign = p.pivots[j].sign;
           let rx = 0, ry = 0, rz = 0;
           // Grazing: head down to the grass with a slow chew; pecking: a quick dip.
           if (p.draw === 'head') { rx = Math.max(w.peck * .9, w.graze * (cow ? .75 : .6)) + (w.graze * Math.sin(idleTime * 6 + w.seed) * .06 + Math.sin(idleTime * 2 + w.seed) * .05) * calm + bite*.75; ry = Math.sin(idleTime * .7 + w.seed) * .15 * (1 - w.graze * .6) * calm; }
@@ -527,8 +531,8 @@ export class FarmPenView {
       m.visible = m.count > 0;
       if (m.count) { m.instanceMatrix.clearUpdateRanges(); m.instanceMatrix.addUpdateRange(0, m.count * 16); m.instanceMatrix.needsUpdate = true; }
       const start = m.userData.coatStart, end = m.userData.coatEnd;
-      if (end > start) for (const name of ['coatA', 'coatB']) {
-        const at = m.geometry.getAttribute(name) as T.InstancedBufferAttribute | undefined;
+      if (end > start) for (let j = 0; j < COAT_ATTRS.length; j++) {
+        const at = m.geometry.getAttribute(COAT_ATTRS[j]) as T.InstancedBufferAttribute | undefined;
         if (at) { at.addUpdateRange(start * at.itemSize, (end - start) * at.itemSize); at.needsUpdate = true; }
       }
       m.userData.coatStart = Infinity; m.userData.coatEnd = 0;

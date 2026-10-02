@@ -67,7 +67,8 @@ test('a crop from the bag halves the time left, once while young and once per pr
   assert.equal(M.feedAnimal(s, 999, adult), null, 'no such animal');
   // Feed all feeds every hungry animal while crops last.
   const t = home(); M.addItem(t, 'radish', 2); for (let i = 0; i < 3; i++) M.buyAnimal(t, 'chicken', t0);
-  assert.equal(M.feedAll(t, t0), 2); assert.equal(t.bag.radish, undefined);
+  assert.equal(M.feedAll(t, t0), 0, 'Feed all skips young animals'); assert.equal(t.bag.radish, 2);
+  const grown = t0 + M.ANIMALS.chicken.growMs + 1; assert.equal(M.feedAll(t, grown), 2); assert.equal(t.bag.radish, undefined);
 });
 
 test('one collect gathers every waiting product with XP, in the order given', () => {

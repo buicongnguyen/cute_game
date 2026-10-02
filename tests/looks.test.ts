@@ -27,11 +27,13 @@ test('friends grow from half to 0.75 to 0.8 of the explorer, by days at home or 
   assert.equal(friendHeight(9), .8);
 });
 
-test('every job counts toward growing up, and the catch-up grows a friend who rested at home for days', () => {
+test('harvests count toward growing up (30 a day at most), and the catch-up grows a friend who rested at home for days', () => {
   const s = M.newGame(); s.level = 30; s.energy = 1e5; s.planet = M.CAGES.sprout.planet;
   M.grantDefeat(s, M.CAGES.sprout.boss, 1, true, () => .5, false); assert.equal(F.rescue(s, 'sprout', T0), true); s.planet = 'home'; F.arriveHome(s, { x: 0, z: 5 });
   const f = s.friends![0];
   for (let i = 0; i < 40; i++) { const plot = s.plots[0]; plot.crop = 'radish'; plot.plantedAt = T0 - M.CROPS.radish.duration - 1; assert.ok(F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0)); }
+  assert.equal(f.jobs, 30, 'at most 30 jobs a day count'); assert.equal(friendStage(f), 0);
+  for (let i = 0; i < 10; i++) { const plot = s.plots[0]; plot.crop = 'radish'; plot.plantedAt = T0 - M.CROPS.radish.duration - 1; assert.ok(F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0 + DAY)); }
   assert.equal(f.jobs, 40); assert.equal(friendStage(f), 1);
   f.paused = true; F.friendsCatchUp(s, T0 + 3 * DAY); assert.equal(friendStage(f), 2);
 });

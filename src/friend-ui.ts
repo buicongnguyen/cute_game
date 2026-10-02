@@ -3,6 +3,7 @@ import { ENEMY_TYPES } from './enemy-types.ts';
 import type { SaveState } from './model.ts';
 import { CAGES, FRIENDS, doneToday, friendOf, type FriendId } from './friends.ts';
 import { GROWTH, friendStage } from './growth.ts';
+import { autoFeedNote } from './farm-helper-ui.ts';
 
 /** Rescued friends' panel copy (main.ts opens it when a friend is tapped). */
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -37,7 +38,7 @@ export function friendPanel(s: SaveState, id: FriendId, now = Date.now()) {
   return `<p class="intro friend-status" data-friend-status="${id}">${esc(friendStatus(s, id, now))}</p><p class="friend-growth" data-friend-stage="${friendStage(f)}">🌱 ${esc(growthLine(s, id))}</p><p>${esc(t(JOB[f.role]))}</p>`
     + `<div class="button-row"><button class="${paused ? 'primary' : 'soft-button'}" data-action="friend-pause" data-kind="${id}" aria-pressed="${paused}">${esc(t(paused ? 'Back to work' : 'Take a break'))}</button></div>`
     // The farmer feeds only when asked (off by default): feeding costs crops that could be sold.
-    + (f.role === 'farm' ? `<div class="settings-row"><div><strong>${esc(t('Automatic feeding'))}</strong><small>${esc(t('Uses crops from your bag only. Turn off to keep every crop.'))}</small></div><button class="toggle ${f.autoFeed ? 'on' : ''}" role="switch" aria-checked="${!!f.autoFeed}" aria-label="${esc(t('Automatic feeding'))}" data-action="friend-feed" data-kind="${id}"></button></div>` : '');
+    + (f.role === 'farm' ? `<div class="settings-row"><div><strong>${esc(t('Automatic feeding'))}</strong><small>${esc(autoFeedNote(s, !!f.autoFeed, now))}</small></div><button class="toggle ${f.autoFeed ? 'on' : ''}" role="switch" aria-checked="${!!f.autoFeed}" aria-label="${esc(t('Automatic feeding'))}" data-action="friend-feed" data-kind="${id}"></button></div>` : '');
 }
 /** What a locked cage says when tapped. */
 export function lockedHint(id: FriendId) {
