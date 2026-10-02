@@ -23,4 +23,7 @@ export const VI_FRIENDS: Record<string, string> = {
   'The robot wanted a cook who never sleeps. I would love to cook for you!': 'Con robot muốn một đầu bếp không bao giờ ngủ. Mình rất muốn nấu ăn cho bạn!',
   '{names} reached Clover Village and went to work!': '{names} đã về tới Hành Tinh Mầm Xanh và bắt tay vào việc!',
   'While you were away, your friends did {count} jobs.': 'Trong lúc bạn vắng mặt, các bạn nhỏ đã làm {count} việc.',
+  'While you were out, your helpers stored:': 'Trong lúc bạn ra ngoài, các bạn giúp việc đã cất vào rương:',
+  'and {count} more': 'và {count} loại khác',
+  'Tap to open the chest': 'Chạm để mở rương',
 };
