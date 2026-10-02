@@ -59,16 +59,24 @@ const PINNED=${JSON.stringify(pinned)};
 const SCRIPTS=${JSON.stringify(scripts)};
 ${staleCaches.toString()}
 ${strategy.toString()}
-// Install reads past the HTTP cache (Pages sends max-age=600), or index.html could be older than its scripts.
+const PINNED_SET=new Set(PINNED);
+// Unpinned files install past the HTTP cache (Pages sends max-age=600), or index.html could be older than its scripts.
+// A pinned URL names one exact build of a file (hash or ?v=), so an older worker's copy of it is used as is, and
+// otherwise the ordinary HTTP cache may answer: reloading those only downloaded the same bytes twice.
 const fresh=url=>new Request(url,{cache:'reload'});
+const older=()=>caches.keys().then(keys=>keys.filter(key=>key!==VERSION&&key.startsWith(PREFIX)));
+const copied=(url,names)=>names.reduce((found,name)=>found.then(hit=>hit||caches.open(name).then(cache=>cache.match(url))),Promise.resolve(undefined));
+const fill=(cache,url,names)=>PINNED_SET.has(url)?copied(url,names).then(hit=>hit?cache.put(url,hit):cache.add(url)):cache.add(fresh(url));
 // A new build takes over at once: its pinned URLs carry content hashes, so an open page of an older
 // build still gets matching files (other versions go to the network), and the page offers a reload.
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(CORE.map(fresh)).then(()=>Promise.allSettled(EXTRA.map(url=>cache.add(fresh(url))))))
-    .then(()=>self.skipWaiting()));
+  event.waitUntil(Promise.all([caches.open(VERSION),older()]).then(([cache,names])=>Promise.all(CORE.map(url=>fill(cache,url,names)))
+    .then(()=>Promise.allSettled(EXTRA.map(url=>fill(cache,url,names))))).then(()=>self.skipWaiting()));
 });
+// Older caches go only once this build holds every EXTRA file: a flaky install keeps the last complete copy for offline play.
+const complete=()=>caches.open(VERSION).then(cache=>Promise.all(EXTRA.map(url=>cache.match(url)))).then(found=>found.every(Boolean));
 self.addEventListener('activate',event=>{
-  event.waitUntil(caches.keys().then(keys=>Promise.all(staleCaches(keys,VERSION,PREFIX,BASE).map(key=>caches.delete(key))))
+  event.waitUntil(complete().then(done=>done&&caches.keys().then(keys=>Promise.all(staleCaches(keys,VERSION,PREFIX,BASE).map(key=>caches.delete(key)))))
     .then(()=>self.clients.claim())
     .then(()=>self.clients.matchAll({type:'window'}))
     .then(clients=>{for(const client of clients)client.postMessage({type:'zoo-sw-ready',version:VERSION,scripts:SCRIPTS});}));
@@ -82,9 +90,11 @@ self.addEventListener('fetch',event=>{
     event.respondWith(fetch(request.url,{cache:'no-cache',credentials:'same-origin'}).catch(error=>caches.open(VERSION).then(cache=>cache.match(BASE+'index.html')).then(cached=>cached||Promise.reject(error))));
     return;
   }
+  // Offline, a copy an older (kept) cache holds beats a stand-in.
+  const elsewhere=(error,ignoreSearch)=>caches.match(request,{ignoreSearch}).then(cached=>cached||Promise.reject(error));
   event.respondWith(caches.open(VERSION).then(cache=>how==='pinned'
-    ?cache.match(request).then(cached=>cached||fetch(request).then(response=>keep(cache,request,response)))
-    :fetch(request,{cache:'no-cache'}).then(response=>keep(cache,request,response),error=>cache.match(request,{ignoreSearch:true}).then(cached=>cached||Promise.reject(error)))));
+    ?cache.match(request).then(cached=>cached||fetch(request).then(response=>keep(cache,request,response),error=>elsewhere(error,false)))
+    :fetch(request,{cache:'no-cache'}).then(response=>keep(cache,request,response),error=>cache.match(request,{ignoreSearch:true}).then(cached=>cached||elsewhere(error,true)))));
 });
 `);
 console.log(`Offline game cache prepared (${core.length + extra.length} files, ${pinned.length} pinned by hash, ${urls.length - core.length - extra.length} on-demand files kept on first use, base ${base}).`);

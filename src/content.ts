@@ -25,6 +25,8 @@ export interface WeaponDef {
 }
 export interface ItemDef {
     name: string;
+    /** Kept so old saves keep their possessions, but no longer obtainable (the collection log leaves it out). */
+    keepsake?: boolean;
     icon: string;
     desc: string;
     type: string;
@@ -3677,8 +3679,8 @@ for (const [id, fact] of Object.entries(ITEM_FACTS)) {
 }
 // The first evaluation had a wood material and a bunny companion. Keep both
 // usable rather than deleting possessions when upgrading an existing save.
-ITEMS.wood = { name: 'Wild wood', icon: '🪵', type: 'material', sell: 5, desc: 'A keepsake material from the first garden. Can still be sold.' };
-ITEMS.bunny = { name: 'Mochi bunny', icon: '🐰', type: 'pet', slot: 'pet', sell: 0, stats: { atk: 3 }, attack: 3, pet: { scale: .5, dmg: .25, cd: 1.5 }, desc: 'Your original companion stays with you.' };
+ITEMS.wood = { name: 'Wild wood', icon: '🪵', type: 'material', sell: 5, keepsake: true, desc: 'A keepsake material from the first garden. Can still be sold.' };
+ITEMS.bunny = { name: 'Mochi bunny', icon: '🐰', type: 'pet', slot: 'pet', sell: 0, keepsake: true, stats: { atk: 3 }, attack: 3, pet: { scale: .5, dmg: .25, cd: 1.5 }, desc: 'Your original companion stays with you.' };
 export const LEGACY_ITEMS: Record<string, string> = { turnip: 'radish', fertilizer: 'spore', fish: 'fish_perch', goldenfish: 'fish_koi', sword: 'sword_wood', blaster: 'gun_bubble', hat: 'hat_straw', outfit: 'armor_leather', boots: 'boots_cloud', firesword: 'sword_lava', fireboots: 'boots_lava', dragon: 'pet_dragon', crystal: 'starshard', ember: 'magma' };
 export function canonicalItem(id: string) { return Object.hasOwn(LEGACY_ITEMS, id) ? LEGACY_ITEMS[id] : id; }
 export const SHOP_CATEGORIES = SHOP_FACTS;
@@ -3704,7 +3706,7 @@ for (const [id, base] of Object.entries({ ...ITEMS })) {
         for (const key of Object.keys(buff) as (keyof BuffDef)[])
             if (!['time', 'light', 'magnet'].includes(key))
                 buff[key] = (buff[key] || 0) * 1.35;
-    ITEMS[`cooked_${id}`] = { ...base, name: `${base.name} · Nướng`, icon: '🔥', type: 'food', slot: undefined, price: undefined, base: id, cooked: true, sell: Math.round(base.sell * 2.2) + 2, heal: base.heal! >= 9999 ? 9999 : (base.heal || 15) * 2, buff, desc: 'Cooked at the garden volcano. Stronger healing and longer effects.' };
+    ITEMS[`cooked_${id}`] = { ...base, name: `${base.name} · Nướng`, icon: '🔥', type: 'food', slot: undefined, price: undefined, base: id, cooked: true, sell: Math.round(base.sell * 2.2) + 2, heal: base.heal! >= 9999 ? 9999 : (base.heal || 15) * 2, buff, desc: 'Cooked at home. Stronger healing and longer effects.' };
 }
 export const DISGUISES: Record<string, {
     name: string;

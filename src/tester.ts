@@ -22,17 +22,31 @@ export const ATTEMPTS_PER_MINUTE = 5;
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
 export function fnv1a(text: string) { let h = 0x811c9dc5; for (const ch of text) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); }
-export async function codeMatches(raw: string, subtle: SubtleCrypto | undefined = globalThis.crypto?.subtle): Promise<boolean> {
+/** The stored hashes of the code; tests pass their own pair, so the plain code never has to appear in the public repo. */
+export const CODE_HASHES = { sha256: CODE_SHA256, fnv1a: CODE_FNV1A };
+export async function codeMatches(raw: string, subtle: SubtleCrypto | undefined = globalThis.crypto?.subtle, hashes = CODE_HASHES): Promise<boolean> {
   const code = raw.trim().toLowerCase(); if (!code || code.length > 64) return false;
-  if (subtle) try { return hex(await subtle.digest('SHA-256', new TextEncoder().encode(code))) === CODE_SHA256; } catch { /* fall through */ }
-  return fnv1a(code) === CODE_FNV1A;
+  if (subtle) try { return hex(await subtle.digest('SHA-256', new TextEncoder().encode(code))) === hashes.sha256; } catch { /* fall through */ }
+  return fnv1a(code) === hashes.fnv1a;
 }
 
 /** At most `limit` tries in any rolling minute; a sliding window kept in memory (a reload resets it, which is fine offline). */
-export function attemptLimiter(limit = ATTEMPTS_PER_MINUTE, windowMs = 60_000) {
-  const tries: number[] = [];
-  return (now = Date.now()) => { while (tries.length && now - tries[0] >= windowMs) tries.shift(); if (tries.length >= limit) return false; tries.push(now); return true; };
+export interface TriesStore { get(): string | null; set(value: string): void }
+/** The tries kept in localStorage, so a reload does not reset the limit (storage is optional: blocked = in memory only). */
+export const savedTries = (key = 'zoo-garden-tester-tries'): TriesStore => ({
+  get() { try { return globalThis.localStorage?.getItem(key) ?? null; } catch { return null; } },
+  set(value) { try { globalThis.localStorage?.setItem(key, value); } catch { /* keep the in-memory window */ } },
+});
+export function attemptLimiter(limit = ATTEMPTS_PER_MINUTE, windowMs = 60_000, store?: TriesStore) {
+  let tries: number[] = [];
+  try { const saved = JSON.parse(store?.get() ?? '[]'); if (Array.isArray(saved)) tries = saved.filter((n): n is number => typeof n === 'number' && Number.isFinite(n)).slice(-limit); } catch { /* a bad entry starts over */ }
+  return (now = Date.now()) => {
+    tries = tries.filter(at => at <= now && now - at < windowMs); // a try "in the future" (clock moved back) does not lock the box
+    if (tries.length >= limit) return false; tries.push(now); store?.set(JSON.stringify(tries)); return true;
+  };
 }
+/** Leaves tester mode: the Tester shop closes; the energy already given stays. */
+export function exitTester(s: M.SaveState) { if (!isTester(s)) return false; delete s.settings.tester; return true; }
 
 export const isTester = (s: M.SaveState) => s.settings.tester === true;
 export function unlockTester(s: M.SaveState) { s.settings.tester = true; s.energy = Math.max(s.energy, TESTER_ENERGY); return true; }

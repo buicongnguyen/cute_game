@@ -31,20 +31,23 @@ test('Easy keeps every current value', () => {
   assert.deepEqual(M.hardScale('easy'), { hp: 1, damage: 1 });
 });
 
-for (const d of ['normal', 'hard'] as const) test(`${d}: kitchen at level 14 (Pepper only gathers before), leaner later fruit trees, dearer slower livestock`, () => {
+for (const d of ['normal', 'hard'] as const) test(`${d}: kitchen at level 14 (Pepper only gathers before), later and slower fruit trees, dearer slower livestock`, () => {
   // Kitchen
   const s = game(d, 13); s.bag.carrot = 4; s.bag.egg = 2;
   assert.equal(M.kitchenOpen(s), false); assert.equal(M.cook(s, 'carrot'), false); assert.equal(M.canCookDish(s, 'omelette'), false);
   const pepper: F.Friend = { id: 'pepper', role: 'cook', rescuedAt: 1, gear: {}, home: true }; s.friends = [pepper];
   assert.deepEqual(F.cookHalf(s, pepper, { carrot: 4 }), {}); assert.equal(s.bag.carrot, 4, 'nothing cooked, nothing carried');
   s.level = 14; assert.equal(M.cook(s, 'carrot'), true);
-  // Fruit trees: apple L8, sells 150, 120 XP; the others by the same ratios, +5 levels (capped at 25).
-  assert.equal(M.cropLevel(s, 'apple'), 8); assert.equal(M.sellPrice(s, 'apple'), 150); assert.equal(M.cropXp(s, 'apple'), 120);
-  assert.equal(M.cropLevel(s, 'peach'), 23); assert.equal(M.sellPrice(s, 'peach'), 550); assert.equal(M.cropXp(s, 'peach'), 420);
+  // Fruit trees: apple L8, twice the grow time (16 h), 120 XP; the others by the same ratios, +5 levels (capped at 25).
+  // The sell price is the same on every difficulty (review w15: a price that followed the setting could be gamed).
+  assert.equal(M.cropLevel(s, 'apple'), 8); assert.equal(M.sellPrice(s, 'apple'), 600); assert.equal(M.cropXp(s, 'apple'), 120); assert.equal(M.cropGrowTime(s, 'apple'), 2 * M.CROPS.apple.duration);
+  assert.equal(M.cropLevel(s, 'peach'), 23); assert.equal(M.sellPrice(s, 'peach'), 2200); assert.equal(M.cropXp(s, 'peach'), 420);
+  assert.equal(M.cropGrowTime(s, 'carrot'), M.CROPS.carrot.duration, 'ordinary crops grow as before');
   assert.equal(M.cropLevel(s, 'carrot'), 1); assert.equal(M.sellPrice(s, 'carrot'), M.ITEMS.carrot.sell, 'ordinary crops unchanged');
   const g = game(d, 7); assert.equal(M.plant(g, 0, 'apple', T0), false); g.level = 8; assert.equal(M.plant(g, 0, 'apple', T0), true);
-  const xp = g.xp; assert.equal(M.harvest(g, 0, T0 + M.CROPS.apple.duration), 'apple'); assert.equal(g.xp - xp, d === 'hard' ? 138 : 120, 'Hard pays +15% XP');
-  const e = g.energy; assert.equal(M.sell(g, 'apple'), 150); assert.equal(g.energy - e, 150);
+  assert.equal(g.plots[0].growDuration, 2 * M.CROPS.apple.duration); assert.equal(M.harvest(g, 0, T0 + M.CROPS.apple.duration), null, 'not ripe at the Easy time');
+  const xp = g.xp; assert.equal(M.harvest(g, 0, T0 + 2 * M.CROPS.apple.duration), 'apple'); assert.equal(g.xp - xp, d === 'hard' ? 138 : 120, 'Hard pays +15% XP');
+  const e = g.energy; assert.equal(M.sell(g, 'apple'), 600); assert.equal(g.energy - e, 600);
   // Livestock
   const f = game(d); assert.equal(M.priceOf(f, 'chicken'), 60); assert.equal(M.priceOf(f, 'cow'), 120); assert.equal(M.priceOf(f, 'duck'), 370); assert.equal(M.priceOf(f, 'pig'), 650); assert.equal(M.priceOf(f, 'dog'), 450);
   const before = f.energy, hen = M.buyAnimal(f, 'chicken', T0)!; assert.equal(before - f.energy, 60);

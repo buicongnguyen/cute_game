@@ -90,11 +90,16 @@ function template(type: string, kit: KitLibrary): T.Group | null {
   return group;
 }
 
-const templates = new WeakMap<KitLibrary, Map<string, T.Group | null>>();
-/** A new model of `type` from the kit (geometry and material shared), or null while it has no art for it. */
+const templates = new WeakMap<KitLibrary, { revision: number; map: Map<string, T.Group | null> }>();
+/**
+ * A new model of `type` from the kit (geometry and material shared), or null while it has no art for it. The kit is
+ * ready after its first file (creatures.glb or forest-birds.glb): the cache follows kit.revision, so a "no art" answer
+ * given before the other file (or a late retry) arrived is asked again and restyleCreatures picks the art up.
+ */
 export function creatureArt(type: string, kit: KitLibrary = creatureKit): T.Group | null {
   if (!kit.ready || !CREATURE_PARTS[type]) return null;
-  let cache = templates.get(kit); if (!cache) templates.set(kit, cache = new Map());
+  let entry = templates.get(kit); if (!entry || entry.revision !== kit.revision) templates.set(kit, entry = { revision: kit.revision, map: new Map() });
+  const cache = entry.map;
   let made = cache.get(type);
   if (made === undefined) { made = template(type, kit); cache.set(type, made); }
   return made ? made.clone(true) : null;

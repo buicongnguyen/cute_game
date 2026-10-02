@@ -1,7 +1,7 @@
 import { ITEMS, type ItemId, type ItemDef } from './content.ts';
 import type { SaveState } from './model.ts';
 
-export type ContextGearState = Pick<SaveState, 'bag' | 'gear'>;
+export type ContextGearState = Pick<SaveState, 'bag' | 'gear'> & { fists?: boolean };
 export interface GearContext { nearWater: boolean; fighting: boolean; fishing: boolean }
 
 function ownedWeapon(state: ContextGearState, id: string | undefined): ItemDef | undefined {
@@ -33,9 +33,11 @@ export class ContextGearSelection {
   private fists = false;
 
   private observe(state: ContextGearState) {
-    if (this.state !== state) { this.state = state; this.combat = null; this.fists = false; }
+    // A save that chose fists (SaveState.fists, set by the 'unequip' action) starts with fists, on the server as well.
+    if (this.state !== state) { this.state = state; this.combat = null; this.fists = state.fists === true; }
     const equipped = Object.hasOwn(state.gear, 'weapon') ? state.gear.weapon : undefined;
     if (ownedCombat(state, equipped)) { this.combat = equipped!; this.fists = false; }
+    else if (state.fists === true && !equipped) { this.fists = true; this.combat = null; }
     else if (this.combat && !ownedCombat(state, this.combat)) this.combat = null;
   }
 

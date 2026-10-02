@@ -62,13 +62,12 @@ test('2. cook tasks wait for the kitchen on Normal and Hard, in the rolls and in
   assert.equal(seen.locked, false, 'never offered below the kitchen level'); assert.ok(seen.easy); assert.ok(seen.open);
 });
 
-// 3. HIGH: roasted fruit skipped the Normal tree price cut.
-test('3. roasted fruit is priced from the difficulty-adjusted raw crop', () => {
-  assert.equal(M.sellPrice(game('easy'), 'cooked_apple'), M.ITEMS.cooked_apple.sell);
-  assert.equal(M.sellPrice(game('normal'), 'cooked_apple'), Math.round(2.2 * 150) + 2);
-  assert.equal(M.sellPrice(game('normal'), 'cooked_carrot'), M.ITEMS.cooked_carrot.sell, 'non-tree food unchanged');
+// 3. HIGH: roasted fruit skipped the Normal tree price cut. Wave 15 moved the tree nerf to grow time and XP, so every
+// price, raw or roasted, is now the same on every difficulty.
+test('3. raw and roasted fruit sell for the same on every difficulty', () => {
+  for (const d of ['easy', 'normal', 'hard'] as const) for (const id of ['apple', 'cooked_apple', 'cooked_carrot']) assert.equal(M.sellPrice(game(d), id), M.ITEMS[id].sell, d + ' ' + id);
   const s = game('normal'); s.bag = { apple: 2, carrot: 3, cooked_apple: 1 }; const lots = produceLots(s);
-  assert.equal(lots.total, 2 * 150 + 3 * M.ITEMS.carrot.sell); const before = s.energy; act(s, 'sell', { id: 'cooked_apple', count: 1 }); assert.equal(s.energy - before, 332);
+  assert.equal(lots.total, 2 * 600 + 3 * M.ITEMS.carrot.sell); const before = s.energy; act(s, 'sell', { id: 'cooked_apple', count: 1 }); assert.equal(s.energy - before, M.ITEMS.cooked_apple.sell);
 });
 
 // 4. MED: difficulty switching.
@@ -80,15 +79,16 @@ test('4. raising is free; lowering works once per 24 h; growing crops keep their
   act(s, 'settings', { settings: { difficulty: 'hard' } }, T0 + 1000); assert.equal(M.difficultyOf(s), 'hard', 'raising stays free in the cooldown');
   act(s, 'settings', { settings: { difficulty: 'easy' } }, T0 + DAY); assert.equal(M.difficultyOf(s), 'easy');
   assert.equal(M.parseSave(JSON.stringify(s))!.settings.difficultyLoweredAt, T0 + DAY, 'the timestamp is saved');
-  // A tree planted on Easy, harvested after raising to Normal: Easy XP and value.
+  // A tree planted on Easy, harvested after raising to Normal: the Easy grow time and XP, and no energy top-up (w15).
   const g = game('easy', 10); assert.ok(M.plant(g, 0, 'apple', T0)); assert.equal(g.plots[0].difficulty, 'easy');
   assert.equal(M.parseSave(JSON.stringify(g))!.plots[0].difficulty, 'easy');
   act(g, 'settings', { settings: { difficulty: 'normal' } }); const xp = g.xp, level = g.level, energy = g.energy;
   assert.equal(M.harvest(g, 0, T0 + M.CROPS.apple.duration), 'apple');
-  assert.ok(g.level > level || g.xp - xp === 400, 'Easy XP'); assert.equal(g.energy - energy, 600 - 150, 'the Easy price, paid as the gap at harvest');
+  assert.ok(g.level > level || g.xp - xp === 400, 'Easy XP'); assert.equal(g.energy - energy, 0, 'no top-up: the price is the same anyway');
   assert.equal(g.plots[0].difficulty, undefined);
   // Planted on Normal, harvested on Easy: the Normal XP.
-  const h = game('normal', 10); M.plant(h, 0, 'apple', T0); h.settings.difficulty = 'easy'; const hx = h.xp; M.harvest(h, 0, T0 + M.CROPS.apple.duration); assert.equal(h.xp - hx, 120);
+  const h = game('normal', 10); M.plant(h, 0, 'apple', T0); h.settings.difficulty = 'easy'; const hx = h.xp; assert.equal(M.harvest(h, 0, T0 + M.CROPS.apple.duration), null, 'the Normal grow time stays');
+  M.harvest(h, 0, T0 + 2 * M.CROPS.apple.duration); assert.equal(h.xp - hx, 120);
 });
 test('4. co-op: the settings note shows the host difficulty (source contract) and Vietnamese has it', () => {
   const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
@@ -127,7 +127,7 @@ test('7. auto-feed says it feeds pigs and ducks when that pays off, and when not
 });
 
 // 8. LOW: friends grew too fast.
-test('8. only harvests and collects grow a friend, 30 a day at most', () => {
+test('8. only harvests and collects grow a friend, 60 a day at most (w15: was 30, so time always won)', () => {
   const s = M.newGame(); s.level = 30; s.energy = 1e5; s.farm.built = true; s.planet = M.CAGES.clover.planet;
   M.grantDefeat(s, M.CAGES.clover.boss, 1, true, () => .5, false); assert.ok(F.rescue(s, 'clover', T0)); s.planet = 'home'; F.arriveHome(s, { x: 0, z: 5 });
   const f = s.friends![0]; f.autoFeed = true;
@@ -139,9 +139,9 @@ test('8. only harvests and collects grow a friend, 30 a day at most', () => {
   const sprout = g.friends![0]; g.bag.seed_star = 0;
   for (let i = 0; i < 3; i++) { g.plots[0].crop = null; F.friendWork(g, 'sprout', { kind: 'plant', index: 0 }, T0); }
   assert.equal(sprout.jobs ?? 0, 0, 'planting does not count');
-  for (let i = 0; i < 45; i++) { ripe(g, 'radish', T0); assert.ok(F.friendWork(g, 'sprout', { kind: 'harvest', index: 0 }, T0)); }
-  assert.equal(sprout.jobs, 30); assert.equal(sprout.done! >= 45, true);
-  assert.equal(M.parseSave(JSON.stringify(g))!.friends![0].grew, 30, 'the daily count survives a reload');
+  for (let i = 0; i < 75; i++) { ripe(g, 'radish', T0); assert.ok(F.friendWork(g, 'sprout', { kind: 'harvest', index: 0 }, T0)); }
+  assert.equal(sprout.jobs, 60); assert.equal(sprout.done! >= 75, true);
+  assert.equal(M.parseSave(JSON.stringify(g))!.friends![0].grew, 60, 'the daily count survives a reload');
 });
 
 // 9 + 10. The rename, and Hard's reward.

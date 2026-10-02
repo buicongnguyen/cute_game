@@ -14,6 +14,16 @@ export const VI_FIXES: Record<string, string> = {
   'Bed upgraded to level {level}: −{percent}% grow time ({ratio}× harvests).': 'Luống đã lên cấp {level}: −{percent}% thời gian lớn ({ratio}× số lần thu hoạch).',
   'Upgrade bed (ϟ {cost})': 'Nâng cấp luống (ϟ {cost})',
   'Fully upgraded': 'Đã nâng cấp tối đa',
+  // Tester mode.
+  'Exit tester mode': 'Thoát chế độ kiểm thử',
+  'Tester mode is off. Your energy stays.': 'Đã tắt chế độ kiểm thử. Năng lượng vẫn được giữ.',
+  // Friends grow up (growth.ts).
+  'Size: {size} · grows {days} days after the rescue, or sooner after {jobs} harvests or collections (now {done}, at most {cap} a day)': 'Vóc dáng: {size} · lớn thêm sau {days} ngày kể từ khi được cứu, hoặc sớm hơn khi thu hoạch/thu nhặt {jobs} lần (hiện {done}, tối đa {cap} lần mỗi ngày)',
+  // The cottage (house-activities.ts) and the server's house checks.
+  'Toasty: +15 defence': 'Ấm áp: +15 phòng thủ',
+  'Titans beaten': 'Titan đã hạ',
+  'Go inside your cottage first.': 'Hãy vào nhà trước đã.',
+  'Walk up to it first.': 'Hãy lại gần trước đã.',
   // Difficulty.
   'A slower economy: kitchen at level 14, fruit trees later and twice as slow with less XP, dearer livestock.': 'Kinh tế chậm hơn: bếp mở ở cấp 14, cây ăn quả mở muộn hơn, lớn chậm gấp đôi và cho ít XP hơn, vật nuôi đắt hơn.',
 };

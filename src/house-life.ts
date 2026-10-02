@@ -41,7 +41,7 @@ export function nearestActivity(x: number, z: number, reach = REACH): Activity |
 const BUFF_NAMES: Record<string, string> = { regen: 'regeneration', def: 'defence', haste: 'attack speed', speed: 'movement speed', luck: 'luck', xp: 'experience' };
 export function buffText(buff: BuffDef | undefined) {
   if (!buff) return '';
-  const parts = Object.entries(buff).filter(([k]) => k !== 'time').map(([k, v]) => k === 'regen' ? `+${v} ${t(BUFF_NAMES[k])}` : `+${Math.round((v as number) * 100)}% ${t(BUFF_NAMES[k] ?? k)}`);
+  const parts = Object.entries(buff).filter(([k]) => k !== 'time').map(([k, v]) => k === 'regen' || k === 'def' ? `+${v} ${t(BUFF_NAMES[k])}` : `+${Math.round((v as number) * 100)}% ${t(BUFF_NAMES[k] ?? k)}`);
   return `${parts.join(', ')} · ${Math.round(buff.time / 60 * 10) / 10} ${t('min')}`;
 }
 
@@ -72,7 +72,10 @@ export function initHouseLife(d: LifeDeps) {
   const prompt = document.createElement('button'); prompt.id = 'house-prompt'; prompt.type = 'button'; prompt.hidden = true; document.body.append(prompt);
   const bubble = document.createElement('div'); bubble.id = 'house-bubble'; bubble.hidden = true; document.body.append(bubble);
   const music = new MusicBox();
-  let near: Activity | null = null, shown = '', scan = 0, chatClock = 4, chatLeft = 0, chatFriend: T.Object3D | null = null, decorClock = 0;
+  let near: Activity | null = null, shown = '', scan = 0, chatClock = 4, chatLeft = 0, chatFriend: T.Object3D | null = null, decorClock = 0, bubbleAt = '';
+  // Online the cooldown stamps are the server's: measure them on its clock (the last reply's `at`), as fish-hunting-view does.
+  let clockOffset = 0, using = false;
+  const now = () => Date.now() + clockOffset;
   const v = new T.Vector3(), talk = new TalkBag(), queue: { who: T.Object3D; text: string }[] = [];
   const fx = (a: Activity) => ({ x: a.at.x, y: a.y, z: a.at.z });
 
@@ -102,10 +105,17 @@ export function initHouseLife(d: LifeDeps) {
       if (a.id === 'radio') { if (music.playing) { music.stop(); d.toast('The radio is off.', '📻'); } else if (d.soundOn()) { music.start(); d.toast('A cosy tune fills the cottage.', '🎶'); } else d.toast('Turn on sound in Settings to hear the radio.', '🔇'); return; }
     }
     if (d.visiting()) return d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷');
-    const left = cooldownLeft(world.state, a.id);
+    const left = cooldownLeft(world.state, a.id, now());
     if (left > 0) { d.tone('click'); return d.toast(t('{name} is ready again in {time}.', { name: t(a.name), time: mmss(left) }), '⏳'); }
-    const r = await d.perform('houseUse', { id: a.id }) as UseResult | null;
-    if (r) { feedback(a, r); shown = ''; syncDecor(); }
+    // One request at a time: an online double tap used to show a success and then a "cooling down" error.
+    if (using) return; using = true; const owner = world.state;
+    try {
+      const r = await d.perform('houseUse', { id: a.id }) as UseResult | null;
+      if (!r) return;
+      if (Number.isFinite(r.at)) clockOffset = r.at - Date.now();
+      // A reply that lands after leaving the cottage (or the save changed) must not play its effects outdoors.
+      if (house.inside && world.state === owner) { feedback(a, r); shown = ''; syncDecor(); }
+    } finally { using = false; }
   };
 
   const trophyWall = () => {
@@ -129,12 +139,13 @@ export function initHouseLife(d: LifeDeps) {
   const project = (x: number, y: number, z: number) => { v.set(x, y, z).project(world.camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight] as const; };
   const frame = (dt: number) => {
     if (!house.inside) { if (!prompt.hidden) prompt.hidden = true; if (!bubble.hidden) bubble.hidden = true; view.highlight.visible = false; if (music.playing) music.stop(); return; }
+    if (music.playing && !d.soundOn()) music.stop(); // sound switched off in Settings
     music.tick(dt);
     if ((decorClock -= dt) <= 0) { decorClock = .5; syncDecor(); }
     // The nearest activity: re-measured 8 times a second, the DOM touched only when the text changes.
     if ((scan -= dt) <= 0) {
       scan = .12; near = d.blocked() ? null : nearestActivity(world.position.x, world.position.z);
-      const left = near ? cooldownLeft(world.state, near.id) : 0;
+      const left = near ? cooldownLeft(world.state, near.id, now()) : 0;
       const label = near ? `${near.icon}|${t(near.verb)}|${left > 0 ? mmss(left) : ''}|${near.id === 'radio' && music.playing ? 1 : 0}` : '';
       if (label !== shown) {
         shown = label; prompt.hidden = !near;
@@ -146,8 +157,10 @@ export function initHouseLife(d: LifeDeps) {
     // Friends chat now and then: one bubble at a time, above whoever is settled.
     if (chatLeft > 0) {
       chatLeft -= dt;
-      if (chatLeft <= 0 || !chatFriend) { bubble.hidden = true; chatFriend = null; }
-      else { const p = chatFriend.position, [x, y] = project(p.x, p.y + 1.9, p.z); bubble.style.visibility = x < 90 || x > innerWidth - 90 || y < 60 ? 'hidden' : ''; bubble.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -100%)`; }
+      // A friend who left (sent out, the house rebuilt) takes the bubble away; the DOM is written only when it moves.
+      if (chatLeft <= 0 || !chatFriend || !chatFriend.parent) { bubble.hidden = true; chatFriend = null; queue.length = 0; }
+      else { const p = chatFriend.position, [x, y] = project(p.x, p.y + 1.9, p.z), at = x < 90 || x > innerWidth - 90 || y < 60 ? 'hidden' : `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -100%)`;
+        if (at !== bubbleAt) { bubbleAt = at; if (at === 'hidden') bubble.style.visibility = 'hidden'; else { bubble.style.visibility = ''; bubble.style.transform = at; } } }
     } else if (queue.length) {
       // The reply of a two-friend exchange follows the first line.
       const next = queue.shift()!; bubble.textContent = next.text; bubble.hidden = false; chatFriend = next.who; chatLeft = 3.2;

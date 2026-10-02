@@ -2,7 +2,7 @@ import { t } from './i18n.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import type { SaveState } from './model.ts';
 import { CAGES, FRIENDS, doneToday, friendOf, type FriendId } from './friends.ts';
-import { GROWTH, friendStage } from './growth.ts';
+import { GROWTH, GROWTH_JOBS_PER_DAY, friendStage } from './growth.ts';
 import { autoFeedNote } from './farm-helper-ui.ts';
 
 /** Rescued friends' panel copy (main.ts opens it when a friend is tapped). */
@@ -26,11 +26,11 @@ const JOB: Record<string, string> = {
   cook: 'Gathers ripe crops and farm products, then cooks half of them (rounded down) at the volcano kitchen. The other half goes to your bag raw.',
 };
 const STAGE_NAME = ['Little', 'Growing', 'Grown'];
-/** "Size: Growing · ¾ of your height · grows again after 150 jobs or 3 days" (the growth stage, growth.ts). */
+/** "Size: Growing · 0.75 of your height · grows 3 days after the rescue, or sooner after 150 harvests or collections" (growth.ts). */
 export function growthLine(s: SaveState, id: FriendId) {
   const f = friendOf(s, id); if (!f) return '';
   const stage = friendStage(f), next = GROWTH[stage + 1], size = t('{name} · {share} of your height', { name: t(STAGE_NAME[stage]), share: String(GROWTH[stage].height) });
-  return next ? t('Size: {size} · grows at {jobs} jobs or {days} days home (now {done} jobs)', { size, jobs: next.jobs, days: next.days, done: f.jobs ?? 0 }) : t('Size: {size} · fully grown', { size });
+  return next ? t('Size: {size} · grows {days} days after the rescue, or sooner after {jobs} harvests or collections (now {done}, at most {cap} a day)', { size, jobs: next.jobs, days: next.days, done: f.jobs ?? 0, cap: GROWTH_JOBS_PER_DAY }) : t('Size: {size} · fully grown', { size });
 }
 export function friendPanel(s: SaveState, id: FriendId, now = Date.now()) {
   const f = friendOf(s, id); if (!f) return '';

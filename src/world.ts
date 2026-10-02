@@ -25,6 +25,7 @@ import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
 import { creatureKit, creatureArt, adoptCreatureModel } from './creature-art.ts';
+import { lateArtParts, type LateArt } from './late-art.ts';
 import type { RoamArea } from './farm-roam.ts';
 import { STARTING_PLOTS, MAX_EXTRA_PLOTS } from './content.ts';
 import { approach, blocked, clearSegment, findRoute, nearbyObstacles, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
@@ -179,7 +180,8 @@ export class World {
     // The 2D cover atlas lives in a render target, which a lost WebGL context empties: bake it again on restore.
     canvas.addEventListener('webglcontextrestored', () => { if (this.scatterGroup) this.refreshScenery(); });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = T.PCFShadowMap; // what the reference really gets: its three.js turns PCFSoft into PCF (renderer.shadowMap.type reads 1 there) this.renderer.outputColorSpace = T.SRGBColorSpace;
+    this.renderer.shadowMap.type = T.PCFShadowMap; // what the reference really gets: its three.js turns PCFSoft into PCF (renderer.shadowMap.type reads 1 there)
+    this.renderer.outputColorSpace = T.SRGBColorSpace;
     // The reference's pipeline (RC-05): no tone mapping, toon materials, per-planet hemisphere 1.5 + sun 2.4 (build sets the colours).
     this.renderer.toneMapping = T.NoToneMapping;
     this.hemi = new T.HemisphereLight('#e8f6ff', '#9ccf7a', 1.5); this.scene.add(this.hemi);
@@ -383,7 +385,8 @@ export class World {
   }
   /** The starship on this world's pad, with its flame and resting height, for launches and landings. */
   launchRocket(){
-    const e=this.entities.find(e=>e.kind==='travel'),ship=e&&part(e.mesh,'ship');
+    // Outdoor list: launched from the cottage's globe, this.entities is the interior's.
+    const e=this.outdoorEntities.find(e=>e.kind==='travel'),ship=e&&part(e.mesh,'ship');
     if(!e||!ship)return null;
     return {ship,flame:part(ship,'flame')??null,x:e.x,z:e.z,rest:(ship.userData.rest as number|undefined)??.2};
   }
@@ -949,8 +952,20 @@ export class World {
   removeRemotePlayer(id:string){const remote=this.remotePlayers?.get(id);if(!remote)return;this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);this.remotePlayers.delete(id);}
   /** Rebuild every explorer model, for example once the Blender explorer and gear have loaded. */
   refreshAvatars(){this.refreshPlayer();for(const [id,remote] of [...this.remotePlayers??[]]){const pose=remote.pose;this.removeRemotePlayer(id);this.addRemotePlayer(id,pose);}}
-  /** A model that only arrived after its retries (art-retry.ts) replaces its stand-in in place: buildings, scatter, avatars, creatures, the pen. */
-  refreshArt(){this.applyRefinedAssets();this.refreshScenery();this.refreshAvatars();this.restyleCreatures();this.farmView?.refresh();}
+  /**
+   * Models that only arrived after their retries (art-retry.ts) replace their stand-ins in place, routed by file
+   * (late-art.ts): buildings, scatter, avatars, creatures, crops (cards re-baked with the new ids), the pen. No list
+   * refreshes everything.
+   */
+  refreshArt(urls?:readonly string[]){
+    const parts=urls?lateArtParts(urls):null,has=(p:LateArt)=>!parts||parts.has(p);
+    if(has('refined'))this.applyRefinedAssets();
+    if(has('scenery'))this.refreshScenery();
+    if(has('avatars'))this.refreshAvatars();
+    if(has('creatures'))this.restyleCreatures();
+    if(has('farm'))this.farmView?.refresh();
+    if(has('crops')&&this.cropCards){this.cropCards.bake(Object.keys(M.CROPS).filter(id=>cropKit.has('crop_'+id)));this.cropSignatures=[];this.syncCrops();}
+  }
   clearRemotePlayers(){for(const id of [...this.remotePlayers?.keys()??[]])this.removeRemotePlayer(id);}
   syncCrops() {
     if(this.planet!=='home')return;
@@ -958,9 +973,9 @@ export class World {
     const cards=this.cardsReady();
     this.state.plots.forEach((p,i)=>{
       // One crop per bed with the reference's stages (G2D-2); the cards draw it when they are baked, else a 3D model does.
-      const stage=cropStage(p.crop,cropProgress(p)),modelled=!!p.crop&&cropKit.has('crop_'+p.crop),signature=cards?'cards':p.crop+':'+stage+(modelled?':kit':'');
+      const stage=cropStage(p.crop,cropProgress(p)),modelled=!!p.crop&&cropKit.has('crop_'+p.crop),carded=cards&&(!p.crop||!stage||this.cropCards!.has(stage===1?'sprout':p.crop)),signature=carded?'cards':p.crop+':'+stage+(modelled?':kit':'');
       if(this.cropSignatures[i]===signature)return;this.cropSignatures[i]=signature;const g=this.plotMeshes[i];this.disposeTree(g);g.clear();
-      if(cards||!p.crop)return;
+      if(carded||!p.crop)return;
       if(modelled){const plant=cropKit.instance(stage===1?'crop_sprout':'crop_'+p.crop);if(!plant)return;
         // Small and flat: crops never cast into the shadow map (C6).
         plant.traverse(o=>{o.castShadow=false;});plant.position.set(0,SOIL_Y,0);plant.rotation.y=(((i*17)%60)-30)*Math.PI/180;
@@ -1472,8 +1487,16 @@ export class World {
     if(e.phase==='charge')lean=.25;
     if(e.stun>.25&&!e.lift){roll=Math.sin(this.time*20)*.1;if(this.fx&&Math.random()<dt*6)this.fx.burst({x:e.x,y:m.position.y+(e.boss?2.6:1.3),z:e.z},{n:1,color:'#fff27a',glow:true,size:.09,speed:1.5,up:.5,life:.5,gravity:0});}
     m.position.y+=lift;m.position.x+=shake;m.rotation.x=lean;m.rotation.z=roll;m.scale.x*=sx;m.scale.y*=sy;m.scale.z*=sz;
+  }
+  /**
+   * Knockback slide and launch height: simulation, so it runs for every live creature each step, also far off screen,
+   * hidden or while the explorer is indoors (it used to live in the drawing code, so a far knock froze mid-slide on the host).
+   */
+  stepCreatureMotion(e:Enemy,dt:number){
+    if(!(dt>0)||e.hp<=0)return;
+    e.liftVelocity=Math.max(-15,(e.liftVelocity??0)-24*dt);e.lift=Math.max(0,(e.lift??0)+(e.liftVelocity??0)*dt);if(!e.lift)e.liftVelocity=0;
     // Knockback velocity decays quickly; scenery stops the slide.
-    if(this.networkRole!=='peer'&&(Math.abs(e.knockVX??0)>.05||Math.abs(e.knockVZ??0)>.05)&&dt>0){
+    if(this.networkRole!=='peer'&&(Math.abs(e.knockVX??0)>.05||Math.abs(e.knockVZ??0)>.05)){
       this.moveCreature(e,(e.knockVX??0)*dt,(e.knockVZ??0)*dt);const k=Math.max(0,1-dt*8);e.knockVX=(e.knockVX??0)*k;e.knockVZ=(e.knockVZ??0)*k;
     }
   }
@@ -1493,7 +1516,6 @@ export class World {
     // Out of sight and past the minimap's 40 m creature range: no animation, matrices or culling tests (the reference stops at its viewDist too).
     if(e.mesh.visible&&view>Math.max(this.viewReach??Infinity,46))e.mesh.visible=false;
     if(!e.mesh.visible)return;
-    e.liftVelocity=Math.max(-15,(e.liftVelocity??0)-24*dt);e.lift=Math.max(0,(e.lift??0)+(e.liftVelocity??0)*dt);if(!e.lift)e.liftVelocity=0;
     const ground=this.planet==='ocean'&&inWater(this.environment.layout,e)?-.5:Math.max(-.7,terrainHeight(this.environment.layout,e));
     // A wanderer that thinks on every 4th step glides between its last two positions instead of hopping (teleports snap).
     const lod=this.networkRole!=='peer'?e.lod:undefined,glide=lod&&Math.abs(e.x-lod.x)+Math.abs(e.z-lod.z)<.5?Math.min(1,(lod.age+1)/4):1,drawX=lod?lod.x+(e.x-lod.x)*glide:e.x,drawZ=lod?lod.z+(e.z-lod.z)*glide:e.z;
@@ -1555,6 +1577,7 @@ export class World {
     if(simulateWorld&&this.networkRole!=='peer')this.separateCreatures();
     if(simulateWorld&&this.networkRole==='peer')for(const enemy of this.enemies)this.updateTitanAttacks(enemy,dt,false);
     // Indoors the outdoor scene is not drawn: posing every creature there was a third of the cottage's frame on slow phones.
+    if(active||simulateWorld)for(const enemy of this.enemies)this.stepCreatureMotion(enemy,dt);
     if(!this.interior){this.drawTitanAttacks();this.decals?.begin();for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);this.decals?.end();}
     if(simulateWorld)for(let i=this.enemyShots.length-1;i>=0;i--){
       const shot=this.enemyShots[i],from={x:shot.mesh.position.x,z:shot.mesh.position.z};shot.mesh.position.x+=shot.vx*dt;shot.mesh.position.z+=shot.vz*dt;shot.life-=dt;

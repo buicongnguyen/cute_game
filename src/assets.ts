@@ -200,6 +200,8 @@ export function isShared(resource: { userData: Record<string, unknown> }) { retu
  */
 export class KitLibrary {
   ready = false;
+  /** Bumped on every file ingested: caches built from the parts (creature templates) rebuild when a later file adds more. */
+  revision = 0;
   private models = new Map<string, KitPart[]>();
   private markers = new Map<string, KitMarker[]>();
   private tinted = new Map<string, T.Material>();
@@ -226,6 +228,7 @@ export class KitLibrary {
   }
 
   private ingest(scene: T.Group) {
+    this.revision++;
     scene.updateMatrixWorld(true);
     for (const node of scene.children) {
       const inverse = node.matrixWorld.clone().invert(), parts: KitPart[] = [], markers: KitMarker[] = [];

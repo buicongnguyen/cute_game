@@ -30,6 +30,8 @@ test('online farm helper purchase and catch-up use durable receipts without dupl
   const f = await fixture(t), before = (await f.store.get('alice')).profile.energy, purchase = randomUUID();
   const bought = await f.command('buyFarmHelper', {}, purchase); assert.equal(bought.profile.energy, before - 1000); assert.equal(bought.profile.farm.helper.autoFeed, false);
   const replay = await f.command('buyFarmHelper', {}, purchase); assert.equal(replay.replayed, true); assert.equal(replay.profile.energy, before - 1000);
+  // Catch-up for time away: the save sat idle for two minutes (delivery.ts CATCH_UP_IDLE_MS), so it goes to the chest.
+  await f.edit(account => { account.profile.savedAt = Date.now() - 120_000; });
   const collection = randomUUID(), caught = await f.command('farmHelperCatchUp', {}, collection);
   assert.equal(caught.result.collected.length, 3); assert.equal(caught.profile.chest.truffle, 3); assert.equal(caught.profile.bag.truffle, undefined, "catch-up work is stored in the house chest"); assert.deepEqual(caught.result.fed, []);
   assert.equal((await f.command('farmHelperCatchUp', {}, collection)).profile.chest.truffle, 3);

@@ -46,8 +46,9 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'cookDish': result = Game.cookDish(state, id()); break;
     case 'upgrade': result = Game.upgrade(state, kind() as keyof typeof Game.UPGRADES); break;
     case 'forge': result = Game.forgeWeapon(state, id(), random); break;
-    case 'equip': result = Game.equip(state, id()); break;
-    case 'unequip': result = Game.unequip(state, string(p.slot) as Game.GearSlot); break;
+    // Taking the weapon off by hand means fists, saved so a reload and the server's combat honour it; a combat weapon put on ends it.
+    case 'equip': result = Game.equip(state, id()); if (result && ['sword', 'gun', 'fist'].includes(Game.ITEMS[state.gear.weapon ?? '']?.weapon?.kind ?? '') && Game.ITEMS[id()]?.slot === 'weapon') delete state.fists; break;
+    case 'unequip': result = Game.unequip(state, string(p.slot) as Game.GearSlot); if (result && p.slot === 'weapon') state.fists = true; break;
     case 'eat': result = Game.eat(state, id(), now); break;
     case 'transfer': {
       const item = id(), toChest = p.toChest === true, available = toChest ? Game.looseQuantity(state, item) : state.chest[item] || 0;
@@ -128,7 +129,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     // Cottage activities: rests and buffs with cooldowns (house-activities.ts).
     case 'houseUse': result = useActivity(state, id(), now); break;
     case 'rest': if (state.planet !== 'home') return invalid(); state.hp = Game.maxHp(state); result = true; break;
-    case 'reset': { const fresh=Game.newGame(state.name,state.color); fresh.settings={...state.settings}; for(const key of Object.keys(state))delete (state as unknown as Record<string,unknown>)[key]; Object.assign(state,fresh); result=true; break; }
+    case 'reset': { const fresh=Game.newGame(state.name,state.color); fresh.settings={...state.settings}; delete fresh.settings.tester; /* a new adventure starts outside tester mode */ for(const key of Object.keys(state))delete (state as unknown as Record<string,unknown>)[key]; Object.assign(state,fresh); result=true; break; }
     case 'settings': {
       const settings = p.settings;
       if (settings && typeof settings === 'object' && !Array.isArray(settings)) for (const key of ['sound', 'lowGraphics', 'movePad', 'placeBeds'] as const) if (typeof (settings as Record<string, unknown>)[key] === 'boolean') state.settings[key] = (settings as Record<string, boolean>)[key];

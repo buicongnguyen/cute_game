@@ -47,8 +47,12 @@ export async function loadWithRetry<V>(key: string, attempt: () => Promise<V>, l
   void (async () => {
     for (;;) {
       await policy.wake();
-      try { const value = await attempt(); failing.delete(key); late(value); status(); for (const f of loadedListeners) f(key); return; }
-      catch { /* Still unavailable: wait for the next wake-up. */ }
+      let value: V;
+      try { value = await attempt(); } catch { continue; /* Still unavailable: wait for the next wake-up. */ }
+      // Outside the try: an error in a callback is not a failed download, and must not fetch the file again.
+      failing.delete(key); late(value); status();
+      for (const f of loadedListeners) try { f(key); } catch (error) { console.error(error); }
+      return;
     }
   })();
   return undefined;

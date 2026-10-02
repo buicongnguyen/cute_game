@@ -88,7 +88,7 @@ export const VI_GAMEPLAY: Record<string, string> = {
   'Pen full': 'Chuồng đầy',
   'Buy · ϟ {price}': 'Mua · ϟ {price}',
   'Grows up in {time}, then gives {product} every {interval}.': 'Trưởng thành sau {time}, rồi cho {product} mỗi {interval}.',
-  '{count} XP each': '{count} KN mỗi lần',
+  '{count} XP each': '{count} XP mỗi lần',
   'Your pen is as big as it gets.': 'Chuồng đã đạt kích thước tối đa.',
   'Bigger pen: +2 chickens, +1 cow (ϟ {cost})': 'Mở rộng chuồng: +2 gà, +1 bò (ϟ {cost})',
   'NEW FRIENDS': 'BẠN MỚI',

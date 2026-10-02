@@ -76,7 +76,8 @@ export function initHouse(d: HouseDeps) {
   label(); document.querySelector('.home-button')?.after(out); document.querySelector('.control-hint')?.after(hint); onLanguageChange(label);
   /** Fade to the warm dark, swap, fade back. */
   const transition = (swap: () => void) => { if (pending) return; pending = swap; fadeTarget = 1; };
-  const sync = () => { document.body.classList.toggle('indoors', house.inside); zoneName(); remember(house.inside && !d.visiting()); };
+  let wasInside = false;
+  const sync = () => { wasInside = house.inside; document.body.classList.toggle('indoors', house.inside); zoneName(); remember(house.inside && !d.visiting()); };
   const enter = (instant = false) => {
     if (house.inside || world.planet !== 'home') return;
     void houseKit.load();
@@ -130,7 +131,9 @@ export function initHouse(d: HouseDeps) {
     if ((hoverScan -= dt) <= 0) { hoverScan = .05; const e = house.inside && mouse && !d.blocked() && !pending ? house.pick(mouse.x, mouse.y) : null; if (e || hovered) hover(e); }
     if (!d.started()) return;
     if (!resumed) { resumed = true; if (remembered() && !d.visiting() && world.planet === 'home') enter(true); }
-    if (house.inside && !world.interior) { sync(); } // the world rebuilt (travel, visit, reset)
+    // Any change: a world rebuild (travel, visit, reset, the globe's flight) drops the interior without leave(), so a
+    // check of house.inside alone never saw it and the indoor HUD stayed on.
+    if (house.inside !== wasInside) sync();
     ensureOutdoorDoor(); stepDoors(dt);
     // Build the kit interior and compile its shaders in idle time outside: on a slow phone the first entry used to
     // stall for 100-150 ms (merging the furniture, then a synchronous shader link on the first indoor frame).

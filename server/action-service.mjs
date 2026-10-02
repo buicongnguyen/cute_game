@@ -11,6 +11,8 @@ import {huntingPonds,huntFish} from '../src/fish-hunting.ts';
 import {CAGES} from '../src/friends-state.ts';
 import {WORK_ACTIONS,CATCH_UP_ACTIONS,explorerAway} from '../src/delivery.ts';
 import {cageCandidates,RESCUE_REACH} from '../src/cage-spots.ts';
+import {activity} from '../src/house-activities.ts';
+import {INDOOR_Y} from '../src/house.ts';
 
 const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 const random=()=>randomInt(0,0x100000000)/0x100000000;
@@ -154,6 +156,8 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         }else fail(400,'Use the interaction for that landmark.');
       }else{
         if(data.type==='rest')requireNear(peer,{x:0,z:-8},7);
+        // Cottage activities: in your own cottage (an indoor pose is raised by INDOOR_Y) and within reach of the thing.
+        if(data.type==='houseUse'){if(!peer||peer.visit||state.planet!=='home'||!(peer.pose.y>=INDOOR_Y-1))fail(409,'Go inside your cottage first.');const spot=activity(typeof p.id==='string'?p.id:'');if(!spot||distance(peer.pose,spot.at)>3)fail(409,'Walk up to it first.');}
         if(data.type==='recoverBag'){if(!state.dropped||state.dropped.planet!==state.planet)fail(409,'That bag is not here.');requireNear(peer,state.dropped,4);}
         if(data.type==='claimMine')requireNear(peer,p.index===0?{x:-6,z:3}:{x:9,z:-8});
         if(data.type==='claimGift'){const a=p.index*2.399+.4,d=24+Math.sqrt(p.index/25)*95;requireNear(peer,{x:Math.cos(a)*d,z:Math.sin(a)*d});}

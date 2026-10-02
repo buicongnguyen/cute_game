@@ -65,7 +65,7 @@ export const VI_HOUSE: Record<string, string> = {
   'Well rested: +25% experience': 'Ngủ ngon: +25% kinh nghiệm',
   'Fresh: +20% movement speed': 'Sảng khoái: +20% tốc độ di chuyển',
   'Sparkling clean: +10% luck': 'Sạch bong: +10% may mắn',
-  'A new painting for the craft room wall! +{n} XP': 'Một bức tranh mới cho tường phòng thủ công! +{n} KN',
+  'A new painting for the craft room wall! +{n} XP': 'Một bức tranh mới cho tường phòng thủ công! +{n} XP',
   '{name} is ready again in {time}.': '{name} sẽ dùng lại được sau {time}.',
   'Squeak!': 'Chíp chíp!',
   'The radio is off.': 'Đã tắt radio.',

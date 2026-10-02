@@ -2,7 +2,8 @@ import * as T from 'three';
 import {KitLibrary,modelUrl} from './assets.ts';
 import {TITANS, type TitanId} from './titan-content.ts';
 import {toonMaterial} from './toon.ts';
-export const titanKit=new KitLibrary([modelUrl('titans.glb')]);
+export const titanKitFile=modelUrl('titans.glb');
+export const titanKit=new KitLibrary([titanKitFile]);
 /** Kit-independent silhouettes keep all nine encounters readable while the optional Blender file streams. */
 export function titanFallback(id:TitanId){
   const d=TITANS[id],g=new T.Group(),materials=new Map<string,T.MeshToonMaterial>();

@@ -33,8 +33,8 @@ test('the robot harvest goes to the bag at home and to the chest from the wilds;
   const junk = garden(); act(junk, 'helperHarvest', { index: 0, away: 'yes' }); assert.equal(junk.bag.carrot, 1);
 });
 
-test('catch-up work for time away is always stored in the chest, and survives a reload with its note', () => {
-  const s = garden(); const r = act(s, 'helperCatchUp') as { harvested: string[] };
+test('catch-up work for time away (the save idle over a minute) is stored in the chest, and survives a reload with its note', () => {
+  const s = garden(); s.savedAt = T0 - 120_000; const r = act(s, 'helperCatchUp') as { harvested: string[] };
   assert.deepEqual(r.harvested, ['carrot']); assert.equal(s.bag.carrot, undefined); assert.equal(s.chest.carrot, 1);
   const back = M.parseSave(JSON.stringify(s))!; assert.deepEqual(back.awayStore, { carrot: 1 });
   assert.deepEqual(act(back, 'ackStored'), { carrot: 1 }); assert.equal(back.awayStore, undefined); assert.equal(back.chest.carrot, 1);

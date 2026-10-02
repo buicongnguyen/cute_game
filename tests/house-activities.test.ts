@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { newGame, parseSave, maxHp, activeBuffs, type SaveState } from '../src/model.ts';
+import { newGame, parseSave, maxHp, activeBuffs, xpNeeded, type SaveState } from '../src/model.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { noteBossDefeat, type Friend } from '../src/friends-state.ts';
 import { ROOMS, roomAt, walkable } from '../src/house.ts';
@@ -62,10 +62,11 @@ test('houseUse runs through the shared action rules and survives a save round tr
   assert.equal(junk.house, undefined);
 });
 
-test('painting gives XP and hangs up to four pictures, newest kept', () => {
+test('painting gives XP (3 % of the level bar) and hangs up to four pictures, newest kept', () => {
   const s = home(), t0 = 1e7; let xp = 0;
   for (let i = 0; i < 6; i++) { const r = useActivity(s, 'easel', t0 + i * 8 * MIN)!; xp += r.xp; }
-  assert.ok(xp >= 6 * 12 - 1);
+  assert.ok(xp >= 6, 'at least 1 XP a painting at level 1');
+  for (const level of [5, 20, 40]) { const p = home(); p.level = level; const r = useActivity(p, 'easel', t0)!; assert.equal(r.xp, Math.round(xpNeeded(level) * .03), 'level ' + level); }
   assert.equal(decorPlacements(s).filter(p => p.kit === 'painting').length, 4);
 });
 

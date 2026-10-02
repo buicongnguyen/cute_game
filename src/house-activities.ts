@@ -9,6 +9,7 @@
  */
 import * as Game from './model.ts';
 import { FISH, ITEMS, PLANETS, type BuffDef } from './content.ts';
+import { TITANS } from './titan-content.ts';
 import { FRIENDS, FRIEND_IDS } from './friends-state.ts';
 import type { Point, RoomId } from './house.ts';
 
@@ -23,7 +24,10 @@ export interface Activity {
   at: Point; y: number; kind: ActivityKind;
   /** Entity kind the tap routes to: house-* for this module, or a main.ts kind for panels it already has. */
   entity: string;
-  cooldownMin?: number; buff?: BuffDef; heal?: 'full' | number; xp?: number;
+  cooldownMin?: number; buff?: BuffDef; heal?: 'full' | number;
+  /** XP as a share of the current level bar (xpNeeded): the easel's 3 % stays worth a visit at every level (a flat 12 was half
+   * a level at level 1 and nothing at 30). */
+  xpShare?: number;
   /** What the buff does, for the toast. */
   note?: string;
 }
@@ -31,7 +35,7 @@ export interface Activity {
 export const ACTIVITIES: Activity[] = [
   // Living room: rest with your friends, warm up by the fire, admire your trophies, play the radio.
   { id: 'sofa', room: 'living', icon: '🛋️', verb: 'Sit with friends', name: 'Sofa', at: { x: -1.9, z: -.85 }, y: .6, kind: 'buff', entity: 'house-use', cooldownMin: 3, heal: 'full', buff: { regen: 3, time: 90 }, note: 'Rested: health restored, +{n} regeneration' },
-  { id: 'fire', room: 'living', icon: '🔥', verb: 'Warm up', name: 'Fireplace', at: { x: -4.1, z: 1.7 }, y: .6, kind: 'buff', entity: 'house-use', cooldownMin: 4, buff: { def: .15, time: 150 }, note: 'Toasty: +15% defence' },
+  { id: 'fire', room: 'living', icon: '🔥', verb: 'Warm up', name: 'Fireplace', at: { x: -4.1, z: 1.7 }, y: .6, kind: 'buff', entity: 'house-use', cooldownMin: 4, buff: { def: 15, time: 150 }, note: 'Toasty: +15 defence' },
   { id: 'trophies', room: 'living', icon: '🏆', verb: 'Trophy wall', name: 'Trophies', at: { x: 2.25, z: -1.5 }, y: .9, kind: 'open', entity: 'house-use' },
   { id: 'radio', room: 'living', icon: '📻', verb: 'Play music', name: 'Radio', at: { x: 3.0, z: .85 }, y: 1.2, kind: 'fun', entity: 'house-use' },
   // Kitchen: the same cooking as the outdoor kitchen (and its level gate), and a cup of tea.
@@ -39,7 +43,7 @@ export const ACTIVITIES: Activity[] = [
   { id: 'tea', room: 'kitchen', icon: '🫖', verb: 'Brew tea', name: 'Kettle', at: { x: -9.0, z: .1 }, y: 1.1, kind: 'buff', entity: 'house-use', cooldownMin: 5, buff: { haste: .15, time: 150 }, note: 'Tea time: +15% attack speed' },
   // Craft room: the workbench is the workshop; the easel paints a picture for the wall.
   { id: 'workbench', room: 'craft', icon: '🔨', verb: 'Craft', name: 'Workbench', at: { x: 9.0, z: .3 }, y: .9, kind: 'open', entity: 'craft' },
-  { id: 'easel', room: 'craft', icon: '🎨', verb: 'Paint', name: 'Easel', at: { x: 7.0, z: -.45 }, y: 1.1, kind: 'paint', entity: 'house-use', cooldownMin: 8, xp: 12 },
+  { id: 'easel', room: 'craft', icon: '🎨', verb: 'Paint', name: 'Easel', at: { x: 7.0, z: -.45 }, y: 1.1, kind: 'paint', entity: 'house-use', cooldownMin: 8, xpShare: .03 },
   // Bedroom: sleep (full health and a well-rested XP buff), the wardrobe and mirror.
   { id: 'bed', room: 'bedroom', icon: '🛏️', verb: 'Sleep', name: 'Bed', at: { x: -7.0, z: -4.7 }, y: .6, kind: 'buff', entity: 'house-use', cooldownMin: 15, heal: 'full', buff: { xp: .25, time: 300 }, note: 'Well rested: +25% experience' },
   { id: 'wardrobe', room: 'bedroom', icon: '👗', verb: 'Wardrobe', name: 'Wardrobe', at: { x: -9.62, z: -3.6 }, y: 1.4, kind: 'open', entity: 'house-wardrobe' },
@@ -60,15 +64,16 @@ type WithHouse = Game.SaveState & { house?: HouseState };
 /** The house's saved part; older saves have none. */
 export function houseOf(s: Game.SaveState): HouseState { return (s as WithHouse).house ?? {}; }
 export const MAX_PAINTINGS = 4;
-/** Milliseconds until `id` can be used again (0 = ready). */
+/** Milliseconds until `id` can be used again (0 = ready); never more than its cooldown, so a clock set back cannot lock it for days. */
 export function cooldownLeft(s: Game.SaveState, id: ActivityId, now = Date.now()) {
   const a = activity(id), at = houseOf(s).used?.[id];
-  return a?.cooldownMin && at !== undefined ? Math.max(0, at + a.cooldownMin * 60000 - now) : 0;
+  return a?.cooldownMin && at !== undefined ? Math.min(a.cooldownMin * 60000, Math.max(0, at + a.cooldownMin * 60000 - now)) : 0;
 }
 /** Friends at home, who make the sofa nicer. */
 const homeFriends = (s: Game.SaveState) => (s.friends ?? []).filter(f => f.home).length;
 
-export interface UseResult { id: ActivityId; healed: number; buff?: BuffDef; xp: number; paintings?: number }
+/** `at`: the rules' clock when it was used (the server's online), so the client can measure cooldowns on the same clock. */
+export interface UseResult { id: ActivityId; healed: number; buff?: BuffDef; xp: number; paintings?: number; at: number }
 /**
  * Uses a rest-style activity: checks the cooldown, heals, adds the buff, records the time. Returns null when it is
  * not available (cooling down, away from home, or not a rule here). The sofa's regeneration grows with friends at home.
@@ -82,15 +87,17 @@ export function useActivity(s: Game.SaveState, id: string, now = Date.now()): Us
   if (buff) Game.addBuff(s, buff, 'house_' + a.id, now);
   const house = ((s as WithHouse).house ??= {}); (house.used ??= {})[a.id] = now;
   let xp = 0;
-  if (a.xp) { const lv = s.level, before = s.xp; Game.gainXp(s, a.xp, now); xp = s.level === lv ? s.xp - before : a.xp; }
+  if (a.xpShare) { const lv = s.level, before = s.xp, amount = Math.max(1, Math.round(Game.xpNeeded(lv) * a.xpShare)); Game.gainXp(s, amount, now); xp = s.level === lv ? s.xp - before : amount; }
   if (a.kind === 'paint') house.paintings = Math.min(99, (house.paintings ?? 0) + 1);
-  return { id: a.id, healed: Math.max(0, s.hp - before), buff, xp, paintings: house.paintings };
+  return { id: a.id, healed: Math.max(0, s.hp - before), buff, xp, paintings: house.paintings, at: now };
 }
-/** Sanitises a loaded save's house part (model.ts parse). */
-export function parseHouse(raw: unknown): HouseState | undefined {
+/** Sanitises a loaded save's house part (model.ts parse). A stamp more than STAMP_SKEW_MS in the future (a clock set back, an
+ * edited save) is dropped; a little ahead is ordinary clock skew between the server and a device, and cooldownLeft caps it. */
+export const STAMP_SKEW_MS = 10 * 60000;
+export function parseHouse(raw: unknown, now = Date.now()): HouseState | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
   const v = raw as Record<string, unknown>, out: HouseState = {};
-  if (v.used && typeof v.used === 'object') for (const a of ACTIVITIES) { const t = (v.used as Record<string, unknown>)[a.id]; if (typeof t === 'number' && Number.isFinite(t) && t >= 0) (out.used ??= {})[a.id] = t; }
+  if (v.used && typeof v.used === 'object') for (const a of ACTIVITIES) { const t = (v.used as Record<string, unknown>)[a.id]; if (typeof t === 'number' && Number.isFinite(t) && t >= 0 && t <= now + STAMP_SKEW_MS) (out.used ??= {})[a.id] = t; }
   if (typeof v.paintings === 'number' && Number.isSafeInteger(v.paintings) && v.paintings >= 0) out.paintings = Math.min(99, v.paintings);
   return out.used || out.paintings ? out : undefined;
 }
@@ -102,16 +109,21 @@ export function trophies(s: Game.SaveState) { return (s.bosses ?? []).slice(-TRO
 export function photos(s: Game.SaveState) { return (s.friends ?? []).map(f => f.id); }
 
 export interface LogRow { id: string; label: string; icon: string; have: number; total: number; pct: number }
-const bossTotal = () => new Set(Object.entries(PLANETS).flatMap(([id, p]) => p.bosses.map(b => `${id}:${b}`))).size;
+/** Every zone boss (planet:type from the planet tables); titans are their own tier, counted apart. */
+const ZONE_BOSSES = new Set(Object.entries(PLANETS).flatMap(([id, p]) => p.bosses.map(b => `${id}:${b}`)));
+const TITAN_IDS = Object.keys(TITANS);
+/** Items the log counts: real things a player can still get (not effects such as the guard dog's protection, not keepsakes). */
+export const COLLECTIBLE_ITEMS = Object.keys(ITEMS).filter(id => ITEMS[id].type !== 'effect' && !ITEMS[id].keepsake);
 /** The study's collection log: what you have found of each kind, as counts and a percentage. */
 export function collectionLog(s: Game.SaveState): { rows: LogRow[]; pct: number } {
-  const fish = Object.keys(FISH), items = Object.keys(ITEMS);
+  const fish = Object.keys(FISH), items = COLLECTIBLE_ITEMS, beaten = s.bosses ?? [];
   const row = (id: string, label: string, icon: string, have: number, total: number): LogRow => ({ id, label, icon, have: Math.min(have, total), total, pct: total ? Math.round(Math.min(have, total) / total * 100) : 0 });
   const rows = [
     row('fish', 'Fish caught', '🐟', fish.filter(f => (s.fishRecords[f] ?? 0) > 0 || s.collection[f]).length, fish.length),
     row('items', 'Items discovered', '🎒', items.filter(i => s.collection[i]).length, items.length),
     row('worlds', 'Worlds discovered', '🪐', s.discovered.length, Object.keys(PLANETS).length),
-    row('bosses', 'Bosses beaten', '👑', (s.bosses ?? []).length, bossTotal()),
+    row('bosses', 'Bosses beaten', '👑', beaten.filter(b => ZONE_BOSSES.has(b)).length, ZONE_BOSSES.size),
+    row('titans', 'Titans beaten', '⛰️', TITAN_IDS.filter(id => beaten.some(b => b.endsWith(':' + id))).length, TITAN_IDS.length),
     row('friends', 'Friends rescued', '🤝', (s.friends ?? []).length, FRIEND_IDS.length),
   ];
   return { rows, pct: Math.round(rows.reduce((n, r) => n + r.pct, 0) / rows.length) };

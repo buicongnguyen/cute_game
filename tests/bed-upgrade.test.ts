@@ -85,19 +85,23 @@ test('layout 3 saves with more than 24 beds: extras over the cap are refunded, t
   assert.equal(reload(r).plots.length, 24);
 });
 
-test('a save over the cap with crops on the beds that must go: ripe ones are harvested, growing ones come back as seeds', () => {
+test('a save over the cap with crops on every bed: the least grown extra beds go, their crops come back as seeds or value', () => {
   const now = Date.now(), s = M.newGame(); s.energy = 0;
-  // 26 beds, every one planted: two must go (the newest).
-  for (let i = 9; i < 26; i++) s.plots.push({ crop: null, plantedAt: 0, ...M.GARDEN_GRID[i % 24], x: -5.5 + (i % 4) * 1.3, z: 1.6 + Math.floor((i - 9) / 4) * 1.3 });
-  s.plots.forEach(p => { p.crop = 'iceberry'; p.plantedAt = now; p.growDuration = M.CROPS.iceberry.duration; });
-  Object.assign(s.plots[25], { crop, plantedAt: now - base * 2, growDuration: base });
-  s.plots[24].level = 1;
+  // 27 beds, every one planted and 90 % grown: three must go, the least grown first (w15 review: not simply the newest).
+  for (let i = 9; i < 27; i++) s.plots.push({ crop: null, plantedAt: 0, ...M.GARDEN_GRID[i % 24], x: -5.5 + (i % 4) * 1.3, z: 1.6 + Math.floor((i - 9) / 4) * 1.3 });
+  const grow = (p: M.Plot, id: M.CropId, share: number) => Object.assign(p, { crop: id, plantedAt: now - Math.round(M.CROPS[id].duration * share), growDuration: M.CROPS[id].duration });
+  s.plots.forEach(p => grow(p, 'iceberry', .9));
+  grow(s.plots[26], crop, 2); grow(s.plots[12], 'iceberry', 0); grow(s.plots[10], 'pumpkin', .3); grow(s.plots[15], 'radish', .6);
+  s.plots[12].level = 1;
   const seed = M.CROPS.iceberry.seed!, seeds = s.bag[seed] || 0;
   const refunded = M.trimGarden(s, now);
   assert.equal(s.plots.length, 24);
-  assert.equal(s.bag[crop], 1, 'the ripe carrot went into the bag');
-  assert.equal(s.bag[seed], seeds + 1, 'the growing iceberry came back as its seed');
-  assert.equal(refunded, M.bedPrice(25) + M.bedPrice(24) + M.bedUpgradeCost(s, 0), 'bed prices and the upgrade come back as energy');
+  assert.equal(s.plots.filter(p => p.crop === crop).length, 1, 'the ripe carrot keeps its bed: the least grown went');
+  assert.equal(s.bag[seed], seeds + 1, 'the iceberry that had just been planted came back as its seed');
+  assert.equal(s.bag.radish, 1, 'a crop more than half grown comes back as the crop');
+  const pumpkin = Math.round(M.ITEMS.pumpkin.sell * .3);
+  assert.equal(refunded, M.bedPrice(26) + M.bedPrice(25) + M.bedPrice(24) + M.bedUpgradeCost(s, 0) + pumpkin, 'the three dearest bed prices, the upgrade and the seedless pumpkin pro rata');
+  assert.deepEqual(s.gardenTrim, { beds: 3, energy: refunded, items: { [seed]: 1, radish: 1 } }, 'kept for the one-time note');
 });
 
 test('layout 3 saves move onto the 6 x 4 grid: starting beds and game-placed beds, crops and levels kept', () => {

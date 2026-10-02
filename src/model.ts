@@ -131,6 +131,8 @@ export interface SaveState {
     nextPlantId?: number;
     /** The beds a save from before the 24-bed cap lost and what it got back (trimGarden), until the note is shown. */
     gardenTrim?: TrimNote;
+    /** The player took the weapon off by hand ('unequip'): fight with fists, after a reload and on the server too (context-gear.ts). */
+    fists?: true;
     /** Harpoon cooldowns and individual pond restock deadlines survive reloads. */
     hunting?: HuntingState;
     /** Rescued friends (friends.ts); missing in older saves = nobody rescued. */
@@ -802,6 +804,7 @@ export function parseSave(raw: string | null): SaveState | null {
         if (!s.gardenTrim && record(v.gardenTrim) && Number.isSafeInteger(v.gardenTrim.beds) && v.gardenTrim.beds > 0) s.gardenTrim = { beds: Math.min(99, v.gardenTrim.beds), energy: integer(v.gardenTrim.energy), items: inventory(v.gardenTrim.items) };
         s.farm = parseFarm(v.farm);
         const hunting = parseHunting(v.hunting); if (hunting) s.hunting = hunting;
+        if (v.fists === true && !s.gear.weapon) s.fists = true;
         if (record(v.helper)) {
             s.helper = parseHelper(v.helper);
             // The robot's "replant the same" memory is keyed by bed position (helper.ts bedKey): follow the beds that moved.
