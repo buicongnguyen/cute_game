@@ -171,17 +171,25 @@ test('invented meteor claims and obsolete host reward acknowledgements cannot gr
   const after=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:peer.cookie}})).json();assert.deepEqual(after.profile.bag,before.profile.bag);
 });
 
-test('late join and host migration retain bounded projectiles and Titan attack visuals',async t=>{
+test('late join and host migration retain bounded projectiles and Titan attack visuals between combat ticks',async t=>{
+  // This fixture checks transport of sanitized host visuals, not a server-approved cast:
+  // everyone is at home, so the next combat tick correctly clears the unbacked Titan attack.
+  // Hold intervals to keep account registration time from changing the snapshot under test.
+  t.mock.timers.enable({apis:['setInterval']});
   const {host,peer,explorer}=await protocolRoom(t);
   const roster=enemyRoster('home'),first=roster.find(e=>e.zone==='forest'&&!e.boss),titan=roster.find(e=>e.titan),source={x:100,z:0,radius:titan.radius,facing:0},targets=[{id:peer.id,x:95,z:1}];
   const attack=beginTitanAttack('lines',source,titanTelegraphs('lines',source,targets[0],targets,()=>.5),targets);
   const enemy={id:first.id,type:first.type,x:-30,z:2,hp:1,shots:[{id:'shot:one',x:-29,y:1.2,z:2,vx:13,vz:0,life:.8,damage:999999,targetEnemyId:titan.id}]};
   const boss={id:titan.id,type:titan.type,x:100,z:0,hp:1,phase:'windup',skill:'lines',phaseTime:.8,titanAttacks:[attack],telegraphs:attack.marks,titanLift:2,shots:Array.from({length:35},(_,i)=>({id:`titan:shot:${i}`,x:98,y:999,z:1,vx:500,vz:-500,life:500,damage:1e8}))};
   host.send({type:'enemies',enemies:[enemy,boss]});const received=(await peer.next(enemiesWith(enemy.id,boss.id))).enemies;
-  const shot=received[0].shots[0];assert.equal(shot.targetEnemyId,titan.id);assert.equal(shot.damage,first.baseDamage);assert.equal(shot.vx,13);
-  assert.equal(received[1].shots.length,30);assert.equal(received[1].shots[0].damage,titan.baseDamage);assert.equal(received[1].shots[0].vx,100);assert.equal(received[1].shots[0].y,50);assert.equal(received[1].shots[0].life,60);assert.deepEqual(received[1].titanAttacks,[attack]);assert.equal(received[1].telegraphs.length,42);
-  const late=await explorer('projectile_viewer');assert.deepEqual(late.joined.enemies.map(e=>e.shots),received.map(e=>e.shots));assert.deepEqual(late.joined.enemies[1].titanAttacks,[attack]);
-  peer.drain(m=>m.type==='authority');host.send({type:'active',active:false});const migrated=await peer.next(m=>m.type==='authority'&&m.host===peer.id);assert.deepEqual(migrated.enemies[1].titanAttacks,[attack]);assert.equal(migrated.enemies[0].shots[0].targetEnemyId,titan.id);
+  const byId=(enemies,id)=>{const found=enemies.find(e=>e.id===id);assert.ok(found,`snapshot contains ${id}`);return found;};
+  const shot=byId(received,enemy.id).shots[0];assert.equal(shot.targetEnemyId,titan.id);assert.equal(shot.damage,first.baseDamage);assert.equal(shot.vx,13);
+  const receivedBoss=byId(received,boss.id);
+  assert.equal(receivedBoss.shots.length,30);assert.equal(receivedBoss.shots[0].damage,titan.baseDamage);assert.equal(receivedBoss.shots[0].vx,100);assert.equal(receivedBoss.shots[0].y,50);assert.equal(receivedBoss.shots[0].life,60);assert.deepEqual(receivedBoss.titanAttacks,[attack]);assert.equal(receivedBoss.telegraphs.length,42);
+  const late=await explorer('projectile_viewer');
+  for(const id of [enemy.id,boss.id])assert.deepEqual(byId(late.joined.enemies,id).shots,byId(received,id).shots);
+  assert.deepEqual(byId(late.joined.enemies,boss.id).titanAttacks,[attack]);
+  peer.drain(m=>m.type==='authority');host.send({type:'active',active:false});const migrated=await peer.next(m=>m.type==='authority'&&m.host===peer.id);assert.deepEqual(byId(migrated.enemies,boss.id).titanAttacks,[attack]);assert.equal(byId(migrated.enemies,enemy.id).shots[0].targetEnemyId,titan.id);
 });
 
 test('concurrent registrations cannot duplicate an account name',async()=>{

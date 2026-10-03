@@ -1,9 +1,19 @@
 export type MovementKey = 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight';
 const movementKeys = new Set<string>(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+const wasdMovement = new Map<string, MovementKey>([['w', 'ArrowUp'], ['a', 'ArrowLeft'], ['s', 'ArrowDown'], ['d', 'ArrowRight']]);
+const KEYBOARD_BINDINGS = {
+  classic: { skills: ['q', 'w', 'e', 'r'], journal: 'j', movement: 'Arrows to move' },
+  wasd: { skills: ['j', 'k', 'l', ';'], journal: 'p', movement: 'WASD to move' },
+} as const;
+export function keyboardBindings(layout?: string) { return layout === 'wasd' ? KEYBOARD_BINDINGS.wasd : KEYBOARD_BINDINGS.classic; }
+export function movementKey(pressed: string, layout?: string): MovementKey | null {
+  if (movementKeys.has(pressed)) return pressed as MovementKey;
+  return layout === 'wasd' ? wasdMovement.get(pressed) ?? null : null;
+}
 /** Physical keys keep shortcuts stable with Vietnamese layouts. Composition never triggers gameplay. */
 export function gameplayKey(event:{code?:string;key:string;isComposing?:boolean;keyCode?:number;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean}){
   if(event.isComposing||event.keyCode===229||event.ctrlKey||event.metaKey||event.altKey)return '';
-  const code=event.code||'';return /^Key[A-Z]$/.test(code)?code.slice(3).toLowerCase():code==='Space'?' ':code.startsWith('Arrow')?code:code==='Escape'?'Escape':code==='Enter'?'Enter':code==='Tab'?'Tab':event.key.length===1?event.key.toLowerCase():event.key;
+  const code=event.code||'';return /^Key[A-Z]$/.test(code)?code.slice(3).toLowerCase():code==='Semicolon'?';':code==='Space'?' ':code.startsWith('Arrow')?code:code==='Escape'?'Escape':code==='Enter'?'Enter':code==='Tab'?'Tab':event.key.length===1?event.key.toLowerCase():event.key;
 }
 export const JOYSTICK={radius:52,deadZone:.18} as const;
 export class JoystickInput{
@@ -16,16 +26,16 @@ export class JoystickInput{
 
 /** Combine keyboard and touch input without one input source releasing another. */
 export class MovementControls {
-  private keyboard = new Set<MovementKey>();
+  private keyboard = new Map<string, MovementKey>();
   private pointers = new Map<number, MovementKey>();
   private output: Set<string>;
   constructor(output: Set<string>) { this.output = output; }
 
-  pressKey(key: string) {
+  pressKey(key: string, source = key) {
     if (!movementKeys.has(key)) return;
-    this.keyboard.add(key as MovementKey); this.sync();
+    this.keyboard.set(source, key as MovementKey); this.sync();
   }
-  releaseKey(key: string) { this.keyboard.delete(key as MovementKey); this.sync(); }
+  releaseKey(source: string) { this.keyboard.delete(source); this.sync(); }
   pressPointer(pointerId: number, key: string) {
     if (!movementKeys.has(key)) return;
     this.pointers.set(pointerId, key as MovementKey); this.sync();
@@ -34,7 +44,7 @@ export class MovementControls {
   clear() { this.keyboard.clear(); this.pointers.clear(); this.sync(); }
   private sync() {
     this.output.clear();
-    for (const key of this.keyboard) this.output.add(key);
+    for (const key of this.keyboard.values()) this.output.add(key);
     for (const key of this.pointers.values()) this.output.add(key);
   }
 }

@@ -24,6 +24,7 @@ npm test        # gameplay, worlds, assets, save migration and real server tests
 ## Play
 
 - Click or tap to walk; hold the ground to steer. Arrow keys also work. Phones enable a draggable joystick by default, with skills on the opposite side. Settings can swap hands or restore tap controls. Scroll or pinch to zoom.
+- **Settings → PC keyboard layout** offers the original **Arrows + QWER** layout or **WASD + JKL;**: W/A/S/D move and J/K/L/; use the four skills in order. In the WASD layout, **P** opens the journal; arrow keys still move. The preference is saved, and skill labels follow it. Flight controls stay W/A/D to fly, S to brake and L to land.
 - On phones, the four combat skills sit near the bottom corner and fishing controls sit above them. **Home** is beside the minimap in the upper HUD, away from combat taps; it returns straight to the village center on the home planet and uses the return-flight sequence from another planet.
 - Click objects to approach and interact. **F** uses the nearest object. **I** opens the backpack, **J** the journal, **M** the map, and **Escape** closes a panel.
 - Stand near a creature and your explorer fights it automatically; click one to chase it down. **Space** attacks the nearest creature. **Q/W/E/R** use four skills: the whirlwind spins with arms out, the dash lunges through enemies, the ground slam leaps and crashes down with a shockwave, and the fourth is your weapon's or disguise's special.

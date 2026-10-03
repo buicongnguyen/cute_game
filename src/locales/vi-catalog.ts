@@ -749,4 +749,10 @@ Object.assign(VI_CATALOG, {
   'Use a rod from your backpack for line fishing.':'Trang bị cần câu từ túi đồ để câu bằng dây.',
   'Finish your cast and return to your own shore before hunting fish.':'Hãy thu cần câu và trở về bờ ao của mình trước khi săn cá.',
   'Equip your hunting harpoon and aim at an available nearby fish.':'Hãy trang bị lao săn và nhắm vào một con cá gần đó chưa bị bắt.',
+  'PC keyboard layout':'Bố trí phím trên máy tính',
+  'Arrows + QWER':'Mũi tên + QWER',
+  'WASD: move · J/K/L/;: skills · P: journal':'WASD: di chuyển · J/K/L/;: kỹ năng · P: nhật ký',
+  'Arrows: move · Q/W/E/R: skills · J: journal':'Mũi tên: di chuyển · Q/W/E/R: kỹ năng · J: nhật ký',
+  'WASD to move':'WASD để di chuyển',
+  'Journal · {key}':'Nhật ký · {key}',
 });
