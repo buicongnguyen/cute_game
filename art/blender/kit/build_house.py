@@ -33,7 +33,7 @@ PREVIEWS = os.path.join(REPO, 'art', 'previews', 'kit')
 PUBLIC_MODELS = os.path.join(REPO, 'public', 'assets', 'models')
 GLB_NAME = 'house.glb'
 MANIFEST = os.path.join(GEN, 'house-manifest.json')
-GLB_LIMIT = 540 * 1024
+GLB_LIMIT = 576 * 1024  # 540 KB until the upgrade bench (+~20 KB, 412 triangles)
 RAD = math.radians
 
 # name: (width x, depth y, height z, triangle budget)
@@ -66,6 +66,7 @@ CONTRACT = {
     'desk': (1.35, 0.7, 1.2, 500),
     'globe': (0.6, 0.5, 1.15, 1000),
     'workbench': (1.65, 0.75, 1.3, 600),
+    'upgrade_bench': (1.25, 0.75, 1.35, 900),
     'easel': (0.8, 0.8, 1.65, 1100),
     'yarn_basket': (0.7, 0.7, 0.7, 300),
     'door_frame': (1.95, 0.55, 2.5, 300),
@@ -486,6 +487,34 @@ def build_workbench():
     return piece('workbench', p)
 
 
+def build_upgrade_bench():
+    """The craft room's upgrade bench: a low stout table with a little anvil, a whetstone wheel and a gold star badge."""
+    p = [box('ub top', (1.2, .66, .1), (0, 0, .62), M['Wood dark'], bev=0, seg=1),
+         box('ub apron', (1.1, .56, .14), (0, 0, .5), M['Wood'], bev=0, seg=1),
+         box('ub shelf', (1.05, .5, .05), (0, 0, .16), M['Wood'], bev=0, seg=1)]
+    p += legs('ub', 1.2, .66, .58, r=.06, inset=.1, material='Wood dark', verts=4)
+    # Anvil: a waisted steel block with a horn.
+    p.append(box('ub anvil foot', (.3, .2, .08), (-.24, .02, .71), M['Charcoal'], bev=0, seg=1))
+    p.append(box('ub anvil waist', (.16, .12, .12), (-.24, .02, .81), M['Charcoal'], bev=0, seg=1))
+    p.append(box('ub anvil face', (.38, .2, .1), (-.24, .02, .92), M['Steel'], bev=0, seg=1))
+    p.append(cone('ub anvil horn', .07, .2, (-.5, .02, .92), M['Steel'], verts=8, rot=(0, RAD(-90), 0)))
+    # Whetstone wheel on a little frame, its axle across the table.
+    p.append(box('ub wheel post a', (.04, .04, .3), (.3, -.1, .82), M['Wood light'], bev=0, seg=1))
+    p.append(box('ub wheel post b', (.04, .04, .3), (.3, .14, .82), M['Wood light'], bev=0, seg=1))
+    p.append(cyl('ub wheel', .17, .07, (.3, .02, .9), M['Brick light'], verts=8, bev=0, seg=1, rot=(RAD(90), 0, 0)))
+    p.append(cyl('ub axle', .025, .3, (.3, .02, .9), M['Steel'], verts=6, bev=0, rot=(RAD(90), 0, 0)))
+    p.append(box('ub crank', (.03, .03, .14), (.3, .2, .84), M['Gold'], bev=0, seg=1))
+    # Upgrade tokens: a few glowing star shards on the shelf and a gold star badge on the apron.
+    for i, (x, c) in enumerate(((-.3, 'Lamp glow'), (-.1, 'Flame core'), (.12, 'Lamp glow'))):
+        p.append(ico(f'ub shard {i}', .06, (x, -.05, .25), M[c], subdiv=0))
+    star = [(math.cos(RAD(90 + i * 36)) * (.11 if i % 2 == 0 else .05), math.sin(RAD(90 + i * 36)) * (.11 if i % 2 == 0 else .05)) for i in range(10)]
+    p.append(extrude_outline('ub badge', star, .03, (0, -.3, .5), M['Gold'], bev=0))
+    # A hammer leaning on the anvil.
+    p.append(box('ub hammer head', (.07, .07, .16), (-.02, -.12, .74), M['Steel'], bev=0, seg=1))
+    p.append(box('ub hammer grip', (.24, .04, .04), (-.12, -.12, .7), M['Wood light'], bev=0, seg=1))
+    return piece('upgrade_bench', p)
+
+
 def build_easel():
     from style import beam
     p = [beam('es leg a', (-.35, -.2, 0), (-.05, 0, 1.6), .05, M['Wood']),
@@ -618,7 +647,7 @@ BUILDERS = dict(
     window=build_window, picture=build_picture, bed=build_bed, nightstand=build_nightstand, lamp_small=build_lamp_small,
     wardrobe=build_wardrobe, mirror=build_mirror, counter=build_counter, stove=build_stove, fridge=build_fridge,
     bathtub=build_bathtub, sink=build_sink, towel_rack=build_towel_rack, desk=build_desk, globe=build_globe,
-    workbench=build_workbench, easel=build_easel, yarn_basket=build_yarn_basket, door_frame=build_door_frame,
+    workbench=build_workbench, upgrade_bench=build_upgrade_bench, easel=build_easel, yarn_basket=build_yarn_basket, door_frame=build_door_frame,
     door=build_door, doorway=build_doorway, duck=build_duck, stool=build_stool, round_table=build_round_table,
     welcome_mat=build_welcome_mat, trophy=build_trophy, trophy_shelf=build_trophy_shelf, photo=build_photo,
     painting=build_painting, kettle=build_kettle, radio=build_radio, books=build_books,

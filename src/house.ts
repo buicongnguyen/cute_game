@@ -105,6 +105,7 @@ export const FURNITURE: Placement[] = [
   { kit: 'plant_small', x: -9.6, z: 5.9, block: [.3, .3] },
   // Craft room: workbench, easel, yarn and a shelf.
   { kit: 'workbench', x: 9.6, z: .3, rot: -Q, block: [1.6, .7] },
+  { kit: 'upgrade_bench', x: 9.55, z: 2.6, rot: -Q, block: [1.2, .7] },
   { kit: 'window', x: 9.93, z: 2.4, rot: -Q },
   { kit: 'easel', x: 7.2, z: -.9, rot: .4, block: [.7, .6] },
   { kit: 'rug_rect', x: 7.5, z: 3.0, rot: Q, scale: .8 },

@@ -7,6 +7,7 @@ import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
 import { buildScatter, disposeScatter, fallbackParts, updateScatterShadows } from './scatter.ts';
 import { OccluderFade } from './occluders.ts';
 import { INDOOR_Y } from './house.ts';
+import {atHome,homeRecoveryBonus} from './home-care.ts';
 import { bakeCoverAtlas, coverCards, tickCoverCards, type CoverAtlas } from './cover-cards.ts';
 import { buildGround } from './ground.ts';
 import { buildPond } from './pond-view.ts';
@@ -146,7 +147,7 @@ export class World {
   playerSizeScale=1;playerShield=false;playerBat=false;
   authoritativeAction?:(intent:{type:string;payload?:Record<string,unknown>})=>Promise<unknown>;
   private progressPending=new Set<string>();private titanView?:TitanAttackView;
-  environment!:EnvironmentSimulation;environmentView!:EnvironmentView;movementLocked=false;playerFlying=false;playerStealth=false;
+  environment!:EnvironmentSimulation;environmentView!:EnvironmentView;movementLocked=false;/** In the village or the cottage and hurt: home-care.ts heals 4x, the HUD shows a chip. */ homeRecovering=false;playerFlying=false;playerStealth=false;
   networkRole:'host'|'peer'|null=null;remotePlayers=new Map<string,{mesh:T.Group;pose:RemotePose}>();remoteRoot=new T.Group();
   onRemoteDamage:(id:string,amount:number,source?:'melee'|'shot'|'hazard',enemyId?:string)=>void=()=>{};
   onEnvironmentEvent:(event:EnvironmentEvent)=>void=()=>{};
@@ -1607,7 +1608,9 @@ export class World {
       if(shot.life<=0){this.scene.remove(shot.mesh);shot.mesh.geometry.dispose();this.enemyShots.splice(i,1);}
     }
     const names={home:'Clover Village',forest:'Mushroom Forest',meadow:'Blue Lake Meadow',swamp:'Chomper Swamp',canyon:'Redrock Canyon'},zone=this.planet==='home'?names[zoneAt(this.position)]:PLANETS[this.planet].name;
-    if(zone!==this.lastZone&&!this.interior){this.lastZone=zone;this.onZone(zone);} // indoors x/z are the cottage's: no village zone bannerif(!this.authoritativeAction&&active&&this.planet==='home'&&zoneAt(this.position)==='home')this.state.hp=Math.min(maxHp(this.state),this.state.hp+dt*4);
+    if(zone!==this.lastZone&&!this.interior){this.lastZone=zone;this.onZone(zone);} // indoors x/z are the cottage's: no village zone banner
+    // Home heals 4x faster (home-care.ts); this line had slipped into the comment above, so offline the village never healed.
+    this.homeRecovering=atHome(this.planet,this.position,!!this.interior)&&this.state.hp>0&&this.state.hp<stats.maxHp;if(!this.authoritativeAction&&active&&this.homeRecovering)this.state.hp=Math.min(stats.maxHp,this.state.hp+homeRecoveryBonus(stats.regen)*dt);
     this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
     if(this.state.gear.pet){
       // The companion trails behind and to one side; flyers hover and flap, walkers hop.

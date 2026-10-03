@@ -22,7 +22,7 @@ const validId=value=>typeof value==='string'&&/^[a-zA-Z0-9:_-]{1,100}$/.test(val
 const point=value=>value&&Number.isFinite(value.x)&&Number.isFinite(value.z);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','upgradeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','helperHarvest','helperPlant','rest','houseUse','cook','cookDish','friendsArrive','setFriendPaused','setFriendAutoFeed','friendWork','friendsCatchUp','helperCatchUp','giveFriendGear','takeFriendGear','ackStored']);
-const farmHelperActions=new Set(['buyFarmHelper','setFarmHelperPaused','setFarmHelperAutoFeed','farmHelperCollect','farmHelperFeed','farmHelperCatchUp']);
+const farmHelperActions=new Set(['buyFarmHelper','setFarmHelperPaused','setFarmHelperAutoFeed','farmHelperCollect','farmHelperFeed','farmHelperCatchUp','upgradeFarmRestock','setFarmRestock','farmHelperRestock']);
 export function waterNodes(planet){
   return huntingPonds(planet).map(pond=>({x:pond.x,z:pond.z,r:pond.rx,water:pond.waterId}));
 }
@@ -60,6 +60,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
       if(peer&&peer.planet!==state.planet&&!['returnHome','stealCrop'].includes(data.type))fail(409,'Reconnect to load your current planet.');
       if(farmActions.has(data.type)&&(state.planet!=='home'||peer?.visit))fail(409,'Return to your own garden first.');
       if(farmHelperActions.has(data.type)&&(state.planet!=='home'||!peer?.active||peer.visit||account.journeyPaid))fail(409,'Return to your own garden first.');
+      if(data.type==='homeCleanse'&&(!peer?.active||peer.visit||account.journeyPaid))fail(409,'Return to your own garden first.');
       let result;
       if(data.type==='stealCrop'){
         const owner=records.get(p.ownerId);
@@ -158,6 +159,8 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         if(data.type==='rest')requireNear(peer,{x:0,z:-8},7);
         // Cottage activities: in your own cottage (an indoor pose is raised by INDOOR_Y) and within reach of the thing.
         if(data.type==='houseUse'){if(!peer||peer.visit||state.planet!=='home'||!(peer.pose.y>=INDOOR_Y-1))fail(409,'Go inside your cottage first.');const spot=activity(typeof p.id==='string'?p.id:'');if(!spot||distance(peer.pose,spot.at)>3)fail(409,'Walk up to it first.');}
+        // The upgrade bench stands in the cottage's craft room (upgrade-bench.ts).
+        if(data.type==='upgradeGear'||data.type==='upgradeSkill'){const bench=activity('bench');if(!peer||peer.visit||state.planet!=='home'||!(peer.pose.y>=INDOOR_Y-1))fail(409,'Go inside your cottage first.');if(!bench||distance(peer.pose,bench.at)>3)fail(409,'Walk up to it first.');}
         if(data.type==='recoverBag'){if(!state.dropped||state.dropped.planet!==state.planet)fail(409,'That bag is not here.');requireNear(peer,state.dropped,4);}
         if(data.type==='claimMine')requireNear(peer,p.index===0?{x:-6,z:3}:{x:9,z:-8});
         if(data.type==='claimGift'){const a=p.index*2.399+.4,d=24+Math.sqrt(p.index/25)*95;requireNear(peer,{x:Math.cos(a)*d,z:Math.sin(a)*d});}

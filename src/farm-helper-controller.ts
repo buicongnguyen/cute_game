@@ -1,7 +1,8 @@
 import type { SaveState, Collected } from './model.ts';
 import { helperOf, type FarmHelperTask } from './farm-helper.ts';
+import { nextRestock, type Restocked } from './farm-restock.ts';
 
-interface Result { collected: Collected[]; fed: number[] }
+interface Result { collected: Collected[]; fed: number[]; restocked?: Restocked[] }
 interface Host {
   state(): SaveState;
   /** A stable scene identity only while the owner can work in their own home. */
@@ -16,6 +17,8 @@ export class FarmHelperController {
   private entry: unknown = null;
   private entryState: SaveState | null = null;
   private host: Host;
+  /** Live restock checks at most every few seconds (the authority re-validates price, guard and room). */
+  private restockAt = 0;
   constructor(host: Host) { this.host = host; }
   sync() {
     const state = this.host.state(), context = this.host.context(), helper = helperOf(state);
@@ -23,8 +26,10 @@ export class FarmHelperController {
     if (this.pending || !helper.owned || helper.paused) return;
     if (this.entry !== context || this.entryState !== state) {
       this.entry = context; this.entryState = state;
-      void this.run('farmHelperCatchUp', {}, true);
+      void this.run('farmHelperCatchUp', {}, true); return;
     }
+    const now = Date.now();
+    if (now >= this.restockAt) { this.restockAt = now + 3000; if (nextRestock(state, now)) void this.run('farmHelperRestock', {}, false); }
   }
   work(task: FarmHelperTask) {
     const h = helperOf(this.host.state());
@@ -35,9 +40,9 @@ export class FarmHelperController {
   private async run(type: string, payload: Record<string, unknown>, catchUp: boolean, uid?: number) {
     const state = this.host.state(), context = this.host.context(); this.pending = true;
     try {
-      const value = await this.host.perform<Result | Collected[] | boolean>(type, payload);
+      const value = await this.host.perform<Result | Collected[] | Restocked[] | boolean>(type, payload);
       if (value === undefined || this.host.state() !== state || this.host.context() !== context || !context) return;
-      const result: Result = catchUp ? value as Result : type === 'farmHelperCollect' ? { collected: value as Collected[], fed: [] } : { collected: [], fed: value ? [uid!] : [] };
+      const result: Result = catchUp ? value as Result : type === 'farmHelperRestock' ? { collected: [], fed: [], restocked: value as Restocked[] } : type === 'farmHelperCollect' ? { collected: value as Collected[], fed: [] } : { collected: [], fed: value ? [uid!] : [] };
       this.host.completed(result, catchUp);
     } catch { /* perform reports rejected commands; never keep the robot locked after a transport failure. */ }
     finally { this.pending = false; }

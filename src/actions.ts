@@ -1,12 +1,15 @@
 import * as Game from './model.ts';
 import * as Helper from './helper.ts';
 import * as FarmHelper from './farm-helper.ts';
+import * as Restock from './farm-restock.ts';
+import { cleanseDebuffs, homeCleanseAllowed } from './home-care.ts';
 import * as Friends from './friends.ts';
 import { deliversToChest, potItems, storeGains, takeFromChest, takeStored } from './delivery.ts';
 import { buyLook, wearLook } from './looks.ts';
 import { huntFish } from './fish-hunting.ts';
 import { useActivity } from './house-activities.ts';
 import { sellProduce } from './item-views.ts';
+import { upgradeGear, upgradeSkill } from './upgrades.ts';
 import { claimProgress, refreshProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 
 export const ACTION_RULES_VERSION = 1;
@@ -46,6 +49,9 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'cookDish': result = Game.cookDish(state, id()); break;
     case 'upgrade': result = Game.upgrade(state, kind() as keyof typeof Game.UPGRADES); break;
     case 'forge': result = Game.forgeWeapon(state, id(), random); break;
+    // The cottage upgrade bench (upgrades.ts): deterministic gear levels and skill levels.
+    case 'upgradeGear': result = upgradeGear(state, id()); break;
+    case 'upgradeSkill': result = upgradeSkill(state, index()); break;
     // Taking the weapon off by hand means fists, saved so a reload and the server's combat honour it; a combat weapon put on ends it.
     case 'equip': result = Game.equip(state, id()); if (result && ['sword', 'gun', 'fist'].includes(Game.ITEMS[state.gear.weapon ?? '']?.weapon?.kind ?? '') && Game.ITEMS[id()]?.slot === 'weapon') delete state.fists; break;
     case 'unequip': result = Game.unequip(state, string(p.slot) as Game.GearSlot); if (result && p.slot === 'weapon') state.fists = true; break;
@@ -90,7 +96,11 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'setFarmHelperAutoFeed': if (typeof p.autoFeed !== 'boolean') return invalid(); result = FarmHelper.setFarmHelperAutoFeed(state, p.autoFeed); break;
     case 'farmHelperCollect': result = FarmHelper.helperCollect(state, integer(p.uid), now); if (!(result as unknown[]).length) return invalid(); break;
     case 'farmHelperFeed': result = FarmHelper.helperFeed(state, integer(p.uid), now); break;
-    case 'farmHelperCatchUp': if (!FarmHelper.canWork(state)) return invalid(); result = FarmHelper.catchUp(state, now); break;
+    case 'farmHelperCatchUp': if (!FarmHelper.canWork(state)) return invalid(); result = { ...FarmHelper.catchUp(state, now), restocked: Restock.restock(state, now, Restock.RESTOCK_CATCH_UP_CAP) }; break;
+    case 'upgradeFarmRestock': result = Restock.upgradeRestock(state, now); if (result !== 'upgraded') return invalid(); break;
+    case 'setFarmRestock': result = Restock.setRestock(state, p.on, p.keep); break;
+    case 'farmHelperRestock': result = Restock.restock(state, now); if (!(result as unknown[]).length) return invalid(); break;
+    case 'homeCleanse': if (!homeCleanseAllowed(state)) return invalid(); result = cleanseDebuffs(state, now); break;
     case 'rescueFriend': result = Friends.rescue(state, string(p.id, 40) as Friends.FriendId, now); break;
     case 'friendsArrive': result = Friends.arriveHome(state, { x: number(p.x), z: number(p.z) }); break;
     case 'setFriendAutoFeed': if (typeof p.autoFeed !== 'boolean') return invalid(); result = Friends.setFriendAutoFeed(state, string(p.id, 40) as Friends.FriendId, p.autoFeed); break;
@@ -115,8 +125,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'rerollDaily': result = rerollDaily(state, index(), now); break;
     case 'startChallenge': result = startChallenge(state, p.kind === undefined ? 'kill' : kind(), now); break;
     case 'launch': result = Game.launch(state); break;
-    case 'travel': result = Game.travel(state, id() as Game.PlanetId); break;
-    case 'returnHome': state.planet = 'home'; result = true; break;
+    case 'travel': result = Game.travel(state, id() as Game.PlanetId); if (result && state.planet === 'home') cleanseDebuffs(state, now); break;
+    case 'returnHome': state.planet = 'home'; result = { cleansed: cleanseDebuffs(state, now) }; break;
     case 'discover': result = Game.discover(state, id() as Game.PlanetId); break;
     case 'collectStardust': result={shard:Game.collectStardust(state,random)}; break;
     case 'claimMine': result = Game.claimMine(state, index(), now); break;

@@ -10,6 +10,7 @@ import { ITEMS } from './content.ts';
 import type { SaveState } from './model.ts';
 import type { Entity, World } from './world.ts';
 import { HOUSE, INDOOR_Y } from './house.ts';
+import { hasDebuffs } from './home-care.ts';
 import { HouseSession, type FriendEntity } from './house-session.ts';
 import { houseKit } from './house-view.ts';
 import { FRIENDS, friendsOf, type FriendId } from './friends.ts';
@@ -31,6 +32,8 @@ export interface HouseDeps {
   ownGear(): void; iconUrl(id: string): string;
   /** The mirror's Look shop (look-shop.ts); without it the mirror opens your gear like the wardrobe. */
   looks?(): void;
+  /** The craft room's upgrade bench (upgrade-bench.ts). */
+  bench?(): void;
   /** The diary opens today's tasks (main.ts quests). */
   quests?(): void;
   soundOn?(): boolean;
@@ -78,10 +81,12 @@ export function initHouse(d: HouseDeps) {
   const transition = (swap: () => void) => { if (pending) return; pending = swap; fadeTarget = 1; };
   let wasInside = false;
   const sync = () => { wasInside = house.inside; document.body.classList.toggle('indoors', house.inside); zoneName(); remember(house.inside && !d.visiting()); };
+  /** Stepping inside clears bad effects like landing home does (home-care.ts; the authority re-checks). */
+  const cleanse = () => { if (d.visiting() || !hasDebuffs(world.state)) return; void d.perform('homeCleanse').then(n => { if (!n) return; world.fx?.burst({ x: world.position.x, z: world.position.z }, { n: 18, color: ['#ffffff', '#bff7ff', '#ffe9a8'], glow: true, size: .1, speed: 3, up: 4, y: 1 }); d.toast(t('Cleansed! Bad effects wash away at home.'), '✨'); }); };
   const enter = (instant = false) => {
     if (house.inside || world.planet !== 'home') return;
     void houseKit.load();
-    const swap = () => { house.enter(world); house.view.doorOpen = 1; house.view.doorTarget = 0; sync(); };
+    const swap = () => { house.enter(world); house.view.doorOpen = 1; house.view.doorTarget = 0; sync(); cleanse(); };
     if (instant) swap(); else { doorOpen = 1; d.tone('pop'); transition(swap); }
   };
   const leave = () => {
@@ -177,6 +182,7 @@ export function initHouse(d: HouseDeps) {
     if (e.kind === 'home') { if (!d.visiting()) void d.perform('rest').then(ok => { if (ok) d.toast('Home, sweet home. Your health is restored.', '🏡'); }); enter(); return true; }
     if (e.kind === 'house-door') { leave(); return true; }
     if (e.kind === 'house-wardrobe' || e.kind === 'house-mirror') { if (d.visiting()) d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷'); else if (e.kind === 'house-mirror' && d.looks) d.looks(); else d.ownGear(); return true; }
+    if (e.kind === 'house-bench') { if (d.visiting()) d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷'); else d.bench?.(); return true; }
     // Indoor friends carry friendId; the outdoor workers (friend-crew.ts) open their status panel in main.ts instead.
     if (e.kind === 'friend' && (e as FriendEntity).friendId) { dress((e as FriendEntity).friendId); return true; }
     return false;
