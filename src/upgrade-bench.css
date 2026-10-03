@@ -12,3 +12,16 @@
 .skill > .skill-pip { position: absolute; left: -5px; top: -5px; z-index: 2; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 999px; display: grid; place-items: center; background: linear-gradient(#ffe48a, #ffb21e); border: 2px solid #fff; color: #6a3d00; font-size: 11px; font-style: normal; font-weight: 1000; line-height: 1; box-shadow: 0 2px 0 rgba(106, 61, 0, .3); pointer-events: none; }
 .skill > .skill-pip[hidden] { display: none; }
 @media (max-width: 600px) { .skill > .skill-pip { min-width: 17px; height: 17px; font-size: 10px; left: -4px; top: -4px; } }
+/* Gear ceilings (gear-ceiling.ts): "Lv 7/10 · at max: …" over a gold bar to +10 with a tick per level; the energy still to pay. */
+.gear-max { margin: 2px 0 3px; }
+.gear-max p { margin: 0 0 3px; }
+.gear-max .muted, .bench-to-max { opacity: .75; }
+.gear-max span.muted { font-size: .92em; }
+/* The row's lines stay at the panel's 12px (.bench-row .muted would otherwise size a muted <p> from the row, not the line). */
+.bench-row .gear-max p, .bench-row p.bench-to-max { font-size: 12px; }
+.gear-bar { position: relative; display: block; width: 100%; max-width: 240px; height: 7px; border-radius: 999px; overflow: hidden; background: #e9e1cd; box-shadow: inset 0 1px 0 rgba(0, 0, 0, .14); }
+.gear-bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(#ffe48a, #ffb21e); box-shadow: inset 0 -1px 0 rgba(106, 61, 0, .25); transition: width .25s ease-out; }
+.gear-bar::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(255, 255, 255, .7) calc(10% - 1px) 10%); pointer-events: none; }
+.bench-row p.bench-to-max { margin: 2px 0 0; }
+.gear-max .gear-bar + p { margin: 4px 0 0; }
+.item-detail .gear-max { margin: 4px 0 6px; }
