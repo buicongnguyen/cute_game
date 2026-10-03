@@ -1,5 +1,6 @@
 import {PLANETS,type PlanetId} from './model.ts';
 import {TITANS} from './titan-content.ts';
+import {SIZE_FACTORS,sized,sizeFactor} from './creature-sizes.ts';
 
 export type EnemyBehavior='hopper'|'melee'|'charger'|'rooted'|'shooter'|'boss';
 export interface EnemyDefinition {name:string;hp:number;damage:number;speed:number;reach:number;sight:number;xp:number;radius:number;behavior:EnemyBehavior;family:string;color:string;accent:string;cooldown:number;windup:number;boss:boolean;titan?:boolean;flying?:boolean;stealth?:number;aquatic?:boolean}
@@ -798,6 +799,8 @@ const combatRules:Record<string,Partial<EnemyDefinition>>={
   }
 };
 for(const [id,rule] of Object.entries(combatRules))if(ENEMY_TYPES[id])Object.assign(ENEMY_TYPES[id],rule);
+// Titans 0.75, forest hawks 0.5 (creature-sizes.ts): radius and reach follow the drawn size.
+for(const id of Object.keys(SIZE_FACTORS))if(ENEMY_TYPES[id])ENEMY_TYPES[id]=sized(id,ENEMY_TYPES[id]);
 
 /**
  * Size hierarchy (CC-05, RC-04): the reference's common creatures stand 0.60-0.74x its hero (hero 1.79 m; mushroom 1.14,
@@ -822,4 +825,4 @@ export const ENEMY_SCALE:Readonly<Record<string,number>>={
   wisp:.73,spider:.99,demoneye:.84,
 };
 /** The scale a creature's model is drawn at: bosses 1.85, common creatures their ENEMY_SCALE. */
-export function enemyScale(type:string|undefined,boss=false){return type&&Object.hasOwn(TITANS,type)?TITANS[type as keyof typeof TITANS].scale:boss?1.85:ENEMY_SCALE[type??'']??1;}
+export function enemyScale(type:string|undefined,boss=false){return (type&&Object.hasOwn(TITANS,type)?TITANS[type as keyof typeof TITANS].scale:boss?1.85:ENEMY_SCALE[type??'']??1)*sizeFactor(type);}

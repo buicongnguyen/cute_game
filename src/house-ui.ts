@@ -10,6 +10,7 @@ import { ITEMS } from './content.ts';
 import type { SaveState } from './model.ts';
 import type { Entity, World } from './world.ts';
 import { HOUSE, INDOOR_Y } from './house.ts';
+import { hasDebuffs } from './home-care.ts';
 import { HouseSession, type FriendEntity } from './house-session.ts';
 import { houseKit } from './house-view.ts';
 import { FRIENDS, friendsOf, type FriendId } from './friends.ts';
@@ -80,10 +81,12 @@ export function initHouse(d: HouseDeps) {
   const transition = (swap: () => void) => { if (pending) return; pending = swap; fadeTarget = 1; };
   let wasInside = false;
   const sync = () => { wasInside = house.inside; document.body.classList.toggle('indoors', house.inside); zoneName(); remember(house.inside && !d.visiting()); };
+  /** Stepping inside clears bad effects like landing home does (home-care.ts; the authority re-checks). */
+  const cleanse = () => { if (d.visiting() || !hasDebuffs(world.state)) return; void d.perform('homeCleanse').then(n => { if (!n) return; world.fx?.burst({ x: world.position.x, z: world.position.z }, { n: 18, color: ['#ffffff', '#bff7ff', '#ffe9a8'], glow: true, size: .1, speed: 3, up: 4, y: 1 }); d.toast(t('Cleansed! Bad effects wash away at home.'), '✨'); }); };
   const enter = (instant = false) => {
     if (house.inside || world.planet !== 'home') return;
     void houseKit.load();
-    const swap = () => { house.enter(world); house.view.doorOpen = 1; house.view.doorTarget = 0; sync(); };
+    const swap = () => { house.enter(world); house.view.doorOpen = 1; house.view.doorTarget = 0; sync(); cleanse(); };
     if (instant) swap(); else { doorOpen = 1; d.tone('pop'); transition(swap); }
   };
   const leave = () => {

@@ -23,9 +23,10 @@ test('six large flying forest birds append after every existing home creature id
   assert.ok(birds.every(e=>e.zone==='forest'&&e.baseMaxHp===160&&!e.boss&&!e.dormant));
   const w=world();w.build('home');
   for(const bird of birds){const e=w.enemies.find(value=>value.id===bird.id)!;assert.equal(e.type,bird.type);assert.equal(e.maxHp,bird.baseMaxHp);assert.equal(e.xp,bird.xp);assert.ok(e.x<0);assert.equal(e.definition?.flying,true);assert.equal(e.definition?.behavior,'charger');}
-  assert.ok(enemyScale('forest_raptor')>1);
+  // w18: hawks are drawn at half their old 1.45 scale (creature-sizes.ts); they now stand under the explorer.
+  assert.ok(Math.abs(enemyScale('forest_raptor')-1.45*.5)<1e-9);
   const fallback=(w as any).enemyModel('forest_raptor',ENEMY_TYPES.forest_raptor) as T.Group;fallback.updateMatrixWorld(true);
-  assert.ok(new T.Box3().setFromObject(fallback).max.y>HERO_SCALE*HERO_MODEL_HEIGHT);
+  assert.ok(new T.Box3().setFromObject(fallback).max.y<HERO_SCALE*HERO_MODEL_HEIGHT);
 });
 
 test('harpoon is a purchasable reusable forgeable ranged weapon with canonical bird rewards',()=>{

@@ -22,7 +22,7 @@ const validId=value=>typeof value==='string'&&/^[a-zA-Z0-9:_-]{1,100}$/.test(val
 const point=value=>value&&Number.isFinite(value.x)&&Number.isFinite(value.z);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','upgradeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','helperHarvest','helperPlant','rest','houseUse','cook','cookDish','friendsArrive','setFriendPaused','setFriendAutoFeed','friendWork','friendsCatchUp','helperCatchUp','giveFriendGear','takeFriendGear','ackStored']);
-const farmHelperActions=new Set(['buyFarmHelper','setFarmHelperPaused','setFarmHelperAutoFeed','farmHelperCollect','farmHelperFeed','farmHelperCatchUp']);
+const farmHelperActions=new Set(['buyFarmHelper','setFarmHelperPaused','setFarmHelperAutoFeed','farmHelperCollect','farmHelperFeed','farmHelperCatchUp','upgradeFarmRestock','setFarmRestock','farmHelperRestock']);
 export function waterNodes(planet){
   return huntingPonds(planet).map(pond=>({x:pond.x,z:pond.z,r:pond.rx,water:pond.waterId}));
 }
@@ -60,6 +60,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
       if(peer&&peer.planet!==state.planet&&!['returnHome','stealCrop'].includes(data.type))fail(409,'Reconnect to load your current planet.');
       if(farmActions.has(data.type)&&(state.planet!=='home'||peer?.visit))fail(409,'Return to your own garden first.');
       if(farmHelperActions.has(data.type)&&(state.planet!=='home'||!peer?.active||peer.visit||account.journeyPaid))fail(409,'Return to your own garden first.');
+      if(data.type==='homeCleanse'&&(!peer?.active||peer.visit||account.journeyPaid))fail(409,'Return to your own garden first.');
       let result;
       if(data.type==='stealCrop'){
         const owner=records.get(p.ownerId);

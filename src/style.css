@@ -1956,3 +1956,12 @@ h1 > span {
 /* Ground-loot countdown pills, placed by drops-view.ts every frame (reference .droptag: dark pill, red under 10 s). */
 .droptag { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap; color: #fff; text-shadow: 0 1px #000; background: rgba(40, 28, 52, .7); border-radius: 8px; padding: 1px 6px; font-size: 11px; font-weight: 800; will-change: transform; }
 .droptag.warn { background: rgba(201, 60, 42, .85); }
+
+/* w18 home care + pen robot auto-restock (home-care.ts, farm-helper-ui.ts restockSection) */
+#buff-bar .home-recovery-chip { background: rgba(72, 150, 86, .85); }
+.restock { margin: 12px 0 8px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 244, 214, .55); }
+.restock-title { display: flex; align-items: baseline; gap: 8px; margin: 0 0 4px; }
+.restock-title small { opacity: .7; font-weight: 600; }
+.restock-stock { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.restock-stock span { padding: 3px 8px; border-radius: 999px; background: #fff; font-weight: 700; font-size: var(--t-sm, 13px); }
+.restock-stock small { opacity: .6; margin-left: 2px; }
