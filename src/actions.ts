@@ -1,5 +1,6 @@
 import * as Game from './model.ts';
 import * as Helper from './helper.ts';
+import * as AutoPlant from './auto-plant.ts';
 import * as FarmHelper from './farm-helper.ts';
 import * as Restock from './farm-restock.ts';
 import { cleanseDebuffs, homeCleanseAllowed } from './home-care.ts';
@@ -63,8 +64,11 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
       if (count < 1 || count > available || count > 100000) return invalid();
       for (let i = 0; i < count; i++) success(Game.transfer(state, item, toChest)); result = count; break;
     }
-    case 'plant': result = Game.plant(state, index(), id(), now); break;
-    case 'plantAll': result = Game.plantAll(state, id(), now); break;
+    // The player's own planting: the crop becomes that bed's choice, which helpers replant and never replace (auto-plant.ts).
+    case 'plant': result = AutoPlant.plantByHand(state, index(), id(), now); break;
+    case 'plantAll': result = AutoPlant.plantAllByHand(state, id(), now); break;
+    case 'setAutoPlant': if (typeof p.on !== 'boolean') return invalid(); result = AutoPlant.setAutoPlant(state, p.on); break;
+    case 'clearBedChoices': result = AutoPlant.forgetChoices(state); break;
     case 'harvest': result = Game.harvest(state, index(), now); break;
     case 'harvestAll': result = Game.harvestAll(state, now); break;
     case 'fertilize': result = Game.fertilize(state, index(), now, id()); break;

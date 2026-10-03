@@ -37,6 +37,8 @@ export interface Plot {
     difficulty?: Difficulty;
     /** Bed upgrades (upgradeBed): each level cuts this bed's grow time by 10 %; missing = 0. */
     level?: number;
+    /** The crop the player last planted here by hand (auto-plant.ts): helpers replant only this in the bed. Missing = helpers choose. */
+    choice?: CropId;
 }
 export interface Decoration {
     uid: string;
@@ -738,7 +740,8 @@ export function parseSave(raw: string | null): SaveState | null {
             const duration = crop ? CROPS[crop].duration / (oldCropTimers && LEGACY_CROP_IDS.includes(crop) ? 10 : 1) : 0;
             const growDuration = crop && record(p) && typeof p.growDuration === 'number' && Number.isFinite(p.growDuration) && p.growDuration > 0 && p.growDuration <= 14 * 86400000 ? p.growDuration : duration;
             const generation = crop ? record(p) && typeof p.generation === 'string' && /^[a-zA-Z0-9:_-]{1,100}$/.test(p.generation) ? p.generation : `legacy:${i}:${plantedAt}:${crop}` : undefined;
-            return { crop, plantedAt, ...point, ...rotation, ...level, ...(crop ? { growDuration, generation, ...(record(p) && isDifficulty(p.difficulty) ? { difficulty: p.difficulty as Difficulty } : {}) } : {}) };
+            const rawChoice = record(p) && typeof p.choice === 'string' ? canonicalItem(p.choice) : '', choice = Object.hasOwn(CROPS, rawChoice) ? { choice: rawChoice } : {};
+            return { crop, plantedAt, ...point, ...rotation, ...level, ...choice, ...(crop ? { growDuration, generation, ...(record(p) && isDifficulty(p.difficulty) ? { difficulty: p.difficulty as Difficulty } : {}) } : {}) };
         });
         if (legacy) {
             const target = Math.min(MAX_PLOTS, s.plots.length + 3);

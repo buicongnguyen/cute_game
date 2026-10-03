@@ -1,6 +1,7 @@
 import * as M from './model.ts';
 import { HELPER_COST, newHelper, type HelperState } from './helper-state.ts';
 import { asHelper } from './progression.ts';
+import { autoPlanting, bedChoice } from './auto-plant.ts';
 
 /**
  * The garden helper's rules, pure and testable (the view, helper-view.ts, only walks and poses).
@@ -13,6 +14,8 @@ import { asHelper } from './progression.ts';
  *   seed from the bag. It never buys seeds.
  * - Which crop: the chosen seed in the settings, or ("same as before") the crop last planted in that bed, otherwise
  *   the cheapest crop the player can plant (free crops first, then the cheapest seed; ties go to the higher-level crop).
+ * - It plants only while auto-planting is on, and a bed the player planted by hand keeps the player's crop (fruit
+ *   trees too): auto-plant.ts has that rule, shared with Sprout.
  */
 export { HELPER_COST };
 export const helperOf = (s: M.SaveState): HelperState => s.helper ?? newHelper();
@@ -55,21 +58,28 @@ export function cheapestSeed(s: M.SaveState): M.CropId | null {
   options.sort((a, b) => rate(b) - rate(a) || seedCost(a) - seedCost(b) || (a < b ? -1 : 1));
   return options[0] ?? null;
 }
-/** The crop the helper would plant in bed `i`, or null (out of the chosen seed: it waits rather than guessing). */
-export function seedFor(s: M.SaveState, i: number): M.CropId | null {
+/**
+ * The crop a helper (Bolt or Sprout) would plant in bed `i` with auto-planting on, or null when the bed waits. A bed
+ * the player planted by hand keeps that crop and gets nothing else (auto-plant.ts); otherwise Bolt's chosen seed (out
+ * of it: it waits rather than guessing), else "same as before".
+ */
+export function cropFor(s: M.SaveState, i: number): M.CropId | null {
+  const own = bedChoice(s, i); if (own) return canPlant(s, own) ? own : null;
   const h = helperOf(s);
   if (h.seed !== 'same') return canPlant(s, h.seed) ? h.seed : null;
   const last = h.last[bedKey(s, i)];
   return last && canPlant(s, last) ? last : cheapestSeed(s);
 }
+/** What a helper plants in bed `i` now: nothing at all while auto-planting is off (every planting path asks here). */
+export function seedFor(s: M.SaveState, i: number): M.CropId | null { return autoPlanting(s) ? cropFor(s, i) : null; }
 
 export interface HelperTask { kind: 'harvest' | 'plant'; index: number; crop?: M.CropId }
-/** The next job: the nearest ripe bed, else the nearest empty bed it has a seed for; null = nothing to do (idle). */
-export function nextTask(s: M.SaveState, from: { x: number; z: number }, now = Date.now()): HelperTask | null {
+/** The next job: the nearest ripe bed, else the nearest empty bed it has a seed for; null = nothing to do (idle). `held` is the empty bed whose seed list the player has open: it is the player's until the panel closes. */
+export function nextTask(s: M.SaveState, from: { x: number; z: number }, now = Date.now(), held?: number): HelperTask | null {
   const h = s.helper; if (!h?.owned || h.paused) return null;
   let best: HelperTask | null = null, bestD = Infinity, bestRipe = false;
   s.plots.forEach((p, i) => {
-    const ripe = !!p.crop && M.cropProgress(p, now) >= 1, crop = !p.crop ? seedFor(s, i) : null;
+    const ripe = !!p.crop && M.cropProgress(p, now) >= 1, crop = !p.crop && i !== held ? seedFor(s, i) : null;
     if (!ripe && !crop) return;
     const b = M.bedPosition(s, i), d = Math.hypot(b.x - from.x, b.z - from.z);
     // Ripe beds come first: a crop left standing is worth more than an empty bed.

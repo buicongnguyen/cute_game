@@ -33,6 +33,8 @@ export interface HelperFrame {
   now: number;
   harvest(index: number): boolean;
   plant(index: number): boolean;
+  /** The empty bed whose seed list the player has open: it is the player's to plant until the panel closes. */
+  held?: number;
 }
 
 /** Shared rigid robot presentation; callers own their tasks and never mutate through this method. */
@@ -127,7 +129,7 @@ export class HelperView {
       }
     } else if ((this.thinkT -= dt) <= 0) {
       this.thinkT = .5;
-      if (f.act) { rememberPlantings(s); this.task = nextTask(s, this, f.now); }
+      if (f.act) { rememberPlantings(s); this.task = nextTask(s, this, f.now, f.held); }
       else if (s.helper!.paused || !s.plots.length) this.task = null;
       // A visitor's copy only pretends: it waters one bed after another.
       else if (!this.task && this.mode !== 'walk') this.task = { kind: 'plant', index: (this.wanderI = (this.wanderI + 1 + Math.floor(Math.random() * 3)) % s.plots.length) };

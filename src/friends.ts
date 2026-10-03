@@ -15,7 +15,9 @@ import { CAGES, FRIENDS, FRIEND_IDS, FRIEND_SLOTS, friendSlot, type Friend, type
  * A cage opens once its boss has been beaten at least once (SaveState.bosses); a boss's respawn never re-locks it.
  *
  * Jobs (only at home, once the friend has reached the village; every grant goes through the player's own rules):
- * - garden (Sprout): the helper robot's job (helper.ts) for free: harvest ripe beds, replant from the bag.
+ * - garden (Sprout): the helper robot's job (helper.ts) for free: harvest ripe beds, replant from the bag. She plants only
+ *   while auto-planting is on (auto-plant.ts: one garden switch, off as well while the robot is switched off), and a bed the
+ *   player planted by hand gets the player's crop again; both come with helper.ts seedFor.
  *   With a bought robot both work. They cannot double-harvest: M.harvest grants only a ripe crop and empties the bed in
  *   the same step, and M.plant refuses a planted bed, so the second worker at a bed simply finds nothing to do. The view
  *   also steers Sprout away from the bed the robot is walking to, so two gardeners cover the beds about twice as fast:
@@ -95,12 +97,12 @@ function tally(f: Friend, n: number, now: number, grows: boolean) {
 /** Work done today, for the status line. */
 export const doneToday = (f: Friend, now = Date.now()) => f.day === Math.floor(now / UTC_DAY) ? f.done ?? 0 : 0;
 
-/** Beds the gardener (or the cook) would go to; `skip` is a bed another worker is already walking to. */
-function bedTask(s: M.SaveState, from: { x: number; z: number }, now: number, plant: boolean, skip?: number): FriendTask | null {
+/** Beds the gardener (or the cook) would go to; `skip` is a bed another worker is already walking to, `held` the empty bed whose seed list the player has open (nobody plants it). */
+function bedTask(s: M.SaveState, from: { x: number; z: number }, now: number, plant: boolean, skip?: number, held?: number): FriendTask | null {
   let best: FriendTask | null = null, bestD = Infinity, bestRipe = false;
   s.plots.forEach((p, i) => {
     if (i === skip) return;
-    const r = ripe(p, now); if (!r && !(plant && !p.crop && seedFor(s, i))) return;
+    const r = ripe(p, now); if (!r && !(plant && !p.crop && i !== held && seedFor(s, i))) return;
     const d = dist(M.bedPosition(s, i), from);
     if (r && !bestRipe || r === bestRipe && d < bestD) { best = { kind: r ? 'harvest' : 'plant', index: i }; bestD = d; bestRipe = r; }
   });
@@ -119,9 +121,9 @@ function animalTask(s: M.SaveState, from: { x: number; z: number }, now: number,
   return best;
 }
 /** The friend's next job, nearest first (a waiting harvest or product before planting or feeding); null = idle at its post. */
-export function nextFriendTask(s: M.SaveState, id: FriendId, from: { x: number; z: number }, now = Date.now(), skipBed?: number): FriendTask | null {
+export function nextFriendTask(s: M.SaveState, id: FriendId, from: { x: number; z: number }, now = Date.now(), skipBed?: number, heldBed?: number): FriendTask | null {
   const f = friendOf(s, id); if (!working(s, f)) return null;
-  if (f.role === 'garden') return bedTask(s, from, now, true, skipBed);
+  if (f.role === 'garden') return bedTask(s, from, now, true, skipBed, heldBed);
   if (f.role === 'farm') return animalTask(s, from, now, f.autoFeed === true);
   const bed = bedTask(s, from, now, false, skipBed), animal = animalTask(s, from, now, false);
   if (!bed || !animal) return bed ?? animal;

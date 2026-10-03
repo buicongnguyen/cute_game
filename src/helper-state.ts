@@ -12,6 +12,8 @@ export interface HelperState {
   seed: 'same' | CropId;
   /** Last crop planted per bed, keyed by the bed's position (indices shift when a bed is stored, positions do not). */
   last: Record<string, CropId>;
+  /** Auto-planting is switched off for the whole garden (auto-plant.ts): helpers only harvest, the player plants every bed. Missing = on. It lives here, even without a robot, so a garden with only Sprout saves it too. */
+  manual?: true;
 }
 export const HELPER_COST = 1000;
 export const newHelper = (): HelperState => ({ owned: false, paused: false, seed: 'same', last: {} });
@@ -22,7 +24,7 @@ export function parseHelper(raw: unknown): HelperState {
   const h = newHelper();
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return h;
   const v = raw as Record<string, unknown>;
-  h.owned = v.owned === true; h.paused = v.paused === true;
+  h.owned = v.owned === true; h.paused = v.paused === true; if (v.manual === true) h.manual = true;
   h.seed = v.seed === 'same' ? 'same' : crop(v.seed) ?? 'same';
   if (v.last && typeof v.last === 'object' && !Array.isArray(v.last))
     for (const [key, id] of Object.entries(v.last as Record<string, unknown>).slice(0, 64)) { const c = crop(id); if (c && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(key)) h.last[key] = c; }

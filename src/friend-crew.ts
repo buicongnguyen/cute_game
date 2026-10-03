@@ -41,6 +41,8 @@ export interface CrewHost {
   started(): boolean;
   /** The bed the garden robot is walking to, so Sprout picks another. */
   robotBed(): number | undefined;
+  /** The empty bed whose seed list the player has open: nobody plants it meanwhile (optional: tests leave it out). */
+  heldBed?(): number | undefined;
   animalAt(uid: number): { x: number; z: number } | undefined;
   perform<R>(type: string, payload?: Record<string, unknown>): Promise<R | undefined>;
   rescued(id: FriendId, at: { x: number; z: number }): void;
@@ -239,7 +241,7 @@ export class FriendCrew {
       this.place(a, a.task ? POSE_OF[a.task.kind] : 'idle');
       if (a.workT <= 0 && a.task) {
         const task = a.task; a.task = null; a.think = .4;
-        if (act && !a.pending) {
+        if (act && !a.pending && !(task.kind === 'plant' && task.index === this.host.heldBed?.())) { // the player opened this bed's seed list meanwhile: it is theirs
           a.pending = true; const own = s;
           void this.host.perform<WorkResult>('friendWork', { id: a.id, kind: task.kind, ...('index' in task ? { index: task.index } : { uid: task.uid }) })
             .then(r => { if (r && !r.skipped && this.host.own() === own) { this.host.worked(a.id, task, r, { x: a.x, z: a.z }); if (a.id === 'pepper') a.cookT = 2.4; } })
@@ -250,7 +252,7 @@ export class FriendCrew {
     }
     if ((a.think -= dt) <= 0 && !a.task && a.cookT <= 0) {
       a.think = .5;
-      if (act && !a.pending) a.task = nextFriendTask(s, a.id, a, now, a.id === 'sprout' ? this.host.robotBed() : a.id === 'pepper' ? this.bedOf('sprout') : undefined);
+      if (act && !a.pending) a.task = nextFriendTask(s, a.id, a, now, a.id === 'sprout' ? this.host.robotBed() : a.id === 'pepper' ? this.bedOf('sprout') : undefined, this.host.heldBed?.());
       else if (!act && (a.wander -= .5) <= 0) {
         // A visitor's copy never acts: it potters between the beds or animals now and then.
         a.wander = 4 + Math.random() * 4;
