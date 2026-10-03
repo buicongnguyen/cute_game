@@ -45,13 +45,13 @@ export function groupOf(id: string): GroupId {
   return 'material';
 }
 export interface ItemGroup<T> { id: GroupId; icon: string; label: string; entries: T[] }
-/** Splits `list` into groups in `order` (empty groups left out), each sorted weakest to strongest. */
-export function groupItems<T>(list: readonly T[], idOf: (entry: T) => string, order: readonly GroupId[] = GEAR_ORDER, priceOf?: (entry: T) => number): ItemGroup<T>[] {
+/** Splits `list` into groups in `order` (empty groups left out), each sorted weakest to strongest (`scoreOf`: owned lists pass item-power ownedScore). */
+export function groupItems<T>(list: readonly T[], idOf: (entry: T) => string, order: readonly GroupId[] = GEAR_ORDER, priceOf?: (entry: T) => number, scoreOf?: (id: string) => number): ItemGroup<T>[] {
   const buckets = new Map<GroupId, T[]>();
   for (const entry of list) { const g = groupOf(idOf(entry)); (buckets.get(g) ?? buckets.set(g, []).get(g)!).push(entry); }
   const rank = (g: GroupId) => { const i = order.indexOf(g); return i < 0 ? order.length : i; };
   return [...buckets.keys()].sort((a, b) => rank(a) - rank(b) || GEAR_ORDER.indexOf(a) - GEAR_ORDER.indexOf(b))
-    .map(id => ({ id, ...GROUPS[id], entries: sortByPower(buckets.get(id)!, idOf, priceOf) }));
+    .map(id => ({ id, ...GROUPS[id], entries: sortByPower(buckets.get(id)!, idOf, priceOf, scoreOf) }));
 }
 
 const FOLD_KEY = 'zoo-garden-folded-groups';
