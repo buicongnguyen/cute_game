@@ -61,6 +61,8 @@ import * as FarmHelper from './farm-helper.ts';
 import { FarmHelperView } from './farm-helper-view.ts';
 import { FarmHelperController } from './farm-helper-controller.ts';
 import { farmHelperPanel } from './farm-helper-ui.ts';
+import { homeChip } from './home-care.ts';
+import * as Restock from './farm-restock.ts';
 import './helper.css';
 import { FriendCrew, postFor } from './friend-crew.ts';
 import { setFriendDresser } from './friend-view.ts';
@@ -255,6 +257,8 @@ const DIALOG_LOOK:Record<string,[string,string]>={
   settings:['⚙️','calm'],help:['🧭','calm'],'fish-help':['🎣','water'],fishing:['🎣','water'],catch:['🐟','water'],death:['🌷','rose'],reset:['🌱','rose'],
 };
 function floating(text:string,x=world.position.x,z=world.position.z,style='item',rise=0) {world.fx?.text({x,y:rise,z},t(text),style);}
+/** Home clears bad effects (home-care.ts): a short sparkle and a toast. */
+function cleansedFx(){world.fx?.burst({x:world.position.x,z:world.position.z},{n:18,color:['#ffffff','#bff7ff','#ffe9a8'],glow:true,size:.1,speed:3,up:4,y:1});toast('Cleansed! Bad effects wash away at home.','✨');}
 function levelCheck(before:number) {if(state.level>before){toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);}}
 function change<T>(action:()=>T):T {const before=state.level;const result=action();levelCheck(before);save();updateHud();return result;}
 function uiBlocked(){return !!modal||!!document.querySelector('dialog[open]')||shipSequence?.busy||!!flight||arriving;}
@@ -292,7 +296,7 @@ function updateHud() {
   setWidth($('#quest-fill'),`${q?progress/q.target*100:100}%`);$('#quick-claim').hidden=!q?.complete;$('#quest-dot').hidden=!q?.complete;
   const skills=skillList();
   document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i];setText(button.querySelector('span')!,t(skill.icon));setText(button.querySelector('small')!,t(skill.name));button.setAttribute('aria-label',t(`${['Q','W','E','R'][i]} ${t(skill.name)}`));button.setAttribute('title',t(skill.name));button.classList.toggle('on-cooldown',cooldowns[i]>0);setText(button.querySelector('.cooldown')!,t(cooldowns[i]>0?Math.ceil(cooldowns[i]).toString():''));const cd=`${cooldowns[i]/skillDurations[i]*100}%`;if(button.style.getPropertyValue('--cooldown')!==cd)button.style.setProperty('--cooldown',cd);});
-  setHtml($('#buff-bar'),localizeHtml(M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,t])=>`<span>✨ ${esc(name)} <b>${Math.ceil(t)}s</b></span>`).join('')));
+  setHtml($('#buff-bar'),localizeHtml(M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,t])=>`<span>✨ ${esc(name)} <b>${Math.ceil(t)}s</b></span>`).join('')+homeChip(world.homeRecovering&&!visiting,t('Home: fast recovery'))));
   setHtml($('#environment-bar'),localizeHtml(world.environmentStatus().map(e=>`<span>${e.icon??''} ${esc(e.label)} <b>${esc(String(e.value))}</b></span>`).join('')));
   const dark=$('#darkness');dark.hidden=!world.darknessActive()||!started;
   // Target frame and boss bar (hud-combat.ts). While a fight is near (or on a phone in the wild) the trackers fold into one chip.
@@ -692,6 +696,7 @@ const farmHelperController=new FarmHelperController({state:()=>state,context:far
   farmCollectFeedback(result.collected,undefined,'worker');for(const uid of result.fed)feedBurst(uid,'worker');
   if(result.fed.length&&gainShows('worker'))tone('pop');
   if(catchUp&&(result.collected.length||result.fed.length))toast(t('Your animal helper collected {count} products and fed {fed} animals.',{count:result.collected.length,fed:result.fed.length}),'🤖');
+  if(result.restocked?.length){const r=Restock.restockSummary(result.restocked);toast(t('Pen robot restocked {animals} for ϟ {spent}.',r),'🔁');}
   if(modal==='pen')penDialog();
 }});
 // Rescued friends (friends.ts rules, friend-crew.ts cages/following/jobs, friend-view.ts looks, friend-ui.ts panel).
@@ -715,10 +720,11 @@ async function friendsCatchUp(){if(!(state.friends??[]).some(f=>f.home&&!f.pause
 const storedNote=initStoredNote({state:()=>state,home:()=>started&&!visiting&&!flight&&world.planet==='home'&&world.state===state&&!explorerOut(),perform,openChest:()=>storage(),t,name:id=>t(M.ITEMS[id as M.ItemId]?.name??id),took:n=>{tone('click');toast(t('Took {count} items from the chest.',{count:n}),'📦');}},app);frameListeners.add(dt=>storedNote.frame(dt));
 let friendsHome=false;frameListeners.add(()=>{const home=started&&!visiting&&!flight&&world.planet==='home';if(started&&!home)tripSeen=true;if(home&&!friendsHome){if(tripSeen){tripBackUntil=Date.now()+120_000;tripSeen=false;}void friendsCatchUp();void helperCatchUp();}friendsHome=home;});
 let farmHelperSettingsPending=false;
-async function farmHelperSetting(type:'buyFarmHelper'|'setFarmHelperPaused'|'setFarmHelperAutoFeed',payload:Record<string,unknown>={}){
+async function farmHelperSetting(type:'buyFarmHelper'|'upgradeFarmRestock'|'setFarmRestock'|'setFarmHelperPaused'|'setFarmHelperAutoFeed',payload:Record<string,unknown>={}){
   if(farmHelperSettingsPending||!farmHelperContext())return;
   const original=state,scene=world.root;farmHelperSettingsPending=true;
   try{const result=await perform(type,payload);if(state!==original||world.root!==scene||!farmHelperContext())return;
+    if(type==='upgradeFarmRestock'&&result==='upgraded'){tone('coin');toast('Auto-restock upgraded!','🔁');}
     if(type==='buyFarmHelper'&&result==='bought'){farmHelperView.reset();tone('coin');toast('Your animal helper is ready! Automatic feeding starts off.','🤖');}
     if(modal==='farm-helper')farmHelperDialog();
   }finally{farmHelperSettingsPending=false;}
@@ -1156,7 +1162,7 @@ async function arrive(id:M.PlanetId){
   await new Promise(resolve=>setTimeout(resolve,600));
   try{
     if(state!==arrivingState)return;
-    const arrived=await perform(id==='home'?'returnHome':'travel',{id});if(state!==arrivingState)return;
+    const arrived=await perform<{cleansed?:number}|boolean>(id==='home'?'returnHome':'travel',{id});if(state!==arrivingState)return;
     if(!arrived){homeQueued=false;if(journey&&flight===journey){journey.landing=null;journey.autopilot=null;}else ship.reset();return;}
     await Promise.race([Promise.all(kitsFor(id).map(name=>SCENERY_KITS[name].load())),new Promise(resolve=>setTimeout(resolve,2500))]);
     if(state!==arrivingState)return;
@@ -1166,7 +1172,7 @@ async function arrive(id:M.PlanetId){
     void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{});
     const p=M.PLANETS[id];
     ship.land(()=>{showZone(id==='home'?'Clover Village':t(p.name));floating(`${p.icon} ${t(p.name)}`,world.position.x,world.position.z,'level',1);toast(id==='home'?'Home, sweet home!':t('Welcome to {planet}! Watch out for its creatures.',{planet:t(p.name)}),p.icon);
-      if(homeQueued){homeQueued=false;if(state.planet!=='home')flyHome();}});
+      if(typeof arrived==='object'&&arrived.cleansed)cleansedFx();if(homeQueued){homeQueued=false;if(state.planet!=='home')flyHome();}});
   }finally{if(state===arrivingState){arriving=false;setTimeout(()=>flash.classList.remove('show'),150);}else{homeQueued=false;flash.classList.remove('show');}}
 }
 function updateSpace(dt:number){
@@ -1219,6 +1225,9 @@ app.addEventListener('click',async event=>{
     case 'farm-helper-buy':await farmHelperSetting('buyFarmHelper');break;
     case 'farm-helper-pause':await farmHelperSetting('setFarmHelperPaused',{paused:!FarmHelper.helperOf(state).paused});break;
     case 'farm-helper-feed':await farmHelperSetting('setFarmHelperAutoFeed',{autoFeed:!FarmHelper.helperOf(state).autoFeed});break;
+    case 'farm-restock-upgrade':await farmHelperSetting('upgradeFarmRestock');break;
+    case 'farm-restock-toggle':await farmHelperSetting('setFarmRestock',{on:!Restock.restockOf(state)?.on});break;
+    case 'farm-restock-keep':{const steps=Restock.RESTOCK_KEEP_STEPS,i=steps.indexOf((Restock.restockOf(state)?.keep??250) as typeof steps[number]);await farmHelperSetting('setFarmRestock',{keep:steps[(i+1)%steps.length]});break;}
     case 'confirm-place':confirmPlacement();break;
     case 'upgrade-bed':{const i=activePlot,cost=M.bedUpgradeCost(state,M.bedLevel(state.plots[i]));if(state.energy<cost){toast(`You need ${cost} energy to upgrade this bed.`,'ϟ');break;}if(await perform('upgradeBed',{index:i})){const level=M.bedLevel(state.plots[i]),p=M.bedPosition(state,i);world.syncCrops();world.fx?.burst({x:p.x,z:p.z},{n:14,color:['#ffd84d','#fff3a8'],glow:true,speed:2.5,up:4,y:.3});tone('success');toast(t('Bed upgraded to level {level}: −{percent}% grow time ({ratio}× harvests).',{level,percent:level*10,ratio:+(1/(1-M.BED_LEVEL_CUT*level)).toFixed(2)}),'⭐');plotDialog(i);}break;}
     case 'store-bed':{const i=activePlot;if(await perform('storeBed',{index:i})){closeDialog();world.dropPlotsFrom(i);tone('poof');toast('The bed is packed away. It is in your bag as a garden bed kit.','🎒');}break;}

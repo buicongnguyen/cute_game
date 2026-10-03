@@ -7,6 +7,7 @@ import {enemyRoster} from '../src/enemy-roster.ts';
 import {zoneAt,createEnvironmentLayout,EnvironmentSimulation} from '../src/environments.ts';
 import {sanitizeTitanAttacks,beginTitanAttack,stepTitanAttack,titanTelegraphs,isTitanSkill} from '../src/titan-patterns.ts';
 import {BOSS_SKILLS,BOSS_WINDUPS,bossTelegraphs,bossPhase,hitControl,BOSS_RESISTED,RESIST_SLOW,liftHeight} from '../src/boss-patterns.ts';
+import {atHome,homeRecoveryBonus} from '../src/home-care.ts';
 import {commandHash} from './action-service.mjs';
 import {clearJourney} from './adventure-lifecycle.mjs';
 
@@ -275,7 +276,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       for(const peer of active){const e=engineFor(peer);e.sim.update(dt,true);e.environment.authoritative=false;e.environment.time=s.environment.time-dt;e.environment.weather.restore(weatherBefore);e.environment.fireRain=structuredClone(rainBefore);e.environment.lightning=structuredClone(lightningBefore);e.environment.lamps=new Map(s.environment.lamps);e.environment.eclipseUntil=s.environment.eclipseUntil;e.environment.dragonPhase=s.environment.dragonPhase;e.environment.nestLevel=before.nestLevel;
         if(peer.account.ridePlanet===peer.planet&&peer.account.rideUntil>now)e.environment.rideUntil=e.environment.time+(peer.account.rideUntil-now)/1000;
         const traits=Game.activeStats(peer.account.profile),hazard=e.environment.step(dt,peer.pose,{x:0,z:0},{...traits,fireResistance:traits.lavaproof?1:traits.fireResistance,flying:e.sim.statuses.flight>0||e.sim.statuses.bats>0},[]);
-        if(hazard.damage>0)hurtPlayer(peer,hazard.damage,'hazard');if(hazard.heal)hp(peer,hazard.heal,'heal');if(traits.regen>0&&peer.account.profile.hp<traits.maxHp)hp(peer,traits.regen*dt,'regen');if(peer.planet==='home'&&zoneAt(peer.pose)==='home'&&peer.account.profile.hp<traits.maxHp)hp(peer,4*dt,'rest');
+        if(hazard.damage>0)hurtPlayer(peer,hazard.damage,'hazard');if(hazard.heal)hp(peer,hazard.heal,'heal');if(traits.regen>0&&peer.account.profile.hp<traits.maxHp)hp(peer,traits.regen*dt,'regen');if(atHome(peer.planet,peer.pose)&&peer.account.profile.hp<traits.maxHp)hp(peer,homeRecoveryBonus(traits.regen)*dt,'rest');
 
       }
     }

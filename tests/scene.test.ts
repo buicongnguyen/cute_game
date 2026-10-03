@@ -19,7 +19,8 @@ test('ordinary common creatures stand 0.55-0.8x the explorer; large forest quarr
     const ratio=drawnHeight(type)/explorer;
     assert.ok(ratio>=.55&&ratio<=.8,`${type}: ${ratio.toFixed(2)}x the explorer`);
   }
-  assert.ok(drawnHeight('forest_raptor')>explorer,'the special forest bird is larger than the explorer');
+  // w18 size pass: the forest hawk is drawn at half its old size (it used to tower over the explorer).
+  const hawk=drawnHeight('forest_raptor')/explorer;assert.ok(hawk>.4&&hawk<1,'forest hawk '+hawk.toFixed(2)+'x the explorer');
 });
 
 test('bosses keep their size and still tower over the explorer',()=>{
