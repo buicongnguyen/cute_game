@@ -1,7 +1,8 @@
 /**
  * The cottage in the game shell: the outdoor door that swings open, the fade in and out, the "Outside"
  * button, walking in and out through the door, the wardrobe and mirror (your own gear) and the "Dress"
- * panel where you give a rescued friend things to wear. main.ts wires it with a few lines.
+ * panel where you give a rescued friend things to wear (Gear tab) or change its look (Looks tab, friend-looks-ui.ts).
+ * main.ts wires it with a few lines.
  */
 import * as T from 'three';
 import { dropTree } from './dispose-tree.ts';
@@ -14,8 +15,8 @@ import { hasDebuffs } from './home-care.ts';
 import { HouseSession, type FriendEntity } from './house-session.ts';
 import { houseKit } from './house-view.ts';
 import { FRIENDS, friendsOf, type FriendId } from './friends.ts';
-import { buildFriend } from './friend-view.ts';
-import { friendStage } from './growth.ts';
+import { friendModel, friendSignature } from './friend-view.ts';
+import { friendLooksHtml, friendTabsHtml, initFriendLooks, type FriendTab } from './friend-looks-ui.ts';
 import { modelIcon } from './icons.ts';
 import { toonMaterial } from './toon.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -68,7 +69,7 @@ export function dressHtml(s: SaveState, id: FriendId, { readOnly = false, portra
 
 export function initHouse(d: HouseDeps) {
   const house = new HouseSession(), world = d.world;
-  let fade = 0, fadeTarget = 0, pending: (() => void) | null = null, friendClock = 0, dressing: FriendId | null = null, resumed = false, outdoorDoor: T.Group | null = null, doorOpen = 0, prewarmed = false, veilFade = -1;
+  let fade = 0, fadeTarget = 0, pending: (() => void) | null = null, friendClock = 0, dressing: FriendId | null = null, friendTab: FriendTab = 'gear', resumed = false, outdoorDoor: T.Group | null = null, doorOpen = 0, prewarmed = false, veilFade = -1;
   const veil = document.createElement('div'); veil.id = 'house-veil'; document.body.append(veil);
   const out = document.createElement('button'); out.className = 'home-button house-out'; out.dataset.houseAction = 'leave'; out.title = t('Outside');
   /** The HUD's place name says where you are: the cottage indoors, the village zone again outside. */
@@ -156,24 +157,34 @@ export function initHouse(d: HouseDeps) {
     life.frame(dt);
     if (house.inside) {
       house.frame(innerWidth / innerHeight); house.view.update(dt, world.time);
-      if ((friendClock -= dt) <= 0) { friendClock = .25; house.syncFriends(friendList()); }
+      // A closed panel ends its look previews (friend-looks-ui.ts drafts); the room shows the drafts while it is open.
+      if (d.modal() !== 'dress' && looks.clear()) friendClock = 0;
+      if ((friendClock -= dt) <= 0) { friendClock = .25; house.syncFriends(looks.shown(friendList())); }
       // Walking into the front door from inside leaves.
       if (!pending && !d.blocked() && world.moving && world.position.z > HOUSE.spawn.z + .65 && Math.abs(world.position.x) < .75 && Math.cos(world.facing) > .5) leave();
     } else if (!pending && !d.blocked() && world.planet === 'home' && world.moving && Math.hypot(world.position.x - HOUSE.outdoorDoor.x, world.position.z - HOUSE.outdoorDoor.z) < 1.45 && Math.cos(world.facing) < -.5) enter();
   };
-  const portrait = (id: FriendId) => { const f = friendList().find(x => x.id === id); return f ? modelIcon(`friend:${id}:${JSON.stringify(f.gear)}:${houseKit.ready}:${friendStage(f)}`, () => buildFriend(id, f.gear, friendStage(f))) : ''; };
-  const dress = (id: FriendId) => {
-    dressing = id;
-    d.openDialog('dress', t('Dress {name}', { name: t(FRIENDS[id].name) }), dressHtml(world.state, id, { readOnly: d.visiting(), portrait: portrait(id), iconUrl: d.iconUrl }), t('A FRIEND AT HOME'), '👗');
+  const portrait = (id: FriendId) => { const f = friendList().find(x => x.id === id); return f ? modelIcon(`friend:${id}:${friendSignature(f)}:${houseKit.ready}`, () => friendModel(f)) : ''; };
+  // The panel's Looks tab: drafts preview on the friend in the room and in the tab's mirror.
+  const looks = initFriendLooks({ friends: friendList, state: () => world.state, visiting: d.visiting, perform: d.perform, toast: d.toast, tone: d.tone,
+    refresh: id => { if (house.inside) house.syncFriends(looks.shown(friendList())); if (d.modal() === 'dress' && dressing === id) dress(id); } });
+  /** A friend's panel, on the tab used last (Gear the first time). */
+  const dress = (id: FriendId, tab: FriendTab = friendTab) => {
+    dressing = id; friendTab = tab;
+    const body = tab === 'looks' ? friendLooksHtml(world.state, id, looks.drafts.get(id), { readOnly: d.visiting() }) : dressHtml(world.state, id, { readOnly: d.visiting(), portrait: portrait(id), iconUrl: d.iconUrl });
+    d.openDialog('dress', t('Dress {name}', { name: t(FRIENDS[id].name) }), `<div class="friend-panel" data-friend-panel="${id}">${friendTabsHtml(tab)}${body}</div>`, t('A FRIEND AT HOME'), tab === 'looks' ? '🪞' : '👗');
+    if (tab === 'looks') looks.paint(id);
   };
   document.addEventListener('click', async event => {
+    const tab = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-friend-tab]');
+    if (tab && dressing && d.modal() === 'dress') { d.tone('click'); dress(dressing, tab.dataset.friendTab as FriendTab); return; }
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-house-action]'); if (!button || button.disabled) return;
     const action = button.dataset.houseAction, friend = button.dataset.friend as FriendId | undefined;
     if (action === 'leave') { d.closeDialog(); leave(); return; }
     if (!friend || d.visiting()) return;
     button.disabled = true;
     const ok = action === 'give' ? await d.perform('giveFriendGear', { friend, id: button.dataset.item }) : await d.perform('takeFriendGear', { friend, slot: button.dataset.slot });
-    if (ok) { d.tone('success'); house.syncFriends(friendList()); if (action === 'give') world.refreshPlayer(); }
+    if (ok) { d.tone('success'); house.syncFriends(looks.shown(friendList())); if (action === 'give') world.refreshPlayer(); }
     if (d.modal() === 'dress' && dressing === friend) dress(friend);
   });
   /** Taps on house things; true when handled (main.ts calls this first in world.onInteract). */
@@ -196,6 +207,8 @@ export function initHouse(d: HouseDeps) {
     poseY: (y: number) => y + (house.inside ? INDOOR_Y : 0),
     frame,
     /** A gear kit arrived: dress the friends again. */
-    refreshFriends: () => house.view.refreshFriends(friendList()),
+    refreshFriends: () => house.view.refreshFriends(looks.shown(friendList())),
+    /** The friend Looks tab (drafts, its mirror), for tests and probes. */
+    looks,
   };
 }

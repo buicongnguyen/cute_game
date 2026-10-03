@@ -738,8 +738,8 @@ export class World {
       const tip=new T.Object3D();tip.name='rod-tip';tip.position.set(0,1.85,0);rod.add(tip);hand.add(rod);
     }
   }
-  /** A rescued friend's body (friend-view.ts buildFriend): the explorer's model and wear-kit path, in the friend's colour. */
-  friendAvatar(color:string,gear:SaveState['gear']){return this.avatar(color,gear);}
+  /** A rescued friend's body (friend-view.ts buildFriend): the explorer's model and wear-kit path, in the friend's colour and look. */
+  friendAvatar(color:string,gear:SaveState['gear'],look:LookId=DEFAULT_LOOK){return this.avatar(color,gear,look);}
   /** An explorer in a body style, for the mirror's portraits (look-shop.ts). */
   lookAvatar(color:string,gear:SaveState['gear'],look:LookId){return this.avatar(color,gear,look);}
   /** A body style shown while previewing at the mirror: local only, never saved or sent online. */

@@ -45,4 +45,12 @@ export const VI_LOOKS: Record<string, string> = {
   'Monkey hood': 'Mũ khỉ',
   'Owl hood': 'Mũ cú mèo',
   'Mix a body, a height, ears and an animal hood. Owned options combine freely; a hood brings its own ears and a hat covers it. Gear fits every look, and stats stay the same.': 'Phối dáng người, chiều cao, tai và mũ trùm thú. Lựa chọn đã có thì phối thoải mái; mũ trùm có sẵn tai riêng và đội mũ sẽ che nó. Trang bị hợp với mọi dáng, chỉ số không đổi.',
+  // A friend's Looks tab (friend-looks-ui.ts).
+  'Hood': 'Mũ trùm',
+  'Friend': 'Bạn nhỏ',
+  'Looks': 'Dáng vẻ',
+  'Back to theirs': 'Trở lại như cũ',
+  'Unlocks it for you and every friend too': 'Mở khóa cho cả bạn và mọi bạn nhỏ',
+  'Options you own dress friends for free; buying one here unlocks it for you too. Height sets the body shape: {name} still grows to {share} of your height.': 'Lựa chọn bạn đã có thì dùng cho bạn nhỏ miễn phí; mua ở đây cũng mở khóa cho chính bạn. Chiều cao chỉ đổi dáng người: {name} vẫn lớn tới {share} chiều cao của bạn.',
+  '{name} has a new look: {look}!': '{name} có dáng mới: {look}!',
 };

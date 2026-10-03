@@ -3,7 +3,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toonMaterial } from './toon.ts';
 import { HERO_SCALE } from './world.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends-state.ts';
-import { friendHeight } from './growth.ts';
+import { friendHeight, friendStage } from './growth.ts';
+import { heroKitFor } from './assets.ts';
+import { DEFAULT_LOOK, HEIGHT_RATIO, splitLook, toLook, type LookId } from './looks.ts';
+import { friendLook, showsHead } from './friend-looks.ts';
 import type { SaveState } from './model.ts';
 import { applyGait, limbsOf, type Gait } from './walk-cycle.ts';
 
@@ -18,7 +21,7 @@ import { applyGait, limbsOf, type Gait } from './walk-cycle.ts';
 export const FRIEND_SCALE = HERO_SCALE * .5;
 /** The root scale at a growth stage (growth.ts): 0.5, 0.75 or 0.8 of the explorer's height. */
 export const friendScale = (stage = 0) => HERO_SCALE * friendHeight(stage);
-type Dresser = (color: string, gear: SaveState['gear']) => T.Group;
+type Dresser = (color: string, gear: SaveState['gear'], look: LookId) => T.Group;
 let dresser: Dresser | null = null;
 /** main.ts registers World.friendAvatar here once the world exists. */
 export function setFriendDresser(fn: Dresser | null) { dresser = fn; }
@@ -87,22 +90,44 @@ function standIn(tint: string, hair: string, wear: SaveState['gear'] = {}) {
   return g;
 }
 
-/** The friend's model: hero kit, tinted, dressed, at half the explorer's size; stands on y = 0, faces +z. */
-export function buildFriend(id: FriendId, gear: Friend['gear'] = {}, stage = 0): T.Group {
-  const look = FRIENDS[id], wear: SaveState['gear'] = { hat: gear.hat, outfit: gear.outfit, boots: gear.boots, weapon: gear.weapon, pet: gear.pet };
+/**
+ * The friend's model: hero kit in its look (friend-looks.ts), tinted, dressed, at its growth stage's share of the
+ * explorer's height; stands on y = 0, faces +z. A styled body file is taller or shorter than the chibi one (Grown-up is
+ * 1.4x): its own height ratio is divided out, so the look sets the proportions and growth alone sets the height. The
+ * ratio follows the body actually drawn: until a styled kit loads, the default explorer stands in at the plain scale.
+ */
+export function buildFriend(id: FriendId, gear: Friend['gear'] = {}, stage = 0, look: LookId = DEFAULT_LOOK): T.Group {
+  const colours = FRIENDS[id], wear: SaveState['gear'] = { hat: gear.hat, outfit: gear.outfit, boots: gear.boots, weapon: gear.weapon, pet: gear.pet };
   for (const k of Object.keys(wear) as (keyof typeof wear)[]) if (!wear[k]) delete wear[k];
-  const model = dresser ? dresser(look.tint, wear) : standIn(look.tint, look.hair, wear);
-  recolourHair(model, look.hair); mergeParts(model);
+  const model = dresser ? dresser(colours.tint, wear, look) : standIn(colours.tint, colours.hair, wear);
+  recolourHair(model, colours.hair); mergeParts(model);
   model.rotation.order = 'YXZ';
   model.traverse(o => { if (o instanceof T.Mesh) { o.castShadow = false; o.receiveShadow = false; } });
-  const pet = model.getObjectByName('remote-pet'); if (pet) pet.scale.setScalar(.7 / friendHeight(stage)); // a pet stays readable beside a small friend (1.4 at half size)
-  const scale = friendScale(stage), root = new T.Group(); root.name = 'friend-' + id; root.scale.setScalar(scale); root.add(model); root.userData.stage = stage;
+  const ratio = HEIGHT_RATIO[splitLook(toLook(model.userData.look) ?? DEFAULT_LOOK).height];
+  const pet = model.getObjectByName('remote-pet'); if (pet) pet.scale.setScalar(.7 * ratio / friendHeight(stage)); // a pet stays readable beside a small friend (1.4 at half size)
+  const scale = friendScale(stage) / ratio, root = new T.Group(); root.name = 'friend-' + id; root.scale.setScalar(scale); root.add(model); root.userData.stage = stage;
   blobGeometry ??= new T.CircleGeometry(.36, 14); blobMaterial ??= new T.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: .2, depthWrite: false });
   blobGeometry.userData.sharedKit = true; blobMaterial.userData.sharedKit = true;
-  const blob = new T.Mesh(blobGeometry, blobMaterial); blob.scale.setScalar(1 / FRIEND_SCALE) /* grows with the friend: .36 m at half size */; blob.rotation.x = -Math.PI / 2; blob.position.y = .03 / scale; blob.name = 'friend-blob'; root.add(blob);
-  root.userData.model = model;
+  const blob = new T.Mesh(blobGeometry, blobMaterial); blob.scale.setScalar(ratio / FRIEND_SCALE) /* grows with the friend: .36 m at half size */; blob.rotation.x = -Math.PI / 2; blob.position.y = .03 / scale; blob.name = 'friend-blob'; root.add(blob);
+  root.userData.model = model; root.userData.look = toLook(model.userData.look) ?? DEFAULT_LOOK;
   return root;
 }
+
+/** Freed friends wear a work hat (display only, never saved) unless the player gave them a hat; prisoners have none. */
+export const WORK_HATS: Record<FriendId, string> = { sprout: 'hat_straw', clover: 'hat_cowboy', pepper: 'hat_chef' };
+/** What a freed friend wears: its gear, plus its work hat while nothing else is on its head (a hat would hide ears or a hood). */
+export function friendWear(f: Pick<Friend, 'id' | 'gear' | 'look'>): Friend['gear'] {
+  return f.gear.hat || showsHead(friendLook(f)) ? { ...f.gear } : { hat: WORK_HATS[f.id] as Friend['gear']['hat'], ...f.gear };
+}
+/**
+ * A freed friend as drawn everywhere: outdoors at work (friend-crew.ts), in the cottage (house-view.ts), in its panel
+ * and in a visitor's copy. One builder with the same gear, work hat, look and growth stage, so a friend stands at the
+ * same share of the explorer's height indoors and out (before, the cottage left the work hat off: Pepper's chef's hat
+ * alone made her 0.91 of the explorer outdoors and 0.80 inside). `look` previews a combination (the Looks tab).
+ */
+export const friendModel = (f: Friend, look = friendLook(f)) => buildFriend(f.id, friendWear({ ...f, look }), friendStage(f), look);
+/** What friendModel depends on, for rebuild checks: gear, stage, look and whether the look's body file has arrived. */
+export const friendSignature = (f: Friend, look = friendLook(f)) => JSON.stringify(f.gear) + friendStage(f) + look + (look === DEFAULT_LOOK || heroKitFor(look).ready ? 1 : 0);
 
 export type FriendPose = 'idle' | 'walk' | 'sad' | 'harvest' | 'plant' | 'collect' | 'feed' | 'cook' | 'cheer';
 /**

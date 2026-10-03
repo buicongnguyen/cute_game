@@ -1,61 +1,63 @@
-/* The mirror's character builder (look-shop.ts): three rows of option chips and a buy/wear footer. */
-.look-builder { display: grid; gap: 10px; }
-.look-row { display: grid; gap: 5px; }
-.look-row-name { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
-.look-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
-.look-chip { display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 64px; padding: 6px 4px; border-radius: 16px; background: #fffaf0; border: 3px solid #fff; box-shadow: var(--lift); font: inherit; font-size: 13px; font-weight: 700; color: inherit; cursor: pointer; }
+/* The mirror's character builder (look-shop.ts) and a friend's Looks tab (friend-looks-ui.ts): a wooden-framed mirror
+   beside four rows of Blender portrait tiles (body, height, ears, head decoration), then a buy/wear footer. Every row is
+   one line of tiles that scrolls sideways when it is longer than its column, so the panel keeps its height. */
+.look-studio { display: grid; grid-template-columns: 188px minmax(0, 1fr); gap: 14px; align-items: start; }
+.look-builder { display: grid; gap: 8px; min-width: 0; }
+.look-row { display: grid; gap: 3px; min-width: 0; }
+.look-row-name { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.look-chips { position: relative; /* offsetLeft of a tile counts from its row (centreChosen) */ display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; padding: 2px 2px 6px; -webkit-overflow-scrolling: touch; }
+.look-chip { position: relative; flex: 0 0 66px; scroll-snap-align: center; display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; padding: 4px 3px 5px; border-radius: 14px; background: #fffaf0; border: 3px solid #fff; box-shadow: var(--lift); font: inherit; font-size: 11px; font-weight: 800; line-height: 1.15; color: inherit; cursor: pointer; text-align: center; }
+.look-chip-icon { width: 52px; height: 52px; flex: none; border-radius: 12px; background: radial-gradient(circle at 50% 36%, #ffffff, #ffe9c6 78%); display: grid; place-items: center; overflow: hidden; font-size: 26px; }
+.look-chip-art { width: 100%; height: 100%; object-fit: contain; display: block; }
+.look-chip-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .look-chip.on { border-color: #8fd36a; background: #f1ffe6; }
-.look-chip-icon { font-size: 24px; line-height: 1.1; }
-.look-price { font-size: 11px; font-weight: 800; color: #b07a00; }
-.look-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; border-top: 2px dashed #f0dfc0; }
-.look-name { font-size: 15px; }
-.look-buttons { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-@media (max-width: 520px) { .look-chip { min-height: 54px; font-size: 12px; } .look-chip-icon { font-size: 20px; } .look-builder { gap: 6px; } }
-/* Friends' chat bubbles would sit on top of the chips while the builder is open. */
-body:has(#dialog-layer.trying-on) #house-bubble { display: none; }
-/* Phones: the builder is a bottom sheet under the explorer, so it stays short: one-line chips, no intro, and the
-   buy/wear footer pinned to the sheet's bottom edge. */
-@media (max-width: 520px) {
-  #dialog-body:has(.look-builder) .store-purpose, #dialog-body:has(.look-builder) > .intro { display: none; }
-  .look-chip { flex-direction: row; flex-wrap: wrap; justify-content: center; min-height: 42px; gap: 0 4px; padding: 4px; }
-  .look-chip-icon { font-size: 18px; }
-  .look-price { flex-basis: 100%; text-align: center; line-height: 1; }
-  .look-row { gap: 3px; }
-  .look-footer { position: sticky; bottom: 0; margin-top: 8px; padding: 8px 0 2px; background: #fffaf0; }
-}
-/* Four rows now: Body (4), Height (5), Ears (3), Head decoration (13). Short rows share the width; long rows scroll
-   sideways with snap, on phones and desktop alike, so the sheet keeps its height. */
-.look-chips { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
-.look-chips.scroll { display: flex; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; padding: 2px 2px 6px; -webkit-overflow-scrolling: touch; }
-.look-chips.scroll .look-chip { flex: 0 0 92px; scroll-snap-align: center; }
-.look-chip-art { width: 40px; height: 40px; display: block; object-fit: contain; }
+.look-chip.on .look-chip-icon { background: radial-gradient(circle at 50% 36%, #ffffff, #cdeeb4 78%); }
 .look-chip.worn:not(.on) { border-color: #ffe39a; }
+.look-chip:disabled { cursor: default; }
+.look-price { font-size: 10px; font-weight: 800; color: #b07a00; line-height: 1.1; }
 .look-state { font-size: 10px; font-weight: 800; color: #4f9a2c; line-height: 1.1; }
 .look-state.owned { color: #8a7a60; }
+.look-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 2px dashed #f0dfc0; }
+.look-name { font-size: 15px; min-width: 0; }
+.look-buttons { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+
+/* The mirror: an arched glass in a carved wooden frame (warm wood, a darker rim, a bright bevel), a soft floor shadow
+   and one diagonal shine. mirror-preview.ts draws the avatar into the canvas inside the glass. */
+.look-mirror { position: sticky; top: 4px; margin: 0; display: grid; gap: 4px; justify-items: center; }
+.mirror-glass { position: relative; width: 100%; aspect-ratio: 188 / 268; overflow: hidden; border: 10px solid transparent; border-radius: 94px 94px 18px 18px;
+  background: radial-gradient(ellipse 70% 55% at 50% 38%, #fbfeff, #e3f3ff 58%, #c3e1f5) padding-box,
+    linear-gradient(155deg, #e2a668, #b5713d 38%, #d79a5c 62%, #8a4b26) border-box;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55), inset 0 -18px 30px rgba(120, 160, 190, .25), 0 3px 0 #6e4330, 0 10px 18px rgba(90, 50, 20, .22); }
+.mirror-glass::before { content: ''; position: absolute; left: 18%; right: 18%; bottom: 5%; height: 7%; border-radius: 50%; background: radial-gradient(closest-side, rgba(60, 90, 120, .28), transparent); }
+.mirror-glass::after { content: ''; position: absolute; inset: -20% 0 0 -60%; background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, .5) 47%, rgba(255, 255, 255, .12) 53%, transparent 58%); pointer-events: none; }
+.mirror-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 1; }
+.look-mirror figcaption { font-size: 12px; font-weight: 800; color: var(--ink-soft); text-align: center; }
+
+/* A friend's panel: Gear and Looks tabs; the Looks tab's glass shows the friend fitted to the frame. */
+.friend-panel { display: grid; gap: 8px; }
+.friend-panel > .intro { margin: 0; font-size: 12.5px; }
+.friend-studio .mirror-glass { aspect-ratio: 188 / 250; }
+
+/* Friends' chat bubbles would sit on top of the tiles while the builder is open. */
+body:has(#dialog-layer.trying-on) #house-bubble { display: none; }
+
+/* Phones: the mirror's builder is a bottom sheet under the explorer (quick-eat.css, about 44% of the height), so it stays
+   short: no intro, a narrow glass at the left, each row's name beside its tiles, compact tiles with the price or state
+   as a badge on the portrait, and the footer pinned to the sheet's bottom edge. */
 @media (max-width: 520px) {
-  .look-chips.scroll .look-chip { flex-basis: 74px; }
-  .look-chip-art { width: 30px; height: 30px; }
-  .look-state { flex-basis: 100%; text-align: center; line-height: 1; }
+  #dialog-body:has(.look-builder) .store-purpose, #dialog-body:has(.look-builder) > .intro { display: none; }
+  .look-studio { grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
+  .look-builder { gap: 3px; }
+  .look-row { grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 4px; }
+  .look-row-name { font-size: 10px; letter-spacing: 0; text-transform: none; line-height: 1.1; }
+  .look-chips { gap: 5px; padding: 2px 2px 3px; scrollbar-width: none; }
+  .look-chip { flex-basis: 54px; padding: 2px 2px 2px; border-width: 2px; border-radius: 12px; font-size: 10px; }
+  .look-chip-icon { width: 34px; height: 34px; border-radius: 9px; }
+  .look-chip small { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); max-width: 50px; padding: 0 4px; border-radius: 8px; background: rgba(255, 250, 240, .94); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* A tall, narrow glass beside the rows: the figure gets the column's height rather than its width. */
+  .mirror-glass, .friend-studio .mirror-glass { aspect-ratio: 84 / 190; border-width: 6px; border-radius: 42px 42px 12px 12px; }
+  .look-footer { position: sticky; bottom: 0; z-index: 2; margin-top: 2px; padding: 5px 0 1px; background: #fffaf0; }
+  .look-name { flex: 1 1 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .look-buttons button { padding-block: 6px; font-size: 14px; }
+  .friend-panel > .intro { font-size: 11.5px; line-height: 1.3; }
 }
-/* Phones: four rows must fit the short sheet under the explorer, so each row's name sits at its left and every row is
-   one line of chips (the long ones scroll sideways). */
-@media (max-width: 520px) {
-  .look-row { grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 6px; }
-  .look-row-name { font-size: 10px; letter-spacing: .02em; white-space: normal; line-height: 1.1; }
-  .look-chips { display: flex; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; padding: 2px 2px 4px; }
-  .look-chips .look-chip, .look-chips.scroll .look-chip { flex: 0 0 74px; scroll-snap-align: center; min-height: 50px; flex-direction: column; flex-wrap: nowrap; gap: 0; padding: 3px 2px; font-size: 11px; line-height: 1.1; }
-  .look-chip-icon { font-size: 17px; }
-  .look-chip-art { width: 26px; height: 26px; }
-  .look-price, .look-state { flex-basis: auto; font-size: 10px; }
-  .look-footer { margin-top: 4px; padding-top: 6px; }
-  .look-name { font-size: 13px; flex-basis: 100%; }
-}
-@media (max-width: 520px) {
-  .look-builder { gap: 4px; }
-  .look-chips .look-chip, .look-chips.scroll .look-chip { flex: 0 0 96px; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 4px; min-height: 40px; padding: 3px 6px; text-align: left; border-width: 2px; border-radius: 12px; }
-  .look-chip > .look-chip-icon { grid-row: 1 / 3; }
-  .look-chip > span:not(.look-chip-icon) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .look-name { flex-basis: auto; flex: 1 1 0; min-width: 0; font-size: 12px; }
-  .look-buttons button { padding-block: 8px; }
-}
-@media (max-width: 520px) { .look-row-name { text-transform: none; letter-spacing: 0; font-size: 11px; } }

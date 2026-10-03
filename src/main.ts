@@ -747,7 +747,7 @@ const farmHelperController=new FarmHelperController({state:()=>state,context:far
   if(modal==='pen')penDialog();
 }});
 // Rescued friends (friends.ts rules, friend-crew.ts cages/following/jobs, friend-view.ts looks, friend-ui.ts panel).
-setFriendDresser((color,gear)=>world.friendAvatar(color,gear));
+setFriendDresser((color,gear,look)=>world.friendAvatar(color,gear,look));
 const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
   robotBed:()=>helperView.task?.index,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform:workPerform,
   rescued(id,at){const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},

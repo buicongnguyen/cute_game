@@ -1,4 +1,5 @@
 import { ITEMS, canonicalItem, type ItemId, type PlanetId } from './content.ts';
+import { DEFAULT_LOOK, toLook, type LookId } from './looks.ts';
 
 /**
  * Rescued friends' saved state (FRIENDS-CONTRACT.md). Kept apart from friends.ts, which needs model.ts, so model.ts can
@@ -13,6 +14,8 @@ export interface Friend {
   rescuedAt: number;
   /** Gear the player gave this friend: the same slot keys and item ids as SaveState.gear (no disguise). */
   gear: Partial<Record<FriendSlot, ItemId>>;
+  /** The friend's own look from the mirror's builder (friend-looks.ts); missing = the default. */
+  look?: LookId;
   /** False while the friend still follows the explorer home; true once it has reached the village and its post. */
   home?: boolean;
   /** The per-friend pause: a paused friend stands at its post and touches nothing. */
@@ -78,6 +81,7 @@ export function parseFriends(raw: unknown): Friend[] {
     if (!FRIEND_IDS.includes(id) || out.some(f => f.id === id)) continue;
     const f: Friend = { id, role: FRIENDS[id].role, rescuedAt: Number.isFinite(r.rescuedAt) ? r.rescuedAt as number : 0, gear: {}, home: r.home === true, paused: r.paused === true };
     if (r.autoFeed === true) f.autoFeed = true;
+    const look = toLook(r.look); if (look && look !== DEFAULT_LOOK) f.look = look; // a visitor's copy too; parseSave also checks the owner owns it
     if (r.gear && typeof r.gear === 'object' && !Array.isArray(r.gear))
       for (const [slot, item] of Object.entries(r.gear)) if (typeof item === 'string' && friendSlot(item) === slot) f.gear[slot as FriendSlot] = canonicalItem(item);
     const day = count(r.day, 1e7); if (day) { f.day = day; f.done = count(r.done, 1e6); const grew = count(r.grew, 1e6); if (grew) f.grew = grew; }

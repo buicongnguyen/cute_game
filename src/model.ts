@@ -4,6 +4,7 @@ import { parseHelper, type HelperState } from './helper-state.ts';
 import { parseFriends, parseBosses, noteBossDefeat, type Friend } from './friends-state.ts';
 import { parseHouse, type HouseState } from './house-activities.ts';
 import { parseLooks, type Looks } from './looks.ts';
+import { dropUnownedFriendLooks } from './friend-looks.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
 import { levelledStat, parseGearLevels, parseSkillLevels } from './upgrades.ts';
@@ -819,6 +820,7 @@ export function parseSave(raw: string | null): SaveState | null {
         const awayStore = inventory(v.awayStore); if (Object.keys(awayStore).length) s.awayStore = awayStore;
         const friends = parseFriends(v.friends), bosses = parseBosses(v.bosses); if (friends.length) s.friends = friends; if (bosses.length) s.bosses = bosses; const house = parseHouse(v.house); if (house) s.house = house;
         const looks = parseLooks(v.looks); if (looks) s.looks = looks;
+        dropUnownedFriendLooks(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
         if (record(v.collection))
             for (const [id, n] of Object.entries(v.collection))

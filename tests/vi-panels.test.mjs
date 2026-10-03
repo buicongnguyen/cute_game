@@ -28,6 +28,7 @@ const Tester=await import('../src/tester.ts');
 const IG=await import('../src/item-groups.ts');
 const {dressHtml,DRESS_SLOTS}=await import('../src/house-ui.ts');
 const {lookShopHtml}=await import('../src/look-shop.ts');
+const {friendLooksHtml,friendTabsHtml}=await import('../src/friend-looks-ui.ts');
 const {ACTIVITIES}=await import('../src/house-activities.ts');
 const {buffText}=await import('../src/house-life.ts');
 const {storedLine}=await import('../src/delivery.ts');
@@ -128,6 +129,10 @@ test('friends, helpers, pen, tester, dress panel, look shop and difficulty texts
     leftovers('dress '+id,localizeHtml(dressHtml(state,id)),found);leftovers('dress read-only '+id,localizeHtml(dressHtml(state,id,{readOnly:true})),found);
   }
   for(const [, , label] of DRESS_SLOTS)leftovers('dress slot',t(label),found);
+  // A friend's Looks tab (friend-looks-ui.ts): the tabs, a draft to buy, a free draft, and a visitor's view.
+  const housed={...state,friends:FRIEND_IDS.map((id,i)=>({id,role:FRIENDS[id].role,rescuedAt:1,gear:{},home:true,grown:i%3,...(i?{look:'girl-chibi-none-bare'}:{})}))};
+  leftovers('friendTabs',localizeHtml(friendTabsHtml('looks')),found);
+  for(const id of FRIEND_IDS){leftovers('friendLooks '+id,localizeHtml(friendLooksHtml(housed,id,'slim-grown-bunny-owl')),found);leftovers('friendLooks free '+id,localizeHtml(friendLooksHtml(housed,id,'girl-chibi-none-bare')),found);leftovers('friendLooks visitor '+id,localizeHtml(friendLooksHtml(housed,id,undefined,{readOnly:true})),found);}
   leftovers('helperRow',localizeHtml(helperRow(state,false)),found);
   leftovers('helperPanel',localizeHtml(helperPanel(state,{esc,mini:()=>'',picture:''})),found);
   leftovers('farmHelperPanel',localizeHtml(farmHelperPanel(state,'')),found);
