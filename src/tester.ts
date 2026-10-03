@@ -2,7 +2,7 @@ import * as M from './model.ts';
 import { RECIPES, PLANETS, ITEMS, type PlanetId } from './content.ts';
 import { FARM_DISHES } from './farm.ts';
 import { MAX_FORGE_LEVEL } from './weapon-forge.ts';
-import { sortByPower } from './item-power.ts';
+import { groupItems, groupedHtml, groupTitle, GEAR_ORDER } from './item-groups.ts';
 export { MAX_FORGE_LEVEL };
 import { FRIENDS, FRIEND_IDS, type FriendId } from './friends-state.ts';
 import { t } from './i18n.ts';
@@ -122,12 +122,13 @@ export function testerShopHtml(s: M.SaveState) {
     const has = (s.friends ?? []).some(f => f.id === id);
     return `<div class="tester-card"><span>🧑‍🌾</span><strong>${esc(t(FRIENDS[id].name))}</strong>${has ? `<small>✓ ${esc(t('Rescued'))}</small>` : `<button class="primary" data-action="tester-friend" data-item="${id}" ${s.energy < FRIEND_PRICE ? 'disabled' : ''}>ϟ ${FRIEND_PRICE}</button>`}</div>`;
   }).join('');
-  const groups = new Map<string, string[]>(TESTER_ITEMS.map(i => [i.category, []])); // category order stays; cards inside run weakest to strongest
-  for (const i of sortByPower(TESTER_ITEMS, i => i.id, i => i.price)) { const it = ITEMS[i.id], have = s.bag[i.id] || 0;
-    (groups.get(i.category) ?? groups.set(i.category, []).get(i.category)!).push(`<div class="tester-card"><span>${it.icon}</span><strong>${esc(t(it.name))}</strong>${have ? `<small>×${have}</small>` : ''}<button class="soft-button" data-action="tester-buy" data-item="${i.id}" ${s.energy < i.price ? 'disabled' : ''}>ϟ ${i.price.toLocaleString()}</button></div>`); }
-  const items = [...groups].map(([cat, cards], i) => `<h3 id="tester-cat-${i}">${esc(t(cat))}</h3><div class="tester-grid">${cards.join('')}</div>`).join('');
+  // Item groups (item-groups.ts) in the shops' order; cards inside run weakest to strongest.
+  const groups = groupItems(TESTER_ITEMS, i => i.id, GEAR_ORDER, i => i.price);
+  const card = (i: typeof TESTER_ITEMS[number]) => { const it = ITEMS[i.id], have = s.bag[i.id] || 0;
+    return (`<div class="tester-card"><span>${it.icon}</span><strong>${esc(t(it.name))}</strong>${have ? `<small>×${have}</small>` : ''}<button class="soft-button" data-action="tester-buy" data-item="${i.id}" ${s.energy < i.price ? 'disabled' : ''}>ϟ ${i.price.toLocaleString()}</button></div>`); };
+  const items = groupedHtml('tester', groups, card, 'tester-grid').replace(/<section class="item-group([^"]*)" data-group="(\w+)"/g, '<section class="item-group$1" data-group="$2" id="tester-cat-$2"');
   return `<p class="intro">${esc(t('Tester mode: every item, crafted, forged and cooked ones too, without materials or level, still paid with energy.'))} ϟ ${s.energy.toLocaleString()}</p>`
     + `<div class="button-row"><button class="soft-button" data-action="tester-planets">${esc(t('Unlock all planets'))}</button><button class="soft-button" data-action="tester-level">${esc(t('Max level'))}</button></div>`
-    + `<nav class="tester-jump" aria-label="${esc(t('Categories'))}">${[...groups.keys()].map((cat, i) => `<a href="#tester-cat-${i}">${esc(t(cat))}</a>`).join('')}</nav>`
+    + `<nav class="tester-jump" aria-label="${esc(t('Categories'))}">${groups.map(g => `<a href="#tester-cat-${g.id}">${esc(groupTitle(g, g.entries.length))}</a>`).join('')}</nav>`
     + `<h3>${esc(t('Rescue friends'))}</h3><div class="tester-grid">${friends}</div>${items}`;
 }

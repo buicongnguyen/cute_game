@@ -11,6 +11,7 @@ import { GEAR_STEP, MAX_GEAR_LEVEL, canUpgradeGear, canUpgradeSkill, gearCost, g
 import { MAX_SKILL_LEVEL, SKILL_LEVEL_TEXT, levelledCooldown, skillTuning } from './skill-upgrades.ts';
 import { whirlRadius, slamRadius } from './skill-info.ts';
 import { sortByPower, powerChip } from './item-power.ts';
+import { groupItems, groupedHtml, GEAR_ORDER } from './item-groups.ts';
 import './upgrade-bench.css';
 
 export type BenchTab = 'gear' | 'skills';
@@ -33,7 +34,7 @@ const maxed = () => `<span class="chip chip-seed">${esc(t('Maximum'))}</span>`;
 function gearRows(s: SaveState, ui: BenchUi) {
   const list = benchGear(s);
   if (!list.length) return `<p class="empty-state">${esc(t('Buy hats, outfits, boots or companions first, then level them here.'))}</p>`;
-  return `<div class="shop-grid">${list.map(id => {
+  return groupedHtml('bench', groupItems(list, id => id, GEAR_ORDER), id => {
     const item = ITEMS[id], name = esc(t(item.name)), icon = ui.art(id, item.icon);
     if (!upgradableGear(id)) {
       const level = forgeLevel(s, id), top = level >= MAX_FORGE_LEVEL, cost = forgeCost(level);
@@ -43,7 +44,7 @@ function gearRows(s: SaveState, ui: BenchUi) {
     const level = gearLevel(s, id), top = level >= MAX_GEAR_LEVEL, cost = gearCost(level);
     const line = `<p>${esc(top ? t('Item stats +{now}% (maximum)', { now: pct(level) }) : t('Item stats +{now}% → +{next}%', { now: pct(level), next: pct(level + 1) }))}</p>`;
     return row(icon, `${name} <span class="level-tag">+${level}</span>`, powerChip(id) + line + (top ? '' : ui.chips(cost.materials)), top ? maxed() : buy(`data-bench-action="gear" data-item="${id}"`, cost.energy, canUpgradeGear(s, id)));
-  }).join('')}</div>`;
+  });
 }
 /** "Damage ×1.2 · radius 3.04 m" (the real hit radius, as the cast ring shows it) or "Damage ×1.2 · cooldown 3.6 s" for slot `index` at `level`. */
 export function skillEffect(index: number, level: number, baseCd: number, weaponKind?: string) {

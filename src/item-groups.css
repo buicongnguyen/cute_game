@@ -1,0 +1,19 @@
+/* Grouped item lists (item-groups.ts): a small header per group, tap to fold. */
+.item-group { margin: 0 0 6px; }
+.item-group-head { margin: 4px 0 4px; position: sticky; top: -1px; z-index: 1; }
+.item-group-head button {
+  display: flex; align-items: center; gap: 6px; width: 100%; min-height: 30px; padding: 4px 10px;
+  border: 0; border-radius: 10px; background: color-mix(in srgb, var(--ink-soft, #6b5a4a) 10%, #fffaf0);
+  color: var(--ink-soft, #6b5a4a); font: inherit; font-size: var(--t-sm, 14px); font-weight: 900; text-align: left; cursor: pointer;
+}
+.item-group-head button::after { content: '▾'; margin-left: auto; font-size: .9em; opacity: .7; transition: transform .15s; }
+.item-group.folded .item-group-head button::after { transform: rotate(-90deg); }
+.item-group.folded > div { display: none; }
+/* Each group's grid flows inside the panel's own scroll; one scroll per panel, not one per group. */
+.item-group > .inventory-grid, .item-group > .chest-grid { max-height: none; overflow: visible; }
+.tester-jump a { white-space: nowrap; }
+@media (max-width: 560px), (max-height: 520px) {
+  .item-group { margin-bottom: 4px; }
+  .item-group-head { margin: 2px 0 3px; }
+  .item-group-head button { min-height: 26px; padding: 2px 8px; font-size: var(--t-xs, 12px); border-radius: 8px; }
+}

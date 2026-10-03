@@ -11,8 +11,11 @@ import { atHome } from './home-care.ts';
  *
  * Guarding: the dog's garden protection is a property of owning it (farm.ts hasGuardDog / guardBiteDamage), and is
  * unchanged by where it walks: its job is the garden, visitors always find it at the pen (a visit shows the host's
- * pen), and the server never has to track a dog. Fights: following is cosmetic only (no damage, no aggro), so the
- * pet slot stays the one companion that fights and nothing new needs server validation.
+ * pen), and the server never has to track a dog. Fights: while it follows you it tosses a bone at a creature within
+ * DOG_TOSS_RANGE of it every DOG_TOSS_CD seconds: your current target first, else the nearest one. The bone flies an arc
+ * for DOG_TOSS_FLIGHT seconds and lands for about a starter pet's shot (dogTossFactor x your attack, a little more with
+ * level). It never throws at home (the safe village, the pen, the cottage): only a following dog fights. The toss runs
+ * in the shared CombatSimulation, so online the server's copy decides the hits, exactly as it does for pet shots.
  */
 export type DogPlace = 'pen' | 'follow' | 'return';
 /** The leash round the pen spot (metres): the dog's strolls and loops keep inside it. */
@@ -66,4 +69,23 @@ export function stepDog(d: DogLink, dt: number, follow: boolean, player: { x: nu
     const turn = Math.atan2(Math.sin(facing - d.heading), Math.cos(facing - d.heading)); d.heading += Math.max(-3 * dt, Math.min(3 * dt, turn));
   }
   return d.place;
+}
+
+/** The toy toss: reach from the dog (m), seconds between throws, the bone's flight time (s). */
+export const DOG_TOSS_RANGE = 7, DOG_TOSS_CD = 2.5, DOG_TOSS_FLIGHT = .5;
+/** The bone lands for this x your attack: a starter pet's shot (Mochi bunny .25), +1% per level above 1, up to +50%. */
+export function dogTossFactor(level: number) { return .25 * (1 + Math.min(.5, Math.max(0, ((Number.isFinite(level) ? level : 1) - 1) * .01))); }
+/** True when a dog at `place` may fight: only while it follows you away from home. */
+export function dogMayToss(place: DogPlace, planet: string, pose: { x: number; z: number }, indoors = false) { return place === 'follow' && dogFollows(planet, pose, indoors); }
+/** The creature the dog throws at: `preferred` (your target) when alive and in reach, else the nearest one alive in reach. */
+export function dogTarget<T extends { id: string; x: number; z: number; hp: number; radius?: number }>(dog: { x: number; z: number }, targets: readonly T[], preferred?: string | null, range = DOG_TOSS_RANGE): T | undefined {
+  let best: T | undefined, bestD = Infinity;
+  for (const t of targets) {
+    if (!(t.hp > 0)) continue;
+    const d = Math.hypot(t.x - dog.x, t.z - dog.z) - (t.radius ?? 0);
+    if (d > range) continue;
+    if (preferred && t.id === preferred) return t;
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  return best;
 }
