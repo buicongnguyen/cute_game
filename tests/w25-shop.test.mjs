@@ -102,7 +102,7 @@ test('home stations read the chest too: workshop, outfitter materials, forge and
   const out = M.forgeWeapon(f, 'sword_wood', () => .1);
   assert.equal(out.success, true); assert.equal(f.bag.leather, undefined); assert.equal(f.chest.leather, 1); assert.equal(f.chest.starshard, undefined); assert.equal(f.bag.sword_wood, 1);
   // Bench: gear levels pay from the chest as well.
-  const b = M.newGame(); b.planet = 'home'; b.bag.hat_straw = 1; const g = gearCost(0); b.energy = g.energy; b.chest.leather = g.materials.leather; b.chest.bone = g.materials.bone;
+  const b = M.newGame(); b.planet = 'home'; b.bag.hat_straw = 1; const g = gearCost('hat_straw', 0); b.energy = g.energy; b.chest.leather = g.materials.leather; b.chest.bone = g.materials.bone;
   assert.deepEqual(upgradeGear(b, 'hat_straw'), { id: 'hat_straw', level: 1 }); assert.equal(b.energy, 0); assert.deepEqual(b.chest, {});
 });
 

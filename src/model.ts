@@ -15,7 +15,7 @@ import { looseQuantity, pantry, usePantry, hasMaterials, useMaterials } from './
 import { specialPrice } from './special-offers.ts';
 export * from './weapon-forge.ts';
 // Purchase-list order and item level tags (main.ts renders them as M.*, which the panel tests already provide).
-export { sortByPower, powerChip, levelTag } from './item-power.ts';
+export { sortByPower, powerChip, levelTag, ownedScore, gearProgressHtml } from './item-power.ts';
 export { gearFactor, skillLevel, skillCooldown } from './upgrades.ts';
 export * from './content.ts';
 export * from './farm.ts';

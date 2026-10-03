@@ -71,20 +71,21 @@ test('workshop, forge and tester lists are sorted the same way', () => {
 
 // ---- 2. gear upgrade math -----------------------------------------------------------------------
 const rich = () => { const s = M.newGame(); s.energy = 1e7; for (const id of ['leather', 'bone', 'starshard', 'moonstone']) s.bag[id] = 500; return s; };
-test('gear levels: +4% of the item stats per level, ten levels, rising costs', () => {
-  assert.deepEqual(U.gearCost(0), { energy: 60, materials: { leather: 2, bone: 1 } });
-  assert.deepEqual(U.gearCost(5), { energy: 510, materials: { leather: 7, bone: 3, starshard: 1 } });
-  assert.deepEqual(U.gearCost(9), { energy: 1230, materials: { leather: 11, bone: 5, starshard: 5, moonstone: 1 } });
-  for (let l = 1; l < 10; l++) assert.ok(U.gearCost(l).energy > U.gearCost(l - 1).energy);
+test('gear levels: ten even steps to the outfit ceiling, rising costs scaled by the gap', () => {
+  // Knight outfit: 90 hp, 28 def, -5% speed; the outfit ceiling is 126 hp, 40 def, 12 atk, 4.5/s, 8% crit, +18% speed.
+  assert.deepEqual(U.gearCost('armor_knight', 0), { energy: 55, materials: { leather: 2, bone: 1 } });
+  assert.deepEqual(U.gearCost('armor_knight', 5), { energy: 455, materials: { leather: 7, bone: 3, starshard: 1 } });
+  assert.deepEqual(U.gearCost('armor_knight', 9), { energy: 1100, materials: { leather: 11, bone: 5, starshard: 5, moonstone: 1 } });
+  for (let l = 1; l < 10; l++) assert.ok(U.gearCost('armor_knight', l).energy > U.gearCost('armor_knight', l - 1).energy);
   const s = rich(); s.bag.armor_knight = 1; M.equip(s, 'armor_knight');
-  const hp0 = M.maxHp(s), def0 = M.defense(s), speed0 = M.activeStats(s).speed;
+  const hp0 = M.maxHp(s), def0 = M.defense(s), atk0 = M.attack(s), st0 = M.activeStats(s);
   for (let l = 0; l < 10; l++) assert.deepEqual(applyGameAction(s, { type: 'upgradeGear', payload: { id: 'armor_knight' } }, { now: 1, random: Math.random }), { id: 'armor_knight', level: l + 1 });
-  assert.equal(U.gearLevel(s, 'armor_knight'), 10); assert.equal(U.gearFactor(s, 'armor_knight'), 1.4);
-  assert.equal(Math.round((M.maxHp(s) - hp0) * 100) / 100, 36); assert.equal(Math.round((M.defense(s) - def0) * 100) / 100, 11.2);
-  assert.equal(M.activeStats(s).speed, speed0, 'speed (and crit) never scale');
+  assert.equal(U.gearLevel(s, 'armor_knight'), 10);
+  assert.equal(M.maxHp(s) - hp0, 36); assert.equal(M.defense(s) - def0, 12); assert.equal(Math.round((M.attack(s) - atk0) * 100) / 100, 12);
+  const st = M.activeStats(s); assert.equal(Math.round((st.speed - st0.speed) * 1000) / 1000, 1.38, '6 m/s x (-5% to +18%)'); assert.equal(Math.round((st.critChance - st0.critChance) * 100) / 100, .08); assert.equal(st.regen, 4.5);
   assert.equal(U.upgradeGear(s, 'armor_knight'), null, 'capped at +10');
-  const spent = Array.from({ length: 10 }, (_, l) => U.gearCost(l).energy).reduce((a, b) => a + b);
-  assert.equal(s.energy, 1e7 - spent); assert.equal(spent, 5250);
+  const spent = Array.from({ length: 10 }, (_, l) => U.gearCost('armor_knight', l).energy).reduce((a, b) => a + b);
+  assert.equal(s.energy, 1e7 - spent); assert.equal(spent, 4690); assert.equal(U.gearCostToMax('armor_knight', 0).energy, 4690);
 });
 
 test('gear upgrades need the item, the energy and the materials; weapons and rods stay on the forge', () => {
@@ -93,14 +94,15 @@ test('gear upgrades need the item, the energy and the materials; weapons and rod
   s.bag.leather = 2; assert.equal(U.canUpgradeGear(s, 'hat_straw'), true); assert.equal(U.canUpgradeGear(s, 'hat_leather'), false, 'not owned');
   s.bag.sword_wood = 1; s.bag.rod = 1; assert.equal(U.upgradableGear('sword_wood'), false); assert.equal(U.upgradableGear('rod'), false); assert.equal(U.upgradableGear('dz_ninja'), false);
   assert.throws(() => applyGameAction(s, { type: 'upgradeGear', payload: { id: 'sword_wood' } }), /not available/);
-  s.energy = 59; assert.throws(() => applyGameAction(s, { type: 'upgradeGear', payload: { id: 'hat_straw' } }), /not available/);
+  s.energy = U.gearCost('hat_straw', 0).energy - 1; assert.throws(() => applyGameAction(s, { type: 'upgradeGear', payload: { id: 'hat_straw' } }), /not available/);
   assert.equal(s.bag.leather, 2, 'a refused upgrade takes nothing');
 });
 
-test('a levelled companion shoots harder (the stat line and the shot both scale)', () => {
+test('a levelled companion shoots harder: its stat line climbs to the pet ceiling, its own shot keeps +4% a level', () => {
   const s = rich(); s.bag.pet_firefly = 1; M.equip(s, 'pet_firefly'); const atk0 = M.attack(s);
   for (let i = 0; i < 5; i++) U.upgradeGear(s, 'pet_firefly');
-  assert.equal(U.gearFactor(s, 'pet_firefly'), 1.2); assert.ok(Math.abs(M.attack(s) - atk0 - 4 * .2) < 1e-9);
+  // Firefly: 4 attack; the pet ceiling's 23 attack is halfway at +5 (13.5), and the shot factor is 1.2.
+  assert.equal(U.gearFactor(s, 'pet_firefly'), 1.2); assert.ok(Math.abs(M.attack(s) - atk0 - 9.5) < 1e-9);
 });
 
 test('levels survive a save round-trip; bad levels are dropped or clamped', () => {
