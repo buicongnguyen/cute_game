@@ -36,18 +36,18 @@ const act = (s: M.SaveState, type: string, payload: Record<string, unknown> = {}
 const src = (file: string) => readFileSync(new URL('../src/' + file, import.meta.url), 'utf8');
 
 // ---- 1. CRITICAL: the harpoon farmed legendary fish -------------------------------------------------------------
-test('1. a caught harpoon slot restocks after 90 s with a newly rolled species, the same on client and server', () => {
-  assert.equal(FISH_HUNT_RESTOCK_MS, 90_000);
+test('1. a caught harpoon slot restocks after 18 s (round 26; was 90 s) with a newly rolled species, the same on client and server', () => {
+  assert.equal(FISH_HUNT_RESTOCK_MS, 18_000); const R = FISH_HUNT_RESTOCK_MS;
   const pond = huntingPonds('home')[1], s = M.newGame(); s.level = 10; s.bag.harpoon = 1; s.gear.weapon = 'harpoon';
   const shore = { x: pond.x, z: pond.z + pond.rz + .6 }, key = fishHuntKey(pond.id, 0);
   // The slot nearest the shore, so the throw is in reach.
   const slot = fishHuntTargets(pond, T0).sort((a, b) => Math.hypot(a.x - shore.x, a.z - shore.z) - Math.hypot(b.x - shore.x, b.z - shore.z))[0].slot, k = fishHuntKey(pond.id, slot);
   const before = fishHuntTarget(pond, slot, T0, s.hunting)!, r = huntFish(s, { weaponId: 'harpoon', pondId: pond.id, slot, aim: before }, shore, T0)!;
-  assert.equal(r.hit, true); assert.equal(r.id, before.id); assert.equal(huntCatches(s.hunting, k), 1); assert.equal(s.hunting!.readyAt[k], T0 + 90_000);
+  assert.equal(r.hit, true); assert.equal(r.id, before.id); assert.equal(huntCatches(s.hunting, k), 1); assert.equal(s.hunting!.readyAt[k], T0 + R);
   // The server derives the same next fish from the same save (no client claim): seeded by key and catch count.
-  const next = fishHuntTarget(pond, slot, T0 + 90_000, s.hunting)!, again = M.parseSave(JSON.stringify(s))!;
-  assert.deepEqual(fishHuntTarget(pond, slot, T0 + 90_000, again.hunting), next, 'the catch count survives a reload');
-  assert.equal(huntFish(s, { weaponId: 'harpoon', pondId: pond.id, slot, aim: next }, shore, T0 + 89_999), null, 'still restocking');
+  const next = fishHuntTarget(pond, slot, T0 + R, s.hunting)!, again = M.parseSave(JSON.stringify(s))!;
+  assert.deepEqual(fishHuntTarget(pond, slot, T0 + R, again.hunting), next, 'the catch count survives a reload');
+  assert.equal(huntFish(s, { weaponId: 'harpoon', pondId: pond.id, slot, aim: next }, shore, T0 + R - 1), null, 'still restocking');
   assert.equal(key === k || huntCatches(s.hunting, key) === 0, true);
   // Over many restocks a slot shows several species, never a legendary fish.
   const seen = new Set<string>(); for (let n = 0; n < 200; n++) seen.add(fishHuntTarget(pond, slot, T0, { caught: { [k]: n } })!.id);
@@ -64,7 +64,9 @@ test('1. no harpoon slot on any pond ever stocks a legendary fish; junk counts a
   assert.deepEqual(parseHunting({ lastShotAt: 0, readyAt: {}, caught: { [key]: 7, 'home:fish:1:99': 3, [fishHuntKey('home:fish:1', 3)]: -1, [fishHuntKey('home:fish:1', 4)]: 1.5 } }, T0), { lastShotAt: 0, readyAt: {}, caught: { [key]: 7 } });
 });
 
-test('1. harpoon income from the best spot by a lake pond stays under the best rod there (~10k energy an hour)', () => {
+// Round 26: the user chose fast restocks and fuller ponds and accepts fishing as a money farm, so the old ~10k/h cap is
+// lifted (about 50k/h now); what stays is that a harpoon slot never pays a legendary fish.
+test('1. harpoon income from the best spot by a lake pond: fast restocks pay more, never a legendary fish', () => {
   const pond = huntingPonds('home').find(p => p.id === 'home:fish:1')!; let best = 0, legend = 0;
   for (let a = 0; a < 8; a++) {
     const at = { x: pond.x + Math.cos(a / 8 * Math.PI * 2) * (pond.rx + 1), z: pond.z + Math.sin(a / 8 * Math.PI * 2) * (pond.rx + 1) };
@@ -77,7 +79,7 @@ test('1. harpoon income from the best spot by a lake pond stays under the best r
     best = Math.max(best, value);
   }
   // Review: 203,498 energy and 224 golden fish an hour before (12 s restock of a fixed golden slot).
-  assert.equal(legend, 0); assert.ok(best > 3000 && best < 10_000, `harpoon energy per hour ${best}`);
+  assert.equal(legend, 0); assert.ok(best > 10_000 && best < 80_000, `harpoon energy per hour ${best}`);
 });
 
 test('1. the rod view and the harpoon view show one stock: a caught slot\'s new species is handed back to the rod view', t => {

@@ -6,7 +6,7 @@ const SPECIAL: Record<string, Sound> = {
 };
 const DISGUISE: Record<string, readonly Sound[]> = {
   dz_superhero: ['magic', 'boom', 'zap', 'boom'], dz_ninja: ['poof', 'poof', 'swing', 'poof'], dz_mage: ['cast', 'magic', 'magic', 'magic'],
-  dz_knight: ['magic', 'swing', 'alert', 'magic'], dz_mecha: ['boom', 'click', 'shoot', 'magic'], dz_dino: ['crit', 'swing', 'alert', 'boom'],
+  dz_knight: ['magic', 'swing', 'alert', 'magic'], dz_mecha: ['shock', 'zap', 'zap', 'magic'], dz_dino: ['crit', 'swing', 'alert', 'boom'],
   dz_fairy: ['magic', 'magic', 'magic', 'magic'], dz_pirate: ['boom', 'snap', 'alert', 'boom'], dz_vampire: ['magic', 'poof', 'poof', 'magic'],
   dz_snowman: ['freeze', 'poof', 'freeze', 'freeze'],
 };

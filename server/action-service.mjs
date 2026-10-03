@@ -1,7 +1,7 @@
 import {createHash,randomUUID,randomInt} from 'node:crypto';
 import * as Game from '../src/model.ts';
 import {applyGameAction,ACTION_RULES_VERSION} from '../src/actions.ts';
-import {resolveMysteryCatch,catchWeight,STEADY} from '../src/fishing.ts';
+import {resolveMysteryCatch,catchWeight,STEADY,lineBreakChance,lineSnaps} from '../src/fishing.ts';
 import {createEnvironmentLayout} from '../src/environments.ts';
 import {environmentResourceNodes} from '../src/environment-resources.ts';
 import {LAVA_ORE_RULES} from '../src/lava-weather.ts';
@@ -39,6 +39,11 @@ function validateFishingProof(proof,ticket,now){
   }
   const power=ticket.power*(ticket.steady?STEADY.heavy:1),minimum=1/(.3*(1.15-power*.45)*(ticket.steady?STEADY.reel:1));
   if(lastProgress<1||held+.25<minimum||proof.elapsed-proof.hookAt+.25<minimum)fail(409,'Reel the fish in before collecting it.');
+  // Line strains (fishing.ts STRAIN): each strain is a flagged sample at full tension, rolled like the browser did from the
+  // ticket's seed. A strain whose roll snaps the line, or full tension with no strain declared, means no fish.
+  const strains=proof.strains??0,flagged=proof.samples.filter(sample=>sample.strain===true).length;
+  if(!Number.isSafeInteger(strains)||strains<0||strains!==flagged||proof.samples.some(sample=>sample.strain!==true&&sample.tension>=.999))fail(400,'This catch could not be verified.');
+  for(let index=0;index<strains;index++)if(!Number.isSafeInteger(ticket.seed)||lineSnaps(ticket.seed,index,ticket.breakChance??lineBreakChance(ticket)))fail(409,'The line snapped. Let go of Reel when the fish surges.');
 }
 function saveDrop(account,item,count,peer,now,{owner=account.id,priority=0,life=30000}={}){
   const drop={id:randomUUID(),ownerId:account.id,item,count,room:peer.room,planet:peer.planet,space:peer.planet==='home'&&Math.hypot(peer.pose.x,peer.pose.z)<18?`home:${account.id}`:'wild',x:peer.pose.x,z:peer.pose.z,owner,releaseAt:now+priority,expiresAt:now+life};
@@ -99,9 +104,10 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         let roll=random()*choices.reduce((sum,[,w])=>sum+w,0),id=choices.at(-1)[0];for(const choice of choices)if((roll-=choice[1])<=0){id=choice[0];break;}
         const fish=Game.FISH[id],fraction=random()**2.4,size=Math.round(fish.size[0]+(fish.size[1]-fish.size[0])*fraction);
         const outcome=mystery?resolveMysteryCatch({id,max:fish.size[1]},random):{id,size,huge:fish.rarity!=='junk'&&fraction>.82,supergiant:false,mystery:false};
-        const ticket={id:randomUUID(),startedAt:now,planet:state.planet,water:key,power:fish.power,steady:rod.steady===true,outcome,cast:{...p.cast}};
+        // The line's strain rolls are seeded here and handed to the browser, so both roll alike (validateFishingProof).
+        const ticket={id:randomUUID(),startedAt:now,planet:state.planet,water:key,power:fish.power,steady:rod.steady===true,breakChance:lineBreakChance(rod),seed:randomInt(0,0x7fffffff),outcome,cast:{...p.cast}};
         account.fishingTicket=ticket;if(bait)Game.removeItem(state.bag,'worm');
-        result={ticketId:ticket.id,bait,pick:{id,power:fish.power,size,huge:fraction>.82,mystery},mysteryState:{readyAt,serverNow:now}};
+        result={ticketId:ticket.id,bait,lineSeed:ticket.seed,pick:{id,power:fish.power,size,huge:fraction>.82,mystery},mysteryState:{readyAt,serverNow:now}};
       }else if(data.type==='fishFinish'||data.type==='fishCancel'){
         const ticket=account.fishingTicket;
         if(!ticket||ticket.id!==p.ticketId)fail(409,'That cast is no longer available.');

@@ -54,7 +54,7 @@ import {part} from './part-cache.ts';
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
   pond?:{rx:number;rz:number;surface:number} }
-export interface Enemy extends Entity { hp: number; maxHp: number; damage: number; xp: number; homeX: number; homeZ: number; cooldown: number; respawn: number; boss: boolean; stun: number;type?:string;definition?:EnemyDefinition;phase?:string;phaseTime?:number;route?:Point[];routeTime?:number;lift?:number;liftVelocity?:number;statuses?:Record<string,number>;targetX?:number;targetZ?:number;bossStage?:number;attackCount?:number;skillCount?:number;skill?:BossSkill;telegraphs?:Array<{x:number;z:number;r:number;delay:number}>;skillEffects?:Array<{x:number;z:number;r:number;inner:number;remaining:number;multiplier:number}>;spinTick?:number;scaled?:boolean;baseMaxHp?:number;baseDamage?:number;level?:number;flash?:number;flashLit?:boolean;knockVX?:number;knockVZ?:number;dying?:number }
+export interface Enemy extends Entity { hp: number; maxHp: number; damage: number; xp: number; homeX: number; homeZ: number; cooldown: number; respawn: number; boss: boolean; stun: number;/** Seconds of the ⚡ mark after an electric hit (skill-fx.ts; looks only). */shock?:number;type?:string;definition?:EnemyDefinition;phase?:string;phaseTime?:number;route?:Point[];routeTime?:number;lift?:number;liftVelocity?:number;statuses?:Record<string,number>;targetX?:number;targetZ?:number;bossStage?:number;attackCount?:number;skillCount?:number;skill?:BossSkill;telegraphs?:Array<{x:number;z:number;r:number;delay:number}>;skillEffects?:Array<{x:number;z:number;r:number;inner:number;remaining:number;multiplier:number}>;spinTick?:number;scaled?:boolean;baseMaxHp?:number;baseDamage?:number;level?:number;flash?:number;flashLit?:boolean;knockVX?:number;knockVZ?:number;dying?:number }
 interface Obstacle { x: number; z: number; r: number;tag?:string }
 /**
  * AI level of detail: a resting creature does not think at all; a calm wanderer thinks on every 4th step (its slot)
@@ -157,7 +157,9 @@ export class World {
   onEnvironmentAction:(action:EnvironmentAction)=>void=()=>{};
   onHazardEnemy:(enemy:Enemy,amount:number)=>void=(enemy,amount)=>this.damageEnemy(enemy,amount,0,true);
   private dynamicObstacles:Obstacle[]=[];private environmentSignature='';private gateHits=0;private resourceTimers=new Map<string,number>();
-  private enemyShots:Array<{id:string;ownerId:string;mesh:T.Mesh;vx:number;vz:number;life:number;damage:number;targetId?:string;targetEnemyId?:string}>=[];
+  private enemyShots:Array<{id:string;ownerId:string;mesh:T.Mesh;vx:number;vz:number;life:number;damage:number;targetId?:string;targetEnemyId?:string;electric?:boolean}>=[];
+  /** The Giant Toy Robot fires electric orbs (skill-fx.ts): a crackle each frame in flight and a small shock where each one ends. */
+  onElectricShot?:(x:number,y:number,z:number,dx:number,dz:number)=>void;onElectricPop?:(x:number,z:number)=>void;
   private sun: T.DirectionalLight; private cropMaterials: T.Material[] = [];
   /** Garden crops as baked 2D cards (crop-cards.ts) once the crop kit has loaded; null until then. */
   cropCards: CropCards|null = null;
@@ -941,7 +943,7 @@ export class World {
     if(impact.lift)this.knockUpEnemy(e,impact.lift,.8);
   }
   applyEnemySnapshots(snapshots:EnemySnapshot[]){const own=`${this.planet}:`;for(const snapshot of snapshots){if(typeof snapshot.id!=='string'||!snapshot.id.startsWith(own)||!Number.isFinite(snapshot.x)||!Number.isFinite(snapshot.z)||!Number.isFinite(snapshot.hp))continue;let e=this.enemies.find(e=>e.id===snapshot.id);if(!e&&snapshot.type&&ENEMY_TYPES[snapshot.type]){e=this.spawnSpecies(snapshot.type,snapshot.x,snapshot.z,this.enemies.length)??undefined;if(e)e.id=snapshot.id;}if(!e)continue;e.x=snapshot.x;e.z=snapshot.z;e.hp=Math.max(0,snapshot.hp);e.maxHp=snapshot.maxHp;e.respawn=snapshot.respawn;e.phase=snapshot.phase;e.lift=snapshot.lift??0;e.stun=snapshot.stun??0;e.phaseTime=snapshot.phaseTime??0;if(Number.isFinite(snapshot.chaseGrace))e.lastHitAt=this.time-4+Math.max(0,Math.min(4,snapshot.chaseGrace!));e.cooldown=snapshot.cooldown??0;e.statuses={...snapshot.statuses};e.targetX=snapshot.targetX;e.targetZ=snapshot.targetZ;e.bossStage=snapshot.bossStage;e.skill=snapshot.skill;e.attackCount=snapshot.attackCount;e.skillCount=snapshot.skillCount;e.telegraphs=snapshot.telegraphs?.map(p=>({...p}));e.skillEffects=snapshot.skillEffects?.map(p=>({...p}));e.spinTick=snapshot.spinTick;e.damage=snapshot.damage??e.damage;e.titanAttacks=sanitizeTitanAttacks(snapshot.titanAttacks);e.titanLift=snapshot.titanLift??0;e.scaled=true;e.mesh.position.set(e.x,terrainHeight(this.environment.layout,e)+(e.lift??0),e.z);e.mesh.rotation.y=snapshot.facing??0;e.mesh.visible=e.hp>0;
-      if(snapshot.shots){this.enemyShots??=[];const ids=new Set(snapshot.shots.map(s=>s.id));for(let i=this.enemyShots.length-1;i>=0;i--)if(this.enemyShots[i].ownerId===e.id&&!ids.has(this.enemyShots[i].id)){const old=this.enemyShots[i];this.scene.remove(old.mesh);old.mesh.geometry.dispose();this.enemyShots.splice(i,1);}for(const source of snapshot.shots){if(![source.x,source.y,source.z,source.vx,source.vz,source.life,source.damage].every(Number.isFinite)||source.life<=0)continue;let shot=this.enemyShots.find(s=>s.id===source.id);if(!shot){const model=ball(e.definition?.accent??'#ffbb72',.17);this.scene.add(model);shot={...source,ownerId:e.id,mesh:model};this.enemyShots.push(shot);}Object.assign(shot,{vx:source.vx,vz:source.vz,life:source.life,damage:source.damage,targetEnemyId:source.targetEnemyId});shot.mesh.position.set(source.x,source.y,source.z);}}
+      if(snapshot.shots){this.enemyShots??=[];const ids=new Set(snapshot.shots.map(s=>s.id));for(let i=this.enemyShots.length-1;i>=0;i--)if(this.enemyShots[i].ownerId===e.id&&!ids.has(this.enemyShots[i].id)){const old=this.enemyShots[i];this.scene.remove(old.mesh);old.mesh.geometry.dispose();this.enemyShots.splice(i,1);}for(const source of snapshot.shots){if(![source.x,source.y,source.z,source.vx,source.vz,source.life,source.damage].every(Number.isFinite)||source.life<=0)continue;let shot=this.enemyShots.find(s=>s.id===source.id);if(!shot){const electric=e.type==='robot',model=ball(electric?'#e8fbff':e.definition?.accent??'#ffbb72',.17);this.scene.add(model);shot={...source,ownerId:e.id,mesh:model,...(electric?{electric}:{})};this.enemyShots.push(shot);}Object.assign(shot,{vx:source.vx,vz:source.vz,life:source.life,damage:source.damage,targetEnemyId:source.targetEnemyId});shot.mesh.position.set(source.x,source.y,source.z);}}
     }}
   /**
    * Online explorers walk on their legs too (walk-cycle.ts). Poses arrive about 15 times a second, so the ground they
@@ -1176,9 +1178,9 @@ export class World {
     fx.burst(this.position,{n:6,color:['#ff7b6b','#ffffff'],size:.1,speed:4,up:3,y:.9});
   }
   /** Swing arcs and animation for the player's own attacks. */
-  playerAttack(kind:'fist'|'sword'|'gun'|'rod'){
+  playerAttack(kind:'fist'|'sword'|'gun'|'rod',muzzle='#fff8c8'){
     const fx=this.fx,at={x:this.position.x,y:this.position.y,z:this.position.z};
-    if(kind==='gun'){this.aimT=.7;this.punchT=.12;fx?.flash({x:at.x+Math.sin(this.facing)*.9,y:at.y+1,z:at.z+Math.cos(this.facing)*.9},'#fff8c8',.9,.08);return;}
+    if(kind==='gun'){this.aimT=.7;this.punchT=.12;fx?.flash({x:at.x+Math.sin(this.facing)*.9,y:at.y+1,z:at.z+Math.cos(this.facing)*.9},muzzle,.9,.08);return;}
     // The slash arc itself arrives through the shared combat effects, so remote players see it too.
     this.punchT=.25;if(kind!=='sword')this.punchArm^=1;
     fx?.burst({x:at.x+Math.sin(this.facing)*1.3,y:at.y,z:at.z+Math.cos(this.facing)*1.3},{n:5,color:'#ffffff',glow:true,size:.1,speed:3,up:2,y:.8,life:.3});
@@ -1263,8 +1265,8 @@ export class World {
   }
   private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string){if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id)this.onRemoteDamage?.(target.id,amount,source,enemyId);else if(!this.playerFlying||source!=='melee')this.onDamage(amount,source,enemyId);}
   private shootEnemy(e:Enemy,target:Point&{id?:string;enemy?:Enemy}){
-    const distance=Math.max(.01,Math.hypot(target.x-e.x,target.z-e.z)),shot=ball(e.definition?.accent??'#f5b576',.17,e.x,1.0,e.z,0);this.scene.add(shot);
-    this.enemyShots.push({id:e.id+':shot:'+Math.random().toString(36).slice(2,10),ownerId:e.id,mesh:shot,vx:(target.x-e.x)/distance*13,vz:(target.z-e.z)/distance*13,life:1.4,damage:e.damage,targetId:target.id,targetEnemyId:target.enemy?.id});
+    const electric=e.type==='robot',distance=Math.max(.01,Math.hypot(target.x-e.x,target.z-e.z)),shot=ball(electric?'#e8fbff':e.definition?.accent??'#f5b576',.17,e.x,1.0,e.z,0);this.scene.add(shot);
+    this.enemyShots.push({id:e.id+':shot:'+Math.random().toString(36).slice(2,10),ownerId:e.id,mesh:shot,vx:(target.x-e.x)/distance*13,vz:(target.z-e.z)/distance*13,life:1.4,damage:e.damage,...(electric?{electric}:{}),targetId:target.id,targetEnemyId:target.enemy?.id});
   }
   private areaDamage(e:Enemy,x:number,z:number,radius:number,multiplier:number,inner=0){
     const hit=(p:Point)=>{const d=Math.hypot(p.x-x,p.z-z);return d<radius&&d>=inner;};
@@ -1274,6 +1276,8 @@ export class World {
     for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&(remote.pose.hp??1)>0&&hit(remote.pose))this.onRemoteDamage?.(id,e.damage*multiplier,source,e.id);
   }
   localPlayerId='local';
+  /** The laser gaze's world angle while it sweeps (main.ts from skill-fx.ts), else null. */
+  gazeAngle:number|null=null;
   private titanTargets():TitanTarget[]{
     const safe=this.planet==='home'?18:11,targets:TitanTarget[]=[];
     if(this.state.hp>0&&Math.hypot(this.position.x,this.position.z)>=safe)targets.push({id:this.localPlayerId??'local',x:this.position.x,z:this.position.z,airborne:this.playerFlying||this.environment.airborne});
@@ -1614,6 +1618,7 @@ export class World {
         for(const [id,remote] of this.remotePlayers??[])if(shot.life>0&&remote.mesh.visible&&Math.hypot(shot.mesh.position.x-remote.pose.x,shot.mesh.position.z-remote.pose.z)<.65){this.onRemoteDamage?.(id,shot.damage,'shot',shot.ownerId);shot.life=0;}
       }
       }
+      if(shot.electric){const p=shot.mesh.position;if(shot.life>0)this.onElectricShot?.(p.x,p.y,p.z,shot.vx/13,shot.vz/13);else this.onElectricPop?.(p.x,p.z);}
       if(shot.life<=0){this.scene.remove(shot.mesh);shot.mesh.geometry.dispose();this.enemyShots.splice(i,1);}
     }
     const names={home:'Clover Village',forest:'Mushroom Forest',meadow:'Blue Lake Meadow',swamp:'Chomper Swamp',canyon:'Redrock Canyon'},zone=this.planet==='home'?names[zoneAt(this.position)]:PLANETS[this.planet].name;
@@ -1711,6 +1716,8 @@ export class World {
       if(pose.t<.42){const e=pose.t/.42;lean=-e*.4;const up=-2.9*Math.min(1,e*2);armL?.rotation.set(up,0,-.2);armR?.rotation.set(up,0,.2);legL?.rotation.set(-.5,0,0);legR?.rotation.set(-.5,0,0);}
       else{const e=Math.min(1,(pose.t-.42)/.38);sx=sz=1+.25*(1-e);sy=1-.3*(1-e);armL?.rotation.set(-.9*(1-e),0,-.3);armR?.rotation.set(-.9*(1-e),0,.3);lean=.5*(1-e);}
     }
+    // Laser gaze (skill-fx.ts): the head turns with the sweep, so the beams leave the eyes along the line they hit.
+    const gaze=this.gazeAngle;if(head&&gaze!=null){const turn=Math.atan2(Math.sin(gaze-this.facing),Math.cos(gaze-this.facing));head.rotation.set(-.06,Math.max(-1.2,Math.min(1.2,turn)),0);}
     // Fishing: the cast swings the rod overhead and forward; reeling leans back against the line.
     if(this.fishing&&this.fishing!=='idle'&&armR){
       armR.rotation.set(-.75,0,.1);armL?.rotation.set(-.8,0,.5);

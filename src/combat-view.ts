@@ -1,10 +1,12 @@
 import * as T from 'three';
-import type {CombatAlly,CombatEffect,Projectile} from './combat.ts';
+import {ELECTRIC_SHOTS,type CombatAlly,type CombatEffect,type Projectile} from './combat.ts';
 import {toonMaterial} from './toon.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 export class CombatView {
   private scene:T.Scene;private shots=new Map<number,T.Mesh>();private effects:Array<{mesh:T.Mesh;life:number;max:number;kind:string}>=[];
   private allies=new Map<number,T.Group>();
+  /** Called every frame for each flying electric shot (skill-fx.ts crackles around it). */
+  electric?:(x:number,y:number,z:number,dx:number,dz:number)=>void;
   constructor(scene:T.Scene){this.scene=scene;}
   /** Effect geometry by shape and size, and finished effect meshes for reuse: no material or geometry is made or freed per swing (each new material relinked a shader). */
   private shapes=new Map<string,T.BufferGeometry>();private spare:T.Mesh[]=[];
@@ -15,7 +17,8 @@ export class CombatView {
     const mesh=this.spare.pop()??new T.Mesh(undefined,new T.MeshBasicMaterial({transparent:true,opacity:.72,side:T.DoubleSide,depthWrite:false}));
     mesh.geometry=this.shape(e);(mesh.material as T.MeshBasicMaterial).color.set(e.color);(mesh.material as T.MeshBasicMaterial).opacity=.72;
     mesh.rotation.set(-Math.PI/2,0,0);mesh.scale.setScalar(1);mesh.position.set(e.x,e.kind==='cast'?.15:.6,e.z);
-    if(e.kind==='beam'){mesh.rotation.z=-(e.facing??0);mesh.position.x+=Math.sin(e.facing??0)*e.radius/2;mesh.position.z+=Math.cos(e.facing??0)*e.radius/2;}
+    // The plane's long side lies along (sin f, cos f) only with +f (−f mirrored every diagonal beam across the z axis).
+    if(e.kind==='beam'){mesh.rotation.z=e.facing??0;mesh.position.x+=Math.sin(e.facing??0)*e.radius/2;mesh.position.z+=Math.cos(e.facing??0)*e.radius/2;}
     if(e.kind==='arc')mesh.rotation.z=-(e.facing??0)+Math.PI/2;
     this.scene.add(mesh);const life=e.duration??(e.kind==='cast'?.7:e.kind==='trail'?.24:.38);this.effects.push({mesh,life,max:life,kind:e.kind});
   }
@@ -28,7 +31,7 @@ export class CombatView {
       else{const head=new T.Mesh(new T.IcosahedronGeometry(.35,1),mat);head.position.y=1.2;model.add(head);for(const x of [-.12,.12]){const eye=new T.Mesh(new T.SphereGeometry(.04,6,4),new T.MeshBasicMaterial({color:'#263541'}));eye.position.set(x,1.23,.32);model.add(eye);}}
       this.allies.set(ally.id,model);this.scene.add(model);}model.position.set(ally.x,ally.kind==='bat'?.7:0,ally.z);}
     const ids=new Set(projectiles.map(p=>p.id));for(const[id,mesh]of this.shots)if(!ids.has(id)){this.dispose(mesh);this.shots.delete(id);}
-    for(const p of projectiles){let mesh=this.shots.get(p.id);if(!mesh){mesh=p.kind==='harpoon'?createHarpoonProjectile():new T.Mesh(new T.IcosahedronGeometry(Math.max(.14,p.radius),1),new T.MeshBasicMaterial({color:p.color,transparent:true,opacity:.9}));this.shots.set(p.id,mesh);this.scene.add(mesh);}mesh.position.set(p.x,p.kind==='wave'?.5:1.05,p.z);if(p.kind==='wave')mesh.scale.set(2.5,.35,1);if(p.kind==='harpoon')mesh.rotation.y=Math.atan2(p.direction.x,p.direction.z);}
+    for(const p of projectiles){let mesh=this.shots.get(p.id);if(!mesh){mesh=p.kind==='harpoon'?createHarpoonProjectile():ELECTRIC_SHOTS.has(p.kind)?new T.Mesh(new T.IcosahedronGeometry(.13,1),new T.MeshBasicMaterial({color:'#f2fdff'})):new T.Mesh(new T.IcosahedronGeometry(Math.max(.14,p.radius),1),new T.MeshBasicMaterial({color:p.color,transparent:true,opacity:.9}));this.shots.set(p.id,mesh);this.scene.add(mesh);}mesh.position.set(p.x,p.kind==='wave'?.5:1.05,p.z);if(p.kind==='wave')mesh.scale.set(2.5,.35,1);if(p.kind==='harpoon')mesh.rotation.y=Math.atan2(p.direction.x,p.direction.z);if(active&&ELECTRIC_SHOTS.has(p.kind))this.electric?.(p.x,1.05,p.z,p.direction.x,p.direction.z);}
     if(!active)return;
     for(let i=this.effects.length-1;i>=0;i--){const e=this.effects[i];e.life-=dt;(e.mesh.material as T.MeshBasicMaterial).opacity=.72*Math.max(0,e.life/e.max);if(e.kind!=='beam'&&e.kind!=='cast'){const scale=1+(1-e.life/e.max)*.65;e.mesh.scale.setScalar(scale);}if(e.life<=0){this.scene.remove(e.mesh);this.spare.push(e.mesh);this.effects.splice(i,1);}}
   }

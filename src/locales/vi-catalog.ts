@@ -28,7 +28,7 @@ export const VI_CATALOG: Record<string, string> = {
   "One more garden bed for home. Place it from your backpack, or tap a garden bed and choose ➕ Expand garden.": "Thêm một luống đất cho vườn nhà. Đặt từ ba lô hoặc chạm vào một luống đất rồi chọn ➕ Mở rộng vườn.",
   "Removes half of the crop's original growing time. Two uses ripen a newly planted crop.": "Giảm thời gian chờ bằng một nửa thời gian sinh trưởng ban đầu của cây. Dùng hai lần sẽ làm cây vừa trồng chín ngay.",
   "Equip this rod and visit a pond. Hook at the bite, then balance reeling with line tension.": "Trang bị cần rồi đến ao. Giật cần khi cá cắn câu, sau đó vừa thu dây vừa giữ độ căng phù hợp.",
-  "A stronger rod that makes difficult fish easier to land and improves rare catches.": "Cần câu khỏe hơn, giúp kéo cá lớn dễ hơn và tăng cơ hội câu được cá hiếm.",
+  "A stronger rod that makes difficult fish easier to land and improves rare catches. A strained line snaps only 30% of the time.": "Cần câu khỏe hơn, giúp kéo cá lớn dễ hơn và tăng cơ hội câu được cá hiếm. Khi dây bị căng, chỉ 30% số lần là đứt.",
   "Your garden and four trails: forest, meadow, swamp and canyon.": "Vườn nhà và bốn lối đi: rừng, đồng cỏ, đầm lầy và hẻm núi.",
   "Sweet forests, springy surprises and powerful candy creatures.": "Những khu rừng ngọt ngào, bất ngờ nảy tưng và sinh vật kẹo đầy sức mạnh.",
   "Slippery ice, frozen ponds and snowbound bosses. Plan your stopping distance.": "Mặt băng trơn trượt, ao đóng băng và trùm tuyết. Hãy tính trước khoảng cách dừng lại.",
@@ -641,9 +641,9 @@ export const VI_CATALOG: Record<string, string> = {
   "Night crystal. Place in your home garden.": "Pha Lê Đêm. Đặt trong vườn nhà.",
   "Owl statue. Place in your home garden.": "Tượng Cú Đêm. Đặt trong vườn nhà.",
 
-  "Keep this rod in your backpack. It is held automatically near a pond; your combat weapon returns away from water. Hook at the bite, then balance reeling with line tension.": "Giữ cần câu này trong ba lô. Bạn tự động cầm cần khi đến gần ao và chuyển lại sang vũ khí khi rời xa mặt nước. Giật cần khi cá cắn, rồi vừa thu dây vừa giữ độ căng phù hợp.",
+  "Keep this rod in your backpack. It is held automatically near a pond; your combat weapon returns away from water. Hook at the bite, then balance reeling with line tension. Its bamboo line snaps 60% of the time when it strains (the tension bar fills).": "Giữ cần câu này trong ba lô. Bạn tự động cầm cần khi đến gần ao và chuyển lại sang vũ khí khi rời xa mặt nước. Giật cần khi cá cắn, rồi vừa thu dây vừa giữ độ căng phù hợp. Dây tre đứt 60% số lần khi bị căng (thanh lực căng đầy).",
   "Steady fishing rod": "Cần Câu Vững Chãi",
-  "A sturdy rod with a forgiving line: tension builds slowly and heavy fish feel lighter. It can still snap, so let go of Reel when the fish surges.": "Cần câu chắc chắn với dây dẻo: lực căng tăng chậm và cá nặng nhẹ hơn. Dây vẫn có thể đứt, nên nhả nút Kéo cần khi cá vùng vẫy.",
+  "A sturdy rod with a forgiving line: tension builds slowly and heavy fish feel lighter. A strained line snaps only 10% of the time, so let go of Reel when the fish surges.": "Cần câu chắc chắn với dây dẻo: lực căng tăng chậm và cá nặng nhẹ hơn. Khi dây bị căng, chỉ 10% số lần là đứt, nên nhả nút Kéo khi cá vùng vẫy.",
 };
 
 // Farm and fruit update: original IDs stay unchanged.

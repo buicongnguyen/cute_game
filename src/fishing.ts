@@ -21,6 +21,10 @@ export interface FishingOptions<P extends FishPick=FishPick> {
   steady?:boolean;
   /** True while the bag holds a worm. */
   bait:boolean;
+  /** Chance the line snaps each time it strains (tension reaches 1); default from the rod (lineBreakChance). */
+  breakChance?:number;
+  /** Seed of the strain rolls (lineRoll; online the server's fishStart ticket, so its proof check rolls the same). Unset: `random` rolls. */
+  lineSeed?:number;
   /** Picks the fish that comes, given the rare-fish bonus of bait, rod and luck. */
   choose:(bonus:number)=>P|null;
   /** Player luck, added to the bonus. */
@@ -48,9 +52,31 @@ export const CAST = {
   flight:.5, arc:1.6,
 } as const;
 
-/** Fish swimming in each kind of water (Lh @861404); a caught fish is replaced 12 s later, another lost fish after 15 s. */
-export const FISH_PER_WATER:Record<string,number>={home:4,lake:9,swamp:4,candy:6,ice:6,lava:0,toy:5,jungle:5,ocean:7,dark:5,shadow:5};
-export const RESTOCK_AFTER_CATCH=12, RESTOCK_AFTER_LOSS=15;
+/**
+ * Fish swimming in each kind of water: twice the reference's counts (Lh @861404: home 4, lake 9 …) since the user asked for
+ * ponds full of fish (round 26). Rod and harpoon share one stock per pond (fish-hunting.ts slots). Drawn instanced
+ * (fishing-view.ts), so a fuller pond costs no more draw calls. A rod catch is replaced RESTOCK_AFTER_CATCH s later
+ * (the reference: 12 s; the user: "a few seconds", exploiting by fishing is fine), a lost fish after RESTOCK_AFTER_LOSS s.
+ */
+export const FISH_PER_WATER:Record<string,number>={home:8,lake:18,swamp:8,candy:12,ice:12,lava:0,toy:10,jungle:10,ocean:14,dark:10,shadow:10};
+export const RESTOCK_AFTER_CATCH=3, RESTOCK_AFTER_LOSS=4;
+
+/**
+ * Line strain (round 26, the user's numbers): when the tension bar fills (the fish surged while Reel was held), the line
+ * strains and snaps with the rod's chance: bamboo 60 %, golden 30 %, steady 10 %. A line that holds gives a little:
+ * tension drops back to STRAIN.relief and the fish takes STRAIN.slip of the line. Above STRAIN.warn the game warns
+ * "Line strained! Let go!" first, so every roll is announced and avoidable (let go and tension falls 0.9 a second).
+ */
+export const LINE_BREAK={bamboo:.6,golden:.3,steady:.1} as const;
+export const STRAIN={warn:.8,relief:.7,slip:.08} as const;
+/** The chance a rod's line snaps on each strain: steady rods 10 %, rods of quality 0.7+ (golden) 30 %, others (bamboo) 60 %. */
+export function lineBreakChance(rod:{quality?:number;steady?:boolean}|undefined){return rod?.steady?LINE_BREAK.steady:(rod?.quality??0)>=.7?LINE_BREAK.golden:LINE_BREAK.bamboo;}
+/** The roll for strain `index` of a fight seeded `seed`, in [0, 1): a hash, so the client and the server's proof check agree. */
+export function lineRoll(seed:number,index:number){
+  let n=Math.imul((seed>>>0)^0x9e3779b9,0x85ebca6b)^Math.imul(index+1,0xc2b2ae35);n=Math.imul(n^(n>>>16),0x7feb352d);n=Math.imul(n^(n>>>15),0x846ca68b);
+  return ((n^(n>>>16))>>>0)/4294967296;
+}
+export const lineSnaps=(seed:number,index:number,chance:number)=>lineRoll(seed,index)<chance;
 
 /**
  * Where the explorer stands and where the bobber lands for a tap at `tap`: the shore point is on the rim
@@ -83,8 +109,8 @@ export const catchWeight=(weight:number,rarity:string,bonus:number)=>weight*(rar
 
 /**
  * The steady rod's numbers (toned down in wave 9). Heavy fish count as 60 % as heavy; reeling is 1.2x and still 0.5x (not
- * 0.2x) during a surge; tension builds at 0.6x. The line snaps at 1.0 like any other, so holding Reel through every surge
- * can still lose a heavy fish, while letting go during surges lands it.
+ * 0.2x) during a surge; tension builds at 0.6x. The line strains at 1.0 like any other (a 10 % snap, LINE_BREAK), so holding
+ * Reel through every surge can still lose a heavy fish, while letting go during surges lands it.
  */
 export const STEADY={bite:.4,heavy:.6,reel:1.2,surge:.5,tension:.6} as const;
 
@@ -96,6 +122,9 @@ export class FishingSimulation<P extends FishPick=FishPick> {
   fishDistance=0; dart=0;
   /** Event counters the game and the view react to. */
   nibbles=0; missedBites=0; earlyPresses=0; fled=0; baitUsed=0; approaches=0;
+  /** Line strains rolled this cast (each one a lineRoll by index) and how many the line survived. */
+  strains=0; strainsHeld=0;
+  readonly breakChance:number; lineSeed:number|null;
   /** Where the bobber floats (an early press moves it). */
   cast:Point|null;
   reason=''; holding=false;
@@ -107,11 +136,17 @@ export class FishingSimulation<P extends FishPick=FishPick> {
     this.options=options;
     this.quality=Math.max(0,options.quality);this.steady=options.steady===true;this.bait=options.bait;this.random=options.random??Math.random;
     this.cast=options.cast?{...options.cast}:null;this.waitT=this.nextWait();
+    this.breakChance=Math.max(0,Math.min(1,options.breakChance??lineBreakChance({quality:options.quality,steady:options.steady})));
+    this.lineSeed=options.lineSeed===undefined?null:options.lineSeed>>>0;
   }
   private between(min:number,max:number){return min+this.random()*(max-min);}
   get fighting(){return this.phase==='hooked';}
   get finished(){return this.phase==='caught'||this.phase==='escaped';}
   get snapped(){return this.phase==='escaped'&&this.reason.includes('snapped');}
+  /** The tension bar is near full while hooked: the next strain may snap the line. */
+  get strained(){return this.phase==='hooked'&&this.tension>=STRAIN.warn;}
+  /** The server's seed arrives with the fish (fishStart), before it can be hooked. */
+  setLineSeed(seed:number){if(Number.isFinite(seed))this.lineSeed=seed>>>0;}
   /** Whether a worm is still on the hook after one was used. */
   setBait(available:boolean){this.bait=available;}
   get usingBait(){return this.bait;}
@@ -194,7 +229,11 @@ export class FishingSimulation<P extends FishPick=FishPick> {
       this.slack=0;
     }else{this.tension-=dt*.9;this.progress-=dt*.05*p*(surging?2.5:1);this.slack+=dt;}
     this.tension=Math.max(0,this.tension);this.progress=Math.max(0,this.progress);
-    if(this.tension>=1){this.snap();return;}
+    if(this.tension>=1){
+      const index=this.strains++;
+      if(this.lineSeed===null?this.random()<this.breakChance:lineSnaps(this.lineSeed,index,this.breakChance)){this.snap();return;}
+      this.strainsHeld++;this.tension=STRAIN.relief;this.progress=Math.max(0,this.progress-STRAIN.slip);
+    }
     if(this.slack>7){this.useBait();this.phase='escaped';this.reason='The line went slack and the fish slipped away.';return;}
     if(this.progress>=1){this.progress=1;this.useBait();this.phase='caught';this.reason='A lovely catch!';}
   }

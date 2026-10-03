@@ -35,11 +35,11 @@ export const SPECIAL_INFO: Record<string, { damage: number; text: string; radius
 
 /** Disguise skills (fixed kits, never levelled), by disguise and slot. */
 export const DISGUISE_INFO: Record<string, readonly string[]> = {
-  dz_superhero: ['Fly for 12 s (press again to land): ground attacks miss you.', 'Dive 4 m ahead and crash: ×2 damage within 5 m, ×4 if you were flying; stuns 1 s.', 'Sweep a 13 m laser across the front for 1.2 s, ×1 damage per touch.', 'Throw a boulder after 0.8 s: ×3 damage, then a 4 m blast that stuns 2 s.'],
+  dz_superhero: ['Fly for 12 s (press again to land): ground attacks miss you.', 'Dive 4 m ahead and crash: ×2 damage within 5 m, ×4 if you were flying; stuns 1 s.', 'Twin eye lasers sweep a 13 m line, 1 m wide, across the front for 1.2 s: ×1 damage per touch, leaving scorch marks.', 'Throw a boulder after 0.8 s: ×3 damage, then a 4 m blast that stuns 2 s.'],
   dz_ninja: ['Two shadow clones fight beside you for 8 s.', 'Vanish for 5 s: enemies lose you, and your next hit does triple damage.', 'Blink behind the nearest enemy within 12 m: ×3 damage and stunned for 1 s.', 'Smoke within 5 m: enemies are blinded for 4 s and you vanish for 4 s.'],
   dz_mage: ['Charge 0.8 s, then a great fireball: ×3 damage and a 4 m blast that stuns 2 s.', 'Blink 8 m ahead.', 'Turn enemies within 3 m of your target into sheep for 6 s: tiny, slow and harmless.', 'A black hole near your target pulls enemies in for 3 s (5 m), then bursts for ×3 damage.'],
   dz_knight: ['Raise your shield: no damage for 4 s.', 'Charge 11 m forward, untouchable, ×3 damage to every enemy on the way.', 'Challenge every enemy within 12 m for 6 s; you take far less damage.', 'After 0.8 s a holy blade strikes your target: ×4 damage within 3.5 m, stuns 1 s.'],
-  dz_mecha: ['Tank mode for 6 s: a 2 m shockwave every 0.25 s, ×1 damage.', 'Drop a turret that shoots for 12 s.', 'Up to 6 homing missiles at enemies within 16 m, ×2 damage with a 2 m blast.', 'Energy shield: no damage for 4 s and 20% health back.'],
+  dz_mecha: ['Tank mode for 6 s: a 2 m electric shockwave every 0.25 s, ×1 damage, stunned 0.3 s.', 'Drop a tesla turret that fires shock bolts for 12 s.', 'Up to 6 shock missiles at enemies within 16 m: ×2 damage and a 2 m electric burst.', 'Energy shield: no damage for 4 s and 20% health back.'],
   dz_dino: ['Bite an enemy within 3.2 m: a weak one (under 40% health) is swallowed whole and heals you 25%; otherwise ×3 damage.', 'A tail sweep all around: ×1.8 damage within 3.6 m and a big knock-back.', 'Roar: enemies within 9 m flee in fear for 4 s.', 'Giant form for 10 s: twice as big, +60% damage, +20 defence, and your steps shake the ground.'],
   dz_fairy: ['Healing flowers for 8 s: stay within 4 m to heal 3% every half second.', 'Float for 8 s: ground attacks miss you.', 'Charm your target for 8 s: it fights the other creatures.', 'Binding roots within 6 m: ×1 damage, stuck for 4 s, then 8 more pulses that heal you.'],
   dz_pirate: ['Set a cannon that fires for 10 s.', 'Hook the nearest enemy within 14 m and pull it to you: ×1.5 damage, stunned 2 s.', 'Your parrot marks every enemy within 12 m for 8 s: they take +50% damage.', 'A broadside of 12 cannonballs around your target, ×1.5 damage within 2 m each.'],
@@ -74,12 +74,12 @@ export const BUFF_CHIPS: Record<string, { icon: string; name: string }> = {
   lifesteal: { icon: '🩸', name: 'Life drain' }, bats: { icon: '🦇', name: 'Bat form' },
 };
 /** Enemy status marks over their HP bar, in priority order (the first two that apply are shown). */
-export const STATUS_MARKS: readonly [key: string, icon: string][] = [['stun', '💫'], ['sheep', '🐑'], ['charm', '💗'], ['fear', '😱'], ['blind', '🌫️'], ['taunt', '💢'], ['slow', '🐌'], ['mark', '🎯']];
-/** The marks a creature shows now: stun first, then statuses; at most two so the bar stays small. */
-export function statusMarks(e: { stun?: number; statuses?: Record<string, number> }, marked = false): string {
+export const STATUS_MARKS: readonly [key: string, icon: string][] = [['stun', '💫'], ['shock', '⚡'], ['sheep', '🐑'], ['charm', '💗'], ['fear', '😱'], ['blind', '🌫️'], ['taunt', '💢'], ['slow', '🐌'], ['mark', '🎯']];
+/** The marks a creature shows now: stun first, then ⚡ (an electric hit, skill-fx.ts), then statuses; at most two so the bar stays small. */
+export function statusMarks(e: { stun?: number; shock?: number; statuses?: Record<string, number> }, marked = false): string {
   let out = '', n = 0;
   for (const [key, icon] of STATUS_MARKS) {
-    const on = key === 'stun' ? (e.stun ?? 0) > .25 : key === 'mark' ? marked : (e.statuses?.[key] ?? 0) > 0;
+    const on = key === 'stun' ? (e.stun ?? 0) > .25 : key === 'shock' ? (e.shock ?? 0) > 0 : key === 'mark' ? marked : (e.statuses?.[key] ?? 0) > 0;
     if (on) { out += icon; if (++n === 2) break; }
   }
   return out;

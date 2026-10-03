@@ -5,9 +5,13 @@ import { grantCatch, type SaveState } from './model.ts';
 import { GUARDIAN_COOLDOWN_MS, GUARDIAN_HIT_RADIUS, GUARDIAN_ID, GUARDIAN_SLOT, guardianTarget } from './lake-guardian.ts';
 
 export const FISH_HUNT_COOLDOWN_MS = 1300;
-/** A caught slot restocks after 90 s with a freshly rolled species (review: a 12 s restock of a fixed golden fish paid ~200k
- * energy an hour). 90 s keeps a lake pond near 8k energy an hour from one spot, under the best rod there (~10k, steady rod). */
-export const FISH_HUNT_RESTOCK_MS = 90_000;
+/**
+ * A caught slot restocks after 18 s with a freshly rolled species. History: a 12 s restock of a fixed golden fish paid ~200k
+ * energy an hour (review), so it went to 90 s; in round 26 the user chose fast restocks and accepts fishing as a money farm,
+ * so it is 18 s again. What still holds: ordinary slots never stock legendary fish (huntChoices) and the Lake Guardian keeps
+ * its own 20 h limit (lake-guardian.ts), so a slot pays only ordinary fish.
+ */
+export const FISH_HUNT_RESTOCK_MS = 18_000;
 export const FISH_HUNT_HIT_RADIUS = .9;
 const HUNT_PLANETS = ['home', 'candy', 'ice', 'toy', 'jungle', 'shadow'];
 const MAX_TIME = Number.MAX_SAFE_INTEGER - FISH_HUNT_RESTOCK_MS;

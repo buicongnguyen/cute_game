@@ -19,7 +19,7 @@ import type { FishHuntTarget, HuntPond, HuntingState } from './fish-hunting.ts';
 
 export const GUARDIAN_ID = 'fish_guardian';
 export const GUARDIAN_POND = 'home:fish:2';
-/** The hunt intent's slot for the guardian (ordinary slots are 0..FISH_PER_WATER-1, at most 8). */
+/** The hunt intent's slot for the guardian (ordinary slots are 0..FISH_PER_WATER-1, at most 17). */
 export const GUARDIAN_SLOT = 100;
 export const GUARDIAN_CYCLE_MS = 6 * 60_000, GUARDIAN_UP_MS = 2 * 60_000, GUARDIAN_STIR_MS = 20_000;
 /** Seconds it takes to rise or sink (the view fades its glow and depth over this). */

@@ -30,7 +30,7 @@ function fixture() {
     innerWidth: 1280, innerHeight: 720, network: { role: null },
     ship: { update: noop }, gestures: { update: noop }, joystick:{update:noop},combatTimers: { advance: noop },
     combat: { update: noop, statuses: {}, airborne: 0, projectiles: [], allies: [], pose: 'idle' },
-    combatView: { update: noop }, fishingView: { update: noop, active: false }, rodTip: {},
+    combatView: { update: noop }, fishingView: { update: noop, active: false }, rodTip: {}, skillFx: { update: noop, gazeAngle: () => null },
     uiBlocked: () => context.blocked,
     world: {
       time: 0, player: { position: { y: 0 } }, position: { x: 0, z: 0 },

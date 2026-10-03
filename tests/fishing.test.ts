@@ -99,7 +99,8 @@ test('reeling a perch steadily takes about as long as in the reference (6–9 s;
 test('the rare-fish bonus, weights and fish per water follow the reference',()=>{
   close(catchBonus(false,.3),0);close(catchBonus(true,.7,.1),1.3);
   assert.equal(catchWeight(10,'common',1),10);assert.equal(catchWeight(10,'rare',1),20);assert.equal(catchWeight(10,'legendary',1),25);
-  assert.equal(FISH_PER_WATER.lake,9);assert.equal(FISH_PER_WATER.home,4);assert.equal(FISH_PER_WATER.lava,0);
+  // Round 26: twice the reference's 9 (lake) and 4 (home) fish, at the user's request.
+  assert.equal(FISH_PER_WATER.lake,18);assert.equal(FISH_PER_WATER.home,8);assert.equal(FISH_PER_WATER.lava,0);
 });
 test('weighted catches respect pool and bounded sizes',()=>{const pool=[{id:'tiny',weight:100,min:2,max:5},{id:'rare',weight:1,min:20,max:30}];assert.equal(selectCatch(pool,()=>0).id,'tiny');const result=selectCatch(pool,()=>.999);assert.equal(result.id,'rare');assert.ok(result.size>=20&&result.size<=30);});
 test('huge fish are large samples inside the ordinary size range, never oversized junk',()=>{const result=selectCatch([{id:'carp',weight:1,min:10,max:50}],()=>.99);assert.equal(result.huge,true);assert.ok(result.size<=50);assert.equal(selectCatch([{id:'boot',weight:1,min:10,max:50,junk:true}],()=>.99).huge,false);assert.equal(selectCatch([{id:'carp',weight:1,min:10,max:50}],()=>.5).huge,false);});

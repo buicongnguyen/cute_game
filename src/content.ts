@@ -1611,7 +1611,7 @@ const ITEM_FACTS: Record<string, any> = {
             "scale": 0.2,
             "dmg": 0.3,
             "cd": 1.2,
-            "shot": "rainbow"
+            "shot": "volt"
         }
     },
     "pet_parrot": {
@@ -3138,7 +3138,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             "kind": "gun",
             "range": 11,
             "cd": 0.22,
-            "shot": "rainbow"
+            "shot": "volt"
         },
         "skills": [
             {
@@ -3857,9 +3857,9 @@ WORKSHOP_CATEGORIES.forEach((category, i) => { const label = ['Volcano equipment
 for (const recipe of RECIPES)
     recipe.category = categoryLabels.get(recipe.category) || recipe.category;
 // Explain how to use specialist equipment where a stat line alone is not enough.
-ITEMS.rod.desc='Keep this rod in your backpack. It is held automatically near a pond; your combat weapon returns away from water. Hook at the bite, then balance reeling with line tension.';
-ITEMS.rod_gold.desc='A stronger rod that makes difficult fish easier to land and improves rare catches.';
-ITEMS.rod_steady.desc='A sturdy rod with a forgiving line: tension builds slowly and heavy fish feel lighter. It can still snap, so let go of Reel when the fish surges.';
+ITEMS.rod.desc='Keep this rod in your backpack. It is held automatically near a pond; your combat weapon returns away from water. Hook at the bite, then balance reeling with line tension. Its bamboo line snaps 60% of the time when it strains (the tension bar fills).';
+ITEMS.rod_gold.desc='A stronger rod that makes difficult fish easier to land and improves rare catches. A strained line snaps only 30% of the time.';
+ITEMS.rod_steady.desc='A sturdy rod with a forgiving line: tension builds slowly and heavy fish feel lighter. A strained line snaps only 10% of the time, so let go of Reel when the fish surges.';
 const worldDescriptions:Record<PlanetId,string>={home:'Your garden and four trails: forest, meadow, swamp and canyon.',candy:'Sweet forests, springy surprises and powerful candy creatures.',ice:'Slippery ice, frozen ponds and snowbound bosses. Plan your stopping distance.',lava:'Eruptions, rising lava, meteors and a hidden cave furnace. Watch the warning circles.',toy:'Ride the moving trains and open surprise gifts among giant toys.',jungle:'Changing thorn walls, poisonous plants and restorative fruit.',ocean:'Swim between islands. Refill your air at bubbles or ride a sea turtle.',cloud:'Bounce between floating islands and watch the wind near their edges.',shadow:'Explore the darkness, light ancient pillars and face the Night Lord.'};
 for(const id of Object.keys(PLANETS)as PlanetId[])PLANETS[id].description=worldDescriptions[id];
 

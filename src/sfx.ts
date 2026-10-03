@@ -3,7 +3,7 @@
  * there is nothing to download and the game stays playable offline.
  */
 export type Sound = 'alert' | 'click' | 'punch' | 'swing' | 'hit' | 'crit' | 'hurt' | 'pop' | 'splash' | 'cast' | 'reel' | 'snap'
-  | 'success' | 'level' | 'harvest' | 'shoot' | 'poof' | 'coin' | 'ready' | 'boom' | 'zap' | 'freeze' | 'magic';
+  | 'success' | 'level' | 'harvest' | 'shoot' | 'poof' | 'coin' | 'ready' | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock';
 
 export class Sfx {
   enabled = true;
@@ -71,6 +71,8 @@ export class Sfx {
       case 'ready': this.tone(ctx, t, 'sine', 880, 1320, .09, .035); break;
       case 'boom': this.tone(ctx, t, 'sine', 140, 40, .32, .3); this.hiss(ctx, t, 'lowpass', 1200, 120, .3, .24); break;
       case 'zap': this.tone(ctx, t, 'sawtooth', 1400, 300, .16, .05); this.hiss(ctx, t, 'highpass', 4000, 2000, .14, .1); break;
+      // An electric burst: a crackling zap over a short low thump.
+      case 'shock': this.tone(ctx, t, 'square', 1900, 240, .12, .035); this.hiss(ctx, t, 'highpass', 5200, 2600, .16, .09); this.tone(ctx, t + .015, 'sine', 120, 45, .2, .2); break;
       case 'freeze': [1568, 2093, 2637].forEach((f, i) => this.tone(ctx, t + i * .04, 'triangle', f, f * .98, .18, .035)); this.hiss(ctx, t, 'highpass', 5000, 3000, .2, .05); break;
       case 'magic': [784, 1175, 1568].forEach((f, i) => this.tone(ctx, t + i * .05, 'sine', f, f * 1.03, .16, .045)); break;
       case 'level': [523, 659, 784, 1046].forEach((f, i) => this.tone(ctx, t + i * .09, 'triangle', f, f, .2, .07)); break;

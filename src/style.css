@@ -679,6 +679,9 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 .reel-hud.bite { animation: reel-bite .35s ease-in-out infinite; background: radial-gradient(circle at 35% 30%, #ffe27a, #ff8a2a); }
 .reel-hud.cast { width: 92px; height: 92px; background: radial-gradient(circle at 35% 30%, #a8f58a, #37b82c); box-shadow: 0 6px 0 rgba(20, 90, 20, .35); }
 @keyframes reel-bite { 50% { transform: scale(1.1) rotate(-6deg); } }
+/* Line strained (fishing.ts STRAIN): the button flashes red until Reel is let go. */
+.reel-hud.strained { animation: reel-strain .22s ease-in-out infinite; background: radial-gradient(circle at 35% 30%, #ff9a8a, #d8262c); }
+@keyframes reel-strain { 50% { transform: scale(1.06) rotate(4deg); box-shadow: 0 0 0 6px rgba(255, 60, 60, .45); } }
 #fish-hint {
   position: absolute;
   right: 18px;

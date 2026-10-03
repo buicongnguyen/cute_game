@@ -3,6 +3,7 @@ import type { KitLibrary } from './assets.ts';
 import type { Effects } from './fx.ts';
 import { CAST, FISH_PER_WATER, RESTOCK_AFTER_CATCH, MYSTERY, type FishingState, type Point } from './fishing.ts';
 import { toonMaterial } from './toon.ts';
+import { FishSchool } from './fish-school.ts';
 
 /** Swimmable water of one pond, in world units. */
 export interface PondView { id: string; x: number; z: number; rx: number; rz: number; surface: number; waterId: string }
@@ -94,11 +95,14 @@ export class FishingView {
   /** Seconds of monotonic time; cooldowns continue while animation is suspended. */
   private readonly monotonicNow:()=>number;
 
+  /** Every kit fish (rod view, hunting view, leaps) draws instanced through this (fish-school.ts). */
+  readonly school: FishSchool;
   private fx:Effects;private kit:KitLibrary;private sound:(name:'pop'|'splash'|'cast'|'snap'|'reel')=>void;
   constructor(scene: T.Scene, fx: Effects, kit: KitLibrary, sound: (name: 'pop' | 'splash' | 'cast' | 'snap' | 'reel') => void, monotonicNow:()=>number=()=>performance.now()/1000) {
     this.fx=fx;this.kit=kit;this.sound=sound;this.monotonicNow=monotonicNow;
     this.root.name = 'fishing';
     scene.add(this.root);
+    this.school = new FishSchool(kit); this.root.add(this.school.root);
     this.bobber = this.makeBobber(); this.bobber.visible = false; this.root.add(this.bobber);
     this.linePositions = new Float32Array(this.segments * 3);
     const geometry = new T.BufferGeometry(); geometry.setAttribute('position', new T.BufferAttribute(this.linePositions, 3));
@@ -117,6 +121,8 @@ export class FishingView {
   }
 
   makeFish(species: string): { obj: T.Group; tail: T.Object3D | null } {
+    const handle = this.kit.ready ? this.school.handle(species) : null;
+    if (handle) { handle.obj.scale.setScalar(look(species)[0]); return handle; }
     const model = this.kit.ready ? this.kit.instance(species) : null;
     if (model) {
       model.traverse(o => { o.castShadow = false; });
@@ -279,6 +285,10 @@ export class FishingView {
   }
 
   update(dt: number, time: number, rodTip: T.Vector3, player: T.Vector3, sim: FishingState | null) {
+    this.step(dt, time, rodTip, player, sim);
+    this.school.render();
+  }
+  private step(dt: number, time: number, rodTip: T.Vector3, player: T.Vector3, sim: FishingState | null) {
     this.clock += dt;
     const mysteryNow=this.monotonicNow();
     for(let i=this.mysterySpawns.length-1;i>=0;i--)if(this.mysterySpawns[i].at<=mysteryNow){this.addMystery(this.mysterySpawns[i].pond);this.mysterySpawns.splice(i,1);}

@@ -45,6 +45,8 @@ import { skillTip, BUFF_CHIPS } from './skill-info.ts';
 import { skillSound } from './skill-sounds.ts';
 import { initUpgradeBench as mountUpgradeBench } from './upgrade-bench.ts';
 import { CombatView } from './combat-view.ts';
+import { SkillFx } from './skill-fx.ts';
+import { terrainHeight } from './environments.ts';
 import { FishingSimulation, selectCatch, planCast, catchWeight, resolveMysteryCatch } from './fishing.ts';
 import { GroundGestures } from './gestures.ts';
 import { ZOOM, clampZoom } from './camera-rig.ts';
@@ -123,7 +125,7 @@ const cooldowns = combatTimers.skills, skillDurations = [7,4,9,6];
 let audio: AudioContext | null = null;
 type FishPick={id:string;power:number;size:number;huge:boolean;mystery?:boolean;supergiant?:boolean};
 type MysteryState={readyAt:number;serverNow:number};
-type FishingRound={input:FishingInput;simulation:FishingSimulation<FishPick>;lastPhase:string;seen:{missed:number;bait:number;early:number};tooEarlyUntil:number;ticket?:string;pending?:boolean;ready?:FishPick;proof?:FishingProof;approach:number;pondId:string};
+type FishingRound={input:FishingInput;simulation:FishingSimulation<FishPick>;lastPhase:string;seen:{missed:number;bait:number;early:number;strains?:number};strainWarned?:boolean;tooEarlyUntil:number;ticket?:string;pending?:boolean;ready?:FishPick;proof?:FishingProof;approach:number;pondId:string};
 let fishGame:FishingRound|null=null;
 let fishingEpoch=0;
 /** Where the last line went in, so the Cast button and F recast to the same spot. */
@@ -214,6 +216,12 @@ const minimap=new Minimap($<HTMLCanvasElement>('#minimap'),$('#map-caption'),()=
 const movement = new MovementControls(world.keys);
 const joystick=mountJoystick($('#hud'),()=>started&&!uiBlocked()&&!placement&&!flight,direction=>{world.joystickInput=direction;});
 const combatView=new CombatView(world.scene);
+// Laser gaze beams, electric bolts and bursts, scorch marks and the ⚡ mark (skill-fx.ts), for the explorer and remote players alike.
+const skillFx=new SkillFx(world.scene,world.fx??null,{
+  explorerAt:(x,z)=>Math.hypot(world.position.x-x,world.position.z-z)<1.5?world.player:[...world.remotePlayers.values()].find(r=>r.mesh.visible&&Math.hypot(r.pose.x-x,r.pose.z-z)<1.5)?.mesh??null,
+  ground:(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})),targets:()=>world.enemies,sound:kind=>tone(kind)});
+combatView.electric=(x,y,z,dx,dz)=>skillFx.crackle(x,y,z,dx,dz);
+world.onElectricShot=(x,y,z,dx,dz)=>skillFx.crackle(x,y,z,dx,dz);world.onElectricPop=(x,z)=>skillFx.shock({x,z,kind:'impact',radius:.7,color:'#8fdcff',look:'shock'},false,false);
 const combat=new CombatSimulation({
   position:()=>world.position,facing:()=>world.facing,face:angle=>world.facing=angle,
   moving:()=>world.moving,skillLevel:i=>M.skillLevel(state,i),
@@ -237,6 +245,10 @@ const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else wo
 function showEffect(effect:CombatEffect){
   const fx=world.fx,at={x:effect.x,z:effect.z};
   if(effect.kind==='toss'){world.guardDogs?.toss(effect);return;}
+  if(effect.look==='eyes'&&effect.kind==='beam'){skillFx.gaze(effect);return;}
+  if(effect.look==='burn'){skillFx.burn(effect);return;}
+  // Electric bursts keep the faint disc and rim at the exact blast radius, then crackle instead of the plain ring.
+  if(effect.look==='shock'&&(effect.kind==='ring'||effect.kind==='impact')){if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.42,y:.1,thick:1,opacity:.18});fx.ring(at,{color:'#d8f4ff',from:effect.radius,to:effect.radius*1.02,life:.42,y:.12,thick:.06,opacity:.9});}skillFx.shock(effect);return;}
   if(fx&&effect.kind==='arc'){const fist=effect.radius<=1.85;fx.slash(at,effect.facing??world.facing,effect.radius+.25,effect.color,fist?{arc:1.4,life:.15,thick:.4}:{arc:Math.min(6.2,effect.arc??2.2)});return;}
   // An area hit also leaves a faint filled disc and a rim at its exact radius (skill-info.ts), so the player sees what the blast covered.
   if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.42,y:.1,thick:1,opacity:.22});fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius*1.02,life:.42,y:.12,thick:.06,opacity:.85});}
@@ -879,11 +891,11 @@ function fish(pond?:Entity|null){
       if(!round.pending){round.pending=true;const mystery=!!fishingView.mysteryNearCast();
         void (async()=>{if(round.ticket){await perform('fishCancel',{ticketId:round.ticket});delete round.ticket;}
           if(fishGame!==round)return;
-          const result=await perform<{ticketId:string;bait:boolean;pick:FishPick;mysteryState:MysteryState}>('fishStart',{water:fishingWater,rodId,cast:simulation.cast??cast,mystery});
+          const result=await perform<{ticketId:string;bait:boolean;pick:FishPick;mysteryState:MysteryState;lineSeed?:number}>('fishStart',{water:fishingWater,rodId,cast:simulation.cast??cast,mystery});
           if(!result){if(fishGame===round)endFishing();return;}
           if(fishGame!==round){void perform('fishCancel',{ticketId:result.ticketId});return;}
           if(result.mysteryState)fishingView.setMysteryAvailability(round.pondId,(result.mysteryState.readyAt-result.mysteryState.serverNow)/1000);
-          simulation.setBait(result.bait);
+          simulation.setBait(result.bait);if(result.lineSeed!==undefined)simulation.setLineSeed(result.lineSeed);
           round.ticket=result.ticketId;round.proof=new FishingProof(performance.now());round.ready=result.pick;round.pending=false;
         })();
       }return null;
@@ -903,6 +915,9 @@ function updateFishing(dt:number){
   const f=fishGame;if(!f)return;const sim=f.simulation;
   if(world.destination||world.route.length||world.moving||world.keys.size||world.joystickInput){endFishing('Fishing line reeled in.');return;}
   sim.update(dt,f.input.held);
+  // Line strain (fishing.ts STRAIN): warn as the bar fills, then a strain that held goes into the proof (the server rolls it too).
+  if(sim.strains>(f.seen.strains??0)){f.seen.strains=sim.strains;if(!sim.snapped){f.proof?.strain(performance.now(),sim.progress);floating('😮‍💨 The line held!',world.position.x,world.position.z,'xp');tone('reel');vibrate(25);}}
+  if(sim.strained&&!f.strainWarned){f.strainWarned=true;floating('⚠️ Line strained!',world.position.x,world.position.z,'alert');tone('alert');}else if(!sim.strained&&sim.tension<.68)f.strainWarned=false;// re-arm 0.12 under STRAIN.warn
   if(f.proof&&(sim.phase==='hooked'||sim.phase==='caught'))f.proof.sample(performance.now(),f.input.held,sim.tension,sim.progress,sim.phase==='caught');
   if(f.ticket&&sim.phase==='wait'&&f.lastPhase!=='wait'){const ticket=f.ticket;delete f.ticket;delete f.proof;void perform('fishCancel',{ticketId:ticket});}
   if(f.proof&&performance.now()-f.proof.startedAt>175000){endFishing('This cast has expired. Cast again.');return;}
@@ -912,8 +927,8 @@ function updateFishing(dt:number){
   if(sim.earlyPresses>f.seen.early){f.seen.early=sim.earlyPresses;f.tooEarlyUntil=sim.time+1.5;}
   if(sim.phase!==f.lastPhase){if(sim.phase==='bite')vibrate(40);f.lastPhase=sim.phase;}
   world.fishing=sim.phase==='cast'?'cast':sim.phase==='hooked'?'fight':'wait';
-  $('#fish-hint').textContent=t(sim.phase==='wait'&&sim.time<f.tooEarlyUntil?'Too early! Wait for the bobber to sink.':sim.phase==='hooked'?(sim.surge>0?'Surge! Let go!':sim.tension>.78?'Easy… let the line go':'Hold Reel to pull it in'):FISH_HINTS[sim.phase]??'');
-  const button=$('#reel-button');button.classList.toggle('bite',sim.phase==='bite');button.classList.toggle('down',f.input.held);button.setAttribute('aria-pressed',String(f.input.held));
+  $('#fish-hint').textContent=t(sim.phase==='wait'&&sim.time<f.tooEarlyUntil?'Too early! Wait for the bobber to sink.':sim.phase==='hooked'?(sim.strained?'Line strained! Let go!':sim.surge>0?'Surge! Let go!':sim.tension>.65?'Easy… let the line go':'Hold Reel to pull it in'):FISH_HINTS[sim.phase]??'');
+  const button=$('#reel-button');button.classList.toggle('bite',sim.phase==='bite');button.classList.toggle('strained',sim.strained);button.classList.toggle('down',f.input.held);button.setAttribute('aria-pressed',String(f.input.held));
   if(!sim.finished)return;
   fishGame=null;world.fishing='idle';
   if(sim.phase==='escaped'){
@@ -1093,7 +1108,7 @@ function endTryOn(){if(!tryingOn&&!world.tryOnGear&&!world.tryOnLook)return;tryi
 function basicAttack(e?:Enemy){
   if(!started||uiBlocked()||visiting||combatTimers.attackCooldown>0)return;
   prepareCombatWeapon();
-  if(combat.basic(e)){const stats=M.activeStats(state),weapon=M.weaponStats(state);combatTimers.attackCooldown=(weapon.cd??.4)/Math.max(.2,1+stats.haste);world.playerAttack(weapon.kind);tone(weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
+  if(combat.basic(e)){const stats=M.activeStats(state),weapon=M.weaponStats(state);combatTimers.attackCooldown=(weapon.cd??.4)/Math.max(.2,1+stats.haste);const volt=weapon.shot==='volt';world.playerAttack(weapon.kind,volt?'#bfefff':undefined);tone(volt?'zap':weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
 }
 world.onAttackEnemy=basicAttack;
 /** The tooltip and long-press tip of skill slot i, with the numbers at the current level (skill-info.ts). */
@@ -1128,7 +1143,7 @@ world.onDamage=(amount,source='melee',enemyId)=>{
 };
 world.onHazardEnemy=(enemy,damage)=>hit(enemy,damage,0,undefined,true,true);
 world.onEnvironmentEvent=event=>{if(event.message)toast(event.message,'🌍');save();updateHud();};
-function resetCombat(){combat.reset();combatTimers.reset();combatView.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1432,6 +1447,7 @@ function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt
   autoAttack(weaponKind);
   updateHunting(dt);updateGuardian(dt);
   fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);
+  skillFx.update(dt);world.gazeAngle=skillFx.gazeAngle(world.player);
   if(!fishGame&&!$('#reel-button').hidden&&!$('#reel-button').classList.contains('hunt')&&(performance.now()>recastUntil||world.moving))showReel(false);
   // Resizing the WebGL canvas clears its drawing buffer. Apply automatic quality changes
   // before drawing, so the browser never presents an empty frame during a quality transition.
