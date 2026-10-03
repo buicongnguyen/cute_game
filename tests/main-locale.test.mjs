@@ -22,7 +22,7 @@ afterEach(()=>setLanguage('en'));
 // are their production modules. We intercept only the dialog/DOM display boundary.
 const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
 const ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
-const renderers=['languageSelector','tryOnButton','effectText','growText','expandButton','bedUpgradeRow','plotDialog','inventory','rewardChips','materialChips','quests','shop','market','storage','upgrades','cooking','crafting','decorations','planets','map','settings','testerMore','testerOnline','help','penDialog'];
+const renderers=['languageSelector','keyboardSettings','tryOnButton','effectText','growText','expandButton','bedUpgradeRow','plotDialog','inventory','rewardChips','materialChips','quests','shop','market','storage','upgrades','cooking','crafting','decorations','planets','map','settings','testerMore','testerOnline','help','penDialog'];
 const functions=ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&renderers.includes(node.name?.text)).map(node=>node.getText(ast)).join('\n');
 const globals=['BUFF_WORDS','JOURNAL_TABS','SHOP_TABS'];
 const declarations=ast.statements.filter(node=>ts.isVariableStatement(node)&&node.declarationList.declarations.some(item=>globals.includes(item.name.getText(ast)))).map(node=>node.getText(ast)).join('\n');

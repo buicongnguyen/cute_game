@@ -109,6 +109,31 @@ async function service(t){
   return {...f,store:f.store,peers,events,execute,act};
 }
 
+test('keyboard settings persist through authoritative actions, retries and reopen without crossing accounts', async t => {
+  const h = await service(t), alice = account('alice'), bob = account('bob');
+  alice.profile.settings.difficulty = 'hard';
+  alice.profile.settings.difficultyLoweredAt = Date.now();
+  await h.store.create(alice); await h.store.create(bob);
+  const requestId = randomUUID();
+  const chosen = await h.act('alice', 'settings', {settings: {keyboardLayout: 'wasd'}}, {requestId});
+  assert.equal(chosen.profile.settings.keyboardLayout, 'wasd');
+  assert.equal(chosen.profile.settings.difficulty, 'hard');
+  const retry = await h.act('alice', 'settings', {settings: {keyboardLayout: 'wasd'}}, {requestId});
+  assert.equal(retry.replayed, true); assert.equal(retry.revision, chosen.revision);
+  const ignored = await h.act('alice', 'settings', {settings: {keyboardLayout: 'WASD', sound: false}});
+  assert.equal(ignored.profile.settings.keyboardLayout, 'wasd'); assert.equal(ignored.profile.settings.sound, false);
+  const before = await h.store.get('alice');
+  await assert.rejects(h.act('alice', 'settings', {settings: {keyboardLayout: 'classic', difficulty: 'easy'}}), status(400));
+  assert.deepEqual(await h.store.get('alice'), before, 'rejected difficulty changes roll back the entire settings command');
+  assert.equal((await h.store.get('bob')).profile.settings.keyboardLayout, undefined, 'other accounts retain the classic default');
+  const reopened = await h.reopen();
+  assert.equal((await reopened.get('alice')).profile.settings.keyboardLayout, 'wasd');
+  const execute = createActionService({store: reopened, getPeer: () => undefined});
+  const restored = await execute('alice', {rulesVersion: ACTION_RULES_VERSION, requestId: randomUUID(), expectedRevision: before.profileRevision, type: 'settings', payload: {settings: {keyboardLayout: 'classic'}}});
+  assert.equal(restored.profile.settings.keyboardLayout, 'classic');
+  assert.equal(restored.profile.settings.difficulty, 'hard');
+});
+
 test('dropped items are shared in the wild but never cross private home instances, including old drops',async t=>{
   const h=await service(t);const alice=account('alice'),bob=account('bob');alice.profile.bag.carrot=3;
   await h.store.create(alice);await h.store.create(bob);

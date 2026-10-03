@@ -151,6 +151,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
         refreshProgress(state, now); // a cook task or story step the new kitchen lock makes impossible swaps at once
       }
       if(settings&&typeof settings==='object'&&['left','right'].includes((settings as Record<string,string>).joystickSide))state.settings.joystickSide=(settings as {joystickSide:'left'|'right'}).joystickSide;
+      const keyboardLayout = settings && typeof settings === 'object' && !Array.isArray(settings) ? (settings as Record<string, unknown>).keyboardLayout : undefined;
+      if (keyboardLayout === 'classic' || keyboardLayout === 'wasd') state.settings.keyboardLayout = keyboardLayout;
       if (p.name !== undefined) state.name = string(p.name, 20).trim() || state.name;
       if (p.color !== undefined) { if (!Game.COLORS.includes(string(p.color))) return invalid(); state.color = string(p.color); }
       result = true; break;

@@ -92,6 +92,7 @@ export interface SaveState {
         /** The on-screen movement pad; off by default because the reference is tap-to-move only. */
         movePad?: boolean;
         joystickSide?: 'left'|'right';
+        keyboardLayout?: 'classic'|'wasd';
         /** "Place new beds myself": a bought bed opens the see-through placement instead of going down automatically. */
         placeBeds?: boolean;
         /** Easy (default; every old save), Normal or Hard: difficulty.ts reads prices and rules through it. */
@@ -761,6 +762,7 @@ export function parseSave(raw: string | null): SaveState | null {
         const settings = record(v.settings) ? v.settings : {};
         s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true, ...(typeof settings.movePad === 'boolean' ? { movePad: settings.movePad } : {}) };
         if(settings.joystickSide==='left'||settings.joystickSide==='right')s.settings.joystickSide=settings.joystickSide;
+        if(settings.keyboardLayout==='classic'||settings.keyboardLayout==='wasd')s.settings.keyboardLayout=settings.keyboardLayout;
         if (settings.placeBeds === true) s.settings.placeBeds = true;
         if (settings.tester === true) s.settings.tester = true;
         s.settings.difficulty = isDifficulty(settings.difficulty) ? settings.difficulty : 'easy'; // saves from before the setting play on Easy
