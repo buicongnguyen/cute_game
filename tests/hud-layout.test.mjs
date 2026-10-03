@@ -168,7 +168,7 @@ const overlaps = (a, b) => a.l < b.r - .5 && b.l < a.r - .5 && a.t < b.b - .5 &&
 const levelTexts = `[...document.querySelectorAll('.player-card *')].filter(el => !el.children.length && /\\b30\\b/.test(el.textContent) && box(el)).map(el => el.textContent)`;
 
 for (const [name, view] of Object.entries(DESKTOP)) {
-  test(`desktop HUD: skills bottom right, keyboard guide bottom left, bonus line under ADVENTURE, nothing overlaps at ${name}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 120000 }, async () => {
+  test(`desktop HUD: skills bottom right, Home by the minimap, keyboard guide bottom left, bonus line under ADVENTURE, nothing overlaps at ${name}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 120000 }, async () => {
     const { browser, page } = await openGame(view);
     try {
       await page.evaluate(async () => { const z = window.__zoo; z.state.level = 30; z.state.hp = 999; z.keysGuide.memory = { mode: 'open', uses: 0 }; await z.startChallenge('harvest'); });
@@ -190,6 +190,12 @@ for (const [name, view] of Object.entries(DESKTOP)) {
       assert.deepEqual(r.levels, ['Lv 30'], 'the level shows once, as the chip after the name'); assert.equal(r.badge, false);
       for (const mine of [...r.skills, r.guide]) for (const [what, boxes] of Object.entries(r.others)) for (const b of boxes) assert.ok(!overlaps(mine, b), `${JSON.stringify(mine)} overlaps ${what} at ${name}`);
       assert.ok(!r.skills.some(s => overlaps(s, r.guide)));
+      // Home sits where phones have it: up by the minimap, under the menu row, clear of everything else.
+      const home = r.others.home[0], mm = r.others.minimap[0];
+      assert.ok(home && home.b < r.H / 3 && home.r <= mm.l + .5 && home.t >= mm.t - .5 && home.t < mm.b, `Home is top right beside the minimap: ${JSON.stringify(home)}`);
+      assert.ok(home.r - home.l >= 44 && home.b - home.t >= 40, 'Home stays a full-size button');
+      for (const [what, boxes] of Object.entries(r.others)) if (what !== 'home') for (const b of boxes) assert.ok(!overlaps(home, b), `Home overlaps ${what} at ${name}`);
+      for (const s of r.skills) assert.ok(!overlaps(home, s));
       if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/desktop-${view.viewport.width}x${view.viewport.height}.png` });
       // The WASD layout from Settings shows in the guide; the guide folds to a chip and remembers it on this device.
       await page.evaluate(() => { window.__zoo.state.settings.keyboardLayout = 'wasd'; });

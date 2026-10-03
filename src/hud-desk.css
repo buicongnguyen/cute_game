@@ -57,14 +57,18 @@ body.indoors .keys-guide { display: none !important; }
 
 /* ---- Desktop: a fine pointer on a screen that is not phone-sized. Phones keep their layout. */
 @media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
-  /* Skills: a tidy row in the bottom-right corner above Home, under the keyboard player's right hand. */
+  /* Skills: a tidy row in the bottom-right corner, under the keyboard player's right hand (Home moved up by the minimap). */
   #hud .skills, #hud.joystick-on .skills {
-    position: absolute; display: flex; flex-direction: row; left: auto; right: 0; bottom: calc(var(--b) + 44px); top: auto;
+    position: absolute; display: flex; flex-direction: row; left: auto; right: 0; bottom: 22px; top: auto;
     transform: none; gap: 16px; max-width: none;
   }
   #hud .skill { width: 60px; height: 60px; }
   #hud .skill > span { font-size: 27px; }
-  #hud .home-button { right: 0; bottom: 18px; }
+  /* Home: the phones' spot, beside the minimap under the menu row, away from the fight keys and the trackers. */
+  #hud .home-button, #hud.joystick-on .home-button, #hud.joystick-on.joystick-right .home-button {
+    position: fixed; left: auto; right: calc(var(--edge) + var(--mm) + 10px); top: calc(var(--edge) + var(--safe-top) + var(--b) + 8px); bottom: auto;
+    height: 40px; padding: 0 14px 0 11px; border-width: 2px; font-size: 18px;
+  }
   /* The guide replaces the old one-line hint. */
   #hud .control-hint:not(.house-hint) { display: none; }
   .keys-guide {

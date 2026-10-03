@@ -9,8 +9,11 @@
 .item-group-head button::after { content: '▾'; margin-left: auto; font-size: .9em; opacity: .7; transition: transform .15s; }
 .item-group.folded .item-group-head button::after { transform: rotate(-90deg); }
 .item-group.folded > div { display: none; }
-/* Each group's grid flows inside the panel's own scroll; one scroll per panel, not one per group. */
-.item-group > .inventory-grid, .item-group > .chest-grid { max-height: none; overflow: visible; }
+/* One scroll per panel: #dialog-body is a scrolling flex column, and a flex child that clips (an item grid with its own
+   max-height + overflow) may shrink below its content. That squashed the wardrobe/bag grid into a strip of half-cut tiles
+   once the purpose note and the picked item's card took room. Panel parts keep their full height; only the panel scrolls. */
+#dialog-body > * { flex-shrink: 0; }
+#dialog-body .inventory-grid, #dialog-body .chest-grid { max-height: none; overflow: visible; }
 .tester-jump a { white-space: nowrap; }
 @media (max-width: 560px), (max-height: 520px) {
   .item-group { margin-bottom: 4px; }
