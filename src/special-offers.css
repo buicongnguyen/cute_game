@@ -1,0 +1,4 @@
+/* Outfitters' special offers (special-offers.ts): a tag by the name, a soft line on the usual way, a warm card edge. */
+.special-tag { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 999px; background: linear-gradient(135deg, #b77bff, #ff8fc8); color: #fff; font-size: .74em; font-weight: 900; line-height: 1.5; vertical-align: .1em; white-space: nowrap; box-shadow: 0 1px 0 #8a4fd6; }
+.shop-item.special-offer { border-color: #e6c8ff; background: linear-gradient(180deg, #fffaff, #fff); }
+#dialog-body .special-note { margin: 2px 0 0; color: #7a55b0; font-size: 11.5px; font-weight: 700; line-height: 1.3; }

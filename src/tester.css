@@ -7,6 +7,8 @@
 .tester-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.5rem;margin:.3rem 0 .8rem}
 .tester-card{display:grid;grid-template-columns:auto 1fr;gap:.2rem .5rem;align-items:center;padding:.5rem;border-radius:14px;background:rgba(255,255,255,.55)}
 .tester-card>span{font-size:1.6rem;grid-row:span 2}
+/* Blender icons (main.ts art) sit in the same 44 px spot the emoji used. */
+.tester-card>span .art-icon{width:44px;height:44px}
 .tester-card strong{font-size:.85rem;line-height:1.1}
 .tester-card small{grid-column:2}
 .tester-card button{grid-column:1/-1;min-height:40px}

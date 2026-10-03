@@ -1,5 +1,6 @@
 import { ITEMS, canonicalItem, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
+import { hasMaterials, useMaterials } from './pantry.ts';
 
 export const MAX_FORGE_LEVEL = 15;
 export const FORGE_SUCCESS_CHANCE = .3;
@@ -18,7 +19,8 @@ export function canForge(state: SaveState, raw: string): boolean {
   const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined;
   if (!item?.weapon || item.weapon.kind === 'rod' || item.slot !== 'weapon' || !(state.bag[id]! > 0) || forgeLevel(state, id) >= MAX_FORGE_LEVEL) return false;
   const cost = forgeCost(forgeLevel(state, id));
-  return state.energy >= cost.energy && Object.entries(cost.materials).every(([id, count]) => (state.bag[id] || 0) - (Object.values(state.gear).includes(id) ? 1 : 0) >= count!);
+  // Bag first, then the house chest at home (pantry.ts), like the workshop recipes beside it.
+  return state.energy >= cost.energy && hasMaterials(state, cost.materials);
 }
 export interface ForgeOutcome { id: string; success: boolean; level: number; energy: number; materials: Inventory }
 /** Randomness is selected by the server online; failures consume one attempt without downgrading. */
@@ -26,8 +28,8 @@ export function forgeWeapon(state: SaveState, raw: string, random: () => number 
   const id = canonicalItem(raw); if (!canForge(state, id)) return null;
   const level = forgeLevel(state, id), cost = forgeCost(level), roll = random();
   if (!Number.isFinite(roll) || roll < 0 || roll >= 1) return null;
+  if (!useMaterials(state, cost.materials)) return null;
   state.energy -= cost.energy;
-  for (const [material, count] of Object.entries(cost.materials)) { state.bag[material]! -= count!; if (!state.bag[material]) delete state.bag[material]; }
   const success = roll < FORGE_SUCCESS_CHANCE;
   (state.forge ??= {})[id] = level + Number(success);
   return { id, success, level: level + Number(success), ...cost };

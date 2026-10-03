@@ -32,7 +32,7 @@ test('groups follow the panel order and run weakest to strongest inside',()=>{
 });
 test('each group has a header "icon label · count", and a folded group stays in the markup but hidden',()=>{
   const html=IG.groupedHtml('test',IG.groupItems(['hat_straw','hat_bear','sword_wood'],id=>id),id=>`<i>${id}</i>`);
-  assert.match(html,/🎩 Hats · 2/);assert.match(html,/⚔️ Swords · 1/);assert.match(html,/data-action="toggle-group" data-panel="test" data-group="hat" aria-expanded="true"/);
+  assert.match(html,/🎩 Hats · 2/);assert.match(html,/⚔️ Melee weapons · 1/);assert.match(html,/data-action="toggle-group" data-panel="test" data-group="hat" aria-expanded="true"/);
   assert.equal(IG.toggleFold('test','hat'),true);assert.ok(IG.isFolded('test','hat'));
   assert.match(IG.groupedHtml('test',IG.groupItems(['hat_straw'],id=>id),id=>id),/item-group folded/);
   assert.equal(IG.toggleFold('test','hat'),false);

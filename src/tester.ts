@@ -1,6 +1,7 @@
 import * as M from './model.ts';
 import { RECIPES, PLANETS, ITEMS, type PlanetId } from './content.ts';
 import { FARM_DISHES } from './farm.ts';
+import { specialIds } from './special-offers.ts';
 import { MAX_FORGE_LEVEL } from './weapon-forge.ts';
 import { groupItems, groupedHtml, groupTitle, GEAR_ORDER } from './item-groups.ts';
 export { MAX_FORGE_LEVEL };
@@ -61,11 +62,14 @@ export const COOKABLE: { id: string; category: string }[] = [
   ...Object.keys(ITEMS).filter(id => id.startsWith('cooked_')).map(id => ({ id, category: KITCHEN_COOKED })),
   ...FARM_DISHES.map(d => ({ id: d.id, category: KITCHEN_DISHES })),
 ];
+export const SPECIAL_CATEGORY = 'Special offers';
 /** Every buyable, crafted, furnace-made or cooked item once, at its cheapest energy price (at least 1), ignoring materials and level. */
 export const TESTER_ITEMS: { id: string; price: number; category: string }[] = (() => {
   const best = new Map<string, { id: string; price: number; category: string }>();
   for (const r of RECIPES) { if (!Object.hasOwn(ITEMS, r.result)) continue; const price = Math.max(1, r.energy), had = best.get(r.result); if (!had || price < had.price) best.set(r.result, { id: r.result, price, category: r.category }); }
   for (const c of COOKABLE) if (Object.hasOwn(ITEMS, c.id) && !best.has(c.id)) best.set(c.id, { ...c, price: 1 });
+  // Boss-only specials (special-offers.ts) have no recipe: the tester pays their market value, not the outfitters' ϟ10,000+.
+  for (const id of specialIds()) if (!best.has(id)) best.set(id, { id, price: Math.max(1, ITEMS[id].sell || 1), category: SPECIAL_CATEGORY });
   return [...best.values()];
 })();
 export const FRIEND_PRICE = 500;
@@ -96,11 +100,19 @@ export function testerMakeButton(s: M.SaveState, action: 'tester-craft' | 'teste
   const attr = action === 'tester-craft' ? `data-index="${key}"` : `data-item="${esc(String(key))}"`;
   return `<button class="soft-button tester-make" data-action="${action}" ${attr} ${s.energy < energy ? 'disabled' : ''}>🧪 ${energy ? `ϟ ${energy.toLocaleString()}` : esc(t(action === 'tester-forge' ? 'Max' : 'Make'))}</button>`;
 }
+/** The outfitters' tester button on a special offer: the tester price (TESTER_ITEMS), not the ϟ10,000 special one. */
+export function testerBuyButton(s: M.SaveState, id: string) {
+  const item = isTester(s) ? TESTER_ITEMS.find(i => i.id === id) : undefined;
+  return item ? `<button class="soft-button tester-make" data-action="tester-buy" data-item="${esc(id)}" ${s.energy < item.price ? 'disabled' : ''}>🧪 ϟ ${item.price.toLocaleString()}</button>` : '';
+}
+/** An item's icon: main.ts passes its Blender art; the emoji is the fallback (and what the Node tests see). */
+type Art = (id: string, icon: string) => string;
+const emoji: Art = (_id, icon) => icon;
 /** Tester kitchen section: every cooked food and dish, with or without ingredients. */
-export function testerKitchenHtml(s: M.SaveState) {
+export function testerKitchenHtml(s: M.SaveState, art: Art = emoji) {
   if (!isTester(s)) return '';
   return `<div class="section-label">${TESTER_TAG} ${esc(t('Cook anything, no ingredients'))}</div><div class="tester-grid">${COOKABLE.map(c => { const it = ITEMS[c.id], have = s.bag[c.id] || 0;
-    return `<div class="tester-card"><span>${it.icon}</span><strong>${esc(t(it.name))}</strong>${have ? `<small>×${have}</small>` : ''}${testerMakeButton(s, 'tester-cook', c.id)}</div>`; }).join('')}</div>`;
+    return `<div class="tester-card"><span>${art(c.id, it.icon)}</span><strong>${esc(t(it.name))}</strong>${have ? `<small>×${have}</small>` : ''}${testerMakeButton(s, 'tester-cook', c.id)}</div>`; }).join('')}</div>`;
 }
 
 export function testerBuy(s: M.SaveState, id: string) {
@@ -117,7 +129,7 @@ export function testerPlanets(s: M.SaveState) { if (!isTester(s)) return false; 
 export function testerMaxLevel(s: M.SaveState) { if (!isTester(s) || s.level >= TESTER_LEVEL) return false; s.level = TESTER_LEVEL; s.xp = 0; s.hp = M.maxHp(s); return true; }
 
 function esc(v: string): string { return v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!)); }
-export function testerShopHtml(s: M.SaveState) {
+export function testerShopHtml(s: M.SaveState, art: Art = emoji) {
   const friends = FRIEND_IDS.map(id => {
     const has = (s.friends ?? []).some(f => f.id === id);
     return `<div class="tester-card"><span>🧑‍🌾</span><strong>${esc(t(FRIENDS[id].name))}</strong>${has ? `<small>✓ ${esc(t('Rescued'))}</small>` : `<button class="primary" data-action="tester-friend" data-item="${id}" ${s.energy < FRIEND_PRICE ? 'disabled' : ''}>ϟ ${FRIEND_PRICE}</button>`}</div>`;
@@ -125,7 +137,7 @@ export function testerShopHtml(s: M.SaveState) {
   // Item groups (item-groups.ts) in the shops' order; cards inside run weakest to strongest.
   const groups = groupItems(TESTER_ITEMS, i => i.id, GEAR_ORDER, i => i.price);
   const card = (i: typeof TESTER_ITEMS[number]) => { const it = ITEMS[i.id], have = s.bag[i.id] || 0;
-    return (`<div class="tester-card"><span>${it.icon}</span><strong>${esc(t(it.name))}</strong>${have ? `<small>×${have}</small>` : ''}<button class="soft-button" data-action="tester-buy" data-item="${i.id}" ${s.energy < i.price ? 'disabled' : ''}>ϟ ${i.price.toLocaleString()}</button></div>`); };
+    return (`<div class="tester-card"><span>${art(i.id, it.icon)}</span><strong>${esc(t(it.name))}</strong>${have ? `<small>×${have}</small>` : ''}<button class="soft-button" data-action="tester-buy" data-item="${i.id}" ${s.energy < i.price ? 'disabled' : ''}>ϟ ${i.price.toLocaleString()}</button></div>`); };
   const items = groupedHtml('tester', groups, card, 'tester-grid').replace(/<section class="item-group([^"]*)" data-group="(\w+)"/g, '<section class="item-group$1" data-group="$2" id="tester-cat-$2"');
   return `<p class="intro">${esc(t('Tester mode: every item, crafted, forged and cooked ones too, without materials or level, still paid with energy.'))} ϟ ${s.energy.toLocaleString()}</p>`
     + `<div class="button-row"><button class="soft-button" data-action="tester-planets">${esc(t('Unlock all planets'))}</button><button class="soft-button" data-action="tester-level">${esc(t('Max level'))}</button></div>`

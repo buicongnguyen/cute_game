@@ -15,7 +15,7 @@ import { t } from './i18n.ts';
 export type GroupId = 'hat' | 'outfit' | 'boots' | 'sword' | 'ranged' | 'tool' | 'pet' | 'disguise' | 'food' | 'harvest' | 'fish' | 'seed' | 'material' | 'decor' | 'kit';
 export const GROUPS: Record<GroupId, { icon: string; label: string }> = {
   hat: { icon: '🎩', label: 'Hats' }, outfit: { icon: '👕', label: 'Outfits' }, boots: { icon: '👢', label: 'Boots' },
-  sword: { icon: '⚔️', label: 'Swords' }, ranged: { icon: '🏹', label: 'Guns & staffs' }, tool: { icon: '🎣', label: 'Rods & tools' },
+  sword: { icon: '⚔️', label: 'Melee weapons' }, ranged: { icon: '🏹', label: 'Guns & staffs' }, tool: { icon: '🎣', label: 'Rods & tools' },
   pet: { icon: '🐾', label: 'Pets' }, disguise: { icon: '🎭', label: 'Disguises' }, food: { icon: '🍲', label: 'Food' },
   harvest: { icon: '🥕', label: 'Harvest' }, fish: { icon: '🐟', label: 'Fish' }, seed: { icon: '🌱', label: 'Seeds' },
   material: { icon: '🪵', label: 'Materials' }, decor: { icon: '🪴', label: 'Decorations' }, kit: { icon: '📦', label: 'Kits' },

@@ -3,7 +3,7 @@ export const VI_GROUPS: Record<string, string> = {
   'Hats': 'Mũ',
   'Outfits': 'Trang phục',
   'Boots': 'Giày',
-  'Swords': 'Kiếm',
+  'Melee weapons': 'Vũ khí cận chiến',
   'Guns & staffs': 'Súng & gậy phép',
   'Rods & tools': 'Cần câu & dụng cụ',
   'Pets': 'Thú cưng',

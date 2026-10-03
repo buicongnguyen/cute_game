@@ -17711,5 +17711,218 @@
         "bytes": 4670
       }
     }
+  },
+  "dishes": {
+    "generator": "art/blender/kit/build_dishes.py",
+    "size": [
+      160,
+      160
+    ],
+    "assets": {
+      "cooked_radish": {
+        "file": "icons/items/cooked_radish.webp",
+        "bytes": 6458
+      },
+      "cooked_carrot": {
+        "file": "icons/items/cooked_carrot.webp",
+        "bytes": 4914
+      },
+      "cooked_pumpkin": {
+        "file": "icons/items/cooked_pumpkin.webp",
+        "bytes": 4644
+      },
+      "cooked_mint": {
+        "file": "icons/items/cooked_mint.webp",
+        "bytes": 4720
+      },
+      "cooked_chili": {
+        "file": "icons/items/cooked_chili.webp",
+        "bytes": 4938
+      },
+      "cooked_candy": {
+        "file": "icons/items/cooked_candy.webp",
+        "bytes": 5094
+      },
+      "cooked_bean": {
+        "file": "icons/items/cooked_bean.webp",
+        "bytes": 4770
+      },
+      "cooked_star": {
+        "file": "icons/items/cooked_star.webp",
+        "bytes": 5412
+      },
+      "cooked_berry": {
+        "file": "icons/items/cooked_berry.webp",
+        "bytes": 5566
+      },
+      "cooked_coffee": {
+        "file": "icons/items/cooked_coffee.webp",
+        "bytes": 4116
+      },
+      "cooked_moonflower": {
+        "file": "icons/items/cooked_moonflower.webp",
+        "bytes": 5972
+      },
+      "cooked_magnetmelon": {
+        "file": "icons/items/cooked_magnetmelon.webp",
+        "bytes": 5718
+      },
+      "cooked_melon": {
+        "file": "icons/items/cooked_melon.webp",
+        "bytes": 5582
+      },
+      "cooked_clover": {
+        "file": "icons/items/cooked_clover.webp",
+        "bytes": 5542
+      },
+      "cooked_glowshroom": {
+        "file": "icons/items/cooked_glowshroom.webp",
+        "bytes": 4790
+      },
+      "cooked_iceberry": {
+        "file": "icons/items/cooked_iceberry.webp",
+        "bytes": 4494
+      },
+      "cooked_goldcorn": {
+        "file": "icons/items/cooked_goldcorn.webp",
+        "bytes": 5958
+      },
+      "cooked_dragonfruit": {
+        "file": "icons/items/cooked_dragonfruit.webp",
+        "bytes": 5284
+      },
+      "cooked_rainbowrose": {
+        "file": "icons/items/cooked_rainbowrose.webp",
+        "bytes": 6104
+      },
+      "cooked_apple": {
+        "file": "icons/items/cooked_apple.webp",
+        "bytes": 5902
+      },
+      "cooked_grape": {
+        "file": "icons/items/cooked_grape.webp",
+        "bytes": 6276
+      },
+      "cooked_mango": {
+        "file": "icons/items/cooked_mango.webp",
+        "bytes": 6478
+      },
+      "cooked_pineapple": {
+        "file": "icons/items/cooked_pineapple.webp",
+        "bytes": 6188
+      },
+      "cooked_coconut": {
+        "file": "icons/items/cooked_coconut.webp",
+        "bytes": 5524
+      },
+      "cooked_durian": {
+        "file": "icons/items/cooked_durian.webp",
+        "bytes": 6082
+      },
+      "cooked_lychee": {
+        "file": "icons/items/cooked_lychee.webp",
+        "bytes": 5512
+      },
+      "cooked_peach": {
+        "file": "icons/items/cooked_peach.webp",
+        "bytes": 5706
+      },
+      "cooked_fish_perch": {
+        "file": "icons/items/cooked_fish_perch.webp",
+        "bytes": 5894
+      },
+      "cooked_fish_clown": {
+        "file": "icons/items/cooked_fish_clown.webp",
+        "bytes": 6768
+      },
+      "cooked_fish_puffer": {
+        "file": "icons/items/cooked_fish_puffer.webp",
+        "bytes": 6652
+      },
+      "cooked_fish_carp": {
+        "file": "icons/items/cooked_fish_carp.webp",
+        "bytes": 5680
+      },
+      "cooked_fish_shark": {
+        "file": "icons/items/cooked_fish_shark.webp",
+        "bytes": 5310
+      },
+      "cooked_fish_rainbow": {
+        "file": "icons/items/cooked_fish_rainbow.webp",
+        "bytes": 5610
+      },
+      "cooked_fish_catfish": {
+        "file": "icons/items/cooked_fish_catfish.webp",
+        "bytes": 5906
+      },
+      "cooked_fish_koi": {
+        "file": "icons/items/cooked_fish_koi.webp",
+        "bytes": 5428
+      },
+      "cooked_fish_eel": {
+        "file": "icons/items/cooked_fish_eel.webp",
+        "bytes": 5022
+      },
+      "cooked_fish_swordfish": {
+        "file": "icons/items/cooked_fish_swordfish.webp",
+        "bytes": 5422
+      },
+      "cooked_fish_jelly": {
+        "file": "icons/items/cooked_fish_jelly.webp",
+        "bytes": 5336
+      },
+      "cooked_fish_icepike": {
+        "file": "icons/items/cooked_fish_icepike.webp",
+        "bytes": 5428
+      },
+      "cooked_fish_whale": {
+        "file": "icons/items/cooked_fish_whale.webp",
+        "bytes": 5306
+      },
+      "cooked_fish_kraken": {
+        "file": "icons/items/cooked_fish_kraken.webp",
+        "bytes": 5314
+      },
+      "cooked_fish_golden": {
+        "file": "icons/items/cooked_fish_golden.webp",
+        "bytes": 5872
+      },
+      "cooked_fish_sunfish": {
+        "file": "icons/items/cooked_fish_sunfish.webp",
+        "bytes": 6020
+      },
+      "cooked_fish_angler": {
+        "file": "icons/items/cooked_fish_angler.webp",
+        "bytes": 5442
+      },
+      "cooked_fish_manta": {
+        "file": "icons/items/cooked_fish_manta.webp",
+        "bytes": 5616
+      },
+      "cooked_meat": {
+        "file": "icons/items/cooked_meat.webp",
+        "bytes": 5428
+      },
+      "omelette": {
+        "file": "icons/items/omelette.webp",
+        "bytes": 5296
+      },
+      "pancake": {
+        "file": "icons/items/pancake.webp",
+        "bytes": 5790
+      },
+      "milkshake": {
+        "file": "icons/items/milkshake.webp",
+        "bytes": 3522
+      },
+      "cheese": {
+        "file": "icons/items/cheese.webp",
+        "bytes": 3724
+      },
+      "guard": {
+        "file": "icons/items/guard.webp",
+        "bytes": 4300
+      }
+    }
   }
 }

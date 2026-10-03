@@ -1165,9 +1165,6 @@ h1 > span {
 .art-icon { width: 100%; height: 100%; object-fit: contain; display: block; }
 /* Inline icons in ingredient lists; cooked food wears a little flame badge. */
 .mini-art { display: inline-grid; place-items: center; width: 1.5em; height: 1.5em; vertical-align: -.4em; font-size: 1em; line-height: 1; }
-.cooked-art { position: relative; display: grid; place-items: center; width: 100%; height: 100%; }
-.cooked-art > i { position: absolute; right: -2px; bottom: -2px; font-size: 16px; font-style: normal; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .3)); }
-.mini-art .cooked-art > i { font-size: 9px; }
 .shop-item strong,
 .quest-row strong,
 .crop-row strong { display: block; font-size: var(--t-lg); line-height: 1.25; overflow-wrap: anywhere; }
