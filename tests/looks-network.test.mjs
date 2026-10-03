@@ -41,14 +41,16 @@ test('the server validates look purchases and the whole combination reaches othe
     return client;
   }
   const ann = await explorer('look_ann'), ben = await explorer('look_ben');
-  assert.equal(ben.joined.players.find(p => p.id === ann.id).look, 'boy-chibi-none');
-  assert.notEqual((await action(ann, 'wearLook', { id: 'girl-tall-none' })).status, 200, 'an unowned height cannot be worn');
-  assert.notEqual((await action(ann, 'buyLook', { id: 'boy-huge-none' })).status, 200, 'an unknown option cannot be bought');
-  const bought = await action(ann, 'buyLook', { id: 'girl-teen-bunny' }); assert.equal(bought.status, 200); assert.equal(bought.data.profile.looks.style, 'girl-teen-bunny'); assert.equal(bought.data.profile.energy, 270);
+  assert.equal(ben.joined.players.find(p => p.id === ann.id).look, 'boy-chibi-none-bare');
+  assert.notEqual((await action(ann, 'wearLook', { id: 'girl-tall-none-bare' })).status, 200, 'an unowned height cannot be worn');
+  assert.notEqual((await action(ann, 'buyLook', { id: 'boy-huge-none-bare' })).status, 200, 'an unknown option cannot be bought');
+  const bought = await action(ann, 'buyLook', { id: 'slim-grown-bunny-penguin' }); assert.equal(bought.status, 200); assert.equal(bought.data.profile.looks.style, 'slim-grown-bunny-penguin'); assert.equal(bought.data.profile.energy, 500 - 160 - 150 - 120);
   ann.send({ type: 'pose', x: 1, z: 2 });
-  const pose = await ben.next(m => m.type === 'pose' && m.player.id === ann.id); assert.equal(pose.player.look, 'girl-teen-bunny');
-  const worn = await action(ann, 'wearLook', { id: 'boy-teen-none' }); assert.equal(worn.status, 200);
+  const pose = await ben.next(m => m.type === 'pose' && m.player.id === ann.id); assert.equal(pose.player.look, 'slim-grown-bunny-penguin');
+  const worn = await action(ann, 'wearLook', { id: 'boy-grown-none-bare' }); assert.equal(worn.status, 200);
   await new Promise(r => setTimeout(r, 120)); // the server keeps poses at least 65 ms apart
   ann.send({ type: 'pose', x: 1.5, z: 2 });
-  assert.equal((await ben.next(m => m.type === 'pose' && m.player.id === ann.id && m.player.x === 1.5)).player.look, 'boy-teen-none');
+  assert.equal((await ben.next(m => m.type === 'pose' && m.player.id === ann.id && m.player.x === 1.5)).player.look, 'boy-grown-none-bare');
+  assert.equal((await action(ann, 'wearLook', { id: 'girl-grown-bunny' })).status, 200, 'a first-builder id still works');
+  assert.notEqual((await action(ann, 'wearLook', { id: 'girl-grown-bunny-tiger' })).status, 200, 'an unbought hood cannot be worn');
 });

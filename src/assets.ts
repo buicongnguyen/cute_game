@@ -2,7 +2,7 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toToon, toonify } from './toon.ts';
-import { DEFAULT_LOOK, DEFAULT_PIVOTS, FIT, bodyFile, splitLook, type Fit, type LookId } from './looks.ts';
+import { BUILD, DEFAULT_LOOK, DEFAULT_PIVOTS, bodyFile, fitOf, splitLook, type Body, type Fit, type LookId } from './looks.ts';
 import { loadWithRetry, DEFAULT_POLICY, type RetryPolicy } from './art-retry.ts';
 
 // Vite supplies the deployment prefix; direct Node tests use the root default.
@@ -465,10 +465,13 @@ export function mergeIntoPart(part: T.Object3D, extra: T.BufferGeometry) {
   const merged = mergeGeometries([base, add], false); add.dispose(); if (base !== target.geometry) base.dispose();
   if (!merged) return false; target.geometry = merged; return true;
 }
-/** Puts a combination's ears (as the head-leaf, which mergeEars bakes into the head) and tail on a baked hero. */
-function dressEars(hero: T.Object3D, parts: T.Object3D, ears: string, fit: Partial<Record<string, Fit>>) {
+/**
+ * Puts a combination's ears or head decoration (as the head-leaf, which mergeEars bakes into the head) and tail on a
+ * baked hero. A decoration (an animal hood) brings its own ears, so it takes the head-leaf instead of the ears.
+ */
+function dressEars(hero: T.Object3D, parts: T.Object3D, ears: string, deco: string, fit: Partial<Record<string, Fit>>) {
   const head = hero.getObjectByName('head'), body = hero.getObjectByName('body'); if (!head || !body) return;
-  const earPiece = parts.getObjectByName('ears-' + ears), tailPiece = parts.getObjectByName('tail-' + ears);
+  const earPiece = parts.getObjectByName(deco !== 'bare' ? 'deco-' + deco : 'ears-' + ears), tailPiece = parts.getObjectByName('tail-' + ears);
   const earGeo = earPiece && bakePart(earPiece, DEFAULT_PIVOTS.head, fit.head), tailGeo = tailPiece && bakePart(tailPiece, DEFAULT_PIVOTS.body, fit.body);
   if (tailGeo) { mergeIntoPart(body, tailGeo); tailGeo.dispose(); }
   const like = head.children.find((o): o is T.Mesh => o instanceof T.Mesh && !!(o.material as Plain).vertexColors);
@@ -476,16 +479,31 @@ function dressEars(hero: T.Object3D, parts: T.Object3D, ears: string, fit: Parti
   head.getObjectByName('head-leaf')?.removeFromParent(); // ears take the sprout's place (and its tuck-under-hats rule)
   const leaf = new T.Group(); leaf.name = 'head-leaf'; leaf.add(new T.Mesh(earGeo, like.material)); head.add(leaf);
 }
+/**
+ * A build (looks.ts BUILD) on a raw body file, before baking: the torso and limbs widen or narrow about their own
+ * pivots and the shoulders and hips spread, so the same meshes (and draws) make a sturdy or slim explorer.
+ */
+export function applyBuild(scene: T.Object3D, body: Body) {
+  const b = BUILD[body]; if (!b) return;
+  const widen = (name: string, x: number, z: number, spread: number) => {
+    const part = scene.getObjectByName(name); if (!part) return;
+    part.position.x *= spread; const m = new T.Matrix4().makeScale(x, 1, z);
+    for (const child of part.children) if (child instanceof T.Mesh) child.applyMatrix4(m);
+  };
+  widen('body', b.torso[0], b.torso[1], 1);
+  for (const arm of ['arm-left', 'arm-right']) widen(arm, b.limb, b.limb, b.spread);
+  for (const leg of ['leg-left', 'leg-right']) widen(leg, b.limb, b.limb, b.hips);
+}
 const heroStyleKits = new Map<string, HeroLibrary>();
 export function heroKitFor(look: LookId): HeroLibrary {
   if (look === DEFAULT_LOOK) return heroKit;
   let kit = heroStyleKits.get(look);
   if (!kit) {
     const l = splitLook(look), file = bodyFile(l.body, l.height); let parts: T.Group | null = null;
-    const load: SceneLoader = async () => { const [scene, p] = await Promise.all([rawScene(file), l.ears === 'none' ? null : rawScene('hero-parts.glb')]); parts = p;
+    const load: SceneLoader = async () => { const [scene, p] = await Promise.all([rawScene(file), l.ears === 'none' && l.deco === 'bare' ? null : rawScene('hero-parts.glb')]); parts = p; applyBuild(scene, l.body);
       if (p) scene.getObjectByName('head-leaf')?.removeFromParent(); // before baking, or the head bake would swallow the sprout beside the ears
       return scene; };
-    kit = new HeroLibrary(modelUrl(file), load, DEFAULT_POLICY, hero => { if (parts) dressEars(hero, parts, l.ears, FIT[l.height]); });
+    kit = new HeroLibrary(modelUrl(file), load, DEFAULT_POLICY, hero => { if (parts) dressEars(hero, parts, l.ears, l.deco, fitOf(look)); });
     heroStyleKits.set(look, kit);
   }
   return kit;

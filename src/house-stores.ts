@@ -12,7 +12,7 @@ export const INDOOR_STORES: Record<'cook' | 'craft' | 'travel' | 'wardrobe' | 'l
   craft: { title: 'Craft-room workbench', kicker: 'CRAFT ROOM · AT HOME', icon: '🪚', purpose: 'Make things from your materials at home. The ember forge for weapons is in the village.' },
   travel: { title: 'Study globe', kicker: 'STUDY · AT HOME', icon: '🌍', purpose: 'Plan your next trip here. The starship takes off from its pad in the village.' },
   wardrobe: { title: 'Wardrobe', kicker: 'BEDROOM · AT HOME', icon: '👗', purpose: 'Change what you wear: only your clothes, pets and gear. Buy new ones at the Little outfitters in the village.' },
-  looks: { title: 'Mirror · Looks', kicker: 'BEDROOM · AT HOME', icon: '🪞', purpose: 'Body, height and ears. Hats, outfits and weapons are sold at the Little outfitters and worn from the wardrobe.' },
+  looks: { title: 'Mirror · Looks', kicker: 'BEDROOM · AT HOME', icon: '🪞', purpose: 'Body, height, ears and animal hoods. Hats, outfits and weapons are sold at the Little outfitters and worn from the wardrobe.' },
 };
 /** The indoor dress of a panel opened inside the cottage, or null (outdoors, or a panel with no indoor twin). */
 export function indoorStore(type: string, inside: boolean, fromWardrobe = false): IndoorStore | null {

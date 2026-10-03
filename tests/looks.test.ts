@@ -6,7 +6,7 @@ import * as M from '../src/model.ts';
 import * as F from '../src/friends.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DEFAULT_LOOK, DEFAULT_PIVOTS, FIT, LOOK_IDS, OPTIONS, ROWS, bodyFile, buyLook, lookOf, lookPrice, ownsLook, parseLooks, splitLook, swapOption, wearLook, type Body, type Fit, type Height } from '../src/looks.ts';
+import { BUILD, DECOS, DEFAULT_LOOK, DEFAULT_PIVOTS, FIT, LOOK_IDS, OPTIONS, ROWS, bodyFile, buyLook, fitOf, joinLook, lookOf, lookPrice, ownsLook, parseLooks, rowOf, splitLook, swapOption, toLook, wearLook, type Body, type Fit, type Height, type LookId } from '../src/looks.ts';
 import { HeroLibrary, heroKitFor, tuckEars, useHeroLoader } from '../src/assets.ts';
 import { HIP, applyGait, gaitSwing, newGait, stepGait } from '../src/walk-cycle.ts';
 import { GROWTH, earnedStage, friendHeight, friendStage, growUp } from '../src/growth.ts';
@@ -60,37 +60,50 @@ test('a grown friend is drawn at its stage, and the friend panel shows the stage
 });
 
 // ----------------------------------------------------------------- looks
-test('looks: body, height and ears combine; options are bought once, for both bodies, and switching is free', () => {
+test('looks: body, height, ears and head decoration combine; options are bought once, for every body, and switching is free', () => {
   const s = M.newGame(); s.energy = 1000;
-  assert.equal(LOOK_IDS.length, 18); assert.equal(lookOf(s), DEFAULT_LOOK); assert.equal(DEFAULT_LOOK, 'boy-chibi-none');
-  assert.equal(ownsLook(s, 'girl-chibi-none'), true, 'both bodies are free'); assert.equal(OPTIONS.boy.price + OPTIONS.girl.price + OPTIONS.chibi.price + OPTIONS.none.price, 0);
-  assert.ok(act(s, 'wearLook', { id: 'girl-chibi-none' })); assert.equal(s.energy, 1000);
-  assert.equal(wearLook(s, 'girl-tall-none'), false, 'tall not owned yet');
-  assert.equal(lookPrice(s, 'girl-tall-cat'), OPTIONS.tall.price + OPTIONS.cat.price);
-  assert.ok(act(s, 'buyLook', { id: 'girl-tall-cat' })); assert.equal(s.energy, 1000 - 270); assert.equal(lookOf(s), 'girl-tall-cat');
-  assert.deepEqual(splitLook(lookOf(s)), { body: 'girl', height: 'tall', ears: 'cat' });
-  assert.throws(() => act(s, 'buyLook', { id: 'girl-tall-cat' }), 'nothing left to buy');
-  assert.ok(act(s, 'wearLook', { id: 'boy-tall-cat' }), 'owned options unlock for the other body too'); assert.equal(s.energy, 730);
-  assert.ok(act(s, 'buyLook', { id: 'bunny' }), 'one option, swapped into the worn look'); assert.equal(lookOf(s), 'boy-tall-bunny'); assert.equal(s.energy, 580);
-  assert.ok(act(s, 'wearLook', { id: 'girl-chibi-cat' })); assert.equal(s.energy, 580, 'switching is free');
-  assert.throws(() => act(s, 'wearLook', { id: 'girl-teen-cat' }), 'teen is not owned');
-  s.energy = 10; assert.equal(buyLook(s, 'girl-teen-none'), false, 'too dear'); assert.equal(buyLook(s, 'mermaid'), false, 'unknown');
-  assert.equal(buyLook(s, 'boy-huge-none'), false); assert.equal(wearLook(s, 'boy-chibi'), false);
-  assert.equal(swapOption('boy-chibi-none', 'girl'), 'girl-chibi-none'); assert.equal(swapOption('boy-chibi-none', 'teen'), 'boy-teen-none'); assert.equal(swapOption('boy-chibi-none', 'cat'), 'boy-chibi-cat');
+  assert.equal(LOOK_IDS.length, 4 * 5 * 3 * 13); assert.equal(new Set(LOOK_IDS).size, LOOK_IDS.length);
+  assert.equal(lookOf(s), DEFAULT_LOOK); assert.equal(DEFAULT_LOOK, 'boy-chibi-none-bare');
+  assert.deepEqual(ROWS.body, ['boy', 'girl', 'sturdy', 'slim']); assert.deepEqual(ROWS.height, ['tiny', 'chibi', 'teen', 'tall', 'grown']);
+  assert.equal(DECOS.length, 12); assert.deepEqual(ROWS.deco, ['bare', ...DECOS]);
+  for (const id of LOOK_IDS) assert.equal(joinLook(splitLook(id)), id);
+  for (const row of Object.values(ROWS)) for (const o of row) assert.equal(ROWS[rowOf(o)], row, `${o} belongs to one row`);
+  for (const b of ROWS.body) assert.equal(OPTIONS[b].price, 0, 'every body is free');
+  assert.ok(act(s, 'wearLook', { id: 'slim-chibi-none-bare' })); assert.equal(s.energy, 1000);
+  assert.equal(wearLook(s, 'girl-grown-none-bare'), false, 'grown not owned yet');
+  assert.equal(lookPrice(s, 'girl-grown-cat-fox'), OPTIONS.grown.price + OPTIONS.cat.price + OPTIONS.fox.price);
+  assert.ok(act(s, 'buyLook', { id: 'girl-grown-cat-fox' })); assert.equal(s.energy, 1000 - 160 - 150 - 120); assert.equal(lookOf(s), 'girl-grown-cat-fox');
+  assert.deepEqual(splitLook(lookOf(s)), { body: 'girl', height: 'grown', ears: 'cat', deco: 'fox' });
+  assert.throws(() => act(s, 'buyLook', { id: 'girl-grown-cat-fox' }), 'nothing left to buy');
+  assert.ok(act(s, 'wearLook', { id: 'sturdy-grown-cat-bare' }), 'owned options unlock for every body'); assert.equal(s.energy, 570);
+  assert.ok(act(s, 'buyLook', { id: 'panda' }), 'one option, swapped into the worn look'); assert.equal(lookOf(s), 'sturdy-grown-cat-panda'); assert.equal(s.energy, 440);
+  assert.ok(act(s, 'buyLook', { id: 'tiny' })); assert.equal(lookOf(s), 'sturdy-tiny-cat-panda');
+  assert.ok(act(s, 'wearLook', { id: 'girl-chibi-cat-fox' })); assert.equal(s.energy, 360, 'switching is free');
+  assert.throws(() => act(s, 'wearLook', { id: 'girl-teen-cat-bare' }), 'teen is not owned');
+  s.energy = 10; assert.equal(buyLook(s, 'girl-teen-none-bare'), false, 'too dear'); assert.equal(buyLook(s, 'mermaid'), false, 'unknown');
+  assert.equal(buyLook(s, 'boy-huge-none-bare'), false); assert.equal(wearLook(s, 'boy-chibi'), false); assert.equal(wearLook(s, 'boy-chibi-none-dragon'), false);
+  assert.equal(swapOption(DEFAULT_LOOK, 'slim'), 'slim-chibi-none-bare'); assert.equal(swapOption(DEFAULT_LOOK, 'grown'), 'boy-grown-none-bare');
+  assert.equal(swapOption(DEFAULT_LOOK, 'cat'), 'boy-chibi-cat-bare'); assert.equal(swapOption(DEFAULT_LOOK, 'owl'), 'boy-chibi-none-owl');
+  // The longest id fits the action's string limit.
+  const longest = LOOK_IDS.reduce((a, b) => b.length > a.length ? b : a); s.energy = 1e4; assert.ok(act(s, 'buyLook', { id: longest }), longest);
 });
 
-test('looks are saved, old single looks migrate onto the builder, and tampered saves fall back to the default', () => {
-  const s = M.newGame(); s.energy = 1000; buyLook(s, 'boy-teen-cat');
-  const back = M.parseSave(JSON.stringify(s))!; assert.deepEqual(back.looks, { owned: ['teen', 'cat'], style: 'boy-teen-cat' });
+test('looks are saved; first-builder ids and old single looks migrate; tampered saves fall back to the default', () => {
+  const s = M.newGame(); s.energy = 1000; buyLook(s, 'boy-teen-cat-koala');
+  const back = M.parseSave(JSON.stringify(s))!; assert.deepEqual(back.looks, { owned: ['teen', 'cat', 'koala'], style: 'boy-teen-cat-koala' });
   const old = JSON.parse(JSON.stringify(s)); delete old.looks; assert.equal(lookOf(M.parseSave(JSON.stringify(old))!), DEFAULT_LOOK);
+  // The first builder's three-part ids gain no decoration.
+  assert.equal(toLook('girl-tall-cat'), 'girl-tall-cat-bare'); assert.equal(toLook('boy-chibi-none'), DEFAULT_LOOK); assert.equal(toLook('girl-huge-cat'), undefined);
+  assert.deepEqual(parseLooks({ owned: ['teen', 'cat'], style: 'boy-teen-cat' }), { owned: ['teen', 'cat'], style: 'boy-teen-cat-bare' });
   // Tall -> Tall height; Cat boy -> Boy + Cat; Bunny girl -> Girl + Bunny.
-  assert.deepEqual(parseLooks({ owned: ['tall'], style: 'tall' }), { owned: ['tall'], style: 'boy-tall-none' });
-  assert.deepEqual(parseLooks({ owned: ['catboy'], style: 'catboy' }), { owned: ['cat'], style: 'boy-chibi-cat' });
-  assert.deepEqual(parseLooks({ owned: ['tall', 'catboy', 'bunny'], style: 'bunny' }), { owned: ['tall', 'cat', 'bunny'], style: 'girl-chibi-bunny' });
+  assert.deepEqual(parseLooks({ owned: ['tall'], style: 'tall' }), { owned: ['tall'], style: 'boy-tall-none-bare' });
+  assert.deepEqual(parseLooks({ owned: ['catboy'], style: 'catboy' }), { owned: ['cat'], style: 'boy-chibi-cat-bare' });
+  assert.deepEqual(parseLooks({ owned: ['tall', 'catboy', 'bunny'], style: 'bunny' }), { owned: ['tall', 'cat', 'bunny'], style: 'girl-chibi-bunny-bare' });
   assert.deepEqual(parseLooks({ owned: ['bunny'], style: 'default' }), { owned: ['bunny'], style: DEFAULT_LOOK });
   const legacy = JSON.parse(JSON.stringify(s)); legacy.looks = { owned: ['tall', 'bunny'], style: 'tall' };
-  const migrated = M.parseSave(JSON.stringify(legacy))!; assert.equal(lookOf(migrated), 'boy-tall-none'); assert.ok(ownsLook(migrated, 'girl-tall-bunny'), 'the old purchases combine');
-  assert.deepEqual(parseLooks({ owned: ['tall', 'x', 'tall', 'girl'], style: 'girl-chibi-bunny' }), { owned: ['tall'], style: DEFAULT_LOOK }, 'a look not owned is not worn; free options are never stored');
+  const migrated = M.parseSave(JSON.stringify(legacy))!; assert.equal(lookOf(migrated), 'boy-tall-none-bare'); assert.ok(ownsLook(migrated, 'girl-tall-bunny-bare'), 'the old purchases combine');
+  assert.deepEqual(parseLooks({ owned: ['tall', 'x', 'tall', 'girl'], style: 'girl-chibi-bunny-bare' }), { owned: ['tall'], style: DEFAULT_LOOK }, 'a look not owned is not worn; free options are never stored');
+  assert.deepEqual(parseLooks({ owned: ['fox'], style: 'boy-chibi-none-panda' }), { owned: ['fox'], style: DEFAULT_LOOK }, 'an unbought hood is not worn');
   assert.equal(parseLooks('tall'), undefined); assert.equal(lookOf({ looks: { owned: [], style: 'nonsense' as never } }), DEFAULT_LOOK);
 });
 
@@ -111,17 +124,31 @@ function glb(file: string) {
   return { doc, nodes, at, box, tris, index: (name: string) => nodes.findIndex(n => n.name === name), parent };
 }
 const PARTS = ['body', 'head', 'arm-left', 'arm-right', 'leg-left', 'leg-right'];
-const BODIES = ROWS.body.flatMap(b => ROWS.height.map(h => ({ body: b as Body, height: h as Height, file: bodyFile(b as Body, h as Height) })));
-/** World.wearKit's placement: relative to the default pivot, then the height's fit, then onto the part. */
+/** Every body (builds included) x height; the builds reuse the boy and girl files. */
+const BODIES = ROWS.body.flatMap(b => ROWS.height.map(h => ({ body: b as Body, height: h as Height, file: bodyFile(b as Body, h as Height), id: `${b}-${h}-none-bare` as LookId })));
+/**
+ * A hero file's part position and box as the game holds them after applyBuild: limbs spread along x, meshes widen about
+ * their part's pivot.
+ */
+function built(file: string, body: Body) {
+  const g = glb(file), b = BUILD[body];
+  const spread = (name: string) => !b ? 1 : /arm/.test(name) ? b.spread : /leg/.test(name) ? b.hips : 1;
+  const widen = (name: string) => !b ? [1, 1] : name === 'body' ? b.torso : PARTS.includes(name) && name !== 'head' ? [b.limb, b.limb] : [1, 1];
+  const at = (name: string) => { const p = g.at(g.index(name)); const own = PARTS.includes(name) ? name : (g.nodes[g.parent.get(g.index(name))!].name!); if (own !== name) { const parent = g.at(g.parent.get(g.index(name))!); return p.sub(parent).multiply(new T.Vector3(widen(own)[0], 1, widen(own)[1])).add(at(own)); } return p.setX(p.x * spread(name)); };
+  const box = (name: string) => { const i = g.index(name), b0 = g.box(i), o = g.at(i), [x, z] = widen(name), s = new T.Vector3(x, 1, z), n = at(name);
+    return new T.Box3(b0.min.clone().sub(o).multiply(s).add(n), b0.max.clone().sub(o).multiply(s).add(n)); };
+  return { g, at, box };
+}
+/** World.wearKit's placement: relative to the default pivot, then the combination's fit, then onto the part. */
 const place = (b: T.Box3, tag: string, f: Fit | undefined, at: T.Vector3) => {
   const out = b.clone().translate(new T.Vector3(...DEFAULT_PIVOTS[tag]).negate());
   if (f) { out.min.multiply(new T.Vector3(...f.scale)).add(new T.Vector3(...f.offset)); out.max.multiply(new T.Vector3(...f.scale)).add(new T.Vector3(...f.offset)); }
-  return out.translate(at);
+  return new T.Box3().setFromPoints([out.min, out.max]).translate(at);
 };
 
-test('six body files keep the hero\'s parts and hand empties; their pivots agree with FIT', () => {
+test('ten body files keep the hero\'s parts and hand empties; their pivots agree with FIT; tiny < chibi < teen < tall < grown', () => {
   const base = glb('hero.glb');
-  assert.equal(new Set(BODIES.map(b => b.file)).size, 6);
+  assert.equal(new Set(BODIES.map(b => b.file)).size, 10, 'builds add no files');
   for (const [name, p] of Object.entries(DEFAULT_PIVOTS)) assert.ok(base.at(base.index(name)).distanceTo(new T.Vector3(...p)) < .002, name);
   for (const { file, height } of BODIES) {
     const g = glb(file), fit = FIT[height];
@@ -129,67 +156,106 @@ test('six body files keep the hero\'s parts and hand empties; their pivots agree
     for (const n of g.nodes) assert.ok(!n.rotation && !n.scale, `${file}: ${n.name} is unrotated and unscaled, as gear placement assumes`);
     assert.equal(g.nodes[g.parent.get(g.index('head-leaf'))!].name, 'head', `${file}: the sprout rides the head and hides under hats`);
     if (height === 'chibi') { for (const name of PARTS) assert.ok(g.at(g.index(name)).distanceTo(base.at(base.index(name))) < .002, `${file} keeps the ${name} pivot`); continue; }
-    // Legs drop by the fit's offset: the hips rise by the extra shin, and the soles stay on the ground.
+    // Legs move by the fit's offset: the hips rise (or drop) by the shin change, and the soles stay on the ground.
     assert.ok(Math.abs(g.at(g.index('leg-left')).y - (DEFAULT_PIVOTS['leg-left'][1] - fit['leg-left']!.offset[1])) < .002, `${file} hips match FIT`);
     assert.ok(Math.abs(g.box(g.index('leg-left')).min.y) < .02, `${file} stands on the ground`);
   }
-  const teen = glb(bodyFile('boy', 'teen')), tall = glb(bodyFile('boy', 'tall'));
-  assert.ok(base.at(base.index('head')).y < teen.at(teen.index('head')).y && teen.at(teen.index('head')).y < tall.at(tall.index('head')).y, 'chibi < teen < tall');
+  const top = (h: Height) => { const g = glb(bodyFile('boy', h)); return g.box(g.index('head')).max.y; };
+  const tops = ROWS.height.map(h => top(h as Height)); for (let i = 1; i < tops.length; i++) assert.ok(tops[i] > tops[i - 1], `${ROWS.height[i]} is taller (${tops.map(t => t.toFixed(2))})`);
+  // Grown is the human-like one: about five heads tall (chibi about two).
+  const heads = (h: Height) => { const g = glb(bodyFile('boy', h)), b = g.box(g.index('head')); return b.max.y / (b.max.y - b.min.y); };
+  assert.ok(heads('chibi') < 2.2 && heads('grown') > 4.8, `heads tall: chibi ${heads('chibi').toFixed(2)}, grown ${heads('grown').toFixed(2)}`);
 });
 
-test('every wearable (hats, outfits, boots, weapons, disguises) attaches to every combination and lands on its part', () => {
+test('every wearable (hats, outfits, boots, weapons, disguises) attaches to every body, build and height and lands on its part', () => {
   const kits = ['gear-wear.glb', 'gear-weapons.glb', 'disguises.glb'].map(glb);
   let checked = 0;
-  for (const { file, height } of BODIES) {
-    const hero = glb(file), fit = FIT[height];
+  for (const { file, body, id } of BODIES) {
+    const hero = built(file, body), fit = fitOf(id);
     for (const kit of kits) for (const [i, n] of kit.nodes.entries()) {
       if (n.mesh === undefined || !n.name) continue;
       const item = M.ITEMS[kit.nodes[kit.parent.get(i)!]?.name ?? n.name];
       const tag = n.name.includes('@') ? n.name.split('@')[1] : item?.slot === 'hat' ? 'head' : item?.slot === 'weapon' ? 'hand-right' : 'body';
-      const part = hero.index(tag); assert.ok(part >= 0, `${file}: ${n.name} finds ${tag}`);
-      const b = place(kit.box(i), tag, fit[tag], hero.at(part));
-      if (tag === 'hand-right') { assert.ok(b.distanceToPoint(hero.at(part)) < .05, `${file}: ${n.name} is held in the fist`); checked++; continue; }
-      const target = hero.box(part).expandByScalar(/halo/.test(n.name) ? .4 : .12); // the halo floats above the head on purpose
-      assert.ok(b.intersectsBox(target), `${file}: ${n.name} sits on ${tag}`);
-      if (/boots/.test(n.name)) assert.ok(Math.abs(b.min.y) < .08, `${file}: ${n.name} stands on the ground (${b.min.y.toFixed(3)})`);
-      if (item?.slot === 'hat' && tag === 'head') assert.ok(b.max.y > hero.box(part).max.y - .05, `${file}: ${n.name} covers the top of the head (ears tuck under it)`);
+      assert.ok(hero.g.index(tag) >= 0, `${file}: ${n.name} finds ${tag}`);
+      const b = place(kit.box(i), tag, fit[tag], hero.at(tag));
+      if (tag === 'hand-right') { assert.ok(b.distanceToPoint(hero.at(tag)) < .05, `${id}: ${n.name} is held in the fist`); checked++; continue; }
+      const target = hero.box(tag).expandByScalar(/halo/.test(n.name) ? .4 : .12); // the halo floats above the head on purpose
+      assert.ok(b.intersectsBox(target), `${id}: ${n.name} sits on ${tag}`);
+      if (/boots/.test(n.name)) assert.ok(Math.abs(b.min.y) < .08, `${id}: ${n.name} stands on the ground (${b.min.y.toFixed(3)})`);
+      if (item?.slot === 'hat' && tag === 'head') assert.ok(b.max.y > hero.box(tag).max.y - .05, `${id}: ${n.name} covers the top of the head (ears and hoods tuck under it)`);
       checked++;
     }
   }
-  assert.ok(checked > 6 * 100, `checked ${checked} pieces`);
+  assert.ok(checked > 20 * 100, `checked ${checked} pieces`);
 });
 
-test('ears sit on the head and tails on the back at every height; budgets: triangles near the hero, 7 meshes per body', () => {
+const partTris = (parts: ReturnType<typeof glb>, p: string) => { const n = parts.nodes[parts.index(p)], m = n.mesh ?? parts.nodes[n.children![0]].mesh!; return parts.doc.meshes[m].primitives.reduce((k: number, q: { indices: number }) => k + parts.doc.accessors[q.indices].count / 3, 0); };
+test('ears and hoods sit on the head and tails on the back at every height and build; triangles stay near the hero, 7 meshes per body', () => {
   const parts = glb('hero-parts.glb'), base = glb('hero.glb');
-  for (const name of ['ears-cat', 'ears-bunny', 'tail-cat', 'tail-bunny']) assert.ok(parts.index(name) >= 0, name);
+  for (const name of ['ears-cat', 'ears-bunny', 'tail-cat', 'tail-bunny', ...DECOS.map(d => 'deco-' + d)]) assert.ok(parts.index(name) >= 0, name);
   const partBox = (name: string) => { const i = parts.index(name), b = new T.Box3(); for (const [j, n] of parts.nodes.entries()) if ((j === i || parts.parent.get(j) === i) && n.mesh !== undefined) b.union(parts.box(j)); return b; };
-  for (const { file, height } of BODIES) {
-    const hero = glb(file), fit = FIT[height], head = hero.index('head'), body = hero.index('body');
+  const report: string[] = [];
+  for (const { file, body, id } of BODIES) {
+    const hero = built(file, body), fit = fitOf(id), headBox = hero.box('head'), bodyBox = hero.box('body');
     for (const ears of ['cat', 'bunny']) {
-      const e = place(partBox('ears-' + ears), 'head', fit.head, hero.at(head)), t = place(partBox('tail-' + ears), 'body', fit.body, hero.at(body));
-      assert.ok(e.intersectsBox(hero.box(head)) && e.max.y > hero.box(head).max.y, `${file}: ${ears} ears rise from the head`);
-      assert.ok(t.intersectsBox(hero.box(body).expandByScalar(.05)) && t.min.z < hero.box(body).min.z - .02, `${file}: ${ears} tail pokes out at the back`);
-      const tris = hero.tris - 128 /* the sprout gives way to the ears */ + [`ears-${ears}`, `tail-${ears}`].reduce((n, p) => n + parts.doc.meshes[parts.nodes[parts.index(p)].mesh ?? parts.nodes[parts.nodes[parts.index(p)].children![0]].mesh!].primitives.reduce((k: number, q: { indices: number }) => k + parts.doc.accessors[q.indices].count / 3, 0), 0);
-      assert.ok(tris <= base.tris * 1.25, `${file} + ${ears}: ${tris} triangles (hero ${base.tris})`);
+      const e = place(partBox('ears-' + ears), 'head', fit.head, hero.at('head')), t = place(partBox('tail-' + ears), 'body', fit.body, hero.at('body'));
+      assert.ok(e.intersectsBox(headBox) && e.max.y > headBox.max.y, `${id}: ${ears} ears rise from the head`);
+      assert.ok(t.intersectsBox(bodyBox.clone().expandByScalar(.05)) && t.min.z < bodyBox.min.z - .02, `${id}: ${ears} tail pokes out at the back`);
     }
-    assert.equal(hero.doc.meshes.length, 7, `${file}: one mesh per part plus head-leaf (the game bakes each into one draw plus the shirt)`);
+    let worst = 0;
+    for (const deco of DECOS) {
+      const d = place(partBox('deco-' + deco), 'head', fit.head, hero.at('head'));
+      assert.ok(d.intersectsBox(headBox) && d.max.y > headBox.max.y - .02, `${id}: the ${deco} hood covers the crown`);
+      assert.ok(d.min.y > headBox.min.y, `${id}: the ${deco} hood stays on the head`);
+      // The hood replaces the sprout and the ears; the tail can come with it.
+      worst = Math.max(worst, hero.g.tris - 128 + partTris(parts, 'deco-' + deco) + partTris(parts, 'tail-cat'));
+    }
+    assert.ok(worst <= base.tris * 1.25, `${file} + a hood and a tail: ${worst} triangles (hero ${base.tris})`);
+    report.push(`${file} ${worst}`);
+    assert.equal(hero.g.doc.meshes.length, 7, `${file}: one mesh per part plus head-leaf (the game bakes each into one draw plus the shirt)`);
   }
+  for (const deco of DECOS) assert.ok(partTris(parts, 'deco-' + deco) <= 360, `${deco}: ${partTris(parts, 'deco-' + deco)} triangles`);
 });
 
 const disk = async (url: string) => { const file = url.split('/').pop()!.split('?')[0], bytes = readFileSync(new URL(`../public/assets/models/${file}`, import.meta.url)); return (await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '')).scene; };
 const draws = (o: T.Object3D) => { let n = 0; o.traverse(m => { if (m instanceof T.Mesh && m.visible && m.layers.mask) n++; }); return n; };
-test('at run time every combination draws exactly what the default explorer draws, and ears tuck under hats', async () => {
+const headVerts = (hero: T.Object3D) => hero.getObjectByName('head')!.children.find((o): o is T.Mesh => o instanceof T.Mesh && !!o.geometry.getAttribute('color'))!;
+test('at run time every body, build, height, ears and hood draws no more than the default explorer; hoods replace ears and tuck under hats', async () => {
   useHeroLoader(disk);
-  const plain = new HeroLibrary('hero.glb', disk); await plain.load(); const want = draws(plain.instance('#4aa8ff')!), bare = new Map<string, number>();
-  for (const id of LOOK_IDS) {
+  const plain = new HeroLibrary('hero.glb', disk); await plain.load(); const want = draws(plain.instance('#4aa8ff')!);
+  // Every body x height with every ear and every hood (the ears x hoods cross is covered on two bodies).
+  const ids = LOOK_IDS.filter(id => { const l = splitLook(id); return l.ears === 'none' || l.deco === 'bare' || (l.height === 'chibi' && ['boy', 'slim'].includes(l.body)); });
+  const bare = new Map<string, number>(), withEars = new Map<string, number>();
+  for (const id of ids) {
     const kit = id === DEFAULT_LOOK ? plain : heroKitFor(id); await kit.load(); assert.ok(kit.ready, id);
-    const hero = kit.instance('#ff7ab0')!, l = splitLook(id);
+    const hero = kit.instance('#ff7ab0')!, l = splitLook(id), key = l.body + l.height;
     assert.ok(draws(hero) <= want, `${id}: no more draws than the default (${draws(hero)} vs ${want})`);
-    const head = hero.getObjectByName('head')!, mesh = head.children.find((o): o is T.Mesh => o instanceof T.Mesh && !!o.geometry.getAttribute('color'))!, before = mesh.geometry.getAttribute('position').count;
-    if (l.ears === 'none') bare.set(l.body + l.height, before); else assert.ok(before > bare.get(l.body + l.height)!, `${id}: the ears are baked into the head`);
+    const mesh = headVerts(hero), before = mesh.geometry.getAttribute('position').count;
+    if (l.ears === 'none' && l.deco === 'bare') bare.set(key, before);
+    else assert.ok(before > bare.get(key)!, `${id}: the ears or hood are baked into the head`);
+    if (l.deco === 'bare' && l.ears !== 'none') withEars.set(key + l.ears, before);
+    if (l.deco !== 'bare' && l.ears !== 'none') {
+      const alone = ids.includes(`${l.body}-${l.height}-none-${l.deco}` as LookId) ? headVerts((await (async () => { const k = heroKitFor(`${l.body}-${l.height}-none-${l.deco}` as LookId); await k.load(); return k; })()).instance('#fff')!).geometry.getAttribute('position').count : -1;
+      assert.equal(before, alone, `${id}: a hood replaces the ears (same head with or without the Ears option)`);
+    }
     tuckEars(hero, true);
-    if (l.ears !== 'none') assert.ok(mesh.geometry.getAttribute('position').count < before, `${id}: the ears tuck under a hat`);
+    if (l.ears !== 'none' || l.deco !== 'bare') assert.ok(mesh.geometry.getAttribute('position').count < before, `${id}: the ears or hood tuck under a hat`);
   }
+  // Builds really change the shape: the sturdy torso is wider than the boy's, the slim one narrower than the girl's.
+  const width = async (id: LookId) => { const k = id === DEFAULT_LOOK ? plain : heroKitFor(id); await k.load(); const h = k.instance('#fff')!; h.updateMatrixWorld(true); return new T.Box3().setFromObject(h.getObjectByName('body')!).getSize(new T.Vector3()).x; };
+  assert.ok(await width('sturdy-chibi-none-bare') > await width(DEFAULT_LOOK) * 1.1);
+  assert.ok(await width('slim-chibi-none-bare') < await width('girl-chibi-none-bare') * .95);
+});
+
+test('an explorer wearing a hood and a hat shows the hat only; the hood comes back when the hat comes off', async () => {
+  useHeroLoader(disk);
+  const look: LookId = 'girl-tall-cat-panda', kit = heroKitFor(look); await kit.load();
+  const { heroKit } = await import('../src/assets.ts'); (heroKit as unknown as { loadScene: typeof disk }).loadScene = disk; await heroKit.load(); // the default kit fetches in a browser
+  const w = world(), head = (gear: M.SaveState['gear']) => headVerts(w.lookAvatar('#ff7ab0', gear, look)).geometry.getAttribute('position').count;
+  const bare = head({}), hatted = head({ hat: 'hat_straw' });
+  assert.ok(hatted < bare, `the hood tucks under the hat (${hatted} < ${bare})`);
+  assert.deepEqual(w.lookAvatar('#fff', {}, look).userData.fit, fitOf(look), 'gear on this look uses the combination fit');
+  assert.equal(head({}), bare, 'hat off: the hood is back');
 });
 
 // ------------------------------------------------------------- presence
@@ -200,9 +266,9 @@ function world() {
   }) as World;
 }
 test('an online explorer\'s whole combination travels with its pose and rebuilds the avatar only when it changes', () => {
-  const w = world(); w.addRemotePlayer('ann', { x: 1, z: 1, look: 'boy-chibi-none' });
+  const w = world(); w.addRemotePlayer('ann', { x: 1, z: 1, look: 'boy-chibi-none' as never });
   const first = w.remotePlayers.get('ann')!.mesh; w.updateRemotePlayer('ann', { x: 2, z: 1 }); assert.equal(w.remotePlayers.get('ann')!.mesh, first, 'a move keeps the avatar');
-  w.updateRemotePlayer('ann', { x: 2, z: 1, look: 'girl-tall-bunny' }); const second = w.remotePlayers.get('ann')!; assert.notEqual(second.mesh, first); assert.equal(second.pose.look, 'girl-tall-bunny');
+  w.updateRemotePlayer('ann', { x: 2, z: 1, look: 'girl-tall-bunny-owl' }); const second = w.remotePlayers.get('ann')!; assert.notEqual(second.mesh, first); assert.equal(second.pose.look, 'girl-tall-bunny-owl');
   assert.equal(second.mesh.scale.x, HERO_SCALE, 'a look never changes the explorer\'s size');
   w.updateRemotePlayer('bob', { x: 0, z: 0, look: 'catboy' as never }); assert.ok(w.remotePlayers.get('bob'), 'an old look id from an older client still draws');
 });

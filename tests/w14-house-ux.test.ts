@@ -116,7 +116,7 @@ test('indoor stores are their own places, in English and Vietnamese', () => {
   const titles = Object.values(INDOOR_STORES).map(s => s.title);
   assert.equal(new Set(titles).size, titles.length);
   for (const outdoor of ['A warm meal for the trail', 'Made with a little magic', 'Starship Sprout', 'Your explorer & backpack', 'Mirror, mirror', 'Little outfitters']) assert.ok(!titles.includes(outdoor), outdoor);
-  assert.ok(INDOOR_STORES.looks.purpose.includes('Body, height and ears'));
+  assert.ok(INDOOR_STORES.looks.purpose.includes('Body, height, ears and animal hoods'));
   assert.ok(purposeHtml(INDOOR_STORES.cook).includes('store-purpose'));
   assert.equal(wardrobeItem({ slot: 'hat' }), true); assert.equal(wardrobeItem({}), false); assert.equal(wardrobeItem(undefined), false);
   setLanguage('vi');

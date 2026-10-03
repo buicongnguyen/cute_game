@@ -23,3 +23,39 @@ body:has(#dialog-layer.trying-on) #house-bubble { display: none; }
   .look-row { gap: 3px; }
   .look-footer { position: sticky; bottom: 0; margin-top: 8px; padding: 8px 0 2px; background: #fffaf0; }
 }
+/* Four rows now: Body (4), Height (5), Ears (3), Head decoration (13). Short rows share the width; long rows scroll
+   sideways with snap, on phones and desktop alike, so the sheet keeps its height. */
+.look-chips { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+.look-chips.scroll { display: flex; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; padding: 2px 2px 6px; -webkit-overflow-scrolling: touch; }
+.look-chips.scroll .look-chip { flex: 0 0 92px; scroll-snap-align: center; }
+.look-chip-art { width: 40px; height: 40px; display: block; object-fit: contain; }
+.look-chip.worn:not(.on) { border-color: #ffe39a; }
+.look-state { font-size: 10px; font-weight: 800; color: #4f9a2c; line-height: 1.1; }
+.look-state.owned { color: #8a7a60; }
+@media (max-width: 520px) {
+  .look-chips.scroll .look-chip { flex-basis: 74px; }
+  .look-chip-art { width: 30px; height: 30px; }
+  .look-state { flex-basis: 100%; text-align: center; line-height: 1; }
+}
+/* Phones: four rows must fit the short sheet under the explorer, so each row's name sits at its left and every row is
+   one line of chips (the long ones scroll sideways). */
+@media (max-width: 520px) {
+  .look-row { grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 6px; }
+  .look-row-name { font-size: 10px; letter-spacing: .02em; white-space: normal; line-height: 1.1; }
+  .look-chips { display: flex; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; padding: 2px 2px 4px; }
+  .look-chips .look-chip, .look-chips.scroll .look-chip { flex: 0 0 74px; scroll-snap-align: center; min-height: 50px; flex-direction: column; flex-wrap: nowrap; gap: 0; padding: 3px 2px; font-size: 11px; line-height: 1.1; }
+  .look-chip-icon { font-size: 17px; }
+  .look-chip-art { width: 26px; height: 26px; }
+  .look-price, .look-state { flex-basis: auto; font-size: 10px; }
+  .look-footer { margin-top: 4px; padding-top: 6px; }
+  .look-name { font-size: 13px; flex-basis: 100%; }
+}
+@media (max-width: 520px) {
+  .look-builder { gap: 4px; }
+  .look-chips .look-chip, .look-chips.scroll .look-chip { flex: 0 0 96px; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 4px; min-height: 40px; padding: 3px 6px; text-align: left; border-width: 2px; border-radius: 12px; }
+  .look-chip > .look-chip-icon { grid-row: 1 / 3; }
+  .look-chip > span:not(.look-chip-icon) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .look-name { flex-basis: auto; flex: 1 1 0; min-width: 0; font-size: 12px; }
+  .look-buttons button { padding-block: 8px; }
+}
+@media (max-width: 520px) { .look-row-name { text-transform: none; letter-spacing: 0; font-size: 11px; } }

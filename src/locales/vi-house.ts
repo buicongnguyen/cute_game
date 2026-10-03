@@ -119,6 +119,6 @@ export const VI_HOUSE: Record<string, string> = {
   'BEDROOM · AT HOME': 'PHÒNG NGỦ · Ở NHÀ',
   'Change what you wear: only your clothes, pets and gear. Buy new ones at the Little outfitters in the village.': 'Thay đồ bạn mặc: chỉ có quần áo, thú cưng và trang bị. Mua đồ mới ở Cửa hàng trang bị trong làng.',
   'Mirror · Looks': 'Gương · Dáng vẻ',
-  'Body, height and ears. Hats, outfits and weapons are sold at the Little outfitters and worn from the wardrobe.': 'Dáng người, chiều cao và tai. Mũ, trang phục và vũ khí bán ở Cửa hàng trang bị và mặc từ tủ quần áo.',
+  'Body, height, ears and animal hoods. Hats, outfits and weapons are sold at the Little outfitters and worn from the wardrobe.': 'Dáng người, chiều cao, tai và mũ trùm thú. Mũ, trang phục và vũ khí bán ở Cửa hàng trang bị và mặc từ tủ quần áo.',
   'TO WEAR': 'ĐỒ ĐỂ MẶC',
 };

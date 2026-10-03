@@ -91,18 +91,18 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'farmHelperCollect': result = FarmHelper.helperCollect(state, integer(p.uid), now); if (!(result as unknown[]).length) return invalid(); break;
     case 'farmHelperFeed': result = FarmHelper.helperFeed(state, integer(p.uid), now); break;
     case 'farmHelperCatchUp': if (!FarmHelper.canWork(state)) return invalid(); result = FarmHelper.catchUp(state, now); break;
-    case 'rescueFriend': result = Friends.rescue(state, string(p.id, 20) as Friends.FriendId, now); break;
+    case 'rescueFriend': result = Friends.rescue(state, string(p.id, 40) as Friends.FriendId, now); break;
     case 'friendsArrive': result = Friends.arriveHome(state, { x: number(p.x), z: number(p.z) }); break;
-    case 'setFriendAutoFeed': if (typeof p.autoFeed !== 'boolean') return invalid(); result = Friends.setFriendAutoFeed(state, string(p.id, 20) as Friends.FriendId, p.autoFeed); break;
-    case 'setFriendPaused': if (typeof p.paused !== 'boolean') return invalid(); result = Friends.setFriendPaused(state, string(p.id, 20) as Friends.FriendId, p.paused); break;
+    case 'setFriendAutoFeed': if (typeof p.autoFeed !== 'boolean') return invalid(); result = Friends.setFriendAutoFeed(state, string(p.id, 40) as Friends.FriendId, p.autoFeed); break;
+    case 'setFriendPaused': if (typeof p.paused !== 'boolean') return invalid(); result = Friends.setFriendPaused(state, string(p.id, 40) as Friends.FriendId, p.paused); break;
     case 'friendWork': {
       const task = p.index !== undefined ? { kind: string(p.kind, 10), index: index() } : { kind: string(p.kind, 10), uid: integer(p.uid) };
       if (!['harvest', 'plant', 'collect', 'feed'].includes(task.kind) || ('index' in task) !== (task.kind === 'harvest' || task.kind === 'plant')) return invalid();
       // Another worker (the robot, the player, a friend) getting there first is normal: report it quietly, not as an error.
-      result = Friends.friendWork(state, string(p.id, 20) as Friends.FriendId, task as Friends.FriendTask, now) ?? { kind: task.kind, raw: {}, cooked: {}, skipped: true }; break;
+      result = Friends.friendWork(state, string(p.id, 40) as Friends.FriendId, task as Friends.FriendTask, now) ?? { kind: task.kind, raw: {}, cooked: {}, skipped: true }; break;
     }
-    case 'buyLook': result = buyLook(state, string(p.id, 20)); break;
-    case 'wearLook': result = wearLook(state, string(p.id, 20)); break;
+    case 'buyLook': result = buyLook(state, string(p.id, 40)); break;
+    case 'wearLook': result = wearLook(state, string(p.id, 40)); break;
     case 'friendsCatchUp': result = Friends.friendsCatchUp(state, now); break;
     case 'ackStored': result = takeStored(state); break;
     case 'ackTrim': result = Game.takeTrimNote(state); break;

@@ -44,7 +44,7 @@ import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
 import {HIP,applyGait,gaitSwing,limbsOf,newGait,stepGait,type Gait} from './walk-cycle.ts';
-import {DEFAULT_PIVOTS,FIT,lookOf,splitLook,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
+import {DEFAULT_PIVOTS,fitOf,lookOf,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {part} from './part-cache.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
@@ -676,7 +676,7 @@ export class World {
     // A body style downloads on first use; the default explorer stands in until it arrives.
     const combo=toLook(look)??DEFAULT_LOOK,styled=heroKitFor(combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
     const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint)??this.chibi(tint);
-    c.userData.look=base===heroKit?DEFAULT_LOOK:combo;const fit=FIT[splitLook(combo).height];if(base!==heroKit&&Object.keys(fit).length)c.userData.fit=fit;
+    c.userData.look=base===heroKit?DEFAULT_LOOK:combo;const fit=fitOf(combo);if(base!==heroKit&&Object.keys(fit).length)c.userData.fit=fit;
     // The sprout pokes through hats and most costumes; the fairy crown and hero mask leave it showing.
     // A hat kept under a costume is not drawn (below), so only the costume decides then.
     const top=id?kitDisguise&&['dz_fairy','dz_superhero'].includes(id):!gear.hat,leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=top;tuckEars(c,!top);
