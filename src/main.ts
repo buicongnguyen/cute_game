@@ -27,7 +27,9 @@ import { FishingView, type PondView } from './fishing-view.ts';
 import { FishHuntingView } from './fish-hunting-view.ts';
 import { FISH_HUNT_COOLDOWN_MS, fishHuntTargets, huntingPondAt, type FishHuntResult } from './fish-hunting.ts';
 import { decorIcon } from './icons.ts';
-import { CombatHud, fightNear, lootText, zoneInfo } from './hud-combat.ts';
+import { CombatHud, fightNear, lootText, zoneInfo, aggro } from './hud-combat.ts';
+import { ChallengeDirector, renderChallenge } from './hud-challenge.ts';
+import { KeysGuide } from './hud-keys.ts';
 import * as M from './model.ts';
 import {applyGameAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
@@ -46,7 +48,7 @@ import { FishingSimulation, selectCatch, planCast, catchWeight, resolveMysteryCa
 import { GroundGestures } from './gestures.ts';
 import { ZOOM, clampZoom } from './camera-rig.ts';
 import {clearSegment,WORLD_BOUNDS} from './navigation.ts';
-import { progressEntries, claimProgress, recordEvent, rerollDaily, startChallenge, storyStep, challengeTitle, type ProgressKind } from './progression.ts';
+import { progressEntries, claimProgress, recordEvent, rerollDaily, startChallenge, storyStep, challengeTitle, asHelper, type ProgressKind } from './progression.ts';
 import { STORY_STEPS } from './content.ts';
 import type { GameBridge, GameAction, NetworkHooks, NetworkDrop } from './game-bridge.ts';
 import { initOnline } from './online.ts';
@@ -84,6 +86,7 @@ import { initLookShop } from './look-shop.ts';
 import { GROWTH } from './growth.ts';
 import * as Tester from './tester.ts';
 import './tester.css';
+import './hud-desk.css'; // last: the timed bonus line, level chip and desktop layout override the older HUD sheets
 import { WORK_ACTIONS, CATCH_UP_ACTIONS, explorerAway } from './delivery.ts';
 import { initStoredNote } from './delivery-ui.ts';
 
@@ -145,16 +148,17 @@ const app = $('#app');
 app.innerHTML = `
   <div id="darkness" hidden></div><div id="world-labels" aria-label="Nearby places"></div>
   <div id="hud" hidden>
-    <header class="player-card"><button class="avatar" data-action="bag" aria-label="Open character and backpack"><span>🌱</span><b id="level-badge">1</b></button><div class="player-details"><div class="player-name"><strong id="player-name"></strong><span id="level-text">Lv. 1</span></div><div class="meter health"><div id="hp-fill"></div><span id="hp-text">100 / 100</span></div><div class="meter experience"><div id="xp-fill"></div><span id="xp-text">EXP 0 / 32</span></div><div class="location"><span class="location-dot"></span><span id="zone-name">Clover Village</span></div></div></header>
+    <header class="player-card"><button class="avatar" data-action="bag" aria-label="Open character and backpack"><span>🌱</span></button><div class="player-details"><div class="player-name"><strong id="player-name"></strong><span id="level-text" class="level-chip">Lv 1</span></div><div class="meter health"><div id="hp-fill"></div><span id="hp-text">100 / 100</span></div><div class="meter experience"><div id="xp-fill"></div><span id="xp-text">EXP 0 / 32</span></div><div class="location"><span class="location-dot"></span><span id="zone-name">Clover Village</span></div></div></header>
     <nav class="top-actions" aria-label="Game menu"><div class="energy"><span>ϟ</span><b id="energy">0</b></div><button class="icon-button" data-action="bag" title="Backpack · I" aria-label="Backpack">🎒</button><button class="icon-button" data-action="quests" title="Journal · J" aria-label="Quest journal">📖<i id="quest-dot"></i></button><div id="social-slot"></div><button class="icon-button secondary-icon" data-action="help" title="How to play" aria-label="How to play">?</button><button class="icon-button" data-action="settings" title="Settings" aria-label="Settings">⚙</button><div id="platform-slot"></div></nav>
-    <div class="tracker-stack"><button id="tracker-chip" class="tracker-chip" data-action="trackers" aria-label="Show quest and bounty" hidden><span id="chip-quest">🥕 0/3</span><span id="chip-bounty">🎯</span><i>▸</i></button><div class="tracker-panels"><aside class="quest-tracker"><button class="tracker-fold" data-action="trackers" aria-label="Fold quest and bounty">▾ Fold</button><div class="eyebrow">ADVENTURE <span id="quest-chapter">1 / 9</span></div><button id="quest-summary" data-action="quests"><span class="quest-icon" id="quest-icon">🥕</span><span><strong id="quest-title">A little green beginning</strong><small id="quest-task">Harvest 3 crops · 0 / 3</small></span><b class="tracker-count" id="quest-count"></b><span class="chevron">›</span></button><div class="quest-progress"><i id="quest-fill"></i></div><button id="quick-claim" data-action="claim" hidden>Collect your reward ✨</button></aside>
+    <div class="tracker-stack"><button id="tracker-chip" class="tracker-chip" data-action="trackers" aria-label="Show quest and bounty" hidden><span id="chip-quest">🥕 0/3</span><span id="chip-chal"></span><span id="chip-bounty">🎯</span><i>▸</i></button><div class="tracker-panels"><aside class="quest-tracker"><button class="tracker-fold" data-action="trackers" aria-label="Fold quest and bounty">▾ Fold</button><div class="eyebrow">ADVENTURE <span id="quest-chapter">1 / 9</span></div><button id="quest-summary" data-action="quests"><span class="quest-icon" id="quest-icon">🥕</span><span><strong id="quest-title">A little green beginning</strong><small id="quest-task">Harvest 3 crops · 0 / 3</small></span><b class="tracker-count" id="quest-count"></b><span class="chevron">›</span></button><div class="quest-progress"><i id="quest-fill"></i></div><button id="quick-claim" data-action="claim" hidden>Collect your reward ✨</button></aside>
+    <button id="challenge-tracker" class="challenge-tracker" data-action="journal-tab" data-kind="challenges" hidden><span class="ch-ring" aria-hidden="true"><span class="ch-icon">⏱️</span></span><div><strong>Quick challenge</strong><small></small></div><b class="tracker-count"></b></button>
     <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div><b class="tracker-count" id="bounty-count"></b></button></div><div id="buff-bar" aria-label="Active effects"></div><div class="quick-eat"><button id="quick-eat" class="idle" data-action="quick-eat" title="Eat · H" aria-label="Eat"><span id="quick-eat-icon" aria-hidden="true">🍽️</span><b id="quick-eat-count">0</b></button><button class="quick-eat-pick" data-action="quick-eat-pick" aria-label="Choose food" aria-expanded="false">▾</button><div id="quick-eat-menu" hidden></div></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="150" height="150"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
     <div id="boss-bar" hidden><span id="boss-icon">👑</span><div><div class="boss-head"><strong id="boss-name"></strong></div><div class="boss-meter"><i id="boss-fill"></i></div></div></div>
     <div id="target-frame" hidden aria-live="off"><span class="target-icon"></span><div><div class="target-head"><strong></strong><span class="target-level">Lv 1</span></div><div class="target-meter"><i></i><b class="target-hp"></b></div></div></div>
     <div id="zone-banner" role="status"><strong id="banner-name">Clover Village</strong><small id="banner-detail">A little place to call home</small><span id="banner-chip"></span></div>
     <button id="reel-button" class="reel-hud" data-action="reel" hidden aria-label="Reel in the line"><span class="reel-icon" aria-hidden="true">🎣</span><span id="reel-text">Reel</span></button><div id="fish-hint" role="status" hidden></div>
     <div id="context-prompt" hidden><button id="interact-button" data-action="interact"><kbd>F</kbd><span id="interact-text">Interact</span></button></div>
-    <div class="bottom-bar"><div class="skills" aria-label="Combat skills"><button class="skill skill-spin" data-action="skill" data-index="0" aria-label="Q Whirlwind"><kbd>Q</kbd><span>🌀</span><small>Whirlwind</small><b class="cooldown"></b></button><button class="skill skill-dash" data-action="skill" data-index="1" aria-label="W Dash"><kbd>W</kbd><span>➶</span><small>Dash</small><b class="cooldown"></b></button><button class="skill skill-stomp" data-action="skill" data-index="2" aria-label="E Ground stomp"><kbd>E</kbd><span>💥</span><small>Stomp</small><b class="cooldown"></b></button><button class="skill skill-special" data-action="skill" data-index="3" aria-label="R Special attack"><kbd>R</kbd><span>✦</span><small id="special-name">Star punch</small><b class="cooldown"></b></button></div><div class="control-hint"><span>Click to wander</span><i>•</i> <span id="movement-hint">Arrows to move</span> <i>•</i> <kbd>Space</kbd> attack</div><button class="home-button" data-action="return-home" title="Return home">⌂ <span>Home</span></button></div>
+    <div class="bottom-bar"><div class="skills" aria-label="Combat skills"><button class="skill skill-spin" data-action="skill" data-index="0" aria-label="Q Whirlwind"><kbd>Q</kbd><span>🌀</span><small>Whirlwind</small><b class="cooldown"></b></button><button class="skill skill-dash" data-action="skill" data-index="1" aria-label="W Dash"><kbd>W</kbd><span>➶</span><small>Dash</small><b class="cooldown"></b></button><button class="skill skill-stomp" data-action="skill" data-index="2" aria-label="E Ground stomp"><kbd>E</kbd><span>💥</span><small>Stomp</small><b class="cooldown"></b></button><button class="skill skill-special" data-action="skill" data-index="3" aria-label="R Special attack"><kbd>R</kbd><span>✦</span><small id="special-name">Star punch</small><b class="cooldown"></b></button></div><div id="keys-guide" class="keys-guide" aria-label="Keyboard controls"></div><div class="control-hint"><span>Click to wander</span><i>•</i> <span id="movement-hint">Arrows to move</span> <i>•</i> <kbd>Space</kbd> attack</div><button class="home-button" data-action="return-home" title="Return home">⌂ <span>Home</span></button></div>
     <div id="touch-controls"><button data-move="ArrowUp" aria-label="Move up">▲</button><div><button data-move="ArrowLeft" aria-label="Move left">◀</button><button data-action="attack" aria-label="Attack">⚔</button><button data-move="ArrowRight" aria-label="Move right">▶</button></div><button data-move="ArrowDown" aria-label="Move down">▼</button></div>
     <div id="environment-bar" aria-label="Environment"></div><div id="placement-bar" hidden><p><span id="placement-name"></span><span id="placement-hint"></span></p><div class="placement-buttons"><button class="sky-button" data-action="rotate-decor">↻ Rotate</button><button class="primary" data-action="confirm-place">✔ Place</button><button class="soft-button" data-action="cancel-decor" aria-label="Cancel">✕</button></div></div><div id="visit-banner" hidden></div>
     <button id="discovery-progress" data-action="discovery" aria-label="Discovery log"><b aria-hidden="true">?</b><span id="discovery-text"></span></button>
@@ -188,6 +192,12 @@ catch (error) { app.innerHTML = localizeHtml('<div class="fatal"><h1>Your garden
 world.ownDog=()=>visiting?null:dogCoatOf(state);
 world.applyGraphics(graphics.profile, graphics.ratio);world.fx?.setTextLayer($('#floating-text'));
 // Over-head HP bars, target frame and boss bar; the trackers fold to a chip in fights ('auto'), or as the player asks.
+// The timed bonus line (hud-challenge.ts) and the desktop keyboard guide (hud-keys.ts).
+const challenges=new ChallengeDirector({state:()=>state,active:()=>started&&!modal&&!visiting&&!flight&&!world.interior&&state.hp>0&&world.state===state,
+  chances:()=>{const p=world.position,near=(r:number,boss:boolean)=>world.enemies.some(e=>e.hp>0&&e.boss===boss&&Math.hypot(e.x-p.x,e.z-p.z)<r);
+    return {kill:near(45,false),skill:near(30,false)||near(30,true),harvest:world.planet==='home'&&state.plots.filter(x=>x.crop).length>=4,fish:!!contextGear.forFishing(state)&&world.entities.some(e=>e.pond&&Math.hypot(e.x-p.x,e.z-p.z)<25),boss:world.enemies.some(e=>e.boss&&e.hp>0&&aggro(e)&&Math.hypot(e.x-p.x,e.z-p.z)<25)};},
+  start:async type=>!!await perform('startChallenge',{kind:type}),claim:async id=>!!await perform('claimProgress',{kind:'challenges',id}),toast:(text,icon)=>toast(text,icon),won:()=>tone('success')});
+const keysGuide=new KeysGuide($('#keys-guide'),(()=>{try{return localStorage;}catch{return null;}})());
 const combatHud=new CombatHud($('#world-labels'),(x,y,z)=>world.screen(x,y,z));let trackerMode:'auto'|'open'|'fold'='auto',wasFight=false;
 // The whole-world minimap (minimap.ts): terrain cached per world, markers redrawn five times a second.
 const minimap=new Minimap($<HTMLCanvasElement>('#minimap'),$('#map-caption'),()=>started?{planet:world.planet,layout:world.environment.layout,position:world.position,facing:world.facing,entities:world.entities,enemies:world.enemies,
@@ -303,7 +313,7 @@ function updateHud() {
   const known=new Set(world.state.discovered),discoveryCount=t('Discovered {count}/{total} planets',{count:known.size,total:Object.keys(M.PLANETS).length});
   if(setHtml($('#discovery-text'),`<strong>🔭 ${esc(world.state.name)}</strong><span>${esc(discoveryCount)}</span><small aria-hidden="true">${Object.entries(M.PLANETS).map(([id,planet])=>known.has(id as M.PlanetId)?planet.icon:'❔').join(' ')}</small>`)){$('#discovery-progress').setAttribute('aria-label',`${world.state.name} · ${discoveryCount} · ${t('Discovery log')}`);}
   $('#world').dataset.status=JSON.stringify({position:[+world.position.x.toFixed(2),+world.position.z.toFixed(2)],route:world.route.length,next:world.route[0]?[world.route[0].x,world.route[0].z]:null,visibility:document.visibilityState,modal,started,frameMs:Math.round(frameTime),drawCalls:world.renderer.info.render.calls});
-  setText($('#player-name'),state.name);setText($('#level-badge'),t(String(state.level)));setText($('#level-text'),t(`Lv. ${state.level}`));setText($('#energy'),t(state.energy.toLocaleString()));
+  setText($('#player-name'),state.name);setText($('#level-text'),t(`Lv ${state.level}`));setText($('#energy'),t(state.energy.toLocaleString()));
   setWidth($('#hp-fill'),`${state.hp/M.maxHp(state)*100}%`);setText($('#hp-text'),t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`));setWidth($('#xp-fill'),`${state.xp/M.xpNeeded(state.level)*100}%`);
   updateQuickEat();
   setText($('#xp-text'),`EXP ${Math.floor(state.xp)} / ${M.xpNeeded(state.level)}`);
@@ -324,6 +334,7 @@ function updateHud() {
   const folded=trackerMode==='fold'||trackerMode==='auto'&&(fight||shown.boss||innerWidth<600&&(state.planet!=='home'||world.lastZone!=='Clover Village'));
   $('.tracker-stack').classList.toggle('folded',folded);$('#tracker-chip').hidden=!folded;
   const bounty=progressEntries(state,'bounties')[0];$('#bounty-tracker').hidden=!bounty;if(bounty){$('#bounty-title').textContent=t(bounty.title);$('#bounty-task').textContent=t(`${bounty.progress}/${bounty.target} · ${bounty.claimed?'Complete':bounty.description}`);$('#bounty-count').textContent=t(bounty.claimed?'✓':`${bounty.progress}/${bounty.target}`);}
+  const chal=challenges.view();renderChallenge($('#challenge-tracker'),chal);setText($('#chip-chal'),chal?chal.chip:'');keysGuide.render(state.settings.keyboardLayout,getLanguage());
   if(folded){$('#chip-quest').textContent=t(q?`${q.icon} ${progress}/${q.target}`:'🚀');$('#chip-bounty').textContent=t(bounty?`🎯 ${bounty.progress}/${bounty.target}`:'');}
   // Light pools cut holes in the darkness; a lamp behind the perspective camera would project mirrored, so it is skipped.
   if(!dark.hidden){const holes=world.lightSources().flatMap(light=>{const p=world.screen(light.x,.7,light.z),edge=world.screen(light.x+light.radius,.7,light.z);return p.front?[`radial-gradient(circle ${Math.abs(edge.x-p.x)}px at ${p.x}px ${p.y}px, transparent 65%, black 100%)`]:[];});
@@ -354,7 +365,7 @@ interface LabelAnchor {e:Entity;wy:number;back:number;dx:number;centre:boolean;w
 const labelAnchors=new Map<string,LabelAnchor>();
 let hudPanels:{left:number;right:number;top:number;bottom:number}[]=[];
 let hudFresh=false;
-function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
+function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#keys-guide,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
 /** The label's screen box at its anchor: bottom centre for buildings, centre for the small crop marks. */
 function labelRect(a:LabelAnchor){const p=world.screen(a.e.x+a.dx,a.wy,a.e.z-a.back),top=p.y-(a.centre?a.h/2:a.h);return {x:p.x,y:p.y,front:p.front,left:p.x-a.w/2,right:p.x+a.w/2,top,bottom:top+a.h};}
 const smallLabels=()=>innerWidth<=600||innerHeight<=520;
@@ -921,7 +932,7 @@ const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked
 // A tap on an indoor label picks its thing, like a tap on the thing (labels themselves never take pointer events).
 house.house.labelBox=id=>{const a=labelAnchors.get(id);return a&&!a.off&&!modal&&labelNodes.get(id)?.hidden===false?labelRect(a):null;};
 const lookShop=initLookShop({world,perform:(type,payload)=>perform(type,payload),openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),endGearTryOn:()=>{if(tryingOn){tryingOn=null;world.tryOnGear=null;}}});
-frameListeners.add(dt=>house.frame(dt));
+frameListeners.add(dt=>house.frame(dt));frameListeners.add(dt=>challenges.tick(dt));
 // The craft room's upgrade bench (upgrade-bench.ts): gear levels and skill levels, both run through actions.ts.
 const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:[...BASE_SKILLS,SPECIALS[M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist']??SPECIALS.fist],disguised:!!state.gear.disguise,weaponKind:M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).kind})});
 world.onInteract=async(e)=>{
@@ -960,9 +971,9 @@ frameListeners.add(dt=>{for(const [uid,meta]of networkDrops){const d=drops.sim.d
 // Drawn on the next frame's render: a one-frame lag is invisible on a 0.5 m gardener.
 frameListeners.add(dt=>helperView.update(dt,{state:!flight&&world.planet==='home'?world.state:null,act:started&&!visiting&&world.state===state&&!document.hidden,now:Date.now(),harvest:helperHarvest,plant:helperPlant}));
 frameListeners.add(dt=>{farmHelperController.sync();farmHelperView.update(dt,{state:!flight&&world.planet==='home'?world.state:null,context:world.root,act:!!farmHelperContext(),pending:farmHelperController.pending,now:Date.now(),position:uid=>world.farmView?.positionOf(uid)??undefined,work:task=>farmHelperController.work(task)});});
-function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string;x?:number;z?:number}){
+function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string;x?:number;z?:number;helper?:boolean}){
   if(actionHandler)return;
-  const loot=change(()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss,Math.random,false));
+  const defeat=()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss,Math.random,false),loot=change(()=>e.helper?asHelper(defeat):defeat());// a pet's kill is not the player's for the timed challenge
   // Experience flies in as cyan orbs; the loot is tossed onto the ground where the creature fell.
   const x=e.x??world.position.x,z=e.z??world.position.z;
   world.fx?.orbs({x,z},Math.min(8,3+Math.floor(e.xp/20)),'#7ff0ff',()=>world.position,()=>tone('coin'));
@@ -977,7 +988,7 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');
-    const type=(e as Enemy&{type?:string}).type??'slime';if(network.onHostKill)network.onHostKill(e.id,e.xp,e.boss,type);else grantDefeat({...e,type});}
+    const type=(e as Enemy&{type?:string}).type??'slime';if(network.onHostKill)network.onHostKill(e.id,e.xp,e.boss,type);else grantDefeat({...e,type,helper:!!impact?.helper});}
 }
 /** Devour finishes a weakened ordinary creature even through a defensive shell. */
 function executeEnemy(enemy:Enemy,healFraction:number){
@@ -1241,7 +1252,7 @@ app.addEventListener('click',async event=>{
     case 'forge-menu':forgeMenu(id);break;
     case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'level':'pop');}forgeMenu(id);break;}
     case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
-    case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'fullscreen':void toggleFullscreen(message=>toast(message));break;
+    case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'fullscreen':void toggleFullscreen(message=>toast(message));break;
     case 'claim':if(await perform('claimQuest')){tone('success');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
     case 'plant':{const i=activePlot,opened=modal,root=world.root;if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
     case 'cook-everything':{let made=0;for(const id of M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id])){const n=M.pantry(state,id);if(n>0&&await perform('cook',{id,count:n}))made+=n;}if(made){tone('success');toast(t('Cooked {count} meals. Enjoy!',{count:made}),'🍲');}cooking();break;}
@@ -1359,6 +1370,8 @@ document.addEventListener('keydown',event=>{
   if(event.repeat)return;
   const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=(bindings.skills as readonly string[]).indexOf(key);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f')world.interactNearest();else if(key==='h')void quickEat();else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(pressed===' '){event.preventDefault();basicAttack();}
 });
+// The keyboard guide counts game keys to learn when to fold itself (hud-keys.ts).
+window.addEventListener('keydown',event=>{if(started&&!uiBlocked()&&!event.repeat&&gameplayKey(event))keysGuide.used();});
 document.addEventListener('keyup',e=>{const key=gameplayKey({...e,code:e.code,key:e.key});spaceKeys.delete(key.toLowerCase());movement.releaseKey(e.code||e.key);if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
 document.addEventListener('pointerdown',e=>{const target=(e.target as HTMLElement).closest<HTMLElement>('button');if(target?.dataset.move){e.preventDefault();movement.pressPointer(e.pointerId,target.dataset.move);target.setPointerCapture(e.pointerId);}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}});
 const releasePointer=(e:PointerEvent)=>{gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);fishGame?.input.releasePointer(e.pointerId);};
@@ -1415,4 +1428,4 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,house,bench,combat,skill,get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

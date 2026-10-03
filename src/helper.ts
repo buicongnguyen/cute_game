@@ -1,5 +1,6 @@
 import * as M from './model.ts';
 import { HELPER_COST, newHelper, type HelperState } from './helper-state.ts';
+import { asHelper } from './progression.ts';
 
 /**
  * The garden helper's rules, pure and testable (the view, helper-view.ts, only walks and poses).
@@ -81,7 +82,7 @@ export function nextTask(s: M.SaveState, from: { x: number; z: number }, now = D
 export function helperHarvest(s: M.SaveState, i: number, now = Date.now()) {
   if (!s.helper?.owned) return null;
   const crop = s.plots[i]?.crop; if (crop) s.helper.last[bedKey(s, i)] = crop;
-  return M.harvest(s, i, now);
+  return asHelper(() => M.harvest(s, i, now)); // the robot's harvests never win the player's timed challenge
 }
 /** Plant bed `i` with the helper's choice; false when it is not empty or there is nothing to plant. */
 export function helperPlant(s: M.SaveState, i: number, now = Date.now()) {

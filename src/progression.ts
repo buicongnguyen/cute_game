@@ -171,7 +171,7 @@ export function refreshProgress(s: SaveState, now = Date.now()) {
         const choices = [...new Set(PLANETS[s.planet].spawns.map(([id]) => id))].sort();
         p.bounty = choices.length ? { key, type: choices[hash(key + s.name) % choices.length], target: 3 + hash(key) % 3, progress: 0, claimed: false, ends: (Math.floor(now / 1800000) + 1) * 1800000 } : null;
     }
-    if (p.challenge && !p.challenge.claimed && now > p.challenge.ends) {
+    if (p.challenge && !p.challenge.claimed && p.challenge.progress < p.challenge.target && now > p.challenge.ends) {
         p.challenge = null;
         p.streak = 0;
     }
@@ -194,6 +194,22 @@ function condition(s: SaveState, key: string) { switch (key) {
     case 'bestStreak': return s.progression.bestStreak;
     default: return s.progression.totals[key] || 0;
 } }
+let helperCredit = 0;
+/** Runs work done by a helper (garden robot, pet): it still counts for quests, totals and bounties, but not for the timed challenge. */
+export function asHelper<T>(work: () => T): T { helperCredit++; try { return work(); } finally { helperCredit--; } }
+/** Which surprise challenges make sense right now (reference Og[type].ok): the game reports what is nearby. */
+export interface ChallengeChances { kill: boolean; skill: boolean; harvest: boolean; fish: boolean; boss: boolean }
+/** The reference's pick: a boss fight always wins, otherwise a random fitting type; null when nothing fits. */
+export function pickChallenge(ok: ChallengeChances, rng: () => number = Math.random): string | null {
+    if (ok.boss) return 'boss';
+    const fits = (['kill', 'skill', 'harvest', 'fish'] as const).filter(k => ok[k]);
+    return fits.length ? fits[Math.min(fits.length - 1, Math.floor(rng() * fits.length))] : null;
+}
+/** Seconds until the next surprise challenge (reference chNext): 70-170 s at first, 100-200 s after a win, 120-220 s after a timeout,
+ * 20 s to look again when nothing fitted. */
+export function nextChallengeDelay(after: 'start' | 'won' | 'failed' | 'none', rng: () => number = Math.random) { return after === 'none' ? 20 : (after === 'start' ? 70 : after === 'won' ? 100 : 120) + rng() * 100; }
+/** Seconds each surprise challenge lasts (reference Og[type].time). */
+export function challengeSeconds(type: string) { return Object.hasOwn(CHALLENGES, type) ? CHALLENGES[type].seconds : 0; }
 export function recordEvent(s: SaveState, event: string, amount = 1, detail?: string, now = Date.now()) {
     if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(now) || !Object.hasOwn({ kill: 1, harvest: 1, sell: 1, craft: 1, fish: 1, skill: 1, upgrade: 1, boss: 1, fishrare: 1, legendFish: 1, cook: 1, mine: 1, planet: 1, expand: 1, decorate: 1, bounty: 1, chal: 1 }, event))
         return;
@@ -212,7 +228,8 @@ export function recordEvent(s: SaveState, event: string, amount = 1, detail?: st
         p.story.progress = Math.min(step.target, p.story.progress + amount);
     if (event === 'kill' && p.bounty && p.bounty.type === detail && !p.bounty.claimed)
         p.bounty.progress = Math.min(p.bounty.target, p.bounty.progress + amount);
-    if (p.challenge?.type === event && !p.challenge.claimed)
+    // Timed challenges count the player's own actions only: the garden helper's harvests and the pet's shots do not (asHelper).
+    if (p.challenge?.type === event && !p.challenge.claimed && !helperCredit)
         p.challenge.progress = Math.min(p.challenge.target, p.challenge.progress + amount);
 }
 function rewardLabel(r: Reward) { return [r.energy ? t('{count} energy', { count: r.energy }) : '', r.xp ? `${r.xp} XP` : '', r.stars ? t('{count} stars', { count: r.stars }) : '', ...Object.entries(r.items || {}).map(([id, n]) => `${t(ITEMS[id]?.name || id)} ×${n}`)].filter(Boolean).join(' · '); }

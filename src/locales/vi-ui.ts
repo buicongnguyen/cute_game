@@ -576,4 +576,18 @@ export const VI_UI: Record<string, string> = {
   "Spending guard": "Giới hạn chi tiêu",
   "Never spends below this much energy.": "Không bao giờ tiêu khi năng lượng còn dưới mức này.",
   "Keep ϟ {n}": "Giữ lại ϟ {n}",
+  // Wave 22 HUD: timed bonus line and keyboard guide
+  "Quick challenge": "Thử thách nhanh",
+  "Quick challenge · {count}s": "Thử thách nhanh · {count} giây",
+  "Challenge won!": "Thắng thử thách!",
+  "Challenge won! {reward}": "Thắng thử thách! {reward}",
+  "Time's up! The quick challenge is over. The next one comes soon.": "Hết giờ thử thách! Lần sau cố lên nhé, thử thách mới sắp tới.",
+  "Surprise challenge! {task} in {count} seconds": "Thử thách bất ngờ! {task} trong {count} giây",
+  "Move": "Di chuyển",
+  "Basic attack": "Đánh thường",
+  "Map": "Bản đồ",
+  "Keyboard": "Bàn phím",
+  "Keyboard controls": "Phím điều khiển",
+  "Show keyboard controls": "Hiện phím điều khiển",
+  "Hide keyboard controls": "Ẩn phím điều khiển",
 };

@@ -2,7 +2,7 @@ export interface CombatPoint { x: number; z: number }
 export interface WeaponProfile { kind: 'fist'|'sword'|'gun'|'rod'; range?: number; cd?: number; arc?: number; special?: string; shot?: string; spread?: number; quality?: number; fx?: string }
 export interface CombatTarget extends CombatPoint { id: string; hp: number; maxHp?:number; boss?:boolean; radius: number; stun?: number }
 export interface CombatStats { attack: number; maxHp?:number; critChance: number; critDamage?: number; haste?: number; lifesteal?: number }
-export interface CombatHit { amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint }
+export interface CombatHit { amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint; /** Dealt by the pet, not the explorer (timed challenges ignore it). */ helper?: boolean }
 export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number }
 import { skillTuning } from './skill-upgrades.ts';
 export interface CombatHost {
@@ -20,7 +20,7 @@ export interface CombatHost {
   /** Upgrade level of base skill slot 0-3 (skill-upgrades.ts); missing = 0. */
   skillLevel?(index:number):number;
 }
-export interface Projectile extends CombatPoint { id: number; direction: CombatPoint; speed: number; remaining: number; radius: number; color: string; kind: string; multiplier: number; hit: Set<string>; pierce: boolean; stun: number; lift: number; explosion: number }
+export interface Projectile extends CombatPoint { id: number; direction: CombatPoint; speed: number; remaining: number; radius: number; color: string; kind: string; multiplier: number; hit: Set<string>; pierce: boolean; stun: number; lift: number; explosion: number; helper?: boolean }
 export interface CombatAlly extends CombatPoint {id:number;kind:'clone'|'turret'|'cannon'|'bat'|'snowman';life:number;cooldown:number;orbit:number}
 export const BASE_SKILLS = [
   { name: 'Whirlwind', icon: '🌀', cd: 7, description: 'Spin for two seconds, striking nearby enemies repeatedly.' },
@@ -70,13 +70,15 @@ export class CombatSimulation {
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing()){this.host.effect({...point,kind,radius,color,facing});}
   private later(delay:number,run:()=>void){const power=this.power;this.jobs.push({at:this.time+delay,run:power===1?run:()=>{const old=this.power;this.power=power;try{run();}finally{this.power=old;}}});}
+  /** Set while a pet projectile deals its damage. */
+  private helperShot=false;
   private damage(target:CombatTarget,multiplier:number,stun=0,lift=0,knock=0){
     if(target.hp<=0)return;const stats=this.host.stats(),p=this.host.position();
     const critical=this.random()<stats.critChance,angle=Math.atan2(target.x-p.x,target.z-p.z);
     const bonus=(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?3:1)*(this.marked.has(target.id)?1.5:1);
     this.statuses.stealth=0;
     const amount=Math.max(1,Math.round(stats.attack*multiplier*this.power*bonus*(critical?(stats.critDamage??2):1)*(.9+this.random()*.2)));
-    const applied=this.host.hit(target,{amount,critical,stun,lift,knock,direction:direction(angle)});
+    const applied=this.host.hit(target,{amount,critical,stun,lift,knock,direction:direction(angle),...(this.helperShot?{helper:true}:{})});
     const dealt=typeof applied==='number'?Math.max(0,Math.min(amount,applied)):amount;
     const lifesteal=(stats.lifesteal??0)+(this.statuses.lifesteal>0?.4:0);
     if(lifesteal>0&&dealt>0)this.host.heal?.(dealt*lifesteal/(stats.maxHp??100));
@@ -210,7 +212,7 @@ this.emit('ring',p,8,'#d0f7ff');this.later(3,()=>{for(const t of targets)this.da
     const pet=this.host.pet?.();
     if(pet&&Number.isFinite(pet.dmg)&&pet.dmg>0&&Number.isFinite(pet.cd)&&pet.cd>0&&this.petCooldown<=0){
       const target=this.host.targets().filter(e=>e.hp>0&&Math.hypot(e.x-position.x,e.z-position.z)<7+e.radius).sort((a,b)=>Math.hypot(a.x-position.x,a.z-position.z)-Math.hypot(b.x-position.x,b.z-position.z))[0];
-      if(target){const angle=Math.atan2(target.x-pet.x,target.z-pet.z);this.shoot(pet.shot??'fire',angle,pet.dmg,9,{x:pet.x,z:pet.z,stun:pet.shot==='ice'?.5:0});// a pet's ice shot chills; 1.5 s at its 1.2-1.5 s rate froze a target for good
+      if(target){const angle=Math.atan2(target.x-pet.x,target.z-pet.z);this.shoot(pet.shot??'fire',angle,pet.dmg,9,{x:pet.x,z:pet.z,stun:pet.shot==='ice'?.5:0,helper:true});// a pet's ice shot chills; 1.5 s at its 1.2-1.5 s rate froze a target for good
 this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot??'fire'),angle);}
     }
     for(const key of Object.keys(this.statuses))this.statuses[key]=Math.max(0,this.statuses[key]-dt);
@@ -235,8 +237,8 @@ this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot?
       if(this.host.clearShot&&!this.host.clearShot(from,to)){this.emit('impact',from,.4,shot.color);this.projectiles.splice(i,1);continue;}
       shot.x=to.x;shot.z=to.z;shot.remaining-=step;let consumed=false;
       const targets=this.host.targets().filter(t=>t.hp>0&&!shot.hit.has(t.id)&&distanceToSegment(t,from,to)<=t.radius+shot.radius).sort((a,b)=>Math.hypot(a.x-from.x,a.z-from.z)-Math.hypot(b.x-from.x,b.z-from.z));
-      for(const target of targets){shot.hit.add(target.id);this.damage(target,shot.multiplier,shot.stun,shot.lift,1);this.emit('impact',target,shot.radius+.3,shot.color);if(shot.explosion)this.area(target,shot.explosion,shot.multiplier*.6,shot.stun,0,shot.color);if(!shot.pierce){consumed=true;break;}}
-      if(consumed||shot.remaining<=0)this.projectiles.splice(i,1);
+      this.helperShot=!!shot.helper;for(const target of targets){shot.hit.add(target.id);this.damage(target,shot.multiplier,shot.stun,shot.lift,1);this.emit('impact',target,shot.radius+.3,shot.color);if(shot.explosion)this.area(target,shot.explosion,shot.multiplier*.6,shot.stun,0,shot.color);if(!shot.pierce){consumed=true;break;}}
+      this.helperShot=false;if(consumed||shot.remaining<=0)this.projectiles.splice(i,1);
     }
   }
 }

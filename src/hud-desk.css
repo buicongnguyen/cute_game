@@ -1,0 +1,90 @@
+/* Wave 22 HUD: one level chip by the name, the timed bonus line under ADVENTURE, and the desktop layout
+   (skills bottom right, keyboard guide bottom left). Loaded last, after hud-compact.css and house.css. */
+
+/* ---- Name + one level chip (the portrait no longer repeats the level) */
+.player-name { justify-content: flex-start; gap: 6px; margin-bottom: 2px; }
+.player-name > strong { min-width: 0; }
+#hud .player-name > .level-chip {
+  display: inline-block; flex: none; padding: 0 6px; border-radius: 999px; background: var(--berry); border: 1.5px solid #fff;
+  color: #fff; font-size: 10px; font-weight: 1000; line-height: 15px; letter-spacing: .2px; font-variant-numeric: tabular-nums;
+  -webkit-text-stroke: 0; text-shadow: none;
+}
+#hud .meter { height: 14px; }
+#hud .meter > span { font-size: 9.5px; line-height: 1; }
+#hud .experience { height: 11px; margin-top: 2px; }
+#hud .experience > span { font-size: 8.5px; }
+#hud .location { margin-top: 2px; }
+
+/* ---- Timed bonus line: like the bounty line, with a ring that drains as the seconds run out */
+.challenge-tracker {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 6px; text-align: left; color: #fff;
+  border-radius: var(--radius-md); background: linear-gradient(90deg, rgba(120, 70, 10, .62), var(--glass)); border: 2px solid rgba(255, 210, 80, .75);
+  box-shadow: 0 6px 18px rgba(10, 30, 10, .18);
+}
+.challenge-tracker[hidden] { display: none; }
+.challenge-tracker > div { min-width: 0; flex: 1; }
+.challenge-tracker strong { display: block; font-size: var(--t-sm); color: #ffe08a; }
+.challenge-tracker small { display: block; margin-top: 1px; font-size: var(--t-xs); color: #fff3d6; }
+.challenge-tracker strong, .challenge-tracker small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-ring {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(#ffd23f calc(var(--left, 1) * 360deg), rgba(255, 255, 255, .18) 0);
+}
+.ch-icon { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #3a2433; font-size: 13px; line-height: 1; }
+.challenge-tracker.urgent { border-color: #ff7a5c; }
+.challenge-tracker.urgent .ch-ring { background: conic-gradient(#ff6a4d calc(var(--left, 1) * 360deg), rgba(255, 255, 255, .18) 0); animation: ch-pulse .8s ease-in-out infinite; }
+.challenge-tracker.won { background: linear-gradient(90deg, #f5b21e, #ffcf4a); border-color: #fff; color: #49330b; }
+.challenge-tracker.won strong { color: #49330b; }
+.challenge-tracker.won small { color: #5a3f0a; }
+.challenge-tracker.won .ch-ring { background: #fff; }
+.challenge-tracker.won .ch-icon { background: #fff4c2; }
+#chip-chal:empty { display: none; }
+#chip-chal { color: #ffe08a; font-variant-numeric: tabular-nums; }
+@keyframes ch-pulse { 50% { scale: 1.08; } }
+@media (prefers-reduced-motion: reduce) { .challenge-tracker.urgent .ch-ring { animation: none; } }
+/* Phones: a one-line pill like the others; the task replaces the title and the count shows the seconds. */
+@media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
+  .challenge-tracker { padding: 2px 5px 2px 3px; gap: 5px; border-width: 1px; border-radius: 999px; }
+  .challenge-tracker strong { display: none; }
+  .challenge-tracker small { margin: 0; font-size: 11px; line-height: 16px; font-weight: 900; color: #fff; }
+  .ch-ring { width: 20px; height: 20px; }
+  .ch-icon { width: 15px; height: 15px; font-size: 9px; }
+}
+
+/* ---- Keyboard guide: only on desktop (below); hidden on touch screens and indoors */
+.keys-guide { display: none; }
+body.indoors .keys-guide { display: none !important; }
+
+/* ---- Desktop: a fine pointer on a screen that is not phone-sized. Phones keep their layout. */
+@media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
+  /* Skills: a tidy row in the bottom-right corner above Home, under the keyboard player's right hand. */
+  #hud .skills, #hud.joystick-on .skills {
+    position: absolute; display: flex; flex-direction: row; left: auto; right: 0; bottom: calc(var(--b) + 44px); top: auto;
+    transform: none; gap: 16px; max-width: none;
+  }
+  #hud .skill { width: 60px; height: 60px; }
+  #hud .skill > span { font-size: 27px; }
+  #hud .home-button { right: 0; bottom: 18px; }
+  /* The guide replaces the old one-line hint. */
+  #hud .control-hint:not(.house-hint) { display: none; }
+  .keys-guide {
+    display: block; position: absolute; left: 0; bottom: 0; pointer-events: auto; width: 188px; padding: 6px 8px 7px; border-radius: 14px;
+    background: rgba(27, 47, 35, .62); border: 2px solid rgba(255, 255, 255, .5); color: #fff; font-size: 11px; box-shadow: 0 6px 18px rgba(10, 30, 10, .18);
+  }
+  .keys-guide.folded { width: auto; padding: 0; border-radius: 999px; }
+  .keys-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0 2px 4px; color: #fff; font-weight: 900; font-size: 11px; letter-spacing: .4px; text-transform: uppercase; }
+  .keys-toggle > span { font-size: 15px; }
+  .keys-toggle > i { margin-left: auto; font-style: normal; opacity: .8; }
+  .keys-guide.folded .keys-toggle { width: 40px; height: 40px; padding: 0; justify-content: center; }
+  .keys-guide.folded .keys-toggle > span { font-size: 19px; }
+  .keys-guide dl { margin: 0; display: grid; gap: 2px; }
+  .keys-guide dl > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .keys-guide dt { font-weight: 800; opacity: .92; }
+  .keys-guide dd { margin: 0; display: flex; gap: 2px; }
+  .keys-guide kbd { min-width: 18px; padding: 0 4px; border-radius: 5px; background: rgba(255, 255, 255, .22); border-bottom: 2px solid rgba(0, 0, 0, .25); text-align: center; font-family: inherit; font-size: 10px; font-weight: 900; line-height: 15px; }
+}
+/* Short landscape phones have no room for a fourth line above the stick: while a timed task runs (at most 150 s) it takes the
+   bounty's slot; the bounty lasts 30 minutes and comes back when the task ends. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .tracker-panels:has(#challenge-tracker:not([hidden])) #bounty-tracker { display: none; }
+}

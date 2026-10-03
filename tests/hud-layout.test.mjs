@@ -147,3 +147,76 @@ test('the discovery pill never shows over the fight buttons or the stick at phon
     if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/discovery-390x844.png` });
   } finally { await browser.close(); }
 });
+
+// Wave 22: desktop layout (skills bottom right, keyboard guide bottom left), the timed bonus line under ADVENTURE and the single
+// level chip. Phones keep their layout (the touch views above); here the guide must stay hidden on them.
+const DESKTOP = { 'desktop 1440x900': VIEWS['desktop 1440x900'], 'desktop 1280x720': { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 } };
+async function openGame(view, name = 'Layout') {
+  const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  const page = await (await browser.newContext(view)).newPage();
+  await page.routeWebSocket(socketUrl => new URL(socketUrl).searchParams.has('token'), () => {});
+  await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+  await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
+  await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
+  await page.fill('#name-input', name); await page.click('#title-screen button.primary');
+  await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(3000);
+  return { browser, page };
+}
+// Runs in the page: the visible box of an element, or null.
+const BOX = `el => { if (!el) return null; const b = el.getBoundingClientRect(), cs = getComputedStyle(el); return b.width && b.height && cs.display !== 'none' && cs.visibility !== 'hidden' ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; }`;
+const overlaps = (a, b) => a.l < b.r - .5 && b.l < a.r - .5 && a.t < b.b - .5 && b.t < a.b - .5;
+const levelTexts = `[...document.querySelectorAll('.player-card *')].filter(el => !el.children.length && /\\b30\\b/.test(el.textContent) && box(el)).map(el => el.textContent)`;
+
+for (const [name, view] of Object.entries(DESKTOP)) {
+  test(`desktop HUD: skills bottom right, keyboard guide bottom left, bonus line under ADVENTURE, nothing overlaps at ${name}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 120000 }, async () => {
+    const { browser, page } = await openGame(view);
+    try {
+      await page.evaluate(async () => { const z = window.__zoo; z.state.level = 30; z.state.hp = 999; z.keysGuide.memory = { mode: 'open', uses: 0 }; await z.startChallenge('harvest'); });
+      await page.waitForTimeout(800);
+      const r = await page.evaluate(([BOX, levelTexts]) => {
+        const box = (0, eval)(BOX), all = sel => [...document.querySelectorAll(sel)].map(box).filter(Boolean);
+        return { W: innerWidth, H: innerHeight, skills: all('#hud .skill'), guide: box(document.querySelector('#keys-guide')), guideText: document.querySelector('#keys-guide').textContent.replace(/\s/g, ''),
+          quest: box(document.querySelector('.quest-tracker')), chal: box(document.querySelector('#challenge-tracker')), chalText: document.querySelector('#challenge-tracker').textContent, bounty: box(document.querySelector('#bounty-tracker')),
+          others: { player: all('.player-card'), menu: all('.top-actions'), minimap: all('.minimap'), home: all('.home-button'), eat: all('.quick-eat'), trackers: all('.tracker-stack > :not([hidden]):not(.quick-eat)'), social: all('#social-slot'), prompt: all('#context-prompt button'), buffs: all('#buff-bar') },
+          levels: eval(levelTexts), badge: !!document.querySelector('#level-badge') };
+      }, [BOX, levelTexts]);
+      assert.equal(r.skills.length, 4, 'four skill buttons');
+      for (const s of r.skills) assert.ok(s.l > r.W * .6 && s.b > r.H - 170 && s.r <= r.W, `skills sit in the bottom-right corner: ${JSON.stringify(s)}`);
+      assert.ok(Math.max(...r.skills.map(s => s.t)) - Math.min(...r.skills.map(s => s.t)) < 2, 'in one tidy row');
+      assert.ok(r.guide && r.guide.l < 40 && r.guide.b > r.H - 40, `the keyboard guide is bottom left: ${JSON.stringify(r.guide)}`);
+      assert.match(r.guideText, /QWER/); assert.match(r.guideText, /Space/);
+      assert.ok(r.chal && r.quest && r.chal.t >= r.quest.b - .5 && (!r.bounty || r.chal.b <= r.bounty.t + .5), 'the bonus line sits right under ADVENTURE, above the bounty');
+      assert.match(r.chalText, /Quick challenge · \d+s/); assert.match(r.chalText, /Harvest crops · 0\/4/);
+      assert.deepEqual(r.levels, ['Lv 30'], 'the level shows once, as the chip after the name'); assert.equal(r.badge, false);
+      for (const mine of [...r.skills, r.guide]) for (const [what, boxes] of Object.entries(r.others)) for (const b of boxes) assert.ok(!overlaps(mine, b), `${JSON.stringify(mine)} overlaps ${what} at ${name}`);
+      assert.ok(!r.skills.some(s => overlaps(s, r.guide)));
+      if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/desktop-${view.viewport.width}x${view.viewport.height}.png` });
+      // The WASD layout from Settings shows in the guide; the guide folds to a chip and remembers it on this device.
+      await page.evaluate(() => { window.__zoo.state.settings.keyboardLayout = 'wasd'; });
+      await page.waitForFunction(() => /WASD/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')) && /JKL;/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')));
+      await page.click('#keys-guide .keys-toggle'); await page.waitForTimeout(300);
+      const folded = await page.evaluate(BOX => ({ box: (0, eval)(BOX)(document.querySelector('#keys-guide')), list: !!document.querySelector('#keys-guide dl'), saved: localStorage.getItem('zoo-garden-keys-guide') }), BOX);
+      assert.equal(folded.list, false); assert.ok(folded.box.r - folded.box.l <= 48, 'folded to a small ⌨️ chip'); assert.match(folded.saved, /"closed"/);
+      // Folded trackers (as in a fight) keep the countdown in the chip.
+      await page.click('.tracker-fold'); await page.waitForTimeout(300);
+      const chip = await page.evaluate(() => ({ panels: getComputedStyle(document.querySelector('.tracker-panels')).display, chip: document.querySelector('#tracker-chip').textContent }));
+      assert.equal(chip.panels, 'none'); assert.match(chip.chip, /⏱️ \d+s 0\/4/);
+    } finally { await browser.close(); }
+  });
+}
+for (const name of ['phone 390x844', 'landscape 844x390']) {
+  test(`phones keep their layout with the bonus line as a one-line pill at ${name}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 120000 }, async () => {
+    const { browser, page } = await openGame(VIEWS[name]);
+    try {
+      await page.evaluate(async () => { const z = window.__zoo; z.state.level = 30; await z.startChallenge('kill'); });
+      await page.waitForTimeout(800);
+      const r = await page.evaluate(([BOX, levelTexts]) => { const box = (0, eval)(BOX); return { guide: box(document.querySelector('#keys-guide')), chal: box(document.querySelector('#challenge-tracker')), skills: [...document.querySelectorAll('.skill')].map(box), joystick: box(document.querySelector('#movement-joystick')), eat: box(document.querySelector('#quick-eat')), levels: eval(levelTexts) }; }, [BOX, levelTexts]);
+      assert.equal(r.guide, null, 'no keyboard guide on touch screens');
+      assert.ok(r.chal && r.chal.b - r.chal.t <= 26, `the bonus line is a slim pill: ${JSON.stringify(r.chal)}`);
+      assert.deepEqual(r.levels, ['Lv 30'], 'the level shows once');
+      assert.ok(!overlaps(r.eat, r.joystick), 'quick eat stays clear of the stick');
+      for (const s of r.skills) assert.ok(!overlaps(s, r.chal));
+      if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/phone-${name.split(' ')[1]}.png` });
+    } finally { await browser.close(); }
+  });
+}
