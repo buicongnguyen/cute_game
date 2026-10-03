@@ -10,6 +10,7 @@
  */
 import { ITEMS, canonicalItem, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
+import { hasMaterials, useMaterials } from './pantry.ts';
 import { MAX_SKILL_LEVEL, SKILL_SLOTS, clampSkillLevel, levelledCooldown } from './skill-upgrades.ts';
 
 export const MAX_GEAR_LEVEL = 10;
@@ -34,12 +35,10 @@ export function gearCost(level: number): { energy: number; materials: Inventory 
   if (l >= 8) materials.moonstone = 1;
   return { energy: 60 + 40 * l + 10 * l * l, materials };
 }
-/** Materials beyond the one worn of each equipped item (wearing a material is impossible, but keep the forge's rule). */
-const spare = (s: SaveState, id: string) => (s.bag[id] || 0) - (Object.values(s.gear).includes(id) ? 1 : 0);
-const affordable = (s: SaveState, cost: { energy: number; materials: Inventory }) => s.energy >= cost.energy && Object.entries(cost.materials).every(([id, n]) => spare(s, id) >= n!);
+/** Materials within reach: the bag (never a worn copy), plus the house chest at home (pantry.ts), as at the forge. */
+const affordable = (s: SaveState, cost: { energy: number; materials: Inventory }) => s.energy >= cost.energy && hasMaterials(s, cost.materials);
 function pay(s: SaveState, cost: { energy: number; materials: Inventory }) {
-  s.energy -= cost.energy;
-  for (const [id, n] of Object.entries(cost.materials)) { s.bag[id]! -= n!; if (!s.bag[id]) delete s.bag[id]; }
+  if (useMaterials(s, cost.materials)) s.energy -= cost.energy;
 }
 export function canUpgradeGear(s: SaveState, raw: string) {
   const id = canonicalItem(raw);

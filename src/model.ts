@@ -10,6 +10,8 @@ import { levelledStat, parseGearLevels, parseSkillLevels } from './upgrades.ts';
 import { LEGACY_CROP_IDS } from './content.ts';
 import { cropLevel, cropXp, cropGrowTime, sellPrice, kitchenOpen, isDifficulty, difficultyOf, rewardScale, bedUpgradeScale, type Difficulty } from './difficulty.ts';
 import { parseHunting, type HuntingState } from './fish-hunting.ts';
+import { looseQuantity, pantry, usePantry, hasMaterials, useMaterials } from './pantry.ts';
+import { specialPrice } from './special-offers.ts';
 export * from './weapon-forge.ts';
 // Purchase-list order and item level tags (main.ts renders them as M.*, which the panel tests already provide).
 export { sortByPower, powerChip, levelTag } from './item-power.ts';
@@ -479,19 +481,20 @@ export function moveBed(s: SaveState, i: number, x: number, z: number, rotation 
     Object.assign(s.plots[i], { x, z, rotation }); return true;
 }
 export * from './difficulty.ts';
-export function looseQuantity(s: SaveState, raw: ItemId) { const id = canonicalItem(raw); return Math.max(0, (s.bag[id] || 0) - (Object.values(s.gear).includes(id) ? 1 : 0)); }
 export function sell(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item || !Number.isSafeInteger(count) || count < 1 || !item.sell || count > looseQuantity(s, id))
     return 0; const value = sellPrice(s, id) * count; if (!Number.isSafeInteger(value) || !Number.isSafeInteger(s.energy + value) || !removeItem(s.bag, id, count))
     return 0; s.energy += value; recordEvent(s, 'sell', value); return value; }
-export function canCraft(s: SaveState, index: number) { const r = RECIPES[index]; return !!r && Number.isSafeInteger((s.bag[r.result] || 0) + (r.count || 1)) && s.energy >= r.energy && (r.station !== 'forge' || furnaceReady(s)) && Object.entries(r.materials).every(([id, n]) => looseQuantity(s, id) >= n!); }
+export function canCraft(s: SaveState, index: number) { const r = RECIPES[index]; return !!r && Number.isSafeInteger((s.bag[r.result] || 0) + (r.count || 1)) && s.energy >= r.energy && (r.station !== 'forge' || furnaceReady(s)) && hasMaterials(s, r.materials); }
+// Materials come from the bag first, then the house chest at home (pantry.ts), as the kitchen's ingredients do.
 export function craft(s: SaveState, index: number) { if (!canCraft(s, index))
-    return false; const r = RECIPES[index]; s.energy -= r.energy; for (const [id, n] of Object.entries(r.materials))
-    removeItem(s.bag, id, n); addItem(s, r.result, r.count || 1); recordEvent(s, 'craft'); return true; }
-export function buy(s: SaveState, raw: ItemId) { const id = canonicalItem(raw); if (id === 'plot_kit') return buyPlotKit(s); const index = RECIPES.findIndex(r => r.station === 'shop' && r.result === id); return index >= 0 && craft(s, index); }
+    return false; const r = RECIPES[index]; if (!useMaterials(s, r.materials)) return false; s.energy -= r.energy; addItem(s, r.result, r.count || 1); recordEvent(s, 'craft'); return true; }
+export function buy(s: SaveState, raw: ItemId) { const id = canonicalItem(raw); if (id === 'plot_kit') return buyPlotKit(s); const index = RECIPES.findIndex(r => r.station === 'shop' && r.result === id); return index >= 0 ? craft(s, index) : buySpecial(s, id); }
+/** A special offer (special-offers.ts): crafted or boss-dropped gear and decorations, for energy only, at the server's price. */
+function buySpecial(s: SaveState, id: ItemId) { const price = specialPrice(id); if (price === null || s.energy < price || !addItem(s, id)) return false; s.energy -= price; recordEvent(s, 'craft'); return true; }
 /** A garden bed kit costs what the bed it adds would cost by Expand (gardenExpansionCost, counting kits already held); none at the 24-bed cap. */
 export function kitPrice(s: SaveState): number | null { const beds = s.plots.length + (s.bag.plot_kit || 0); return beds >= MAX_PLOTS ? null : bedPrice(beds); }
 /** The shop's price for an item now; null = not on sale (a bed kit at the cap). */
-export function shopPrice(s: SaveState, id: ItemId): number | null { return id === 'plot_kit' ? kitPrice(s) : ITEMS[id]?.price ?? null; }
+export function shopPrice(s: SaveState, id: ItemId): number | null { return id === 'plot_kit' ? kitPrice(s) : Object.hasOwn(ITEMS, id) ? ITEMS[id].price ?? specialPrice(id) : null; }
 function buyPlotKit(s: SaveState) { const price = kitPrice(s); if (price === null || s.energy < price || !addItem(s, 'plot_kit')) return false; s.energy -= price; recordEvent(s, 'craft'); return true; }
 /** Clothes: drawn on the explorer only without a disguise. */
 export const WEARABLE_SLOTS: readonly GearSlot[] = ['hat', 'outfit', 'boots'];
@@ -509,19 +512,9 @@ export function eat(s: SaveState, raw: ItemId, now = Date.now()) { const id = ca
     return false; if (item.heal)
     s.hp = Math.min(maxHp(s), s.hp + item.heal); if (item.buff)
     addBuff(s, item.buff, id, now); return true; }
-/**
- * Ingredients within reach: the loose bag stack, plus the house chest when at home. The workers store their harvest
- * in the chest while the explorer is out (delivery.ts), so the kitchen, the farm dishes and the feeders reach into it.
- */
-export function pantry(s: SaveState, raw: ItemId) { const id = canonicalItem(raw); return looseQuantity(s, id) + (s.planet === 'home' ? s.chest[id] || 0 : 0); }
-/** The ids within reach (pantry > 0), bag first. */
-export function pantryIds(s: SaveState) { return [...new Set([...Object.keys(s.bag), ...(s.planet === 'home' ? Object.keys(s.chest) : [])])].filter(id => pantry(s, id) > 0); }
-/** Takes `count` from the bag first, then the chest (home only); false (and nothing taken) when there is not enough. */
-export function usePantry(s: SaveState, raw: ItemId, count = 1) {
-    const id = canonicalItem(raw); if (!Object.hasOwn(ITEMS, id) || !Number.isSafeInteger(count) || count < 1 || pantry(s, id) < count) return false;
-    const fromBag = Math.min(count, looseQuantity(s, id)); if (fromBag) removeItem(s.bag, id, fromBag);
-    return fromBag === count || removeItem(s.chest, id, count - fromBag);
-}
+// Ingredients within reach (bag, plus the chest at home) live in pantry.ts, shared by every home station.
+export { looseQuantity, pantry, pantryIds, usePantry, hasMaterials, useMaterials, fromChest } from './pantry.ts';
+export { SPECIAL_PRICE, TITAN_PRICE, isSpecial, specialPrice, specialSource, specialIds, SOURCE_NOTE } from './special-offers.ts';
 export function cook(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw), result = `cooked_${id}`; if (!Object.hasOwn(ITEMS, result) || s.planet !== 'home' || !kitchenOpen(s) || !Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger((s.bag[result] || 0) + count) || !usePantry(s, id, count))
     return false; addItem(s, result, count); recordEvent(s, 'cook', count); return true; }
 export function transfer(s: SaveState, raw: ItemId, toChest: boolean) { const id = canonicalItem(raw); if (toChest && looseQuantity(s, id) < 1)

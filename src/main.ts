@@ -88,8 +88,10 @@ import { GROWTH } from './growth.ts';
 import * as Tester from './tester.ts';
 import './tester.css';
 import './item-groups.css';
+import './special-offers.css';
 import './hud-desk.css'; // last: the timed bonus line, level chip and desktop layout override the older HUD sheets
 import {setDock,initDockFraming} from './dialog-dock';
+import {iconPath} from './item-icons.ts';
 import { WORK_ACTIONS, CATCH_UP_ACTIONS, explorerAway } from './delivery.ts';
 import { initStoredNote } from './delivery-ui.ts';
 import * as IG from './item-groups.ts';
@@ -267,16 +269,14 @@ function toast(message: string, icon='✨') {
   const live=Array.from(stack.children).filter(node=>!node.classList.contains('leaving'));const keep=phoneScreen.matches?2:3;for(const old of live.slice(0,Math.max(0,live.length-keep)))dismiss(old);
   setTimeout(()=>dismiss(el),phoneScreen.matches?2800:3800);
 }
-// Blender-rendered icons for crops, fish, gear and items; decorations are drawn from their
-// 3D models by the game; cooked food shows the raw item with a flame. Emoji remain the fallback.
+// Blender-rendered icons for crops, fish, gear, items, cooked food and dishes (item-icons.ts); decorations are drawn
+// from their 3D models by the game. Emoji remain the fallback.
 const ICON_BASE=`${import.meta.env.BASE_URL}assets/icons/`;
 const missingIcons=new Set<string>();
 function art(id:string,icon:string):string{
-  if(id.startsWith('cooked_')&&Object.hasOwn(M.ITEMS,id.slice(7)))return `<span class="cooked-art">${art(id.slice(7),icon)}<i>🔥</i></span>`;
-  const item=Object.hasOwn(M.ITEMS,id)?M.ITEMS[id]:undefined;
-  if(item?.type==='decor'){const url=decorIcon(id);return url?`<img class="art-icon" src="${url}" alt="" draggable="false">`:icon;}
-  const folder=Object.hasOwn(M.CROPS,id)?'crops':Object.hasOwn(M.FISH,id)?'fish':item?'items':'';
-  return folder&&!missingIcons.has(id)?`<img class="art-icon" src="${ICON_BASE}${folder}/${id}.webp" alt="" draggable="false" data-id="${esc(id)}" data-fallback="${esc(icon)}">`:icon;
+  if(Object.hasOwn(M.ITEMS,id)&&M.ITEMS[id].type==='decor'){const url=decorIcon(id);return url?`<img class="art-icon" src="${url}" alt="" draggable="false">`:icon;}
+  const path=iconPath(id);
+  return path&&!missingIcons.has(id)?`<img class="art-icon" src="${ICON_BASE}${path}" alt="" draggable="false" data-id="${esc(id)}" data-fallback="${esc(icon)}">`:icon;
 }
 /** A small inline icon for ingredient lists and chips. */
 const mini=(id:string)=>`<span class="mini-art">${art(id,M.ITEMS[id]?.icon??'✨')}</span>`;
@@ -314,7 +314,8 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   bodyNode.scrollTop=reopened&&bodyNode.querySelector('.panel-tabs .active')?.textContent===tab?scroll:0;
   $('.close-button').focus({preventScroll:true});
 }
-function closeDialog(){endTryOn();modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
+// The Mirror docks with 'trying-on' even before a preview (look-shop.ts), so closing always clears it: a later panel or confirmation must not inherit it.
+function closeDialog(){endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
 async function start() {settle();showTrimNote();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{}); // warm the village's shaders off the first walk
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
@@ -542,7 +543,8 @@ function inventory() {
 // "36 energy · 6 XP · 15 stars" becomes three coloured chips.
 function rewardChips(label:string){return label.split(' · ').filter(Boolean).map(part=>{const kind=/energy|năng lượng/i.test(part)?'energy':/xp/i.test(part)?'xp':/star|sao/i.test(part)?'star':'';return `<span class="chip${kind?` chip-${kind}`:''}">${kind==='energy'?'ϟ ':kind==='xp'?'✨ ':kind==='star'?'⭐ ':''}${esc(kind?part.replace(/\s*(energy|stars?|năng lượng|sao)$/i,''):part)}</span>`;}).join('');}
 // Materials as small chips: icon and have/need like the reference (the name is a tooltip and screen-reader text); red = still short.
-function materialChips(materials?:M.Inventory){const list=Object.entries(materials??{}) as [M.ItemId,number][];return list.length?`<span class="chips">${list.map(([id,n])=>`<span class="chip${(state.bag[id]||0)<n?' chip-miss':''}" title="${esc(t(M.ITEMS[id].name))}">${mini(id)}<span class="vh">${esc(t(M.ITEMS[id].name))}</span> ${state.bag[id]||0}/${n}</span>`).join('')}</span>`:'';}
+// "Have" is what the station can use: the loose bag, plus the house chest at home (pantry.ts), which the tooltip names.
+function materialChips(materials?:M.Inventory){const list=Object.entries(materials??{}) as [M.ItemId,number][];return list.length?`<span class="chips">${list.map(([id,n])=>{const have=M.pantry(state,id),chest=M.fromChest(state,id,n),name=esc(t(M.ITEMS[id].name))+(chest?' · '+esc(t('{count} from the chest',{count:chest})):'');return `<span class="chip${have<n?' chip-miss':''}" title="${name}">${mini(id)}<span class="vh">${name}</span> ${have}/${n}</span>`;}).join('')}</span>`:'';}
 const JOURNAL_TABS:[ProgressKind,string][]=[['story','Story'],['daily','Daily'],['weekly','Weekly'],['achievements','Achievements'],['pass','Star pass'],['bounties','Bounties'],['collection','Collection'],['challenges','Challenges']];
 function quests(){
   const entries=progressEntries(state,journalTab),claimable=entries.filter(e=>e.complete&&!e.claimed).length;
@@ -566,10 +568,12 @@ const SHOP_TABS=['Weapons','Clothing','Pets','Disguises','Supplies','Decor'];
 /** "Try on" for wearable gear not already worn; pressed while the explorer is wearing it as a preview. */
 function tryOnButton(id:M.ItemId){return canTryOn(id)&&!Object.values(state.gear).includes(id)?`<button class="soft-button try-on" data-action="try-on" data-item="${id}" aria-pressed="${tryingOn===id}">${tryingOn===id?'👀 Trying on':'👕 Try on'}</button>`:'';}
 function shop(){
+  // Special offers (special-offers.ts): a tag by the name and a line on how the item is usually obtained.
+  const specialTag=(id:string)=>M.isSpecial(id)?` <span class="special-tag">${esc(t('✨ Special'))}</span>`:'',specialNote=(id:string)=>M.isSpecial(id)?`<p class="special-note">${esc(t(M.SOURCE_NOTE[M.specialSource(id)]))}</p>`:'';
   const matches=(item:M.ItemDef)=>shopTab==='Weapons'?item.slot==='weapon':shopTab==='Clothing'?['hat','outfit','boots'].includes(item.slot??''):shopTab==='Pets'?item.slot==='pet':shopTab==='Disguises'?item.slot==='disguise':shopTab==='Decor'?item.type==='decor':!item.slot&&item.type!=='decor';
-  // Weakest to strongest (item-power.ts), ties by price.
-  const entries=IG.groupItems(Object.entries(M.ITEMS).filter(([id,item])=>M.shopPrice(state,id)!==null&&matches(item)),([id])=>id,IG.GEAR_ORDER,([id])=>M.shopPrice(state,id)??0);
-  openDialog('shop','Little outfitters',`<nav class="panel-tabs" aria-label="Shop categories">${SHOP_TABS.map(tab=>`<button class="${shopTab===tab?'active':''}" aria-pressed="${shopTab===tab}" data-action="shop-tab" data-kind="${tab}">${tab}</button>`).join('')}</nav>${IG.groupedHtml('shop',entries,([id,item])=>`<div class="shop-item"><span class="shop-icon">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))}${state.bag[id]?M.levelTag(state,id):''}${state.bag[id]?` <small>×${state.bag[id]}</small>`:''}</strong>${M.powerChip(id)}<p>${esc(item.desc)}</p>${materialChips(item.materials)}</div><button class="primary" data-action="buy" data-item="${id}" ${state.energy<M.shopPrice(state,id)!||Object.entries(item.materials??{}).some(([id,n])=>M.looseQuantity(state,id)<n!)?'disabled':''}>ϟ ${M.shopPrice(state,id)}</button>${item.weapon?.kind==='rod'&&state.bag[id]?'<span class="chip">Used automatically near ponds</span>':item.slot?Object.values(state.gear).includes(id)?'<span class="chip chip-seed">✓ Equipped</span>':state.bag[id]?`<button class="sky-button" data-action="equip" data-item="${id}">Equip</button>`:'':''}${tryOnButton(id)}</div>`)||'<p class="empty-state">Visit the workshop for this collection.</p>'}`,'ϟ '+state.energy+' ENERGY');
+  // Weakest to strongest (item-power.ts), ties by price; special offers (one flat price) tie by their usual worth.
+  const entries=IG.groupItems(Object.entries(M.ITEMS).filter(([id,item])=>M.shopPrice(state,id)!==null&&matches(item)),([id])=>id,IG.GEAR_ORDER,([id])=>M.isSpecial(id)?M.ITEMS[id].sell:M.shopPrice(state,id)??0);
+  openDialog('shop','Little outfitters',`<nav class="panel-tabs" aria-label="Shop categories">${SHOP_TABS.map(tab=>`<button class="${shopTab===tab?'active':''}" aria-pressed="${shopTab===tab}" data-action="shop-tab" data-kind="${tab}">${tab}</button>`).join('')}</nav>${IG.groupedHtml('shop',entries,([id,item])=>`<div class="shop-item${M.isSpecial(id)?' special-offer':''}"><span class="shop-icon">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))}${specialTag(id)}${state.bag[id]?M.levelTag(state,id):''}${state.bag[id]?` <small>×${state.bag[id]}</small>`:''}</strong>${M.powerChip(id)}<p>${esc(item.desc)}</p>${specialNote(id)}${materialChips(item.materials)}</div>${Tester.isTester(state)&&M.isSpecial(id)?'<div class="button-row tester-row">':''}<button class="primary" data-action="buy" data-item="${id}" ${state.energy<M.shopPrice(state,id)!||!M.hasMaterials(state,item.materials)?'disabled':''}>ϟ ${M.shopPrice(state,id)!.toLocaleString()}</button>${Tester.isTester(state)&&M.isSpecial(id)?Tester.testerBuyButton(state,id)+'</div>':''}${item.weapon?.kind==='rod'&&state.bag[id]?'<span class="chip">Used automatically near ponds</span>':item.slot?Object.values(state.gear).includes(id)?'<span class="chip chip-seed">✓ Equipped</span>':state.bag[id]?`<button class="sky-button" data-action="equip" data-item="${id}">Equip</button>`:'':''}${tryOnButton(id)}</div>`)||'<p class="empty-state">Visit the workshop for this collection.</p>'}`,'ϟ '+state.energy+' ENERGY');
   if(shopTab==='Pets'&&state.planet==='home'&&!visiting)$('#dialog-body').insertAdjacentHTML('beforeend',localizeHtml('<div class="button-row"><button class="soft-button" data-action="pen-menu">🐔 Animal pen</button></div>'));
 }
 
@@ -585,7 +589,7 @@ const mobileJoystickDefault=matchMedia('(pointer: coarse)').matches;
 function joystickEnabled(){return state.settings.movePad??mobileJoystickDefault;}
 function applyMovePad(){$('#hud').classList.remove('move-pad');joystick.setEnabled(joystickEnabled());$('#hud').classList.toggle('joystick-right',state.settings.joystickSide==='right');movement.clear();measureHud();}
 function upgrades(){openDialog('upgrade','A wish for something more',`<div class="en-head">Energy: <b>ϟ ${state.energy.toLocaleString()}</b></div><div class="upgrade-cards">${upgradeCards(state).map(c=>`<div class="upgrade-card"><span class="upgrade-icon">${c.icon}</span><div><strong>${t(c.name)} <small>Level ${c.level}</small></strong><p>Now: ${c.now} • ${c.gain}</p></div><button class="primary" data-action="upgrade" data-kind="${c.kind}" ${c.affordable?'':'disabled'}>${c.max?'MAX':`ϟ ${c.cost}`}</button></div>`).join('')}</div>`,'THE WISHING CRYSTAL');}
-function cooking(){if(!M.kitchenOpen(state)&&!Tester.isTester(state)){openDialog('cook','A warm meal for the trail',`<p class="intro">🔒 ${esc(t('Unlocks at level {level}',{level:M.KITCHEN_LEVEL}))}</p>`,'VOLCANO KITCHEN');return;}const ingredients=M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id]).map(id=>[id,M.pantry(state,id)] as const);const cookTotal=ingredients.reduce((a,[,n])=>a+n,0);openDialog('cook','A warm meal for the trail',`<p class="intro">Cooked food heals more and lasts longer. Cooking here is free.</p>${cookTotal?`<button class="primary sell-produce cook-everything" data-action="cook-everything">${esc(t('Cook all → {count} meals',{count:cookTotal}))}</button>`:''}<div class="shop-grid">${ingredients.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} <small>×${n}</small></strong><p>${esc(M.ITEMS['cooked_'+id].desc)}</p></div><div class="button-row"><button class="soft-button" data-action="cook-one" data-item="${id}">Cook 1</button><button class="primary" data-action="cook-all" data-item="${id}" aria-label="Cook all">All</button></div></div>`).join('')||'<p class="empty-state">Bring crops, fish, or meat from your adventures.</p>'}</div>${dishesHtml(state,farmUi)}${Tester.testerKitchenHtml(state)}`,'VOLCANO KITCHEN');}
+function cooking(){if(!M.kitchenOpen(state)&&!Tester.isTester(state)){openDialog('cook','A warm meal for the trail',`<p class="intro">🔒 ${esc(t('Unlocks at level {level}',{level:M.KITCHEN_LEVEL}))}</p>`,'VOLCANO KITCHEN');return;}const ingredients=M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id]).map(id=>[id,M.pantry(state,id)] as const);const cookTotal=ingredients.reduce((a,[,n])=>a+n,0);openDialog('cook','A warm meal for the trail',`<p class="intro">Cooked food heals more and lasts longer. Cooking here is free.</p>${cookTotal?`<button class="primary sell-produce cook-everything" data-action="cook-everything">${esc(t('Cook all → {count} meals',{count:cookTotal}))}</button>`:''}<div class="shop-grid">${ingredients.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} <small>×${n}</small></strong><p>${esc(M.ITEMS['cooked_'+id].desc)}</p><span class="chips"><span class="chip cook-result">→ ${mini('cooked_'+id)} ${esc(t(M.ITEMS['cooked_'+id].name))}</span></span></div><div class="button-row"><button class="soft-button" data-action="cook-one" data-item="${id}">Cook 1</button><button class="primary" data-action="cook-all" data-item="${id}" aria-label="Cook all">All</button></div></div>`).join('')||'<p class="empty-state">Bring crops, fish, or meat from your adventures.</p>'}</div>${dishesHtml(state,farmUi)}${Tester.testerKitchenHtml(state,art)}`,'VOLCANO KITCHEN');}
 /**
  * The animal pen collects all ready stock, nearest first and 140 ms apart; tapping an animal collects only its stock.
  * With nothing waiting, either interaction opens the pen panel.
@@ -638,7 +642,7 @@ function crafting(){
 function forgeMenu(id?:string){
   const weapons=Object.entries(state.bag).filter(([key,n])=>n!>0&&M.ITEMS[key]?.slot==='weapon'&&M.ITEMS[key]?.weapon?.kind!=='rod');
   if(id)selectedItem=id;
-  openDialog('forge','Strengthen your weapon',`<p class="intro">Each attempt has a 30% chance to add one forge level, up to +15. Each level adds 1% attack. Failed attempts consume materials and energy, but never lower your weapon level.</p><div class="shop-grid">${weapons.map(([key])=>{const level=M.forgeLevel(state,key),cost=M.forgeCost(level);return `<div class="shop-item"><span class="shop-icon">${art(key,M.ITEMS[key].icon)}</span><div><strong>${esc(t(M.ITEMS[key].name))} +${level}</strong><p>${t('Attack bonus: {count}%',{count:level})}</p>${level<15?materialChips(cost.materials):'<p>Maximum forge level</p>'}</div>${Tester.isTester(state)?'<div class="button-row tester-row">':''}<button class="primary" data-action="forge" data-item="${key}" ${M.canForge(state,key)?'':'disabled'}>${level<15?'ϟ '+cost.energy:t('Maximum')}</button>${level<15?Tester.testerMakeButton(state,'tester-forge',key):''}${Tester.isTester(state)?'</div>':''}</div>`;}).join('')||'<p class="empty-state">Get a weapon first, then bring it here to forge.</p>'}</div>`,'WEAPON FORGE','🔨');
+  openDialog('forge','Strengthen your weapon',`<div class="button-row"><button class="soft-button" data-action="craft-back">← ${esc(t(craftStation==='forge'?'Back to the furnace':'Back to the workshop'))}</button></div><p class="intro">Each attempt has a 30% chance to add one forge level, up to +15. Each level adds 1% attack. Failed attempts consume materials and energy, but never lower your weapon level.</p><div class="shop-grid">${weapons.map(([key])=>{const level=M.forgeLevel(state,key),cost=M.forgeCost(level);return `<div class="shop-item"><span class="shop-icon">${art(key,M.ITEMS[key].icon)}</span><div><strong>${esc(t(M.ITEMS[key].name))} +${level}</strong><p>${t('Attack bonus: {count}%',{count:level})}</p>${level<15?materialChips(cost.materials):'<p>Maximum forge level</p>'}</div>${Tester.isTester(state)?'<div class="button-row tester-row">':''}<button class="primary" data-action="forge" data-item="${key}" ${M.canForge(state,key)?'':'disabled'}>${level<15?'ϟ '+cost.energy:t('Maximum')}</button>${level<15?Tester.testerMakeButton(state,'tester-forge',key):''}${Tester.isTester(state)?'</div>':''}</div>`;}).join('')||'<p class="empty-state">Get a weapon first, then bring it here to forge.</p>'}</div>`,'WEAPON FORGE','🔨');
 }
 function decorations(){
   const owned=Object.entries(state.bag).filter(([id,n])=>n!>0&&(M.ITEMS[id].type==='decor'));
@@ -703,7 +707,7 @@ function map(){openDialog('map','Every path is a possibility',`<p class="intro">
 function testerOnline(){return !!actionHandler||!!persistence;}
 const testerTry=Tester.attemptLimiter(undefined,undefined,Tester.savedTries());let testerOpen=false;
 function testerMore(){return `<details class="settings-more"${testerOpen||Tester.isTester(state)?' open':''}><summary>More</summary><div class="settings-row"><div><strong>Tester code</strong><small>${testerOnline()?'Tester code works in solo play':Tester.isTester(state)?'Tester mode is on':'For testing items and performance'}</small></div><div class="button-row tester-code"><input id="tester-code" type="password" autocomplete="off" maxlength="64" aria-label="Tester code" ${testerOnline()?'disabled':''}><button class="soft-button" data-action="tester-apply" ${testerOnline()?'disabled':''}>Apply</button></div></div>${Tester.isTester(state)&&!testerOnline()?'<div class="button-row"><button class="primary" data-action="tester-shop">🧪 <span>Tester shop</span></button><button class="soft-button" data-action="tester-exit">Exit tester mode</button></div>':''}</details>`;}
-function testerShop(){openDialog('tester','Tester shop',Tester.testerShopHtml(state),'TESTER','🧪');}
+function testerShop(){openDialog('tester','Tester shop',Tester.testerShopHtml(state,art),'TESTER','🧪');}
 /** Runs a tester rule on the solo save, then saves and redraws like perform() does offline. */
 function testerDo(rule:(s:M.SaveState)=>boolean){if(testerOnline()){toast(t('Tester code works in solo play'),'💭');return false;}const before=state.level;if(!rule(state))return false;state.savedAt=Date.now();levelCheck(before);save();updateHud();tone('success');return true;}
 async function testerApply(){testerOpen=true;if(testerOnline()){toast(t('Tester code works in solo play'),'💭');return;}
@@ -976,7 +980,7 @@ world.onInteract=async(e)=>{
 };
 // Loot lands on the ground (drops.ts) and reaches the bag through the pickup magnet, with a '+n name' float.
 const drops=createDrops(world,{layer:$('#world-labels'),alive:()=>state.hp>0&&!world.interior,item:id=>Object.hasOwn(M.ITEMS,id)?M.ITEMS[id]:undefined,
-  iconUrl:id=>M.ITEMS[id]?.type==='decor'?decorIcon(id)||null:`${ICON_BASE}${Object.hasOwn(M.CROPS,id)?'crops':Object.hasOwn(M.FISH,id)?'fish':'items'}/${id}.webp`,
+  iconUrl:id=>Object.hasOwn(M.ITEMS,id)&&M.ITEMS[id].type==='decor'?decorIcon(id)||null:iconPath(id)?ICON_BASE+iconPath(id):null,
   canAdd:(id,n)=>Number.isSafeInteger((state.bag[id]??0)+n),onPick:(d,stack)=>{
     const feedback=(id:string,count:number)=>{floating('+'+count+' '+t(M.ITEMS[id].name),world.position.x,world.position.z,'item',stack*.7);tone('coin');};
     if(actionHandler){const meta=networkDrops.get(d.uid);if(!meta)return;networkDrops.delete(d.uid);const collectingState=state,root=world.root;
@@ -1277,6 +1281,7 @@ app.addEventListener('click',async event=>{
     case 'start':start();break;case 'discovery':planets();break;
     case 'color':await perform('settings',{color:button.dataset.color!});document.querySelectorAll<HTMLButtonElement>('.color-picker button').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});world.refreshPlayer();break;
     case 'forge-menu':forgeMenu(id);break;
+    case 'craft-back':crafting();break;
     case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'level':'pop');}forgeMenu(id);break;}
     case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
     case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'fullscreen':void toggleFullscreen(message=>toast(message));break;
@@ -1354,7 +1359,7 @@ app.addEventListener('click',async event=>{
     case 'tester-craft':{const r=M.RECIPES[index];if(r&&testerDo(s=>Tester.testerCraft(s,index)))toast(t(M.ITEMS[r.result].name),M.ITEMS[r.result].icon);crafting();break;}
     case 'tester-cook':if(id&&testerDo(s=>Tester.testerCook(s,id)))toast(t(M.ITEMS[id].name),M.ITEMS[id].icon);cooking();break;
     case 'tester-forge':if(id&&testerDo(s=>Tester.testerForgeMax(s,id)))toast(t('Forged to +{level}!',{level:Tester.MAX_FORGE_LEVEL}),'✨');forgeMenu(id);break;
-    case 'tester-buy':if(id&&testerDo(s=>Tester.testerBuy(s,id)))toast(t(M.ITEMS[id].name),M.ITEMS[id].icon);testerShop();break;
+    case 'tester-buy':if(id&&testerDo(s=>Tester.testerBuy(s,id)))toast(t(M.ITEMS[id].name),M.ITEMS[id].icon);if(modal==='shop')shop();else testerShop();break;
     case 'tester-friend':if(id&&testerDo(s=>Tester.testerFriend(s,id as FriendId)))toast(t('{name} is home!',{name:t(FRIENDS[id as FriendId].name)}),'🏡');testerShop();break;
     case 'tester-planets':if(!button.dataset.sure){button.dataset.sure='1';button.textContent=t('Tap again to confirm');break;}if(testerDo(Tester.testerPlanets))toast(t('All planets unlocked'),'🪐');testerShop();break;
     case 'tester-exit':if(testerDo(Tester.exitTester)){toast(t('Tester mode is off. Your energy stays.'),'🧪');settings();}break;
@@ -1456,4 +1461,4 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open()} as Record<string,()=>void>)[type]?.();},house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

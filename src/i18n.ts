@@ -11,11 +11,12 @@ import { VI_TESTER } from './locales/vi-tester.ts';
 import { VI_FIXES } from './locales/vi-fixes.ts';
 import { VI_SKILLS } from './locales/vi-skills.ts';
 import { VI_GROUPS, VI_DOG_TOSS } from './locales/vi-groups.ts';
+import { VI_SHOP } from './locales/vi-shop.ts';
 import { VI_LAKE } from './locales/vi-lake.ts';
 
 export type Language = 'en' | 'vi';
 export const LANGUAGE_KEY = 'cute-game-language';
-const vi: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS, VI_HOUSE, VI_HOUSE_TALK, VI_LOOKS, VI_UPGRADES, VI_TESTER, VI_SKILLS, VI_GROUPS, VI_DOG_TOSS, VI_LAKE, VI_FIXES);
+const vi: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS, VI_HOUSE, VI_HOUSE_TALK, VI_LOOKS, VI_UPGRADES, VI_TESTER, VI_SKILLS, VI_GROUPS, VI_DOG_TOSS, VI_SHOP, VI_LAKE, VI_FIXES);
 const folded = new Map(Object.entries(vi).map(([key, value]) => [key.toLowerCase(), value]));
 const listeners = new Set<() => void>();
 const cache = new Map<string, string>();

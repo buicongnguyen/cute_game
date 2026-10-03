@@ -1,12 +1,14 @@
 import './dialog-dock.css';
 
 /**
- * Desktop panel docking: on a wide screen with a mouse, regular menus (bag, wardrobe, shops, bench, chest, kitchen…)
- * dock to the right without dimming the world, so the explorer stays in view and gear changes show on the avatar
- * as they happen. Confirm/alert-style dialogs and big read-only pages stay centred. Phones keep the bottom sheet:
+ * Desktop panel docking: on a wide screen with a mouse, every menu (bag, wardrobe, shops, bench, chest, kitchen, the
+ * wishing crystal, the market, the starship's travel list, the map, the journal, settings and help…) docks to the right
+ * without dimming the world, so the explorer stays in view and gear changes show on the avatar as they happen. Only
+ * true confirm/alert dialogs stay centred over a dimmed world, because they ask for a decision before anything else:
+ * being knocked out, the difficulty and feed confirmations, and starting a new story. Phones keep the bottom sheet:
  * the CSS only applies under (pointer: fine) and min-width 1000px.
  */
-const CENTRED = new Set(['death', 'difficulty-confirm', 'feed-confirm', 'reset', 'help', 'fish-help', 'map', 'settings', 'travel', 'quests']);
+export const CENTRED: ReadonlySet<string> = new Set(['death', 'difficulty-confirm', 'feed-confirm', 'reset']);
 
 export const dockable = (type: string) => !CENTRED.has(type);
 
@@ -32,9 +34,10 @@ export function initDockFraming(camera: ViewCamera) {
   let shift = 0;
   const tick = () => {
     requestAnimationFrame(tick);
-    const W = innerWidth, panel = document.querySelector('#dialog');
+    // The docked menu, or the docked "Play together" modal (online.ts; dialog-dock.css docks it the same way).
+    const W = innerWidth, panel = dockedNow() ? document.querySelector('#dialog') : matchMedia(DOCK_QUERY).matches ? document.querySelector('#online-dialog[open]') : null;
     let want = 0;
-    if (dockedNow() && panel) want = Math.max(0, (W / 2 + 96 - (panel.getBoundingClientRect().left - 24)) / W); // hero half-width up to ~90px with a wide hat
+    if (panel) want = Math.max(0, (W / 2 + 96 - (panel.getBoundingClientRect().left - 24)) / W); // hero half-width up to ~90px with a wide hat
     if (Math.abs(want - shift) < 1e-4) { if (shift === want) return; shift = want; } else shift += (want - shift) * .18;
     if (shift < 1e-4 && want === 0) { shift = 0; camera.clearViewOffset(); } else camera.setViewOffset(1, 1, shift, 0, 1, 1);
   };

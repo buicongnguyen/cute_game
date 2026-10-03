@@ -1,4 +1,5 @@
-// Desktop menus dock right without dimming, and the hero stays clear of them (dialog-dock.ts); phones keep the bottom
+// Desktop menus (all of them: shops, crystal, market, starship travel, map, journal, settings, help, workshop, kitchen)
+// dock right without dimming, and the hero stays clear of them (dialog-dock.ts); confirmations stay centred; phones keep the bottom
 // sheet. Needs a running DEV server and Playwright, so it only runs when HUD_LAYOUT_URL is set (see hud-layout.test.mjs).
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 const url = process.env.HUD_LAYOUT_URL;
 const DESKTOP = [[1440, 900], [1280, 720], [1920, 1080]];
-const PANELS = ['bag', 'wardrobe', 'shop', 'looks', 'upgrade'];
+const PANELS = ['bag', 'wardrobe', 'shop', 'looks', 'upgrade', 'sell', 'travel', 'map', 'quests', 'settings', 'help', 'craft', 'cook'];
 
 async function chromium() {
   const given = process.env.PLAYWRIGHT_MODULE;
@@ -55,6 +56,12 @@ for (const [width, height] of DESKTOP) {
       }
       await page.keyboard.press('Escape');
       assert.ok(await page.evaluate(() => document.querySelector('#dialog-layer').hidden), 'Escape closes the docked panel');
+      // A confirmation (Start a new adventure) stays centred over a dimmed world.
+      await page.evaluate(() => { window.__zoo.panel('settings'); document.querySelector('[data-action="reset-confirm"]').click(); });
+      await page.waitForTimeout(500);
+      const reset = await page.evaluate(() => { const d = document.querySelector('#dialog').getBoundingClientRect(), layer = document.querySelector('#dialog-layer'); return { docked: layer.classList.contains("docked"), cls: layer.className, mid: (d.left + d.right) / 2, bg: getComputedStyle(layer).backgroundColor, W: innerWidth }; });
+      assert.equal(reset.docked, false, 'the reset confirmation is not docked'); assert.ok(Math.abs(reset.mid - reset.W / 2) < 2, `centred: ${JSON.stringify(reset)}`); assert.notEqual(reset.bg, 'rgba(0, 0, 0, 0)', 'and dims the world');
+      await page.keyboard.press('Escape');
     } finally { await browser.close(); }
   });
 }
