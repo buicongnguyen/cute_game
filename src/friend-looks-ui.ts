@@ -6,7 +6,7 @@ import { friendModel, friendSignature } from './friend-view.ts';
 import { friendHeight, friendStage } from './growth.ts';
 import { OPTIONS, lookPrice, missingOptions, swapOption, type LookId, type LookOption, type Looks } from './looks.ts';
 import { centreChosen, headline, lookName, lookRowsHtml, mirrorHtml } from './look-tiles.ts';
-import { MirrorPreview } from './mirror-preview.ts';
+import { MirrorPreview, restPose } from './mirror-preview.ts';
 
 /**
  * A friend's Looks tab in its cottage panel (house-ui.ts "Dress"): the mirror's four rows of portrait tiles and a framed
@@ -59,7 +59,10 @@ export function initFriendLooks(d: FriendLooksDeps) {
   const paint = (id: FriendId) => {
     const f = friend(id); if (!f) return;
     const look = drafts.get(id) ?? friendLook(f), kit = heroKitFor(look), key = friendSignature(f, look) + heroKit.ready + wearKit.ready;
-    mirror.show(document.querySelector('[data-mirror-slot="friend"]'), id + key, () => friendModel(f, look));
+    mirror.show(document.querySelector('[data-mirror-slot="friend"]'), id + key, () => {
+      // The glass draws its own floor shadow: no blob, and the explorer's relaxed stance.
+      const model = friendModel(f, look), blob = model.getObjectByName('friend-blob'); if (blob) blob.visible = false; return restPose(model);
+    });
     centreChosen();
     if (!kit.ready) void kit.load().then(() => { if (drafts.get(id) === look || friendLook(friend(id)) === look) d.refresh(id); });
   };

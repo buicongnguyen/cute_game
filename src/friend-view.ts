@@ -11,8 +11,9 @@ import type { SaveState } from './model.ts';
 import { applyGait, limbsOf, type Gait } from './walk-cycle.ts';
 
 /**
- * A rescued friend's look (FRIENDS-CONTRACT.md "Look"): the explorer's own hero kit at half the explorer's size, with
- * the friend's shirt and hair colours, wearing its gear through the explorer's wear-kit path (World.friendAvatar ->
+ * A rescued friend's look (FRIENDS-CONTRACT.md "Look"): the explorer's own hero kit in the friend's own mirror look
+ * (friend-looks.ts) at its growth stage's share of the explorer's height (growth.ts), with the friend's shirt and hair
+ * colours, wearing its gear through the explorer's wear-kit path (World.friendAvatar ->
  * World.avatar -> wearKit/kitFor, registered with setFriendDresser so this module needs no World).
  *
  * Kept cheap: no shadow casting (a soft blob instead, shared geometry and material), the explorer's merged outlines,

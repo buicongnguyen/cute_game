@@ -26,7 +26,7 @@ function makeRenderer(): PreviewRenderer {
   r.setPixelRatio(1); r.outputColorSpace = T.SRGBColorSpace; r.toneMapping = T.NoToneMapping; r.setClearColor(0x000000, 0);
   return r;
 }
-const box = new T.Box3(), size = new T.Vector3(), centre = new T.Vector3();
+const box = new T.Box3(), part = new T.Box3(), size = new T.Vector3(), centre = new T.Vector3();
 /** The explorer's idle stance (world.ts: arms a little out), so a portrait does not stand stiff. */
 export function restPose<O extends T.Object3D>(model: O): O {
   model.getObjectByName('arm-left')?.rotation.set(0, 0, -.3); model.getObjectByName('arm-right')?.rotation.set(0, 0, .3); return model;
@@ -83,9 +83,12 @@ export class MirrorPreview {
   }
   /** Aims the camera: feet near the glass's bottom edge, a little above eye level, the whole figure in. */
   private frame(model: T.Object3D, aspect: number) {
-    model.updateMatrixWorld(true); box.setFromObject(model); box.getSize(size); box.getCenter(centre);
-    const reach = this.opts.reach, height = reach ?? size.y * 1.1, floor = reach ? box.min.y - .06 : centre.y - height / 2;
-    const span = Math.max(height, (Math.max(size.x, size.z) * 1.08) / aspect), mid = floor + span / 2;
+    // What is drawn only (a hidden floor blob or tucked ears must not shrink the figure in a narrow glass).
+    model.updateMatrixWorld(true); box.makeEmpty();
+    model.traverseVisible(o => { const m = o as T.Mesh; if (!m.isMesh) return; m.geometry.boundingBox ?? m.geometry.computeBoundingBox(); part.copy(m.geometry.boundingBox!).applyMatrix4(m.matrixWorld); box.union(part); });
+    box.getSize(size); box.getCenter(centre);
+    const reach = this.opts.reach, height = reach ?? size.y * 1.16, floor = reach ? box.min.y - .06 : centre.y - height / 2;
+    const span = Math.max(height, size.x * 1.08 / aspect), mid = floor + span / 2;
     const fov = T.MathUtils.degToRad(this.camera.fov), dist = span / 2 / Math.tan(fov / 2) + size.z / 2;
     this.camera.aspect = aspect; this.camera.position.set(0, mid + dist * .1, dist); this.camera.lookAt(0, mid, 0); this.camera.updateProjectionMatrix();
   }
