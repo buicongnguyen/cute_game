@@ -1,0 +1,6 @@
+/* Desktop: regular menus dock right with no dim/blur so the explorer stays visible (dialog-dock.ts). */
+@media (pointer: fine) and (min-width: 1000px) {
+  #dialog-layer.docked { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; justify-content: flex-end; }
+  #dialog-layer.docked #dialog { width: min(600px, 46vw); }
+  body:has(#dialog-layer.docked:not([hidden])) #house-bubble { display: none; }
+}

@@ -88,6 +88,7 @@ import * as Tester from './tester.ts';
 import './tester.css';
 import './item-groups.css';
 import './hud-desk.css'; // last: the timed bonus line, level chip and desktop layout override the older HUD sheets
+import {setDock,initDockFraming} from './dialog-dock';
 import { WORK_ACTIONS, CATCH_UP_ACTIONS, explorerAway } from './delivery.ts';
 import { initStoredNote } from './delivery-ui.ts';
 import * as IG from './item-groups.ts';
@@ -191,6 +192,7 @@ const graphics=loadGraphics(state.settings.lowGraphics);
 let world: World;
 try { world = new World($('#world'), state, { antialias: !(graphics.mobile && devicePixelRatio >= 2) }); }
 catch (error) { app.innerHTML = localizeHtml('<div class="fatal"><h1>Your garden needs WebGL</h1><p>Enable hardware acceleration in your browser, then reload this page.</p><p>Your saved adventure is safe.</p></div>'); throw error; }
+initDockFraming(world.camera); // desktop menus dock right; slide the picture so the hero stays clear (dialog-dock.ts)
 // Your guard dog: none while visiting someone else's garden (it stays at your own pen).
 world.ownDog=()=>visiting?null:dogCoatOf(state);
 world.applyGraphics(graphics.profile, graphics.ratio);world.fx?.setTextLayer($('#floating-text'));
@@ -300,7 +302,7 @@ let bagMode:'bag'|'wardrobe'='bag';
 function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF AT HOME',icon?:string) {
   if(fishGame)endFishing();
   // Inside the cottage the stove, workbench, globe, wardrobe and mirror are their own places, not the village shops (house-stores.ts).
-  const store=indoorStore(type,!!world.interior,bagMode==='wardrobe');if(store){title=store.title;kicker=store.kicker;icon=store.icon;body=purposeHtml(store)+body;}$('#dialog').dataset.station=store?type:'';
+  const store=indoorStore(type,!!world.interior,bagMode==='wardrobe');if(store){title=store.title;kicker=store.kicker;icon=store.icon;body=purposeHtml(store)+body;}$('#dialog').dataset.station=store?type:'';setDock(type);
   if(!modal)lastFocused=document.activeElement as HTMLElement;const reopened=modal===type;modal=type;movement.clear();gestures.clear();world.destination=null;world.route=[];
   const [defaultIcon,look]=DIALOG_LOOK[type]??['✨','garden'];$('#dialog').dataset.tone=look;$('#dialog-icon').innerHTML=localizeHtml(icon??defaultIcon);
   // Re-rendering the same panel (a tab, a purchase) keeps the reader's scroll position.
@@ -1435,4 +1437,4 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open()} as Record<string,()=>void>)[type]?.();},house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
