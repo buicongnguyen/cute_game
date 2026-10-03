@@ -31,6 +31,8 @@ export interface HouseDeps {
   ownGear(): void; iconUrl(id: string): string;
   /** The mirror's Look shop (look-shop.ts); without it the mirror opens your gear like the wardrobe. */
   looks?(): void;
+  /** The craft room's upgrade bench (upgrade-bench.ts). */
+  bench?(): void;
   /** The diary opens today's tasks (main.ts quests). */
   quests?(): void;
   soundOn?(): boolean;
@@ -177,6 +179,7 @@ export function initHouse(d: HouseDeps) {
     if (e.kind === 'home') { if (!d.visiting()) void d.perform('rest').then(ok => { if (ok) d.toast('Home, sweet home. Your health is restored.', '🏡'); }); enter(); return true; }
     if (e.kind === 'house-door') { leave(); return true; }
     if (e.kind === 'house-wardrobe' || e.kind === 'house-mirror') { if (d.visiting()) d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷'); else if (e.kind === 'house-mirror' && d.looks) d.looks(); else d.ownGear(); return true; }
+    if (e.kind === 'house-bench') { if (d.visiting()) d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷'); else d.bench?.(); return true; }
     // Indoor friends carry friendId; the outdoor workers (friend-crew.ts) open their status panel in main.ts instead.
     if (e.kind === 'friend' && (e as FriendEntity).friendId) { dress((e as FriendEntity).friendId); return true; }
     return false;

@@ -169,7 +169,7 @@ test('friends sit in the big room wearing what they were given, and change at on
 
 test('draw budget: the whole interior from the Blender kit is two batches (plus the door)', async () => {
   const bytes = await readFile(new URL('../public/assets/models/house.glb', import.meta.url));
-  assert.ok(bytes.length < 560_000);
+  assert.ok(bytes.length < 580_000); // 544 KB + the upgrade bench (~19 KB)
   const gltf = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '');
   // Earlier tests asked for the kit without a server; load it again from the file.
   Object.assign(houseKit, { loadScene: async () => gltf.scene, loading: null });

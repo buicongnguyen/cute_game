@@ -6,10 +6,14 @@ import { parseHouse, type HouseState } from './house-activities.ts';
 import { parseLooks, type Looks } from './looks.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
+import { levelledStat, parseGearLevels, parseSkillLevels } from './upgrades.ts';
 import { LEGACY_CROP_IDS } from './content.ts';
 import { cropLevel, cropXp, cropGrowTime, sellPrice, kitchenOpen, isDifficulty, difficultyOf, rewardScale, bedUpgradeScale, type Difficulty } from './difficulty.ts';
 import { parseHunting, type HuntingState } from './fish-hunting.ts';
 export * from './weapon-forge.ts';
+// Purchase-list order and item level tags (main.ts renders them as M.*, which the panel tests already provide).
+export { sortByPower, powerChip, levelTag } from './item-power.ts';
+export { gearFactor, skillLevel, skillCooldown } from './upgrades.ts';
 export * from './content.ts';
 export * from './farm.ts';
 export * from './helper-state.ts';
@@ -128,6 +132,10 @@ export interface SaveState {
     /** What the workers stored in the chest while the explorer was out (delivery.ts), until the note is read. */
     awayStore?: Inventory;
     forge?: Record<string, number>;
+    /** Upgrade-bench levels of owned hats, outfits, boots and companions (upgrades.ts); missing = +0. */
+    gearLevels?: Record<string, number>;
+    /** Upgrade levels of the skills Q, W, E, R (skill-upgrades.ts); missing = all 0. */
+    skillLevels?: number[];
     nextPlantId?: number;
     /** The beds a save from before the 24-bed cap lost and what it got back (trimGarden), until the note is shown. */
     gardenTrim?: TrimNote;
@@ -149,7 +157,8 @@ export const SAVE_KEY = 'cute-game-save-v1';
 export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 3, forge: {}, nextPlantId: 0, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, lowGraphics: false, difficulty: 'easy' }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now() }; }
 export function xpNeeded(level: number) { return Math.round(25 * Math.pow(Math.max(1, level), 1.55)); }
 function equipped(s: SaveState) { return Object.values(s.gear).map(id => ITEMS[id]).filter(Boolean); }
-function equipmentStat(s: SaveState, key: string) { return equipped(s).reduce((sum, item) => sum + ((item.stats as Record<string, number> | undefined)?.[key] || 0), 0); }
+// Bench levels (upgrades.ts) scale an item's own flat stats.
+function equipmentStat(s: SaveState, key: string) { return Object.values(s.gear).reduce((sum, id) => sum + levelledStat(s, id, key, (ITEMS[id]?.stats as Record<string, number> | undefined)?.[key] || 0), 0); }
 function effect(s: SaveState, key: BuffKey, now = Date.now()) { const buff = s.buffs[key]; return buff && buff.expiresAt > now ? buff.value : 0; }
 export function maxHp(s: SaveState) { return 100 + (s.level - 1) * 10 + s.healthUp * 25 + equipmentStat(s, 'hp'); }
 export function attack(s: SaveState, now = Date.now()) { return (10 + (s.level - 1) * 1.5 + s.attackUp * 3 + equipmentStat(s, 'atk')) * (1 + (s.gear.weapon ? forgeLevel(s, s.gear.weapon) / 100 : 0)) * (1 + effect(s, 'atk', now)); }
@@ -712,6 +721,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.bag = inventory(v.bag);
         s.chest = inventory(v.chest);
         s.forge = parseForge(v.forge);
+        { const gear = parseGearLevels(v.gearLevels), skills = parseSkillLevels(v.skillLevels); if (gear) s.gearLevels = gear; if (skills) s.skillLevels = skills; }
         s.nextPlantId = integer(v.nextPlantId);
         if (record(v.gear))
             for (const [rawSlot, rawId] of Object.entries(v.gear)) {

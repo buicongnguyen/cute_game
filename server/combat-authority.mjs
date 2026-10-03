@@ -8,6 +8,7 @@ import {zoneAt,createEnvironmentLayout,EnvironmentSimulation} from '../src/envir
 import {sanitizeTitanAttacks,beginTitanAttack,stepTitanAttack,titanTelegraphs,isTitanSkill} from '../src/titan-patterns.ts';
 import {BOSS_SKILLS,BOSS_WINDUPS,bossTelegraphs,bossPhase,hitControl,BOSS_RESISTED,RESIST_SLOW,liftHeight} from '../src/boss-patterns.ts';
 import {commandHash} from './action-service.mjs';
+import {gearFactor,skillLevel,skillCooldown} from '../src/upgrades.ts';
 import {clearJourney} from './adventure-lifecycle.mjs';
 
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
@@ -227,7 +228,8 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       heal:fraction=>hp(current(),Game.maxHp(current().account.profile)*fraction,'heal'),
       execute:target=>{const p=current();if(!target.boss&&target.hp/target.maxHp<.4&&dist(p.pose,target)<=3.2+target.radius)hit(p,target,{amount:target.hp,critical:true,stun:0,lift:0,knock:0,direction:{x:0,z:0}},true);},
       effect:effect=>{if(room())broadcast(room(),{type:'effect',by:current().account.id,visual:effect},current().account.id);},
-      pet:()=>{const p=current(),pet=Game.ITEMS[p.account.profile.gear.pet]?.pet;return pet?{...pet,x:p.pose.x,z:p.pose.z}:null;},
+      pet:()=>{const p=current(),id=p.account.profile.gear.pet,pet=Game.ITEMS[id]?.pet;return pet?{...pet,dmg:pet.dmg*gearFactor(p.account.profile,id),x:p.pose.x,z:p.pose.z}:null;},
+      skillLevel:index=>skillLevel(combatProfile(current()),index),
       status:(target,kind,duration)=>{if(target.boss&&BOSS_RESISTED.includes(kind)){kind='slow';duration*=RESIST_SLOW;}target.statuses[kind]=Math.max(target.statuses[kind]||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});},
       moveTarget:(target,x,z)=>{if(dist(target,{x,z})>12)return;target.x=x;target.z=z;if(room())broadcast(room(),{type:'moveEnemy',id:target.id,x,z});}});
     engines.set(peer.account.id,engine);return engine;
@@ -239,7 +241,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     if(reason==='reset'){engine.nextBasic=0;engine.nextSkill=[0,0,0,0];}
   }
   function basic(peer,targetId){if(peer.visit||!peer.active||peer.account.profile.hp<=0)return;const e=engineFor(peer),now=Date.now();if(now<e.nextBasic)return;const target=state(rooms.get(peer.room)).enemies.get(targetId);if(e.sim.basic(target)){const weapon=Game.weaponStats(combatProfile(peer));e.nextBasic=now+Math.max(.12,(weapon.cd||.5)/Math.max(.2,1+Game.activeStats(peer.account.profile).haste))*1000;}}
-  function skill(peer,index){if(peer.visit||!peer.active||peer.account.profile.hp<=0||!Number.isInteger(index)||index<0||index>3)return;const e=engineFor(peer),now=Date.now();if(now<e.nextSkill[index])return;const profile=combatProfile(peer),dz=profile.gear.disguise,weapon=Game.weaponStats(profile),list=Game.DISGUISES[dz]?.skills||[...BASE_SKILLS,SPECIALS[weapon.special||'fist']||SPECIALS.fist];if(dz?e.sim.disguise(dz,index):e.sim.skill(index,weapon.special||'fist')){e.nextSkill[index]=now+list[index].cd/Math.max(.2,1+Game.activeStats(profile).haste)*1000;internal(peer.account.id,'skill',[],records=>{const s=records.get(peer.account.id).profile;Game.recordEvent(s,'skill');return {index};}).catch(()=>{});}}
+  function skill(peer,index){if(peer.visit||!peer.active||peer.account.profile.hp<=0||!Number.isInteger(index)||index<0||index>3)return;const e=engineFor(peer),now=Date.now();if(now<e.nextSkill[index])return;const profile=combatProfile(peer),dz=profile.gear.disguise,weapon=Game.weaponStats(profile),list=Game.DISGUISES[dz]?.skills||[...BASE_SKILLS,SPECIALS[weapon.special||'fist']||SPECIALS.fist];if(dz?e.sim.disguise(dz,index):e.sim.skill(index,weapon.special||'fist')){e.nextSkill[index]=now+skillCooldown(profile,index,list[index].cd,!!dz)/Math.max(.2,1+Game.activeStats(profile).haste)*1000;internal(peer.account.id,'skill',[],records=>{const s=records.get(peer.account.id).profile;Game.recordEvent(s,'skill');return {index};}).catch(()=>{});}}
   function damage(peer,enemyId,source='melee'){
     if(peer.visit)return;const room=rooms.get(peer.room),enemy=room&&state(room).enemies.get(enemyId),e=engineFor(peer),now=Date.now();
     if(!enemy||enemy.hp<=0)return;

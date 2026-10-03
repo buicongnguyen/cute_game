@@ -158,6 +158,8 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         if(data.type==='rest')requireNear(peer,{x:0,z:-8},7);
         // Cottage activities: in your own cottage (an indoor pose is raised by INDOOR_Y) and within reach of the thing.
         if(data.type==='houseUse'){if(!peer||peer.visit||state.planet!=='home'||!(peer.pose.y>=INDOOR_Y-1))fail(409,'Go inside your cottage first.');const spot=activity(typeof p.id==='string'?p.id:'');if(!spot||distance(peer.pose,spot.at)>3)fail(409,'Walk up to it first.');}
+        // The upgrade bench stands in the cottage's craft room (upgrade-bench.ts).
+        if(data.type==='upgradeGear'||data.type==='upgradeSkill'){const bench=activity('bench');if(!peer||peer.visit||state.planet!=='home'||!(peer.pose.y>=INDOOR_Y-1))fail(409,'Go inside your cottage first.');if(!bench||distance(peer.pose,bench.at)>3)fail(409,'Walk up to it first.');}
         if(data.type==='recoverBag'){if(!state.dropped||state.dropped.planet!==state.planet)fail(409,'That bag is not here.');requireNear(peer,state.dropped,4);}
         if(data.type==='claimMine')requireNear(peer,p.index===0?{x:-6,z:3}:{x:9,z:-8});
         if(data.type==='claimGift'){const a=p.index*2.399+.4,d=24+Math.sqrt(p.index/25)*95;requireNear(peer,{x:Math.cos(a)*d,z:Math.sin(a)*d});}

@@ -4,6 +4,7 @@ export interface CombatTarget extends CombatPoint { id: string; hp: number; maxH
 export interface CombatStats { attack: number; maxHp?:number; critChance: number; critDamage?: number; haste?: number; lifesteal?: number }
 export interface CombatHit { amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint }
 export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'; color: string; radius: number; facing?: number; duration?: number }
+import { skillTuning } from './skill-upgrades.ts';
 export interface CombatHost {
   position(): CombatPoint; facing(): number; face(angle: number): void;
   targets(): CombatTarget[]; weapon(): WeaponProfile; stats(): CombatStats;
@@ -16,6 +17,8 @@ export interface CombatHost {
   pet?():{x:number;z:number;dmg:number;cd:number;shot?:string}|null;
   status?(target:CombatTarget,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt',duration:number):void;
   moveTarget?(target:CombatTarget,x:number,z:number):void;
+  /** Upgrade level of base skill slot 0-3 (skill-upgrades.ts); missing = 0. */
+  skillLevel?(index:number):number;
 }
 export interface Projectile extends CombatPoint { id: number; direction: CombatPoint; speed: number; remaining: number; radius: number; color: string; kind: string; multiplier: number; hit: Set<string>; pierce: boolean; stun: number; lift: number; explosion: number }
 export interface CombatAlly extends CombatPoint {id:number;kind:'clone'|'turret'|'cannon'|'bat'|'snowman';life:number;cooldown:number;orbit:number}
@@ -50,7 +53,8 @@ export class CombatSimulation {
   readonly statuses: Record<string,number>={};
   readonly marked=new Map<string,number>();
   private host:CombatHost; private random:()=>number; private time=0; private serial=0; private combo=0;
-  private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;
+  /** Damage factor of the levelled skill being cast; delayed hits keep the factor they were cast with. */
+  private power=1;private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;
   private jobs:Scheduled[]=[]; private action:{kind:'dash'|'slam';until:number;started:number;direction:CombatPoint;speed:number;multiplier:number;hit:Set<string>}|null=null;
   constructor(host:CombatHost,random:()=>number=Math.random){this.host=host;this.random=random;}
   get visualScale(){return this.statuses.giant>0?2:1;}
@@ -65,13 +69,13 @@ export class CombatSimulation {
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing()){this.host.effect({...point,kind,radius,color,facing});}
-  private later(delay:number,run:()=>void){this.jobs.push({at:this.time+delay,run});}
+  private later(delay:number,run:()=>void){const power=this.power;this.jobs.push({at:this.time+delay,run:power===1?run:()=>{const old=this.power;this.power=power;try{run();}finally{this.power=old;}}});}
   private damage(target:CombatTarget,multiplier:number,stun=0,lift=0,knock=0){
     if(target.hp<=0)return;const stats=this.host.stats(),p=this.host.position();
     const critical=this.random()<stats.critChance,angle=Math.atan2(target.x-p.x,target.z-p.z);
     const bonus=(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?3:1)*(this.marked.has(target.id)?1.5:1);
     this.statuses.stealth=0;
-    const amount=Math.max(1,Math.round(stats.attack*multiplier*bonus*(critical?(stats.critDamage??2):1)*(.9+this.random()*.2)));
+    const amount=Math.max(1,Math.round(stats.attack*multiplier*this.power*bonus*(critical?(stats.critDamage??2):1)*(.9+this.random()*.2)));
     const applied=this.host.hit(target,{amount,critical,stun,lift,knock,direction:direction(angle)});
     const dealt=typeof applied==='number'?Math.max(0,Math.min(amount,applied)):amount;
     const lifesteal=(stats.lifesteal??0)+(this.statuses.lifesteal>0?.4:0);
@@ -90,7 +94,7 @@ export class CombatSimulation {
   }
   shoot(kind:string,angle:number,multiplier=1,range=11,extras:Partial<Projectile>={}){
     const p=this.host.position(),d=direction(angle);
-    this.projectiles.push({id:++this.serial,x:p.x+d.x*.6,z:p.z+d.z*.6,direction:d,speed:kind==='wave'?13:kind==='bigbubble'?7:19,remaining:range,radius:kind==='bigbubble'?.8:.22,color:colorFor(kind),kind,multiplier,hit:new Set(),pierce:kind==='wave',stun:kind==='ice'?1.5:0,lift:kind==='bigbubble'?3:0,explosion:kind==='fireball'?2:0,...extras});
+    this.projectiles.push({id:++this.serial,x:p.x+d.x*.6,z:p.z+d.z*.6,direction:d,speed:kind==='wave'?13:kind==='bigbubble'?7:19,remaining:range,radius:kind==='bigbubble'?.8:.22,color:colorFor(kind),kind,multiplier:multiplier*this.power,hit:new Set(),pierce:kind==='wave',stun:kind==='ice'?1.5:0,lift:kind==='bigbubble'?3:0,explosion:kind==='fireball'?2:0,...extras});
   }
   basic(target?:CombatTarget){
     if(this.action)return false;const weapon=this.host.weapon();if(weapon.kind==='rod')return false;
@@ -104,16 +108,19 @@ export class CombatSimulation {
     return true;
   }
   private dash(multiplier=1.7,speed=30,duration=.24){
-    this.action={kind:'dash',started:this.time,until:this.time+duration,direction:direction(this.aim()),speed,multiplier,hit:new Set()};
+    this.action={kind:'dash',started:this.time,until:this.time+duration,direction:direction(this.aim()),speed,multiplier:multiplier*this.power,hit:new Set()};
   }
   skill(index:number,special='fist'){
     if(this.action)return false;
     this.aim();
-    if(index===0){for(let i=0;i<10;i++)this.later(i*.22,()=>this.area(this.host.position(),this.host.weapon().kind==='sword'?3.4:2.8,.55));}
-    else if(index===1)this.dash();
-    else if(index===2){this.action={kind:'slam',started:this.time,until:this.time+.8,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};this.later(.42,()=>this.area(this.host.position(),4.4,2.3,.8,2.5,'#ffd091'));}
-    else return this.special(special);
-    return true;
+    const tuning=skillTuning(index,this.host.skillLevel?.(index)??0);this.power=tuning.damage;
+    try{
+      if(index===0){for(let i=0;i<10;i++)this.later(i*.22,()=>this.area(this.host.position(),(this.host.weapon().kind==='sword'?3.4:2.8)+tuning.radius,.55));}
+      else if(index===1)this.dash();
+      else if(index===2){this.action={kind:'slam',started:this.time,until:this.time+.8,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};this.later(.42,()=>this.area(this.host.position(),4.4+tuning.radius,2.3,.8,2.5,'#ffd091'));}
+      else return this.special(special);
+      return true;
+    }finally{this.power=1;}
   }
   special(id:string){
     const p={...this.host.position()},angle=this.aim(),d=direction(angle);
