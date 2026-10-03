@@ -9,6 +9,7 @@ const P = await import('../src/item-power.ts');
 const { CombatSimulation, BASE_SKILLS, SPECIALS } = await import('../src/combat.ts');
 const { applyGameAction } = await import('../src/actions.ts');
 const { benchHtml, benchGear, skillEffect } = await import('../src/upgrade-bench.ts');
+const IG = await import('../src/item-groups.ts');
 const { t, localizeHtml, setLanguage } = await import('../src/i18n.ts');
 const Tester = await import('../src/tester.ts');
 const { ACTIVITIES } = await import('../src/house-activities.ts');
@@ -62,7 +63,8 @@ test('workshop, forge and tester lists are sorted the same way', () => {
   }
   const s = M.newGame(); s.settings.tester = true; s.energy = 1e9;
   const html = Tester.testerShopHtml(s), order = [...html.matchAll(/data-action="tester-buy" data-item="([^"]+)"/g)].map(m => m[1]);
-  const weapons = order.filter(id => P.powerKind(M.ITEMS[id]) === 'weapon' && Tester.TESTER_ITEMS.find(i => i.id === id)!.category === Tester.TESTER_ITEMS.find(i => i.id === order.find(o => P.powerKind(M.ITEMS[o]) === 'weapon'))!.category);
+  // Grouped (item-groups.ts): inside each group, weakest to strongest.
+  const weapons = order.filter(id => IG.groupOf(id) === 'sword');
   assert.ok(weapons.length > 3 && nonDecreasing(weapons, P.itemScore), weapons.join(','));
 });
 

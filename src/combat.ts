@@ -3,8 +3,9 @@ export interface WeaponProfile { kind: 'fist'|'sword'|'gun'|'rod'; range?: numbe
 export interface CombatTarget extends CombatPoint { id: string; hp: number; maxHp?:number; boss?:boolean; radius: number; stun?: number }
 export interface CombatStats { attack: number; maxHp?:number; critChance: number; critDamage?: number; haste?: number; lifesteal?: number }
 export interface CombatHit { amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint; /** Dealt by the pet, not the explorer (timed challenges ignore it). */ helper?: boolean }
-export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number }
+export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'|'toss'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number }
 import { skillTuning } from './skill-upgrades.ts';
+import { dogTarget, DOG_TOSS_FLIGHT, DOG_TOSS_RANGE } from './guard-dog.ts';
 export interface CombatHost {
   position(): CombatPoint; facing(): number; face(angle: number): void;
   targets(): CombatTarget[]; weapon(): WeaponProfile; stats(): CombatStats;
@@ -15,6 +16,8 @@ export interface CombatHost {
   execute?(target:CombatTarget,healFraction:number):void;
   moving?():boolean;
   pet?():{x:number;z:number;dmg:number;cd:number;shot?:string}|null;
+  /** The guard dog when it may fight (following you away from home, guard-dog.ts): where it is, its toss factor and rate, and your target. */
+  dog?():{x:number;z:number;dmg:number;cd:number;target?:string|null}|null;
   status?(target:CombatTarget,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt',duration:number):void;
   moveTarget?(target:CombatTarget,x:number,z:number):void;
   /** Upgrade level of base skill slot 0-3 (skill-upgrades.ts); missing = 0. */
@@ -54,7 +57,7 @@ export class CombatSimulation {
   readonly marked=new Map<string,number>();
   private host:CombatHost; private random:()=>number; private time=0; private serial=0; private combo=0;
   /** Damage factor of the levelled skill being cast; delayed hits keep the factor they were cast with. */
-  private power=1;private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;
+  private power=1;private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;private dogCooldown=0;
   private jobs:Scheduled[]=[]; private action:{kind:'dash'|'slam';until:number;started:number;direction:CombatPoint;speed:number;multiplier:number;hit:Set<string>}|null=null;
   constructor(host:CombatHost,random:()=>number=Math.random){this.host=host;this.random=random;}
   get visualScale(){return this.statuses.giant>0?2:1;}
@@ -65,7 +68,7 @@ export class CombatSimulation {
   /** The movement skill in progress and its elapsed time, for the explorer's pose. */
   get pose(){return this.action?{kind:this.action.kind,t:this.time-this.action.started}:null;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0;}
-  reset(){this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing()){this.host.effect({...point,kind,radius,color,facing});}
@@ -203,6 +206,18 @@ this.emit('ring',p,8,'#d0f7ff');this.later(3,()=>{for(const t of targets)this.da
     else return this.special(effect);
     return true;
   }
+  /**
+   * The guard dog's toy toss (guard-dog.ts): a 'toss' effect from the dog (radius = distance, facing = direction) for the
+   * bone's arc, then the hit when it lands DOG_TOSS_FLIGHT later, if the creature is still alive and near.
+   */
+  private dogToss(dt:number){
+    this.dogCooldown=Math.max(0,this.dogCooldown-dt);const dog=this.host.dog?.();
+    if(!dog||!(dog.dmg>0)||!(dog.cd>0)||!Number.isFinite(dog.x)||!Number.isFinite(dog.z)||this.dogCooldown>0)return;
+    const target=dogTarget(dog,this.host.targets(),dog.target);if(!target)return;
+    const from={x:dog.x,z:dog.z},dmg=dog.dmg;this.dogCooldown=dog.cd;
+    this.emit('toss',from,Math.hypot(target.x-from.x,target.z-from.z),'#fff1d6',Math.atan2(target.x-from.x,target.z-from.z));
+    this.later(DOG_TOSS_FLIGHT,()=>{if(target.hp<=0||Math.hypot(target.x-from.x,target.z-from.z)>DOG_TOSS_RANGE+3+target.radius)return;this.helperShot=true;this.damage(target,dmg,0,0,.4);this.helperShot=false;/* the puppy's kill is not the player's for timed challenges */this.emit('impact',target,.45,'#fff1d6');});
+  }
   update(dt:number,active=true){
     if(!active||!Number.isFinite(dt)||dt<=0)return;this.time+=dt;
     const position=this.host.position(),moved=this.host.moving?.()??(!!this.lastStep&&Math.hypot(position.x-this.lastStep.x,position.z-this.lastStep.z)>dt);
@@ -215,6 +230,7 @@ this.emit('ring',p,8,'#d0f7ff');this.later(3,()=>{for(const t of targets)this.da
       if(target){const angle=Math.atan2(target.x-pet.x,target.z-pet.z);this.shoot(pet.shot??'fire',angle,pet.dmg,9,{x:pet.x,z:pet.z,stun:pet.shot==='ice'?.5:0,helper:true});// a pet's ice shot chills; 1.5 s at its 1.2-1.5 s rate froze a target for good
 this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot??'fire'),angle);}
     }
+    this.dogToss(dt);
     for(const key of Object.keys(this.statuses))this.statuses[key]=Math.max(0,this.statuses[key]-dt);
     for(const[id,time]of this.marked){if(time<=dt)this.marked.delete(id);else this.marked.set(id,time-dt);}
     const due=this.jobs.filter(job=>job.at<=this.time);this.jobs=this.jobs.filter(job=>job.at>this.time);for(const job of due)job.run();

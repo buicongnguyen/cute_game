@@ -88,6 +88,11 @@ test('only the player earns timed-challenge progress: the garden helper and the 
   const sim = new CombatSimulation({ position: () => ({ x: 0, z: 0 }), facing: () => 0, face() {}, moving: () => false, skillLevel: () => 1, targets: () => [target], weapon: () => ({ kind: 'melee', attack: 1 }) as never, stats: () => ({ attack: 10, critChance: 0 }) as never, move() {}, hit: (_t, h) => { hits.push(h); }, effect() {}, pet: () => ({ x: 0, z: 0, dmg: 1, cd: 1 }) } as never);
   for (let i = 0; i < 20; i++) sim.update(.05, true);
   assert.ok(hits.length > 0 && hits.every(h => h.helper === true), 'pet shots carry helper: true');
+  // The puppy's bone toss is a helper's hit too.
+  const dogHits: { helper?: boolean }[] = [], prey = { id: 'b', x: 0, z: 3, hp: 50, radius: .6 };
+  const withDog = new CombatSimulation({ position: () => ({ x: 0, z: 0 }), facing: () => 0, face() {}, moving: () => false, skillLevel: () => 1, targets: () => [prey], weapon: () => ({ kind: 'melee', attack: 1 }) as never, stats: () => ({ attack: 10, critChance: 0 }) as never, move() {}, hit: (_t, h) => { dogHits.push(h); }, effect() {}, dog: () => ({ x: 0, z: 1, dmg: 1, cd: 2.5 }) } as never);
+  for (let i = 0; i < 20; i++) withDog.update(.05, true);
+  assert.ok(dogHits.length > 0 && dogHits.every(h => h.helper === true), 'puppy tosses carry helper: true');
 });
 
 test('the keyboard guide shows the layout chosen in Settings and folds itself after the keys are learned', () => {

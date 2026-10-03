@@ -14,7 +14,9 @@ export interface DogPose { key: string; x: number; z: number; y?: number; headin
 export const MAX_DOGS = 12;
 /** Drawn at the pen's size; its hip height (metres) is the walk cycle's leg length. */
 const SIZE = SHOWN.dog, LEG = .19 * SIZE;
-interface Live { gait: Gait; x: number; z: number; still: number; sit: number; seed: number; seen: boolean }
+interface Live { gait: Gait; x: number; z: number; still: number; sit: number; seed: number; seen: boolean; /** 1 at a throw, fading to 0 over TOSS_TIME: the head-toss. */ toss: number }
+/** Seconds a head-toss takes (the bone leaves at its top). */
+const TOSS_TIME = .4;
 
 export class DogFollowView {
   readonly group = new T.Group();
@@ -45,10 +47,11 @@ export class DogFollowView {
     for (const key of this.live.keys()) if (!dogs.some(d => d.key === key)) this.live.delete(key);
     for (let n = 0; n < dogs.length && n < MAX_DOGS; n++) {
       const d = dogs[n]; let l = this.live.get(d.key);
-      if (!l) { l = { gait: newGait(), x: d.x, z: d.z, still: 0, sit: 0, seed: (n * 2.399) % 6.28, seen: true }; this.live.set(d.key, l); }
+      if (!l) { l = { gait: newGait(), x: d.x, z: d.z, still: 0, sit: 0, seed: (n * 2.399) % 6.28, seen: true, toss: 0 }; this.live.set(d.key, l); }
       let dist = Math.hypot(d.x - l.x, d.z - l.z); if (dist > 3) dist = 0; // a placement is not a step
       l.x = d.x; l.z = d.z; stepGait(l.gait, dist, dt, LEG);
-      l.still = dist > dt * .05 ? 0 : l.still + dt;
+      l.toss = Math.max(0, l.toss - dt / TOSS_TIME);
+      l.still = dist > dt * .05 || l.toss > 0 ? 0 : l.still + dt;
       // After a moment standing still it sits; it gets up the instant it moves.
       l.sit += ((l.still > 1.2 ? 1 : 0) - l.sit) * (1 - Math.exp(-dt * (l.still > 1.2 ? 4 : 12)));
       const b = l.gait.blend, phase = l.gait.phase, bob = Math.abs(Math.cos(phase)) * .045 * b, swing = .75 * b;
@@ -61,7 +64,7 @@ export class DogFollowView {
           if (part.draw === 'legs') {
             // Front legs stand straight while sitting (the body tilts back); the back legs fold forward under it.
             const front = at.z > 0; rx = sign * Math.sin(phase) * swing + (front ? l.sit * .32 : -l.sit * 1.1);
-          } else if (part.draw === 'head') { rx = -l.sit * .25 + Math.sin(time * 1.7 + l.seed) * .06; ry = Math.sin(time * .6 + l.seed) * .25 * (1 - b); }
+          } else if (part.draw === 'head') { rx = -l.sit * .25 + Math.sin(time * 1.7 + l.seed) * .06 + (l.toss > 0 ? Math.sin((1 - l.toss) * Math.PI * 2) * .55 : 0); /* the toss: chin down to scoop, then a flick up */ ry = Math.sin(time * .6 + l.seed) * .25 * (1 - b); }
           else if (part.draw === 'tail') ry = Math.sin(time * (b > .3 ? 13 : 8) + l.seed) * .55;
           this.local.compose(this.v.copy(at), this.q.setFromEuler(this.e.set(rx, ry, 0)), this.one);
           const i = p.mesh.count; if (i >= p.mesh.instanceMatrix.count) continue;
@@ -71,6 +74,12 @@ export class DogFollowView {
       }
     }
     for (const p of this.meshes) { p.mesh.visible = p.mesh.count > 0; if (p.mesh.count) { p.mesh.instanceMatrix.needsUpdate = true; p.coatA.needsUpdate = true; p.coatB.needsUpdate = true; } }
+  }
+  /** The dog nearest (x, z) (within 3 m) tosses its head: the throw a 'toss' effect starts. */
+  tossAt(x: number, z: number) {
+    let best: Live | null = null, bestD = 3;
+    for (const l of this.live.values()) { const d = Math.hypot(l.x - x, l.z - z); if (d < bestD) { bestD = d; best = l; } }
+    if (best) best.toss = 1;
   }
   /** Draw calls the dogs cost now (shadow pass: the body only). */
   get draws() { return this.group.visible ? this.meshes.filter(p => p.mesh.visible).length : 0; }

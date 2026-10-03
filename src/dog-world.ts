@@ -2,6 +2,7 @@ import type * as T from 'three';
 import { coatOf, PEN, type SaveState } from './model.ts';
 import { farmKit, type FarmPenView } from './farm-view.ts';
 import { DogFollowView, type DogPose } from './dog-follow.ts';
+import { DogTossView } from './dog-toss-view.ts';
 import { dogFollows, leashSpot, newDogLink, stepDog, trailSpot, DOG_FAR, type DogLink } from './guard-dog.ts';
 
 /** What the dog needs from the world (world.ts passes itself). */
@@ -21,6 +22,8 @@ export function dogCoatOf(s: SaveState) { const a = s.farm?.animals?.find(x => x
  */
 export class GuardDogs {
   readonly view = new DogFollowView();
+  /** Thrown bones (one pooled draw). */
+  readonly bones = new DogTossView();
   readonly link: DogLink = newDogLink();
   private planet = '';
   private kit = farmKit.ready;
@@ -29,7 +32,8 @@ export class GuardDogs {
   /** Where your dog is now: 'pen', 'follow' or 'return' (for probes and tests). */
   get place() { return this.link.place; }
   update(h: DogHost, dt: number) {
-    if (this.view.group.parent !== h.scene) h.scene.add(this.view.group);
+    if (this.planet !== h.planet) this.bones.clear();
+    if (this.view.group.parent !== h.scene) { h.scene.add(this.view.group); h.scene.add(this.bones.mesh); }
     if (this.kit !== farmKit.ready) { this.kit = farmKit.ready; this.view.refresh(); }
     const poses = this.poses; poses.length = 0;
     const coat = h.ownDog ? h.ownDog() : dogCoatOf(h.state), pen = h.planet === 'home' && h.farmView?.isBuilt ? h.farmView : null;
@@ -56,6 +60,9 @@ export class GuardDogs {
     }
     for (const id of this.remote.keys()) if (!h.remotePlayers?.has(id)) this.remote.delete(id);
     this.view.update(dt, h.time, poses);
+    this.bones.update(dt);
   }
-  dispose() { this.view.dispose(); }
+  /** A 'toss' combat effect (yours or another explorer's): the nearest dog flicks its head and a bone flies. */
+  toss(e: { x: number; z: number; radius: number; facing?: number }) { this.view.tossAt(e.x, e.z); this.bones.throw(e.x, e.z, e.facing ?? 0, e.radius); }
+  dispose() { this.view.dispose(); this.bones.dispose(); }
 }
