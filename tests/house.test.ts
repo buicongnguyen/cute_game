@@ -156,7 +156,8 @@ test('friends sit in the big room wearing what they were given, and change at on
   const s = seeded(), view = new HouseView();
   view.syncFriends(friendsOf(s));
   const gearOn = (id: string) => { const items: string[] = []; view.friends.get(id as 'sprout')!.group.traverse(o => { if (o.userData.gear) items.push(o.userData.gear); }); return items; };
-  assert.deepEqual(gearOn('sprout'), ['hat_straw']); assert.deepEqual(gearOn('pepper'), ['pet_parrot']);
+  // Pepper wears her chef's hat indoors too: the same model as outdoors (friend-view.ts friendModel), so the same size.
+  assert.deepEqual(gearOn('sprout'), ['hat_straw']); assert.deepEqual(gearOn('pepper'), ['hat_chef', 'pet_parrot']);
   const before = view.friends.get('sprout')!.group;
   giveGear(s, 'sprout', 'hat_cowboy'); view.syncFriends(friendsOf(s));
   assert.notEqual(view.friends.get('sprout')!.group, before); assert.deepEqual(gearOn('sprout'), ['hat_cowboy']);

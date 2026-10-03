@@ -32,19 +32,27 @@ export interface Fit { scale: [number, number, number]; offset: [number, number,
 
 export const DECOS = ['bear', 'panda', 'fox', 'kitty', 'frog', 'piggy', 'chick', 'koala', 'tiger', 'penguin', 'monkey', 'owl'] as const;
 export const ROWS: Record<LookRow, readonly LookOption[]> = { body: ['boy', 'girl', 'sturdy', 'slim'], height: ['tiny', 'chibi', 'teen', 'tall', 'grown'], ears: ['none', 'cat', 'bunny'], deco: ['bare', ...DECOS] };
-export const ROW_NAMES: Record<LookRow, string> = { body: 'Body', height: 'Height', ears: 'Ears', deco: 'Head decoration' };
-/** `art`: a Blender portrait at assets/icons/looks/<id>.webp (build_hero_styles.py render_deco_icons); the emoji is its alt. */
-export const OPTIONS: Record<LookOption, { name: string; price: number; icon: string; art?: boolean }> = {
+export const ROW_NAMES: Record<LookRow, string> = { body: 'Body', height: 'Height', ears: 'Ears', deco: 'Hood' }; // every head decoration is an animal hood: the short name fits beside a phone's tiles
+/**
+ * Every option has a Blender portrait at assets/icons/looks/<id>.webp (build_hero_styles.py render_option_icons: the
+ * default explorer with only that option changed); `icon` is its alt text and the stand-in if the picture fails.
+ */
+export const OPTIONS: Record<LookOption, { name: string; price: number; icon: string }> = {
   boy: { name: 'Boy', price: 0, icon: '👦' }, girl: { name: 'Girl', price: 0, icon: '👧' }, sturdy: { name: 'Sturdy', price: 0, icon: '💪' }, slim: { name: 'Slim', price: 0, icon: '🌿' },
   tiny: { name: 'Tiny', price: 80, icon: '👶' }, chibi: { name: 'Chibi', price: 0, icon: '🧒' }, teen: { name: 'Teen', price: 80, icon: '🧑' }, tall: { name: 'Tall', price: 120, icon: '🧍' }, grown: { name: 'Grown-up', price: 160, icon: '🚶' },
   none: { name: 'No ears', price: 0, icon: '🙂' }, cat: { name: 'Cat ears', price: 150, icon: '🐱' }, bunny: { name: 'Bunny ears', price: 150, icon: '🐰' },
   bare: { name: 'No hood', price: 0, icon: '✨' },
-  bear: { name: 'Bear hood', price: 110, icon: '🐻', art: true }, panda: { name: 'Panda hood', price: 130, icon: '🐼', art: true }, fox: { name: 'Fox hood', price: 120, icon: '🦊', art: true },
-  kitty: { name: 'Kitty hood', price: 110, icon: '🐱', art: true }, frog: { name: 'Frog hood', price: 110, icon: '🐸', art: true }, piggy: { name: 'Piggy hood', price: 110, icon: '🐷', art: true },
-  chick: { name: 'Chick hood', price: 110, icon: '🐥', art: true }, koala: { name: 'Koala hood', price: 130, icon: '🐨', art: true }, tiger: { name: 'Tiger hood', price: 140, icon: '🐯', art: true },
-  penguin: { name: 'Penguin hood', price: 120, icon: '🐧', art: true }, monkey: { name: 'Monkey hood', price: 120, icon: '🐵', art: true }, owl: { name: 'Owl hood', price: 130, icon: '🦉', art: true },
+  bear: { name: 'Bear hood', price: 110, icon: '🐻' }, panda: { name: 'Panda hood', price: 130, icon: '🐼' }, fox: { name: 'Fox hood', price: 120, icon: '🦊' },
+  kitty: { name: 'Kitty hood', price: 110, icon: '🐱' }, frog: { name: 'Frog hood', price: 110, icon: '🐸' }, piggy: { name: 'Piggy hood', price: 110, icon: '🐷' },
+  chick: { name: 'Chick hood', price: 110, icon: '🐥' }, koala: { name: 'Koala hood', price: 130, icon: '🐨' }, tiger: { name: 'Tiger hood', price: 140, icon: '🐯' },
+  penguin: { name: 'Penguin hood', price: 120, icon: '🐧' }, monkey: { name: 'Monkey hood', price: 120, icon: '🐵' }, owl: { name: 'Owl hood', price: 130, icon: '🦉' },
 };
 export const DEFAULT_LOOK: LookId = 'boy-chibi-none-bare';
+/**
+ * Standing height of each height's body file over the chibi's (tests/w26-people.test.ts measures the GLBs). A friend
+ * (friend-view.ts) divides it out: for a friend the height option sets the proportions and growth sets the height.
+ */
+export const HEIGHT_RATIO: Record<Height, number> = { tiny: .979, chibi: 1, teen: 1.066, tall: 1.152, grown: 1.398 };
 export const LOOK_IDS: readonly LookId[] = ROWS.body.flatMap(b => ROWS.height.flatMap(h => ROWS.ears.flatMap(e => ROWS.deco.map(d => [b, h, e, d].join('-') as LookId))));
 const LOOK_SET = new Set<string>(LOOK_IDS);
 /** The old single-choice looks (saves and presence from before the builder). */

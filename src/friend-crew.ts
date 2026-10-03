@@ -1,7 +1,7 @@
 import * as T from 'three';
 import * as M from './model.ts';
 import { cageKit, heroKit, wearKit, weaponKit, petKit } from './assets.ts';
-import { buildFriend, poseFriend, FRIEND_SCALE, type FriendPose } from './friend-view.ts';
+import { buildFriend, friendModel, friendSignature, poseFriend, FRIEND_SCALE, type FriendPose } from './friend-view.ts';
 import { CAGES, FRIENDS, FRIEND_IDS, cageState, friendsOf, inVillage, nextFriendTask, friendStage, friendHeight, type CageState, type Friend, type FriendId, type FriendTask, type WorkResult } from './friends.ts';
 import type { World, Entity } from './world.ts';
 import { dropTree } from './dispose-tree.ts';
@@ -147,7 +147,7 @@ export class FriendCrew {
   // ---- Friends ----
   private actor(id: FriendId, f: Friend): Actor {
     let a = this.actors.get(id);
-    const stage = friendStage(f), sig = JSON.stringify(f.gear) + this.kitSig() + stage;
+    const stage = friendStage(f), sig = friendSignature(f) + this.kitSig();
     if (a && a.sig !== sig) {
       const grew = stage > (a.root.userData.stage ?? 0);
       dropTree(a.root); a.root = this.dress(id, f); a.sig = sig; this.group.add(a.root); this.fitProxy(a.entity.mesh, stage);
@@ -164,8 +164,8 @@ export class FriendCrew {
       x: POSTS[id].x, z: POSTS[id].z, facing: 0, t: Math.random() * 9, gait: newGait(), swing: .6, pose: 'idle', task: null, workT: 0, think: 0, cookT: 0, cheerT: 0, pending: false, wander: 0 };
     this.group.add(a.root); this.actors.set(id, a); return a;
   }
-  /** Freed friends wear a work hat (display only, never saved) unless the player gave them one; prisoners have none. */
-  private dress(id: FriendId, f: Friend) { const r = buildFriend(id, { hat: WORK_HATS[id], ...f.gear }, friendStage(f)); r.userData.friend = id; return r; }
+  /** The same model as in the cottage (friend-view.ts friendModel): gear, work hat, look and growth stage. */
+  private dress(id: FriendId, f: Friend) { const r = friendModel(f); r.userData.friend = id; return r; }
   /** The label box grows with the friend, so the name stays just above its head. */
   private fitProxy(proxy: T.Object3D, stage: number) { proxy.scale.set(1, friendHeight(stage) / friendHeight(0), 1); }
   private hide(a: Actor) { a.root.visible = false; this.setEntity(a, false); }
@@ -272,7 +272,6 @@ export class FriendCrew {
   /** For the status line and tests. */
   activity(id: FriendId): string { const a = this.actors.get(id); return !a ? 'away' : a.pose; }
 }
-const WORK_HATS: Record<FriendId, string> = { sprout: 'hat_straw', clover: 'hat_cowboy', pepper: 'hat_chef' };
 let PROXY_BOX: T.BoxGeometry | null = null;
 const ICONS: Record<Friend['role'], string> = { garden: '🌱', farm: '🐄', cook: '🍳' };
 export { FRIEND_SCALE };

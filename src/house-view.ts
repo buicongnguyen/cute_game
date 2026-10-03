@@ -10,7 +10,7 @@ import { KitLibrary, heroKit, wearKit, weaponKit, petKit, modelUrl } from './ass
 import { toonMaterial } from './toon.ts';
 import { FURNITURE, FRIEND_SPOTS, HOUSE, ROOMS, WALL, WALLS, roomAt, walkable, type Placement, type Point } from './house.ts';
 import { findRoute } from './navigation.ts';
-import { buildFriend } from './friend-view.ts';
+import { friendModel, friendSignature } from './friend-view.ts';
 import { dropTree } from './dispose-tree.ts';
 import { friendStage } from './growth.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends.ts';
@@ -201,11 +201,12 @@ export class HouseView {
     const seen = new Set<FriendId>();
     assignHangouts(list.map(f => f.role), time, this.hangouts); this.schedulePhase = Math.floor(time / SCHEDULE_SECONDS);
     list.forEach((friend, index) => {
-      const spot = HANGOUTS[this.hangouts[index]] ?? FRIEND_SPOTS[index % FRIEND_SPOTS.length], signature = JSON.stringify(friend.gear) + index + kitStamp() + friendStage(friend), known = this.friends.get(friend.id);
+      const spot = HANGOUTS[this.hangouts[index]] ?? FRIEND_SPOTS[index % FRIEND_SPOTS.length], signature = friendSignature(friend) + index + kitStamp(), known = this.friends.get(friend.id);
       seen.add(friend.id);
       if (known && known.signature === signature) { known.spot = spot; known.stage = friendStage(friend); return; }
       if (known) this.dropFriend(known);
-      const group = buildFriend(friend.id, friend.gear, friendStage(friend)); group.userData.friendId = friend.id;
+      // The outdoor builder (friend-view.ts friendModel): same gear, work hat, look and stage, so the same size as outside.
+      const group = friendModel(friend); group.userData.friendId = friend.id;
       // Friends are small and keep still: they skip the shadow pass (it would cost a draw per part).
       group.traverse(o => { o.castShadow = false; });
       group.position.set(spot.x, spot.y ?? 0, spot.z); group.rotation.y = spot.facing;

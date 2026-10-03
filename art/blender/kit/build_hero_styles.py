@@ -32,6 +32,8 @@ Run from the repository root:
     blender -b --factory-startup --python art/blender/kit/build_hero_styles.py -- [--install] [--render]
 
 --render writes art/previews/kit/hero-styles.webp: every combination, bare-headed and in a hat.
+--icons renders only the mirror's 25 option portraits (public/assets/icons/looks/<option>.webp with --install)
+and art/previews/kit/look-icons.webp, without exporting any GLB; --render renders them too.
 """
 import bpy
 import json
@@ -607,29 +609,85 @@ def render_heights():
     BH.composite(paths, lay, (len(bodies) * len(HEIGHTS) * W, H), os.path.join(BH.PREVIEWS, 'hero-heights.webp'))
 
 
-def render_deco_icons(install):
-    """Shop portraits: the chibi head in each decoration, 128 px, transparent webp under 8 KB."""
+# The mirror's option portraits (src/looks.ts OPTIONS, src/look-shop.ts): one 128 px transparent webp per option,
+# under 8 KB, each the default explorer (boy, chibi, no ears, no hood) with only that option changed. Ears and hoods
+# are head portraits; bodies and heights are whole figures. The five heights share one scale and one ground line, so
+# the row reads as a ladder from Tiny to Grown-up. Framing per row: (elevation, yaw, camera target z, ortho scale).
+ICON_FRAMES = {
+    'body': (12, -22, 1.18, 2.55),
+    'height': (8, -20, 1.72, 3.55),
+    'ears': (20, -32, 1.9, 2.25),
+    'deco': (26, -18, 1.72, 1.95),
+}
+OPTION_ROWS = {
+    'body': ('boy', 'girl', 'sturdy', 'slim'),
+    'height': tuple(HEIGHTS),
+    'ears': EARS,
+    'deco': ('bare',) + DECOS,
+}
+
+
+def option_combo(row, option, prefix):
+    """The default explorer with one option changed (sturdy and slim are builds on the boy and girl files)."""
+    M = BH.hero_materials()
+    if row == 'body':
+        return make_combo(option, 'chibi', M, prefix=prefix)
+    if row == 'height':
+        return make_combo('boy', option, M, prefix=prefix)
+    if row == 'ears':
+        return make_combo('boy', 'chibi', M, prefix=prefix, ears=option)
+    return make_combo('boy', 'chibi', M, prefix=prefix, deco=None if option == 'bare' else option)
+
+
+def render_option_icons(install):
+    """Every option of every row (25 portraits) into art/generated/kit/icons/looks/ (--install: public/assets/icons/looks/)."""
     out_dir = os.path.join(BH.GEN, 'icons', 'looks')
     pub = os.path.join(BH.REPO, 'public', 'assets', 'icons', 'looks')
     os.makedirs(out_dir, exist_ok=True)
-    for deco in DECOS:
-        objs, _, _ = make_combo('boy', 'chibi', BH.hero_materials(), prefix=f'i{deco} ', deco=deco)
-        BH.pose(objs, yaw=math.radians(-18))
-        BH.stage((128, 128), transparent=True, world=0.6, exposure=-0.15)
-        cam = BH.camera(26, -18, target=(0, 0, 1.72))
-        cam.data.ortho_scale = 1.95
-        bpy.ops.render.render(write_still=False)
-        path = os.path.join(out_dir, deco + '.webp')
-        BH.save_webp_under(path, BH.ICON_LIMIT)
-        if install:
-            os.makedirs(pub, exist_ok=True)
-            shutil.copy2(path, os.path.join(pub, deco + '.webp'))
-        bpy.data.objects.remove(cam, do_unlink=True)
-        BH.remove_tree(objs['hero'])
+    written = {}
+    for row, options in OPTION_ROWS.items():
+        elev, yaw, z, ortho = ICON_FRAMES[row]
+        for option in options:
+            objs, _, _ = option_combo(row, option, f'i{option} ')
+            BH.pose(objs, yaw=math.radians(yaw))
+            BH.stage((128, 128), transparent=True, world=0.6, exposure=-0.15)
+            cam = BH.camera(elev, yaw, target=(0, 0, z))
+            cam.data.ortho_scale = ortho
+            bpy.ops.render.render(write_still=False)
+            path = os.path.join(out_dir, option + '.webp')
+            BH.save_webp_under(path, BH.ICON_LIMIT)
+            written[option] = os.path.getsize(path)
+            if install:
+                os.makedirs(pub, exist_ok=True)
+                shutil.copy2(path, os.path.join(pub, option + '.webp'))
+            bpy.data.objects.remove(cam, do_unlink=True)
+            BH.remove_tree(objs['hero'])
+    print('look icons', written)
+    return written
+
+
+def render_icon_sheet():
+    """art/previews/kit/look-icons.webp: the 25 portraits in their four rows, for review (composite eats its inputs: copies)."""
+    src, tmp = os.path.join(BH.GEN, 'icons', 'looks'), os.path.join(BH.GEN, '_tmp')
+    os.makedirs(tmp, exist_ok=True)
+    paths, lay = [], []
+    for r, (row, options) in enumerate(OPTION_ROWS.items()):
+        for c, option in enumerate(options):
+            copy = os.path.join(tmp, f'icon_{option}.webp')
+            shutil.copy2(os.path.join(src, option + '.webp'), copy)
+            paths.append(copy)
+            lay.append((c * 128, (len(OPTION_ROWS) - 1 - r) * 128))
+    BH.composite(paths, lay, (13 * 128, len(OPTION_ROWS) * 128), os.path.join(BH.PREVIEWS, 'look-icons.webp'))
 
 
 def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+    if '--icons' in argv:      # only the mirror's option portraits (no GLB export): -- --icons [--install]
+        reset_scene()
+        render_option_icons('--install' in argv)
+        render_icon_sheet()
+        print('Look icons OK')
+        return
     out, failures = {'fit': {h: fit_table(h) for h in HEIGHTS}, 'bodies': {}}, []
     for body in BODIES:
         for height in HEIGHTS:
@@ -669,7 +727,8 @@ def main():
         raise RuntimeError('Hero styles: ' + '; '.join(failures))
     if '--render' in argv:
         reset_scene()
-        render_deco_icons('--install' in argv)
+        render_option_icons('--install' in argv)
+        render_icon_sheet()
         reset_scene()
         render_decos()
         reset_scene()
