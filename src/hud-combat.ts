@@ -4,6 +4,7 @@ import type { Enemy, Entity } from './world.ts';
 import { ENEMY_TYPES, HOME_SPAWNS, PLANET_SPAWNS, PLANET_BOSSES } from './enemy-types.ts';
 import { PLANETS, type PlanetId } from './model.ts';
 import { modelIcon } from './icons.ts';
+import { statusMarks } from './skill-info.ts';
 
 /**
  * The combat HUD: over-head HP bars, the target frame, the boss-bar rule, tracker folding and the
@@ -15,7 +16,7 @@ export const BAR = { w: 80, h: 17 };
 /** A creature is engaged once it chases, winds up or attacks; walking home or idling is calm. */
 export const aggro = (e: Pick<Enemy, 'phase'>) => !!e.phase && e.phase !== 'idle' && e.phase !== 'return';
 /** Over-head bars show while hurt, aggro or selected, never for bosses (they use the boss bar). */
-export const engaged = (e: Enemy, selected: unknown) => e.hp > 0 && !e.boss && (e.hp < e.maxHp || aggro(e) || e === selected);
+export const engaged = (e: Enemy, selected: unknown) => e.hp > 0 && !e.boss && (e.hp < e.maxHp || aggro(e) || e === selected || statusMarks(e) !== '');
 
 export interface BarSpot { id: string; x: number; y: number }
 /**
@@ -104,7 +105,9 @@ const portrait = (e: Enemy) => { if ((e.flash ?? 0) > 0) return null; const url 
 
 /** DOM side: owns the over-head bars in the label layer and fills the target frame and boss bar. */
 export class CombatHud {
-  private bars = new Map<string, { el: HTMLDivElement; fill: HTMLElement; lv: HTMLElement; pct: number; level: number; sel: boolean }>();
+  private bars = new Map<string, { el: HTMLDivElement; fill: HTMLElement; lv: HTMLElement; mark: HTMLElement; marks: string; pct: number; level: number; sel: boolean }>();
+  /** Parrot marks live in the combat simulation, not on the creature (main.ts sets this). */
+  isMarked: (id: string) => boolean = () => false;
   private lastHit: { e: Enemy; at: number } | null = null;
   private targetId = ''; private bossId = '';
   private layer: HTMLElement; private screen: Screen;
@@ -130,12 +133,15 @@ export class CombatHud {
       const e = items[i].e; live.add(s.id);
       let bar = this.bars.get(s.id);
       if (!bar) {
-        const el = document.createElement('div'); el.className = 'enemy-label'; el.dataset.entity = s.id; el.innerHTML = '<span></span><i><b></b></i>';
-        this.layer.append(el); bar = { el, lv: el.firstElementChild as HTMLElement, fill: el.querySelector('b')!, pct: -1, level: -1, sel: false }; this.bars.set(s.id, bar);
+        const el = document.createElement('div'); el.className = 'enemy-label'; el.dataset.entity = s.id; el.innerHTML = '<span></span><i><b></b></i><em class="status-marks" hidden></em>';
+        this.layer.append(el); bar = { el, lv: el.firstElementChild as HTMLElement, fill: el.querySelector('b')!, mark: el.querySelector('em')!, marks: '', pct: -1, level: -1, sel: false }; this.bars.set(s.id, bar);
       }
       const pct = Math.round(e.hp / e.maxHp * 100), level = e.level ?? 1, sel = e === selected;
       if (pct !== bar.pct) { bar.fill.style.width = `${pct}%`; bar.pct = pct; }
       if (level !== bar.level) { bar.lv.textContent = String(level); bar.level = level; }
+      // Status marks (stun, sheep, charm, fear, blind, taunt, slow, parrot mark) ride on the bar: written only when they change.
+      const marks = statusMarks(e, this.isMarked(e.id));
+      if (marks !== bar.marks) { bar.mark.textContent = marks; bar.mark.hidden = !marks; bar.marks = marks; }
       if (sel !== bar.sel) { bar.el.classList.toggle('sel', sel); bar.sel = sel; }
       bar.el.style.transform = `translate(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px) translate(-50%,-100%)`;
     });

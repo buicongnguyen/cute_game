@@ -3,7 +3,7 @@ export interface WeaponProfile { kind: 'fist'|'sword'|'gun'|'rod'; range?: numbe
 export interface CombatTarget extends CombatPoint { id: string; hp: number; maxHp?:number; boss?:boolean; radius: number; stun?: number }
 export interface CombatStats { attack: number; maxHp?:number; critChance: number; critDamage?: number; haste?: number; lifesteal?: number }
 export interface CombatHit { amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint }
-export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'; color: string; radius: number; facing?: number; duration?: number }
+export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number }
 import { skillTuning } from './skill-upgrades.ts';
 export interface CombatHost {
   position(): CombatPoint; facing(): number; face(angle: number): void;
@@ -86,7 +86,7 @@ export class CombatSimulation {
     for(const target of this.host.targets())if(target.hp>0&&Math.hypot(target.x-point.x,target.z-point.z)<=radius+target.radius)this.damage(target,multiplier,stun,lift,knock);
   }
   private arc(radius:number,multiplier:number,threshold:number,target?:CombatTarget,knock=1.2){
-    const p=this.host.position(),d=direction(this.host.facing());this.emit('arc',p,radius,this.host.weapon().fx??'#fff4c8');
+    const p=this.host.position(),d=direction(this.host.facing());this.host.effect({...p,kind:'arc',radius,color:this.host.weapon().fx??'#fff4c8',facing:this.host.facing(),arc:2*Math.acos(Math.max(-1,Math.min(1,threshold)))});
     for(const enemy of this.host.targets()){
       const x=enemy.x-p.x,z=enemy.z-p.z,length=Math.hypot(x,z);
       if(enemy.hp>0&&length<=radius+enemy.radius&&(enemy===target||length===0||(x*d.x+z*d.z)/length>=threshold))this.damage(enemy,multiplier,.15,0,knock);
@@ -115,9 +115,9 @@ export class CombatSimulation {
     this.aim();
     const tuning=skillTuning(index,this.host.skillLevel?.(index)??0);this.power=tuning.damage;
     try{
-      if(index===0){for(let i=0;i<10;i++)this.later(i*.22,()=>this.area(this.host.position(),(this.host.weapon().kind==='sword'?3.4:2.8)+tuning.radius,.55));}
+      if(index===0){const radius=(this.host.weapon().kind==='sword'?3.4:2.8)+tuning.radius;this.host.effect({...this.host.position(),kind:'cast',radius,color:'#e5f6ff',duration:.5});for(let i=0;i<10;i++)this.later(i*.22,()=>this.area(this.host.position(),radius,.55));}
       else if(index===1)this.dash();
-      else if(index===2){this.action={kind:'slam',started:this.time,until:this.time+.8,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};this.later(.42,()=>this.area(this.host.position(),4.4+tuning.radius,2.3,.8,2.5,'#ffd091'));}
+      else if(index===2){this.action={kind:'slam',started:this.time,until:this.time+.8,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};this.host.effect({...this.host.position(),kind:'cast',radius:4.4+tuning.radius,color:'#ffd091',duration:.45});this.later(.42,()=>this.area(this.host.position(),4.4+tuning.radius,2.3,.8,2.5,'#ffd091'));}
       else return this.special(special);
       return true;
     }finally{this.power=1;}
@@ -133,12 +133,12 @@ export class CombatSimulation {
       case 'bigbubble':this.shoot('bigbubble',angle,1.2,11,{stun:3});break;
       case 'nova':case 'blizzard':for(let i=0;i<24;i++)this.shoot(id==='nova'?'spike':'ice',i*Math.PI/12,id==='nova'?1.1:1,id==='nova'?8:9);break;
       case 'magma':for(let i=1;i<=5;i++)this.later(i*.09,()=>this.area({x:p.x+d.x*i*1.7,z:p.z+d.z*i*1.7},1.6,1.5,.5,1.8,'#ff9357'));break;
-      case 'thunder':this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<10).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z)).slice(0,6).forEach((target,i)=>this.later(i*.09,()=>{this.emit('impact',target,1,'#a6f8ff');this.damage(target,2.4,2);}));break;
+      case 'thunder':this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<10).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z)).slice(0,6).forEach((target,i,list)=>this.later(i*.09,()=>{const from=i?list[i-1]:this.host.position();this.host.effect({x:from.x,z:from.z,kind:'beam',radius:Math.hypot(target.x-from.x,target.z-from.z),color:'#a6f8ff',facing:Math.atan2(target.x-from.x,target.z-from.z),duration:.3,width:.35});this.emit('impact',target,1,'#a6f8ff');this.damage(target,2.4,2);}));break;
       case 'bonk':this.area({x:p.x+d.x*1.6,z:p.z+d.z*1.6},3.6,2.2,3,2,'#ffe14d');break;
       case 'whirl':for(let i=0;i<3;i++)this.later(i*.22,()=>this.area(this.host.position(),4.4,1.4,.2,0,'#c9e8ff'));break;
       case 'starfall':{const target={...(this.nearest(13)??{x:p.x+d.x*6,z:p.z+d.z*6})};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*3.6,point={x:target.x+Math.cos(a)*r,z:target.z+Math.sin(a)*r};this.later(i*.09,()=>this.emit('cast',point,1.6,'#ffe45c'));this.later(i*.09+.22,()=>this.area(point,1.6,1.1,.2,0,'#ffe45c'));}break;}
       case 'inferno':for(let i=0;i<10;i++)this.later(i*.05,()=>{const a=i*Math.PI/5;this.area({x:p.x+Math.cos(a)*3.6,z:p.z+Math.sin(a)*3.6},1.8,1.3,.2,1.2,'#ff874c');});break;
-      case 'laser':{const end={x:p.x+d.x*14,z:p.z+d.z*14};this.emit('beam',p,14,'#bbfaff',angle);for(const t of this.host.targets())if(t.hp>0&&distanceToSegment(t,p,end)<t.radius+.7)this.damage(t,3,.4,0,2);break;}
+      case 'laser':{const end={x:p.x+d.x*14,z:p.z+d.z*14};this.host.effect({...p,kind:'beam',radius:14,color:'#bbfaff',facing:angle,duration:.5,width:1.4});for(const t of this.host.targets())if(t.hp>0&&distanceToSegment(t,p,end)<t.radius+.7)this.damage(t,3,.4,0,2);break;}
       default:return false;
     }return true;
   }
@@ -154,7 +154,7 @@ export class CombatSimulation {
       const nextHit=new Map<string,number>();
       for(let step=0;step<=48;step++){const elapsed=step*.025,beamAngle=angle-.9+elapsed/1.2*1.8;this.later(elapsed,()=>{
         const origin=this.host.position(),forward=direction(beamAngle);
-        this.host.effect({...origin,kind:'beam',radius:13,color:'#ff5656',facing:beamAngle,duration:.06});
+        this.host.effect({...origin,kind:'beam',radius:13,color:'#ff5656',facing:beamAngle,duration:.08,width:1});
         for(const target of this.host.targets()){
           const dx=target.x-origin.x,dz=target.z-origin.z,along=dx*forward.x+dz*forward.z,across=Math.abs(dx*forward.z-dz*forward.x);
           if(target.hp>0&&along>0&&along<13&&across<target.radius+.5&&elapsed>=(nextHit.get(target.id)??-Infinity)){nextHit.set(target.id,elapsed+.25);this.damage(target,1,0,0,.5);}
@@ -181,7 +181,7 @@ export class CombatSimulation {
     }
     else if(effect==='roots'){this.area(p,6,1,4);for(let i=1;i<9;i++)this.later(i*.5,()=>{this.area(p,6,.3,.5,0,'#aad487');this.host.heal?.(.01);});}
     else if(effect==='drain'){const t=this.nearest(11);if(!t)return false;for(let i=0;i<7;i++)this.later(i*.35,()=>{if(t.hp>0){this.damage(t,.7);this.host.heal?.(.035);this.emit('beam',this.host.position(),Math.hypot(t.x-this.host.position().x,t.z-this.host.position().z),'#ea7a9c',Math.atan2(t.x-this.host.position().x,t.z-this.host.position().z));}});}
-    else if(effect==='bloodnova'){this.statuses.lifesteal=6;const targets=this.host.targets().filter(t=>Math.hypot(t.x-p.x,t.z-p.z)<7);for(let i=0;i<12;i++)this.later(i*.5,()=>{for(const t of targets)this.damage(t,.3);this.emit('ring',p,7,'#cf6290');});}
+    else if(effect==='bloodnova'){this.statuses.lifesteal=6;const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<7);for(let i=0;i<12;i++)this.later(i*.5,()=>{for(const t of targets)this.damage(t,.3);this.emit('ring',p,7,'#cf6290');});}
     else if(effect==='fireball'||effect==='boulder'){this.emit('cast',p,2,effect==='fireball'?'#ffad6b':'#ad9d89');this.later(.8,()=>this.shoot(effect==='fireball'?'fireball':'boulder',angle,3,14,{radius:1,explosion:4,stun:2}));}
     else if(effect==='snowball'){this.shoot('snowball',angle,3,21,{radius:1.5,speed:9,pierce:true,stun:2});}
     else if(effect==='blackhole'){const target={...(this.nearest(12)??p)};for(let i=0;i<10;i++)this.later(i*.3,()=>{for(const t of this.host.targets())if(Math.hypot(t.x-target.x,t.z-target.z)<7)this.host.moveTarget?.(t,target.x+(t.x-target.x)*.65,target.z+(t.z-target.z)*.65);this.area(target,5,.4,1,0,'#9c8ee5');});this.later(3,()=>this.area(target,5,3,1,2,'#bc97ed'));}
@@ -191,12 +191,13 @@ export class CombatSimulation {
       for(let i=0;i<count;i++){const a=i/count*Math.PI*2;this.allies.push({id:++this.serial,kind:effect==='clones'?'clone':effect==='batcircle'?'bat':effect,x:p.x+Math.cos(a)*1.5,z:p.z+Math.sin(a)*1.5,life:effect==='turret'?12:effect==='cannon'?10:8,cooldown:i*.12,orbit:a});}
     }
     else if(effect==='hook'){const t=this.nearest(14);if(!t)return false;this.host.moveTarget?.(t,p.x+d.x*1.8,p.z+d.z*1.8);this.damage(t,1.5,2);this.emit('beam',p,Math.hypot(t.x-p.x,t.z-p.z),'#d6c19b',angle);}
-    else if(effect==='parrot'){for(const t of this.host.targets().filter(t=>Math.hypot(t.x-p.x,t.z-p.z)<12)){this.marked.set(t.id,8);this.damage(t,.5);this.emit('impact',t,1,'#8ae394');}}
+    else if(effect==='parrot'){for(const t of this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<12)){this.marked.set(t.id,8);this.damage(t,.5);this.emit('impact',t,1,'#8ae394');}}
     else if(effect==='missiles'){const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<16).slice(0,6);targets.forEach((t,i)=>this.later(i*.15,()=>this.shoot('missile',Math.atan2(t.x-p.x,t.z-p.z),2,18,{explosion:2})));}
     else if(effect==='cannons'){const t={...(this.nearest(14)??p)};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*4,point={x:t.x+Math.cos(a)*r,z:t.z+Math.sin(a)*r};this.later(i*.15,()=>this.emit('cast',point,2,'#dca66c'));this.later(i*.15+.5,()=>this.area(point,2,1.5,.5,1,'#dca66c'));}}
-    else if(effect==='decoy'){const point={x:p.x+d.x*2.5,z:p.z+d.z*2.5};this.allies.push({id:++this.serial,kind:'snowman',...point,life:6,cooldown:99,orbit:0});for(const t of this.host.targets())if(Math.hypot(t.x-point.x,t.z-point.z)<8)this.host.status?.(t,'blind',6);this.later(6,()=>this.area(point,4,2.5,2,0,'#e4f9ff'));}
-    else if(effect==='icefloor'){for(let i=0;i<16;i++)this.later(i*.5,()=>{this.emit('ring',p,6,'#c2f1ff');for(const t of this.host.targets())if(Math.hypot(t.x-p.x,t.z-p.z)<6)this.host.status?.(t,'slow',1);});}
-    else if(effect==='iceage'){const targets=this.host.targets().filter(t=>Math.hypot(t.x-p.x,t.z-p.z)<8);for(const t of targets)this.host.status?.(t,'sheep',3);this.emit('ring',p,8,'#d0f7ff');this.later(3,()=>{for(const t of targets)this.damage(t,2.8,1);});}
+    else if(effect==='decoy'){const point={x:p.x+d.x*2.5,z:p.z+d.z*2.5};this.allies.push({id:++this.serial,kind:'snowman',...point,life:6,cooldown:99,orbit:0});for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-point.x,t.z-point.z)<8)this.host.status?.(t,'blind',6);this.later(6,()=>this.area(point,4,2.5,2,0,'#e4f9ff'));}
+    else if(effect==='icefloor'){for(let i=0;i<16;i++)this.later(i*.5,()=>{this.emit('ring',p,6,'#c2f1ff');for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<6)this.host.status?.(t,'slow',1);});}
+    else if(effect==='iceage'){const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<8);for(const t of targets){this.damage(t,.3,3);this.host.status?.(t,'slow',3);}// a freeze (3 s stun), not a sheep spell
+this.emit('ring',p,8,'#d0f7ff');this.later(3,()=>{for(const t of targets)this.damage(t,2.8,1);});}
     else return this.special(effect);
     return true;
   }
@@ -209,7 +210,8 @@ export class CombatSimulation {
     const pet=this.host.pet?.();
     if(pet&&Number.isFinite(pet.dmg)&&pet.dmg>0&&Number.isFinite(pet.cd)&&pet.cd>0&&this.petCooldown<=0){
       const target=this.host.targets().filter(e=>e.hp>0&&Math.hypot(e.x-position.x,e.z-position.z)<7+e.radius).sort((a,b)=>Math.hypot(a.x-position.x,a.z-position.z)-Math.hypot(b.x-position.x,b.z-position.z))[0];
-      if(target){const angle=Math.atan2(target.x-pet.x,target.z-pet.z);this.shoot(pet.shot??'fire',angle,pet.dmg,9,{x:pet.x,z:pet.z});this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot??'fire'),angle);}
+      if(target){const angle=Math.atan2(target.x-pet.x,target.z-pet.z);this.shoot(pet.shot??'fire',angle,pet.dmg,9,{x:pet.x,z:pet.z,stun:pet.shot==='ice'?.5:0});// a pet's ice shot chills; 1.5 s at its 1.2-1.5 s rate froze a target for good
+this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot??'fire'),angle);}
     }
     for(const key of Object.keys(this.statuses))this.statuses[key]=Math.max(0,this.statuses[key]-dt);
     for(const[id,time]of this.marked){if(time<=dt)this.marked.delete(id);else this.marked.set(id,time-dt);}

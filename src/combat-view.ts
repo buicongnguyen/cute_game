@@ -8,8 +8,8 @@ export class CombatView {
   constructor(scene:T.Scene){this.scene=scene;}
   /** Effect geometry by shape and size, and finished effect meshes for reuse: no material or geometry is made or freed per swing (each new material relinked a shader). */
   private shapes=new Map<string,T.BufferGeometry>();private spare:T.Mesh[]=[];
-  private shape(e:CombatEffect){const key=e.kind+':'+e.radius.toFixed(2);let geometry=this.shapes.get(key);
-    if(!geometry){if(e.kind==='beam')geometry=new T.PlaneGeometry(.65,e.radius);else if(e.kind==='arc')geometry=new T.RingGeometry(e.radius*.78,e.radius,28,1,-Math.PI*.65,Math.PI*1.3);else if(e.kind==='cast')geometry=new T.RingGeometry(e.radius*.92,e.radius,40);else geometry=new T.RingGeometry(e.radius*.65,e.radius,32);this.shapes.set(key,geometry);}
+  private shape(e:CombatEffect){const key=e.kind+':'+e.radius.toFixed(2)+':'+(e.width??.65).toFixed(2);let geometry=this.shapes.get(key);
+    if(!geometry){if(e.kind==='beam')geometry=new T.PlaneGeometry(e.width??.65,e.radius);else if(e.kind==='arc')geometry=new T.RingGeometry(e.radius*.78,e.radius,28,1,-Math.PI*.65,Math.PI*1.3);else if(e.kind==='cast')geometry=new T.RingGeometry(e.radius*.92,e.radius,40);else geometry=new T.RingGeometry(e.radius*.65,e.radius,32);this.shapes.set(key,geometry);}
     return geometry;}
   effect(e:CombatEffect){
     const mesh=this.spare.pop()??new T.Mesh(undefined,new T.MeshBasicMaterial({transparent:true,opacity:.72,side:T.DoubleSide,depthWrite:false}));

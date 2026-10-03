@@ -1,0 +1,8 @@
+/* Skill readability (skill-info.ts): enemy status marks on the HP bar, the cooldown-ready pop, the long-press tip. */
+.enemy-label .status-marks { position: absolute; left: 50%; bottom: calc(100% + 1px); transform: translateX(-50%); font-style: normal; font-size: 15px; line-height: 1; letter-spacing: 1px; white-space: nowrap; filter: drop-shadow(0 1px 0 #3a2433) drop-shadow(0 0 2px #fff); animation: status-bob 1s ease-in-out infinite alternate; }
+@keyframes status-bob { to { transform: translate(-50%, -3px); } }
+.skill.ready-pop { animation: skill-ready .45s ease-out; }
+@keyframes skill-ready { 0% { transform: scale(1); box-shadow: 0 0 0 0 #fff8; } 40% { transform: scale(1.14); box-shadow: 0 0 0 8px #ffe66d99; } 100% { transform: scale(1); box-shadow: 0 0 0 14px #ffe66d00; } }
+#skill-tip { position: fixed; left: 50%; top: 34%; transform: translateX(-50%); z-index: 40; max-width: min(92vw, 420px); padding: 8px 12px; border-radius: 12px; background: rgba(58, 36, 51, .92); color: #fff; font-size: 13px; line-height: 1.35; pointer-events: none; box-shadow: 0 4px 0 #3a243340; }
+#skill-tip[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .enemy-label .status-marks, .skill.ready-pop { animation: none; } }

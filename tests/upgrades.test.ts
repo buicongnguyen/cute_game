@@ -157,7 +157,7 @@ test('the bench lists owned gear weakest first, weapons with the forge rule, and
   const skills = benchHtml(s, 'skills', ui); assert.equal([...skills.matchAll(/data-bench-action="skill"/g)].length, 4);
   for (let i = 0; i < 5; i++) U.upgradeSkill(s, 0);
   assert.equal([...benchHtml(s, 'skills', ui).matchAll(/data-bench-action="skill"/g)].length, 3, 'a maxed skill shows Maximum');
-  assert.equal(skillEffect(1, 5, 4), 'Damage ×1.5 · cooldown 3 s'); assert.equal(skillEffect(2, 2, 9), 'Damage ×1.16 · radius +0.6 m');
+  assert.equal(skillEffect(1, 5, 4), 'Damage ×1.5 · cooldown 3 s'); assert.equal(skillEffect(2, 2, 9), 'Damage ×1.16 · radius 5 m'); assert.equal(skillEffect(0, 1, 7, 'sword'), 'Damage ×1.1 · radius 3.52 m');
 });
 
 test('the upgrade bench is a cottage spot in the craft room with its own title and purpose', () => {

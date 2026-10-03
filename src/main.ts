@@ -5,6 +5,7 @@ import './joystick.css';
 import { FishingProof } from './fishing-proof.ts';
 import '@fontsource-variable/nunito';
 import './style.css';
+import './skills.css';
 import { t, localizeHtml, getLanguage, setLanguage, onLanguageChange, bindLanguage } from './i18n.ts';
 import './menus.css';
 import { Box3, Vector3 } from 'three';
@@ -35,6 +36,8 @@ import { CombatTimers, FishingInput, MovementControls, gameplayKey } from './gam
 import {mountJoystick} from './joystick.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatHit, type CombatEffect } from './combat.ts';
 import { skillPip } from './skill-pip.ts';
+import { skillTip, BUFF_CHIPS } from './skill-info.ts';
+import { skillSound } from './skill-sounds.ts';
 import { initUpgradeBench as mountUpgradeBench } from './upgrade-bench.ts';
 import { CombatView } from './combat-view.ts';
 import { FishingSimulation, selectCatch, planCast, catchWeight, resolveMysteryCatch } from './fishing.ts';
@@ -197,11 +200,14 @@ const combat=new CombatSimulation({
   status:(target,kind,duration)=>{if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
   moveTarget:(target,x,z)=>{if(actionHandler)return;if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
 });
+combatHud.isMarked=id=>combat.marked.has(id);
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 // Swings become additive slash trails and area skills become expanding rings with sparks.
 function showEffect(effect:CombatEffect){
   const fx=world.fx,at={x:effect.x,z:effect.z};
-  if(fx&&effect.kind==='arc'){const fist=effect.radius<=1.85;fx.slash(at,effect.facing??world.facing,effect.radius+.25,effect.color,fist?{arc:1.4,life:.15,thick:.4}:{arc:2.2});return;}
+  if(fx&&effect.kind==='arc'){const fist=effect.radius<=1.85;fx.slash(at,effect.facing??world.facing,effect.radius+.25,effect.color,fist?{arc:1.4,life:.15,thick:.4}:{arc:Math.min(6.2,effect.arc??2.2)});return;}
+  // An area hit also leaves a faint filled disc and a rim at its exact radius (skill-info.ts), so the player sees what the blast covered.
+  if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.42,y:.1,thick:1,opacity:.22});fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius*1.02,life:.42,y:.12,thick:.06,opacity:.85});}
   if(fx&&(effect.kind==='ring'||effect.kind==='impact')){fx.ring(at,{color:effect.color,from:.3,to:Math.max(.8,effect.radius),life:.35,y:.15,thick:.25});fx.burst(at,{n:6,color:effect.color,glow:true,size:.12,speed:Math.min(8,effect.radius*1.6),up:2,y:.3,life:.4});return;}
   combatView.effect(effect);
 }
@@ -297,8 +303,8 @@ function updateHud() {
   setText($('#quest-chapter'),t(state.quest<M.QUESTS.length?`${state.quest+1} / ${M.QUESTS.length}`:'ONGOING'));setText($('#quest-icon'),t(q?.icon??'🚀'));setText($('#quest-title'),t(q?.title??'A world of possibilities'));setText($('#quest-task'),t(q?`${q.description} · ${progress} / ${q.target}`:'Your next chapter awaits.'));setText($('#quest-count'),t(q?`${progress}/${q.target}`:''));
   setWidth($('#quest-fill'),`${q?progress/q.target*100:100}%`);$('#quick-claim').hidden=!q?.complete;$('#quest-dot').hidden=!q?.complete;
   const skills=skillList();
-  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i];setText(button.querySelector('span')!,t(skill.icon));setText(button.querySelector('small')!,t(skill.name));button.setAttribute('aria-label',t(`${['Q','W','E','R'][i]} ${t(skill.name)}`));button.setAttribute('title',t(skill.name));button.classList.toggle('on-cooldown',cooldowns[i]>0);setText(button.querySelector('.cooldown')!,t(cooldowns[i]>0?Math.ceil(cooldowns[i]).toString():''));skillPip(button,state.gear.disguise?0:M.skillLevel(state,i));const cd=`${cooldowns[i]/skillDurations[i]*100}%`;if(button.style.getPropertyValue('--cooldown')!==cd)button.style.setProperty('--cooldown',cd);});
-  setHtml($('#buff-bar'),localizeHtml(M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,t])=>`<span>✨ ${esc(name)} <b>${Math.ceil(t)}s</b></span>`).join('')+homeChip(world.homeRecovering&&!visiting,t('Home: fast recovery'))));
+  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i];setText(button.querySelector('span')!,t(skill.icon));setText(button.querySelector('small')!,t(skill.name));button.setAttribute('aria-label',t(`${['Q','W','E','R'][i]} ${t(skill.name)}`));const tip=currentSkillTip(i);if(button.title!==tip)button.title=tip;if(readyWas[i]>0&&cooldowns[i]<=0){button.classList.remove('ready-pop');void button.offsetWidth;button.classList.add('ready-pop');tone('ready');}readyWas[i]=cooldowns[i];button.classList.toggle('on-cooldown',cooldowns[i]>0);setText(button.querySelector('.cooldown')!,t(cooldowns[i]>0?Math.ceil(cooldowns[i]).toString():''));skillPip(button,state.gear.disguise?0:M.skillLevel(state,i));const cd=`${cooldowns[i]/skillDurations[i]*100}%`;if(button.style.getPropertyValue('--cooldown')!==cd)button.style.setProperty('--cooldown',cd);});
+  setHtml($('#buff-bar'),localizeHtml(M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,left])=>{const chip=BUFF_CHIPS[name];return `<span class="skill-buff">${chip?.icon??'✨'} ${esc(t(chip?.name??name))} <b>${Math.ceil(left)}s</b></span>`;}).join('')+homeChip(world.homeRecovering&&!visiting,t('Home: fast recovery'))));
   setHtml($('#environment-bar'),localizeHtml(world.environmentStatus().map(e=>`<span>${e.icon??''} ${esc(e.label)} <b>${esc(String(e.value))}</b></span>`).join('')));
   const dark=$('#darkness');dark.hidden=!world.darknessActive()||!started;
   // Target frame and boss bar (hud-combat.ts). While a fight is near (or on a phone in the wild) the trackers fold into one chip.
@@ -906,7 +912,7 @@ house.house.labelBox=id=>{const a=labelAnchors.get(id);return a&&!a.off&&!modal&
 const lookShop=initLookShop({world,perform:(type,payload)=>perform(type,payload),openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),endGearTryOn:()=>{if(tryingOn){tryingOn=null;world.tryOnGear=null;}}});
 frameListeners.add(dt=>house.frame(dt));
 // The craft room's upgrade bench (upgrade-bench.ts): gear levels and skill levels, both run through actions.ts.
-const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:[...BASE_SKILLS,SPECIALS[M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist']??SPECIALS.fist],disguised:!!state.gear.disguise})});
+const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:[...BASE_SKILLS,SPECIALS[M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist']??SPECIALS.fist],disguised:!!state.gear.disguise,weaponKind:M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).kind})});
 world.onInteract=async(e)=>{
   if(!started||uiBlocked())return;tone();if(house.interact(e))return;if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
@@ -1037,6 +1043,16 @@ function basicAttack(e?:Enemy){
   if(combat.basic(e)){const stats=M.activeStats(state),weapon=M.weaponStats(state);combatTimers.attackCooldown=(weapon.cd??.4)/Math.max(.2,1+stats.haste);world.playerAttack(weapon.kind);tone(weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
 }
 world.onAttackEnemy=basicAttack;
+/** The tooltip and long-press tip of skill slot i, with the numbers at the current level (skill-info.ts). */
+function currentSkillTip(i:number){const disguise=state.gear.disguise,weapon=M.weaponStats(state);return skillTip(skillList()[i],i,{special:weapon.special??'fist',weaponKind:weapon.kind,level:disguise?0:M.skillLevel(state,i),disguise});}
+const readyWas=[0,0,0,0];
+// Long-press a skill button (phones have no hover): its tip shows for a few seconds and the press does not cast.
+{let timer=0,held=false,hide=0;const tipEl=document.createElement('div');tipEl.id='skill-tip';tipEl.hidden=true;tipEl.setAttribute('role','status');document.body.append(tipEl);
+  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{
+    button.addEventListener('pointerdown',()=>{held=false;clearTimeout(timer);timer=window.setTimeout(()=>{held=true;tipEl.textContent=currentSkillTip(i);tipEl.hidden=false;clearTimeout(hide);hide=window.setTimeout(()=>{tipEl.hidden=true;},3500);},450);});
+    for(const type of ['pointerup','pointerleave','pointercancel'])button.addEventListener(type,()=>clearTimeout(timer));
+    button.addEventListener('click',event=>{if(held){held=false;event.stopImmediatePropagation();event.preventDefault();}},true);
+    button.addEventListener('contextmenu',event=>event.preventDefault());});}
 function skillList(){const disguise=state.gear.disguise?M.DISGUISES[state.gear.disguise]:null;return disguise?.skills??[...BASE_SKILLS,SPECIALS[M.weaponStats(state).special??'fist']??SPECIALS.fist];}
 function skill(index:number){
   if(!started||uiBlocked()||visiting||cooldowns[index]>0||index<0||index>3)return;
@@ -1044,7 +1060,7 @@ function skill(index:number){
   const disguise=state.gear.disguise,weapon=M.weaponStats(state),skills=skillList();
   if(!(disguise?combat.disguise(disguise,index):combat.skill(index,weapon.special??'fist')))return;
   skillDurations[index]=M.skillCooldown(state,index,skills[index].cd,!!disguise)/Math.max(.2,1+M.activeStats(state).haste);cooldowns[index]=skillDurations[index];
-  if(!actionHandler)change(()=>recordEvent(state,'skill'));if(index===0)world.spinT=2.2;else if(index===1)world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});tone(index===0?'swing':index===3?'crit':'punch');emitAction({kind:'skill',index,special:disguise??weapon.special});
+  if(!actionHandler)change(()=>recordEvent(state,'skill'));if(index===0)world.spinT=2.2;else if(index===1)world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});tone(skillSound(index,disguise,weapon.special));emitAction({kind:'skill',index,special:disguise??weapon.special});
 }
 let dying=false;
 function checkDefeat(){if(!started||state.hp>0||dying)return false;if(actionHandler){dying=true;void perform('die',{x:world.position.x,z:world.position.z}).then(()=>{dying=false;endFishing();resetCombat();rebuildHomePresentation('home');world.refreshPlayer();toast('You are safe at home.','🏡');});return true;}endFishing();resetCombat();change(()=>M.die(state,world.position.x,world.position.z));rebuildHomePresentation('home');world.refreshPlayer();openDialog('death','A little rest, then try again',`<div class="grow-illustration">🌷</div><p class="center">You’re safe at home. Your level, energy, and equipped gear are safe too.</p><p class="center muted">${state.dropped?'Your loose items are waiting where you fell.':'Nothing was dropped.'}</p><button class="primary wide" data-action="close">Back on my feet →</button>`,'EVERY EXPLORER TAKES A TUMBLE');return true;}
@@ -1384,4 +1400,4 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,house,bench,lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,house,bench,combat,skill,get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

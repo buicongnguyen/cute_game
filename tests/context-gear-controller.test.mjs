@@ -61,7 +61,7 @@ function fixture(...items) {
       skill: (index, special) => { calls.skills.push({ index, special, kind: M.weaponStats(ctx.state).kind, item: ctx.state.gear.weapon }); return true; },
       disguise: (id, index) => { calls.skills.push({ id, index, item: ctx.state.gear.weapon }); return true; },
     },
-    tipPosition: () => ({ x: 5, y: 1.4, z: 0 }), showReel: (on, mode = 'reel') => calls.reels.push({ on, mode }), tone() {}, vibrate() {},
+    tipPosition: () => ({ x: 5, y: 1.4, z: 0 }), showReel: (on, mode = 'reel') => calls.reels.push({ on, mode }), tone() {}, skillSound: () => 'punch', vibrate() {},
     setTimeout: (run, delay) => { calls.timers.push({ run, delay }); return calls.timers.length; },
     $: () => ({ textContent: '', classList: { toggle() {} }, setAttribute() {} }),
     t: value => value, floating() {}, formatSize: cm => `${cm} cm`,
