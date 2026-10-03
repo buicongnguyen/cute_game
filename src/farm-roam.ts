@@ -18,6 +18,8 @@ export interface RoamArea {
   radius: number;
   /** A short grid route for a long trip (searched once per trip, never per frame); empty when there is none. */
   route?(ax: number, az: number, bx: number, bz: number, r: number): { x: number; z: number }[];
+  /** The guard dog's loose leash (guard-dog.ts): it strolls, sniffs and sits within r metres of this spot by the pen. */
+  leash?: { x: number; z: number; r: number };
 }
 export interface Roamer {
   uid: number; kind: RoamKind; young: boolean; x: number; z: number; heading: number; goalX: number; goalZ: number;
@@ -129,7 +131,8 @@ function startRest(w: Roamer, rng: () => number, _area?: RoamArea) {
   // Cattle graze and chew for three times their actual walking time, including interrupted trips.
   if (w.kind === 'cow') { w.rest = 'graze'; w.restT = Math.max(.3, w.grazeDebt); }
   else if (w.kind === 'pig') { w.rest = 'graze'; w.restT = 4 + rng() * 7; }
-  else if (w.kind === 'dog') { w.rest = k < .6 ? 'look' : 'sit'; w.restT = 5 + rng() * 8; }
+  // The dog sits, sniffs the ground (a head dip, as a hen pecks) or looks about, wagging.
+  else if (w.kind === 'dog') { w.rest = k < .35 ? 'sit' : k < .7 ? 'peck' : 'look'; w.restT = w.rest === 'sit' ? 5 + rng() * 7 : 2.5 + rng() * 4; }
   else if (w.young) { w.rest = k < .75 ? 'peck' : 'sit'; w.restT = w.rest === 'sit' ? 5 + rng() * 8 : 1.5 + rng() * 3.5; }
   else { w.rest = k < .62 ? 'peck' : k < .8 ? 'sit' : k < .92 ? 'dust' : 'look'; w.restT = w.rest === 'peck' ? 2.5 + rng() * 5 : w.rest === 'look' ? 1.5 + rng() * 2 : 8 + rng() * 14; }
 }
@@ -158,12 +161,13 @@ function straighten(area: RoamArea, w: Roamer, route: { x: number; z: number }[]
 function pickGoal(w: Roamer, all: readonly Roamer[], area: RoamArea, rng: () => number, grid?: RoamGrid) {
   const h = area.home, r = roamRadius(w), free = (x: number, z: number) => spotFree(w, x, z, all, grid);
   let g: { x: number; z: number } | null = null;
-  if (w.trip > w.tripLimit && !inHomeYard(area, w.x, w.z) && !w.homeward) {
+  if (w.kind === 'dog' && area.leash) { leashGoal(w, area, area.leash, rng, free); return; }
+  if (w.kind !== 'dog' && w.trip > w.tripLimit && !inHomeYard(area, w.x, w.z) && !w.homeward) {
     // Home to a free spot of the yard, not its centre: animals coming back never pile up in one place.
     w.homeward = true; w.dest = { x: h.x, z: h.z };
     for (let i = 0; i < 8; i++) { const a = rng() * TAU, d = Math.sqrt(rng()) * .8, x = h.x + Math.sin(a) * h.rx * d, z = h.z + Math.cos(a) * h.rz * d; if (!area.blocked(x, z, r) && free(x, z)) { w.dest = { x, z }; break; } }
   }
-  if (!w.dest && !w.young && rng() < (w.kind === 'cow' ? .35 : .25)) {
+  if (!w.dest && !w.young && w.kind !== 'dog' && rng() < (w.kind === 'cow' ? .35 : .25)) {
     // A far trip: any open spot in the village.
     for (let i = 0; i < 8 && !w.dest; i++) { const a = rng() * TAU, d = Math.sqrt(rng()) * (area.radius - r), x = Math.sin(a) * d, z = Math.cos(a) * d; if (Math.hypot(x - w.x, z - w.z) > 5 && !area.blocked(x, z, r) && free(x, z)) w.dest = { x, z }; }
   }
@@ -185,11 +189,39 @@ function pickGoal(w: Roamer, all: readonly Roamer[], area: RoamArea, rng: () => 
   w.goalX = g.x; w.goalZ = g.z; w.walking = true; w.rest = 'none'; w.walkT = 4 + Math.hypot(g.x - w.x, g.z - w.z) * (w.kind === 'cow' ? 5 : 3);
 }
 
+/**
+ * The dog's next walk on its leash: back toward the pen spot in legs when it is beyond the leash (after a chase, or
+ * handed back from following the explorer), a trotted loop of the ring round the spot that it goes on with, or a
+ * short stroll inside the leash; with nothing clear it rests again.
+ */
+function leashGoal(w: Roamer, area: RoamArea, leash: { x: number; z: number; r: number }, rng: () => number, free: (x: number, z: number) => boolean) {
+  const r = roamRadius(w), d = Math.hypot(w.x - leash.x, w.z - leash.z);
+  let g: { x: number; z: number } | null = null;
+  w.homeward = d > leash.r;
+  if (w.homeward) { w.path = []; w.dest = null; g = legToward(w, area, leash.x, leash.z); }
+  else if (w.path.length) g = w.path.shift()!;
+  else if (rng() < .35) {
+    // A loop of four points on a ring round the spot, starting from the side the dog stands on.
+    const ring = Math.min(leash.r * .7, 1.8), a0 = Math.atan2(w.x - leash.x, w.z - leash.z), dir = rng() < .5 ? 1 : -1;
+    let from = { x: w.x, z: w.z };
+    for (let i = 1; i <= 4; i++) { const a = a0 + dir * i * Math.PI / 2, x = leash.x + Math.sin(a) * ring, z = leash.z + Math.cos(a) * ring; if (!free(x, z) || !segmentClear(area, from.x, from.z, x, z, r)) break; w.path.push({ x, z }); from = { x, z }; }
+    g = w.path.shift() ?? null;
+  }
+  if (!g) {
+    for (let i = 0; i < 10 && !g; i++) { const a = rng() * TAU, k = Math.sqrt(rng()) * leash.r * .85, x = leash.x + Math.sin(a) * k, z = leash.z + Math.cos(a) * k; if (Math.hypot(x - w.x, z - w.z) > .6 && free(x, z) && segmentClear(area, w.x, w.z, x, z, r)) g = { x, z }; }
+  }
+  if (!g) { startRest(w, rng, area); w.restT = Math.min(w.restT, 2); return; }
+  w.goalX = g.x; w.goalZ = g.z; w.walking = true; w.rest = 'none'; w.walkT = 4 + Math.hypot(g.x - w.x, g.z - w.z) * 3;
+}
 /** One step of one animal: flee the explorer, rest, or walk its clear segment; keep a little apart from the others. */
 export function stepRoamer(w: Roamer, all: readonly Roamer[], area: RoamArea, rng: () => number, dt: number, player: { x: number; z: number } | null, grid?: RoamGrid) {
   const cow = w.kind === 'cow', r = roamRadius(w);
   w.flee = Math.max(0, w.flee - dt);
-  if (player && w.flee <= 0) {
+  if (player && w.kind === 'dog' && w.flee <= 0) {
+    // A friendly dog never scurries off: resting, it turns to watch the explorer who comes close.
+    const dx = player.x - w.x, dz = player.z - w.z;
+    if (!w.walking && dx * dx + dz * dz < 2.6 * 2.6) { const turn = Math.atan2(Math.sin(Math.atan2(dx, dz) - w.heading), Math.cos(Math.atan2(dx, dz) - w.heading)); w.heading += Math.max(-3 * dt, Math.min(3 * dt, turn)); if (w.rest === 'peck') w.rest = 'look'; }
+  } else if (player && w.flee <= 0) {
     const dx = w.x - player.x, dz = w.z - player.z, d = Math.hypot(dx, dz), shy = cow ? 1.5 : 1.3;
     if (d < shy) {
       const base = d > 1e-3 ? Math.atan2(dx, dz) : rng() * TAU, run = cow ? 1.6 : 2.2;
@@ -240,7 +272,7 @@ export function stepRoamer(w: Roamer, all: readonly Roamer[], area: RoamArea, rn
     else {
       const want = Math.atan2(dx / d + ax, dz / d + az), turn = Math.atan2(Math.sin(want - w.heading), Math.cos(want - w.heading)), rate = cow ? 1.6 : 4;
       w.heading += Math.max(-rate * dt, Math.min(rate * dt, turn));
-      const top = (cow ? .45 : .8) * (w.young ? 1.15 : 1) * (w.flee > 0 ? (cow ? 1.8 : 2.4) : 1);
+      const top = (cow ? .45 : w.kind === 'dog' ? (w.homeward ? 1.6 : 1.1) : .8) * (w.young ? 1.15 : 1) * (w.flee > 0 ? (cow ? 1.8 : 2.4) : 1);
       // Turn on the spot first, then slow while still turning: the walk stays on the segment that was checked clear.
       w.speed = Math.min(top, w.speed + dt * 2) * (Math.abs(turn) > 1 ? 0 : Math.abs(turn) > .45 ? .3 : 1);
       w.x += Math.sin(w.heading) * w.speed * dt; w.z += Math.cos(w.heading) * w.speed * dt;

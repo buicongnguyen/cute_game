@@ -4,6 +4,7 @@ import { bakeModel, farmKit } from './assets.ts';
 import { toonMaterial } from './toon.ts';
 import { detectEnvironment } from './graphics.ts';
 import { ANIMALS, ANIMAL_KINDS, PEN, YARD, MAX_ANIMALS_PER_KIND, expired, isAdult, productReady, growth, coatOf, type FarmState, type Animal, type AnimalKind } from './farm.ts';
+import { DOG_LEASH, leashSpot } from './guard-dog.ts';
 import { newRoamer, spawnSpot, stepRoamer, segmentClear, RoamGrid, type RoamArea, type Roamer } from './farm-roam.ts';
 
 /**
@@ -28,8 +29,8 @@ const PRODUCT: Record<AnimalKind, ProductId> = { chicken: 'egg', cow: 'milk', du
 /** Most animals of one model the pen can hold (cap at the largest pen); a model has up to four legs. */
 const MAX_PER_MODEL: Record<ModelId, number> = { chicken: MAX_ANIMALS_PER_KIND, chick: MAX_ANIMALS_PER_KIND, cow: MAX_ANIMALS_PER_KIND, calf: MAX_ANIMALS_PER_KIND, duck: MAX_ANIMALS_PER_KIND, duckling: MAX_ANIMALS_PER_KIND, pig: MAX_ANIMALS_PER_KIND, piglet: MAX_ANIMALS_PER_KIND, dog: 1 };
 const MAX_LEGS = 4, MAX_PRODUCTS = MAX_ANIMALS_PER_KIND * 24;
-/** Hens and chicks are drawn 1.3x their true size so they read at the game camera (a hen is then about 40 px tall, like a ripe crop). */
-const SHOWN: Record<AnimalKind, number> = { chicken: 1.3, cow: 1, duck: 1.3, pig: 1, dog: 1 };
+/** Hens and chicks are drawn 1.3x their true size so they read at the game camera (a hen is then about 40 px tall, like a ripe crop); the puppy 1.35x (about knee-high to the explorer). */
+export const SHOWN: Record<AnimalKind, number> = { chicken: 1.3, cow: 1, duck: 1.3, pig: 1, dog: 1.35 };
 
 /** Pen pieces inside the fence (pen-local metres, +z toward the gate and the garden), also the animals' keep-out circles. */
 export const PEN_PROPS: readonly { id: string; x: number; z: number; rot: number; r: number }[] = [
@@ -54,7 +55,8 @@ export const COATS: Record<ModelId, readonly (readonly [string, string, number])
   duckling: [['#ffde63', '#edbf35', 0], ['#b8a146', '#765c37', .2], ['#ccaa6b', '#72583c', .1]],
   pig: [['#ffb4c0', '#e58f9d', 0], ['#ffb4c0', '#694d4a', .25], ['#ba794d', '#845035', .1]],
   piglet: [['#ffc1cd', '#eaa0ae', 0], ['#ffc1cd', '#694d4a', .25], ['#cb8c61', '#845035', .1]],
-  dog: [['#c98d4c', '#fff0d3', 0], ['#3b3434', '#bd8954', .25], ['#fff7e3', '#ddc59d', .1]],
+  // The puppy's second colour paints its muzzle, chest, ruff, paws and tail tip (no flecks: a clean, friendly coat).
+  dog: [['#eba55e', '#fff3dc', 0], ['#4a3f48', '#f0b878', 0], ['#fff9ee', '#f4cf9e', 0]],
 };
 const COAT_COLORS = Object.fromEntries(Object.entries(COATS).map(([id, list]) => [id, list.map(([a, b, f]) => [new T.Color(a), new T.Color(b), f] as const)])) as unknown as Record<ModelId, readonly (readonly [T.Color, T.Color, number])[]>;
 /** The two instanced coat attributes, as one constant list (no array literal per frame). */
@@ -72,7 +74,7 @@ const COAT_PARTS: Record<ModelId, Record<string, [1 | 2, string]>> = {
   duckling: { 'Farm duckling': [1, '#ffde63'], '#ffde63': [1, '#ffde63'] },
   pig: { 'Farm pig': [1, '#ffb4c0'], '#ffb4c0': [1, '#ffb4c0'] },
   piglet: { 'Farm piglet': [1, '#ffc1cd'], '#ffc1cd': [1, '#ffc1cd'] },
-  dog: { 'Farm dog': [1, '#c98d4c'], '#c98d4c': [1, '#c98d4c'] },
+  dog: { 'Farm dog': [1, '#e8a25a'], 'Farm dog ear': [1, '#e8a25a'], 'Farm dog light': [2, '#fff1d8'], '#e8a25a': [1, '#e8a25a'], '#fff1d8': [2, '#fff1d8'] },
 };
 
 /** A drawn piece: one geometry hung at one hinge (legs: at each leg's hinge, swinging by `sign`). */
@@ -124,6 +126,11 @@ function cyl(color: string, r: number, h: number, x = 0, y = 0, z = 0) { const m
 /** A named part whose origin is its hinge, holding shapes placed relative to that hinge. */
 function part(name: string, pivot: [number, number, number], ...meshes: T.Object3D[]) { const g = new T.Group(); g.name = name; g.position.set(...pivot); g.add(...meshes); return g; }
 
+/** The guard dog's rig (farm.glb's puppy, or the stand-in), merged per part like the pen's animals; the caller owns it. */
+export function dogRig(): Rig { const src = model('dog', true), rig = rigOf(src, COAT_PARTS.dog); src.traverse(o => { if (o instanceof T.Mesh) { if (!o.geometry.userData.sharedKit) o.geometry.dispose(); const m = o.material as T.Material; if (!m.userData.sharedKit) m.dispose(); } }); return rig; }
+/** A breed's linear coat colours for the dog ([coat, second, fleck]). */
+export const dogCoat = (coat: number) => COAT_COLORS.dog[coat] ?? COAT_COLORS.dog[0];
+export { animalMaterial, type Rig, type Part };
 /** Stand-in animals with the contract's part names and hinges, scaled to the contract's heights. */
 export function placeholderAnimal(id: ModelId): T.Group {
   const g = new T.Group(); g.name = id;
@@ -134,8 +141,14 @@ export function placeholderAnimal(id: ModelId): T.Group {
     for (const side of [1, -1]) g.add(part(`${id}_wing_${side > 0 ? 'l' : 'r'}`, [side * .15 * s, .3 * s, 0], ball(body, .1 * s, side * .03 * s, -.06 * s, -.02 * s, .45, .8, 1.2)));
     for (const side of [1, -1]) g.add(part(`${id}_leg_${side > 0 ? 'l' : 'r'}`, [side * .06 * s, .12 * s, 0], cyl(beak, .018 * s, .12 * s, 0, -.06 * s, 0), box(beak, .07 * s, .02 * s, .08 * s, 0, -.115 * s, .02 * s)));
     g.add(part(`${id}_tail`, [0, .3 * s, -.16 * s], ball(id === 'chick' ? body : '#f3e5d0', .08 * s, 0, .05 * s, -.04 * s, .5, 1.2, .8)));
-  } else if (id === 'pig' || id === 'piglet' || id === 'dog') {
-    const dog = id === 'dog', s = id === 'piglet' ? .58 : 1, coat = dog ? '#c98d4c' : id === 'piglet' ? '#ffc1cd' : '#ffb4c0';
+  } else if (id === 'dog') {
+    // A stand-in puppy (farm.glb has the real one): a big round head, pale muzzle and paws, upright ears, curled tail.
+    g.add(part('dog_body', [0, .28, .03], ball('#e8a25a', .19, 0, 0, 0, 1, .9, 1.3), ball('#fff1d8', .12, 0, -.02, .14), box('#3fa9f5', .26, .05, .07, 0, .13, .18)));
+    g.add(part('dog_head', [0, .4, .2], ball('#e8a25a', .2, 0, .14, .1), ball('#fff1d8', .09, 0, .08, .26, 1.2, .9, .9), ball('#1c1b2e', .03, 0, .12, .34), ball('#1c1b2e', .035, -.08, .2, .26), ball('#1c1b2e', .035, .08, .2, .26), ball('#b8743a', .07, -.12, .33, .08, .8, 1.5, .5), ball('#b8743a', .07, .12, .33, .08, .8, 1.5, .5)));
+    for (const [n,x,z] of [['fl',-.1,.15],['fr',.1,.15],['bl',-.1,-.17],['br',.1,-.17]] as const) g.add(part(`dog_leg_${n}`, [x,.18,z], cyl('#e8a25a',.05,.14,0,-.09,0), ball('#fff1d8',.06,0,-.15,.01,1,.7,1.2)));
+    g.add(part('dog_tail', [0,.35,-.23], ball('#e8a25a',.06,0,.08,-.04,.9,1.8,.9), ball('#fff1d8',.05,0,.2,-.02)));
+  } else if (id === 'pig' || id === 'piglet') {
+    const dog = false, s = id === 'piglet' ? .58 : 1, coat = dog ? '#c98d4c' : id === 'piglet' ? '#ffc1cd' : '#ffb4c0';
     g.add(part(`${id}_body`, [0, .48*s, 0], ball(coat, .34*s, 0, 0, 0, 1, .85, 1.45)));
     g.add(part(`${id}_head`, [0, .58*s, .36*s], ball(coat, .23*s, 0, .03*s, .10*s), ball(dog ? '#fff0d3' : '#ee8ca3', .12*s, 0, -.03*s, .29*s, 1.05, .75, .8), ball('#2a2028', .028*s, -.11*s, .12*s, .26*s), ball('#2a2028', .028*s, .11*s, .12*s, .26*s), ball(coat, .1*s, -.17*s, .22*s, .04*s, .55, 1.3, .5), ball(coat, .1*s, .17*s, .22*s, .04*s, .55, 1.3, .5)));
     for (const [n,x,z] of [['fl',-.22,.3],['fr',.22,.3],['bl',-.22,-.3],['br',.22,-.3]] as const) g.add(part(`${id}_leg_${n}`, [x*s,.28*s,z*s], cyl(coat,.065*s,.28*s,0,-.14*s,0)));
@@ -251,7 +264,22 @@ export class FarmPenView {
   private pensSignature = '';
   /** Seconds since the pen was built here (drives the pop-in of the yard); Infinity when it was already standing. */
   private buildT = Infinity;
-  private area: RoamArea = yardArea();
+  private area: RoamArea = { ...yardArea(), leash: this.leash() };
+  private baseArea?: RoamArea;
+  /** The dog's leash (world metres): tied in front of its dog house, or the pen's front. */
+  private leash() { const s = leashSpot(PEN, this.speciesPens?.dog); return { x: s.x, z: s.z, r: DOG_LEASH }; }
+  /** The guard dog is out with the explorer (guard-dog.ts): the pen neither moves nor draws it meanwhile. */
+  private dogAway = false;
+  /** Sends the dog out (true) or takes it back at (x, z) (false). */
+  setDogAway(away: boolean, at?: { x: number; z: number }) {
+    if (away === this.dogAway) return; this.dogAway = away; this.poseDirty = true;
+    const dog = [...this.walkers.values()].find(w => w.kind === 'dog');
+    if (dog && !away && at && Number.isFinite(at.x) && Number.isFinite(at.z)) { dog.x = at.x; dog.z = at.z; dog.walking = false; dog.speed = 0; dog.path = []; dog.dest = null; dog.rest = 'look'; dog.restT = 1.5; }
+    if (dog && away && this.guard?.uid === dog.uid) this.guard = null;
+  }
+  get isDogAway() { return this.dogAway; }
+  /** Where the pen has its dog now (world metres), or null without one. */
+  dogSpot() { const dog = [...this.walkers.values()].find(w => w.kind === 'dog'); return dog ? { x: dog.x, z: dog.z, heading: dog.heading } : null; }
   private readonly mobile: boolean;
   private poseDt = 0;
   private poseDirty = true;
@@ -275,13 +303,14 @@ export class FarmPenView {
   get isBuilt() { return this.built; }
   /** Where the animals may roam (the world's village ground). */
   setArea(area: RoamArea) {
-    this.area = { ...area, blocked: (x,z,r) => area.blocked(x,z,r) || !!this.speciesPens?.dog && Math.hypot(x-this.speciesPens.dog.x,z-this.speciesPens.dog.z) < r+.45 };
+    this.baseArea = area;
+    this.area = { ...area, leash: this.leash(), blocked: (x,z,r) => area.blocked(x,z,r) || !!this.speciesPens?.dog && Math.hypot(x-this.speciesPens.dog.x,z-this.speciesPens.dog.z) < r+.45 };
   }
   /** Rebuild shelter props only when the saved placement changes, not every animation frame. */
   setSpeciesPens(pens: FarmState['speciesPens']) {
     const next = JSON.stringify(ANIMAL_KINDS.map(kind => [kind,pens?.[kind]?.x,pens?.[kind]?.z]));
     if (next === this.pensSignature) return;
-    this.pensSignature = next; this.speciesPens = structuredClone(pens ?? {});
+    this.pensSignature = next; this.speciesPens = structuredClone(pens ?? {}); if (this.baseArea) this.setArea(this.baseArea); else this.area.leash = this.leash();
     this.disposeStatics(); this.buildStatics();
   }
   refresh() {
@@ -338,7 +367,7 @@ export class FarmPenView {
   }
   /** Presentation only: the server decides theft and damage before the guardian gives chase. */
   guardBite(target: { x: number; z: number }, follow?: () => { x: number; z: number } | null) {
-    const dog = [...this.walkers.values()].find(w => w.kind === 'dog');
+    const dog = this.dogAway ? undefined : [...this.walkers.values()].find(w => w.kind === 'dog');
     if (!dog || !Number.isFinite(target.x) || !Number.isFinite(target.z)) return false;
     this.guard = { uid: dog.uid, target: { ...target }, follow, remaining: 6, bite: -1, repath: 0, route: [] };
     this.poseDirty = true;
@@ -413,7 +442,7 @@ export class FarmPenView {
     for (const a of list) {
       keep.add(a.uid); const model = modelOf(a, now); let w = this.walkers.get(a.uid);
       if (!w) {
-        const young = model !== a.kind, spot = spawnSpot(this.area, this.rng, a.kind, young, [...this.walkers.values()]);
+        const young = model !== a.kind, leash = a.kind === 'dog' ? this.area.leash : undefined, spot = leash ? { x: leash.x, z: leash.z } : spawnSpot(this.area, this.rng, a.kind, young, [...this.walkers.values()]);
         w = { ...newRoamer(a.uid, a.kind, young, spot, this.rng), model, expired: expired(a, now), ready: productReady(a, now), phase: this.rng() * 6, pop: 0, size: .94 + this.rng() * .12, seed: this.rng() * 10, coat: 0, lodT: 0, lodDt: 0, seen: true };
         this.walkers.set(a.uid, w); changed = true;
       }
@@ -453,7 +482,7 @@ export class FarmPenView {
     if (player) { this.playerAt.x = player.x; this.playerAt.z = player.z; } this.player = player ? this.playerAt : null;
     if (this.camera) { this.camera.updateMatrixWorld(); this.frustum.setFromProjectionMatrix(this.m.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse)); }
     if (this.buildT < 1) { this.buildT += dt; const k = Math.min(1, this.buildT / .6), s = k < 1 ? k * (1 + Math.sin(k * Math.PI) * .25) : 1; for (const c of this.statics.children) if (c !== this.animals) c.scale.set(1, Math.max(.01, s), 1); }
-    const walkers = this.live; walkers.length = 0; for (const w of this.walkers.values()) if (!w.expired) walkers.push(w);
+    const walkers = this.live; walkers.length = 0; for (const w of this.walkers.values()) if (!w.expired && !(this.dogAway && w.kind === 'dog')) walkers.push(w);
     this.grid.build(walkers);
     // Far or offscreen animals think a few times a second with the gathered time (their walks stay on the same line).
     for (let n = 0; n < walkers.length; n++) {
@@ -466,6 +495,7 @@ export class FarmPenView {
     for (const m of this.meshes.values()) { m.count = 0; m.userData.animalUids.length=0; }
     for (let n = 0; n < list.length; n++) {
       const a = list[n], w = this.walkers.get(a.uid)!;
+      if (this.dogAway && a.kind === 'dog') continue;
       if (w.expired) {
         const marker = this.productMesh('meat'), i = marker.count;
         if (i < MAX_PRODUCTS) { marker.setMatrixAt(i, this.m.compose(this.v.set(w.x - PEN.x, .15 + Math.sin(idleTime * 3 + w.seed) * .05 * calm, w.z - PEN.z), this.q.setFromEuler(this.e.set(0, idleTime * .7 + w.seed, 0)), this.s.setScalar(1.6))); marker.userData.animalUids[i]=a.uid; marker.count = i + 1; }
@@ -497,7 +527,7 @@ export class FarmPenView {
           // Grazing: head down to the grass with a slow chew; pecking: a quick dip.
           if (p.draw === 'head') { rx = Math.max(w.peck * .9, w.graze * (cow ? .75 : .6)) + (w.graze * Math.sin(idleTime * 6 + w.seed) * .06 + Math.sin(idleTime * 2 + w.seed) * .05) * calm + bite*.75; ry = Math.sin(idleTime * .7 + w.seed) * .15 * (1 - w.graze * .6) * calm; }
           else if (p.draw === 'legs') rx = sign * swing;
-          else if (p.draw === 'tail') ry = Math.sin(idleTime * 3 + w.seed) * .35 * calm;
+          else if (p.draw === 'tail') ry = a.kind === 'dog' ? Math.sin(idleTime * (w.rest === 'look' || moving ? 11 : 6) + w.seed) * .5 * calm : Math.sin(idleTime * 3 + w.seed) * .35 * calm;
           else rz = moving ? Math.sin(w.phase) * .04 * calm : 0;
           this.local.compose(this.v2.copy(at).setY(at.y + (p.draw === 'legs' ? 0 : w.flap * .08)), this.q.setFromEuler(this.e.set(rx, ry, rz)), this.one);
           const i = mesh.count; if (i >= max) continue;

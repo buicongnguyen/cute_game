@@ -114,3 +114,6 @@ def extend(g):
         g['game_camera'](target=(0,0,.5),ortho_scale=9)
         g['render'](g['os'].path.join(g['PREVIEWS'],'farm-expansion.webp'))
     g['preview_expansion']=preview
+    # The guard dog is its own original puppy (build_farm_dog.py), cousin of the wilds' wolf.
+    import build_farm_dog
+    build_farm_dog.install(g)

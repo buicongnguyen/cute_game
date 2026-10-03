@@ -25,6 +25,7 @@ import { CropCards, CROP_PRESENTATION_SCALE, SOIL_Y, cropStage, popScale, stageS
 import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
+import { GuardDogs } from './dog-world.ts';
 import { creatureKit, creatureArt, adoptCreatureModel } from './creature-art.ts';
 import { lateArtParts, type LateArt } from './late-art.ts';
 import type { RoamArea } from './farm-roam.ts';
@@ -65,7 +66,7 @@ export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
 export interface AvatarVisual {size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
 export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
-export interface RemotePose {visual?:Partial<AvatarVisual>;id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
+export interface RemotePose {/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
 export interface EnemySnapshot {homeX?:number;homeZ?:number;titanAttacks?:TitanAttack[];titanLift?:number;chaseGrace?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
 export interface EnvironmentSnapshot {time:number;lamps:Array<[number,number]>;eclipseUntil?:number;weather?:LavaWeatherSnapshot;nestLevel?:number;fireRain?:EnvironmentSimulation['fireRain'];lightning?:LightningState}
@@ -163,6 +164,8 @@ export class World {
   private cardCellPx = 128; private gardenBeds?: GardenBeds; private bedCrops: BedCrop[] = [];
   /** The animal pen at home (farm-view.ts); undefined elsewhere. */
   farmView?: FarmPenView;
+  /** The guard dog at the pen or out with you, and other explorers' dogs (dog-world.ts); main sets ownDog (none while visiting). */
+  guardDogs?: GuardDogs; ownDog?: () => number | null;
   /** Pooled particles, rings, flashes, floating text, camera shake and hit-stop. */
   fx?: Effects;
   /** The red target ring and arrow, and the pooled danger discs. */
@@ -1630,6 +1633,7 @@ export class World {
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
     this.animateCrops(dt);
     if(this.farmView&&this.planet==='home'){this.farmView.setSpeciesPens(this.state.farm?.speciesPens);if((this.penKeepClock=(this.penKeepClock??0)-dt)<=0){this.penKeepClock=1;this.roamKeep=this.penKeepOut();}this.farmView.update(this.state.farm?.animals??[],dt,this.time,Date.now(),this.position);}
+    (this.guardDogs??=new GuardDogs()).update(this,dt);
     this.updateTarget(dt);
     this.fx?.update(dt);
     this.marker.scale.setScalar(1+Math.sin(this.time*5)*.12);if(draw)this.render();

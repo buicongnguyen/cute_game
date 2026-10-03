@@ -13943,11 +13943,11 @@
   },
   "farm": {
     "generator": "art/blender/kit/build_farm.py",
-    "blender": "4.5.14 LTS",
+    "blender": "4.5.9 LTS",
     "units": "metres",
     "coordinates": "Blender: Z up, front -Y; glTF: Y up, front +Z; origin at each piece's ground centre. Animals and the gate: a root node with one child per part, whose translation is the part pivot (glTF) and whose vertices are relative to it.",
     "file": "farm.glb",
-    "bytes": 449304,
+    "bytes": 459352,
     "limit_bytes": 655360,
     "budgets": {
       "animal": 1500,
@@ -15333,174 +15333,178 @@
       },
       "dog": {
         "kind": "animal",
-        "triangles": 1196,
+        "triangles": 1460,
         "budget": 1500,
         "materials": [
           "Farm bell",
+          "Farm blush",
+          "Farm collar",
           "Farm dog",
+          "Farm dog ear",
+          "Farm dog light",
           "Farm eye",
-          "Farm eye glint",
-          "Farm hoof",
-          "Farm strap",
-          "Farm trim"
+          "Farm eye glint"
         ],
         "bounds": {
           "min": [
-            -0.312,
-            -0.745,
-            0.0
+            -0.2064,
+            -0.5306,
+            -0.0043
           ],
           "max": [
-            0.312,
-            0.6229,
-            1.0
+            0.2064,
+            0.3627,
+            0.7998
           ],
           "size": [
-            0.624,
-            1.3679,
-            1.0
+            0.4128,
+            0.8933,
+            0.8041
           ]
         },
         "bounds_gltf": {
           "min": [
-            -0.312,
-            0.0,
-            -0.6229
+            -0.2064,
+            -0.0043,
+            -0.3627
           ],
           "max": [
-            0.312,
-            1.0,
-            0.745
+            0.2064,
+            0.7998,
+            0.5306
           ]
         },
         "parts": {
           "body": {
             "node": "dog_body",
-            "triangles": 252,
+            "triangles": 400,
             "materials": [
               "Farm dog",
-              "Farm strap",
+              "Farm dog light",
+              "Farm collar",
               "Farm bell"
             ],
             "pivot": [
               0.0,
-              0.0,
-              0.4
+              0.0258,
+              0.2838
             ],
             "pivot_gltf": [
               0.0,
-              0.4,
-              -0.0
+              0.2838,
+              -0.0258
             ]
           },
           "head": {
             "node": "dog_head",
-            "triangles": 520,
+            "triangles": 712,
             "materials": [
               "Farm dog",
-              "Farm trim",
+              "Farm dog light",
+              "Farm dog ear",
+              "Farm blush",
               "Farm eye",
-              "Farm strap",
               "Farm eye glint"
             ],
             "pivot": [
               0.0,
-              -0.33,
-              0.55
+              -0.1978,
+              0.4042
             ],
             "pivot_gltf": [
               0.0,
-              0.55,
-              0.33
+              0.4042,
+              0.1978
             ]
           },
           "leg_fl": {
             "node": "dog_leg_fl",
-            "triangles": 64,
+            "triangles": 60,
             "materials": [
               "Farm dog",
-              "Farm hoof"
+              "Farm dog light"
             ],
             "pivot": [
-              -0.21,
-              -0.28,
-              0.3
+              -0.1032,
+              -0.1462,
+              0.1806
             ],
             "pivot_gltf": [
-              -0.21,
-              0.3,
-              0.28
+              -0.1032,
+              0.1806,
+              0.1462
             ]
           },
           "leg_fr": {
             "node": "dog_leg_fr",
-            "triangles": 64,
+            "triangles": 60,
             "materials": [
               "Farm dog",
-              "Farm hoof"
+              "Farm dog light"
             ],
             "pivot": [
-              0.21,
-              -0.28,
-              0.3
+              0.1032,
+              -0.1462,
+              0.1806
             ],
             "pivot_gltf": [
-              0.21,
-              0.3,
-              0.28
+              0.1032,
+              0.1806,
+              0.1462
             ]
           },
           "leg_bl": {
             "node": "dog_leg_bl",
-            "triangles": 64,
+            "triangles": 60,
             "materials": [
               "Farm dog",
-              "Farm hoof"
+              "Farm dog light"
             ],
             "pivot": [
-              -0.21,
-              0.28,
-              0.3
+              -0.1032,
+              0.172,
+              0.1806
             ],
             "pivot_gltf": [
-              -0.21,
-              0.3,
-              -0.28
+              -0.1032,
+              0.1806,
+              -0.172
             ]
           },
           "leg_br": {
             "node": "dog_leg_br",
-            "triangles": 64,
+            "triangles": 60,
             "materials": [
               "Farm dog",
-              "Farm hoof"
+              "Farm dog light"
             ],
             "pivot": [
-              0.21,
-              0.28,
-              0.3
+              0.1032,
+              0.172,
+              0.1806
             ],
             "pivot_gltf": [
-              0.21,
-              0.3,
-              -0.28
+              0.1032,
+              0.1806,
+              -0.172
             ]
           },
           "tail": {
             "node": "dog_tail",
-            "triangles": 168,
+            "triangles": 108,
             "materials": [
-              "Farm dog"
+              "Farm dog",
+              "Farm dog light"
             ],
             "pivot": [
               0.0,
-              0.44,
-              0.52
+              0.2322,
+              0.3526
             ],
             "pivot_gltf": [
               0.0,
-              0.52,
-              -0.44
+              0.3526,
+              -0.2322
             ]
           }
         }
@@ -16225,6 +16229,11 @@
         "roughness": 0.5,
         "metallic": 0.0
       },
+      "Farm collar": {
+        "color": "#3FA9F5",
+        "roughness": 0.4,
+        "metallic": 0.0
+      },
       "Farm comb": {
         "color": "#F0393F",
         "roughness": 0.5,
@@ -16241,7 +16250,17 @@
         "metallic": 0.0
       },
       "Farm dog": {
-        "color": "#C98D4C",
+        "color": "#E8A25A",
+        "roughness": 0.5,
+        "metallic": 0.0
+      },
+      "Farm dog ear": {
+        "color": "#B8743A",
+        "roughness": 0.5,
+        "metallic": 0.0
+      },
+      "Farm dog light": {
+        "color": "#FFF1D8",
         "roughness": 0.5,
         "metallic": 0.0
       },

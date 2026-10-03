@@ -717,7 +717,7 @@ Object.assign(VI_CATALOG, {
   "Guarding crops · 18 bite damage": "Đang canh vườn · sát thương cắn 18",
   "{name} ×{count}/{capacity} ready! Tap to collect.": "{name} ×{count}/{capacity} đã sẵn sàng! Chạm để thu.",
   "Build a welcoming farm for chickens, ducks, cows and pigs. A guard dog keeps visitors away from ripe crops.": "Xây trang trại cho gà, vịt, bò và heo. Chó canh giữ khách tránh xa cây chín.",
-  "Livestock produces while you are away and leaves meat after two real hours. Guard dogs stay with you.": "Gia súc, gia cầm vẫn cho sản phẩm khi bạn vắng mặt và để lại thịt sau hai giờ thực. Chó canh luôn ở bên bạn.",
+  "Livestock produces while you are away and leaves meat after two real hours. Your guard dog waits by the pen at home, trots after you in the wilds and on other planets, and guards the garden either way.": "Gia súc, gia cầm vẫn cho sản phẩm khi bạn vắng mặt và để lại thịt sau hai giờ thực. Chó canh chờ bên chuồng khi bạn ở nhà, chạy theo bạn ngoài vùng hoang dã và trên các hành tinh khác, và luôn canh giữ khu vườn.",
   "The farm is empty. Choose a new friend below.": "Trang trại đang trống. Chọn một người bạn mới bên dưới.",
   "Protects ripe crops from theft. No feeding, products or lifespan limit.": "Bảo vệ cây chín khỏi trộm. Không cần cho ăn, không tạo sản phẩm và không giới hạn tuổi thọ.",
   "{name} shelter": "Chuồng {name}",

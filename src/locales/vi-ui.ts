@@ -558,7 +558,7 @@ export const VI_UI: Record<string, string> = {
   // Vietnamese review pass (w14): strings that still showed in English.
   "Interactive 3D garden. Click the ground to walk, or use arrow keys. Press F to interact with nearby objects.": "Khu vườn 3D. Nhấp vào mặt đất để đi, hoặc dùng phím mũi tên. Nhấn F để tương tác với đồ vật ở gần.",
   "Effect": "Hiệu ứng",
-  "Livestock produces while you are away and leaves meat after two real hours. Guard dogs stay with you. Sell the products at the market or cook them at the kitchen.": "Gia súc, gia cầm vẫn cho sản phẩm khi bạn vắng mặt và để lại thịt sau hai giờ thực. Chó canh luôn ở bên bạn. Bán sản phẩm ở chợ hoặc nấu món ngon trong bếp nhé.",
+  "Livestock produces while you are away and leaves meat after two real hours. Your guard dog waits by the pen at home, trots after you in the wilds and on other planets, and guards the garden either way. Sell the products at the market or cook them at the kitchen.": "Gia súc, gia cầm vẫn cho sản phẩm khi bạn vắng mặt và để lại thịt sau hai giờ thực. Chó canh chờ bên chuồng khi bạn ở nhà, chạy theo bạn ngoài vùng hoang dã và trên các hành tinh khác, và luôn canh giữ khu vườn. Bán sản phẩm ở chợ hoặc nấu món ngon trong bếp nhé.",
   "Hold anywhere to steer toward your finger · hold {boost} to speed up · fly close to a planet to land": "Giữ ở bất cứ đâu để lái theo ngón tay · giữ nút {boost} để bay nhanh hơn · bay gần hành tinh để hạ cánh",
   "Hold the mouse to steer (or {keys}) · {shift} boosts · fly close to a planet to land": "Giữ chuột để lái (hoặc {keys}) · {shift} để tăng tốc · bay gần hành tinh để hạ cánh",
   "Home: fast recovery": "Ở nhà: hồi phục nhanh",

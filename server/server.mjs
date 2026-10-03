@@ -6,6 +6,7 @@ import { randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as Game from '../src/model.ts';
+import { dogFollows } from '../src/guard-dog.ts';
 import { lookOf } from '../src/looks.ts';
 import { createAccountStore } from './account-store.mjs';
 import { createActionService } from './action-service.mjs';
@@ -312,7 +313,9 @@ export async function createGameServer(options = {}) {
           const distance = Math.hypot(x - peer.pose.x, z - peer.pose.z);
           if (peer.poseAt && distance > 55 * elapsed + 8 && !(Math.hypot(x, z) < 2)) return;
           const combat=combatAuthority.engineFor(peer).sim;
-          peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; peer.pose = { x, z, y: number(message.y, 0, -30, 50), facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0} };
+          peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && account.profile.farm?.animals?.find(a => a.kind === 'dog');
+          // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.
+          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0} };
           broadcast(room, { type: 'pose', player: presence(peer) }, account.id);
         } else if (message.type === 'chat') {
           if (!room) throw failure(409, 'Join a world before sending a message.');

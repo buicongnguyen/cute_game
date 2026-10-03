@@ -10,6 +10,8 @@ import { t, localizeHtml, getLanguage, setLanguage, onLanguageChange, bindLangua
 import './menus.css';
 import { Box3, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
+import { dogCoatOf } from './dog-world.ts';
+import { dogFollows } from './guard-dog.ts';
 import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, KIT_FILES } from './assets.ts';
 import { onArtLoaded } from './art-retry.ts';
 import { LateArtQueue } from './late-art.ts';
@@ -182,6 +184,8 @@ const graphics=loadGraphics(state.settings.lowGraphics);
 let world: World;
 try { world = new World($('#world'), state, { antialias: !(graphics.mobile && devicePixelRatio >= 2) }); }
 catch (error) { app.innerHTML = localizeHtml('<div class="fatal"><h1>Your garden needs WebGL</h1><p>Enable hardware acceleration in your browser, then reload this page.</p><p>Your saved adventure is safe.</p></div>'); throw error; }
+// Your guard dog: none while visiting someone else's garden (it stays at your own pen).
+world.ownDog=()=>visiting?null:dogCoatOf(state);
 world.applyGraphics(graphics.profile, graphics.ratio);world.fx?.setTextLayer($('#floating-text'));
 // Over-head HP bars, target frame and boss bar; the trackers fold to a chip in fights ('auto'), or as the player asks.
 const combatHud=new CombatHud($('#world-labels'),(x,y,z)=>world.screen(x,y,z));let trackerMode:'auto'|'open'|'fold'='auto',wasFight=false;
@@ -1091,7 +1095,7 @@ function rebuildHomePresentation(planet:M.PlanetId){
 const sharedKills=new Set<string>();
 export const gameBridge:GameBridge={
   getState:()=>state,getWorld:()=>world,
-  getPresence:()=>({y:house.poseY(world.position.y),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot()}),
+  getPresence:()=>({y:house.poseY(world.position.y),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot(),dog:(()=>{const dog=world.ownDog?.();return dog!==null&&dog!==undefined&&dogFollows(world.planet,world.position,!!world.interior)?dog:null;})()}),
   getOfflineState:()=>{try{return M.parseSave(localStorage.getItem(M.SAVE_KEY));}catch{return null;}},
   applyState(next){fishingEpoch++;fishingView.resetMysteryAvailability();if(flight)exitSpace();shipSequence?.reset();arriving=false;autopilotTarget=null;homeQueued=false;state=next;applyMovePad();const nameInput=document.querySelector<HTMLInputElement>('#name-input');if(nameInput)nameInput.value=state.name;visiting=null;visitHome=null;world.state=state;resetCombat();world.build(state.planet);world.refreshPlayer();if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal)closeDialog();updateHud();updateLabels();},
   setPersistence(handler){persistence=handler;},
