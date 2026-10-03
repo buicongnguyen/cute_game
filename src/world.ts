@@ -26,6 +26,8 @@ import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
 import { GuardDogs } from './dog-world.ts';
+import { PetCompanion } from './pet-world.ts';
+import { FLYING_PETS, petFollows } from './pet-pen.ts';
 import { creatureKit, creatureArt, adoptCreatureModel } from './creature-art.ts';
 import { lateArtParts, type LateArt } from './late-art.ts';
 import type { RoamArea } from './farm-roam.ts';
@@ -166,6 +168,8 @@ export class World {
   farmView?: FarmPenView;
   /** The guard dog at the pen or out with you, and other explorers' dogs (dog-world.ts); main sets ownDog (none while visiting). */
   guardDogs?: GuardDogs; ownDog?: () => number | null;
+  /** Your pet: waits by the pen at home, follows (and fights) away from it (pet-world.ts); main sets petStaysHome (a visit). */
+  petPen?: PetCompanion; petStaysHome?: () => boolean;
   /** Pooled particles, rings, flashes, floating text, camera shake and hit-stop. */
   fx?: Effects;
   /** The red target ring and arrow, and the pooled danger discs. */
@@ -656,7 +660,7 @@ export class World {
   /** A companion model: from the pet kit when it has loaded, otherwise the simple shapes. */
   petFor(id:string){
     const model=this.kitFor(id)?.instance(id)??this.petModel(id);
-    model.userData.flying=['pet_parrot','pet_firefly','pet_dragon','pet_t_crystal','pet_t_whale','pet_t_eye'].includes(id);
+    model.userData.flying=FLYING_PETS.includes(id);
     // The kit's convention: the right wing lifts with +z, the left with -z.
     model.userData.wings=model.children.filter(c=>/_wing_[lr]/.test(c.name)).map(c=>({node:c,base:c.rotation.z,side:/_wing_l/.test(c.name)?-1:1}));
     return model;
@@ -952,6 +956,8 @@ export class World {
       stepGait(g,moving?Math.max(u.speed,1.5)*dt:0,dt,leg);
       if(l.legL)l.legL.rotation.x=0;if(l.legR)l.legR.rotation.x=0;if(l.armL)l.armL.rotation.x=0;if(l.armR)l.armR.rotation.x=0;
       const bob=applyGait(l,g,gaitSwing(u.speed,leg)),body=m.children[0];if(body)body.position.y=bob;
+      // Their pet waits at their own pen while they are in the safe village (pet-pen.ts): it is drawn beside them only away from it.
+      const pet=(u.pet===undefined?u.pet=m.getObjectByName('remote-pet')??null:u.pet) as T.Object3D|null;if(pet)pet.visible=petFollows(remote.pose.planet??this.planet,remote.pose);
     }
   }
   receiveRemoteHit(id:string,amount:number,stun=0){const e=this.enemies.find(e=>e.id===id);if(!e||e.hp<=0||!Number.isFinite(amount)||amount<0)return false;this.damageEnemy(e,amount,stun);return true;}
@@ -1615,16 +1621,10 @@ export class World {
     // Home heals 4x faster (home-care.ts); this line had slipped into the comment above, so offline the village never healed.
     this.homeRecovering=atHome(this.planet,this.position,!!this.interior)&&this.state.hp>0&&this.state.hp<stats.maxHp;if(!this.authoritativeAction&&active&&this.homeRecovering)this.state.hp=Math.min(stats.maxHp,this.state.hp+homeRecoveryBonus(stats.regen)*dt);
     this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
-    if(this.state.gear.pet){
-      // The companion trails behind and to one side; flyers hover and flap, walkers hop.
-      const back=new T.Vector3(this.position.x-Math.sin(this.facing)*1.1+Math.cos(this.facing)*.9,0,this.position.z-Math.cos(this.facing)*1.1-Math.sin(this.facing)*.9),c=this.companion,flying=!!c.userData.flying;
-      const before=c.position.clone();c.position.lerp(back,1-Math.exp(-dt*4));
-      c.position.y=this.position.y+(flying?1.1+Math.sin(this.time*3)*.18:Math.abs(Math.sin(this.time*5))*.12*(before.distanceTo(c.position)>dt*.5?1:.3));
-      const dx=c.position.x-before.x,dz=c.position.z-before.z;if(dx*dx+dz*dz>1e-5)c.rotation.y=Math.atan2(dx,dz);c.rotation.z=flying?Math.sin(this.time*2.5)*.1:0;
-      for(const wing of (c.userData.wings??[]) as {node:T.Object3D;base:number;side:number}[])wing.node.rotation.z=wing.base+wing.side*Math.sin(this.time*18)*.6;
-    }
+    // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
+    (this.petPen??=new PetCompanion()).update(this,dt);
     this.animatePlayer(dt);this.animateRemotes(dt);
-    this.player.visible=!this.boarded;this.companion.visible=!this.boarded;
+    this.player.visible=!this.boarded;this.companion.visible=!this.boarded&&this.petPen.shown;
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);
     if(this.fx)this.camera.position.add(this.fx.shakeOffset(dt,this.shakeOffset));

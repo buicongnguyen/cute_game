@@ -2,6 +2,7 @@ import { FISH, FISH_WEIGHTS, ITEMS } from './content.ts';
 import { FISH_PER_WATER } from './fishing.ts';
 import { zoneAt } from './environments.ts';
 import { grantCatch, type SaveState } from './model.ts';
+import { GUARDIAN_COOLDOWN_MS, GUARDIAN_HIT_RADIUS, GUARDIAN_ID, GUARDIAN_SLOT, guardianTarget } from './lake-guardian.ts';
 
 export const FISH_HUNT_COOLDOWN_MS = 1300;
 /** A caught slot restocks after 90 s with a freshly rolled species (review: a 12 s restock of a fixed golden fish paid ~200k
@@ -13,7 +14,7 @@ const MAX_TIME = Number.MAX_SAFE_INTEGER - FISH_HUNT_RESTOCK_MS;
 interface Point { x: number; z: number }
 export interface HuntPond extends Point { id: string; rx: number; rz: number; surface: number; waterId: string }
 export interface FishHuntTarget extends Point { slot: number; id: string; size: number; facing: number }
-export interface HuntingState { lastShotAt: number; readyAt: Record<string, number>; /** Fish caught per slot: seeds the species that restocks there. */ caught?: Record<string, number>; /** Distinguishes an initial zero timestamp from a shot at time zero. */ hasShot?: boolean }
+export interface HuntingState { lastShotAt: number; readyAt: Record<string, number>; /** Fish caught per slot: seeds the species that restocks there. */ caught?: Record<string, number>; /** Distinguishes an initial zero timestamp from a shot at time zero. */ hasShot?: boolean; /** When this explorer last caught the Lake Guardian (lake-guardian.ts: one per 20 h). */ guardianAt?: number }
 export interface FishHuntIntent { weaponId: string; pondId: string; slot: number; aim: Point }
 export interface FishHuntResult { hit: boolean; count: 0 | 1; id: string; size: number; huge: false; pondId: string; slot: number; readyAt: number; shotReadyAt: number; serverNow: number }
 const validTime = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= MAX_TIME;
@@ -67,7 +68,9 @@ export function parseHunting(raw: unknown, now = Date.now()): HuntingState | und
   }
   // Reset implausible future timestamps instead of repeatedly clamping them on every rejected request.
   const validShot = validTime(value.lastShotAt) && value.lastShotAt <= now;
-  return { lastShotAt: validShot ? value.lastShotAt as number : 0, readyAt, ...(Object.keys(caught).length ? { caught } : {}), ...(validShot && value.hasShot === true ? { hasShot: true } : {}) };
+  // A guardian catch stamped in the future is pulled back to now (still a full cooldown), never dropped: that would free a catch.
+  const guardianAt = validTime(value.guardianAt) ? Math.min(value.guardianAt as number, now) : undefined;
+  return { lastShotAt: validShot ? value.lastShotAt as number : 0, readyAt, ...(Object.keys(caught).length ? { caught } : {}), ...(validShot && value.hasShot === true ? { hasShot: true } : {}), ...(guardianAt !== undefined ? { guardianAt } : {}) };
 }
 
 /** Offline uses the player's position; the server must supply its own authenticated peer position. */
@@ -75,13 +78,17 @@ export function huntFish(s: SaveState, intent: FishHuntIntent, from: Point, now 
   if (!intent || intent.weaponId !== 'harpoon' || s.gear.weapon !== 'harpoon' || s.gear.disguise || !(s.bag.harpoon! >= 1) || s.hp <= 0 || !validTime(now) || !point(from) || !point(intent.aim)) return null;
   const weapon = ITEMS.harpoon?.weapon, pond = huntingPonds(s.planet).find(p => p.id === intent.pondId);
   if (!weapon || !pond || s.hunting && (s.hunting.hasShot || s.hunting.lastShotAt > 0) && now - s.hunting.lastShotAt < FISH_HUNT_COOLDOWN_MS) return null;
-  const target = fishHuntTarget(pond, intent.slot, now, s.hunting); if (!target) return null;
-  const key = fishHuntKey(pond.id, target.slot), readyAt = s.hunting?.readyAt[key] ?? 0;
+  // The Lake Guardian (lake-guardian.ts) has its own slot: up, in its lake, and not caught by this explorer for 20 h.
+  const guardian = intent.slot === GUARDIAN_SLOT;
+  const target = guardian ? guardianTarget(pond, now, s.hunting) : fishHuntTarget(pond, intent.slot, now, s.hunting); if (!target) return null;
+  const key = fishHuntKey(pond.id, target.slot), readyAt = guardian ? 0 : s.hunting?.readyAt[key] ?? 0;
   if (now < readyAt || Math.hypot((intent.aim.x - pond.x) / pond.rx, (intent.aim.z - pond.z) / pond.rz) > 1 || Math.hypot(from.x - pond.x, from.z - pond.z) > pond.rx + 3.05 || Math.hypot(from.x - intent.aim.x, from.z - intent.aim.z) > Math.min(16, weapon.range)) return null;
-  const hit = Math.hypot(target.x - intent.aim.x, target.z - intent.aim.z) <= FISH_HUNT_HIT_RADIUS;
+  const hit = Math.hypot(target.x - intent.aim.x, target.z - intent.aim.z) <= (guardian ? GUARDIAN_HIT_RADIUS : FISH_HUNT_HIT_RADIUS);
   // A failed inventory grant keeps both the fish and the shot available.
   if (hit && !grantCatch(s, target.id, target.size, false)) return null;
   const hunting = s.hunting ??= { lastShotAt: 0, readyAt: {} }; hunting.lastShotAt = now; hunting.hasShot = true;
-  if (hit) { hunting.readyAt[key] = now + FISH_HUNT_RESTOCK_MS; (hunting.caught ??= {})[key] = Math.min(1e9, huntCatches(hunting, key) + 1); }
-  return { hit, count: hit ? 1 : 0, id: target.id, size: target.size, huge: false, pondId: pond.id, slot: target.slot, readyAt: hunting.readyAt[key] ?? 0, shotReadyAt: now + FISH_HUNT_COOLDOWN_MS, serverNow: now };
+  if (hit && guardian) hunting.guardianAt = now;
+  else if (hit) { hunting.readyAt[key] = now + FISH_HUNT_RESTOCK_MS; (hunting.caught ??= {})[key] = Math.min(1e9, huntCatches(hunting, key) + 1); }
+  const restock = guardian ? hit ? now + GUARDIAN_COOLDOWN_MS : 0 : hunting.readyAt[key] ?? 0;
+  return { hit, count: hit ? 1 : 0, id: guardian ? GUARDIAN_ID : target.id, size: target.size, huge: false, pondId: pond.id, slot: target.slot, readyAt: restock, shotReadyAt: now + FISH_HUNT_COOLDOWN_MS, serverNow: now };
 }

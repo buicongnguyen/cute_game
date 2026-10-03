@@ -3,6 +3,7 @@ import { isShared } from './assets.ts';
 import { fishLook, type FishingView } from './fishing-view.ts';
 import { fishHuntKey, fishHuntTargets, type FishHuntTarget, type HuntPond, type HuntingState } from './fish-hunting.ts';
 import { createHarpoonProjectile } from './harpoon-art.ts';
+import { guardianTarget } from './lake-guardian.ts';
 
 type Point = { x: number; z: number };
 type FishModel = { obj: T.Group; tail: T.Object3D | null; id: string };
@@ -70,6 +71,8 @@ export class FishHuntingView {
       if (f.tail) f.tail.rotation.y = Math.sin(now / 200 + target.slot) * wag;
     }
     this.targets = this.targets.filter(t => this.fish[t.slot]?.obj.visible);
+    // The Lake Guardian is drawn by LakeGuardianView (shown with any gear); here it is only a target to aim at.
+    const guardian = pond ? guardianTarget(pond, now, hunting) : null; if (guardian) this.targets.push(guardian);
     if (this.shot) {
       this.shot.elapsed += dt; const t = Math.min(1, this.shot.elapsed / .28);
       this.projectile.position.lerpVectors(this.shot.from, this.shot.to, t);

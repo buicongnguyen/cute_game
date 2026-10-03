@@ -738,7 +738,9 @@ Object.assign(VI_CATALOG, {'Collect ×{count}':'Thu ×{count}','Collect from {na
 Object.assign(VI_CATALOG, {
   'Hunting harpoon':'Lao săn ba chĩa',
   'Great Forest Hawk':'Diều hâu rừng lớn',
-  'A reusable throwing fork for hunting fish near ponds and large forest birds. +20 attack. No ammunition needed.':'Lao ba chĩa dùng nhiều lần để săn cá gần ao và chim lớn trong rừng. +20 tấn công. Không cần đạn.',
+  'A heavy reusable throwing fork: +100 attack in fights, and the tool for hunting pond fish, large forest birds and the rare Lake Guardian. No ammunition needed.':'Lao ba chĩa nặng, dùng nhiều lần: +100 tấn công khi chiến đấu, và là công cụ săn cá trong ao, chim lớn trong rừng và Cá Thần Hồ hiếm có. Không cần đạn.',
+  'Lake Guardian':'Cá Thần Hồ',
+  'A glowing koi that guards the big meadow lake. It surfaces now and then, only a harpoon can catch it, and it comes back for you about once a day.':'Cá koi phát sáng canh giữ hồ lớn trên đồng cỏ. Thỉnh thoảng nó nổi lên, chỉ lao săn mới bắt được, và mỗi ngày nó quay lại với bạn khoảng một lần.',
   'Hunt':'Săn',
   'Hunt a fish':'Săn cá',
   'Tap a fish to throw your harpoon.':'Chạm vào cá để phóng lao.',

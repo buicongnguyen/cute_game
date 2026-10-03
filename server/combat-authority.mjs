@@ -230,7 +230,8 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       heal:fraction=>hp(current(),Game.maxHp(current().account.profile)*fraction,'heal'),
       execute:target=>{const p=current();if(!target.boss&&target.hp/target.maxHp<.4&&dist(p.pose,target)<=3.2+target.radius)hit(p,target,{amount:target.hp,critical:true,stun:0,lift:0,knock:0,direction:{x:0,z:0}},true);},
       effect:effect=>{if(room())broadcast(room(),{type:'effect',by:current().account.id,visual:effect},current().account.id);},
-      pet:()=>{const p=current(),id=p.account.profile.gear.pet,pet=Game.ITEMS[id]?.pet;return pet?{...pet,dmg:pet.dmg*gearFactor(p.account.profile,id),x:p.pose.x,z:p.pose.z}:null;},
+      // The pet waits by the pen at home (pet-pen.ts petMayFight): it shoots only while its explorer is away from the safe village.
+      pet:()=>{const p=current(),id=p.account.profile.gear.pet,pet=Game.ITEMS[id]?.pet;return pet&&!p.visit&&!atHome(p.planet,p.pose)?{...pet,dmg:pet.dmg*gearFactor(p.account.profile,id),x:p.pose.x,z:p.pose.z}:null;},
       // The guard dog throws only while the server says it follows (pose.dog is null at home and on visits); it stands at the trailing spot.
       dog:()=>{const p=current();if(p.visit||typeof p.pose?.dog!=='number'||atHome(p.planet,p.pose))return null;const at=trailSpot(p.pose,p.pose.facing||0);return {x:at.x,z:at.z,dmg:dogTossFactor(p.account.profile.level),cd:DOG_TOSS_CD,target:p.target??null};},
       skillLevel:index=>skillLevel(combatProfile(current()),index),

@@ -3867,7 +3867,13 @@ Object.assign(ITEMS, TITAN_ITEMS);
 Object.assign(LOOT_TABLES, TITAN_LOOT);
 
 // New recipes append after the reference catalog so saved/in-flight recipe indexes remain stable.
-ITEMS.harpoon={name:'Hunting harpoon',icon:'🔱',desc:'A reusable throwing fork for hunting fish near ponds and large forest birds. +20 attack. No ammunition needed.',type:'weapon',slot:'weapon',sell:250,price:650,materials:{},attack:20,stats:{atk:20},weapon:{kind:'gun',range:11,cd:1.3,shot:'harpoon',special:'wave',fx:'#c9f0ec'}};
-SHOP_CATEGORIES.find(category=>category.tab==='Weapons')!.items.push({id:'harpoon',cost:650});
-RECIPES.push({result:'harpoon',energy:650,materials:{},category:'Weapons',station:'shop'});
+// w25: the user's pick (option 2): ϟ1000 and +100 attack, still the fish-hunting tool. One slow heavy throw (1.3 s):
+// 77 basic DPS (item-power.ts), between the lava sword and the moon scythe; the biggest single hit in the game (next: 55).
+ITEMS.harpoon={name:'Hunting harpoon',icon:'🔱',desc:'A heavy reusable throwing fork: +100 attack in fights, and the tool for hunting pond fish, large forest birds and the rare Lake Guardian. No ammunition needed.',type:'weapon',slot:'weapon',sell:400,price:1000,materials:{},attack:100,stats:{atk:100},weapon:{kind:'gun',range:11,cd:1.3,shot:'harpoon',special:'wave',fx:'#c9f0ec'}};
+SHOP_CATEGORIES.find(category=>category.tab==='Weapons')!.items.push({id:'harpoon',cost:1000});
+RECIPES.push({result:'harpoon',energy:1000,materials:{},category:'Weapons',station:'shop'});
+// The Lake Guardian (lake-guardian.ts): harpoon only, at most one a day per explorer. It is in no FISH_WEIGHTS table,
+// so no rod cast or ordinary hunting slot can roll it; it is registered in FISH by hand (the FISH loop has already run).
+ITEMS.fish_guardian={name:'Lake Guardian',icon:'🎏',desc:'A glowing koi that guards the big meadow lake. It surfaces now and then, only a harpoon can catch it, and it comes back for you about once a day.',type:'fish',sell:450,heal:250,buff:{luck:.4,regen:6,time:240},rare:true,legend:true,power:.98,size:[180,260]};
+FISH.fish_guardian={id:'fish_guardian',name:ITEMS.fish_guardian.name,icon:ITEMS.fish_guardian.icon,rarity:'legendary',speed:.98,power:.98,stamina:.98,sell:450,xp:Math.round((4+.98*25)*4),size:[180,260],planet:['home']};
 LOOT_TABLES.forest_raptor=[['feather',1,1,2],['meat',.7,1,2]];

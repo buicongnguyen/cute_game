@@ -40,6 +40,7 @@ const FISH_LOOK: Record<string, [scale: number, top: number, wag: number]> = {
   fish_sunfish: [1.1, 0.0819, 0.4],
   fish_angler: [1.4, 0.0989, 0.6],
   fish_manta: [1.1, 0.0405, 0.5],
+  fish_guardian: [1.8, 0.1006, 0.5],
   boot: [1.4, 0.1864, 0.6],
 };
 export const fishLook = (species: string) => FISH_LOOK[species] ?? [1, .06, .5];
@@ -52,7 +53,7 @@ const FALLBACK: Record<string, [string, string]> = {
   fish_shark: ['#7f93a8', '#e8eef4'], fish_rainbow: ['#5fd3f5', '#ff6bb5'], fish_catfish: ['#8a7a6a', '#5a4a3a'], fish_koi: ['#ffffff', '#ff5a2a'],
   fish_eel: ['#3fae8f', '#1f6a5a'], fish_swordfish: ['#3f7fd6', '#a9c8f5'], fish_jelly: ['#ff9ccf', '#ffd3ec'], fish_icepike: ['#bfe8ff', '#ffffff'],
   fish_whale: ['#4a7fd6', '#dcecff'], fish_kraken: ['#b04a8a', '#ff8ad0'], fish_golden: ['#ffc83a', '#fff1a0'], fish_sunfish: ['#b8c2cc', '#e8eef4'],
-  fish_angler: ['#2b3a6b', '#ffe45c'], fish_manta: ['#2a3a5a', '#e8eef4'], boot: ['#8a5a34', '#5a3a20'],
+  fish_angler: ['#2b3a6b', '#ffe45c'], fish_manta: ['#2a3a5a', '#e8eef4'], fish_guardian: ['#fff6ea', '#5cf0e4'], boot: ['#8a5a34', '#5a3a20'],
 };
 
 /**

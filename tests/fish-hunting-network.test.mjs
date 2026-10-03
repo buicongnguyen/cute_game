@@ -44,7 +44,7 @@ test('two real authenticated HTTP/WebSocket clients hunt using authoritative pos
     // Test-only starting currency; buying and equipping then use the public actions route.
     await store.command({ actorId: id, requestId: randomUUID(), expectedRevision: session.data.revision, actionType: 'testSetup', hash: 'a'.repeat(64), run: records => { records.get(id).profile.energy = 2000; return true; } });
     const client = { id, cookie };
-    const bought = await action(client, 'buy', { id: 'harpoon' }); assert.equal(bought.status, 200); assert.equal(bought.data.profile.bag.harpoon, 1); assert.equal(bought.data.profile.energy, 1350);
+    const bought = await action(client, 'buy', { id: 'harpoon' }); assert.equal(bought.status, 200); assert.equal(bought.data.profile.bag.harpoon, 1); assert.equal(bought.data.profile.energy, 1000);
     const equipped = await action(client, 'equip', { id: 'harpoon' }); assert.equal(equipped.status, 200); assert.equal(equipped.data.profile.gear.weapon, 'harpoon');
     Object.assign(client, connect(server.url, cookie)); clients.push(client); client.joined = await client.next(m => m.type === 'joined');
     return client;

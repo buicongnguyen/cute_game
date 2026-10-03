@@ -31,9 +31,9 @@ test('six large flying forest birds append after every existing home creature id
 
 test('harpoon is a purchasable reusable forgeable ranged weapon with canonical bird rewards',()=>{
   const s=M.newGame();s.energy=10000;s.bag.spore=40;s.bag.starshard=40;s.bag.bone=40;
-  const item=M.ITEMS.harpoon;assert.equal(item.price,650);assert.equal(item.slot,'weapon');assert.equal(item.weapon?.kind,'gun');assert.equal(item.weapon?.shot,'harpoon');
+  const item=M.ITEMS.harpoon;assert.equal(item.price,1000);assert.equal(item.slot,'weapon');assert.equal(item.weapon?.kind,'gun');assert.equal(item.weapon?.shot,'harpoon');
   assert.ok(M.SHOP_CATEGORIES.find(c=>c.tab==='Weapons')!.items.some(i=>i.id==='harpoon'));
-  assert.equal(M.buy(s,'harpoon'),true);assert.equal(s.energy,9350);assert.equal(M.equip(s,'harpoon'),true);assert.equal(M.weaponStats(s).range,11);
+  assert.equal(M.buy(s,'harpoon'),true);assert.equal(s.energy,9000);assert.equal(M.equip(s,'harpoon'),true);assert.equal(M.weaponStats(s).range,11);
   const cost=M.forgeCost(0);for(const[id,count]of Object.entries(cost.materials))s.bag[id]=count;assert.equal(M.canForge(s,'harpoon'),true);
   const loot=M.rollLoot('forest_raptor',0,()=>0);assert.ok(loot.some(item=>item.id==='feather'));assert.ok(loot.some(item=>item.id==='meat'));
   assert.equal(weaponModelName('harpoon'),'trident');assert.equal(weaponModelName('bow_star'),'bow_star');

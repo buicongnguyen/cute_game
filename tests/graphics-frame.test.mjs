@@ -40,7 +40,7 @@ function fixture() {
       },
       render() { events.push('render'); painted = true; renders++; },
     },
-    $: () => ({ hidden: true }), autoAttack: noop, updateContextWeapon: noop, updateHunting: noop, positionLabels: noop,
+    $: () => ({ hidden: true }), autoAttack: noop, updateContextWeapon: noop, updateHunting: noop, updateGuardian: noop, positionLabels: noop,
     minimap: { frame: noop }, frameListeners: new Set(), updateHud: noop, updateLabels: noop, measureHud: noop, hudFresh: false,
     save: noop, saveGraphics: noop, requestAnimationFrame: () => { scheduled++; },
   };

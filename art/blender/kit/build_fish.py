@@ -1,6 +1,6 @@
 """Zoo Garden fishing kit: pond fish, an old boot, pond dressing and fish icons.
 
-Eighteen catalogue fish and the old boot, authored procedurally as soft, glossy toys that
+Eighteen catalogue fish, the Lake Guardian (harpoon only) and the old boot, authored procedurally as soft, glossy toys that
 read from the high game camera: bold silhouettes, big eyes and simple high-contrast colour
 patterns that survive being seen through translucent water. Each model is an empty at its
 centre of mass with a `<id>_body` mesh and (for real fish) a one-material `<id>_tail` mesh
@@ -50,7 +50,7 @@ PUBLIC_ICONS = os.path.join(REPO, 'public', 'assets', 'icons', 'fish')
 
 FISH_IDS = ['fish_perch', 'fish_clown', 'fish_puffer', 'fish_carp', 'fish_shark', 'fish_rainbow', 'fish_catfish',
             'fish_koi', 'fish_eel', 'fish_swordfish', 'fish_jelly', 'fish_icepike', 'fish_whale', 'fish_kraken',
-            'fish_golden', 'fish_sunfish', 'fish_angler', 'fish_manta']
+            'fish_golden', 'fish_sunfish', 'fish_angler', 'fish_manta', 'fish_guardian']
 MODEL_IDS = FISH_IDS + ['boot']
 DRESSING_IDS = ['bobber', 'lily_pad', 'lily_flower', 'reeds']
 CLASS_RANGE = {'small': (0.45, 0.55), 'medium': (0.6, 0.75), 'big': (0.8, 1.1), 'junk': (0.3, 0.45)}
@@ -1534,12 +1534,67 @@ def build_boot():
     return M
 
 
+def build_guardian():
+    """The Lake Guardian (src/lake-guardian.ts): a moon-white butterfly koi, about 1.4 x the catalogue koi, with
+    glowing teal patches, a gold tancho spot on the crown, long gold whiskers, long flowing fins and a double
+    fantail. Every material glows a little, so it reads as a light under the water from the high game camera."""
+    M = Model('fish_guardian', 'big', wag=0.5)
+    pearl = M.m('body', '#FFF6EA', 0.32, emit='#D8FFF8', strength=0.12)
+    glow = M.m('patch', '#00B8C8', 0.3, emit='#12E0D8', strength=0.55)
+    gold = M.m('gold', '#FFA81A', 0.3, emit='#FF9A10', strength=0.4)
+    fin = M.m('fin', '#62E2E0', 0.3, emit='#5CF0E4', strength=0.4)
+    S = 1.42
+    B = Body(-0.34 * S, 0.2 * S,
+             w=[(t, v * S) for t, v in ((0, 0), (0.015, 0.02), (0.06, 0.044), (0.18, 0.07), (0.4, 0.08), (0.65, 0.062),
+                                        (0.85, 0.034), (0.95, 0.024), (1, 0))],
+             ht=[(t, v * S) for t, v in ((0, 0), (0.015, 0.018), (0.06, 0.04), (0.2, 0.07), (0.42, 0.08), (0.66, 0.06),
+                                         (0.86, 0.035), (0.95, 0.026), (1, 0))],
+             hb=[(t, v * S) for t, v in ((0, 0), (0.015, 0.016), (0.06, 0.034), (0.2, 0.056), (0.45, 0.062),
+                                         (0.68, 0.046), (0.86, 0.028), (0.95, 0.021), (1, 0))],
+             zc=[(0, -0.01 * S), (0.3, 0.0), (1, 0.008 * S)])
+
+    def paint(t, th, b, s):
+        sn, cs = math.sin(th), math.cos(th)
+        if 0.07 < t < 0.2 and sn > 0.55:
+            return gold                                   # the tancho spot on the crown
+        if 0.3 < t < 0.52 and sn > -0.15 and cs > -0.5:
+            return glow
+        if 0.62 < t < 0.8 and sn > 0.1 and cs < 0.6:
+            return glow
+        return pearl
+    g = body_loft(B, [0, 0.015, 0.06, 0.13, 0.2, 0.3, 0.41, 0.52, 0.66, 0.8, 0.95, 1], 10, paint)
+    M.body.add(g)
+    M.mass.append(g)
+    add_eyes(M.body, B, 0.1, RAD(26), 0.03, bead=True)
+    # Long whiskers sweeping back along the cheeks: the "guardian" (dragon-koi) look.
+    for sx in (1, -1):
+        root = B.point(0.02, RAD(-30 if sx > 0 else 210))
+        barbel(M.body, root, [root + Vector((sx * 0.08, 0.05, -0.02)), root + Vector((sx * 0.12, 0.19, -0.01))],
+               [0.013, 0.009, 0.0], gold)
+    M.body.add(ridge_fin(B, [(0.28, 0), (0.31, 0.075), (0.4, 0.1), (0.55, 0.085), (0.68, 0.055), (0.76, 0.03),
+                             (0.79, 0)]), fin)
+    M.body.add(ridge_fin(B, [(0.72, 0), (0.75, 0.04), (0.82, 0.036), (0.86, 0)], side=-1), fin)
+    pec = side_fin(B, 0.22, RAD(-18), paddle(0.17, 0.1), RAD(52), RAD(-14))
+    pel = side_fin(B, 0.47, RAD(-66), paddle(0.08, 0.045, k=1), RAD(76), RAD(-34))
+    for g2 in (pec, pec.mirrored(), pel, pel.mirrored()):
+        M.body.add(g2, fin)
+    M.hinge = B.centre(0.965)
+    # A long double fantail, the lobes rolled apart so it spreads like a veil when seen from above.
+    lobe = [(0.0, 0.018), (0.08, 0.07), (0.19, 0.12), (0.31, 0.15), (0.34, 0.11), (0.25, 0.055), (0.29, 0.0),
+            (0.25, -0.045), (0.33, -0.1), (0.25, -0.118), (0.12, -0.08), (0.0, -0.016)]
+    for sx in (1, -1):
+        g3 = vfin(lobe, (0.08, 0.0), 0.014).transformed(Matrix.Rotation(RAD(26) * sx, 4, 'Y'))
+        M.tail.add(g3.moved(M.hinge), fin)
+    M.note = 'The Lake Guardian: harpoon only, glowing (emissive) so it reads under the lake water.'
+    return M
+
+
 BUILDERS = dict(fish_perch=build_perch, fish_clown=build_clown, fish_puffer=build_puffer, fish_carp=build_carp,
                 fish_shark=build_shark, fish_rainbow=build_rainbow, fish_catfish=build_catfish, fish_koi=build_koi,
                 fish_eel=build_eel, fish_swordfish=build_swordfish, fish_jelly=build_jelly,
                 fish_icepike=build_icepike, fish_whale=build_whale, fish_kraken=build_kraken,
                 fish_golden=build_golden, fish_sunfish=build_sunfish, fish_angler=build_angler,
-                fish_manta=build_manta, boot=build_boot)
+                fish_manta=build_manta, fish_guardian=build_guardian, boot=build_boot)
 
 
 def realise(M):
@@ -1569,6 +1624,12 @@ def realise(M):
 
 # Display scales that bring fish to ~35-45 px at the game's zoom (~43 px per metre), like the reference.
 DISPLAY_SCALE = {'small': 1.6, 'medium': 1.4, 'big': 1.1, 'junk': 1.4}
+# The Lake Guardian is meant to look huge beside the lake's ordinary fish (about 2 m in the game).
+DISPLAY_OVERRIDE = {'fish_guardian': 1.8}
+
+
+def display_scale(M):
+    return DISPLAY_OVERRIDE.get(M.id, DISPLAY_SCALE[M.cls])
 
 
 def suggested_depth(entry, scale=1.0):
@@ -1716,9 +1777,9 @@ def model_stats(entry):
     # Centre depths under the water surface: body just submerged (fins may break the surface, which
     # reads well for sharks and sails), everything submerged, and the body at the suggested display scale.
     s['body_top'] = round(entry['body_top'], 4)
-    s['display_scale'] = DISPLAY_SCALE[M.cls]
+    s['display_scale'] = display_scale(M)
     s['depth'] = dict(body_under=suggested_depth(entry), all_under=round(b['max'][2] + 0.015, 3),
-                      body_under_at_display_scale=suggested_depth(entry, DISPLAY_SCALE[M.cls]))
+                      body_under_at_display_scale=suggested_depth(entry, display_scale(M)))
     return s
 
 

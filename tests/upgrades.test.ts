@@ -37,7 +37,8 @@ test('every outfitters tab runs from the weakest to the strongest, ties by price
   // Concrete orders the player can check against the chips.
   const weapons = shopTab(s, 'Weapons').filter(id => P.powerKind(M.ITEMS[id]) === 'weapon');
   assert.equal(weapons[0], 'gun_pea'); assert.ok(weapons.indexOf('sword_wood') < weapons.indexOf('sword_lava'));
-  assert.ok(weapons.indexOf('harpoon') < weapons.indexOf('sword_tusk'), 'the harpoon is slow: 20 attack / 1.3 s');
+  // w25: 100 attack / 1.3 s = 77/s, between the lava sword (76/s) and the moon scythe (80/s).
+  assert.ok(weapons.indexOf('sword_lava') < weapons.indexOf('harpoon') && weapons.indexOf('harpoon') < weapons.indexOf('scythe_moon'), 'the harpoon: 100 attack / 1.3 s');
   assert.deepEqual(shopTab(s, 'Weapons').slice(0, 3), ['rod', 'rod_gold', 'rod_steady'], 'rods are tools: listed first, by fishing power');
   const clothes = shopTab(s, 'Clothing'); assert.ok(clothes.indexOf('hat_party') < clothes.indexOf('armor_knight'));
 });

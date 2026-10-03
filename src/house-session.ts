@@ -1,9 +1,10 @@
 /**
  * Going in and out of the cottage. The world keeps its outdoor build untouched while the explorer is
- * inside: entering swaps in the interior's entities and furniture obstacles, moves the explorer, its pet,
- * the tap marker and other explorers into the interior scene (world.render draws that scene instead) and
- * zooms the camera in; leaving restores everything and stands the explorer in front of the cottage door.
- * Creatures and hazards stay outdoors: none of them is in the interior's entities or scene.
+ * inside: entering swaps in the interior's entities and furniture obstacles, moves the explorer, the tap
+ * marker and other explorers into the interior scene (world.render draws that scene instead) and zooms the
+ * camera in; leaving restores everything and stands the explorer in front of the cottage door.
+ * Creatures and hazards stay outdoors: none of them is in the interior's entities or scene. So does the pet:
+ * at home it waits by the animal pen (pet-pen.ts).
  */
 import * as T from 'three';
 import { groundAt } from './camera-rig.ts';
@@ -43,8 +44,8 @@ export class HouseSession {
     // Friends walk between hangouts: their tap circles follow them (no allocation).
     for (const e of h.entities) if (e.kind === 'friend') { const p = e.mesh.position; e.x = p.x; e.z = p.z; }
   }
-  /** Moves the explorer and its pet (rebuilt on every gear change) back under the interior. */
-  private adopt() { const h = this.host; if (!h || !this.saved) return; this.view.root.add(h.player, h.companion); }
+  /** Moves the explorer (rebuilt on every gear change) back under the interior. The pet stays outdoors by the pen (pet-pen.ts). */
+  private adopt() { const h = this.host; if (!h || !this.saved) return; this.view.root.add(h.player); }
   enter(host: HouseHost) {
     if (this.saved) return;
     this.host = host;

@@ -26,6 +26,7 @@ import { ENEMY_TYPES } from './enemy-types.ts';
 import { FishingView, type PondView } from './fishing-view.ts';
 import { FishHuntingView } from './fish-hunting-view.ts';
 import { FISH_HUNT_COOLDOWN_MS, fishHuntTargets, huntingPondAt, type FishHuntResult } from './fish-hunting.ts';
+import { LakeGuardianView, guardianLake } from './lake-guardian-view.ts';
 import { decorIcon } from './icons.ts';
 import { CombatHud, fightNear, lootText, zoneInfo, aggro } from './hud-combat.ts';
 import { ChallengeDirector, renderChallenge } from './hud-challenge.ts';
@@ -195,6 +196,7 @@ catch (error) { app.innerHTML = localizeHtml('<div class="fatal"><h1>Your garden
 initDockFraming(world.camera); // desktop menus dock right; slide the picture so the hero stays clear (dialog-dock.ts)
 // Your guard dog: none while visiting someone else's garden (it stays at your own pen).
 world.ownDog=()=>visiting?null:dogCoatOf(state);
+world.petStaysHome=()=>!!visiting; // and your pet waits there too (pet-pen.ts)
 world.applyGraphics(graphics.profile, graphics.ratio);world.fx?.setTextLayer($('#floating-text'));
 // Over-head HP bars, target frame and boss bar; the trackers fold to a chip in fights ('auto'), or as the player asks.
 // The timed bonus line (hud-challenge.ts) and the desktop keyboard guide (hud-keys.ts).
@@ -213,7 +215,8 @@ const combatView=new CombatView(world.scene);
 const combat=new CombatSimulation({
   position:()=>world.position,facing:()=>world.facing,face:angle=>world.facing=angle,
   moving:()=>world.moving,skillLevel:i=>M.skillLevel(state,i),
-  pet:()=>{const pet=state.gear.pet&&M.ITEMS[state.gear.pet]?.pet;return pet&&Number.isFinite(pet.dmg)&&Number.isFinite(pet.cd)&&started&&!visiting&&!fishGame?{dmg:pet.dmg!*M.gearFactor(state,state.gear.pet!),cd:pet.cd!,shot:pet.shot,x:world.companion.position.x,z:world.companion.position.z}:null;},
+  // The pet shoots only while it follows you away from home (pet-pen.ts); waiting by the pen it never fights.
+  pet:()=>{const pet=state.gear.pet&&M.ITEMS[state.gear.pet]?.pet;return pet&&Number.isFinite(pet.dmg)&&Number.isFinite(pet.cd)&&started&&!visiting&&!fishGame&&!!world.petPen?.mayFight(world.planet,world.position,!!world.interior)?{dmg:pet.dmg!*M.gearFactor(state,state.gear.pet!),cd:pet.cd!,shot:pet.shot,x:world.companion.position.x,z:world.companion.position.z}:null;},
   // The guard dog tosses bones only while it follows you away from home (guard-dog.ts); your target first.
   dog:()=>{const g=world.guardDogs;return g&&started&&!visiting&&!fishGame&&!world.boarded&&dogMayToss(g.place,world.planet,world.position,!!world.interior)?{x:g.link.x,z:g.link.z,dmg:dogTossFactor(state.level),cd:DOG_TOSS_CD,target:world.selected?.kind==='enemy'?(world.selected as Enemy).id:null}:null;},
   targets:()=>world.enemies,weapon:()=>M.weaponStats(state),stats:()=>M.activeStats(state),
@@ -715,6 +718,7 @@ function help(){openDialog('help','A small guide to a big world',`<div class="he
 let fishPond:Entity|null=null,recastUntil=0;
 const fishingView=new FishingView(world.scene,world.fx!,fishKit,sound=>tone(sound));
 const huntingView=new FishHuntingView(world.scene,fishingView);
+const guardianView=new LakeGuardianView(world.scene,fishingView);
 let huntingPending:{owner:M.SaveState;scene:typeof world.root}|null=null;
 // The garden helper (helper.ts rules, helper-view.ts walking and poses, helper-ui.ts panels).
 const helperView=new HelperView();world.scene.add(helperView.group);
@@ -813,6 +817,21 @@ function updateHunting(dt:number){
     $('#fish-hint').textContent=t(huntingView.targets.length?'Tap a fish to throw your harpoon.':'Fish are returning soon.');
     button.classList.toggle('down',!!huntingPending||huntingView.now()-(state.hunting?.lastShotAt??0)<FISH_HUNT_COOLDOWN_MS);
   }else if(button.classList.contains('hunt'))showReel(false);
+}
+/**
+ * The Lake Guardian (lake-guardian.ts) shows by the big meadow lake with any gear; holding the harpoon makes it a target
+ * (FishHuntingView). A catch is read from the save (hunting.guardianAt), so offline and online replies celebrate alike.
+ */
+let guardianSeen:{owner:M.SaveState;at:number|undefined}|null=null;
+function updateGuardian(dt:number){
+  guardianView.attach(world.scene);
+  const lake=started&&!visiting&&!flight&&!world.interior?guardianLake(state.planet,world.position):null,now=huntingView.now(),at=state.hunting?.guardianAt;
+  if(guardianSeen?.owner===state&&at!==undefined&&at!==guardianSeen.at&&Math.abs(now-at)<10_000){
+    const p=guardianView.position??world.position;guardianView.caught(p,lake?.surface??.3,world.fx);toast('You caught the Lake Guardian! It will come back for you tomorrow.','🎏');tone('level');
+  }
+  guardianSeen={owner:state,at};
+  if(guardianView.update(dt,lake,now,state.hunting,fishKit.ready,world.fx)==='surfaced'&&lake&&Math.hypot(lake.x-world.position.x,lake.z-world.position.z)<lake.rx+14)
+    toast(state.gear.weapon==='harpoon'&&!state.gear.disguise?'The Lake Guardian has surfaced! Tap it to throw your harpoon.':'A glowing Lake Guardian is circling the lake. Only a harpoon can catch it.','🎏');
 }
 async function throwHarpoon(aim?:{x:number;z:number}){
   if(!started||uiBlocked()||visiting||flight||fishGame||huntingPending||state.gear.weapon!=='harpoon'||state.gear.disguise||combatTimers.attackCooldown>0)return;
@@ -1406,7 +1425,7 @@ function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt
   // The explorer's pose follows the weapon, skills, fishing line and hit invulnerability.
   const weaponKind=M.weaponStats(state).kind;world.weaponKind=state.gear.weapon&&M.ITEMS[state.gear.weapon]?.weapon?.kind==='rod'?'rod':state.gear.disguise?'fist':weaponKind;world.pose=combat.pose;world.invulnerable=combatTimers.invulnerable>0;world.fishTension=fishGame?.simulation.tension??0;
   autoAttack(weaponKind);
-  updateHunting(dt);
+  updateHunting(dt);updateGuardian(dt);
   fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);
   if(!fishGame&&!$('#reel-button').hidden&&!$('#reel-button').classList.contains('hunt')&&(performance.now()>recastUntil||world.moving))showReel(false);
   // Resizing the WebGL canvas clears its drawing buffer. Apply automatic quality changes
@@ -1437,4 +1456,4 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open()} as Record<string,()=>void>)[type]?.();},house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open()} as Record<string,()=>void>)[type]?.();},house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
