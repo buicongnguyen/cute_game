@@ -32,6 +32,8 @@ export interface GameBridge {
   applyRemoteEffect(effect:CombatEffect):void;
   setVisiting(owner:string|null,homeState?:Partial<SaveState>):void;
   showNotice(text:string):void;
+  /** AI neighbours (bots.ts): does the player already have this item; hand over a gift (items and/or energy; false when it cannot be given now); may a neighbour walk up and talk now. */
+  ownsItem(id:string):boolean;grantGift(gift:{item?:string;count:number;energy:number}):boolean;botContext():{ready:boolean};
   onFrame(listener:(dt:number)=>void):()=>void;
   onAction(listener:(action:GameAction)=>void):()=>void;
 }

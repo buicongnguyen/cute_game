@@ -55,6 +55,7 @@ import { progressEntries, claimProgress, recordEvent, rerollDaily, startChalleng
 import { STORY_STEPS } from './content.ts';
 import type { GameBridge, GameAction, NetworkHooks, NetworkDrop } from './game-bridge.ts';
 import { initOnline } from './online.ts';
+import { initBots } from './bots.ts';
 import { initPlatform, toggleFullscreen } from './platform.ts';
 import { Sfx, type Sound } from './sfx.ts';
 import { loadGraphics, saveGraphics, QUALITY, type QualitySetting } from './graphics.ts';
@@ -1234,6 +1235,13 @@ export const gameBridge:GameBridge={
     world.refreshPlayer();$('#visit-banner').hidden=!owner;$('#visit-banner').textContent=t(owner?t('Visiting {owner} · look around their garden',{owner}):'');updateLabels();
   },
   showNotice:message=>toast(message),
+  ownsItem:id=>(state.bag[id]||0)>0||(state.chest[id]||0)>0||Object.values(state.gear).includes(id),
+  grantGift:gift=>{
+    if(!started||!Number.isFinite(gift.energy)||gift.energy<0)return false;
+    if(gift.item&&gift.count>0&&!M.addItem(state,gift.item,gift.count))return false;
+    state.energy+=gift.energy;tone('level');save();updateLabels();return true;
+  },
+  botContext:()=>({ready:started&&modal===''&&!visiting&&!fishGame&&!flight&&!placement&&!world.interior&&world.planet==='home'&&state.hp>0&&!document.querySelector('dialog[open]')}),
   onFrame(listener){frameListeners.add(listener);return()=>frameListeners.delete(listener);},
   onAction(listener){actionListeners.add(listener);return()=>actionListeners.delete(listener);},
 };
@@ -1538,6 +1546,7 @@ onLanguageChange(()=>{
   else if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal==='shop')shop();else if(modal==='sell')market();else if(modal==='chest')storage();else if(modal==='upgrade')upgrades();else if(modal==='cook')cooking();else if(modal==='craft')crafting();else if(modal==='forge')forgeMenu();else if(modal==='decor')decorations();else if(modal==='map')map();else if(modal==='travel')planets();else if(modal==='help')help();else if(modal==='pen')penDialog();else if(modal==='helper')helperDialog();else if(modal==='farm-helper')farmHelperDialog();
 });
 initOnline(gameBridge);
+const neighbours=initBots(gameBridge);if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__bots:neighbours});
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
 if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

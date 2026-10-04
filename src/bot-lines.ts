@@ -1,0 +1,90 @@
+/**
+ * What the AI neighbours say (bots.ts shows it in a speech bubble). Every line is an [English, Vietnamese] pair so the two
+ * can never drift apart; locales/vi-bots.ts turns the pairs into the Vietnamese catalog. Pools hold about a dozen lines per
+ * scenario and are dealt like cards (TalkBag: no repeat until three quarters of a pool has been used). `{name}` is the
+ * player's name and `{me}` the bot's own.
+ */
+export type BotScenario = 'GREET' | 'ASK' | 'THANKS' | 'LATER' | 'GIFT' | 'FRIEND' | 'FLYBY' | 'WANDER';
+export const BOT_LINES: Record<BotScenario, ReadonlyArray<readonly [string, string]>> = {
+  GREET: [
+    ['Hi {name}! Your garden looks wonderful.', 'Chào {name}! Khu vườn của bạn đẹp quá.'],
+    ['Hello there! What a lovely day for a walk.', 'Xin chào! Hôm nay đi dạo thật dễ chịu.'],
+    ['{name}! I have heard so many good things about you.', '{name}! Mình nghe nhiều điều tốt về bạn lắm.'],
+    ['Good to see you, {name}. You always look so cheerful.', 'Vui được gặp bạn, {name}. Bạn lúc nào cũng tươi tắn.'],
+    ['Hey! I love your outfit. Very stylish.', 'Này! Mình thích bộ đồ của bạn. Rất phong cách.'],
+    ['Hello, {name}! The whole world is brighter with you in it.', 'Chào {name}! Có bạn là cả thế giới sáng hơn hẳn.'],
+    ['What a kind-looking explorer. Hi!', 'Một nhà thám hiểm trông thật tốt bụng. Chào bạn!'],
+    ['I was hoping I would run into you today.', 'Mình đã mong hôm nay gặp được bạn đấy.'],
+    ['{name}, you work so hard. I admire that.', '{name}, bạn chăm chỉ quá. Mình rất nể.'],
+    ['Hi, hi! Is that a new crop I see? Impressive.', 'Chào chào! Có phải vụ mới không? Ấn tượng thật.'],
+    ['You have the friendliest smile in the whole valley.', 'Bạn có nụ cười thân thiện nhất thung lũng.'],
+    ['Hello, {name}! Nice to meet a real gardener.', 'Chào {name}! Rất vui được gặp một người làm vườn thực thụ.'],
+  ],
+  ASK: [
+    ['Would you like to be friends, {name}?', 'Bạn có muốn làm bạn với mình không, {name}?'],
+    ['I would love to be your friend. What do you say?', 'Mình rất muốn làm bạn với bạn. Bạn thấy sao?'],
+    ['Friends? I think we would get along great.', 'Làm bạn nhé? Mình nghĩ chúng ta hợp nhau lắm.'],
+    ['Let us be friends! I even have a little gift for you.', 'Làm bạn nhé! Mình còn có một món quà nhỏ cho bạn nữa.'],
+    ['You seem like a good person. Can we be friends?', 'Bạn có vẻ là người tốt. Mình làm bạn được không?'],
+    ['Be my friend, {name}? I promise to be a good one.', 'Làm bạn của mình nhé, {name}? Mình hứa sẽ là bạn tốt.'],
+    ['Can I visit your garden sometime, as a friend?', 'Thỉnh thoảng mình ghé vườn bạn chơi, với tư cách bạn bè, được không?'],
+    ['Shall we be friends? You can visit my house too.', 'Mình làm bạn nhé? Bạn cũng có thể ghé nhà mình chơi.'],
+  ],
+  THANKS: [
+    ['Yay! We are friends now!', 'Yay! Giờ chúng ta là bạn rồi!'],
+    ['Thank you, {name}! You made my day.', 'Cảm ơn {name}! Bạn làm mình vui cả ngày.'],
+    ['Wonderful! I knew you were kind.', 'Tuyệt quá! Mình biết bạn tốt bụng mà.'],
+    ['Best news today. Friends forever, {name}!', 'Tin vui nhất hôm nay. Bạn bè mãi nhé, {name}!'],
+    ['I am so happy! Come and visit me any time.', 'Mình vui lắm! Cứ ghé nhà mình bất cứ lúc nào nhé.'],
+    ['A new friend! My heart is doing a little dance.', 'Một người bạn mới! Tim mình đang nhảy múa đây.'],
+    ['You will never be lonely in this valley now.', 'Từ giờ bạn sẽ không bao giờ cô đơn trong thung lũng này.'],
+    ['Deal! Friends help friends, always.', 'Chốt nhé! Bạn bè luôn giúp đỡ nhau.'],
+  ],
+  LATER: [
+    ['No problem at all. Maybe another time!', 'Không sao đâu. Để lần khác nhé!'],
+    ['That is okay, {name}. I will say hi again soon.', 'Không sao, {name}. Lát nữa mình chào lại nhé.'],
+    ['Take your time. I am not going anywhere.', 'Cứ thong thả. Mình không đi đâu cả.'],
+    ['Fair enough. Have a lovely day, though!', 'Cũng phải. Chúc bạn một ngày thật đẹp nhé!'],
+    ['No worries! You are still great.', 'Đừng lo! Bạn vẫn rất tuyệt.'],
+    ['Another day, then. Keep growing that garden!', 'Vậy để hôm khác. Cứ chăm vườn nhé!'],
+  ],
+  GIFT: [
+    ['Here, a present for my new friend. I hope you love it!', 'Đây, quà tặng người bạn mới. Mong bạn thích nó!'],
+    ['I want you to have this. It looks even better on you.', 'Mình muốn tặng bạn món này. Bạn mặc còn đẹp hơn.'],
+    ['A friend gift! It is rare, so take good care of it.', 'Quà tặng bạn bè! Món này hiếm đấy, giữ gìn nhé.'],
+    ['Open it later, or right now. I am too excited!', 'Mở sau hay mở ngay đều được. Mình hồi hộp quá!'],
+    ['This one is special. Just like you.', 'Món này đặc biệt. Giống như bạn vậy.'],
+    ['Wear it proudly, {name}. You deserve it.', 'Hãy mặc nó thật tự hào, {name}. Bạn xứng đáng mà.'],
+    ['Friends share the good stuff. This is for you!', 'Bạn bè chia sẻ đồ tốt cho nhau. Cái này dành cho bạn!'],
+    ['I saved this for someone kind. That is you.', 'Mình để dành món này cho người tử tế. Chính là bạn.'],
+  ],
+  FRIEND: [
+    ['My friend! Great to see you again.', 'Bạn của mình! Gặp lại vui quá.'],
+    ['{name}! How is the garden growing?', '{name}! Vườn của bạn thế nào rồi?'],
+    ['You are my favourite neighbour, you know.', 'Bạn là người hàng xóm mình quý nhất đấy.'],
+    ['Come visit my house when you have time!', 'Rảnh thì ghé nhà mình chơi nhé!'],
+    ['Look who it is! Today just got better.', 'Xem ai đây này! Hôm nay vui hơn rồi.'],
+    ['I told everyone about you. All good things.', 'Mình kể với mọi người về bạn rồi. Toàn chuyện tốt thôi.'],
+    ['Keep being awesome, {name}.', 'Cứ tuyệt vời như vậy nhé, {name}.'],
+    ['Good to see my friend. Take a snack from me!', 'Gặp bạn thật vui. Nhận chút quà ăn vặt của mình nhé!'],
+    ['You make this valley feel like home.', 'Bạn làm thung lũng này như một mái nhà.'],
+    ['Hi {name}! I was just thinking about you.', 'Chào {name}! Mình vừa nghĩ đến bạn đó.'],
+  ],
+  FLYBY: [
+    ['Whoosh! Coming through!', 'Vút! Cho qua nào!'],
+    ['Look up, friend! The view is amazing from here.', 'Nhìn lên đi bạn! Trên này ngắm cảnh đã lắm.'],
+    ['Flying is the best way to get to the garden!', 'Bay là cách tới vườn tuyệt nhất!'],
+    ['Up, up and away!', 'Bay lên nào!'],
+    ['Wheee! Hello down there!', 'Vù vù! Xin chào dưới đó!'],
+  ],
+  WANDER: [
+    ['Such a lovely valley.', 'Thung lũng đẹp ghê.'],
+    ['Hmm, is it time for a snack yet?', 'Hmm, đến giờ ăn vặt chưa nhỉ?'],
+    ['I think the flowers are waving at me.', 'Mình nghĩ mấy bông hoa đang vẫy chào.'],
+    ['La la la...', 'Lá la la la...'],
+    ['Nice weather for a walk.', 'Trời đẹp để đi dạo.'],
+    ['Oh, a butterfly!', 'Ô, một chú bướm!'],
+  ],
+};
+/** English and Vietnamese for every line: locales/vi-bots.ts spreads it into the catalog. */
+export const BOT_LINE_PAIRS: Record<string, string> = Object.fromEntries(Object.values(BOT_LINES).flat().map(([en, vi]) => [en, vi]));

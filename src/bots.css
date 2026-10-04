@@ -1,0 +1,24 @@
+/* AI neighbours (bots.ts): speech bubbles, the friend request, the gift pop-up and the neighbours list. */
+.bot-bubble { position: fixed; left: 0; top: 0; z-index: 31; max-width: min(240px, 60vw); padding: 6px 11px; border-radius: 14px; background: #fff; color: #2c3a26; border: 2px solid #ffd76b; font: 800 13px/1.3 Nunito, system-ui, sans-serif; text-align: center; pointer-events: none; box-shadow: 0 3px 0 rgba(44, 58, 38, .16); }
+.bot-bubble::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 11px; height: 11px; background: #fff; border-right: 2px solid #ffd76b; border-bottom: 2px solid #ffd76b; transform: translateX(-50%) rotate(45deg); }
+.bot-card { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60; width: min(340px, calc(100vw - 32px)); padding: 12px 16px 14px; border: 4px solid #fff; border-radius: 22px; background: #fffaf0; color: #2c3a26; font: 800 14px Nunito, system-ui, sans-serif; box-shadow: 0 6px 0 rgba(44, 58, 38, .16), 0 14px 30px rgba(34, 60, 24, .25); text-align: center; }
+.bot-card[hidden] { display: none; }
+.bot-card h3 { margin: 0 0 4px; font-size: 16px; font-weight: 1000; }
+.bot-card p { margin: 0 0 10px; }
+.bot-actions { display: flex; gap: 10px; justify-content: center; }
+.bot-actions button { min-height: 40px; padding: 6px 16px; border: 2px solid #efe2c2; border-radius: 12px; background: #fff; color: #2c3a26; font: 900 14px Nunito, system-ui, sans-serif; box-shadow: 0 3px 0 #e2cf9f; cursor: pointer; }
+.bot-actions .bot-yes { background: #7bd66a; border-color: #5cb84e; box-shadow: 0 3px 0 #4c9c40; }
+.bot-gift { position: fixed; left: 50%; top: 22%; transform: translateX(-50%); z-index: 70; display: flex; align-items: center; gap: 12px; padding: 12px 20px; border: 4px solid #fff; border-radius: 24px; background: linear-gradient(180deg, #fff7d6, #ffe9a0); color: #5a3a00; font: 800 15px Nunito, system-ui, sans-serif; box-shadow: 0 6px 0 rgba(120, 80, 0, .2), 0 18px 40px rgba(120, 80, 0, .3); animation: bot-gift-in .45s cubic-bezier(.2, 1.4, .4, 1); }
+.bot-gift.leaving { opacity: 0; transition: opacity .35s; }
+.bot-gift b { display: block; font-size: 16px; }
+.bot-gift span { display: block; }
+.bot-gift-icon { width: 56px; height: 56px; object-fit: contain; font-size: 40px; line-height: 56px; text-align: center; }
+.bot-gift-extra { font-size: 13px; opacity: .8; }
+@keyframes bot-gift-in { from { transform: translateX(-50%) scale(.5); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+.bot-leave { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60; min-height: 42px; padding: 8px 20px; border: 3px solid #fff; border-radius: 999px; background: #ff9f43; color: #fff; font: 900 15px Nunito, system-ui, sans-serif; box-shadow: 0 4px 0 #cc7a1f; cursor: pointer; }
+.bot-leave[hidden], .bot-open[hidden] { display: none; }
+.bot-list { display: grid; gap: 8px; padding: 12px; }
+.bot-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 14px; background: #fff; border: 2px solid #efe2c2; }
+.bot-info { display: grid; gap: 2px; }
+.bot-toggle { display: flex; align-items: center; gap: 6px; font-weight: 800; }
+@media (prefers-reduced-motion: reduce) { .bot-gift { animation: none; } }

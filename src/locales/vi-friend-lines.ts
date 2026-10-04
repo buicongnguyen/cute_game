@@ -1,5 +1,7 @@
 /** Vietnamese for friend-lines.ts. */
+import { MORE_LINES } from "../friend-lines-more.ts";
 export const VI_FRIEND_LINES: Record<string, string> = {
+  ...Object.fromEntries(Object.values(MORE_LINES).flat().map(([en, vi]) => [en, vi])),
   'Look at that one! Big and proud.': 'Nhìn quả này nè! To và tự hào ghê.',
   'Into the basket you go, little friend.': 'Vào giỏ nào, bạn nhỏ.',
   'Ripe at last. Good things come to those who wait five minutes.': 'Chín rồi! Chờ năm phút là xứng đáng.',
