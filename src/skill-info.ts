@@ -30,6 +30,12 @@ export const SPECIAL_INFO: Record<string, { damage: number; text: string; radius
   whirl: { damage: 1.4, radius: 4.4, text: 'Three cyclone pulses around you: ×{dmg} damage within 4.4 m each.' },
   starfall: { damage: 1.1, radius: 1.6, text: '12 stars fall around the nearest enemy, ×{dmg} damage within 1.6 m of each.' },
   inferno: { damage: 1.3, radius: 1.8, text: 'A ring of 10 fire bursts 3.6 m around you, ×{dmg} damage within 1.8 m of each.' },
+  volley: { damage: .7, text: 'Ten rapid shots fly 15 m ahead in one second, ×{dmg} damage each.' },
+  anchor: { damage: 2, radius: 4.4, text: 'Swing a heavy anchor all around you: ×{dmg} damage within 4.4 m, knocked back.' },
+  lotus: { damage: .8, text: 'Twelve lotus petals burst out all around you to 8 m, ×{dmg} damage each, and you heal 8% health.' },
+  dragon: { damage: 1.3, text: 'Seven waves in a wide fan fly 12 m, ×{dmg} damage each.' },
+  eagle: { damage: 1.8, radius: 3, text: 'Dive forward 7 m, then land in a burst: ×{dmg} damage within 3 m.' },
+  goldstar: { damage: 1.4, radius: 2.6, text: 'Five piercing gold stars fly 11 m, ×{dmg} damage each, with a 2.6 m burst around you.' },
   laser: { damage: 3, text: 'A 14 m rainbow beam straight ahead: ×{dmg} damage to everything in the line.' },
 };
 

@@ -1554,6 +1554,42 @@ const ITEM_FACTS: Record<string, any> = {
             "speed": 0.05
         }
     },
+    "armor_army": {
+        "name": "Quân Phục Sao Đỏ",
+        "type": "armor",
+        "sell": 90,
+        "stats": {"def": 14, "hp": 45, "crit": 0.05}
+    },
+    "armor_navy": {
+        "name": "Quân Phục Hải Quân",
+        "type": "armor",
+        "sell": 90,
+        "stats": {"def": 12, "hp": 40, "speed": 0.04}
+    },
+    "armor_aodai": {
+        "name": "Áo Dài Việt Nam",
+        "type": "armor",
+        "sell": 95,
+        "stats": {"def": 10, "hp": 50, "regen": 1}
+    },
+    "armor_aodai_man": {
+        "name": "Áo Dài Nam Gấm",
+        "type": "armor",
+        "sell": 95,
+        "stats": {"def": 13, "hp": 40, "crit": 0.06}
+    },
+    "armor_usa": {
+        "name": "Áo Cờ Hoa Kỳ",
+        "type": "armor",
+        "sell": 85,
+        "stats": {"def": 11, "hp": 35, "speed": 0.05}
+    },
+    "armor_vietnam": {
+        "name": "Áo Cờ Đỏ Sao Vàng",
+        "type": "armor",
+        "sell": 85,
+        "stats": {"def": 11, "hp": 45, "crit": 0.05}
+    },
     "boots_rocket": {
         "name": "Giày Tên Lửa",
         "type": "feet",
@@ -2403,6 +2439,36 @@ const SHOP_FACTS: {
                     "leather": 5,
                     "icecrystal": 3
                 }
+            },
+            {
+                "id": "armor_army",
+                "cost": 220,
+                "mats": {"leather": 4, "bone": 2}
+            },
+            {
+                "id": "armor_navy",
+                "cost": 200,
+                "mats": {"leather": 3, "coral": 3}
+            },
+            {
+                "id": "armor_aodai",
+                "cost": 210,
+                "mats": {"leather": 3, "feather": 4}
+            },
+            {
+                "id": "armor_aodai_man",
+                "cost": 210,
+                "mats": {"leather": 3, "feather": 3, "moonstone": 1}
+            },
+            {
+                "id": "armor_usa",
+                "cost": 190,
+                "mats": {"leather": 4, "starshard": 1, "coral": 2}
+            },
+            {
+                "id": "armor_vietnam",
+                "cost": 190,
+                "mats": {"leather": 4, "starshard": 1, "bone": 2}
             },
             {
                 "id": "armor_kimono",
@@ -3635,7 +3701,7 @@ const FISH_WEIGHTS_RAW: Record<string, [
 export const SPECIALS: Record<string, {
     name: string;
     cd: number;
-}> = { "fist": { "name": "Liên Hoàn Quyền", "cd": 6 }, "crescent": { "name": "Chém Trăng Khuyết", "cd": 6 }, "gore": { "name": "Húc Nanh", "cd": 7 }, "wave": { "name": "Kiếm Khí", "cd": 6 }, "peastorm": { "name": "Mưa Đậu", "cd": 8 }, "bigbubble": { "name": "Bong Bóng Nhốt", "cd": 10 }, "nova": { "name": "Bão Gai", "cd": 9 }, "blizzard": { "name": "Bão Tuyết", "cd": 9 }, "magma": { "name": "Cột Dung Nham", "cd": 8 }, "thunder": { "name": "Sấm Sét Trời Giáng", "cd": 9 }, "bonk": { "name": "Búa Nện Chít Chít", "cd": 7 }, "tsunami": { "name": "Sóng Thần", "cd": 9 }, "whirl": { "name": "Lốc Trăng", "cd": 8 }, "starfall": { "name": "Mưa Sao Băng", "cd": 9 }, "inferno": { "name": "Vòng Hoả Ngục", "cd": 9 }, "laser": { "name": "Tia Cầu Vồng", "cd": 8 } };
+}> = { "volley": { "name": "Loạt Đạn Liên Thanh", "cd": 7 }, "anchor": { "name": "Vung Mỏ Neo", "cd": 8 }, "lotus": { "name": "Cánh Sen Chữa Lành", "cd": 9 }, "dragon": { "name": "Quạt Rồng", "cd": 8 }, "eagle": { "name": "Đại Bàng Lao Xuống", "cd": 8 }, "goldstar": { "name": "Sao Vàng Bùng Nổ", "cd": 9 }, "fist": { "name": "Liên Hoàn Quyền", "cd": 6 }, "crescent": { "name": "Chém Trăng Khuyết", "cd": 6 }, "gore": { "name": "Húc Nanh", "cd": 7 }, "wave": { "name": "Kiếm Khí", "cd": 6 }, "peastorm": { "name": "Mưa Đậu", "cd": 8 }, "bigbubble": { "name": "Bong Bóng Nhốt", "cd": 10 }, "nova": { "name": "Bão Gai", "cd": 9 }, "blizzard": { "name": "Bão Tuyết", "cd": 9 }, "magma": { "name": "Cột Dung Nham", "cd": 8 }, "thunder": { "name": "Sấm Sét Trời Giáng", "cd": 9 }, "bonk": { "name": "Búa Nện Chít Chít", "cd": 7 }, "tsunami": { "name": "Sóng Thần", "cd": 9 }, "whirl": { "name": "Lốc Trăng", "cd": 8 }, "starfall": { "name": "Mưa Sao Băng", "cd": 9 }, "inferno": { "name": "Vòng Hoả Ngục", "cd": 9 }, "laser": { "name": "Tia Cầu Vồng", "cd": 8 } };
 export const LOOT_TABLES: Record<string, [
     string,
     number,
@@ -3809,7 +3875,7 @@ const englishNames: Record<string, string> = {
     radish: 'Radish', carrot: 'Carrot', pumpkin: 'Pumpkin', mint: 'Mint', chili: 'Chili', candy: 'Candy bloom', bean: 'Shield bean', star: 'Star fruit', berry: 'Berry', coffee: 'Coffee bean', moonflower: 'Moonflower', magnetmelon: 'Magnet melon', melon: 'Melon', clover: 'Lucky clover', glowshroom: 'Glow mushroom', iceberry: 'Ice berry', goldcorn: 'Golden corn', dragonfruit: 'Dragon fruit', rainbowrose: 'Rainbow rose',
     seed_fire: 'Fire seed', seed_ice: 'Ice seed', seed_star: 'Star seed', plot_kit: 'Garden bed kit', meat: 'Meat', leather: 'Leather', bone: 'Bone', manure: 'Fertilizer', spore: 'Magic spore', tusk: 'Tusk', claw: 'Claw', sap: 'Sap', nectar: 'Nectar', spine: 'Cactus spine', cwater: 'Cactus water', bloom: 'Wild flower', honey: 'Honey', sugar: 'Sugar', icecrystal: 'Ice crystal', magma: 'Magma', starshard: 'Star shard', mcrystal: 'Magma crystal', obsidian: 'Obsidian', firecore: 'Fire core', dragonscale: 'Dragon scale', fcrystal: 'Fire crystal', gear: 'Toy gear', battery: 'Battery', vine: 'Vine', amber: 'Amber', pearl: 'Pearl', coral: 'Coral', feather: 'Feather', thunderstone: 'Thunder stone', shadow: 'Shadow essence', moonstone: 'Moonstone', dragonegg: 'Dragon egg', potion: 'Healing potion', worm: 'Worm bait', boot: 'Old boot', rod: 'Fishing rod', rod_gold: 'Golden fishing rod', rod_steady: 'Steady fishing rod', crown: 'Royal crown', trident: 'Ocean trident', toy_hammer: 'Toy hammer', wood: 'Wild wood', bunny: 'Mochi bunny',
     fish_perch: 'Perch', fish_clown: 'Clownfish', fish_puffer: 'Pufferfish', fish_carp: 'Carp', fish_shark: 'Shark', fish_rainbow: 'Rainbow fish', fish_catfish: 'Catfish', fish_koi: 'Koi', fish_eel: 'Eel', fish_swordfish: 'Swordfish', fish_jelly: 'Jellyfish', fish_icepike: 'Ice pike', fish_whale: 'Whale', fish_kraken: 'Kraken', fish_golden: 'Golden fish', fish_sunfish: 'Sunfish', fish_angler: 'Anglerfish', fish_manta: 'Manta ray',
-    armor_wings: 'Dragon wings', armor_tux: 'Tuxedo', armor_kimono: 'Kimono', armor_hawaii: 'Island shirt', armor_hoodie: 'Hoodie', hat_halo: 'Halo', hat_graduate: 'Graduation cap', boots_flipper: 'Swim flippers',
+    armor_wings: 'Dragon wings', armor_tux: 'Tuxedo', armor_kimono: 'Kimono', armor_hawaii: 'Island shirt', armor_hoodie: 'Hoodie', armor_army: 'Army uniform', armor_navy: 'Navy uniform', armor_aodai: 'Vietnamese long dress', armor_aodai_man: 'Vietnamese long gown', armor_usa: 'Stars and stripes outfit', armor_vietnam: 'Vietnam flag outfit', hat_halo: 'Halo', hat_graduate: 'Graduation cap', boots_flipper: 'Swim flippers',
     dz_ninja: 'Shadow ninja', dz_mage: 'Archmage', dz_knight: 'Sun knight', dz_mecha: 'Battle robot', dz_dino: 'Tyrannosaur', dz_fairy: 'Flower fairy', dz_pirate: 'Pirate captain', dz_superhero: 'Superhero', dz_vampire: 'Vampire count', dz_snowman: 'Snowman',
     deco_volcano: 'Little volcano', deco_lamp: 'Lava lamp', deco_table: 'Obsidian table', deco_statue: 'Golem statue', deco_nest: 'Dragon nest', deco_trophy: 'Dragon trophy', deco_teddy: 'Giant teddy', deco_musicbox: 'Music box', deco_traincar: 'Toy train', deco_totem: 'Forest totem', deco_rafflesia: 'Giant forest flower', deco_fruittree: 'Fruit tree', deco_aquarium: 'Coral aquarium', deco_shell: 'Giant seashell', deco_piratechest: 'Pirate treasure', deco_cloudsofa: 'Cloud sofa', deco_windchime: 'Crystal wind chime', deco_rainbow: 'Rainbow arch', deco_ghostlantern: 'Ghost lantern', deco_nightcrystal: 'Night crystal', deco_owlstatue: 'Owl statue',
 };
@@ -3848,7 +3914,7 @@ for (const [id, disguise] of Object.entries(DISGUISES)) {
 }
 for (const [id, collection] of Object.entries(COLLECTIONS))
     collection.name = planetLabels[sourcePlanet(id) as PlanetId];
-const specialLabels: Record<string, string> = { fist: 'Rapid punches', crescent: 'Crescent slash', gore: 'Tusk charge', wave: 'Blade wave', peastorm: 'Pea storm', bigbubble: 'Bubble cage', nova: 'Spike storm', blizzard: 'Blizzard', magma: 'Magma pillar', thunder: 'Thunderstrike', bonk: 'Squeaky smash', tsunami: 'Tsunami', whirl: 'Moon cyclone', starfall: 'Starfall', inferno: 'Inferno ring', laser: 'Rainbow beam' };
+const specialLabels: Record<string, string> = { volley: 'Rifle volley', anchor: 'Anchor swing', lotus: 'Lotus petals', dragon: 'Dragon fan', eagle: 'Eagle strike', goldstar: 'Golden star burst', fist: 'Rapid punches', crescent: 'Crescent slash', gore: 'Tusk charge', wave: 'Blade wave', peastorm: 'Pea storm', bigbubble: 'Bubble cage', nova: 'Spike storm', blizzard: 'Blizzard', magma: 'Magma pillar', thunder: 'Thunderstrike', bonk: 'Squeaky smash', tsunami: 'Tsunami', whirl: 'Moon cyclone', starfall: 'Starfall', inferno: 'Inferno ring', laser: 'Rainbow beam' };
 for (const [id, special] of Object.entries(SPECIALS))
     special.name = specialLabels[id];
 const categoryLabels = new Map<string, string>();

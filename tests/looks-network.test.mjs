@@ -41,8 +41,8 @@ test('the server validates look purchases and the whole combination reaches othe
     return client;
   }
   const ann = await explorer('look_ann'), ben = await explorer('look_ben');
-  assert.equal(ben.joined.players.find(p => p.id === ann.id).look, 'boy-chibi-none-bare');
-  assert.notEqual((await action(ann, 'wearLook', { id: 'girl-tall-none-bare' })).status, 200, 'an unowned height cannot be worn');
+  assert.equal(ben.joined.players.find(p => p.id === ann.id).look, 'girl-tall-none-bare');
+  assert.notEqual((await action(ann, 'wearLook', { id: 'girl-teen-none-bare' })).status, 200, 'an unowned height cannot be worn');
   assert.notEqual((await action(ann, 'buyLook', { id: 'boy-huge-none-bare' })).status, 200, 'an unknown option cannot be bought');
   const bought = await action(ann, 'buyLook', { id: 'slim-grown-bunny-penguin' }); assert.equal(bought.status, 200); assert.equal(bought.data.profile.looks.style, 'slim-grown-bunny-penguin'); assert.equal(bought.data.profile.energy, 500 - 160 - 150 - 120);
   ann.send({ type: 'pose', x: 1, z: 2 });

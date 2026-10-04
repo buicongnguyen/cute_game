@@ -13,7 +13,7 @@ import { createActionService } from '../server/action-service.mjs';
 async function fixture(t, edit = () => {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'zoo-friend-looks-')), store = await createAccountStore({ dataDir: dir });
   t.after(async () => { await store.close(); await rm(dir, { recursive: true, force: true }); });
-  const profile = M.newGame('Alice'); profile.energy = 400;
+  const profile = M.newGame('Alice'); profile.energy = 400; delete profile.looks; // the classic hero: the girl default already owns tall
   profile.friends = [{ id: 'sprout', role: 'garden', rescuedAt: 1, gear: {}, home: true }];
   edit(profile);
   await store.create({ id: 'alice', username: 'alice', hash: 'test-hash', salt: 'test-salt', friends: [], requests: [], profile });

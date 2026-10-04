@@ -59,13 +59,15 @@ export function cageState(s: M.SaveState, id: FriendId): CageState {
 /** Frees a prisoner: only from an open cage on the planet the explorer is on. */
 export function rescue(s: M.SaveState, id: FriendId, now = Date.now()): boolean {
   if (!FRIEND_IDS.includes(id) || cageState(s, id) !== 'open' || s.planet !== CAGES[id].planet) return false;
-  (s.friends ??= []).push({ id, role: FRIENDS[id].role, rescuedAt: now, gear: {}, home: false }); return true;
+  (s.friends ??= []).push({ id, role: FRIENDS[id].role, rescuedAt: now, gear: {}, home: false, look: HELPER_LOOK }); return true;
 }
 /** Welcome gift for a new game: the cook joins at once; `take` also gives the 1M energy she "won in the lottery". False when already settled. */
+/** Every helper is a girl: small (half the explorer's height) when freed, growing up with the days and jobs (growth.ts). */
+export const HELPER_LOOK = 'girl-chibi-none-bare' as const;
 export const WELCOME_ENERGY = 1_000_000;
 export function welcomeStart(s: M.SaveState, take: boolean, now = Date.now()): boolean {
   if (s.welcome !== 'pending' || typeof take !== 'boolean') return false;
-  if (!friendOf(s, 'pepper')) (s.friends ??= []).push({ id: 'pepper', role: 'cook', rescuedAt: now, gear: {}, home: true });
+  if (!friendOf(s, 'pepper')) (s.friends ??= []).push({ id: 'pepper', role: 'cook', rescuedAt: now, gear: {}, home: true, look: HELPER_LOOK });
   if (take && Number.isSafeInteger(s.energy + WELCOME_ENERGY)) s.energy += WELCOME_ENERGY;
   s.welcome = 'done'; return true;
 }

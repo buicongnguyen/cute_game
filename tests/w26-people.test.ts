@@ -1,5 +1,6 @@
 // Wave 26 "people": friends the same size indoors and out, a friend's Looks tab (save, apply, validate, visitors), the
 // mirror's Blender option portraits, and the mirror preview that renders only when something changes.
+const classic = <T extends { looks?: unknown }>(s: T) => { delete s.looks; return s; }; // a save from before the girl default
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
@@ -58,7 +59,7 @@ const homeFriends = (stage: number, extra: Partial<Friend> = {}): Friend[] => FR
 // ------------------------------------------------------------------ 1. the same size indoors and outdoors
 test('every friend stands at the same share of the explorer\'s height indoors and outdoors, at every growth stage', async () => {
   await kits();
-  const s = M.newGame('Ann'), w = homeWorld(s), explorer = w.lookAvatar(s.color, {}, DEFAULT_LOOK); explorer.scale.setScalar(HERO_SCALE);
+  const s = classic(M.newGame('Ann')), w = homeWorld(s), explorer = w.lookAvatar(s.color, {}, DEFAULT_LOOK); explorer.scale.setScalar(HERO_SCALE);
   const hero = standingHeight(explorer); assert.ok(hero > 1.8 && hero < 2.1, `the explorer stands about 1.95 m (${hero.toFixed(3)})`);
   const crew = new FriendCrew({ world: w, own: () => s, visiting: () => false, flying: () => false, started: () => false, robotBed: () => undefined, animalAt: () => undefined,
     perform: async () => undefined, rescued() {}, locked() {}, worked() {}, arrived() {} });
@@ -83,7 +84,7 @@ test('every friend stands at the same share of the explorer\'s height indoors an
 
 test('a styled friend: the height option sets proportions and growth sets the height (body files measured)', async () => {
   await kits();
-  const s = M.newGame('Ann'), w = homeWorld(s), hero = standingHeight(w.lookAvatar(s.color, {}, DEFAULT_LOOK));
+  const s = classic(M.newGame('Ann')), w = homeWorld(s), hero = standingHeight(w.lookAvatar(s.color, {}, DEFAULT_LOOK));
   // HEIGHT_RATIO mirrors the files: each height's body over the chibi's.
   for (const h of ROWS.height as Height[]) {
     const id = `boy-${h}-none-bare` as LookId, kit = heroKitFor(id); await kit.load();
@@ -112,7 +113,7 @@ test('work hats: worn in both places, but never over ears or a hood; a given hat
 });
 
 // ------------------------------------------------------------------ 2. friend looks: rules, saving, the server, visitors
-const withFriends = (energy = 1000) => { const s = M.newGame('Ann'); s.energy = energy; s.friends = homeFriends(1); return s; };
+const withFriends = (energy = 1000) => { const s = classic(M.newGame('Ann')); s.energy = energy; s.friends = homeFriends(1); return s; };
 test('friend looks: owned options are free, missing ones are bought once for the player too, and the explorer keeps their own look', () => {
   const s = withFriends(500);
   assert.equal(setFriendLook(s, 'sprout', 'girl-chibi-none-bare'), true, 'free options dress a friend for free');
@@ -179,7 +180,7 @@ test('every body, height, ears and hood option has a small 128 px Blender portra
     const url = new URL(`../public/assets/icons/looks/${o}.webp`, import.meta.url), bytes = readFileSync(url);
     assert.deepEqual(webpSize(bytes), [128, 128], o); assert.ok(statSync(url).size < 8 * 1024, `${o}: ${statSync(url).size} bytes`);
   }
-  const html = lookRowsHtml(M.newGame(), DEFAULT_LOOK, { attr: 'data-look-option', worn: DEFAULT_LOOK }) + friendLooksHtml(withFriends(), 'sprout');
+  const html = lookRowsHtml(classic(M.newGame()), DEFAULT_LOOK, { attr: 'data-look-option', worn: DEFAULT_LOOK }) + friendLooksHtml(withFriends(), 'sprout');
   for (const o of options) assert.equal(html.split(`src="${lookArt(o)}"`).length - 1, 2, `${o}: one tile in the mirror, one in the friend tab`);
   assert.ok(!/look-chip-icon">[^<]/.test(html), 'no emoji-only tiles left');
 });

@@ -1136,7 +1136,7 @@ export class World {
     return findRoute(this.position,target,this.collisionObstacles(),this.navigationOptions()).map(p=>new T.Vector3(p.x,0,p.z));
   }
   /** The thing the context button acts on: the current target while it is still in reach (so the prompt and the target frame agree and a press never swaps creatures mid-fight), else the nearest valid entity in reach. */
-  nearest() {const s=this.selected;if(s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2)return s;return this.entities.filter(e=>this.validTarget(e)).sort((a,b)=>Math.hypot(a.x-this.position.x,a.z-this.position.z)-a.radius-(Math.hypot(b.x-this.position.x,b.z-this.position.z)-b.radius)).find(e=>Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.radius+2);}
+  nearest() {const s=this.selected;if(s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2)return s;/* The cottage door wins over a helper standing in front of it (a friend coming out used to take the Interact button, so the house seemed locked). */const gap=(e:Entity)=>Math.hypot(e.x-this.position.x,e.z-this.position.z)-e.radius-(e.kind==='home'?1.6:0);return this.entities.filter(e=>this.validTarget(e)).sort((a,b)=>gap(a)-gap(b)).find(e=>Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.radius+2);}
   interactNearest() {const e=this.nearest();if(e)this.select(e);}
   burst(x:number,z:number,color:string,count=14) {
     if(this.fx){this.fx.burst({x,z},{n:count,color:[color,'#ffffff'],speed:4,up:5,size:.13});this.fx.burst({x,z},{n:Math.ceil(count/2),color,glow:true,size:.12,speed:3,up:4,life:.5});return;}

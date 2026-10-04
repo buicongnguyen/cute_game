@@ -40,6 +40,7 @@ export const BASE_SKILLS = [
   { name: 'Ground slam', icon: '💥', cd: 9, description: 'Leap and land with a shockwave that throws enemies into the air.' },
 ] as const;
 export const SPECIALS: Record<string,{name:string;icon:string;cd:number}> = {
+  volley:{name:'Rifle volley',icon:'🔫',cd:7},anchor:{name:'Anchor swing',icon:'⚓',cd:8},lotus:{name:'Lotus petals',icon:'🪷',cd:9},dragon:{name:'Dragon fan',icon:'🐉',cd:8},eagle:{name:'Eagle strike',icon:'🦅',cd:8},goldstar:{name:'Golden star burst',icon:'⭐',cd:9},
   fist:{name:'Punch flurry',icon:'👊',cd:6},crescent:{name:'Crescent slash',icon:'🌙',cd:6},gore:{name:'Tusk rush',icon:'🐗',cd:7},wave:{name:'Blade waves',icon:'🌊',cd:6},
   peastorm:{name:'Pea barrage',icon:'🟢',cd:8},bigbubble:{name:'Bubble prison',icon:'🫧',cd:10},nova:{name:'Thorn nova',icon:'🌵',cd:9},blizzard:{name:'Blizzard',icon:'❄️',cd:9},
   magma:{name:'Magma pillars',icon:'🌋',cd:8},thunder:{name:'Thunder chain',icon:'⚡',cd:9},bonk:{name:'Giant bonk',icon:'🔨',cd:7},tsunami:{name:'Tsunami',icon:'🌊',cd:9},
@@ -139,6 +140,13 @@ export class CombatSimulation {
   special(id:string){
     const p={...this.host.position()},angle=this.aim(),d=direction(angle);
     switch(id){
+      // Uniform skills (uniform-skills.ts)
+      case 'volley':for(let i=0;i<10;i++)this.later(i*.06,()=>this.shoot('pea',angle+(this.random()-.5)*.14,.7,15));break;
+      case 'anchor':this.emit('ring',p,4.4,'#9fd6ff');this.later(.15,()=>this.area(p,4.4,2,.4,3,'#9fd6ff'));break;
+      case 'lotus':for(let i=0;i<12;i++)this.shoot('star',i*Math.PI/6,.8,8);this.host.heal?.(.08);this.emit('ring',p,3,'#ffb3cf');break;
+      case 'dragon':for(const offset of [-.45,-.3,-.15,0,.15,.3,.45])this.shoot('wave',angle+offset,1.3,12);break;
+      case 'eagle':this.dash(2.4,30,.3);this.later(.3,()=>{this.emit('ring',this.host.position(),3,'#ffffff');this.area(this.host.position(),3,1.8,.5,2,'#ffffff');});break;
+      case 'goldstar':for(let i=0;i<5;i++)this.shoot('star',angle+i*Math.PI*2/5,1.4,11,{pierce:true});this.later(.1,()=>this.area(p,2.6,1.2,.3,1.5,'#ffe34d'));break;
       case 'fist': for(let i=0;i<6;i++)this.later(i*.14,()=>{this.aim(this.nearest(2.6));this.arc(1.8,.8,.5);});break;
       case 'crescent':this.arc(3.8,2.4,-.05);break;
       case 'gore':this.dash(2,28,.36);break;
