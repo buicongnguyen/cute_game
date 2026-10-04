@@ -2,7 +2,7 @@ import * as T from 'three';
 import * as M from './model.ts';
 import { cageKit, heroKit, wearKit, weaponKit, petKit } from './assets.ts';
 import { buildFriend, friendModel, friendSignature, poseFriend, FRIEND_SCALE, type FriendPose } from './friend-view.ts';
-import { CAGES, FRIENDS, FRIEND_IDS, cageState, friendsOf, inVillage, nextFriendTask, resting, friendStage, friendHeight, type CageState, type Friend, type FriendId, type FriendTask, type WorkResult } from './friends.ts';
+import { CAGES, FRIENDS, FRIEND_IDS, canChangeOutfit, cageState, friendsOf, inVillage, nextFriendTask, resting, friendStage, friendHeight, type CageState, type Friend, type FriendId, type FriendTask, type WorkResult } from './friends.ts';
 import type { World, Entity } from './world.ts';
 import { dropTree } from './dispose-tree.ts';
 import { lineFor, type LineScenario } from './friend-lines.ts';
@@ -44,6 +44,8 @@ export interface CrewHost {
   started(): boolean;
   /** The bed the garden robot is walking to, so Sprout picks another. */
   robotBed(): number | undefined;
+  /** The animal the pen robot is walking to, so Clover (or the cook) picks another (optional: tests leave it out). */
+  robotAnimal?(): number | undefined;
   /** The empty bed whose seed list the player has open: nobody plants it meanwhile (optional: tests leave it out). */
   heldBed?(): number | undefined;
   animalAt(uid: number): { x: number; z: number } | undefined;
@@ -242,8 +244,9 @@ export class FriendCrew {
   private work(a: Actor, f: Friend, s: M.SaveState, act: boolean, dt: number, now: number) {
     const post = POSTS[a.id];
     if (a.cheerT > 0) { a.cheerT -= dt; this.place(a, 'cheer'); return; }
-    if (f.role === 'cook' && (f.paused || resting(f, now))) {
-      // The cook off duty walks into the cottage and stays there.
+    if (f.role === 'cook' && !f.paused && resting(f, now)) {
+      // The cook on her rest walks into the cottage and stays there (her Dress panel indoors has "Ask to work now").
+      // Paused by the player she waits at her post instead, like the others, so "Back to work" is a tap away.
       a.task = null; if (a.trip === 2 || this.walk(a, COTTAGE_DOOR, dt)) this.goInside(a, 0); return;
     }
     if (a.trip === 2) { // inside the cottage on a visit: wait it out, then come out (the cook in a new outfit)
@@ -270,7 +273,7 @@ export class FriendCrew {
     }
     if ((a.think -= dt) <= 0 && !a.task && a.cookT <= 0) {
       a.think = .5;
-      if (act && !a.pending) a.task = nextFriendTask(s, a.id, a, now, a.id === 'sprout' ? this.host.robotBed() : a.id === 'pepper' ? this.bedOf('sprout') : undefined, this.host.heldBed?.());
+      if (act && !a.pending) a.task = nextFriendTask(s, a.id, a, now, a.id === 'sprout' ? this.host.robotBed() : a.id === 'pepper' ? this.bedOf('sprout') : undefined, this.host.heldBed?.(), this.host.robotAnimal?.());
       else if (!act && (a.wander -= .5) <= 0) {
         // A visitor's copy never acts: it potters between the beds or animals now and then.
         a.wander = 4 + Math.random() * 4;
@@ -302,7 +305,8 @@ export class FriendCrew {
   /** Out of the cottage door: a new outfit for the cook, a word about it. */
   private comeOut(a: Actor, f: Friend) {
     a.trip = 0; a.jobs = 0; a.tripAt = 3 + Math.floor(Math.random() * 3); a.x = COTTAGE_DOOR.x; a.z = COTTAGE_DOOR.z + .5; a.root.visible = true; this.setEntity(a, true);
-    if (f.role === 'cook' && this.host.own().friends?.includes(f)) void this.host.perform('friendOutfit', { id: a.id, pick: Math.random() }).then(ok => { if (ok) this.speak(a, 'OUTFIT'); });
+    // Only when there is something new to wear: a fresh game has nothing, and asking anyway was a refused action every trip.
+    if (f.role === 'cook' && this.host.own().friends?.includes(f) && canChangeOutfit(this.host.own(), a.id)) void this.host.perform<{ changed: boolean }>('friendOutfit', { id: a.id, pick: Math.random() }).then(r => { if (r?.changed) this.speak(a, 'OUTFIT'); });
   }
   private bedOf(id: FriendId) { const t = this.actors.get(id)?.task; return t && 'index' in t ? t.index : undefined; }
   /** For the status line and tests. */

@@ -123,7 +123,7 @@ test('keyboard settings persist through authoritative actions, retries and reope
   const ignored = await h.act('alice', 'settings', {settings: {keyboardLayout: 'WASD', sound: false}});
   assert.equal(ignored.profile.settings.keyboardLayout, 'wasd'); assert.equal(ignored.profile.settings.sound, false);
   const before = await h.store.get('alice');
-  await assert.rejects(h.act('alice', 'settings', {settings: {keyboardLayout: 'classic', difficulty: 'easy'}}), status(400));
+  await assert.rejects(h.act('alice', 'settings', {settings: {keyboardLayout: 'classic', difficulty: 'easy'}}), status(409)); // a refusal with its reason: lower again in 24 h
   assert.deepEqual(await h.store.get('alice'), before, 'rejected difficulty changes roll back the entire settings command');
   assert.equal((await h.store.get('bob')).profile.settings.keyboardLayout, undefined, 'other accounts retain the classic default');
   const reopened = await h.reopen();

@@ -1272,6 +1272,7 @@ h1 > span {
 .garden-tip { margin: 0; padding: 6px 12px; border-radius: 14px; background: #fff8dc; font-size: var(--t-sm); color: var(--ink-soft); }
 .grow-button { min-height: 40px; padding: 6px 14px; font-size: var(--t-md); justify-content: center; }
 .grow-button.soft-button { color: var(--ink-soft); }
+.grow-button.grow-max { display: flex; align-items: center; margin: 0; text-align: center; }
 /* Compact garden panels (seed picker, growing bed): small art, one-line text, small buttons beside the text, so many
    seed rows fit on a phone and a PC. Rows never wrap their buttons under the text. */
 .crop-list:has(> .garden-row) { gap: 6px; }

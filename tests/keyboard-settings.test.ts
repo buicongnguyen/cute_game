@@ -49,7 +49,7 @@ test('a rejected difficulty change cannot partially switch keyboard layout', () 
   const state = M.newGame();
   state.settings = {...state.settings, keyboardLayout: 'classic', difficulty: 'hard', difficultyLoweredAt: now - 1000};
   const before = structuredClone(state);
-  assert.throws(() => act(state, {keyboardLayout: 'wasd', difficulty: 'easy', sound: false}), {status: 400});
+  assert.throws(() => act(state, {keyboardLayout: 'wasd', difficulty: 'easy', sound: false}), {status: 409, message: /lower the difficulty again in 24 h/});
   assert.deepEqual(state, before);
   assert.equal(act(state, {keyboardLayout: 'wasd'}), true, 'the difficulty cooldown does not block changing controls');
   assert.equal(state.settings.keyboardLayout, 'wasd');

@@ -93,8 +93,8 @@ test('gear upgrades need the item, the energy and the materials; weapons and rod
   assert.equal(U.canUpgradeGear(s, 'hat_straw'), false, 'one leather short');
   s.bag.leather = 2; assert.equal(U.canUpgradeGear(s, 'hat_straw'), true); assert.equal(U.canUpgradeGear(s, 'hat_leather'), false, 'not owned');
   s.bag.sword_wood = 1; s.bag.rod = 1; assert.equal(U.upgradableGear('sword_wood'), false); assert.equal(U.upgradableGear('rod'), false); assert.equal(U.upgradableGear('dz_ninja'), false);
-  assert.throws(() => applyGameAction(s, { type: 'upgradeGear', payload: { id: 'sword_wood' } }), /not available/);
-  s.energy = U.gearCost('hat_straw', 0).energy - 1; assert.throws(() => applyGameAction(s, { type: 'upgradeGear', payload: { id: 'hat_straw' } }), /not available/);
+  assert.throws(() => applyGameAction(s, { type: 'upgradeGear', payload: { id: 'sword_wood' } }), /more energy or materials to upgrade/);
+  s.energy = U.gearCost('hat_straw', 0).energy - 1; assert.throws(() => applyGameAction(s, { type: 'upgradeGear', payload: { id: 'hat_straw' } }), /more energy or materials to upgrade/);
   assert.equal(s.bag.leather, 2, 'a refused upgrade takes nothing');
 });
 
@@ -122,8 +122,8 @@ test('skill costs and caps; the cooldown and damage table', () => {
   assert.deepEqual([0, 1, 2, 3, 4].map(l => U.skillCost(l).energy), [120, 480, 1080, 1920, 3000]);
   assert.deepEqual(U.skillCost(4).materials, { bone: 11, starshard: 4, moonstone: 1 });
   const s = rich(); for (let i = 0; i < 5; i++) assert.deepEqual(applyGameAction(s, { type: 'upgradeSkill', payload: { index: 3 } }), { index: 3, level: i + 1 });
-  assert.throws(() => applyGameAction(s, { type: 'upgradeSkill', payload: { index: 3 } }), /not available/);
-  assert.throws(() => applyGameAction(s, { type: 'upgradeSkill', payload: { index: 4 } }), /not available/);
+  assert.throws(() => applyGameAction(s, { type: 'upgradeSkill', payload: { index: 3 } }), /at its best/);
+  assert.throws(() => applyGameAction(s, { type: 'upgradeSkill', payload: { index: 4 } }), /upgrade that skill/);
   assert.throws(() => applyGameAction(s, { type: 'upgradeSkill', payload: { index: -1 } }), /not available/);
   assert.equal(S.levelledCooldown(1, 4, 5), 3); assert.equal(Math.round(S.levelledCooldown(3, 9, 5) * 100) / 100, 7.2);
   assert.equal(S.levelledCooldown(0, 7, 5), 7); assert.equal(S.levelledCooldown(1, 4, 5, true), 4, 'disguise skills never level');

@@ -40,6 +40,11 @@ export function nextTask(s: M.SaveState, from: { x: number; z: number }, now = D
   }
   return task;
 }
+/** The job is still there when the robot finishes its work pose (the player, Clover or the cook may have done it meanwhile). */
+export function stillDue(s: M.SaveState, task: FarmHelperTask, now = Date.now()): boolean {
+  const a = canWork(s) ? s.farm.animals.find(x => x.uid === task.uid) : undefined; if (!a) return false;
+  return task.kind === 'collect' ? M.productCount(a, now) > 0 : helperOf(s).autoFeed && !!M.autoFeedCrop(s, a, now);
+}
 /** All grants use the same inventory, stock, aging and XP rules as manual collection. */
 export function helperCollect(s: M.SaveState, uid: number, now = Date.now()): M.Collected[] {
   return canWork(s) && Number.isSafeInteger(uid) && uid > 0 ? M.collectProducts(s, now, [uid]) : [];

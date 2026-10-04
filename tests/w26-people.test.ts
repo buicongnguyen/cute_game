@@ -134,8 +134,8 @@ test('friend looks: owned options are free, missing ones are bought once for the
 test('friend looks save, load, go through the shared actions, and reach visitors', () => {
   const s = withFriends(1000);
   assert.equal(applyGameAction(s, { type: 'friendLook', payload: { friend: 'pepper', id: 'girl-teen-bunny-bare', buy: true } }, { now: T0, random: () => .5 }), true);
-  assert.throws(() => applyGameAction(s, { type: 'friendLook', payload: { friend: 'pepper', id: 'girl-teen-bunny-bare' } }, { now: T0, random: () => .5 }), /not available/, 'no change: refused');
-  assert.throws(() => applyGameAction(s, { type: 'friendLook', payload: { friend: 'pepper', id: 'boy-chibi-none-owl' } }, { now: T0, random: () => .5 }), /not available/, 'unowned without buy: refused');
+  assert.throws(() => applyGameAction(s, { type: 'friendLook', payload: { friend: 'pepper', id: 'girl-teen-bunny-bare' } }, { now: T0, random: () => .5 }), /already has that look/, 'no change: refused');
+  assert.throws(() => applyGameAction(s, { type: 'friendLook', payload: { friend: 'pepper', id: 'boy-chibi-none-owl' } }, { now: T0, random: () => .5 }), /Buy that look first/, 'unowned without buy: refused');
   assert.throws(() => applyGameAction(s, { type: 'friendLook', payload: { friend: 7, id: 'boy-chibi-none-bare' } }, { now: T0, random: () => .5 }), /not available/);
   const back = M.parseSave(JSON.stringify(s))!; assert.equal(back.friends!.find(f => f.id === 'pepper')!.look, 'girl-teen-bunny-bare', 'saved and loaded');
   // A save edited by hand cannot dress a friend in options its owner never bought.

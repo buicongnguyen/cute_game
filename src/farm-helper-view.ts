@@ -1,6 +1,6 @@
 import * as M from './model.ts';
 import { HelperView } from './helper-view.ts';
-import { helperOf, nextTask, type FarmHelperTask } from './farm-helper.ts';
+import { helperOf, nextTask, stillDue, type FarmHelperTask } from './farm-helper.ts';
 
 export const FARM_HELPER_HOME = { x: M.PEN.x + M.PEN.hw - .5, z: M.PEN.z + M.PEN.hd + .45 };
 interface Frame {
@@ -30,7 +30,8 @@ export class FarmHelperView {
     if (this.mode === 'work') {
       this.workLeft -= dt;
       if (this.workLeft <= 0) {
-        if (f.act && this.task) f.work(this.task);
+        // Look again before acting: the task was picked up to half a second before the walk and the pose.
+        if (f.act && this.task && stillDue(s, this.task, f.now)) f.work(this.task);
         this.task = null; this.mode = 'idle'; this.wait = .6;
       }
     } else if ((this.wait -= dt) <= 0 && !h.paused && !f.pending) {

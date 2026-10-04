@@ -32,7 +32,7 @@ import { CombatHud, fightNear, lootText, zoneInfo, aggro } from './hud-combat.ts
 import { ChallengeDirector, renderChallenge } from './hud-challenge.ts';
 import { KeysGuide } from './hud-keys.ts';
 import * as M from './model.ts';
-import {applyGameAction,type GameIntent,type ActionReply} from './actions.ts';
+import {applyGameAction,isMalformedAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
 import { quickEatView, healingFoods, type FoodChoice } from './quick-eat.ts';
 import { previewGear, canTryOn, autoHeld } from './try-on.ts';
@@ -139,11 +139,23 @@ let shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forg
 let placement:{id:string;rotation:number;x:number;z:number;ok:boolean}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
 let persistence:((state:M.SaveState)=>void)|null=null,network:NetworkHooks={role:null};
 let actionHandler:((intent:GameIntent)=>Promise<ActionReply>)|null=null;
-async function perform<T=any>(type:string,payload:Record<string,unknown>={}):Promise<T|undefined>{
+/**
+ * Runs one intent through the shared rules (actions.ts), or the server online. A refusal comes back with its reason in
+ * plain words (refusals.ts) and is shown as a toast. Two kinds stay off the screen and go to the console for developers:
+ * a malformed intent (the generic "not available" text: a bug in the caller, nothing the player can act on), and any
+ * refusal of a `quiet` intent, which the helpers send by themselves (another worker or the player got there first).
+ */
+async function perform<T=any>(type:string,payload:Record<string,unknown>={},{quiet=false}:{quiet?:boolean}={}):Promise<T|undefined>{
   const before=state.level,original=state,online=!!actionHandler;
   try{const result=actionHandler?(await actionHandler({type,payload})).result:applyGameAction(state,{type,payload},{now:Date.now(),random:Math.random});
     if(state!==original)return undefined;if(!online)levelCheck(before);save();updateHud();return result as T;
-  }catch(error){if(state===original)toast(t(error instanceof Error?error.message:'That action was unavailable.'),'💭');return undefined;}
+  }catch(error){if(state===original)reportRefusal(type,payload,error,quiet);return undefined;}
+}
+function reportRefusal(type:string,payload:Record<string,unknown>,error:unknown,quiet:boolean){
+  const message=error instanceof Error?error.message:'';
+  if(isMalformedAction(error)){console.warn(`[zoo] malformed action "${type}"`,payload,error);return;}
+  if(quiet||!message){console.debug(`[zoo] ${type} skipped: ${message||String(error)}`,payload);return;}
+  toast(t(message),'💭');
 }
 // The starship (set up once the world exists); while flying, space replaces the world.
 let shipSequence:ShipSequence|undefined,flight:SpaceFlight|null=null,arriving=false,launchPending=false;
@@ -266,7 +278,13 @@ void refinedAssets.loadAll().then(() => world.applyRefinedAssets());
 void spaceKit.load().then(() => world.applyRefinedAssets());
 void cropKit.load();
 // If the scenery kit arrived after the first build, rebuild while the title screen is still up.
-if(!sceneryKit.ready)void sceneryKit.load().then(()=>{if(sceneryKit.ready&&!started){world.build(state.planet);world.refreshPlayer();}});
+// The village's fence, gates, blossom trees, stepping stones and bushes are made from the scenery kit when the world is built.
+// A kit that arrives after Start (a slow phone network) is picked up by one rebuild at the next quiet moment at home.
+let villageNeedsKit=!sceneryKit.ready;
+if(!sceneryKit.ready)void sceneryKit.load().then(()=>{if(sceneryKit.ready&&!started){world.build(state.planet);world.refreshPlayer();villageNeedsKit=false;}});
+frameListeners.add(()=>{if(!villageNeedsKit||!sceneryKit.ready||!started)return;if(world.planet!=='home'){villageNeedsKit=false;return;} // another planet: the next home build has the kit
+  if(modal||visiting||flight||world.interior||fishGame||placement||world.enemies.some(e=>e.hp>0&&aggro(e)))return;
+  villageNeedsKit=false;rebuildHomePresentation('home');world.refreshPlayer();});
 // Models that only arrive after their retries (art-retry.ts) swap in without a reload; before Play a rebuild also brings in late trees.
 // Files landing together are handled once per frame, each refreshing only what it dresses (late-art.ts).
 initArtNote();const lateArt=new LateArtQueue();onArtLoaded(url=>lateArt.add(url));
@@ -477,7 +495,7 @@ function explorerOut(){return explorerAway(world.planet,world.position.x,world.p
 let tripBackUntil=0,tripSeen=false;
 function catchUpAway(){return explorerOut()||Date.now()<tripBackUntil;}
 /** perform() for the workers' jobs: tells the rules whether the explorer is out (the server uses its own pose). */
-function workPerform<T=any>(type:string,payload:Record<string,unknown>={}){return perform<T>(type,CATCH_UP_ACTIONS.has(type)?{...payload,away:catchUpAway()}:WORK_ACTIONS.has(type)?{...payload,away:explorerOut()}:payload);}
+function workPerform<T=any>(type:string,payload:Record<string,unknown>={}){return perform<T>(type,CATCH_UP_ACTIONS.has(type)?{...payload,away:catchUpAway()}:WORK_ACTIONS.has(type)?{...payload,away:explorerOut()}:payload,{quiet:true});} // the helpers act by themselves: a refused job is logged, never toasted
 /** A save from before the 24-bed cap lost its extra beds (model.ts trimGarden): say once what came back. */
 function showTrimNote(){const n=state.gardenTrim;if(!n)return;void perform('ackTrim');setTimeout(()=>toast(t('Your garden now holds {max} beds: {beds} extra beds were refunded for ϟ {energy}.',{max:M.MAX_PLOTS,beds:n.beds,energy:n.energy})+(Object.keys(n.items).length?' '+t('Their crops are in your bag.'):''),'🌱'),1800);}
 /** Harvest orbs fly to the bag, or into the chest when the harvest is stored there (never across the map). */
@@ -513,7 +531,7 @@ function growText(plot:M.Plot){const progress=M.cropProgress(plot),left=Math.cei
 function expandButton(growing:boolean){
   if(visiting||state.planet!=='home')return '';
   const kits=state.bag.plot_kit||0,cost=M.gardenExpansionCost(state);
-  if(state.plots.length>=M.MAX_PLOTS)return `<button class="soft-button wide grow-button" data-action="expand">🌱 Your garden has the maximum ${M.MAX_PLOTS} beds</button>`;
+  if(state.plots.length>=M.MAX_PLOTS)return `<p class="muted wide grow-button grow-max">🌱 Your garden has the maximum ${M.MAX_PLOTS} beds</p>`; // a note, not a button: nothing to press at the cap
   const label=growing?`➕ Expand garden: add 1 bed (${kits?'one in your bag':`ϟ ${cost}`})`:kits?`➕ Place another bed (${kits} in your bag)`:`➕ Expand garden: add 1 bed (ϟ ${cost})`;
   return `<button class="${kits||state.energy>=cost?'primary':'soft-button'} wide grow-button" data-action="expand">${label}</button>`;
 }
@@ -522,11 +540,12 @@ function expandButton(growing:boolean){
  * nearest the garden, or, with "Place new beds myself" on, the see-through bed lets the player choose the spot.
  */
 async function buyPlot(){
+  // The same order as the rule (model.ts readyPlotKit), checked first so a grey button explains itself instead of asking the rules.
+  if(state.plots.length>=M.MAX_PLOTS){toast(t('Your garden already has the maximum {count} beds.',{count:M.MAX_PLOTS}),'🌱');return;}
+  if(state.planet!=='home'||visiting){toast('Garden beds belong at home. Return to your garden first.','🏡');return;}
+  if(!(state.bag.plot_kit||0)&&state.energy<M.gardenExpansionCost(state)){toast(t('You need {amount} energy to expand the garden.',{amount:M.gardenExpansionCost(state)}),'ϟ');return;}
   const result=await perform('buyBedKit');if(!result)return;
-  if(result==='max')toast(`Your garden already has the maximum ${M.MAX_PLOTS} beds.`,'🌱');
-  else if(result==='away')toast('Garden beds belong at home. Return to your garden first.','🏡');
-  else if(result==='energy')toast(`You need ${M.gardenExpansionCost(state)} energy to expand the garden.`,'ϟ');
-  else{if(result==='bought')tone('coin');beginPlacement('plot_kit');}
+  if(result==='bought')tone('coin');beginPlacement('plot_kit');
 }
 /** Puts a bed kit from the bag down automatically (expandGarden picks the spot); the kit stays in the bag if there is no room. */
 async function autoPlaceBed(){
@@ -543,7 +562,8 @@ function bedUpgradeRow(index:number){
 }
 /** Redraws the open bed panel as the bed is now; a ripe bed is left alone (opening it harvests). */
 function refreshPlot(){const p=state.plots[activePlot];if((modal==='plot'||modal==='plant')&&p&&!(p.crop&&M.cropProgress(p)>=1))plotDialog(activePlot);}
-let plotSeen='';
+let plotSeen='',stockShown='';
+function stockKey(){let k='';for(const id in state.bag)k+=id+':'+state.bag[id]+',';k+='|';for(const id in state.chest)k+=id+':'+state.chest[id]+',';return k;}
 function plotDialog(index:number) {
   if(visiting){network.visitCrop?.(index);return;}
   activePlot=index;const plot=state.plots[index];if(!plot)return;
@@ -766,7 +786,7 @@ function helperAction(kind:'helperHarvest'|'helperPlant',i:number){
   const effect=(crop:M.CropId|undefined|null)=>{if(crop){if(kind==='helperHarvest')harvestBurst(i,crop,'worker');else{plantBurst(i,'worker');if(gainShows('worker'))tone('pop');}world.syncCrops();}return !!crop;};
   if(!actionHandler)return effect(change(()=>{try{return applyGameAction(state,{type:kind,payload:{index:i,away:explorerOut()}}) as M.CropId;}catch{return null;}}));
   const key=kind+':'+i;if(helperPending.has(key))return false;helperPending.add(key);
-  void perform<M.CropId>(kind,{index:i,away:explorerOut()}).then(effect).finally(()=>helperPending.delete(key));return true;
+  void perform<M.CropId>(kind,{index:i,away:explorerOut()},{quiet:true}).then(effect).finally(()=>helperPending.delete(key));return true;
 }
 const helperHarvest=(i:number)=>helperAction('helperHarvest',i),helperPlant=(i:number)=>helperAction('helperPlant',i);
 
@@ -784,7 +804,7 @@ const farmHelperController=new FarmHelperController({state:()=>state,context:far
 setFriendDresser((color,gear,look)=>world.friendAvatar(color,gear,look));
 const helperChat=new ChatBubbles(world,()=>!started||modal!=='');
 const crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
-  robotBed:()=>helperView.task?.index,heldBed,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform:workPerform,
+  robotBed:()=>helperView.task?.index,robotAnimal:()=>farmHelperView.task?.uid,heldBed,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform:(type,payload)=>type==='rescueFriend'?perform(type,payload):workPerform(type,payload), // a rescue is the player's own tap; the rest are the friends' own jobs
   rescued(id,at){const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
   locked(id){toast(lockedHint(id),'🔒');},
   worked(id,task,r,at){
@@ -799,7 +819,7 @@ const crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!vi
 frameListeners.add(dt=>{crew.update(dt);helperChat.frame(dt);});
 function friendDialog(id:FriendId){openDialog('friend',FRIENDS[id].name,friendPanel(world.state,id),'RESCUED FRIEND',{garden:'🌱',farm:'🐄',cook:'🍳'}[FRIENDS[id].role]);}
 async function friendsCatchUp(){if(!(state.friends??[]).some(f=>f.home&&!f.paused))return;const r=await workPerform<Partial<Record<FriendId,{jobs:number;cooked:number}>>>('friendsCatchUp');const jobs=Object.values(r??{}).reduce((n,v)=>n+(v?.jobs??0),0);if(jobs)setTimeout(()=>toast(t('While you were away, your friends did {count} jobs.',{count:jobs}),'🤝'),3200);}
-const storedNote=initStoredNote({state:()=>state,home:()=>started&&!visiting&&!flight&&world.planet==='home'&&world.state===state&&!explorerOut(),perform,openChest:()=>storage(),t,name:id=>t(M.ITEMS[id as M.ItemId]?.name??id),took:n=>{tone('click');toast(t('Took {count} items from the chest.',{count:n}),'📦');}},app);frameListeners.add(dt=>storedNote.frame(dt));
+const storedNote=initStoredNote({state:()=>state,home:()=>started&&!visiting&&!flight&&world.planet==='home'&&world.state===state&&!explorerOut(),perform,openChest:()=>storage(),t,name:id=>t(M.ITEMS[id as M.ItemId]?.name??id),took:n=>{tone('click');toast(t('Took {count} items from the chest.',{count:n}),'📦');},covered:()=>!!modal},app);frameListeners.add(dt=>storedNote.frame(dt));
 let friendsHome=false;frameListeners.add(()=>{const home=started&&!visiting&&!flight&&world.planet==='home';if(started&&!home)tripSeen=true;if(home&&!friendsHome){if(tripSeen){tripBackUntil=Date.now()+120_000;tripSeen=false;}void friendsCatchUp();void helperCatchUp();}friendsHome=home;});
 let farmHelperSettingsPending=false;
 async function farmHelperSetting(type:'buyFarmHelper'|'upgradeFarmRestock'|'setFarmRestock'|'setFarmHelperPaused'|'setFarmHelperAutoFeed',payload:Record<string,unknown>={}){
@@ -1088,6 +1108,8 @@ function equipFeedback(id:string){
 }
 /** Eating from the bag or the HUD button: one path, with "+N ❤️" over the explorer like the reference's useItem. */
 async function eatFood(id:M.ItemId){
+  // Healing food at full health does nothing (model.ts eat refuses it): say so here, for the bag's Use button as for quick-eat.
+  const item=M.ITEMS[id];if(item&&!item.buff&&state.hp>=M.maxHp(state)){toast('Your health is already full.','❤️');return false;}
   const before=state.hp,ok=await perform<boolean>('eat',{id});
   if(ok){const healed=Math.round(state.hp-before);if(healed>0)floating(`+${healed} ❤️`,world.position.x,world.position.z,'item');tone('pop');}
   return !!ok;
@@ -1326,9 +1348,13 @@ app.addEventListener('click',async event=>{
     case 'claim':if(await perform('claimQuest')){tone('success');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
     case 'plant':{const i=activePlot,opened=modal,root=world.root,taken=state.plots[i]?.crop;if(taken){toast(t('This bed already grows {crop}.',{crop:t(M.CROPS[taken].name)}),'🌱');refreshPlot();break;}if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
     case 'cook-everything':{let made=0;for(const id of M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id])){const n=M.pantry(state,id);if(n>0&&await perform('cook',{id,count:n}))made+=n;}if(made){tone('success');toast(t('Cooked {count} meals. Enjoy!',{count:made}),'🍲');}cooking();break;}
-    case 'cook-one':case 'cook-all':if(await perform('cook',{id,count:action==='cook-all'?M.pantry(state,id):1})){tone('success');cooking();}break;
+    // Open panels can be out of date: a helper may have used the last one meanwhile. Then the panel just catches up.
+    case 'cook-one':case 'cook-all':if(M.pantry(state,id)<1){cooking();break;}if(await perform('cook',{id,count:action==='cook-all'?M.pantry(state,id):1})){tone('success');cooking();}break;
     // Reference: a fertilizer that ripens the crop closes the panel; one that only speeds it up refreshes it.
-    case 'fertilize-manure':case 'fertilize':{const i=activePlot,opened=modal,root=world.root,generation=state.plots[i]?.generation;if(await perform('fertilize',{index:i,id:action==='fertilize'?'spore':'manure'})&&world.root===root&&!visiting){world.syncCrops();const p=state.plots[i];if(!p?.crop||p.generation!==generation)break;const active=modal===opened&&activePlot===i;if(M.cropProgress(p)>=1){if(active)closeDialog();toast('Ready to harvest!','🌿');}else{if(active)plotDialog(i);toast('Your crop will be ready sooner.','🌿');}}break;}
+    case 'fertilize-manure':case 'fertilize':{const i=activePlot,opened=modal,root=world.root,generation=state.plots[i]?.generation;
+      // The panel stays open while the crop ripens (refreshPlot leaves a ripe bed alone): nothing left to speed up.
+      if(state.plots[i]?.crop&&M.cropProgress(state.plots[i])>=1){if(modal===opened)closeDialog();toast('Ready to harvest!','🌿');break;}
+      if(await perform('fertilize',{index:i,id:action==='fertilize'?'spore':'manure'})&&world.root===root&&!visiting){world.syncCrops();const p=state.plots[i];if(!p?.crop||p.generation!==generation)break;const active=modal===opened&&activePlot===i;if(M.cropProgress(p)>=1){if(active)closeDialog();toast('Ready to harvest!','🌿');}else{if(active)plotDialog(i);toast('Your crop will be ready sooner.','🌿');}}break;}
     case 'expand':buyPlot();break;
     case 'helper':helperDialog();break;
     case 'helper-buy':{const r=await perform('buyHelper');if(r==='bought'){tone('coin');helperView.reset();toast('Bolt joins your garden! It will tend the beds by itself.','🤖');}else if(r==='energy')toast(`You need ${Helper.HELPER_COST} energy to hire Bolt.`,'ϟ');else if(r==='away')toast('Garden beds belong at home. Return to your garden first.','🏡');helperDialog();break;}
@@ -1372,10 +1398,10 @@ app.addEventListener('click',async event=>{
     case 'quick-eat-pick':quickEatMenu($('#quick-eat-menu').hidden);break;
     case 'quick-eat-choose':quickEatChoice=id as FoodChoice;try{localStorage.setItem(QUICK_EAT_KEY,quickEatChoice);}catch{}quickEatMenu(false);updateQuickEat();break;
     case 'try-on':tryOn(id);break;
-    case 'sell-one':case 'sell-all':{const n=action==='sell-all'?M.looseQuantity(state,id):1;const value=await perform('sell',{id,count:n});if(value){tone('success');toast(`Sold for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
+    case 'sell-one':case 'sell-all':{if(M.looseQuantity(state,id)<1){market();break;}const n=action==='sell-all'?M.looseQuantity(state,id):1;const value=await perform('sell',{id,count:n});if(value){tone('success');toast(`Sold for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
     case 'sell-produce':{const chest=produceLots(state).fromChest,value=await perform('sellProduce');if(value){tone('success');floating(`+${value} ϟ`);toast(t('Sold all your produce for {amount} energy. Thank you, neighbor!',{amount:value})+(chest?' '+t('{count} from the chest',{count:chest})+'.':''),'ϟ');}market();break;}
     // A tap moves the whole stack, like the reference's chest (equipped gear stays in the backpack).
-    case 'transfer':{const store=button.dataset.direction==='store',n=store?M.looseQuantity(state,id):state.chest[id]??0;await perform('transfer',{id,count:n,toChest:store});tone('click');storage();break;}
+    case 'transfer':{const store=button.dataset.direction==='store',n=store?M.looseQuantity(state,id):state.chest[id]??0;if(n<1){storage();break;}await perform('transfer',{id,count:n,toChest:store});tone('click');storage();break;}
     case 'take-all':{const r=await perform<{count:number}>('takeChest');if(r?.count){tone('click');toast(t('Took {count} items from the chest.',{count:r.count}),'📦');}storage();break;}
     case 'upgrade':{const kind=button.dataset.kind as keyof typeof M.UPGRADES;if(await perform('upgrade',{kind})){upgradeFeedback(kind);upgrades();tone('success');}break;}
     case 'craft':if(await perform('craft',{index})){crafting();toast('Made with your own two hands. Check your backpack!','🔨');}break;
@@ -1413,7 +1439,8 @@ app.addEventListener('click',async event=>{
     case 'feed-animal':{const choice=chosenFeed(state),target=M.farmOf(state).animals.find(a=>a.uid===Number(button.dataset.id));if(choice&&target&&!button.dataset.sure&&M.feedLoses(state,choice,target)){feedConfirm(choice,'feed-animal',button.dataset.id);break;}const crop=await perform('feedAnimal',{uid:Number(button.dataset.id),...(choice?{id:choice}:{})});if(crop){tone('pop');feedBurst(Number(button.dataset.id));toast(`Fed a ${t(M.ITEMS[crop].name).toLowerCase()}. It will be quicker now.`,M.ITEMS[crop].icon);}penDialog();break;}
     case 'feed-all':{const pick=chosenFeed(state);if(pick&&!button.dataset.sure&&M.farmOf(state).animals.some(a=>M.playerCanFeed(a)&&M.feedLoses(state,pick,a))){feedConfirm(pick,'feed-all');break;}const before=new Set(M.farmOf(state).animals.filter(a=>M.canFeed(a)).map(a=>a.uid)),choice=chosenFeed(state),n=await perform('feedAll',choice?{id:choice}:{});if(n){tone('pop');for(const uid of before){const animal=M.farmOf(state).animals.find(a=>a.uid===uid);if(animal&&!M.canFeed(animal))feedBurst(uid);}toast(t(n>1?'Fed {count} animals.':'Fed {count} animal.',{count:n}),'🥕');}penDialog();break;}
     case 'build-pen':buildPenAction();break;
-    case 'expand-pen':if(await perform('expandPen')){tone('success');toast('The pen is bigger: room for 3 more chickens and 4 more cows.','🐔');}else toast(`You need ${M.penExpandCost(state)??0} energy to make the pen bigger.`,'ϟ');penDialog();break;
+    case 'expand-pen':{const cost=M.penExpandCost(state);if(cost!==null&&state.energy<cost){toast(t('You need {amount} energy to make the pen bigger.',{amount:cost}),'ϟ');break;} // one toast: the reason, before asking the rules
+      if(await perform('expandPen')){tone('success');toast('The pen is bigger: room for 3 more chickens and 4 more cows.','🐔');}penDialog();break;}
     case 'friend-feed':{const id=button.dataset.kind as FriendId,f=state.friends?.find(f=>f.id===id);if(f&&await perform('setFriendAutoFeed',{id,autoFeed:!f.autoFeed}))friendDialog(id);break;}
     case 'profile':{const slot=Number(button.dataset.slot);if(slot!==activeSlot()&&setActiveSlot(slot))location.reload();break;}
     case 'welcome-take':case 'welcome-pass':{const take=action==='welcome-take';if(state.welcome==='pending'&&await perform('welcomeStart',{take})){closeDialog();toast(take?t('Pepper joined you, and you start with 1,000,000 energy!'):t('Pepper joined you. A fair start it is!'),'🍳');updateHud();}break;}
@@ -1423,7 +1450,7 @@ app.addEventListener('click',async event=>{
     case 'cook-dish':if(await perform('cookDish',{id})){tone('success');toast(`${t(M.ITEMS[id].name)} is ready. Enjoy!`,M.ITEMS[id].icon);cooking();}break;case 'graphics':graphics.choose(button.dataset.kind as QualitySetting);world.applyGraphics(graphics.profile,graphics.ratio);saveGraphics(graphics);await perform('settings',{settings:{lowGraphics:graphics.level==='low'}});settings();break;
     case 'zoom-in':case 'zoom-out':world.zoom=clampZoom(Math.round((world.zoom+(action==='zoom-in'?-ZOOM.button:ZOOM.button))*100)/100,'wheel');world.resize();$('#zoom-value').textContent=t(`${Math.round(world.zoom*100)}%`);break;
     case 'reset-confirm':openDialog('reset','Begin a brand-new story?',`<p class="intro">This replaces your ${persistence?'online account adventure':'offline adventure in this browser'}, including your garden, items, and levels.</p><div class="button-row"><button class="soft-button" data-action="settings">Keep my adventure</button><button class="primary danger-button" data-action="reset">Start fresh</button></div>`,'A FRESH START');break;
-    case 'reset':{if(!await perform('reset'))break;state=structuredClone(state);world.state=state;rebuildHomePresentation('home');world.refreshPlayer();resetCombat();selectedItem=null;save();closeDialog();updateHud();toast('Every adventure starts with a little seed.','🌱');break;}
+    case 'reset':{if(!await perform('reset'))break;state=structuredClone(state);world.state=state;rebuildHomePresentation('home');world.refreshPlayer();resetCombat();selectedItem=null;save();closeDialog();if(state.welcome==='pending')welcomeDialog();updateHud();toast('Every adventure starts with a little seed.','🌱');break;} // the new story's welcome (Pepper and her offer) at once, not on the next reload
   }
 });
 $('#dialog-layer').addEventListener('click',e=>{if(e.target===$('#dialog-layer'))closeDialog();});
@@ -1483,7 +1510,9 @@ function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt
   const graphicsChange=graphics.sample(realDt,started&&!document.hidden&&!uiBlocked()&&performance.now()>settledAt);if(graphicsChange)world.applyGraphics(graphics.profile,graphics.ratio);if(graphics.takeSave())saveGraphics(graphics);
   world.render();positionLabels();minimap.frame(realDt);fx?.updateText(realDt,innerWidth,innerHeight);
   for(const listener of frameListeners)listener(dt);
-  if(uiElapsed>.12){uiElapsed=0;world.syncCrops();updateHud();updateLabels();if(modal==='plot'||modal==='plant'){const p=state.plots[activePlot],seen=p?`${activePlot}|${p.crop??''}|${p.generation??''}|${state.plots.filter(q=>!q.crop).length}|${autoPlantRow(state,activePlot)}`:'';if(plotSeen&&seen&&seen!==plotSeen)refreshPlot();plotSeen=seen;}else plotSeen='';if(modal==='plot'){const p=state.plots[activePlot];if(p?.crop&&$('#grow-fill')){$('#grow-fill').style.width=`${M.cropProgress(p)*100}%`;$('#grow-time').textContent=t(growText(p));}}if(modal==='pen'){if(penSignature(state)!==penShown)penDialog();else tickPen($('#dialog-body'),state);}}
+  if(uiElapsed>.12){uiElapsed=0;world.syncCrops();updateHud();updateLabels();if(modal==='plot'||modal==='plant'){const p=state.plots[activePlot],seen=p?`${activePlot}|${p.crop??''}|${p.generation??''}|${state.plots.filter(q=>!q.crop).length}|${autoPlantRow(state,activePlot)}`:'';if(plotSeen&&seen&&seen!==plotSeen)refreshPlot();plotSeen=seen;}else plotSeen='';if(modal==='plot'){const p=state.plots[activePlot];if(p?.crop&&$('#grow-fill')){$('#grow-fill').style.width=`${M.cropProgress(p)*100}%`;$('#grow-time').textContent=t(growText(p));}}if(modal==='pen'){if(penSignature(state)!==penShown)penDialog();else tickPen($('#dialog-body'),state);}
+    // Helpers keep working while the market, chest or kitchen is open: redraw it when the bag or chest changes, so no row offers what is gone.
+    if(modal==='sell'||modal==='chest'||modal==='cook'){const k=stockKey();if(stockShown&&k!==stockShown){if(modal==='sell')market();else if(modal==='chest')storage();else cooking();}stockShown=k;}else stockShown='';}
   if(elapsed>8){elapsed=0;if(started)save();}requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

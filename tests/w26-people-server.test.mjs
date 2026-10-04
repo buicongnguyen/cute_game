@@ -25,9 +25,9 @@ async function fixture(t, edit = () => {}) {
 
 test('a friend\'s look is validated and saved by the server: owned options free, the rest bought for the player', async t => {
   const f = await fixture(t);
-  await assert.rejects(f.command('friendLook', { friend: 'sprout', id: 'girl-tall-none-fox' }), /not available/, 'unowned options need buy');
-  await assert.rejects(f.command('friendLook', { friend: 'sprout', id: 'robot-chibi-none-bare' }), /not available/, 'unknown look');
-  await assert.rejects(f.command('friendLook', { friend: 'clover', id: 'girl-chibi-none-bare' }), /not available/, 'not rescued');
+  await assert.rejects(f.command('friendLook', { friend: 'sprout', id: 'girl-tall-none-fox' }), /Buy that look first/, 'unowned options need buy');
+  await assert.rejects(f.command('friendLook', { friend: 'sprout', id: 'robot-chibi-none-bare' }), /look does not exist/, 'unknown look');
+  await assert.rejects(f.command('friendLook', { friend: 'clover', id: 'girl-chibi-none-bare' }), /has not joined you yet/, 'not rescued');
   const ok = await f.command('friendLook', { friend: 'sprout', id: 'girl-tall-none-fox', buy: true }); assert.equal(ok.result, true);
   const profile = (await f.store.get('alice')).profile;
   assert.equal(profile.friends[0].look, 'girl-tall-none-fox'); assert.equal(profile.energy, 400 - 120 - 120);

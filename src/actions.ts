@@ -13,17 +13,21 @@ import { useActivity } from './house-activities.ts';
 import { sellProduce } from './item-views.ts';
 import { upgradeGear, upgradeSkill } from './upgrades.ts';
 import { claimProgress, refreshProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
+import { refusalReason } from './refusals.ts';
 
 export const ACTION_RULES_VERSION = 1;
 export interface GameIntent { type: string; payload?: Record<string, unknown> }
 export interface ActionReply { ok: true; profile: Game.SaveState; revision: number; authorityVersion: 1; result: unknown; replayed?: boolean; actionRevision?: number }
 export interface ActionContext { now: number; random: () => number }
 export class ActionError extends Error { status: number; constructor(status: number, message: string) { super(message); this.status = status; } }
-const invalid = () => { throw new ActionError(400, 'That action is not available.'); };
+/** The only generic text left: an intent the rules cannot read at all (unknown type, missing or malformed fields). The client logs it for developers rather than showing it. */
+export const MALFORMED_ACTION = 'That action is not available.';
+export const isMalformedAction = (error: unknown) => error instanceof Error && (error as ActionError).status === 400 && error.message === MALFORMED_ACTION;
+const invalid = () => { throw new ActionError(400, MALFORMED_ACTION); };
 function string(value: unknown, max = 100): string { return typeof value === 'string' && value.length > 0 && value.length <= max ? value : invalid(); }
 function number(value: unknown): number { return typeof value === 'number' && Number.isFinite(value) ? value : invalid(); }
 function integer(value: unknown, fallback?: number): number { const result = value === undefined && fallback !== undefined ? fallback : number(value); return Number.isSafeInteger(result) && result >= 0 ? result : invalid(); }
-function success<T>(result: T): T { if (result === false || result === null || result === undefined) throw new ActionError(409, 'That action is not available with your current progress.'); return result; }
+const failed = (result: unknown) => result === false || result === null || result === undefined;
 
 /** Shared deterministic game rules. Online callers must additionally validate session, spatial context and receipts. */
 export function applyGameAction(state: Game.SaveState, intent: GameIntent, context: ActionContext = { now: Date.now(), random: Math.random }): unknown {
@@ -38,12 +42,15 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
   const p = intent.payload ?? {};
   if (!p || typeof p !== 'object' || Array.isArray(p)) return invalid();
   const id = () => string(p.id), index = () => integer(p.index), kind = () => string(p.kind), now = context.now, random = context.random;
+  // A refusal says why in plain words (refusals.ts), read from the state as the rule saw it.
+  const refuse = (): never => { throw new ActionError(409, refusalReason(intent.type, state, p as Record<string, unknown>, now)); };
+  const success = <T>(result: T): T => failed(result) ? refuse() : result;
   // Workers' harvest while the explorer is out goes to the house chest (delivery.ts).
   const before = deliversToChest(intent.type, p, now - state.savedAt) ? { ...state.bag } : null, potBefore = before ? potItems(state) : {};
   let result: unknown;
   switch (intent.type) {
     case 'buy': result = Game.buy(state, id()); break;
-    case 'sell': result = Game.sell(state, id(), integer(p.count, 1)); if (!result) return invalid(); break;
+    case 'sell': result = Game.sell(state, id(), integer(p.count, 1)); if (!result) return refuse(); break;
     // The same crop, fish and junk stacks (item-views.ts PRODUCE_TYPES) whose total the button shows.
     case 'sellProduce': result = sellProduce(state); break;
     case 'craft': result = Game.craft(state, index()); break;
@@ -61,7 +68,9 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'transfer': {
       const item = id(), toChest = p.toChest === true, available = toChest ? Game.looseQuantity(state, item) : state.chest[item] || 0;
       const count = p.count === undefined ? available : integer(p.count);
-      if (count < 1 || count > available || count > 100000) return invalid();
+      if (count > 100000) return invalid();
+      // The chest stands in the village (delivery.ts takeFromChest): away from home only the backpack counts.
+      if (state.planet !== 'home' || count < 1 || count > available) return refuse();
       for (let i = 0; i < count; i++) success(Game.transfer(state, item, toChest)); result = count; break;
     }
     // The player's own planting: the crop becomes that bed's choice, which helpers replant and never replace (auto-plant.ts).
@@ -73,7 +82,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'harvestAll': result = Game.harvestAll(state, now); break;
     case 'fertilize': result = Game.fertilize(state, index(), now, id()); break;
     case 'expandGarden': result = Game.expandGarden(state, p.x === undefined ? undefined : number(p.x), p.z === undefined ? undefined : number(p.z), p.rotation === undefined ? 0 : number(p.rotation)); break;
-    case 'buyBedKit': result = Game.readyPlotKit(state); if (!['bought', 'have'].includes(result as string)) return invalid(); break;
+    case 'buyBedKit': result = Game.readyPlotKit(state); if (!['bought', 'have'].includes(result as string)) return refuse(); break;
     case 'storeBed': result = Game.storeBed(state, index()); break;
     case 'upgradeBed': result = Game.upgradeBed(state, index(), now); break;
     case 'moveBed': result = Game.moveBed(state, index(), number(p.x), number(p.z), p.rotation === undefined ? undefined : number(p.rotation)); break;
@@ -90,27 +99,32 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     }
     case 'expandPen': result = Game.expandPen(state); break;
     case 'buildSpeciesPen': result = Game.buildSpeciesPen(state, kind() as Game.AnimalKind, now); break;
-    case 'buyHelper': result = Helper.buyHelper(state); if (result !== 'bought') return invalid(); break;
+    case 'buyHelper': result = Helper.buyHelper(state); if (result !== 'bought') return refuse(); break;
     case 'setHelperPaused': result = Helper.setHelperPaused(state, p.paused === true); break;
     case 'setHelperSeed': result = Helper.setHelperSeed(state, id()); break;
     case 'helperHarvest': result = Helper.helperHarvest(state, index(), now); break;
     case 'helperPlant': result = Helper.helperPlant(state, index(), now); break;
     case 'helperCatchUp': result = Helper.catchUp(state,now); break;
-    case 'buyFarmHelper': result = FarmHelper.buyFarmHelper(state); if (result !== 'bought') return invalid(); break;
+    case 'buyFarmHelper': result = FarmHelper.buyFarmHelper(state); if (result !== 'bought') return refuse(); break;
     case 'setFarmHelperPaused': if (typeof p.paused !== 'boolean') return invalid(); result = FarmHelper.setFarmHelperPaused(state, p.paused); break;
     case 'setFarmHelperAutoFeed': if (typeof p.autoFeed !== 'boolean') return invalid(); result = FarmHelper.setFarmHelperAutoFeed(state, p.autoFeed); break;
-    case 'farmHelperCollect': result = FarmHelper.helperCollect(state, integer(p.uid), now); if (!(result as unknown[]).length) return invalid(); break;
+    case 'farmHelperCollect': result = FarmHelper.helperCollect(state, integer(p.uid), now); if (!(result as unknown[]).length) return refuse(); break;
     case 'farmHelperFeed': result = FarmHelper.helperFeed(state, integer(p.uid), now); break;
-    case 'farmHelperCatchUp': if (!FarmHelper.canWork(state)) return invalid(); result = { ...FarmHelper.catchUp(state, now), restocked: Restock.restock(state, now, Restock.RESTOCK_CATCH_UP_CAP) }; break;
-    case 'upgradeFarmRestock': result = Restock.upgradeRestock(state, now); if (result !== 'upgraded') return invalid(); break;
+    case 'farmHelperCatchUp': if (!FarmHelper.canWork(state)) return refuse(); result = { ...FarmHelper.catchUp(state, now), restocked: Restock.restock(state, now, Restock.RESTOCK_CATCH_UP_CAP) }; break;
+    case 'upgradeFarmRestock': result = Restock.upgradeRestock(state, now); if (result !== 'upgraded') return refuse(); break;
     case 'setFarmRestock': result = Restock.setRestock(state, p.on, p.keep); break;
-    case 'farmHelperRestock': result = Restock.restock(state, now); if (!(result as unknown[]).length) return invalid(); break;
-    case 'homeCleanse': if (!homeCleanseAllowed(state)) return invalid(); result = cleanseDebuffs(state, now); break;
+    case 'farmHelperRestock': result = Restock.restock(state, now); if (!(result as unknown[]).length) return refuse(); break;
+    case 'homeCleanse': if (!homeCleanseAllowed(state)) return refuse(); result = cleanseDebuffs(state, now); break;
     case 'rescueFriend': result = Friends.rescue(state, string(p.id, 40) as Friends.FriendId, now); break;
     case 'friendsArrive': result = Friends.arriveHome(state, { x: number(p.x), z: number(p.z) }); break;
     case 'setFriendAutoFeed': if (typeof p.autoFeed !== 'boolean') return invalid(); result = Friends.setFriendAutoFeed(state, string(p.id, 40) as Friends.FriendId, p.autoFeed); break;
     case 'welcomeStart': if (typeof p.take !== 'boolean') return invalid(); result = Friends.welcomeStart(state, p.take, now); break;
-    case 'friendOutfit': { const pick = typeof p.pick === 'number' ? p.pick : -1; result = Friends.changeOutfit(state, string(p.id, 40) as Friends.FriendId, pick); break; }
+    // Nothing new to wear is not a refusal: she simply keeps her clothes ({ changed: false }).
+    case 'friendOutfit': {
+      const friend = string(p.id, 40) as Friends.FriendId, pick = number(p.pick); if (pick < 0 || pick >= 1) return invalid();
+      if (!Friends.friendOf(state, friend)) return refuse();
+      result = { changed: Friends.changeOutfit(state, friend, pick) }; break;
+    }
     case 'callHelper': result = Helper.callHelper(state, now); break;
     case 'callFriend': result = Friends.callFriend(state, string(p.id, 40) as Friends.FriendId, now); break;
     case 'setFriendPaused': if (typeof p.paused !== 'boolean') return invalid(); result = Friends.setFriendPaused(state, string(p.id, 40) as Friends.FriendId, p.paused); break;
@@ -149,7 +163,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'die': Game.die(state, number(p.x), number(p.z)); result = true; break;
     // Cottage activities: rests and buffs with cooldowns (house-activities.ts).
     case 'houseUse': result = useActivity(state, id(), now); break;
-    case 'rest': if (state.planet !== 'home') return invalid(); state.hp = Game.maxHp(state); result = true; break;
+    case 'rest': if (state.planet !== 'home') return refuse(); state.hp = Game.maxHp(state); result = true; break;
     case 'reset': { const fresh=Game.newGame(state.name,state.color); fresh.settings={...state.settings}; delete fresh.settings.tester; /* a new adventure starts outside tester mode */ for(const key of Object.keys(state))delete (state as unknown as Record<string,unknown>)[key]; Object.assign(state,fresh); result=true; break; }
     case 'settings': {
       const settings = p.settings;
@@ -157,7 +171,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
       const level = settings && typeof settings === 'object' ? (settings as Record<string, unknown>).difficulty : undefined;
       // Raising is free; lowering works once a day (difficulty.ts), so the Normal rules cannot be dodged per action.
       if (Game.isDifficulty(level) && level !== Game.difficultyOf(state)) {
-        if (Game.isLowering(Game.difficultyOf(state), level)) { if (Game.lowerReadyAt(state) > now) return invalid(); state.settings.difficultyLoweredAt = now; }
+        if (Game.isLowering(Game.difficultyOf(state), level)) { if (Game.lowerReadyAt(state) > now) return refuse(); state.settings.difficultyLoweredAt = now; }
         state.settings.difficulty = level;
         refreshProgress(state, now); // a cook task or story step the new kitchen lock makes impossible swaps at once
       }
