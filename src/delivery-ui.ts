@@ -11,6 +11,8 @@ interface Host {
   name(id: string): string;
   /** After "Take all" moved `count` items from the chest to the bag. */
   took?(count: number): void;
+  /** True while a panel is open: the card sits above the dialog layer, so it waits (or steps aside) rather than cover the panel and swap it for the chest. */
+  covered?(): boolean;
 }
 
 /**
@@ -43,7 +45,10 @@ export function initStoredNote(host: Host, parent: HTMLElement) {
   }
   return {
     /** Per frame: inside the circle with something noted for 1.5 s → show it. */
-    frame(dt: number) { homeFor = host.home() ? homeFor + dt : 0; if (homeFor > 1.5 && !busy && host.state().awayStore) void show(); },
+    frame(dt: number) {
+      if (host.covered?.()) { homeFor = 0; if (!el.hidden && !el.classList.contains('leaving')) hide(); return; }
+      homeFor = host.home() ? homeFor + dt : 0; if (homeFor > 1.5 && !busy && host.state().awayStore) void show();
+    },
     show,
   };
 }

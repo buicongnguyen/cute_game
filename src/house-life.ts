@@ -46,11 +46,17 @@ export function buffText(buff: BuffDef | undefined) {
 }
 
 /** The radio: plays the game's own theme (public/assets/audio/zoo-garden-theme.mp3, a loop). If the file cannot play, a tiny WebAudio music box (a looping pentatonic tune) stands in. */
-class MusicBox {
+export class MusicBox {
   private ctx: AudioContext | null = null; private gain: GainNode | null = null; private timer = 0; private step = 0;
   playing = false;
   private static NOTES = [523, 659, 784, 659, 587, 523, 440, 523, 659, 784, 880, 784, 659, 587, 523, 0];
   private theme: HTMLAudioElement | null = null; private fallback = false;
+  constructor() {
+    // The <audio> loop plays on in a hidden tab, where the frame loop (which stops it on leaving) no longer runs: hold it while hidden, go on when back.
+    if (typeof document === 'undefined') return;
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.theme?.pause(); else if (this.playing && this.theme) void this.theme.play().catch(() => {}); });
+    globalThis.addEventListener?.('pagehide', () => this.stop());
+  }
   start() {
     if (!this.fallback && typeof Audio !== 'undefined') {
       try {

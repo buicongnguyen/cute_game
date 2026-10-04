@@ -144,7 +144,8 @@ export const SCHEDULE_SECONDS = 40;
 /** What a friend does at a hangout: arm/leg poses on the hero rig (house-view.ts), no extra meshes. */
 export type HangoutPose = 'sit' | 'stand' | 'wave' | 'stir' | 'sip' | 'paint' | 'read' | 'stretch' | 'brush';
 export interface Hangout extends Point { facing: number; pose: HangoutPose; y?: number; room: RoomId; say: string[] }
-export const HANGOUTS: Hangout[] = [
+// Drawn on the plan like the furniture, then spread by the same SPACE rule (house.ts), so a sofa sitter stays on the sofa.
+const HANGOUTS_PLAN: Hangout[] = [
   { x: -2.4, z: -1.32, facing: 0, pose: 'sit', y: .5, room: 'living', say: ['This sofa is the best.', 'Welcome home!', 'Sit with us a while.'] },
   { x: -1.4, z: -1.32, facing: 0, pose: 'sit', y: .5, room: 'living', say: ['I could nap right here.', 'Tell me about your trip!'] },
   { x: -3.55, z: 2.85, facing: .5, pose: 'stand', room: 'living', say: ['The fire is so cosy.', 'Warm your paws!'] },
@@ -158,6 +159,7 @@ export const HANGOUTS: Hangout[] = [
   { x: -7.4, z: .3, facing: -1.69, pose: 'sip', room: 'kitchen', say: ['Mm, tea.'] },
   { x: 8.0, z: -4.4, facing: Math.PI / 2, pose: 'read', room: 'study', say: ['One more page.'] },
 ];
+export const HANGOUTS: Hangout[] = HANGOUTS_PLAN.map(spreadActivity);
 /** Where friends without a role errand drift, in turn: around the house rather than only the living room. */
 const ROTATION = [0, 7, 1, 8, 2, 9, 3, 10];
 /** The hangout index for friend number `index` (role first) at world time `time`. */
@@ -183,10 +185,12 @@ const FRIEND_TINT: Record<string, string> = { sprout: '#c8f5a8', clover: '#ffe2a
 export function decorPlacements(s: Game.SaveState): DecorPlacement[] {
   const out: DecorPlacement[] = [];
   // Cups stand on the shelf along the living room's low back wall; photos hang above your bed; paintings lean on the craft room's low wall.
-  trophies(s).forEach((_, i) => out.push({ kit: 'trophy', x: 1.65 + i * .24, z: -1.86, y: .69 }));
-  photos(s).forEach((id, i) => out.push({ kit: 'photo', x: -7.55 + i * .55, z: -6.88, y: i % 2 ? .12 : 0, tint: FRIEND_TINT[id] ?? '#fff1d2' }));
+  // Plan spots spread like the furniture (house.ts SPACE); the gaps between cups and photos keep their size.
+  const cup = spreadActivity({ x: 1.65, z: -1.86 }), photo = spreadActivity({ x: -7.55, z: -6.88 });
+  trophies(s).forEach((_, i) => out.push({ kit: 'trophy', x: cup.x + i * .24, z: cup.z, y: .69 }));
+  photos(s).forEach((id, i) => out.push({ kit: 'photo', x: photo.x + i * .55, z: photo.z, y: i % 2 ? .12 : 0, tint: FRIEND_TINT[id] ?? '#fff1d2' }));
   const n = Math.min(MAX_PAINTINGS, houseOf(s).paintings ?? 0), first = (houseOf(s).paintings ?? 0) - n;
-  for (let i = 0; i < n; i++) out.push({ kit: 'painting', x: [6.35, 8.0, 8.7, 9.4][i], z: -1.83, y: -.77, rot: (i % 2 ? -.06 : .06), tint: PAINT[(first + i) % PAINT.length] });
+  for (let i = 0; i < n; i++) { const at = spreadActivity({ x: [6.35, 8.0, 8.7, 9.4][i], z: -1.83 }); out.push({ kit: 'painting', x: at.x, z: at.z, y: -.77, rot: (i % 2 ? -.06 : .06), tint: PAINT[(first + i) % PAINT.length] }); }
   return out;
 }
 /** Changes only when what hangs on the walls changes (the view rebuilds its batch then, not every frame). */

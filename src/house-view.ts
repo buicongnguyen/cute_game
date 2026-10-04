@@ -8,7 +8,7 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { KitLibrary, heroKit, wearKit, weaponKit, petKit, modelUrl } from './assets.ts';
 import { toonMaterial } from './toon.ts';
-import { FURNITURE, FRIEND_SPOTS, HOUSE, ROOMS, WALL, WALLS, roomAt, walkable, type Placement, type Point } from './house.ts';
+import { FURNITURE, FRIEND_SPOTS, HOUSE, ROOMS, WALL, WALLS, roomAt, walkable, spreadActivity, type Placement, type Point } from './house.ts';
 import { findRoute } from './navigation.ts';
 import { friendModel, friendSignature } from './friend-view.ts';
 import { dropTree } from './dispose-tree.ts';
@@ -81,7 +81,11 @@ function fallbackPiece(p: Placement): { plain: T.BufferGeometry[]; glow: T.Buffe
 const kitStamp = () => [heroKit, wearKit, weaponKit, petKit].map(k => k.ready ? 1 : 0).join('');
 export interface FriendView { id: FriendId; group: T.Group; signature: string; spot: (typeof FRIEND_SPOTS)[number] | Hangout; seed: number; role: string; stage: number; gait?: Gait }
 /** Steam puffs over the kettle and the stove's pot, bubbles over the bath: [x, y, z, rise, spread]. */
-const PUFF_SOURCES: Array<[number, number, number, number, number]> = [[-9.5, 1.15, -.13, .7, .06], [-9.38, 1.12, 2.27, .8, .08], [-.75, .62, -6.4, .45, .55]];
+/** Drawn on the plan, spread like the furniture (house.ts SPACE) so the steam stays over the kettle, the pot and the tub. */
+export const PUFF_SOURCES: Array<[number, number, number, number, number]> = ([[-9.5, 1.15, -.13, .7, .06], [-9.38, 1.12, 2.27, .8, .08], [-.75, .62, -6.4, .45, .55]] as Array<[number, number, number, number, number]>)
+  .map(([x, y, z, rise, spread]) => { const at = spreadActivity({ x, z }); return [at.x, y, at.z, rise, spread]; });
+/** The fire in the fireplace, on the plan then spread (house.ts SPACE). */
+export const FLAME_AT = { ...spreadActivity({ x: -4.42, z: 1.7 }), y: .12 };
 const PUFFS_EACH = 5;
 
 export class HouseView {
@@ -126,7 +130,7 @@ export class HouseView {
     this.door.name = 'house-door'; this.root.add(this.door);
     const fire = new T.ConeGeometry(.16, .42, 6); fire.translate(0, .21, 0); const core = new T.ConeGeometry(.09, .28, 5); core.translate(0, .14, .02);
     const flames = mergeGeometries([baked(fire, '#ff8a2a'), baked(core, '#ffe36b')], false)!; fire.dispose(); core.dispose();
-    this.flame = new T.Mesh(flames, new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false })); this.flame.name = 'house-flame'; this.flame.position.set(-4.42, .12, 1.7);
+    this.flame = new T.Mesh(flames, new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false })); this.flame.name = 'house-flame'; this.flame.position.set(FLAME_AT.x, FLAME_AT.y, FLAME_AT.z);
     const puff = new T.IcosahedronGeometry(.07, 0);
     this.puffs = new T.InstancedMesh(puff, new T.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), PUFF_SOURCES.length * PUFFS_EACH); this.puffs.name = 'house-puffs'; this.puffs.frustumCulled = false;
     const ring = new T.RingGeometry(.5, .62, 28); ring.rotateX(-Math.PI / 2);

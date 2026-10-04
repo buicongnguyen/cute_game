@@ -120,3 +120,20 @@ test('the house update and the prompt search allocate nothing per frame, and the
   assert.equal(own, 3); assert.equal(view.staticDraws, 2);
   assert.equal(nearestActivity(-1.9, -.3)?.id, 'sofa'); assert.equal(nearestActivity(0, 4), null);
 });
+
+// Review: the roomier cottage (house.ts SPACE) spread the furniture but left these plan points behind, so sitters
+// hovered in front of the sofa, the fire burned a metre from the fireplace and the steam drifted off the kettle.
+test('hangouts, wall decor, the fire and the steam sit on their spread furniture', async () => {
+  const { FURNITURE } = await import('../src/house.ts');
+  const { FLAME_AT, PUFF_SOURCES } = await import('../src/house-view.ts');
+  const piece = (kit: string, near?: { x: number; z: number }) => FURNITURE.filter(p => p.kit === kit).sort((a, b) => near ? Math.hypot(a.x - near.x, a.z - near.z) - Math.hypot(b.x - near.x, b.z - near.z) : 0)[0];
+  const d = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
+  assert.ok(d(FLAME_AT, piece('fireplace')) < .3, `flame ${d(FLAME_AT, piece('fireplace')).toFixed(2)} m from the fireplace`);
+  for (const [kit, [x, , z]] of [['kettle', PUFF_SOURCES[0]], ['stove', PUFF_SOURCES[1]], ['bathtub', PUFF_SOURCES[2]]] as const) assert.ok(d({ x, z }, piece(kit)) < .35, `${kit} steam ${d({ x, z }, piece(kit)).toFixed(2)} m off`);
+  const sofa = piece('sofa'); for (const h of HANGOUTS.slice(0, 2)) assert.ok(Math.abs(h.z - sofa.z) < .2 && Math.abs(h.x - sofa.x) < 1, `sitter at ${h.x.toFixed(2)},${h.z.toFixed(2)} vs sofa ${sofa.x.toFixed(2)},${sofa.z.toFixed(2)}`);
+  assert.ok(d(HANGOUTS[4], piece('stove')) < 1.7, `the cook stirs ${d(HANGOUTS[4], piece('stove')).toFixed(2)} m from the stove`);
+  const s = home(); s.bosses = ['home:treant', 'home:bear']; (s as SaveState & { house?: { paintings?: number } }).house = { paintings: 1 };
+  s.friends = friends(2);
+  const decor = decorPlacements(s), shelf = piece('trophy_shelf'), cups = decor.filter(p => p.kit === 'trophy');
+  assert.ok(cups.length && cups.every(c => Math.abs(c.z - shelf.z) < .15), `cups on the shelf (z ${cups.map(c => c.z.toFixed(2))} vs ${shelf.z.toFixed(2)})`);
+});

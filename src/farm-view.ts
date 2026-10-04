@@ -261,7 +261,7 @@ export class FarmPenView {
   private kitUsed = false;
   private built = true;
   private speciesPens: FarmState['speciesPens'] = {};
-  private pensSignature = '';
+  private pensSeen: Array<number | undefined> = [];
   /** Seconds since the pen was built here (drives the pop-in of the yard); Infinity when it was already standing. */
   private buildT = Infinity;
   private area: RoamArea = { ...yardArea(), leash: this.leash() };
@@ -308,9 +308,11 @@ export class FarmPenView {
   }
   /** Rebuild shelter props only when the saved placement changes, not every animation frame. */
   setSpeciesPens(pens: FarmState['speciesPens']) {
-    const next = JSON.stringify(ANIMAL_KINDS.map(kind => [kind,pens?.[kind]?.x,pens?.[kind]?.z]));
-    if (next === this.pensSignature) return;
-    this.pensSignature = next; this.speciesPens = structuredClone(pens ?? {}); if (this.baseArea) this.setArea(this.baseArea); else this.area.leash = this.leash();
+    // Called every step: compare the numbers in place (a JSON string per step was garbage for nothing).
+    let same = this.pensSeen.length === ANIMAL_KINDS.length * 2;
+    for (let i = 0; same && i < ANIMAL_KINDS.length; i++) same = this.pensSeen[i * 2] === pens?.[ANIMAL_KINDS[i]]?.x && this.pensSeen[i * 2 + 1] === pens?.[ANIMAL_KINDS[i]]?.z;
+    if (same) return;
+    this.pensSeen = ANIMAL_KINDS.flatMap(kind => [pens?.[kind]?.x, pens?.[kind]?.z]); this.speciesPens = structuredClone(pens ?? {}); if (this.baseArea) this.setArea(this.baseArea); else this.area.leash = this.leash();
     this.disposeStatics(); this.buildStatics();
   }
   refresh() {

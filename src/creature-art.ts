@@ -106,7 +106,8 @@ export function creatureArt(type: string, kit: KitLibrary = creatureKit): T.Grou
 }
 
 /** Cached animation lookups and measurements that belong to the model being replaced. */
-const MODEL_CACHE = ['legs', 'wings', 'pickHeight', 'pickHeightAsset', 'castsShadow', 'outlined'];
+// 'footprint' is the target ring's measured size (world.ts updateTarget): a new body must be measured again.
+export const MODEL_CACHE = ['legs', 'wings', 'pickHeight', 'pickHeightAsset', 'castsShadow', 'outlined', 'footprint'];
 /**
  * Moves a prepared creature model's parts into an existing creature's root, so the entity, its position, facing,
  * scale and AI state stay as they are while its look changes (the kit arriving after the creature spawned).

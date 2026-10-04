@@ -116,6 +116,8 @@ export const HERO_MODEL_HEIGHT = 2.3;
 export {DEFAULT_PIVOTS};
 // Creature AI level of detail, as in the reference: calm creatures farther than this from every explorer do not think.
 const AI_REST_RANGE=48,EXPLORER_RADIUS=.45;
+/** The AI numbers of a creature without its own definition, made once rather than per creature per step. */
+const DEFAULT_AI={speed:2.4,reach:1.8,sight:6,behavior:'melee',cooldown:1.3,windup:.35,flying:false,titan:false} as const,DEFAULT_BOSS_AI={...DEFAULT_AI,sight:11} as const;
 /** A* steps for a creature walking home (about a 35 m square of 1 m cells): enough around fences and ponds, never a long stall. */
 const ROUTE_BUDGET=1200,heightBox=new T.Box3(),occluderPoints=[new T.Vector3(),new T.Vector3(),new T.Vector3()],explorerPoints=occluderPoints.slice(0,2);
 /** Glowing eyes for creatures on dark planets (C8): one small unlit ball per eye, all in one batch. */
@@ -755,7 +757,8 @@ export class World {
   refreshPlayer() {
     const gear=this.tryOnGear??this.state.gear;
     this.disposeTree(this.player);this.player.removeFromParent();this.player=this.avatar(this.state.color,{...gear,pet:undefined},this.tryOnLook??lookOf(this.state));this.player.rotation.order='YXZ';
-    this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;this.playerMaterials.push(o.material);}});this.root.add(this.player);
+    // These copies are the explorer's own (flash and blink edit them), so the stealth fade below reuses them instead of copying again.
+    this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;o.userData.statusMaterials=true;this.playerMaterials.push(o.material);}});this.root.add(this.player);
     const pet=this.companion;this.disposeTree(pet);pet.removeFromParent();this.companion=gear.pet?this.petFor(gear.pet):new T.Group();this.companion.position.copy(pet.position);this.companion.rotation.copy(pet.rotation);addOutlines(this.companion,{merge:true});this.root.add(this.companion);
     this.interior?.adopt();
   }
@@ -967,8 +970,11 @@ export class World {
   updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear,pose.look??remote.pose.look);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;remote.mesh.position.set(current.x,(current.y??0)-(indoor?INDOOR_Y:0),current.z);remote.mesh.rotation.y=current.facing??0;this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
   visualSnapshot():AvatarVisual{return {size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
+    // Nothing to change until stealth first fades the explorer: a new avatar starts fully opaque, so it is never copied for opacity 1
+    // (the copy used to replace the flash materials and the ink outlines' push-out shader, which Material.clone does not carry).
     const opacity=visual?.stealth?.25:1;
-    if(mesh.userData.statusOpacity!==opacity){mesh.userData.statusOpacity=opacity;mesh.traverse(o=>{if(!(o instanceof T.Mesh)||o.name==='status-shield')return;
+    if((mesh.userData.statusOpacity??1)!==opacity){mesh.userData.statusOpacity=opacity;mesh.traverse(o=>{if(!(o instanceof T.Mesh)||o.name==='status-shield')return;
+      if(o.userData.outline){o.visible=opacity===1;return;} // the shared ink hull is hidden while faded, never copied
       if(!o.userData.statusMaterials){o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();o.userData.statusMaterials=true;}
       for(const m of Array.isArray(o.material)?o.material:[o.material]){m.userData.normalOpacity??=m.opacity;m.opacity=m.userData.normalOpacity*opacity;m.transparent=opacity<1||m.userData.normalOpacity<1;m.needsUpdate=true;}
     });}
@@ -1255,13 +1261,14 @@ export class World {
       const nx=d>.0001?dx/d:Math.sin(this.facing),nz=d>.0001?dz/d:Math.cos(this.facing);this.moveCreature(e,nx*(minimum-d+.002),nz*(minimum-d+.002));
     }
   }
-  private enemyTarget(e:Enemy){
-    const candidates:Array<Point&{id?:string;enemy?:Enemy}>=[];
-    const safe=this.planet==='home'?18:11;
-    if(!this.playerStealth&&Math.hypot(this.position.x,this.position.z)>=safe)candidates.push({x:this.position.x,z:this.position.z});
-    for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&!remote.pose.visual?.stealth&&(remote.pose.hp??1)>0&&Math.hypot(remote.pose.x,remote.pose.z)>=safe)candidates.push({x:remote.pose.x,z:remote.pose.z,id});
-    if((e.statuses?.charm??0)>0)return this.enemies.filter(other=>other!==e&&other.hp>0).map(enemy=>({x:enemy.x,z:enemy.z,enemy})).sort((a,b)=>Math.hypot(a.x-e.x,a.z-e.z)-Math.hypot(b.x-e.x,b.z-e.z))[0];
-    return candidates.sort((a,b)=>Math.hypot(a.x-e.x,a.z-e.z)-Math.hypot(b.x-e.x,b.z-e.z))[0];
+  /** The nearest explorer outside the safe village (or, charmed, the nearest other creature). Runs for every creature every step, so it
+   *  keeps the nearest as it goes instead of building and sorting a list: one small object per call, for the winner only. */
+  private enemyTarget(e:Enemy):(Point&{id?:string;enemy?:Enemy})|undefined{
+    if((e.statuses?.charm??0)>0){let best:Enemy|undefined,bestD=Infinity;for(const other of this.enemies){if(other===e||other.hp<=0)continue;const d=Math.hypot(other.x-e.x,other.z-e.z);if(d<bestD){bestD=d;best=other;}}return best?{x:best.x,z:best.z,enemy:best}:undefined;}
+    const safe=this.planet==='home'?18:11;let bx=0,bz=0,bid:string|undefined,bestD=Infinity;
+    if(!this.playerStealth&&Math.hypot(this.position.x,this.position.z)>=safe){bx=this.position.x;bz=this.position.z;bestD=Math.hypot(bx-e.x,bz-e.z);}
+    if(this.remotePlayers)for(const [id,remote] of this.remotePlayers)if(remote.mesh.visible&&!remote.pose.visual?.stealth&&(remote.pose.hp??1)>0&&Math.hypot(remote.pose.x,remote.pose.z)>=safe){const d=Math.hypot(remote.pose.x-e.x,remote.pose.z-e.z);if(d<bestD){bestD=d;bx=remote.pose.x;bz=remote.pose.z;bid=id;}}
+    return bestD<Infinity?(bid?{x:bx,z:bz,id:bid}:{x:bx,z:bz}):undefined;
   }
   private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string){if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id)this.onRemoteDamage?.(target.id,amount,source,enemyId);else if(!this.playerFlying||source!=='melee')this.onDamage(amount,source,enemyId);}
   private shootEnemy(e:Enemy,target:Point&{id?:string;enemy?:Enemy}){
@@ -1392,9 +1399,9 @@ export class World {
   }
   private updateEnemyAi(e:Enemy,dt:number){
     e.cooldown=Math.max(0,e.cooldown-dt);this.updateTitanAttacks(e,dt);if(e.phase==='titan-leap'&&e.titanAttacks?.some(a=>a.skill==='leap'))return;e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
-    for(const key of Object.keys(e.statuses??{}))e.statuses![key]=Math.max(0,e.statuses![key]-dt);
+    if(e.statuses)for(const key in e.statuses)e.statuses[key]=Math.max(0,e.statuses[key]-dt); // no key array per creature per step
     if(e.hp<=0){e.respawn=Math.max(0,e.respawn-dt);if(this.authoritativeAction)return;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.enraged=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];}return;}
-    const def=e.definition??{speed:2.4,reach:1.8,sight:e.boss?11:6,behavior:'melee',cooldown:1.3,windup:.35,flying:false,titan:false};
+    const def=e.definition??(e.boss?DEFAULT_BOSS_AI:DEFAULT_AI);
     const target=this.enemyTarget(e),distance=target?Math.hypot(target.x-e.x,target.z-e.z):Infinity;
     if(!this.authoritativeAction&&e.boss&&!e.scaled&&distance<def.sight&&e.hp===e.maxHp){
       const nearby=[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&(r.pose.hp??1)>0&&Math.hypot(r.pose.x-e.x,r.pose.z-e.z)<32),players=nearby.length+(Math.hypot(this.position.x-e.x,this.position.z-e.z)<32?1:0),level=Math.max(this.state.level,...nearby.map(r=>r.pose.level??1)),difference=Math.max(0,level-(e.level??1));
