@@ -188,3 +188,7 @@ def extend(g):
     # The guard dog is its own original puppy (build_farm_dog.py), cousin of the wilds' wolf.
     import build_farm_dog
     build_farm_dog.install(g)
+    # The goat and the goose (build_farm_goat.py, build_farm_goose.py): each registers its adult, young animal and shelter.
+    import build_farm_goat, build_farm_goose
+    build_farm_goat.install(g)
+    build_farm_goose.install(g)
