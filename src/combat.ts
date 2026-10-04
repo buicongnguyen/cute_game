@@ -166,8 +166,10 @@ export class CombatSimulation {
   }
   disguise(id:string,index:number){
     if(this.action)return false;
-    const map:Record<string,string[]>={dz_superhero:['flight','dive','sweep','boulder'],dz_mage:['fireball','teleport','sheep','blackhole'],dz_knight:['shield','charge','taunt','holy'],dz_mecha:['tank','turret','missiles','energyshield'],dz_ninja:['clones','stealth','backstab','smoke'],dz_dino:['devour','tail','roar','giant'],dz_pirate:['cannon','hook','parrot','cannons'],dz_vampire:['drain','bats','batcircle','bloodnova'],dz_snowman:['snowball','decoy','icefloor','iceage'],dz_fairy:['heal','hover','charm','roots']};
+    const map:Record<string,string[]>={dz_superhero:['flight','dive','sweep','boulder'],dz_army:['volley','turret','smoke','missiles'],dz_navy:['anchor','hook','cannons','tsunami'],dz_aodai:['lotus','heal','charm','starfall'],dz_aodai_man:['dragon','roar','charge','thunder'],dz_usa:['eagle','shield','cannon','nova'],dz_vietnam:['goldstar','roots','holy','inferno'],dz_mage:['fireball','teleport','sheep','blackhole'],dz_knight:['shield','charge','taunt','holy'],dz_mecha:['tank','turret','missiles','energyshield'],dz_ninja:['clones','stealth','backstab','smoke'],dz_dino:['devour','tail','roar','giant'],dz_pirate:['cannon','hook','parrot','cannons'],dz_vampire:['drain','bats','batcircle','bloodnova'],dz_snowman:['snowball','decoy','icefloor','iceage'],dz_fairy:['heal','hover','charm','roots']};
     const effect=map[id]?.[index];if(!effect)return false;
+    // The uniform kits reuse the weapon specials (volley, anchor, lotus, dragon, eagle, goldstar, tsunami, starfall, thunder, nova, inferno).
+    if(['volley','anchor','lotus','dragon','eagle','goldstar','tsunami','starfall','thunder','nova','inferno'].includes(effect))return this.special(effect);
     const p={...this.host.position()},angle=this.aim(),d=direction(angle);
     if(effect==='flight'){this.statuses.flight=this.statuses.flight>0?0:12;this.emit('ring',p,2,'#ffffff');}
     else if(effect==='hover'){this.statuses.flight=8;this.emit('ring',p,2,'#ffe1ff');}

@@ -26,7 +26,7 @@ export const VI_SKILLS: Record<string, string> = {
   'Swing a heavy anchor all around you: ×{dmg} damage within 4.4 m, knocked back.': 'Vung mỏ neo nặng quanh người: ×{dmg} sát thương trong 4,4 m, đẩy lùi kẻ địch.',
   'Twelve lotus petals burst out all around you to 8 m, ×{dmg} damage each, and you heal 8% health.': 'Mười hai cánh sen tỏa ra quanh người đến 8 m, mỗi cánh ×{dmg} sát thương, và bạn hồi 8% máu.',
   'Seven waves in a wide fan fly 12 m, ×{dmg} damage each.': 'Bảy làn sóng xòe rộng bay 12 m, mỗi làn ×{dmg} sát thương.',
-  'Dive forward 7 m, then land in a burst: ×{dmg} damage within 3 m.': 'Lao tới trước 7 m rồi đáp xuống nổ tung: ×{dmg} sát thương trong 3 m.',
+  'Dive forward 9 m, then land in a burst: ×{dmg} damage within 3 m.': 'Lao tới trước 9 m rồi đáp xuống nổ tung: ×{dmg} sát thương trong 3 m.',
   'Five piercing gold stars fly 11 m, ×{dmg} damage each, with a 2.6 m burst around you.': 'Năm ngôi sao vàng xuyên thấu bay 11 m, mỗi sao ×{dmg} sát thương, kèm vụ nổ 2,6 m quanh người.',
   'A 14 m rainbow beam straight ahead: ×{dmg} damage to everything in the line.': 'Tia cầu vồng 14 m thẳng phía trước: ×{dmg} sát thương mọi thứ trên đường.',
   // Disguise kits

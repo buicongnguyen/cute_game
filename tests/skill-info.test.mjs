@@ -83,3 +83,12 @@ test('every skill has a description with numbers, in English and Vietnamese', ()
     for (const text of texts) assert.doesNotMatch(text, /\b(damage|enemies|enemy|within|seconds?)\b/, text);
   } finally { setLanguage('en'); }
 });
+
+test('the six uniform disguises run all four skills, each with a description', () => {
+  for (const id of ['dz_army', 'dz_navy', 'dz_aodai', 'dz_aodai_man', 'dz_usa', 'dz_vietnam']) {
+    for (let i = 0; i < 4; i++) {
+      const r = rig(); assert.ok(r.sim.disguise(id, i), `${id} skill ${i}`); run(r.sim, 1.5);
+      assert.ok(skillDescription(i, { disguise: id }).length > 10, `${id} ${i} has text`);
+    }
+  }
+});
