@@ -5,10 +5,10 @@ const KEYBOARD_BINDINGS = {
   classic: { skills: ['q', 'w', 'e', 'r'], journal: 'j', movement: 'Arrows to move' },
   wasd: { skills: ['j', 'k', 'l', ';'], journal: 'p', movement: 'WASD to move' },
 } as const;
-export function keyboardBindings(layout?: string) { return layout === 'wasd' ? KEYBOARD_BINDINGS.wasd : KEYBOARD_BINDINGS.classic; }
+export function keyboardBindings(layout?: string) { return layout === 'classic' ? KEYBOARD_BINDINGS.classic : KEYBOARD_BINDINGS.wasd; }
 export function movementKey(pressed: string, layout?: string): MovementKey | null {
   if (movementKeys.has(pressed)) return pressed as MovementKey;
-  return layout === 'wasd' ? wasdMovement.get(pressed) ?? null : null;
+  return layout === 'classic' ? null : wasdMovement.get(pressed) ?? null;
 }
 /** Physical keys keep shortcuts stable with Vietnamese layouts. Composition never triggers gameplay. */
 export function gameplayKey(event:{code?:string;key:string;isComposing?:boolean;keyCode?:number;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean}){

@@ -153,7 +153,7 @@ let settledAt=0;const settle=()=>{settledAt=performance.now()+4000;};
 const frameListeners=new Set<(dt:number)=>void>(),actionListeners=new Set<(action:GameAction)=>void>();
 function languageSelector(place:string){return `<div class="language-picker"><label for="language-${place}">Language</label><select id="language-${place}" data-language aria-label="Language"><option value="en" data-i18n-skip ${getLanguage()==='en'?'selected':''}>English</option><option value="vi" data-i18n-skip ${getLanguage()==='vi'?'selected':''}>Tiếng Việt</option></select></div>`;}
 function keyboardSettings(){
-  const selected=state.settings.keyboardLayout==='wasd'?'wasd':'classic';
+  const selected=state.settings.keyboardLayout==='classic'?'classic':'wasd';
   const description=selected==='wasd'?'WASD: move · J/K/L/;: skills · P: journal':'Arrows: move · Q/W/E/R: skills · J: journal';
   return `<div class="settings-row keyboard-settings"><div><strong>PC keyboard layout</strong><small>${description}</small></div><div class="segmented" role="radiogroup" aria-label="PC keyboard layout">${(['classic','wasd'] as const).map(layout=>`<button role="radio" aria-checked="${selected===layout}" class="${selected===layout?'on':''}" data-action="keyboard-layout" data-kind="${layout}">${layout==='wasd'?'WASD + JKL;':'Arrows + QWER'}</button>`).join('')}</div></div>`;
 }
