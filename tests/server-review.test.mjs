@@ -81,6 +81,8 @@ test('sign-in rate limits key on the client behind a trusted proxy, and never tr
   assert.equal(clientAddress(request, false), '10.0.0.7', 'no proxy configured: the header could be made up');
   assert.equal(clientAddress(request, true), '203.0.113.9', 'the entry the trusted proxy appended');
   assert.equal(clientAddress({ socket: { remoteAddress: '10.0.0.7' }, headers: {} }, true), '10.0.0.7');
+  assert.equal(clientAddress({ ...request, headers: { ...request.headers, 'cf-connecting-ip': '198.51.100.4' } }, true), '203.0.113.9', 'CF-Connecting-IP could be made up where no Cloudflare sits in front (Render, ngrok)');
+  assert.equal(clientAddress({ socket: {}, headers: { 'x-forwarded-for': 'x'.repeat(500) } }, true).length, 64, 'a long header is not a long key');
 });
 
 async function storeFixture(t, kind) {
