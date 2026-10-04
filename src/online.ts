@@ -23,7 +23,7 @@ interface NetworkWorld {
   grantEnvironmentReward(eventId:string,rewards:{id:string;count:number}[]):unknown;
 }
 interface Session { authorityVersion?:number;account:Explorer|null;profile?:SaveState;revision?:number;friends?:Explorer[];requests?:Explorer[] }
-interface ActionJob extends GameIntent {requestId:string;expectedRevision:number;rulesVersion:1;submitted?:boolean}
+interface ActionJob extends GameIntent {requestId:string;expectedRevision:number;rulesVersion:1;submitted?:boolean;retries?:number}
 interface ChatAttempt { requestId:string;draft:string;accountId:string;room:string;connection:WebSocket;pending:boolean;timer?:number }
 const el = <K extends keyof HTMLElementTagNameMap>(tag:K,className='',text='') => {const node=document.createElement(tag);node.className=className;node.textContent=text;return node;};
 const button=(label:string,action:()=>void,className='')=>{const node=el('button',className,t(label));node.type='button';node.addEventListener('click',action);return node;};
@@ -201,14 +201,16 @@ export function initOnline(game:GameBridge) {
     if(saving)return saving;if(!actionQueue.length||!account||stopped)return;
     const accountId=account.id,epoch=sessionEpoch;
     saving=(async()=>{while(actionQueue.length&&account?.id===accountId&&sessionEpoch===epoch&&!stopped){const job=actionQueue[0];
-      try{if(!job.submitted){job.expectedRevision=revision;job.submitted=true;rememberActions();}const {submitted,...body}=job;const reply=await api<ActionReply>('actions',body);if(account?.id!==accountId||sessionEpoch!==epoch)return;
+      try{if(!job.submitted){job.expectedRevision=revision;job.submitted=true;rememberActions();}const {submitted,retries,...body}=job;void submitted;void retries;const reply=await api<ActionReply>('actions',body);if(account?.id!==accountId||sessionEpoch!==epoch)return;
         if(reply.revision>=revision){revision=reply.revision;game.applyAuthoritativeState(reply.profile);}actionQueue.shift();rememberActions();retryMs=500;waiting.get(job.requestId)?.resolve(reply);waiting.delete(job.requestId);
         // A new unsubmitted intent follows the revision returned by the preceding transaction.
         rememberActions();
         status=socket?.readyState===WebSocket.OPEN?'Online':'Reconnecting';setSaveStatus(actionQueue.length?'◌ Saving online…':'● Saved online');refreshButton();
       }catch(error){if(account?.id!==accountId||sessionEpoch!==epoch)return;const statusCode=(error as {status?:number}).status;
         if(statusCode===401){expireSession();return;}
-        if(statusCode===409){try{const fresh=await api<Session>('auth/session');if(account?.id!==accountId||sessionEpoch!==epoch)return;if(!fresh.account){expireSession();return;}if(fresh.account.id!==accountId){begin(fresh);return;}revision=fresh.revision||0;if(fresh.profile)game.applyAuthoritativeState(fresh.profile);}catch{break;}}
+        if(statusCode===409){try{const fresh=await api<Session>('auth/session');if(account?.id!==accountId||sessionEpoch!==epoch)return;if(!fresh.account){expireSession();return;}if(fresh.account.id!==accountId){begin(fresh);return;}revision=fresh.revision||0;if(fresh.profile)game.applyAuthoritativeState(fresh.profile);
+          // Someone else changed this account meanwhile (a visitor watered a crop, say): the action itself is fine, so retry it on the new revision instead of dropping it (the server replays it if the first try had gone through).
+          job.retries=(job.retries??0)+1;if(job.retries<=3){job.expectedRevision=revision;rememberActions();continue;}}catch{break;}}
         if(statusCode&&statusCode<500){actionQueue.shift();rememberActions();waiting.get(job.requestId)?.reject(error as Error);waiting.delete(job.requestId);continue;}
         status='Action pending';setSaveStatus('○ Action pending — reconnect to finish');refreshButton();break;
       }

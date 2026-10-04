@@ -89,7 +89,7 @@ async function runCommand(spec, records, receipt) {
     return { reply: {...receipt.reply,profile:clone(actor.profile),revision:actor.profileRevision||0,actionRevision:receipt.reply.revision,replayed:true}, records:[], receipt:null };
   }
   if ((actor.profileRevision || 0) !== spec.expectedRevision) throw conflict();
-  const before = new Map([...records].map(([id,value])=>[id,JSON.stringify(value)]));
+  const before = new Map([...records].map(([id,value])=>[id,JSON.stringify(value)])), profileBefore = new Map([...records].map(([id,value])=>[id,JSON.stringify(value.profile)]));
   const result = await spec.run(records);
   actor.authorityVersion = 1;
   if(spec.actionType&&spec.outbox!==false){
@@ -98,8 +98,12 @@ async function runCommand(spec, records, receipt) {
     actor.outbox=actor.outbox.slice(-256);
   }
   const changed = [];
-  for (const [id,value] of records) if (id === actor.id || JSON.stringify(value) !== before.get(id)) {
-    value.profileRevision = (value.profileRevision || 0) + 1;
+  for (const [id,value] of records) {
+    if (id !== actor.id && JSON.stringify(value) === before.get(id)) continue;
+    // A friend's visit, water or message changes things around an account without changing its game profile. Only a changed
+    // profile moves its revision: otherwise the owner's very next action (planting, say) would find the revision stale, be rejected, and be lost.
+    const profileChanged = JSON.stringify(value.profile) !== profileBefore.get(id);
+    if (profileChanged || (id === actor.id && !spec.keepRevision)) value.profileRevision = (value.profileRevision || 0) + 1;
     value.accountRevision = nextAccountRevision(value);
     value.receivedAt = Date.now();
     changed.push(accountRecord(value));

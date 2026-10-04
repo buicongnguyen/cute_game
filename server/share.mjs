@@ -7,7 +7,7 @@
  *   winget install Cloudflare.cloudflared      # or: winget install ngrok.ngrok  (then: ngrok config add-authtoken ...)
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,8 +16,12 @@ const port = Number(process.env.PORT || 8787), dataDir = process.env.DATA_DIR ||
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const have = command => spawnSync(process.platform === 'win32' ? 'where' : 'which', [command], { stdio: 'ignore' }).status === 0;
 
-if (!existsSync(path.join(root, 'dist', 'index.html'))) {
-  console.log('Building the game first…');
+// Rebuild when the game was never built, when asked (--build), or when any source file is newer than the build.
+const newest = dir => { let latest = 0; for (const entry of readdirSync(dir, { withFileTypes: true })) { const full = path.join(dir, entry.name); latest = Math.max(latest, entry.isDirectory() ? newest(full) : statSync(full).mtimeMs); } return latest; };
+const built = path.join(root, 'dist', 'index.html');
+const stale = !existsSync(built) || process.argv.includes('--build') || ['src', 'public', 'index.html'].some(item => { const full = path.join(root, item); return existsSync(full) && (statSync(full).isDirectory() ? newest(full) : statSync(full).mtimeMs) > statSync(built).mtimeMs; });
+if (stale) {
+  console.log('Building the latest game first (about 15 seconds)…');
   if (spawnSync(npm, ['run', 'build'], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' }).status !== 0) { console.error('The build failed.'); process.exit(1); }
 }
 // A dated copy of the accounts file at every start, last 14 kept.

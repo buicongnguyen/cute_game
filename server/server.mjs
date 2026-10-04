@@ -121,11 +121,11 @@ export async function createGameServer(options = {}) {
   /** Writes one entry in an owner's guest diary (visit, message) and tells them at once; false if the account was busy. */
   async function noteGuest(ownerId, entry) {
     try {
-      const committed = await store.command({ actorId: ownerId, requestId: randomUUID(), hash: commandHash({ type: 'guestNote', ownerId, entry }), expectedRevision: accounts.get(ownerId)?.profileRevision || 0, actionType: 'guestNote',
+      const committed = await store.command({ actorId: ownerId, requestId: randomUUID(), hash: commandHash({ type: 'guestNote', ownerId, entry }), expectedRevision: accounts.get(ownerId)?.profileRevision || 0, actionType: 'guestNote', keepRevision: true,
         run: records => { logGuest(records.get(ownerId), entry); return true; } });
       committed.accounts.forEach(remember);
       const owner = accounts.get(ownerId), ownerPeer = peers.get(ownerId);
-      if (owner && ownerPeer) { send(ownerPeer.socket, { type: 'profile', profile: owner.profile, revision: owner.profileRevision, authorityVersion: 1 }); send(ownerPeer.socket, { type: 'guestNotice', entry: owner.visitLog?.[0] }); }
+      if (owner && ownerPeer) send(ownerPeer.socket, { type: 'guestNotice', entry: owner.visitLog?.[0] }); // the profile and its revision did not change
       return true;
     } catch { return false; }
   }

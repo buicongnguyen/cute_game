@@ -65,3 +65,29 @@ test('friends see each other when one visits, and a gift reaches their chest', a
   const cancelled = await call(eve.cookie, 'friends/cancel', { id: ann.id }); assert.equal(cancelled.status, 200); assert.equal(cancelled.data.sent.length, 0);
   assert.equal((await call(ann.cookie, 'auth/session')).data.requests.length, 0);
 });
+
+test('a friend visiting or messaging does not make the owner\'s next action fail', async t => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'cute-game-visit-revision-')), clients = [];
+  const store = await createAccountStore({ dataDir, databaseUrl: '' });
+  const server = await createGameServer({ host: '127.0.0.1', port: 0, dataDir, accountStore: store, databaseUrl: '', databaseRequired: false });
+  t.after(async () => { for (const client of clients) client.socket.terminate(); await server.close(); await rm(dataDir, { recursive: true, force: true }); });
+  async function call(cookie, route, body) {
+    const response = await fetch(`${server.url}/api/${route}`, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: response.status, data: await response.json(), cookie: response.headers.get('set-cookie')?.split(';')[0] };
+  }
+  async function explorer(username) {
+    const session = await call(null, 'auth/register', { username, password: 'Local-revision-test-123', name: username });
+    const client = { id: session.data.account.id, cookie: session.cookie };
+    Object.assign(client, connect(server.url, client.cookie)); clients.push(client); client.joined = await client.next(m => m.type === 'joined');
+    return client;
+  }
+  const owner = await explorer('rev_owner'), guest = await explorer('rev_guest');
+  await call(guest.cookie, 'friends/request', { id: owner.id }); await call(owner.cookie, 'friends/accept', { id: guest.id });
+  const before = (await call(owner.cookie, 'auth/session')).data.revision;
+  guest.send({ type: 'visit', id: owner.id }); await guest.next(m => m.type === 'visit' && m.home);
+  guest.send({ type: 'dm', to: owner.id, text: 'hi' }); await owner.next(m => m.type === 'guestNotice' && m.entry.kind === 'message');
+  const after = (await call(owner.cookie, 'auth/session')).data;
+  assert.equal(after.revision, before, 'a visit and a message leave the game revision alone');
+  const next = await call(owner.cookie, 'actions', { type: 'settings', payload: { settings: { sound: false } }, requestId: randomUUID(), rulesVersion: 1, expectedRevision: before });
+  assert.equal(next.status, 200, JSON.stringify(next.data)); // not a 409: the owner's next action goes through
+});
