@@ -109,6 +109,9 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'rescueFriend': result = Friends.rescue(state, string(p.id, 40) as Friends.FriendId, now); break;
     case 'friendsArrive': result = Friends.arriveHome(state, { x: number(p.x), z: number(p.z) }); break;
     case 'setFriendAutoFeed': if (typeof p.autoFeed !== 'boolean') return invalid(); result = Friends.setFriendAutoFeed(state, string(p.id, 40) as Friends.FriendId, p.autoFeed); break;
+    case 'welcomeStart': if (typeof p.take !== 'boolean') return invalid(); result = Friends.welcomeStart(state, p.take, now); break;
+    case 'callHelper': result = Helper.callHelper(state, now); break;
+    case 'callFriend': result = Friends.callFriend(state, string(p.id, 40) as Friends.FriendId, now); break;
     case 'setFriendPaused': if (typeof p.paused !== 'boolean') return invalid(); result = Friends.setFriendPaused(state, string(p.id, 40) as Friends.FriendId, p.paused); break;
     case 'friendWork': {
       const task = p.index !== undefined ? { kind: string(p.kind, 10), index: index() } : { kind: string(p.kind, 10), uid: integer(p.uid) };

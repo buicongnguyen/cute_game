@@ -14,8 +14,16 @@ export interface HelperState {
   last: Record<string, CropId>;
   /** Auto-planting is switched off for the whole garden (auto-plant.ts): helpers only harvest, the player plants every bed. Missing = on. It lives here, even without a robot, so a garden with only Sprout saves it too. */
   manual?: true;
+  /** Asked to work through a daily rest until this time (ms). */
+  callUntil?: number;
 }
 export const HELPER_COST = 1000;
+const HOUR = 3_600_000;
+/** Daily rests, on the UTC clock so client and server agree: the robot rests the last 3 hours of each day, the cook the last hour of every 4, so the grown garden stands for the player to see. */
+export const BREAKS = { robot: { cycle: 24 * HOUR, rest: 3 * HOUR }, cook: { cycle: 4 * HOUR, rest: HOUR } } as const;
+export const CALL_MS = 30 * 60_000;
+export const onBreak = (who: keyof typeof BREAKS, now: number, callUntil?: number) =>
+  !(callUntil && now < callUntil) && now % BREAKS[who].cycle >= BREAKS[who].cycle - BREAKS[who].rest;
 export const newHelper = (): HelperState => ({ owned: false, paused: false, seed: 'same', last: {} });
 const crop = (raw: unknown): CropId | null => { if (typeof raw !== 'string') return null; const id = canonicalItem(raw); return Object.hasOwn(CROPS, id) ? id : null; };
 
@@ -25,6 +33,7 @@ export function parseHelper(raw: unknown): HelperState {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return h;
   const v = raw as Record<string, unknown>;
   h.owned = v.owned === true; h.paused = v.paused === true; if (v.manual === true) h.manual = true;
+  if (typeof v.callUntil === 'number' && Number.isFinite(v.callUntil)) h.callUntil = v.callUntil;
   h.seed = v.seed === 'same' ? 'same' : crop(v.seed) ?? 'same';
   if (v.last && typeof v.last === 'object' && !Array.isArray(v.last))
     for (const [key, id] of Object.entries(v.last as Record<string, unknown>).slice(0, 64)) { const c = crop(id); if (c && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(key)) h.last[key] = c; }

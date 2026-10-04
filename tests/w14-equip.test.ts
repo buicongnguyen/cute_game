@@ -54,12 +54,11 @@ test('equipping a hat, outfit or boots takes a disguise off, exactly as the try-
   const pet = owning('dz_ninja', 'bunny'); hold(pet, 'dz_ninja'); hold(pet, 'bunny'); assert.equal(pet.gear.disguise, 'dz_ninja', 'pets and weapons keep the costume');
 });
 
-test('giving a friend the worn last copy of a health item lowers health to the new maximum', () => {
+test('lending a worn health item to a friend changes nothing for the explorer', () => {
   const s = M.newGame(); s.friends = [{ id: 'sprout', role: 'garden', rescuedAt: 1, gear: {}, home: true }];
   assert.ok(M.addItem(s, 'armor_space')); hold(s, 'armor_space'); s.hp = M.maxHp(s); assert.equal(s.hp, 180);
   assert.equal(applyGameAction(s, { type: 'giveFriendGear', payload: { friend: 'sprout', id: 'armor_space' } }), true);
-  assert.equal(s.gear.outfit, undefined); assert.equal(M.maxHp(s), 100);
-  assert.equal(s.hp, 100, 'health above the maximum would stay until the next hit or reload');
+  assert.equal(s.gear.outfit, 'armor_space'); assert.equal(M.maxHp(s), 180); assert.equal(s.hp, 180);
 });
 
 test('an outfit given to a friend shows as worn in the Dress panel and can be taken back', () => {

@@ -15,7 +15,7 @@ import { createActionService } from '../server/action-service.mjs';
 
 const T0 = 1_000_000;
 const act = (s: M.SaveState, type: string, payload: Record<string, unknown> = {}) => applyGameAction(s, { type, payload }, { now: T0, random: () => .5 });
-function garden() { const s = M.newGame(); s.level = 30; s.energy = 5000; assert.equal(H.buyHelper(s), 'bought'); s.plots[0].crop = 'carrot'; s.plots[0].plantedAt = T0 - M.CROPS.carrot.duration - 1; return s; }
+function garden() { const s = M.newGame(); s.level = 30; s.energy = 5000; assert.equal(H.buyHelper(s), 'bought'); s.plots[0].crop = 'carrot'; s.plots[0].plantedAt = T0 - M.CROPS.carrot.duration - 1 - 300000; return s; }
 
 test('the explorer is out past the safe circle at home, or anywhere on another planet', () => {
   assert.equal(explorerAway('home', 0, 0), false); assert.equal(explorerAway('home', HOME_SAFE_R - .1, 0), false);
@@ -43,7 +43,7 @@ test('catch-up work for time away (the save idle over a minute) is stored in the
 test('the cook keeps her pot in the bag; what she cooks and the raw half go to the chest', () => {
   const s = M.newGame(); s.level = 30; s.planet = 'toy'; M.grantDefeat(s, 'robot', 1, true, () => .5, false);
   assert.equal(F.rescue(s, 'pepper', T0), true); s.planet = 'home'; F.arriveHome(s, { x: 0, z: 5 });
-  for (const i of [0, 1, 2, 3]) { s.plots[i].crop = 'carrot'; s.plots[i].plantedAt = T0 - M.CROPS.carrot.duration - 1; }
+  for (const i of [0, 1, 2, 3]) { s.plots[i].crop = 'carrot'; s.plots[i].plantedAt = T0 - M.CROPS.carrot.duration - 1 - 300000; }
   for (const i of [0, 1, 2, 3]) act(s, 'friendWork', { id: 'pepper', kind: 'harvest', index: i, away: true });
   assert.equal((s.bag.carrot ?? 0) + (s.bag.cooked_carrot ?? 0), 0, 'nothing reaches the bag');
   assert.equal((s.chest.carrot ?? 0) + (s.chest.cooked_carrot ?? 0) * 1, 4);
@@ -63,8 +63,8 @@ test('the summary lists the largest stacks first and its words have Vietnamese',
 test('online, the server decides from its own pose of the explorer, not the client flag', async t => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'zoo-delivery-')), store = await createAccountStore({ dataDir: dir });
   t.after(async () => { await store.close(); await rm(dir, { recursive: true, force: true }); });
-  const profile = garden(); profile.plots[1].crop = 'carrot'; profile.plots[1].plantedAt = Date.now() - M.CROPS.carrot.duration - 1000;
-  profile.plots[0].plantedAt = Date.now() - M.CROPS.carrot.duration - 1000;
+  const profile = garden(); profile.plots[1].crop = 'carrot'; profile.plots[1].plantedAt = Date.now() - M.CROPS.carrot.duration - 1000 - 300000;
+  profile.plots[0].plantedAt = Date.now() - M.CROPS.carrot.duration - 1000 - 300000;
   await store.create({ id: 'alice', username: 'alice', hash: 'h', salt: 's', friends: [], requests: [], profile });
   let peer = { active: true, planet: 'home', room: 'public:home', visit: null, pose: { x: 40, z: 0 } };
   const execute = createActionService({ store, getPeer: () => peer });

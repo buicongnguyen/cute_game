@@ -80,6 +80,7 @@ import * as Restock from './farm-restock.ts';
 import './helper.css';
 import { FriendCrew, postFor } from './friend-crew.ts';
 import { setFriendDresser } from './friend-view.ts';
+import { PROFILE_SLOTS, activeSlot, activeKey, slotKey, setActiveSlot } from './profiles.ts';
 import { FRIENDS, FRIEND_IDS, type FriendId } from './friends.ts';
 import { friendPanel, lockedHint, RESCUE_LINES } from './friend-ui.ts';
 import './language.css';
@@ -116,7 +117,7 @@ const discoverySize={w:0,h:0};
 let discoveryObserver:ResizeObserver|null=null;
 const esc = (value: string) => value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 let saved: M.SaveState | null = null;
-try { saved = M.parseSave(localStorage.getItem(M.SAVE_KEY)); } catch { /* Play remains available without storage. */ }
+try { saved = M.parseSave(localStorage.getItem(activeKey())); } catch { /* Play remains available without storage. */ }
 let state = saved ?? M.newGame();
 let started = false, modal = '', selectedItem: M.ItemId | null = null, activePlot = 0, lastFocused: HTMLElement | null = null;
 let saveFailed = false, elapsed = 0, uiElapsed = 0, frameTime = 16;
@@ -185,7 +186,7 @@ app.innerHTML = `
     <div class="space-help">Hold to steer <i>•</i> <kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd> fly <i>•</i> <kbd>Shift</kbd> boost <i>•</i> <kbd>S</kbd> brake <i>•</i> <kbd>L</kbd> land</div>
   </div>
   <div id="warp-flash"></div>
-  <div id="title-screen"><div class="title-shade"></div><div class="welcome-card">${languageSelector('welcome')}<div class="welcome-eyebrow"><span></span> YOUR NEXT LITTLE ADVENTURE</div><div class="brand-sprout">🌱</div><h1>Zoo <em data-i18n-skip>Garden</em><span>grow a little. wander a lot.</span></h1><p>A cozy home, a pocketful of seeds,<br>and a whole world waiting for you.</p><div class="welcome-form"><label for="name-input">WHAT SHOULD WE CALL YOU?</label><input id="name-input" aria-label="Your character name" maxlength="20" value="${esc(saved?.name ?? '')}" placeholder="Your name" autocomplete="off"><fieldset class="color-picker"><legend>Pick your favorite color</legend>${M.COLORS.map((c,i)=>`<button type="button" data-action="color" data-color="${c}" style="--swatch:${c}" class="${state.color===c?'selected':''}" aria-label="${['Sky blue','Rose pink','Leaf green','Honey yellow','Lavender','Terracotta'][i]}" aria-pressed="${state.color===c}"></button>`).join('')}</fieldset><button class="primary start-button" data-action="start">${saved?'Continue adventure':'Let’s play'} <span>→</span></button></div><div class="welcome-footer"><span>🌾 Grow</span><span>🎣 Discover</span><span>✨ Adventure</span></div><small class="local-note">${import.meta.env.VITE_STATIC_HOST==='true'?'Solo adventure · progress saved in this browser':'Play offline, or meet friends online'}</small></div><div class="title-caption"><span>🌿</span> WELCOME TO CLOVER VILLAGE</div></div>
+  <div id="title-screen"><div class="title-shade"></div><div class="welcome-card">${languageSelector('welcome')}<div class="welcome-eyebrow"><span></span> YOUR NEXT LITTLE ADVENTURE</div><div class="brand-sprout">🌱</div><h1>Zoo <em data-i18n-skip>Garden</em><span>grow a little. wander a lot.</span></h1><p>A cozy home, a pocketful of seeds,<br>and a whole world waiting for you.</p><div class="welcome-form">${profilePicker()}<label for="name-input">WHAT SHOULD WE CALL YOU?</label><input id="name-input" aria-label="Your character name" maxlength="20" value="${esc(saved?.name ?? '')}" placeholder="Your name" autocomplete="off"><fieldset class="color-picker"><legend>Pick your favorite color</legend>${M.COLORS.map((c,i)=>`<button type="button" data-action="color" data-color="${c}" style="--swatch:${c}" class="${state.color===c?'selected':''}" aria-label="${['Sky blue','Rose pink','Leaf green','Honey yellow','Lavender','Terracotta'][i]}" aria-pressed="${state.color===c}"></button>`).join('')}</fieldset><button class="primary start-button" data-action="start">${saved?'Continue adventure':'Let’s play'} <span>→</span></button></div><div class="welcome-footer"><span>🌾 Grow</span><span>🎣 Discover</span><span>✨ Adventure</span></div><small class="local-note">${import.meta.env.VITE_STATIC_HOST==='true'?'Solo adventure · progress saved in this browser':'Play offline, or meet friends online'}</small></div><div class="title-caption"><span>🌿</span> WELCOME TO CLOVER VILLAGE</div></div>
   <div id="dialog-layer" hidden><section id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><header><span id="dialog-icon" aria-hidden="true"></span><div><span id="dialog-kicker" class="eyebrow">MAKE YOURSELF AT HOME</span><h2 id="dialog-title"></h2></div><button class="close-button" data-action="close" aria-label="Close dialog">×</button></header><div id="dialog-body"></div></section></div>
   <div id="toasts" role="status" aria-live="polite"></div><div id="floating-text"></div><div id="damage-flash"></div>
 `;
@@ -273,7 +274,7 @@ frameListeners.add(()=>{const urls=lateArt.take();if(!urls.length)return;if(!sta
 const sfx=new Sfx();
 function tone(kind: Sound = 'click') { sfx.enabled = state.settings.sound; sfx.play(kind); }
 const vibrate=(ms:number)=>{try{if(state.settings.sound&&matchMedia('(pointer: coarse)').matches)navigator.vibrate?.(ms);}catch{/* Optional. */}};
-function save() { if(!started)return;if(persistence){persistence(state);return;}try { state.savedAt=Date.now();localStorage.setItem(M.SAVE_KEY,JSON.stringify(contextGear.persisted(state)));saveFailed=false;$('#save-status').textContent=t('● Saved on this device'); } catch { saveFailed=true;$('#save-status').textContent=t('○ Saving unavailable'); } }
+function save() { if(!started)return;if(persistence){persistence(state);return;}try { state.savedAt=Date.now();localStorage.setItem(activeKey(),JSON.stringify(contextGear.persisted(state)));saveFailed=false;$('#save-status').textContent=t('● Saved on this device'); } catch { saveFailed=true;$('#save-status').textContent=t('○ Saving unavailable'); } }
 // Keep at most three messages on screen (two on phones, where they also leave sooner); older ones fade out instead of stacking up the view.
 const phoneScreen=matchMedia('(max-width: 600px), (max-height: 520px)');
 function toast(message: string, icon='✨') {
@@ -330,7 +331,18 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
 }
 // The Mirror docks with 'trying-on' even before a preview (look-shop.ts), so closing always clears it: a later panel or confirmation must not inherit it.
 function closeDialog(){endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
-async function start() {settle();showTrimNote();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{}); // warm the village's shaders off the first walk
+/** The three save profiles on the title screen: name and level of each, or an empty slot for a new game. */
+function profilePicker(){
+  const cur=activeSlot();
+  const items=Array.from({length:PROFILE_SLOTS},(_,i)=>{let s:M.SaveState|null=null;try{s=M.parseSave(localStorage.getItem(slotKey(i)));}catch{}
+    return `<button type="button" data-action="profile" data-slot="${i}" class="${i===cur?'selected':''}" aria-pressed="${i===cur}"><b>${t('Profile')} ${i+1}</b><small>${s?`${esc(s.name)} · ${t('Level')} ${s.level}`:t('New game')}</small></button>`;}).join('');
+  return `<fieldset class="profile-picker"><legend>${t('Choose a save profile')}</legend>${items}</fieldset>`;
+}
+/** The first helper's greeting: the cook introduces herself and offers the 1M energy she says she won in the lottery. */
+function welcomeDialog(){
+  openDialog('welcome',t('Welcome to the game!'),`<p class="intro">${t('Hi boss! I am Pepper, your cook. Welcome to the game!')}</p><p>${t('Guess what? You are lucky today! I played the lottery and won 1,000,000 energy. Do you want it?')}</p><div class="button-row"><button class="primary" data-action="welcome-take">${t('Yes, take it!')}</button><button class="soft-button" data-action="welcome-pass">${t('No, thanks')}</button></div>`,t('YOUR COOK'),'🍳');
+}
+async function start() {settle();showTrimNote();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{}); // warm the village's shaders off the first walk
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
@@ -1162,7 +1174,7 @@ const sharedKills=new Set<string>();
 export const gameBridge:GameBridge={
   getState:()=>state,getWorld:()=>world,
   getPresence:()=>({y:house.poseY(world.position.y),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot(),dog:(()=>{const dog=world.ownDog?.();return dog!==null&&dog!==undefined&&dogFollows(world.planet,world.position,!!world.interior)?dog:null;})()}),
-  getOfflineState:()=>{try{return M.parseSave(localStorage.getItem(M.SAVE_KEY));}catch{return null;}},
+  getOfflineState:()=>{try{return M.parseSave(localStorage.getItem(activeKey()));}catch{return null;}},
   applyState(next){fishingEpoch++;fishingView.resetMysteryAvailability();if(flight)exitSpace();shipSequence?.reset();arriving=false;autopilotTarget=null;homeQueued=false;state=next;applyMovePad();const nameInput=document.querySelector<HTMLInputElement>('#name-input');if(nameInput)nameInput.value=state.name;visiting=null;visitHome=null;world.state=state;resetCombat();world.build(state.planet);world.refreshPlayer();if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal)closeDialog();updateHud();updateLabels();},
   setPersistence(handler){persistence=handler;},
   setActionHandler(handler){actionHandler=handler;world.authoritativeAction=handler?intent=>handler(intent).then(reply=>reply.result):undefined;},
@@ -1401,6 +1413,10 @@ app.addEventListener('click',async event=>{
     case 'build-pen':buildPenAction();break;
     case 'expand-pen':if(await perform('expandPen')){tone('success');toast('The pen is bigger: room for 3 more chickens and 4 more cows.','🐔');}else toast(`You need ${M.penExpandCost(state)??0} energy to make the pen bigger.`,'ϟ');penDialog();break;
     case 'friend-feed':{const id=button.dataset.kind as FriendId,f=state.friends?.find(f=>f.id===id);if(f&&await perform('setFriendAutoFeed',{id,autoFeed:!f.autoFeed}))friendDialog(id);break;}
+    case 'profile':{const slot=Number(button.dataset.slot);if(slot!==activeSlot()&&setActiveSlot(slot))location.reload();break;}
+    case 'welcome-take':case 'welcome-pass':{const take=action==='welcome-take';if(state.welcome==='pending'&&await perform('welcomeStart',{take})){closeDialog();toast(take?t('Pepper joined you, and you start with 1,000,000 energy!'):t('Pepper joined you. A fair start it is!'),'🍳');updateHud();}break;}
+    case 'friend-call':{const id=button.dataset.kind as FriendId;if(await perform('callFriend',{id}))friendDialog(id);break;}
+    case 'helper-call':{if(await perform('callHelper'))helperDialog();break;}
     case 'friend-pause':{const id=button.dataset.kind as FriendId,f=state.friends?.find(f=>f.id===id);if(f&&await perform('setFriendPaused',{id,paused:!f.paused}))friendDialog(id);break;}
     case 'cook-dish':if(await perform('cookDish',{id})){tone('success');toast(`${t(M.ITEMS[id].name)} is ready. Enjoy!`,M.ITEMS[id].icon);cooking();}break;case 'graphics':graphics.choose(button.dataset.kind as QualitySetting);world.applyGraphics(graphics.profile,graphics.ratio);saveGraphics(graphics);await perform('settings',{settings:{lowGraphics:graphics.level==='low'}});settings();break;
     case 'zoom-in':case 'zoom-out':world.zoom=clampZoom(Math.round((world.zoom+(action==='zoom-in'?-ZOOM.button:ZOOM.button))*100)/100,'wheel');world.resize();$('#zoom-value').textContent=t(`${Math.round(world.zoom*100)}%`);break;

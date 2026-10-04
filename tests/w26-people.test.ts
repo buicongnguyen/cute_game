@@ -65,9 +65,10 @@ test('every friend stands at the same share of the explorer\'s height indoors an
   const report: string[] = [];
   for (const stage of [0, 1, 2]) {
     s.friends = homeFriends(stage);
-    crew.update(.016);
+    for (let i = 0; i < 400; i++) crew.update(.25); // the paused cook walks into the cottage and is hidden outside
     const view = new HouseView(); view.syncFriends(s.friends);
     for (const id of FRIEND_IDS) {
+      crew.actors.get(id)!.root.visible = true;
       const outside = standingHeight(crew.actors.get(id)!.root) / hero, inside = standingHeight(view.friends.get(id)!.group) / hero;
       report.push(`${id}@${stage}: out ${outside.toFixed(3)} in ${inside.toFixed(3)}`);
       assert.ok(Math.abs(outside - inside) < .005, `${id} at stage ${stage}: ${outside.toFixed(3)} outdoors vs ${inside.toFixed(3)} indoors`);

@@ -2,7 +2,7 @@ import * as T from 'three';
 import * as M from './model.ts';
 import { cageKit, heroKit, wearKit, weaponKit, petKit } from './assets.ts';
 import { buildFriend, friendModel, friendSignature, poseFriend, FRIEND_SCALE, type FriendPose } from './friend-view.ts';
-import { CAGES, FRIENDS, FRIEND_IDS, cageState, friendsOf, inVillage, nextFriendTask, friendStage, friendHeight, type CageState, type Friend, type FriendId, type FriendTask, type WorkResult } from './friends.ts';
+import { CAGES, FRIENDS, FRIEND_IDS, cageState, friendsOf, inVillage, nextFriendTask, resting, friendStage, friendHeight, type CageState, type Friend, type FriendId, type FriendTask, type WorkResult } from './friends.ts';
 import type { World, Entity } from './world.ts';
 import { dropTree } from './dispose-tree.ts';
 import { HIP, gaitSwing, newGait, stepGait, type Gait } from './walk-cycle.ts';
@@ -23,6 +23,8 @@ const POSTS: Record<FriendId, { x: number; z: number }> = {
   clover: { x: M.PEN.x - M.PEN.hw + .6, z: M.PEN.z + M.PEN.hd + .55 },
   pepper: { x: -.65, z: 10.9 },
 };
+/** Outside the cottage door. */
+const COTTAGE_DOOR = { x: 0, z: -5.2 };
 export const postFor = (id: FriendId) => POSTS[id];
 /** A following friend's spot: behind the explorer and to its left (the pet trails to the right), one row per friend. */
 export function followGoal(hero: { x: number; z: number }, facing: number, slot: number) {
@@ -235,6 +237,10 @@ export class FriendCrew {
   private work(a: Actor, f: Friend, s: M.SaveState, act: boolean, dt: number, now: number) {
     const post = POSTS[a.id];
     if (a.cheerT > 0) { a.cheerT -= dt; this.place(a, 'cheer'); return; }
+    if (f.role === 'cook' && (f.paused || resting(f, now))) {
+      // The cook off duty walks into the cottage and stays there.
+      a.task = null; if (this.walk(a, COTTAGE_DOOR, dt)) { this.place(a, 'idle'); a.root.visible = false; this.setEntity(a, false); } return;
+    }
     if (f.paused) { a.task = null; if (this.walk(a, post, dt)) this.place(a, 'idle'); return; }
     if (a.workT > 0) {
       a.workT -= dt; const tg = a.task && this.target(s, a, a.task); if (tg) this.turn(a, Math.atan2(tg.at.x - a.x, tg.at.z - a.z), dt);

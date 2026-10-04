@@ -1,6 +1,6 @@
 import * as M from './model.ts';
 import { t } from './i18n.ts';
-import { HELPER_COST, helperOf, canPlant } from './helper.ts';
+import { HELPER_COST, helperOf, canPlant, robotResting } from './helper.ts';
 import { chosenBeds } from './auto-plant.ts';
 import { autoPlantRow } from './auto-plant-ui.ts';
 
@@ -29,7 +29,7 @@ export function helperPanel(s: M.SaveState, ui: HelperUi) {
   }
   const crops = Object.entries(M.CROPS).filter(([id]) => M.cropLevel(s, id) <= s.level), own = chosenBeds(s);
   const seedButton = (id: string, label: string, extra = '') => `<button role="radio" aria-checked="${h.seed === id}" class="${h.seed === id ? 'on' : ''}" data-action="helper-seed" data-item="${id}">${label}${extra}</button>`;
-  return `${picture}<div class="settings-row"><div><strong>Helper at work</strong><small>Off: Bolt rests, and you plant every bed yourself</small></div><button class="toggle ${h.paused ? '' : 'on'}" role="switch" aria-checked="${!h.paused}" aria-label="Helper at work" data-action="helper-pause"></button></div>${autoPlantRow(s)}`
+  return `${picture}<div class="settings-row"><div><strong>Helper at work</strong><small>Off: Bolt rests, and you plant every bed yourself</small></div><button class="toggle ${h.paused ? '' : 'on'}" role="switch" aria-checked="${!h.paused}" aria-label="Helper at work" data-action="helper-pause"></button></div>${robotResting(s) ? `<div class="button-row"><button class="primary" data-action="helper-call">${t('Ask Bolt to work now')}</button></div><p class="muted">${t('Bolt takes a rest at the end of each day so the grown garden can be seen.')}</p>` : ''}${autoPlantRow(s)}`
     + `<div class="settings-row helper-seed-row"><div><strong>Seed to plant</strong><small>Same as before: each bed gets what grew there last, otherwise the cheapest seed you have</small></div></div>`
     + `<div class="segmented helper-seeds" role="radiogroup" aria-label="Seed to plant">${seedButton('same', 'Same as before')}${crops.map(([id, c]) => seedButton(id, `${ui.mini(id)} ${ui.esc(t(c.name))}`, c.seed ? ` <span class="chip">×${s.bag[c.seed] ?? 0}</span>` : '')).join('')}</div>`
     // A bed the player planted by hand keeps the player's crop, whatever seed is chosen here: say so, and offer to hand those beds over.

@@ -8,7 +8,7 @@ import { localizeHtml, setLanguage } from '../src/i18n.ts';
 const T0 = 1_000_000;
 function game(energy = 2000) { const s = M.newGame(); s.energy = energy; s.level = 10; return s; }
 function owned() { const s = game(); assert.equal(H.buyHelper(s), 'bought'); return s; }
-const ripe = (s: M.SaveState, i: number, crop: string) => { s.plots[i].crop = crop; s.plots[i].plantedAt = T0 - M.CROPS[crop].duration - 1; };
+const ripe = (s: M.SaveState, i: number, crop: string) => { s.plots[i].crop = crop; s.plots[i].plantedAt = T0 - M.CROPS[crop].duration - 1 - 5 * 60_000; };
 
 test('the helper costs ϟ1000 once, only at home, and older saves have none', () => {
   const poor = game(999); assert.equal(H.buyHelper(poor), 'energy'); assert.equal(poor.energy, 999);
@@ -86,4 +86,25 @@ test('the bed panel row and the helper panel are localized without changing acti
     assert.match(panel, /data-action="helper-pause"/); assert.match(panel, /data-action="helper-seed" data-item="same"/); assert.match(panel, /Như trước/);
     assert.doesNotMatch(panel, /Seed to plant|Helper at work|Same as before/);
   } finally { setLanguage('en'); }
+});
+
+test('helpers let a fully grown bed stand for five minutes before harvesting it', () => {
+  const s = owned(); s.plots[0].crop = 'pumpkin'; s.plots[0].plantedAt = T0 - M.CROPS.pumpkin.duration - 1;
+  assert.equal(H.nextTask(s, { x: 0, z: 0 }, T0)?.kind === 'harvest', false);
+  assert.equal(H.helperHarvest(s, 0, T0), null); assert.equal(H.catchUp(s, T0).harvested.length, 0);
+  assert.equal(H.nextTask(s, { x: 0, z: 0 }, T0 + H.GROWN_HOLD_MS)?.kind, 'harvest');
+  assert.equal(H.helperHarvest(s, 0, T0 + H.GROWN_HOLD_MS), 'pumpkin');
+});
+
+test('daily rests: Bolt rests the last 3 UTC hours, the cook the last hour of every 4, and either can be asked to work', async () => {
+  const F = await import('../src/friends.ts'), D = 86_400_000, H1 = 3_600_000;
+  const day = Math.floor(T0 / D) * D, s = owned();
+  s.plots[0].crop = 'pumpkin'; s.plots[0].plantedAt = day + 10 * H1 - M.CROPS.pumpkin.duration - 1 - H.GROWN_HOLD_MS;
+  assert.equal(H.nextTask(s, { x: 0, z: 0 }, day + 22 * H1), null);          // resting at 22:00
+  assert.equal(H.nextTask(s, { x: 0, z: 0 }, day + 12 * H1)?.kind, 'harvest'); // working at noon (bed is long ripe)
+  assert.equal(H.catchUp(s, day + 22 * H1).harvested.length, 0);
+  assert.ok(H.callHelper(s, day + 22 * H1)); assert.equal(H.nextTask(s, { x: 0, z: 0 }, day + 22 * H1 + 1000)?.kind, 'harvest');
+  assert.equal(H.nextTask(s, { x: 0, z: 0 }, day + 23 * H1)?.kind === 'harvest', false); // the call lasts 30 minutes
+  const cook = { id: 'pepper', role: 'cook', home: true } as never;
+  assert.equal(F.resting(cook, day + 3.5 * H1), true); assert.equal(F.resting(cook, day + 2 * H1), false);
 });

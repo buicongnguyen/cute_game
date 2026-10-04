@@ -1,5 +1,5 @@
 import * as M from './model.ts';
-import { HELPER_COST, newHelper, type HelperState } from './helper-state.ts';
+import { HELPER_COST, CALL_MS, onBreak, newHelper, type HelperState } from './helper-state.ts';
 import { asHelper } from './progression.ts';
 import { autoPlanting, bedChoice } from './auto-plant.ts';
 
@@ -22,6 +22,9 @@ export const helperOf = (s: M.SaveState): HelperState => s.helper ?? newHelper()
 /** A bed's identity for "last planted": its position, which does not shift when another bed is stored. */
 export const bedKey = (s: M.SaveState, i: number) => { const p = M.bedPosition(s, i); return `${p.x.toFixed(2)},${p.z.toFixed(2)}`; };
 
+/** Bolt is on his daily rest (unless asked to work). */
+export const robotResting = (s: M.SaveState, now = Date.now()) => onBreak('robot', now, s.helper?.callUntil);
+export function callHelper(s: M.SaveState, now = Date.now()) { if (!s.helper?.owned || s.planet !== 'home') return false; s.helper.paused = false; s.helper.callUntil = now + CALL_MS; return true; }
 export type BuyResult = 'owned' | 'away' | 'energy' | 'bought';
 export function buyHelper(s: M.SaveState): BuyResult {
   if (s.helper?.owned) return 'owned';
@@ -73,13 +76,18 @@ export function cropFor(s: M.SaveState, i: number): M.CropId | null {
 /** What a helper plants in bed `i` now: nothing at all while auto-planting is off (every planting path asks here). */
 export function seedFor(s: M.SaveState, i: number): M.CropId | null { return autoPlanting(s) ? cropFor(s, i) : null; }
 
+/** Helpers leave a fully grown bed standing this long before they harvest it, so the garden is seen at its best. The player may harvest any time. */
+export const GROWN_HOLD_MS = 5 * 60_000;
+/** True once the crop in this bed has been ripe for the hold; the one rule for the robot, Sprout and every catch-up. */
+export const harvestable = (p: M.Plot, now: number) => !!p.crop && M.cropProgress(p, now) >= 1 && now - (p.plantedAt + M.cropDuration(p)) >= GROWN_HOLD_MS;
+
 export interface HelperTask { kind: 'harvest' | 'plant'; index: number; crop?: M.CropId }
 /** The next job: the nearest ripe bed, else the nearest empty bed it has a seed for; null = nothing to do (idle). `held` is the empty bed whose seed list the player has open: it is the player's until the panel closes. */
 export function nextTask(s: M.SaveState, from: { x: number; z: number }, now = Date.now(), held?: number): HelperTask | null {
-  const h = s.helper; if (!h?.owned || h.paused) return null;
+  const h = s.helper; if (!h?.owned || h.paused || robotResting(s, now)) return null;
   let best: HelperTask | null = null, bestD = Infinity, bestRipe = false;
   s.plots.forEach((p, i) => {
-    const ripe = !!p.crop && M.cropProgress(p, now) >= 1, crop = !p.crop && i !== held ? seedFor(s, i) : null;
+    const ripe = harvestable(p, now), crop = !p.crop && i !== held ? seedFor(s, i) : null;
     if (!ripe && !crop) return;
     const b = M.bedPosition(s, i), d = Math.hypot(b.x - from.x, b.z - from.z);
     // Ripe beds come first: a crop left standing is worth more than an empty bed.
@@ -90,13 +98,14 @@ export function nextTask(s: M.SaveState, from: { x: number; z: number }, now = D
 
 /** Harvest bed `i` as the player would (bag, XP, quests); remembers the crop for "same as before". */
 export function helperHarvest(s: M.SaveState, i: number, now = Date.now()) {
-  if (!s.helper?.owned) return null;
-  const crop = s.plots[i]?.crop; if (crop) s.helper.last[bedKey(s, i)] = crop;
+  if (!s.helper?.owned || robotResting(s, now)) return null;
+  if (!s.plots[i] || !harvestable(s.plots[i], now)) return null;
+  const crop = s.plots[i].crop; if (crop) s.helper.last[bedKey(s, i)] = crop;
   return asHelper(() => M.harvest(s, i, now)); // the robot's harvests never win the player's timed challenge
 }
 /** Plant bed `i` with the helper's choice; false when it is not empty or there is nothing to plant. */
 export function helperPlant(s: M.SaveState, i: number, now = Date.now()) {
-  if (!s.helper?.owned || s.plots[i]?.crop) return null;
+  if (!s.helper?.owned || robotResting(s, now) || s.plots[i]?.crop) return null;
   const crop = seedFor(s, i); if (!crop || !M.plant(s, i, crop, now)) return null;
   s.helper.last[bedKey(s, i)] = crop; return crop;
 }
@@ -110,11 +119,11 @@ export function helperPlant(s: M.SaveState, i: number, now = Date.now()) {
 export const HELPER_CATCH_UP_CAP = M.STARTING_PLOTS + M.MAX_EXTRA_PLOTS;
 export function catchUp(s: M.SaveState, now = Date.now(), cap = HELPER_CATCH_UP_CAP) {
   const harvested: M.CropId[] = [], planted: M.CropId[] = [];
-  if (!s.helper?.owned || s.helper.paused || s.planet !== 'home') return { harvested, planted }; // the garden is on the home planet
+  if (!s.helper?.owned || s.helper.paused || s.planet !== 'home' || robotResting(s, now)) return { harvested, planted }; // the garden is on the home planet
   rememberPlantings(s);
   for (let i = 0; i < s.plots.length && harvested.length + planted.length < cap * 2; i++) {
     const p = s.plots[i];
-    if (p.crop && M.cropProgress(p, now) >= 1) { if (harvested.length >= cap) continue; const c = helperHarvest(s, i, now); if (c) harvested.push(c); else continue; }
+    if (harvestable(p, now)) { if (harvested.length >= cap) continue; const c = helperHarvest(s, i, now); if (c) harvested.push(c); else continue; }
     if (!s.plots[i].crop && planted.length < cap) { const c = helperPlant(s, i, now); if (c) planted.push(c); }
   }
   return { harvested, planted };

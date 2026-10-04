@@ -9,7 +9,7 @@ import { followGoal, postFor } from '../src/friend-crew.ts';
 
 const T0 = 1_000_000;
 function game() { const s = M.newGame(); s.level = 30; s.energy = 100_000; return s; }
-const ripe = (s: M.SaveState, i: number, crop: string) => { s.plots[i].crop = crop; s.plots[i].plantedAt = T0 - M.CROPS[crop].duration - 1; };
+const ripe = (s: M.SaveState, i: number, crop: string) => { s.plots[i].crop = crop; s.plots[i].plantedAt = T0 - M.CROPS[crop].duration - 1 - 5 * 60_000; };
 const act = (s: M.SaveState, type: string, payload: Record<string, unknown> = {}, now = T0) => applyGameAction(s, { type, payload }, { now, random: () => .5 });
 function rescued(id: F.FriendId) {
   const s = game(); s.planet = F.CAGES[id].planet; M.grantDefeat(s, id === 'pepper' ? 'robot' : F.CAGES[id].boss, 1, true, () => .5, false);
@@ -119,11 +119,11 @@ test('catch-up is one fair round: each bed and animal at most once, gardener fir
   const away = rescued('sprout'); away.plots.forEach((_, i) => ripe(away, i, 'carrot')); away.planet = 'ice'; assert.deepEqual(F.friendsCatchUp(away, T0), {});
 });
 
-test('gear moves between the bag and a friend', () => {
+test('helpers borrow gear: the bag keeps it, so every helper can wear the same piece', () => {
   const s = rescued('clover'); s.bag.hat_straw = 1; const hat = Object.keys(M.ITEMS).find(id => M.ITEMS[id].slot === 'hat')!; s.bag[hat] = 1;
-  assert.equal(F.giveGear(s, 'clover', hat), true); assert.equal(s.bag[hat] ?? 0, 0); assert.equal(F.friendOf(s, 'clover')!.gear.hat, hat);
+  assert.equal(F.giveGear(s, 'clover', hat), true); assert.equal(s.bag[hat], 1); assert.equal(F.friendOf(s, 'clover')!.gear.hat, hat);
   assert.equal(F.giveGear(s, 'clover', 'carrot'), false); assert.equal(F.takeGear(s, 'clover', 'hat'), true); assert.equal(s.bag[hat], 1);
-  s.gear.hat = hat; assert.equal(F.giveGear(s, 'clover', hat), true); assert.equal(s.gear.hat, undefined, 'the explorer takes off its last copy'); F.takeGear(s, 'clover', 'hat');
+  s.gear.hat = hat; assert.equal(F.giveGear(s, 'clover', hat), true); assert.equal(s.gear.hat, hat, 'the explorer keeps wearing it'); F.takeGear(s, 'clover', 'hat');
   s.bag.armor_chef = 1; assert.equal(F.giveGear(s, 'clover', 'armor_chef'), true); assert.deepEqual(F.friendOf(s, 'clover')!.gear, { outfit: 'armor_chef' }, 'same slot keys as SaveState.gear');
   assert.deepEqual(M.parseSave(JSON.stringify(s))!.friends!.find(f => f.id === 'clover')!.gear, { outfit: 'armor_chef' });
 });

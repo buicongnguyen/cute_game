@@ -20,6 +20,8 @@ export interface Friend {
   home?: boolean;
   /** The per-friend pause: a paused friend stands at its post and touches nothing. */
   paused?: boolean;
+  /** Asked to work through a daily rest until this time (ms). */
+  callUntil?: number;
   /** The farmer only feeds animals when the player turns this on (off by default, like the pen robot's autoFeed). */
   autoFeed?: boolean;
   /** Jobs done since the rescue (growth.ts counts them); older saves start from today's count. */
@@ -81,6 +83,7 @@ export function parseFriends(raw: unknown): Friend[] {
     if (!FRIEND_IDS.includes(id) || out.some(f => f.id === id)) continue;
     const f: Friend = { id, role: FRIENDS[id].role, rescuedAt: Number.isFinite(r.rescuedAt) ? r.rescuedAt as number : 0, gear: {}, home: r.home === true, paused: r.paused === true };
     if (r.autoFeed === true) f.autoFeed = true;
+    if (typeof r.callUntil === 'number' && Number.isFinite(r.callUntil)) f.callUntil = r.callUntil;
     const look = toLook(r.look); if (look && look !== DEFAULT_LOOK) f.look = look; // a visitor's copy too; parseSave also checks the owner owns it
     if (r.gear && typeof r.gear === 'object' && !Array.isArray(r.gear))
       for (const [slot, item] of Object.entries(r.gear)) if (typeof item === 'string' && friendSlot(item) === slot) f.gear[slot as FriendSlot] = canonicalItem(item);

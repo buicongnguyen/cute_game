@@ -162,27 +162,61 @@ export const ROOM_TALK: Record<RoomId, Record<Age, string[]>> = {
 /** Each friend's own lines, picked now and then in any room. */
 export const PERSONA_TALK: Record<string, Record<Age, string[]>> = {
   garden: {
-    kid: ['I planted a jelly bean. Tomorrow we get a jelly bean tree!', 'Worms are my friends. They are very wiggly friends.', 'I whispered to the carrots so they grow faster.'],
-    grown: ['The beds need water at sunrise, before the heat.', 'I swear the pumpkins grow while you watch them.', 'Upgraded beds are wonderful. Everything grows so quickly now.'],
+    kid: ['I planted a jelly bean. Tomorrow we get a jelly bean tree!', 'Worms are my friends. They are very wiggly friends.', 'I whispered to the carrots so they grow faster.', 'The tomatoes are blushing. I think they like me.', 'I told the pumpkin a joke. It did not laugh. It is very round and very serious.', 'The robot waits and the plants get taller. We are both very patient!'],
+    grown: ['The beds need water at sunrise, before the heat.', 'I swear the pumpkins grow while you watch them.', 'Upgraded beds are wonderful. Everything grows so quickly now.', 'The robot lets the crops stand a while. Honestly, the garden looks lovely like this.', 'Radishes are the gossips of the garden. Everything pokes out sooner or later.', 'A full bed in the sun. I could stand here all afternoon. And I will.'],
   },
   farm: {
-    kid: ['The chickens said hello. Well, they said bok. Same thing.', 'I want to ride a cow. A slow one.', 'The pig rolled in mud and looked so happy!'],
-    grown: ['The hens laid six eggs this morning. Good girls.', 'Feeding time is the best time. Everyone is so pleased to see me.', 'A farm never sleeps. But I do. Goodnight.'],
+    kid: ['The chickens said hello. Well, they said bok. Same thing.', 'I want to ride a cow. A slow one.', 'The pig rolled in mud and looked so happy!', 'The cow looked at me for a very long time. I think we are best friends now.', 'Eggs are warm. Why are eggs warm? Were they hugged?', 'I counted the sheep to fall asleep, but they kept moving.'],
+    grown: ['The hens laid six eggs this morning. Good girls.', 'Feeding time is the best time. Everyone is so pleased to see me.', 'A farm never sleeps. But I do. Goodnight.', 'The pig has opinions about breakfast. Loud ones.', 'Milk before sunrise, eggs after. Everyone has a schedule except the goat.', 'Nothing makes a boss smile like a full basket. Look at that grin!'],
   },
   cook: {
-    kid: ['I made a soup! It is mostly water and one carrot.', 'Pancakes are just flat cakes. Flat cakes are the best cakes.', 'Can I crack the egg? I will be gentle. Mostly.'],
-    grown: ['A pinch of chili wakes up any stew.', 'Good food, good friends, good evening.', 'Never trust a cook who does not taste as they go.'],
+    kid: ['I made a soup! It is mostly water and one carrot.', 'Pancakes are just flat cakes. Flat cakes are the best cakes.', 'Can I crack the egg? I will be gentle. Mostly.', 'I stirred the soup seven times. Seven is the lucky number for soup.', 'Is it sneezing or is it steam? The pot is being mysterious.', 'I want to be a chef and a dragon. Dragons can toast the bread.'],
+    grown: ['A pinch of chili wakes up any stew.', 'Good food, good friends, good evening.', 'Never trust a cook who does not taste as they go.', 'Fresh from the garden today. The carrots practically jumped in the pot.', 'If the boss smells dinner, I have done my job.', 'Salt is easy to add and impossible to take out. Ask my first stew.'],
   },
 };
 
+/** Lines for the boss (the player): a friend says one when the explorer stops beside them; the boss mutters the last pool. */
+export const BOSS_TALK: Record<Age, string[]> = {
+  kid: [
+    'Boss! Boss! I did something! I forgot what. But it was big!',
+    'Boss, can you carry me? Only a little bit. To the moon.',
+    'The boss is back! Did you bring snacks? Even a leaf would do.',
+    'Boss, your boots are very big. Can I wear one as a boat?',
+    'I tidied up! Everything is in one big pile. Very organised.',
+    'Boss, you are the bestest. Please do not tell the others I said so.',
+    'Shh, the boss is here. Everybody look busy! Hold this spoon!',
+    'Boss, I grew an entire millimetre. Measure me!',
+  ],
+  grown: [
+    'Welcome home, boss. The house behaved. Mostly. The kettle sulked.',
+    'Boss, the garden is thriving. I would say it is because of me, but the robot is listening.',
+    'Good to see you, boss. Dinner in ten minutes. Or twenty. Cooking is not an exact science.',
+    'Boss, you have leaves in your hair. It suits you, honestly.',
+    'We saved you the comfy seat. Well, we argued over it first.',
+    'Everything is under control, boss. Do not look behind the sofa.',
+    'The crops are standing tall just for you, boss. They practised all morning.',
+    'Another day, another basket. You work too hard, boss. Sit. Tea.',
+  ],
+};
+export const BOSS_SELF_TALK: string[] = [
+  'Home sweet home. Sweeter with snacks.',
+  'Right. Where did I leave my sword? And my keys? And my dignity?',
+  'Being the boss mostly means knowing where the biscuits are.',
+  'I wonder if the pumpkins are plotting something.',
+  'Everyone is working so hard. I will supervise. From the sofa.',
+  'The garden looks great. Let the plants show off a little longer.',
+  'Note to self: wipe the boots. Second note: ignore the first note.',
+  'A little tea, a little quiet, a little nap. In that order.',
+];
+
 /** Two-friend exchanges: a line, then another friend in the room replies. */
 export const EXCHANGES: Record<RoomId, [string, string][]> = {
-  living: [['Is it my turn on the comfy cushion?', 'It is always your turn, apparently.'], ['Who wants to hear about my day?', 'Only if it ends with a snack.']],
-  kitchen: [['What is for dinner?', 'Food. Now set the table, please.'], ['Can I help cook?', 'Yes! Start by washing those hands.']],
-  craft: [['Do you like my painting?', 'I love it. Which way up does it go?'], ['I need the glue.', 'It is stuck to your elbow.']],
-  bedroom: [['Are you awake?', 'I am now.'], ['Goodnight!', 'Goodnight! Do not let the bed bugs bite. We do not have any.']],
-  bath: [['Bath time!', 'Do I have to? I was clean last week.'], ['Have you seen the duck?', 'He is in the bath. Where else would he be?']],
-  study: [['What does this word mean?', 'Look it up. That is what the big book is for.'], ['Shh, I am reading.', 'You are holding it upside down.']],
+  living: [['Is it my turn on the comfy cushion?', 'It is always your turn, apparently.'], ['Who wants to hear about my day?', 'Only if it ends with a snack.'], ['Who moved my cushion?', 'It moved itself. It is a very brave cushion.']],
+  kitchen: [['What is for dinner?', 'Food. Now set the table, please.'], ['Can I help cook?', 'Yes! Start by washing those hands.'], ['Is the soup supposed to be purple?', 'It is a surprise soup. Surprise!']],
+  craft: [['Do you like my painting?', 'I love it. Which way up does it go?'], ['I need the glue.', 'It is stuck to your elbow.'], ['Look, I made a hat!', 'That is a bucket. A lovely bucket.']],
+  bedroom: [['Are you awake?', 'I am now.'], ['Goodnight!', 'Goodnight! Do not let the bed bugs bite. We do not have any.'], ['I cannot sleep. The dark is so loud.', 'Count the garden plants. Slowly. They are standing very tall.']],
+  bath: [['Bath time!', 'Do I have to? I was clean last week.'], ['Have you seen the duck?', 'He is in the bath. Where else would he be?'], ['Why is the duck wearing my towel?', 'He is the boss of the bath. Obviously.']],
+  study: [['What does this word mean?', 'Look it up. That is what the big book is for.'], ['Shh, I am reading.', 'You are holding it upside down.'], ['What is the longest word you know?', 'Dinner. It feels long when I wait for it.']],
 };
 
 /** Deals lines from a pool without repeats until most of it (three quarters) has been used, then starts over. */
@@ -209,3 +243,8 @@ export function exchangeFor(bag: TalkBag, room: RoomId, random = Math.random): [
   const pool = EXCHANGES[room]; if (!pool?.length) return null;
   const first = bag.pick(`x:${room}`, pool.map(p => p[0]), random); return pool.find(p => p[0] === first) ?? null;
 }
+
+/** A friend next to the boss greets them. */
+export const bossLine = (bag: TalkBag, stage: number, random = Math.random) => bag.pick('boss:' + ageOf(stage), BOSS_TALK[ageOf(stage)], random);
+/** The boss's own mutter. */
+export const bossSelfLine = (bag: TalkBag, random = Math.random) => bag.pick('boss:self', BOSS_SELF_TALK, random);

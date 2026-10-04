@@ -1,7 +1,7 @@
 import { t } from './i18n.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import type { SaveState } from './model.ts';
-import { CAGES, FRIENDS, doneToday, friendOf, type FriendId } from './friends.ts';
+import { CAGES, FRIENDS, doneToday, resting, friendOf, type FriendId } from './friends.ts';
 import { GROWTH, GROWTH_JOBS_PER_DAY, friendStage } from './growth.ts';
 import { autoFeedNote } from './farm-helper-ui.ts';
 import { autoPlantRow } from './auto-plant-ui.ts';
@@ -19,6 +19,7 @@ export function friendStatus(s: SaveState, id: FriendId, now = Date.now()) {
   if (!f) return t('{name} is still waiting in a cage.', { name });
   if (!f.home) return t('{name} · following you home', { name });
   if (f.paused) return t('{name} · resting (paused)', { name });
+  if (resting(f, now)) return t('{name} · taking a break indoors', { name });
   return t(ROLE_LINE[f.role], { name, count: doneToday(f, now) });
 }
 const JOB: Record<string, string> = {
@@ -37,7 +38,7 @@ export function friendPanel(s: SaveState, id: FriendId, now = Date.now()) {
   const f = friendOf(s, id); if (!f) return '';
   const paused = !!f.paused;
   return `<p class="intro friend-status" data-friend-status="${id}">${esc(friendStatus(s, id, now))}</p><p class="friend-growth" data-friend-stage="${friendStage(f)}">🌱 ${esc(growthLine(s, id))}</p><p>${esc(t(JOB[f.role]))}</p>`
-    + `<div class="button-row"><button class="${paused ? 'primary' : 'soft-button'}" data-action="friend-pause" data-kind="${id}" aria-pressed="${paused}">${esc(t(paused ? 'Back to work' : 'Take a break'))}</button></div>`
+    + `<div class="button-row"><button class="${paused ? 'primary' : 'soft-button'}" data-action="friend-pause" data-kind="${id}" aria-pressed="${paused}">${esc(t(paused ? 'Back to work' : 'Take a break'))}</button>${resting(f, now) ? `<button class="primary" data-action="friend-call" data-kind="${id}">${esc(t('Ask to work now'))}</button>` : ''}</div>`
     // The gardener plants only while the garden's one Auto-planting switch is on (auto-plant.ts): it is here too.
     + (f.role === 'garden' ? autoPlantRow(s, undefined, id) : '')
     // The farmer feeds only when asked (off by default): feeding costs crops that could be sold.

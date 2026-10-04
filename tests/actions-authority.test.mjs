@@ -156,7 +156,7 @@ test('crop theft checks friendship, visit, generation, ripeness, range and six s
   let at=2_000_000_000_000;t.mock.method(Date,'now',()=>at);const h=await service(t);
   const actor=account('alice'),owner=account('owner');actor.friends=['owner'];owner.friends=['alice'];owner.profile.level=30;
   while(owner.profile.plots.length<7)owner.profile.plots.push({crop:null,plantedAt:0});
-  for(let i=0;i<7;i++)assert.ok(Game.plant(owner.profile,i,'carrot',at-Game.CROPS.carrot.duration-1));
+  for(let i=0;i<7;i++)assert.ok(Game.plant(owner.profile,i,'carrot',at-Game.CROPS.carrot.duration-1-300000));
   await h.store.create(actor);await h.store.create(owner);
   const peer={planet:'home',room:'home',visit:'owner',pose:Game.bedPosition(owner.profile,0)};h.peers.set('alice',peer);
   const payload=i=>({ownerId:'owner',index:i,generation:owner.profile.plots[i].generation});

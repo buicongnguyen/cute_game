@@ -13,13 +13,10 @@ function home() {
   return s;
 }
 
-test('giveGear undoes the swap when the old item cannot go back into the bag', () => {
-  const s = home(), f = F.friendOf(s, 'sprout')!; s.bag.hat_cowboy = 1;
-  f.gear.hat = 'not_an_item'; // addItem refuses unknown ids: the bag would lose the new hat and gain nothing
+test('giveGear replaces what the helper wore without touching the bag', () => {
+  const s = home(), f = F.friendOf(s, 'sprout')!; s.bag.hat_cowboy = 1; f.gear.hat = 'hat_straw';
   const bag = structuredClone(s.bag);
-  assert.equal(F.giveGear(s, 'sprout', 'hat_cowboy'), false);
-  assert.deepEqual(s.bag, bag); assert.equal(f.gear.hat, 'not_an_item');
-  f.gear.hat = 'hat_straw'; assert.equal(F.giveGear(s, 'sprout', 'hat_cowboy'), true); assert.equal(s.bag.hat_straw, 1); assert.equal(f.gear.hat, 'hat_cowboy');
+  assert.equal(F.giveGear(s, 'sprout', 'hat_cowboy'), true); assert.deepEqual(s.bag, bag); assert.equal(f.gear.hat, 'hat_cowboy');
 });
 
 test('feed crops are only cheap quick ones: radish, carrot, pumpkin, mint; never fruit trees or seed crops', () => {

@@ -23,7 +23,7 @@ const DAY = 86_400_000;
 const ui: FarmUi = { art: (_id, icon) => icon, esc: text => text, mini: id => `<i data-item="${id}"></i>`, chips: () => '', effect: () => '' };
 function game(d: M.Difficulty = 'easy', level = 30) { const s = M.newGame(); s.level = level; s.energy = 100_000; s.farm.built = true; s.settings.difficulty = d; return s; }
 const act = (s: M.SaveState, type: string, payload: Record<string, unknown> = {}, now = T0) => applyGameAction(s, { type, payload }, { now, random: () => .5 });
-const ripe = (s: M.SaveState, crop: M.CropId, now: number) => { s.plots[0].crop = crop; s.plots[0].plantedAt = now - M.CROPS[crop].duration - 1; s.plots[0].growDuration = M.CROPS[crop].duration; };
+const ripe = (s: M.SaveState, crop: M.CropId, now: number) => { s.plots[0].crop = crop; s.plots[0].plantedAt = now - M.CROPS[crop].duration-1-300000; s.plots[0].growDuration = M.CROPS[crop].duration; };
 
 // 1. HIGH: the chapter-2 "Cook three meals" step softlocked Normal/Hard (kitchen opens at level 14).
 for (const d of M.DIFFICULTIES) test(`1. ${d}: every story step is doable at the level it is reached`, () => {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ROOM_TALK, PERSONA_TALK, EXCHANGES, TalkBag, lineFor, exchangeFor, ageOf } from '../src/house-talk.ts';
+import { ROOM_TALK, PERSONA_TALK, EXCHANGES, BOSS_TALK, BOSS_SELF_TALK, TalkBag, lineFor, exchangeFor, ageOf } from '../src/house-talk.ts';
 import { VI_HOUSE_TALK } from '../src/locales/vi-house-talk.ts';
 import { ROOMS } from '../src/house.ts';
 
@@ -8,6 +8,7 @@ test('every room has at least 8 kid lines and 8 grown-up lines, all distinct, ea
   const all: string[] = [];
   for (const room of ROOMS) for (const age of ['kid', 'grown'] as const) { const pool = ROOM_TALK[room.id][age]; assert.ok(pool.length >= 8, `${room.id} ${age}`); all.push(...pool); }
   for (const p of Object.values(PERSONA_TALK)) all.push(...p.kid, ...p.grown);
+  all.push(...BOSS_TALK.kid, ...BOSS_TALK.grown, ...BOSS_SELF_TALK);
   for (const x of Object.values(EXCHANGES)) for (const [a, b] of x) all.push(a, b);
   assert.equal(new Set(all).size, all.length, 'no line written twice');
   for (const line of all) { assert.ok(VI_HOUSE_TALK[line], `vi: ${line}`); assert.notEqual(VI_HOUSE_TALK[line], line); }

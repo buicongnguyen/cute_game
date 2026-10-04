@@ -63,7 +63,7 @@ export function dressHtml(s: SaveState, id: FriendId, { readOnly = false, portra
   return `<div class="dress-panel"><div class="dress-head">${portrait ? `<img class="dress-portrait" src="${portrait}" alt="">` : `<div class="dress-portrait">🧑‍🌾</div>`}<div><strong>${esc(t(look.name))}</strong><small>${t(look.role === 'garden' ? 'Tends the garden' : look.role === 'farm' ? 'Looks after the animals' : 'Cooks in the kitchen')}</small></div></div>`
     + `<h4>${t('Wearing')}</h4><div class="dress-slots">${slots}</div>`
     + (readOnly ? `<p class="fineprint">${t('Only the owner of this cottage can dress their friends.')}</p>`
-      : `<h4>${t('Give from your bag')}</h4>${bag ? `<div class="dress-bag">${bag}</div>` : `<p class="fineprint">${t('Nothing to wear in your bag yet. Visit the outfitters!')}</p>`}<p class="fineprint">${t('Given things leave your bag and come back when you take them.')}</p>`)
+      : `<h4>${t('Dress from your collection')}</h4>${bag ? `<div class="dress-bag">${bag}</div>` : `<p class="fineprint">${t('Nothing to wear in your bag yet. Visit the outfitters!')}</p>`}<p class="fineprint">${t('Your helpers borrow a copy, so every helper can wear anything you have obtained and you keep it too.')}</p>`)
     + '</div>';
 }
 

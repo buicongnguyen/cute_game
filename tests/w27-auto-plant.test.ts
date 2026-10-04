@@ -18,7 +18,7 @@ function garden({ robot = true, sprout = true } = {}) {
   if (sprout) s.friends = [{ id: 'sprout', role: 'garden', rescuedAt: 1, gear: {}, home: true }];
   return s;
 }
-const ripe = (s: M.SaveState, i: number, crop?: string) => { const p = s.plots[i]; if (crop) { p.crop = crop; p.growDuration = M.CROPS[crop].duration; } p.plantedAt = T0 - M.cropDuration(p) - 1; };
+const ripe = (s: M.SaveState, i: number, crop?: string) => { const p = s.plots[i]; if (crop) { p.crop = crop; p.growDuration = M.CROPS[crop].duration; } p.plantedAt = T0 - M.cropDuration(p) - 1 - 300000; };
 const crops = (s: M.SaveState) => s.plots.map(p => p.crop ?? '-').join(',');
 const act = (s: M.SaveState, type: string, payload: Record<string, unknown> = {}) => applyGameAction(s, { type, payload }, { now: T0, random: () => .5 });
 

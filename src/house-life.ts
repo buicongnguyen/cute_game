@@ -9,7 +9,7 @@
 import { t } from './i18n.ts';
 import type { Entity, World } from './world.ts';
 import type { HouseSession, ActivityEntity } from './house-session.ts';
-import { TalkBag, lineFor, exchangeFor } from './house-talk.ts';
+import { TalkBag, lineFor, exchangeFor, bossLine, bossSelfLine } from './house-talk.ts';
 import type { RoomId } from './house.ts';
 import { ACTIVITIES, activity, collectionLog, cooldownLeft, decorPlacements, decorSignature, friendLabel, trophies, photos, type Activity, type UseResult } from './house-activities.ts';
 import { PLANETS, type BuffDef } from './content.ts';
@@ -76,6 +76,8 @@ export function initHouseLife(d: LifeDeps) {
   // Online the cooldown stamps are the server's: measure them on its clock (the last reply's `at`), as fish-hunting-view does.
   let clockOffset = 0, using = false;
   const now = () => Date.now() + clockOffset;
+  // The explorer as a bubble anchor: same shape as a friend's group (position + parent).
+  const bossBody = { position: world.position, parent: true } as unknown as T.Object3D;
   const v = new T.Vector3(), talk = new TalkBag(), queue: { who: T.Object3D; text: string }[] = [];
   const fx = (a: Activity) => ({ x: a.at.x, y: a.y, z: a.at.z });
 
@@ -165,10 +167,15 @@ export function initHouseLife(d: LifeDeps) {
       // The reply of a two-friend exchange follows the first line.
       const next = queue.shift()!; bubble.textContent = next.text; bubble.hidden = false; chatFriend = next.who; chatLeft = 3.2;
     } else if ((chatClock -= dt) <= 0) {
-      chatClock = 5 + Math.random() * 5;
+      chatClock = 3 + Math.random() * 4;
       const settled = [...view.friends.values()].filter(f => Math.hypot(f.spot.x - f.group.position.x, f.spot.z - f.group.position.z) < .1);
-      const pick = settled[Math.floor(Math.random() * settled.length)];
-      if (pick) {
+      const near = settled.find(f => Math.hypot(f.group.position.x - world.position.x, f.group.position.z - world.position.z) < 3);
+      const pick = near && Math.random() < .6 ? near : settled[Math.floor(Math.random() * settled.length)];
+      if (near && pick === near) { bubble.textContent = t(bossLine(talk, near.stage)); bubble.hidden = false; chatFriend = near.group; chatLeft = 3.6; }
+      else if (!pick || Math.random() < .12) {
+        // The boss talks too: a mutter above the explorer.
+        bubble.textContent = t(bossSelfLine(talk)); bubble.hidden = false; chatFriend = bossBody; chatLeft = 3.2;
+      } else if (pick) {
         const room = ((pick.spot as { room?: RoomId }).room ?? 'living'), mate = settled.find(f => f !== pick && (f.spot as { room?: RoomId }).room === room);
         const pair = mate && Math.random() < .35 ? exchangeFor(talk, room) : null;
         if (pair && mate) { queue.push({ who: mate.group, text: t(pair[1]) }); bubble.textContent = t(pair[0]); }

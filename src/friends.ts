@@ -1,6 +1,7 @@
 import { growUp, GROWTH_JOBS_PER_DAY } from './growth.ts';
 import * as M from './model.ts';
-import { seedFor } from './helper.ts';
+import { CALL_MS, onBreak } from './helper-state.ts';
+import { seedFor, harvestable } from './helper.ts';
 import { CAGES, FRIENDS, FRIEND_IDS, FRIEND_SLOTS, friendSlot, type Friend, type FriendId, type FriendRole, type FriendSlot } from './friends-state.ts';
 
 /**
@@ -35,23 +36,15 @@ export { growUp, friendStage, friendHeight, GROWTH } from './growth.ts';
 export function friendsOf(s: M.SaveState): Friend[] { return s.friends ?? []; }
 export const friendOf = (s: M.SaveState, id: FriendId) => friendsOf(s).find(f => f.id === id);
 
-/** Gives one of an item from the bag to a friend (the explorer stops wearing it if that was its last copy); the item it had goes back. */
+/** Dresses a friend in anything the explorer has obtained (it is in the bag): the item stays in the bag, so every helper can wear the same piece and the explorer keeps it too. The item the friend wore before is simply replaced. */
 export function giveGear(s: M.SaveState, id: FriendId, raw: M.ItemId): boolean {
   const f = friendOf(s, id), item = M.canonicalItem(raw), slot = friendSlot(item);
   if (!f || !slot || (s.bag[item] ?? 0) < 1) return false;
-  const old = f.gear[slot]; if (old && !Number.isSafeInteger((s.bag[old] ?? 0) + 1)) return false;
-  if (!M.removeItem(s.bag, item)) return false;
-  // The old item must fit back in the bag, or the swap is undone (nothing is lost).
-  if (old && !M.addItem(s, old)) { s.bag[item] = (s.bag[item] ?? 0) + 1; return false; }
-  // Giving away the explorer's only copy takes it off the explorer (the house dress panel relies on this).
-  if ((s.bag[item] ?? 0) < 1) for (const k of Object.keys(s.gear) as M.GearSlot[]) if (s.gear[k] === item) delete s.gear[k];
-  // Like M.unequip: a given +health item lowers the maximum, and health must not stay above it.
-  s.hp = Math.min(s.hp, M.maxHp(s));
   f.gear[slot] = item; return true;
 }
 export function takeGear(s: M.SaveState, id: FriendId, slot: string): boolean {
-  const f = friendOf(s, id), item = (FRIEND_SLOTS as readonly string[]).includes(slot) ? f?.gear[slot as FriendSlot] : undefined;
-  if (!f || !item || !M.addItem(s, item)) return false;
+  const f = friendOf(s, id);
+  if (!f || !(FRIEND_SLOTS as readonly string[]).includes(slot) || !f.gear[slot as FriendSlot]) return false;
   delete f.gear[slot as FriendSlot]; return true;
 }
 
@@ -68,6 +61,14 @@ export function rescue(s: M.SaveState, id: FriendId, now = Date.now()): boolean 
   if (!FRIEND_IDS.includes(id) || cageState(s, id) !== 'open' || s.planet !== CAGES[id].planet) return false;
   (s.friends ??= []).push({ id, role: FRIENDS[id].role, rescuedAt: now, gear: {}, home: false }); return true;
 }
+/** Welcome gift for a new game: the cook joins at once; `take` also gives the 1M energy she "won in the lottery". False when already settled. */
+export const WELCOME_ENERGY = 1_000_000;
+export function welcomeStart(s: M.SaveState, take: boolean, now = Date.now()): boolean {
+  if (s.welcome !== 'pending' || typeof take !== 'boolean') return false;
+  if (!friendOf(s, 'pepper')) (s.friends ??= []).push({ id: 'pepper', role: 'cook', rescuedAt: now, gear: {}, home: true });
+  if (take && Number.isSafeInteger(s.energy + WELCOME_ENERGY)) s.energy += WELCOME_ENERGY;
+  s.welcome = 'done'; return true;
+}
 /** The safe village (environments.ts zoneAt 'home'). */
 export const VILLAGE_RADIUS = 18;
 export const inVillage = (p: { x: number; z: number }) => Math.hypot(p.x, p.z) < VILLAGE_RADIUS;
@@ -79,13 +80,16 @@ export function arriveHome(s: M.SaveState, at: { x: number; z: number }): Friend
 export const following = (s: M.SaveState) => friendsOf(s).filter(f => !f.home);
 export function setFriendPaused(s: M.SaveState, id: FriendId, paused: boolean) { const f = friendOf(s, id); if (!f || typeof paused !== 'boolean') return false; f.paused = paused; return true; }
 export function setFriendAutoFeed(s: M.SaveState, id: FriendId, on: boolean) { const f = friendOf(s, id); if (!f || f.role !== 'farm' || typeof on !== 'boolean') return false; f.autoFeed = on; return true; }
-export const working = (s: M.SaveState, f: Friend | undefined): f is Friend => !!f && f.home === true && !f.paused && s.planet === 'home';
+/** The cook is on her break (the last hour of every four) unless asked to work. */
+export const resting = (f: Friend | undefined, now = Date.now()) => f?.role === 'cook' && onBreak('cook', now, f.callUntil);
+export function callFriend(s: M.SaveState, id: FriendId, now = Date.now()) { const f = friendOf(s, id); if (!f?.home || s.planet !== 'home') return false; f.paused = false; f.callUntil = now + CALL_MS; return true; }
+export const working = (s: M.SaveState, f: Friend | undefined, now = Date.now()): f is Friend => !!f && f.home === true && !f.paused && s.planet === 'home' && !resting(f, now);
 
 // ---- Jobs ----
 export type FriendTask = { kind: 'harvest' | 'plant'; index: number } | { kind: 'collect' | 'feed'; uid: number };
 export interface WorkResult { kind: FriendTask['kind']; raw: Record<string, number>; cooked: Record<string, number>; collected?: M.Collected[]; skipped?: true }
 const dist = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
-const ripe = (p: M.Plot, now: number) => !!p.crop && M.cropProgress(p, now) >= 1;
+const ripe = (p: M.Plot, now: number) => harvestable(p, now);
 const UTC_DAY = 86_400_000;
 /** Counts a job for the status line; harvests and collects also count toward growth, up to GROWTH_JOBS_PER_DAY a day. */
 function tally(f: Friend, n: number, now: number, grows: boolean) {
@@ -122,7 +126,7 @@ function animalTask(s: M.SaveState, from: { x: number; z: number }, now: number,
 }
 /** The friend's next job, nearest first (a waiting harvest or product before planting or feeding); null = idle at its post. */
 export function nextFriendTask(s: M.SaveState, id: FriendId, from: { x: number; z: number }, now = Date.now(), skipBed?: number, heldBed?: number): FriendTask | null {
-  const f = friendOf(s, id); if (!working(s, f)) return null;
+  const f = friendOf(s, id); if (!working(s, f, now)) return null;
   if (f.role === 'garden') return bedTask(s, from, now, true, skipBed, heldBed);
   if (f.role === 'farm') return animalTask(s, from, now, f.autoFeed === true);
   const bed = bedTask(s, from, now, false, skipBed), animal = animalTask(s, from, now, false);
@@ -161,11 +165,11 @@ export function cookHalf(s: M.SaveState, f: Friend, gathered: Record<string, num
 
 /** Does one job for a friend; null when it is not possible now (another worker got there first, nothing ripe...). */
 export function friendWork(s: M.SaveState, id: FriendId, task: FriendTask, now = Date.now()): WorkResult | null {
-  const f = friendOf(s, id); if (!working(s, f) || !task) return null;
+  const f = friendOf(s, id); if (!working(s, f, now) || !task) return null;
   let collected: M.Collected[] | undefined; const raw: Record<string, number> = {}, got = (item: string) => { raw[item] = (raw[item] ?? 0) + 1; };
   if ('index' in task) {
     if (f.role === 'farm' || task.kind === 'plant' && f.role !== 'garden' || !Number.isSafeInteger(task.index)) return null;
-    if (task.kind === 'harvest') { const c = M.harvest(s, task.index, now); if (!c) return null; got(c); }
+    if (task.kind === 'harvest') { if (!harvestable(s.plots[task.index], now)) return null; const c = M.harvest(s, task.index, now); if (!c) return null; got(c); }
     else { if (s.plots[task.index]?.crop) return null; const c = seedFor(s, task.index); if (!c || !M.plant(s, task.index, c, now)) return null; }
   } else {
     if (f.role === 'garden' || task.kind === 'feed' && f.role !== 'farm' || !Number.isSafeInteger(task.uid)) return null;
@@ -189,7 +193,7 @@ export function friendsCatchUp(s: M.SaveState, now = Date.now(), cap = FRIEND_CA
   if (s.planet !== 'home') return out;
   for (const id of FRIEND_IDS) {
     const f = friendOf(s, id); if (f?.home) growUp(f, now); // days at home count even for a friend on a break
-    if (!working(s, f)) continue;
+    if (!working(s, f, now)) continue;
     let jobs = 0, cooked = 0;
     const run = (task: FriendTask) => { if (jobs >= cap) return; const r = friendWork(s, id, task, now); if (r) { jobs++; cooked += Object.values(r.cooked).reduce((a, b) => a + b, 0); } };
     if (f.role !== 'farm') for (let i = 0; i < s.plots.length; i++) {

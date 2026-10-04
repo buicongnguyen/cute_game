@@ -24,7 +24,7 @@ async function fixture(t, edit = () => {}) {
   const profileNow = async () => (await store.get('alice')).profile;
   return { store, peer, command, profile: profileNow };
 }
-const ripe = (s, i, crop) => { const p = s.plots[i]; p.crop = crop; p.growDuration = M.CROPS[crop].duration; p.plantedAt = Date.now() - p.growDuration - 1000; };
+const ripe = (s, i, crop) => { const p = s.plots[i]; p.crop = crop; p.growDuration = M.CROPS[crop].duration; p.plantedAt = Date.now() - p.growDuration - 1000 - 300000; };
 
 test('with auto-planting off the server lets no helper plant; harvests and the player\'s own planting go through', async t => {
   const f = await fixture(t, s => { ripe(s, 0, 'melon'); ripe(s, 1, 'carrot'); ripe(s, 2, 'carrot'); });

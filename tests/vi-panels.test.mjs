@@ -62,7 +62,7 @@ function leftovers(where,html,found){
 // ---- main.ts panels, rendered by the production functions --------------------------------
 const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
 const ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
-const renderers=['languageSelector','tryOnButton','effectText','growText','expandButton','plotDialog','inventory','rewardChips','materialChips','quests','shop','market','storage','upgrades','cooking','crafting','forgeMenu','decorations','planets','map','settings','testerMore','testerOnline','testerShop','help','penDialog','helperDialog','farmHelperDialog','friendDialog'];
+const renderers=['languageSelector','profilePicker','tryOnButton','effectText','growText','expandButton','plotDialog','inventory','rewardChips','materialChips','quests','shop','market','storage','upgrades','cooking','crafting','forgeMenu','decorations','planets','map','settings','testerMore','testerOnline','testerShop','help','penDialog','helperDialog','farmHelperDialog','friendDialog'];
 // Pull in the pure helpers the renderers call (function declarations only; they are hoisted
 // and run nothing until called), so a new helper in main.ts does not break this test.
 const declared=new Map(ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name).map(node=>[node.name.text,node.getText(ast)]));
@@ -89,7 +89,7 @@ function advancedState(){
 function mainPanels(state){
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
-  const context={...extraModules,M,IG,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,ICON_BASE:'/assets/icons/',localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
+  const context={PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},...extraModules,M,IG,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,ICON_BASE:'/assets/icons/',localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
     HELP_TOPICS,joystickEnabled:()=>state.settings.movePad??false,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},

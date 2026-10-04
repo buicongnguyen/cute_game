@@ -1965,3 +1965,9 @@ h1 > span {
 .restock-stock { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .restock-stock span { padding: 3px 8px; border-radius: 999px; background: #fff; font-weight: 700; font-size: var(--t-sm, 13px); }
 .restock-stock small { opacity: .6; margin-left: 2px; }
+
+.profile-picker{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border:0;padding:0;margin:0 0 12px}
+.profile-picker legend{font-size:.72rem;letter-spacing:.08em;margin-bottom:6px;opacity:.8}
+.profile-picker button{display:flex;flex-direction:column;gap:2px;padding:8px 6px;border-radius:12px;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.55);cursor:pointer;font:inherit;color:inherit}
+.profile-picker button.selected{border-color:#5fb04a;background:#fff}
+.profile-picker small{opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

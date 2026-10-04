@@ -232,7 +232,7 @@ test('13. bed upgrades say what they do to the harvest rate', () => {
 });
 test('15. a busy friend can grow by work before time (60 counted jobs a day) and the panel says how', () => {
   const s = M.newGame(); s.level = 30; s.planet = M.CAGES.sprout.planet; M.grantDefeat(s, M.CAGES.sprout.boss, 1, true, () => .5, false); F.rescue(s, 'sprout', T0); s.planet = 'home'; F.arriveHome(s, { x: 0, z: 5 });
-  for (let i = 0; i < 40; i++) { s.plots[0].crop = 'radish'; s.plots[0].plantedAt = T0 - M.CROPS.radish.duration - 1; F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0 + 3600e3); }
+  for (let i = 0; i < 40; i++) { s.plots[0].crop = 'radish'; s.plots[0].plantedAt = T0 - M.CROPS.radish.duration-1-300000; F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0 + 3600e3); }
   assert.equal(F.friendStage(s.friends![0]), 1, 'grown an hour after the rescue, by work');
 });
 test('16. the easel pays 3 % of the level bar', () => {
@@ -270,7 +270,7 @@ test('14. cooking, farm dishes and the feeders draw from the chest at home (bag 
 test('14. catch-ups go to the chest only when away or after a minute idle; a tab switch at home keeps them in the bag', () => {
   assert.equal(deliversToChest('farmHelperCatchUp', {}, 5_000), false); assert.equal(deliversToChest('farmHelperCatchUp', {}, CATCH_UP_IDLE_MS + 1), true);
   assert.equal(deliversToChest('helperCatchUp', { away: true }, 0), true); assert.equal(deliversToChest('helperHarvest', {}, 1e9), false, 'live work follows the pose only');
-  const s = M.newGame(); s.level = 30; s.energy = 5000; H.buyHelper(s); s.plots[0].crop = 'carrot'; s.plots[0].plantedAt = T0 - M.CROPS.carrot.duration - 1; s.savedAt = T0 - 2000;
+  const s = M.newGame(); s.level = 30; s.energy = 5000; H.buyHelper(s); s.plots[0].crop = 'carrot'; s.plots[0].plantedAt = T0 - M.CROPS.carrot.duration-1-300000; s.savedAt = T0 - 2000;
   act(s, 'helperCatchUp'); assert.equal(s.bag.carrot, 1); assert.equal(s.chest.carrot, undefined);
   // The robot's catch-up runs on every arrival home, like the friends'; right after a trip (another planet or a visit)
   // it counts as work done while away, so the client asks for the chest and the server agrees from its own trip clock.

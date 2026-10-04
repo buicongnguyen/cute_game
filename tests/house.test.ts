@@ -125,19 +125,19 @@ test('other explorers show only on their side of the door (pose height tags the 
 test('give and take round-trip with the bag; the stub and the action agree', () => {
   const s = seeded();
   assert.ok(giveGear(s, 'clover', 'hat_cowboy'));
-  assert.equal(s.bag.hat_cowboy, undefined); assert.equal(friendsOf(s)[1].gear.hat, 'hat_cowboy');
-  // Giving another hat returns the old one.
+  assert.equal(s.bag.hat_cowboy, 1); assert.equal(friendsOf(s)[1].gear.hat, 'hat_cowboy');
+  // Another hat replaces the old one; both stay in the bag.
   s.bag.hat_bear = 1; assert.ok(giveGear(s, 'clover', 'hat_bear')); assert.equal(s.bag.hat_cowboy, 1); assert.equal(friendsOf(s)[1].gear.hat, 'hat_bear');
   assert.ok(takeGear(s, 'clover', 'hat')); assert.equal(s.bag.hat_bear, 1); assert.equal(friendsOf(s)[1].gear.hat, undefined);
   assert.equal(giveGear(s, 'clover', 'dz_ninja'), false, 'disguises are not for friends');
   assert.equal(giveGear(s, 'clover', 'hat_wizard'), false, 'only what is in the bag');
   // Outfits go in the outfit slot (as SaveState.gear); the explorer stops wearing something it gave away.
   s.gear.outfit = 'armor_cloud'; s.bag.armor_cloud = 1; assert.ok(giveGear(s, 'sprout', 'armor_cloud'));
-  assert.equal(friendsOf(s)[0].gear.outfit, 'armor_cloud'); assert.equal(s.gear.outfit, undefined);
+  assert.equal(friendsOf(s)[0].gear.outfit, 'armor_cloud'); assert.equal(s.gear.outfit, 'armor_cloud', 'the explorer keeps wearing it');
   // Through the shared action reducer (offline and online use it).
   const t = seeded();
   applyGameAction(t, { type: 'giveFriendGear', payload: { friend: 'pepper', id: 'sword_wood' } });
-  assert.equal(friendsOf(t)[2].gear.weapon, 'sword_wood'); assert.equal(t.bag.sword_wood, undefined);
+  assert.equal(friendsOf(t)[2].gear.weapon, 'sword_wood'); assert.equal(t.bag.sword_wood, 1);
   applyGameAction(t, { type: 'takeFriendGear', payload: { friend: 'pepper', slot: 'weapon' } });
   assert.equal(t.bag.sword_wood, 1); assert.equal(friendsOf(t)[2].gear.weapon, undefined);
   assert.throws(() => applyGameAction(t, { type: 'takeFriendGear', payload: { friend: 'pepper', slot: 'weapon' } }));

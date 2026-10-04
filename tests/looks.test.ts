@@ -34,11 +34,11 @@ test('harvests count toward growing up (60 a day at most), and the catch-up grow
   const s = M.newGame(); s.level = 30; s.energy = 1e5; s.planet = M.CAGES.sprout.planet;
   M.grantDefeat(s, M.CAGES.sprout.boss, 1, true, () => .5, false); assert.equal(F.rescue(s, 'sprout', T0), true); s.planet = 'home'; F.arriveHome(s, { x: 0, z: 5 });
   const f = s.friends![0];
-  for (let i = 0; i < 39; i++) { const plot = s.plots[0]; plot.crop = 'radish'; plot.plantedAt = T0 - M.CROPS.radish.duration - 1; assert.ok(F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0)); }
+  for (let i = 0; i < 39; i++) { const plot = s.plots[0]; plot.crop = 'radish'; plot.plantedAt = T0 - M.CROPS.radish.duration - 1 - 300000; assert.ok(F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0)); }
   assert.equal(friendStage(f), 0);
-  for (let i = 0; i < 31; i++) { const plot = s.plots[0]; plot.crop = 'radish'; plot.plantedAt = T0 - M.CROPS.radish.duration - 1; assert.ok(F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0)); }
+  for (let i = 0; i < 31; i++) { const plot = s.plots[0]; plot.crop = 'radish'; plot.plantedAt = T0 - M.CROPS.radish.duration - 1 - 300000; assert.ok(F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0)); }
   assert.equal(f.jobs, 60, 'at most 60 jobs a day count'); assert.equal(friendStage(f), 1, 'a busy first day reaches the first step, before the one-day timer');
-  for (let i = 0; i < 10; i++) { const plot = s.plots[0]; plot.crop = 'radish'; plot.plantedAt = T0 - M.CROPS.radish.duration - 1; assert.ok(F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0 + DAY)); }
+  for (let i = 0; i < 10; i++) { const plot = s.plots[0]; plot.crop = 'radish'; plot.plantedAt = T0 - M.CROPS.radish.duration - 1 - 300000; assert.ok(F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0 + DAY)); }
   assert.equal(f.jobs, 70); assert.equal(friendStage(f), 1);
   f.paused = true; F.friendsCatchUp(s, T0 + 3 * DAY); assert.equal(friendStage(f), 2);
 });

@@ -42,7 +42,7 @@ test('F. houseUse needs your own cottage: an indoor pose within reach of the thi
 });
 
 test('Server: without a game socket the client cannot send the harvest to the chest', async t => {
-  const T = Date.now(), f = await service(t, p => { H.buyHelper(p); for (const i of [0, 1]) { p.plots[i].crop = 'carrot'; p.plots[i].plantedAt = T - M.CROPS.carrot.duration - 1000; } });
+  const T = Date.now(), f = await service(t, p => { H.buyHelper(p); for (const i of [0, 1]) { p.plots[i].crop = 'carrot'; p.plots[i].plantedAt = T - M.CROPS.carrot.duration - 1000 - 300000; } });
   let r = await f.command('helperHarvest', { index: 0, away: true }); assert.equal(r.profile.bag.carrot, 1); assert.equal(r.profile.chest.carrot, undefined);
   f.box.peer = { active: true, planet: 'home', room: 'public:home', visit: null, pose: { x: 40, z: 0 } };
   r = await f.command('helperHarvest', { index: 1, away: false }); assert.equal(r.profile.chest.carrot, 1, 'the server pose decides');
