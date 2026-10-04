@@ -15,6 +15,8 @@ import { hasDebuffs } from './home-care.ts';
 import { HouseSession, type FriendEntity } from './house-session.ts';
 import { houseKit } from './house-view.ts';
 import { FRIENDS, friendsOf, type FriendId } from './friends.ts';
+import { friendStatus, friendWorkRow, offDutyIndoors } from './friend-ui.ts';
+import { indoorsKey } from './profiles.ts';
 import { friendModel, friendSignature } from './friend-view.ts';
 import { friendLooksHtml, friendTabsHtml, initFriendLooks, type FriendTab } from './friend-looks-ui.ts';
 import { modelIcon } from './icons.ts';
@@ -40,9 +42,9 @@ export interface HouseDeps {
   soundOn?(): boolean;
 }
 /** A save made inside resumes inside: this device remembers the explorer was in the cottage. */
-const INSIDE_KEY = 'zoo-garden-indoors';
-const remember = (inside: boolean) => { try { if (inside) localStorage.setItem(INSIDE_KEY, '1'); else localStorage.removeItem(INSIDE_KEY); } catch { /* optional */ } };
-const remembered = () => { try { return localStorage.getItem(INSIDE_KEY) === '1'; } catch { return false; } };
+// Per save profile (profiles.ts): profile 1 saved indoors must not start profile 2 in the cottage.
+const remember = (inside: boolean) => { try { if (inside) localStorage.setItem(indoorsKey(), '1'); else localStorage.removeItem(indoorsKey()); } catch { /* optional */ } };
+const remembered = () => { try { return localStorage.getItem(indoorsKey()) === '1'; } catch { return false; } };
 // Keys are FRIEND_SLOTS (Friend.gear): 'outfit', not the item type 'armor', or a given outfit never showed and could not be taken back.
 export const DRESS_SLOTS: Array<[string, string, string]> = [['hat', '👒', 'Hat'], ['outfit', '🧥', 'Outfit'], ['boots', '👟', 'Boots'], ['weapon', '⚔️', 'Weapon'], ['pet', '🐾', 'Pet']];
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -61,6 +63,8 @@ export function dressHtml(s: SaveState, id: FriendId, { readOnly = false, portra
   }).join('');
   const bag = readOnly ? '' : wearables(s).map(({ id: item, count }) => `<button class="dress-item" data-house-action="give" data-friend="${id}" data-item="${esc(item)}" aria-label="${esc(t('Give {item}', { item: t(ITEMS[item].name) }))}"><img src="${esc(iconUrl(item))}" alt="" loading="lazy"><span>${esc(t(ITEMS[item].name))}</span><b>×${count}</b></button>`).join('');
   return `<div class="dress-panel"><div class="dress-head">${portrait ? `<img class="dress-portrait" src="${portrait}" alt="">` : `<div class="dress-portrait">🧑‍🌾</div>`}<div><strong>${esc(t(look.name))}</strong><small>${t(look.role === 'garden' ? 'Tends the garden' : look.role === 'farm' ? 'Looks after the animals' : 'Cooks in the kitchen')}</small></div></div>`
+    // Off duty indoors the outdoor panel cannot be tapped: its work buttons are here instead.
+    + (!readOnly && offDutyIndoors(s, id) ? `<p class="intro friend-status">${esc(friendStatus(s, id))}</p>${friendWorkRow(s, id)}` : '')
     + `<h4>${t('Wearing')}</h4><div class="dress-slots">${slots}</div>`
     + (readOnly ? `<p class="fineprint">${t('Only the owner of this cottage can dress their friends.')}</p>`
       : `<h4>${t('Dress from your collection')}</h4>${bag ? `<div class="dress-bag">${bag}</div>` : `<p class="fineprint">${t('Nothing to wear in your bag yet. Visit the outfitters!')}</p>`}<p class="fineprint">${t('Your helpers borrow a copy, so every helper can wear anything you have obtained and you keep it too.')}</p>`)

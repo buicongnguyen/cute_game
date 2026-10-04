@@ -1,7 +1,7 @@
 import * as M from './model.ts';
 import { t } from './i18n.ts';
 import { autoPlantOff, bedChoice } from './auto-plant.ts';
-import { cropFor, helperOf } from './helper.ts';
+import { cropFor, helperOf, robotResting } from './helper.ts';
 import { FRIENDS, friendsOf, working } from './friends.ts';
 
 /**
@@ -18,11 +18,11 @@ export const hasGardener = (s: M.SaveState) => !!s.helper?.owned || !!gardener(s
 export interface BedPlan { who: 'you' | 'helper' | 'wait'; crop: M.CropId | null; text: string }
 /** Who plants bed `i` next and what, in the player's words: the player, a helper, or nobody until the player acts. */
 export function bedPlan(s: M.SaveState, i: number): BedPlan {
-  const off = autoPlantOff(s), h = helperOf(s), f = gardener(s), robot = h.owned && !h.paused, friend = working(s, f);
+  const off = autoPlantOff(s), h = helperOf(s), f = gardener(s), resting = h.owned && !h.paused && robotResting(s), robot = h.owned && !h.paused && !resting, friend = working(s, f);
   const you = (why: string): BedPlan => ({ who: 'you', crop: null, text: `${t('You plant this bed.')} ${t(why)}` });
   if (off === 'switch') return you('Your helpers only harvest.');
   if (off === 'robot') return you('Bolt is switched off, so nobody plants for you.');
-  if (!robot && !friend) return you('No helper is at work right now.');
+  if (!robot && !friend) return you(resting ? 'Bolt is on his daily rest and plants again afterwards.' : 'No helper is at work right now.');
   const own = bedChoice(s, i), crop = cropFor(s, i), who = robot && friend ? t('Your helpers') : robot ? 'Bolt' : t(FRIENDS[f!.id].name);
   if (crop) return { who: 'helper', crop, text: t(own ? '{who} will plant {crop} here again. It is your own choice for this bed.' : '{who} will plant {crop} here. Plant a seed yourself and this bed keeps your crop.', { who, crop: t(M.CROPS[crop].name) }) };
   // The bed's own crop (or Bolt's chosen seed) cannot be planted now: it stays empty rather than getting something else.

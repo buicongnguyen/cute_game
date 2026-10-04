@@ -13,3 +13,5 @@ export function setActiveSlot(slot: number): boolean {
   try { globalThis.localStorage?.setItem(SLOT_KEY, String(slot)); return true; } catch { return false; }
 }
 export const activeKey = () => slotKey(activeSlot());
+/** "This profile was last saved inside the cottage" (house-ui.ts), one flag per profile; profile 1 keeps the original key. */
+export const indoorsKey = (slot = activeSlot()) => slot === 0 ? 'zoo-garden-indoors' : `zoo-garden-indoors-slot${slot + 1}`;

@@ -25,6 +25,8 @@ export const CALL_MS = 30 * 60_000;
 export const onBreak = (who: keyof typeof BREAKS, now: number, callUntil?: number) =>
   !(callUntil && now < callUntil) && now % BREAKS[who].cycle >= BREAKS[who].cycle - BREAKS[who].rest;
 export const newHelper = (): HelperState => ({ owned: false, paused: false, seed: 'same', last: {} });
+/** Records a bed's crop as the newest entry (insertion order is what parseHelper keeps when trimming to 64). */
+export function remember(h: HelperState, key: string, crop: CropId) { delete h.last[key]; h.last[key] = crop; }
 const crop = (raw: unknown): CropId | null => { if (typeof raw !== 'string') return null; const id = canonicalItem(raw); return Object.hasOwn(CROPS, id) ? id : null; };
 
 /** Validates a saved helper (or a visitor's copy of one); anything malformed falls back to safe defaults. */
@@ -36,6 +38,7 @@ export function parseHelper(raw: unknown): HelperState {
   if (typeof v.callUntil === 'number' && Number.isFinite(v.callUntil)) h.callUntil = v.callUntil;
   h.seed = v.seed === 'same' ? 'same' : crop(v.seed) ?? 'same';
   if (v.last && typeof v.last === 'object' && !Array.isArray(v.last))
-    for (const [key, id] of Object.entries(v.last as Record<string, unknown>).slice(0, 64)) { const c = crop(id); if (c && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(key)) h.last[key] = c; }
+    // The newest 64: remember() moves a key to the end on every write, so these are the beds' current spots, not long-gone ones.
+    for (const [key, id] of Object.entries(v.last as Record<string, unknown>).slice(-64)) { const c = crop(id); if (c && /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(key)) h.last[key] = c; }
   return h;
 }

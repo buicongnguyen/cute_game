@@ -1,3 +1,4 @@
+import './support/midday-clock.mjs'; // the bed panel names a resting Bolt differently: test at a working hour
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as M from '../src/model.ts';
@@ -115,7 +116,7 @@ test('the shared actions carry the rule (offline play and the server run the sam
   const s = garden(); ripe(s, 0, 'melon');
   assert.throws(() => act(s, 'setAutoPlant', { on: 'no' }), /not available/);
   assert.equal(act(s, 'setAutoPlant', { on: false }), true);
-  assert.throws(() => act(s, 'helperPlant', { index: 1 }), /not available/); assert.equal(s.plots[1].crop, null);
+  assert.throws(() => act(s, 'helperPlant', { index: 1 }), /Auto-planting is off/); assert.equal(s.plots[1].crop, null);
   assert.deepEqual(act(s, 'friendWork', { id: 'sprout', kind: 'plant', index: 1 }), { kind: 'plant', raw: {}, cooked: {}, skipped: true });
   // The catch-up after time away harvests the ripe bed and plants nothing.
   assert.deepEqual(act(s, 'helperCatchUp'), { harvested: ['melon'], planted: [] });

@@ -2,6 +2,7 @@ import { growUp, GROWTH_JOBS_PER_DAY } from './growth.ts';
 import * as M from './model.ts';
 import { CALL_MS, onBreak } from './helper-state.ts';
 import { seedFor, harvestable } from './helper.ts';
+import { asHelper } from './progression.ts';
 import { CAGES, FRIENDS, FRIEND_IDS, FRIEND_SLOTS, friendSlot, type Friend, type FriendId, type FriendRole, type FriendSlot } from './friends-state.ts';
 
 /**
@@ -59,13 +60,13 @@ export function cageState(s: M.SaveState, id: FriendId): CageState {
 /** Frees a prisoner: only from an open cage on the planet the explorer is on. */
 export function rescue(s: M.SaveState, id: FriendId, now = Date.now()): boolean {
   if (!FRIEND_IDS.includes(id) || cageState(s, id) !== 'open' || s.planet !== CAGES[id].planet) return false;
-  (s.friends ??= []).push({ id, role: FRIENDS[id].role, rescuedAt: now, gear: {}, home: false }); return true;
+  (s.friends ??= []).push({ id, role: FRIENDS[id].role, rescuedAt: now, gear: {}, home: false, borrowed: true }); return true;
 }
 /** Welcome gift for a new game: the cook joins at once; `take` also gives the 1M energy she "won in the lottery". False when already settled. */
 export const WELCOME_ENERGY = 1_000_000;
 export function welcomeStart(s: M.SaveState, take: boolean, now = Date.now()): boolean {
   if (s.welcome !== 'pending' || typeof take !== 'boolean') return false;
-  if (!friendOf(s, 'pepper')) (s.friends ??= []).push({ id: 'pepper', role: 'cook', rescuedAt: now, gear: {}, home: true });
+  if (!friendOf(s, 'pepper')) (s.friends ??= []).push({ id: 'pepper', role: 'cook', rescuedAt: now, gear: {}, home: true, borrowed: true });
   if (take && Number.isSafeInteger(s.energy + WELCOME_ENERGY)) s.energy += WELCOME_ENERGY;
   s.welcome = 'done'; return true;
 }
@@ -73,13 +74,16 @@ export function welcomeStart(s: M.SaveState, take: boolean, now = Date.now()): b
  * The cook's change of clothes after a visit home: a random hat, outfit and boots from what the explorer has obtained
  * (borrowed, giveGear), never the same look twice in a row when there is a choice. `pick` is a number in [0, 1) from the caller.
  */
+const OUTFIT_SLOTS: readonly FriendSlot[] = FRIEND_SLOTS.filter(slot => slot !== 'pet' && slot !== 'weapon');
+const outfitChoices = (s: M.SaveState, f: Friend, slot: FriendSlot) => Object.keys(s.bag).filter(item => (s.bag[item] ?? 0) > 0 && friendSlot(item) === slot && item !== f.gear[slot]).sort();
+/** True when the explorer has something for the cook to change into (a fresh game has nothing: she keeps her clothes). */
+export function canChangeOutfit(s: M.SaveState, id: FriendId): boolean { const f = friendOf(s, id); return !!f && OUTFIT_SLOTS.some(slot => outfitChoices(s, f, slot).length > 0); }
 export function changeOutfit(s: M.SaveState, id: FriendId, pick: number): boolean {
   const f = friendOf(s, id); if (!f || !Number.isFinite(pick) || pick < 0 || pick >= 1) return false;
-  const owned = (slot: FriendSlot) => Object.keys(s.bag).filter(item => (s.bag[item] ?? 0) > 0 && friendSlot(item) === slot).sort();
   let changed = false;
   FRIEND_SLOTS.forEach((slot, i) => {
-    if (slot === 'pet' || slot === 'weapon') return;
-    const list = owned(slot).filter(item => item !== f.gear[slot]); if (!list.length) return;
+    if (!OUTFIT_SLOTS.includes(slot)) return;
+    const list = outfitChoices(s, f, slot); if (!list.length) return;
     // A different fraction of `pick` per slot, so hat, outfit and boots do not always move together.
     f.gear[slot] = list[Math.floor(((pick * (i + 3) * 7.31) % 1) * list.length)]; changed = true;
   });
@@ -130,25 +134,26 @@ function bedTask(s: M.SaveState, from: { x: number; z: number }, now: number, pl
 }
 /** The farmer's feed for this animal (farm.ts autoFeedCrop: cheap crops, adults, worth it; bag or, at home, chest), always leaving the player one. */
 const keepOne = (s: M.SaveState, a: M.Animal | undefined, now: number) => { const crop = a && M.autoFeedCrop(s, a, now); return crop && M.pantry(s, crop) > 1 ? crop : null; };
-function animalTask(s: M.SaveState, from: { x: number; z: number }, now: number, feed: boolean): FriendTask | null {
+function animalTask(s: M.SaveState, from: { x: number; z: number }, now: number, feed: boolean, skip?: number): FriendTask | null {
   if (!M.penBuilt(s)) return null;
   let best: FriendTask | null = null, bestD = Infinity, ready = false;
   for (const a of M.farmOf(s).animals) {
+    if (a.uid === skip) continue; // the pen robot is already on its way to this one
     const r = M.productCount(a, now) > 0; if (!r && !(feed && keepOne(s, a, now))) continue;
     const d = dist(a.home ?? M.PEN, from);
     if (r && !ready || r === ready && d < bestD) { best = { kind: r ? 'collect' : 'feed', uid: a.uid }; bestD = d; ready = r; }
   }
   return best;
 }
-/** The friend's next job, nearest first (a waiting harvest or product before planting or feeding); null = idle at its post. */
-export function nextFriendTask(s: M.SaveState, id: FriendId, from: { x: number; z: number }, now = Date.now(), skipBed?: number, heldBed?: number): FriendTask | null {
+/** The friend's next job, nearest first (a waiting harvest or product before planting or feeding); null = idle at its post. `skipAnimal` is the animal the pen robot is walking to. */
+export function nextFriendTask(s: M.SaveState, id: FriendId, from: { x: number; z: number }, now = Date.now(), skipBed?: number, heldBed?: number, skipAnimal?: number): FriendTask | null {
   const f = friendOf(s, id); if (!working(s, f, now)) return null;
   if (f.role === 'garden') return bedTask(s, from, now, true, skipBed, heldBed);
-  if (f.role === 'farm') return animalTask(s, from, now, f.autoFeed === true);
+  if (f.role === 'farm') return animalTask(s, from, now, f.autoFeed === true, skipAnimal);
   // The cook shops for the pot, not for the beds: a bed only once two are ripe (one trip for a basket, so she no
   // longer shadows the gardener bed by bed), farm products only when no farmer is working them.
   if (s.plots.filter(p => ripe(p, now)).length >= 2) { const bed = bedTask(s, from, now, false, skipBed); if (bed) return bed; }
-  return working(s, friendOf(s, 'clover'), now) ? null : animalTask(s, from, now, false);
+  return working(s, friendOf(s, 'clover'), now) ? null : animalTask(s, from, now, false, skipAnimal);
 }
 
 /** Cooks half of what the cook gathered (with the carried odd ones); returns what was cooked, the rest stays raw. */
@@ -181,6 +186,10 @@ export function cookHalf(s: M.SaveState, f: Friend, gathered: Record<string, num
 
 /** Does one job for a friend; null when it is not possible now (another worker got there first, nothing ripe...). */
 export function friendWork(s: M.SaveState, id: FriendId, task: FriendTask, now = Date.now()): WorkResult | null {
+  // A friend's work counts for quests, totals and bounties like the robot's, but never wins the player's timed challenge.
+  return asHelper(() => doWork(s, id, task, now));
+}
+function doWork(s: M.SaveState, id: FriendId, task: FriendTask, now: number): WorkResult | null {
   const f = friendOf(s, id); if (!working(s, f, now) || !task) return null;
   let collected: M.Collected[] | undefined; const raw: Record<string, number> = {}, got = (item: string) => { raw[item] = (raw[item] ?? 0) + 1; };
   if ('index' in task) {

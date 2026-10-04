@@ -123,7 +123,7 @@ export function testerBuy(s: M.SaveState, id: string) {
 /** Counts as a real rescue that already walked home: the friend stands at its post and its cage disappears. */
 export function testerFriend(s: M.SaveState, id: FriendId, now = Date.now()) {
   if (!isTester(s) || !FRIEND_IDS.includes(id) || (s.friends ?? []).some(f => f.id === id) || s.energy < FRIEND_PRICE) return false;
-  s.energy -= FRIEND_PRICE; (s.friends ??= []).push({ id, role: FRIENDS[id].role, rescuedAt: now, gear: {}, home: true }); return true;
+  s.energy -= FRIEND_PRICE; (s.friends ??= []).push({ id, role: FRIENDS[id].role, rescuedAt: now, gear: {}, home: true, borrowed: true }); return true;
 }
 export function testerPlanets(s: M.SaveState) { if (!isTester(s)) return false; for (const id of Object.keys(PLANETS) as PlanetId[]) if (!s.discovered.includes(id)) s.discovered.push(id); return true; }
 export function testerMaxLevel(s: M.SaveState) { if (!isTester(s) || s.level >= TESTER_LEVEL) return false; s.level = TESTER_LEVEL; s.xp = 0; s.hp = M.maxHp(s); return true; }

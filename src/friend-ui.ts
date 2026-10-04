@@ -34,11 +34,18 @@ export function growthLine(s: SaveState, id: FriendId) {
   const stage = friendStage(f), next = GROWTH[stage + 1], size = t('{name} · {share} of your height', { name: t(STAGE_NAME[stage]), share: String(GROWTH[stage].height) });
   return next ? t('Size: {size} · grows {days} days after the rescue, or sooner after {jobs} harvests or collections (now {done}, at most {cap} a day)', { size, jobs: next.jobs, days: next.days, done: f.jobs ?? 0, cap: GROWTH_JOBS_PER_DAY }) : t('Size: {size} · fully grown', { size });
 }
-export function friendPanel(s: SaveState, id: FriendId, now = Date.now()) {
+/** "Take a break" / "Back to work", and "Ask to work now" during a rest: in the friend's panel, and in the cottage's Dress panel for a friend who is off duty indoors (house-ui.ts), where the outdoor panel cannot be reached. */
+export function friendWorkRow(s: SaveState, id: FriendId, now = Date.now()) {
   const f = friendOf(s, id); if (!f) return '';
   const paused = !!f.paused;
+  return `<div class="button-row friend-work-row"><button class="${paused ? 'primary' : 'soft-button'}" data-action="friend-pause" data-kind="${id}" aria-pressed="${paused}">${esc(t(paused ? 'Back to work' : 'Take a break'))}</button>${resting(f, now) ? `<button class="primary" data-action="friend-call" data-kind="${id}">${esc(t('Ask to work now'))}</button>` : ''}</div>`;
+}
+/** True while the friend is off duty inside the cottage (only the cook goes in: friend-crew.ts). */
+export const offDutyIndoors = (s: SaveState, id: FriendId, now = Date.now()) => { const f = friendOf(s, id); return f?.role === 'cook' && f.home === true && resting(f, now); };
+export function friendPanel(s: SaveState, id: FriendId, now = Date.now()) {
+  const f = friendOf(s, id); if (!f) return '';
   return `<p class="intro friend-status" data-friend-status="${id}">${esc(friendStatus(s, id, now))}</p><p class="friend-growth" data-friend-stage="${friendStage(f)}">🌱 ${esc(growthLine(s, id))}</p><p>${esc(t(JOB[f.role]))}</p>`
-    + `<div class="button-row"><button class="${paused ? 'primary' : 'soft-button'}" data-action="friend-pause" data-kind="${id}" aria-pressed="${paused}">${esc(t(paused ? 'Back to work' : 'Take a break'))}</button>${resting(f, now) ? `<button class="primary" data-action="friend-call" data-kind="${id}">${esc(t('Ask to work now'))}</button>` : ''}</div>`
+    + friendWorkRow(s, id, now)
     // The gardener plants only while the garden's one Auto-planting switch is on (auto-plant.ts): it is here too.
     + (f.role === 'garden' ? autoPlantRow(s, undefined, id) : '')
     // The farmer feeds only when asked (off by default): feeding costs crops that could be sold.

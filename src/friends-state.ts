@@ -22,6 +22,8 @@ export interface Friend {
   paused?: boolean;
   /** Asked to work through a daily rest until this time (ms). */
   callUntil?: number;
+  /** Gear follows the borrowing rule (ab819d1: the item stays in the bag). Missing on friends from older saves, whose given gear left the bag: parseSave hands those items back once (model.ts). */
+  borrowed?: true;
   /** The farmer only feeds animals when the player turns this on (off by default, like the pen robot's autoFeed). */
   autoFeed?: boolean;
   /** Jobs done since the rescue (growth.ts counts them); older saves start from today's count. */
@@ -83,6 +85,7 @@ export function parseFriends(raw: unknown): Friend[] {
     if (!FRIEND_IDS.includes(id) || out.some(f => f.id === id)) continue;
     const f: Friend = { id, role: FRIENDS[id].role, rescuedAt: Number.isFinite(r.rescuedAt) ? r.rescuedAt as number : 0, gear: {}, home: r.home === true, paused: r.paused === true };
     if (r.autoFeed === true) f.autoFeed = true;
+    if (r.borrowed === true) f.borrowed = true;
     if (typeof r.callUntil === 'number' && Number.isFinite(r.callUntil)) f.callUntil = r.callUntil;
     const look = toLook(r.look); if (look && look !== DEFAULT_LOOK) f.look = look; // a visitor's copy too; parseSave also checks the owner owns it
     if (r.gear && typeof r.gear === 'object' && !Array.isArray(r.gear))

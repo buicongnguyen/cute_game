@@ -1,3 +1,4 @@
+import './support/midday-clock.mjs'; // helpers work at this hour (their breaks are tested on their own)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -30,7 +31,7 @@ test('with auto-planting off the server lets no helper plant; harvests and the p
   const f = await fixture(t, s => { ripe(s, 0, 'melon'); ripe(s, 1, 'carrot'); ripe(s, 2, 'carrot'); });
   assert.equal((await f.command('setAutoPlant', { on: false })).result, true);
   assert.equal((await f.profile()).helper.manual, true, 'the switch is saved on the account');
-  await assert.rejects(f.command('helperPlant', { index: 4 }), /not available/);
+  await assert.rejects(f.command('helperPlant', { index: 4 }), /Auto-planting is off/);
   assert.equal((await f.command('friendWork', { id: 'sprout', kind: 'plant', index: 4 })).result.skipped, true);
   assert.equal((await f.command('helperHarvest', { index: 0 })).result, 'melon');
   assert.deepEqual((await f.command('friendWork', { id: 'sprout', kind: 'harvest', index: 1 })).result.raw, { carrot: 1 });
@@ -48,7 +49,7 @@ test('a switched-off robot means no automatic planting by Sprout either, on the 
   const f = await fixture(t);
   assert.equal((await f.command('setHelperPaused', { paused: true })).result, true);
   assert.equal((await f.command('friendWork', { id: 'sprout', kind: 'plant', index: 0 })).result.skipped, true);
-  await assert.rejects(f.command('helperPlant', { index: 0 }), /not available/);
+  await assert.rejects(f.command('helperPlant', { index: 0 }), /Auto-planting is off/);
   assert.equal((await f.command('friendsCatchUp')).result.sprout.jobs, 0);
   assert.ok((await f.profile()).plots.every(p => !p.crop));
   assert.equal((await f.command('plantAll', { id: 'grape' })).result, 9);

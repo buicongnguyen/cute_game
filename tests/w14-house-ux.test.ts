@@ -1,5 +1,6 @@
 // w14-ux: indoor labels sit on their things and a tap on the label or the thing picks it; the indoor stores are their own
 // places; workers' gain effects show only outdoors in the home village (user decision 2026-10-02).
+import './support/midday-clock.mjs'; // helpers work at this hour (their breaks are tested on their own)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';

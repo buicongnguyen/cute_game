@@ -1,3 +1,4 @@
+import './support/midday-clock.mjs'; // helpers work at this hour (their breaks are tested on their own)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as M from '../src/model.ts';

@@ -821,10 +821,12 @@ export function parseSave(raw: string | null): SaveState | null {
             s.helper = parseHelper(v.helper);
             // The robot's "replant the same" memory is keyed by bed position (helper.ts bedKey): follow the beds that moved.
             const last = { ...s.helper.last };
-            s.plots.forEach((p, i) => { const crop = last[oldKeys.get(p) ?? ''] ?? last[bedKey(i)]; if (crop) s.helper!.last[bedKey(i)] = crop; });
+            s.plots.forEach((p, i) => { const crop = last[oldKeys.get(p) ?? ''] ?? last[bedKey(i)]; if (crop) { delete s.helper!.last[bedKey(i)]; s.helper!.last[bedKey(i)] = crop; } }); // newest last: parseHelper keeps the newest 64
         }
         const awayStore = inventory(v.awayStore); if (Object.keys(awayStore).length) s.awayStore = awayStore;
-        const friends = parseFriends(v.friends), bosses = parseBosses(v.bosses); if (friends.length) s.friends = friends; if (bosses.length) s.bosses = bosses; const house = parseHouse(v.house); if (house) s.house = house;
+        const friends = parseFriends(v.friends), bosses = parseBosses(v.bosses); if (friends.length) s.friends = friends;
+        // Gear given before borrowing (ab819d1) left the bag: put that copy back once, so taking it off or the cook's change of clothes never destroys it.
+        for (const f of friends) if (!f.borrowed) { for (const item of Object.values(f.gear)) if (item && !(s.bag[item] ?? 0)) addItem(s, item); f.borrowed = true; } if (bosses.length) s.bosses = bosses; const house = parseHouse(v.house); if (house) s.house = house;
         const looks = parseLooks(v.looks); if (looks) s.looks = looks;
         dropUnownedFriendLooks(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));

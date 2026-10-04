@@ -1,5 +1,5 @@
 import * as M from './model.ts';
-import { HELPER_COST, CALL_MS, onBreak, newHelper, type HelperState } from './helper-state.ts';
+import { HELPER_COST, CALL_MS, onBreak, newHelper, remember, type HelperState } from './helper-state.ts';
 import { asHelper } from './progression.ts';
 import { autoPlanting, bedChoice } from './auto-plant.ts';
 
@@ -24,7 +24,8 @@ export const bedKey = (s: M.SaveState, i: number) => { const p = M.bedPosition(s
 
 /** Bolt is on his daily rest (unless asked to work). */
 export const robotResting = (s: M.SaveState, now = Date.now()) => onBreak('robot', now, s.helper?.callUntil);
-export function callHelper(s: M.SaveState, now = Date.now()) { if (!s.helper?.owned || s.planet !== 'home') return false; s.helper.paused = false; s.helper.callUntil = now + CALL_MS; return true; }
+/** "Ask Bolt to work now" during his rest: 30 minutes of work. A Bolt the player switched off stays off (that switch also means "I plant by hand", auto-plant.ts). */
+export function callHelper(s: M.SaveState, now = Date.now()) { if (!s.helper?.owned || s.helper.paused || s.planet !== 'home') return false; s.helper.callUntil = now + CALL_MS; return true; }
 export type BuyResult = 'owned' | 'away' | 'energy' | 'bought';
 export function buyHelper(s: M.SaveState): BuyResult {
   if (s.helper?.owned) return 'owned';
@@ -42,7 +43,7 @@ export function setHelperSeed(s: M.SaveState, seed: 'same' | M.CropId) {
 /** Records what grows in each bed now, so "same as before" follows the player's own choices too. */
 export function rememberPlantings(s: M.SaveState) {
   const h = s.helper; if (!h?.owned) return;
-  s.plots.forEach((p, i) => { if (p.crop) h.last[bedKey(s, i)] = p.crop; });
+  s.plots.forEach((p, i) => { if (p.crop) remember(h, bedKey(s, i), p.crop); });
 }
 
 /** True when the crop can be planted now from what the player has (level reached, seed in the bag if it needs one). */
@@ -100,14 +101,14 @@ export function nextTask(s: M.SaveState, from: { x: number; z: number }, now = D
 export function helperHarvest(s: M.SaveState, i: number, now = Date.now()) {
   if (!s.helper?.owned || robotResting(s, now)) return null;
   if (!s.plots[i] || !harvestable(s.plots[i], now)) return null;
-  const crop = s.plots[i].crop; if (crop) s.helper.last[bedKey(s, i)] = crop;
+  const crop = s.plots[i].crop; if (crop) remember(s.helper, bedKey(s, i), crop);
   return asHelper(() => M.harvest(s, i, now)); // the robot's harvests never win the player's timed challenge
 }
 /** Plant bed `i` with the helper's choice; false when it is not empty or there is nothing to plant. */
 export function helperPlant(s: M.SaveState, i: number, now = Date.now()) {
   if (!s.helper?.owned || robotResting(s, now) || s.plots[i]?.crop) return null;
   const crop = seedFor(s, i); if (!crop || !M.plant(s, i, crop, now)) return null;
-  s.helper.last[bedKey(s, i)] = crop; return crop;
+  remember(s.helper, bedKey(s, i), crop); return crop;
 }
 
 /**

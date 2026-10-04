@@ -1,5 +1,6 @@
 // Wave 15 review, server side: the cottage position check, the away flag without a socket, the co-op Hard bonus,
 // and the offline worker's partial install.
+import './support/midday-clock.mjs'; // helpers work at this hour (their breaks are tested on their own)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
