@@ -10,13 +10,14 @@ import { replyTo } from './bot-chat.ts';
 import type { GameBridge } from './game-bridge.ts';
 import type { RemotePose } from './world.ts';
 import {
-  BOT_ID_PREFIX, MEET_PAUSE_MS, befriend, canMeet, choosePresent, isBotId, isFriend, makeCast, newStore, parseStore, pickGoal, presentReady, schedulePresent, seeded, settleGift, walk,
-  type BotDef, type BotStore, type GiftNote, type WalkCtx, type Walker,
+  BOT_ID_PREFIX, MEET_PAUSE_MS, SAFE_RADIUS, ZONE_RADIUS, attackDamage, huntFor, restFor, visitStay, befriend, canMeet, choosePresent, gateRoute, inSafeZone, isBotId, isFriend, makeCast, newStore, nextVisitIn, parseStore, pickFoe, pickGoal, presentReady, schedulePresent, seeded, settleGift, walk, zoneOf,
+  type BotDef, type BotStore, type GiftNote, type WalkCtx, type Walker, type Zone,
 } from './bot-logic.ts';
 import './bots.css';
 
 /**
- * AI neighbours for solo play: a few made-up explorers share the garden with you (drawn by the same code as other players,
+ * AI neighbours for solo play: a few made-up explorers live in the common area beyond the four gates, fighting the enemies there (you meet them
+ * out there). Friends sometimes walk through a gate into your safe zone to visit your house, and stay a minute or so. A few made-up explorers share the garden with you (drawn by the same code as other players,
  * with a name and level above their heads), each with a house you can visit once you are friends. Some are rich and wear
  * rare outfits; the ones who can fly cross the sky now and then. Now and then one walks up, says something kind and asks to be
  * friends; when you say yes they give you a rare gift. They only exist while you play offline, never next to real players.
@@ -25,12 +26,17 @@ import './bots.css';
  * it, so closing the page, a full bag or a visit in progress can delay it but never lose it.
  */
 const STORE_KEY = 'cute-game-neighbours-v1', ENABLED_KEY = 'cute-game-neighbours-on', COUNT = 5;
-const AREA = { radius: 13, centre: { x: 0, z: 2 } }; // inside the home safe zone (18 m), so enemies never notice them
+const AREA = { radius: 13, centre: { x: 0, z: 2 } }; // where a visiting friend wanders: inside the safe zone
 const FLY_HEIGHT = 3.1, GATE_EXIT = 19.5;
-type Mode = 'wander' | 'approach' | 'talk' | 'ask' | 'fly';
+type Mode = 'wander' | 'approach' | 'talk' | 'ask' | 'fly' | 'commute' | 'rest';
+/** `zone`: out in the common area, fighting. `garden`: a friend visiting your safe zone. */
+type Place = 'zone' | 'garden';
 interface Run {
   def: BotDef; w: Walker; y: number; mode: Mode; modeT: number; flyY: number; say: { text: string; until: number } | null;
   moving: boolean; nextPlan: number; chase: number; askUntil: number;
+  huntUntil: number; restUntil: number; hidden: boolean;
+  place: Place; zone: Zone; /** Clock time of the next trip into the safe zone (friends) and when the visit ends. */ visitAt: number; stayUntil: number;
+  foe: { id: string; x: number; z: number; hp: number } | null; foeT: number; swing: number; route: Array<{ x: number; z: number }>; commuteTo: Place;
 }
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode: friendships last for this visit only */ } };
@@ -49,13 +55,21 @@ export function initBots(game: GameBridge) {
   const botName = (d: BotDef) => d.name;
 
   // ---- Where they walk ----
-  const ctx: WalkCtx = { blocked: (x, z) => world.blocked(x, z), rand, radius: AREA.radius, centre: AREA.centre };
-  const spawn = (def: BotDef): Run => {
-    const w: Walker = { x: 0, z: 0, facing: rand() * 6.28, goalX: 0, goalZ: 0, wait: 1 + rand() * 3, speed: 2.1 };
-    for (let i = 0; i < 40; i++) { pickGoal(w, ctx); if (Math.hypot(w.goalX - world.position.x, w.goalZ - world.position.z) > 5) break; }
-    w.x = w.goalX; w.z = w.goalZ; pickGoal(w, ctx);
-    return { def, w, y: 0, mode: 'wander', modeT: 0, flyY: 0, say: null, moving: false, nextPlan: 4 + rand() * 8, chase: 0, askUntil: 0 };
+  const blocked = (x: number, z: number) => world.blocked(x, z);
+  const gardenCtx: WalkCtx = { blocked, rand, radius: AREA.radius, centre: AREA.centre };
+  const zoneCtxs = new Map<string, WalkCtx>();
+  const ctxOf = (r: Run): WalkCtx => {
+    if (r.place === 'garden') return gardenCtx;
+    let c = zoneCtxs.get(r.zone.id); if (!c) zoneCtxs.set(r.zone.id, c = { blocked, rand, radius: ZONE_RADIUS - 3, centre: { x: r.zone.x, z: r.zone.z } });
+    return c;
   };
+  const spawn = (def: BotDef): Run => {
+    const w: Walker = { x: 0, z: 0, facing: rand() * 6.28, goalX: 0, goalZ: 0, wait: 1 + rand() * 3, speed: 2.1 }, zone = zoneOf(def);
+    const r: Run = { def, w, y: 0, mode: 'wander', modeT: 0, flyY: 0, say: null, moving: false, nextPlan: 4 + rand() * 8, chase: 0, askUntil: 0, place: 'zone', zone, huntUntil: 0, restUntil: 0, hidden: false, visitAt: 0, stayUntil: 0, foe: null, foeT: 0, swing: 0, route: [], commuteTo: 'zone' };
+    placeInZone(r); r.huntUntil = clock + 60 + rand() * 120; r.visitAt = clock + 60 + nextVisitIn(rand); return r;
+  };
+  /** Puts a neighbour at a free spot in its hunting ground. */
+  function placeInZone(r: Run) { r.place = 'zone'; const c = ctxOf(r); pickGoal(r.w, c); r.w.x = r.w.goalX; r.w.z = r.w.goalZ; pickGoal(r.w, c); r.mode = 'wander'; r.flyY = 0; r.y = 0; r.foe = null; r.route = []; r.hidden = false; }
 
   // ---- State shared with the game ----
   let visitingBot: string | null = null, busy: string | null = null, giftTimer = 0, clock = 0, pushClock = 0, thinkClock = 2;
@@ -103,7 +117,7 @@ export function initBots(game: GameBridge) {
     giftTimer = 0; // the promised gift follows at once (deliverGifts)
     world.friendIds.add(r.def.id);
   }
-  function leave(r: Run) { r.mode = 'wander'; r.modeT = 0; r.w.speed = 2.1; busy = busy === r.def.id ? null : busy; pickGoal(r.w, ctx); r.nextPlan = 5 + rand() * 8; }
+  function leave(r: Run) { r.mode = 'wander'; r.modeT = 0; r.w.speed = 2.1; r.flyY = 0; busy = busy === r.def.id ? null : busy; pickGoal(r.w, ctxOf(r)); r.nextPlan = 5 + rand() * 8; }
 
   // ---- Gifts ----
   function showGift(def: BotDef, g: GiftNote) {
@@ -131,7 +145,9 @@ export function initBots(game: GameBridge) {
     if (busy || visitingBot) return;
     const p = playerPos(), c = ready();
     if (!c.ready) return;
-    const now = Date.now(), list = [...runs.values()].filter(r => r.mode === 'wander' || r.mode === 'fly').filter(r => canMeet(store, r.def.id, now)).sort((a, b) => (presentReady(store, b.def.id, now) ? 1 : 0) - (presentReady(store, a.def.id, now) ? 1 : 0) || Math.hypot(a.w.x - p.x, a.w.z - p.z) - Math.hypot(b.w.x - p.x, b.w.z - p.z));
+    // Strangers are met out in the common area only: they stay out there, so the player must be beyond the gates and close by.
+    const now = Date.now(), outside = !inSafeZone(p.x, p.z), meetable = (r: Run) => !r.hidden && (r.mode === 'wander' || r.mode === 'fly') && (r.place === 'garden' ? !outside : outside && Math.hypot(r.w.x - p.x, r.w.z - p.z) < 22);
+    const list = [...runs.values()].filter(meetable).filter(r => canMeet(store, r.def.id, now)).sort((a, b) => (presentReady(store, b.def.id, now) ? 1 : 0) - (presentReady(store, a.def.id, now) ? 1 : 0) || Math.hypot(a.w.x - p.x, a.w.z - p.z) - Math.hypot(b.w.x - p.x, b.w.z - p.z));
     // friends say hello more rarely than strangers ask, and every meeting is worth waiting a little for
     const r = list[0]; if (!r || rand() > .55) return;
     r.mode = 'approach'; r.chase = 0; busy = r.def.id; r.w.speed = r.def.flies ? 6.2 : 3.3;
@@ -140,7 +156,7 @@ export function initBots(game: GameBridge) {
     const p = playerPos(), dx = p.x - r.w.x, dz = p.z - r.w.z, d = Math.hypot(dx, dz);
     r.chase += dt; r.w.goalX = p.x - dx / (d || 1) * 2.1; r.w.goalZ = p.z - dz / (d || 1) * 2.1;
     if (r.def.flies) r.flyY = d > 6 ? FLY_HEIGHT : Math.max(0, (d - 2.4) * .5);
-    if (!ready().ready) { leave(r); return; }
+    if (!ready().ready || (r.place === 'zone' && inSafeZone(p.x, p.z))) { leave(r); return; } // (a stranger never follows you through the gate)
     if (d < 3 || r.chase > 18) {
       if (d >= 3) { store.meetAfter[r.def.id] = Date.now() + 60_000; save(); leave(r); return; }
       r.mode = 'talk'; r.modeT = 0; r.flyY = 0; r.w.facing = Math.atan2(dx, dz);
@@ -165,32 +181,87 @@ export function initBots(game: GameBridge) {
   }
 
   // ---- The per-bot step ----
+  /** Out in the common area a neighbour hunts the nearest enemy (a gentle blow every second or so) and wanders when there is none. */
+  function hunt(r: Run, dt: number) {
+    const w = r.w, c = ctxOf(r); r.foeT -= dt; r.swing = Math.max(0, r.swing - dt);
+    if (r.foe && (r.foe.hp <= 0 || !world.enemies.some(e => e.id === r.foe!.id && e.hp > 0))) r.foe = null;
+    if (!r.foe && r.foeT <= 0) { r.foeT = .8 + rand() * .6; const f = pickFoe(world.enemies, w, r.zone); r.foe = f ? { id: f.id, x: f.x, z: f.z, hp: f.hp } : null; }
+    const foe = r.foe ? world.enemies.find(e => e.id === r.foe!.id) : null;
+    if (foe && foe.hp > 0) {
+      const dx = foe.x - w.x, dz = foe.z - w.z, d = Math.hypot(dx, dz);
+      if (d > 2.4) { w.goalX = foe.x - dx / d * 1.9; w.goalZ = foe.z - dz / d * 1.9; w.speed = 3.2; r.moving = walk(w, dt, c, false); return; }
+      w.facing = Math.atan2(dx, dz); r.moving = false;
+      if (r.foeT <= 0) { r.foeT = .9 + rand() * .5; r.swing = .3; game.applyRemoteHit(foe.id, attackDamage(r.def.level), 0); world.burst(foe.x, foe.z, r.def.color, 6); }
+      return;
+    }
+    w.speed = 2.4;
+    if (w.wait > 0) { w.wait -= dt; r.moving = false; return; }
+    r.moving = walk(w, dt, c, false);
+    if (!r.moving) { w.wait = 1 + rand() * 3; pickGoal(w, c); }
+  }
+  /** Starts the walk through a gate: into the safe zone (a friend's visit) or back out to the hunting ground. */
+  function commute(r: Run, to: Place) {
+    r.mode = 'commute'; r.commuteTo = to; r.foe = null; busy = null;
+    r.route = to === 'garden' ? [...gateRoute(r.zone, true), { x: AREA.centre.x * .6 + (rand() - .5) * 6, z: AREA.centre.z * .6 + (rand() - .5) * 6 }] : [...gateRoute(r.zone, false), { x: r.zone.x, z: r.zone.z }];
+    r.w.speed = r.def.flies ? 6 : 3.4; r.flyY = r.def.flies ? FLY_HEIGHT : 0;
+  }
   function step(r: Run, dt: number) {
-    const w = r.w, id = r.def.id;
+    const w = r.w;
     switch (r.mode) {
       case 'wander': case 'fly': {
         r.nextPlan -= dt;
-        if (r.def.flies && r.mode === 'wander' && r.nextPlan <= 0 && rand() < .5 && !visitingBot) { // a flight across the garden
-          r.mode = 'fly'; r.modeT = 9 + rand() * 6; w.speed = 6; r.flyY = FLY_HEIGHT; pickGoal(w, ctx); if (rand() < .4) sayLine(r, 'FLYBY', 3000);
-        } else if (r.nextPlan <= 0 && r.mode === 'wander') { r.nextPlan = 5 + rand() * 9; if (rand() < .22) sayLine(r, 'WANDER', 3200); }
-        if (r.mode === 'fly') { r.modeT -= dt; if (r.modeT <= 0) { r.mode = 'wander'; r.flyY = 0; w.speed = 2.1; r.nextPlan = 8 + rand() * 10; } }
-        if (w.wait > 0) { w.wait -= dt; r.moving = false; break; }
-        r.moving = walk(w, dt, ctx, r.mode === 'fly');
-        if (!r.moving) { w.wait = r.mode === 'fly' ? 0 : 1.5 + rand() * 5; pickGoal(w, ctx); }
+        if (r.place === 'zone') {
+          if (r.mode === 'fly') { r.modeT -= dt; if (r.modeT <= 0) { r.mode = 'wander'; r.flyY = 0; w.speed = 2.4; } r.moving = walk(w, dt, ctxOf(r), true); if (!r.moving) pickGoal(w, ctxOf(r)); break; }
+          if (r.nextPlan <= 0) { r.nextPlan = 6 + rand() * 9; if (rand() < .2) sayLine(r, 'WANDER', 3200); else if (r.def.flies && !r.foe && rand() < .25) { r.mode = 'fly'; r.modeT = 7 + rand() * 5; w.speed = 5.5; r.flyY = FLY_HEIGHT; pickGoal(w, ctxOf(r)); if (rand() < .4) sayLine(r, 'FLYBY', 3000); } }
+          hunt(r, dt);
+          if (clock > r.huntUntil && !busy && !r.foe && r.mode === 'wander') { // back to its own safe zone for a rest: it walks away and is gone for a while
+            const k = 1 + 16 / Math.max(1, Math.hypot(r.zone.x, r.zone.z)); r.mode = 'rest'; r.route = [{ x: r.zone.x * k, z: r.zone.z * k }]; w.speed = 3; sayLine(r, 'WANDER', 2500);
+          }
+          // a friend now and then walks into the safe zone to visit the player's house (only while the player is there)
+          if (isFriend(store, r.def.id) && clock >= r.visitAt && !busy && !visitingBot && r.mode === 'wander' && !r.foe) {
+            const p = playerPos(), c = ready();
+            if (c.ready && inSafeZone(p.x, p.z)) { commute(r, 'garden'); r.stayUntil = 0; sayLine(r, 'FRIEND', 3000); } else r.visitAt = clock + 20;
+          }
+        } else { // visiting the safe zone
+          if (r.mode === 'fly') { r.modeT -= dt; if (r.modeT <= 0) { r.mode = 'wander'; r.flyY = 0; w.speed = 2.1; } }
+          else if (r.nextPlan <= 0) { r.nextPlan = 5 + rand() * 9; if (rand() < .3) sayLine(r, 'WANDER', 3200); else if (r.def.flies && rand() < .3) { r.mode = 'fly'; r.modeT = 6 + rand() * 4; w.speed = 6; r.flyY = FLY_HEIGHT; pickGoal(w, gardenCtx); } }
+          if (clock > r.stayUntil && !busy) { commute(r, 'zone'); break; }
+          if (w.wait > 0) { w.wait -= dt; r.moving = false; break; }
+          r.moving = walk(w, dt, gardenCtx, r.mode === 'fly');
+          if (!r.moving) { w.wait = r.mode === 'fly' ? 0 : 1.5 + rand() * 4; pickGoal(w, gardenCtx); }
+        }
         break;
       }
-      case 'approach': approach(r, dt); r.moving = walk(w, dt, ctx, r.def.flies); break;
+      case 'commute': {
+        const next = r.route[0];
+        if (!next) { // arrived
+          r.flyY = 0; w.speed = 2.1; r.mode = 'wander';
+          if (r.commuteTo === 'garden') { r.place = 'garden'; r.stayUntil = clock + visitStay(rand); pickGoal(w, gardenCtx); }
+          else { r.place = 'zone'; r.visitAt = clock + nextVisitIn(rand); pickGoal(w, ctxOf(r)); }
+          break;
+        }
+        w.goalX = next.x; w.goalZ = next.z; r.moving = walk(w, dt, gardenCtx, true);
+        if (Math.hypot(next.x - w.x, next.z - w.z) < .6) r.route.shift();
+        break;
+      }
+      case 'rest': {
+        if (!r.hidden) {
+          const next = r.route[0]; if (next) { w.goalX = next.x; w.goalZ = next.z; r.moving = walk(w, dt, gardenCtx, true); if (Math.hypot(next.x - w.x, next.z - w.z) < .8) r.route.shift(); }
+          else { r.hidden = true; r.restUntil = clock + restFor(rand); r.moving = false; world.removeRemotePlayer(r.def.id); }
+        } else if (clock > r.restUntil) { r.hidden = false; placeInZone(r); r.huntUntil = clock + huntFor(rand); }
+        break;
+      }
+      case 'approach': approach(r, dt); r.moving = walk(w, dt, ctxOf(r), r.def.flies); break;
       case 'talk': talk(r, dt); r.moving = false; break;
       case 'ask': ask(r); r.moving = false; break;
     }
     // altitude eases toward the plan; walking bots stay on the ground
     r.y += (r.flyY - r.y) * Math.min(1, dt * 3);
-    void id;
   }
   function pose(r: Run): RemotePose {
     const d = r.def, flying = r.y > .4;
     return {
-      id: d.id, x: r.w.x, z: r.w.z, y: r.y + (flying ? Math.sin(clock * 2 + d.level) * .12 : 0), facing: r.w.facing, color: d.color, name: d.name, planet: 'home', moving: r.moving || flying,
+      id: d.id, x: r.w.x, z: r.w.z, y: r.y + (flying ? Math.sin(clock * 2 + d.level) * .12 : 0) + (r.swing > 0 ? Math.sin(r.swing / .3 * Math.PI) * .25 : 0), facing: r.w.facing, color: d.color, name: d.name, planet: 'home', moving: r.moving || flying || r.swing > 0,
       gear: d.gear as RemotePose['gear'], level: d.level, hp: 100, visual: flying ? { flight: 1 } : { flight: 0 },
     };
   }
@@ -219,7 +290,7 @@ export function initBots(game: GameBridge) {
     if (!isFriend(store, def.id)) return;
     visitingBot = def.id; busy = def.id; closeCard();
     game.setVisiting(def.name, buildHome(def));
-    for (const [id, r] of runs) if (id !== def.id) world.removeRemotePlayer(id); else { r.mode = 'wander'; r.w.x = 4; r.w.z = 4; pickGoal(r.w, ctx); }
+    for (const [id, r] of runs) if (id !== def.id) world.removeRemotePlayer(id); else { r.place = 'garden'; r.mode = 'wander'; r.stayUntil = clock + 1e9; r.flyY = 0; r.w.x = 4; r.w.z = 4; pickGoal(r.w, gardenCtx); }
     showLeave(def);
   }
   const leaveBtn = el('button', 'bot-leave'); leaveBtn.hidden = true; document.body.append(leaveBtn);
@@ -230,7 +301,7 @@ export function initBots(game: GameBridge) {
   /** Back to your own garden: from the button, or by walking out of a gate (the wild beyond belongs to you, and so does the way home). */
   function endVisit() {
     if (!visitingBot) return;
-    leaveBtn.hidden = true; visitingBot = null; busy = null; game.setVisiting(null); for (const r of runs.values()) r.w.facing = 0;
+    leaveBtn.hidden = true; visitingBot = null; busy = null; game.setVisiting(null); for (const r of runs.values()) { r.w.facing = 0; placeInZone(r); r.visitAt = clock + nextVisitIn(rand); }
   }
 
   // ---- The neighbours panel ----
@@ -266,8 +337,8 @@ export function initBots(game: GameBridge) {
     header.append(el('h2', '', `🏘️ ${t('Neighbours')}`), close);
     const body = el('div', 'social-content bot-list');
     const toggle = el('label', 'bot-toggle'), box = el('input'); box.type = 'checkbox'; box.checked = enabled; box.onchange = () => { enabled = box.checked; write(ENABLED_KEY, enabled ? '1' : '0'); renderPanel(); };
-    toggle.append(box, document.createTextNode(' ' + t('Show AI neighbours in my garden')));
-    body.append(el('p', 'social-small', t('Friendly neighbours walk around your garden. Some are rich and wear rare outfits; become friends and they send gifts and let you visit their gardens.')), toggle);
+    toggle.append(box, document.createTextNode(' ' + t('Show AI neighbours')));
+    body.append(el('p', 'social-small', t('Neighbours fight enemies in the wild beyond the four gates, so go out and meet them there. Some are rich and wear rare outfits. Become friends and they give you gifts, let you visit their gardens, and sometimes walk in through a gate to visit yours.')), toggle);
     for (const d of cast) {
       const row = el('section', 'bot-row'), friend = isFriend(store, d.id);
       const info = el('div', 'bot-info'); info.append(el('b', '', `${friend ? '💚 ' : ''}${d.name} · Lv ${d.level}`), el('span', 'social-small', `${d.tier === 'rich' ? '💎 ' : ''}${outfitName(d)}${d.flies ? ' · ' + t('flies') : ''}`));
@@ -279,7 +350,7 @@ export function initBots(game: GameBridge) {
     dialog.append(header, body);
   }
   const slot = document.querySelector('#social-slot');
-  const panelBtn = el('button', 'social-toggle bot-open', `🏘️ ${t('Neighbours')}`); panelBtn.id = 'neighbours-button';
+  const panelBtn = el('button', 'social-toggle bot-open', '🏘️'); panelBtn.id = 'neighbours-button'; panelBtn.title = t('Neighbours'); panelBtn.setAttribute('aria-label', t('Neighbours'));
   panelBtn.onclick = () => { renderPanel(); dialog.showModal(); };
   if (slot) { slot.append(panelBtn); panelBtn.classList.add('social-inline-toggle'); } else document.body.append(panelBtn);
 
@@ -307,7 +378,7 @@ export function initBots(game: GameBridge) {
     // Through any of the four gates (18 m out) is the wild, with its enemies; returning through the gate lands you in your own safe zone.
     if (visitingBot && Math.hypot(world.position.x, world.position.z) > GATE_EXIT) { endVisit(); game.showNotice(t('You left through the gate. Your own garden is waiting when you come back.')); return; }
     for (const r of runs.values()) step(r, d);
-    pushClock -= d; if (pushClock <= 0) { pushClock = 1 / 12; for (const [id, r] of runs) { const p = pose(r); if (world.remotePlayers.has(id)) world.updateRemotePlayer(id, p); else world.addRemotePlayer(id, p); } }
+    pushClock -= d; if (pushClock <= 0) { pushClock = 1 / 12; for (const [id, r] of runs) { if (r.hidden) continue; const p = pose(r); if (world.remotePlayers.has(id)) world.updateRemotePlayer(id, p); else world.addRemotePlayer(id, p); } }
     for (const id of Object.keys(store.friends)) world.friendIds.add(id);
     thinkClock -= d; if (thinkClock <= 0) { thinkClock = 3; if (!visitingBot) thinkMeet(); }
     giftTimer -= d; if (giftTimer <= 0) { giftTimer = 1.5; deliverGifts(); }

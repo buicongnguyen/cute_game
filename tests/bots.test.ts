@@ -87,3 +87,14 @@ test('the message box sorts English and Vietnamese messages and always answers i
   for (let i = 0; i < 30; i++) seen.add(replyTo('haha funny', bot, true, { pick: (_k, pool) => pool[Math.floor(rand() * pool.length)], rand }));
   assert.ok(seen.size >= 3);
 });
+
+test('neighbours live beyond the gates, hunt the nearest ordinary enemy there, and walk through their own gate', async () => {
+  const L = await import('../src/bot-logic.ts');
+  for (const zone of L.ZONES) { assert.ok(Math.hypot(zone.gate.x, zone.gate.z) === L.SAFE_RADIUS); assert.ok(Math.hypot(zone.x, zone.z) - L.ZONE_RADIUS > L.SAFE_RADIUS, `${zone.id} hunting ground is outside the safe zone`); }
+  assert.equal(new Set(makeCast(5).map(b => L.zoneOf(b).id)).size, 4, 'five neighbours spread over the four zones');
+  const zone = L.ZONES[3], foes = [{ id: 'far', x: 38, z: 3, hp: 5 }, { id: 'near', x: 29, z: 2, hp: 5 }, { id: 'dead', x: 30, z: 0, hp: 0 }, { id: 'boss', x: 30, z: 1, hp: 9, boss: true }, { id: 'home', x: 10, z: 0, hp: 5 }];
+  assert.equal(L.pickFoe(foes, { x: 31, z: 0 }, zone)?.id, 'near'); assert.equal(L.pickFoe(foes.slice(2), { x: 31, z: 0 }, zone), null, 'no bosses, no dead, nothing inside the safe zone');
+  const [out, inside] = L.gateRoute(zone, true); assert.ok(Math.hypot(out.x, out.z) > L.SAFE_RADIUS && Math.hypot(inside.x, inside.z) < L.SAFE_RADIUS);
+  const [a, b] = L.gateRoute(zone, false); assert.ok(Math.hypot(a.x, a.z) < L.SAFE_RADIUS && Math.hypot(b.x, b.z) > L.SAFE_RADIUS);
+  assert.ok(L.attackDamage(40) < 40 && L.attackDamage(2) >= 4); const v = L.nextVisitIn(() => 0), w = L.nextVisitIn(() => .9999); assert.ok(v >= 360 && w < 720 && L.visitStay(() => .9999) < 40 && L.huntFor(() => 0) >= 120 && L.restFor(() => 0) >= 40);
+});

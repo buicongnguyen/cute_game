@@ -164,7 +164,47 @@ export function walk(w: Walker, dt: number, ctx: WalkCtx, flying = false) {
   const dx = w.goalX - w.x, dz = w.goalZ - w.z, dist = Math.hypot(dx, dz);
   if (dist < .25) return false;
   w.facing = turn(w.facing, Math.atan2(dx, dz), dt * 6);
-  const step = Math.min(dist, w.speed * dt), nx = w.x + Math.sin(w.facing) * step, nz = w.z + Math.cos(w.facing) * step;
-  if (flying || !ctx.blocked(nx, nz)) { w.x = nx; w.z = nz; return true; }
+  const step = Math.min(dist, w.speed * dt);
+  // Straight on when free; otherwise slide round the obstacle by turning up to ~80 degrees either way (no path finding needed for a tree or a fence post).
+  for (const off of flying ? [0] : [0, .7, -.7, 1.4, -1.4]) {
+    const heading = w.facing + off, nx = w.x + Math.sin(heading) * step, nz = w.z + Math.cos(heading) * step;
+    if (flying || !ctx.blocked(nx, nz)) { w.x = nx; w.z = nz; w.facing = heading; return true; }
+  }
   w.wait = 0; pickGoal(w, ctx); return false;
 }
+
+// ---- Where they live: the common area beyond the four gates ----
+/** The safe zone around the cottage ends here; the four gates stand on it (world.ts). */
+export const SAFE_RADIUS = 18;
+export interface Zone { id: string; x: number; z: number; /** The gate on the way in, on the safe zone's edge. */ gate: { x: number; z: number } }
+export const ZONES: readonly Zone[] = [
+  { id: 'forest', x: -30, z: 0, gate: { x: -SAFE_RADIUS, z: 0 } }, { id: 'meadow', x: 0, z: 30, gate: { x: 0, z: SAFE_RADIUS } },
+  { id: 'swamp', x: 0, z: -30, gate: { x: 0, z: -SAFE_RADIUS } }, { id: 'canyon', x: 30, z: 0, gate: { x: SAFE_RADIUS, z: 0 } },
+];
+/** How far from its zone's middle a neighbour wanders: the nearest edge is still 21 m from the cottage, outside the safe zone. */
+export const ZONE_RADIUS = 9;
+export const zoneOf = (def: Pick<BotDef, 'id'>) => ZONES[(Number(def.id.slice(BOT_ID_PREFIX.length)) || 0) % ZONES.length];
+export const inSafeZone = (x: number, z: number) => Math.hypot(x, z) < SAFE_RADIUS;
+/** The way through a gate: a point just outside it and one just inside (`out` first when leaving, in first when arriving). */
+export function gateRoute(zone: Zone, inward: boolean) {
+  const k = 1 / SAFE_RADIUS, ux = zone.gate.x * k, uz = zone.gate.z * k, outside = { x: ux * (SAFE_RADIUS + 3.5), z: uz * (SAFE_RADIUS + 3.5) }, inside = { x: ux * (SAFE_RADIUS - 4), z: uz * (SAFE_RADIUS - 4) };
+  return inward ? [outside, inside] : [inside, outside];
+}
+export interface Foe { id: string; x: number; z: number; hp: number; boss?: boolean }
+/** The nearest living, ordinary enemy near the neighbour and its hunting ground (bosses are left to the player). */
+export function pickFoe(foes: readonly Foe[], at: { x: number; z: number }, zone: Zone, reach = 18): Foe | null {
+  let best: Foe | null = null, bestD = Infinity;
+  for (const f of foes) {
+    if (f.hp <= 0 || f.boss || !Number.isFinite(f.x) || !Number.isFinite(f.z) || inSafeZone(f.x, f.z) || Math.hypot(f.x - zone.x, f.z - zone.z) > ZONE_RADIUS + 14) continue;
+    const d = Math.hypot(f.x - at.x, f.z - at.z); if (d < reach && d < bestD) { best = f; bestD = d; }
+  }
+  return best;
+}
+/** A neighbour's blow: gentle, so the fights last and the player still has enemies to beat. */
+export const attackDamage = (level: number) => 4 + Math.round(level * .6);
+/** A friend plans its next trip into the player's safe zone 6 to 12 minutes ahead and stays only 20 to 40 seconds: they are busy fighting. */
+export const nextVisitIn = (rand: () => number) => 360 + rand() * 360;
+export const visitStay = (rand: () => number) => 20 + rand() * 20;
+/** Out hunting 2 to 4 minutes, then a rest at its own safe zone (out of sight) for 40 to 90 seconds. */
+export const huntFor = (rand: () => number) => 120 + rand() * 120;
+export const restFor = (rand: () => number) => 40 + rand() * 50;
