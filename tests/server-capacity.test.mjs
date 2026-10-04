@@ -56,3 +56,17 @@ test('movement is sent as small changes, a still player sends nothing, and a ful
   assert.equal(deltas.at(-1).player.x, 1.2);
   const withFacing = seen.find(m => m.player.facing !== undefined); assert.equal(withFacing.player.facing, 1.23, 'numbers are rounded');
 });
+
+test('the health check can be read from another site (the solo page asks whether the server is on), and nothing else can', async t => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'cute-game-health-'));
+  const store = await createAccountStore({ dataDir, databaseUrl: '' });
+  const server = await createGameServer({ host: '127.0.0.1', port: 0, dataDir, accountStore: store, databaseUrl: '', databaseRequired: false });
+  t.after(async () => { await server.close(); await rm(dataDir, { recursive: true, force: true }); });
+  const foreign = { Origin: 'https://buicongnguyen.github.io' };
+  const preflight = await fetch(`${server.url}/api/health`, { method: 'OPTIONS', headers: { ...foreign, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'ngrok-skip-browser-warning' } });
+  assert.equal(preflight.status, 204); assert.equal(preflight.headers.get('access-control-allow-origin'), '*');
+  const health = await fetch(`${server.url}/api/health`, { headers: { ...foreign, 'ngrok-skip-browser-warning': '1' } });
+  assert.equal(health.status, 200); assert.equal(health.headers.get('access-control-allow-origin'), '*'); assert.equal((await health.json()).ok, true);
+  const session = await fetch(`${server.url}/api/auth/session`, { headers: foreign });
+  assert.equal(session.status, 403, 'every other route still refuses a foreign origin'); assert.equal(session.headers.get('access-control-allow-origin'), null);
+});

@@ -91,8 +91,8 @@ export async function createGameServer(options = {}) {
     const secure = request.socket.encrypted || process.env.COOKIE_SECURE === '1';
     response.setHeader('Set-Cookie', `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.floor(SESSION_MS / 1000)}${secure ? '; Secure' : ''}`);
   }
-  function respond(response, status, value) {
-    response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+  function respond(response, status, value, extra = {}) {
+    response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra });
     response.end(JSON.stringify(value));
   }
   async function body(request) {
@@ -219,6 +219,16 @@ export async function createGameServer(options = {}) {
   }
 
   async function api(request, response, url) {
+    // The status check is public and readable from the solo site (github.io), which asks "is the server on?" before it shows its Play online link. Nothing else is cross-origin.
+    if (url.pathname === '/api/health') {
+      const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'ngrok-skip-browser-warning, Content-Type', 'Access-Control-Max-Age': '600' };
+      if (request.method === 'OPTIONS') { response.writeHead(204, cors); return response.end(); }
+      if (request.method === 'GET') {
+        try { if (closing) throw new Error('Closing'); await store.health(); }
+        catch { return respond(response, 503, { ok: false, error: 'Account storage is unavailable.' }, cors); }
+        return respond(response, 200, { ok: true, online: peers.size, version: 1, storage: store.kind }, cors);
+      }
+    }
     if (!allowedOrigin(request)) throw failure(403, 'This origin is not allowed.');
     const route = url.pathname.slice(5), method = request.method;
     if (route === 'health' && method === 'GET') {

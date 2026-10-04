@@ -44,6 +44,17 @@ function initSoloEdition() {
     keepPlaying.textContent=t('Keep playing');toggle.textContent=slot?'🌱':`🌱 ${t('Solo adventure')}`;toggle.title=t('Solo adventure');toggle.setAttribute('aria-label',t('About this solo adventure'));
   };
   refresh();onLanguageChange(refresh);
+  // If this edition was built with the address of a multiplayer server (VITE_ONLINE_URL), the title screen's "Play online" link shows only while that server answers; otherwise it stays hidden and nothing says "multiplayer".
+  const server=String(import.meta.env.VITE_ONLINE_URL||'').replace(/\/+$/,''),link=document.querySelector<HTMLAnchorElement>('#online-link');
+  if(server&&link){
+    const check=async()=>{
+      const abort=new AbortController(),timer=window.setTimeout(()=>abort.abort(),4000);
+      try{const reply=await fetch(`${server}/api/health`,{headers:{'ngrok-skip-browser-warning':'1'},cache:'no-store',signal:abort.signal}),info=await reply.json();
+        link.hidden=!(reply.ok&&info?.ok);if(!link.hidden)link.textContent=`🌐 ${t('Play online with friends')}${Number.isFinite(info.online)&&info.online>0?` · ${t('{n} online',{n:info.online})}`:''} →`;}
+      catch{link.hidden=true;}finally{clearTimeout(timer);}
+    };
+    void check();window.setInterval(()=>{if(!document.hidden)void check();},60_000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void check();});
+  }
 }
 
 export function initOnline(game:GameBridge) {
