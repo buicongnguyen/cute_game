@@ -44,8 +44,23 @@ const FISH_LOOK: Record<string, [scale: number, top: number, wag: number]> = {
   fish_guardian: [1.8, 0.1006, 0.5],
   boot: [1.4, 0.1864, 0.6],
 };
-export const fishLook = (species: string) => FISH_LOOK[species] ?? [1, .06, .5];
-const look = fishLook;
+/**
+ * Typical body length in centimetres of each catch, so a whale swims bigger than a perch in the water, not every fish
+ * about the same size. Drawn with the square root-ish curve below (a whale is bigger, not 20x bigger: the ponds are small).
+ */
+const REAL_CM: Record<string, number> = {
+  fish_clown: 11, fish_jelly: 20, fish_puffer: 25, fish_perch: 28, boot: 30, fish_rainbow: 40, fish_carp: 55, fish_angler: 60, fish_catfish: 60,
+  fish_koi: 70, fish_icepike: 100, fish_golden: 110, fish_eel: 120, fish_sunfish: 160, fish_shark: 180, fish_guardian: 220, fish_swordfish: 250,
+  fish_manta: 450, fish_kraken: 500, fish_whale: 800,
+};
+const SIZE_REF_CM = 40;
+/** How much bigger or smaller than the standard model a species is drawn (0.45 to 3.2). */
+export const realSize = (species: string) => Math.max(.45, Math.min(3.2, ((REAL_CM[species] ?? SIZE_REF_CM) / SIZE_REF_CM) ** .55));
+/** The model's own look (it mirrors the Blender manifest). */
+export const fishLook = (species: string): [scale: number, top: number, wag: number] => FISH_LOOK[species] ?? [1, .06, .5];
+/** What the water draws: the model scale times the species' real size (rod and harpoon views both use it). */
+export const fishDrawLook = (species: string): [scale: number, top: number, wag: number] => { const [scale, top, wag] = fishLook(species); return [scale * realSize(species), top, wag]; };
+const look = fishDrawLook;
 /** Height of the bobber's antenna tip above its waterline, where the line ties on. */
 const LINE_ANCHOR = .134;
 // Fallback colours when the fish models are unavailable.
@@ -87,7 +102,7 @@ export class FishingView {
   private respawns: Array<{ pond: PondView; at: number }> = [];
   private ripples = new Map<PondView, number>();
   private clock = 0;
-  private mysterySpawns:Array<{pond:PondView;at:number}>=[];
+  private mysterySpawns:Array<{pond:PondView;at:number}>=[];private mysteryMaterial:T.MeshBasicMaterial|null=null;
   private ponds:PondView[]=[];
   private mysteryDeadlines=new Map<string,number>();
   private mysterySpecies:(waterId:string)=>string=()=> 'fish_perch';
@@ -177,9 +192,18 @@ export class FishingView {
   private addMystery(pond:PondView){
     if(this.fish.some(f=>f.pond.id===pond.id&&f.mystery))return;
     const species=this.mysterySpecies(pond.waterId),fish=this.addFish(pond,species==='boot'?'fish_perch':species);
-    this.root.remove(fish.obj);const obj=new T.Group(),shadow=new T.Mesh(new T.CircleGeometry(.8,24),new T.MeshBasicMaterial({color:'#0d1626',transparent:true,opacity:.55,depthWrite:false}));
-    shadow.rotation.x=-Math.PI/2;shadow.scale.set(.55,1.25,1);obj.add(shadow);const mark=this.symbol('?');mark.position.y=1.1;obj.add(mark);obj.position.copy(fish.obj.position);this.root.add(obj);
-    fish.obj=obj;fish.tail=null;fish.depth=.04;fish.mystery=true;fish.mark=mark;fish.speed=between(.35,.6);
+    this.root.remove(fish.obj);const obj=new T.Group(),silhouette=this.kit.ready?this.kit.instance(species):null;
+    if(silhouette){
+      // The hidden catch shows as its own dark shape under the water (a whale looks big, a boot looks like a boot), flattened like a shadow; what it is stays secret until it is landed.
+      this.mysteryMaterial??=new T.MeshBasicMaterial({color:'#0d1626',transparent:true,opacity:.6,depthWrite:false});
+      silhouette.traverse(o=>{const mesh=o as T.Mesh;if(mesh.isMesh){mesh.material=this.mysteryMaterial!;mesh.castShadow=false;}});
+      silhouette.scale.setScalar(look(species)[0]);silhouette.scale.y*=.35;obj.add(silhouette);fish.tail=silhouette.children.find(c=>c.name.endsWith('_tail'))??null;
+    }else{
+      const shadow=new T.Mesh(new T.CircleGeometry(.8,24),new T.MeshBasicMaterial({color:'#0d1626',transparent:true,opacity:.55,depthWrite:false}));
+      shadow.rotation.x=-Math.PI/2;shadow.scale.set(.55,1.25,1);obj.add(shadow);fish.tail=null;
+    }
+    const mark=this.symbol('?');mark.position.y=1.1;obj.add(mark);obj.position.copy(fish.obj.position);this.root.add(obj);
+    fish.obj=obj;fish.depth=.04;fish.mystery=true;fish.mark=mark;fish.speed=between(.35,.6);
   }
   /** Hidden species is revealed only on landing; the visible question mark determines attraction. */
   mysteryNearCast(){return this.fish.find(f=>f.mystery&&f.pond.id===this.pond?.id&&f.state==='swim'&&Math.hypot(f.obj.position.x-this.castTo.x,f.obj.position.z-this.castTo.z)<MYSTERY.reach)?.species??null;}

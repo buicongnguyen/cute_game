@@ -320,9 +320,26 @@ class Model:
 
 
 # ------------------------------------------------------------------ birds
+def _feather_blade(path, width, thick, sides=5, binormal=(1, 0, 0)):
+    """A curved feather: an elliptical tube along a path, widest near the first third, pointed at the tip."""
+    n = len(path)
+    secs = []
+    for i in range(n):
+        t = i / (n - 1)
+        if i == n - 1:
+            secs.append([(0.0, 0.0)])
+            continue
+        w = width * (1 - t ** 2) ** 0.7 * (0.55 + 0.45 * min(1.0, t * 4))
+        secs.append([(thick * math.sin(TAU * j / sides + 0.3), w * math.cos(TAU * j / sides + 0.3))
+                     for j in range(sides)])
+    return sweep(path, secs, binormal, None, 0.0, 0.0).outward()
+
+
 def build_bird(pid, m, s):
-    """Hen and chick share one build: an egg-shaped body, a round head with big eyes, pillowy wings,
-    a tail (hen: three upright feathers; chick: a fluffy point) and thin legs with three toes."""
+    """Hen and chick share one build: a plump egg-shaped body with layered feather scallops, a round head
+    with a two-part beak, big eyes with lids, a pointed comb and wattles, layered wings (a plate with rows
+    of flight feathers), a tail of curved feathers and legs with a feathered thigh, a scaled shank, a spur
+    and four clawed toes. The chick swaps comb and long feathers for downy tufts."""
     k = s['k']
     B, BR = Vector(s['body']), s['body_r']
     H, HR = Vector(s['head']), s['head_r']
@@ -332,73 +349,132 @@ def build_bird(pid, m, s):
                leg_r=(hip_x, hip.y, hip.z), leg_l=(-hip_x, hip.y, hip.z), tail=s['tail_root'])
     M = Model(pid, piv)
     plume, wingm = m[s['plume']], m[s['wing_mat']]
+    hen = bool(s.get('comb'))
     # Body: an egg tipped so the tail end rides higher.
-    body_g = sphere(1.0, 12, 8, scale=BR).transformed(xf(B, (RAD(s['tilt']), 0, 0)))
-    M['body'].add(body_g, plume)
+    M['body'].add(sphere(1.0, 16, 10, scale=BR).transformed(xf(B, (RAD(s['tilt']), 0, 0))), plume)
     if s.get('bib'):
-        M['body'].add(sphere(1.0, 8, 5, scale=s['bib'][1]).moved(s['bib'][0]), plume)
+        M['body'].add(sphere(1.0, 10, 6, scale=s['bib'][1]).moved(s['bib'][0]), plume)
     # Head.
     M['head'].add(sphere(1.0, 14, 9, scale=HR).moved(H), plume)
-    eye_pair(M['head'], H, HR, s['eye_dir'], s['eye_r'], m, squash=1.25)
+    eye_pair(M['head'], H, HR, s['eye_dir'], s['eye_r'], m, squash=1.25, segs=8)
     blush_pair(M['head'], H, HR, s['blush_dir'], s['eye_r'] * 0.8, m)
     bp, bn = ell_point(H, HR, (0, -1, s['beak_z']))
-    blen = s['beak_len']
-    M['head'].add(cone(bp - bn * blen * 0.25, bp + Vector((0, -blen, -blen * 0.12)), s['beak_r'], 6), m['beak'])
-    if s.get('comb'):
-        for dy, dz, r in ((-0.045, -0.006, 0.026), (0.0, 0.006, 0.031), (0.045, -0.006, 0.027)):
-            p, _ = ell_point(H, HR, (0, -0.25 + dy * 6, 1))
-            M['head'].add(sphere(1.0, 6, 4, scale=(r * 0.75, r * 1.0, r * 1.25)).moved(p + Vector((0, 0, dz + r * 0.6))),
+    blen, br_ = s['beak_len'], s['beak_r']
+    root = bp - bn * blen * 0.25
+    # Upper beak, a smaller lower beak and a nostril dot on each side.
+    M['head'].add(cone(root + Vector((0, 0, 0.004 * k)), bp + Vector((0, -blen, -blen * 0.1)), br_, 7), m['beak'])
+    M['head'].add(cone(root - Vector((0, 0, br_ * 0.45)), bp + Vector((0, -blen * 0.8, -blen * 0.2 - br_ * 0.45)),
+                       br_ * 0.8, 7), m['beak'])
+    for side in (-1, 1):
+        M['head'].add(sphere(1.0, 6, 4, scale=(br_ * 0.14, br_ * 0.3, br_ * 0.14)).moved(
+            bp + Vector((side * br_ * 0.55, -blen * 0.28, br_ * 0.4))), m['eye'])
+    if hen:
+        # Comb: a ridge of five points rising toward the middle, on a low base along the crown.
+        cs = ((-0.056, 0.026, 0.02), (-0.028, 0.040, 0.024), (0.0, 0.046, 0.026), (0.028, 0.038, 0.024),
+              (0.054, 0.024, 0.02))
+        for dy, h, r in cs:
+            p, _ = ell_point(H, HR, (0, -0.28 + dy * 5.5, 1))
+            M['head'].add(sphere(1.0, 6, 3, scale=(r * 0.6, r, h)).moved(p + Vector((0, 0, h * 0.3))),
                           m['comb'])
-        wp, _ = ell_point(H, HR, (0, -1, -0.55))
-        M['head'].add(sphere(1.0, 6, 4, scale=(0.02, 0.019, 0.03)).moved(wp + Vector((0, -0.012, -0.022))), m['comb'])
+        p, _ = ell_point(H, HR, (0, -0.28, 1))
+        M['head'].add(sphere(1.0, 6, 3, scale=(0.02, 0.07, 0.016)).moved(p), m['comb'])
+        # Wattles: two lobes under the beak, one slightly longer.
+        for ox, sz in ((-0.011, 1.0), (0.011, 0.8)):
+            wp, _ = ell_point(H, HR, (0, -1, -0.5))
+            M['head'].add(sphere(1.0, 6, 3, scale=(0.012, 0.014, 0.028 * sz)).moved(
+                wp + Vector((ox, -0.016, -0.026 * sz))), m['comb'])
     if s.get('tuft'):
         top, _ = ell_point(H, HR, (0, -0.1, 1))
-        for ang in (-0.35, 0.3):
-            g = slab(leaf_outline(0.05, 0.026, 4), 0.012, bev=0.004, dome=0.002)
-            M['head'].add(g, plume, facing(top - Vector((0, 0, 0.01)), (1, 0, 0), (0, math.sin(ang), math.cos(ang))))
-    # Wings: the right wing (+X) and its mirror, each with its origin at the shoulder.
+        for dx, ln_, tilt in ((-0.014, 0.034, -0.3), (0.0, 0.044, 0.0), (0.014, 0.036, 0.3)):
+            g = slab(leaf_outline(ln_, 0.02, 4), 0.01, bev=0.003, dome=0.002)
+            M['head'].add(g, plume, Matrix.Translation((dx, 0, 0)) @ facing(
+                top - Vector((0, 0, 0.012)), (1, 0, 0), (0, 0.3 + tilt * 0.2, 1.0)))
+    # Wings: the right wing (+X) and its mirror, each with its origin at the shoulder. A pillowy plate with
+    # staggered rows of flight feathers fanned off its trailing edge.
     wl = Vector(s['wing_dir']).normalized()
-    g = side_plate(Vector(s['wing_c']), wl, Vector((1, 0, 0.18)).normalized(), s['wing_r'][0], s['wing_r'][1],
-                   s['wing_t'])
-    M['wing_r'].add(g, wingm)
-    M['wing_l'].add(g.mirrored(), wingm)
-    # Tail.
+    out = Vector((1, 0, 0.18)).normalized()
+    wc = Vector(s['wing_c'])
+    rx, ry = s['wing_r']
+    wing_parts = [side_plate(wc - wl * ry * 0.06, wl, out, rx, ry * 0.9, s['wing_t'], n=10)]
+    lat = wl.cross(out).normalized()
+    for row, (nf, spread, length, off) in enumerate(s['wing_rows']):
+        for i in range(nf):
+            u = (i / (nf - 1) - 0.5) if nf > 1 else 0.0
+            h = s['wing_t'] * (0.2 + 0.1 * row)
+            p = wc + wl * (ry * off) + lat * (u * rx * 1.5 * spread) + out * h
+            d = (wl + lat * u * 0.45 - out * 0.05).normalized()
+            fl = ry * length * (1.0 - 0.25 * abs(u))
+            path = bez([p, p + d * fl * 0.5 + out * 0.004 * k, p + d * fl * 0.85, p + d * fl - out * fl * 0.12], 4)
+            wing_parts.append(_feather_blade(path, rx * spread / nf * 1.05, 0.006 * k + 0.002, binormal=lat))
+    for g in wing_parts:
+        M['wing_r'].add(g, wingm)
+        M['wing_l'].add(g.mirrored(), wingm)
+    # Tail: a fan of curved feathers on a rounded base (chick: a few downy points).
     tr = Vector(s['tail_root'])
     if s.get('feathers'):
-        for ang, ln, dx in s['feathers']:
-            d = Vector((0, math.sin(RAD(ang)), math.cos(RAD(ang))))
-            g = slab(leaf_outline(ln, ln * 0.5, 4), 0.03 * k, bev=0.008, dome=0.003)
-            M['tail'].add(g, plume, facing(tr + Vector((dx, 0, 0)), (1, 0, 0), d))
+        M['tail'].add(sphere(1.0, 10, 6, scale=(0.034, 0.03, 0.04)).moved(tr + Vector((0, 0.0, -0.005))), plume)
+        for ang, fl, dx in s['feathers']:
+            a = RAD(ang)
+            d = Vector((dx * 5.0, math.sin(a), math.cos(a))).normalized()
+            p0 = tr + Vector((dx * 2.0, 0, 0))
+            path = bez([p0, p0 + d * fl * 0.4, p0 + d * fl * 0.75 + Vector((0, fl * 0.12, -fl * 0.08)), p0 + d * fl], 5)
+            M['tail'].add(_feather_blade(path, s['feather_w'], 0.006 * k + 0.002), plume)
     else:
-        M['tail'].add(cone(tr - Vector((0, 0.02, 0.0)), tr + Vector((0, 0.065, 0.045)), 0.032, 7), plume)
-    # Legs and toes, single material each.
+        for ang, fl, dx in s['down_tail']:
+            a = RAD(ang)
+            d = Vector((dx * 2.0, math.sin(a), math.cos(a))).normalized()
+            M['tail'].add(cone(tr - Vector((0, 0.02, 0.0)), tr + d * fl, 0.017, 7), plume)
+        M['tail'].add(sphere(1.0, 10, 6, scale=(0.03, 0.026, 0.03)).moved(tr), plume)
+    # Chick: down tufts scattered over the back and flanks.
+    for pos, tl_ in s.get('down', ()):
+        p, nrm = ell_point(B, BR, pos)
+        M['body'].add(cone(p - nrm * 0.004, p + nrm * tl_ * 0.7 + Vector((0, 0.004, 0.003)), 0.014, 6), plume)
+    # Legs: feathered thigh, tapered shank with a hock knob, a spur (hen) and four clawed toes.
     for side, name in ((1, 'leg_r'), (-1, 'leg_l')):
         x = side * hip_x
-        top = Vector((x, hip.y, hip.z + 0.02 * k))
-        ankle = Vector((x, hip.y - 0.015 * k, s['toe_r'] * 1.1))
-        M[name].add(cyl(top, ankle, s['leg_r'], s['leg_r'] * 0.9, sides=6, cap=0.0), m['leg'])
         tl, tr_ = s['toe_len'], s['toe_r']
-        for dx, dy in ((-0.6, -1.0), (0.0, -1.12), (0.6, -1.0), (0.0, 0.7)):
+        top = Vector((x, hip.y, hip.z + 0.02 * k))
+        ankle = Vector((x, hip.y - 0.015 * k, tr_ * 1.1))
+        lr = s['leg_r']
+        M[name].add(sphere(1.0, 8, 5, scale=s['thigh']).moved(Vector((x * 1.08, hip.y + 0.005, hip.z + 0.012 * k))), plume)
+        M[name].add(cyl(top - Vector((0, 0, 0.01 * k)), ankle, lr * 1.2, lr * 0.85, sides=7, n=1, cap=0.0), m['leg'])
+        if hen:
+            M[name].add(cone(ankle + Vector((0, lr * 0.8, tr_ * 3.0)), ankle + Vector((0, lr * 2.6, tr_ * 3.6)),
+                             lr * 0.6, 5), m['beak'])
+        for dx, dy in ((-0.62, -1.0), (0.0, -1.12), (0.62, -1.0), (0.0, 0.7)):
             tip = ankle + Vector((dx * tl * 0.55, dy * tl, -0.1 * tr_))
-            M[name].add(cyl(ankle, tip, tr_, tr_ * 0.8, sides=5, cap=tr_ * 0.6), m['leg'])
+            M[name].add(cyl(ankle, tip, tr_, tr_ * 0.75, sides=5, cap=tr_ * 0.3), m['leg'])
+            dirn = (tip - ankle).normalized()
+            M[name].add(cone(tip - dirn * tr_ * 0.4, tip + dirn * tr_ * 1.3 + Vector((0, 0, -tr_ * 0.15)), tr_ * 0.7, 4),
+                        m['beak'])
+        M[name].add(sphere(1.0, 8, 4, scale=(tr_ * 1.7, tr_ * 1.6, tr_ * 0.8)).moved(
+            ankle + Vector((0, -tl * 0.1, -tr_ * 0.2))), m['leg'])
     return M
 
 
 HEN = dict(k=1.0, body=(0, 0.03, 0.255), body_r=(0.15, 0.19, 0.15), tilt=12,
            bib=((0, -0.09, 0.27), (0.11, 0.08, 0.11)),
-           head=(0, -0.12, 0.42), head_r=(0.105, 0.1, 0.1), neck=(0, -0.08, 0.34),
+                      head=(0, -0.12, 0.42), head_r=(0.105, 0.1, 0.1), neck=(0, -0.08, 0.34),
            eye_dir=(0.52, -0.8, 0.18), eye_r=0.031, blush_dir=(0.72, -0.6, -0.14), beak_z=-0.08, beak_len=0.06,
            beak_r=0.03, comb=True, plume='feather', wing_mat='feather',
            wing_root=(0.135, -0.03, 0.31), wing_c=(0.158, 0.05, 0.25), wing_dir=(0, 1, -0.5), wing_r=(0.07, 0.12),
-           wing_t=0.036, tail_root=(0, 0.19, 0.31), feathers=((12, 0.15, -0.014), (36, 0.17, 0.0), (60, 0.14, 0.014)),
+           wing_t=0.036, wing_rows=((4, 1.0, 1.0, 0.18), (3, 0.8, 0.85, -0.05)),
+           tail_root=(0, 0.19, 0.31),
+           feathers=((-4, 0.17, -0.02), (22, 0.15, -0.011), (38, 0.18, 0.0), (54, 0.15, 0.011), (74, 0.13, 0.02)),
+           feather_w=0.032, thigh=(0.045, 0.06, 0.06),
            hip_x=0.062, hip=(0, 0.04, 0.13), leg_r=0.017, toe_r=0.012, toe_len=0.07)
 CHICK = dict(k=0.6, body=(0, 0.01, 0.12), body_r=(0.1, 0.11, 0.095), tilt=6, bib=None,
+                          down=(((0, 0.3, 1), 0.02), ((0.45, 0.5, 0.75), 0.016), ((-0.45, 0.5, 0.75), 0.016),
+                   ((0.0, 0.9, 0.5), 0.02)),
              head=(0, -0.055, 0.205), head_r=(0.08, 0.076, 0.074), neck=(0, -0.03, 0.16),
              eye_dir=(0.5, -0.82, 0.12), eye_r=0.022, blush_dir=(0.7, -0.62, -0.18), beak_z=-0.12, beak_len=0.038,
              beak_r=0.02, comb=False, tuft=True, plume='chick', wing_mat='chick_wing',
              wing_root=(0.09, -0.005, 0.14), wing_c=(0.1, 0.03, 0.115), wing_dir=(0, 1, -0.35), wing_r=(0.042, 0.06),
-             wing_t=0.026, tail_root=(0, 0.1, 0.13), feathers=None,
+             wing_t=0.026, wing_rows=((3, 0.9, 0.95, 0.1),),
+             tail_root=(0, 0.1, 0.13), feathers=None, down_tail=((20, 0.06, -0.01), (50, 0.055, 0.0), (80, 0.045, 0.01)),
+             thigh=(0.026, 0.035, 0.035),
              hip_x=0.042, hip=(0, 0.02, 0.05), leg_r=0.011, toe_r=0.0085, toe_len=0.038)
+
 
 
 # ----------------------------------------------------------------- cattle
@@ -406,48 +482,56 @@ def build_bovine(pid, m, s):
     """Cow and calf share one build: a rounded-box body, a big round head with a pink muzzle, ears, a bell
     (cow) and four legs with hooves; spots hug the body through ray-casts."""
     coat, spot = m[s['coat']], m[s['spot']]
+    big = s['head_k'] >= 1.0  # the calf spends fewer triangles per part
     L, yc, A, C, Z = s['L'], s['yc'], s['A'], s['C'], s['Z']
     H, HR = Vector(s['head']), s['head_r']
     lx, lyf, lyb, hz = s['leg_x'], s['leg_yf'], s['leg_yb'], s['hip_z']
     piv = dict(body=(0, yc, hz), head=s['neck'], leg_fl=(-lx, lyf, hz), leg_fr=(lx, lyf, hz), leg_bl=(-lx, lyb, hz),
                leg_br=(lx, lyb, hz), tail=s['tail_root'])
     M = Model(pid, piv)
-    # Body: superellipse sections along Y, rounded off at both ends.
-    ts = (-1.0, -0.93, -0.74, -0.36, 0.36, 0.74, 0.93, 1.0)
+    # Body: superellipse sections along Y, rounded off at both ends (more rings and sides than the toy pass).
+    ts = (-1.0, -0.96, -0.86, -0.7, -0.48, -0.24, 0.0, 0.24, 0.48, 0.7, 0.86, 0.96, 1.0)
     path, secs = [], []
     for t in ts:
         f = (1 - abs(t) ** 3) ** (1 / 3)
         path.append(Vector((0, yc + t * L, Z)))
-        secs.append([(0.0, 0.0)] if f < 1e-4 else sec_super(A * f, C * f, 16, 2.6))
+        secs.append([(0.0, 0.0)] if f < 1e-4 else sec_super(A * f, C * f, 18 if big else 14, 2.6))
     body = sweep(path, secs, (0, 0, 1), None, None, None).outward()
     M['body'].add(body, coat)
     surf = BodySurface(yc, L, A, C, Z)
     for d, r, ph, sq in s['spots']:
         surf.patch(M['body'], d, r, spot, n=10, lift=0.012, phase=ph, wobble=0.12, squash=sq)
+    # Chest brisket and hip bones give the barrel a shoulder and a rump instead of one smooth egg.
+    M['body'].add(sphere(1.0, 8, 5, scale=(A * 0.62, L * 0.2, C * 0.5)).moved(Vector((0, yc - L * 0.62, Z - C * 0.5))), coat)
     if s.get('udder'):
         u = Vector((0, yc + L * 0.45, Z - C * 0.93))
-        M['body'].add(sphere(1.0, 6, 4, scale=s['udder']).moved(u), m['muzzle'])
+        M['body'].add(sphere(1.0, 10, 6, scale=s['udder']).moved(u), m['muzzle'])
+        for tx, ty in ((-0.4, -0.45), (0.4, -0.45), (-0.4, 0.45), (0.4, 0.45)):
+            tp = u + Vector((tx * s['udder'][0], ty * s['udder'][1], -s['udder'][2] * 0.75))
+            M['body'].add(cone(tp + Vector((0, 0, 0.012)), tp - Vector((0, 0, 0.045)), 0.017, 5), m['muzzle'])
     # Head: round skull, wide muzzle, eyes, ears, horns, a forelock and (cow) a bell under the chin.
     hk = s['head_k']
-    M['head'].add(sphere(1.0, 14, 8, scale=HR).moved(H), coat)
+    M['head'].add(sphere(1.0, 12 if big else 10, 7 if big else 6, scale=HR).moved(H), coat)
     MZ = H + Vector((0, -HR[1] * 0.78, -HR[2] * 0.36))
     MR = (HR[0] * 0.8, HR[1] * 0.5, HR[2] * 0.52)
     M['head'].add(sphere(1.0, 10, 6, scale=MR).moved(MZ), m['muzzle'])
     for side in (-1, 1):
-        decal(M['head'], MZ, MR, (side * 0.42, -1, 0.3), 0.03 * hk, 0.02 * hk, m['nostril'], lift=0.003, n=7)
+        decal(M['head'], MZ, MR, (side * 0.42, -1, 0.3), 0.03 * hk, 0.02 * hk, m['nostril'], lift=0.003, n=8)
     smile(M['head'], MZ, MR, (0, -0.8, -0.62), 0.07 * hk, 0.008 * hk, m['nostril'])
     if s.get('head_spot'):
         decal(M['head'], H, HR, s['head_spot'], 0.13 * hk, 0.1 * hk, spot, lift=0.003, n=10, spin=0.4)
     eye_pair(M['head'], H, HR, (0.44, -0.8, 0.34), 0.06 * hk, m, squash=1.25)
     blush_pair(M['head'], H, HR, (0.7, -0.6, 0.02), 0.045 * hk, m)
     for side in (-1, 1):
-        ear = sphere(1.0, 6, 4, scale=(0.13 * hk, 0.05 * hk, 0.07 * hk))
-        M['head'].add(ear, coat,
-                      xf(H + Vector((side * HR[0] * 1.08, HR[1] * 0.12, HR[2] * 0.22)), (0, side * RAD(-22), side * RAD(8))))
+        ea = H + Vector((side * HR[0] * 1.08, HR[1] * 0.12, HR[2] * 0.22))
+        er = xf(ea, (0, side * RAD(-22), side * RAD(8)))
+        M['head'].add(sphere(1.0, 8, 5, scale=(0.13 * hk, 0.05 * hk, 0.07 * hk)), coat, er)
+        M['head'].add(sphere(1.0, 6, 4, scale=(0.095 * hk, 0.02 * hk, 0.05 * hk)), m['muzzle'],
+                      er @ Matrix.Translation(Vector((side * 0.012 * hk, -0.034 * hk, 0.0))))
         if s.get('horns'):
             base = H + Vector((side * HR[0] * 0.5, HR[1] * 0.05, HR[2] * 0.78))
-            pts = bez([base, base + Vector((side * 0.07, 0, 0.08)) * hk, base + Vector((side * 0.13, 0.02, 0.11)) * hk], 3)
-            M['head'].add(tube(pts, [0.05 * hk, 0.035 * hk, 0.014 * hk], sides=5, cap=0.012 * hk), m['horn'])
+            pts = bez([base, base + Vector((side * 0.07, 0, 0.08)) * hk, base + Vector((side * 0.13, 0.02, 0.11)) * hk], 5)
+            M['head'].add(tube(pts, [0.052 * hk, 0.044 * hk, 0.035 * hk, 0.024 * hk, 0.01 * hk], sides=6, cap=0.012 * hk), m['horn'])
         elif s.get('nubs'):
             base = H + Vector((side * HR[0] * 0.48, HR[1] * 0.05, HR[2] * 0.82))
             M['head'].add(sphere(1.0, 6, 4, scale=(0.03, 0.03, 0.025)).moved(base), m['horn'])
@@ -460,23 +544,40 @@ def build_bovine(pid, m, s):
         bc = H + Vector((0, -HR[1] * 0.2, -HR[2] * 1.06))
         M['head'].add(cyl(bc + Vector((0, 0.0, 0.1)), bc + Vector((0, 0, 0.02)), 0.022, sides=5, cap=0.0), m['strap'])
         prof = [(0.0, 0.0), (0.075, 0.0), (0.07, 0.03), (0.05, 0.07), (0.028, 0.095), (0.0, 0.1)]
-        M['head'].add(lathe(prof, 8).outward().moved(bc - Vector((0, 0, 0.08))), m['bell'])
+        M['head'].add(lathe(prof, 6).outward().moved(bc - Vector((0, 0, 0.08))), m['bell'])
     # Neck filler so the head never floats off the body when it nods (part of the head).
-    M['head'].add(sphere(1.0, 8, 5, scale=s['neck_r']).moved(s['neck_c']), coat)
-    # Legs: a slightly tapered column into a hoof, with the origin at the hip.
+    M['head'].add(sphere(1.0, 8, 5 if big else 4, scale=s['neck_r']).moved(s['neck_c']), coat)
+    nc, nr = Vector(s['neck_c']), s['neck_r']
+    M['head'].add(sphere(1.0, 10, 6, scale=(nr[0] * 0.55, nr[1] * 0.8, nr[2] * 0.5)).moved(nc + Vector((0, -nr[1] * 0.25, -nr[2] * 0.62))), coat)
+    # Legs: thigh tapering to a knee/hock, a slim cannon, a fetlock and a cloven hoof; the origin stays at the hip.
+    r, hoof_h = s['leg_r'], s['hoof_h']
     for name, x, y in (('leg_fl', -lx, lyf), ('leg_fr', lx, lyf), ('leg_bl', -lx, lyb), ('leg_br', lx, lyb)):
-        r = s['leg_r']
-        hoof_h = s['hoof_h']
-        M[name].add(cyl((x, y, hz + 0.1 * hk), (x, y, hoof_h * 0.85), r, r * 0.92, sides=8, cap=0.0),
-                    spot if (s.get('sock') and name in s['sock']) else coat)
-        M[name].add(cyl((x, y, hoof_h), (x, y, 0.0), r * 0.96, r * 1.05, sides=8, cap=0.0), m['hoof'])
-    # Tail: hangs from the rump with a tuft.
+        back = name.startswith('leg_b')
+        zt, zk, zf = hz + 0.1 * hk, hz * 0.5, hoof_h
+        # Hind legs zig-zag (stifle forward, hock back); forelegs stay straight with a small knee.
+        ky = y + (-0.02 if back else 0.0) * hk
+        fy = y + (0.035 if back else 0.0) * hk
+        pts = [Vector((x, y, zt)), Vector((x, y, hz - 0.05 * hk)), Vector((x, ky, zk + 0.05 * hk)),
+               Vector((x, ky + (0.012 if back else 0.0) * hk, zk)), Vector((x, fy, zk * 0.55)),
+               Vector((x, fy, zf * 1.5)), Vector((x, fy, zf * 0.95))]
+        rad = [r * 1.04, r * 1.0, r * 0.7, r * 0.68, r * 0.5, r * 0.6, r * 0.66]
+        lm = spot if (s.get('sock') and name in s['sock']) else coat
+        M[name].add(sweep(pts, [sec_super(q, q, 8 if big else 6, 2.0) for q in rad], (1, 0, 0), None, 0.0, 0.0).outward(), lm)
+        # Cloven hoof: two toes side by side.
+        for dx in (-1, 1):
+            hp = Vector((x + dx * r * 0.34, fy - r * 0.04, 0.0))
+            M[name].add(cyl(hp + Vector((0, 0, zf * 1.0)), hp, r * 0.38, r * 0.46, sides=6, cap=0.0,
+                            binormal=(1, 0, 0)), m['hoof'])
+    # Tail: hangs from the rump, thin cord into a fluffy tuft.
     tr = Vector(s['tail_root'])
     tl = s['tail_len']
     pts = bez([tr, tr + Vector((0, 0.12, -0.06)) * tl, tr + Vector((0, 0.16, -0.5)) * tl], 5)
-    M['tail'].add(tube(pts, [0.03 * hk, 0.026 * hk, 0.022 * hk, 0.02 * hk, 0.018 * hk], sides=5, cap=0.0), coat)
-    M['tail'].add(sphere(1.0, 6, 4, scale=(0.05 * hk, 0.05 * hk, 0.08 * hk)).moved(pts[-1] + Vector((0, 0.005, -0.04 * hk))),
-                  spot)
+    M['tail'].add(tube(pts, [0.03 * hk, 0.025 * hk, 0.021 * hk, 0.019 * hk, 0.018 * hk],
+                       sides=5, cap=0.0), coat)
+    tp = pts[-1]
+    M['tail'].add(sphere(1.0, 7, 4, scale=(0.05 * hk, 0.05 * hk, 0.09 * hk)).moved(tp + Vector((0, 0.005, -0.045 * hk))), spot)
+    for dy in ((-0.025, 0.03) if big else (0.0,)):
+        M['tail'].add(sphere(1.0, 6, 4, scale=(0.032 * hk, 0.03 * hk, 0.06 * hk)).moved(tp + Vector((0, dy * hk, -0.08 * hk))), spot)
     return M
 
 

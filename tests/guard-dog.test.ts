@@ -147,7 +147,7 @@ test('farm.glb has the puppy with the farm animal part contract, its coat materi
     assert.ok(n.translation && n.translation.every(Number.isFinite), `${n.name} has its hinge as translation`); assert.ok(!n.rotation && !n.scale);
     for (const p of doc.meshes[n.mesh].primitives) { tris += doc.accessors[p.indices].count / 3; mats.add(doc.materials[p.material].name); }
   }
-  assert.ok(tris <= 1500, `${tris} triangles`);
+  assert.ok(tris <= 2600, `${tris} triangles`);
   for (const m of ['Farm dog', 'Farm dog ear', 'Farm dog light', 'Farm collar']) assert.ok(mats.has(m), m);
   // Front (+z) legs ahead of the back legs, head ahead of the body.
   const at = (id: string) => kids.find((n: { name: string }) => n.name === id).translation;

@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { isShared } from './assets.ts';
-import { fishLook, type FishingView } from './fishing-view.ts';
+import { fishDrawLook, type FishingView } from './fishing-view.ts';
 import { fishHuntKey, fishHuntTargets, type FishHuntTarget, type HuntPond, type HuntingState } from './fish-hunting.ts';
 import { createHarpoonProjectile } from './harpoon-art.ts';
 import { guardianTarget } from './lake-guardian.ts';
@@ -63,7 +63,7 @@ export class FishHuntingView {
       // A caught slot restocks with a newly rolled species (fish-hunting.ts): swap the model while the slot is empty.
       if (f.id !== target.id) { const next = this.makeFish(target.id); next.obj.position.copy(f.obj.position); next.obj.rotation.y = f.obj.rotation.y; this.dispose(f); this.fish[target.slot] = f = next; this.group.add(next.obj); }
       f.obj.visible = now >= (hunting?.readyAt[fishHuntKey(pond!.id, target.slot)] ?? 0);
-      const [scale, top, wag] = fishLook(target.id);
+      const [scale, top, wag] = fishDrawLook(target.id);
       // Same swim depth as the rod view's fish (FishingView.addFish), so the pond looks the same with either gear.
       const start = k < 1 ? this.from[target.slot] : undefined;
       f.obj.position.set(start ? start.x + (target.x - start.x) * k : target.x, pond!.surface - top * scale - .015, start ? start.z + (target.z - start.z) * k : target.z);

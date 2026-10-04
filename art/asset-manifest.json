@@ -2576,7 +2576,7 @@
           "line_anchor_gltf": [
             0,
             0.134,
-            -0
+            0
           ]
         },
         "lily_pad": {
@@ -14021,18 +14021,18 @@
     "units": "metres",
     "coordinates": "Blender: Z up, front -Y; glTF: Y up, front +Z; origin at each piece's ground centre. Animals and the gate: a root node with one child per part, whose translation is the part pivot (glTF) and whose vertices are relative to it.",
     "file": "farm.glb",
-    "bytes": 459352,
-    "limit_bytes": 655360,
+    "bytes": 678856,
+    "limit_bytes": 1024000,
     "budgets": {
-      "animal": 1500,
+      "animal": 2600,
       "prop": 800,
       "product": 300
     },
     "nodes": {
       "chicken": {
         "kind": "animal",
-        "triangles": 1332,
-        "budget": 1500,
+        "triangles": 2468,
+        "budget": 2600,
         "materials": [
           "Farm beak",
           "Farm bird leg",
@@ -14044,37 +14044,37 @@
         ],
         "bounds": {
           "min": [
-            -0.1883,
+            -0.1877,
             -0.2797,
             0.0012
           ],
           "max": [
-            0.1883,
-            0.3112,
-            0.5804
+            0.1877,
+            0.3143,
+            0.5761
           ],
           "size": [
-            0.3765,
-            0.5909,
-            0.5792
+            0.3754,
+            0.594,
+            0.5749
           ]
         },
         "bounds_gltf": {
           "min": [
-            -0.1883,
+            -0.1877,
             0.0012,
-            -0.3112
+            -0.3143
           ],
           "max": [
-            0.1883,
-            0.5804,
+            0.1877,
+            0.5761,
             0.2797
           ]
         },
         "parts": {
           "body": {
             "node": "chicken_body",
-            "triangles": 232,
+            "triangles": 388,
             "materials": [
               "Farm feather"
             ],
@@ -14091,7 +14091,7 @@
           },
           "head": {
             "node": "chicken_head",
-            "triangles": 540,
+            "triangles": 676,
             "materials": [
               "Farm feather",
               "Farm eye",
@@ -14113,7 +14113,7 @@
           },
           "wing_l": {
             "node": "chicken_wing_l",
-            "triangles": 80,
+            "triangles": 290,
             "materials": [
               "Farm feather"
             ],
@@ -14130,7 +14130,7 @@
           },
           "wing_r": {
             "node": "chicken_wing_r",
-            "triangles": 80,
+            "triangles": 290,
             "materials": [
               "Farm feather"
             ],
@@ -14147,9 +14147,11 @@
           },
           "leg_l": {
             "node": "chicken_leg_l",
-            "triangles": 104,
+            "triangles": 262,
             "materials": [
-              "Farm bird leg"
+              "Farm feather",
+              "Farm bird leg",
+              "Farm beak"
             ],
             "pivot": [
               -0.062,
@@ -14164,9 +14166,11 @@
           },
           "leg_r": {
             "node": "chicken_leg_r",
-            "triangles": 104,
+            "triangles": 262,
             "materials": [
-              "Farm bird leg"
+              "Farm feather",
+              "Farm bird leg",
+              "Farm beak"
             ],
             "pivot": [
               0.062,
@@ -14181,7 +14185,7 @@
           },
           "tail": {
             "node": "chicken_tail",
-            "triangles": 192,
+            "triangles": 300,
             "materials": [
               "Farm feather"
             ],
@@ -14200,8 +14204,8 @@
       },
       "chick": {
         "kind": "animal",
-        "triangles": 1074,
-        "budget": 1500,
+        "triangles": 1998,
+        "budget": 2600,
         "materials": [
           "Farm beak",
           "Farm bird leg",
@@ -14213,37 +14217,37 @@
         ],
         "bounds": {
           "min": [
-            -0.1191,
+            -0.1189,
             -0.1684,
-            0.0009
+            0.0008
           ],
           "max": [
-            0.1191,
-            0.165,
-            0.3164
+            0.1189,
+            0.1443,
+            0.3088
           ],
           "size": [
-            0.2382,
-            0.3334,
-            0.3156
+            0.2378,
+            0.3127,
+            0.3079
           ]
         },
         "bounds_gltf": {
           "min": [
-            -0.1191,
-            0.0009,
-            -0.165
+            -0.1189,
+            0.0008,
+            -0.1443
           ],
           "max": [
-            0.1191,
-            0.3164,
+            0.1189,
+            0.3088,
             0.1684
           ]
         },
         "parts": {
           "body": {
             "node": "chick_body",
-            "triangles": 168,
+            "triangles": 336,
             "materials": [
               "Farm chick"
             ],
@@ -14260,7 +14264,7 @@
           },
           "head": {
             "node": "chick_head",
-            "triangles": 524,
+            "triangles": 676,
             "materials": [
               "Farm chick",
               "Farm eye",
@@ -14281,7 +14285,7 @@
           },
           "wing_l": {
             "node": "chick_wing_l",
-            "triangles": 80,
+            "triangles": 170,
             "materials": [
               "Farm chick wing"
             ],
@@ -14298,7 +14302,7 @@
           },
           "wing_r": {
             "node": "chick_wing_r",
-            "triangles": 80,
+            "triangles": 170,
             "materials": [
               "Farm chick wing"
             ],
@@ -14315,9 +14319,11 @@
           },
           "leg_l": {
             "node": "chick_leg_l",
-            "triangles": 104,
+            "triangles": 252,
             "materials": [
-              "Farm bird leg"
+              "Farm chick",
+              "Farm bird leg",
+              "Farm beak"
             ],
             "pivot": [
               -0.042,
@@ -14332,9 +14338,11 @@
           },
           "leg_r": {
             "node": "chick_leg_r",
-            "triangles": 104,
+            "triangles": 252,
             "materials": [
-              "Farm bird leg"
+              "Farm chick",
+              "Farm bird leg",
+              "Farm beak"
             ],
             "pivot": [
               0.042,
@@ -14349,7 +14357,7 @@
           },
           "tail": {
             "node": "chick_tail",
-            "triangles": 14,
+            "triangles": 142,
             "materials": [
               "Farm chick"
             ],
@@ -14368,8 +14376,8 @@
       },
       "cow": {
         "kind": "animal",
-        "triangles": 1490,
-        "budget": 1500,
+        "triangles": 2546,
+        "budget": 2600,
         "materials": [
           "Farm bell",
           "Farm blush",
@@ -14385,37 +14393,37 @@
         ],
         "bounds": {
           "min": [
-            -0.4866,
+            -0.4887,
             -1.2305,
             0.0
           ],
           "max": [
-            0.4866,
-            0.9283,
-            1.7478
+            0.4887,
+            0.936,
+            1.7437
           ],
           "size": [
-            0.9731,
-            2.1588,
-            1.7478
+            0.9775,
+            2.1665,
+            1.7437
           ]
         },
         "bounds_gltf": {
           "min": [
-            -0.4866,
+            -0.4887,
             0.0,
-            -0.9283
+            -0.936
           ],
           "max": [
-            0.4866,
-            1.7478,
+            0.4887,
+            1.7437,
             1.2305
           ]
         },
         "parts": {
           "body": {
             "node": "cow_body",
-            "triangles": 348,
+            "triangles": 720,
             "materials": [
               "Farm cow",
               "Farm cow patch",
@@ -14434,7 +14442,7 @@
           },
           "head": {
             "node": "cow_head",
-            "triangles": 800,
+            "triangles": 1022,
             "materials": [
               "Farm cow",
               "Farm muzzle",
@@ -14460,7 +14468,7 @@
           },
           "leg_fl": {
             "node": "cow_leg_fl",
-            "triangles": 64,
+            "triangles": 160,
             "materials": [
               "Farm cow",
               "Farm hoof"
@@ -14478,7 +14486,7 @@
           },
           "leg_fr": {
             "node": "cow_leg_fr",
-            "triangles": 64,
+            "triangles": 160,
             "materials": [
               "Farm cow",
               "Farm hoof"
@@ -14496,7 +14504,7 @@
           },
           "leg_bl": {
             "node": "cow_leg_bl",
-            "triangles": 64,
+            "triangles": 160,
             "materials": [
               "Farm cow",
               "Farm hoof"
@@ -14514,7 +14522,7 @@
           },
           "leg_br": {
             "node": "cow_leg_br",
-            "triangles": 64,
+            "triangles": 160,
             "materials": [
               "Farm cow",
               "Farm hoof"
@@ -14532,7 +14540,7 @@
           },
           "tail": {
             "node": "cow_tail",
-            "triangles": 86,
+            "triangles": 164,
             "materials": [
               "Farm cow",
               "Farm cow patch"
@@ -14552,8 +14560,8 @@
       },
       "calf": {
         "kind": "animal",
-        "triangles": 1420,
-        "budget": 1500,
+        "triangles": 2032,
+        "budget": 2600,
         "materials": [
           "Farm blush",
           "Farm calf",
@@ -14567,37 +14575,37 @@
         ],
         "bounds": {
           "min": [
-            -0.3583,
-            -0.8255,
+            -0.3599,
+            -0.8254,
             0.0
           ],
           "max": [
-            0.3583,
-            0.6058,
+            0.3599,
+            0.6099,
             1.1613
           ],
           "size": [
-            0.7167,
-            1.4313,
+            0.7199,
+            1.4353,
             1.1613
           ]
         },
         "bounds_gltf": {
           "min": [
-            -0.3583,
+            -0.3599,
             0.0,
-            -0.6058
+            -0.6099
           ],
           "max": [
-            0.3583,
+            0.3599,
             1.1613,
-            0.8255
+            0.8254
           ]
         },
         "parts": {
           "body": {
             "node": "calf_body",
-            "triangles": 252,
+            "triangles": 432,
             "materials": [
               "Farm calf",
               "Farm cow"
@@ -14615,7 +14623,7 @@
           },
           "head": {
             "node": "calf_head",
-            "triangles": 826,
+            "triangles": 944,
             "materials": [
               "Farm calf",
               "Farm muzzle",
@@ -14639,7 +14647,7 @@
           },
           "leg_fl": {
             "node": "calf_leg_fl",
-            "triangles": 64,
+            "triangles": 132,
             "materials": [
               "Farm calf",
               "Farm hoof"
@@ -14657,7 +14665,7 @@
           },
           "leg_fr": {
             "node": "calf_leg_fr",
-            "triangles": 64,
+            "triangles": 132,
             "materials": [
               "Farm calf",
               "Farm hoof"
@@ -14675,7 +14683,7 @@
           },
           "leg_bl": {
             "node": "calf_leg_bl",
-            "triangles": 64,
+            "triangles": 132,
             "materials": [
               "Farm calf",
               "Farm hoof"
@@ -14693,7 +14701,7 @@
           },
           "leg_br": {
             "node": "calf_leg_br",
-            "triangles": 64,
+            "triangles": 132,
             "materials": [
               "Farm calf",
               "Farm hoof"
@@ -14711,7 +14719,7 @@
           },
           "tail": {
             "node": "calf_tail",
-            "triangles": 86,
+            "triangles": 128,
             "materials": [
               "Farm calf",
               "Farm cow"
@@ -14731,48 +14739,49 @@
       },
       "duck": {
         "kind": "animal",
-        "triangles": 764,
-        "budget": 1500,
+        "triangles": 2090,
+        "budget": 2600,
         "materials": [
           "Farm beak",
           "Farm bird leg",
+          "Farm blush",
           "Farm duck",
           "Farm eye",
           "Farm eye glint"
         ],
         "bounds": {
           "min": [
-            -0.26,
-            -0.5136,
-            0.0
+            -0.255,
+            -0.5,
+            0.004
           ],
           "max": [
-            0.26,
-            0.46,
-            0.68
+            0.255,
+            0.5,
+            0.675
           ],
           "size": [
-            0.52,
-            0.9736,
-            0.68
+            0.51,
+            1.0,
+            0.671
           ]
         },
         "bounds_gltf": {
           "min": [
-            -0.26,
-            0.0,
-            -0.46
+            -0.255,
+            0.004,
+            -0.5
           ],
           "max": [
-            0.26,
-            0.68,
-            0.5136
+            0.255,
+            0.675,
+            0.5
           ]
         },
         "parts": {
           "body": {
             "node": "duck_body",
-            "triangles": 120,
+            "triangles": 456,
             "materials": [
               "Farm duck"
             ],
@@ -14789,12 +14798,14 @@
           },
           "head": {
             "node": "duck_head",
-            "triangles": 324,
+            "triangles": 720,
             "materials": [
               "Farm duck",
               "Farm beak",
+              "Farm bird leg",
               "Farm eye",
-              "Farm eye glint"
+              "Farm eye glint",
+              "Farm blush"
             ],
             "pivot": [
               0.0,
@@ -14809,7 +14820,7 @@
           },
           "wing_l": {
             "node": "duck_wing_l",
-            "triangles": 60,
+            "triangles": 206,
             "materials": [
               "Farm duck"
             ],
@@ -14826,7 +14837,7 @@
           },
           "wing_r": {
             "node": "duck_wing_r",
-            "triangles": 60,
+            "triangles": 206,
             "materials": [
               "Farm duck"
             ],
@@ -14843,10 +14854,10 @@
           },
           "leg_l": {
             "node": "duck_leg_l",
-            "triangles": 76,
+            "triangles": 212,
             "materials": [
-              "Farm bird leg",
-              "Farm beak"
+              "Farm duck",
+              "Farm bird leg"
             ],
             "pivot": [
               -0.09,
@@ -14861,10 +14872,10 @@
           },
           "leg_r": {
             "node": "duck_leg_r",
-            "triangles": 76,
+            "triangles": 212,
             "materials": [
-              "Farm bird leg",
-              "Farm beak"
+              "Farm duck",
+              "Farm bird leg"
             ],
             "pivot": [
               0.09,
@@ -14879,7 +14890,7 @@
           },
           "tail": {
             "node": "duck_tail",
-            "triangles": 48,
+            "triangles": 78,
             "materials": [
               "Farm duck"
             ],
@@ -14898,48 +14909,49 @@
       },
       "duckling": {
         "kind": "animal",
-        "triangles": 764,
-        "budget": 1500,
+        "triangles": 1438,
+        "budget": 2600,
         "materials": [
           "Farm beak",
           "Farm bird leg",
+          "Farm blush",
           "Farm duckling",
           "Farm eye",
           "Farm eye glint"
         ],
         "bounds": {
           "min": [
-            -0.1456,
-            -0.2876,
-            0.0
+            -0.1428,
+            -0.2808,
+            0.0022
           ],
           "max": [
-            0.1456,
-            0.2576,
-            0.3808
+            0.1428,
+            0.28,
+            0.378
           ],
           "size": [
-            0.2912,
-            0.5452,
-            0.3808
+            0.2856,
+            0.5608,
+            0.3758
           ]
         },
         "bounds_gltf": {
           "min": [
-            -0.1456,
-            0.0,
-            -0.2576
+            -0.1428,
+            0.0022,
+            -0.28
           ],
           "max": [
-            0.1456,
-            0.3808,
-            0.2876
+            0.1428,
+            0.378,
+            0.2808
           ]
         },
         "parts": {
           "body": {
             "node": "duckling_body",
-            "triangles": 120,
+            "triangles": 270,
             "materials": [
               "Farm duckling"
             ],
@@ -14956,12 +14968,14 @@
           },
           "head": {
             "node": "duckling_head",
-            "triangles": 324,
+            "triangles": 462,
             "materials": [
               "Farm duckling",
               "Farm beak",
+              "Farm bird leg",
               "Farm eye",
-              "Farm eye glint"
+              "Farm eye glint",
+              "Farm blush"
             ],
             "pivot": [
               0.0,
@@ -14976,7 +14990,7 @@
           },
           "wing_l": {
             "node": "duckling_wing_l",
-            "triangles": 60,
+            "triangles": 130,
             "materials": [
               "Farm duckling"
             ],
@@ -14993,7 +15007,7 @@
           },
           "wing_r": {
             "node": "duckling_wing_r",
-            "triangles": 60,
+            "triangles": 130,
             "materials": [
               "Farm duckling"
             ],
@@ -15010,10 +15024,10 @@
           },
           "leg_l": {
             "node": "duckling_leg_l",
-            "triangles": 76,
+            "triangles": 196,
             "materials": [
-              "Farm bird leg",
-              "Farm beak"
+              "Farm duckling",
+              "Farm bird leg"
             ],
             "pivot": [
               -0.0504,
@@ -15028,10 +15042,10 @@
           },
           "leg_r": {
             "node": "duckling_leg_r",
-            "triangles": 76,
+            "triangles": 196,
             "materials": [
-              "Farm bird leg",
-              "Farm beak"
+              "Farm duckling",
+              "Farm bird leg"
             ],
             "pivot": [
               0.0504,
@@ -15046,7 +15060,7 @@
           },
           "tail": {
             "node": "duckling_tail",
-            "triangles": 48,
+            "triangles": 54,
             "materials": [
               "Farm duckling"
             ],
@@ -15065,8 +15079,8 @@
       },
       "pig": {
         "kind": "animal",
-        "triangles": 1152,
-        "budget": 1500,
+        "triangles": 2480,
+        "budget": 2600,
         "materials": [
           "Farm eye",
           "Farm eye glint",
@@ -15077,37 +15091,37 @@
         ],
         "bounds": {
           "min": [
-            -0.312,
-            -0.7247,
-            0.0
+            -0.3026,
+            -0.712,
+            -0.002
           ],
           "max": [
-            0.312,
-            0.5896,
-            0.94
+            0.3026,
+            0.6153,
+            0.9
           ],
           "size": [
-            0.624,
-            1.3143,
-            0.94
+            0.6052,
+            1.3273,
+            0.902
           ]
         },
         "bounds_gltf": {
           "min": [
-            -0.312,
-            0.0,
-            -0.5896
+            -0.3026,
+            -0.002,
+            -0.6153
           ],
           "max": [
-            0.312,
-            0.94,
-            0.7247
+            0.3026,
+            0.9,
+            0.712
           ]
         },
         "parts": {
           "body": {
             "node": "pig_body",
-            "triangles": 144,
+            "triangles": 492,
             "materials": [
               "Farm pig"
             ],
@@ -15124,7 +15138,7 @@
           },
           "head": {
             "node": "pig_head",
-            "triangles": 488,
+            "triangles": 1004,
             "materials": [
               "Farm pig",
               "Farm muzzle",
@@ -15145,7 +15159,7 @@
           },
           "leg_fl": {
             "node": "pig_leg_fl",
-            "triangles": 64,
+            "triangles": 168,
             "materials": [
               "Farm pig",
               "Farm hoof"
@@ -15163,7 +15177,7 @@
           },
           "leg_fr": {
             "node": "pig_leg_fr",
-            "triangles": 64,
+            "triangles": 168,
             "materials": [
               "Farm pig",
               "Farm hoof"
@@ -15181,7 +15195,7 @@
           },
           "leg_bl": {
             "node": "pig_leg_bl",
-            "triangles": 64,
+            "triangles": 168,
             "materials": [
               "Farm pig",
               "Farm hoof"
@@ -15199,7 +15213,7 @@
           },
           "leg_br": {
             "node": "pig_leg_br",
-            "triangles": 64,
+            "triangles": 168,
             "materials": [
               "Farm pig",
               "Farm hoof"
@@ -15217,7 +15231,7 @@
           },
           "tail": {
             "node": "pig_tail",
-            "triangles": 264,
+            "triangles": 312,
             "materials": [
               "Farm pig"
             ],
@@ -15236,8 +15250,8 @@
       },
       "piglet": {
         "kind": "animal",
-        "triangles": 1152,
-        "budget": 1500,
+        "triangles": 1790,
+        "budget": 2600,
         "materials": [
           "Farm eye",
           "Farm eye glint",
@@ -15248,37 +15262,37 @@
         ],
         "bounds": {
           "min": [
-            -0.1747,
-            -0.4059,
-            0.0
+            -0.1736,
+            -0.397,
+            -0.0011
           ],
           "max": [
-            0.1747,
-            0.3302,
-            0.5264
+            0.1736,
+            0.3446,
+            0.504
           ],
           "size": [
-            0.3494,
-            0.736,
-            0.5264
+            0.3472,
+            0.7416,
+            0.5051
           ]
         },
         "bounds_gltf": {
           "min": [
-            -0.1747,
-            0.0,
-            -0.3302
+            -0.1736,
+            -0.0011,
+            -0.3446
           ],
           "max": [
-            0.1747,
-            0.5264,
-            0.4059
+            0.1736,
+            0.504,
+            0.397
           ]
         },
         "parts": {
           "body": {
             "node": "piglet_body",
-            "triangles": 144,
+            "triangles": 332,
             "materials": [
               "Farm piglet"
             ],
@@ -15295,7 +15309,7 @@
           },
           "head": {
             "node": "piglet_head",
-            "triangles": 488,
+            "triangles": 598,
             "materials": [
               "Farm piglet",
               "Farm muzzle",
@@ -15316,7 +15330,7 @@
           },
           "leg_fl": {
             "node": "piglet_leg_fl",
-            "triangles": 64,
+            "triangles": 144,
             "materials": [
               "Farm piglet",
               "Farm hoof"
@@ -15334,7 +15348,7 @@
           },
           "leg_fr": {
             "node": "piglet_leg_fr",
-            "triangles": 64,
+            "triangles": 144,
             "materials": [
               "Farm piglet",
               "Farm hoof"
@@ -15352,7 +15366,7 @@
           },
           "leg_bl": {
             "node": "piglet_leg_bl",
-            "triangles": 64,
+            "triangles": 144,
             "materials": [
               "Farm piglet",
               "Farm hoof"
@@ -15370,7 +15384,7 @@
           },
           "leg_br": {
             "node": "piglet_leg_br",
-            "triangles": 64,
+            "triangles": 144,
             "materials": [
               "Farm piglet",
               "Farm hoof"
@@ -15388,7 +15402,7 @@
           },
           "tail": {
             "node": "piglet_tail",
-            "triangles": 264,
+            "triangles": 284,
             "materials": [
               "Farm piglet"
             ],
@@ -15407,8 +15421,8 @@
       },
       "dog": {
         "kind": "animal",
-        "triangles": 1460,
-        "budget": 1500,
+        "triangles": 2548,
+        "budget": 2600,
         "materials": [
           "Farm bell",
           "Farm blush",
@@ -15422,36 +15436,36 @@
         "bounds": {
           "min": [
             -0.2064,
-            -0.5306,
-            -0.0043
+            -0.532,
+            -0.0017
           ],
           "max": [
             0.2064,
-            0.3627,
-            0.7998
+            0.3762,
+            0.812
           ],
           "size": [
             0.4128,
-            0.8933,
-            0.8041
+            0.9083,
+            0.8137
           ]
         },
         "bounds_gltf": {
           "min": [
             -0.2064,
-            -0.0043,
-            -0.3627
+            -0.0017,
+            -0.3762
           ],
           "max": [
             0.2064,
-            0.7998,
-            0.5306
+            0.812,
+            0.532
           ]
         },
         "parts": {
           "body": {
             "node": "dog_body",
-            "triangles": 400,
+            "triangles": 518,
             "materials": [
               "Farm dog",
               "Farm dog light",
@@ -15471,7 +15485,7 @@
           },
           "head": {
             "node": "dog_head",
-            "triangles": 712,
+            "triangles": 994,
             "materials": [
               "Farm dog",
               "Farm dog light",
@@ -15493,7 +15507,7 @@
           },
           "leg_fl": {
             "node": "dog_leg_fl",
-            "triangles": 60,
+            "triangles": 214,
             "materials": [
               "Farm dog",
               "Farm dog light"
@@ -15511,7 +15525,7 @@
           },
           "leg_fr": {
             "node": "dog_leg_fr",
-            "triangles": 60,
+            "triangles": 214,
             "materials": [
               "Farm dog",
               "Farm dog light"
@@ -15529,7 +15543,7 @@
           },
           "leg_bl": {
             "node": "dog_leg_bl",
-            "triangles": 60,
+            "triangles": 214,
             "materials": [
               "Farm dog",
               "Farm dog light"
@@ -15547,7 +15561,7 @@
           },
           "leg_br": {
             "node": "dog_leg_br",
-            "triangles": 60,
+            "triangles": 214,
             "materials": [
               "Farm dog",
               "Farm dog light"
@@ -15565,10 +15579,11 @@
           },
           "tail": {
             "node": "dog_tail",
-            "triangles": 108,
+            "triangles": 180,
             "materials": [
               "Farm dog",
-              "Farm dog light"
+              "Farm dog light",
+              "Farm dog ear"
             ],
             "pivot": [
               0.0,

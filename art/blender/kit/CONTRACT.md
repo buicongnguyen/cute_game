@@ -673,7 +673,7 @@ in three.js (`GLTFLoader` may add `_1`, `_2` to the names). Each of them carries
 the same pivot, so match parts by the `<id>_<part>` prefix and turn them all.
 The right-hand parts (`_r`, `_fr`, `_br`) are on +X, as with `hand-right`.
 
-| Node | Parts | Size (w × l × h) | Triangles (≤ 1,500) |
+| Node | Parts | Size (w × l × h) | Triangles (≤ 2,600) |
 | --- | --- | --- | ---: |
 | `chicken` | `body`, `head`, `wing_l`, `wing_r`, `leg_l`, `leg_r`, `tail` | 0.38 × 0.59 × 0.58 (comb top; body top 0.40) | 1,332 |
 | `chick` | same as `chicken` | 0.24 × 0.33 × 0.32 | 1,074 |
@@ -795,7 +795,7 @@ One root empty `helper` with one child mesh per part, `helper_<part>`:
 translation is the part's **pivot** (shoulder, hip, neck, waist) and its
 vertices are relative to it; no rotation or scale. Multi-material parts load as
 several meshes; match by the `helper_<part>` prefix. Materials are `Helper
-<name>`, flat colours, no textures or glow. Budget 1,500 triangles (now 1,436),
+<name>`, flat colours, no textures or glow. Budget 2,600 triangles (the October realism pass; was 1,500),
 about 46 KB. The game shows it at 1.5x (0.8 m) so it reads at the game camera. The runtime (`src/helper-view.ts`) bakes each part's colours into
 one geometry and draws all six with one shared toon material, with no shadow
 casting (a blob decal sits underneath). The build also renders

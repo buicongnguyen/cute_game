@@ -7,8 +7,9 @@ import math
 
 
 def extend(g):
-    Model, sphere, cyl, rbox, FM = (g[n] for n in ('Model', 'sphere', 'cyl', 'rbox', 'FM'))
-    def blob(part, color, center, radii, seg=10, rings=5):
+    Model, sphere, cyl, rbox, FM, cone = (g[n] for n in ('Model', 'sphere', 'cyl', 'rbox', 'FM', 'cone'))
+    def blob(part, color, center, radii, seg=10, rings=5, young=[False]):
+        if young[0]: seg=max(5,round(seg*.8)); rings=max(3,round(rings*.8))
         part.add(sphere(1, seg, rings, scale=radii).moved(center), color)
 
     def animal(pid, m):
@@ -16,6 +17,7 @@ def extend(g):
         young = pid in ('duckling', 'piglet')
         dog = pid == 'dog'
         sc = .56 if young else 1
+        blob.__defaults__[-1][0]=young
         def v(x,y,z): return (x*sc,y*sc,z*sc)
         if bird:
             piv = dict(body=v(0,0,.20),head=v(0,-.12,.36),wing_l=v(-.18,0,.30),wing_r=v(.18,0,.30),leg_l=v(-.09,0,.14),leg_r=v(.09,0,.14),tail=v(0,.25,.30))
@@ -25,19 +27,87 @@ def extend(g):
         color = '#ffde63' if pid=='duckling' else '#fffaf0' if bird else '#c98d4c' if dog else '#ffc1cd' if young else '#ffb4c0'
         coat = FM(pid,color)
         if bird:
-            blob(model['body'],coat,v(0,.02,.29),v(.22,.34,.19),12,6)
-            blob(model['head'],coat,v(0,-.20,.50),v(.15,.16,.18),12,6)
-            # A wide, flat bill and webbed feet distinguish a duck from the existing hen.
-            blob(model['head'],m['beak'],v(0,-.39,.45),v(.125,.13,.035),10,4)
+            bill=m['beak']
+            # Body: barrel + breast + uptilted rump, so the silhouette is a duck's boat shape.
+            blob(model['body'],coat,v(0,.03,.29),v(.215,.33,.185),14,8)
+            blob(model['body'],coat,v(0,-.14,.27),v(.19,.18,.18),12,6)
+            blob(model['body'],coat,v(0,.22,.34),v(.15,.16,.13),10,5)
+            blob(model['body'],coat,v(0,-.02,.20),v(.17,.28,.10),10,4)
+            # Slim neck blending head into the body.
+            blob(model['head'],coat,v(0,-.15,.43),v(.095,.10,.15),8,5)
+            blob(model['head'],coat,v(0,-.19,.51),v(.145,.155,.165),14,8)
+            blob(model['head'],coat,v(0,-.255,.455),v(.10,.09,.075),8,4)
+            # Flat bill: upper + lower mandible, nail, nostrils.
+            blob(model['head'],bill,v(0,-.37,.455),v(.095,.105,.03),10,4)
+            blob(model['head'],bill,v(0,-.43,.452),v(.075,.055,.024),8,3)
+            blob(model['head'],bill,v(0,-.37,.425),v(.085,.095,.017),8,3)
+            blob(model['head'],m['leg'],v(0,-.485,.455),v(.032,.02,.014),6,3)
             for side in (-1,1):
-                blob(model['head'],m['eye'],v(side*.12,-.315,.55),v(.026,.026,.032),8,4)
-                blob(model['head'],m['glint'],v(side*.128,-.335,.563),v(.009,.009,.01),6,3)
+                blob(model['head'],m['eye'],v(side*.035,-.45,.468),v(.012,.016,.008),5,3)
+                blob(model['head'],m['eye'],v(side*.118,-.30,.545),v(.028,.028,.034),8,5)
+                blob(model['head'],m['glint'],v(side*.128,-.32,.558),v(.009,.009,.01),6,3)
+                blob(model['head'],m['blush'],v(side*.135,-.285,.495),v(.03,.012,.018),6,3)
                 part='wing_l' if side<0 else 'wing_r'
-                blob(model[part],coat,v(side*.19,.055,.32),v(.07,.24,.10),10,4)
+                W=model[part]
+                # Folded wing: shoulder, overlapping feather layers, pointed tip.
+                blob(W,coat,v(side*.195,-.02,.325),v(.06,.17,.12),8,5)
+                blob(W,coat,v(side*.2,.09,.31),v(.055,.17,.095),8,4)
+                blob(W,coat,v(side*.198,.17,.30),v(.048,.15,.07),6,4)
+                W.add(cone(v(side*.2,.24,.30),v(side*.2,.40,.33),.04*sc,5),coat)
+                for yy,zz in ((.05,.255),(.15,.25)):
+                    blob(W,coat,v(side*.208,yy,zz),v(.035,.12,.035),6,3)
                 leg='leg_l' if side<0 else 'leg_r'
-                model[leg].add(cyl(v(side*.09,0,.13),v(side*.09,0,.025),.024*sc,sides=7),m['leg'])
-                blob(model[leg],m['beak'],v(side*.09,-.055,.025),v(.085,.13,.025),8,4)
-            blob(model['tail'],coat,v(0,.33,.35),v(.09,.13,.10),8,4)
+                L=model[leg]; x=side*.09
+                blob(L,coat,v(x,.0,.15),v(.06,.08,.055),6,4)
+                L.add(cyl(v(x,0,.14),v(x,-.005,.035),.026*sc,.019*sc,sides=6),m['leg'])
+                blob(L,m['leg'],v(x,-.005,.04),v(.03,.03,.022),6,3)  # ankle
+                for ang in (-.5,0,.5):
+                    tx=x+math.sin(ang)*.1; ty=-.005-math.cos(ang)*.1
+                    L.add(cyl(v(x,-.005,.03),v(tx,ty,.016),.012*sc,.009*sc,sides=4),m['leg'])
+                    blob(L,m['leg'],v(tx,ty,.016),v(.015,.016,.012),4,3)
+                blob(L,m['leg'],v(x,-.065,.012),v(.075,.075,.008),8,3)  # web
+            # Upturned tail fan.
+            T=model['tail']
+            blob(T,coat,v(0,.32,.36),v(.085,.11,.09),8,4)
+            for k in (-1,0,1):
+                T.add(cone(v(k*.03,.36,.37),v(k*.06,.50,.46-abs(k)*.03),.045*sc,5),coat)
+        elif not dog:
+            blob(model['body'],coat,v(0,.03,.49),v(.31,.45,.27),12,7)
+            blob(model['body'],coat,v(0,-.20,.52),v(.30,.25,.27),12,7)   # shoulders
+            blob(model['body'],coat,v(0,.26,.50),v(.30,.24,.26),12,7)    # hams
+            blob(model['body'],coat,v(0,.02,.38),v(.27,.40,.19),10,4)    # belly
+            blob(model['head'],coat,v(0,-.40,.60),v(.235,.24,.225),14,7)
+            blob(model['head'],coat,v(0,-.40,.50),v(.20,.22,.14),10,4)   # jowls
+            snout=m['muzzle']
+            model['head'].add(cyl(v(0,-.52,.545),v(0,-.67,.545),.125*sc,.135*sc,sides=12),snout)
+            blob(model['head'],snout,v(0,-.67,.545),v(.135,.025,.12),12,4)  # snout disc
+            blob(model['head'],snout,v(0,-.55,.55),v(.15,.10,.12),8,4)
+            for side in (-1,1):
+                blob(model['head'],m['nostril'],v(side*.05,-.700,.55),v(.022,.012,.032),8,4)
+                blob(model['head'],m['nostril'],v(side*.065,-.64,.47),v(.05,.03,.007),6,3)  # mouth line
+                # Floppy folded ear with inner colour.
+                blob(model['head'],coat,v(side*.17,-.37,.80),v(.10,.07,.10),8,4)
+                blob(model['head'],coat,v(side*.215,-.40,.775),v(.085,.09,.06),8,4)
+                blob(model['head'],m['muzzle'],v(side*.205,-.43,.775),v(.055,.045,.04),8,4)
+                blob(model['head'],m['eye'],v(side*.125,-.575,.675),v(.029,.027,.033),8,5)
+                blob(model['head'],m['glint'],v(side*.13,-.598,.688),v(.01,.009,.011),6,3)
+            for name,(x,y) in {'fl':(-.21,-.28),'fr':(.21,-.28),'bl':(-.21,.28),'br':(.21,.28)}.items():
+                L=model['leg_'+name]
+                kb=.02 if y>0 else -.02
+                L.add(cyl(v(x,y,.31),v(x,y+kb,.17),.095*sc,.066*sc,sides=7),coat)
+                blob(L,coat,v(x,y+kb,.17),v(.07,.07,.065),6,4)  # knee
+                L.add(cyl(v(x,y+kb,.17),v(x,y,.075),.062*sc,.054*sc,sides=7),coat)
+                L.add(cyl(v(x,y,.085),v(x,y,.02),.062*sc,.07*sc,sides=7),m['hoof'])
+                for tx in (-.032,.032):
+                    blob(L,m['hoof'],v(x+tx,y-.03,.028),v(.04,.062,.03),6,3)  # split toes
+            # Curly corkscrew tail.
+            previous=None
+            for i in range(7):
+                a=i*.95; r=.045*(1-i*.03)
+                center=v(math.sin(a)*r,.52+i*.012,.57-i*.003+math.cos(a)*r)
+                if previous is not None: model['tail'].add(cyl(previous,center,.026*sc,sides=6),coat)
+                blob(model['tail'],coat,center,v(.028,.028,.03),6,3)
+                previous=center
         else:
             blob(model['body'],coat,v(0,.03,.49),v(.32,.47,.29),12,7)
             blob(model['head'],coat,v(0,-.39,.62),v(.23,.25,.23),12,6)
@@ -66,6 +136,7 @@ def extend(g):
             if dog:
                 blob(model['body'],m['strap'],v(0,-.30,.58),v(.255,.045,.21),10,4)
                 blob(model['body'],m['bell'],v(0,-.358,.40),v(.05,.03,.06),8,4)
+        blob.__defaults__[-1][0]=False
         return model
 
     def product(pid,m):
