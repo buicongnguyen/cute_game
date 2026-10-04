@@ -41,7 +41,7 @@ test('online progress submits serialized intents and never an optimistic profile
 test('an uncertain action keeps the exact receipt identity and revision when retried',async()=>{
   const app=await fixture({failFirstAction:true}),pending=app.bridge.perform({type:'buy',payload:{id:'rod'}});await flush();
   const first=app.requests.find(r=>r.url.endsWith('/actions')).options.body;
-  app.socket.message({type:'profile',authorityVersion:1,revision:5,profile:newGame('Newer')});app.fire(5000);await pending;
+  app.socket.message({type:'profile',authorityVersion:1,revision:5,profile:newGame('Newer')});app.fire(500);await pending;
   const sent=app.requests.filter(r=>r.url.endsWith('/actions'));assert.equal(sent.length,2);assert.equal(sent[1].options.body,first);
   assert.equal(app.bridge.getState().name,'Newer','an older replay profile cannot replace newer server state');
 });

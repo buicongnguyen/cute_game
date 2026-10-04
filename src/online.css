@@ -160,3 +160,6 @@
 .social-gifts h4 { margin: 0 0 6px; }
 
 button[data-badge]:not([data-badge=""])::after { content: attr(data-badge); display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: #e8453c; color: #fff; font-size: 12px; line-height: 18px; text-align: center; }
+
+.player-plate { position: fixed; left: 0; top: 0; z-index: 30; pointer-events: none; padding: 2px 9px; border-radius: 10px; background: rgba(35, 45, 30, .72); color: #fff; font: 800 12px/1.35 Nunito, system-ui, sans-serif; white-space: nowrap; text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
+.player-plate.friend { background: rgba(32, 120, 62, .8); }

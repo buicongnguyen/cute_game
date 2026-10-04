@@ -60,7 +60,7 @@ interface Obstacle { x: number; z: number; r: number;tag?:string }
  * AI level of detail: a resting creature does not think at all; a calm wanderer thinks on every 4th step (its slot)
  * and is drawn gliding from (x, z), `age` steps after it last thought.
  */
-export interface Enemy { resting?:boolean;lod?:{wait:number;age:number;x:number;z:number;slot:number} }
+export interface Enemy { /** A peer's drawn position, gliding to the host's latest snapshot (world.ts stepCreatureMotion). */smooth?:{x:number;z:number};resting?:boolean;lod?:{wait:number;age:number;x:number;z:number;slot:number} }
 /** windupTotal: the length of the current wind-up, so its telegraph fills exactly when the blow lands; enraged: below 30% HP (one toast). */
 export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;resistAt?:number }
 /** A boss attacks faster as it weakens, like the reference (bundle @837714): ×0.7 below half health, ×0.6 once enraged.
@@ -153,7 +153,7 @@ export class World {
   authoritativeAction?:(intent:{type:string;payload?:Record<string,unknown>})=>Promise<unknown>;
   private progressPending=new Set<string>();private titanView?:TitanAttackView;
   environment!:EnvironmentSimulation;environmentView!:EnvironmentView;movementLocked=false;/** In the village or the cottage and hurt: home-care.ts heals 4x, the HUD shows a chip. */ homeRecovering=false;playerFlying=false;playerStealth=false;
-  networkRole:'host'|'peer'|null=null;remotePlayers=new Map<string,{mesh:T.Group;pose:RemotePose}>();remoteRoot=new T.Group();
+  networkRole:'host'|'peer'|null=null;remotePlayers=new Map<string,{mesh:T.Group;pose:RemotePose}>();/** Friends' account ids (online.ts keeps it current): their nameplates get a heart. */friendIds=new Set<string>();remoteRoot=new T.Group();
   onRemoteDamage:(id:string,amount:number,source?:'melee'|'shot'|'hazard',enemyId?:string)=>void=()=>{};
   onEnvironmentEvent:(event:EnvironmentEvent)=>void=()=>{};
   onEnvironmentAction:(action:EnvironmentAction)=>void=()=>{};
@@ -955,6 +955,8 @@ export class World {
   private animateRemotes(dt:number){
     for(const remote of this.remotePlayers?.values()??[]){
       const m=remote.mesh,u=m.userData,g:Gait=u.gait??=newGait(),p=m.position,last=u.lastPos as T.Vector3|undefined;
+      const tg=u.target as {x:number;y:number;z:number;f:number}|undefined;
+      if(tg){const k=1-Math.exp(-dt*12);p.x+=(tg.x-p.x)*k;p.y+=(tg.y-p.y)*k;p.z+=(tg.z-p.z)*k;m.rotation.y+=Math.atan2(Math.sin(tg.f-m.rotation.y),Math.cos(tg.f-m.rotation.y))*k;}
       let dist=last?Math.hypot(p.x-last.x,p.z-last.z):0;if(dist>3)dist=0;if(last)last.copy(p);else u.lastPos=p.clone(); // a teleport is not a step
       u.speed=(u.speed??0)+((dt>0?dist/dt:0)-(u.speed??0))*(1-Math.exp(-dt*6));
       const moving=remote.pose.moving??u.speed>.3,leg=HIP*m.scale.x,l=limbsOf(m);
@@ -967,7 +969,10 @@ export class World {
   }
   receiveRemoteHit(id:string,amount:number,stun=0){const e=this.enemies.find(e=>e.id===id);if(!e||e.hp<=0||!Number.isFinite(amount)||amount<0)return false;this.damageEnemy(e,amount,stun);return true;}
   addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear,pose.look);avatar.userData.remoteId=id;this.remoteRoot.add(avatar);this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
-  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear,pose.look??remote.pose.look);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;remote.mesh.position.set(current.x,(current.y??0)-(indoor?INDOOR_Y:0),current.z);remote.mesh.rotation.y=current.facing??0;this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
+  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear,pose.look??remote.pose.look);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;// Each pose is a target the avatar glides to (per frame, below): poses arrive about every 100 ms and a tunnel bunches them, so setting the position outright made others jump and blink. First sight, big jumps and rebuilds snap.
+    {const ty=(current.y??0)-(indoor?INDOOR_Y:0),u=remote.mesh.userData,p=remote.mesh.position;u.target={x:current.x,y:ty,z:current.z,f:current.facing??0};
+      if(!u.placed||Math.hypot(p.x-current.x,p.z-current.z)>8||Math.abs(p.y-ty)>3){p.set(current.x,ty,current.z);remote.mesh.rotation.y=u.target.f;u.placed=true;}}
+    this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
   visualSnapshot():AvatarVisual{return {size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
     // Nothing to change until stealth first fades the explorer: a new avatar starts fully opaque, so it is never copied for opacity 1
@@ -1554,7 +1559,10 @@ export class World {
     if(!e.mesh.visible)return;
     const ground=this.planet==='ocean'&&inWater(this.environment.layout,e)?-.5:Math.max(-.7,terrainHeight(this.environment.layout,e));
     // A wanderer that thinks on every 4th step glides between its last two positions instead of hopping (teleports snap).
-    const lod=this.networkRole!=='peer'?e.lod:undefined,glide=lod&&Math.abs(e.x-lod.x)+Math.abs(e.z-lod.z)<.5?Math.min(1,(lod.age+1)/4):1,drawX=lod?lod.x+(e.x-lod.x)*glide:e.x,drawZ=lod?lod.z+(e.z-lod.z)*glide:e.z;
+    // A peer does not simulate creatures: it only receives the host's positions about 10 times a second (bunched by a tunnel), so they are drawn gliding toward the latest one instead of jumping to it (that read as a creature shaking back and forth).
+    const view2=this.networkRole==='peer'?(e.smooth??={x:e.x,z:e.z}):undefined;
+    if(view2){if(Math.hypot(e.x-view2.x,e.z-view2.z)>7){view2.x=e.x;view2.z=e.z;}else{const k=1-Math.exp(-dt*9);view2.x+=(e.x-view2.x)*k;view2.z+=(e.z-view2.z)*k;}}
+    const lod=this.networkRole!=='peer'?e.lod:undefined,glide=lod&&Math.abs(e.x-lod.x)+Math.abs(e.z-lod.z)<.5?Math.min(1,(lod.age+1)/4):1,drawX=lod?lod.x+(e.x-lod.x)*glide:view2?view2.x:e.x,drawZ=lod?lod.z+(e.z-lod.z)*glide:view2?view2.z:e.z;
     e.mesh.position.set(drawX,ground+(e.lift??0)+(e.titanLift??0)+(e.definition?.flying?1+Math.sin(this.time*4+e.homeX)*.15:Math.sin(this.time*3+e.homeX)*.06),drawZ);
     const scale=enemyScale(e.type,e.boss)*((e.statuses?.sheep??0)>0?.45:1);e.mesh.scale.setScalar(scale);
     // Hit reaction: a pop in the creature's own colour (emissive 0.35) and a ×1.15 squash, so the silhouette survives the hit.
