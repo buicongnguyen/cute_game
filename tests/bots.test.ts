@@ -103,3 +103,10 @@ test('a neighbour can pick a boss only when asked, dares it for a few seconds, t
   assert.equal(L.pickFoe(foes, { x: 31, z: 0 }, zone)?.id, 'imp'); assert.equal(L.pickFoe(foes, { x: 31, z: 0 }, zone, 18, true)?.id, 'king');
   assert.ok(L.bossDare(() => 0) >= 5 && L.bossDare(() => .9999) < 10 && L.BOSS_SHY >= 120);
 });
+
+test('compound and everyday messages are sorted by the most specific intent', async () => {
+  const { intentOf } = await import('../src/bot-chat.ts');
+  assert.equal(intentOf('hi, how are you?'), 'how'); assert.equal(intentOf('hello, what is your name'), 'name'); assert.equal(intentOf('thanks for the gift'), 'gift');
+  assert.equal(intentOf('we met yesterday'), 'other'); assert.equal(intentOf('trong nhà bạn có gì?'), 'question'); assert.equal(intentOf('representative'), 'other');
+  assert.equal(intentOf('mình mệt quá'), 'sad'); assert.equal(intentOf('đưa mình cái mũ'), 'outfit'); assert.equal(intentOf('xin chào'), 'hello');
+});

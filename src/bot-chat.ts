@@ -9,23 +9,23 @@ export type Intent = 'hello' | 'how' | 'thanks' | 'bye' | 'garden' | 'gift' | 'o
 /** Lower-case, no accents (đ -> d), so "Xin chào" and "xin chao" match the same key. */
 export const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/\?/g, ' ? ').replace(/[^a-z0-9? ]+/g, ' ').replace(/\s+/g, ' ').trim();
 const KEYS: Array<[Intent, string[]]> = [
-  ['bye', ['bye', 'goodbye', 'see you', 'good night', 'tam biet', 'hen gap lai', 'ngu ngon', 'di day']],
-  ['thanks', ['thank', 'thanks', 'cam on']],
-  ['hello', ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'xin chao', 'chao', 'alo']],
-  ['how', ['how are you', 'how r you', 'how do you do', 'what s up', 'khoe khong', 'khoe ko', 'the nao', 'dang lam gi', 'what are you doing']],
-  ['gift', ['gift', 'present', 'give me', 'qua tang', 'tang qua', 'cho minh qua']],
-  ['outfit', ['outfit', 'costume', 'clothes', 'wear', 'dress', 'hat', 'do dep', 'trang phuc', 'quan ao', 'bo do', 'mu']],
-  ['fly', ['fly', 'flying', 'wings', 'sky', 'bay', 'canh']],
-  ['friend', ['friend', 'be my', 'ban be', 'ket ban', 'lam ban']],
-  ['garden', ['garden', 'farm', 'plant', 'crop', 'animal', 'vuon', 'trong', 'cay', 'nong trai', 'thu cung', 'gia suc']],
-  ['joke', ['joke', 'funny', 'laugh', 'haha', 'lol', 'dua', 'hai huoc', 'cuoi']],
-  ['praise', ['cool', 'awesome', 'great', 'nice', 'amazing', 'love', 'beautiful', 'tuyet', 'gioi', 'dep', 'thich', 'hay qua']],
   ['name', ['your name', 'who are you', 'ten gi', 'ten ban', 'ban la ai']],
-  ['sad', ['sad', 'tired', 'lonely', 'bored', 'buon', 'met', 'chan', 'co don']],
+  ['how', ['how are you', 'how r you', 'how do you do', 'what s up', 'whats up', 'khoe khong', 'khoe ko', 'the nao', 'dang lam gi', 'what are you doing']],
+  ['gift', ['gift', 'gifts', 'present', 'presents', 'give me', 'qua tang', 'tang qua', 'cho minh qua']],
+  ['bye', ['bye', 'goodbye', 'see you', 'good night', 'tam biet', 'hen gap lai', 'ngu ngon']],
+  ['thanks', ['thank', 'thanks', 'thank you', 'cam on']],
+  ['outfit', ['outfit', 'costume', 'clothes', 'wear', 'dress', 'hat', 'do dep', 'trang phuc', 'quan ao', 'bo do', 'cai mu', 'chiec mu']],
+  ['fly', ['fly', 'flying', 'wings', 'sky', 'bay', 'canh']],
+  ['friend', ['friend', 'friends', 'be my', 'ban be', 'ket ban', 'lam ban']],
+  ['garden', ['garden', 'farm', 'plant', 'plants', 'crop', 'crops', 'animal', 'animals', 'vuon', 'trong cay', 'trong trot', 'cay', 'nong trai', 'thu cung', 'gia suc']],
+  ['joke', ['joke', 'funny', 'laugh', 'haha', 'lol', 'hai huoc', 'cuoi', 'dua vui']],
+  ['praise', ['cool', 'awesome', 'great', 'nice', 'amazing', 'love', 'beautiful', 'tuyet', 'gioi', 'dep', 'thich', 'hay qua']],
+  ['sad', ['sad', 'tired', 'lonely', 'bored', 'buon', 'met qua', 'met roi', 'dang met', 'chan', 'co don']],
+  ['hello', ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'xin chao', 'chao', 'alo']],
 ];
 export function intentOf(text: string): Intent {
   const s = ' ' + normalize(text) + ' ';
-  for (const [intent, keys] of KEYS) if (keys.some(k => s.includes(' ' + k + ' ') || (k.length > 4 && s.includes(k)))) return intent;
+  for (const [intent, keys] of KEYS) if (keys.some(k => s.includes(' ' + k + ' '))) return intent;
   return s.includes(' ? ') ? 'question' : 'other';
 }
 const P = (en: string, vi: string) => [en, vi] as const;

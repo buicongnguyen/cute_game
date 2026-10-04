@@ -55,6 +55,7 @@ import { progressEntries, claimProgress, recordEvent, rerollDaily, startChalleng
 import { STORY_STEPS } from './content.ts';
 import type { GameBridge, GameAction, NetworkHooks, NetworkDrop } from './game-bridge.ts';
 import { initOnline } from './online.ts';
+import { defeatPaysPlayer } from './safe-zone.ts';
 import { initBots, neighboursOn, setNeighboursOn } from './bots.ts';
 import { initPlatform, toggleFullscreen } from './platform.ts';
 import { Sfx, type Sound } from './sfx.ts';
@@ -1067,6 +1068,8 @@ frameListeners.add(dt=>helperView.update(dt,{state:!flight&&world.planet==='home
 frameListeners.add(dt=>{farmHelperController.sync();farmHelperView.update(dt,{state:!flight&&world.planet==='home'?world.state:null,context:world.root,act:!!farmHelperContext(),pending:farmHelperController.pending,now:Date.now(),position:uid=>world.farmView?.positionOf(uid)??undefined,work:task=>farmHelperController.work(task)});});
 function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string;x?:number;z?:number;helper?:boolean}){
   if(actionHandler)return;
+  // In the safe zone nothing that falls far outside it pays you: no EXP, no orbs, no loot (safe-zone.ts).
+  if(!defeatPaysPlayer(world.position,{x:e.x??world.position.x,z:e.z??world.position.z},world.planet,!!world.networkRole))return;
   const defeat=()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss,Math.random,false),loot=change(()=>e.helper?asHelper(defeat):defeat());// a pet's kill is not the player's for the timed challenge
   // Experience flies in as cyan orbs; the loot is tossed onto the ground where the creature fell.
   const x=e.x??world.position.x,z=e.z??world.position.z;
@@ -1235,7 +1238,7 @@ export const gameBridge:GameBridge={
     world.refreshPlayer();$('#visit-banner').hidden=!owner;$('#visit-banner').textContent=t(owner?t('Visiting {owner} · look around their garden',{owner}):'');updateLabels();
   },
   showNotice:message=>toast(message),
-  botHit:(id,damage)=>{const e=world.enemies.find(x=>x.id===id);if(!e||e.hp<=0||actionHandler||!Number.isFinite(damage)||damage<=0)return;world.damageEnemy(e,damage,0,false);world.hitFeedback(e,damage,false);if(e.hp===0)world.defeatFeedback(e);},
+  botHit:(id,damage)=>{const e=world.enemies.find(x=>x.id===id);if(!e||e.hp<=0||actionHandler||!Number.isFinite(damage)||damage<=0)return;world.damageEnemy(e,damage,0,false);},
   ownsItem:id=>(state.bag[id]||0)>0||(state.chest[id]||0)>0||Object.values(state.gear).includes(id),
   grantGift:gift=>{
     if(!started||!Number.isFinite(gift.energy)||gift.energy<0)return false;

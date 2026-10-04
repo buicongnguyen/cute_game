@@ -10,6 +10,7 @@ import { INDOOR_Y } from './house.ts';
 import {atHome,homeRecoveryBonus} from './home-care.ts';
 import { bakeCoverAtlas, coverCards, tickCoverCards, type CoverAtlas } from './cover-cards.ts';
 import { buildGround } from './ground.ts';
+import { inSafeZone } from './safe-zone.ts';
 import { buildPond } from './pond-view.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
@@ -1277,7 +1278,7 @@ export class World {
   }
   private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string){if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id)this.onRemoteDamage?.(target.id,amount,source,enemyId);else if(!this.playerSafe()&&(!this.playerFlying||source!=='melee'))this.onDamage(amount,source,enemyId);}
   /** Inside the safe zone (18 m at home, 11 m elsewhere) no creature can hurt the explorer, whoever it was aiming at: shots and area attacks aimed at a neighbour or a friend near the gate stop at the fence. */
-  private playerSafe(){return Math.hypot(this.position.x,this.position.z)<(this.planet==='home'?18:11);}
+  private playerSafe(){return inSafeZone(this.position,this.planet);}
   private shootEnemy(e:Enemy,target:Point&{id?:string;enemy?:Enemy}){
     const electric=e.type==='robot',distance=Math.max(.01,Math.hypot(target.x-e.x,target.z-e.z)),shot=ball(electric?'#e8fbff':e.definition?.accent??'#f5b576',.17,e.x,1.0,e.z,0);this.scene.add(shot);
     this.enemyShots.push({id:e.id+':shot:'+Math.random().toString(36).slice(2,10),ownerId:e.id,mesh:shot,vx:(target.x-e.x)/distance*13,vz:(target.z-e.z)/distance*13,life:1.4,damage:e.damage,...(electric?{electric}:{}),targetId:target.id,targetEnemyId:target.enemy?.id});

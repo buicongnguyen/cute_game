@@ -133,12 +133,18 @@ export function initBots(game: GameBridge) {
     box.append(icon, text); document.body.append(box); setTimeout(() => box.classList.add('leaving'), 5200); setTimeout(() => box.remove(), 5600);
   }
   /** Hands over any gift still waiting in the store. A grant that fails (nothing playing yet, a full bag) is tried again later. */
+  const giftTries = new Map<string, number>();
   function deliverGifts() {
     for (const [id, gift] of Object.entries(store.pending)) {
       const def = cast.find(d => d.id === id); if (!def) { settleGift(store, id, true); save(); continue; }
       if (!ready().ready) return;
       const ok = game.grantGift({ item: gift.item, count: gift.count, energy: gift.energy });
-      if (!ok) { settleGift(store, id, false); store.pending[id] = { ...gift, item: undefined, count: 0, energy: Math.max(gift.energy, 300) }; save(); continue; }
+      if (!ok) { // a failed grant keeps the promise (and the reservation) and tries again; only an item that can never be given (tried many times) turns into energy
+        const n = (giftTries.get(id) ?? 0) + 1; giftTries.set(id, n);
+        if (n >= 6 && gift.item) { settleGift(store, id, false); store.pending[id] = { ...gift, item: undefined, count: 0, energy: Math.max(gift.energy, 500) }; giftTries.delete(id); save(); }
+        return;
+      }
+      giftTries.delete(id);
       settleGift(store, id, true); save(); showGift(def, gift); const r = runs.get(id); if (r) { sayLine(r, 'GIFT', 5000); }
       return; // one at a time, so each popup is seen
     }
@@ -305,7 +311,7 @@ export function initBots(game: GameBridge) {
     if (!isFriend(store, def.id)) return;
     visitingBot = def.id; busy = def.id; closeCard();
     game.setVisiting(def.name, buildHome(def));
-    for (const [id, r] of runs) if (id !== def.id) world.removeRemotePlayer(id); else { r.place = 'garden'; r.mode = 'wander'; r.stayUntil = clock + 1e9; r.flyY = 0; r.w.x = 4; r.w.z = 4; pickGoal(r.w, gardenCtx); }
+    for (const [id, r] of runs) if (id !== def.id) world.removeRemotePlayer(id); else { r.place = 'garden'; r.hidden = false; r.route = []; r.foe = null; r.retreat = 0; r.say = null; r.mode = 'wander'; r.stayUntil = clock + 1e9; r.flyY = 0; r.w.x = 4; r.w.z = 4; pickGoal(r.w, gardenCtx); }
     showLeave(def);
   }
   const leaveBtn = el('button', 'bot-leave'); leaveBtn.hidden = true; document.body.append(leaveBtn);
@@ -382,13 +388,13 @@ export function initBots(game: GameBridge) {
   game.onFrame(dt => {
     clock += Math.min(.1, dt);
     const on = active();
-    if (!on) { for (const id of [...runs.keys()]) { world.removeRemotePlayer(id); bubbles.get(id)?.remove(); bubbles.delete(id); } runs.clear(); busy = null; closeCard(); leaveBtn.hidden = true; visitingBot = null; panelBtn.hidden = !enabled || !!world.networkRole; return; }
+    if (!on) { endVisit(); for (const id of [...runs.keys()]) { world.removeRemotePlayer(id); bubbles.get(id)?.remove(); bubbles.delete(id); } runs.clear(); busy = null; closeCard(); leaveBtn.hidden = true; visitingBot = null; panelBtn.hidden = !enabled || !!world.networkRole; return; }
     panelBtn.hidden = false;
     for (const d of cast) {
       if (visitingBot && d.id !== visitingBot) continue;
       if (!runs.has(d.id)) runs.set(d.id, spawn(d));
     }
-    for (const id of [...runs.keys()]) if (visitingBot && id !== visitingBot) { world.removeRemotePlayer(id); runs.delete(id); }
+    for (const id of [...runs.keys()]) if (visitingBot && id !== visitingBot) { world.removeRemotePlayer(id); runs.delete(id); bubbles.get(id)?.remove(); bubbles.delete(id); }
     const d = Math.min(.1, dt);
     // Through any of the four gates (18 m out) is the wild, with its enemies; returning through the gate lands you in your own safe zone.
     if (visitingBot && Math.hypot(world.position.x, world.position.z) > GATE_EXIT) { endVisit(); game.showNotice(t('You left through the gate. Your own garden is waiting when you come back.')); return; }
