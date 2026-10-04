@@ -5,6 +5,7 @@ import { buildFriend, friendModel, friendSignature, poseFriend, FRIEND_SCALE, ty
 import { CAGES, FRIENDS, FRIEND_IDS, cageState, friendsOf, inVillage, nextFriendTask, resting, friendStage, friendHeight, type CageState, type Friend, type FriendId, type FriendTask, type WorkResult } from './friends.ts';
 import type { World, Entity } from './world.ts';
 import { dropTree } from './dispose-tree.ts';
+import { lineFor, type LineScenario } from './friend-lines.ts';
 import { HIP, gaitSwing, newGait, stepGait, type Gait } from './walk-cycle.ts';
 import { RESCUE_REACH, cageCandidates } from './cage-spots.ts';
 
@@ -53,11 +54,15 @@ export interface CrewHost {
   arrived(ids: FriendId[]): void;
   /** A friend reached a new growth stage (optional: tests and older hosts leave it out). */
   grew?(id: FriendId, stage: number): void;
+  /** Outdoor speech bubbles (optional: tests leave them out). */
+  chat?: { say(who: string, text: string, at: () => { x: number; z: number }): void; speaking(who: string): boolean };
 }
 
 interface Actor {
   id: FriendId; root: T.Group; sig: string; entity: Entity; x: number; z: number; facing: number; t: number; gait: Gait; swing: number; walked?: boolean;
   pose: FriendPose; task: FriendTask | null; workT: number; think: number; cookT: number; cheerT: number; pending: boolean; wander: number;
+  /** Home trips: 0 working, 1 walking to the cottage door, 2 inside; `inT` seconds left inside, `jobs` done since the last visit, `tripAt` jobs before the next, `nice` seconds until a friendly word. */
+  trip: 0 | 1 | 2; inT: number; jobs: number; tripAt: number; nice: number;
 }
 interface Cage { id: FriendId; group: T.Group; door: T.Object3D | null; prisoner: T.Group | null; entity: Entity; x: number; z: number; state: CageState; pop?: { t: number; vx: number; vz: number } }
 
@@ -165,7 +170,7 @@ export class FriendCrew {
     PROXY_BOX ??= new T.BoxGeometry(.5, 1.05, .5).translate(0, .52, 0); PROXY_BOX.userData.sharedKit = true;
     const box = new T.Mesh(PROXY_BOX); box.visible = false; proxy.add(box); this.fitProxy(proxy, stage);
     a = { id, root: this.dress(id, f), sig, entity: { id: 'friend:' + id, kind: 'friend', name: FRIENDS[id].name, icon: ICONS[f.role], mesh: proxy, x: 0, z: 0, radius: .35, index: FRIEND_IDS.indexOf(id) },
-      x: POSTS[id].x, z: POSTS[id].z, facing: 0, t: Math.random() * 9, gait: newGait(), swing: .6, pose: 'idle', task: null, workT: 0, think: 0, cookT: 0, cheerT: 0, pending: false, wander: 0 };
+      x: POSTS[id].x, z: POSTS[id].z, facing: 0, t: Math.random() * 9, gait: newGait(), swing: .6, pose: 'idle', task: null, workT: 0, think: 0, cookT: 0, cheerT: 0, pending: false, wander: 0, trip: 0, inT: 0, jobs: 0, tripAt: 2 + Math.floor(Math.random() * 3) + FRIEND_IDS.indexOf(id), nice: 6 + Math.random() * 10 };
     this.group.add(a.root); this.actors.set(id, a); return a;
   }
   /** The same model as in the cottage (friend-view.ts friendModel): gear, work hat, look and growth stage. */
@@ -239,9 +244,16 @@ export class FriendCrew {
     if (a.cheerT > 0) { a.cheerT -= dt; this.place(a, 'cheer'); return; }
     if (f.role === 'cook' && (f.paused || resting(f, now))) {
       // The cook off duty walks into the cottage and stays there.
-      a.task = null; if (this.walk(a, COTTAGE_DOOR, dt)) { this.place(a, 'idle'); a.root.visible = false; this.setEntity(a, false); } return;
+      a.task = null; if (a.trip === 2 || this.walk(a, COTTAGE_DOOR, dt)) this.goInside(a, 0); return;
     }
+    if (a.trip === 2) { // inside the cottage on a visit: wait it out, then come out (the cook in a new outfit)
+      if ((a.inT -= dt) > 0) { this.goInside(a, a.inT); return; }
+      this.comeOut(a, f); return;
+    }
+    if (a.trip === 1) { a.task = null; if (this.walk(a, COTTAGE_DOOR, dt)) this.goInside(a, 12 + Math.random() * 16); return; }
     if (f.paused) { a.task = null; if (this.walk(a, post, dt)) this.place(a, 'idle'); return; }
+    // A friendly word when the explorer is near (the pool for it is in friend-lines.ts).
+    if ((a.nice -= dt) <= 0) { a.nice = 14 + Math.random() * 16; if (Math.hypot(a.x - this.host.world.position.x, a.z - this.host.world.position.z) < 3.6) this.speak(a, 'NICE'); }
     if (a.workT > 0) {
       a.workT -= dt; const tg = a.task && this.target(s, a, a.task); if (tg) this.turn(a, Math.atan2(tg.at.x - a.x, tg.at.z - a.z), dt);
       this.place(a, a.task ? POSE_OF[a.task.kind] : 'idle');
@@ -250,7 +262,7 @@ export class FriendCrew {
         if (act && !a.pending && !(task.kind === 'plant' && task.index === this.host.heldBed?.())) { // the player opened this bed's seed list meanwhile: it is theirs
           a.pending = true; const own = s;
           void this.host.perform<WorkResult>('friendWork', { id: a.id, kind: task.kind, ...('index' in task ? { index: task.index } : { uid: task.uid }) })
-            .then(r => { if (r && !r.skipped && this.host.own() === own) { this.host.worked(a.id, task, r, { x: a.x, z: a.z }); if (a.id === 'pepper') a.cookT = 2.4; } })
+            .then(r => { if (r && !r.skipped && this.host.own() === own) { this.host.worked(a.id, task, r, { x: a.x, z: a.z }); if (a.id === 'pepper') a.cookT = 2.4; a.jobs++; this.speak(a, this.scenarioOf(f.role, task.kind)); } })
             .finally(() => { a.pending = false; });
         } else if (!act && a.id === 'pepper') a.cookT = 2.4;
       }
@@ -267,6 +279,8 @@ export class FriendCrew {
         else if (s.plots.length) a.task = { kind: f.role === 'garden' ? 'plant' : 'harvest', index: Math.floor(Math.random() * s.plots.length) };
       }
     }
+    // After a few jobs, a friend walks home for a rest (and comes out later), as a person would.
+    if (act && !a.task && !a.pending && a.workT <= 0 && a.jobs >= a.tripAt && inVillage(a)) { a.trip = 1; this.speak(a, 'HOME'); return; }
     const tg = a.task && this.target(s, a, a.task);
     if (a.task && !tg) a.task = null;
     if (a.task && tg) { if (this.walk(a, tg.stand, dt)) a.workT = WORK_TIME[a.task.kind] * (act ? 1 : 2); return; }
@@ -275,6 +289,20 @@ export class FriendCrew {
       if (a.id === 'pepper') { a.cookT = Math.max(0, a.cookT - dt); this.turn(a, Math.atan2(1 - a.x, 10.5 - a.z), dt); this.place(a, 'cook'); }
       else { this.turn(a, 0, dt * .3); this.place(a, 'idle'); }
     } else a.cookT = 0;
+  }
+  private scenarioOf(role: Friend['role'], kind: FriendTask['kind']): LineScenario {
+    return role === 'cook' && (kind === 'harvest' || kind === 'collect') ? 'COOK' : kind === 'harvest' ? 'HARVEST' : kind === 'plant' ? 'PLANT' : kind === 'collect' ? 'COLLECT' : 'FEED';
+  }
+  private speak(a: Actor, scenario: LineScenario) {
+    const chat = this.host.chat; if (!chat || this.host.world.interior || chat.speaking(a.id)) return;
+    chat.say(a.id, lineFor(a.id, scenario), () => ({ x: a.x, z: a.z }));
+  }
+  /** In the cottage: hidden outdoors (its own scene shows it indoors). */
+  private goInside(a: Actor, left: number) { a.trip = 2; a.inT = left; this.place(a, 'idle'); a.root.visible = false; this.setEntity(a, false); }
+  /** Out of the cottage door: a new outfit for the cook, a word about it. */
+  private comeOut(a: Actor, f: Friend) {
+    a.trip = 0; a.jobs = 0; a.tripAt = 3 + Math.floor(Math.random() * 3); a.x = COTTAGE_DOOR.x; a.z = COTTAGE_DOOR.z + .5; a.root.visible = true; this.setEntity(a, true);
+    if (f.role === 'cook' && this.host.own().friends?.includes(f)) void this.host.perform('friendOutfit', { id: a.id, pick: Math.random() }).then(ok => { if (ok) this.speak(a, 'OUTFIT'); });
   }
   private bedOf(id: FriendId) { const t = this.actors.get(id)?.task; return t && 'index' in t ? t.index : undefined; }
   /** For the status line and tests. */

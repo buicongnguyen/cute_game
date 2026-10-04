@@ -45,20 +45,29 @@ export function buffText(buff: BuffDef | undefined) {
   return `${parts.join(', ')} · ${Math.round(buff.time / 60 * 10) / 10} ${t('min')}`;
 }
 
-/** A tiny music box: a looping pentatonic tune on its own quiet WebAudio voice. */
+/** The radio: plays the game's own theme (public/assets/audio/zoo-garden-theme.mp3, a loop). If the file cannot play, a tiny WebAudio music box (a looping pentatonic tune) stands in. */
 class MusicBox {
   private ctx: AudioContext | null = null; private gain: GainNode | null = null; private timer = 0; private step = 0;
   playing = false;
   private static NOTES = [523, 659, 784, 659, 587, 523, 440, 523, 659, 784, 880, 784, 659, 587, 523, 0];
+  private theme: HTMLAudioElement | null = null; private fallback = false;
   start() {
+    if (!this.fallback && typeof Audio !== 'undefined') {
+      try {
+        this.theme ??= Object.assign(new Audio(`${import.meta.env?.BASE_URL ?? '/'}assets/audio/zoo-garden-theme.mp3`), { loop: true, volume: .45 });
+        this.playing = true;
+        void this.theme.play().catch(() => { this.fallback = true; this.theme = null; if (this.playing) this.start(); });
+        return;
+      } catch { this.fallback = true; this.theme = null; }
+    }
     try { this.ctx ??= new AudioContext(); if (this.ctx.state === 'suspended') void this.ctx.resume(); } catch { return; }
     if (!this.gain) { this.gain = this.ctx.createGain(); this.gain.gain.value = .07; this.gain.connect(this.ctx.destination); }
     this.playing = true; this.step = 0; this.timer = 0;
   }
-  stop() { this.playing = false; }
+  stop() { this.playing = false; this.theme?.pause(); }
   /** Called each frame while inside; schedules a note every 0.32 s. */
   tick(dt: number) {
-    if (!this.playing || !this.ctx || !this.gain) return;
+    if (!this.playing || !this.fallback || !this.ctx || !this.gain) return;
     if ((this.timer -= dt) > 0) return; this.timer = .32;
     const f = MusicBox.NOTES[this.step++ % MusicBox.NOTES.length]; if (!f) return;
     const at = this.ctx.currentTime, osc = this.ctx.createOscillator(), env = this.ctx.createGain();

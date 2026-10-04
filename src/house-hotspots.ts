@@ -8,7 +8,7 @@
  * the outdoor buildings' radii, so the word, the object and the place that answered a tap were three different spots.
  */
 import * as T from 'three';
-import { FURNITURE, HOUSE, type Placement } from './house.ts';
+import { FURNITURE, HOUSE, spreadActivity, type Placement } from './house.ts';
 import { houseKit } from './house-view.ts';
 import type { ActivityId } from './house-activities.ts';
 
@@ -32,7 +32,8 @@ const GUESS: Record<string, { h: number; w?: number; d?: number }> = {
 /** The front door seen from inside: the panel in its frame. */
 const DOOR: Box3D = { x0: -.6, x1: .6, y0: 0, y1: 2.05, z0: HOUSE.bounds.z1 - .2, z1: HOUSE.bounds.z1 + .1 };
 
-const placementOf = (kit: string, x: number, z: number): Placement | undefined => FURNITURE.find(p => p.kit === kit && Math.abs(p.x - x) < .01 && Math.abs(p.z - z) < .01);
+/** PIECES lists plan coordinates; FURNITURE is spread (house.ts SPACE), so spread the lookup the same way. */
+const placementOf = (kit: string, x: number, z: number): Placement | undefined => { const at = spreadActivity({ x, z }); return FURNITURE.find(p => p.kit === kit && Math.abs(p.x - at.x) < .01 && Math.abs(p.z - at.z) < .01); };
 const box = new T.Box3(), part = new T.Box3(), m = new T.Matrix4(), q = new T.Quaternion(), up = new T.Vector3(0, 1, 0);
 /** A placement's box from the kit's real parts, or from its footprint and a guessed height. */
 function pieceBox(p: Placement, out: T.Box3) {

@@ -1,0 +1,40 @@
+import { open } from './shoot.mjs';
+import { CAST, caption, cast, TXT, SUF } from './common.mjs';
+import { mkdirSync } from 'node:fs';
+mkdirSync('promo/rec', { recursive: true });
+const { browser, ctx, page } = await open({ viewport: { width: 1920, height: 1080 }, recordVideo: { dir: 'promo/rec', size: { width: 1920, height: 1080 } } });
+page.on('pageerror', e => console.log('ERR', e.message));
+const css = '#zone-banner,#hud,.toast,#keys-guide{display:none!important}.promo{position:fixed;left:48px;bottom:44px;z-index:99999;padding:18px 28px;border-radius:22px;background:rgba(255,252,240,.92);color:#2f5d2a;font:800 38px/1.15 Nunito,system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.25);animation:in .6s}.promo small{display:block;font:700 22px/1.3 Nunito,system-ui,sans-serif;color:#7a6a3a;margin-top:6px}.promo b{color:#f2a010}@keyframes in{from{opacity:0;transform:translateY(20px)}}.outro{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:radial-gradient(circle,#fff6c9,#9be15d);animation:in 1s;text-align:center;font:900 140px/1 Nunito,system-ui,sans-serif;color:#2f7d2a}.outro b{color:#f2a010}.outro small{display:block;font:800 40px Nunito,system-ui,sans-serif;color:#6b5a1a;margin-top:24px}';
+await page.addStyleTag({ content: css });
+await page.waitForTimeout(3500); // the real title screen
+await page.click('[data-action="start"]');
+await page.waitForTimeout(2500);
+// Smooth glide of the explorer + zoom between two stops.
+const glide = (to, zoom, ms) => page.evaluate(async ([to, zoom, ms]) => {
+  const w = __zoo.world, from = { x: w.position.x, z: w.position.z, zoom: w.zoom }, t0 = performance.now();
+  await new Promise(res => { const step = () => { const k = Math.min(1, (performance.now() - t0) / ms), e = k * k * (3 - 2 * k); w.position.set(from.x + (to.x - from.x) * e, 0, from.z + (to.z - from.z) * e); w.zoom = from.zoom + (zoom - from.zoom) * e; w.resize(); k < 1 ? requestAnimationFrame(step) : res(); }; step(); });
+}, [to, zoom, ms]);
+await page.evaluate(() => { __zoo.world.facing = 0; });
+await caption(page, ...TXT.intro);
+await glide({ x: 0, z: 0 }, 1.0, 3500);
+await cast(page);
+await caption(page, ...TXT.crew);
+await glide({ x: 0, z: 3.6 }, .66, 5500);
+await page.waitForTimeout(1500);
+await page.evaluate(() => { for (let i = 0; i < 9; i++) __zoo.world.removeRemotePlayer('cast' + i); });
+await caption(page, ...TXT.garden);
+await glide({ x: -9.1, z: 3.9 }, .78, 5500);
+await page.waitForTimeout(1500);
+await caption(page, ...TXT.animals);
+await glide({ x: -8.6, z: -3.2 }, .8, 5500);
+await page.waitForTimeout(1500);
+await caption(page, ...TXT.helpers);
+await glide({ x: -4, z: 3 }, 1.0, 4500);
+await page.waitForTimeout(500);
+await page.evaluate(() => __zoo.house.enter(true));
+await caption(page, ...TXT.house);
+await page.waitForTimeout(8000);
+await caption(page, '');
+await page.evaluate(tag => { const d = document.createElement('div'); d.className = 'outro'; d.innerHTML = '<div><b>Zoo</b> Garden<small>' + tag + '</small></div>'; document.body.append(d); }, TXT.tag);
+await page.waitForTimeout(3500);
+await ctx.close(); await browser.close();

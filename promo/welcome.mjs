@@ -1,0 +1,11 @@
+import { open } from './shoot.mjs';
+import { SUF, VI } from './common.mjs';
+const { browser, page } = await open({ viewport: { width: 1920, height: 1080 } });
+await page.addStyleTag({ content: '#hud,#zone-banner,.toast,[id*="toast"],[class*="toast"]{display:none!important}#dialog-layer .dialog,#dialog-layer>*{zoom:1.55}.promo{position:fixed;left:48px;bottom:44px;z-index:99999;padding:18px 28px;border-radius:22px;background:rgba(255,252,240,.92);color:#2f5d2a;font:800 40px/1.15 Nunito,system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.25)}.promo small{display:block;font:700 22px/1.3 Nunito,system-ui,sans-serif;color:#7a6a3a;margin-top:6px}.promo b{color:#f2a010}' });
+await page.click('[data-action="start"]');
+await page.waitForSelector('[data-action="welcome-take"]', { timeout: 20000 });
+await page.waitForTimeout(2500);
+await page.evaluate(v => { const d = document.createElement('div'); d.className = 'promo'; d.innerHTML = v ? '<b>Zoo</b> Garden · Nhận ngay 1.000.000 năng lượng!<small>Bắt đầu với món quà may mắn từ đầu bếp Pepper</small>' : '<b>Zoo</b> Garden · Get 1,000,000 energy to start!<small>A lucky welcome gift from your cook, Pepper</small>'; document.body.append(d); }, VI);
+await page.waitForTimeout(300);
+await page.screenshot({ path: `promo/zoo-garden-0-welcome${SUF}.png` });
+await browser.close();

@@ -1,0 +1,12 @@
+import { start, caption, cast, go, TXT, SUF } from './common.mjs';
+const { browser, page } = await start({ viewport: { width: 1920, height: 1080 } });
+const shot = async (n, name, key) => { await caption(page, ...TXT[key]); await page.screenshot({ path: `promo/zoo-garden-${n}-${name}${SUF}.png` }); };
+await cast(page); await go(page, 0, 3.6, .68); await shot(1, 'friends', 'crew');
+await page.evaluate(() => { for (let i = 0; i < 9; i++) __zoo.world.removeRemotePlayer('cast' + i); });
+await go(page, -9.1, 3.9, .78, 3500); await shot(2, 'garden', 'garden');
+await go(page, -8.6, -3.2, .8, 3500); await shot(3, 'animals', 'animals');
+await page.evaluate(() => __zoo.house.enter(true)); await page.waitForTimeout(1500);
+await page.waitForFunction(() => { const b = document.querySelector('#house-bubble'); return b && !b.hidden && b.textContent; }, null, { timeout: 30000 }).catch(() => {});
+await page.waitForTimeout(600);
+await shot(4, 'house', 'house');
+await browser.close();

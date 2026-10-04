@@ -11,7 +11,7 @@ import * as Game from './model.ts';
 import { FISH, ITEMS, PLANETS, type BuffDef } from './content.ts';
 import { TITANS } from './titan-content.ts';
 import { FRIENDS, FRIEND_IDS } from './friends-state.ts';
-import type { Point, RoomId } from './house.ts';
+import { spreadActivity, type Point, type RoomId } from './house.ts';
 
 export type ActivityId = 'sofa' | 'fire' | 'trophies' | 'radio' | 'stove' | 'tea' | 'workbench' | 'bench' | 'easel' | 'bed' | 'wardrobe' | 'mirror' | 'bath' | 'duck' | 'sink' | 'globe' | 'books' | 'diary';
 /** buff: a rule in this file; open: an existing panel (main.ts routes kind 'cook'/'craft'/'travel'); fun: sound and sparkle only. */
@@ -32,7 +32,7 @@ export interface Activity {
   note?: string;
 }
 
-export const ACTIVITIES: Activity[] = [
+const ACTIVITIES_PLAN: Activity[] = [
   // Living room: rest with your friends, warm up by the fire, admire your trophies, play the radio.
   { id: 'sofa', room: 'living', icon: '🛋️', verb: 'Sit with friends', name: 'Sofa', at: { x: -1.9, z: -.85 }, y: .6, kind: 'buff', entity: 'house-use', cooldownMin: 3, heal: 'full', buff: { regen: 3, time: 90 }, note: 'Rested: health restored, +{n} regeneration' },
   { id: 'fire', room: 'living', icon: '🔥', verb: 'Warm up', name: 'Fireplace', at: { x: -4.1, z: 1.7 }, y: .6, kind: 'buff', entity: 'house-use', cooldownMin: 4, buff: { def: 15, time: 150 }, note: 'Toasty: +15 defence' },
@@ -59,6 +59,8 @@ export const ACTIVITIES: Activity[] = [
   { id: 'books', room: 'study', icon: '📚', verb: 'Collection log', name: 'Bookshelf', at: { x: 9.2, z: -4.4 }, y: 1.2, kind: 'open', entity: 'house-use' },
   { id: 'diary', room: 'study', icon: '📔', verb: 'Diary', name: 'Diary', at: { x: 6.5, z: -6.0 }, y: 1.0, kind: 'open', entity: 'house-use' },
 ];
+/** Spread with the rest of the plan (house.ts SPACE), so each activity stays at its piece of furniture. */
+export const ACTIVITIES: Activity[] = ACTIVITIES_PLAN.map(a => ({ ...a, at: spreadActivity(a.at) }));
 export const activity = (id: string) => ACTIVITIES.find(a => a.id === id);
 
 export interface HouseState { used?: Partial<Record<ActivityId, number>>; paintings?: number }

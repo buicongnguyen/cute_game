@@ -8,7 +8,7 @@ import { newGame, type SaveState } from '../src/model.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { EnvironmentSimulation, createEnvironmentLayout } from '../src/environments.ts';
 import { findRoute, clearSegment, WORLD_BOUNDS } from '../src/navigation.ts';
-import { FURNITURE, FRIEND_SPOTS, HOUSE, INDOOR_Y, ROOMS, WALLS, furnitureObstacles, roomAt, walkable } from '../src/house.ts';
+import { FURNITURE, FRIEND_SPOTS, HOUSE, INDOOR_Y, SPACE, ROOMS, WALLS, furnitureObstacles, roomAt, walkable } from '../src/house.ts';
 import { HouseSession, houseFocus } from '../src/house-session.ts';
 import { HouseView, houseKit } from '../src/house-view.ts';
 import { friendsOf, giveGear, takeGear, type Friend } from '../src/friends.ts';
@@ -71,7 +71,7 @@ test('walls keep the explorer inside: walking into every wall and out of the fro
   }
   // Interior walls between rooms hold too (kitchen | living away from its doorway).
   w.position.set(-3, 0, 0); for (let i = 0; i < 100; i++) w.move(-.1, 0);
-  assert.ok(w.position.x > -5 + .1, 'went through the kitchen wall');
+  assert.ok(w.position.x > -5 * SPACE + .1, 'went through the kitchen wall');
 });
 
 test('entering swaps in the interior and leaving restores the village, in front of the door', () => {

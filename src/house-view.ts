@@ -119,7 +119,7 @@ export class HouseView {
     this.scene.background = new T.Color('#2a1d1a');
     this.hemi = new T.HemisphereLight('#fff3df', '#b07a52', 1.55);
     this.sun = new T.DirectionalLight('#ffe9c8', 1.7); this.sun.position.set(4, 14, 9); this.sun.target.position.set(0, 0, 0); this.sun.castShadow = true;
-    const b = HOUSE.bounds, cam = this.sun.shadow.camera; Object.assign(cam, { left: -13, right: 13, top: 11, bottom: -11, near: 1, far: 40 }); cam.updateProjectionMatrix();
+    const b = HOUSE.bounds, cam = this.sun.shadow.camera; Object.assign(cam, { left: -15, right: 15, top: 13, bottom: -13, near: 1, far: 40 }); cam.updateProjectionMatrix();
     this.sun.shadow.mapSize.set(1024, 1024); this.sun.shadow.bias = -.0008; this.sun.shadow.normalBias = .03;
     void b;
     this.scene.add(this.hemi, this.sun, this.sun.target, this.root);

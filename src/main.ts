@@ -81,6 +81,7 @@ import './helper.css';
 import { FriendCrew, postFor } from './friend-crew.ts';
 import { setFriendDresser } from './friend-view.ts';
 import { PROFILE_SLOTS, activeSlot, activeKey, slotKey, setActiveSlot } from './profiles.ts';
+import { ChatBubbles } from './friend-chat.ts';
 import { FRIENDS, FRIEND_IDS, type FriendId } from './friends.ts';
 import { friendPanel, lockedHint, RESCUE_LINES } from './friend-ui.ts';
 import './language.css';
@@ -781,7 +782,8 @@ const farmHelperController=new FarmHelperController({state:()=>state,context:far
 }});
 // Rescued friends (friends.ts rules, friend-crew.ts cages/following/jobs, friend-view.ts looks, friend-ui.ts panel).
 setFriendDresser((color,gear,look)=>world.friendAvatar(color,gear,look));
-const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
+const helperChat=new ChatBubbles(world,()=>!started||modal!=='');
+const crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
   robotBed:()=>helperView.task?.index,heldBed,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform:workPerform,
   rescued(id,at){const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
   locked(id){toast(lockedHint(id),'🔒');},
@@ -794,7 +796,7 @@ const crew=new FriendCrew({world,own:()=>state,visiting:()=>!!visiting,flying:()
   },
   grew(id,stage){toast(t('{name} grew up! Now {share} of your height.',{name:t(FRIENDS[id].name),share:String(GROWTH[stage].height)}),'🌱');tone('success');},
   arrived(ids){toast(t('{names} reached Clover Village and went to work!',{names:ids.map(id=>t(FRIENDS[id].name)).join(', ')}),'🏡');void friendsCatchUp();}});
-frameListeners.add(dt=>crew.update(dt));
+frameListeners.add(dt=>{crew.update(dt);helperChat.frame(dt);});
 function friendDialog(id:FriendId){openDialog('friend',FRIENDS[id].name,friendPanel(world.state,id),'RESCUED FRIEND',{garden:'🌱',farm:'🐄',cook:'🍳'}[FRIENDS[id].role]);}
 async function friendsCatchUp(){if(!(state.friends??[]).some(f=>f.home&&!f.paused))return;const r=await workPerform<Partial<Record<FriendId,{jobs:number;cooked:number}>>>('friendsCatchUp');const jobs=Object.values(r??{}).reduce((n,v)=>n+(v?.jobs??0),0);if(jobs)setTimeout(()=>toast(t('While you were away, your friends did {count} jobs.',{count:jobs}),'🤝'),3200);}
 const storedNote=initStoredNote({state:()=>state,home:()=>started&&!visiting&&!flight&&world.planet==='home'&&world.state===state&&!explorerOut(),perform,openChest:()=>storage(),t,name:id=>t(M.ITEMS[id as M.ItemId]?.name??id),took:n=>{tone('click');toast(t('Took {count} items from the chest.',{count:n}),'📦');}},app);frameListeners.add(dt=>storedNote.frame(dt));

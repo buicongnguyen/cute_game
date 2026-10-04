@@ -69,6 +69,22 @@ export function welcomeStart(s: M.SaveState, take: boolean, now = Date.now()): b
   if (take && Number.isSafeInteger(s.energy + WELCOME_ENERGY)) s.energy += WELCOME_ENERGY;
   s.welcome = 'done'; return true;
 }
+/**
+ * The cook's change of clothes after a visit home: a random hat, outfit and boots from what the explorer has obtained
+ * (borrowed, giveGear), never the same look twice in a row when there is a choice. `pick` is a number in [0, 1) from the caller.
+ */
+export function changeOutfit(s: M.SaveState, id: FriendId, pick: number): boolean {
+  const f = friendOf(s, id); if (!f || !Number.isFinite(pick) || pick < 0 || pick >= 1) return false;
+  const owned = (slot: FriendSlot) => Object.keys(s.bag).filter(item => (s.bag[item] ?? 0) > 0 && friendSlot(item) === slot).sort();
+  let changed = false;
+  FRIEND_SLOTS.forEach((slot, i) => {
+    if (slot === 'pet' || slot === 'weapon') return;
+    const list = owned(slot).filter(item => item !== f.gear[slot]); if (!list.length) return;
+    // A different fraction of `pick` per slot, so hat, outfit and boots do not always move together.
+    f.gear[slot] = list[Math.floor(((pick * (i + 3) * 7.31) % 1) * list.length)]; changed = true;
+  });
+  return changed;
+}
 /** The safe village (environments.ts zoneAt 'home'). */
 export const VILLAGE_RADIUS = 18;
 export const inVillage = (p: { x: number; z: number }) => Math.hypot(p.x, p.z) < VILLAGE_RADIUS;
@@ -129,10 +145,10 @@ export function nextFriendTask(s: M.SaveState, id: FriendId, from: { x: number; 
   const f = friendOf(s, id); if (!working(s, f, now)) return null;
   if (f.role === 'garden') return bedTask(s, from, now, true, skipBed, heldBed);
   if (f.role === 'farm') return animalTask(s, from, now, f.autoFeed === true);
-  const bed = bedTask(s, from, now, false, skipBed), animal = animalTask(s, from, now, false);
-  if (!bed || !animal) return bed ?? animal;
-  const b = bed as { index: number }, u = (animal as { uid: number }).uid;
-  return dist(M.bedPosition(s, b.index), from) <= dist(M.farmOf(s).animals.find(a => a.uid === u)?.home ?? M.PEN, from) ? bed : animal;
+  // The cook shops for the pot, not for the beds: a bed only once two are ripe (one trip for a basket, so she no
+  // longer shadows the gardener bed by bed), farm products only when no farmer is working them.
+  if (s.plots.filter(p => ripe(p, now)).length >= 2) { const bed = bedTask(s, from, now, false, skipBed); if (bed) return bed; }
+  return working(s, friendOf(s, 'clover'), now) ? null : animalTask(s, from, now, false);
 }
 
 /** Cooks half of what the cook gathered (with the carried odd ones); returns what was cooked, the rest stays raw. */

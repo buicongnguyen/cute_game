@@ -32,24 +32,38 @@ export interface Placement { kit: string; x: number; z: number; rot?: number; y?
 export interface FriendSpot extends Point { facing: number; pose: 'sit' | 'stand' | 'wave'; y?: number }
 
 export const INDOOR_Y = 40;
+/**
+ * The plan below is drawn on the original 20 x 13.5 m footprint; every coordinate is then spread by SPACE so the rooms
+ * are a little roomier while the furniture keeps its size. A piece within WALL_NEAR of a wall keeps its distance from
+ * that wall (so a fridge or a mirror still touches its wall), everything else scales about the centre.
+ */
+export const SPACE = 1.15;
+const WALL_NEAR = .75, PLAN_X = [-10, -5, -2, 3, 5, 10], PLAN_Z = [-7, -2, 6.5];
+const spread = (v: number, walls: number[]) => {
+  let best: number | null = null;
+  for (const w of walls) if (Math.abs(v - w) < WALL_NEAR && (best === null || Math.abs(v - w) < Math.abs(v - best))) best = w;
+  return best === null ? v * SPACE : best * SPACE + (v - best);
+};
+const spreadPoint = <T extends Point>(p: T): T => ({ ...p, x: spread(p.x, PLAN_X), z: spread(p.z, PLAN_Z) });
+export const spreadActivity = spreadPoint;
 export const WALL = { thick: .2, full: 2.6, low: .55 } as const;
 /** Clearance the explorer keeps from walls (navigation's default clearance for the explorer). */
 export const CLEARANCE = .36;
 export const HOUSE = {
   /** Camera zoom indoors (the outdoor default is 1): closer, so rooms read like a dollhouse; a little wider on landscape screens. */
-  zoom: .8, wideZoom: .9,
+  zoom: .8 * 1.08, wideZoom: .9 * 1.08,
   /** Where you stand after coming in, facing into the living room. */
-  spawn: { x: 0, z: 5.2 } as Point,
+  spawn: spreadPoint({ x: 0, z: 5.2 }) as Point,
   /** Inside the front door: tapping it or walking into it leaves. */
-  door: { x: 0, z: 6.35 } as Point,
+  door: spreadPoint({ x: 0, z: 6.35 }) as Point,
   /** The cottage (world.ts: home at (0, -8)) and the outdoor spot in front of its door. */
   cottage: { x: 0, z: -8 } as Point,
   outdoorDoor: { x: 0, z: -5.5 } as Point,
   outside: { x: 0, z: -4.3 } as Point,
-  bounds: { x0: -10, x1: 10, z0: -7, z1: 6.5 } as Rect,
+  bounds: { x0: -10 * SPACE, x1: 10 * SPACE, z0: -7 * SPACE, z1: 6.5 * SPACE } as Rect,
 } as const;
 
-export const ROOMS: Room[] = [
+const ROOMS_PLAN: Room[] = [
   { id: 'living', name: 'Living room', rect: { x0: -5, x1: 5, z0: -2, z1: 6.5 }, floor: ['#d7965a', '#c9874d'], wall: '#ffdcae', pattern: 'planks' },
   { id: 'kitchen', name: 'Kitchen', rect: { x0: -10, x1: -5, z0: -2, z1: 6.5 }, floor: ['#fff3dc', '#f0b9a0'], wall: '#b8ead2', pattern: 'tiles' },
   { id: 'craft', name: 'Craft room', rect: { x0: 5, x1: 10, z0: -2, z1: 6.5 }, floor: ['#e8b37b', '#dca46b'], wall: '#ffcadb', pattern: 'planks' },
@@ -57,10 +71,11 @@ export const ROOMS: Room[] = [
   { id: 'bath', name: 'Bathroom', rect: { x0: -2, x1: 3, z0: -7, z1: -2 }, floor: ['#e4f6ff', '#a9dcf2'], wall: '#9fe0ee', pattern: 'tiles' },
   { id: 'study', name: 'Study', rect: { x0: 3, x1: 10, z0: -7, z1: -2 }, floor: ['#b9794a', '#ad6e40'], wall: '#fff0b2', pattern: 'planks' },
 ];
+export const ROOMS: Room[] = ROOMS_PLAN.map(r => ({ ...r, rect: { x0: r.rect.x0 * SPACE, x1: r.rect.x1 * SPACE, z0: r.rect.z0 * SPACE, z1: r.rect.z1 * SPACE } }));
 export const BIG_ROOM: RoomId = 'living';
 
 /** Doorway gaps (1.6 m) between rooms, as [wall, gap]. */
-export const WALLS: Wall[] = [
+const WALLS_PLAN: Wall[] = [
   { axis: 'x', at: -7, from: -10, to: 10, height: WALL.full, gaps: [] },
   { axis: 'x', at: 6.5, from: -10, to: 10, height: WALL.low, gaps: [[-.85, .85]] },
   { axis: 'x', at: -2, from: -10, to: 10, height: WALL.low, gaps: [[-4.6, -3], [-.3, 1.3], [3.2, 4.8]] },
@@ -72,9 +87,11 @@ export const WALLS: Wall[] = [
   { axis: 'z', at: 3, from: -7, to: -2, height: WALL.full, gaps: [] },
 ];
 
+export const WALLS: Wall[] = WALLS_PLAN.map(w => ({ ...w, at: w.at * SPACE, from: w.from * SPACE, to: w.to * SPACE, gaps: w.at === 6.5 ? w.gaps : w.gaps.map(([a, b]) => [a * SPACE, b * SPACE] as [number, number]) })); // the front door keeps the size of its frame
+
 const Q = Math.PI / 2;
 /** Furniture; rot turns the piece's front (+z) toward: 0 = camera (+z), Q = +x, -Q = -x, PI = back wall. */
-export const FURNITURE: Placement[] = [
+const FURNITURE_PLAN: Placement[] = [
   // Living room: fireplace corner with the sofa facing it, a dining table, shelves, plants and lamps.
   { kit: 'fireplace', x: -4.62, z: 1.7, rot: Q, block: [1.6, .6] },
   { kit: 'picture', x: -4.88, z: 3.75, rot: Q },
@@ -144,8 +161,10 @@ export const FURNITURE: Placement[] = [
   { kit: 'books', x: 6.95, z: -6.5, y: .8, rot: .3 },
 ];
 
+export const FURNITURE: Placement[] = FURNITURE_PLAN.map(p => ({ ...spreadPoint(p), ...(p.kit.startsWith('rug_') ? { scale: (p.scale ?? 1) * SPACE } : {}) }));
+
 /** Friends in the big room: two on the sofa, one warming by the fire, one waving at the door, then more standing about. */
-export const FRIEND_SPOTS: FriendSpot[] = [
+const FRIEND_SPOTS_PLAN: FriendSpot[] = [
   { x: -2.4, z: -1.32, facing: 0, pose: 'sit', y: .5 },
   { x: -1.4, z: -1.32, facing: 0, pose: 'sit', y: .5 },
   { x: -3.55, z: 2.85, facing: .5, pose: 'stand' },
@@ -153,6 +172,8 @@ export const FRIEND_SPOTS: FriendSpot[] = [
   { x: 3.6, z: 3.2, facing: -.6, pose: 'stand' },
   { x: 1.0, z: 2.6, facing: .4, pose: 'stand' },
 ];
+
+export const FRIEND_SPOTS: FriendSpot[] = FRIEND_SPOTS_PLAN.map(spreadPoint);
 
 const inset = (r: Rect, d: number): Rect => ({ x0: r.x0 + d, x1: r.x1 - d, z0: r.z0 + d, z1: r.z1 - d });
 const inside = (r: Rect, p: Point) => p.x >= r.x0 && p.x <= r.x1 && p.z >= r.z0 && p.z <= r.z1;

@@ -11,7 +11,7 @@ import * as M from '../src/model.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { explorerAway } from '../src/delivery.ts';
 import { EnvironmentSimulation, createEnvironmentLayout } from '../src/environments.ts';
-import { HOUSE } from '../src/house.ts';
+import { HOUSE, spreadActivity } from '../src/house.ts';
 import { HouseSession, houseFocus } from '../src/house-session.ts';
 import { HouseView } from '../src/house-view.ts';
 import { ACTIVITIES } from '../src/house-activities.ts';
@@ -42,7 +42,8 @@ function aim(w: World, x: number, z: number) {
   w.camera.position.copy(focus).add(cameraOffset(W / H, w.zoom)); w.camera.lookAt(focus); w.camera.updateMatrixWorld(true);
 }
 const project = (cam: T.Camera, p: { x: number; y: number; z: number }) => { const v = new T.Vector3(p.x, p.y, p.z).project(cam); return { x: (v.x + 1) * W / 2, y: (1 - v.y) * H / 2 }; };
-const ROOMS: Array<[number, number]> = [[-1.5, 3], [-7.6, 1.6], [7.6, 1.6], [-5.6, -3.4], [.6, -3.6], [6.2, -3.8]];
+// One spot in each room, spread like the plan itself (house.ts SPACE).
+const ROOMS: Array<[number, number]> = ([[-1.5, 3], [-7.6, 1.6], [7.6, 1.6], [-5.6, -3.4], [.6, -3.6], [6.2, -3.8]] as const).map(([x, z]) => { const q = spreadActivity({ x, z }); return [q.x, q.z] as [number, number]; });
 
 test('indoor labels sit on their thing: the label point is inside the thing\'s own screen box, low and centred', () => {
   const w = homeWorld(), house = new HouseSession(); house.enter(w);
@@ -82,7 +83,7 @@ test('a tap on an indoor label or on the thing itself picks it; open floor is a 
   }
   assert.ok(checked > 40, `${checked} checks`);
   // Open floor in the living room is a walk, not the nearest piece of furniture.
-  aim(w, 0, 3); const floor = project(w.camera, { x: .8, y: 0, z: 3.4 });
+  const open = spreadActivity({ x: 0, z: 3 }), spot = spreadActivity({ x: .8, z: 3.4 }); aim(w, open.x, open.z); const floor = project(w.camera, { x: spot.x, y: 0, z: spot.z });
   assert.equal(w.pickEntity(floor.x, floor.y), null);
 });
 
