@@ -48,6 +48,13 @@ export async function createGameServer(options = {}) {
   const store = options.accountStore || await createAccountStore({ dataDir, databaseUrl });
   const accounts = new Map(), sessions = new Map(), peers = new Map(), rooms = new Map(), parties = new Map();
   const limits = new Map(), chatReceipts = new Map();
+  const maxPlayers = Number(options.maxPlayers ?? process.env.MAX_PLAYERS ?? 60);
+  // Behind a tunnel or proxy every request arrives from 127.0.0.1: with TRUST_PROXY=1 rate limits use the visitor's real address instead.
+  const trustProxy = options.trustProxy ?? process.env.TRUST_PROXY === '1';
+  function clientIp(request) {
+    if (trustProxy) { const forwarded = String(request.headers['cf-connecting-ip'] || request.headers['x-forwarded-for'] || '').split(',')[0].trim(); if (forwarded) return forwarded.slice(0, 64); }
+    return request.socket.remoteAddress;
+  }
   let closing = false;
   const remember=value=>rememberAccount(accounts,value);
   try {
@@ -188,7 +195,7 @@ export async function createGameServer(options = {}) {
       return respond(response, 200, { ok: true, online: peers.size, version: 1, storage: store.kind });
     }
     if ((route === 'auth/register' || route === 'auth/login') && method === 'POST') {
-      rate(`auth:${request.socket.remoteAddress}`, 30);
+      rate(`auth:${clientIp(request)}`, 30);
       const data = await body(request), username = text(data.username, 24).toLowerCase(), password = typeof data.password === 'string' ? data.password : '';
       if (!/^[a-z0-9_]{3,24}$/.test(username) || password.length < 8 || password.length > 128) throw failure(400, 'Use a 3–24 character username and a password of at least 8 characters.');
       let account = remember(await store.findByUsername(username));
@@ -280,6 +287,7 @@ export async function createGameServer(options = {}) {
       if (!account) { socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n'); return socket.destroy(); }
       await refreshFriends(account);
       if (socket.destroyed || closing) return socket.destroy();
+      if (peers.size >= maxPlayers && !peers.has(account.id)) { socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n'); return; } // the server is full
       if (validSession(request)?.id !== account.id) { socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n'); return; }
       socket.removeListener('error', onError);
       sockets.handleUpgrade(request, socket, head, ws => sockets.emit('connection', ws, request, account));

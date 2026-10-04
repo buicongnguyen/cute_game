@@ -10,6 +10,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
     "dev:client": "vite --host 127.0.0.1",
     "start": "node --env-file-if-exists=.env server/server.mjs",
+    "share": "node --env-file-if-exists=.env server/share.mjs",
     "build:pages": "node server/build-pages.mjs",
     "db:check": "node --env-file-if-exists=.env server/database-cli.mjs check",
     "db:import": "node --env-file-if-exists=.env server/database-cli.mjs import"
