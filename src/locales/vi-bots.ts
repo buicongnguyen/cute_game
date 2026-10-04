@@ -1,7 +1,15 @@
 import { BOT_LINE_PAIRS } from '../bot-lines.ts';
+import { CHAT_VI } from '../bot-chat.ts';
 /** Vietnamese copy for the AI neighbours (bots.ts): the speech lines come from bot-lines.ts, the rest is here. */
 export const VI_BOTS: Record<string, string> = {
   ...BOT_LINE_PAIRS,
+  ...CHAT_VI,
+  'You left through the gate. Your own garden is waiting when you come back.': 'Bạn đã ra ngoài qua cổng. Khu vườn của bạn đang đợi khi bạn quay về.',
+  'Chat': 'Trò chuyện',
+  'Back': 'Quay lại',
+  'Send': 'Gửi',
+  'Message': 'Tin nhắn',
+  'Type a message…': 'Nhập tin nhắn…',
   'Neighbours': 'Hàng xóm',
   'Close': 'Đóng',
   'Show AI neighbours in my garden': 'Hiện hàng xóm AI trong vườn của tôi',

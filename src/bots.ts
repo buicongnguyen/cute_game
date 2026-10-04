@@ -6,6 +6,7 @@ import { t } from './i18n.ts';
 import { TalkBag } from './house-talk.ts';
 import { BOT_LINES, type BotScenario } from './bot-lines.ts';
 import { iconPath } from './item-icons.ts';
+import { replyTo } from './bot-chat.ts';
 import type { GameBridge } from './game-bridge.ts';
 import type { RemotePose } from './world.ts';
 import {
@@ -25,7 +26,7 @@ import './bots.css';
  */
 const STORE_KEY = 'cute-game-neighbours-v1', ENABLED_KEY = 'cute-game-neighbours-on', COUNT = 5;
 const AREA = { radius: 13, centre: { x: 0, z: 2 } }; // inside the home safe zone (18 m), so enemies never notice them
-const FLY_HEIGHT = 3.1;
+const FLY_HEIGHT = 3.1, GATE_EXIT = 19.5;
 type Mode = 'wander' | 'approach' | 'talk' | 'ask' | 'fly';
 interface Run {
   def: BotDef; w: Walker; y: number; mode: Mode; modeT: number; flyY: number; say: { text: string; until: number } | null;
@@ -224,13 +225,43 @@ export function initBots(game: GameBridge) {
   const leaveBtn = el('button', 'bot-leave'); leaveBtn.hidden = true; document.body.append(leaveBtn);
   function showLeave(def: BotDef) {
     leaveBtn.textContent = t('Leave {name}\'s garden', { name: def.name }); leaveBtn.hidden = false;
-    leaveBtn.onclick = () => { leaveBtn.hidden = true; visitingBot = null; busy = null; game.setVisiting(null); for (const r of runs.values()) r.w.facing = 0; };
+    leaveBtn.onclick = endVisit;
+  }
+  /** Back to your own garden: from the button, or by walking out of a gate (the wild beyond belongs to you, and so does the way home). */
+  function endVisit() {
+    if (!visitingBot) return;
+    leaveBtn.hidden = true; visitingBot = null; busy = null; game.setVisiting(null); for (const r of runs.values()) r.w.facing = 0;
   }
 
   // ---- The neighbours panel ----
   const dialog = el('dialog', 'social-dialog bot-dialog'); dialog.setAttribute('aria-label', t('Neighbours')); document.body.append(dialog);
+  // ---- The message box ----
+  const logs = new Map<string, Array<{ me: boolean; text: string }>>(); let chatWith: BotDef | null = null, draft = '';
+  function renderChat(d: BotDef) {
+    chatWith = d; dialog.replaceChildren();
+    const header = el('header', 'social-header'), close = el('button', 'social-close', '✕'); close.setAttribute('aria-label', t('Close')); close.onclick = () => { chatWith = null; dialog.close(); };
+    const back = el('button', 'bot-back', '‹ ' + t('Back')); back.onclick = () => { chatWith = null; renderPanel(); };
+    header.append(back, el('h2', '', `${isFriend(store, d.id) ? '💚 ' : ''}${d.name} · Lv ${d.level}`), close);
+    const body = el('div', 'social-content bot-chat'), log = el('div', 'bot-log'), form = el('form', 'bot-form'), input = el('input'), send = el('button', 'bot-send', t('Send'));
+    input.type = 'text'; input.maxLength = 160; input.placeholder = t('Type a message…'); input.value = draft; input.autocomplete = 'off'; input.setAttribute('aria-label', t('Message'));
+    input.oninput = () => { draft = input.value; }; send.type = 'submit';
+    const lines = logs.get(d.id) ?? (logs.set(d.id, [{ me: false, text: t('Hello, {name}! So nice to hear from you.', { name: player().name }) }]), logs.get(d.id)!);
+    for (const m of lines) log.append(el('p', m.me ? 'bot-msg me' : 'bot-msg', m.text));
+    form.onsubmit = event => {
+      event.preventDefault(); const text = input.value.trim().slice(0, 160); if (!text) return;
+      input.value = ''; draft = ''; lines.push({ me: true, text }); log.append(el('p', 'bot-msg me', text)); log.scrollTop = log.scrollHeight;
+      const typing = el('p', 'bot-msg typing', '…'); log.append(typing); log.scrollTop = log.scrollHeight;
+      const reply = replyTo(text, d, isFriend(store, d.id), { pick: (key, pool) => bag.pick(key, pool, rand), rand });
+      window.setTimeout(() => {
+        const out = t(reply, { name: player().name, me: d.name, level: d.level }); lines.push({ me: false, text: out }); if (lines.length > 40) lines.splice(0, lines.length - 40);
+        typing.remove(); if (chatWith === d && dialog.open) { log.append(el('p', 'bot-msg', out)); log.scrollTop = log.scrollHeight; }
+        const r = runs.get(d.id); if (r) r.say = { text: out, until: clock + 5 };
+      }, 500 + rand() * 700);
+    };
+    form.append(input, send); body.append(log, form); dialog.append(header, body); log.scrollTop = log.scrollHeight;
+  }
   function renderPanel() {
-    dialog.replaceChildren();
+    chatWith = null; dialog.replaceChildren();
     const header = el('header', 'social-header'), close = el('button', 'social-close', '✕'); close.setAttribute('aria-label', t('Close')); close.onclick = () => dialog.close();
     header.append(el('h2', '', `🏘️ ${t('Neighbours')}`), close);
     const body = el('div', 'social-content bot-list');
@@ -242,7 +273,8 @@ export function initBots(game: GameBridge) {
       const info = el('div', 'bot-info'); info.append(el('b', '', `${friend ? '💚 ' : ''}${d.name} · Lv ${d.level}`), el('span', 'social-small', `${d.tier === 'rich' ? '💎 ' : ''}${outfitName(d)}${d.flies ? ' · ' + t('flies') : ''}`));
       const visitBtn = el('button', '', t('Visit garden')); visitBtn.disabled = !friend || !!visitingBot; visitBtn.title = friend ? '' : t('Become friends first.');
       visitBtn.onclick = () => { dialog.close(); visit(d); };
-      row.append(info, visitBtn); body.append(row);
+      const chatBtn = el('button', '', `💬 ${t('Chat')}`); chatBtn.onclick = () => renderChat(d);
+      const acts = el('div', 'bot-acts'); acts.append(chatBtn, visitBtn); row.append(info, acts); body.append(row);
     }
     dialog.append(header, body);
   }
@@ -257,7 +289,7 @@ export function initBots(game: GameBridge) {
     if (!isBotId(id)) { previousClick?.(id); return; }
     const r = runs.get(id); if (!r) return;
     if (!isFriend(store, id) && !busy && ready().ready) { r.mode = 'approach'; r.chase = 0; busy = id; r.w.speed = r.def.flies ? 6.2 : 3.3; return; }
-    renderPanel(); dialog.showModal();
+    const d = cast.find(b => b.id === id); if (d) { renderChat(d); dialog.showModal(); }
   };
 
   // ---- Every frame ----
@@ -272,6 +304,8 @@ export function initBots(game: GameBridge) {
     }
     for (const id of [...runs.keys()]) if (visitingBot && id !== visitingBot) { world.removeRemotePlayer(id); runs.delete(id); }
     const d = Math.min(.1, dt);
+    // Through any of the four gates (18 m out) is the wild, with its enemies; returning through the gate lands you in your own safe zone.
+    if (visitingBot && Math.hypot(world.position.x, world.position.z) > GATE_EXIT) { endVisit(); game.showNotice(t('You left through the gate. Your own garden is waiting when you come back.')); return; }
     for (const r of runs.values()) step(r, d);
     pushClock -= d; if (pushClock <= 0) { pushClock = 1 / 12; for (const [id, r] of runs) { const p = pose(r); if (world.remotePlayers.has(id)) world.updateRemotePlayer(id, p); else world.addRemotePlayer(id, p); } }
     for (const id of Object.keys(store.friends)) world.friendIds.add(id);

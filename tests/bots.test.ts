@@ -75,3 +75,15 @@ test('a friend gives a present every 5 to 10 minutes, mostly everyday things and
   for (let i = 0; i < 400; i++) { const p = choosePresent(newStore(1), () => false, rand); assert.ok(p.item ? ITEMS[p.item] : p.energy > 0); if (p.item && ITEMS[p.item].rare) rare++; }
   assert.ok(rare > 10 && rare < 90, `about one in ten is rare (${rare}/400)`);
 });
+
+test('the message box sorts English and Vietnamese messages and always answers in a pool with Vietnamese', async () => {
+  const { intentOf, replyTo, CHAT_REPLIES, CHAT_VI, normalize } = await import('../src/bot-chat.ts');
+  assert.equal(intentOf('Hello there!'), 'hello'); assert.equal(intentOf('Xin chào bạn'), 'hello'); assert.equal(intentOf('cảm ơn nha'), 'thanks');
+  assert.equal(intentOf('Can I get a gift?'), 'gift'); assert.equal(intentOf('Tạm biệt'), 'bye'); assert.equal(intentOf('mình buồn quá'), 'sad');
+  assert.equal(intentOf('tell me about your garden'), 'garden'); assert.equal(intentOf('what is that?'), 'question'); assert.equal(intentOf('blah'), 'other');
+  assert.equal(normalize('Đẹp Quá!'), 'dep qua');
+  for (const [k, pool] of Object.entries(CHAT_REPLIES)) { assert.ok(pool.length >= 2, k); for (const [en, vi] of pool) { assert.equal(CHAT_VI[en], vi); assert.notEqual(vi, en); } }
+  const bot = makeCast(1)[0], seen = new Set<string>(); let n = 7; const rand = () => (n = (n * 48271) % 2147483647) / 2147483647;
+  for (let i = 0; i < 30; i++) seen.add(replyTo('haha funny', bot, true, { pick: (_k, pool) => pool[Math.floor(rand() * pool.length)], rand }));
+  assert.ok(seen.size >= 3);
+});
