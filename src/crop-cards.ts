@@ -2,6 +2,7 @@ import * as T from 'three';
 import { CAMERA } from './camera-rig.ts';
 import { cropKit } from './assets.ts';
 import { toonMaterial } from './toon.ts';
+import { CROPS } from './content.ts';
 
 /**
  * Garden crops as 2D cards (G2D-1/G2D-2). The crops are our own Blender models (crops.glb); once the kit has loaded
@@ -67,11 +68,20 @@ export function cropBounds(id: string): ViewBounds | null {
   if (!metrics.has(id)) { const model = cropKit.instance('crop_' + id); if (!model) return null; metrics.set(id, viewBounds(model)); }
   return metrics.get(id) ?? null;
 }
+/**
+ * Fruit trees (the crops that take 8 hours or more: apple, mango, coconut, durian, lychee, peach, and the grape and pineapple
+ * plants) were fitted to the same small height as a radish and read as shrubs next to the village's trees. They now stand
+ * taller than the bed: a young one 1.45x, a ripe one 1.9x the standard crop height (the beds are seen from above, so the
+ * crown may rise over the next bed).
+ */
+export const TREE_BOOST: Readonly<Record<number, number>> = { 2: 1.45, 3: 1.9 };
+export const isTreeCrop = (crop: string) => (CROPS[crop]?.duration ?? 0) >= 8 * 3_600_000;
 /** Size of a crop at a stage relative to its model: the stage scale times the model's bed scale. */
 export function stageScale(crop: string, stage: CropStage) {
   if (!stage) return 0;
   const b = cropBounds(stage === 1 ? 'sprout' : crop);
-  return b ? STAGE_SCALE[stage] * bedScale(b, stage === 1) : STAGE_SCALE[stage];
+  const boost = stage > 1 && isTreeCrop(crop) ? TREE_BOOST[stage] ?? 1 : 1;
+  return b ? STAGE_SCALE[stage] * bedScale(b, stage === 1) * boost : STAGE_SCALE[stage] * boost;
 }
 /** A compact ready badge above the mature silhouette, in the same view plane as crop cards. */
 export function cropBadgeAnchor(crop: string, size = 1): { y: number; back: number } {
