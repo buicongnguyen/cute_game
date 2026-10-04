@@ -70,3 +70,21 @@ test('the health check can be read from another site (the solo page asks whether
   const session = await fetch(`${server.url}/api/auth/session`, { headers: foreign });
   assert.equal(session.status, 403, 'every other route still refuses a foreign origin'); assert.equal(session.headers.get('access-control-allow-origin'), null);
 });
+
+test('a player stays signed in after the server restarts, and signing out really ends the session', async t => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'cute-game-sessions-'));
+  t.after(async () => { await rm(dataDir, { recursive: true, force: true }); });
+  const start = async () => { const store = await createAccountStore({ dataDir, databaseUrl: '' }); return createGameServer({ host: '127.0.0.1', port: 0, dataDir, accountStore: store, databaseUrl: '', databaseRequired: false }); };
+  let server = await start();
+  const registered = await fetch(`${server.url}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'stay_in', password: 'abcd', name: 'Stay' }) });
+  const cookie = registered.headers.get('set-cookie')?.split(';')[0]; assert.ok(cookie);
+  assert.match(registered.headers.get('set-cookie'), /Max-Age=5184000/, 'a sign-in lasts 60 days');
+  await server.close();
+  server = await start(); t.after(() => server.close());
+  const again = await (await fetch(`${server.url}/api/auth/session`, { headers: { Cookie: cookie } })).json();
+  assert.equal(again.account?.username, 'stay_in', 'still signed in after a restart');
+  const raw = await (await import('node:fs/promises')).readFile(path.join(dataDir, 'sessions.json'), 'utf8');
+  assert.ok(!raw.includes(cookie.split('=')[1]), 'the file holds a hash, not the cookie value');
+  await fetch(`${server.url}/api/auth/logout`, { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: '{}' });
+  assert.ok(!(await (await fetch(`${server.url}/api/auth/session`, { headers: { Cookie: cookie } })).json()).account, 'signed out');
+});

@@ -72,7 +72,7 @@ test('SQL-backed HTTP accounts, revisions and friendships survive a server resta
   await server.close(); server = null;
   assert.equal(db.closes, 1);
   await start();
-  assert.equal((await api(server, 'auth/session', { cookie: alice.cookie })).body.account, null, 'sessions are deliberately process-local');
+  assert.equal((await api(server, 'auth/session', { cookie: alice.cookie })).body.account?.id, aliceId, 'sign-ins are kept in the data folder, so a restart does not sign players out');
   const restoredAlice = await login(server, 'alice'), restoredBob = await login(server, 'bob');
   assert.equal(restoredAlice.status, 200); assert.equal(restoredBob.status, 200);
   assert.equal(restoredAlice.body.account.id, aliceId); assert.equal(restoredAlice.body.revision, 2);
@@ -88,7 +88,7 @@ test('SQL-backed HTTP accounts, revisions and friendships survive a server resta
   assert.equal(forbidden.status,409);
   assert.deepEqual(await store.get(aliceId), durableBefore);
   assert.deepEqual((await api(server, 'health')).body.storage, 'postgres');
-  assert.deepEqual(await readdir(directory), [], 'SQL storage never creates a fallback accounts.json');
+  assert.deepEqual((await readdir(directory)).filter(name => name !== 'sessions.json'), [], 'SQL storage never creates a fallback accounts.json (only the hashed sign-ins file is kept)');
 });
 
 test('SQL write and commit failures never produce successful HTTP saves or publish uncommitted accounts', async t => {
