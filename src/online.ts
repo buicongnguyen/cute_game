@@ -219,6 +219,8 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='authority'){if(message.environment)world().applyEnvironmentSnapshot(message.environment);authority(message.host,message.enemies);}
       else if(message.type==='enter'||message.type==='pose'){if(message.player?.id)players.set(message.player.id,message.player);renderPlayers();}
       else if(message.type==='leave'){players.delete(message.id);renderPlayers();}
+      // The server dropped a pose that outran its movement budget (server/pose-budget.mjs): go back to its spot, so the proximity rules agree with the screen again.
+      else if(message.type==='poseFix'){const w=world();if(message.planet===w.planet&&(message.visit??null)===visiting&&Number.isFinite(message.x)&&Number.isFinite(message.z)){w.position.set(message.x,w.position.y,message.z);w.destination=null;w.route=[];w.selected=null;}}
       else if(message.type==='enemies')world().applyEnemySnapshots(message.enemies);
       else if(message.type==='profile'&&message.authorityVersion===1&&message.profile&&message.revision>=revision){revision=message.revision;game.applyAuthoritativeState(message.profile);}
       else if(message.type==='enemyHealth')world().applyAuthoritativeEnemyHealth(message);

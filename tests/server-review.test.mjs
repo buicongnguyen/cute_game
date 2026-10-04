@@ -8,7 +8,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import * as M from '../src/model.ts';
-import { poseStep, arrived, TOP_SPEED, BURST, ARRIVAL } from '../server/pose-budget.mjs';
+import { poseStep, poseFix, arrived, TOP_SPEED, BURST, ARRIVAL, FIX_MS } from '../server/pose-budget.mjs';
 import { clientAddress } from '../server/client-address.mjs';
 import { createAccountStore, RECEIPT_WINDOW } from '../server/account-store.mjs';
 import { commandHash } from '../server/action-service.mjs';
@@ -42,6 +42,38 @@ test('a join or respawn allows the landing spot for a few seconds, then the norm
   const p = peer(); send(p, 0, 0, 1000); arrived(p, 2000);
   assert.equal(send(p, 0, ARRIVAL - 2, 2100), true, 'landing spot near the server spawn');
   assert.equal(send(p, 0, ARRIVAL - 2 + BURST + 5, 20_000), false, 'later the burst is back to normal');
+});
+
+test('a dropped pose heals: the server sends its spot back (poseFix), the client goes there, and its poses are accepted again', async () => {
+  // The re-review case: walk out of the centre, press Home twice within 5 s (the second snap is dropped), then walk on.
+  const p = peer(); send(p, 0, 0, 1000);
+  for (let t = 1100; t <= 1600; t += 100) send(p, p.pose.x + 5, 0, t); // 30 m out
+  assert.equal(send(p, 1, 0, 1700), true, 'Home: the first snap');
+  for (let t = 1800; t <= 2900; t += 100) send(p, p.pose.x + 4, 0, t); // about 49 m out again
+  assert.ok(p.pose.x > BURST + 5, `walked to ${p.pose.x}`);
+  assert.equal(send(p, 1, 0, 3000), false, 'the second Home snap within 5 s is dropped');
+  let client = { x: 1, z: 0 }, fixes = 0;
+  // A client that honours poseFix: without it every later pose would stay dropped, since the budget never covers the gap.
+  for (let t = 3100; t <= 4500; t += 100) {
+    client = { x: client.x, z: client.z - 1 };
+    if (!send(p, client.x, client.z, t)) { const fix = poseFix(p, t); if (fix) { fixes++; assert.deepEqual([fix.type, fix.planet, fix.visit], ['poseFix', 'home', null]); client = { x: fix.x, z: fix.z }; } }
+  }
+  assert.equal(fixes, 1, 'one correction is enough');
+  assert.deepEqual(p.pose, client, 'server and client agree again, so requireNear rules work on the spot the player sees');
+  // Without the correction (an old client) poses keep being dropped: the fix is what heals it.
+  const q = peer(); send(q, 0, 0, 1000); q.pose = { x: 60, z: 0 }; q.poseAt = 1000;
+  let accepted = 0; for (let t = 1100; t < 30_000; t += 100) if (send(q, 30, -(t - 1100) / 100, t)) accepted++; // walking away, 30 m from the server's spot
+  assert.equal(accepted, 0, 'the stuck case the fix exists for');
+});
+
+test('poseFix goes out at most once per FIX_MS, and the server and client wire it up', async () => {
+  const p = { ...peer(), pose: { x: 7, z: 3 } };
+  assert.deepEqual(poseFix(p, 1000), { type: 'poseFix', planet: 'home', visit: null, x: 7, z: 3 });
+  assert.equal(poseFix(p, 1000 + FIX_MS - 1), null);
+  assert.ok(poseFix(p, 1000 + FIX_MS));
+  const server = await readFile(new URL('../server/server.mjs', import.meta.url), 'utf8'), online = await readFile(new URL('../src/online.ts', import.meta.url), 'utf8');
+  assert.match(server, /if \(!move\) \{ const fix = poseFix\(peer, now\); if \(fix\) send\(socket, fix\)/);
+  assert.match(online, /message\.type==='poseFix'.*message\.planet===w\.planet&&\(message\.visit\?\?null\)===visiting.*w\.position\.set\(message\.x,w\.position\.y,message\.z\)/);
 });
 
 test('sign-in rate limits key on the client behind a trusted proxy, and never trust the header otherwise', () => {

@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { poseStep, arrived } from './pose-budget.mjs';
+import { poseStep, poseFix, arrived } from './pose-budget.mjs';
 import { clientAddress } from './client-address.mjs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -316,7 +316,7 @@ export async function createGameServer(options = {}) {
           const x = number(message.x), z = number(message.z), distance = Math.hypot(x - peer.pose.x, z - peer.pose.z);
           // Movement budget (pose-budget.mjs): refills at the top speed and saves up only a short burst, so neither a pause
           // nor a stream of small jumps adds up to a teleport; the Home button's snap to the village centre stays allowed.
-          const move = poseStep(peer, { x, z }, distance, now); if (!move) return;
+          const move = poseStep(peer, { x, z }, distance, now); if (!move) { const fix = poseFix(peer, now); if (fix) send(socket, fix); return; } // the client goes back to the server's spot
           const combat=combatAuthority.engineFor(peer).sim;
           peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && account.profile.farm?.animals?.find(a => a.kind === 'dog');
           // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.
