@@ -4,7 +4,7 @@
  * scenario and are dealt like cards (TalkBag: no repeat until three quarters of a pool has been used). `{name}` is the
  * player's name and `{me}` the bot's own.
  */
-export type BotScenario = 'GREET' | 'ASK' | 'THANKS' | 'LATER' | 'GIFT' | 'FRIEND' | 'FLYBY' | 'WANDER';
+export type BotScenario = 'GREET' | 'ASK' | 'THANKS' | 'LATER' | 'GIFT' | 'FRIEND' | 'FLYBY' | 'WANDER' | 'WITHDRAW';
 export const BOT_LINES: Record<BotScenario, ReadonlyArray<readonly [string, string]>> = {
   GREET: [
     ['Hi {name}! Your garden looks wonderful.', 'Chào {name}! Khu vườn của bạn đẹp quá.'],
@@ -76,6 +76,13 @@ export const BOT_LINES: Record<BotScenario, ReadonlyArray<readonly [string, stri
     ['Flying is the best way to get to the garden!', 'Bay là cách tới vườn tuyệt nhất!'],
     ['Up, up and away!', 'Bay lên nào!'],
     ['Wheee! Hello down there!', 'Vù vù! Xin chào dưới đó!'],
+  ],
+  WITHDRAW: [
+    ['Whoa, that boss is too tough for me! It is all yours, {name}!', 'Ôi, trùm này mạnh quá! Nhường bạn đó, {name}!'],
+    ['I will leave this one to you. Good luck!', 'Con này mình nhường bạn. Chúc may mắn!'],
+    ['Retreat! Retreat! You go get it, hero!', 'Rút lui! Rút lui! Bạn lên đi, anh hùng!'],
+    ['Too big for me. Show them what you can do!', 'Lớn quá với mình. Cho nó biết tay bạn đi!'],
+    ['I got in one good hit. The rest is yours!', 'Mình đã đánh trúng một cú. Phần còn lại của bạn!'],
   ],
   WANDER: [
     ['Such a lovely valley.', 'Thung lũng đẹp ghê.'],

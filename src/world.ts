@@ -771,7 +771,7 @@ export class World {
     else {const sprout=ball(boss?'#e5c479':'#719d61',.23,0,1.6);sprout.scale.x=1.5;e.add(sprout);}
     if(boss){e.scale.setScalar(1.9);e.add(cyl('#e9c876',.4,.35,.3,0,1.73,0,5));}
     addOutlines(e);showOutlines(e,false);
-    const health=(this.planet==='home'?(strong?65:42):theme.health)*(boss?5:1);
+    const health=(this.planet==='home'?(strong?65:42):theme.health)*(boss?10:1);
     const ent=this.addEntity('enemy',name,boss?'👑':'🍃',e,x,z,boss?1.7:.8,index) as Enemy;
     Object.assign(ent,{hp:health,maxHp:health,damage:theme.attack*(boss?2:strong?1.4:1),xp:theme.xp*(boss?7:1),homeX:x,homeZ:z,cooldown:0,respawn:0,boss,stun:0});this.enemies.push(ent);
   }
@@ -824,7 +824,7 @@ export class World {
     const zone=this.planet==='home'?zoneAt({x,z}):this.planet,difficulty=({home:0,forest:1,meadow:1,swamp:2,canyon:3,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,cloud:5,shadow:6} as Record<string,number>)[zone],scale=[1,1,1.7,2.6,3.6,4.8,6.2][difficulty];
     // Hard difficulty (difficulty.ts hardScale): the same multipliers the server applies to its roster. In a room the
     // host's difficulty decides (online.ts sets roomDifficulty), so every browser spawns what the server expects.
-    const hard=hardScale(this.roomDifficulty??this.state),health=Math.round(def.hp*scale*(def.titan?7:def.boss&&type!=='dragon'?2.6:1)*hard.hp),damage=def.damage*scale*(def.titan?1.6:def.boss?1.35:1)*hard.damage,xp=Math.round(def.xp*(.6+scale*.4));
+    const hard=hardScale(this.roomDifficulty??this.state),health=Math.round(def.hp*scale*(def.titan?7:def.boss&&type!=='dragon'?5.2:def.boss?2:1)*hard.hp),damage=def.damage*scale*(def.titan?1.6:def.boss?1.35:1)*hard.damage,xp=Math.round(def.xp*(.6+scale*.4));
     const model=this.enemyModel(type,def);
     const e=this.addEntity('enemy',def.name,def.boss?'👑':'⚔️',model,x,z,def.radius,index) as Enemy;
     Object.assign(e,{type,definition:def,hp:health,maxHp:health,baseMaxHp:health,baseDamage:damage,damage,xp,level:difficulty*3-2+(def.boss?6:0),homeX:x,homeZ:z,cooldown:0,respawn:0,boss:def.boss,stun:0,phase:'idle',phaseTime:0,route:[],routeTime:0,lift:0,liftVelocity:0,statuses:{}});this.enemies.push(e);return e;

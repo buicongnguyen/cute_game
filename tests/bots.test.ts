@@ -51,7 +51,7 @@ test('friendship, pending gifts and pauses survive a save, and a damaged save st
 });
 
 test('every neighbour line has a Vietnamese version and each pool is big enough', () => {
-  for (const [k, pool] of Object.entries(BOT_LINES)) { assert.ok(pool.length >= (k === 'FLYBY' || k === 'WANDER' || k === 'LATER' ? 5 : 8), k); for (const [en, vi] of pool) { assert.equal(VI_BOTS[en], vi); assert.notEqual(vi, en); } }
+  for (const [k, pool] of Object.entries(BOT_LINES)) { assert.ok(pool.length >= (k === 'FLYBY' || k === 'WANDER' || k === 'LATER' || k === 'WITHDRAW' ? 5 : 8), k); for (const [en, vi] of pool) { assert.equal(VI_BOTS[en], vi); assert.notEqual(vi, en); } }
 });
 
 test('a neighbour house builds into a valid garden with crops, animals and decorations', () => {
@@ -95,4 +95,11 @@ test('neighbours live beyond the gates, hunt the nearest ordinary enemy there, a
   const [out, inside] = L.gateRoute(zone, true); assert.ok(Math.hypot(out.x, out.z) > L.SAFE_RADIUS && Math.hypot(inside.x, inside.z) < L.SAFE_RADIUS);
   const [a, b] = L.gateRoute(zone, false); assert.ok(Math.hypot(a.x, a.z) < L.SAFE_RADIUS && Math.hypot(b.x, b.z) > L.SAFE_RADIUS);
   assert.ok(L.attackDamage(40) < 40 && L.attackDamage(2) >= 4); const v = L.nextVisitIn(() => 0), w = L.nextVisitIn(() => .9999); assert.ok(v >= 360 && w < 720 && L.visitStay(() => .9999) < 40 && L.huntFor(() => 0) >= 120 && L.restFor(() => 0) >= 100);
+});
+
+test('a neighbour can pick a boss only when asked, dares it for a few seconds, then keeps away', async () => {
+  const L = await import('../src/bot-logic.ts'), zone = L.ZONES[3];
+  const foes = [{ id: 'imp', x: 29, z: 2, hp: 5 }, { id: 'king', x: 30, z: 1, hp: 900, boss: true }];
+  assert.equal(L.pickFoe(foes, { x: 31, z: 0 }, zone)?.id, 'imp'); assert.equal(L.pickFoe(foes, { x: 31, z: 0 }, zone, 18, true)?.id, 'king');
+  assert.ok(L.bossDare(() => 0) >= 5 && L.bossDare(() => .9999) < 10 && L.BOSS_SHY >= 120);
 });

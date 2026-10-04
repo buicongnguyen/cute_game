@@ -190,17 +190,19 @@ export function gateRoute(zone: Zone, inward: boolean) {
   return inward ? [outside, inside] : [inside, outside];
 }
 export interface Foe { id: string; x: number; z: number; hp: number; boss?: boolean }
-/** The nearest living, ordinary enemy near the neighbour and its hunting ground (bosses are left to the player). */
-export function pickFoe(foes: readonly Foe[], at: { x: number; z: number }, zone: Zone, reach = 18): Foe | null {
+/** The nearest living enemy near the neighbour and its hunting ground: ordinary ones, or (bosses = true) only bosses, which they test briefly and then leave to the player. */
+export function pickFoe(foes: readonly Foe[], at: { x: number; z: number }, zone: Zone, reach = 18, bosses = false): Foe | null {
   let best: Foe | null = null, bestD = Infinity;
   for (const f of foes) {
-    if (f.hp <= 0 || f.boss || !Number.isFinite(f.x) || !Number.isFinite(f.z) || inSafeZone(f.x, f.z) || Math.hypot(f.x - zone.x, f.z - zone.z) > ZONE_RADIUS + 14) continue;
+    if (f.hp <= 0 || !!f.boss !== bosses || !Number.isFinite(f.x) || !Number.isFinite(f.z) || inSafeZone(f.x, f.z) || Math.hypot(f.x - zone.x, f.z - zone.z) > ZONE_RADIUS + 14) continue;
     const d = Math.hypot(f.x - at.x, f.z - at.z); if (d < reach && d < bestD) { best = f; bestD = d; }
   }
   return best;
 }
 /** A neighbour's blow: gentle, so the fights last and the player still has enemies to beat. */
 export const attackDamage = (level: number) => 4 + Math.round(level * .6);
+/** How long a neighbour dares to fight a boss (seconds) and how long it keeps away from bosses afterwards. */
+export const bossDare = (rand: () => number) => 5 + rand() * 5, BOSS_SHY = 150;
 /** A friend plans its next trip into the player's safe zone 6 to 12 minutes ahead and stays only 20 to 40 seconds: they are busy fighting. */
 export const nextVisitIn = (rand: () => number) => 360 + rand() * 360;
 export const visitStay = (rand: () => number) => 20 + rand() * 20;

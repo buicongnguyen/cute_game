@@ -17,7 +17,7 @@ export const ZONE_DIFFICULTY:Record<string,number>={home:0,forest:1,meadow:1,swa
 const DIFFICULTY_MULTIPLIERS=[1,1,1.7,2.6,3.6,4.8,6.2];
 export function creatureScale(difficulty:number,boss=false,worldBoss=false){
   const rank=Math.min(6,Math.max(0,Math.floor(difficulty))),base=DIFFICULTY_MULTIPLIERS[rank];
-  return {level:rank*3-2+(boss?6:0),hpMultiplier:base*(boss&&!worldBoss?2.6:1),attackMultiplier:base*(boss?1.35:1),xpMultiplier:.6+base*.4};
+  return {level:rank*3-2+(boss?6:0),hpMultiplier:base*(boss?(worldBoss?2:5.2):1),attackMultiplier:base*(boss?1.35:1),xpMultiplier:.6+base*.4};
 }
 /** Apply this to definition HP/attack once when a boss acquires its first target. */
 export function bossScale(zone:string,type:string,players:number,maxPlayerLevel:number){

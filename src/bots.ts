@@ -10,7 +10,7 @@ import { replyTo } from './bot-chat.ts';
 import type { GameBridge } from './game-bridge.ts';
 import type { RemotePose } from './world.ts';
 import {
-  BOT_ID_PREFIX, MEET_PAUSE_MS, SAFE_RADIUS, ZONE_RADIUS, attackDamage, huntFor, restFor, visitStay, befriend, canMeet, choosePresent, gateRoute, givesPresent, inSafeZone, isBotId, isFriend, makeCast, newStore, nextVisitIn, parseStore, pickFoe, pickGoal, seeded, settleGift, walk, zoneOf,
+  BOT_ID_PREFIX, MEET_PAUSE_MS, SAFE_RADIUS, ZONE_RADIUS, attackDamage, BOSS_SHY, bossDare, huntFor, restFor, visitStay, befriend, canMeet, choosePresent, gateRoute, givesPresent, inSafeZone, isBotId, isFriend, makeCast, newStore, nextVisitIn, parseStore, pickFoe, pickGoal, seeded, settleGift, walk, zoneOf,
   type BotDef, type BotStore, type GiftNote, type WalkCtx, type Walker, type Zone,
 } from './bot-logic.ts';
 import './bots.css';
@@ -36,7 +36,7 @@ interface Run {
   moving: boolean; nextPlan: number; chase: number; askUntil: number;
   huntUntil: number; restUntil: number; hidden: boolean;
   place: Place; zone: Zone; /** Clock time of the next trip into the safe zone (friends) and when the visit ends. */ visitAt: number; stayUntil: number;
-  foe: { id: string; x: number; z: number; hp: number } | null; foeT: number; swing: number; route: Array<{ x: number; z: number }>; commuteTo: Place;
+  foe: { id: string; x: number; z: number; hp: number } | null; bossUntil: number; bossShy: number; retreat: number; foeT: number; swing: number; route: Array<{ x: number; z: number }>; commuteTo: Place;
 }
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode: friendships last for this visit only */ } };
@@ -65,7 +65,7 @@ export function initBots(game: GameBridge) {
   };
   const spawn = (def: BotDef): Run => {
     const w: Walker = { x: 0, z: 0, facing: rand() * 6.28, goalX: 0, goalZ: 0, wait: 1 + rand() * 3, speed: 2.1 }, zone = zoneOf(def);
-    const r: Run = { def, w, y: 0, mode: 'wander', modeT: 0, flyY: 0, say: null, moving: false, nextPlan: 4 + rand() * 8, chase: 0, askUntil: 0, place: 'zone', zone, huntUntil: 0, restUntil: 0, hidden: false, visitAt: 0, stayUntil: 0, foe: null, foeT: 0, swing: 0, route: [], commuteTo: 'zone' };
+    const r: Run = { def, w, y: 0, mode: 'wander', modeT: 0, flyY: 0, say: null, moving: false, nextPlan: 4 + rand() * 8, chase: 0, askUntil: 0, place: 'zone', zone, huntUntil: 0, restUntil: 0, hidden: false, visitAt: 0, stayUntil: 0, foe: null, bossUntil: 0, bossShy: 0, retreat: 0, foeT: 0, swing: 0, route: [], commuteTo: 'zone' };
     placeInZone(r); r.huntUntil = clock + 60 + rand() * 120; r.visitAt = clock + 60 + nextVisitIn(rand);
     if (rand() < .5) { r.mode = 'rest'; r.hidden = true; r.restUntil = clock + rand() * restFor(rand); } // about half are away resting when the game starts
     return r;
@@ -187,13 +187,23 @@ export function initBots(game: GameBridge) {
   function hunt(r: Run, dt: number) {
     const w = r.w, c = ctxOf(r); r.foeT -= dt; r.swing = Math.max(0, r.swing - dt);
     if (r.foe && (r.foe.hp <= 0 || !world.enemies.some(e => e.id === r.foe!.id && e.hp > 0))) r.foe = null;
-    if (!r.foe && r.foeT <= 0) { r.foeT = .8 + rand() * .6; const f = pickFoe(world.enemies, w, r.zone); r.foe = f ? { id: f.id, x: f.x, z: f.z, hp: f.hp } : null; }
+    const bossFight = !!r.foe && r.bossUntil > 0;
+    if (bossFight && clock > r.bossUntil) { // it has had enough: out of reach of the boss, which it leaves for the player
+      r.foe = null; r.bossUntil = 0; r.bossShy = clock + BOSS_SHY; r.foeT = 2; r.retreat = 2.2; w.goalX = r.zone.x; w.goalZ = r.zone.z; w.speed = 4.2; sayLine(r, 'WITHDRAW', 3800);
+    }
+    if (!r.foe && r.foeT <= 0) {
+      r.foeT = .8 + rand() * .6; const f = pickFoe(world.enemies, w, r.zone);
+      // now and then, with nothing else to fight, it tries a boss for a few seconds
+      const b = !f && clock >= r.bossShy && rand() < .35 ? pickFoe(world.enemies, w, r.zone, 18, true) : null;
+      r.foe = f ?? b ? { id: (f ?? b)!.id, x: (f ?? b)!.x, z: (f ?? b)!.z, hp: (f ?? b)!.hp } : null; r.bossUntil = b ? clock + bossDare(rand) : 0;
+    }
+    if (r.retreat > 0) { r.retreat -= dt; r.moving = walk(w, dt, c, false); return; } // backing away from the boss
     const foe = r.foe ? world.enemies.find(e => e.id === r.foe!.id) : null;
     if (foe && foe.hp > 0) {
       const dx = foe.x - w.x, dz = foe.z - w.z, d = Math.hypot(dx, dz);
       if (d > 2.4) { w.goalX = foe.x - dx / d * 1.9; w.goalZ = foe.z - dz / d * 1.9; w.speed = 3.2; r.moving = walk(w, dt, c, false); return; }
       w.facing = Math.atan2(dx, dz); r.moving = false;
-      if (r.foeT <= 0) { r.foeT = .9 + rand() * .5; r.swing = .3; game.applyRemoteHit(foe.id, attackDamage(r.def.level), 0); world.burst(foe.x, foe.z, r.def.color, 6); }
+      if (r.foeT <= 0) { r.foeT = .9 + rand() * .5; r.swing = .3; game.applyRemoteHit(foe.id, Math.round(attackDamage(r.def.level) * (foe.boss ? .5 : 1)), 0); world.burst(foe.x, foe.z, r.def.color, 6); }
       return;
     }
     w.speed = 2.4;
