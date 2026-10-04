@@ -7,21 +7,21 @@ import { helperPlant } from '../src/helper.ts';
 const reload = (s: M.SaveState) => M.parseSave(JSON.stringify(s))!;
 const crop = 'carrot' as M.CropId, base = M.CROPS[crop].duration;
 
-test('each bed level cuts that bed\'s grow time by 10 %, up to 5 levels (half the time)', () => {
+test('each bed level halves the grow time, up to 3 levels (an eighth of the time)', () => {
   const s = M.newGame(); s.energy = 1e6;
   assert.equal(M.bedGrowTime(s.plots[0], base), base);
-  for (let level = 1; level <= 5; level++) { assert.ok(M.upgradeBed(s, 0)); assert.equal(M.bedLevel(s.plots[0]), level); assert.equal(M.bedGrowTime(s.plots[0], base), Math.round(base * (1 - level / 10))); }
-  const left = s.energy; assert.equal(M.upgradeBed(s, 0), false, 'level 5 is the cap'); assert.equal(s.energy, left);
-  // Planting reads the level: the crop ripens at half time on a level-5 bed, at full time on a plain one.
+  for (let level = 1; level <= 3; level++) { assert.ok(M.upgradeBed(s, 0)); assert.equal(M.bedLevel(s.plots[0]), level); assert.equal(M.bedGrowTime(s.plots[0], base), Math.round(base / 2 ** level)); }
+  const left = s.energy; assert.equal(M.upgradeBed(s, 0), false, 'level 3 is the cap'); assert.equal(s.energy, left);
+  // Planting reads the level: the crop ripens in an eighth of the time on a level-3 bed, at full time on a plain one.
   assert.ok(M.plant(s, 0, crop, 1000)); assert.ok(M.plant(s, 1, crop, 1000));
-  assert.equal(M.cropDuration(s.plots[0]), base / 2); assert.equal(M.cropDuration(s.plots[1]), base);
-  assert.equal(M.cropProgress(s.plots[0], 1000 + base / 2), 1); assert.ok(M.cropProgress(s.plots[1], 1000 + base / 2) < 1);
+  assert.equal(M.cropDuration(s.plots[0]), base / 8); assert.equal(M.cropDuration(s.plots[1]), base);
+  assert.equal(M.cropProgress(s.plots[0], 1000 + base / 8), 1); assert.ok(M.cropProgress(s.plots[1], 1000 + base / 8) < 1);
 });
 
 test('upgrade prices double per level from 120, cost 1.5x off Easy, and need the energy', () => {
   const s = M.newGame();
-  assert.deepEqual([0, 1, 2, 3, 4].map(l => M.bedUpgradeCost(s, l)), [120, 240, 480, 960, 1920]);
-  s.settings.difficulty = 'normal'; assert.deepEqual([0, 1, 2, 3, 4].map(l => M.bedUpgradeCost(s, l)), [180, 360, 720, 1440, 2880]);
+  assert.deepEqual([0, 1, 2].map(l => M.bedUpgradeCost(s, l)), [120, 240, 480]);
+  s.settings.difficulty = 'normal'; assert.deepEqual([0, 1, 2].map(l => M.bedUpgradeCost(s, l)), [180, 360, 720]);
   s.settings.difficulty = 'hard'; assert.equal(M.bedUpgradeCost(s, 0), 180);
   s.settings.difficulty = 'easy'; s.energy = 119; assert.equal(M.upgradeBed(s, 0), false); assert.equal(s.energy, 119); assert.equal(s.plots[0].level, undefined);
   s.energy = 120; assert.ok(M.upgradeBed(s, 0)); assert.equal(s.energy, 0);
@@ -34,8 +34,8 @@ test('upgrading a bed with a growing crop speeds it up at once, keeping the shar
   const half = base / 2; assert.equal(M.cropProgress(s.plots[0], half), .5);
   assert.ok(M.upgradeBed(s, 0, half));
   assert.equal(M.cropProgress(s.plots[0], half), .5, 'no progress lost or gained at the moment of upgrading');
-  assert.equal(M.cropDuration(s.plots[0]), Math.round(base * .9));
-  assert.equal(M.cropProgress(s.plots[0], half + Math.round(base * .9) / 2), 1, 'the rest grows 10 % faster');
+  assert.equal(M.cropDuration(s.plots[0]), Math.round(base / 2));
+  assert.equal(M.cropProgress(s.plots[0], half + Math.round(base / 2) / 2), 1, 'the rest grows twice as fast');
   // A ripe crop is left alone.
   const r = M.newGame(); r.energy = 1e6; M.plant(r, 0, crop, 0); M.upgradeBed(r, 0, base * 2); assert.equal(M.cropDuration(r.plots[0]), base);
 });
@@ -44,16 +44,16 @@ test('helpers and friends plant through the bed level; offline growth uses the u
   const s = M.newGame(); s.energy = 1e6; for (let i = 0; i < 3; i++) M.upgradeBed(s, 2);
   s.helper = { owned: true, paused: false, seed: crop, last: {} } as unknown as M.SaveState['helper'];
   const planted = helperPlant(s, 2, 5000);
-  assert.ok(planted, 'the helper planted'); assert.equal(M.cropDuration(s.plots[2]), Math.round(base * .7));
-  // Reloading (the offline path) keeps the snapshot: ripe at 70 % of the base time after planting.
-  const r = reload(s); assert.equal(M.bedLevel(r.plots[2]), 3); assert.equal(M.cropProgress(r.plots[2], 5000 + Math.round(base * .7)), 1);
+  assert.ok(planted, 'the helper planted'); assert.equal(M.cropDuration(s.plots[2]), Math.round(base / 8));
+  // Reloading (the offline path) keeps the snapshot: ripe at an eighth of the base time after planting.
+  const r = reload(s); assert.equal(M.bedLevel(r.plots[2]), 3); assert.equal(M.cropProgress(r.plots[2], 5000 + Math.round(base / 8)), 1);
 });
 
 test('bed levels survive a save round-trip, are clamped on load, and an upgraded bed is not packed away', () => {
   const s = M.newGame(); s.energy = 1e6; M.addItem(s, 'plot_kit'); assert.ok(M.expandGarden(s)); M.upgradeBed(s, 9); M.upgradeBed(s, 9);
   assert.equal(reload(s).plots[9].level, 2); assert.equal(reload(s).plots[0].level, undefined);
   const odd = JSON.parse(JSON.stringify(s)); odd.plots[0].level = 99; odd.plots[1].level = -2; odd.plots[2].level = 'x'; odd.plots[3].level = 2.5;
-  const r = M.parseSave(JSON.stringify(odd))!; assert.deepEqual(r.plots.slice(0, 4).map(p => p.level), [5, undefined, undefined, undefined]);
+  const r = M.parseSave(JSON.stringify(odd))!; assert.deepEqual(r.plots.slice(0, 4).map(p => p.level), [3, undefined, undefined, undefined]);
   assert.equal(M.storeBed(s, 9), false, 'its level would be lost in a kit'); assert.equal(s.plots.length, 10);
 });
 
@@ -114,4 +114,12 @@ test('layout 3 saves move onto the 6 x 4 grid: starting beds and game-placed bed
   assert.equal(r.gardenLayout, M.GARDEN_LAYOUT); assert.equal(r.plots.length, 11);
   assert.deepEqual(r.plots.map(p => ({ x: p.x, z: p.z })), M.GARDEN_GRID.slice(0, 11));
   assert.equal(r.plots[4].crop, crop); assert.equal(r.plots[4].plantedAt, now); assert.equal(r.plots[4].level, 2); assert.equal(r.plots[10].plantedAt, 7);
+});
+
+test('a save from the five-level days is set to level 3 and gets the energy of the removed levels back, once', () => {
+  const s = M.newGame(); s.energy = 1000; s.plots[0].level = 5; s.plots[1].level = 4; s.plots[2].level = 3;
+  const r = reload(s);
+  assert.deepEqual(r.plots.slice(0, 3).map(p => p.level), [3, 3, 3]);
+  assert.equal(r.energy, 1000 + (960 + 1920) + 960, 'level 5 gets back 960 + 1920, level 4 gets back 960');
+  const again = reload(r); assert.equal(again.energy, r.energy, 'saving once settles it: no second refund');
 });

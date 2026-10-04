@@ -228,7 +228,7 @@ test('12. the log counts obtainable items only, zone bosses only, and titans in 
 // ---- 13 + 15 + 16. LOW: texts and rates -------------------------------------------------------------------------------
 test('13. bed upgrades say what they do to the harvest rate', () => {
   const main = src('main.ts'); assert.match(main, /'−\{percent\}% grow time \(\{ratio\}× harvests\)'/); assert.doesNotMatch(main, /Grows \{percent\}% faster/);
-  assert.equal(+(1 / (1 - M.BED_LEVEL_CUT * 5)).toFixed(2), 2); for (const k of ['−{percent}% grow time ({ratio}× harvests)', 'Bed upgraded to level {level}: −{percent}% grow time ({ratio}× harvests).']) assert.ok(VI_FIXES[k], k);
+  assert.equal(M.bedSpeedUp(3), 8); for (const k of ['−{percent}% grow time ({ratio}× harvests)', 'Bed upgraded to level {level}: −{percent}% grow time ({ratio}× harvests).']) assert.ok(VI_FIXES[k], k);
 });
 test('15. a busy friend can grow by work before time (60 counted jobs a day) and the panel says how', () => {
   const s = M.newGame(); s.level = 30; s.planet = M.CAGES.sprout.planet; M.grantDefeat(s, M.CAGES.sprout.boss, 1, true, () => .5, false); F.rescue(s, 'sprout', T0); s.planet = 'home'; F.arriveHome(s, { x: 0, z: 5 });

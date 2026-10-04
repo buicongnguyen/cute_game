@@ -401,15 +401,17 @@ export function trimGarden(s: SaveState, now = Date.now()) {
 /** The trim note, once: reading it clears it. */
 export function takeTrimNote(s: SaveState): TrimNote | Record<string, never> { const note = s.gardenTrim ?? {}; delete s.gardenTrim; return note; }
 /**
- * Bed upgrades: each level cuts that bed's grow time by 10 % (BED_LEVEL_CUT), up to BED_MAX_LEVEL 5 = half the time.
- * Five stops there because the fastest crops already ripen in seconds and a half-time bed doubles a bed's yield; more
- * would make the 24-bed cap meaningless. The level-L -> L+1 price doubles each step from 120 energy (120, 240, 480,
- * 960, 1920: 3,720 per bed, about a fully grown garden's worth of mid crops); Normal and Hard pay 1.5x (difficulty.ts).
+ * Bed upgrades: each level HALVES that bed's grow time (level 1 = half, 2 = a quarter, 3 = an eighth), up to
+ * BED_MAX_LEVEL 3. The level-L -> L+1 price doubles each step from 120 energy (120, 240, 480: 840 per bed); Normal and
+ * Hard pay 1.5x (difficulty.ts). Saves from when a bed had five gentler 10 % levels (up to level 5) are set to level 3
+ * on loading and get the energy of the two levels removed back (parseSave).
  */
-export const BED_MAX_LEVEL = 5, BED_LEVEL_CUT = .1, BED_UPGRADE_BASE = 120;
+export const BED_MAX_LEVEL = 3, BED_UPGRADE_BASE = 120, LEGACY_BED_MAX_LEVEL = 5;
 export const bedLevel = (p: Plot | undefined) => p && Number.isSafeInteger(p.level) && p.level! > 0 ? Math.min(BED_MAX_LEVEL, p.level!) : 0;
-/** A crop's grow time on this bed: 10 % less per level. */
-export const bedGrowTime = (p: Plot | undefined, duration: number) => Math.round(duration * (1 - BED_LEVEL_CUT * bedLevel(p)));
+/** How many times faster a bed of this level grows its crops (2, 4, 8). */
+export const bedSpeedUp = (level: number) => 2 ** Math.max(0, Math.min(BED_MAX_LEVEL, level));
+/** A crop's grow time on this bed: halved per level. */
+export const bedGrowTime = (p: Plot | undefined, duration: number) => Math.max(1, Math.round(duration / bedSpeedUp(bedLevel(p))));
 /** The energy to take a bed from `level` to `level + 1`. */
 export function bedUpgradeCost(s: Parameters<typeof bedUpgradeScale>[0], level: number) { return Math.round(BED_UPGRADE_BASE * 2 ** level * bedUpgradeScale(s)); }
 /**
@@ -423,7 +425,7 @@ export function upgradeBed(s: SaveState, i: number, now = Date.now()) {
     s.energy -= cost; p.level = level + 1;
     if (p.crop) {
         const before = cropDuration(p), progress = cropProgress(p, now);
-        if (progress < 1 && before > 0) { const after = Math.max(1, Math.round(before * (1 - BED_LEVEL_CUT * (level + 1)) / (1 - BED_LEVEL_CUT * level))); p.growDuration = after; p.plantedAt = Math.round(now - progress * after); }
+        if (progress < 1 && before > 0) { const after = Math.max(1, Math.round(before / 2)); p.growDuration = after; p.plantedAt = Math.round(now - progress * after); }
     }
     return true;
 }
@@ -736,10 +738,12 @@ export function parseSave(raw: string | null): SaveState | null {
                     s.gear[slot as GearSlot] = id;
             }
         s.hp = Math.min(typeof v.hp === 'number' && Number.isFinite(v.hp) && v.hp >= 0 ? v.hp : 100, maxHp(s));
+        let bedRefund = 0; // energy back for upgrade levels above BED_MAX_LEVEL in older saves
         s.plots = v.plots.slice(0, LEGACY_MAX_PLOTS).map((p: unknown, i: number) => {
             const rawCrop = record(p) && typeof p.crop === 'string' ? canonicalItem(p.crop) : null;
             const crop = rawCrop && Object.hasOwn(CROPS, rawCrop) ? rawCrop : null;
             const point = record(p) && Number.isFinite(p.x) && Number.isFinite(p.z) ? { x: p.x, z: p.z } : layoutBed(i);
+            if (record(p) && Number.isSafeInteger(p.level)) for (let l = BED_MAX_LEVEL; l < Math.min(LEGACY_BED_MAX_LEVEL, p.level); l++) bedRefund += bedUpgradeCost(s, l);
             const level = record(p) && Number.isSafeInteger(p.level) && p.level > 0 ? { level: Math.min(BED_MAX_LEVEL, p.level) } : {};
             const rotation = record(p) && typeof p.rotation === 'number' && Number.isFinite(p.rotation) && p.rotation ? { rotation: p.rotation } : {};
             // Fertilizer may legitimately advance a synthetic-clock planting before epoch zero.
@@ -750,6 +754,7 @@ export function parseSave(raw: string | null): SaveState | null {
             const rawChoice = record(p) && typeof p.choice === 'string' ? canonicalItem(p.choice) : '', choice = Object.hasOwn(CROPS, rawChoice) ? { choice: rawChoice } : {};
             return { crop, plantedAt, ...point, ...rotation, ...level, ...choice, ...(crop ? { growDuration, generation, ...(record(p) && isDifficulty(p.difficulty) ? { difficulty: p.difficulty as Difficulty } : {}) } : {}) };
         });
+        if (bedRefund > 0 && Number.isSafeInteger(s.energy + bedRefund)) s.energy += bedRefund;
         if (legacy) {
             const target = Math.min(MAX_PLOTS, s.plots.length + 3);
             while (s.plots.length < target)
