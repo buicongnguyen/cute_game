@@ -32,7 +32,8 @@ test('local multiplayer: accounts, saves, friendship, privacy, rooms and host mi
   t.after(async()=>{for(const client of sockets)client.socket.terminate();await game.close();});
   async function call(route,body,cookie,method=body?'POST':'GET',origin){const response=await fetch(game.url+'/api/'+route,{method,headers:{...(cookie?{Cookie:cookie}:{}),...(origin?{Origin:origin}:{}),'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});return {status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};}
   assert.equal((await call('profile',{profile:{}},null,'PUT')).status,401);
-  assert.equal((await call('auth/register',{username:'bad',password:'short'})).status,400);
+  assert.equal((await call('auth/register',{username:'bad',password:'abc'})).status,400);
+  assert.equal((await call('auth/register',{username:'tiny_pw',password:'abcd'})).status,200,'a short 4-character password is allowed');
   assert.equal((await call('auth/register',{username:'intruder',password:'password-one'},null,'POST','https://unrelated.example')).status,403);
   const alice=await call('auth/register',{username:'alice',password:'password-one',name:'Alice'});
   const bob=await call('auth/register',{username:'bob',password:'password-two',name:'Bob'});

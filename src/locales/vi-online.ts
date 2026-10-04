@@ -104,7 +104,7 @@ export const VI_ONLINE: Record<string, string> = {
   'That party code was not found.': 'Không tìm thấy mã nhóm đó.',
   'This world is full. Join a private party to play together.': 'Thế giới này đã đầy. Hãy tham gia một nhóm riêng để chơi cùng nhau.',
   'This origin is not allowed.': 'Không thể kết nối từ địa chỉ trang web này.',
-  'Use a 3–24 character username and a password of at least 8 characters.': 'Tên đăng nhập cần có 3–24 ký tự và mật khẩu cần ít nhất 8 ký tự.',
+  'Use a 3–24 character username and a password of at least 4 characters.': 'Tên đăng nhập cần có 3–24 ký tự và mật khẩu cần ít nhất 4 ký tự.',
   'That username is already taken.': 'Tên đăng nhập đó đã được sử dụng.',
   'The username or password is incorrect.': 'Tên đăng nhập hoặc mật khẩu không đúng.',
   'Sign in to play online.': 'Đăng nhập để chơi trực tuyến.',

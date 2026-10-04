@@ -230,7 +230,7 @@ export async function createGameServer(options = {}) {
       rate(`auth:${clientAddress(request, trustProxy)}`, 30);
       const data = await body(request), username = text(data.username, 24).toLowerCase(), password = typeof data.password === 'string' ? data.password : '';
       if (route === 'auth/login') rate(`auth-user:${username}`, 20); // tries per account, whoever sends them
-      if (!/^[a-z0-9_]{3,24}$/.test(username) || password.length < 8 || password.length > 128) throw failure(400, 'Use a 3–24 character username and a password of at least 8 characters.');
+      if (!/^[a-z0-9_]{3,24}$/.test(username) || password.length < 4 || password.length > 128) throw failure(400, 'Use a 3–24 character username and a password of at least 4 characters.');
       let account = remember(await store.findByUsername(username));
       if (route === 'auth/register') {
         if (account) throw failure(409, 'That username is already taken.');
