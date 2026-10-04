@@ -9,10 +9,11 @@ import { befriend, canMeet, chooseGift, choosePresent, givesPresent, isFriend, m
 test('the cast is the same for one seed, has a rich flyer, and dresses everyone from real items', () => {
   const a = makeCast(1234), b = makeCast(1234), c = makeCast(99);
   assert.deepEqual(a, b); assert.equal(a.length, 5); assert.notDeepEqual(a.map(x => x.name), c.map(x => x.name));
-  assert.equal(a[0].tier, 'rich'); assert.equal(new Set(a.map(x => x.name)).size, 5);
+  assert.equal(a[0].tier, 'rich'); assert.equal(a[0].pets.length, 2); assert.notEqual(a[0].pets[0], a[0].pets[1]); assert.equal(new Set(a.map(x => x.name)).size, 5);
   for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) for (const bot of makeCast(seed)) {
     for (const id of [...Object.values(bot.gear), ...bot.gifts]) assert.ok(ITEMS[id], `${bot.name}: ${id}`);
     if (bot.flies) assert.equal(bot.tier, 'rich');
+    assert.equal(bot.pets.length, bot.tier === 'rich' ? 2 : 0); for (const p of bot.pets) assert.ok(ITEMS[p]?.slot === 'pet', p);
   }
   assert.ok([1, 2, 3, 4, 5, 6, 7, 8].some(seed => makeCast(seed).some(x => x.flies)), 'somebody flies');
 });

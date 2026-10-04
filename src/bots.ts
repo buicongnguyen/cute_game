@@ -283,7 +283,7 @@ export function initBots(game: GameBridge) {
     const d = r.def, flying = r.y > .4;
     return {
       id: d.id, x: r.w.x, z: r.w.z, y: r.y + (flying ? Math.sin(clock * 2 + d.level) * .12 : 0) + (r.swing > 0 ? Math.sin(r.swing / .3 * Math.PI) * .25 : 0), facing: r.w.facing, color: d.color, name: d.name, planet: 'home', moving: r.moving || flying || r.swing > 0,
-      gear: d.gear as RemotePose['gear'], level: d.level, hp: 100, visual: flying ? { flight: 1 } : { flight: 0 },
+      gear: (d.pets.length ? { ...d.gear, pet: d.pets[0] } : d.gear) as RemotePose['gear'], pets: d.pets.slice(1), level: d.level, hp: 100, visual: flying ? { flight: 1 } : { flight: 0 },
     };
   }
 

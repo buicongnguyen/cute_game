@@ -13,6 +13,8 @@ export interface BotDef {
   flies: boolean;
   /** What its house holds (bots.ts builds the garden from this). */
   house: { plots: number; animals: AnimalKind[]; crops: string[]; decor: string[] };
+  /** Pets that follow it: two for the rich ones (gear.pet is the first, bots.ts sends the second as an extra pet), none for the rest. */
+  pets: string[];
   /** Rare things it can give a new friend, best first; the first one the player does not have yet is given. */
   gifts: string[];
 }
@@ -55,6 +57,12 @@ const ANIMALS_BY_TIER: Record<Tier, AnimalKind[][]> = {
 const CROPS_BY_TIER: Record<Tier, string[]> = { rich: ['apple', 'mango', 'grape', 'pumpkin', 'melon', 'rainbowrose'], average: ['carrot', 'pumpkin', 'berry', 'melon'], new: ['radish', 'carrot', 'mint'] };
 const DECOR_BY_TIER: Record<Tier, string[]> = { rich: ['deco_fruittree', 'deco_statue', 'deco_trophy', 'deco_rainbow', 'deco_aquarium', 'deco_lamp'], average: ['deco_lamp', 'deco_table', 'deco_teddy'], new: ['deco_nest'] };
 
+/** Two different pets for a rich neighbour, from their own random so the rest of the cast stays what it was. */
+const PET_POOL = ['pet_dragon', 'pet_firefly', 'pet_parrot', 'pet_turtle', 'pet_sheep', 'bunny', 'pet_robot'];
+function pickPets(seed: number, index: number) {
+  const r = seeded((seed ^ 0x9e3779b9) + index * 7919), pool = [...PET_POOL], first = pool.splice(Math.floor(r() * pool.length), 1)[0];
+  return [first, pool[Math.floor(r() * pool.length)]];
+}
 /** `count` neighbours from a seed: at least one rich one, the rest random (richer ones are rarer). */
 export function makeCast(seed: number, count = 5): BotDef[] {
   const r = seeded(seed), names = [...NAMES];
@@ -68,7 +76,7 @@ export function makeCast(seed: number, count = 5): BotDef[] {
     bots.push({
       id: `${BOT_ID_PREFIX}${i}`, name: names[i], level, tier, color: pick(COLORS, r), gear: look.gear, flies: look.flies,
       house: { plots, animals: pick(ANIMALS_BY_TIER[tier], r), crops: [...CROPS_BY_TIER[tier]], decor: DECOR_BY_TIER[tier].slice(0, tier === 'rich' ? 5 : tier === 'average' ? 3 : 1) },
-      gifts: [...GIFTS[tier]],
+      gifts: [...GIFTS[tier]], pets: tier === 'rich' ? pickPets(seed, i) : [],
     });
   }
   return bots;
