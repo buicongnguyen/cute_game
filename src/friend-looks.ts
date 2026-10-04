@@ -14,7 +14,7 @@ import type { Friend, FriendId } from './friends-state.ts';
  *
  * Height: a friend's height option picks the body file, so it sets the proportions (Tiny: a big-headed toddler,
  * Grown-up: about five heads tall), and growth (growth.ts) still sets how tall the friend stands: 0.5, then 0.75,
- * then 1.0 of the explorer's height whatever the option. friend-view.ts divides the body file's own height out
+ * then 0.8 of the explorer's height whatever the option. friend-view.ts divides the body file's own height out
  * (looks.ts HEIGHT_RATIO), so a Grown-up friend never outgrows the explorer, and every stage reads the same indoors
  * and out.
  */

@@ -20,7 +20,7 @@ import { applyGait, limbsOf, type Gait } from './walk-cycle.ts';
  * and the hero kit's baked-colour parts; only the head geometry is copied, to recolour the baked hair.
  */
 export const FRIEND_SCALE = HERO_SCALE * .5;
-/** The root scale at a growth stage (growth.ts): 0.5, 0.75 or 1 of the explorer's height. */
+/** The root scale at a growth stage (growth.ts): 0.5, 0.75 or 0.8 of the explorer's height. */
 export const friendScale = (stage = 0) => HERO_SCALE * friendHeight(stage);
 type Dresser = (color: string, gear: SaveState['gear'], look: LookId) => T.Group;
 let dresser: Dresser | null = null;
