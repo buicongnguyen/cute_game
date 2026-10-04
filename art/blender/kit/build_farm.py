@@ -67,7 +67,7 @@ FARM_IDS = ANIMALS + PROPS + PRODUCTS
 BIRD_PARTS = ['body', 'head', 'wing_l', 'wing_r', 'leg_l', 'leg_r', 'tail']
 HOOF_PARTS = ['body', 'head', 'leg_fl', 'leg_fr', 'leg_bl', 'leg_br', 'tail']
 PARTS = dict(chicken=BIRD_PARTS, chick=BIRD_PARTS, cow=HOOF_PARTS, calf=HOOF_PARTS, pen_gate=['frame', 'door'])
-BUDGET = dict(animal=1500, prop=800, product=300)
+BUDGET = dict(animal=2600, prop=800, product=300)  # animals: 1,500 until the October realism pass
 KIND = {**{i: 'animal' for i in ANIMALS}, **{i: 'prop' for i in PROPS}, **{i: 'product' for i in PRODUCTS}}
 # Height (top, metres) and footprint (half extents x, y) each piece must stay within (+-12 %).
 SIZE = dict(

@@ -1,7 +1,7 @@
 """Original low-poly duck, pig and garden guardian additions to the farm kit.
 
 Called by build_farm.py. Every animated piece keeps its own ground-centred root,
-named rigid hinges and the existing 1,500-triangle per-animal budget.
+named rigid hinges and the per-animal budget in build_farm.py BUDGET (2,600).
 """
 import math
 
@@ -105,7 +105,7 @@ def extend(g):
         g['SIZE'][pid]=dict(h=.15 if pid=='duck_egg' else .22,half=(.055,.055) if pid=='duck_egg' else (.13,.12))
         g['KIND'][pid]='product';g['BUILDERS'][pid]=lambda m,pid=pid:product(pid,m)
         g['ICON_VIEW'][pid]=dict(elevation=28,yaw=24,margin=1.2)
-    g['GLB_LIMIT']=640*1024
+    g['GLB_LIMIT']=1000*1024
 
     def preview(entries):
         g['stage']((1400,800),ground='#8BE36A');g['hide_all']()
