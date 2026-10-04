@@ -49,4 +49,14 @@ test('friends see each other when one visits, and a gift reaches their chest', a
   assert.equal(gift.status, 200, JSON.stringify(gift.data));
   const annProfile = (await store.get(ann.id)).profile; assert.equal(annProfile.chest.carrot, 2); assert.equal(annProfile.awayStore.carrot, 2);
   assert.equal((await store.get(ben.id)).profile.bag.carrot, 3);
+  // The guest diary lists the visit and the gift for the owner, newest first.
+  const diary = (await call(ann.cookie, 'auth/session')).data.visitLog;
+  assert.deepEqual(diary.map(e => e.kind), ['gift', 'visit']); assert.equal(diary[0].name, 'visit_ben'); assert.equal(diary[0].what, 'carrot');
+  // A friend request can be cancelled by the one who sent it.
+  const eve = await explorer('visit_eve');
+  assert.equal((await call(eve.cookie, 'friends/request', { id: ann.id })).status, 200);
+  assert.deepEqual((await call(eve.cookie, 'auth/session')).data.sent.map(p => p.id), [ann.id]);
+  assert.equal((await call(ann.cookie, 'auth/session')).data.requests.length, 1);
+  const cancelled = await call(eve.cookie, 'friends/cancel', { id: ann.id }); assert.equal(cancelled.status, 200); assert.equal(cancelled.data.sent.length, 0);
+  assert.equal((await call(ann.cookie, 'auth/session')).data.requests.length, 0);
 });

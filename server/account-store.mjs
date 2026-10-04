@@ -110,7 +110,7 @@ async function runCommand(spec, records, receipt) {
   return {reply,records:changed,receipt:{format:2,actorId:spec.actorId,requestId:spec.requestId,hash:spec.hash,reply:compactReply}};
 }
 function updateFriends(first, second, action) {
-  if (!['request', 'accept', 'decline', 'remove'].includes(action)) throw failure(404, 'Unknown action.');
+  if (!['request', 'accept', 'decline', 'remove', 'cancel'].includes(action)) throw failure(404, 'Unknown action.');
   if (!first || !second || first.id === second.id) throw unavailable();
   const actor = clone(first), target = clone(second);
   if (action === 'request') {
@@ -122,6 +122,7 @@ function updateFriends(first, second, action) {
     if (!actor.friends.includes(target.id)) actor.friends.push(target.id);
     if (!target.friends.includes(actor.id)) target.friends.push(actor.id);
   } else if (action === 'decline') actor.requests = actor.requests.filter(id => id !== target.id);
+  else if (action === 'cancel') target.requests = target.requests.filter(id => id !== actor.id); // withdraw my own request
   else { actor.friends = actor.friends.filter(id => id !== target.id); target.friends = target.friends.filter(id => id !== actor.id); }
   actor.accountRevision = nextAccountRevision(actor); target.accountRevision = nextAccountRevision(target);
   return [actor, target];

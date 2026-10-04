@@ -11,7 +11,7 @@ import * as Game from '../src/model.ts';
 import { dogFollows } from '../src/guard-dog.ts';
 import { lookOf } from '../src/looks.ts';
 import { createAccountStore } from './account-store.mjs';
-import { createActionService } from './action-service.mjs';
+import { createActionService, commandHash, logGuest } from './action-service.mjs';
 import { createCombatAuthority } from './combat-authority.mjs';
 import { EFFECT_LOOKS } from '../src/combat.ts';
 import { rememberAccount } from './account-cache.mjs';
@@ -36,7 +36,7 @@ const publicHome = account => {
     // The cottage's trophy shelf and paintings, for visitors (cooldown stamps stay private).
     bosses: Array.isArray(source.bosses) ? source.bosses : [], house: { paintings: Number.isSafeInteger(source.house?.paintings) ? source.house.paintings : 0 } };
 };
-const send = (socket, payload) => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload)); };
+const send = (socket, payload) => { if (socket.readyState === WebSocket.OPEN) socket.send(typeof payload === 'string' ? payload : JSON.stringify(payload)); };
 const failure = (status, message) => Object.assign(new Error(message), { status });
 export async function createGameServer(options = {}) {
   const host = options.host || process.env.HOST || '127.0.0.1';
@@ -109,6 +109,9 @@ export async function createGameServer(options = {}) {
     return {
       friends: account.friends.map(id => accounts.get(id)).filter(Boolean).map(value => ({ ...publicAccount(value), online: peers.has(value.id) })),
       requests: account.requests.map(id => accounts.get(id)).filter(Boolean).map(publicAccount),
+      // Requests I sent that are still waiting (so they can be cancelled), and the guest diary (who visited, watered, gifted).
+      sent: [...accounts.values()].filter(other => other.requests.includes(account.id)).map(publicAccount),
+      visitLog: (account.visitLog || []).slice(0, 30),
     };
   }
   async function refreshFriends(account) {
@@ -116,7 +119,7 @@ export async function createGameServer(options = {}) {
     return friendList(account);
   }
   function tellFriends(account) { const peer = peers.get(account.id); if (peer) send(peer.socket, { type: 'friends', ...friendList(account) }); }
-  function broadcast(room, payload, except) { for (const id of room.members) { if (id !== except) { const peer = peers.get(id); if (peer) send(peer.socket, payload); } } }
+  function broadcast(room, payload, except) { payload = JSON.stringify(payload); /* once for everyone in the room */ for (const id of room.members) { if (id !== except) { const peer = peers.get(id); if (peer) send(peer.socket, payload); } } }
   function visibleDrop(peer,drop){const space=drop.space||(drop.planet==='home'&&Math.hypot(drop.x,drop.z)<18?`home:${drop.ownerId}`:'wild');return !peer.visit&&drop.room===peer.room&&drop.planet===peer.planet&&(space==='wild'||space===`home:${peer.account.id}`);}
   function respawn(peer){if(peer.visit)endVisit(peer);join(peer,'home',peer.party);peer.pose={...peer.pose,x:0,z:-4.8};arrived(peer);}
   const combatAuthority=createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath:respawn});
@@ -132,6 +135,7 @@ export async function createGameServer(options = {}) {
     if(['rest','reset','die','returnHome','travel'].includes(intent.type)||result?.died){const peer=peers.get(intent.actorId);if(peer)combatAuthority.resetPeer?.(peer,{newLife:['reset','die'].includes(intent.type)||result?.died===true,reason:intent.type});}
     if(intent.type==='claimGift'&&result?.kind==='bomb'){const peer=peers.get(intent.actorId);if(peer)combatAuthority.bomb(peer,result.radius,result.damageMultiplier);}
     if(result?.died){const peer=peers.get(intent.actorId);if(peer){respawn(peer);send(peer.socket,{type:'healthResult',delta:-result.damage,died:true});}}
+    if(['waterFriend','giftFriend','stealCrop'].includes(intent.type)&&result?.ownerId){const owner=accounts.get(result.ownerId),entry=owner?.visitLog?.[0],ownerPeer=peers.get(result.ownerId);if(entry&&ownerPeer)send(ownerPeer.socket,{type:'guestNotice',entry});}
     if(intent.type==='stealCrop'&&result?.ownerId)for(const peer of peers.values())if(peer.visit===result.ownerId||peer.account.id===result.ownerId||peer.account.id===intent.actorId)send(peer.socket,{type:'gardenEvent',eventId:intent.requestId,by:intent.actorId,...result});
     if(intent.type==='dropItem'&&result?.room)for(const peer of peers.values())if(visibleDrop(peer,result))send(peer.socket,{type:'dropSpawn',drop:result});
     if(intent.type==='claimDrop'||intent.type==='releaseDrop')for(const peer of peers.values())if(visibleDrop(peer,result))send(peer.socket,{type:intent.type==='claimDrop'?'dropClaimed':'dropReleased',...result});
@@ -140,11 +144,30 @@ export async function createGameServer(options = {}) {
     peer.visit = null; send(peer.socket, { type: 'visit', home: null });
     const party=peer.visitReturnParty&&parties.has(peer.visitReturnParty)?peer.visitReturnParty:null;delete peer.visitReturnParty;
     join(peer,peer.account.profile.planet,party,null,true);
-    const room = rooms.get(peer.room); if (room) broadcast(room, { type: 'pose', player: presence(peer) }, peer.account.id);
+    const room = rooms.get(peer.room); if (room) { peer.lastSent = null; broadcastPose(room, peer); }
   }
   function presence(peer) {
     return { ...publicAccount(peer.account), ...peer.pose, difficulty: Game.difficultyOf(peer.account.profile), id: peer.account.id, planet: peer.planet, space: peer.visit ? `home:${peer.visit}` : peer.planet === 'home' && Math.hypot(peer.pose.x, peer.pose.z) < 18 ? `home:${peer.account.id}` : 'wild', active: peer.active };
   }
+  /**
+   * Movement updates are sent as changes only: the first time (and every 5 s as a resync, and after any non-movement
+   * event) the full presence, otherwise just the fields that changed since the last send, with numbers rounded. A player
+   * standing still sends nothing. The client merges them (online.ts).
+   */
+  const round2 = value => typeof value === 'number' ? Math.round(value * 100) / 100 : value;
+  function poseUpdate(peer, now = Date.now()) {
+    const full = presence(peer);
+    for (const key of ['x', 'y', 'z', 'facing']) if (key in full) full[key] = round2(full[key]);
+    const last = peer.lastSent;
+    if (!last || now - peer.lastSentAt > 5000) { peer.lastSent = full; peer.lastSentAt = now; return { type: 'pose', player: full }; }
+    const changed = { id: full.id };
+    for (const key of Object.keys(full)) if (JSON.stringify(full[key]) !== JSON.stringify(last[key])) changed[key] = full[key];
+    for (const key of Object.keys(last)) if (!(key in full)) changed[key] = null;
+    if (Object.keys(changed).length === 1) return null;
+    peer.lastSent = full;
+    return { type: 'pose', player: changed, delta: true };
+  }
+  function broadcastPose(room, peer) { const update = poseUpdate(peer); if (update) broadcast(room, update, peer.account.id); }
   function roster(room) { return [...room.members].map(id => peers.get(id)).filter(Boolean).map(presence); }
   function elect(room) {
     const available = [...room.members].map(id => peers.get(id)).filter(Boolean);
@@ -325,7 +348,7 @@ export async function createGameServer(options = {}) {
           peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && account.profile.farm?.animals?.find(a => a.kind === 'dog');
           // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.
           peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0} };
-          broadcast(room, { type: 'pose', player: presence(peer) }, account.id);
+          broadcastPose(room, peer);
         } else if (message.type === 'chat') {
           if (!room) throw failure(409, 'Join a world before sending a message.');
           if (message.requestId !== undefined && !requestId) throw failure(400, 'This message needs a valid request ID.');
@@ -348,7 +371,11 @@ export async function createGameServer(options = {}) {
           if (!target || !account.friends.includes(target.id)) throw failure(403, 'Become friends before visiting.');
           if(!peer.visit)peer.visitReturnParty=peer.party;
           join(peer, 'home', peers.get(target.id)?.party || peer.party,target.id); peer.pose = { ...peer.pose, x: 0, z: 3 };
-          send(socket, { type: 'visit', home: publicHome(target) }); broadcast(rooms.get(peer.room), { type: 'pose', player: presence(peer) }, account.id);
+          // The owner's guest diary notes the visit (best effort: a busy account just skips it).
+          store.command({ actorId: target.id, requestId: randomUUID(), hash: commandHash({ type: 'guestVisit', visitor: account.id, at: Date.now() }), expectedRevision: accounts.get(target.id)?.profileRevision || 0, actionType: 'guestVisit',
+            run: records => { logGuest(records.get(target.id), { at: Date.now(), by: account.id, name: account.profile.name, kind: 'visit' }); return true; } })
+            .then(committed => { committed.accounts.forEach(remember); const owner = accounts.get(target.id), ownerPeer = peers.get(target.id); if (owner && ownerPeer) { send(ownerPeer.socket, { type: 'profile', profile: owner.profile, revision: owner.profileRevision, authorityVersion: 1 }); send(ownerPeer.socket, { type: 'guestNotice', entry: owner.visitLog?.[0] }); } }).catch(() => {});
+          send(socket, { type: 'visit', home: publicHome(target) }); { peer.lastSent = null; broadcastPose(rooms.get(peer.room), peer); }
         } else if (message.type === 'leaveVisit') {
           endVisit(peer);
         } else if (message.type === 'enemies' && room?.host === account.id && Array.isArray(message.enemies)) {

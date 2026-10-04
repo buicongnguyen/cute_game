@@ -158,3 +158,5 @@
 
 .social-gifts { margin-top: 8px; }
 .social-gifts h4 { margin: 0 0 6px; }
+
+button[data-badge]:not([data-badge=""])::after { content: attr(data-badge); display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: #e8453c; color: #fff; font-size: 12px; line-height: 18px; text-align: center; }

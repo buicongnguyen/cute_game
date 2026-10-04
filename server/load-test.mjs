@@ -41,12 +41,12 @@ for (let n = 0; n < online; n++) {
 }
 console.log(`${accountsWanted} accounts registered in ${((Date.now() - started) / 1000).toFixed(1)} s`);
 
-const sockets = [], gaps = [], lastSeen = new Map(); let received = 0, refused = 0, joined = 0;
+const sockets = [], gaps = [], lastSeen = new Map(); let received = 0, refused = 0, joined = 0, bytes = 0;
 await Promise.all(Array.from({ length: online }, (_, n) => new Promise(resolve => {
   const ws = new WebSocket(server.url.replace('http:', 'ws:') + '/socket', { headers: { Cookie: cookies[n] } });
   sockets.push(ws);
   ws.on('message', raw => {
-    received++;
+    received++; bytes += raw.length;
     const message = JSON.parse(raw.toString());
     if (message.type === 'joined') { joined++; resolve(); }
     if (message.type === 'pose') { const now = Date.now(), last = lastSeen.get(ws); if (last) gaps.push(now - last); lastSeen.set(ws, now); }
@@ -78,7 +78,7 @@ const saveSeconds = (Date.now() - saveStart) / 1000;
 const sorted = gaps.sort((a, b) => a - b), pick = q => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))] : NaN;
 const mem = process.memoryUsage();
 console.log(`\nResult for ${accountsWanted} accounts, ${joined} online, ${seconds} s:`);
-console.log(`  messages received by players: ${received}`);
+console.log(`  messages received by players: ${received}  (${(bytes / 1048576).toFixed(1)} MB, ${(bytes / 1024 / seconds / Math.max(1, joined)).toFixed(1)} KB/s per player)`);
 console.log(`  time between other players' pose updates seen by one player (ms): median ${pick(.5)}, 95th ${pick(.95)}, worst ${sorted.at(-1) ?? 'n/a'}  (${sorted.length} samples)`);
 console.log(`  server event-loop lag (ms): mean ${(lag.mean / 1e6).toFixed(1)}, 99th ${(lag.percentile(99) / 1e6).toFixed(1)}, max ${(lag.max / 1e6).toFixed(1)}`);
 console.log(`  saves: ${saves} account writes in ${saveSeconds.toFixed(1)} s (${(saves / saveSeconds).toFixed(0)} per second) while ${accountsWanted} accounts are stored`);

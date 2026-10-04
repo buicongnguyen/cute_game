@@ -45,6 +45,8 @@ function validateFishingProof(proof,ticket,now){
   if(!Number.isSafeInteger(strains)||strains<0||strains!==flagged||proof.samples.some(sample=>sample.strain!==true&&sample.tension>=.999))fail(400,'This catch could not be verified.');
   for(let index=0;index<strains;index++)if(!Number.isSafeInteger(ticket.seed)||lineSnaps(ticket.seed,index,ticket.breakChance??lineBreakChance(ticket)))fail(409,'The line snapped. Let go of Reel when the fish surges.');
 }
+/** The guest diary: the newest 30 things friends did at this home (water, gift, steal, visit). */
+export function logGuest(owner,entry){owner.visitLog=[entry,...(owner.visitLog||[])].slice(0,30);}
 function saveDrop(account,item,count,peer,now,{owner=account.id,priority=0,life=30000}={}){
   const drop={id:randomUUID(),ownerId:account.id,item,count,room:peer.room,planet:peer.planet,space:peer.planet==='home'&&Math.hypot(peer.pose.x,peer.pose.z)<18?`home:${account.id}`:'wild',x:peer.pose.x,z:peer.pose.z,owner,releaseAt:now+priority,expiresAt:now+life};
   account.drops=(account.drops||[]).filter(value=>value.expiresAt>now);account.drops.push(drop);return drop;
@@ -84,6 +86,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
           plot.crop=null;plot.plantedAt=0;delete plot.growDuration;delete plot.generation;
           owner.profile=target;ledger.count++;account.theftLedger[owner.id]=ledger;
           result={blocked:false,ownerId:owner.id,index:p.index,item,count:1,remaining:6-ledger.count};
+          logGuest(owner,{at:now,by:actorId,name:state.name,kind:'steal',what:item,count:1});
         }
       }else if(data.type==='giftFriend'){
         // A gift from the bag to a friend: it lands in their chest and shows in their "while you were out" note.
@@ -101,6 +104,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         target.chest[item]=(target.chest[item]??0)+count;(target.awayStore??={})[item]=(target.awayStore[item]??0)+count;
         owner.profile=target;ledger.count+=count;account.giftLedger=ledger;
         result={ownerId:owner.id,item,count};
+        logGuest(owner,{at:now,by:actorId,name:state.name,kind:'gift',what:item,count});
       }else if(data.type==='waterFriend'){
         // Water a growing crop in a friend's garden you are visiting: it ripens a little sooner, once per visitor per plant.
         const owner=records.get(p.ownerId);
@@ -117,6 +121,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         const boost=Math.min(Game.cropDuration(plot)*.1,120000);plot.plantedAt-=boost;by.push(actorId);owner.watered[key]=by.slice(-8);
         ledger.count++;account.waterLedger=ledger;Game.gainXp(state,2,now,1);owner.profile=target;
         result={ownerId:owner.id,index:p.index,seconds:Math.round(boost/1000)};
+        logGuest(owner,{at:now,by:actorId,name:state.name,kind:'water',what:plot.crop,count:1});
       }else if(data.type==='fishHunt'){
         if(!peer?.active||peer.visit||account.journeyPaid||account.fishingTicket&&now-account.fishingTicket.startedAt<180000)fail(409,'Finish your cast and return to your own shore before hunting fish.');
         result=huntFish(state,p,peer.pose,now);
