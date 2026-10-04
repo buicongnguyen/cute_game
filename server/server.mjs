@@ -1,4 +1,6 @@
 import http from 'node:http';
+import { poseStep, arrived } from './pose-budget.mjs';
+import { clientAddress } from './client-address.mjs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -113,7 +115,7 @@ export async function createGameServer(options = {}) {
   function tellFriends(account) { const peer = peers.get(account.id); if (peer) send(peer.socket, { type: 'friends', ...friendList(account) }); }
   function broadcast(room, payload, except) { for (const id of room.members) { if (id !== except) { const peer = peers.get(id); if (peer) send(peer.socket, payload); } } }
   function visibleDrop(peer,drop){const space=drop.space||(drop.planet==='home'&&Math.hypot(drop.x,drop.z)<18?`home:${drop.ownerId}`:'wild');return !peer.visit&&drop.room===peer.room&&drop.planet===peer.planet&&(space==='wild'||space===`home:${peer.account.id}`);}
-  function respawn(peer){if(peer.visit)endVisit(peer);join(peer,'home',peer.party);peer.pose={...peer.pose,x:0,z:-4.8};}
+  function respawn(peer){if(peer.visit)endVisit(peer);join(peer,'home',peer.party);peer.pose={...peer.pose,x:0,z:-4.8};arrived(peer);}
   const combatAuthority=createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath:respawn});
   const executeAction = createActionService({store,getPeer:id=>peers.get(id),getWorld:id=>rooms.has(id)?combatAuthority.state(rooms.get(id)):null,afterCommit:async(committed,intent)=>{
     committed.accounts.forEach(remember);
@@ -173,7 +175,7 @@ export async function createGameServer(options = {}) {
     const room = existing || { id: key, members: new Set(), host: null, enemies: [], environment:null, requests:new Map(), epoch: 0, killed: new Set(), contributors: new Map(), lastSnapshot: 0 };
     rooms.set(key, room); room.members.add(peer.account.id);
     if (peer.planet && peer.planet !== 'home' || peer.visit) peer.tripAt = Date.now(); // leaving a trip: delivery.ts catch-ups go to the chest
-    peer.planet = planet; peer.party = party; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9 };
+    peer.planet = planet; peer.party = party; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9 }; arrived(peer);
     elect(room);
     send(peer.socket, { type: 'joined', id: peer.account.id, room: key, party, host: room.host, planet, visiting:visitId, players: roster(room), enemies: room.enemies, environment:room.environment, epoch: room.epoch });
     broadcast(room, { type: 'enter', player: presence(peer) }, peer.account.id);
@@ -188,8 +190,9 @@ export async function createGameServer(options = {}) {
       return respond(response, 200, { ok: true, online: peers.size, version: 1, storage: store.kind });
     }
     if ((route === 'auth/register' || route === 'auth/login') && method === 'POST') {
-      rate(`auth:${request.socket.remoteAddress}`, 30);
+      rate(`auth:${clientAddress(request, options.trustProxy ?? process.env.TRUST_PROXY === '1')}`, 30);
       const data = await body(request), username = text(data.username, 24).toLowerCase(), password = typeof data.password === 'string' ? data.password : '';
+      if (route === 'auth/login') rate(`auth-user:${username}`, 20); // tries per account, whoever sends them
       if (!/^[a-z0-9_]{3,24}$/.test(username) || password.length < 8 || password.length > 128) throw failure(400, 'Use a 3–24 character username and a password of at least 8 characters.');
       let account = remember(await store.findByUsername(username));
       if (route === 'auth/register') {
@@ -310,9 +313,10 @@ export async function createGameServer(options = {}) {
           join(peer, peer.planet, code); send(socket, { type: 'party', code });
         } else if (message.type === 'pose' && room) {
           const now = Date.now(); if (now - peer.poseAt < 65) return;
-          const x = number(message.x), z = number(message.z), elapsed = Math.min(5, (now - peer.poseAt) / 1000);
-          const distance = Math.hypot(x - peer.pose.x, z - peer.pose.z);
-          if (peer.poseAt && distance > 55 * elapsed + 8 && !(Math.hypot(x, z) < 2)) return;
+          const x = number(message.x), z = number(message.z), distance = Math.hypot(x - peer.pose.x, z - peer.pose.z);
+          // Movement budget (pose-budget.mjs): refills at the top speed and saves up only a short burst, so neither a pause
+          // nor a stream of small jumps adds up to a teleport; the Home button's snap to the village centre stays allowed.
+          const move = poseStep(peer, { x, z }, distance, now); if (!move) return;
           const combat=combatAuthority.engineFor(peer).sim;
           peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && account.profile.farm?.animals?.find(a => a.kind === 'dog');
           // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.

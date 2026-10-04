@@ -71,6 +71,14 @@ function commandSpec(spec) {
   if(spec.checkAccess!==undefined&&typeof spec.checkAccess!=='function')throw failure(400,'This action needs a valid request.');
   return [...new Set([spec.actorId,...(spec.relatedIds || [])])].sort();
 }
+/**
+ * Receipts make a retried request safe (same id, same answer). A client retries only its few pending actions, so each
+ * account keeps the receipts of its last RECEIPT_WINDOW revisions; an older id that comes back fails the revision check
+ * (409) instead of running twice, so the table no longer grows with play time. Server bookkeeping that the player never
+ * reads (combat health batches, about two a second while hurt: `outbox: false`) also stays out of the account's event outbox.
+ */
+export const RECEIPT_WINDOW = 512;
+const receiptRevision = receipt => receipt?.reply?.revision ?? 0;
 async function runCommand(spec, records, receipt) {
   // Access may have been revoked while the request waited for a database lock.
   spec.checkAccess?.();
@@ -84,7 +92,7 @@ async function runCommand(spec, records, receipt) {
   const before = new Map([...records].map(([id,value])=>[id,JSON.stringify(value)]));
   const result = await spec.run(records);
   actor.authorityVersion = 1;
-  if(spec.actionType){
+  if(spec.actionType&&spec.outbox!==false){
     actor.outbox??=[];
     actor.outbox.push({id:spec.requestId,type:spec.actionType,result:clone(result),at:Date.now()});
     actor.outbox=actor.outbox.slice(-256);
@@ -146,7 +154,11 @@ async function fileStore(dataDir) {
     const result = pending.catch(() => {}).then(async () => {
       const next = new Map(accounts), outcome = await operation(next);
       const nextReceipts = new Map(receipts);
-      if (outcome.receipt) nextReceipts.set(`${outcome.receipt.actorId}:${outcome.receipt.requestId}`,outcome.receipt);
+      if (outcome.receipt) {
+        nextReceipts.set(`${outcome.receipt.actorId}:${outcome.receipt.requestId}`,outcome.receipt);
+        const floor = receiptRevision(outcome.receipt) - RECEIPT_WINDOW;
+        if (floor > 0) for (const [key, value] of nextReceipts) if (value.actorId === outcome.receipt.actorId && receiptRevision(value) <= floor) nextReceipts.delete(key);
+      }
       for(const receipt of outcome.receipts||[])nextReceipts.set(`${receipt.actorId}:${receipt.requestId}`,receipt);
       // Publish only after the complete replacement has been written and renamed.
       if (outcome.changed !== false) { await persist(next,nextReceipts); accounts = next; receipts = nextReceipts; }
@@ -242,7 +254,11 @@ async function postgresStore(databaseUrl, injectedPool) {
         const receipt = (await client.query('SELECT receipt FROM zoo_action_receipts WHERE actor_id=$1 AND request_id=$2',[spec.actorId,spec.requestId])).rows[0]?.receipt;
         const result = await runCommand(spec,new Map(rows.map(row=>[row.account.id,row.account])),receipt);
         for (const account of result.records) await update(client,account);
-        if (result.receipt) await client.query('INSERT INTO zoo_action_receipts(actor_id,request_id,receipt) VALUES($1,$2,$3::jsonb)',[spec.actorId,spec.requestId,JSON.stringify(result.receipt)]);
+        if (result.receipt) {
+          await client.query('INSERT INTO zoo_action_receipts(actor_id,request_id,receipt) VALUES($1,$2,$3::jsonb)',[spec.actorId,spec.requestId,JSON.stringify(result.receipt)]);
+          const floor = receiptRevision(result.receipt) - RECEIPT_WINDOW;
+          if (floor > 0) await client.query("DELETE FROM zoo_action_receipts WHERE actor_id=$1 AND (receipt->'reply'->>'revision')::bigint <= $2",[spec.actorId,floor]);
+        }
         return {reply:result.reply,accounts:result.records};
       });
     },

@@ -17,7 +17,7 @@ The Render service serves the built game, `/api/*`, and `/socket` from one HTTPS
 | Database | User-supplied Neon `DATABASE_URL` secret |
 | Game/API/WebSocket paths | `/`, `/api/`, `/socket` on the same origin |
 
-[`render.yaml`](../render.yaml) sets `HOST=0.0.0.0`, `COOKIE_SECURE=1`, `DATABASE_REQUIRED=1`, `VITE_BASE_PATH=/`, and `VITE_STATIC_HOST=false`. Render supplies `PORT`; do not replace it with a fixed port. The build explicitly includes development dependencies because Vite and TypeScript are needed to compile the game.
+[`render.yaml`](../render.yaml) sets `HOST=0.0.0.0`, `COOKIE_SECURE=1`, `TRUST_PROXY=1` (sign-in rate limits then key on the client address Render's proxy reports in `X-Forwarded-For`, not on the proxy itself; leave it unset when nothing sits in front of the server), `DATABASE_REQUIRED=1`, `VITE_BASE_PATH=/`, and `VITE_STATIC_HOST=false`. Render supplies `PORT`; do not replace it with a fixed port. The build explicitly includes development dependencies because Vite and TypeScript are needed to compile the game.
 
 The Blueprint uses `autoDeployTrigger: off`, the current equivalent of `autoDeploy: false`. It defines no Render database, disk, worker, or paid service. Creating the Blueprint starts its initial deployment; later code deployments are manual. Blueprint configuration sync is a separate setting: choose **Auto Sync: No** in the Blueprint settings if you also want to apply future `render.yaml` changes manually. [Render Blueprint reference](https://render.com/docs/blueprint-spec), [Blueprint sync settings](https://render.com/docs/infrastructure-as-code).
 

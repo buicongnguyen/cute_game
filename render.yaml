@@ -18,6 +18,9 @@ services:
         value: 0.0.0.0
       - key: COOKIE_SECURE
         value: "1"
+      # Behind Render's proxy the socket address is the proxy's: rate limits read the client from X-Forwarded-For instead.
+      - key: TRUST_PROXY
+        value: "1"
       - key: VITE_BASE_PATH
         value: /
       - key: VITE_STATIC_HOST

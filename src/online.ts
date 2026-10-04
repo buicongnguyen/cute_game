@@ -70,7 +70,9 @@ export function initOnline(game:GameBridge) {
   function announce(message:string,params:Record<string,string|number>={}){setNotice(message,params);game.showNotice(t(message,params));}
   function setSaveStatus(message:string){saveStatusSource=message;const label=document.querySelector('#save-status');if(label)label.textContent=t(message);}
   async function api<T>(path:string,data?:unknown,method=data?'POST':'GET'):Promise<T>{
-    const response=await fetch(`${serviceBase}api/${path}`,{method,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});
+    // A fetch that never reaches the server (offline, DNS, server down) rejects with the browser's own English text ("Failed to fetch",
+    // "Load failed"): say it in the game's words instead. No status, so flushSave keeps the action for a retry as before.
+    let response:Response;try{response=await fetch(`${serviceBase}api/${path}`,{method,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});}catch{throw new Error('Connection interrupted. Please try again.');}
     let value:{error?:string};try{value=await response.json();}catch{throw new Error('Online play needs the game server. Your offline adventure is ready to play.');}
     if(!response.ok)throw Object.assign(new Error(value.error||'Connection interrupted. Please try again.'),{status:response.status});return value as T;
   }

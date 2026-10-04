@@ -22,12 +22,12 @@ const STATUS=['fear','charm','slow','blind','sheep','taunt'];
 export function createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath=()=>{},onError=()=>{}}){
   const engines=new Map(),queues=new Map();let stopped=false;
   function queue(id,task){const next=(queues.get(id)||Promise.resolve()).catch(()=>{}).then(task);queues.set(id,next);return next;}
-  async function internal(actorId,type,relatedIds,run,requestId=randomUUID()){
+  async function internal(actorId,type,relatedIds,run,requestId=randomUUID(),outbox=true){
     return queue(actorId,async()=>{
       for(let retry=0;retry<5;retry++){
         const account=await store.get(actorId);if(!account)return null;
         try{
-          const committed=await store.command({actorId,requestId,hash:commandHash({type,requestId}),expectedRevision:account.profileRevision||0,actionType:type,relatedIds,run});
+          const committed=await store.command({actorId,requestId,hash:commandHash({type,requestId}),expectedRevision:account.profileRevision||0,actionType:type,relatedIds,run,outbox});
           // A successful commit may outlive its connection. Receipt replay has no changed
           // records, but connected peers still need the persisted HP and life metadata.
           if(committed.reply.replayed)committed.accounts=(await Promise.all([...new Set([actorId,...relatedIds])].map(id=>store.get(id)))).filter(Boolean);
@@ -196,7 +196,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
         if(profile.hp<=0){profile.planet=event.planet;Game.die(profile,event.x,event.z);clearJourney(account);account.lifeEpoch=(account.lifeEpoch||0)+1;died=true;}
       }
       return {delta,died,lifeEpoch:account.lifeEpoch||0};
-    },batch.requestId).then(result=>{engine.pendingHealth=null;if(!result)return true;const live=peers.get(actorId);if(!live)return true;
+    },batch.requestId,false) /* bookkeeping: no event-outbox entry twice a second while hurt */.then(result=>{engine.pendingHealth=null;if(!result)return true;const live=peers.get(actorId);if(!live)return true;
       if(result.reply.result.died){resetPeer(live,{newLife:true});onDeath(live);}
       send(live.socket,{type:'healthResult',...result.reply.result});return true;
     }).catch(()=>{batch.flushing=false;return false;});
