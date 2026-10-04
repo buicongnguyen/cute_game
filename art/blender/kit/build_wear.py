@@ -63,7 +63,10 @@ OUTFITS = [('armor_leather', 'Leather outfit'), ('armor_wolf', 'Wolf outfit'), (
            ('armor_wings', 'Dragon wings'), ('armor_knight', 'Knight outfit'), ('armor_pirate', 'Pirate outfit'),
            ('armor_chef', 'Chef outfit'), ('armor_tux', 'Tuxedo'), ('armor_kimono', 'Kimono'),
            ('armor_hawaii', 'Island shirt'), ('armor_superhero', 'Superhero outfit'), ('armor_angel', 'Angel outfit'),
-           ('armor_santa', 'Santa outfit'), ('armor_hoodie', 'Hoodie')]
+           ('armor_santa', 'Santa outfit'), ('armor_hoodie', 'Hoodie'),
+           ('armor_army', 'Army uniform'), ('armor_navy', 'Navy uniform'), ('armor_aodai', 'Vietnamese long dress'),
+           ('armor_aodai_man', 'Vietnamese long gown'), ('armor_usa', 'Stars and stripes outfit'),
+           ('armor_vietnam', 'Vietnam flag outfit')]
 BOOTS = [('boots_rocket', 'Rocket boots'), ('boots_cowboy', 'Cowboy boots'), ('boots_flipper', 'Swim flippers'),
          ('boots_cloud', 'Cloud boots'), ('boots_lava', 'Lava boots')]
 KIND = {i: 'hat' for i, _ in HATS}
@@ -77,7 +80,7 @@ TRI_LIMIT = {'hat': 700, 'outfit': 1400, 'boots': 600}
 ALLOWED_PARTS = {'hat': ('head',), 'outfit': ('body', 'arm-left', 'arm-right'), 'boots': ('leg-left', 'leg-right')}
 PART_ORDER = ('head', 'body', 'arm-left', 'arm-right', 'leg-left', 'leg-right')
 SUFFIX = {'head': '', 'body': '', 'arm-left': '_sleeve_l', 'arm-right': '_sleeve_r', 'leg-left': '_l', 'leg-right': '_r'}
-GLB_LIMIT = 700 * 1024
+GLB_LIMIT = 820 * 1024
 ICON_LIMIT = 8 * 1024
 FACE_CLEAR = 0.60          # contract: no hat vertex this close to the head centre on the face side below z 1.9
 HAT_CLEAR = 0.63           # hero_spec: a hat's inner surface stays this far from the head centre
@@ -2194,6 +2197,177 @@ def armor_hoodie():
     sleeves(it, sleeve_profile(0.8, 0.156, cuff=0.012, cuff_h=0.075), stag(rib, orange))
     finish_sleeves(it)
     it.note = 'The hood lies down behind the neck, on top of the backpack.'
+    return it
+
+
+# ------------------------------------------------------------ national and uniform outfits
+def rect(w, h):
+    """A rectangle outline (x, y) for shell decals."""
+    return [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)]
+
+
+@builder
+def armor_army():
+    it = Item('armor_army')
+    olive = it.m('olive', '#6B7A3A', 0.6)
+    olive_dark = it.m('olive dark', '#566330', 0.6)
+    red = it.m('red', '#E0262B', 0.45)
+    gold = it.m('gold', '#FFC21E', 0.4)
+    belt = it.m('belt', '#4A3A22', 0.5)
+    prof = shirt_profile(0.5, 0.036, 0.01, bands=[(0.58, 0.63, 0.016)])
+
+    def fn(z, az, b, s):
+        if b == -2 or z < 0.53:
+            return olive_dark
+        if 0.58 <= z <= 0.63:
+            return belt
+        return olive
+    shell(it, prof, fn)
+    shell_decal(it, prof, circle(8, 0.028), gold, 0, 0.605, 0.012, lift=0.012)    # belt buckle
+    for sx in (-1, 1):                                                              # chest pockets and red collar tabs
+        shell_decal(it, prof, rect(0.11, 0.09), olive_dark, 38 * sx, 0.78, 0.006)
+    shell_decal(it, prof, star(5, 0.075, 0.032), red, 0, 0.94, 0.014, lift=0.008)   # red star badge over the heart
+    for z in (0.7, 0.76, 0.82, 0.88):
+        shell_decal(it, prof, circle(6, 0.012), gold, 0, z, 0.006)
+    sleeves(it, sleeve_profile(0.8, 0.156, cuff=0.01, cuff_h=0.04), stag(olive_dark, olive))
+    finish_sleeves(it)
+    it.note = 'Olive field uniform with a red star badge; the belt band sits at z 0.58-0.63.'
+    return it
+
+
+@builder
+def armor_navy():
+    it = Item('armor_navy')
+    white = it.m('white', '#FFFDF7', 0.55)
+    shade = it.m('white shade', '#DCE6F4', 0.55)
+    navy = it.m('navy', '#1E3A8A', 0.5)
+    red = it.m('scarf', '#E0262B', 0.45)
+    gold = it.m('button', '#FFC21E', 0.4)
+    prof = shirt_profile(0.46, 0.036, 0.015, bands=[(0.98, 1.05, 0.014)])
+
+    def fn(z, az, b, s):
+        if b == -2 or z < 0.5:
+            return shade
+        if z > 0.98:
+            return navy if abs(az) > 18 else white   # the broad sailor collar over the shoulders and down the back
+        return white
+    shell(it, prof, fn)
+    for sx in (-1, 1):                               # three white stripes on the collar
+        for z in (1.0, 1.02, 1.04):
+            shell_decal(it, prof, rect(0.1, 0.008), white, 60 * sx, z, 0.004)
+    q, nq = on_shell(prof, 0, 0.93, 0.03)
+    m = facing(q, nq)
+    it.add('body', ellipsoid((0, 0, 0), (0.05, 0.04, 0.035), 8, 4), red, m)       # the neckerchief knot
+    for sx in (-1, 1):
+        tri = [(0.0, 0.0), (0.07 * sx, -0.1), (0.02 * sx, -0.12)]
+        if sx < 0:
+            tri = list(reversed(tri))
+        it.add('body', prism(tri, 0.016, 0.0), red, m @ xf((0.01 * sx, -0.01, -0.012), (0, 0, 0)))
+    for z in (0.62, 0.7, 0.78):
+        shell_decal(it, prof, circle(6, 0.014), gold, 0, z, 0.006)
+    sleeves(it, sleeve_profile(0.8, 0.156, cuff=0.012, cuff_h=0.06), stag(navy, white))
+    finish_sleeves(it)
+    it.note = 'Sailor suit: navy collar with three stripes and a red neckerchief.'
+    return it
+
+
+@builder
+def armor_aodai():
+    it = Item('armor_aodai')
+    silk = it.m('silk', '#FF8FB1', 0.45)
+    silk_dark = it.m('silk dark', '#E86A92', 0.45)
+    collar = it.m('collar', '#FFFDF7', 0.5)
+    gold = it.m('gold', '#FFC21E', 0.4)
+    white = it.m('trousers', '#FFFDF7', 0.5)
+    prof = shirt_profile(0.22, 0.034, 0.045, flare_top=0.55, zs=(0.3, 0.4, 0.5, 0.62, 0.8, 0.95), bands=[(1.03, 1.075, 0.012)])
+
+    def fn(z, az, b, s):
+        if b == -2:
+            return silk_dark
+        if z > 1.03:
+            return collar                       # the stand-up mandarin collar
+        if 70 < abs(az) < 110 and z < 0.7:
+            return white                        # the side slit shows the white trousers
+        return silk_dark if z < 0.28 else silk
+    shell(it, prof, fn)
+    for az, z in ((-30, 0.5), (30, 0.4), (-12, 0.3), (12, 0.62), (-48, 0.66), (46, 0.55)):
+        shell_decal(it, prof, flower(5, 0.05, 0.4, 10), gold, az, z, 0.008)      # lotus motifs
+    sleeves(it, sleeve_profile(0.8, 0.152, cuff=0.01, cuff_h=0.05), stag(gold, silk))
+    finish_sleeves(it)
+    it.note = 'Long tunic (ao dai) to z 0.22 with a mandarin collar and lotus motifs; the slit shows white trousers.'
+    return it
+
+
+@builder
+def armor_aodai_man():
+    it = Item('armor_aodai_man')
+    gown = it.m('gown', '#23408F', 0.5)
+    gown_dark = it.m('gown dark', '#1A3070', 0.5)
+    gold = it.m('gold', '#FFC21E', 0.4)
+    collar = it.m('collar', '#F2D27A', 0.45)
+    prof = shirt_profile(0.28, 0.036, 0.035, flare_top=0.58, zs=(0.35, 0.45, 0.55, 0.7, 0.85, 0.97), bands=[(1.03, 1.075, 0.012)])
+
+    def fn(z, az, b, s):
+        if b == -2:
+            return gown_dark
+        if z > 1.03:
+            return collar
+        if z < 0.32:
+            return gold                          # the embroidered hem
+        return gown
+    shell(it, prof, fn)
+    for az, z in ((0, 0.8), (-30, 0.6), (30, 0.6), (0, 0.45), (-55, 0.82), (55, 0.82), (180, 0.7), (150, 0.55), (-150, 0.55)):
+        shell_decal(it, prof, circle(10, 0.04), gold, az, z, 0.008)                 # the round brocade medallions
+        shell_decal(it, prof, circle(10, 0.02), gown, az, z, 0.01, lift=0.009)
+    for z in (0.95, 0.85, 0.75):
+        shell_decal(it, prof, circle(6, 0.012), gold, 70, z, 0.006)                 # side fastening
+    sleeves(it, sleeve_profile(0.8, 0.152, cuff=0.01, cuff_h=0.06), stag(gold, gown))
+    finish_sleeves(it)
+    it.note = 'Traditional long gown to z 0.28, round brocade medallions and a gold stand collar.'
+    return it
+
+
+@builder
+def armor_usa():
+    it = Item('armor_usa')
+    red = it.m('red', '#D6283A', 0.5)
+    white = it.m('white', '#FFFDF7', 0.5)
+    blue = it.m('blue', '#1F3A8F', 0.5)
+    prof = shirt_profile(0.47, 0.036, 0.01, zs=(0.52, 0.58, 0.64, 0.7, 0.76, 0.82, 0.88, 0.94, 1.0))
+
+    def fn(z, az, b, s):
+        if b == -2:
+            return blue
+        if z > 0.78 and abs(az) < 75:
+            return blue                          # the star field across the chest
+        return red if int((z - 0.46) / 0.065) % 2 == 0 else white
+    shell(it, prof, fn)
+    for az, z in ((-26, 0.9), (0, 0.9), (26, 0.9), (-13, 0.83), (13, 0.83), (-40, 0.83), (40, 0.83), (-40, 0.97), (40, 0.97), (-13, 0.97), (13, 0.97)):
+        shell_decal(it, prof, star(5, 0.032, 0.014), white, az, z, 0.008)
+    sleeves(it, sleeve_profile(0.8, 0.156, cuff=0.01, cuff_h=0.07), lambda b, s: (blue if b <= 2 else (red if s % 2 else white)))
+    finish_sleeves(it)
+    it.note = 'Stars and stripes: a blue star field on the chest over red and white stripes.'
+    return it
+
+
+@builder
+def armor_vietnam():
+    it = Item('armor_vietnam')
+    red = it.m('red', '#DA251D', 0.5)
+    red_dark = it.m('red dark', '#B81A14', 0.5)
+    yellow = it.m('yellow', '#FFDD00', 0.4)
+    prof = shirt_profile(0.47, 0.036, 0.01, bands=[(0.46, 0.5, 0.012)])
+
+    def fn(z, az, b, s):
+        if b == -2 or z < 0.5:
+            return yellow if 0.46 <= z < 0.5 else red_dark
+        return red
+    shell(it, prof, fn)
+    shell_decal(it, prof, star(5, 0.17, 0.068), yellow, 0, 0.79, 0.014, lift=0.006)          # the big gold star on the chest
+    shell_decal(it, prof, star(5, 0.17, 0.068), yellow, 180, 0.79, 0.014, lift=0.006)        # and on the back
+    sleeves(it, sleeve_profile(0.8, 0.156, cuff=0.01, cuff_h=0.05), stag(yellow, red))
+    finish_sleeves(it)
+    it.note = 'Red shirt with a big five-point gold star front and back.'
     return it
 
 

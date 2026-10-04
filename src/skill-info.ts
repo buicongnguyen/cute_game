@@ -30,11 +30,23 @@ export const SPECIAL_INFO: Record<string, { damage: number; text: string; radius
   whirl: { damage: 1.4, radius: 4.4, text: 'Three cyclone pulses around you: ×{dmg} damage within 4.4 m each.' },
   starfall: { damage: 1.1, radius: 1.6, text: '12 stars fall around the nearest enemy, ×{dmg} damage within 1.6 m of each.' },
   inferno: { damage: 1.3, radius: 1.8, text: 'A ring of 10 fire bursts 3.6 m around you, ×{dmg} damage within 1.8 m of each.' },
+  volley: { damage: .7, text: 'Ten rapid shots fly 15 m ahead in one second, ×{dmg} damage each.' },
+  anchor: { damage: 2, radius: 4.4, text: 'Swing a heavy anchor all around you: ×{dmg} damage within 4.4 m, knocked back.' },
+  lotus: { damage: .8, text: 'Twelve lotus petals burst out all around you to 8 m, ×{dmg} damage each, and you heal 8% health.' },
+  dragon: { damage: 1.3, text: 'Seven waves in a wide fan fly 12 m, ×{dmg} damage each.' },
+  eagle: { damage: 1.8, radius: 3, text: 'Dive forward 9 m, then land in a burst: ×{dmg} damage within 3 m.' },
+  goldstar: { damage: 1.4, radius: 2.6, text: 'Five piercing gold stars fly 11 m, ×{dmg} damage each, with a 2.6 m burst around you.' },
   laser: { damage: 3, text: 'A 14 m rainbow beam straight ahead: ×{dmg} damage to everything in the line.' },
 };
 
 /** Disguise skills (fixed kits, never levelled), by disguise and slot. */
 export const DISGUISE_INFO: Record<string, readonly string[]> = {
+  dz_army: [SPECIAL_INFO.volley.text, 'Drop a machine-gun nest that shoots for 12 s.', 'Smoke within 5 m: enemies are blinded for 4 s and you vanish for 4 s.', 'Up to 6 rockets at enemies within 16 m: ×2 damage and a 2 m blast.'],
+  dz_navy: [SPECIAL_INFO.anchor.text, 'Hook the nearest enemy within 14 m and pull it to you: ×1.5 damage, stunned 2 s.', 'A broadside of 12 cannonballs around your target, ×1.5 damage within 2 m each.', SPECIAL_INFO.tsunami.text],
+  dz_aodai: [SPECIAL_INFO.lotus.text, 'Healing flowers for 8 s: stay within 4 m to heal 3% every half second.', 'Charm your target for 8 s: it fights the other creatures.', SPECIAL_INFO.starfall.text],
+  dz_aodai_man: [SPECIAL_INFO.dragon.text, 'Roar: enemies within 9 m flee in fear for 4 s.', 'Charge 11 m forward, untouchable, ×3 damage to every enemy on the way.', SPECIAL_INFO.thunder.text],
+  dz_usa: [SPECIAL_INFO.eagle.text, 'Raise your shield: no damage for 4 s.', 'Set a cannon that fires for 10 s.', SPECIAL_INFO.nova.text],
+  dz_vietnam: [SPECIAL_INFO.goldstar.text, 'Binding roots within 6 m: ×1 damage, stuck for 4 s, then 8 more pulses that heal you.', 'After 0.8 s a holy blade strikes your target: ×4 damage within 3.5 m, stuns 1 s.', SPECIAL_INFO.inferno.text],
   dz_superhero: ['Fly for 12 s (press again to land): ground attacks miss you.', 'Dive 4 m ahead and crash: ×2 damage within 5 m, ×4 if you were flying; stuns 1 s.', 'Twin eye lasers sweep a 13 m line, 1 m wide, across the front for 1.2 s: ×1 damage per touch, leaving scorch marks.', 'Throw a boulder after 0.8 s: ×3 damage, then a 4 m blast that stuns 2 s.'],
   dz_ninja: ['Two shadow clones fight beside you for 8 s.', 'Vanish for 5 s: enemies lose you, and your next hit does triple damage.', 'Blink behind the nearest enemy within 12 m: ×3 damage and stunned for 1 s.', 'Smoke within 5 m: enemies are blinded for 4 s and you vanish for 4 s.'],
   dz_mage: ['Charge 0.8 s, then a great fireball: ×3 damage and a 4 m blast that stuns 2 s.', 'Blink 8 m ahead.', 'Turn enemies within 3 m of your target into sheep for 6 s: tiny, slow and harmless.', 'A black hole near your target pulls enemies in for 3 s (5 m), then bursts for ×3 damage.'],
@@ -53,7 +65,7 @@ export interface SkillView { name: string; icon: string; cd: number }
  * special scale with their upgrade level; disguise skills use their fixed kit.
  */
 export function skillDescription(index: number, { special = 'fist', weaponKind, level = 0, disguise }: { special?: string; weaponKind?: string; level?: number; disguise?: string }): string {
-  if (disguise) { const text = DISGUISE_INFO[disguise]?.[index]; return text ? t(text) : ''; }
+  if (disguise) { const text = DISGUISE_INFO[disguise]?.[index], sp = Object.values(SPECIAL_INFO).find(i => i.text === text); return text ? t(text, sp ? { dmg: fix(sp.damage) } : {}) : ''; }
   const dmg = (base: number) => fix(base * skillTuning(index, level).damage);
   if (index === 0) return t('Spin for 2.2 s: 10 hits of ×{dmg} damage on every enemy within {r} m.', { dmg: dmg(.55), r: fix(whirlRadius(weaponKind, level)) });
   if (index === 1) return t('Rush {d} m forward, untouchable, striking each enemy on the way once for ×{dmg} damage.', { d: fix(DASH_LENGTH), dmg: dmg(1.7) });

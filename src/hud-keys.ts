@@ -18,7 +18,7 @@ export const guideFolded = (m: KeysGuideMemory) => m.mode === 'closed' || m.mode
 const key = (k: string) => `<kbd>${k === ' ' ? 'Space' : k.length === 1 ? k.toUpperCase() : k}</kbd>`;
 /** The guide's rows for a layout ('classic' arrows + QWER, or 'wasd' + JKL;). */
 export function keysGuideHtml(layout: string | undefined, folded: boolean) {
-  const b = keyboardBindings(layout), wasd = layout === 'wasd';
+  const b = keyboardBindings(layout), wasd = layout !== 'classic';
   const rows: [string, string][] = [
     [t('Move'), wasd ? ['W', 'A', 'S', 'D'].map(key).join('') : ['↑', '←', '↓', '→'].map(key).join('')],
     [t('Basic attack'), key(' ')], [t('Skills'), b.skills.map(key).join('')], [t('Interact'), key('f')],

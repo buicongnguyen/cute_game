@@ -4,6 +4,7 @@ import { parseHelper, type HelperState } from './helper-state.ts';
 import { parseFriends, parseBosses, noteBossDefeat, type Friend } from './friends-state.ts';
 import { parseHouse, type HouseState } from './house-activities.ts';
 import { parseLooks, type Looks } from './looks.ts';
+import { uniformSpecial } from './uniform-skills.ts';
 import { dropUnownedFriendLooks } from './friend-looks.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
@@ -162,7 +163,7 @@ export interface SaveState {
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
-export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 3, forge: {}, nextPlantId: 0, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, lowGraphics: false, difficulty: 'easy' }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now(), welcome: 'pending' }; }
+export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 3, forge: {}, nextPlantId: 0, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, lowGraphics: false, difficulty: 'easy' }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now(), welcome: 'pending', looks: { owned: ['tall'], style: 'girl-tall-none-bare' } }; }
 export function xpNeeded(level: number) { return Math.round(25 * Math.pow(Math.max(1, level), 1.55)); }
 function equipped(s: SaveState) { return Object.values(s.gear).map(id => ITEMS[id]).filter(Boolean); }
 // Bench levels (upgrades.ts) scale an item's own flat stats.
@@ -177,7 +178,10 @@ export function activeStats(s: SaveState, now = Date.now()) {
 }
 export function weaponStats(s: SaveState): WeaponDef {
     const weapon = (s.gear.disguise && DISGUISES[s.gear.disguise]?.weapon) || (s.gear.weapon && ITEMS[s.gear.weapon]?.weapon);
-    return { kind: 'fist', range: 1, cd: .5, special: 'fist', ...(weapon || {}) };
+    const stats: WeaponDef = { kind: 'fist', range: 1, cd: .5, special: 'fist', ...(weapon || {}) };
+    // A uniform in the outfit slot brings its own fighting skill (uniform-skills.ts) in place of the weapon's special.
+    const uniform = !s.gear.disguise && stats.kind !== 'rod' ? uniformSpecial(s.gear.outfit) : undefined;
+    return uniform ? { ...stats, special: uniform } : stats;
 }
 export function activeBuffs(s: SaveState, now = Date.now()) { return Object.entries(s.buffs).filter(([, b]) => b && b.expiresAt > now).map(([id, b]) => ({ id, name: ({ atk: 'Attack', def: 'Defense', haste: 'Attack speed', regen: 'Regeneration', speed: 'Movement speed', crit: 'Critical chance', xp: 'Experience', magnet: 'Loot magnet', luck: 'Luck', light: 'Light', fireres: 'Fire resistance', lifesteal: 'Life steal' } as Record<string, string>)[id], icon: ITEMS[b!.source]?.icon || '✨', remaining: (b!.expiresAt - now) / 1000, description: `${ITEMS[b!.source]?.name || 'Effect'} · ${b!.value}` })); }
 export function addBuff(s: SaveState, buff: BuffDef, source = 'effect', now = Date.now()) {
@@ -827,7 +831,7 @@ export function parseSave(raw: string | null): SaveState | null {
         const friends = parseFriends(v.friends), bosses = parseBosses(v.bosses); if (friends.length) s.friends = friends;
         // Gear given before borrowing (ab819d1) left the bag: put that copy back once, so taking it off or the cook's change of clothes never destroys it.
         for (const f of friends) if (!f.borrowed) { for (const item of Object.values(f.gear)) if (item && !(s.bag[item] ?? 0)) addItem(s, item); f.borrowed = true; } if (bosses.length) s.bosses = bosses; const house = parseHouse(v.house); if (house) s.house = house;
-        const looks = parseLooks(v.looks); if (looks) s.looks = looks;
+        const looks = parseLooks(v.looks); if (looks) s.looks = looks; else delete s.looks; // older saves keep the look they had: the default hero
         dropUnownedFriendLooks(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
         if (record(v.collection))

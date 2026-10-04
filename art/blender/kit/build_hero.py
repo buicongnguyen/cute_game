@@ -53,12 +53,14 @@ TAGS = PARTS + ('hand-right',)
 DISGUISES = [('dz_ninja', 'Shadow ninja'), ('dz_mage', 'Archmage'), ('dz_knight', 'Sun knight'),
              ('dz_mecha', 'Battle robot'), ('dz_dino', 'Tyrannosaur'), ('dz_fairy', 'Flower fairy'),
              ('dz_pirate', 'Pirate captain'), ('dz_superhero', 'Superhero'), ('dz_vampire', 'Vampire count'),
-             ('dz_snowman', 'Snowman')]
+             ('dz_snowman', 'Snowman'), ('dz_army', 'Army soldier'), ('dz_navy', 'Navy sailor'),
+             ('dz_aodai', 'Ao dai lady'), ('dz_aodai_man', 'Ao dai gentleman'), ('dz_usa', 'Stars and stripes'),
+             ('dz_vietnam', 'Vietnam flag')]
 DISGUISE_IDS = [d for d, _ in DISGUISES]
 HERO_MATERIALS = ['Hero skin', 'Hero hair', 'Hero shirt', 'Hero shirt shade', 'Hero pants', 'Hero shoe', 'Hero eye',
                   'Hero blush', 'Hero bag', 'Hero leaf']
 HERO_TRI_LIMIT, HERO_GLB_LIMIT = 3500, 200 * 1024
-DZ_TRI_LIMIT, DZ_GLB_LIMIT = 2500, 600 * 1024
+DZ_TRI_LIMIT, DZ_GLB_LIMIT = 2500, 900 * 1024
 ICON_LIMIT = 8 * 1024
 PIVOT_TOL, ENVELOPE_TOL = 0.001, 0.02
 SHIRT = '#4AA8FF'           # COLORS[0] in src/model.ts; the game recolours 'Hero shirt'
@@ -1682,9 +1684,163 @@ def dz_snowman():
     return k
 
 
+# ------------------------------------------------------- national and uniform costumes
+def front_star(k, piece, part, mat, point, normal, r_out, thick=0.02):
+    """A raised five-point star standing on a surface at `point`."""
+    k.add(piece, part, star_solid(5, r_out, r_out * 0.42, thick, 0.008).retag(mat).transformed(facing(point, normal)))
+
+
+def uniform_limbs(k, sleeve, glove_mat, trouser, trouser_tag=None, shoe=None, shoe_tag=None, bottom=0.3, shaft=0.36):
+    """Sleeves and gloves on both arms, trousers and shoes on both legs. sleeve/trouser are materials,
+    *_tag(z) pick a different material per band."""
+    for side, part in ((-1, 'arm-left'), (1, 'arm-right')):
+        k.add('sleeve', part, shell_arm(side, 0.028, tag=(lambda z: None) if sleeve is None else (lambda z, s=sleeve: s)), sleeve)
+        k.add('sleeve', part, glove(side, 0.024), glove_mat)
+    for side, part in ((-1, 'leg-left'), (1, 'leg-right')):
+        k.add('trousers', part, shell_leg(side, 0.026, bottom=bottom, rows=3), trouser)
+        k.add('shoes', part, boot(side, 0.03, shaft=shaft, tag=shoe_tag), shoe or trouser)
+
+
+def dz_army():
+    k = Costume('dz_army', 'army')
+    olive = k.m('olive', '#6B7A3A', 0.6)
+    olive_dark = k.m('olive dark', '#566330', 0.6)
+    red = k.m('red', '#E0262B', 0.45)
+    gold = k.m('gold', '#FFC21E', 0.3, 0.2)
+    belt = k.m('belt', '#4A3A22', 0.5)
+    boots = k.m('boots', '#2E2A22', 0.5)
+    # A pith helmet: wide low crown with a brim, a green band and the red star in front.
+    k.add('helmet', 'head', hood(0.675, (37, 29, 8.0, 2.6), trim=olive_dark, lip_in=0.64), olive)
+    k.add('helmet', 'head', band_on_hood(0.675, 1.87, 1.936), olive_dark)
+    sd = Vector((0, -1, 0.72)).normalized()
+    front_star(k, 'helmet', 'head', red, on_head(sd, 0.685), sd, 0.11)
+    def rr(phi, z):
+        return env_r(max(z, 0.525)) + 0.04 + 0.03 * smoothstep(0.6, 0.44, z)
+    k.add('jacket', 'body', shell_torso(bottom=0.44, rows=7, segs=20, radius=rr, lip_tag=olive_dark,
+                                        tag=lambda phi, z: belt if 0.58 <= z < 0.66 else None), olive)
+    front_star(k, 'jacket', 'body', gold, (0, -(env_r(0.9) + 0.044), 0.92), (0, -1, 0.15), 0.07)
+    k.add('jacket', 'body', ellipsoid((0, -(rr(0, 0.62) + 0.004), 0.62), (0.06, 0.02, 0.04), segs=8, rings=3), gold)
+    k.add('pack', 'body', pack_cover(radius=0.06), olive_dark)
+    uniform_limbs(k, olive, olive_dark, olive_dark, shoe=boots, bottom=0.34)
+    return k
+
+
+def dz_navy():
+    k = Costume('dz_navy', 'navy')
+    white = k.m('white', '#FFFDF7', 0.55)
+    navy = k.m('navy', '#1E3A8A', 0.5)
+    red = k.m('red', '#E0262B', 0.45)
+    gold = k.m('gold', '#FFC21E', 0.3, 0.2)
+    # A white sailor cap: a flat round crown over a navy band, with a gold anchor badge.
+    k.add('cap', 'head', lathe([(0.0, 2.2), (0.4, 2.18), (0.56, 2.1), (0.64, 1.98), (0.62, 1.9)], 20).solidify(0.02), white)
+    k.add('cap', 'head', lathe([(0.625, 1.9), (0.64, 1.9), (0.655, 1.97), (0.64, 1.98)], 20), navy)
+    k.add('cap', 'head', ellipsoid(None, (0.05, 0.02, 0.05), segs=8, rings=4, m=facing((0, -0.655, 2.04), (0, -1, 0.1))), gold)
+    def rr(phi, z):
+        return env_r(max(z, 0.525)) + 0.04
+    k.add('suit', 'body', shell_torso(bottom=0.46, rows=7, segs=20, radius=rr, lip_tag=navy,
+                                      tag=lambda phi, z: navy if (z > 1.04 and abs(math.remainder(phi, math.tau)) > 0.3) else None), white)
+    kp = (0, -(env_r(0.98) + 0.05), 0.98)
+    k.add('suit', 'body', ellipsoid(kp, (0.05, 0.035, 0.035), segs=8, rings=3), red)
+    k.add('pack', 'body', pack_cover(radius=0.06), white)
+    uniform_limbs(k, white, navy, white, shoe=navy)
+    return k
+
+
+def dz_aodai():
+    k = Costume('dz_aodai', 'aodai')
+    silk = k.m('silk', '#FF8FB1', 0.45)
+    silk_dark = k.m('silk dark', '#E86A92', 0.45)
+    gold = k.m('gold', '#FFC21E', 0.3, 0.2)
+    straw = k.m('straw', '#F2DDA0', 0.6)
+    straw_dark = k.m('straw band', '#C9503C', 0.5)
+    white = k.m('white', '#FFFDF7', 0.5)
+    # A conical palm-leaf hat (non la) with a red chin band.
+    cone = [(0.0, 2.66), (0.3, 2.4), (0.62, 2.13), (0.9, 1.98), (0.93, 1.955)]
+    k.add('hat', 'head', lathe(cone, 18, tag=lambda j: straw_dark if j == 3 else None).solidify(0.02), straw)
+    # A long tunic (ao dai) down to the shins over white trousers.
+    def rr(phi, z):
+        return env_r(max(z, 0.525)) + 0.036 + 0.05 * smoothstep(0.7, 0.2, z)
+    k.add('dress', 'body', shell_torso(bottom=0.2, rows=9, segs=20, radius=rr, lip_tag=silk_dark,
+                                       tag=lambda phi, z: gold if z > 1.08 else (silk_dark if z < 0.3 else None)), silk)
+    for az, z in ((-30, 0.6), (28, 0.45), (-8, 0.34), (10, 0.78)):
+        r = rr(0, z) + 0.004
+        front_star(k, 'dress', 'body', gold, (r * math.sin(RAD(az)), -r * math.cos(RAD(az)), z), (math.sin(RAD(az)), -math.cos(RAD(az)), 0.1), 0.045, 0.012)
+    k.add('pack', 'body', pack_cover(radius=0.06), silk_dark)
+    uniform_limbs(k, silk, gold, white, shoe=silk_dark, bottom=0.34)
+    return k
+
+
+def dz_aodai_man():
+    k = Costume('dz_aodai_man', 'aodai man')
+    gown = k.m('gown', '#23408F', 0.5)
+    gown_dark = k.m('gown dark', '#1A3070', 0.5)
+    gold = k.m('gold', '#FFC21E', 0.3, 0.2)
+    black = k.m('black', '#1E1A24', 0.4)
+    white = k.m('white', '#FFFDF7', 0.5)
+    # A black turban (khan dong): a tall wound crown with a gold band and a gold roundel in front.
+    k.add('turban', 'head', lathe([(0.0, 2.42), (0.4, 2.36), (0.6, 2.2), (0.68, 2.0), (0.64, 1.9)], 20).solidify(0.03), black)
+    k.add('turban', 'head', lathe([(0.63, 1.91), (0.7, 1.97), (0.7, 2.04), (0.63, 2.0)], 20), gold)
+    front_star(k, 'turban', 'head', gold, (0, -0.71, 2.2), (0, -1, 0.15), 0.08, 0.014)
+    def rr(phi, z):
+        return env_r(max(z, 0.525)) + 0.036 + 0.04 * smoothstep(0.7, 0.3, z)
+    k.add('gown', 'body', shell_torso(bottom=0.26, rows=9, segs=20, radius=rr, lip_tag=gold,
+                                      tag=lambda phi, z: gold if (z > 1.08 or z < 0.32) else None), gown)
+    for az, z in ((0, 0.82), (-28, 0.6), (28, 0.6), (0, 0.44)):
+        r = rr(0, z) + 0.004
+        k.add('gown', 'body', ellipsoid((r * math.sin(RAD(az)), -r * math.cos(RAD(az)), z), (0.04, 0.012, 0.04), segs=8, rings=3, m=None), gold)
+    k.add('pack', 'body', pack_cover(radius=0.06), gown_dark)
+    uniform_limbs(k, gown, gold, white, shoe=black, bottom=0.34)
+    return k
+
+
+def dz_usa():
+    k = Costume('dz_usa', 'usa')
+    red = k.m('red', '#D6283A', 0.5)
+    white = k.m('white', '#FFFDF7', 0.5)
+    blue = k.m('blue', '#1F3A8F', 0.5)
+    # Uncle Sam's top hat: a blue crown with a red-and-white band and white stars, and a wide brim.
+    crown = [(0.0, 2.52), (0.42, 2.52), (0.45, 2.48), (0.45, 1.99), (0.5, 1.96)]
+    k.add('hat', 'head', lathe(crown, 20, tag=lambda j: white if j == 0 else None).solidify(0.02), blue)
+    k.add('hat', 'head', lathe([(0.455, 2.0), (0.455, 2.1), (0.45, 2.1), (0.45, 2.0)], 20).solidify(0.01), red)
+    brim = [(0.5, 1.97), (0.78, 1.985), (0.8, 1.99)]
+    k.add('hat', 'head', lathe(brim, 20).solidify(0.02), white)
+    for a in (-60, 0, 60):
+        ar = RAD(a)
+        front_star(k, 'hat', 'head', white, (0.46 * math.sin(ar), -0.46 * math.cos(ar), 2.3), (math.sin(ar), -math.cos(ar), 0), 0.055, 0.01)
+    def rr(phi, z):
+        return env_r(max(z, 0.525)) + 0.04
+    stripes = lambda phi, z: blue if (z > 0.84 and abs(math.remainder(phi, math.tau)) < 1.35) else (red if int((z - 0.44) / 0.1) % 2 == 0 else None)
+    k.add('shirt', 'body', shell_torso(bottom=0.44, rows=9, segs=20, radius=rr, lip_tag=blue, tag=stripes), white)
+    for az, z in ((-24, 0.98), (24, 0.98), (0, 0.88)):
+        r = rr(0, z) + 0.004
+        front_star(k, 'shirt', 'body', white, (r * math.sin(RAD(az)), -r * math.cos(RAD(az)), z), (math.sin(RAD(az)), -math.cos(RAD(az)), 0.1), 0.04, 0.01)
+    k.add('pack', 'body', pack_cover(radius=0.06), blue)
+    uniform_limbs(k, white, red, blue, shoe=red, bottom=0.34)
+    return k
+
+
+def dz_vietnam():
+    k = Costume('dz_vietnam', 'vietnam')
+    red = k.m('red', '#DA251D', 0.5)
+    red_dark = k.m('red dark', '#B81A14', 0.5)
+    yellow = k.m('yellow', '#FFDD00', 0.35, 0.1)
+    # A red headband with a gold star, over a red shirt carrying a big gold star.
+    k.add('band', 'head', band_on_hood(0.675, 1.87, 1.99), red)
+    sd = Vector((0, -1, 0.5)).normalized()
+    front_star(k, 'band', 'head', yellow, on_head(sd, 0.69), sd, 0.12, 0.018)
+    def rr(phi, z):
+        return env_r(max(z, 0.525)) + 0.04
+    k.add('shirt', 'body', shell_torso(bottom=0.44, rows=7, segs=20, radius=rr, lip_tag=yellow, tag=lambda phi, z: yellow if z < 0.5 else None), red)
+    front_star(k, 'shirt', 'body', yellow, (0, -(rr(0, 0.82) + 0.002), 0.82), (0, -1, 0.15), 0.22, 0.022)
+    k.add('pack', 'body', pack_cover(radius=0.06), red_dark)
+    uniform_limbs(k, red, yellow, red_dark, shoe=yellow, bottom=0.34)
+    return k
+
+
 BUILDERS = {'dz_ninja': dz_ninja, 'dz_mage': dz_mage, 'dz_knight': dz_knight, 'dz_mecha': dz_mecha,
             'dz_dino': dz_dino, 'dz_fairy': dz_fairy, 'dz_pirate': dz_pirate, 'dz_superhero': dz_superhero,
-            'dz_vampire': dz_vampire, 'dz_snowman': dz_snowman}
+            'dz_vampire': dz_vampire, 'dz_snowman': dz_snowman, 'dz_army': dz_army, 'dz_navy': dz_navy,
+            'dz_aodai': dz_aodai, 'dz_aodai_man': dz_aodai_man, 'dz_usa': dz_usa, 'dz_vietnam': dz_vietnam}
 
 
 def build_costume(did, prefix=''):

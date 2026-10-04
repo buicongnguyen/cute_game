@@ -9,6 +9,8 @@ const DISGUISE: Record<string, readonly Sound[]> = {
   dz_knight: ['magic', 'swing', 'alert', 'magic'], dz_mecha: ['shock', 'zap', 'zap', 'magic'], dz_dino: ['crit', 'swing', 'alert', 'boom'],
   dz_fairy: ['magic', 'magic', 'magic', 'magic'], dz_pirate: ['boom', 'snap', 'alert', 'boom'], dz_vampire: ['magic', 'poof', 'poof', 'magic'],
   dz_snowman: ['freeze', 'poof', 'freeze', 'freeze'],
+  dz_army: ['shoot', 'zap', 'poof', 'boom'], dz_navy: ['boom', 'snap', 'boom', 'splash'], dz_aodai: ['magic', 'magic', 'magic', 'magic'],
+  dz_aodai_man: ['swing', 'alert', 'swing', 'zap'], dz_usa: ['swing', 'magic', 'boom', 'shoot'], dz_vietnam: ['magic', 'magic', 'magic', 'boom'],
 };
 export function skillSound(index: number, disguise?: string, special = 'fist'): Sound {
   if (disguise) return DISGUISE[disguise]?.[index] ?? 'punch';

@@ -1,3 +1,4 @@
+const classic = <T extends { looks?: unknown }>(s: T) => { delete s.looks; return s; }; // a save from before the girl default
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -31,7 +32,7 @@ test('friends grow from half to 0.75 to 0.8 of the explorer, by days at home or 
 });
 
 test('harvests count toward growing up (60 a day at most), and the catch-up grows a friend who rested at home for days', () => {
-  const s = M.newGame(); s.level = 30; s.energy = 1e5; s.planet = M.CAGES.sprout.planet;
+  const s = classic(M.newGame()); s.level = 30; s.energy = 1e5; s.planet = M.CAGES.sprout.planet;
   M.grantDefeat(s, M.CAGES.sprout.boss, 1, true, () => .5, false); assert.equal(F.rescue(s, 'sprout', T0), true); s.planet = 'home'; F.arriveHome(s, { x: 0, z: 5 });
   const f = s.friends![0];
   for (let i = 0; i < 39; i++) { const plot = s.plots[0]; plot.crop = 'radish'; plot.plantedAt = T0 - M.CROPS.radish.duration - 1 - 300000; assert.ok(F.friendWork(s, 'sprout', { kind: 'harvest', index: 0 }, T0)); }
@@ -44,7 +45,7 @@ test('harvests count toward growing up (60 a day at most), and the catch-up grow
 });
 
 test('growth survives saving, and saves from before growth migrate from today\'s work', () => {
-  const s = M.newGame(); s.friends = [{ id: 'clover', role: 'farm', rescuedAt: T0, gear: {}, home: true, jobs: 77, grown: 1 }];
+  const s = classic(M.newGame()); s.friends = [{ id: 'clover', role: 'farm', rescuedAt: T0, gear: {}, home: true, jobs: 77, grown: 1 }];
   const back = M.parseSave(JSON.stringify(s))!; assert.equal(back.friends![0].jobs, 77); assert.equal(back.friends![0].grown, 1);
   const old = JSON.parse(JSON.stringify(s)); delete old.friends[0].jobs; delete old.friends[0].grown; old.friends[0].day = 5; old.friends[0].done = 12;
   const migrated = M.parseSave(JSON.stringify(old))!.friends![0]; assert.equal(migrated.jobs, 12); assert.equal(friendStage(migrated), 0);
@@ -54,14 +55,14 @@ test('growth survives saving, and saves from before growth migrate from today\'s
 test('a grown friend is drawn at its stage, and the friend panel shows the stage', async () => {
   for (const stage of [0, 1, 2]) assert.equal(buildFriend('pepper', {}, stage).scale.x, friendScale(stage));
   const { growthLine } = await import('../src/friend-ui.ts');
-  const s = M.newGame(); s.friends = [{ id: 'pepper', role: 'cook', rescuedAt: T0, gear: {}, home: true, jobs: 50, grown: 1 }];
+  const s = classic(M.newGame()); s.friends = [{ id: 'pepper', role: 'cook', rescuedAt: T0, gear: {}, home: true, jobs: 50, grown: 1 }];
   assert.match(growthLine(s, 'pepper'), /0\.75/); assert.match(growthLine(s, 'pepper'), /150 harvests or collections/); assert.match(growthLine(s, 'pepper'), /3 days after the rescue/);
   s.friends[0].grown = 2; assert.match(growthLine(s, 'pepper'), /fully grown/);
 });
 
 // ----------------------------------------------------------------- looks
 test('looks: body, height, ears and head decoration combine; options are bought once, for every body, and switching is free', () => {
-  const s = M.newGame(); s.energy = 1000;
+  const s = classic(M.newGame()); s.energy = 1000;
   assert.equal(LOOK_IDS.length, 4 * 5 * 3 * 13); assert.equal(new Set(LOOK_IDS).size, LOOK_IDS.length);
   assert.equal(lookOf(s), DEFAULT_LOOK); assert.equal(DEFAULT_LOOK, 'boy-chibi-none-bare');
   assert.deepEqual(ROWS.body, ['boy', 'girl', 'sturdy', 'slim']); assert.deepEqual(ROWS.height, ['tiny', 'chibi', 'teen', 'tall', 'grown']);
@@ -89,7 +90,7 @@ test('looks: body, height, ears and head decoration combine; options are bought 
 });
 
 test('looks are saved; first-builder ids and old single looks migrate; tampered saves fall back to the default', () => {
-  const s = M.newGame(); s.energy = 1000; buyLook(s, 'boy-teen-cat-koala');
+  const s = classic(M.newGame()); s.energy = 1000; buyLook(s, 'boy-teen-cat-koala');
   const back = M.parseSave(JSON.stringify(s))!; assert.deepEqual(back.looks, { owned: ['teen', 'cat', 'koala'], style: 'boy-teen-cat-koala' });
   const old = JSON.parse(JSON.stringify(s)); delete old.looks; assert.equal(lookOf(M.parseSave(JSON.stringify(old))!), DEFAULT_LOOK);
   // The first builder's three-part ids gain no decoration.
@@ -261,7 +262,7 @@ test('an explorer wearing a hood and a hat shows the hat only; the hood comes ba
 // ------------------------------------------------------------- presence
 function world() {
   return Object.assign(Object.create(World.prototype), {
-    state: M.newGame(), scene: new T.Scene(), camera: new T.PerspectiveCamera(40, 4 / 3, .5, 300), root: new T.Group(), player: new T.Group(), companion: new T.Group(), position: new T.Vector3(),
+    state: classic(M.newGame()), scene: new T.Scene(), camera: new T.PerspectiveCamera(40, 4 / 3, .5, 300), root: new T.Group(), player: new T.Group(), companion: new T.Group(), position: new T.Vector3(),
     entities: [], enemies: [], planet: 'home',
   }) as World;
 }

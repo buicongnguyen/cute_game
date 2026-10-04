@@ -1,5 +1,5 @@
 import type { GameBridge, NetworkDrop } from './game-bridge.ts';
-import { newGame, type SaveState, type PlanetId, type Difficulty } from './model.ts';
+import { newGame, cropProgress, ITEMS, type SaveState, type PlanetId, type Difficulty } from './model.ts';
 import type { LookId } from './looks.ts';
 import './online.css';
 import { t, onLanguageChange } from './i18n.ts';
@@ -111,11 +111,20 @@ export function initOnline(game:GameBridge) {
     if(!sameRoom){captureChatDraft();chatReady=false;refreshChatControls();}return true;
   }
 
+  /** Gifts: pick things from your bag to hand a friend (server: friends only, a daily limit; it lands in their chest). */
+  function giftPicker(friendId:string,box:HTMLElement){
+    box.replaceChildren(el('h4','',t('Give from your bag')));
+    const bag=Object.entries(game.getState().bag).filter(([id,n])=>(n??0)>0&&ITEMS[id]).sort((a,b)=>(b[1]??0)-(a[1]??0)).slice(0,16);
+    if(!bag.length){box.append(el('p','social-small',t('Your bag is empty.')));return;}
+    const list=el('div','social-actions');
+    for(const [id,n] of bag)list.append(button(`${t(ITEMS[id].name)} ×${n}`,async()=>{try{await queueAction({type:'giftFriend',payload:{ownerId:friendId,item:id,count:1}});announce('Gift sent!');giftPicker(friendId,box);}catch(error){announce((error as Error).message);}}));
+    box.append(list);
+  }
   function openPlayer(id:string){
     const player=players.get(id);if(!player||id===account?.id)return;captureChatDraft();render();dialog.showModal();
     const card=el('section','social-player-card'),title=el('h3','',player.name),actions=el('div','social-actions');card.append(title);
     if(player.username)card.append(el('p','social-small','@'+player.username));
-    if(friends.some(friend=>friend.id===id))actions.append(button('Visit garden',()=>{sendRoom({type:'visit',id});dialog.close();}));
+    if(friends.some(friend=>friend.id===id)){actions.append(button('Visit garden',()=>{sendRoom({type:'visit',id});dialog.close();}));const gifts=el('div','social-gifts');actions.append(button('Send a gift',()=>giftPicker(id,gifts)));card.append(gifts);}
     else actions.append(button('Send friend request',async()=>{try{await api('friends/request',{id});announce('Friend request sent.');}catch(error){announce((error as Error).message);}}));
     card.append(actions);content.prepend(card);
   }
@@ -149,6 +158,8 @@ export function initOnline(game:GameBridge) {
     world().onEnvironmentAction=action=>{send({type:'environmentAction',action});};
     game.setNetworkHooks({role,hit:()=>true,status:()=>true,moveTarget:()=>true,reportDamage:(enemyId,source)=>{if(role==='host')send({type:'damage',id:account?.id,source,enemyId});},visitCrop:index=>{
       const plot=world().state.plots[index];if(!visiting||!plot?.crop)return;
+      // A growing crop is watered (it ripens sooner for the owner); a ripe one can be picked as before.
+      if(cropProgress(plot)<1){void queueAction({type:'waterFriend',payload:{ownerId:visiting,index,generation:plot.generation}}).then(()=>announce('You watered the plant. It will ripen a little sooner!')).catch(error=>announce(error.message));return;}
       void queueAction({type:'stealCrop',payload:{ownerId:visiting,index,generation:plot.generation}}).catch(error=>announce(error.message));
     }});
   }
@@ -292,7 +303,7 @@ export function initOnline(game:GameBridge) {
       const add=el('form','social-inline'),input=el('input');input.placeholder=t('Friend’s username');input.setAttribute('aria-label',t('Friend username'));input.name='friend-username';input.maxLength=24;const submit=el('button','',t('Send request'));submit.type='submit';add.append(input,submit);add.addEventListener('submit',async event=>{event.preventDefault();try{await api('friends/request',{username:input.value});announce('Friend request sent.');input.value='';}catch(error){announce((error as Error).message);}});content.append(add);
       if(requests.length){content.append(el('h3','',t('Friend requests')));for(const friend of requests)content.append(personRow(friend,[button('Accept',()=>void friendAction('accept',friend.id)),button('Decline',()=>void friendAction('decline',friend.id))]));}
       content.append(el('h3','',t('Your friends')));if(!friends.length)content.append(el('p','social-small',t('Add a friend by username to visit each other’s gardens.')));
-      for(const friend of friends)content.append(personRow(friend,[button('Visit garden',()=>{sendRoom({type:'visit',id:friend.id});dialog.close();}),button('Remove friend',()=>void friendAction('remove',friend.id),'social-link')]));
+      for(const friend of friends){const gifts=el('div','social-gifts');content.append(personRow(friend,[button('Visit garden',()=>{sendRoom({type:'visit',id:friend.id});dialog.close();}),button('Send a gift',()=>giftPicker(friend.id,gifts)),button('Remove friend',()=>void friendAction('remove',friend.id),'social-link')]));content.append(gifts);}
     }else{
       content.append(el('h3','',account.name),el('p','',t('Username: {username}',{username:account.username||''})),el('p','social-small',t('Your progress saves to this server. Returning to offline play restores the adventure you left there.')),button('Save now',async()=>{queueSave(game.getState());await flushSave();if(account)announce(pendingSave()?'Save pending. Please keep this page open.':'Online adventure saved.');}),button('Reconnect',reconnectOnline),button('Sign out and play offline',()=>void signOut(),'social-primary'));
     }
