@@ -18,17 +18,17 @@ const DAY = 86_400_000, T0 = 1_000_000_000;
 const act = (s: M.SaveState, type: string, payload: Record<string, unknown> = {}, now = T0) => applyGameAction(s, { type, payload }, { now, random: () => .5 });
 
 // ---------------------------------------------------------------- growth
-test('friends grow from half to 0.75 to 0.8 of the explorer, by days at home or jobs done, and never shrink', () => {
+test('friends grow from half to 0.75 to the full height of the explorer, by days at home or jobs done, and never shrink', () => {
   const f: F.Friend = { id: 'sprout', role: 'garden', rescuedAt: T0, gear: {}, home: true };
-  assert.deepEqual(GROWTH.map(g => g.height), [.5, .75, .8]);
+  assert.deepEqual(GROWTH.map(g => g.height), [.5, .75, 1]);
   assert.equal(earnedStage(f, T0), 0);
   assert.equal(earnedStage(f, T0 + DAY - 1), 0); assert.equal(earnedStage(f, T0 + DAY), 1); assert.equal(earnedStage(f, T0 + 3 * DAY), 2);
   assert.equal(earnedStage({ ...f, jobs: 39 }, T0), 0); assert.equal(earnedStage({ ...f, jobs: 40 }, T0), 1); assert.equal(earnedStage({ ...f, jobs: 150 }, T0), 2);
   assert.equal(earnedStage({ ...f, rescuedAt: 0 }, T0 + 9 * DAY), 0, 'an unknown rescue time never counts as days');
   assert.equal(growUp(f, T0 + DAY), true); assert.equal(friendStage(f), 1); assert.equal(growUp(f, T0 + DAY), false, 'the moment fires once');
   f.rescuedAt = T0 + 5 * DAY; assert.equal(growUp(f, T0), false); assert.equal(friendStage(f), 1, 'a grown friend never shrinks');
-  assert.equal(friendScale(0), HERO_SCALE * .5); assert.equal(friendScale(1), HERO_SCALE * .75); assert.equal(friendScale(2), HERO_SCALE * .8);
-  assert.equal(friendHeight(9), .8);
+  assert.equal(friendScale(0), HERO_SCALE * .5); assert.equal(friendScale(1), HERO_SCALE * .75); assert.equal(friendScale(2), HERO_SCALE);
+  assert.equal(friendHeight(9), 1);
 });
 
 test('harvests count toward growing up (60 a day at most), and the catch-up grows a friend who rested at home for days', () => {
