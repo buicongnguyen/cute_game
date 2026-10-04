@@ -8,6 +8,7 @@ import { dropTree } from './dispose-tree.ts';
 import { lineFor, type LineScenario } from './friend-lines.ts';
 import { HIP, gaitSwing, newGait, stepGait, type Gait } from './walk-cycle.ts';
 import { RESCUE_REACH, cageCandidates } from './cage-spots.ts';
+import { idleAfter, idleChoice, lookFor, strollRoute, type Stop } from './friend-idle.ts';
 
 /**
  * Rescued friends in the world: the prisoners' cages by their bosses, the rescue, friends following the explorer home,
@@ -65,6 +66,8 @@ interface Actor {
   pose: FriendPose; task: FriendTask | null; workT: number; think: number; cookT: number; cheerT: number; pending: boolean; wander: number;
   /** Home trips: 0 working, 1 walking to the cottage door, 2 inside; `inT` seconds left inside, `jobs` done since the last visit, `tripAt` jobs before the next, `nice` seconds until a friendly word. */
   trip: 0 | 1 | 2; inT: number; jobs: number; tripAt: number; nice: number;
+  /** Idle life: seconds without a job, when it next does something, the stops of the stroll it is on and the seconds left looking at the current one. */
+  idleT: number; idleAt: number; stroll: Stop[]; look: number;
 }
 interface Cage { id: FriendId; group: T.Group; door: T.Object3D | null; prisoner: T.Group | null; entity: Entity; x: number; z: number; state: CageState; pop?: { t: number; vx: number; vz: number } }
 
@@ -172,7 +175,7 @@ export class FriendCrew {
     PROXY_BOX ??= new T.BoxGeometry(.5, 1.05, .5).translate(0, .52, 0); PROXY_BOX.userData.sharedKit = true;
     const box = new T.Mesh(PROXY_BOX); box.visible = false; proxy.add(box); this.fitProxy(proxy, stage);
     a = { id, root: this.dress(id, f), sig, entity: { id: 'friend:' + id, kind: 'friend', name: FRIENDS[id].name, icon: ICONS[f.role], mesh: proxy, x: 0, z: 0, radius: .35, index: FRIEND_IDS.indexOf(id) },
-      x: POSTS[id].x, z: POSTS[id].z, facing: 0, t: Math.random() * 9, gait: newGait(), swing: .6, pose: 'idle', task: null, workT: 0, think: 0, cookT: 0, cheerT: 0, pending: false, wander: 0, trip: 0, inT: 0, jobs: 0, tripAt: 2 + Math.floor(Math.random() * 3) + FRIEND_IDS.indexOf(id), nice: 6 + Math.random() * 10 };
+      x: POSTS[id].x, z: POSTS[id].z, facing: 0, t: Math.random() * 9, gait: newGait(), swing: .6, pose: 'idle', task: null, workT: 0, think: 0, cookT: 0, cheerT: 0, pending: false, wander: 0, trip: 0, inT: 0, jobs: 0, tripAt: 2 + Math.floor(Math.random() * 3) + FRIEND_IDS.indexOf(id), nice: 6 + Math.random() * 10, idleT: 0, idleAt: idleAfter(Math.random), stroll: [], look: 0 };
     this.group.add(a.root); this.actors.set(id, a); return a;
   }
   /** The same model as in the cottage (friend-view.ts friendModel): gear, work hat, look and growth stage. */
@@ -286,7 +289,23 @@ export class FriendCrew {
     if (act && !a.task && !a.pending && a.workT <= 0 && a.jobs >= a.tripAt && inVillage(a)) { a.trip = 1; this.speak(a, 'HOME'); return; }
     const tg = a.task && this.target(s, a, a.task);
     if (a.task && !tg) a.task = null;
-    if (a.task && tg) { if (this.walk(a, tg.stand, dt)) a.workT = WORK_TIME[a.task.kind] * (act ? 1 : 2); return; }
+    if (a.task && tg) { a.stroll = []; a.look = 0; a.idleT = 0; if (this.walk(a, tg.stand, dt)) a.workT = WORK_TIME[a.task.kind] * (act ? 1 : 2); return; }
+    // No job: now and then go home for a rest, or stroll round the farm and look at a few beds or animals, then back to the post.
+    if (act && !a.pending && a.cookT <= 0 && inVillage(a)) {
+      if (a.stroll.length) {
+        const stop = a.stroll[0];
+        if (a.look > 0) { a.look -= dt; this.turn(a, Math.atan2(stop.at.x - a.x, stop.at.z - a.z), dt); this.place(a, 'idle'); if (a.look <= 0) a.stroll.shift(); return; }
+        if (this.walk(a, stop, dt, 1.7, .05)) a.look = lookFor(Math.random);
+        return;
+      }
+      if ((a.idleT += dt) >= a.idleAt) {
+        a.idleT = 0; a.idleAt = idleAfter(Math.random);
+        if (idleChoice(Math.random) === 'home') { a.trip = 1; this.speak(a, 'HOME'); return; }
+        a.stroll = strollRoute(this.strollSpots(a.id, f, s), a, Math.random);
+        if (a.stroll.length && Math.random() < .5) this.speak(a, 'NICE');
+        return;
+      }
+    }
     // Back at the post: the cook stirs her pot after each gathering (and keeps a pot going while she waits).
     if (this.walk(a, post, dt)) {
       if (a.id === 'pepper') { a.cookT = Math.max(0, a.cookT - dt); this.turn(a, Math.atan2(1 - a.x, 10.5 - a.z), dt); this.place(a, 'cook'); }
@@ -307,6 +326,12 @@ export class FriendCrew {
     a.trip = 0; a.jobs = 0; a.tripAt = 3 + Math.floor(Math.random() * 3); a.x = COTTAGE_DOOR.x; a.z = COTTAGE_DOOR.z + .5; a.root.visible = true; this.setEntity(a, true);
     // Only when there is something new to wear: a fresh game has nothing, and asking anyway was a refused action every trip.
     if (f.role === 'cook' && this.host.own().friends?.includes(f) && canChangeOutfit(this.host.own(), a.id)) void this.host.perform<{ changed: boolean }>('friendOutfit', { id: a.id, pick: Math.random() }).then(r => { if (r?.changed) this.speak(a, 'OUTFIT'); });
+  }
+  /** What a helper likes to look round at: the beds (gardener), the animals (farmer), both (cook). */
+  private strollSpots(id: FriendId, f: Friend, s: M.SaveState) {
+    const beds = s.plots.map((_, i) => M.bedPosition(s, i)).filter((p): p is { x: number; z: number } => !!p);
+    const animals = M.penBuilt(s) ? M.farmOf(s).animals.filter(x => x.kind !== 'dog').map(x => this.host.animalAt(x.uid)).filter((p): p is { x: number; z: number } => !!p) : [];
+    void id; return f.role === 'farm' ? (animals.length ? animals : beds) : f.role === 'garden' ? beds : [...beds, ...animals];
   }
   private bedOf(id: FriendId) { const t = this.actors.get(id)?.task; return t && 'index' in t ? t.index : undefined; }
   /** For the status line and tests. */
