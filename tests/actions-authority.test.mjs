@@ -258,3 +258,27 @@ test('HTTP denies full profile overwrites and derives action identity from the a
   const reply=await api('actions','POST',intent,a.cookie);assert.equal(reply.status,200);assert.equal(reply.body.profile.name,'New name');assert.equal(reply.body.profile.energy,0);
   assert.equal((await f.store.get(a.body.account.id)).profile.name,'New name');
 });
+
+test('friends can gift items from the bag (chest + note, daily limit) and water growing crops once per plant',async t=>{
+  let at=2_000_000_000_000;t.mock.method(Date,'now',()=>at);const h=await service(t);
+  const actor=account('alice'),owner=account('owner'),stranger=account('eve');actor.friends=['owner'];owner.friends=['alice'];
+  owner.profile.level=30;actor.profile.bag.carrot=30;actor.profile.bag.radish=3;
+  assert.ok(Game.plant(owner.profile,0,'pumpkin',at-60_000));
+  await h.store.create(actor);await h.store.create(owner);await h.store.create(stranger);
+  // Gifts
+  const gift=await h.act('alice','giftFriend',{ownerId:'owner',item:'carrot',count:5});
+  assert.equal(gift.result.count,5);assert.equal(gift.profile.bag.carrot,25);
+  const given=(await h.store.get('owner')).profile;assert.equal(given.chest.carrot,5);assert.equal(given.awayStore.carrot,5);
+  await assert.rejects(h.act('alice','giftFriend',{ownerId:'eve',item:'carrot',count:1}),status(403),'not a friend');
+  await assert.rejects(h.act('alice','giftFriend',{ownerId:'owner',item:'carrot',count:99}),status(400));
+  await assert.rejects(h.act('alice','giftFriend',{ownerId:'owner',item:'nonsense',count:1}),status(400));
+  await assert.rejects(h.act('alice','giftFriend',{ownerId:'owner',item:'radish',count:4}),status(409),'more than you have');
+  // Watering needs a visit, range and a growing crop; once per plant per visitor
+  const plot=(await h.store.get('owner')).profile.plots[0],peer={planet:'home',room:'home',visit:null,pose:Game.bedPosition(owner.profile,0)};h.peers.set('alice',peer);
+  const payload={ownerId:'owner',index:0,generation:plot.generation};
+  await assert.rejects(h.act('alice','waterFriend',payload),status(403),'not visiting');peer.visit='owner';
+  const before=plot.plantedAt,watered=await h.act('alice','waterFriend',payload);
+  assert.ok(watered.result.seconds>0);assert.ok((await h.store.get('owner')).profile.plots[0].plantedAt<before);
+  await assert.rejects(h.act('alice','waterFriend',payload),status(409),'only once per plant');
+  await assert.rejects(h.act('alice','waterFriend',{...payload,generation:'old'}),status(409));
+});

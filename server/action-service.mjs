@@ -56,7 +56,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
     checkAccess?.();
     if(data?.rulesVersion!==ACTION_RULES_VERSION||!validId(data.type)||!data.payload||typeof data.payload!=='object'||Array.isArray(data.payload))fail(400,'This action needs the current game rules.');
     const intent={type:data.type,payload:data.payload},p=data.payload;
-    const relatedIds=['stealCrop','claimDrop','releaseDrop'].includes(data.type)&&validId(p.ownerId)?[p.ownerId]:[];
+    const relatedIds=['stealCrop','claimDrop','releaseDrop','giftFriend','waterFriend'].includes(data.type)&&validId(p.ownerId)?[p.ownerId]:[];
     let reservation;
     try {
     const committed=await store.command({actorId,requestId:data.requestId,expectedRevision:data.expectedRevision,actionType:data.type,hash:commandHash({rulesVersion:data.rulesVersion,...intent}),relatedIds,checkAccess,run:records=>{
@@ -85,6 +85,38 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
           owner.profile=target;ledger.count++;account.theftLedger[owner.id]=ledger;
           result={blocked:false,ownerId:owner.id,index:p.index,item,count:1,remaining:6-ledger.count};
         }
+      }else if(data.type==='giftFriend'){
+        // A gift from the bag to a friend: it lands in their chest and shows in their "while you were out" note.
+        const owner=records.get(p.ownerId);
+        if(!owner||owner.id===actorId||!account.friends.includes(owner.id)||!owner.friends.includes(actorId))fail(403,'Only friends can send gifts.');
+        const item=typeof p.item==='string'?Game.canonicalItem(p.item):'',count=p.count;
+        if(!Object.hasOwn(Game.ITEMS,item)||!Number.isSafeInteger(count)||count<1||count>20)fail(400,'Choose an item and how many to give.');
+        if((state.bag[item]??0)<count)fail(409,'You do not have enough of that to give.');
+        if(Object.values(state.gear).includes(item)&&(state.bag[item]??0)-count<1)fail(409,'Take it off before giving your last one away.');
+        const day=new Date(now).toISOString().slice(0,10),ledger=account.giftLedger?.day===day?account.giftLedger:{day,count:0};
+        if(ledger.count+count>60)fail(429,'You have given plenty of gifts today. Try again tomorrow.');
+        const target=Game.parseSave(JSON.stringify(owner.profile));if(!target)fail(409,'That friend could not be reached.');
+        if(!Number.isSafeInteger((target.chest[item]??0)+count)||!Number.isSafeInteger(((target.awayStore??{})[item]??0)+count))fail(409,'Their chest is full of that already.');
+        if(!Game.removeItem(state.bag,item,count))fail(409,'You do not have enough of that to give.');
+        target.chest[item]=(target.chest[item]??0)+count;(target.awayStore??={})[item]=(target.awayStore[item]??0)+count;
+        owner.profile=target;ledger.count+=count;account.giftLedger=ledger;
+        result={ownerId:owner.id,item,count};
+      }else if(data.type==='waterFriend'){
+        // Water a growing crop in a friend's garden you are visiting: it ripens a little sooner, once per visitor per plant.
+        const owner=records.get(p.ownerId);
+        if(!owner||owner.id===actorId||!account.friends.includes(owner.id)||!owner.friends.includes(actorId)||peer?.visit!==owner.id||peer.planet!=='home')fail(403,'Visit a friend’s garden to water their crops.');
+        const target=Game.parseSave(JSON.stringify(owner.profile)),plot=target?.plots[p.index];
+        if(!Number.isSafeInteger(p.index)||!plot||!plot.crop||p.generation!==plot.generation||distance(peer.pose,Game.bedPosition(target,p.index))>5)fail(409,'That crop is not here any more.');
+        if(Game.cropProgress(plot,now)>=1)fail(409,'That crop is already ripe.');
+        const live=new Set(target.plots.map((q,i)=>q.crop?`${i}:${q.generation}`:''));owner.watered??={};
+        for(const k of Object.keys(owner.watered))if(!live.has(k))delete owner.watered[k];
+        const key=`${p.index}:${plot.generation}`,by=owner.watered[key]??[];
+        if(by.includes(actorId))fail(409,'You already watered this plant.');
+        const day=new Date(now).toISOString().slice(0,10),ledger=account.waterLedger?.day===day?account.waterLedger:{day,count:0};
+        if(ledger.count>=30)fail(429,'You have watered plenty of plants today.');
+        const boost=Math.min(Game.cropDuration(plot)*.1,120000);plot.plantedAt-=boost;by.push(actorId);owner.watered[key]=by.slice(-8);
+        ledger.count++;account.waterLedger=ledger;Game.gainXp(state,2,now,1);owner.profile=target;
+        result={ownerId:owner.id,index:p.index,seconds:Math.round(boost/1000)};
       }else if(data.type==='fishHunt'){
         if(!peer?.active||peer.visit||account.journeyPaid||account.fishingTicket&&now-account.fishingTicket.startedAt<180000)fail(409,'Finish your cast and return to your own shore before hunting fish.');
         result=huntFish(state,p,peer.pose,now);

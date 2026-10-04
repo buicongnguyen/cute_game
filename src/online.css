@@ -155,3 +155,6 @@
   .social-auth { gap: 10px; }
   .social-dialog .social-link { margin-top: 8px; }
 }
+
+.social-gifts { margin-top: 8px; }
+.social-gifts h4 { margin: 0 0 6px; }
