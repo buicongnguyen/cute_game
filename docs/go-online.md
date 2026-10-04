@@ -19,5 +19,6 @@ Double-click `start-online.cmd` (or run `npm run share`). It builds the game if 
 - **Friends button** (the 👥 button, with a red number for new friend requests and new guest-diary entries): send a request by username or by tapping another explorer; accept or decline; **cancel** a request you sent; remove a friend.
 - **Go to a friend's house and garden** from the friends list. Water their growing plants (10% faster, once per plant, up to 30 a day), give them gifts from your bag, or pick a ripe crop. **Return to my garden** takes you back.
 - **Guest diary** (📒): the owner sees who visited, watered, gave a gift or picked a crop, and gets a pop-up message when it happens.
+- **Messages**: press "Message" on a friend (their card, or the friends list) to send a short private message, even if they are offline. It lands in their guest diary and pops up if they are playing. Everyone in the same world can also use the world chat.
 - **Shared wilds**: outside the safe circle everyone meets in one world (24 per world; use a private party for more) and fights together. Your own home area is yours alone, apart from guests.
 - Movement is sent as small changes to save bandwidth (about 70% less traffic in the load test).

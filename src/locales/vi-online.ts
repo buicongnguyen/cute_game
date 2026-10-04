@@ -215,4 +215,8 @@ export const VI_ONLINE: Record<string, string> = {
   'Cancel request': 'Hủy lời mời',
   'Friends who visit, water, or give gifts at your home show up here.': 'Bạn bè ghé thăm, tưới cây hay tặng quà ở nhà bạn sẽ hiện ở đây.',
   'No one has visited yet. Invite a friend to come and water your plants!': 'Chưa có ai ghé thăm. Rủ bạn sang tưới cây giúp nhé!',
+  'Message': 'Nhắn tin',
+  'Write a short message…': 'Viết một tin nhắn ngắn…',
+  'That message could not be delivered. Try again.': 'Không gửi được tin nhắn. Hãy thử lại.',
+  'Only friends can send messages.': 'Chỉ bạn bè mới nhắn tin được.',
 };

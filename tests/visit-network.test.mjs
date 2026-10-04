@@ -52,6 +52,11 @@ test('friends see each other when one visits, and a gift reaches their chest', a
   // The guest diary lists the visit and the gift for the owner, newest first.
   const diary = (await call(ann.cookie, 'auth/session')).data.visitLog;
   assert.deepEqual(diary.map(e => e.kind), ['gift', 'visit']); assert.equal(diary[0].name, 'visit_ben'); assert.equal(diary[0].what, 'carrot');
+  // A private message to a friend lands in their guest diary and pops up for them; strangers cannot send one.
+  ben.send({ type: 'dm', to: ann.id, text: 'Come and see my farm!' });
+  const popup = await ann.next(m => m.type === 'guestNotice' && m.entry.kind === 'message'); assert.equal(popup.entry.text, 'Come and see my farm!'); assert.equal(popup.entry.name, 'visit_ben');
+  assert.equal((await ben.next(m => m.type === 'dmSent')).ok, true);
+  assert.equal((await call(ann.cookie, 'auth/session')).data.visitLog[0].kind, 'message');
   // A friend request can be cancelled by the one who sent it.
   const eve = await explorer('visit_eve');
   assert.equal((await call(eve.cookie, 'friends/request', { id: ann.id })).status, 200);

@@ -6,7 +6,7 @@ import { t, onLanguageChange } from './i18n.ts';
 import {gameplayKey} from './gameplay-controls.ts';
 import type {GameIntent,ActionReply} from './actions.ts';
 
-interface GuestEntry { at:number;by:string;name:string;kind:'visit'|'water'|'gift'|'steal';what?:string;count?:number }
+interface GuestEntry { at:number;by:string;name:string;kind:'visit'|'water'|'gift'|'steal'|'message';what?:string;count?:number;text?:string }
 interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];look?:LookId;online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string;difficulty?:string }
 interface Home extends Explorer { discovered?:PlanetId[]; plots:SaveState['plots'];farm?:SaveState['farm'];placed?:unknown[];decorations?:unknown[];helper?:unknown;friends?:unknown[] }
 interface EnemyState { id:string;x:number;z:number;hp:number;maxHp:number;[key:string]:unknown }
@@ -112,6 +112,14 @@ export function initOnline(game:GameBridge) {
     if(!sameRoom){captureChatDraft();chatReady=false;refreshChatControls();}return true;
   }
 
+  /** A private message to a friend, online or not: it shows in their guest diary and pops up if they are playing. */
+  function messageForm(friendId:string,box:HTMLElement){
+    box.replaceChildren(el('h4','',t('Message')));
+    const form=el('form','social-inline'),input=el('input');input.maxLength=120;input.placeholder=t('Write a short message…');input.setAttribute('aria-label',t('Message'));input.name='friend-message';
+    const submit=el('button','',t('Send'));submit.type='submit';form.append(input,submit);
+    form.addEventListener('submit',event=>{event.preventDefault();const text=input.value.trim();if(!text)return;if(send({type:'dm',to:friendId,text})){input.value='';announce('Message sent.');}});
+    box.append(form);input.focus();
+  }
   /** Gifts: pick things from your bag to hand a friend (server: friends only, a daily limit; it lands in their chest). */
   function giftPicker(friendId:string,box:HTMLElement){
     box.replaceChildren(el('h4','',t('Give from your bag')));
@@ -125,7 +133,7 @@ export function initOnline(game:GameBridge) {
     const player=players.get(id);if(!player||id===account?.id)return;captureChatDraft();render();dialog.showModal();
     const card=el('section','social-player-card'),title=el('h3','',player.name),actions=el('div','social-actions');card.append(title);
     if(player.username)card.append(el('p','social-small','@'+player.username));
-    if(friends.some(friend=>friend.id===id)){actions.append(button('Visit garden',()=>{sendRoom({type:'visit',id});dialog.close();}));const gifts=el('div','social-gifts');actions.append(button('Send a gift',()=>giftPicker(id,gifts)));card.append(gifts);}
+    if(friends.some(friend=>friend.id===id)){actions.append(button('Visit garden',()=>{sendRoom({type:'visit',id});dialog.close();}));const gifts=el('div','social-gifts');actions.append(button('Send a gift',()=>giftPicker(id,gifts)),button('Message',()=>messageForm(id,gifts)));card.append(gifts);}
     else actions.append(button('Send friend request',async()=>{try{await api('friends/request',{id});announce('Friend request sent.');}catch(error){announce((error as Error).message);}}));
     card.append(actions);content.prepend(card);
   }
@@ -136,7 +144,7 @@ export function initOnline(game:GameBridge) {
   });
   /** One line for the guest diary and for the toast when a friend does something at your home. */
   function guestLine(e:GuestEntry){const what=e.what&&ITEMS[e.what]?t(ITEMS[e.what].name):'';
-    return e.kind==='water'?t('{name} watered your {item}!',{name:e.name,item:what}):e.kind==='gift'?t('{name} sent you a gift: {count} {item}',{name:e.name,count:e.count??1,item:what}):e.kind==='steal'?t('{name} picked your {item}!',{name:e.name,item:what}):t('{name} is visiting your garden',{name:e.name});}
+    return e.kind==='water'?t('{name} watered your {item}!',{name:e.name,item:what}):e.kind==='gift'?t('{name} sent you a gift: {count} {item}',{name:e.name,count:e.count??1,item:what}):e.kind==='steal'?t('{name} picked your {item}!',{name:e.name,item:what}):e.kind==='message'?`${e.name}: ${e.text??''}`:t('{name} is visiting your garden',{name:e.name});}
   const ago=(at:number)=>{const s=Math.max(0,(Date.now()-at)/1000);return s<60?t('just now'):s<3600?t('{n} min ago',{n:Math.floor(s/60)}):s<86400?t('{n} h ago',{n:Math.floor(s/3600)}):t('{n} d ago',{n:Math.floor(s/86400)});};
   function refreshButton(){const label=account?t(status,{code:party||''}):t('Play together');toggle.textContent=socialSlot?'👥':`👥 ${label}`;toggle.dataset.badge=String(requests.length+unreadLog||'');toggle.title=label;toggle.setAttribute('aria-label',t('Play together'));dialog.setAttribute('aria-label',t('Play together'));close.setAttribute('aria-label',t('Close online menu'));toggle.dataset.online=String(!!account);}
   function expireSession(){
@@ -246,6 +254,7 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='chatAck')acknowledgeChat(message.requestId,connection);
       else if(message.type==='chat'&&!restoring&&chatRoom){chat.push({name:String(message.name),message:String(message.message)});if(chat.length>60)chat.shift();if(dialog.open&&tab==='world')renderChat();else game.showNotice(`${message.name}: ${message.message}`);}
       else if(message.type==='friends'){const before=requests.length;friends=message.friends||[];requests=message.requests||[];sent=message.sent||[];visitLog=message.visitLog||visitLog;if(requests.length>before)announce('You have a new friend request!');refreshButton();if(dialog.open&&tab==='friends')render();}
+      else if(message.type==='dmSent'&&message.ok===false)announce('That message could not be delivered. Try again.');
       else if(message.type==='guestNotice'&&message.entry){const e=message.entry as GuestEntry;visitLog=[e,...visitLog].slice(0,30);unreadLog++;refreshButton();announce(guestLine(e));if(dialog.open&&tab==='diary'){unreadLog=0;render();}}
       else if(message.type==='visit'){
         chatReady=true;refreshChatControls();visiting=message.home?.id||null;
@@ -310,13 +319,13 @@ export function initOnline(game:GameBridge) {
     }else if(tab==='diary'){
       content.append(el('p','social-intro',t('Friends who visit, water, or give gifts at your home show up here.')));
       if(!visitLog.length)content.append(el('p','social-small',t('No one has visited yet. Invite a friend to come and water your plants!')));
-      for(const e of visitLog){const row=el('div','social-person');row.append(el('span','social-avatar',e.kind==='water'?'💧':e.kind==='gift'?'🎁':e.kind==='steal'?'🕵️':'👋'),el('span','',guestLine(e)),el('small','social-small',ago(e.at)));content.append(row);}
+      for(const e of visitLog){const row=el('div','social-person');row.append(el('span','social-avatar',e.kind==='water'?'💧':e.kind==='gift'?'🎁':e.kind==='steal'?'🕵️':e.kind==='message'?'💬':'👋'),el('span','',guestLine(e)),el('small','social-small',ago(e.at)));content.append(row);}
     }else if(tab==='friends'){
       const add=el('form','social-inline'),input=el('input');input.placeholder=t('Friend’s username');input.setAttribute('aria-label',t('Friend username'));input.name='friend-username';input.maxLength=24;const submit=el('button','',t('Send request'));submit.type='submit';add.append(input,submit);add.addEventListener('submit',async event=>{event.preventDefault();try{await api('friends/request',{username:input.value});announce('Friend request sent.');input.value='';}catch(error){announce((error as Error).message);}});content.append(add);
       if(requests.length){content.append(el('h3','',t('Friend requests')));for(const friend of requests)content.append(personRow(friend,[button('Accept',()=>void friendAction('accept',friend.id)),button('Decline',()=>void friendAction('decline',friend.id))]));}
       if(sent.length){content.append(el('h3','',t('Waiting for a reply')));for(const person of sent)content.append(personRow(person,[button('Cancel request',()=>void friendAction('cancel',person.id),'social-link')]));}
       content.append(el('h3','',t('Your friends')));if(!friends.length)content.append(el('p','social-small',t('Add a friend by username to visit each other’s gardens.')));
-      for(const friend of friends){const gifts=el('div','social-gifts');content.append(personRow(friend,[button('Visit garden',()=>{sendRoom({type:'visit',id:friend.id});dialog.close();}),button('Send a gift',()=>giftPicker(friend.id,gifts)),button('Remove friend',()=>void friendAction('remove',friend.id),'social-link')]));content.append(gifts);}
+      for(const friend of friends){const gifts=el('div','social-gifts');content.append(personRow(friend,[button('Visit garden',()=>{sendRoom({type:'visit',id:friend.id});dialog.close();}),button('Send a gift',()=>giftPicker(friend.id,gifts)),button('Message',()=>messageForm(friend.id,gifts)),button('Remove friend',()=>void friendAction('remove',friend.id),'social-link')]));content.append(gifts);}
     }else{
       content.append(el('h3','',account.name),el('p','',t('Username: {username}',{username:account.username||''})),el('p','social-small',t('Your progress saves to this server. Returning to offline play restores the adventure you left there.')),button('Save now',async()=>{queueSave(game.getState());await flushSave();if(account)announce(pendingSave()?'Save pending. Please keep this page open.':'Online adventure saved.');}),button('Reconnect',reconnectOnline),button('Sign out and play offline',()=>void signOut(),'social-primary'));
     }

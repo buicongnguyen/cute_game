@@ -118,6 +118,17 @@ export async function createGameServer(options = {}) {
     await Promise.all([...new Set([...account.friends, ...account.requests])].map(async id => remember(await store.get(id))));
     return friendList(account);
   }
+  /** Writes one entry in an owner's guest diary (visit, message) and tells them at once; false if the account was busy. */
+  async function noteGuest(ownerId, entry) {
+    try {
+      const committed = await store.command({ actorId: ownerId, requestId: randomUUID(), hash: commandHash({ type: 'guestNote', ownerId, entry }), expectedRevision: accounts.get(ownerId)?.profileRevision || 0, actionType: 'guestNote',
+        run: records => { logGuest(records.get(ownerId), entry); return true; } });
+      committed.accounts.forEach(remember);
+      const owner = accounts.get(ownerId), ownerPeer = peers.get(ownerId);
+      if (owner && ownerPeer) { send(ownerPeer.socket, { type: 'profile', profile: owner.profile, revision: owner.profileRevision, authorityVersion: 1 }); send(ownerPeer.socket, { type: 'guestNotice', entry: owner.visitLog?.[0] }); }
+      return true;
+    } catch { return false; }
+  }
   function tellFriends(account) { const peer = peers.get(account.id); if (peer) send(peer.socket, { type: 'friends', ...friendList(account) }); }
   function broadcast(room, payload, except) { payload = JSON.stringify(payload); /* once for everyone in the room */ for (const id of room.members) { if (id !== except) { const peer = peers.get(id); if (peer) send(peer.socket, payload); } } }
   function visibleDrop(peer,drop){const space=drop.space||(drop.planet==='home'&&Math.hypot(drop.x,drop.z)<18?`home:${drop.ownerId}`:'wild');return !peer.visit&&drop.room===peer.room&&drop.planet===peer.planet&&(space==='wild'||space===`home:${peer.account.id}`);}
@@ -349,6 +360,13 @@ export async function createGameServer(options = {}) {
           // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.
           peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0} };
           broadcastPose(room, peer);
+        } else if (message.type === 'dm') {
+          // A private message to a friend, online or not: it lands in their guest diary (and pops up if they are playing).
+          rate(`dm:${account.id}`, 10);
+          const target = accounts.get(typeof message.to === 'string' ? message.to : ''), body = text(message.text, 120);
+          if (!target || !account.friends.includes(target.id) || !target.friends.includes(account.id)) throw failure(403, 'Only friends can send messages.');
+          if (!body) return;
+          noteGuest(target.id, { at: Date.now(), by: account.id, name: account.profile.name, kind: 'message', text: body }).then(ok => send(socket, { type: 'dmSent', to: target.id, ok }));
         } else if (message.type === 'chat') {
           if (!room) throw failure(409, 'Join a world before sending a message.');
           if (message.requestId !== undefined && !requestId) throw failure(400, 'This message needs a valid request ID.');
@@ -371,10 +389,7 @@ export async function createGameServer(options = {}) {
           if (!target || !account.friends.includes(target.id)) throw failure(403, 'Become friends before visiting.');
           if(!peer.visit)peer.visitReturnParty=peer.party;
           join(peer, 'home', peers.get(target.id)?.party || peer.party,target.id); peer.pose = { ...peer.pose, x: 0, z: 3 };
-          // The owner's guest diary notes the visit (best effort: a busy account just skips it).
-          store.command({ actorId: target.id, requestId: randomUUID(), hash: commandHash({ type: 'guestVisit', visitor: account.id, at: Date.now() }), expectedRevision: accounts.get(target.id)?.profileRevision || 0, actionType: 'guestVisit',
-            run: records => { logGuest(records.get(target.id), { at: Date.now(), by: account.id, name: account.profile.name, kind: 'visit' }); return true; } })
-            .then(committed => { committed.accounts.forEach(remember); const owner = accounts.get(target.id), ownerPeer = peers.get(target.id); if (owner && ownerPeer) { send(ownerPeer.socket, { type: 'profile', profile: owner.profile, revision: owner.profileRevision, authorityVersion: 1 }); send(ownerPeer.socket, { type: 'guestNotice', entry: owner.visitLog?.[0] }); } }).catch(() => {});
+          noteGuest(target.id, { at: Date.now(), by: account.id, name: account.profile.name, kind: 'visit' }); // the owner's guest diary (best effort)
           send(socket, { type: 'visit', home: publicHome(target) }); { peer.lastSent = null; broadcastPose(rooms.get(peer.room), peer); }
         } else if (message.type === 'leaveVisit') {
           endVisit(peer);
