@@ -27,7 +27,7 @@ const renderers=['languageSelector','profilePicker','keyboardSettings','tryOnBut
 const functions=ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&renderers.includes(node.name?.text)).map(node=>node.getText(ast)).join('\n');
 const globals=['BUFF_WORDS','JOURNAL_TABS','SHOP_TABS'];
 const declarations=ast.statements.filter(node=>ts.isVariableStatement(node)&&node.declarationList.declarations.some(item=>globals.includes(item.name.getText(ast)))).map(node=>node.getText(ast)).join('\n');
-const shell=ast.statements.find(node=>ts.isExpressionStatement(node)&&node.getText(ast).startsWith('app.innerHTML =')).getText(ast).replaceAll('import.meta.env.VITE_STATIC_HOST',"'true'");
+const shell=ast.statements.find(node=>ts.isExpressionStatement(node)&&node.getText(ast).startsWith('app.innerHTML =')).getText(ast).replaceAll('import.meta.env.VITE_STATIC_HOST',"'true'").replaceAll('import.meta.env.VITE_ONLINE_URL',"''");
 const compiled=ts.transpileModule(declarations+'\n'+functions,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
 const esc=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 function fixture(advanced=true){

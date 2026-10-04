@@ -31,6 +31,8 @@ jobs:
         run: npm run build:pages
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          # Set the repository variable ONLINE_URL to your Render address and this edition links to it from the title screen.
+          VITE_ONLINE_URL: ${{ vars.ONLINE_URL }}
       - name: Package the playable site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
