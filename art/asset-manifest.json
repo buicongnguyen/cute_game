@@ -14021,7 +14021,7 @@
     "units": "metres",
     "coordinates": "Blender: Z up, front -Y; glTF: Y up, front +Z; origin at each piece's ground centre. Animals and the gate: a root node with one child per part, whose translation is the part pivot (glTF) and whose vertices are relative to it.",
     "file": "farm.glb",
-    "bytes": 678856,
+    "bytes": 882432,
     "limit_bytes": 1024000,
     "budgets": {
       "animal": 2600,
@@ -15598,6 +15598,706 @@
           }
         }
       },
+      "goat": {
+        "kind": "animal",
+        "triangles": 1702,
+        "budget": 2600,
+        "materials": [
+          "Farm blush",
+          "Farm eye",
+          "Farm eye glint",
+          "Farm goat",
+          "Farm goat beard",
+          "Farm goat patch",
+          "Farm hoof",
+          "Farm horn",
+          "Farm muzzle",
+          "Farm nostril"
+        ],
+        "bounds": {
+          "min": [
+            -0.2574,
+            -0.5322,
+            0.0
+          ],
+          "max": [
+            0.2574,
+            0.4611,
+            0.8446
+          ],
+          "size": [
+            0.5148,
+            0.9933,
+            0.8446
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.2574,
+            0.0,
+            -0.4611
+          ],
+          "max": [
+            0.2574,
+            0.8446,
+            0.5322
+          ]
+        },
+        "parts": {
+          "body": {
+            "node": "goat_body",
+            "triangles": 286,
+            "materials": [
+              "Farm goat",
+              "Farm goat patch"
+            ],
+            "pivot": [
+              0.0,
+              0.05,
+              0.4
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.4,
+              -0.05
+            ]
+          },
+          "head": {
+            "node": "goat_head",
+            "triangles": 672,
+            "materials": [
+              "Farm goat",
+              "Farm muzzle",
+              "Farm nostril",
+              "Farm eye",
+              "Farm eye glint",
+              "Farm blush",
+              "Farm goat patch",
+              "Farm goat beard",
+              "Farm horn"
+            ],
+            "pivot": [
+              0.0,
+              -0.25,
+              0.57
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.57,
+              0.25
+            ]
+          },
+          "leg_fl": {
+            "node": "goat_leg_fl",
+            "triangles": 176,
+            "materials": [
+              "Farm goat",
+              "Farm hoof"
+            ],
+            "pivot": [
+              -0.1,
+              -0.19,
+              0.4
+            ],
+            "pivot_gltf": [
+              -0.1,
+              0.4,
+              0.19
+            ]
+          },
+          "leg_fr": {
+            "node": "goat_leg_fr",
+            "triangles": 176,
+            "materials": [
+              "Farm goat",
+              "Farm hoof"
+            ],
+            "pivot": [
+              0.1,
+              -0.19,
+              0.4
+            ],
+            "pivot_gltf": [
+              0.1,
+              0.4,
+              0.19
+            ]
+          },
+          "leg_bl": {
+            "node": "goat_leg_bl",
+            "triangles": 176,
+            "materials": [
+              "Farm goat",
+              "Farm hoof"
+            ],
+            "pivot": [
+              -0.1,
+              0.27,
+              0.4
+            ],
+            "pivot_gltf": [
+              -0.1,
+              0.4,
+              -0.27
+            ]
+          },
+          "leg_br": {
+            "node": "goat_leg_br",
+            "triangles": 176,
+            "materials": [
+              "Farm goat",
+              "Farm hoof"
+            ],
+            "pivot": [
+              0.1,
+              0.27,
+              0.4
+            ],
+            "pivot_gltf": [
+              0.1,
+              0.4,
+              -0.27
+            ]
+          },
+          "tail": {
+            "node": "goat_tail",
+            "triangles": 40,
+            "materials": [
+              "Farm goat"
+            ],
+            "pivot": [
+              0.0,
+              0.35,
+              0.56
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.56,
+              -0.35
+            ]
+          }
+        }
+      },
+      "kid": {
+        "kind": "animal",
+        "triangles": 1496,
+        "budget": 2600,
+        "materials": [
+          "Farm blush",
+          "Farm eye",
+          "Farm eye glint",
+          "Farm goat",
+          "Farm goat beard",
+          "Farm goat patch",
+          "Farm hoof",
+          "Farm horn",
+          "Farm muzzle",
+          "Farm nostril"
+        ],
+        "bounds": {
+          "min": [
+            -0.2008,
+            -0.3464,
+            0.0
+          ],
+          "max": [
+            0.2008,
+            0.2767,
+            0.4504
+          ],
+          "size": [
+            0.4015,
+            0.6231,
+            0.4504
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.2008,
+            0.0,
+            -0.2767
+          ],
+          "max": [
+            0.2008,
+            0.4504,
+            0.3464
+          ]
+        },
+        "parts": {
+          "body": {
+            "node": "kid_body",
+            "triangles": 200,
+            "materials": [
+              "Farm goat",
+              "Farm goat patch"
+            ],
+            "pivot": [
+              0.0,
+              0.03,
+              0.216
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.216,
+              -0.03
+            ]
+          },
+          "head": {
+            "node": "kid_head",
+            "triangles": 600,
+            "materials": [
+              "Farm goat",
+              "Farm muzzle",
+              "Farm nostril",
+              "Farm eye",
+              "Farm eye glint",
+              "Farm blush",
+              "Farm goat patch",
+              "Farm goat beard",
+              "Farm horn"
+            ],
+            "pivot": [
+              0.0,
+              -0.15,
+              0.318
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.318,
+              0.15
+            ]
+          },
+          "leg_fl": {
+            "node": "kid_leg_fl",
+            "triangles": 164,
+            "materials": [
+              "Farm goat",
+              "Farm hoof"
+            ],
+            "pivot": [
+              -0.06,
+              -0.114,
+              0.216
+            ],
+            "pivot_gltf": [
+              -0.06,
+              0.216,
+              0.114
+            ]
+          },
+          "leg_fr": {
+            "node": "kid_leg_fr",
+            "triangles": 164,
+            "materials": [
+              "Farm goat",
+              "Farm hoof"
+            ],
+            "pivot": [
+              0.06,
+              -0.114,
+              0.216
+            ],
+            "pivot_gltf": [
+              0.06,
+              0.216,
+              0.114
+            ]
+          },
+          "leg_bl": {
+            "node": "kid_leg_bl",
+            "triangles": 164,
+            "materials": [
+              "Farm goat",
+              "Farm hoof"
+            ],
+            "pivot": [
+              -0.06,
+              0.162,
+              0.216
+            ],
+            "pivot_gltf": [
+              -0.06,
+              0.216,
+              -0.162
+            ]
+          },
+          "leg_br": {
+            "node": "kid_leg_br",
+            "triangles": 164,
+            "materials": [
+              "Farm goat",
+              "Farm hoof"
+            ],
+            "pivot": [
+              0.06,
+              0.162,
+              0.216
+            ],
+            "pivot_gltf": [
+              0.06,
+              0.216,
+              -0.162
+            ]
+          },
+          "tail": {
+            "node": "kid_tail",
+            "triangles": 40,
+            "materials": [
+              "Farm goat"
+            ],
+            "pivot": [
+              0.0,
+              0.21,
+              0.312
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.312,
+              -0.21
+            ]
+          }
+        }
+      },
+      "goose": {
+        "kind": "animal",
+        "triangles": 1794,
+        "budget": 2600,
+        "materials": [
+          "Farm beak",
+          "Farm bird leg",
+          "Farm blush",
+          "Farm eye",
+          "Farm eye glint",
+          "Farm goose"
+        ],
+        "bounds": {
+          "min": [
+            -0.255,
+            -0.5,
+            0.003
+          ],
+          "max": [
+            0.255,
+            0.51,
+            0.865
+          ],
+          "size": [
+            0.51,
+            1.01,
+            0.862
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.255,
+            0.003,
+            -0.51
+          ],
+          "max": [
+            0.255,
+            0.865,
+            0.5
+          ]
+        },
+        "parts": {
+          "body": {
+            "node": "goose_body",
+            "triangles": 380,
+            "materials": [
+              "Farm goose"
+            ],
+            "pivot": [
+              0.0,
+              0.02,
+              0.34
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.34,
+              -0.02
+            ]
+          },
+          "head": {
+            "node": "goose_head",
+            "triangles": 516,
+            "materials": [
+              "Farm goose",
+              "Farm beak",
+              "Farm eye",
+              "Farm eye glint",
+              "Farm blush"
+            ],
+            "pivot": [
+              0.0,
+              -0.15,
+              0.46
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.46,
+              0.15
+            ]
+          },
+          "wing_l": {
+            "node": "goose_wing_l",
+            "triangles": 206,
+            "materials": [
+              "Farm goose"
+            ],
+            "pivot": [
+              -0.2,
+              0.0,
+              0.42
+            ],
+            "pivot_gltf": [
+              -0.2,
+              0.42,
+              -0.0
+            ]
+          },
+          "wing_r": {
+            "node": "goose_wing_r",
+            "triangles": 206,
+            "materials": [
+              "Farm goose"
+            ],
+            "pivot": [
+              0.2,
+              0.0,
+              0.42
+            ],
+            "pivot_gltf": [
+              0.2,
+              0.42,
+              -0.0
+            ]
+          },
+          "leg_l": {
+            "node": "goose_leg_l",
+            "triangles": 204,
+            "materials": [
+              "Farm goose",
+              "Farm bird leg"
+            ],
+            "pivot": [
+              -0.09,
+              0.0,
+              0.23
+            ],
+            "pivot_gltf": [
+              -0.09,
+              0.23,
+              -0.0
+            ]
+          },
+          "leg_r": {
+            "node": "goose_leg_r",
+            "triangles": 204,
+            "materials": [
+              "Farm goose",
+              "Farm bird leg"
+            ],
+            "pivot": [
+              0.09,
+              0.0,
+              0.23
+            ],
+            "pivot_gltf": [
+              0.09,
+              0.23,
+              -0.0
+            ]
+          },
+          "tail": {
+            "node": "goose_tail",
+            "triangles": 78,
+            "materials": [
+              "Farm goose"
+            ],
+            "pivot": [
+              0.0,
+              0.3,
+              0.42
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.42,
+              -0.3
+            ]
+          }
+        }
+      },
+      "gosling": {
+        "kind": "animal",
+        "triangles": 1440,
+        "budget": 2600,
+        "materials": [
+          "Farm beak",
+          "Farm bird leg",
+          "Farm blush",
+          "Farm eye",
+          "Farm eye glint",
+          "Farm gosling",
+          "Farm gosling grey"
+        ],
+        "bounds": {
+          "min": [
+            -0.153,
+            -0.252,
+            0.0018
+          ],
+          "max": [
+            0.153,
+            0.288,
+            0.444
+          ],
+          "size": [
+            0.306,
+            0.54,
+            0.4422
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.153,
+            0.0018,
+            -0.288
+          ],
+          "max": [
+            0.153,
+            0.444,
+            0.252
+          ]
+        },
+        "parts": {
+          "body": {
+            "node": "gosling_body",
+            "triangles": 258,
+            "materials": [
+              "Farm gosling",
+              "Farm gosling grey"
+            ],
+            "pivot": [
+              0.0,
+              0.012,
+              0.204
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.204,
+              -0.012
+            ]
+          },
+          "head": {
+            "node": "gosling_head",
+            "triangles": 412,
+            "materials": [
+              "Farm gosling",
+              "Farm beak",
+              "Farm eye",
+              "Farm eye glint",
+              "Farm blush"
+            ],
+            "pivot": [
+              0.0,
+              -0.09,
+              0.276
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.276,
+              0.09
+            ]
+          },
+          "wing_l": {
+            "node": "gosling_wing_l",
+            "triangles": 142,
+            "materials": [
+              "Farm gosling grey"
+            ],
+            "pivot": [
+              -0.12,
+              0.0,
+              0.252
+            ],
+            "pivot_gltf": [
+              -0.12,
+              0.252,
+              -0.0
+            ]
+          },
+          "wing_r": {
+            "node": "gosling_wing_r",
+            "triangles": 142,
+            "materials": [
+              "Farm gosling grey"
+            ],
+            "pivot": [
+              0.12,
+              0.0,
+              0.252
+            ],
+            "pivot_gltf": [
+              0.12,
+              0.252,
+              -0.0
+            ]
+          },
+          "leg_l": {
+            "node": "gosling_leg_l",
+            "triangles": 216,
+            "materials": [
+              "Farm gosling",
+              "Farm bird leg"
+            ],
+            "pivot": [
+              -0.054,
+              0.0,
+              0.138
+            ],
+            "pivot_gltf": [
+              -0.054,
+              0.138,
+              -0.0
+            ]
+          },
+          "leg_r": {
+            "node": "gosling_leg_r",
+            "triangles": 216,
+            "materials": [
+              "Farm gosling",
+              "Farm bird leg"
+            ],
+            "pivot": [
+              0.054,
+              0.0,
+              0.138
+            ],
+            "pivot_gltf": [
+              0.054,
+              0.138,
+              -0.0
+            ]
+          },
+          "tail": {
+            "node": "gosling_tail",
+            "triangles": 54,
+            "materials": [
+              "Farm gosling grey"
+            ],
+            "pivot": [
+              0.0,
+              0.18,
+              0.252
+            ],
+            "pivot_gltf": [
+              0.0,
+              0.252,
+              -0.18
+            ]
+          }
+        }
+      },
       "pen_fence": {
         "kind": "prop",
         "triangles": 128,
@@ -16079,6 +16779,88 @@
           ]
         }
       },
+      "goat_shelter": {
+        "kind": "prop",
+        "triangles": 304,
+        "budget": 800,
+        "materials": [
+          "Farm barn red",
+          "Farm hay",
+          "Farm wood",
+          "Farm wood light"
+        ],
+        "bounds": {
+          "min": [
+            -0.403,
+            -0.3534,
+            0.0
+          ],
+          "max": [
+            0.403,
+            0.3534,
+            0.58
+          ],
+          "size": [
+            0.8059,
+            0.7067,
+            0.58
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.403,
+            0.0,
+            -0.3534
+          ],
+          "max": [
+            0.403,
+            0.58,
+            0.3534
+          ]
+        }
+      },
+      "goose_shelter": {
+        "kind": "prop",
+        "triangles": 304,
+        "budget": 800,
+        "materials": [
+          "Farm hay",
+          "Farm thatch",
+          "Farm thatch dark",
+          "Farm water",
+          "Farm wood",
+          "Farm wood light"
+        ],
+        "bounds": {
+          "min": [
+            -0.43,
+            -0.455,
+            0.0
+          ],
+          "max": [
+            0.43,
+            0.455,
+            0.58
+          ],
+          "size": [
+            0.86,
+            0.91,
+            0.58
+          ]
+        },
+        "bounds_gltf": {
+          "min": [
+            -0.43,
+            0.0,
+            -0.455
+          ],
+          "max": [
+            0.43,
+            0.58,
+            0.455
+          ]
+        }
+      },
       "egg": {
         "kind": "product",
         "triangles": 216,
@@ -16396,6 +17178,36 @@
       "Farm glass": {
         "color": "#BDEBFF",
         "roughness": 0.2,
+        "metallic": 0.0
+      },
+      "Farm goat": {
+        "color": "#FBF0DC",
+        "roughness": 0.5,
+        "metallic": 0.0
+      },
+      "Farm goat beard": {
+        "color": "#7A4A28",
+        "roughness": 0.5,
+        "metallic": 0.0
+      },
+      "Farm goat patch": {
+        "color": "#A56A3A",
+        "roughness": 0.5,
+        "metallic": 0.0
+      },
+      "Farm goose": {
+        "color": "#FFFBF2",
+        "roughness": 0.5,
+        "metallic": 0.0
+      },
+      "Farm gosling": {
+        "color": "#FFE27A",
+        "roughness": 0.5,
+        "metallic": 0.0
+      },
+      "Farm gosling grey": {
+        "color": "#B9B2A2",
+        "roughness": 0.5,
         "metallic": 0.0
       },
       "Farm grain": {

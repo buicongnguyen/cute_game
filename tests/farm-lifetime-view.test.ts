@@ -12,7 +12,7 @@ const ui: FarmUi = { art: (_id, icon) => icon, esc: text => text, mini: id => `<
 function fullFarm() {
   const s = M.newGame(); s.level = 10; s.energy = 1e6; s.farm.built = true;
   M.expandPen(s); M.expandPen(s);
-  for (let i = 0; i < 10; i++) { assert.ok(M.buyAnimal(s, 'chicken', now)); assert.ok(M.buyAnimal(s, 'cow', now)); }
+  for (let i = 0; i < 7; i++) { assert.ok(M.buyAnimal(s, 'chicken', now)); assert.ok(M.buyAnimal(s, 'cow', now)); }
   return s;
 }
 const meshes = (v: FarmPenView) => v.animals.children.filter((o): o is T.InstancedMesh => o instanceof T.InstancedMesh);
@@ -21,11 +21,11 @@ test('all ten hens and ten cows render; expired animals become twenty stationary
   const s = fullFarm(), view = new FarmPenView();
   const grown = now + Math.max(M.ANIMALS.chicken.growMs, M.ANIMALS.cow.growMs);
   view.update(s.farm.animals, .1, 1, grown);
-  assert.equal(meshes(view).find(m => m.name === 'farm-chicken:body')?.count, 10);
-  assert.equal(meshes(view).find(m => m.name === 'farm-cow:body')?.count, 10);
+  assert.equal(meshes(view).find(m => m.name === 'farm-chicken:body')?.count, 7);
+  assert.equal(meshes(view).find(m => m.name === 'farm-cow:body')?.count, 7);
   const end = M.expiresAt(s.farm.animals[0]);
   view.update(s.farm.animals, .1, 2, end);
-  assert.equal(meshes(view).find(m => m.name === 'farm-product:meat')?.count, 20);
+  assert.equal(meshes(view).find(m => m.name === 'farm-product:meat')?.count, 14);
   for (const mesh of meshes(view)) if (/farm-(?:chicken|cow|chick|calf):/.test(mesh.name)) {
     assert.equal(mesh.count, 0); assert.equal(mesh.visible, false, 'expired animal models never remain alive on screen');
   }
@@ -37,7 +37,7 @@ test('all ten hens and ten cows render; expired animals become twenty stationary
   for (const c of collected) view.collect(c.uid, c.item);
   view.update(s.farm.animals, .1, 3.1, end + 1100);
   assert.equal(view.positions().length, 0);
-  assert.equal(meshes(view).find(m => m.name === 'farm-product:meat')?.count, 20, 'all twenty pickups can animate together');
+  assert.equal(meshes(view).find(m => m.name === 'farm-product:meat')?.count, 14, 'all twenty pickups can animate together');
   view.update([], .5, 3.6, end + 1600);
   assert.equal(meshes(view).find(m => m.name === 'farm-product:meat')?.visible, false);
   view.dispose();

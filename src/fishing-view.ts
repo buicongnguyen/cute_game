@@ -12,6 +12,8 @@ interface Swimmer {
   obj: T.Group; tail: T.Object3D | null; pond: PondView; species: string; heading: number; speed: number; depth: number; wag: number;
   goal: { x: number; z: number } | null; state: FishState; t: number; wig: number;
   mystery?:boolean; mark?:T.Sprite;
+  /** A big fish in the deep part of the water: drawn only as a dark shadow until it is landed. */
+  deep?:boolean;
 }
 interface Leap { obj: T.Group; from: T.Vector3; target: () => T.Vector3; t: number; done: () => void }
 
@@ -54,6 +56,10 @@ const REAL_CM: Record<string, number> = {
   fish_manta: 450, fish_kraken: 500, fish_whale: 800,
 };
 const SIZE_REF_CM = 40;
+/** Fish this long or longer live in deep water: the pond shows only their shadow, and the real shape appears when one is landed. */
+export const DEEP_CM = 100;
+const DEEP_PER_POND = 3;
+export const isDeepSpecies = (species: string) => (REAL_CM[species] ?? 0) >= DEEP_CM;
 /** How much bigger or smaller than the standard model a species is drawn (0.45 to 3.2). */
 export const realSize = (species: string) => Math.max(.45, Math.min(3.2, ((REAL_CM[species] ?? SIZE_REF_CM) / SIZE_REF_CM) ** .55));
 /** The model's own look (it mirrors the Blender manifest). */
@@ -102,7 +108,7 @@ export class FishingView {
   private respawns: Array<{ pond: PondView; at: number }> = [];
   private ripples = new Map<PondView, number>();
   private clock = 0;
-  private mysterySpawns:Array<{pond:PondView;at:number}>=[];private mysteryMaterial:T.MeshBasicMaterial|null=null;
+  private mysterySpawns:Array<{pond:PondView;at:number}>=[];private shadowMaterials=new Map<string,T.MeshBasicMaterial>();
   private ponds:PondView[]=[];
   private mysteryDeadlines=new Map<string,number>();
   private mysterySpecies:(waterId:string)=>string=()=> 'fish_perch';
@@ -169,6 +175,9 @@ export class FishingView {
       // Stocking from the harpoon slots keeps the same species in the pond when hunting gear takes over its fish.
       const slots = stock?.(pond);
       for (let i = 0; i < count && species.length; i++) this.addFish(pond, slots?.[i] ?? species[Math.floor(Math.random() * species.length)]);
+      // A few big fish lurk in the deep water of every pond whose catch list has any: only their shadows show (addFish).
+      const bigPool = species.filter(isDeepSpecies);
+      for (let i = 0; i < DEEP_PER_POND && bigPool.length && count; i++) this.addFish(pond, bigPool[Math.floor(Math.random() * bigPool.length)]);
       if(count&&species.length)this.mysterySpawns.push({pond,at:this.mysteryDeadlines.get(pond.id)??this.monotonicNow()+between(MYSTERY.firstMin,MYSTERY.firstMax)});
       // Reeds on the sandy lip and lily flowers on the water, from the kit.
       for (const [name, count2, onEdge] of [['reeds', 3, true], ['lily_flower', 2, false]] as const) {
@@ -192,12 +201,10 @@ export class FishingView {
   private addMystery(pond:PondView){
     if(this.fish.some(f=>f.pond.id===pond.id&&f.mystery))return;
     const species=this.mysterySpecies(pond.waterId),fish=this.addFish(pond,species==='boot'?'fish_perch':species);
-    this.root.remove(fish.obj);const obj=new T.Group(),silhouette=this.kit.ready?this.kit.instance(species):null;
-    if(silhouette){
+    this.root.remove(fish.obj);const obj=new T.Group(),shape=this.silhouette(species);
+    if(shape){
       // The hidden catch shows as its own dark shape under the water (a whale looks big, a boot looks like a boot), flattened like a shadow; what it is stays secret until it is landed.
-      this.mysteryMaterial??=new T.MeshBasicMaterial({color:'#0d1626',transparent:true,opacity:.6,depthWrite:false});
-      silhouette.traverse(o=>{const mesh=o as T.Mesh;if(mesh.isMesh){mesh.material=this.mysteryMaterial!;mesh.castShadow=false;}});
-      silhouette.scale.setScalar(look(species)[0]);silhouette.scale.y*=.35;obj.add(silhouette);fish.tail=silhouette.children.find(c=>c.name.endsWith('_tail'))??null;
+      obj.add(shape.obj);fish.tail=shape.tail;
     }else{
       const shadow=new T.Mesh(new T.CircleGeometry(.8,24),new T.MeshBasicMaterial({color:'#0d1626',transparent:true,opacity:.55,depthWrite:false}));
       shadow.rotation.x=-Math.PI/2;shadow.scale.set(.55,1.25,1);obj.add(shadow);fish.tail=null;
@@ -218,23 +225,34 @@ export class FishingView {
   }
   resetMysteryAvailability(){this.mysteryDeadlines.clear();}
 
+  /** A dark, flattened copy of a species' model (shared translucent material), or null before the kit has loaded. */
+  private silhouette(species: string, opacity = .6): { obj: T.Group; tail: T.Object3D | null } | null {
+    const model = this.kit.ready ? this.kit.instance(species) : null; if (!model) return null;
+    const key = String(opacity); let material = this.shadowMaterials.get(key);
+    if (!material) { material = new T.MeshBasicMaterial({ color: '#0d1626', transparent: true, opacity, depthWrite: false }); this.shadowMaterials.set(key, material); }
+    model.traverse(o => { const mesh = o as T.Mesh; if (mesh.isMesh) { mesh.material = material!; mesh.castShadow = false; } });
+    model.scale.setScalar(look(species)[0]); model.scale.y *= .35;
+    return { obj: model, tail: model.children.find(c => c.name.endsWith('_tail')) ?? null };
+  }
+
   private addFish(pond: PondView, species: string, fromEdge = false) {
-    const { obj, tail } = this.makeFish(species), a = Math.random() * Math.PI * 2, r = fromEdge ? .85 : Math.random() * .7;
-    const [scale, top, wag] = this.kit.ready ? look(species) : [1, .06, .5], depth = top * scale + .015;
+    const deepShape = isDeepSpecies(species) ? this.silhouette(species, .55) : null;
+    const { obj, tail } = deepShape ?? this.makeFish(species), a = Math.random() * Math.PI * 2, r = fromEdge ? .85 : Math.random() * .7;
+    const [scale, top, wag] = this.kit.ready ? look(species) : [1, .06, .5], depth = top * scale + .015 + (deepShape ? .09 : 0);
     obj.position.set(pond.x + Math.cos(a) * pond.rx * r, pond.surface - depth, pond.z + Math.sin(a) * pond.rz * r);
     this.root.add(obj);
-    const fish: Swimmer = { obj, tail, pond, species, heading: Math.random() * 6.28, speed: between(.5, 1.1), goal: null, state: 'swim', t: 0, wig: Math.random() * 10, depth, wag };
+    const fish: Swimmer = { obj, tail, pond, species, heading: Math.random() * 6.28, speed: between(.5, 1.1), goal: null, state: 'swim', t: 0, wig: Math.random() * 10, depth, wag, ...(deepShape ? { deep: true } : {}) };
     this.fish.push(fish); return fish;
   }
 
   /** Where this pond's ordinary fish are, in stocking order, so a hunting handover starts from them. */
-  ordinaryPoses(pondId: string) { return this.fish.filter(f => f.pond.id === pondId && !f.mystery).map(f => ({ x: f.obj.position.x, z: f.obj.position.z, heading: f.obj.rotation.y })); }
+  ordinaryPoses(pondId: string) { return this.fish.filter(f => f.pond.id === pondId && !f.mystery && !f.deep).map(f => ({ x: f.obj.position.x, z: f.obj.position.z, heading: f.obj.rotation.y })); }
   /**
    * Hand the fish back where the hunting view left them, so leaving the shore does not teleport them. `id` is the slot's
    * species now: a harpoon catch restocks its slot with a new one, and the rod view takes it over (one stock per pond).
    */
   adoptPoses(pondId: string, poses: Array<{ x: number; z: number; heading: number; id?: string }>) {
-    this.fish.filter(f => f.pond.id === pondId && !f.mystery).forEach((f, i) => { const p = poses[i]; if (!p) return;
+    this.fish.filter(f => f.pond.id === pondId && !f.mystery && !f.deep).forEach((f, i) => { const p = poses[i]; if (!p) return;
       if (p.id && p.id !== f.species && f !== this.interest) {
         const { obj, tail } = this.makeFish(p.id), [scale, top, wag] = this.kit.ready ? look(p.id) : [1, .06, .5];
         this.root.remove(f.obj); this.root.add(obj); Object.assign(f, { obj, tail, species: p.id, depth: top * scale + .015, wag });
@@ -298,6 +316,7 @@ export class FishingView {
     if (fish) { this.fish.splice(this.fish.indexOf(fish), 1); obj = fish.obj; }
     else { obj = this.makeFish(this.species).obj; obj.position.copy(this.bobber.position); this.root.add(obj); }
     if(fish?.mystery&&reveal){const previous=obj;obj=reveal.fish!==false?this.makeFish(reveal.id).obj:new T.Group();if(reveal.fish===false)obj.add(this.symbol(reveal.icon??'✨',1.1));obj.position.copy(previous.position);if(reveal.supergiant)obj.scale.multiplyScalar(2.2);this.root.remove(previous);this.root.add(obj);}
+    if(fish?.deep){const real=this.makeFish(fish.species).obj;real.position.copy(obj.position);real.rotation.y=obj.rotation.y;this.root.remove(obj);this.root.add(real);obj=real;} // out of the deep water the real shape shows
     this.interest = null;
     if (pond) {if(fish?.mystery)this.setMysteryAvailability(pond.id,between(MYSTERY.respawnMin,MYSTERY.respawnMax));else this.respawns.push({ pond, at: this.clock + RESTOCK_AFTER_CATCH });}
     const from = obj.position.clone(); from.y = (pond?.surface ?? 0) + .1;
@@ -318,7 +337,7 @@ export class FishingView {
     for(let i=this.mysterySpawns.length-1;i>=0;i--)if(this.mysterySpawns[i].at<=mysteryNow){this.addMystery(this.mysterySpawns[i].pond);this.mysterySpawns.splice(i,1);}
     for (let i = this.respawns.length - 1; i >= 0; i--) if (this.respawns[i].at <= this.clock) {
       const { pond } = this.respawns[i]; this.respawns.splice(i, 1);
-      const species = this.fish.find(f => f.pond.id === pond.id&&!f.mystery)?.species; if (species) this.addFish(pond, species, true);
+      const species = this.fish.find(f => f.pond.id === pond.id&&!f.mystery&&!f.deep)?.species; if (species) this.addFish(pond, species, true);
     }
     for (const fish of this.fish) this.updateFish(fish, dt, time, Math.hypot(player.x - fish.pond.x, player.z - fish.pond.z) < 45);
     this.ambientRipples(player);

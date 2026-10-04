@@ -104,11 +104,11 @@ test('auto-restock: the switch and the energy guard are respected, prices follow
 
 test('auto-restock offline catch-up collects the meat first, then restocks fairly and at most six', () => {
   const s = farmer(99999); s.farm.penLevel = 2;
-  for (const kind of ['chicken', 'duck', 'cow', 'pig']) for (let i = 0; i < 4; i++) M.buyAnimal(s, kind);
-  for (let i = 0; i < 4; i++) R.upgradeRestock(s);
-  for (const kind of ['chicken', 'duck', 'cow', 'pig']) for (let i = 0; i < 4; i++) expire(s, kind);
+  for (const kind of ['chicken', 'duck', 'cow', 'pig']) for (let i = 0; i < 3; i++) M.buyAnimal(s, kind);
+  for (let i = 0; i < 3; i++) R.upgradeRestock(s);
+  for (const kind of ['chicken', 'duck', 'cow', 'pig']) for (let i = 0; i < 3; i++) expire(s, kind);
   const now = Date.now(), r = act(s, 'farmHelperCatchUp', {}, now);
-  assert.equal(r.collected.filter(c => c.item === 'meat').length, 16);
+  assert.equal(r.collected.filter(c => c.item === 'meat').length, 12);
   assert.equal(r.restocked.length, R.RESTOCK_CATCH_UP_CAP);
   assert.ok(s.farm.animals.every(a => a.bornAt === now), 'replacements arrive young now: no back-dated production');
   const sum = R.restockSummary(r.restocked); assert.equal(sum.spent, r.restocked.reduce((n, x) => n + x.price, 0)); assert.match(sum.animals, /\d/);

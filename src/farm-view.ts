@@ -18,19 +18,19 @@ import { newRoamer, spawnSpot, stepRoamer, segmentClear, RoamGrid, type RoamArea
  */
 export { farmKit };
 
-type ModelId = 'chicken' | 'chick' | 'duck' | 'duckling' | 'cow' | 'calf' | 'pig' | 'piglet' | 'dog';
+type ModelId = 'chicken' | 'chick' | 'duck' | 'duckling' | 'cow' | 'calf' | 'pig' | 'piglet' | 'goat' | 'kid' | 'goose' | 'gosling' | 'dog';
 type ProductId = 'egg' | 'milk' | 'meat' | 'duck_egg' | 'truffle';
 type Role = 'body' | 'head' | 'wing_l' | 'wing_r' | 'leg_l' | 'leg_r' | 'leg_fl' | 'leg_fr' | 'leg_bl' | 'leg_br' | 'tail';
 const ROLES: readonly Role[] = ['body', 'head', 'wing_l', 'wing_r', 'leg_l', 'leg_r', 'leg_fl', 'leg_fr', 'leg_bl', 'leg_br', 'tail'];
 const PART_NAME = /_(body|head|wing_[lr]|leg_[lr]|leg_[fb][lr]|tail)(?:_\d+)?$/;
-const modelOf = (a: Animal, now: number): ModelId => isAdult(a, now) ? a.kind : a.kind === 'chicken' ? 'chick' : a.kind === 'cow' ? 'calf' : a.kind === 'duck' ? 'duckling' : a.kind === 'pig' ? 'piglet' : 'dog';
+const modelOf = (a: Animal, now: number): ModelId => isAdult(a, now) ? a.kind : a.kind === 'chicken' ? 'chick' : a.kind === 'cow' ? 'calf' : a.kind === 'duck' ? 'duckling' : a.kind === 'pig' ? 'piglet' : a.kind === 'goat' ? 'kid' : a.kind === 'goose' ? 'gosling' : 'dog';
 /** Product per model; chicks and calves make nothing. */
-const PRODUCT: Record<AnimalKind, ProductId> = { chicken: 'egg', cow: 'milk', duck: 'duck_egg', pig: 'truffle', dog: 'meat' };
+const PRODUCT: Record<AnimalKind, ProductId> = { chicken: 'egg', cow: 'milk', duck: 'duck_egg', pig: 'truffle', goat: 'milk', goose: 'duck_egg', dog: 'meat' };
 /** Most animals of one model the pen can hold (cap at the largest pen); a model has up to four legs. */
-const MAX_PER_MODEL: Record<ModelId, number> = { chicken: MAX_ANIMALS_PER_KIND, chick: MAX_ANIMALS_PER_KIND, cow: MAX_ANIMALS_PER_KIND, calf: MAX_ANIMALS_PER_KIND, duck: MAX_ANIMALS_PER_KIND, duckling: MAX_ANIMALS_PER_KIND, pig: MAX_ANIMALS_PER_KIND, piglet: MAX_ANIMALS_PER_KIND, dog: 1 };
+const MAX_PER_MODEL: Record<ModelId, number> = { chicken: MAX_ANIMALS_PER_KIND, chick: MAX_ANIMALS_PER_KIND, cow: MAX_ANIMALS_PER_KIND, calf: MAX_ANIMALS_PER_KIND, duck: MAX_ANIMALS_PER_KIND, duckling: MAX_ANIMALS_PER_KIND, pig: MAX_ANIMALS_PER_KIND, piglet: MAX_ANIMALS_PER_KIND, goat: MAX_ANIMALS_PER_KIND, kid: MAX_ANIMALS_PER_KIND, goose: MAX_ANIMALS_PER_KIND, gosling: MAX_ANIMALS_PER_KIND, dog: 1 };
 const MAX_LEGS = 4, MAX_PRODUCTS = MAX_ANIMALS_PER_KIND * 24;
 /** Hens and chicks are drawn 1.3x their true size so they read at the game camera (a hen is then about 40 px tall, like a ripe crop); the puppy 1.35x (about knee-high to the explorer). */
-export const SHOWN: Record<AnimalKind, number> = { chicken: 1.3, cow: 1, duck: 1.3, pig: 1, dog: 1.35 };
+export const SHOWN: Record<AnimalKind, number> = { chicken: 1.3, cow: 1, duck: 1.3, pig: 1, goat: 1, goose: 1.15, dog: 1.35 };
 
 /** Pen pieces inside the fence (pen-local metres, +z toward the gate and the garden), also the animals' keep-out circles. */
 export const PEN_PROPS: readonly { id: string; x: number; z: number; rot: number; r: number }[] = [
@@ -55,6 +55,10 @@ export const COATS: Record<ModelId, readonly (readonly [string, string, number])
   duckling: [['#ffde63', '#edbf35', 0], ['#b8a146', '#765c37', .2], ['#ccaa6b', '#72583c', .1]],
   pig: [['#ffb4c0', '#e58f9d', 0], ['#ffb4c0', '#694d4a', .25], ['#ba794d', '#845035', .1]],
   piglet: [['#ffc1cd', '#eaa0ae', 0], ['#ffc1cd', '#694d4a', .25], ['#cb8c61', '#845035', .1]],
+  goat: [['#fbf0dc', '#a56a3a', 0], ['#e9dcc4', '#4a3a30', 0], ['#7a5a40', '#2f2520', 0]],
+  kid: [['#fbf0dc', '#a56a3a', 0], ['#e9dcc4', '#4a3a30', 0], ['#8a6a4e', '#2f2520', 0]],
+  goose: [['#fffbf2', '#fffbf2', 0], ['#b9b2a6', '#8a8276', 0], ['#a88660', '#7a5e3e', 0]],
+  gosling: [['#ffe27a', '#ffe27a', 0], ['#c9c0a0', '#a89f80', 0], ['#c8a574', '#a8845a', 0]],
   // The puppy's second colour paints its muzzle, chest, ruff, paws and tail tip (no flecks: a clean, friendly coat).
   dog: [['#eba55e', '#fff3dc', 0], ['#4a3f48', '#f0b878', 0], ['#fff9ee', '#f4cf9e', 0]],
 };
@@ -74,6 +78,10 @@ const COAT_PARTS: Record<ModelId, Record<string, [1 | 2, string]>> = {
   duckling: { 'Farm duckling': [1, '#ffde63'], '#ffde63': [1, '#ffde63'] },
   pig: { 'Farm pig': [1, '#ffb4c0'], '#ffb4c0': [1, '#ffb4c0'] },
   piglet: { 'Farm piglet': [1, '#ffc1cd'], '#ffc1cd': [1, '#ffc1cd'] },
+  goat: { 'Farm goat': [1, '#fbf0dc'], 'Farm goat patch': [2, '#a56a3a'] },
+  kid: { 'Farm goat': [1, '#fbf0dc'], 'Farm goat patch': [2, '#a56a3a'] },
+  goose: { 'Farm goose': [1, '#fffbf2'] },
+  gosling: { 'Farm gosling': [1, '#ffe27a'] },
   dog: { 'Farm dog': [1, '#e8a25a'], 'Farm dog ear': [1, '#e8a25a'], 'Farm dog light': [2, '#fff1d8'], '#e8a25a': [1, '#e8a25a'], '#fff1d8': [2, '#fff1d8'] },
 };
 

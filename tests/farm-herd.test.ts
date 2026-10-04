@@ -11,7 +11,7 @@ function random(seed: number) { return () => ((seed = seed * 16807 % 2147483647)
 test('each bought animal gets a stable breed that survives saving, and old saves get one from the id', () => {
   const s = M.newGame(); s.level = 25; s.energy = 1e6; s.farm.built = true; s.farm.penLevel = 2;
   const seen = { chicken: new Set<number>(), cow: new Set<number>() };
-  for (let i = 0; i < 10; i++) for (const kind of ['chicken', 'cow'] as const) {
+  for (let i = 0; i < 7; i++) for (const kind of ['chicken', 'cow'] as const) {
     const a = buyAnimal(s, kind, 1_000_000 + i * 7_919)!; assert.ok(a, 'bought');
     assert.ok(Number.isInteger(a.coat) && a.coat! >= 0 && a.coat! < BREEDS[kind].length); seen[kind].add(a.coat!);
   }

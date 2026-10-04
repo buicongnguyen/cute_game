@@ -19,7 +19,7 @@ const compiled = ts.transpileModule(declarations.map(node => node.getText(ast)).
 function fullExpiredFarm(now) {
   const state = M.newGame(); state.level = 25; state.energy = 100_000; state.farm.built = true;
   assert.equal(M.expandPen(state), true); assert.equal(M.expandPen(state), true);
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 7; i++) {
     assert.ok(M.buyAnimal(state, 'chicken', now - M.ANIMAL_LIFESPAN_MS - 10_000));
     assert.ok(M.buyAnimal(state, 'cow', now - M.ANIMAL_LIFESPAN_MS - 10_000));
   }
@@ -63,19 +63,19 @@ function fixture(holdResponse = false) {
   };
 }
 
-test('normal staggered collection grants all twenty meat pickups once with the correct summary', async () => {
+test('normal staggered collection grants all fourteen meat pickups once with the correct summary', async () => {
   const f = fixture(); await f.start();
   assert.equal(f.closed, 1);
   assert.equal(f.state.bag.meat, 1, 'the nearest pickup happens immediately');
-  assert.equal(f.pending.length, 19);
-  assert.deepEqual(f.pending.map(job => job.delay), Array.from({ length: 19 }, (_, i) => (i + 1) * 140));
+  assert.equal(f.pending.length, 13);
+  assert.deepEqual(f.pending.map(job => job.delay), Array.from({ length: 13 }, (_, i) => (i + 1) * 140));
   await f.flush();
-  assert.equal(f.state.bag.meat, 20); assert.equal(f.state.farm.animals.length, 0);
-  assert.equal(f.calls.length, 20); assert.equal(f.animations.length, 20);
-  assert.equal(new Set(f.animations.map(item => item.uid)).size, 20);
+  assert.equal(f.state.bag.meat, 14); assert.equal(f.state.farm.animals.length, 0);
+  assert.equal(f.calls.length, 14); assert.equal(f.animations.length, 14);
+  assert.equal(new Set(f.animations.map(item => item.uid)).size, 14);
   assert.ok(f.animations.every(item => item.item === 'meat'));
-  assert.equal(f.notices.length, 1); assert.equal(f.notices[0].message, 'Collected 20: 20 meat.');
-  await f.start(); await f.flush(); assert.equal(f.state.bag.meat, 20, 'repeated interaction cannot re-collect the removed animals');
+  assert.equal(f.notices.length, 1); assert.equal(f.notices[0].message, 'Collected 14: 14 meat.');
+  await f.start(); await f.flush(); assert.equal(f.state.bag.meat, 14, 'repeated interaction cannot re-collect the removed animals');
 });
 
 test('changing the active save cancels pending pickups without granting from colliding animal IDs', async () => {
@@ -96,7 +96,7 @@ for (const transition of ['visiting a friend', 'leaving the home world']) {
     else f.ctx.world.planet = 'toy';
     await f.flush();
     assert.deepEqual(f.state, before);
-    assert.equal(f.state.bag.meat, 1); assert.equal(f.state.farm.animals.length, 19);
+    assert.equal(f.state.bag.meat, 1); assert.equal(f.state.farm.animals.length, 13);
     assert.equal(f.calls.length, 1); assert.equal(f.animations.length, 1); assert.equal(f.notices.length, 0);
   });
 }

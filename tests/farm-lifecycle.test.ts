@@ -7,11 +7,11 @@ function garden() { const s = M.newGame(); s.level = 25; s.energy = 100_000; s.f
 const reload = (s: M.SaveState) => M.parseSave(JSON.stringify(s))!;
 
 test('each pen level enforces its independent chicken/cow capacity, never above ten', () => {
-  const limits = [[4, 2, 4, 4, 1], [7, 6, 7, 7, 1], [10, 10, 10, 10, 1]];
+  const limits = [[4, 2, 4, 4, 3, 3, 1], [7, 6, 7, 7, 6, 6, 1], [10, 10, 10, 10, 9, 9, 1]];
   for (let level = 0; level <= M.MAX_PEN_LEVEL; level++) {
-    const s = garden();
-    for (let i = 0; i < level; i++) assert.equal(M.expandPen(s), true);
     for (const [index, kind] of M.ANIMAL_KINDS.entries()) {
+      const s = garden(); // a fresh pen per kind: the pen's 15-animal total is tested below
+      for (let i = 0; i < level; i++) assert.equal(M.expandPen(s), true);
       const limit = limits[level][index];
       assert.equal(M.penCapacity(s, kind), limit);
       for (let i = 0; i < limit; i++) assert.ok(M.buyAnimal(s, kind, start));
@@ -31,6 +31,14 @@ test('each pen level enforces its independent chicken/cow capacity, never above 
     for (const [index, kind] of M.ANIMAL_KINDS.entries()) assert.equal(parsed.animals.filter(a => a.kind === kind).length, limits[level][index]);
     assert.ok(parsed.animals.every(a => a.acquiredAt === start), 'legacy arrival is inferred without resetting its life');
   }
+});
+
+test('a pen holds at most 15 animals in all, the guard dog not counted', () => {
+  const s = garden(); M.expandPen(s); M.expandPen(s);
+  for (const kind of ['chicken', 'cow', 'goat', 'goose', 'duck', 'pig'] as const) M.buildSpeciesPen(s, kind, start);
+  let n = 0; for (const kind of ['chicken', 'cow', 'duck', 'pig', 'goat', 'goose'] as const) for (let i = 0; i < 4 && n < M.MAX_ANIMALS_TOTAL; i++) if (M.buyAnimal(s, kind, start)) n++;
+  assert.equal(n, M.MAX_ANIMALS_TOTAL); assert.equal(M.canBuyAnimal(s, 'goose'), 'full'); assert.equal(M.buyAnimal(s, 'goose', start), null);
+  assert.equal(M.canBuyAnimal(s, 'dog'), 'ok');
 });
 
 test('offline expiry leaves collectible meat until collected exactly once, then frees the pen slot', () => {

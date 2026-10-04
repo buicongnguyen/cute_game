@@ -582,12 +582,31 @@ export function chooseFish(s: SaveState, water: string = s.planet, rng: () => nu
     if (draw <= 0)
         return id;
 } return weighted[weighted.length - 1][0]; }
-export function grantCatch(s: SaveState, raw: ItemId, size?: number, hugeCatch = false) { const id = canonicalItem(raw), fish = Object.hasOwn(FISH, id) ? FISH[id] : undefined; if (!fish)
-    return false; const huge = hugeCatch && fish.rarity !== 'junk', bonus = huge ? Math.round(fish.sell * .6) : 0; if (!Number.isSafeInteger(s.energy + bonus) || !addItem(s, id))
-    return false; gainXp(s, fish.xp * (huge ? 2 : 1)); s.energy += bonus; if (size && Number.isFinite(size))
-    s.fishRecords[id] = Math.max(s.fishRecords[id] || 0, size); recordEvent(s, 'fish'); if (ITEMS[id].rare || ITEMS[id].legend)
-    recordEvent(s, 'fishrare'); if (ITEMS[id].legend)
-    recordEvent(s, 'legendFish'); return true; }
+/**
+ * The size bonus of a catch: 1 for a small or ordinary fish, rising to 2 (a double bonus) for the biggest the species grows
+ * and past 2 up to 3 for a giant beyond that; a "huge" catch (the top of the sampling) is at least 1.6. The bonus pays that
+ * many times the fish's value (energy) and experience; junk never gets one.
+ */
+export function catchMultiplier(fish: { size: number[]; rarity: string }, size?: number, huge = false) {
+    if (fish.rarity === 'junk') return 1;
+    const [lo, hi] = fish.size, f = size && Number.isFinite(size) && hi > lo ? (size - lo) / (hi - lo) : 0;
+    const bySize = 1 + Math.max(0, Math.min(1, (f - .4) / .6)) + Math.max(0, Math.min(1, f - 1));
+    return Math.max(huge ? 1.6 : 1, Math.round(bySize * 100) / 100);
+}
+export function grantCatch(s: SaveState, raw: ItemId, size?: number, hugeCatch = false) {
+    const id = canonicalItem(raw), fish = Object.hasOwn(FISH, id) ? FISH[id] : undefined; if (!fish)
+        return false;
+    const huge = hugeCatch && fish.rarity !== 'junk', multiplier = catchMultiplier(fish, size, huge), bonus = Math.round(fish.sell * (multiplier - 1));
+    if (!Number.isSafeInteger(s.energy + bonus) || !addItem(s, id))
+        return false;
+    gainXp(s, Math.round(fish.xp * (huge ? Math.max(2, multiplier) : multiplier))); s.energy += bonus;
+    if (size && Number.isFinite(size))
+        s.fishRecords[id] = Math.max(s.fishRecords[id] || 0, size);
+    recordEvent(s, 'fish'); if (ITEMS[id].rare || ITEMS[id].legend)
+        recordEvent(s, 'fishrare'); if (ITEMS[id].legend)
+        recordEvent(s, 'legendFish');
+    return true;
+}
 /** Mystery catches are resolved once by the caller's authority, including unusual treasure. */
 export function grantMysteryCatch(s: SaveState, raw: ItemId, size?: number, supergiant = false) {
     const id = canonicalItem(raw), fish = FISH[id];

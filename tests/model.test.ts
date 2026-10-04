@@ -76,9 +76,14 @@ test('defeats grant reference XP and probabilistic loot without an extra currenc
   const s=M.newGame();const loot=M.grantDefeat(s,'mushroom',8,false,()=>0);assert.equal(s.xp,8);assert.equal(s.energy,0);assert.equal(s.counters.kills,1);assert.deepEqual(loot,[{id:'manure',count:1},{id:'spore',count:1},{id:'meat',count:1}]);assert.equal(s.collection.spore,1);
   M.grantCatch(s,'fish_perch',20);assert.equal(s.counters.fish,1);assert.equal(s.fishRecords.fish_perch,20);assert.equal(s.collection.fish_perch,1);assert.equal(M.grantCatch(s,'wood'),false);
 });
-test('huge catches use the sampling flag within the normal size range and do not make common fish rare',()=>{
-  const normal=M.newGame(),huge=M.newGame();const fish=M.FISH.fish_perch,size=fish.size[1];M.grantCatch(normal,'fish_perch',size);M.grantCatch(huge,'fish_perch',size,true);
-  assert.equal(normal.energy,0);assert.equal(huge.energy,Math.round(fish.sell*.6));assert.equal(normal.xp,fish.xp);assert.equal(huge.xp,fish.xp*2);assert.equal(huge.progression.totals.fishrare,undefined);assert.equal(huge.fishRecords.fish_perch,size);
+test('a bigger fish pays a bigger bonus: double at the species maximum, more beyond, and the huge flag is at least 1.6',()=>{
+  const fish=M.FISH.fish_perch,[lo,hi]=fish.size,at=(size:number,huge=false)=>{const s=M.newGame();M.grantCatch(s,'fish_perch',size,huge);return s;};
+  const small=at(lo),big=at(hi),giant=at(hi+(hi-lo)),flagged=at(lo,true);
+  assert.equal(small.energy,0);assert.equal(small.xp,fish.xp);
+  assert.equal(big.energy,fish.sell);assert.equal(big.xp,fish.xp*2);assert.equal(M.catchMultiplier(fish,hi),2);
+  assert.equal(giant.energy,fish.sell*2);assert.equal(M.catchMultiplier(fish,hi+(hi-lo)),3);
+  assert.equal(flagged.energy,Math.round(fish.sell*.6));assert.equal(flagged.xp,fish.xp*2);assert.equal(big.progression.totals.fishrare,undefined);assert.equal(big.fishRecords.fish_perch,hi);
+  assert.ok(M.catchMultiplier(fish,(lo+hi)/2)>1&&M.catchMultiplier(fish,(lo+hi)/2)<2,'a middling fish gets a small bonus');
   const junk=M.newGame();M.grantCatch(junk,'boot',60,true);assert.equal(junk.energy,0);assert.equal(junk.xp,M.FISH.boot.xp);
 });
 test('mine cooldowns and separate environment resources persist across travel and reload',()=>{

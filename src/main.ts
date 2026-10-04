@@ -1002,6 +1002,7 @@ async function finishFishingCatch(f:FishingRound){
       floating(item.icon+' '+t(item.name),world.position.x,world.position.z,reward.supergiant?'item big':'item');
       if(caught&&caught.rarity!=='junk'&&reward.size>0)setTimeout(()=>floating((reward.supergiant?t('SUPERGIANT')+' ':reward.huge?t('HUGE')+' ':'📏 ')+formatSize(reward.size),world.position.x,world.position.z,reward.huge?'crit big':'xp'),350);
       if(reward.huge)world.fx?.shake(.3);
+      {const m=caught&&reward.size>0?M.catchMultiplier(caught,reward.size,reward.huge):1;if(m>=1.5)setTimeout(()=>floating(t('×{n} size bonus',{n:m.toFixed(1)}),world.position.x,world.position.z,'level'),900);}
       if(reward.mystery)toast(reward.supergiant?'The mysterious shadow was a supergiant fish!':'A treasure was hiding beneath the question mark!',item.icon);
       else if(caught?.rarity==='legendary')toast(t('Legendary catch! {name}, {size}.',{name:t(caught.name),size:formatSize(reward.size)}),'👑');
       if(!fishGame){showReel(true,'cast');recastUntil=performance.now()+6000;}

@@ -10,7 +10,7 @@ import { RESTOCK_KEEP_STEPS, RESTOCK_MAX_LEVEL, type RestockState } from './farm
  * holds now (expansions raise it). The robot only refills what it has seen: its roster remembers the most living
  * animals of each kind it ever counted, so it replaces losses but never decides to grow the farm by itself.
  */
-export const RESTOCK_KINDS: readonly LivestockKind[] = ['chicken', 'duck', 'cow', 'pig'];
+export const RESTOCK_KINDS: readonly LivestockKind[] = ['chicken', 'duck', 'cow', 'pig', 'goat', 'goose'];
 export const RESTOCK_PER_KIND = [2, 4, 7, 10] as const;
 export const RESTOCK_COSTS = [300, 600, 1200, 2400] as const;
 /** One live run buys at most this many; returning home after a long trip at most RESTOCK_CATCH_UP_CAP. */

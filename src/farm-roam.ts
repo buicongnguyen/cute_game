@@ -7,7 +7,7 @@
  * per-frame world query is one point test per moving animal (so a bed placed in its way stops it).
  * Coordinates are world metres.
  */
-export type RoamKind = 'chicken' | 'duck' | 'cow' | 'pig' | 'dog';
+export type RoamKind = 'chicken' | 'duck' | 'cow' | 'pig' | 'goat' | 'goose' | 'dog';
 export type Rest = 'none' | 'graze' | 'peck' | 'sit' | 'dust' | 'look';
 export interface RoamArea {
   /** True when a body of radius r centred here would touch something it must keep off (or leave the village). */
@@ -40,7 +40,7 @@ export interface Roamer {
   grazeDebt: number;
 }
 /** Body radius kept off obstacles. */
-export const roamRadius = (w: { kind: RoamKind; young: boolean }) => w.kind === 'cow' ? (w.young ? .5 : .75) : w.kind === 'pig' || w.kind === 'dog' ? (w.young ? .28 : .45) : (w.young ? .2 : .28);
+export const roamRadius = (w: { kind: RoamKind; young: boolean }) => w.kind === 'cow' ? (w.young ? .5 : .75) : w.kind === 'pig' || w.kind === 'goat' || w.kind === 'dog' ? (w.young ? .28 : .45) : (w.young ? .2 : .28);
 const TAU = Math.PI * 2;
 /**
  * Centre-to-centre room two animals keep: hens 1.5 m, cows 3 m, a calf or chick a little closer to its kind (it
@@ -130,7 +130,7 @@ function startRest(w: Roamer, rng: () => number, _area?: RoamArea) {
   w.walking = false; const k = rng();
   // Cattle graze and chew for three times their actual walking time, including interrupted trips.
   if (w.kind === 'cow') { w.rest = 'graze'; w.restT = Math.max(.3, w.grazeDebt); }
-  else if (w.kind === 'pig') { w.rest = 'graze'; w.restT = 4 + rng() * 7; }
+  else if (w.kind === 'pig' || w.kind === 'goat') { w.rest = 'graze'; w.restT = 4 + rng() * 7; }
   // The dog sits, sniffs the ground (a head dip, as a hen pecks) or looks about, wagging.
   else if (w.kind === 'dog') { w.rest = k < .35 ? 'sit' : k < .7 ? 'peck' : 'look'; w.restT = w.rest === 'sit' ? 5 + rng() * 7 : 2.5 + rng() * 4; }
   else if (w.young) { w.rest = k < .75 ? 'peck' : 'sit'; w.restT = w.rest === 'sit' ? 5 + rng() * 8 : 1.5 + rng() * 3.5; }
@@ -242,7 +242,7 @@ export function stepRoamer(w: Roamer, all: readonly Roamer[], area: RoamArea, rn
   w.sit += ((!w.walking && (w.rest === 'sit' || w.rest === 'dust') ? 1 : 0) - w.sit) * Math.min(1, dt * 3);
   w.peckT -= dt; if (w.peckT <= 0) { const pecking = !w.walking && w.rest === 'peck'; w.peckT = pecking ? .5 + rng() * 1.2 : 2 + rng() * 4; w.peck = cow ? 0 : 1; }
   w.peck = Math.max(0, w.peck - dt * 1.6);
-  w.flap = Math.max(0, w.flap - dt * 2.5); if ((w.kind === 'chicken' || w.kind === 'duck') && (w.rest === 'dust' && !w.walking ? rng() < dt * .6 : rng() < dt * .04)) w.flap = 1;
+  w.flap = Math.max(0, w.flap - dt * 2.5); if ((w.kind === 'chicken' || w.kind === 'duck' || w.kind === 'goose') && (w.rest === 'dust' && !w.walking ? rng() < dt * .6 : rng() < dt * .04)) w.flap = 1;
   const px = w.x, pz = w.z;
   if (!w.walking) {
     w.restT -= dt;

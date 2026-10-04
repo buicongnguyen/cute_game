@@ -6,7 +6,7 @@ import { newFarmHelper, parseFarmHelper, type FarmHelperState } from './farm-hel
 import { animalPrice, productPace, kitchenOpen, sellPrice, PRODUCT_PACE } from './difficulty.ts';
 
 /** Livestock production uses the offline farm clock; aging uses two real hours. */
-export type AnimalKind = 'chicken' | 'duck' | 'cow' | 'pig' | 'dog';
+export type AnimalKind = 'chicken' | 'duck' | 'cow' | 'pig' | 'goat' | 'goose' | 'dog';
 export type LivestockKind = Exclude<AnimalKind, 'dog'>;
 export interface Animal {
   uid: number;
@@ -41,6 +41,8 @@ export const ANIMALS: Record<AnimalKind, AnimalDef> = {
   cow: { name: 'Cow', baby: 'Calf', icon: '🐄', babyIcon: '🐮', level: 5, price: 70, growMs: 120_000, productMs: gameHours(4), product: 'milk', xp: 10, cap: 2, capStep: 4 },
   duck: { name: 'Duck', baby: 'Duckling', icon: '🦆', babyIcon: '🐥', level: 3, price: 220, growMs: 90_000, productMs: gameHours(3), product: 'duck_egg', xp: 8, cap: 4, capStep: 3 },
   pig: { name: 'Pink pig', baby: 'Piglet', icon: '🐖', babyIcon: '🐷', level: 6, price: 380, growMs: 120_000, productMs: gameHours(6), product: 'truffle', xp: 18, cap: 4, capStep: 3 },
+  goat: { name: 'Goat', baby: 'Kid', icon: '🐐', babyIcon: '🐐', level: 4, price: 300, growMs: 100_000, productMs: gameHours(5), product: 'goat_milk', xp: 12, cap: 3, capStep: 3 },
+  goose: { name: 'Goose', baby: 'Gosling', icon: '🪿', babyIcon: '🐥', level: 4, price: 260, growMs: 100_000, productMs: gameHours(4), product: 'goose_egg', xp: 10, cap: 3, capStep: 3 },
   dog: { name: 'Garden guard dog', baby: 'Garden guard dog', icon: '🐕', babyIcon: '🐕', level: 3, price: 450, growMs: 0, productMs: 0, product: 'guard', xp: 0, cap: 1, capStep: 0 },
 };
 export const ANIMAL_KINDS = Object.keys(ANIMALS) as AnimalKind[];
@@ -50,6 +52,8 @@ export const BREEDS: Record<AnimalKind, readonly string[]> = {
   cow: ['Holstein', 'Jersey', 'Red and white', 'Black Angus', 'Highland'],
   duck: ['Pekin', 'Mallard', 'Khaki Campbell'],
   pig: ['Pink pig', 'Spotted pig', 'Ginger pig'],
+  goat: ['Saanen', 'Toggenburg', 'Alpine'],
+  goose: ['White goose', 'Grey goose', 'Brown goose'],
   dog: ['Golden guardian', 'Black and tan guardian', 'White guardian'],
 };
 /** A stable breed: a hash of the animal's id and arrival second, so a purchase always gets the same coat. */
@@ -103,6 +107,8 @@ export function clearOfPen(x: number, z: number, half: number, margin = .5) {
 const FARM_ITEMS: Record<string, Pick<typeof ITEMS[string], 'name' | 'icon' | 'type' | 'sell' | 'heal' | 'buff' | 'desc'>> = {
   egg: { name: 'Egg', icon: '🥚', type: 'food', sell: 6, heal: 12, desc: 'Laid by your chickens. Sell it, or cook an omelette or pancakes at the kitchen.' },
   milk: { name: 'Milk', icon: '🥛', type: 'food', sell: 14, heal: 20, desc: 'From your cows. Sell it, or make a milkshake, cheese or pancakes at the kitchen.' },
+  goat_milk: { name: 'Goat milk', icon: '🥛', type: 'food', sell: 22, heal: 30, desc: 'Creamy milk from your goats. Sell it or use it at the kitchen.' },
+  goose_egg: { name: 'Goose egg', icon: '🥚', type: 'food', sell: 32, heal: 42, desc: 'A big goose egg. Collect from geese or sell at the market.' },
   duck_egg: { name: 'Duck egg', icon: '🥚', type: 'food', sell: 25, heal: 35, desc: 'A rich duck egg. Collect from ducks or sell at the market.' },
   truffle: { name: 'Garden truffle', icon: '🍄', type: 'food', sell: 80, heal: 90, buff: { luck: .2, time: 120 }, desc: 'A rare treat unearthed by pigs. Heals 90 and +20% luck for 120s.' },
   guard: { name: 'Garden protection', icon: '🛡️', type: 'effect', sell: 0, desc: 'A guard dog protects ripe crops from visitors. It never becomes meat.' },
@@ -178,7 +184,7 @@ export function timeLeft(a: Animal, now = Date.now()) {
   const next = isAdult(a, now) ? a.cycleAt + firstDuration(a) - now : adultAt(a) - now;
   return productReady(a, now) ? 0 : Math.max(0, next);
 }
-export const SPECIES_PEN_COST: Record<AnimalKind, number> = { chicken: 160, duck: 220, cow: 300, pig: 320, dog: 250 };
+export const SPECIES_PEN_COST: Record<AnimalKind, number> = { chicken: 160, duck: 220, cow: 300, pig: 320, goat: 340, goose: 280, dog: 250 };
 function releasePoint(kind: AnimalKind) {
   const i = ANIMAL_KINDS.indexOf(kind); return { x: PEN.x - 2 + i, z: PEN.z + .5 };
 }
@@ -213,6 +219,8 @@ function capacity(kind: AnimalKind, level: number) {
 }
 export function penCapacity(s: SaveState, kind: AnimalKind) { return capacity(kind, farmOf(s).penLevel); }
 export function animalCount(s: SaveState, kind: AnimalKind) { return farmOf(s).animals.filter(a => a.kind === kind).length; }
+/** The pen holds at most this many animals in all (the guard dog is not counted). */
+export const MAX_ANIMALS_TOTAL = 15;
 export type BuyCheck = 'ok' | 'away' | 'unbuilt' | 'level' | 'full' | 'energy';
 export function canBuyAnimal(s: SaveState, kind: AnimalKind): BuyCheck {
   const d = Object.hasOwn(ANIMALS, kind) ? ANIMALS[kind] : undefined;
@@ -220,6 +228,7 @@ export function canBuyAnimal(s: SaveState, kind: AnimalKind): BuyCheck {
   if (!penBuilt(s)) return 'unbuilt';
   if (s.level < d.level) return 'level';
   if (animalCount(s, kind) >= penCapacity(s, kind)) return 'full';
+  if (kind !== 'dog' && farmOf(s).animals.filter(a => a.kind !== 'dog').length >= MAX_ANIMALS_TOTAL) return 'full';
   return s.energy < priceOf(s, kind) ? 'energy' : 'ok';
 }
 /** Buys a chick or a calf; it arrives young and grows up on its own. */
@@ -329,7 +338,7 @@ export function parseFarm(raw: unknown): FarmState {
     const pen = (v.speciesPens as Record<string, unknown>)[kind] as { x?: unknown; z?: unknown } | undefined;
     if (pen && typeof pen.x === 'number' && typeof pen.z === 'number' && Number.isFinite(pen.x) && Number.isFinite(pen.z) && Math.abs(pen.x) <= 200 && Math.abs(pen.z) <= 200) farm.speciesPens![kind] = { x: pen.x, z: pen.z };
   }
-  const seen = new Set<number>(), room: Record<AnimalKind, number> = { chicken: 0, duck: 0, cow: 0, pig: 0, dog: 0 };
+  const seen = new Set<number>(), room: Record<AnimalKind, number> = { chicken: 0, duck: 0, cow: 0, pig: 0, goat: 0, goose: 0, dog: 0 };
   for (const item of Array.isArray(v.animals) ? v.animals : []) {
     if (!item || typeof item !== 'object') continue;
     const a = item as Record<string, unknown>, kind = a.kind as AnimalKind, uid = count(a.uid, -1);

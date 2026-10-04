@@ -32,6 +32,7 @@ export const VI_FRIENDS: Record<string, string> = {
   'Fill the whole screen; press again to leave.': 'Phủ kín màn hình; bấm lần nữa để thoát.',
   'Play online with friends': 'Chơi trực tuyến cùng bạn bè',
   '{n} online': '{n} đang online',
+  '×{n} size bonus': 'Thưởng cỡ lớn ×{n}',
   'Take a break': 'Nghỉ một lát',
   'Beat a boss on another planet to open this cage.': 'Hãy hạ một trùm ở hành tinh khác để mở lồng này.',
   'Defeat the {boss} nearby to open this cage.': 'Hãy hạ {boss} gần đây để mở lồng này.',

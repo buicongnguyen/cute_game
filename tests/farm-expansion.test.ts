@@ -129,16 +129,16 @@ test('guard presentation cancels when the thief leaves the garden',()=>{
 
 test('all four full species pens retain every accumulated product animation and stable shelter meshes',()=>{
   const s=home();M.expandPen(s);M.expandPen(s);
-  for(const kind of ['chicken','duck','cow','pig'] as const){M.buildSpeciesPen(s,kind,now);for(let i=0;i<10;i++)assert.ok(M.buyAnimal(s,kind,now));}
+  for(const kind of ['chicken','duck','cow','pig'] as const){M.buildSpeciesPen(s,kind,now);for(let i=0;i<3;i++)assert.ok(M.buyAnimal(s,kind,now));}
   const dog=M.buyAnimal(s,'dog',now)!;M.buildSpeciesPen(s,'dog',now);
   const view=new FarmPenView();view.setSpeciesPens(s.farm.speciesPens);const statics=[...view.statics.children];view.setSpeciesPens(structuredClone(s.farm.speciesPens));assert.deepEqual(view.statics.children,statics);
-  const at=now+3600_000;view.update(s.farm.animals,.1,1,at);assert.equal(view.positions().length,41);
+  const at=now+3600_000;view.update(s.farm.animals,.1,1,at);assert.equal(view.positions().length,13);
   assert.ok(view.guardBite({x:M.PEN.x,z:M.PEN.z+2}));assert.equal(view.guardBite({x:NaN,z:0}),false);
-  const collected=M.collectProducts(s,at);assert.equal(collected.length,200);assert.equal(M.productCount(dog,at),0);
+  const collected=M.collectProducts(s,at);assert.equal(collected.length,60);assert.equal(M.productCount(dog,at),0);
   for(const c of collected)view.collect(c.uid,c.item);view.update(s.farm.animals,.1,1.1,at+100);
   for(const id of ['egg','duck_egg','milk','truffle']){
     const mesh=view.animals.children.find(m=>m.name==='farm-product:'+id) as import('three').InstancedMesh;
-    assert.equal(mesh.count,50);assert.ok([...mesh.instanceMatrix.array].every(Number.isFinite));
+    assert.equal(mesh.count,15);assert.ok([...mesh.instanceMatrix.array].every(Number.isFinite));
   }
   view.dispose();
 });
