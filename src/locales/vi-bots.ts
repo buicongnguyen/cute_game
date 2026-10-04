@@ -5,6 +5,8 @@ export const VI_BOTS: Record<string, string> = {
   ...BOT_LINE_PAIRS,
   ...CHAT_VI,
   'You left through the gate. Your own garden is waiting when you come back.': 'Bạn đã ra ngoài qua cổng. Khu vườn của bạn đang đợi khi bạn quay về.',
+  'AI neighbours': 'Hàng xóm AI',
+  'Friendly explorers who fight in the wild, make friends and give gifts. Always off while you play online.': 'Những nhà thám hiểm thân thiện chiến đấu ở vùng hoang, kết bạn và tặng quà. Luôn tắt khi bạn chơi online.',
   'Chat': 'Trò chuyện',
   'Back': 'Quay lại',
   'Send': 'Gửi',

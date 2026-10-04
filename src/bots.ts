@@ -40,11 +40,14 @@ interface Run {
 }
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode: friendships last for this visit only */ } };
+/** The Settings switch (main.ts): on by default; the neighbours are never shown while connected to the game server, whatever it says. */
+let enabled = read(ENABLED_KEY) !== '0';
+export const neighboursOn = () => enabled;
+export function setNeighboursOn(on: boolean) { enabled = on; write(ENABLED_KEY, on ? '1' : '0'); }
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
 
 export function initBots(game: GameBridge) {
   const world = game.getWorld(), bag = new TalkBag(), rand = Math.random;
-  let enabled = read(ENABLED_KEY) !== '0';
   const seed0 = (Date.now() ^ (Math.random() * 2 ** 32)) >>> 0;
   let store: BotStore = parseStore(read(STORE_KEY), seed0);
   const cast = makeCast(store.seed, COUNT), runs = new Map<string, Run>();
@@ -203,7 +206,7 @@ export function initBots(game: GameBridge) {
       const dx = foe.x - w.x, dz = foe.z - w.z, d = Math.hypot(dx, dz);
       if (d > 2.4) { w.goalX = foe.x - dx / d * 1.9; w.goalZ = foe.z - dz / d * 1.9; w.speed = 3.2; r.moving = walk(w, dt, c, false); return; }
       w.facing = Math.atan2(dx, dz); r.moving = false;
-      if (r.foeT <= 0) { r.foeT = .9 + rand() * .5; r.swing = .3; game.applyRemoteHit(foe.id, Math.round(attackDamage(r.def.level) * (foe.boss ? .5 : 1)), 0); world.burst(foe.x, foe.z, r.def.color, 6); }
+      if (r.foeT <= 0) { r.foeT = .9 + rand() * .5; r.swing = .3; if (!foe.boss) game.botHit(foe.id, attackDamage(r.def.level)); /* a boss only gets the sparks: its bar and health belong to the player's fight */ world.burst(foe.x, foe.z, r.def.color, 6); }
       return;
     }
     w.speed = 2.4;
@@ -348,7 +351,7 @@ export function initBots(game: GameBridge) {
     const header = el('header', 'social-header'), close = el('button', 'social-close', '✕'); close.setAttribute('aria-label', t('Close')); close.onclick = () => dialog.close();
     header.append(el('h2', '', `🏘️ ${t('Neighbours')}`), close);
     const body = el('div', 'social-content bot-list');
-    const toggle = el('label', 'bot-toggle'), box = el('input'); box.type = 'checkbox'; box.checked = enabled; box.onchange = () => { enabled = box.checked; write(ENABLED_KEY, enabled ? '1' : '0'); renderPanel(); };
+    const toggle = el('label', 'bot-toggle'), box = el('input'); box.type = 'checkbox'; box.checked = enabled; box.onchange = () => { setNeighboursOn(box.checked); renderPanel(); };
     toggle.append(box, document.createTextNode(' ' + t('Show AI neighbours')));
     body.append(el('p', 'social-small', t('Neighbours fight enemies in the wild beyond the four gates, so go out and meet them there. Some are rich and wear rare outfits. Become friends and they give you gifts, let you visit their gardens, and sometimes walk in through a gate to visit yours.')), toggle);
     for (const d of cast) {

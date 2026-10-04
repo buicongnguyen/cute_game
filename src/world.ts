@@ -1275,7 +1275,9 @@ export class World {
     if(this.remotePlayers)for(const [id,remote] of this.remotePlayers)if(remote.mesh.visible&&!remote.pose.visual?.stealth&&(remote.pose.hp??1)>0&&Math.hypot(remote.pose.x,remote.pose.z)>=safe){const d=Math.hypot(remote.pose.x-e.x,remote.pose.z-e.z);if(d<bestD){bestD=d;bx=remote.pose.x;bz=remote.pose.z;bid=id;}}
     return bestD<Infinity?(bid?{x:bx,z:bz,id:bid}:{x:bx,z:bz}):undefined;
   }
-  private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string){if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id)this.onRemoteDamage?.(target.id,amount,source,enemyId);else if(!this.playerFlying||source!=='melee')this.onDamage(amount,source,enemyId);}
+  private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string){if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id)this.onRemoteDamage?.(target.id,amount,source,enemyId);else if(!this.playerSafe()&&(!this.playerFlying||source!=='melee'))this.onDamage(amount,source,enemyId);}
+  /** Inside the safe zone (18 m at home, 11 m elsewhere) no creature can hurt the explorer, whoever it was aiming at: shots and area attacks aimed at a neighbour or a friend near the gate stop at the fence. */
+  private playerSafe(){return Math.hypot(this.position.x,this.position.z)<(this.planet==='home'?18:11);}
   private shootEnemy(e:Enemy,target:Point&{id?:string;enemy?:Enemy}){
     const electric=e.type==='robot',distance=Math.max(.01,Math.hypot(target.x-e.x,target.z-e.z)),shot=ball(electric?'#e8fbff':e.definition?.accent??'#f5b576',.17,e.x,1.0,e.z,0);this.scene.add(shot);
     this.enemyShots.push({id:e.id+':shot:'+Math.random().toString(36).slice(2,10),ownerId:e.id,mesh:shot,vx:(target.x-e.x)/distance*13,vz:(target.z-e.z)/distance*13,life:1.4,damage:e.damage,...(electric?{electric}:{}),targetId:target.id,targetEnemyId:target.enemy?.id});
@@ -1625,6 +1627,7 @@ export class World {
     if(!this.interior){this.drawTitanAttacks();this.decals?.begin();for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);this.decals?.end();}
     if(simulateWorld)for(let i=this.enemyShots.length-1;i>=0;i--){
       const shot=this.enemyShots[i],from={x:shot.mesh.position.x,z:shot.mesh.position.z};shot.mesh.position.x+=shot.vx*dt;shot.mesh.position.z+=shot.vz*dt;shot.life-=dt;
+      if(!shot.targetEnemyId&&Math.hypot(shot.mesh.position.x,shot.mesh.position.z)<(this.planet==='home'?18:11)-.3)shot.life=0; // shots aimed at players die at the safe zone's edge
       if(this.networkRole!=='peer'){
       if(!clearSegment(from,shot.mesh.position,this.obstacles,{bounds:WORLD_BOUNDS,clearance:.1}))shot.life=0;
       if(shot.targetEnemyId){const enemy=this.enemies.find(e=>e.id===shot.targetEnemyId);if(enemy&&enemy.hp>0&&shot.life>0&&Math.hypot(shot.mesh.position.x-enemy.x,shot.mesh.position.z-enemy.z)<enemy.radius+.2){(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(enemy,shot.damage);shot.life=0;}}
