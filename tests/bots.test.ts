@@ -4,7 +4,7 @@ import * as M from '../src/model.ts';
 import { ITEMS } from '../src/content.ts';
 import { BOT_LINES } from '../src/bot-lines.ts';
 import { VI_BOTS } from '../src/locales/vi-bots.ts';
-import { befriend, canMeet, chooseGift, choosePresent, presentReady, schedulePresent, PRESENT_MAX_MS, PRESENT_MIN_MS, isFriend, makeCast, newStore, parseStore, settleGift, SPARE_GIFTS, ENERGY_GIFT } from '../src/bot-logic.ts';
+import { befriend, canMeet, chooseGift, choosePresent, givesPresent, isFriend, makeCast, newStore, parseStore, settleGift, SPARE_GIFTS, ENERGY_GIFT } from '../src/bot-logic.ts';
 
 test('the cast is the same for one seed, has a rich flyer, and dresses everyone from real items', () => {
   const a = makeCast(1234), b = makeCast(1234), c = makeCast(99);
@@ -42,11 +42,10 @@ test('a gift is never one the player already has, falls back to spare rares, and
 });
 
 test('friendship, pending gifts and pauses survive a save, and a damaged save starts fresh', () => {
-  const bot = makeCast(7)[1], store = newStore(7); befriend(store, bot, 5, () => false); store.meetAfter['bot:3'] = 99; store.daily[bot.id] = 10;
+  const bot = makeCast(7)[1], store = newStore(7); befriend(store, bot, 5, () => false); store.meetAfter['bot:3'] = 99;
   const back = parseStore(JSON.stringify(store), 1); assert.deepEqual(back, store);
   assert.equal(parseStore('{not json', 42).seed, 42); assert.equal(parseStore(null, 5).seed, 5);
   assert.ok(!canMeet(back, 'bot:3', 50) && canMeet(back, 'bot:3', 100));
-  assert.ok(!presentReady(back, bot.id, 9) && presentReady(back, bot.id, 10) && !presentReady(back, 'bot:9', 1e12));
   const weird = parseStore(JSON.stringify({ seed: 3, pending: { 'bot:1': { count: 1e9, energy: -5, item: 4 } }, given: [1, 'x'], friends: { a: 'no', b: 3 } }), 0);
   assert.deepEqual(weird.pending['bot:1'], { item: undefined, count: 99, energy: 0 }); assert.deepEqual(weird.given, ['x']); assert.deepEqual(weird.friends, { b: 3 });
 });
@@ -65,12 +64,11 @@ test('a neighbour house builds into a valid garden with crops, animals and decor
   }
 });
 
-test('a friend gives a present every 5 to 10 minutes, mostly everyday things and rarely a rare one', () => {
-  const store = newStore(1), bot = makeCast(1)[0]; befriend(store, bot, 0, () => false);
-  assert.ok(store.daily[bot.id] >= PRESENT_MIN_MS && store.daily[bot.id] <= PRESENT_MAX_MS, 'the first present is due in 5-10 minutes');
-  assert.ok(!presentReady(store, bot.id, PRESENT_MIN_MS - 1)); assert.ok(presentReady(store, bot.id, PRESENT_MAX_MS));
-  schedulePresent(store, bot.id, 1000, () => 0); assert.equal(store.daily[bot.id], 1000 + PRESENT_MIN_MS);
-  schedulePresent(store, bot.id, 1000, () => .999999); assert.ok(store.daily[bot.id] < 1000 + PRESENT_MAX_MS);
+test('meeting a friend gives a present about one time in five, mostly everyday things and rarely a rare one', () => {
+  const store = newStore(1), bot = makeCast(1)[0]; assert.ok(!givesPresent(store, bot.id, () => 0), 'strangers give none'); befriend(store, bot, 0, () => false);
+  assert.ok(givesPresent(store, bot.id, () => .19) && !givesPresent(store, bot.id, () => .21));
+  let n = 0, s0 = 3; const dice = () => (s0 = (s0 * 48271) % 2147483647) / 2147483647; for (let i = 0; i < 2000; i++) if (givesPresent(store, bot.id, dice)) n++;
+  assert.ok(n > 300 && n < 500, `about one in five (${n}/2000)`);
   let rare = 0, state = 7; const rand = () => (state = (state * 1103515245 + 12345) % 2147483648) / 2147483648;
   for (let i = 0; i < 400; i++) { const p = choosePresent(newStore(1), () => false, rand); assert.ok(p.item ? ITEMS[p.item] : p.energy > 0); if (p.item && ITEMS[p.item].rare) rare++; }
   assert.ok(rare > 10 && rare < 90, `about one in ten is rare (${rare}/400)`);
@@ -96,5 +94,5 @@ test('neighbours live beyond the gates, hunt the nearest ordinary enemy there, a
   assert.equal(L.pickFoe(foes, { x: 31, z: 0 }, zone)?.id, 'near'); assert.equal(L.pickFoe(foes.slice(2), { x: 31, z: 0 }, zone), null, 'no bosses, no dead, nothing inside the safe zone');
   const [out, inside] = L.gateRoute(zone, true); assert.ok(Math.hypot(out.x, out.z) > L.SAFE_RADIUS && Math.hypot(inside.x, inside.z) < L.SAFE_RADIUS);
   const [a, b] = L.gateRoute(zone, false); assert.ok(Math.hypot(a.x, a.z) < L.SAFE_RADIUS && Math.hypot(b.x, b.z) > L.SAFE_RADIUS);
-  assert.ok(L.attackDamage(40) < 40 && L.attackDamage(2) >= 4); const v = L.nextVisitIn(() => 0), w = L.nextVisitIn(() => .9999); assert.ok(v >= 360 && w < 720 && L.visitStay(() => .9999) < 40 && L.huntFor(() => 0) >= 120 && L.restFor(() => 0) >= 40);
+  assert.ok(L.attackDamage(40) < 40 && L.attackDamage(2) >= 4); const v = L.nextVisitIn(() => 0), w = L.nextVisitIn(() => .9999); assert.ok(v >= 360 && w < 720 && L.visitStay(() => .9999) < 40 && L.huntFor(() => 0) >= 120 && L.restFor(() => 0) >= 100);
 });

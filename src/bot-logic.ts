@@ -115,7 +115,7 @@ export function chooseGift(bot: BotDef, store: BotStore, owns: (item: string) =>
  */
 export function befriend(store: BotStore, bot: BotDef, now: number, owns: (item: string) => boolean): GiftNote | null {
   if (isFriend(store, bot.id)) return store.pending[bot.id] ?? null;
-  store.friends[bot.id] = now; delete store.meetAfter[bot.id]; schedulePresent(store, bot.id, now, Math.random);
+  store.friends[bot.id] = now; delete store.meetAfter[bot.id];
   const gift = chooseGift(bot, store, owns);
   if (gift.item) store.given.push(gift.item); // reserved now, so two friends never promise the same item
   store.pending[bot.id] = gift; return gift;
@@ -129,12 +129,11 @@ export function settleGift(store: BotStore, botId: string, delivered: boolean) {
 export const MEET_PAUSE_MS = { declined: 8 * 60_000, greeted: 90_000, spoke: 3 * 60_000 };
 export const canMeet = (s: BotStore, id: string, now: number) => (s.meetAfter[id] ?? 0) <= now;
 /**
- * A friend hands over a present every 5 to 10 minutes of play when you meet: mostly everyday things (a snack, seeds, a little
- * energy), now and then (1 time in 10) something rare. `store.daily[id]` is the time the next present is due.
+ * Meeting a friend gives a present about one time in five: mostly everyday things (a snack, seeds, a little energy), now and
+ * then (1 time in 10) something rare.
  */
-export const PRESENT_MIN_MS = 5 * 60_000, PRESENT_MAX_MS = 10 * 60_000, RARE_PRESENT_CHANCE = .1;
-export const presentReady = (s: BotStore, id: string, now: number) => isFriend(s, id) && now >= (s.daily[id] ?? 0);
-export const schedulePresent = (s: BotStore, id: string, now: number, rand: () => number) => { s.daily[id] = now + PRESENT_MIN_MS + Math.floor(rand() * (PRESENT_MAX_MS - PRESENT_MIN_MS)); };
+export const PRESENT_CHANCE = .2, RARE_PRESENT_CHANCE = .1;
+export const givesPresent = (s: BotStore, id: string, rand: () => number) => isFriend(s, id) && rand() < PRESENT_CHANCE;
 const EVERYDAY: Array<[string, number]> = [['carrot', 3], ['radish', 3], ['egg', 2], ['milk', 2], ['pumpkin', 1], ['mint', 2], ['berry', 2], ['leather', 1], ['coral', 1], ['meat', 1]];
 /** The present for this meeting (what the player has is no reason to skip: everyday things stack). */
 export function choosePresent(store: BotStore, owns: (item: string) => boolean, rand: () => number): GiftNote {
@@ -205,6 +204,6 @@ export const attackDamage = (level: number) => 4 + Math.round(level * .6);
 /** A friend plans its next trip into the player's safe zone 6 to 12 minutes ahead and stays only 20 to 40 seconds: they are busy fighting. */
 export const nextVisitIn = (rand: () => number) => 360 + rand() * 360;
 export const visitStay = (rand: () => number) => 20 + rand() * 20;
-/** Out hunting 2 to 4 minutes, then a rest at its own safe zone (out of sight) for 40 to 90 seconds. */
+/** Out hunting 2 to 4 minutes, then a rest at its own safe zone (out of sight) for about as long: half the time they are away. */
 export const huntFor = (rand: () => number) => 120 + rand() * 120;
-export const restFor = (rand: () => number) => 40 + rand() * 50;
+export const restFor = (rand: () => number) => 100 + rand() * 140;

@@ -10,7 +10,7 @@ import { replyTo } from './bot-chat.ts';
 import type { GameBridge } from './game-bridge.ts';
 import type { RemotePose } from './world.ts';
 import {
-  BOT_ID_PREFIX, MEET_PAUSE_MS, SAFE_RADIUS, ZONE_RADIUS, attackDamage, huntFor, restFor, visitStay, befriend, canMeet, choosePresent, gateRoute, inSafeZone, isBotId, isFriend, makeCast, newStore, nextVisitIn, parseStore, pickFoe, pickGoal, presentReady, schedulePresent, seeded, settleGift, walk, zoneOf,
+  BOT_ID_PREFIX, MEET_PAUSE_MS, SAFE_RADIUS, ZONE_RADIUS, attackDamage, huntFor, restFor, visitStay, befriend, canMeet, choosePresent, gateRoute, givesPresent, inSafeZone, isBotId, isFriend, makeCast, newStore, nextVisitIn, parseStore, pickFoe, pickGoal, seeded, settleGift, walk, zoneOf,
   type BotDef, type BotStore, type GiftNote, type WalkCtx, type Walker, type Zone,
 } from './bot-logic.ts';
 import './bots.css';
@@ -66,7 +66,9 @@ export function initBots(game: GameBridge) {
   const spawn = (def: BotDef): Run => {
     const w: Walker = { x: 0, z: 0, facing: rand() * 6.28, goalX: 0, goalZ: 0, wait: 1 + rand() * 3, speed: 2.1 }, zone = zoneOf(def);
     const r: Run = { def, w, y: 0, mode: 'wander', modeT: 0, flyY: 0, say: null, moving: false, nextPlan: 4 + rand() * 8, chase: 0, askUntil: 0, place: 'zone', zone, huntUntil: 0, restUntil: 0, hidden: false, visitAt: 0, stayUntil: 0, foe: null, foeT: 0, swing: 0, route: [], commuteTo: 'zone' };
-    placeInZone(r); r.huntUntil = clock + 60 + rand() * 120; r.visitAt = clock + 60 + nextVisitIn(rand); return r;
+    placeInZone(r); r.huntUntil = clock + 60 + rand() * 120; r.visitAt = clock + 60 + nextVisitIn(rand);
+    if (rand() < .5) { r.mode = 'rest'; r.hidden = true; r.restUntil = clock + rand() * restFor(rand); } // about half are away resting when the game starts
+    return r;
   };
   /** Puts a neighbour at a free spot in its hunting ground. */
   function placeInZone(r: Run) { r.place = 'zone'; const c = ctxOf(r); pickGoal(r.w, c); r.w.x = r.w.goalX; r.w.z = r.w.goalZ; pickGoal(r.w, c); r.mode = 'wander'; r.flyY = 0; r.y = 0; r.foe = null; r.route = []; r.hidden = false; }
@@ -147,7 +149,7 @@ export function initBots(game: GameBridge) {
     if (!c.ready) return;
     // Strangers are met out in the common area only: they stay out there, so the player must be beyond the gates and close by.
     const now = Date.now(), outside = !inSafeZone(p.x, p.z), meetable = (r: Run) => !r.hidden && (r.mode === 'wander' || r.mode === 'fly') && (r.place === 'garden' ? !outside : outside && Math.hypot(r.w.x - p.x, r.w.z - p.z) < 22);
-    const list = [...runs.values()].filter(meetable).filter(r => canMeet(store, r.def.id, now)).sort((a, b) => (presentReady(store, b.def.id, now) ? 1 : 0) - (presentReady(store, a.def.id, now) ? 1 : 0) || Math.hypot(a.w.x - p.x, a.w.z - p.z) - Math.hypot(b.w.x - p.x, b.w.z - p.z));
+    const list = [...runs.values()].filter(meetable).filter(r => canMeet(store, r.def.id, now)).sort((a, b) => Math.hypot(a.w.x - p.x, a.w.z - p.z) - Math.hypot(b.w.x - p.x, b.w.z - p.z));
     // friends say hello more rarely than strangers ask, and every meeting is worth waiting a little for
     const r = list[0]; if (!r || rand() > .55) return;
     r.mode = 'approach'; r.chase = 0; busy = r.def.id; r.w.speed = r.def.flies ? 6.2 : 3.3;
@@ -169,9 +171,9 @@ export function initBots(game: GameBridge) {
     r.modeT -= dt; if (r.modeT > 0) return;
     const now = Date.now();
     if (!isFriend(store, r.def.id)) { r.mode = 'ask'; r.askUntil = clock + 30; sayLine(r, 'ASK', 28000); openRequest(r); return; }
-    if (presentReady(store, r.def.id, now)) {
+    if (givesPresent(store, r.def.id, rand)) {
       const present = choosePresent(store, owns, rand);
-      if (game.grantGift(present)) { schedulePresent(store, r.def.id, now, rand); if (present.item && ITEMS[present.item]?.rare) store.given.push(present.item); save(); showGift(r.def, present); sayLine(r, 'GIFT', 4500); }
+      if (game.grantGift(present)) { if (present.item && ITEMS[present.item]?.rare) store.given.push(present.item); save(); showGift(r.def, present); sayLine(r, 'GIFT', 4500); }
     }
     store.meetAfter[r.def.id] = now + MEET_PAUSE_MS.greeted; save(); leave(r);
   }
