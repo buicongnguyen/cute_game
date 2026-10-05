@@ -20,7 +20,7 @@ import { manageSceneMatrices, updateSceneMatrices } from './scene-matrices.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { keepAlive } from './dispose-tree.ts';
 import { hardScale, type Difficulty } from './difficulty.ts';
-import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, heroKitFor, tuckEars, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
+import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, heroKitFor, tuckEars, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, bossPetKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
 import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
@@ -677,7 +677,7 @@ export class World {
    * first time; avatars are rebuilt when it arrives, and simple shapes stand in until then.
    */
   private kitFor(id:string){
-    const slot=M.ITEMS[id]?.slot,kit=/^(hat|pet)_t_/.test(id)?titanKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
+    const slot=M.ITEMS[id]?.slot,kit=/^(hat|pet)_t_/.test(id)?titanKit:/^pet_b_/.test(id)?bossPetKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
     if(!kit.requested)void kit.load().then(()=>{if(kit.ready)this.refreshAvatars();});
     return kit.ready&&kit.has(weaponModelName(id))?kit:null;
   }

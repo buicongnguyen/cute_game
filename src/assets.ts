@@ -35,6 +35,7 @@ export const KIT_FILES = {
   weapons: modelUrl('gear-weapons.glb'),
   disguises: modelUrl('disguises.glb'),
   pets: modelUrl('pets.glb'),
+  bossPets: modelUrl('boss-pets.glb'),
   space: modelUrl('space.glb'),
   wilds: modelUrl('wilds.glb'),
   worldsBright: modelUrl('worlds-bright.glb'),
@@ -515,6 +516,8 @@ export const weaponKit = new KitLibrary([KIT_FILES.weapons]);
 export const weaponModelName = (id: string) => id === 'harpoon' ? 'trident' : id;
 export const disguiseKit = new KitLibrary([KIT_FILES.disguises]);
 export const petKit = new KitLibrary([KIT_FILES.pets]);
+/** Little boss companions (pet_b_<boss>), loaded the first time one is worn. */
+export const bossPetKit = new KitLibrary([KIT_FILES.bossPets]);
 /** The starship, its launch pad, stardust and asteroids. */
 export const spaceKit = new KitLibrary([KIT_FILES.space]);
 /** Scenery for the home wilds and the other planets, loaded the first time each is needed. */

@@ -137,5 +137,5 @@ test('all refined model URLs honor a project deployment prefix',async()=>{
   const exports={};
   vm.runInNewContext(await compile('assets.ts',{BASE_URL:'/cute_game/'}),{exports,require:name=>name==='three'?{}:{GLTFLoader:class{}}});
   const paths=[...Object.values(exports.REFINED_ASSET_FILES),...Object.values(exports.KIT_FILES)];
-  assert.equal(paths.length,27);assert.equal(exports.KIT_FILES.forestBirds,'/cute_game/assets/models/forest-birds.glb');assert.ok(paths.every(url=>url.startsWith('/cute_game/assets/models/')&&url.endsWith('.glb')));
+  assert.equal(paths.length,28);assert.equal(exports.KIT_FILES.forestBirds,'/cute_game/assets/models/forest-birds.glb');assert.ok(paths.every(url=>url.startsWith('/cute_game/assets/models/')&&url.endsWith('.glb')));
 });

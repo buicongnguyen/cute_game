@@ -572,9 +572,16 @@ export function rollLoot(type: string, luck = 0, rng: () => number = Math.random
     if (rng() < Math.min(1, boost * chance * (chance < .5 ? 1 + Math.max(0, luck) : 1)))
         loot.push({ id, count: min + Math.min(max - min, Math.floor(rng() * (max - min + 1))) });
 } return loot; }
+/** Whether the explorer already has this item anywhere (bag, chest, worn gear or collection). */
+export function ownsItem(s: SaveState, id: string) { return (s.bag[id] ?? 0) > 0 || (s.chest?.[id] ?? 0) > 0 || Object.values(s.gear ?? {}).includes(id) || !!s.collection?.[id]; }
+/** The first defeat of a boss or titan guarantees its little companion (never a duplicate of one already owned). */
+function addFirstDefeatPet(s: SaveState, type: string, loot: { id: string; count: number }[]) {
+    const id = type.startsWith('titan_') ? `pet_t_${type.slice(6)}` : `pet_b_${type}`;
+    if (Object.hasOwn(ITEMS, id) && !ownsItem(s, id) && !loot.some(l => l.id === id)) loot.push({ id, count: 1 });
+}
 /** bank=false leaves the loot out of the bag: the game tosses it onto the ground instead (drops.ts). `bonus`: the Hard
  * reward of the creatures fought (co-op: the room's scale, difficulty.ts scaleReward); solo it is the save's own. */
-export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true, bonus = rewardScale(s)) { gainXp(s, xp, Date.now(), bonus); const loot = rollLoot(type, activeStats(s).luck, rng, bonus); if (bank) for (const item of loot)
+export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true, bonus = rewardScale(s)) { gainXp(s, xp, Date.now(), bonus); const first = boss && !(s.bosses ?? []).includes(`${s.planet}:${type}`), loot = rollLoot(type, activeStats(s).luck, rng, bonus); if (first) addFirstDefeatPet(s, type, loot); if (bank) for (const item of loot)
     addItem(s, item.id, item.count); recordEvent(s, 'kill', 1, type); if (boss)
     { recordEvent(s, 'boss', 1, type); noteBossDefeat(s, type); } return loot; }
 export function chooseFish(s: SaveState, water: string = s.planet, rng: () => number = Math.random) { const choices = FISH_WEIGHTS[water] || FISH_WEIGHTS.home, luck = activeStats(s).luck, weighted = choices.map(([id, weight]) => [id, weight * (ITEMS[id].legend ? 1 + luck * 1.5 : ITEMS[id].rare ? 1 + luck : 1)] as const); let draw = rng() * weighted.reduce((sum, [, w]) => sum + w, 0); for (const [id, weight] of weighted) {

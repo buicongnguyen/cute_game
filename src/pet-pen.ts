@@ -21,7 +21,7 @@ export type PetPlace = 'pen' | 'follow' | 'return';
 /** perch: lands on things; hover: floats over them; walk: stays on the ground. */
 export type PetStyle = 'perch' | 'hover' | 'walk';
 /** Pets drawn flying (world.ts petFor keeps the same list). */
-export const FLYING_PETS: readonly string[] = ['pet_parrot', 'pet_firefly', 'pet_dragon', 'pet_t_crystal', 'pet_t_whale', 'pet_t_eye'];
+export const FLYING_PETS: readonly string[] = ['pet_parrot', 'pet_firefly', 'pet_dragon', 'pet_t_crystal', 'pet_t_whale', 'pet_t_eye', 'pet_b_frostowl', 'pet_b_phoenix', 'pet_b_dragon', 'pet_b_shadowlord'];
 const PERCHERS = ['pet_parrot', 'pet_dragon'];
 /** How high the feet are above a percher's model origin (metres, from the pet kit's models): it stands on the perch. */
 export const PERCH_FEET: Record<string, number> = { pet_parrot: .3, pet_dragon: .19 };
