@@ -511,12 +511,13 @@ function showTrimNote(){const n=state.gardenTrim;if(!n)return;void perform('ackT
 /** Harvest orbs fly to the bag, or into the chest when the harvest is stored there (never across the map). */
 /** Whether a gain effect shows now: the workers' only outdoors in the home village, the explorer's own always (work-effects.ts). */
 function gainShows(source:GainSource){return showsGain(source,{planet:world.planet,indoors:!!world.interior,away:explorerOut()});}
-function orbTarget(){if(!explorerOut())return ()=>world.position;const c=world.entities.find(x=>x.kind==='chest'),at=world.position.clone().set(c?.x??0,0,c?.z??0);return ()=>at;}
+/** Where collected orbs fly: to whoever collected them. A helper's find goes to the helper (it carries it home), never across the yard to the explorer. */
+function orbTarget(by?:{x:number;z:number}){if(by){const at=world.position.clone().set(by.x,.9,by.z);return ()=>at;}if(!explorerOut())return ()=>world.position;const c=world.entities.find(x=>x.kind==='chest'),at=world.position.clone().set(c?.x??0,0,c?.z??0);return ()=>at;}
 /** Sparkles, the XP number and a few orbs flying into the bag when a crop comes up. */
-function harvestBurst(index:number,crop:M.CropId,source:GainSource='own'){
+function harvestBurst(index:number,crop:M.CropId,source:GainSource='own',by?:{x:number;z:number}){
   if(!gainShows(source))return;const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(!e)return;
   world.fx?.burst({x:e.x,z:e.z},{n:10,color:['#9be36f','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.4});
-  world.fx?.orbs({x:e.x,z:e.z},2,'#9be36f',orbTarget());
+  world.fx?.orbs({x:e.x,z:e.z},2,'#9be36f',orbTarget(source==='worker'?by:undefined));
   floating('+'+M.CROPS[crop].xp+' XP',e.x,e.z,'xp');tone('harvest');
 }
 function plantBurst(index:number,source:GainSource='own'){if(!gainShows(source))return;const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(e)world.fx?.burst({x:e.x,z:e.z},{n:6,color:['#8a5a3a','#6a3f2a'],size:.1,speed:2,up:3,y:.25});}
@@ -670,10 +671,10 @@ async function buildPenAction(){
 }
 function penTap(){if(M.readyAnimals(state).length)collectFarm();else penDialog();}
 function feedBurst(uid:number,source:GainSource='own'){if(!gainShows(source))return;const p=world.farmView?.positionOf(uid);if(p)world.fx?.burst({x:p.x,z:p.z},{n:6,color:['#9be36f','#ffe66d'],size:.08,speed:1.5,up:3,y:.4});}
-function farmCollectFeedback(collected:readonly M.Collected[],origin?:{x:number;z:number},source:GainSource='own'){
+function farmCollectFeedback(collected:readonly M.Collected[],origin?:{x:number;z:number},source:GainSource='own',by?:{x:number;z:number}){
   if(!gainShows(source))return; // the products are already in the bag or chest: only the flight, orbs and floats are skipped
   const groups=new Map<number,M.Collected[]>();for(const product of collected){const list=groups.get(product.uid)??[];list.push(product);groups.set(product.uid,list);world.farmView?.collect(product.uid,product.item,origin??world.farmView?.positionOf(product.uid)??M.PEN);}
-  for(const [uid,list]of groups){const p=world.farmView?.positionOf(uid)??origin??M.PEN;world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',orbTarget());floating('+'+M.ANIMALS[list[0].kind].xp*list.length+' XP',p.x,p.z,'xp');}
+  for(const [uid,list]of groups){const p=world.farmView?.positionOf(uid)??origin??M.PEN;world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',orbTarget(source==='worker'?by:undefined));floating('+'+M.ANIMALS[list[0].kind].xp*list.length+' XP',p.x,p.z,'xp');}
   if(collected.length)tone('harvest');
 }
 function collectFarm(uid?:number){
@@ -818,8 +819,8 @@ const crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!vi
   rescued(id,at){const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
   locked(id){toast(lockedHint(id),'🔒');},
   worked(id,task,r,at){
-    if(task.kind==='harvest'){harvestBurst(task.index,Object.keys(r.raw)[0]??'carrot','worker');world.syncCrops();}else if(task.kind==='plant'){plantBurst(task.index,'worker');world.syncCrops();}
-    else if(task.kind==='feed')feedBurst(task.uid,'worker');else farmCollectFeedback(r.collected??[],at,'worker');
+    if(task.kind==='harvest'){harvestBurst(task.index,Object.keys(r.raw)[0]??'carrot','worker',at);world.syncCrops();}else if(task.kind==='plant'){plantBurst(task.index,'worker');world.syncCrops();}
+    else if(task.kind==='feed')feedBurst(task.uid,'worker');else farmCollectFeedback(r.collected??[],at,'worker',at);
     if(!gainShows('worker'))return;
     for(const [item,n] of Object.entries(r.cooked))floating('+'+n+' '+t(M.ITEMS[item]?.name??item),postFor(id).x,postFor(id).z,'item',1);
     if(Object.keys(r.cooked).length)tone('pop');
