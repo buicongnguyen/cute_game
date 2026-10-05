@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { GraphicsGovernor } from '../src/graphics.ts';
 import { frameSteps } from '../src/frame-steps.ts';
 import * as M from '../src/model.ts';
+import { BoulderFx } from '../src/boulder-fx.ts';
 
 // Exercise the real main-loop controller and governor. Rendering is intercepted
 // because changing a canvas's dimensions invalidates its last rendered image.
@@ -16,6 +17,7 @@ assert.ok(declaration, 'main.ts must provide the actual frame controller');
 const compiled = ts.transpileModule(declaration.getText(ast), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 
 function fixture() {
+  const boulders=new BoulderFx({ground:()=>0,explorerAt:()=>null});
   const graphics = new GraphicsGovernor({ mobile: false, devicePixelRatio: 2 });
   const events = [], samples = [], changes = [];
   let now = 0, painted = false, renders = 0, scheduled = 0;
@@ -30,7 +32,7 @@ function fixture() {
     innerWidth: 1280, innerHeight: 720, network: { role: null },
     ship: { update: noop }, gestures: { update: noop }, joystick:{update:noop},combatTimers: { advance: noop },
     combat: { update: noop, statuses: {}, airborne: 0, projectiles: [], allies: [], pose: 'idle' },
-    combatView: { update: noop }, fishingView: { update: noop, active: false }, rodTip: {}, skillFx: { update: noop, gazeAngle: () => null },
+    combatView: { update: noop }, fishingView: { update: noop, active: false }, rodTip: {}, skillFx: { boulders, update: noop, gazeAngle: () => null },
     uiBlocked: () => context.blocked,
     world: {
       time: 0, player: { position: { y: 0 } }, position: { x: 0, z: 0 },
@@ -92,4 +94,12 @@ test('a manual quality setting remains fixed during slow rendered frames', () =>
   const f = fixture(); f.graphics.choose('medium'); f.run(20, 10);
   assert.equal(f.changes.length, 0); assert.equal(f.graphics.level, 'medium');
   assert.equal(f.graphics.ratio, 1.25); assert.ok(f.samples.every(Boolean));
+});
+
+test('a boulder pauses with solo combat and resumes on the same simulation clock',()=>{
+  const f=fixture(),b=f.ctx.skillFx.boulders;
+  b.throw({kind:'cast',look:'boulder',x:0,z:0,radius:8,facing:0,duration:.6,color:'#c96a3a'});
+  f.run(60,.2);const rock=b.root.children[0],at=rock.position.clone();assert.ok(at.z>0&&at.z<8);
+  f.ctx.blocked=true;f.run(60,2);assert.deepEqual(rock.position,at);assert.equal(b.busy,true);
+  f.ctx.blocked=false;f.run(60,.5);assert.equal(b.busy,false);assert.equal(rock.visible,false);
 });

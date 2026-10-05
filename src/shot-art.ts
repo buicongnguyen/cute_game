@@ -53,7 +53,15 @@ export function makeShot(kind: string, radius: number, color: string): T.Group {
     case 'arrow': add(shared('shaft', () => new T.CylinderGeometry(.5, .5, 3, 5)), basic('#c79a5a'), [r * .4, r * .4, r * .4], [0, 0, 0], [Math.PI / 2, 0, 0]); add(shared('cone', () => new T.ConeGeometry(1, 2.4, 6)), basic('#e8eef2'), [r * .8, r * .8, r * .8], [0, 0, r * 2.2], [Math.PI / 2, 0, 0]); g.userData.yaw = true; haloSize = 2.5; break;
     case 'rainbow': ['#ff4f4f', '#ffd23e', '#4fb8ff'].forEach((c, i) => add(ball, basic(c), [r * (1 - i * .15), r * (1 - i * .15), r * (1 - i * .15)], [0, 0, -i * r * 1.2])); g.userData.yaw = true; haloColor = '#ffffff'; break;
     case 'missile': add(shared('shaft', () => new T.CylinderGeometry(.5, .5, 3, 6)), basic('#e6e9ee'), [r * .4, r * .4, r * .4], [0, 0, 0], [Math.PI / 2, 0, 0]); add(shared('cone', () => new T.ConeGeometry(1, 2.4, 6)), basic('#e8453c'), [r * .4, r * .4, r * .4], [0, 0, r * 1.5], [Math.PI / 2, 0, 0]); add(shared('cone', () => new T.ConeGeometry(1, 2.4, 6)), basic('#ffb347', .8), [r * .35, r * .35, r * .9], [0, 0, -r * 1.7], [-Math.PI / 2, 0, 0]); g.userData.yaw = true; haloColor = '#ffb347'; haloSize = 4; break;
-    case 'rock': add(shared('rock', () => new T.DodecahedronGeometry(1)), basic('#8c7a64'), [r, r * .85, r]); g.userData.spin3 = true; haloSize = 0; break;
+    case 'rock': {
+      const stone=shared('rock',()=>{
+        const geometry=new T.DodecahedronGeometry(1),positions=geometry.getAttribute('position'),colors=new Float32Array(positions.count*3),c=new T.Color();
+        for(let i=0;i<positions.count;i+=3){c.set('#c96a3a').multiplyScalar(.72+.28*((i/3*7)%11)/10);for(let j=0;j<3;j++)c.toArray(colors,(i+j)*3);}
+        geometry.setAttribute('color',new T.BufferAttribute(colors,3));return geometry;
+      });
+      let material=mats.get('stone');if(!material)mats.set('stone',material=new T.MeshStandardMaterial({vertexColors:true,roughness:1,flatShading:true}));
+      add(stone,material,[r,r*.85,r]);g.userData.spin3=true;haloSize=0;break;
+    }
     case 'snow': inked(r * 1.3); add(ball, basic('#ffffff'), [r * 1.3, r * 1.3, r * 1.3]); haloColor = '#9fd8ff'; haloSize = 3.2; break;
     default: inked(r * 1.45); add(ball, basic(kind === 'pea' ? '#e4ff5e' : col), [r * 1.45, r * 1.45, r * 1.45]); add(ball, basic('#ffffff', .85), [r * .6, r * .6, r * .6], [-r * .3, r * .3, 0]); haloSize = 4.4;
   }

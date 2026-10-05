@@ -33,7 +33,7 @@ export const VI_SKILLS: Record<string, string> = {
   'Fly for 12 s (press again to land): ground attacks miss you.': 'Bay 12 giây (bấm lần nữa để đáp): đòn đánh mặt đất trượt khỏi bạn.',
   'Dive 4 m ahead and crash: ×2 damage within 5 m, ×4 if you were flying; stuns 1 s.': 'Bổ nhào 4 m về phía trước: ×2 sát thương trong 5 m, ×4 nếu đang bay; choáng 1 giây.',
   'Twin eye lasers sweep a 13 m line, 1 m wide, across the front for 1.2 s: ×1 damage per touch, leaving scorch marks.': 'Hai tia laser từ mắt quét một đường dài 13 m, rộng 1 m ngang phía trước trong 1,2 giây: ×1 sát thương mỗi lần chạm, để lại vết cháy xém.',
-  'Throw a boulder after 0.8 s: ×3 damage, then a 4 m blast that stuns 2 s.': 'Ném tảng đá sau 0,8 giây: ×3 sát thương, rồi nổ 4 m gây choáng 2 giây.',
+  'Lob a giant rock at the nearest enemy within 14 m (8 m ahead if none): lands in 0.6 s for ×3.2 damage in a 4.5 m blast, launching enemies upward.': 'Ném tảng đá khổng lồ vào kẻ địch gần nhất trong 14 m (ném về trước 8 m nếu không có): đá rơi sau 0,6 giây, gây ×3,2 sát thương trong 4,5 m và hất tung kẻ địch.',
   'Two shadow clones fight beside you for 8 s.': 'Hai phân thân bóng tối chiến đấu cùng bạn trong 8 giây.',
   'Vanish for 5 s: enemies lose you, and your next hit does triple damage.': 'Tàng hình 5 giây: kẻ địch mất dấu bạn, đòn kế tiếp gây gấp ba sát thương.',
   'Blink behind the nearest enemy within 12 m: ×3 damage and stunned for 1 s.': 'Lướt ra sau kẻ địch gần nhất trong 12 m: ×3 sát thương và choáng 1 giây.',

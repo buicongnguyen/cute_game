@@ -267,6 +267,8 @@ const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else wo
 function showEffect(effect:CombatEffect){
   const fx=world.fx,at={x:effect.x,z:effect.z};
   if(effect.kind==='toss'){world.guardDogs?.toss(effect);return;}
+  if(effect.look==='boulder'&&effect.kind==='cast'){skillFx.boulders.throw(effect);return;}
+  if(effect.look==='boulder'&&effect.kind==='ring'&&fx){const y=world.interior?0:Math.max(0,terrainHeight(world.environment.layout,at));fx.burst(at,{n:20,color:['#c96a3a','#f3b27a','#8b5034'],size:.25,speed:8,up:8,y:y+.2,life:.65,gravity:18});fx.ring(at,{color:effect.color,from:.3,to:effect.radius,life:.4,y:y+.12,thick:.25});return;}
   if(effect.look==='eyes'&&effect.kind==='beam'){skillFx.gaze(effect);return;}
   if(effect.look==='burn'){skillFx.burn(effect);return;}
   // Electric bursts keep the faint disc and rim at the exact blast radius, then crackle instead of the plain ring.
@@ -1515,7 +1517,7 @@ function frame(now:number){
   // browser throttles rendering, and collisions do not tunnel at a low frame rate. At most four steps
   // run per frame; a longer stall turns into slow motion rather than a spiral of ever longer frames.
   updateContextWeapon();joystick.update();
-  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);combat.update(step,combatActive);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerStealth=(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
+  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);combat.update(step,combatActive);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerStealth=(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
   // Landing from the ground slam squashes the explorer and jolts the camera.
   const airborne=combat.airborne>0;if(wasAirborne&&!airborne){world.landT=.25;slamImpact();}wasAirborne=airborne;
   // The explorer's pose follows the weapon, skills, fishing line and hit invulnerability.

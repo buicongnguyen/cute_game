@@ -3,6 +3,7 @@ import { RibbonBatch } from './ribbons.ts';
 import type { Effects } from './fx.ts';
 import { GAZE, type CombatEffect } from './combat.ts';
 import { part } from './part-cache.ts';
+import { BoulderFx } from './boulder-fx.ts';
 
 /**
  * Skill visuals that need more than rings and sparks (lightweight-game-objects: pooled, two ribbon draws + one decal
@@ -86,6 +87,7 @@ function burnCard() {
 }
 
 export class SkillFx {
+  readonly boulders:BoulderFx;
   readonly root = new T.Group();
   readonly glow = new RibbonBatch(1024, { renderOrder: 3 });
   readonly core = new RibbonBatch(768, { renderOrder: 4 });
@@ -103,6 +105,7 @@ export class SkillFx {
   private u = new T.Vector3(); private v = new T.Vector3(); private d = new T.Vector3();
 
   constructor(scene: T.Scene, fx: Effects | null, host: SkillFxHost) {
+    this.boulders=new BoulderFx(host);this.root.add(this.boulders.root);
     this.scene = scene; this.fx = fx; this.host = host;
     this.root.name = 'skill-fx';
     const decal = new T.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
@@ -119,7 +122,7 @@ export class SkillFx {
   }
 
   /** True while anything is drawn (tests and the idle early-out). */
-  get busy() { return this.gazes.some(g => g.live) || this.bolts.some(b => b.live) || this.decals.some(d => d.live) || this.crackleCount > 0 || this.shocked.size > 0; }
+  get busy() { return this.boulders.busy || this.gazes.some(g => g.live) || this.bolts.some(b => b.live) || this.decals.some(d => d.live) || this.crackleCount > 0 || this.shocked.size > 0; }
   get liveBolts() { return this.bolts.reduce((n, b) => n + (b.live ? 1 : 0), 0); }
   get liveDecals() { return this.decals.reduce((n, d) => n + (d.live ? 1 : 0), 0); }
 
@@ -307,6 +310,7 @@ export class SkillFx {
   }
 
   clear() {
+    this.boulders.clear();
     for (const g of this.gazes) { g.live = false; g.band.visible = false; } for (const b of this.bolts) b.live = false; for (const d of this.decals) d.live = false;
     for (const t of this.shocked) t.shock = 0; this.shocked.clear(); this.crackleCount = 0; this.decalMesh.count = 0;
     this.glow.clear(); this.core.clear(); this.glow.commit(); this.core.commit();

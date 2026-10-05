@@ -6,8 +6,10 @@ export interface CombatHit { amount: number; critical: boolean; stun: number; li
 export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'|'toss'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number;
   /** How the view dresses it (skill-fx.ts): 'eyes' twin eye lasers, 'burn' a laser scorch, 'shock' an electric burst. Same hit either way. */
   look?: EffectLook }
-export type EffectLook='eyes'|'burn'|'shock';
-export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock'];
+export type EffectLook='eyes'|'burn'|'shock'|'boulder';
+export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder'];
+/** Superhero throw: lock a landing point, then lob over intervening ground obstacles. */
+export const BOULDER={range:14,fallback:8,time:.6,arc:4,height:3,radius:4.5,power:3.2,lift:7} as const;
 /** The laser gaze (dz_superhero slot 2): one sweep of `arc` rad in `time` s, a `length` m line `width` m wide; a creature is hit again after `rehit` s. */
 export const GAZE={length:13,width:1,arc:1.8,time:1.2,step:.025,rehit:.25} as const;
 /** Shots that crackle with electricity and burst with a shock: the battle robot's bolts, its turret and missiles, the robot pet. */
@@ -211,7 +213,12 @@ export class CombatSimulation {
     else if(effect==='roots'){this.area(p,6,1,4);for(let i=1;i<9;i++)this.later(i*.5,()=>{this.area(p,6,.3,.5,0,'#aad487');this.host.heal?.(.01);});}
     else if(effect==='drain'){const t=this.nearest(11);if(!t)return false;for(let i=0;i<7;i++)this.later(i*.35,()=>{if(t.hp>0){this.damage(t,.7);this.host.heal?.(.035);this.emit('beam',this.host.position(),Math.hypot(t.x-this.host.position().x,t.z-this.host.position().z),'#ea7a9c',Math.atan2(t.x-this.host.position().x,t.z-this.host.position().z));}});}
     else if(effect==='bloodnova'){this.statuses.lifesteal=6;const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<7);for(let i=0;i<12;i++)this.later(i*.5,()=>{for(const t of targets)this.damage(t,.3);this.emit('ring',p,7,'#cf6290');});}
-    else if(effect==='fireball'||effect==='boulder'){this.emit('cast',p,2,effect==='fireball'?'#ffad6b':'#ad9d89');this.later(.8,()=>this.shoot(effect==='fireball'?'fireball':'boulder',angle,3,14,{radius:1,explosion:4,stun:2}));}
+    else if(effect==='boulder'){
+      const target=this.nearest(BOULDER.range),landing=target?{x:target.x,z:target.z}:{x:p.x+d.x*BOULDER.fallback,z:p.z+d.z*BOULDER.fallback};
+      this.host.effect({...p,kind:'cast',look:'boulder',radius:Math.hypot(landing.x-p.x,landing.z-p.z),facing:Math.atan2(landing.x-p.x,landing.z-p.z),duration:BOULDER.time,color:'#c96a3a'});
+      this.later(BOULDER.time,()=>this.area(landing,BOULDER.radius,BOULDER.power,0,BOULDER.lift,'#c96a3a',1.2,'boulder'));
+    }
+    else if(effect==='fireball'){this.emit('cast',p,2,'#ffad6b');this.later(.8,()=>this.shoot('fireball',angle,3,14,{radius:1,explosion:4,stun:2}));}
     else if(effect==='snowball'){this.shoot('snowball',angle,3,21,{radius:1.5,speed:9,pierce:true,stun:2});}
     else if(effect==='blackhole'){const target={...(this.nearest(12)??p)};for(let i=0;i<10;i++)this.later(i*.3,()=>{for(const t of this.host.targets())if(Math.hypot(t.x-target.x,t.z-target.z)<7)this.host.moveTarget?.(t,target.x+(t.x-target.x)*.65,target.z+(t.z-target.z)*.65);this.area(target,5,.4,1,0,'#9c8ee5');});this.later(3,()=>this.area(target,5,3,1,2,'#bc97ed'));}
     else if(effect==='holy'){const target={...(this.nearest(14)??p)};this.emit('cast',target,3,'#fff1b0');this.later(.8,()=>this.area(target,3.5,4,1,2.5,'#fff1b0'));}
