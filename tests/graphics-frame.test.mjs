@@ -50,6 +50,7 @@ function fixture() {
     run(fps, seconds) {
       for (let i = 0; i < Math.round(fps * seconds); i++) {
         events.length = 0; now += 1000 / fps; ctx.frame(now);
+        if (ctx.document.hidden) { assert.equal(events.includes('render'), false, 'a hidden tab does no rendering work'); continue; }
         assert.equal(painted, true, `frame ${renders} must end with a rendered image after any resize`);
         assert.equal(events.filter(event => event === 'render').length, 1, 'draw exactly once per animation frame');
         const resize = events.indexOf('resize');
@@ -74,7 +75,7 @@ test('adaptive resolution and quality changes finish every frame with a visible 
 });
 
 for (const condition of ['not started', 'menu open', 'document hidden', 'world settling']) {
-  test(`${condition} still renders but cannot trigger automatic quality changes`, () => {
+  test(`${condition} cannot trigger automatic quality changes`, () => {
     const f = fixture();
     if (condition === 'not started') f.ctx.started = false;
     else if (condition === 'menu open') f.ctx.blocked = true;
@@ -83,7 +84,7 @@ for (const condition of ['not started', 'menu open', 'document hidden', 'world s
     f.run(20, 10);
     assert.equal(f.changes.length, 0); assert.equal(f.graphics.ratio, 2);
     assert.equal(f.samples.length, 200); assert.ok(f.samples.every(playing => playing === false));
-    assert.equal(f.renders, 200); assert.equal(f.scheduled, 200);
+    assert.equal(f.renders, condition === 'document hidden' ? 0 : 200); assert.equal(f.scheduled, 200);
   });
 }
 

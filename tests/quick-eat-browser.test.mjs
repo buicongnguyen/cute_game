@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
+import { dismissWelcome } from './browser-start.mjs';
 
 const url = process.env.HUD_LAYOUT_URL, evidence = process.env.EVIDENCE_DIR;
 const VIEWS = {
@@ -24,7 +25,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
       await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
       await page.fill('#name-input', 'Taster');
       await page.click('#title-screen button.primary');
-      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 });
+      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await dismissWelcome(page);
       await page.waitForTimeout(3000);
       // A hurt explorer with a small and a big food; nothing may hit them while measuring.
       await page.evaluate(() => { const z = window.__zoo, s = z.state; z.world.onDamage = () => {}; s.bag.carrot = 3; s.bag.apple = 2; s.hp = Math.round(s.hp * .4); z.toast('ready'); });

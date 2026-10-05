@@ -65,7 +65,7 @@ export class GraphicsGovernor {
   targetRatio() { return Math.min(this.env.devicePixelRatio, this.profile.ratio); }
 
   choose(setting: QualitySetting) {
-    this.setting = setting; this.effectsReduced = false; this.slowSeconds = this.goodSeconds = 0;
+    this.setting = setting; this.effectsReduced = false; this.frames = this.elapsed = this.slowSeconds = this.goodSeconds = 0;
     if (setting === 'auto') this.autoLevel = this.kept = null; this.ratio = this.targetRatio();
   }
 
@@ -78,11 +78,15 @@ export class GraphicsGovernor {
    * seconds in a row (55 fps or more) at full resolution step back up a level.
    */
   sample(dt: number, playing: boolean): GraphicsChange {
+    // Even a brief menu/background transition ends the measurement window: paused frames
+    // must not finish an old slow streak on the first frame back in the game.
+    if (!playing) { this.frames = this.elapsed = this.slowSeconds = this.goodSeconds = 0; return null; }
+    if (!Number.isFinite(dt) || dt <= 0) return null;
     this.frames++; this.elapsed += dt;
     if (this.elapsed < 1) return null;
     const fps = this.frames / this.elapsed; this.fps = fps; this.frames = 0; this.elapsed = 0;
     // Pauses, menus and the settling seconds after start or landing break a streak: only play is judged.
-    if (!playing || this.setting !== 'auto') { this.slowSeconds = this.goodSeconds = 0; return null; }
+    if (this.setting !== 'auto') { this.slowSeconds = this.goodSeconds = 0; return null; }
     // A level is remembered only after a minute of play, so a short spike (a crowded fight, a busy
     // moment on the device) lowers quality for the moment but never for the next visit.
     if (this.autoLevel !== this.kept && ++this.heldSeconds >= HOLD_SECONDS) { this.kept = this.autoLevel; this.unsaved = true; }

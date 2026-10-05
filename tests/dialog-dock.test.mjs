@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
+import { dismissWelcome } from './browser-start.mjs';
 
 const url = process.env.HUD_LAYOUT_URL;
 const DESKTOP = [[1440, 900], [1280, 720], [1920, 1080]];
@@ -22,7 +23,7 @@ async function startGame(browser, view) {
   await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
   await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
   await page.click('#title-screen button.primary');
-  await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 });
+  await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await dismissWelcome(page);
   await page.waitForTimeout(2500);
   return page;
 }

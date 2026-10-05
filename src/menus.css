@@ -89,8 +89,8 @@
 #dialog-body .fish-card strong { font-size: 10.5px; }
 
 /* ------------------------------------------------------------- Backpack */
-#dialog-body .stat-strip { flex-wrap: nowrap; gap: 4px; }
-#dialog-body .stat-strip > span { flex: 1 1 0; min-width: 0; justify-content: center; gap: 4px; padding: 3px 4px; border-radius: 9px; font-size: 12px; white-space: nowrap; }
+#dialog-body .stat-strip { flex-wrap: wrap; gap: 4px; }
+#dialog-body .stat-strip > span { flex: 1 0 auto; min-width: 0; justify-content: center; gap: 4px; padding: 3px 4px; border-radius: 9px; font-size: 12px; white-space: nowrap; }
 .equipment { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .equipment > div { flex-direction: row; align-items: stretch; border-radius: 11px; }
 .equipment > div > button:first-child { flex: 1; min-width: 0; min-height: 40px; padding: 3px 4px 3px 5px; flex-direction: row; justify-content: flex-start; gap: 5px; text-align: left; }
@@ -156,7 +156,7 @@
 #dialog-body .settings-row > div:first-child { flex: 1 1 150px; min-width: 0; }
 #dialog-body .settings-row strong { font-size: 13.5px; }
 #dialog-body .settings-row small { margin-top: 0; font-size: 11.5px; line-height: 1.3; }
-#dialog-body .segmented { gap: 2px; padding: 2px; border-radius: 11px; }
+#dialog-body .segmented { max-width: 100%; gap: 2px; padding: 2px; border-radius: 11px; }
 #dialog-body .segmented button { min-height: 28px; padding: 2px 9px; border-radius: 9px; font-size: 12px; }
 #dialog-body .save-note { padding: 6px 10px; font-size: 12px; line-height: 1.35; }
 #dialog-body .help-grid { gap: 6px; }
@@ -193,8 +193,8 @@
 
 /* Short landscape phones: a wider sheet that uses the full height, with list rows in two columns. */
 @media (max-height: 500px) and (orientation: landscape) {
-  #dialog-layer { padding: 6px; }
-  #dialog { width: min(820px, 100%); max-height: calc(100dvh - 12px); }
+  #dialog-layer { padding: calc(6px + var(--safe-top)) 6px calc(6px + var(--safe-bottom)); }
+  #dialog { width: min(820px, 100%); max-height: calc(100dvh - 12px - var(--safe-top) - var(--safe-bottom)); }
   #dialog-body .shop-grid, #dialog-body .quest-list, #dialog-body .planet-grid, #dialog-body .upgrade-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   #dialog-body .chapter-banner { grid-column: 1 / -1; }
   #dialog-body .help-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -207,6 +207,8 @@
 @media (pointer: coarse) {
   #dialog-body button { position: relative; }
   #dialog-body button::before { content: ''; position: absolute; left: 0; right: 0; top: min(0px, calc(50% - 22px)); bottom: min(0px, calc(50% - 22px)); }
+  /* Wrapped translated options need full-height cells so adjacent rows cannot steal taps. */
+  #dialog-body .segmented button { min-width: 44px; min-height: 44px; }
   /* The tab strip clips its children, so its own padding holds the taller hit area. */
   #dialog:not([data-tone="garden"]) #dialog-body .panel-tabs { padding-top: 7px; padding-bottom: 7px; }
   /* Equipment slots and their ✕ fill a 44 px cell; their hit areas are the cells themselves. */

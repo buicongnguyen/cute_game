@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
+import { dismissWelcome } from './browser-start.mjs';
 
 const url = process.env.HUD_LAYOUT_URL;
 const skip = !url && 'set HUD_LAYOUT_URL to a running DEV server';
@@ -23,7 +24,7 @@ async function play(view, run) {
 }
 async function start(page) {
   await page.fill('#name-input', 'QA'); await page.click('#title-screen button.primary');
-  await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(3000);
+  await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await dismissWelcome(page); await page.waitForTimeout(3000);
 }
 
 /** Controls whose hit area (their box, or an absolutely placed ::before/::after) is under 44 px on this screen. */
@@ -40,8 +41,24 @@ const smallTargets = () => {
 };
 
 test('ten trips in and out of the cottage leave the village scene and its draw calls flat', { skip, timeout: 180000 }, () => play({ viewport: { width: 1440, height: 900 } }, async page => {
+  // Neighbours change clothes and respawn during ordinary play; this fixture measures the cottage's lifetime only.
+  await page.evaluate(async () => (await import('/src/bots.ts')).setNeighboursOn(false));
   await start(page);
-  const probe = () => page.evaluate(() => { const w = window.__zoo.world; let n = 0, doors = 0; w.scene.traverse(o => { if (o.name === 'fishing' || o.parent?.name === 'fishing' || o.parent?.parent?.name === 'fishing') return; n++; if (o.name === 'cottage-door') doors++; }); return { n, doors, draws: w.renderer.info.render.calls }; });
+  await page.evaluate(() => { const w = window.__zoo.world; w.position.set(0, 0, -4); w.cameraTarget.copy(w.position); });
+  await page.waitForTimeout(900);
+  const probe = () => page.evaluate(() => {
+    const w = window.__zoo.world; let n = 0, doors = 0;
+    // Refined fish now have deeper mesh trees: prune the entire independently spawning pond population.
+    const count = o => { if (o.name === 'fishing') return; n++; if (o.name === 'cottage-door') doors++; for (const c of o.children) count(c); };
+    count(w.scene);
+    const fish = w.scene.getObjectByName('fishing'), visible = fish?.visible;
+    window.__cottageCamera ??= w.camera.clone();
+    w.camera.copy(window.__cottageCamera);
+    if (fish) fish.visible = false;
+    w.render(); const draws = w.renderer.info.render.calls;
+    if (fish) fish.visible = visible;
+    return { n, doors, draws };
+  });
   const first = await probe();
   for (let i = 0; i < 10; i++) {
     await page.evaluate(() => { window.__zoo.world.position.set(0, 0, -4); window.__zoo.house.enter(true); }); await page.waitForTimeout(700);
@@ -49,7 +66,7 @@ test('ten trips in and out of the cottage leave the village scene and its draw c
   }
   const last = await probe();
   assert.equal(last.doors, 1, 'one outdoor door');
-  // Pond fish (timed mystery spawns) live under the fishing group and are left out; nothing else may grow.
+  // Nothing in the stable village fixture may grow after repeated entries.
   assert.ok(last.n <= first.n + 2, `scene objects ${first.n} -> ${last.n}`);
   assert.ok(last.draws <= first.draws + 3, `draw calls ${first.draws} -> ${last.draws}`);
 }));

@@ -120,6 +120,27 @@ test('manual choices and paused play are never adjusted', () => {
   const auto = new GraphicsGovernor(desktop); feed(auto, 20, 10, false); assert.equal(auto.level, 'high');
 });
 
+test('even a brief pause discards partial samples and breaks the slow-frame streak', () => {
+  const g = new GraphicsGovernor(phone);
+  feed(g, 20, 2.5);
+  assert.equal(g.sample(.01, false), null);
+  assert.deepEqual(feed(g, 20, .55), [], 'the old two slow seconds must not carry across a menu or background pause');
+  assert.equal(g.profile, QUALITY.high);
+  assert.equal(nextChange(g, 20), 'effects', 'three fresh slow seconds still trigger the normal fallback');
+
+  const resumed = new GraphicsGovernor(phone);
+  feed(resumed, 20, 2.5); resumed.sample(0, false);
+  assert.deepEqual(feed(resumed, 60, 1), [], 'a visibility event can reset the window without adding a frame');
+  assert.ok(resumed.fps > 59, 'the resumed estimate only measures visible frames');
+});
+
+test('choosing graphics discards frames measured under the previous setting', () => {
+  const g = new GraphicsGovernor(phone); feed(g, 2, .5); g.choose('auto');
+  feed(g, 60, 1); assert.ok(g.fps > 59);
+  for (const dt of [0, -1, NaN, Infinity]) assert.equal(g.sample(dt, true), null);
+  assert.ok(Number.isFinite(g.fps)); assert.equal(g.profile, QUALITY.high);
+});
+
 test('stored choices and the legacy low-graphics flag are respected', () => {
   assert.equal(new GraphicsGovernor(desktop, { setting: 'low' }).level, 'low');
   assert.equal(new GraphicsGovernor(desktop, null, true).level, 'low');

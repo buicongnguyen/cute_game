@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
+import { dismissWelcome } from './browser-start.mjs';
 
 const url = process.env.HUD_LAYOUT_URL;
 const VIEWS = {
@@ -50,7 +51,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
       await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
       await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
       await page.fill('#name-input', 'Tiles'); await page.click('#title-screen button.primary');
-      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(2500);
+      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await dismissWelcome(page); await page.waitForTimeout(2500);
       // A full wardrobe and bag, a stocked chest, and the cottage bedroom (the wardrobe's purpose note takes room too).
       await page.evaluate(async () => {
         const M = await import('/src/model.ts'), z = window.__zoo, ids = Object.keys(M.ITEMS);

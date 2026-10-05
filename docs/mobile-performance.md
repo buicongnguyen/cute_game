@@ -41,3 +41,11 @@ A second capture rendered the complete home scene with the same camera, full her
 Automated coverage in `tests/farm-mobile.test.ts` checks 60/120 Hz input cadence, unchanged geometry and draw counts, immediate lifecycle updates, animal picking, real-time guard/collection effects, calmer roaming, and breed uploads across reordered instances. `tests/graphics.test.ts` checks the Sharp default, the one-time mobile Auto migration, the first effects fallback, recovery and fixed manual settings.
 
 The tradeoff is visibly calmer, less frequent animal motion. When Auto needs the effects fallback, shadows disappear and decorative ground cover becomes sparser. Actual battery use, GPU time and sustained frame rate still need checking on representative physical phones.
+
+## Touch and background behavior
+
+Opening menus, rotating the screen, or leaving the app cancels held movement and fishing input. Flight steering and Boost track their own fingers. Buttons also accept a second finger while the movement thumb is held, including on browsers that omit that finger's normal click; browsers that send both events activate the button only once. Skill and food long presses use separate timers, and interrupted presses cannot activate when the old finger is released.
+
+Hidden pages do not simulate flight or draw frames. Returning to the app resets the frame clock, so suspended time does not spend fuel or advance fishing. Auto graphics also resets its measurement window on pauses and manual setting changes; a menu or background transition cannot complete an old slow-frame streak.
+
+Phone menus wrap translated stat labels and graphics options, keeping each touch option at least 44 pixels high. The browser regression matrix covers English and Vietnamese at 320 × 568, 390 × 844 and 844 × 390. The optional browser suites require `HUD_LAYOUT_URL` for a running development server and `PLAYWRIGHT_MODULE` for the installed Playwright entry point. Unit tests cover pointer ownership, cancellation, long presses and hidden-frame timing. Browser emulation verifies interaction and layout; it does not measure sustained performance on physical Android or iOS devices.

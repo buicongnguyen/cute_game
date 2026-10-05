@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
+import { dismissWelcome } from './browser-start.mjs';
 
 const url = process.env.HUD_LAYOUT_URL;
 const skip = !url && 'set HUD_LAYOUT_URL to a running DEV server';
@@ -30,7 +31,7 @@ async function open(browser, block) {
   await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
   await page.fill('#name-input', 'Retry');
   await page.click('#title-screen button.primary');
-  await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 });
+  await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await dismissWelcome(page);
   return { page, tries };
 }
 

@@ -35,6 +35,8 @@ import * as M from './model.ts';
 import {applyGameAction,isMalformedAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
 import { quickEatView, healingFoods, type FoodChoice } from './quick-eat.ts';
+import { mountLongPress, cancelLongPresses } from './long-press.ts';
+import { mountTouchButtons, cancelButtonTouches } from './touch-buttons.ts';
 import { previewGear, canTryOn, autoHeld } from './try-on.ts';
 import './quick-eat.css';
 import { CombatTimers, FishingInput, MovementControls, gameplayKey, keyboardBindings, movementKey } from './gameplay-controls.ts';
@@ -345,7 +347,7 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   if(fishGame)endFishing();
   // Inside the cottage the stove, workbench, globe, wardrobe and mirror are their own places, not the village shops (house-stores.ts).
   const store=indoorStore(type,!!world.interior,bagMode==='wardrobe');if(store){title=store.title;kicker=store.kicker;icon=store.icon;body=purposeHtml(store)+body;}$('#dialog').dataset.station=store?type:'';setDock(type);
-  if(!modal)lastFocused=document.activeElement as HTMLElement;const reopened=modal===type;modal=type;movement.clear();gestures.clear();world.destination=null;world.route=[];
+  if(!modal)lastFocused=document.activeElement as HTMLElement;const reopened=modal===type;modal=type;clearHeldInput();world.destination=null;world.route=[];
   const [defaultIcon,look]=DIALOG_LOOK[type]??['✨','garden'];$('#dialog').dataset.tone=look;$('#dialog-icon').innerHTML=localizeHtml(icon??defaultIcon);
   // Re-rendering the same panel (a tab, a purchase) keeps the reader's scroll position.
   const bodyNode=$('#dialog-body'),scroll=bodyNode.scrollTop,tab=bodyNode.querySelector('.panel-tabs .active')?.textContent;
@@ -354,7 +356,7 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   $('.close-button').focus({preventScroll:true});
 }
 // The Mirror docks with 'trying-on' even before a preview (look-shop.ts), so closing always clears it: a later panel or confirmation must not inherit it.
-function closeDialog(){endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();movement.clear();}
+function closeDialog(){endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();clearHeldInput();}
 /** The three save profiles on the title screen: name and level of each, or an empty slot for a new game. */
 function profilePicker(){
   const cur=activeSlot();
@@ -1143,12 +1145,7 @@ function quickEatMenu(open:boolean){
   const row=(id:string,label:string,icon:string,extra='')=>`<button data-action="quick-eat-choose" data-item="${id}" aria-pressed="${quickEatChoice===id}"><span>${icon}</span><small>${esc(label)}</small>${extra}</button>`;
   menu.innerHTML=localizeHtml(row('auto',t('Auto'),'✨')+healingFoods(state).map(id=>row(id,t(M.ITEMS[id].name),art(id,M.ITEMS[id].icon),`<b>+${M.ITEMS[id].heal! >999?'∞':M.ITEMS[id].heal} · ×${state.bag[id]}</b>`)).join(''));
 }
-{let timer=0,held=false;const button=$('#quick-eat');
-  button.addEventListener('pointerdown',()=>{held=false;clearTimeout(timer);timer=window.setTimeout(()=>{held=true;quickEatMenu(true);},450);});
-  for(const type of ['pointerup','pointerleave','pointercancel'])button.addEventListener(type,()=>clearTimeout(timer));
-  // A long press opens the picker; the click that follows must not also eat.
-  button.addEventListener('click',event=>{if(held){held=false;event.stopImmediatePropagation();}},true);
-  button.addEventListener('contextmenu',event=>event.preventDefault());}
+mountLongPress($('#quick-eat'),()=>quickEatMenu(true),()=>started&&!document.hidden&&!uiBlocked());
 let tryingOn:M.ItemId|null=null;
 /**
  * Try-on: the explorer wears the item at once (World.tryOnGear, never saved or sent online) while the menu
@@ -1169,12 +1166,9 @@ world.onAttackEnemy=basicAttack;
 function currentSkillTip(i:number){const disguise=state.gear.disguise,weapon=M.weaponStats(state);return skillTip(skillList()[i],i,{special:weapon.special??'fist',weaponKind:weapon.kind,level:disguise?0:M.skillLevel(state,i),disguise});}
 const readyWas=[0,0,0,0];
 // Long-press a skill button (phones have no hover): its tip shows for a few seconds and the press does not cast.
-{let timer=0,held=false,hide=0;const tipEl=document.createElement('div');tipEl.id='skill-tip';tipEl.hidden=true;tipEl.setAttribute('role','status');document.body.append(tipEl);
+{let hide=0;const tipEl=document.createElement('div');tipEl.id='skill-tip';tipEl.hidden=true;tipEl.setAttribute('role','status');document.body.append(tipEl);
   document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{
-    button.addEventListener('pointerdown',()=>{held=false;clearTimeout(timer);timer=window.setTimeout(()=>{held=true;tipEl.textContent=currentSkillTip(i);tipEl.hidden=false;clearTimeout(hide);hide=window.setTimeout(()=>{tipEl.hidden=true;},3500);},450);});
-    for(const type of ['pointerup','pointerleave','pointercancel'])button.addEventListener(type,()=>clearTimeout(timer));
-    button.addEventListener('click',event=>{if(held){held=false;event.stopImmediatePropagation();event.preventDefault();}},true);
-    button.addEventListener('contextmenu',event=>event.preventDefault());});}
+    mountLongPress(button,()=>{tipEl.textContent=currentSkillTip(i);tipEl.hidden=false;clearTimeout(hide);hide=window.setTimeout(()=>{tipEl.hidden=true;},3500);},()=>started&&!document.hidden&&!uiBlocked());});}
 function skillList(){const disguise=state.gear.disguise?M.DISGUISES[state.gear.disguise]:null;return disguise?.skills??[...BASE_SKILLS,SPECIALS[M.weaponStats(state).special??'fist']??SPECIALS.fist];}
 function skill(index:number){
   if(!started||uiBlocked()||visiting||cooldowns[index]>0||index<0||index>3)return;
@@ -1256,7 +1250,7 @@ function go(kind:string){closeDialog();const entities=world.entities.filter(e=>e
 const SCENERY_KITS={scenery:sceneryKit,wilds:wildsKit,bright:brightKit,harsh:harshKit,dressing:dressingKit};
 shipSequence=new ShipSequence(world,tone);const ship=shipSequence;
 const spaceView=new SpaceView($('#space-labels'),spaceKit);
-const spaceKeys=new Set<string>();let spacePointer:{x:number;y:number}|null=null,boostHeld=false;
+const spaceKeys=new Set<string>(),boostPointers=new Set<number>();let spacePointer:{pointerId:number;x:number;y:number}|null=null,boostHeld=false;
 const prefetch=(id:M.PlanetId)=>{for(const name of kitsFor(id))void SCENERY_KITS[name].load();};
 function leaveWorld(){if(house.inside)house.house.leave();/* the globe's Fly here starts indoors */closeDialog();resetCombat();cancelPlacement();endFishing();world.destination=null;world.route=[];world.selected=null;world.marker.visible=false;world.ring.visible=false;movement.clear();}
 async function launch(){
@@ -1284,7 +1278,7 @@ function enterSpace(){
   $('#hud').hidden=true;$('#world-labels').hidden=true;$('#space-hud').hidden=false;
   if(flight.autopilot){const p=M.PLANETS[flight.autopilot.id];spaceHint(t('🧭 Autopilot to {planet}: sit back, or press Skip.',{planet:`${p.icon} ${t(p.name)}`}),5);}else spaceHint(matchMedia('(pointer: coarse)').matches?t('Hold anywhere to steer toward your finger · hold {boost} to speed up · fly close to a planet to land',{boost:`<b>${t('Boost')}</b>`}):t('Hold the mouse to steer (or {keys}) · {shift} boosts · fly close to a planet to land',{keys:'<kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd>',shift:'<kbd>Shift</kbd>'}),5);tone('cast');
 }
-function exitSpace(){flight=null;spaceView.hideLabels();spaceKeys.clear();spacePointer=null;boostHeld=false;$('#space-hud').hidden=true;$('#hud').hidden=false;$('#world-labels').hidden=false;}
+function exitSpace(){flight=null;spaceView.hideLabels();clearHeldInput();$('#space-hud').hidden=true;$('#hud').hidden=false;$('#world-labels').hidden=false;}
 let hintTimer=0;
 function spaceHint(html:string,seconds=5){const hint=$('#space-hint');hint.innerHTML=localizeHtml(html);hint.classList.add('show');clearTimeout(hintTimer);hintTimer=window.setTimeout(()=>hint.classList.remove('show'),seconds*1000);}
 function spaceFloat(html:string){const el=document.createElement('div');el.className='space-float';el.innerHTML=localizeHtml(html);$('#space-floats').append(el);setTimeout(()=>el.remove(),1600);}
@@ -1340,12 +1334,12 @@ function updateSpace(dt:number){
   $('#autopilot-skip').hidden=!flight.autopilot;$('#boost-button').hidden=!!flight.autopilot;const land=$('#land-button'),over=flight.autopilot?null:flight.over;land.hidden=!over||!!flight.landing;
   if(over&&!flight.landing){const p=M.PLANETS[over.id],locked=state.level<p.level;land.classList.toggle('locked',locked);$('#land-title').textContent=t(locked?`🔒 ${t(p.name)}`:'🛬 Land');$('#land-name').textContent=t(locked?`Needs level ${p.level}`:`${p.icon} ${t(p.name)}`);}
 }
-$('#world').addEventListener('pointerdown',event=>{if(!flight)return;const e=event as PointerEvent;spacePointer={x:e.clientX,y:e.clientY};});
-addEventListener('pointermove',event=>{if(flight&&spacePointer){const e=event as PointerEvent;spacePointer={x:e.clientX,y:e.clientY};}});
-for(const type of ['pointerup','pointercancel'])addEventListener(type,()=>{spacePointer=null;});
+$('#world').addEventListener('pointerdown',event=>{if(!flight||arriving||spacePointer||event.button!==0)return;event.preventDefault();spacePointer={pointerId:event.pointerId,x:event.clientX,y:event.clientY};$('#world').setPointerCapture(event.pointerId);});
+addEventListener('pointermove',event=>{if(flight&&spacePointer?.pointerId===event.pointerId)spacePointer={pointerId:event.pointerId,x:event.clientX,y:event.clientY};});
+// Steering and Boost belong to their own fingers; releasing either must leave the other held.
+for(const type of ['pointerup','pointercancel','lostpointercapture'] as const)addEventListener(type,event=>{if(spacePointer?.pointerId===event.pointerId)spacePointer=null;boostPointers.delete(event.pointerId);boostHeld=boostPointers.size>0;});
 const boostButton=$('#boost-button');
-boostButton.addEventListener('pointerdown',event=>{event.stopPropagation();event.preventDefault();boostHeld=true;});
-for(const type of ['pointerup','pointerleave','pointercancel'])boostButton.addEventListener(type,()=>{boostHeld=false;});
+boostButton.addEventListener('pointerdown',event=>{if(!flight||arriving||event.button!==0)return;event.stopPropagation();event.preventDefault();boostPointers.add(event.pointerId);boostHeld=true;boostButton.setPointerCapture(event.pointerId);});
 app.addEventListener('click',async event=>{
   const button=(event.target as HTMLElement).closest<HTMLButtonElement>('button');if(!button||button.disabled)return;
   // A clicked HUD button gives up focus, so Space and other shortcuts cannot press it again.
@@ -1496,13 +1490,20 @@ document.addEventListener('keydown',event=>{
 // The keyboard guide counts game keys to learn when to fold itself (hud-keys.ts).
 window.addEventListener('keydown',event=>{if(started&&!uiBlocked()&&!event.repeat&&gameplayKey(event))keysGuide.used();});
 document.addEventListener('keyup',e=>{const key=gameplayKey({...e,code:e.code,key:e.key});spaceKeys.delete(key.toLowerCase());movement.releaseKey(e.code||e.key);if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
-document.addEventListener('pointerdown',e=>{const target=(e.target as HTMLElement).closest<HTMLElement>('button');if(target?.dataset.move){e.preventDefault();movement.pressPointer(e.pointerId,target.dataset.move);target.setPointerCapture(e.pointerId);}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}});
+document.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=(e.target as HTMLElement).closest<HTMLElement>('button');if(target?.dataset.move){e.preventDefault();movement.pressPointer(e.pointerId,target.dataset.move);target.setPointerCapture(e.pointerId);}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}});
 const releasePointer=(e:PointerEvent)=>{gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);fishGame?.input.releasePointer(e.pointerId);};
 document.addEventListener('pointerup',releasePointer);document.addEventListener('pointercancel',releasePointer);document.addEventListener('lostpointercapture',releasePointer);
-function clearHeldInput(){movement.clear();fishGame?.input.clear();gestures.clear();spaceKeys.clear();spacePointer=null;boostHeld=false;}
+function clearHeldInput(){cancelLongPresses();cancelButtonTouches();movement.clear();joystick.clear();fishGame?.input.clear();gestures.clear();spaceKeys.clear();spacePointer=null;boostPointers.clear();boostHeld=false;}
 window.addEventListener('blur',()=>{clearHeldInput();save();});window.addEventListener('beforeunload',save);document.addEventListener('visibilitychange',()=>{clearHeldInput();save();});
+window.addEventListener('resize',clearHeldInput);window.addEventListener('orientationchange',clearHeldInput);
+mountTouchButtons();
 let previous=performance.now(),wasAirborne=false;
-function frame(now:number){frameTime=frameTime*.9+(now-previous)*.1;const realDt=Math.min(1,(now-previous)/1000);previous=now;elapsed+=realDt;uiElapsed+=realDt;
+// A phone may suspend animation callbacks entirely. Neither a hidden callback nor the
+// first frame after returning should spend that absence on flight, fishing or effects.
+document.addEventListener('visibilitychange',()=>{previous=performance.now();graphics.sample(0,false);});
+function frame(now:number){
+  if(document.hidden){previous=now;graphics.sample(0,false);requestAnimationFrame(frame);return;}
+  const frameMs=Math.max(0,now-previous);frameTime=frameTime*.9+frameMs*.1;const realDt=Math.min(1,frameMs/1000);previous=now;elapsed+=realDt;uiElapsed+=realDt;
   // HUD panel boxes are read at the top of the frame, while layout is still clean from the last one; read after
   // this frame's HUD writes they forced a synchronous layout eight times a second (PERF-ANALYSIS.md).
   if(flight&&!arriving){updateSpace(realDt);if(uiElapsed>.12){uiElapsed=0;updateHud();}if(elapsed>8){elapsed=0;save();}requestAnimationFrame(frame);return;}

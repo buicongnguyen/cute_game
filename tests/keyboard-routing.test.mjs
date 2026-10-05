@@ -17,9 +17,11 @@ function target(kind='body'){
 }
 function fixture(layout='classic'){
   const calls=[],keys=new Set(),documentHandlers=new Map(),windowHandlers=new Map(),body=target();
+  const register=(handlers,name,fn)=>{const list=handlers.get(name)??[];list.push(fn);handlers.set(name,list);};
   const state={settings:{keyboardLayout:layout}},movement=new Controls.MovementControls(keys);
-  const ctx=vm.createContext({...Controls,state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,
-    world:{keys,interactNearest:()=>calls.push(['interact'])},document:{hidden:false,activeElement:body,addEventListener:(name,fn)=>documentHandlers.set(name,fn),querySelector:selector=>selector==='dialog[open]'&&ctx.nativeDialog?{}:null},window:{addEventListener:(name,fn)=>windowHandlers.set(name,fn)},
+  const ctx=vm.createContext({...Controls,state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
+    world:{keys,interactNearest:()=>calls.push(['interact'])},document:{hidden:false,activeElement:body,addEventListener:(name,fn)=>register(documentHandlers,name,fn),querySelector:selector=>selector==='dialog[open]'&&ctx.nativeDialog?{}:null},window:{addEventListener:(name,fn)=>register(windowHandlers,name,fn)},
+    previous:0,performance:{now:()=>12345},graphics:{sample:(...args)=>calls.push(['graphicsSample',...args])},
     $:()=>({querySelectorAll:()=>[]}),uiBlocked:()=>!!ctx.modal||ctx.nativeDialog,
     tryLanding:()=>calls.push(['land']),cancelPlacement:()=>{calls.push(['cancelPlacement']);ctx.placement=null;},confirmPlacement:()=>calls.push(['place']),rotatePlacement:()=>calls.push(['rotate']),
     closeDialog:()=>{calls.push(['close']);ctx.modal='';movement.clear();},start:()=>calls.push(['start']),inventory:()=>calls.push(['bag']),quests:()=>calls.push(['journal']),map:()=>calls.push(['map']),quickEat:()=>calls.push(['eat']),skill:index=>calls.push(['skill',index]),basicAttack:()=>calls.push(['attack']),
@@ -30,7 +32,7 @@ function fixture(layout='classic'){
     const event={code,key,target:body,repeat:false,shiftKey:false,ctrlKey:false,metaKey:false,altKey:false,isComposing:false,defaultPrevented:false,preventDefault(){this.defaultPrevented=true;},...extra};
     // Browser KeyboardEvent fields are prototype getters, so object spread does not copy modifiers.
     for(const field of ['code','key','shiftKey','ctrlKey','metaKey','altKey','isComposing','keyCode'])if(field in event)Object.defineProperty(event,field,{value:event[field],enumerable:false});
-    documentHandlers.get(type)(event);return event;
+    for(const handler of documentHandlers.get(type)??[])handler(event);return event;
   }
   return {ctx,calls,keys,state,movement,body,fire,documentHandlers,windowHandlers};
 }
@@ -90,7 +92,8 @@ test('blur and visibility loss clear held ground, space, boost, pointer and reel
   for(const kind of ['blur','visibilitychange']){
     const f=fixture('wasd'),input=new Controls.FishingInput();input.enable({disabled:true,focus(){}});input.holdSpace();f.ctx.fishGame={input};f.fire('keydown','KeyW');
     f.ctx.spaceKeys.add('w');f.ctx.boostHeld=true;f.ctx.spacePointer={x:2,y:3};f.ctx.document.hidden=true;
-    (kind==='blur'?f.windowHandlers:f.documentHandlers).get(kind)();
+    for(const handler of (kind==='blur'?f.windowHandlers:f.documentHandlers).get(kind)??[])handler();
     assert.equal(f.keys.size,0);assert.equal(f.ctx.spaceKeys.size,0);assert.equal(f.ctx.boostHeld,false);assert.equal(f.ctx.spacePointer,null);assert.equal(input.held,false);
+    if(kind==='visibilitychange'){assert.equal(f.ctx.previous,12345);assert.ok(f.calls.some(([call,dt,playing])=>call==='graphicsSample'&&dt===0&&playing===false));}
   }
 });

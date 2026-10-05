@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
+import { dismissWelcome } from './browser-start.mjs';
 
 const url = process.env.HUD_LAYOUT_URL;
 const VIEWS = {
@@ -32,7 +33,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
       await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
       await page.fill('#name-input', 'Layout');
       await page.click('#title-screen button.primary');
-      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 });
+      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await dismissWelcome(page);
       await page.waitForTimeout(4000);
       // A boss fight with a regular creature selected: both the boss bar and the target frame show.
       await page.evaluate(() => {
@@ -127,7 +128,7 @@ test('the discovery pill never shows over the fight buttons or the stick at phon
     await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
     await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
     await page.fill('#name-input', 'Pill'); await page.click('#title-screen button.primary');
-    await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(3000);
+    await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await dismissWelcome(page); await page.waitForTimeout(3000);
     let shown = 0, bad = [];
     // Sweep the explorer around the pill's anchor (2.6, 14.5) so its projection crosses the whole lower screen.
     for (let dx = -6; dx <= 6; dx += 2) for (let dz = -12; dz <= 2; dz += 2) {
@@ -159,7 +160,7 @@ async function openGame(view, name = 'Layout') {
   await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
   await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
   await page.fill('#name-input', name); await page.click('#title-screen button.primary');
-  await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(3000);
+  await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await dismissWelcome(page); await page.waitForTimeout(3000);
   return { browser, page };
 }
 // Runs in the page: the visible box of an element, or null.
@@ -184,7 +185,7 @@ for (const [name, view] of Object.entries(DESKTOP)) {
       for (const s of r.skills) assert.ok(s.l > r.W * .6 && s.b > r.H - 170 && s.r <= r.W, `skills sit in the bottom-right corner: ${JSON.stringify(s)}`);
       assert.ok(Math.max(...r.skills.map(s => s.t)) - Math.min(...r.skills.map(s => s.t)) < 2, 'in one tidy row');
       assert.ok(r.guide && r.guide.l < 40 && r.guide.b > r.H - 40, `the keyboard guide is bottom left: ${JSON.stringify(r.guide)}`);
-      assert.match(r.guideText, /QWER/); assert.match(r.guideText, /Space/);
+      assert.match(r.guideText, /WASD/); assert.match(r.guideText, /JKL;/); assert.match(r.guideText, /Space/);
       assert.ok(r.chal && r.quest && r.chal.t >= r.quest.b - .5 && (!r.bounty || r.chal.b <= r.bounty.t + .5), 'the bonus line sits right under ADVENTURE, above the bounty');
       assert.match(r.chalText, /Quick challenge · \d+s/); assert.match(r.chalText, /Harvest crops · 0\/4/);
       assert.deepEqual(r.levels, ['Lv 30'], 'the level shows once, as the chip after the name'); assert.equal(r.badge, false);
@@ -197,9 +198,9 @@ for (const [name, view] of Object.entries(DESKTOP)) {
       for (const [what, boxes] of Object.entries(r.others)) if (what !== 'home') for (const b of boxes) assert.ok(!overlaps(home, b), `Home overlaps ${what} at ${name}`);
       for (const s of r.skills) assert.ok(!overlaps(home, s));
       if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/desktop-${view.viewport.width}x${view.viewport.height}.png` });
-      // The WASD layout from Settings shows in the guide; the guide folds to a chip and remembers it on this device.
-      await page.evaluate(() => { window.__zoo.state.settings.keyboardLayout = 'wasd'; });
-      await page.waitForFunction(() => /WASD/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')) && /JKL;/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')));
+      // Switching from the default WASD layout to classic updates the guide; folding is remembered on this device.
+      await page.evaluate(() => { window.__zoo.state.settings.keyboardLayout = 'classic'; });
+      await page.waitForFunction(() => /↑←↓→/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')) && /QWER/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')));
       await page.click('#keys-guide .keys-toggle'); await page.waitForTimeout(300);
       const folded = await page.evaluate(BOX => ({ box: (0, eval)(BOX)(document.querySelector('#keys-guide')), list: !!document.querySelector('#keys-guide dl'), saved: localStorage.getItem('zoo-garden-keys-guide') }), BOX);
       assert.equal(folded.list, false); assert.ok(folded.box.r - folded.box.l <= 48, 'folded to a small ⌨️ chip'); assert.match(folded.saved, /"closed"/);
