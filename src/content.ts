@@ -3321,7 +3321,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             },
             {
                 "name": "Quẫy Đuôi",
-                "icon": "🌪️",
+                "icon": "💨",
                 "cd": 5
             },
             {
@@ -3331,7 +3331,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             },
             {
                 "name": "Hoá Khổng Lồ",
-                "icon": "🦕",
+                "icon": "🦖",
                 "cd": 18
             }
         ]
@@ -3426,7 +3426,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             {"name": "Đại Bàng Lao Xuống", "icon": "🦅", "cd": 8},
             {"name": "Dựng Khiên", "icon": "🛡️", "cd": 10},
             {"name": "Pháo Dã Chiến", "icon": "💣", "cd": 12},
-            {"name": "Bão Sao", "icon": "🌟", "cd": 14}
+            {"name": "Bão Sao", "icon": "🌵", "cd": 14}
         ]
     },
     "dz_vietnam": {
@@ -3470,7 +3470,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             },
             {
                 "name": "Tàu Bắn Phá",
-                "icon": "🏴‍☠️",
+                "icon": "💥",
                 "cd": 14
             }
         ]
@@ -3500,7 +3500,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             },
             {
                 "name": "Bầy Dơi Quây",
-                "icon": "🌑",
+                "icon": "🦇",
                 "cd": 12
             },
             {
@@ -4052,14 +4052,14 @@ for (const [id, planet] of Object.entries(PLANETS)) {
     planet.name = planetLabels[id as PlanetId];
     planet.description = `${planet.name} · Landing from level ${planet.level}.`;
 }
-const skillLabels: Record<string, string[]> = { dz_army: ['Rifle volley', 'Machine-gun nest', 'Smoke screen', 'Guided rockets'], dz_navy: ['Anchor swing', 'Grappling hook', 'Broadside', 'Tidal wave'], dz_aodai: ['Lotus petals', 'Healing bloom', 'Charm', 'Starfall'], dz_aodai_man: ['Dragon fan', 'Mighty roar', 'Charge', 'Thunder chain'], dz_usa: ['Eagle strike', 'Raise shield', 'Field cannon', 'Star burst'], dz_vietnam: ['Golden star burst', 'Bamboo roots', 'Holy light', 'Ring of fire'], dz_ninja: ['Shadow clones', 'Vanish', 'Shadow strike', 'Smoke bomb'], dz_mage: ['Great fireball', 'Blink', 'Sheep spell', 'Black hole'], dz_knight: ['Raise shield', 'Charge', 'Challenge', 'Holy blade'], dz_mecha: ['Tank mode', 'Turret', 'Homing missiles', 'Energy shield'], dz_dino: ['Devour', 'Tail sweep', 'Terrifying roar', 'Giant form'], dz_fairy: ['Healing flowers', 'Float', 'Charm', 'Binding tree'], dz_pirate: ['Cannon', 'Hook', 'Scout parrot', 'Broadside'], dz_superhero: ['Take flight', 'Meteor dive', 'Laser gaze', 'Boulder throw'], dz_vampire: ['Life drain', 'Bat form', 'Bat swarm', 'Blood moon'], dz_snowman: ['Rolling snowball', 'Snow decoy', 'Ice rink', 'Ice age'] };
+const skillLabels: Record<string, string[]> = { dz_army: ['Rifle volley', 'Sentry turret', 'Smoke screen', 'Guided rockets'], dz_navy: ['Anchor swing', 'Grappling hook', 'Cannon barrage', 'Surf blades'], dz_aodai: ['Lotus star burst', 'Healing bloom', 'Charm', 'Starfall'], dz_aodai_man: ['Dragon fan', 'Mighty roar', 'Charge', 'Thunder chain'], dz_usa: ['Eagle strike', 'Raise shield', 'Field cannon', 'Thorn burst'], dz_vietnam: ['Golden star burst', 'Bamboo roots', 'Holy strike', 'Ring of fire'], dz_ninja: ['Shadow clones', 'Vanish', 'Shadow strike', 'Smoke bomb'], dz_mage: ['Great fireball', 'Blink', 'Sheep spell', 'Black hole'], dz_knight: ['Raise shield', 'Charge', 'Challenge', 'Holy blade'], dz_mecha: ['Tank mode', 'Turret', 'Homing missiles', 'Energy shield'], dz_dino: ['Devour', 'Tail sweep', 'Terrifying roar', 'Giant form'], dz_fairy: ['Healing flowers', 'Float', 'Charm', 'Binding roots'], dz_pirate: ['Cannon', 'Hook', 'Scout parrot', 'Cannon rain'], dz_superhero: ['Take flight', 'Meteor dive', 'Laser gaze', 'Boulder throw'], dz_vampire: ['Life drain', 'Bat form', 'Bat swarm', 'Blood moon'], dz_snowman: ['Rolling snowball', 'Snow decoy', 'Ice rink', 'Ice age'] };
 for (const [id, disguise] of Object.entries(DISGUISES)) {
     disguise.name = ITEMS[id].name;
     disguise.skills.forEach((skill, i) => skill.name = skillLabels[id][i]);
 }
 for (const [id, collection] of Object.entries(COLLECTIONS))
     collection.name = planetLabels[sourcePlanet(id) as PlanetId];
-const specialLabels: Record<string, string> = { volley: 'Rifle volley', anchor: 'Anchor swing', lotus: 'Lotus petals', dragon: 'Dragon fan', eagle: 'Eagle strike', goldstar: 'Golden star burst', fist: 'Rapid punches', crescent: 'Crescent slash', gore: 'Tusk charge', wave: 'Blade wave', peastorm: 'Pea storm', bigbubble: 'Bubble cage', nova: 'Spike storm', blizzard: 'Blizzard', magma: 'Magma pillar', thunder: 'Thunderstrike', bonk: 'Squeaky smash', tsunami: 'Tsunami', whirl: 'Moon cyclone', starfall: 'Starfall', inferno: 'Inferno ring', laser: 'Rainbow beam' };
+const specialLabels: Record<string, string> = { volley: 'Rifle volley', anchor: 'Anchor swing', lotus: 'Lotus petals', dragon: 'Dragon fan', eagle: 'Eagle strike', goldstar: 'Golden star burst', fist: 'Rapid punches', crescent: 'Crescent slash', gore: 'Tusk charge', wave: 'Blade wave', peastorm: 'Pea storm', bigbubble: 'Bubble cage', nova: 'Spike storm', blizzard: 'Blizzard', magma: 'Magma pillar', thunder: 'Chain lightning', bonk: 'Squeaky smash', tsunami: 'Wave fan', whirl: 'Moon cyclone', starfall: 'Starfall', inferno: 'Inferno ring', laser: 'Prism beam' };
 for (const [id, special] of Object.entries(SPECIALS))
     special.name = specialLabels[id];
 const categoryLabels = new Map<string, string>();

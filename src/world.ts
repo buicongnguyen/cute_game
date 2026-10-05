@@ -42,7 +42,7 @@ import * as M from './model.ts';
 import {EnvironmentSimulation,createEnvironmentLayout,environmentWalkable,inWater,terrainHeight,zoneAt,type EnvironmentStatus,type EnvironmentEvent,type LightningState} from './environments.ts';
 import {EnvironmentView} from './environment-art.ts';
 import {buildDecoration} from './decorations-art.ts';
-import {bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,CALLOUT_RANGE,CREATURE_TELEGRAPHS,telegraphProgress,hitControl,liftHeight,keepsChasing,BOSS_RESISTED,RESIST_SLOW,KNOCK_IMPULSE,BOSS_KNOCK,BOSS_REACH,BOSS_SKILLS,LEASH,type BossSkill} from './boss-patterns.ts';
+import {bossCalloutText,bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,CALLOUT_RANGE,CREATURE_TELEGRAPHS,telegraphProgress,hitControl,liftHeight,keepsChasing,BOSS_RESISTED,RESIST_SLOW,KNOCK_IMPULSE,BOSS_KNOCK,BOSS_REACH,BOSS_SKILLS,LEASH,type BossSkill} from './boss-patterns.ts';
 import {addOutlines,setOutlinesEnabled,showOutlines} from './outline.ts';
 import {SUN_OFFSET,applyPlanetLight,isLit,toonMaterial,type LitMaterial} from './toon.ts';
 import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
@@ -120,6 +120,8 @@ export {DEFAULT_PIVOTS};
 // Creature AI level of detail, as in the reference: calm creatures farther than this from every explorer do not think.
 const AI_REST_RANGE=48,EXPLORER_RADIUS=.45;
 /** The AI numbers of a creature without its own definition, made once rather than per creature per step. */
+/** Disguises that show the flying pose while airborne (the fairy hovers upright-ish, the superhero glides). */
+const FLIGHT_POSE_DISGUISES:readonly string[]=['dz_superhero','dz_fairy'];
 const DEFAULT_AI={speed:2.4,reach:1.8,sight:6,behavior:'melee',cooldown:1.3,windup:.35,flying:false,titan:false} as const,DEFAULT_BOSS_AI={...DEFAULT_AI,sight:11} as const;
 /** A* steps for a creature walking home (about a 35 m square of 1 m cells): enough around fences and ponds, never a long stall. */
 const ROUTE_BUDGET=1200,heightBox=new T.Box3(),occluderPoints=[new T.Vector3(),new T.Vector3(),new T.Vector3()],explorerPoints=occluderPoints.slice(0,2);
@@ -963,12 +965,12 @@ export class World {
       let dist=last?Math.hypot(p.x-last.x,p.z-last.z):0;if(dist>3)dist=0;if(last)last.copy(p);else u.lastPos=p.clone(); // a teleport is not a step
       u.speed=(u.speed??0)+((dt>0?dist/dt:0)-(u.speed??0))*(1-Math.exp(-dt*6));
       const moving=remote.pose.moving??u.speed>.3,leg=HIP*m.scale.x,l=limbsOf(m);
-      const flying=remote.pose.gear?.disguise==='dz_superhero'&&(remote.pose.visual?.flight??0)>0;
+      const flying=FLIGHT_POSE_DISGUISES.includes(remote.pose.gear?.disguise??'')&&(remote.pose.visual?.flight??0)>0;
       if(!flying)clearSuperheroFlightPose(m);
       stepGait(g,moving?Math.max(u.speed,1.5)*dt:0,dt,leg);
       if(l.legL)l.legL.rotation.x=0;if(l.legR)l.legR.rotation.x=0;if(l.armL)l.armL.rotation.x=0;if(l.armR)l.armR.rotation.x=0;
       const bob=applyGait(l,g,gaitSwing(u.speed,leg)),body=m.children[0];if(body)body.position.y=bob;
-      if(flying){superheroFlightPose(m,moving);if(body)body.position.y=0;g.blend=0;}
+      if(flying){superheroFlightPose(m,moving&&remote.pose.gear?.disguise==='dz_superhero');if(body)body.position.y=0;g.blend=0;}
       // Their pet waits at their own pen while they are in the safe village (pet-pen.ts): it is drawn beside them only away from it.
       const pets=(u.pets??=m.children.filter(o=>o.name==='remote-pet')) as T.Object3D[],follows=pets.length>0&&petFollows(remote.pose.planet??this.planet,remote.pose);for(const pet of pets)pet.visible=follows;
     }
@@ -1345,7 +1347,7 @@ export class World {
     if(e.hp<e.maxHp*.3)this.enrageBoss(e);
     if(Math.hypot(e.x-this.position.x,e.z-this.position.z)>CALLOUT_RANGE)return;
     const fx=this.fx;if(!fx)return;const top=e.mesh.position.y+(this.modelHeight?.(e)??2.6)*.6-1.8;
-    fx.text({x:e.x,y:top,z:e.z},t(BOSS_CALLOUTS[skill]),'alert callout');
+    fx.text({x:e.x,y:top,z:e.z},t(bossCalloutText(skill,e.type)),'alert callout');
     fx.burst({x:e.x,y:top+1.2,z:e.z},{n:24,color:[BOSS_TELEGRAPH_COLORS[skill],'#ffffff'],glow:true,size:.12,speed:5,up:4,life:.5});
   }
   /** '🛡️ RESIST' over a boss that shrugged off a stun or a status, at most every 0.7 s like the reference's. */
@@ -1713,7 +1715,7 @@ export class World {
     for(const key of ['punchT','swingT','aimT','hurtT','spinT','landT','castT'] as const)this[key]=Math.max(0,(this[key]||0)-dt);
     this.walkClock=(this.walkClock||0)+dt*(this.moving?11:3);
     const o=this.walkClock,c=Math.sin(o),p=this.player;
-    const flying=this.playerFlying&&this.state.gear.disguise==='dz_superhero';
+    const flying=this.playerFlying&&FLIGHT_POSE_DISGUISES.includes(this.state.gear.disguise??'');
     if(!flying)clearSuperheroFlightPose(p);
     const armL=part(p,'arm-left'),armR=part(p,'arm-right'),legL=part(p,'leg-left'),legR=part(p,'leg-right'),head=part(p,'head');
     const kind=this.weaponKind??'fist',pose=this.pose;
@@ -1754,7 +1756,7 @@ export class World {
     if(this.landT>0){const k=Math.sin(this.landT/.25*Math.PI);sx*=1+k*.18;sy*=1-k*.22;sz*=1+k*.18;}
     p.rotation.y=this.spinT>0?this.facing+(2.2-this.spinT)*22:this.facing+twist;
     p.rotation.x=lean;p.position.y+=lift;p.scale.x*=sx;p.scale.y*=sy;p.scale.z*=sz;
-    if(flying){p.position.y-=lift;p.scale.y/=sy;superheroFlightPose(p,this.moving);if(head&&gaze!=null){const turn=Math.atan2(Math.sin(gaze-this.facing),Math.cos(gaze-this.facing));head.rotation.y=Math.max(-1.2,Math.min(1.2,turn));}}
+    if(flying){p.position.y-=lift;p.scale.y/=sy;superheroFlightPose(p,this.moving&&this.state.gear.disguise==='dz_superhero');if(head&&gaze!=null){const turn=Math.atan2(Math.sin(gaze-this.facing),Math.cos(gaze-this.facing));head.rotation.y=Math.max(-1.2,Math.min(1.2,turn));}}
     if(this.spinT>0&&this.fx&&Math.random()<dt*40)this.fx.burst(this.position,{n:1,color:['#ffffff','#d4f1ff'],glow:true,size:.1,speed:6,up:1,life:.35,y:.6,gravity:0});
     if(pose?.kind==='dash'&&this.fx)this.fx.burst(this.position,{n:2,color:['#ffffff','#bfe9ff'],size:.13,speed:1,up:1,life:.4,y:.3});
     // Hurt flashes red; invulnerability after a hit blinks white.

@@ -915,8 +915,8 @@ export const TITAN_LOOT:Record<string,[string,number,number,number][]> = {
 };
 export const TITAN_VI:Record<string,string> = {
   "⚠️ SWEEPING BEAM": "⚠️ TIA QUÉT",
-  "⚠️ BLACK HOLE": "⚠️ HỐ ĐEN",
-  "⚠️ SEISMIC RAYS": "⚠️ TIA ĐỊA CHẤN",
+  "⚠️ SUCTION PULL": "⚠️ HÚT VÀO",
+  "⚠️ RAY BURST": "⚠️ TIA NỔ TOẢ ĐI",
   "⚠️ BOMBARDMENT": "⚠️ MƯA BOM",
   "⚠️ LEAP CRUSH": "⚠️ NHẢY NGHIỀN NÁT",
   "⚠️ DEATH RING — STAY CLOSE!": "⚠️ VÒNG TỬ THẦN — ĐỨNG SÁT VÀO!",

@@ -9,7 +9,7 @@ import * as T from 'three';
 export type ShotLook = 'bead' | 'star' | 'crescent' | 'shard' | 'thorn' | 'fire' | 'bubble' | 'arrow' | 'rainbow' | 'missile' | 'rock' | 'snow';
 const LOOK_OF: Record<string, ShotLook> = {
   pea: 'bead', star: 'star', wave: 'crescent', ice: 'shard', spike: 'thorn', fire: 'fire', fireball: 'fire', bubble: 'bubble', bigbubble: 'bubble',
-  arrow: 'arrow', rainbow: 'rainbow', missile: 'missile', boulder: 'rock', snowball: 'snow',
+  arrow: 'arrow', rainbow: 'rainbow', missile: 'missile', rocket: 'missile', boulder: 'rock', snowball: 'snow',
 };
 export const lookOf = (kind: string): ShotLook => LOOK_OF[kind] ?? 'bead';
 

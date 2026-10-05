@@ -46,7 +46,7 @@ export const SPECIALS: Record<string,{name:string;icon:string;cd:number}> = {
   volley:{name:'Rifle volley',icon:'🔫',cd:7},anchor:{name:'Anchor swing',icon:'⚓',cd:8},lotus:{name:'Lotus petals',icon:'🪷',cd:9},dragon:{name:'Dragon fan',icon:'🐉',cd:8},eagle:{name:'Eagle strike',icon:'🦅',cd:8},goldstar:{name:'Golden star burst',icon:'⭐',cd:9},
   fist:{name:'Punch flurry',icon:'👊',cd:6},crescent:{name:'Crescent slash',icon:'🌙',cd:6},gore:{name:'Tusk rush',icon:'🐗',cd:7},wave:{name:'Blade waves',icon:'🌊',cd:6},
   peastorm:{name:'Pea barrage',icon:'🟢',cd:8},bigbubble:{name:'Bubble prison',icon:'🫧',cd:10},nova:{name:'Thorn nova',icon:'🌵',cd:9},blizzard:{name:'Blizzard',icon:'❄️',cd:9},
-  magma:{name:'Magma pillars',icon:'🌋',cd:8},thunder:{name:'Thunder chain',icon:'⚡',cd:9},bonk:{name:'Giant bonk',icon:'🔨',cd:7},tsunami:{name:'Tsunami',icon:'🌊',cd:9},
+  magma:{name:'Magma pillars',icon:'🌋',cd:8},thunder:{name:'Thunder chain',icon:'⚡',cd:9},bonk:{name:'Giant bonk',icon:'🔨',cd:7},tsunami:{name:'Wave fan',icon:'🌊',cd:9},
   whirl:{name:'Moon cyclone',icon:'🌪️',cd:8},starfall:{name:'Starfall',icon:'🌠',cd:9},inferno:{name:'Inferno ring',icon:'🔥',cd:9},laser:{name:'Rainbow laser',icon:'🌈',cd:8},
 };
 export function attackRange(weapon?: string|WeaponProfile, targetRadius=.8): number {
@@ -59,7 +59,7 @@ export function distanceToSegment(point:CombatPoint,from:CombatPoint,to:CombatPo
   return Math.hypot(point.x-from.x-dx*fraction,point.z-from.z-dz*fraction);
 }
 const direction=(angle:number)=>({x:Math.sin(angle),z:Math.cos(angle)});
-const colorFor=(kind:string)=>ELECTRIC_SHOTS.has(kind)?ELECTRIC_COLOR:kind.includes('ice')?'#a9eeff':kind.includes('fire')?'#ff985f':kind.includes('bubble')?'#b6eaff':kind.includes('spike')?'#cae482':kind.includes('star')?'#ffe689':'#c4ec9f';
+const colorFor=(kind:string)=>ELECTRIC_SHOTS.has(kind)?ELECTRIC_COLOR:kind.includes('ice')?'#a9eeff':kind.includes('fire')||kind==='rocket'?'#ff985f':kind.includes('bubble')?'#b6eaff':kind.includes('spike')?'#cae482':kind.includes('star')?'#ffe689':'#c4ec9f';
 type Scheduled={at:number;run:()=>void};
 
 /** Independently authored fixed-step combat; every delayed effect follows game pause. */
@@ -231,7 +231,7 @@ export class CombatSimulation {
     }
     else if(effect==='hook'){const t=this.nearest(14);if(!t)return false;this.visual('hook',p,Math.hypot(t.x-p.x,t.z-p.z),.25,'#d6c19b',angle);this.later(.25,()=>{if(t.hp<=0)return;this.host.moveTarget?.(t,p.x+d.x*1.8,p.z+d.z*1.8);this.damage(t,1.5,2);});}
     else if(effect==='parrot'){this.visual('parrot',p,2,8,'#8ae394');for(const t of this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<12)){this.marked.set(t.id,8);this.damage(t,.5);this.emit('impact',t,1,'#8ae394');}}
-    else if(effect==='missiles'){const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<16).slice(0,6);targets.forEach((t,i)=>this.later(i*.15,()=>{if(t.hp<=0)return;const from=this.host.position();this.shoot('missile',Math.atan2(t.x-from.x,t.z-from.z),2,18,{explosion:2,homing:t.id});}));}
+    else if(effect==='missiles'){const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<16).slice(0,6);targets.forEach((t,i)=>this.later(i*.15,()=>{if(t.hp<=0)return;const from=this.host.position();this.shoot(id==='dz_army'?'rocket':'missile',Math.atan2(t.x-from.x,t.z-from.z),2,18,{explosion:2,homing:t.id});}));}
     else if(effect==='cannons'){const t={...(this.nearest(14)??p)};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*4,point={x:t.x+Math.cos(a)*r,z:t.z+Math.sin(a)*r};this.later(i*.15,()=>this.visual('cannonfall',point,2,.5,'#dca66c'));this.later(i*.15+.5,()=>this.area(point,2,1.5,.5,1,'#dca66c'));}}
     else if(effect==='decoy'){const point={x:p.x+d.x*2.5,z:p.z+d.z*2.5};this.allies.push({id:++this.serial,kind:'snowman',...point,life:6,cooldown:99,orbit:0});for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-point.x,t.z-point.z)<8)this.host.status?.(t,'blind',6);this.later(6,()=>this.area(point,4,2.5,2,0,'#e4f9ff'));}
     else if(effect==='icefloor'){this.visual('icefield',p,6,8,'#c2f1ff');for(let i=0;i<16;i++)this.later(i*.5,()=>{for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<6)this.host.status?.(t,'slow',1);});}

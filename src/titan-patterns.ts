@@ -7,7 +7,7 @@ export interface TitanTarget extends TitanPoint {id:string;airborne?:boolean}
 export interface TitanMark extends TitanPoint {r:number;delay:number;k?:number;a?:number;safe?:boolean}
 export const TITAN_WINDUPS:Record<TitanSkill,number>={sweep:1.3,pull:1.1,lines:1.2,bombard:1.3,leap:1,donut:1.6,orbs:1,pools:1.2,summon:1.1,stomp4:1};
 export const TITAN_COLORS:Record<TitanSkill,string>={sweep:'#ff3bd0',pull:'#8a5aff',lines:'#ff7a1f',bombard:'#ff3b3b',leap:'#ffb13d',donut:'#ff2a2a',orbs:'#b06aff',pools:'#7fff5a',summon:'#ffe14d',stomp4:'#ff5a3b'};
-export const TITAN_CALLOUTS:Record<TitanSkill,string>={sweep:'⚠️ SWEEPING BEAM',pull:'⚠️ BLACK HOLE',lines:'⚠️ SEISMIC RAYS',bombard:'⚠️ BOMBARDMENT',leap:'⚠️ LEAP CRUSH',donut:'⚠️ DEATH RING — STAY CLOSE!',orbs:'⚠️ HOMING ORBS',pools:'⚠️ POISON POOLS',summon:'⚠️ SUMMON',stomp4:'⚠️ REPEATED STOMPS'};
+export const TITAN_CALLOUTS:Record<TitanSkill,string>={sweep:'⚠️ SWEEPING BEAM',pull:'⚠️ SUCTION PULL',lines:'⚠️ RAY BURST',bombard:'⚠️ BOMBARDMENT',leap:'⚠️ LEAP CRUSH',donut:'⚠️ DEATH RING — STAY CLOSE!',orbs:'⚠️ HOMING ORBS',pools:'⚠️ POISON POOLS',summon:'⚠️ SUMMON',stomp4:'⚠️ REPEATED STOMPS'};
 export const TITAN_MOVE_SETS=Object.fromEntries(Object.entries(TITANS).map(([id,d])=>[id,d.skills])) as Record<string,readonly TitanSkill[]>;
 export const isTitanSkill=(skill:string|undefined):skill is TitanSkill=>!!skill&&Object.hasOwn(TITAN_WINDUPS,skill);
 const distance=(a:TitanPoint,b:TitanPoint)=>Math.hypot(a.x-b.x,a.z-b.z);

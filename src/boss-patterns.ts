@@ -43,7 +43,7 @@ export function bossTelegraphs(skill:BossSkill,from:BossPoint,target:BossPoint,p
     let value=seed>>>0;const random=()=>{value=(Math.imul(value,1664525)+1013904223)>>>0;return value/4294967296;};
     const marks=[point(target,2)];for(let i=1;i<(phase>=2?4:3);i++){const angle=random()*Math.PI*2,distance=2+random()*4.5;marks.push(point({x:target.x+Math.cos(angle)*distance,z:target.z+Math.sin(angle)*distance},2));}return marks;
   }
-  return [point(from,{slam:4.8,quake:9,barrage:2.2,spin:3.4,eclipse:7}[skill])];
+  return [point(from,{slam:4.8,quake:9,barrage:10,spin:3.4,eclipse:7}[skill])];
 }
 /**
  * Telegraph language, after the reference: red means "your target" (the open ring), so danger is a
@@ -53,7 +53,10 @@ export const TELEGRAPH_LOOK={base:.18,fill:.35,edge:.8,edgeWidth:.12};
 /** Disc colours, the reference's (showSkillWindup): meteor rain orange, the charge lane amber, every other skill red. */
 export const BOSS_TELEGRAPH_COLORS:Record<BossSkill,string>={slam:'#ff3b3b',quake:'#ff3b3b',charge:'#ffb13d',barrage:'#ff3b3b',rain:'#ff7a1f',spin:'#ff3b3b',eclipse:'#ff3b3b',...TITAN_COLORS};
 /** The callout floated above a boss at the start of a wind-up (one per skill, never a toast). */
-export const BOSS_CALLOUTS:Record<BossSkill,string>={slam:'⚠️ SLAM',quake:'⚠️ QUAKE',charge:'⚠️ CHARGE',barrage:'⚠️ BARRAGE',rain:'⚠️ METEOR RAIN',spin:'⚠️ SPIN',eclipse:'⚠️ ECLIPSE',...TITAN_CALLOUTS};
+export const BOSS_CALLOUTS:Record<BossSkill,string>={slam:'⚠️ SLAM',quake:'⚠️ QUAKE',charge:'⚠️ CHARGE',barrage:'⚠️ BARRAGE',rain:'⚠️ FALLING STRIKES',spin:'⚠️ SPIN',eclipse:'⚠️ ECLIPSE',...TITAN_CALLOUTS};
+/** Bosses whose rain really is falling meteors; every other boss's rain is plain falling strikes. */
+export const METEOR_RAIN_BOSSES:ReadonlySet<string>=new Set(['dragon','golem','phoenix']);
+export const bossCalloutText=(skill:BossSkill,type?:string)=>skill==='rain'&&type&&METEOR_RAIN_BOSSES.has(type)?'⚠️ METEOR RAIN':BOSS_CALLOUTS[skill];
 /** Callouts show only to explorers this close to the boss (metres). */
 export const CALLOUT_RANGE=30;
 /**

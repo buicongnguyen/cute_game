@@ -164,6 +164,7 @@ export const VI_GAMEPLAY: Record<string, string> = {
   '⚠️ CHARGE': '⚠️ LAO TỚI',
   '⚠️ BARRAGE': '⚠️ MƯA ĐẠN',
   '⚠️ METEOR RAIN': '⚠️ MƯA THIÊN THẠCH',
+  '⚠️ FALLING STRIKES': '⚠️ ĐÒN GIÁNG XUỐNG',
   '⚠️ SPIN': '⚠️ XOAY TRÒN',
   '⚠️ ECLIPSE': '⚠️ NHẬT THỰC',
   "{hours}h {minutes}m": "{hours} giờ {minutes} phút",
