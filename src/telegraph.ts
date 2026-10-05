@@ -45,7 +45,17 @@ export class TelegraphDecals {
     return ring;
   }
 
-  begin() { this.used = 0; }
+  /** Starts a frame: the rim pulses and the soft area breathes (shared materials, so no per-decal cost). */
+  begin() {
+    this.used = 0;
+    const t = (typeof performance === 'undefined' ? 0 : performance.now()) / 1000, beat = Math.sin(t * 9);
+    for (const set of this.materials.values()) {
+      set.edge.opacity = Math.min(1, TELEGRAPH_LOOK.edge * (.82 + .18 * beat));
+      set.base.opacity = TELEGRAPH_LOOK.base * (.9 + .1 * Math.sin(t * 4));
+    }
+    this.beat = beat;
+  }
+  private beat = 0;
 
   /** One decal: centre, ground height, radius, progress 0–1 of the wind-up and its colour. */
   draw(x: number, y: number, z: number, r: number, progress: number, color: string) {
@@ -60,7 +70,7 @@ export class TelegraphDecals {
     const look = this.look(color), p = Math.min(1, Math.max(0, progress));
     decal.base.material = look.base; decal.fill.material = look.fill; decal.edge.material = look.edge; decal.edge.geometry = this.edge(r);
     decal.group.visible = true; decal.group.position.set(x, y, z);
-    decal.base.scale.setScalar(r); decal.edge.scale.setScalar(r);
+    decal.base.scale.setScalar(r); decal.edge.scale.setScalar(r * (1 + .012 * this.beat * (.4 + .6 * p)));
     decal.fill.visible = p > .001; decal.fill.scale.setScalar(Math.max(.001, r * p));
     decal.fill.position.y = .005; decal.edge.position.y = .01;
     return decal;

@@ -240,7 +240,8 @@ const combatView=new CombatView(world.scene);
 // Laser gaze beams, electric bolts and bursts, scorch marks and the ⚡ mark (skill-fx.ts), for the explorer and remote players alike.
 const skillFx=new SkillFx(world.scene,world.fx??null,{
   explorerAt:(x,z)=>Math.hypot(world.position.x-x,world.position.z-z)<1.5?world.player:[...world.remotePlayers.values()].find(r=>r.mesh.visible&&Math.hypot(r.pose.x-x,r.pose.z-z)<1.5)?.mesh??null,
-  ground:(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})),targets:()=>world.enemies,sound:kind=>tone(kind)});
+  ground:(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})),targets:()=>world.enemies,sound:kind=>tone(kind),
+  density:()=>world.fx?.density??1,isLocal:(x,z)=>Math.hypot(world.position.x-x,world.position.z-z)<1.5});
 combatView.electric=(x,y,z,dx,dz)=>skillFx.crackle(x,y,z,dx,dz);
 combatView.trail=(x,y,z,color)=>world.fx?.burst({x,z},{n:1,glow:true,color,size:.06,life:.38,speed:.25,up:.15,gravity:0,y:y-.15,spread:.1});
 world.onElectricShot=(x,y,z,dx,dz)=>skillFx.crackle(x,y,z,dx,dz);world.onElectricPop=(x,z)=>skillFx.shock({x,z,kind:'impact',radius:.7,color:'#8fdcff',look:'shock'},false,false);

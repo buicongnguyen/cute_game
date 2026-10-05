@@ -21,7 +21,7 @@ for(const id of Object.keys(DISGUISE_INFO))for(let slot=0;slot<4;slot++)test(`${
 test('every new effect is bounded, renders finite transforms, expires and reuses six batches',()=>{
  const fx=new DisguiseFx({ground:()=>2,explorerAt:()=>null});
  for(const look of DISGUISE_LOOKS){assert.equal(fx.play({look,kind:'cast',x:2,z:3,radius:4,color:'#bbaaee',duration:2}),true);fx.update(.35);}
- assert.equal(fx.root.children.length,6);assert.ok(fx.busy);
+ assert.equal(fx.root.children.length,13);assert.ok(fx.busy);
  for(const child of fx.root.children){const b=child as T.InstancedMesh;assert.ok(b.count<=1024);for(const value of b.instanceMatrix.array.slice(0,b.count*16))assert.ok(Number.isFinite(value));}
  for(let i=0;i<200;i++)fx.play({look:'heal',kind:'cast',x:i,z:0,radius:4,color:'#ffffff',duration:8});assert.equal(fx.count,48);
  const geometries=fx.root.children.map(c=>(c as T.Mesh).geometry);fx.update(0);assert.equal(fx.count,48);fx.update(9);assert.equal(fx.count,0);assert.ok(fx.root.children.every(c=>!c.visible));fx.clear();assert.deepEqual(fx.root.children.map(c=>(c as T.Mesh).geometry),geometries);

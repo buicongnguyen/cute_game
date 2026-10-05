@@ -23,6 +23,9 @@ export interface SkillFxHost {
   ground(x: number, z: number): number;
   targets(): readonly ShockTarget[];
   sound(kind: 'shock' | 'zap'): void;
+  /** Particle density 0-1 of the graphics setting, and whether a cast at x,z is the local player's. */
+  density?(): number;
+  isLocal?(x: number, z: number): boolean;
 }
 /** Seconds a creature shows ⚡ after an electric hit. */
 export const SHOCK_MARK = 1.1;

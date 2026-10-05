@@ -6,7 +6,7 @@ export interface CombatHit { amount: number; critical: boolean; stun: number; li
 export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'|'toss'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number;
   /** How the view dresses it (skill-fx.ts): 'eyes' twin eye lasers, 'burn' a laser scorch, 'shock' an electric burst. Same hit either way. */
   look?: EffectLook }
-export const DISGUISE_LOOKS=['charge','smoke','heal','icefield','blackhole','moon','holy','meteor','cannonfall','hook','drain','hearts','roots','roar','freeze','portal','bite','tail','parrot'] as const;
+export const DISGUISE_LOOKS=['charge','smoke','heal','icefield','blackhole','moon','holy','meteor','cannonfall','hook','drain','hearts','roots','roar','freeze','portal','bite','tail','parrot','shield','rush','bolt','rainbow','bats','iceage','crater','lift','blast','magma','inferno','anchor','lotus','eagle','goldstar','bonk','whirl','surf','poof','sheep','taunt','dust'] as const;
 export type EffectLook='eyes'|'burn'|'shock'|'boulder'|typeof DISGUISE_LOOKS[number];
 export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder',...DISGUISE_LOOKS];
 /** Superhero throw: lock a landing point, then lob over intervening ground obstacles. */
@@ -113,7 +113,7 @@ export class CombatSimulation {
   }
   shoot(kind:string,angle:number,multiplier=1,range=11,extras:Partial<Projectile>={}){
     const p=this.host.position(),d=direction(angle);
-    this.projectiles.push({id:++this.serial,x:p.x+d.x*.6,z:p.z+d.z*.6,direction:d,speed:kind==='wave'?13:kind==='bigbubble'?7:19,remaining:range,radius:kind==='bigbubble'?.8:.22,color:colorFor(kind),kind,multiplier:multiplier*this.power,hit:new Set(),pierce:kind==='wave',stun:kind==='ice'?1.5:0,lift:kind==='bigbubble'?3:0,explosion:kind==='fireball'?2:0,...extras});
+    this.projectiles.push({id:++this.serial,x:p.x+d.x*.6,z:p.z+d.z*.6,direction:d,speed:kind==='wave'||kind==='dragon'?13:kind==='bigbubble'?7:19,remaining:range,radius:kind==='bigbubble'?.8:.22,color:colorFor(kind),kind,multiplier:multiplier*this.power,hit:new Set(),pierce:kind==='wave'||kind==='dragon',stun:kind==='ice'?1.5:0,lift:kind==='bigbubble'?3:0,explosion:kind==='fireball'?2:0,...extras});
   }
   basic(target?:CombatTarget){
     if(this.action)return false;const weapon=this.host.weapon();if(weapon.kind==='rod')return false;
@@ -127,16 +127,16 @@ export class CombatSimulation {
     return true;
   }
   private dash(multiplier=1.7,speed=30,duration=.24){
-    this.action={kind:'dash',started:this.time,until:this.time+duration,direction:direction(this.aim()),speed,multiplier:multiplier*this.power,hit:new Set()};
+    const aimed=this.aim();this.action={kind:'dash',started:this.time,until:this.time+duration,direction:direction(aimed),speed,multiplier:multiplier*this.power,hit:new Set()};this.visual('rush',this.host.position(),2,duration,'#e9fbff',aimed);
   }
   skill(index:number,special='fist'){
     if(this.action)return false;
     this.aim();
     const tuning=skillTuning(index,this.host.skillLevel?.(index)??0);this.power=tuning.damage;
     try{
-      if(index===0){const radius=(this.host.weapon().kind==='sword'?3.4:2.8)+tuning.radius;this.host.effect({...this.host.position(),kind:'cast',radius,color:'#e5f6ff',duration:.5});for(let i=0;i<10;i++)this.later(i*.22,()=>this.area(this.host.position(),radius,.55));}
+      if(index===0){const radius=(this.host.weapon().kind==='sword'?3.4:2.8)+tuning.radius;this.host.effect({...this.host.position(),kind:'cast',look:'whirl',radius,color:'#e5f6ff',duration:2.2});for(let i=0;i<10;i++)this.later(i*.22,()=>this.area(this.host.position(),radius,.55));}
       else if(index===1)this.dash();
-      else if(index===2){this.action={kind:'slam',started:this.time,until:this.time+.8,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};this.host.effect({...this.host.position(),kind:'cast',radius:4.4+tuning.radius,color:'#ffd091',duration:.45});this.later(.42,()=>this.area(this.host.position(),4.4+tuning.radius,2.3,.8,2.5,'#ffd091'));}
+      else if(index===2){this.action={kind:'slam',started:this.time,until:this.time+.8,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};this.host.effect({...this.host.position(),kind:'cast',radius:4.4+tuning.radius,color:'#ffd091',duration:.45});this.later(.42,()=>this.area(this.host.position(),4.4+tuning.radius,2.3,.8,2.5,'#ffd091',1.2,'crater'));}
       else return this.special(special);
       return true;
     }finally{this.power=1;}
@@ -146,25 +146,25 @@ export class CombatSimulation {
     switch(id){
       // Uniform skills (uniform-skills.ts)
       case 'volley':for(let i=0;i<10;i++)this.later(i*.06,()=>this.shoot('pea',angle+(this.random()-.5)*.14,.7,15));break;
-      case 'anchor':this.emit('ring',p,4.4,'#9fd6ff');this.later(.15,()=>this.area(p,4.4,2,.4,3,'#9fd6ff'));break;
-      case 'lotus':for(let i=0;i<12;i++)this.shoot('star',i*Math.PI/6,.8,8);this.host.heal?.(.08);this.emit('ring',p,3,'#ffb3cf');break;
-      case 'dragon':for(const offset of [-.45,-.3,-.15,0,.15,.3,.45])this.shoot('wave',angle+offset,1.3,12);break;
-      case 'eagle':this.dash(2.4,30,.3);this.later(.3,()=>{this.emit('ring',this.host.position(),3,'#ffffff');this.area(this.host.position(),3,1.8,.5,2,'#ffffff');});break;
-      case 'goldstar':for(let i=0;i<5;i++)this.shoot('star',angle+i*Math.PI*2/5,1.4,11,{pierce:true});this.later(.1,()=>this.area(p,2.6,1.2,.3,1.5,'#ffe34d'));break;
+      case 'anchor':this.visual('anchor',p,4.4,.7,'#9fd6ff',angle);this.later(.15,()=>this.area(p,4.4,2,.4,3,'#9fd6ff'));break;
+      case 'lotus':for(let i=0;i<12;i++)this.shoot('lotus',i*Math.PI/6,.8,8);this.host.heal?.(.08);this.visual('lotus',p,3,1.4,'#ffb3cf');break;
+      case 'dragon':for(const offset of [-.45,-.3,-.15,0,.15,.3,.45])this.shoot('dragon',angle+offset,1.3,12);break;
+      case 'eagle':this.dash(2.4,30,.3);this.later(.3,()=>{this.emit('ring',this.host.position(),3,'#ffffff');this.area(this.host.position(),3,1.8,.5,2,'#ffffff',1.2,'eagle');});break;
+      case 'goldstar':for(let i=0;i<5;i++)this.shoot('star',angle+i*Math.PI*2/5,1.4,11,{pierce:true});this.later(.1,()=>this.area(p,2.6,1.2,.3,1.5,'#ffe34d',1.2,'goldstar'));break;
       case 'fist': for(let i=0;i<6;i++)this.later(i*.14,()=>{this.aim(this.nearest(2.6));this.arc(1.8,.8,.5);});break;
       case 'crescent':this.arc(3.8,2.4,-.05);break;
       case 'gore':this.dash(2,28,.36);break;
-      case 'wave':case 'tsunami':{const angles=id==='wave'?[-.28,0,.28]:[-.5,-.25,0,.25,.5];for(const offset of angles)this.shoot('wave',angle+offset,id==='wave'?2:1.6,id==='wave'?12:13);break;}
+      case 'wave':case 'tsunami':{const angles=id==='wave'?[-.28,0,.28]:[-.5,-.25,0,.25,.5];this.visual('surf',p,id==='wave'?10:13,.9,'#7fd0ff',angle);for(const offset of angles)this.shoot('wave',angle+offset,id==='wave'?2:1.6,id==='wave'?12:13);break;}
       case 'peastorm':for(let i=0;i<14;i++)this.later(i*.07,()=>this.shoot('pea',angle+(this.random()-.5)*.9,.8,11));break;
       case 'bigbubble':this.shoot('bigbubble',angle,1.2,11,{stun:3});break;
-      case 'nova':case 'blizzard':for(let i=0;i<24;i++)this.shoot(id==='nova'?'spike':'ice',i*Math.PI/12,id==='nova'?1.1:1,id==='nova'?8:9);break;
-      case 'magma':for(let i=1;i<=5;i++)this.later(i*.09,()=>this.area({x:p.x+d.x*i*1.7,z:p.z+d.z*i*1.7},1.6,1.5,.5,1.8,'#ff9357'));break;
-      case 'thunder':this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<10).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z)).slice(0,6).forEach((target,i,list)=>this.later(i*.09,()=>{const from=i?list[i-1]:this.host.position();this.host.effect({x:from.x,z:from.z,kind:'beam',radius:Math.hypot(target.x-from.x,target.z-from.z),color:'#a6f8ff',facing:Math.atan2(target.x-from.x,target.z-from.z),duration:.3,width:.35});this.emit('impact',target,1,'#a6f8ff');this.damage(target,2.4,2);}));break;
-      case 'bonk':this.area({x:p.x+d.x*1.6,z:p.z+d.z*1.6},3.6,2.2,3,2,'#ffe14d');break;
-      case 'whirl':for(let i=0;i<3;i++)this.later(i*.22,()=>this.area(this.host.position(),4.4,1.4,.2,0,'#c9e8ff'));break;
-      case 'starfall':{const target={...(this.nearest(13)??{x:p.x+d.x*6,z:p.z+d.z*6})};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*3.6,point={x:target.x+Math.cos(a)*r,z:target.z+Math.sin(a)*r};this.later(i*.09,()=>this.visual('meteor',point,1.6,.22,'#ffe45c'));this.later(i*.09+.22,()=>this.area(point,1.6,1.1,.2,0,'#ffe45c'));}break;}
-      case 'inferno':for(let i=0;i<10;i++)this.later(i*.05,()=>{const a=i*Math.PI/5;this.area({x:p.x+Math.cos(a)*3.6,z:p.z+Math.sin(a)*3.6},1.8,1.3,.2,1.2,'#ff874c');});break;
-      case 'laser':{const end={x:p.x+d.x*14,z:p.z+d.z*14};this.host.effect({...p,kind:'beam',radius:14,color:'#bbfaff',facing:angle,duration:.5,width:1.4});for(const t of this.host.targets())if(t.hp>0&&distanceToSegment(t,p,end)<t.radius+.7)this.damage(t,3,.4,0,2);break;}
+      case 'nova':case 'blizzard':for(let i=0;i<24;i++)this.shoot(id==='nova'?'thornburst':'ice',i*Math.PI/12,id==='nova'?1.1:1,id==='nova'?8:9);break;
+      case 'magma':for(let i=1;i<=5;i++)this.later(i*.09,()=>this.area({x:p.x+d.x*i*1.7,z:p.z+d.z*i*1.7},1.6,1.5,.5,1.8,'#ff9357',1.2,'magma'));break;
+      case 'thunder':this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<10).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z)).slice(0,6).forEach((target,i,list)=>this.later(i*.09,()=>{const from=i?list[i-1]:this.host.position();this.host.effect({x:from.x,z:from.z,kind:'beam',radius:Math.hypot(target.x-from.x,target.z-from.z),color:'#a6f8ff',facing:Math.atan2(target.x-from.x,target.z-from.z),duration:.3,width:.35,look:'bolt'});this.emit('impact',target,1,'#a6f8ff');this.damage(target,2.4,2);}));break;
+      case 'bonk':this.area({x:p.x+d.x*1.6,z:p.z+d.z*1.6},3.6,2.2,3,2,'#ffe14d',1.2,'bonk');break;
+      case 'whirl':for(let i=0;i<3;i++)this.later(i*.22,()=>this.area(this.host.position(),4.4,1.4,.2,0,'#c9e8ff',1.2,'whirl'));break;
+      case 'starfall':{const target={...(this.nearest(13)??{x:p.x+d.x*6,z:p.z+d.z*6})};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*3.6,point={x:target.x+Math.cos(a)*r,z:target.z+Math.sin(a)*r};this.later(i*.09,()=>this.visual('meteor',point,1.6,.22,'#ffe45c'));this.later(i*.09+.22,()=>this.area(point,1.6,1.1,.2,0,'#ffe45c',1.2,'blast'));}break;}
+      case 'inferno':for(let i=0;i<10;i++)this.later(i*.05,()=>{const a=i*Math.PI/5;this.area({x:p.x+Math.cos(a)*3.6,z:p.z+Math.sin(a)*3.6},1.8,1.3,.2,1.2,'#ff874c',1.2,'inferno');});break;
+      case 'laser':{const end={x:p.x+d.x*14,z:p.z+d.z*14};this.host.effect({...p,kind:'beam',radius:14,color:'#bbfaff',facing:angle,duration:.5,width:1.4,look:'rainbow'});for(const t of this.host.targets())if(t.hp>0&&distanceToSegment(t,p,end)<t.radius+.7)this.damage(t,3,.4,0,2);break;}
       default:return false;
     }return true;
   }
@@ -175,9 +175,9 @@ export class CombatSimulation {
     // The uniform kits reuse the weapon specials (volley, anchor, lotus, dragon, eagle, goldstar, tsunami, starfall, thunder, nova, inferno).
     if(['volley','anchor','lotus','dragon','eagle','goldstar','tsunami','starfall','thunder','nova','inferno'].includes(effect))return this.special(effect);
     const p={...this.host.position()},angle=this.aim(),d=direction(angle);
-    if(effect==='flight'){this.statuses.flight=this.statuses.flight>0?0:12;this.emit('ring',p,2,'#ffffff');}
-    else if(effect==='hover'){this.statuses.flight=8;this.emit('ring',p,2,'#ffe1ff');}
-    else if(effect==='dive'){const mult=this.statuses.flight>0?4:2;this.statuses.flight=0;this.host.move(d.x*4,d.z*4);this.later(.18,()=>this.area(this.host.position(),5,mult,1,3,'#b5cbff'));}
+    if(effect==='flight'){this.statuses.flight=this.statuses.flight>0?0:12;this.visual('lift',p,2.5,.9,'#ffffff');}
+    else if(effect==='hover'){this.statuses.flight=8;this.visual('lift',p,2.5,.9,'#ffe1ff');}
+    else if(effect==='dive'){const mult=this.statuses.flight>0?4:2;this.statuses.flight=0;this.host.move(d.x*4,d.z*4);this.later(.18,()=>this.area(this.host.position(),5,mult,1,3,'#b5cbff',1.2,'crater'));}
     else if(effect==='sweep'){
       // Laser gaze: twin eye beams sweep the front. Each step the line drawn (look 'eyes', skill-fx.ts) and the line hit
       // are the same: from the explorer along `beamAngle`, GAZE.length long and GAZE.width wide; a hit leaves a scorch ('burn').
@@ -194,12 +194,12 @@ export class CombatSimulation {
         }
       });}
     }
-    else if(effect==='shield'||effect==='energyshield'){this.statuses.shield=4;if(effect==='energyshield')this.host.heal?.(.2);this.emit('ring',p,2.5,'#a1fbdf');}
+    else if(effect==='shield'||effect==='energyshield'){this.statuses.shield=4;if(effect==='energyshield')this.host.heal?.(.2);this.visual('shield',p,2.3,4,effect==='energyshield'?'#6fe8ff':'#a1fbdf');}
     else if(effect==='heal'){this.visual('heal',p,4,8,'#bbffb9');for(let i=0;i<16;i++)this.later(i*.5,()=>{if(Math.hypot(this.host.position().x-p.x,this.host.position().z-p.z)<4)this.host.heal?.(.03);});}
-    else if(effect==='stealth'||effect==='bats'){this.statuses.stealth=effect==='bats'?0:5;this.statuses.bats=effect==='bats'?2.5:0;if(effect==='bats')this.statuses.shield=2.5;this.emit('ring',p,2,'#c0ace8');}
+    else if(effect==='stealth'||effect==='bats'){this.statuses.stealth=effect==='bats'?0:5;this.statuses.bats=effect==='bats'?2.5:0;if(effect==='bats')this.statuses.shield=2.5;if(effect==='bats')this.visual('bats',p,2,2.5,'#6a3d9a');else this.visual('poof',p,2,.7,'#c0ace8');}
     else if(effect==='teleport'){this.visual('portal',p,1,.45);this.host.move(d.x*8,d.z*8);this.visual('portal',this.host.position(),1,.45);}
     else if(effect==='backstab'){const t=this.nearest(12);if(!t)return false;const behind=direction(t.facing??angle),gap=t.radius+.8;this.visual('portal',p,1,.35);this.host.move(t.x-p.x-behind.x*gap,t.z-p.z-behind.z*gap);this.aim(t);this.visual('portal',this.host.position(),1,.35);this.damage(t,3,1);this.emit('arc',t,2,'#f9f0ce');}
-    else if(effect==='giant'){this.statuses.giant=10;this.giantStep=0;this.lastStep={...p};this.emit('ring',p,2.5,'#c96a3a');}
+    else if(effect==='giant'){this.statuses.giant=10;this.giantStep=0;this.lastStep={...p};this.visual('crater',p,3.2,.8,'#c96a3a');}
     else if(effect==='tank'){this.statuses.tank=6;for(let i=0;i<24;i++)this.later(i*.25,()=>this.area(this.host.position(),2,1,.3,1,ELECTRIC_COLOR,1.2,'shock'));}// an electric shockwave (same hit, same .3 s stun)
     else if(effect==='charge')this.dash(3,25,.45);
     else if(effect==='tail'){this.visual('tail',p,3.6,.4,'#5fbf5a');this.area(p,3.6,1.8,0,0,'#5fbf5a',6);}
@@ -211,7 +211,7 @@ export class CombatSimulation {
     else if(effect==='roar'||effect==='taunt'||effect==='sheep'||effect==='charm'){
       const t=this.nearest(12),center=(effect==='sheep'||effect==='charm')?(t??p):p,radius=effect==='sheep'?3:effect==='charm'?1:effect==='roar'?9:12;
       for(const e of this.host.targets())if(e.hp>0&&Math.hypot(e.x-center.x,e.z-center.z)<radius+e.radius)this.host.status?.(e,effect==='roar'?'fear':effect==='taunt'?'taunt':effect==='sheep'?'sheep':'charm',effect==='charm'?8:effect==='sheep'||effect==='taunt'?6:4);
-      if(effect==='taunt')this.statuses.armor=6;if(effect==='roar')this.visual('roar',center,radius,.8,'#79c487');else if(effect==='charm')this.visual('hearts',center,1,2,'#ff80bd');else this.emit('ring',center,radius,'#ccbae8');
+      if(effect==='taunt')this.statuses.armor=6;if(effect==='roar')this.visual('roar',center,radius,.8,'#79c487');else if(effect==='charm')this.visual('hearts',center,1,2,'#ff80bd');else this.visual(effect==='taunt'?'taunt':'sheep',center,radius,1,effect==='taunt'?'#ff6a4a':'#ccbae8');
     }
     else if(effect==='roots'){this.visual('roots',p,6,4.5,'#aad487');this.area(p,6,1,4);for(let i=1;i<9;i++)this.later(i*.5,()=>{this.area(p,6,.3,.5,0,'#aad487');this.host.heal?.(.01);});}
     else if(effect==='drain'){const t=this.nearest(11);if(!t)return false;for(let i=0;i<7;i++)this.later(i*.35,()=>{if(t.hp>0){this.damage(t,.7);this.host.heal?.(.035);this.visual('drain',this.host.position(),Math.hypot(t.x-this.host.position().x,t.z-this.host.position().z),.35,'#ea7a9c',Math.atan2(t.x-this.host.position().x,t.z-this.host.position().z));}});}
@@ -228,15 +228,16 @@ export class CombatSimulation {
     else if(effect==='clones'||effect==='turret'||effect==='cannon'||effect==='batcircle'){
       const count=effect==='clones'?2:effect==='batcircle'?5:1;
       for(let i=0;i<count;i++){const a=i/count*Math.PI*2;this.allies.push({id:++this.serial,kind:effect==='clones'?'clone':effect==='batcircle'?'bat':effect,x:p.x+Math.cos(a)*1.5,z:p.z+Math.sin(a)*1.5,life:effect==='turret'?12:effect==='cannon'?10:8,cooldown:i*.12,orbit:a});}
+      this.visual('dust',p,effect==='turret'||effect==='cannon'?2.2:2.6,.8,effect==='clones'||effect==='batcircle'?'#b9a6e8':'#d8c59a');
     }
     else if(effect==='hook'){const t=this.nearest(14);if(!t)return false;this.visual('hook',p,Math.hypot(t.x-p.x,t.z-p.z),.25,'#d6c19b',angle);this.later(.25,()=>{if(t.hp<=0)return;this.host.moveTarget?.(t,p.x+d.x*1.8,p.z+d.z*1.8);this.damage(t,1.5,2);});}
     else if(effect==='parrot'){this.visual('parrot',p,2,8,'#8ae394');for(const t of this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<12)){this.marked.set(t.id,8);this.damage(t,.5);this.emit('impact',t,1,'#8ae394');}}
     else if(effect==='missiles'){const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<16).slice(0,6);targets.forEach((t,i)=>this.later(i*.15,()=>{if(t.hp<=0)return;const from=this.host.position();this.shoot(id==='dz_army'?'rocket':'missile',Math.atan2(t.x-from.x,t.z-from.z),2,18,{explosion:2,homing:t.id});}));}
-    else if(effect==='cannons'){const t={...(this.nearest(14)??p)};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*4,point={x:t.x+Math.cos(a)*r,z:t.z+Math.sin(a)*r};this.later(i*.15,()=>this.visual('cannonfall',point,2,.5,'#dca66c'));this.later(i*.15+.5,()=>this.area(point,2,1.5,.5,1,'#dca66c'));}}
-    else if(effect==='decoy'){const point={x:p.x+d.x*2.5,z:p.z+d.z*2.5};this.allies.push({id:++this.serial,kind:'snowman',...point,life:6,cooldown:99,orbit:0});for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-point.x,t.z-point.z)<8)this.host.status?.(t,'blind',6);this.later(6,()=>this.area(point,4,2.5,2,0,'#e4f9ff'));}
+    else if(effect==='cannons'){const t={...(this.nearest(14)??p)};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*4,point={x:t.x+Math.cos(a)*r,z:t.z+Math.sin(a)*r};this.later(i*.15,()=>this.visual('cannonfall',point,2,.5,'#dca66c'));this.later(i*.15+.5,()=>this.area(point,2,1.5,.5,1,'#dca66c',1.2,'blast'));}}
+    else if(effect==='decoy'){const point={x:p.x+d.x*2.5,z:p.z+d.z*2.5};this.allies.push({id:++this.serial,kind:'snowman',...point,life:6,cooldown:99,orbit:0});for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-point.x,t.z-point.z)<8)this.host.status?.(t,'blind',6);this.later(6,()=>this.area(point,4,2.5,2,0,'#e4f9ff',1.2,'iceage'));}
     else if(effect==='icefloor'){this.visual('icefield',p,6,8,'#c2f1ff');for(let i=0;i<16;i++)this.later(i*.5,()=>{for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<6)this.host.status?.(t,'slow',1);});}
     else if(effect==='iceage'){const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<8);for(const t of targets){this.damage(t,.3,3);this.host.status?.(t,'slow',3);this.visual('freeze',t,Math.max(.6,t.radius),3,'#d0f7ff');}// a freeze (3 s stun), not a sheep spell
-this.emit('ring',p,8,'#d0f7ff');this.later(3,()=>{for(const t of targets)this.damage(t,2.8,1);});}
+this.visual('iceage',p,8,2.2,'#d0f7ff');this.later(3,()=>{for(const t of targets)this.damage(t,2.8,1);});}
     else return this.special(effect);
     return true;
   }
@@ -255,7 +256,7 @@ this.emit('ring',p,8,'#d0f7ff');this.later(3,()=>{for(const t of targets)this.da
   update(dt:number,active=true){
     if(!active||!Number.isFinite(dt)||dt<=0)return;this.time+=dt;
     const position=this.host.position(),moved=this.host.moving?.()??(!!this.lastStep&&Math.hypot(position.x-this.lastStep.x,position.z-this.lastStep.z)>dt);
-    if(this.statuses.giant>0){this.giantStep-=dt;if(moved&&this.giantStep<=0){this.giantStep=.45;this.area(position,2.5,.7,0,0,'#c96a3a',2);}}
+    if(this.statuses.giant>0){this.giantStep-=dt;if(moved&&this.giantStep<=0){this.giantStep=.45;this.area(position,2.5,.7,0,0,'#c96a3a',2,'crater');}}
     this.lastStep={...position};
     this.petCooldown=Math.max(0,this.petCooldown-dt);
     const pet=this.host.pet?.();
@@ -280,14 +281,14 @@ this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot?
       const distance=Math.hypot(target.x-ally.x,target.z-ally.z),angle=Math.atan2(target.x-ally.x,target.z-ally.z);ally.facing=angle;
       if(ally.kind==='clone'&&distance>1.3){const step=Math.min(distance-1.2,dt*8);ally.x+=Math.sin(angle)*step;ally.z+=Math.cos(angle)*step;}
       if(ally.cooldown>0)continue;
-      if(ally.kind==='turret'||ally.kind==='cannon'){this.shoot(ally.kind==='turret'?'volt':'fireball',angle,ally.kind==='turret'?.65:1.2,14,{x:ally.x,z:ally.z,explosion:ally.kind==='cannon'?2:0});ally.cooldown=ally.kind==='turret'?.5:.8;this.emit('cast',ally,.6,ally.kind==='turret'?ELECTRIC_COLOR:'#d2b9ff');}
+      if(ally.kind==='turret'||ally.kind==='cannon'){this.shoot(ally.kind==='turret'?'volt':'cannonball',angle,ally.kind==='turret'?.65:1.2,14,{x:ally.x,z:ally.z,explosion:ally.kind==='cannon'?2:0});ally.cooldown=ally.kind==='turret'?.5:.8;this.emit('cast',ally,.6,ally.kind==='turret'?ELECTRIC_COLOR:'#d2b9ff');}
       else if(distance<target.radius+1.6){this.damage(target,ally.kind==='bat'?.35:.6,.1);ally.cooldown=.7;this.emit('arc',ally,1,'#c6b2ee',angle);if(ally.kind==='bat')this.host.heal?.(.01);}
     }
     for(let i=this.projectiles.length-1;i>=0;i--){const shot=this.projectiles[i];if(shot.kind==='snowball')shot.radius=Math.min(2.6,shot.radius+.9*dt);if(shot.homing){const target=this.host.targets().find(t=>t.id===shot.homing&&t.hp>0);if(target){const a=Math.atan2(target.x-shot.x,target.z-shot.z),old=Math.atan2(shot.direction.x,shot.direction.z),turn=Math.atan2(Math.sin(a-old),Math.cos(a-old));shot.direction=direction(old+Math.max(-dt*5,Math.min(dt*5,turn)));}}const from={x:shot.x,z:shot.z},step=Math.min(shot.speed*dt,shot.remaining),to={x:shot.x+shot.direction.x*step,z:shot.z+shot.direction.z*step};
       if(this.host.clearShot&&!this.host.clearShot(from,to)){this.emit('impact',from,.4,shot.color);this.projectiles.splice(i,1);continue;}
       shot.x=to.x;shot.z=to.z;shot.remaining-=step;let consumed=false;
       const targets=this.host.targets().filter(t=>t.hp>0&&!shot.hit.has(t.id)&&distanceToSegment(t,from,to)<=t.radius+shot.radius).sort((a,b)=>Math.hypot(a.x-from.x,a.z-from.z)-Math.hypot(b.x-from.x,b.z-from.z));
-      this.helperShot=!!shot.helper;for(const target of targets){shot.hit.add(target.id);this.damage(target,shot.multiplier,shot.stun,shot.lift,1);const look=ELECTRIC_SHOTS.has(shot.kind)?'shock' as const:undefined;this.emit('impact',target,shot.radius+.3,shot.color,this.host.facing(),look);if(shot.explosion)this.area(target,shot.explosion,shot.multiplier*.6,shot.stun,0,shot.color,1.2,look);if(!shot.pierce){consumed=true;break;}}
+      this.helperShot=!!shot.helper;for(const target of targets){shot.hit.add(target.id);this.damage(target,shot.multiplier,shot.stun,shot.lift,1);const look=ELECTRIC_SHOTS.has(shot.kind)?'shock' as const:shot.explosion?'blast' as const:undefined;this.emit('impact',target,shot.radius+.3,shot.color,this.host.facing(),look);if(shot.explosion)this.area(target,shot.explosion,shot.multiplier*.6,shot.stun,0,shot.color,1.2,look);if(!shot.pierce){consumed=true;break;}}
       this.helperShot=false;if(consumed||shot.remaining<=0)this.projectiles.splice(i,1);
     }
   }
