@@ -14,6 +14,7 @@ import { inSafeZone } from './safe-zone.ts';
 import { buildPond } from './pond-view.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
+import {superheroFlightPose,clearSuperheroFlightPose} from './flight-pose.ts';
 import { manageSceneMatrices, updateSceneMatrices } from './scene-matrices.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { keepAlive } from './dispose-tree.ts';
@@ -961,9 +962,12 @@ export class World {
       let dist=last?Math.hypot(p.x-last.x,p.z-last.z):0;if(dist>3)dist=0;if(last)last.copy(p);else u.lastPos=p.clone(); // a teleport is not a step
       u.speed=(u.speed??0)+((dt>0?dist/dt:0)-(u.speed??0))*(1-Math.exp(-dt*6));
       const moving=remote.pose.moving??u.speed>.3,leg=HIP*m.scale.x,l=limbsOf(m);
+      const flying=remote.pose.gear?.disguise==='dz_superhero'&&(remote.pose.visual?.flight??0)>0;
+      if(!flying)clearSuperheroFlightPose(m);
       stepGait(g,moving?Math.max(u.speed,1.5)*dt:0,dt,leg);
       if(l.legL)l.legL.rotation.x=0;if(l.legR)l.legR.rotation.x=0;if(l.armL)l.armL.rotation.x=0;if(l.armR)l.armR.rotation.x=0;
       const bob=applyGait(l,g,gaitSwing(u.speed,leg)),body=m.children[0];if(body)body.position.y=bob;
+      if(flying){superheroFlightPose(m,moving);if(body)body.position.y=0;g.blend=0;}
       // Their pet waits at their own pen while they are in the safe village (pet-pen.ts): it is drawn beside them only away from it.
       const pets=(u.pets??=m.children.filter(o=>o.name==='remote-pet')) as T.Object3D[],follows=pets.length>0&&petFollows(remote.pose.planet??this.planet,remote.pose);for(const pet of pets)pet.visible=follows;
     }
@@ -1708,6 +1712,8 @@ export class World {
     for(const key of ['punchT','swingT','aimT','hurtT','spinT','landT','castT'] as const)this[key]=Math.max(0,(this[key]||0)-dt);
     this.walkClock=(this.walkClock||0)+dt*(this.moving?11:3);
     const o=this.walkClock,c=Math.sin(o),p=this.player;
+    const flying=this.playerFlying&&this.state.gear.disguise==='dz_superhero';
+    if(!flying)clearSuperheroFlightPose(p);
     const armL=part(p,'arm-left'),armR=part(p,'arm-right'),legL=part(p,'leg-left'),legR=part(p,'leg-right'),head=part(p,'head');
     const kind=this.weaponKind??'fist',pose=this.pose;
     let twist=0,lean=0,lift=0,sx=1,sy=1,sz=1;
@@ -1747,6 +1753,7 @@ export class World {
     if(this.landT>0){const k=Math.sin(this.landT/.25*Math.PI);sx*=1+k*.18;sy*=1-k*.22;sz*=1+k*.18;}
     p.rotation.y=this.spinT>0?this.facing+(2.2-this.spinT)*22:this.facing+twist;
     p.rotation.x=lean;p.position.y+=lift;p.scale.x*=sx;p.scale.y*=sy;p.scale.z*=sz;
+    if(flying){p.position.y-=lift;p.scale.y/=sy;superheroFlightPose(p,this.moving);if(head&&gaze!=null){const turn=Math.atan2(Math.sin(gaze-this.facing),Math.cos(gaze-this.facing));head.rotation.y=Math.max(-1.2,Math.min(1.2,turn));}}
     if(this.spinT>0&&this.fx&&Math.random()<dt*40)this.fx.burst(this.position,{n:1,color:['#ffffff','#d4f1ff'],glow:true,size:.1,speed:6,up:1,life:.35,y:.6,gravity:0});
     if(pose?.kind==='dash'&&this.fx)this.fx.burst(this.position,{n:2,color:['#ffffff','#bfe9ff'],size:.13,speed:1,up:1,life:.4,y:.3});
     // Hurt flashes red; invulnerability after a hit blinks white.
