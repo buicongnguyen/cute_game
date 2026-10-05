@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as T from 'three';
-import { CombatSimulation, GAZE, ELECTRIC_SHOTS, ELECTRIC_COLOR, EFFECT_LOOKS, distanceToSegment, type CombatEffect, type CombatTarget, type WeaponProfile } from '../src/combat.ts';
+import { CombatSimulation, GAZE, ELECTRIC_SHOTS, ELECTRIC_COLOR, EFFECT_LOOKS, DISGUISE_LOOKS, distanceToSegment, type CombatEffect, type CombatTarget, type WeaponProfile } from '../src/combat.ts';
 import { CombatView } from '../src/combat-view.ts';
 import { SkillFx, gazeEnds, eyePoints, GAZE_BEAM, SHOCK_MARK, type ShockTarget } from '../src/skill-fx.ts';
 import { DISGUISE_INFO, statusMarks } from '../src/skill-info.ts';
@@ -117,7 +117,7 @@ test('the gaze view draws twin beams from the eyes to the line end, a ground ban
 // ---- 2. The battle robot is electric ------------------------------------------------------------------------------
 test('the battle robot fires electricity: volt bolts, a tesla turret, shock missiles and an electric tank wave', () => {
   assert.equal(M.DISGUISES.dz_mecha.weapon!.shot, 'volt'); assert.equal(M.ITEMS.pet_robot.pet!.shot, 'volt');
-  assert.ok(ELECTRIC_SHOTS.has('volt') && ELECTRIC_SHOTS.has('missile')); assert.deepEqual([...EFFECT_LOOKS].sort(), ['boulder', 'burn', 'eyes', 'shock']);
+  assert.ok(ELECTRIC_SHOTS.has('volt') && ELECTRIC_SHOTS.has('missile')); assert.deepEqual([...EFFECT_LOOKS].sort(), ['boulder', 'burn', 'eyes', 'shock', ...DISGUISE_LOOKS].sort());
   const ring = () => [at(0, 3, 'a'), at(1, 4, 'b'), at(-1, 5, 'c')];
   // Missiles: every impact and blast is an electric burst; no stun added (they never stunned).
   const m = rig(ring()); m.sim.disguise('dz_mecha', 2); run(m.sim, 2);

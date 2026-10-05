@@ -1,13 +1,14 @@
 export interface CombatPoint { x: number; z: number }
 export interface WeaponProfile { kind: 'fist'|'sword'|'gun'|'rod'; range?: number; cd?: number; arc?: number; special?: string; shot?: string; spread?: number; quality?: number; fx?: string }
-export interface CombatTarget extends CombatPoint { id: string; hp: number; maxHp?:number; boss?:boolean; radius: number; stun?: number }
+export interface CombatTarget extends CombatPoint { id: string; hp: number; maxHp?:number; boss?:boolean; radius: number; stun?: number; facing?:number }
 export interface CombatStats { attack: number; maxHp?:number; critChance: number; critDamage?: number; haste?: number; lifesteal?: number }
 export interface CombatHit { amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint; /** Dealt by the pet, not the explorer (timed challenges ignore it). */ helper?: boolean }
 export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'|'toss'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number;
   /** How the view dresses it (skill-fx.ts): 'eyes' twin eye lasers, 'burn' a laser scorch, 'shock' an electric burst. Same hit either way. */
   look?: EffectLook }
-export type EffectLook='eyes'|'burn'|'shock'|'boulder';
-export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder'];
+export const DISGUISE_LOOKS=['charge','smoke','heal','icefield','blackhole','moon','holy','meteor','cannonfall','hook','drain','hearts','roots','roar','freeze','portal','bite','tail','parrot'] as const;
+export type EffectLook='eyes'|'burn'|'shock'|'boulder'|typeof DISGUISE_LOOKS[number];
+export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder',...DISGUISE_LOOKS];
 /** Superhero throw: lock a landing point, then lob over intervening ground obstacles. */
 export const BOULDER={range:14,fallback:8,time:.6,arc:4,height:3,radius:4.5,power:3.2,lift:7} as const;
 /** The laser gaze (dz_superhero slot 2): one sweep of `arc` rad in `time` s, a `length` m line `width` m wide; a creature is hit again after `rehit` s. */
@@ -34,8 +35,8 @@ export interface CombatHost {
   /** Upgrade level of base skill slot 0-3 (skill-upgrades.ts); missing = 0. */
   skillLevel?(index:number):number;
 }
-export interface Projectile extends CombatPoint { id: number; direction: CombatPoint; speed: number; remaining: number; radius: number; color: string; kind: string; multiplier: number; hit: Set<string>; pierce: boolean; stun: number; lift: number; explosion: number; helper?: boolean }
-export interface CombatAlly extends CombatPoint {id:number;kind:'clone'|'turret'|'cannon'|'bat'|'snowman';life:number;cooldown:number;orbit:number}
+export interface Projectile extends CombatPoint { id: number; direction: CombatPoint; speed: number; remaining: number; radius: number; color: string; kind: string; multiplier: number; hit: Set<string>; pierce: boolean; stun: number; lift: number; explosion: number; homing?:string; initialRadius?:number; helper?: boolean }
+export interface CombatAlly extends CombatPoint {id:number;kind:'clone'|'turret'|'cannon'|'bat'|'snowman';life:number;cooldown:number;orbit:number;facing?:number}
 export const BASE_SKILLS = [
   { name: 'Whirlwind', icon: '🌀', cd: 7, description: 'Spin for two seconds, striking nearby enemies repeatedly.' },
   { name: 'Dash', icon: '➶', cd: 4, description: 'Rush forward, striking every enemy along your path once.' },
@@ -84,6 +85,7 @@ export class CombatSimulation {
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{})});}
+  private visual(look:EffectLook,point:CombatPoint,radius:number,duration:number,color='#cfb5f5',facing=this.host.facing()){this.host.effect({...point,kind:'cast',look,radius,duration,color,facing});}
   private later(delay:number,run:()=>void){const power=this.power;this.jobs.push({at:this.time+delay,run:power===1?run:()=>{const old=this.power;this.power=power;try{run();}finally{this.power=old;}}});}
   /** Set while a pet projectile deals its damage. */
   private helperShot=false;
@@ -160,7 +162,7 @@ export class CombatSimulation {
       case 'thunder':this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<10).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z)).slice(0,6).forEach((target,i,list)=>this.later(i*.09,()=>{const from=i?list[i-1]:this.host.position();this.host.effect({x:from.x,z:from.z,kind:'beam',radius:Math.hypot(target.x-from.x,target.z-from.z),color:'#a6f8ff',facing:Math.atan2(target.x-from.x,target.z-from.z),duration:.3,width:.35});this.emit('impact',target,1,'#a6f8ff');this.damage(target,2.4,2);}));break;
       case 'bonk':this.area({x:p.x+d.x*1.6,z:p.z+d.z*1.6},3.6,2.2,3,2,'#ffe14d');break;
       case 'whirl':for(let i=0;i<3;i++)this.later(i*.22,()=>this.area(this.host.position(),4.4,1.4,.2,0,'#c9e8ff'));break;
-      case 'starfall':{const target={...(this.nearest(13)??{x:p.x+d.x*6,z:p.z+d.z*6})};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*3.6,point={x:target.x+Math.cos(a)*r,z:target.z+Math.sin(a)*r};this.later(i*.09,()=>this.emit('cast',point,1.6,'#ffe45c'));this.later(i*.09+.22,()=>this.area(point,1.6,1.1,.2,0,'#ffe45c'));}break;}
+      case 'starfall':{const target={...(this.nearest(13)??{x:p.x+d.x*6,z:p.z+d.z*6})};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*3.6,point={x:target.x+Math.cos(a)*r,z:target.z+Math.sin(a)*r};this.later(i*.09,()=>this.visual('meteor',point,1.6,.22,'#ffe45c'));this.later(i*.09+.22,()=>this.area(point,1.6,1.1,.2,0,'#ffe45c'));}break;}
       case 'inferno':for(let i=0;i<10;i++)this.later(i*.05,()=>{const a=i*Math.PI/5;this.area({x:p.x+Math.cos(a)*3.6,z:p.z+Math.sin(a)*3.6},1.8,1.3,.2,1.2,'#ff874c');});break;
       case 'laser':{const end={x:p.x+d.x*14,z:p.z+d.z*14};this.host.effect({...p,kind:'beam',radius:14,color:'#bbfaff',facing:angle,duration:.5,width:1.4});for(const t of this.host.targets())if(t.hp>0&&distanceToSegment(t,p,end)<t.radius+.7)this.damage(t,3,.4,0,2);break;}
       default:return false;
@@ -193,46 +195,47 @@ export class CombatSimulation {
       });}
     }
     else if(effect==='shield'||effect==='energyshield'){this.statuses.shield=4;if(effect==='energyshield')this.host.heal?.(.2);this.emit('ring',p,2.5,'#a1fbdf');}
-    else if(effect==='heal'){for(let i=0;i<16;i++)this.later(i*.5,()=>{this.emit('ring',p,4,'#bbffb9');if(Math.hypot(this.host.position().x-p.x,this.host.position().z-p.z)<4)this.host.heal?.(.03);});}
+    else if(effect==='heal'){this.visual('heal',p,4,8,'#bbffb9');for(let i=0;i<16;i++)this.later(i*.5,()=>{if(Math.hypot(this.host.position().x-p.x,this.host.position().z-p.z)<4)this.host.heal?.(.03);});}
     else if(effect==='stealth'||effect==='bats'){this.statuses.stealth=effect==='bats'?0:5;this.statuses.bats=effect==='bats'?2.5:0;if(effect==='bats')this.statuses.shield=2.5;this.emit('ring',p,2,'#c0ace8');}
-    else if(effect==='teleport'){this.host.move(d.x*8,d.z*8);this.emit('impact',this.host.position(),2,'#c6adff');}
-    else if(effect==='backstab'){const t=this.nearest(12);if(!t)return false;this.host.move(t.x-p.x-d.x*1.2,t.z-p.z-d.z*1.2);this.damage(t,3,1);this.emit('arc',t,2,'#f9f0ce');}
+    else if(effect==='teleport'){this.visual('portal',p,1,.45);this.host.move(d.x*8,d.z*8);this.visual('portal',this.host.position(),1,.45);}
+    else if(effect==='backstab'){const t=this.nearest(12);if(!t)return false;const behind=direction(t.facing??angle),gap=t.radius+.8;this.visual('portal',p,1,.35);this.host.move(t.x-p.x-behind.x*gap,t.z-p.z-behind.z*gap);this.aim(t);this.visual('portal',this.host.position(),1,.35);this.damage(t,3,1);this.emit('arc',t,2,'#f9f0ce');}
     else if(effect==='giant'){this.statuses.giant=10;this.giantStep=0;this.lastStep={...p};this.emit('ring',p,2.5,'#c96a3a');}
     else if(effect==='tank'){this.statuses.tank=6;for(let i=0;i<24;i++)this.later(i*.25,()=>this.area(this.host.position(),2,1,.3,1,ELECTRIC_COLOR,1.2,'shock'));}// an electric shockwave (same hit, same .3 s stun)
     else if(effect==='charge')this.dash(3,25,.45);
-    else if(effect==='tail')this.area(p,3.6,1.8,0,0,'#5fbf5a',6);
+    else if(effect==='tail'){this.visual('tail',p,3.6,.4,'#5fbf5a');this.area(p,3.6,1.8,0,0,'#5fbf5a',6);}
     else if(effect==='devour'){const t=this.nearest(3.2);if(!t)return false;if(!t.boss&&t.hp/(t.maxHp??t.hp)<.4){
       if(this.host.execute)this.host.execute(t,.25);
       else{this.host.hit(t,{amount:t.hp+1,critical:true,stun:0,lift:0,knock:0,direction:d});if(t.hp<=0)this.host.heal?.(.25);}
-    }else this.damage(t,3,0,0,1);this.emit('arc',p,2.4,'#d4e79a');}
-    else if(effect==='roar'||effect==='smoke'||effect==='taunt'||effect==='sheep'||effect==='charm'){
-      const t=this.nearest(12),center=(effect==='sheep'||effect==='charm')?(t??p):p,radius=effect==='sheep'?3:effect==='charm'?1:effect==='roar'?9:effect==='taunt'?12:5;
-      for(const e of this.host.targets())if(e.hp>0&&Math.hypot(e.x-center.x,e.z-center.z)<radius+e.radius)this.host.status?.(e,effect==='roar'?'fear':effect==='smoke'?'blind':effect==='taunt'?'taunt':effect==='sheep'?'sheep':'charm',effect==='charm'?8:effect==='sheep'||effect==='taunt'?6:4);
-      if(effect==='taunt')this.statuses.armor=6;if(effect==='smoke')this.statuses.stealth=4;this.emit('ring',center,radius,'#ccbae8');
+    }else this.damage(t,3,0,0,1);this.visual('bite',p,2.4,.4,'#d4e79a');}
+    else if(effect==='smoke'){this.visual('smoke',p,5,5);for(let i=0;i<10;i++)this.later(i*.5,()=>{for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<5+t.radius)this.host.status?.(t,'blind',1.2);const at=this.host.position();if(Math.hypot(at.x-p.x,at.z-p.z)<5)this.statuses.stealth=Math.max(this.statuses.stealth??0,.6);});}
+    else if(effect==='roar'||effect==='taunt'||effect==='sheep'||effect==='charm'){
+      const t=this.nearest(12),center=(effect==='sheep'||effect==='charm')?(t??p):p,radius=effect==='sheep'?3:effect==='charm'?1:effect==='roar'?9:12;
+      for(const e of this.host.targets())if(e.hp>0&&Math.hypot(e.x-center.x,e.z-center.z)<radius+e.radius)this.host.status?.(e,effect==='roar'?'fear':effect==='taunt'?'taunt':effect==='sheep'?'sheep':'charm',effect==='charm'?8:effect==='sheep'||effect==='taunt'?6:4);
+      if(effect==='taunt')this.statuses.armor=6;if(effect==='roar')this.visual('roar',center,radius,.8,'#79c487');else if(effect==='charm')this.visual('hearts',center,1,2,'#ff80bd');else this.emit('ring',center,radius,'#ccbae8');
     }
-    else if(effect==='roots'){this.area(p,6,1,4);for(let i=1;i<9;i++)this.later(i*.5,()=>{this.area(p,6,.3,.5,0,'#aad487');this.host.heal?.(.01);});}
-    else if(effect==='drain'){const t=this.nearest(11);if(!t)return false;for(let i=0;i<7;i++)this.later(i*.35,()=>{if(t.hp>0){this.damage(t,.7);this.host.heal?.(.035);this.emit('beam',this.host.position(),Math.hypot(t.x-this.host.position().x,t.z-this.host.position().z),'#ea7a9c',Math.atan2(t.x-this.host.position().x,t.z-this.host.position().z));}});}
-    else if(effect==='bloodnova'){this.statuses.lifesteal=6;const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<7);for(let i=0;i<12;i++)this.later(i*.5,()=>{for(const t of targets)this.damage(t,.3);this.emit('ring',p,7,'#cf6290');});}
+    else if(effect==='roots'){this.visual('roots',p,6,4.5,'#aad487');this.area(p,6,1,4);for(let i=1;i<9;i++)this.later(i*.5,()=>{this.area(p,6,.3,.5,0,'#aad487');this.host.heal?.(.01);});}
+    else if(effect==='drain'){const t=this.nearest(11);if(!t)return false;for(let i=0;i<7;i++)this.later(i*.35,()=>{if(t.hp>0){this.damage(t,.7);this.host.heal?.(.035);this.visual('drain',this.host.position(),Math.hypot(t.x-this.host.position().x,t.z-this.host.position().z),.35,'#ea7a9c',Math.atan2(t.x-this.host.position().x,t.z-this.host.position().z));}});}
+    else if(effect==='bloodnova'){this.visual('moon',p,7,6,'#cf6290');this.statuses.lifesteal=6;const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<7);for(let i=0;i<12;i++)this.later(i*.5,()=>{for(const t of targets)this.damage(t,.3);});}
     else if(effect==='boulder'){
       const target=this.nearest(BOULDER.range),landing=target?{x:target.x,z:target.z}:{x:p.x+d.x*BOULDER.fallback,z:p.z+d.z*BOULDER.fallback};
       this.host.effect({...p,kind:'cast',look:'boulder',radius:Math.hypot(landing.x-p.x,landing.z-p.z),facing:Math.atan2(landing.x-p.x,landing.z-p.z),duration:BOULDER.time,color:'#c96a3a'});
       this.later(BOULDER.time,()=>this.area(landing,BOULDER.radius,BOULDER.power,0,BOULDER.lift,'#c96a3a',1.2,'boulder'));
     }
-    else if(effect==='fireball'){this.emit('cast',p,2,'#ffad6b');this.later(.8,()=>this.shoot('fireball',angle,3,14,{radius:1,explosion:4,stun:2}));}
-    else if(effect==='snowball'){this.shoot('snowball',angle,3,21,{radius:1.5,speed:9,pierce:true,stun:2});}
-    else if(effect==='blackhole'){const target={...(this.nearest(12)??p)};for(let i=0;i<10;i++)this.later(i*.3,()=>{for(const t of this.host.targets())if(Math.hypot(t.x-target.x,t.z-target.z)<7)this.host.moveTarget?.(t,target.x+(t.x-target.x)*.65,target.z+(t.z-target.z)*.65);this.area(target,5,.4,1,0,'#9c8ee5');});this.later(3,()=>this.area(target,5,3,1,2,'#bc97ed'));}
-    else if(effect==='holy'){const target={...(this.nearest(14)??p)};this.emit('cast',target,3,'#fff1b0');this.later(.8,()=>this.area(target,3.5,4,1,2.5,'#fff1b0'));}
+    else if(effect==='fireball'){this.visual('charge',p,1,.8,'#ffad6b');this.later(.8,()=>this.shoot('fireball',angle,3,14,{radius:1,explosion:4,stun:2}));}
+    else if(effect==='snowball'){this.shoot('snowball',angle,3,21,{radius:.5,initialRadius:.5,speed:9,pierce:true,stun:2});}
+    else if(effect==='blackhole'){const target={...(this.nearest(12)??p)};this.visual('blackhole',target,7,3,'#9c8ee5');for(let i=0;i<10;i++)this.later(i*.3,()=>{for(const t of this.host.targets())if(Math.hypot(t.x-target.x,t.z-target.z)<7)this.host.moveTarget?.(t,target.x+(t.x-target.x)*.65,target.z+(t.z-target.z)*.65);this.area(target,5,.4,1,0,'#9c8ee5');});this.later(3,()=>this.area(target,5,3,1,2,'#bc97ed'));}
+    else if(effect==='holy'){const target={...(this.nearest(14)??p)};this.visual('holy',target,3.5,.8,'#fff1b0');this.later(.8,()=>this.area(target,3.5,4,1,2.5,'#fff1b0'));}
     else if(effect==='clones'||effect==='turret'||effect==='cannon'||effect==='batcircle'){
       const count=effect==='clones'?2:effect==='batcircle'?5:1;
       for(let i=0;i<count;i++){const a=i/count*Math.PI*2;this.allies.push({id:++this.serial,kind:effect==='clones'?'clone':effect==='batcircle'?'bat':effect,x:p.x+Math.cos(a)*1.5,z:p.z+Math.sin(a)*1.5,life:effect==='turret'?12:effect==='cannon'?10:8,cooldown:i*.12,orbit:a});}
     }
-    else if(effect==='hook'){const t=this.nearest(14);if(!t)return false;this.host.moveTarget?.(t,p.x+d.x*1.8,p.z+d.z*1.8);this.damage(t,1.5,2);this.emit('beam',p,Math.hypot(t.x-p.x,t.z-p.z),'#d6c19b',angle);}
-    else if(effect==='parrot'){for(const t of this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<12)){this.marked.set(t.id,8);this.damage(t,.5);this.emit('impact',t,1,'#8ae394');}}
-    else if(effect==='missiles'){const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<16).slice(0,6);targets.forEach((t,i)=>this.later(i*.15,()=>this.shoot('missile',Math.atan2(t.x-p.x,t.z-p.z),2,18,{explosion:2})));}
-    else if(effect==='cannons'){const t={...(this.nearest(14)??p)};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*4,point={x:t.x+Math.cos(a)*r,z:t.z+Math.sin(a)*r};this.later(i*.15,()=>this.emit('cast',point,2,'#dca66c'));this.later(i*.15+.5,()=>this.area(point,2,1.5,.5,1,'#dca66c'));}}
+    else if(effect==='hook'){const t=this.nearest(14);if(!t)return false;this.visual('hook',p,Math.hypot(t.x-p.x,t.z-p.z),.25,'#d6c19b',angle);this.later(.25,()=>{if(t.hp<=0)return;this.host.moveTarget?.(t,p.x+d.x*1.8,p.z+d.z*1.8);this.damage(t,1.5,2);});}
+    else if(effect==='parrot'){this.visual('parrot',p,2,8,'#8ae394');for(const t of this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<12)){this.marked.set(t.id,8);this.damage(t,.5);this.emit('impact',t,1,'#8ae394');}}
+    else if(effect==='missiles'){const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<16).slice(0,6);targets.forEach((t,i)=>this.later(i*.15,()=>{if(t.hp<=0)return;const from=this.host.position();this.shoot('missile',Math.atan2(t.x-from.x,t.z-from.z),2,18,{explosion:2,homing:t.id});}));}
+    else if(effect==='cannons'){const t={...(this.nearest(14)??p)};for(let i=0;i<12;i++){const a=this.random()*Math.PI*2,r=this.random()*4,point={x:t.x+Math.cos(a)*r,z:t.z+Math.sin(a)*r};this.later(i*.15,()=>this.visual('cannonfall',point,2,.5,'#dca66c'));this.later(i*.15+.5,()=>this.area(point,2,1.5,.5,1,'#dca66c'));}}
     else if(effect==='decoy'){const point={x:p.x+d.x*2.5,z:p.z+d.z*2.5};this.allies.push({id:++this.serial,kind:'snowman',...point,life:6,cooldown:99,orbit:0});for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-point.x,t.z-point.z)<8)this.host.status?.(t,'blind',6);this.later(6,()=>this.area(point,4,2.5,2,0,'#e4f9ff'));}
-    else if(effect==='icefloor'){for(let i=0;i<16;i++)this.later(i*.5,()=>{this.emit('ring',p,6,'#c2f1ff');for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<6)this.host.status?.(t,'slow',1);});}
-    else if(effect==='iceage'){const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<8);for(const t of targets){this.damage(t,.3,3);this.host.status?.(t,'slow',3);}// a freeze (3 s stun), not a sheep spell
+    else if(effect==='icefloor'){this.visual('icefield',p,6,8,'#c2f1ff');for(let i=0;i<16;i++)this.later(i*.5,()=>{for(const t of this.host.targets())if(t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<6)this.host.status?.(t,'slow',1);});}
+    else if(effect==='iceage'){const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<8);for(const t of targets){this.damage(t,.3,3);this.host.status?.(t,'slow',3);this.visual('freeze',t,Math.max(.6,t.radius),3,'#d0f7ff');}// a freeze (3 s stun), not a sheep spell
 this.emit('ring',p,8,'#d0f7ff');this.later(3,()=>{for(const t of targets)this.damage(t,2.8,1);});}
     else return this.special(effect);
     return true;
@@ -274,13 +277,13 @@ this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot?
       const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-ally.x,t.z-ally.z)<13).sort((a,b)=>Math.hypot(a.x-ally.x,a.z-ally.z)-Math.hypot(b.x-ally.x,b.z-ally.z)),target=targets[0];
       if(ally.kind==='bat'){const p=this.host.position();ally.x=p.x+Math.cos(this.time*3+ally.orbit)*2.2;ally.z=p.z+Math.sin(this.time*3+ally.orbit)*2.2;}
       if(!target)continue;
-      const distance=Math.hypot(target.x-ally.x,target.z-ally.z),angle=Math.atan2(target.x-ally.x,target.z-ally.z);
+      const distance=Math.hypot(target.x-ally.x,target.z-ally.z),angle=Math.atan2(target.x-ally.x,target.z-ally.z);ally.facing=angle;
       if(ally.kind==='clone'&&distance>1.3){const step=Math.min(distance-1.2,dt*8);ally.x+=Math.sin(angle)*step;ally.z+=Math.cos(angle)*step;}
       if(ally.cooldown>0)continue;
       if(ally.kind==='turret'||ally.kind==='cannon'){this.shoot(ally.kind==='turret'?'volt':'fireball',angle,ally.kind==='turret'?.65:1.2,14,{x:ally.x,z:ally.z,explosion:ally.kind==='cannon'?2:0});ally.cooldown=ally.kind==='turret'?.5:.8;this.emit('cast',ally,.6,ally.kind==='turret'?ELECTRIC_COLOR:'#d2b9ff');}
       else if(distance<target.radius+1.6){this.damage(target,ally.kind==='bat'?.35:.6,.1);ally.cooldown=.7;this.emit('arc',ally,1,'#c6b2ee',angle);if(ally.kind==='bat')this.host.heal?.(.01);}
     }
-    for(let i=this.projectiles.length-1;i>=0;i--){const shot=this.projectiles[i],from={x:shot.x,z:shot.z},step=Math.min(shot.speed*dt,shot.remaining),to={x:shot.x+shot.direction.x*step,z:shot.z+shot.direction.z*step};
+    for(let i=this.projectiles.length-1;i>=0;i--){const shot=this.projectiles[i];if(shot.kind==='snowball')shot.radius=Math.min(2.6,shot.radius+.9*dt);if(shot.homing){const target=this.host.targets().find(t=>t.id===shot.homing&&t.hp>0);if(target){const a=Math.atan2(target.x-shot.x,target.z-shot.z),old=Math.atan2(shot.direction.x,shot.direction.z),turn=Math.atan2(Math.sin(a-old),Math.cos(a-old));shot.direction=direction(old+Math.max(-dt*5,Math.min(dt*5,turn)));}}const from={x:shot.x,z:shot.z},step=Math.min(shot.speed*dt,shot.remaining),to={x:shot.x+shot.direction.x*step,z:shot.z+shot.direction.z*step};
       if(this.host.clearShot&&!this.host.clearShot(from,to)){this.emit('impact',from,.4,shot.color);this.projectiles.splice(i,1);continue;}
       shot.x=to.x;shot.z=to.z;shot.remaining-=step;let consumed=false;
       const targets=this.host.targets().filter(t=>t.hp>0&&!shot.hit.has(t.id)&&distanceToSegment(t,from,to)<=t.radius+shot.radius).sort((a,b)=>Math.hypot(a.x-from.x,a.z-from.z)-Math.hypot(b.x-from.x,b.z-from.z));

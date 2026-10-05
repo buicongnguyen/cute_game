@@ -1,3 +1,4 @@
+import {disguiseForm} from './disguise-form.ts';
 import { t } from './i18n.ts';
 import {TITANS,TITAN_BY_PLANET,type TitanId} from './titan-content.ts';
 import {titanKit,titanArt,titanFallback} from './titan-art.ts';
@@ -989,7 +990,7 @@ export class World {
       for(const m of Array.isArray(o.material)?o.material:[o.material]){m.userData.normalOpacity??=m.opacity;m.opacity=m.userData.normalOpacity*opacity;m.transparent=opacity<1||m.userData.normalOpacity<1;m.needsUpdate=true;}
     });}
     let shield=mesh.getObjectByName('status-shield');if(visual?.shield&&!shield){shield=new T.Mesh(new T.SphereGeometry(1.15,16,10),new T.MeshBasicMaterial({color:'#a1f5ef',transparent:true,opacity:.22,depthWrite:false,wireframe:true}));shield.name='status-shield';shield.position.y=1.1;mesh.add(shield);}if(shield)shield.visible=!!visual?.shield;
-    let bat=mesh.getObjectByName('status-bat');if(visual?.bat&&!bat){const b=new T.Group();b.name='status-bat';for(const side of [-1,1]){const wing=box('#49345f',1.1,.07,.8);wing.position.set(side*.75,1.4,0);wing.rotation.z=side*.3;b.add(wing);}bat=b;mesh.add(b);}if(bat)bat.visible=!!visual?.bat;
+    disguiseForm(mesh,'bat',!!visual?.bat,this.time??0);
   }
   updateRemotePlayers(players:Array<RemotePose&{id:string}>){const ids=new Set(players.map(p=>p.id));for(const id of this.remotePlayers?.keys()??[])if(!ids.has(id))this.removeRemotePlayer(id);for(const pose of players)this.updateRemotePlayer(pose.id,pose);}
   removeRemotePlayer(id:string){const remote=this.remotePlayers?.get(id);if(!remote)return;this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);this.remotePlayers.delete(id);}
@@ -1571,7 +1572,7 @@ export class World {
     if(view2){if(Math.hypot(e.x-view2.x,e.z-view2.z)>7){view2.x=e.x;view2.z=e.z;}else{const k=1-Math.exp(-dt*9);view2.x+=(e.x-view2.x)*k;view2.z+=(e.z-view2.z)*k;}}
     const lod=this.networkRole!=='peer'?e.lod:undefined,glide=lod&&Math.abs(e.x-lod.x)+Math.abs(e.z-lod.z)<.5?Math.min(1,(lod.age+1)/4):1,drawX=lod?lod.x+(e.x-lod.x)*glide:view2?view2.x:e.x,drawZ=lod?lod.z+(e.z-lod.z)*glide:view2?view2.z:e.z;
     e.mesh.position.set(drawX,ground+(e.lift??0)+(e.titanLift??0)+(e.definition?.flying?1+Math.sin(this.time*4+e.homeX)*.15:Math.sin(this.time*3+e.homeX)*.06),drawZ);
-    const scale=enemyScale(e.type,e.boss)*((e.statuses?.sheep??0)>0?.45:1);e.mesh.scale.setScalar(scale);
+    const scale=enemyScale(e.type,e.boss);e.mesh.scale.setScalar(scale);disguiseForm(e.mesh,'sheep',(e.statuses?.sheep??0)>0,this.time,1.2/scale);
     // Hit reaction: a pop in the creature's own colour (emissive 0.35) and a ×1.15 squash, so the silhouette survives the hit.
     if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);const k=e.flash!/.14;e.mesh.scale.x*=1+k*.15;e.mesh.scale.z*=1+k*.15;e.mesh.scale.y*=1+k*.06;}
     const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as LitMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.set(e.definition?.color??'#ffffff');m.emissiveIntensity=.35;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}

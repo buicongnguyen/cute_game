@@ -7,6 +7,7 @@ import { GraphicsGovernor } from '../src/graphics.ts';
 import { frameSteps } from '../src/frame-steps.ts';
 import * as M from '../src/model.ts';
 import { BoulderFx } from '../src/boulder-fx.ts';
+import {DisguiseFx} from '../src/disguise-fx.ts';
 
 // Exercise the real main-loop controller and governor. Rendering is intercepted
 // because changing a canvas's dimensions invalidates its last rendered image.
@@ -32,7 +33,7 @@ function fixture() {
     innerWidth: 1280, innerHeight: 720, network: { role: null },
     ship: { update: noop }, gestures: { update: noop }, joystick:{update:noop},combatTimers: { advance: noop },
     combat: { update: noop, statuses: {}, airborne: 0, projectiles: [], allies: [], pose: 'idle' },
-    combatView: { update: noop }, fishingView: { update: noop, active: false }, rodTip: {}, skillFx: { boulders, update: noop, gazeAngle: () => null },
+    combatView: { update: noop }, fishingView: { update: noop, active: false }, rodTip: {}, skillFx: { disguises: new DisguiseFx({ground:()=>0,explorerAt:()=>null}), boulders, update: noop, gazeAngle: () => null },
     uiBlocked: () => context.blocked,
     world: {
       time: 0, player: { position: { y: 0 } }, position: { x: 0, z: 0 },
@@ -103,3 +104,5 @@ test('a boulder pauses with solo combat and resumes on the same simulation clock
   f.ctx.blocked=true;f.run(60,2);assert.deepEqual(rock.position,at);assert.equal(b.busy,true);
   f.ctx.blocked=false;f.run(60,.5);assert.equal(b.busy,false);assert.equal(rock.visible,false);
 });
+
+test('persistent disguise fields pause with solo combat and reset',()=>{const f=fixture(),fx=f.ctx.skillFx.disguises;fx.play({kind:'cast',look:'heal',x:0,z:0,radius:4,color:'#ffffff',duration:1});f.run(60,.2);f.ctx.blocked=true;f.run(60,2);assert.equal(fx.busy,true);f.ctx.blocked=false;f.run(60,1);assert.equal(fx.busy,false);});

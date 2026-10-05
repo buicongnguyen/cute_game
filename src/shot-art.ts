@@ -62,7 +62,7 @@ export function makeShot(kind: string, radius: number, color: string): T.Group {
       let material=mats.get('stone');if(!material)mats.set('stone',material=new T.MeshStandardMaterial({vertexColors:true,roughness:1,flatShading:true}));
       add(stone,material,[r,r*.85,r]);g.userData.spin3=true;haloSize=0;break;
     }
-    case 'snow': inked(r * 1.3); add(ball, basic('#ffffff'), [r * 1.3, r * 1.3, r * 1.3]); haloColor = '#9fd8ff'; haloSize = 3.2; break;
+    case 'snow': inked(r); add(ball, basic('#ffffff'), [r, r, r]); haloColor = '#9fd8ff'; haloSize = 3.2; break;
     default: inked(r * 1.45); add(ball, basic(kind === 'pea' ? '#e4ff5e' : col), [r * 1.45, r * 1.45, r * 1.45]); add(ball, basic('#ffffff', .85), [r * .6, r * .6, r * .6], [-r * .3, r * .3, 0]); haloSize = 4.4;
   }
   if (haloSize > 0 && typeof document !== 'undefined') { const s = new T.Sprite(halo(haloColor)); s.scale.setScalar(r * haloSize); s.name = 'halo'; g.add(s); g.userData.haloBase = r * haloSize; }
