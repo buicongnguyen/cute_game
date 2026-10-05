@@ -989,7 +989,7 @@ export class World {
       if(!o.userData.statusMaterials){o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();o.userData.statusMaterials=true;}
       for(const m of Array.isArray(o.material)?o.material:[o.material]){m.userData.normalOpacity??=m.opacity;m.opacity=m.userData.normalOpacity*opacity;m.transparent=opacity<1||m.userData.normalOpacity<1;m.needsUpdate=true;}
     });}
-    let shield=mesh.getObjectByName('status-shield');if(visual?.shield&&!shield){shield=new T.Mesh(new T.SphereGeometry(1.15,16,10),new T.MeshBasicMaterial({color:'#a1f5ef',transparent:true,opacity:.22,depthWrite:false,wireframe:true}));shield.name='status-shield';shield.position.y=1.1;mesh.add(shield);}if(shield)shield.visible=!!visual?.shield;
+    let shield=mesh.getObjectByName('status-shield');if(visual?.shield&&!shield){shield=new T.Mesh(new T.SphereGeometry(1.15,16,10),new T.MeshBasicMaterial({color:'#a1f5ef',transparent:true,opacity:.2,depthWrite:false}));shield.name='status-shield';shield.position.y=1.1;mesh.add(shield);}if(shield)shield.visible=!!visual?.shield&&!visual?.bat;
     disguiseForm(mesh,'bat',!!visual?.bat,this.time??0);
   }
   updateRemotePlayers(players:Array<RemotePose&{id:string}>){const ids=new Set(players.map(p=>p.id));for(const id of this.remotePlayers?.keys()??[])if(!ids.has(id))this.removeRemotePlayer(id);for(const pose of players)this.updateRemotePlayer(pose.id,pose);}
