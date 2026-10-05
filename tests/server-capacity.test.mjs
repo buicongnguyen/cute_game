@@ -88,3 +88,22 @@ test('a player stays signed in after the server restarts, and signing out really
   await fetch(`${server.url}/api/auth/logout`, { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: '{}' });
   assert.ok(!(await (await fetch(`${server.url}/api/auth/session`, { headers: { Cookie: cookie } })).json()).account, 'signed out');
 });
+
+test('a first movement packet is corrected after each WebSocket reconnect', { timeout: 10_000 }, async t => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'cute-game-first-pose-')), sockets = [];
+  const store = await createAccountStore({ dataDir, databaseUrl: '' });
+  const server = await createGameServer({ host: '127.0.0.1', port: 0, dataDir, accountStore: store, databaseUrl: '', databaseRequired: false });
+  t.after(async () => { for (const socket of sockets) socket.terminate(); await server.close(); await rm(dataDir, { recursive: true, force: true }); });
+  const registered = await fetch(`${server.url}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'first_pose', password: 'pose-test-password' }) });
+  assert.equal(registered.status, 200);
+  const cookie = registered.headers.get('set-cookie').split(';')[0];
+  for (let connection = 0; connection < 2; connection++) {
+    const socket = new WebSocket(server.url.replace('http:', 'ws:') + '/socket', { headers: { Cookie: cookie } }); sockets.push(socket);
+    await new Promise((resolve, reject) => { socket.once('message', resolve); socket.once('error', reject); });
+    const correction = new Promise(resolve => socket.on('message', raw => { const message = JSON.parse(raw.toString()); if (message.type === 'poseFix') resolve(message); }));
+    socket.send(JSON.stringify({ type: 'pose', x: 140, z: 40, facing: 0, moving: true }));
+    const fixed = await correction;
+    assert.equal(fixed.planet, 'home'); assert.ok(Math.hypot(fixed.x, fixed.z) < 18, 'server stays at the safe arrival point');
+    socket.close(); await new Promise(resolve => socket.once('close', resolve));
+  }
+});

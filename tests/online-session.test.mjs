@@ -45,6 +45,30 @@ test('an uncertain action keeps the exact receipt identity and revision when ret
   const sent=app.requests.filter(r=>r.url.endsWith('/actions'));assert.equal(sent.length,2);assert.equal(sent[1].options.body,first);
   assert.equal(app.bridge.getState().name,'Newer','an older replay profile cannot replace newer server state');
 });
+
+test('conflict retries preserve the original revision in the immutable action ID',async()=>{
+  let first=true;
+  const app=await fixture({responseFor(url,options,session){if(url.endsWith('/actions')&&first){first=false;session.revision=9;return{ok:false,status:409,json:async()=>({error:'A newer adventure is already saved.'})};}}});
+  await app.bridge.perform({type:'settings',payload:{settings:{sound:false}}});
+  const sent=app.requests.filter(r=>r.url.endsWith('/actions')).map(r=>JSON.parse(r.options.body));
+  assert.equal(sent.length,2);assert.match(sent[0].requestId,/^r0-[a-f0-9-]{36}$/);assert.equal(sent[1].requestId,sent[0].requestId);assert.deepEqual(sent.map(value=>value.expectedRevision),[0,9]);
+});
+
+for(const status of [410,426])test(`expired receipt (${status}) refreshes the adventure and removes the action without resending`,async()=>{
+  const app=await fixture({responseFor(url,options,session){if(url.endsWith('/actions')){session.revision=600;session.profile.name='Latest saved';return{ok:false,status,json:async()=>({error:'This action cannot be retried safely.'})};}}});
+  await assert.rejects(app.bridge.perform({type:'giftFriend',payload:{ownerId:'bob',item:'carrot',count:1}}),/cannot be retried safely/);
+  assert.equal(app.requests.filter(r=>r.url.endsWith('/actions')).length,1);
+  assert.equal(app.bridge.getState().name,'Latest saved');
+  assert.deepEqual(JSON.parse(app.storage.get('cute-game-actions-alice')),[]);
+});
+
+test('previously submitted legacy browser jobs retain their identity and never invent an origin revision',async()=>{
+  const oldId=randomUUID(),job={type:'giftFriend',payload:{ownerId:'bob',item:'carrot',count:1},requestId:oldId,rulesVersion:1,expectedRevision:514,submitted:true,retries:2};
+  const app=await fixture({initialActions:[job],responseFor(url){if(url.endsWith('/actions'))return{ok:false,status:426,json:async()=>({error:'Reconnect to use server-approved actions.'})};}});
+  const sent=app.requests.filter(r=>r.url.endsWith('/actions')).map(r=>JSON.parse(r.options.body));
+  assert.equal(sent.length,1);assert.equal(sent[0].requestId,oldId);assert.equal(sent[0].expectedRevision,514);assert.equal(sent[0].originalRevision,undefined);
+  assert.deepEqual(JSON.parse(app.storage.get('cute-game-actions-alice')),[]);
+});
 test('Enter opens chat but composition and typing keep their normal Enter behavior',async()=>{
   const app=await fixture();app.dialog.close();const key=app.document.listeners.get('keydown');let prevented=0;
   key({code:'Enter',key:'Enter',isComposing:true,target:app.body,preventDefault(){prevented++;}});assert.equal(app.dialog.open,false);
@@ -57,9 +81,10 @@ test('selecting an explorer offers a friend request addressed by immutable playe
   const sent=app.requests.find(r=>r.url.endsWith('/friends/request'));assert.deepEqual(JSON.parse(sent.options.body),{id:'bob'});
 });
 
-async function fixture({failFirstAction=false,responseFor}={}){
+async function fixture({failFirstAction=false,responseFor,initialActions}={}){
   let session=sessionFor(),state=newGame('Offline'),language='en',timerId=0;
   const document=new Element(),window=new Element(),body=new Element(),slot=new Element(),timers=new Map(),sockets=[],requests=[],notices=[],visits=[],languageListeners=[],storage=new Map(),spawned=[];
+  if(initialActions)storage.set('cute-game-actions-alice',JSON.stringify(initialActions));
   document.body=body;document.createElement=tag=>Object.assign(new Element(tag),{ownerDocument:document});document.createTextNode=textContent=>Object.assign(new Element('text'),{textContent});document.querySelector=selector=>selector==='#social-slot'?slot:null;
   const setTimeout=(fn,delay)=>{const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout=id=>timers.delete(id);
   window.setTimeout=setTimeout;window.clearTimeout=clearTimeout;

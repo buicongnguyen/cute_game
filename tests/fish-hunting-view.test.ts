@@ -7,7 +7,7 @@ import { huntingPonds, fishHuntKey, fishHuntTargets } from '../src/fish-hunting.
 
 test('hunting targets match the shared paths and restock clock without altering the rod selection', t => {
   let now = 1_800_000_000_000; t.mock.method(Date, 'now', () => now);
-  const pond = huntingPonds('home')[0], world = {}, owner = {}, fishing = { huntingPondId: null, makeFish: () => ({ obj: new T.Group(), tail: null }) };
+  const pond = huntingPonds('home')[0], world = {}, owner = {}, fishing = { huntingPondId: null, makeSwimmingFish: () => ({ obj: new T.Group(), tail: null, depth: .1, wag: .5 }) };
   const view = new FishHuntingView(new T.Scene(), fishing as unknown as FishingView);
   const state = { lastShotAt: now, readyAt: { [fishHuntKey(pond.id, 0)]: now + 12_000 } };
   view.update(0, pond, state, false, world, owner);
@@ -17,7 +17,7 @@ test('hunting targets match the shared paths and restock clock without altering 
 });
 
 test('leaving hunting mode during a projectile flight clears the old pond visual immediately', () => {
-  const pond = huntingPonds('home')[0], world = {}, owner = {}, fishing = { huntingPondId: null, makeFish: () => ({ obj: new T.Group(), tail: null }) };
+  const pond = huntingPonds('home')[0], world = {}, owner = {}, fishing = { huntingPondId: null, makeSwimmingFish: () => ({ obj: new T.Group(), tail: null, depth: .1, wag: .5 }) };
   const view = new FishHuntingView(new T.Scene(), fishing as unknown as FishingView);
   const internals = view as unknown as { shot: unknown; projectile: T.Object3D };
   view.update(0, pond, undefined, false, world, owner); view.throw({ x: pond.x, z: pond.z + 4 }, pond);

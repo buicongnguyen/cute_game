@@ -24,7 +24,7 @@ test('a pause no longer buys a teleport: after 5 s one pose may move a short bur
 });
 
 test('the village-centre snap is the Home button only: no chain of snaps and small jumps outruns the top speed', () => {
-  const p = peer(); send(p, 60, 0, 1000); send(p, 60, 0, 1100);
+  const p = { ...peer(), pose: { x: 60, z: 0 } }; send(p, 60, 0, 1000); send(p, 60, 0, 1100);
   assert.equal(send(p, 1, 0, 1200), true, 'Home: back to the centre at once');
   assert.equal(send(p, 0, -8, 1280), true, 'then walking on from there');
   send(p, 60, 0, 1400); assert.notDeepEqual(p.pose, { x: 60, z: 0 }, 'cannot jump back out');
@@ -35,7 +35,19 @@ test('the village-centre snap is the Home button only: no chain of snaps and sma
   const q = peer(); send(q, 0, 0, 1000); let t = 1000;
   for (let i = 0; i < 40; i++) { t += 65; send(q, q.pose.x + 11, 0, t); }
   assert.ok(q.pose.x <= TOP_SPEED * (t - 1000) / 1000 + BURST + 1, `moved ${q.pose.x.toFixed(1)} m in ${t - 1000} ms`);
-  const away = { ...peer(), planet: 'toy' }; send(away, 50, 0, 1000); assert.equal(send(away, 1, 0, 1100), false, 'no snap on other planets');
+  const away = { ...peer(), planet: 'toy', pose: { x: 50, z: 0 } }; send(away, 50, 0, 1000); assert.equal(send(away, 1, 0, 1100), false, 'no snap on other planets');
+});
+
+test('first poses and reconnects cannot bypass or replenish the arrival budget', () => {
+  for (let connection = 0; connection < 2; connection++) {
+    const p = peer(); arrived(p, 1000);
+    assert.equal(send(p, 140, 40, 1000), false, 'reject the first far-away pose');
+    assert.deepEqual(p.pose, { x: 0, z: -8 });
+    assert.equal(send(p, ARRIVAL - 1, -8, 1000), true, 'legitimate arrival spends its budget');
+    assert.equal(p.poseBudget, 1);
+    assert.equal(send(p, ARRIVAL + 1, -8, 1000), false, 'another first-frame packet cannot get a fresh allowance');
+    assert.equal(send(p, ARRIVAL + 1, -8, 1100), true, 'normal movement resumes as time replenishes the budget');
+  }
 });
 
 test('a join or respawn allows the landing spot for a few seconds, then the normal burst again', () => {

@@ -19,3 +19,17 @@ CREATE TABLE IF NOT EXISTS zoo_action_receipts (
     receipt JSONB NOT NULL,
     PRIMARY KEY(actor_id,request_id)
 );
+
+-- @statement
+-- Sign-ins share the durable account database; cookie values are never stored.
+CREATE TABLE IF NOT EXISTS zoo_sessions (
+    token_hash TEXT PRIMARY KEY CHECK (token_hash ~ '^[a-f0-9]{64}$'),
+    account_id TEXT NOT NULL REFERENCES zoo_accounts(id) ON DELETE CASCADE,
+    expires_at BIGINT NOT NULL
+);
+
+-- @statement
+CREATE TABLE IF NOT EXISTS zoo_store_metadata (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL
+);

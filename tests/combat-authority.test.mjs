@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {commandHash} from '../server/action-service.mjs';
 import {createAccountStore} from '../server/account-store.mjs';
 import {createCombatAuthority} from '../server/combat-authority.mjs';
 import * as Game from '../src/model.ts';
@@ -87,6 +89,39 @@ test('healing actions can await buffered and in-flight health before consuming a
  assert.equal((await f.store.get('actor')).profile.hp,hp-damage);assert.equal(f.account.profile.hp,hp-damage);assert.equal(engine.healthEvents.length,0);assert.equal(engine.pendingHealth,null);assert.equal(engine.nextBasic,12345);
  await f.authority.internal('actor','fixtureHeal',[],records=>{const profile=records.get('actor').profile;profile.hp=Math.min(Game.maxHp(profile),profile.hp+damage);return {};});
  assert.equal(f.account.profile.hp,hp);await f.authority.flushPeerHealth(f.peer);assert.equal(f.account.profile.hp,hp,'settled damage is not applied again after healing');
+});
+
+test('a health batch keeps its original revision across lost acknowledgements and receipt eviction',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
+ const f=await fixture(t),engine=f.authority.engineFor(f.peer),hp=f.account.profile.hp;
+ engine.healthEvents.push({adventure:0,life:0,amount:-5,source:'test',at:Date.now(),planet:'home',x:-30,z:1});
+ const original=f.store.command.bind(f.store);let lost=true;
+ t.mock.method(f.store,'command',async spec=>{const committed=await original(spec);if(spec.actionType==='health'&&lost){lost=false;throw new Error('Lost acknowledgement after durable COMMIT');}return committed;});
+ await assert.rejects(f.authority.flushPeerHealth(f.peer),/could not be saved/);
+ const batch=engine.pendingHealth;assert.ok(batch);assert.equal(batch.originalRevision,0);assert.equal((await f.store.get('actor')).profile.hp,hp-5);
+ for(let i=1;i<=513;i++)await original({actorId:'actor',requestId:randomUUID(),hash:commandHash({i}),expectedRevision:i,run:()=>true});
+ await f.authority.flushPeerHealth(f.peer);
+ assert.equal((await f.store.get('actor')).profile.hp,hp-5,'an evicted receipt cannot reapply the committed damage');
+ assert.equal(f.account.profile.hp,hp-5,'the live peer reloads the canonical state');assert.equal(engine.pendingHealth,null);
+ engine.healthEvents.push({adventure:0,life:0,amount:-2,source:'test',at:Date.now(),planet:'home',x:-30,z:1});await f.authority.flushPeerHealth(f.peer);
+ assert.equal((await f.store.get('actor')).profile.hp,hp-7,'new damage can settle after the expired batch retires');
+});
+
+for(const resetAdventure of [false,true])test(`an expired lethal batch ${resetAdventure?'cannot respawn a newer adventure':'still reconciles death after other actions refreshed the cached life'}`,async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
+ const f=await fixture(t),engine=f.authority.engineFor(f.peer);
+ engine.healthEvents.push({adventure:0,life:0,amount:-10000,source:'test',at:Date.now(),planet:'home',x:-30,z:1});
+ const original=f.store.command.bind(f.store);let lost=true;
+ t.mock.method(f.store,'command',async spec=>{const committed=await original(spec);if(spec.actionType==='health'&&lost){lost=false;throw new Error('Lost acknowledgement after durable COMMIT');}return committed;});
+ await assert.rejects(f.authority.flushPeerHealth(f.peer),/could not be saved/);
+ for(let i=1;i<=513;i++){
+  const result=await original({actorId:'actor',requestId:randomUUID(),hash:commandHash({i}),expectedRevision:i,run:records=>{if(resetAdventure)records.get('actor').adventureEpoch=1;return true;}});
+  Object.assign(f.account,result.accounts[0]); // The server's ordinary afterCommit refreshes account caches.
+ }
+ assert.equal(f.account.lifeEpoch,1);assert.equal(f.deaths(),0);
+ await f.authority.flushPeerHealth(f.peer);assert.equal(engine.pendingHealth,null);
+ assert.equal(f.deaths(),resetAdventure?0:1);assert.equal(f.peer.pose.x,resetAdventure?-30:0);
+ await f.authority.flushPeerHealth(f.peer);assert.equal(f.deaths(),resetAdventure?0:1,'the same batch cannot respawn twice');
 });
 test('untouched enemies take shared environmental damage without awarding a player a kill',async t=>{
  const f=await fixture(t,{planet:'lava'}),env=f.authority.state(f.room).environment;env.time=25;env.weather.time=25;let pool;for(let x=25;x<120&&!pool;x+=2)for(let z=-100;z<100;z+=2)if(env.lavaAt({x,z})){pool={x,z};break;}assert.ok(pool);const enemy=f.spawn('firelizard',pool.x,pool.z),before=enemy.hp;f.peer.pose={x:0,z:0};

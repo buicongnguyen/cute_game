@@ -227,6 +227,7 @@ test('owned PostgreSQL pools bound resources and handle idle errors without leak
   // Inspect the actual pg Pool without opening a network connection. SQL
   // correctness and rollback are tested against PGlite above.
   t.mock.method(Pool.prototype, 'query', function () { owned = this; return Promise.resolve({ rows: [] }); });
+  t.mock.method(Pool.prototype, 'connect', async function () { return { query: (...args) => this.query(...args), release() {} }; });
   const warnings = [];
   t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
   const url = 'postgres://test_user:private-test-value@unused.invalid/database?sslmode=verify-full';

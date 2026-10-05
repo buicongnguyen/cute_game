@@ -7,24 +7,22 @@
  *   winget install Cloudflare.cloudflared      # or: winget install ngrok.ngrok  (then: ngrok config add-authtoken ...)
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { needsShareBuild, shareBuildEnv } from './share-build.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.PORT || 8787), dataDir = process.env.DATA_DIR || path.join(root, 'data');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const have = command => spawnSync(process.platform === 'win32' ? 'where' : 'which', [command], { stdio: 'ignore' }).status === 0;
 
-// Rebuild when the game was never built, when asked (--build), or when any source file is newer than the build.
-const newest = dir => { let latest = 0; for (const entry of readdirSync(dir, { withFileTypes: true })) { const full = path.join(dir, entry.name); latest = Math.max(latest, entry.isDirectory() ? newest(full) : statSync(full).mtimeMs); } return latest; };
-const built = path.join(root, 'dist', 'index.html');
-const stale = !existsSync(built) || process.argv.includes('--build') || ['src', 'public', 'index.html'].some(item => { const full = path.join(root, item); return existsSync(full) && (statSync(full).isDirectory() ? newest(full) : statSync(full).mtimeMs) > statSync(built).mtimeMs; });
-if (stale) {
+// A newer Pages build can still be the wrong edition; check its emitted mode as well as its age.
+if (needsShareBuild(root, process.argv.includes('--build'))) {
   console.log('Building the latest game first (about 15 seconds)…');
-  if (spawnSync(npm, ['run', 'build'], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' }).status !== 0) { console.error('The build failed.'); process.exit(1); }
+  if (spawnSync(npm, ['run', 'build'], { cwd: root, env: shareBuildEnv(), stdio: 'inherit', shell: process.platform === 'win32' }).status !== 0) { console.error('The build failed.'); process.exit(1); }
 }
-// A dated copy of the accounts file at every start, last 14 kept.
+// A dated daily copy of the accounts file before the server starts.
 const accounts = path.join(dataDir, 'accounts.json');
 if (existsSync(accounts)) {
   const backups = path.join(dataDir, 'backups'); mkdirSync(backups, { recursive: true });

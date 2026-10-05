@@ -15,3 +15,5 @@ export function setActiveSlot(slot: number): boolean {
 export const activeKey = () => slotKey(activeSlot());
 /** "This profile was last saved inside the cottage" (house-ui.ts), one flag per profile; profile 1 keeps the original key. */
 export const indoorsKey = (slot = activeSlot()) => slot === 0 ? 'zoo-garden-indoors' : `zoo-garden-indoors-slot${slot + 1}`;
+/** Keep the legacy neighbour record with the original save only; never copy gifts into another profile. */
+export const neighboursKey = (slot = activeSlot()) => slot === 0 ? 'cute-game-neighbours-v1' : `cute-game-neighbours-v1-slot${slot + 1}`;

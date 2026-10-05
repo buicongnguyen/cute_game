@@ -17,14 +17,16 @@
 export const TOP_SPEED = 55, BURST = 20, ARRIVAL = 40, ARRIVAL_MS = 10_000, SNAP_MS = 5000, FIX_MS = 500;
 
 /** The server placed the explorer (join, respawn, visit): for a few seconds the poses may settle on the client's landing spot. */
-export function arrived(peer, now = Date.now()) { peer.arrivedAt = now; peer.poseBudget = ARRIVAL; }
+export function arrived(peer, now = Date.now()) { peer.arrivedAt = now; peer.budgetAt = now; peer.poseBudget = ARRIVAL; }
 
 /** Accepts or drops one pose; true when accepted (the caller then stores it). Updates the peer's budget (refilled from its own clock, so a dropped pose does not count the same time twice). */
 export function poseStep(peer, at, distance, now) {
+  if (!Number.isFinite(distance) || distance < 0 || !Number.isFinite(now)) return false;
   const last = peer.budgetAt; peer.budgetAt = now;
-  if (!peer.poseAt || last === undefined) { peer.poseBudget = Math.max(peer.poseBudget ?? 0, BURST); return true; } // the first pose of a session
   const cap = now - (peer.arrivedAt ?? -Infinity) < ARRIVAL_MS ? ARRIVAL : BURST;
-  const budget = Math.min(cap, (peer.poseBudget ?? BURST) + TOP_SPEED * Math.max(0, now - last) / 1000);
+  // The first packet spends the same finite arrival budget as later packets. Reconnecting
+  // must not turn a forged first pose into a teleport past every proximity check.
+  const budget = Math.min(cap, (peer.poseBudget ?? BURST) + TOP_SPEED * Math.max(0, now - (last ?? now)) / 1000);
   if (distance <= budget) { peer.poseBudget = budget - distance; return true; }
   const snap = peer.planet === 'home' && !peer.visit && Math.hypot(at.x, at.z) < 2 && now - (peer.snapAt ?? -Infinity) >= SNAP_MS;
   if (snap) { peer.snapAt = now; peer.poseBudget = budget; return true; }

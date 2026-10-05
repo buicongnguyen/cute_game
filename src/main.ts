@@ -338,6 +338,7 @@ function cleansedFx(){world.fx?.burst({x:world.position.x,z:world.position.z},{n
 function levelCheck(before:number) {if(state.level>before){toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);}}
 function change<T>(action:()=>T):T {const before=state.level;const result=action();levelCheck(before);save();updateHud();return result;}
 function uiBlocked(){return !!modal||!!document.querySelector('dialog[open]')||shipSequence?.busy||!!flight||arriving;}
+function botActive(){return started&&!actionHandler&&!document.hidden&&!uiBlocked()&&!placement&&!world.interior&&world.planet==='home'&&state.hp>0;}
 /** 'wardrobe' while the bag was opened from the bedroom wardrobe: it then lists only things to wear (house-stores.ts). */
 let bagMode:'bag'|'wardrobe'='bag';
 function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF AT HOME',icon?:string) {
@@ -1238,14 +1239,14 @@ export const gameBridge:GameBridge={
     world.refreshPlayer();$('#visit-banner').hidden=!owner;$('#visit-banner').textContent=t(owner?t('Visiting {owner} · look around their garden',{owner}):'');updateLabels();
   },
   showNotice:message=>toast(message),
-  botHit:(id,damage)=>{const e=world.enemies.find(x=>x.id===id);if(!e||e.hp<=0||actionHandler||!Number.isFinite(damage)||damage<=0)return;world.damageEnemy(e,damage,0,false);},
+  botHit:(id,damage)=>{const e=world.enemies.find(x=>x.id===id);if(!botActive()||visiting||!e||e.hp<=0||!Number.isFinite(damage)||damage<=0)return;world.damageEnemy(e,damage,0,false);},
   ownsItem:id=>(state.bag[id]||0)>0||(state.chest[id]||0)>0||Object.values(state.gear).includes(id),
   grantGift:gift=>{
     if(!started||!Number.isFinite(gift.energy)||gift.energy<0)return false;
     if(gift.item&&gift.count>0&&!M.addItem(state,gift.item,gift.count))return false;
     state.energy+=gift.energy;tone('level');save();updateLabels();return true;
   },
-  botContext:()=>({ready:started&&modal===''&&!visiting&&!fishGame&&!flight&&!placement&&!world.interior&&world.planet==='home'&&state.hp>0&&!document.querySelector('dialog[open]')}),
+  botContext:()=>({active:botActive(),ready:botActive()&&!visiting&&!fishGame}),
   onFrame(listener){frameListeners.add(listener);return()=>frameListeners.delete(listener);},
   onAction(listener){actionListeners.add(listener);return()=>actionListeners.delete(listener);},
 };
@@ -1360,7 +1361,7 @@ app.addEventListener('click',async event=>{
     case 'craft-back':crafting();break;
     case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'level':'pop');}forgeMenu(id);break;}
     case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
-    case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'fullscreen':void toggleFullscreen(message=>toast(message));break;
+    case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;
     case 'claim':if(await perform('claimQuest')){tone('success');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
     case 'plant':{const i=activePlot,opened=modal,root=world.root,taken=state.plots[i]?.crop;if(taken){toast(t('This bed already grows {crop}.',{crop:t(M.CROPS[taken].name)}),'🌱');refreshPlot();break;}if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
     case 'cook-everything':{let made=0;for(const id of M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id])){const n=M.pantry(state,id);if(n>0&&await perform('cook',{id,count:n}))made+=n;}if(made){tone('success');toast(t('Cooked {count} meals. Enjoy!',{count:made}),'🍲');}cooking();break;}
@@ -1468,7 +1469,7 @@ app.addEventListener('click',async event=>{
     case 'cook-dish':if(await perform('cookDish',{id})){tone('success');toast(`${t(M.ITEMS[id].name)} is ready. Enjoy!`,M.ITEMS[id].icon);cooking();}break;case 'graphics':graphics.choose(button.dataset.kind as QualitySetting);world.applyGraphics(graphics.profile,graphics.ratio);saveGraphics(graphics);await perform('settings',{settings:{lowGraphics:graphics.level==='low'}});settings();break;
     case 'zoom-in':case 'zoom-out':world.zoom=clampZoom(Math.round((world.zoom+(action==='zoom-in'?-ZOOM.button:ZOOM.button))*100)/100,'wheel');world.resize();$('#zoom-value').textContent=t(`${Math.round(world.zoom*100)}%`);break;
     case 'reset-confirm':openDialog('reset','Begin a brand-new story?',`<p class="intro">This replaces your ${persistence?'online account adventure':'offline adventure in this browser'}, including your garden, items, and levels.</p><div class="button-row"><button class="soft-button" data-action="settings">Keep my adventure</button><button class="primary danger-button" data-action="reset">Start fresh</button></div>`,'A FRESH START');break;
-    case 'reset':{if(!await perform('reset'))break;state=structuredClone(state);world.state=state;rebuildHomePresentation('home');world.refreshPlayer();resetCombat();selectedItem=null;save();closeDialog();if(state.welcome==='pending')welcomeDialog();updateHud();toast('Every adventure starts with a little seed.','🌱');break;} // the new story's welcome (Pepper and her offer) at once, not on the next reload
+    case 'reset':{const offline=!actionHandler;if(!await perform('reset'))break;if(offline)neighbours.reset();state=structuredClone(state);world.state=state;rebuildHomePresentation('home');world.refreshPlayer();resetCombat();selectedItem=null;save();closeDialog();if(state.welcome==='pending')welcomeDialog();updateHud();toast('Every adventure starts with a little seed.','🌱');break;} // the new story's welcome (Pepper and her offer) at once, not on the next reload
   }
 });
 $('#dialog-layer').addEventListener('click',e=>{if(e.target===$('#dialog-layer'))closeDialog();});

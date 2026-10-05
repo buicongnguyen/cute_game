@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { poseStep, poseFix, arrived } from './pose-budget.mjs';
 import { clientAddress } from './client-address.mjs';
-import { readFile, writeFile, rename } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomBytes, randomUUID, scrypt, timingSafeEqual, createHash } from 'node:crypto';
@@ -48,19 +48,26 @@ export async function createGameServer(options = {}) {
     throw new Error('DATABASE_URL is required for this deployment. No temporary account storage was started.');
   }
   const store = options.accountStore || await createAccountStore({ dataDir, databaseUrl });
-  // Sign-ins are kept in data/sessions.json (as hashes of the cookie tokens), so restarting the server does not sign everyone out.
-  const sessionFile = path.join(dataDir, 'sessions.json'), sessionKey = token => createHash('sha256').update(token).digest('hex');
-  const sessions = new Map();
-  try { for (const [key, value] of Object.entries(JSON.parse(await readFile(sessionFile, 'utf8')))) if (value?.id && value.expires > Date.now()) sessions.set(key, value); } catch { /* no saved sign-ins yet */ }
+  // Persist only token hashes, alongside the accounts: PostgreSQL sessions survive an
+  // empty/replaced application disk too. Publish a login/logout only after its commit.
+  const sessionKey = token => createHash('sha256').update(token).digest('hex');
+  let sessions;
+  try { sessions = new Map(await store.loadSessions(Date.now())); }
+  catch (error) { await store.close(); throw new Error('Saved sign-ins could not be loaded.', { cause: error }); }
   let sessionTimer = null, sessionWrite = Promise.resolve();
+  function commitSessions(change) {
+    const nextWrite = sessionWrite.catch(() => {}).then(async () => {
+      const next = new Map(sessions); change(next);
+      for (const [key, value] of next) if (value.expires <= Date.now()) next.delete(key);
+      await store.saveSessions([...next]);
+      sessions = next;
+    });
+    sessionWrite = nextWrite;
+    return nextWrite;
+  }
   function saveSessions() {
     if (sessionTimer) return;
-    sessionTimer = setTimeout(() => { sessionTimer = null; flushSessions(); }, 400); sessionTimer.unref?.();
-  }
-  function flushSessions() {
-    const data = JSON.stringify(Object.fromEntries(sessions));
-    sessionWrite = sessionWrite.then(async () => { try { await writeFile(sessionFile + '.tmp', data); await rename(sessionFile + '.tmp', sessionFile); } catch { /* a read-only disk just means sign-ins last until the next restart */ } });
-    return sessionWrite;
+    sessionTimer = setTimeout(() => { sessionTimer = null; commitSessions(() => {}).catch(() => { console.error('Expired sign-ins could not be removed from storage.'); }); }, 400); sessionTimer.unref?.();
   }
   const accounts = new Map(), peers = new Map(), rooms = new Map(), parties = new Map();
   const limits = new Map(), chatReceipts = new Map();
@@ -90,7 +97,7 @@ export async function createGameServer(options = {}) {
   }
   function validSession(request) {
     const token = cookieValue(request), key = token && sessionKey(token), session = key && sessions.get(key);
-    if (!session || session.expires < Date.now()) { if (key && session) { sessions.delete(key); saveSessions(); } return null; }
+    if (!session || session.expires <= Date.now()) { if (key && session) saveSessions(); return null; }
     return session;
   }
   async function authenticated(request) {
@@ -99,9 +106,9 @@ export async function createGameServer(options = {}) {
     const account = await store.get(session.id);
     return validSession(request) === session ? remember(account) : null;
   }
-  function sessionCookie(response, request, account) {
+  async function sessionCookie(response, request, account) {
     const token = randomBytes(32).toString('hex');
-    sessions.set(sessionKey(token), { id: account.id, expires: Date.now() + SESSION_MS }); saveSessions();
+    await commitSessions(next => next.set(sessionKey(token), { id: account.id, expires: Date.now() + SESSION_MS }));
     const secure = request.socket.encrypted || process.env.COOKIE_SECURE === '1';
     response.setHeader('Set-Cookie', `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.floor(SESSION_MS / 1000)}${secure ? '; Secure' : ''}`);
   }
@@ -135,7 +142,7 @@ export async function createGameServer(options = {}) {
   /** Writes one entry in an owner's guest diary (visit, message) and tells them at once; false if the account was busy. */
   async function noteGuest(ownerId, entry) {
     try {
-      const committed = await store.command({ actorId: ownerId, requestId: randomUUID(), hash: commandHash({ type: 'guestNote', ownerId, entry }), expectedRevision: accounts.get(ownerId)?.profileRevision || 0, actionType: 'guestNote', keepRevision: true,
+      const committed = await store.command({ actorId: ownerId, requestId: randomUUID(), hash: commandHash({ type: 'guestNote', ownerId, entry }), expectedRevision: accounts.get(ownerId)?.profileRevision || 0, actionType: 'guestNote', keepRevision: true, receipt: false, outbox: false,
         run: records => { logGuest(records.get(ownerId), entry); return true; } });
       committed.accounts.forEach(remember);
       const owner = accounts.get(ownerId), ownerPeer = peers.get(ownerId);
@@ -265,12 +272,13 @@ export async function createGameServer(options = {}) {
         const salt = account?.salt || 'missing-user-salt', hash = (await derive(password, salt, 64)).toString('hex');
         if (!account || !sameString(hash, account.hash)) throw failure(401, 'The username or password is incorrect.');
       }
-      sessionCookie(response, request, account);
+      await sessionCookie(response, request, account);
       return respond(response, 200, { account: publicAccount(account), profile: account.profile, revision:account.profileRevision||0, authorityVersion:1, ...await refreshFriends(account) });
     }
     if (route === 'auth/logout' && method === 'POST') {
       const session = validSession(request);
-      { const token = cookieValue(request); if (token) { sessions.delete(sessionKey(token)); saveSessions(); } } response.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
+      if (session) await commitSessions(next => next.delete(sessionKey(cookieValue(request))));
+      response.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
       if (session) peers.get(session.id)?.socket.close(1000, 'Signed out');
       return respond(response, 200, { ok: true });
     }
@@ -448,7 +456,7 @@ export async function createGameServer(options = {}) {
   });
   const cleanup = setInterval(() => {
     const now = Date.now();
-    for (const [key, value] of sessions) if (value.expires < now) { sessions.delete(key); saveSessions(); }
+    if ([...sessions.values()].some(value => value.expires <= now)) saveSessions();
     for (const [key, value] of limits) if (now - value.at > 120_000) limits.delete(key);
     for (const [key, value] of chatReceipts) if (now - value.at > 10 * 60_000) chatReceipts.delete(key);
     for (const [key, value] of parties) if (now - value.created > 24 * 60 * 60 * 1000 && ![...rooms.keys()].some(room => room.startsWith(key + ':'))) parties.delete(key);
@@ -463,7 +471,7 @@ export async function createGameServer(options = {}) {
   catch (error) { clearInterval(cleanup); clearInterval(heartbeat); await store.close(); throw error; }
   return {
     server, port: server.address().port, url: `http://${host}:${server.address().port}`,
-    async close() { if (closing) return; closing = true; if (sessionTimer) { clearTimeout(sessionTimer); sessionTimer = null; } await flushSessions(); await combatAuthority.close(); clearInterval(cleanup); clearInterval(heartbeat); for (const socket of sockets.clients) socket.terminate(); await new Promise(resolve => sockets.close(resolve)); await new Promise(resolve => server.close(resolve)); await store.close(); },
+    async close() { if (closing) return; closing = true; if (sessionTimer) { clearTimeout(sessionTimer); sessionTimer = null; } await sessionWrite.catch(() => {}); await combatAuthority.close(); clearInterval(cleanup); clearInterval(heartbeat); for (const socket of sockets.clients) socket.terminate(); await new Promise(resolve => sockets.close(resolve)); await new Promise(resolve => server.close(resolve)); await store.close(); },
   };
 }
 

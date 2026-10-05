@@ -12,7 +12,7 @@ How the world is split: inside the safe circle at home (18 m round the village, 
 
 ## Run it on this PC now (ngrok)
 
-Double-click `start-online.cmd` (or run `npm run share`). It builds the game if needed, starts the server on this PC only, opens your ngrok tunnel and prints the public address. Send that address to players and keep the window open. `npm run loadtest -- 1000 100 20` measures how many players the PC copes with.
+Double-click `start-online.cmd` (or run `npm run share`). It builds the game if needed, starts the server on this PC only, opens your ngrok tunnel and prints the public address. The launcher rebuilds when the existing output is the solo GitHub Pages edition, uses a different base path, or predates source/configuration changes. It always builds the online edition at `/`. Send that address to players and keep the window open. `npm run loadtest -- 1000 100 20` measures how many players the PC copes with.
 
 ## What players can do together (modelled on how Zoo Pet works)
 

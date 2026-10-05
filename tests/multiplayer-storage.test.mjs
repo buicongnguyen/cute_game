@@ -43,16 +43,20 @@ const login = (server, username) => api(server, 'auth/login', { method: 'POST', 
 
 test('SQL-backed HTTP accounts, revisions and friendships survive a server restart', async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'zoo-http-sql-')), db = await database();
-  let server, store;
+  let server, store, starts = 0;
   t.after(async () => { if (server) await server.close(); await db.destroy(); await rm(directory, { recursive: true, force: true }); });
   async function start() {
     store = await createAccountStore({ pool: db.pool });
-    server = await createGameServer({ host: '127.0.0.1', port: 0, dataDir: directory, databaseUrl: '', databaseRequired: false, accountStore: store });
+    server = await createGameServer({ host: '127.0.0.1', port: 0, dataDir: path.join(directory, `fresh-app-disk-${++starts}`), databaseUrl: '', databaseRequired: false, accountStore: store });
   }
   await start();
   const alice = await api(server, 'auth/register', { method: 'POST', body: { username: 'alice', password, name: 'Alice' } });
   const bob = await api(server, 'auth/register', { method: 'POST', body: { username: 'bob', password, name: 'Bob' } });
   assert.equal(alice.status, 200); assert.equal(bob.status, 200);
+  const savedSessions = await store.loadSessions(Date.now());
+  assert.equal(savedSessions.length, 2, 'sign-ins are durable before their successful HTTP response');
+  assert.ok(savedSessions.every(([hash]) => /^[a-f0-9]{64}$/.test(hash)));
+  assert.ok(!JSON.stringify(savedSessions).includes(alice.cookie.split('=')[1]), 'storage contains only token hashes');
   const aliceId = alice.body.account.id, bobId = bob.body.account.id;
   // Privileged fixture setup is separate from the public API: clients cannot upload earned value.
   await store.command({ actorId: aliceId, expectedRevision: 0, requestId: randomUUID(), hash: commandHash({fixture:true}), run: records => {
@@ -72,7 +76,7 @@ test('SQL-backed HTTP accounts, revisions and friendships survive a server resta
   await server.close(); server = null;
   assert.equal(db.closes, 1);
   await start();
-  assert.equal((await api(server, 'auth/session', { cookie: alice.cookie })).body.account?.id, aliceId, 'sign-ins are kept in the data folder, so a restart does not sign players out');
+  assert.equal((await api(server, 'auth/session', { cookie: alice.cookie })).body.account?.id, aliceId, 'PostgreSQL sign-ins survive a restart on a new application disk');
   const restoredAlice = await login(server, 'alice'), restoredBob = await login(server, 'bob');
   assert.equal(restoredAlice.status, 200); assert.equal(restoredBob.status, 200);
   assert.equal(restoredAlice.body.account.id, aliceId); assert.equal(restoredAlice.body.revision, 2);
@@ -88,7 +92,33 @@ test('SQL-backed HTTP accounts, revisions and friendships survive a server resta
   assert.equal(forbidden.status,409);
   assert.deepEqual(await store.get(aliceId), durableBefore);
   assert.deepEqual((await api(server, 'health')).body.storage, 'postgres');
-  assert.deepEqual((await readdir(directory)).filter(name => name !== 'sessions.json'), [], 'SQL storage never creates a fallback accounts.json (only the hashed sign-ins file is kept)');
+  assert.deepEqual(await readdir(directory), [], 'SQL accounts and sessions need no local persistence files');
+  assert.equal((await api(server, 'auth/logout', { method: 'POST', cookie: alice.cookie })).status, 200);
+  await server.close(); server = null; await start();
+  assert.equal((await api(server, 'auth/session', { cookie: alice.cookie })).body.account, null, 'signing out stays effective after a fresh-disk restart');
+  assert.equal((await api(server, 'auth/session', { cookie: bob.cookie })).body.account?.id, bobId, 'signing out does not revoke other accounts');
+});
+
+test('session persistence failures do not issue cookies or publish an uncommitted logout', async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'zoo-session-fault-')), db = await database();
+  const store = await createAccountStore({ pool: db.pool });
+  const server = await createGameServer({ host: '127.0.0.1', port: 0, dataDir: path.join(directory, 'absent'), accountStore: store, databaseUrl: '', databaseRequired: false });
+  t.after(async () => { db.fail(null); await server.close(); await db.destroy(); await rm(directory, { recursive: true, force: true }); });
+  const first = await api(server, 'auth/register', { method: 'POST', body: { username: 'session_fault', password } });
+  assert.equal(first.status, 200);
+  db.fail(sql => { if (/^(INSERT|DELETE|UPDATE).*zoo_sessions/s.test(sql)) throw new Error('private-session-write-failure'); });
+  const unknownLogout = await api(server, 'auth/logout', { method: 'POST', cookie: 'zoo_session=unknown-token' });
+  assert.equal(unknownLogout.status, 200, 'unknown sign-ins do not enqueue session database writes');
+  assert.equal(unknownLogout.cookie, 'zoo_session=');
+  const failedLogin = await login(server, 'session_fault');
+  assert.equal(failedLogin.status, 500); assert.equal(failedLogin.cookie, undefined);
+  const failedLogout = await api(server, 'auth/logout', { method: 'POST', cookie: first.cookie });
+  assert.equal(failedLogout.status, 500); assert.equal(failedLogout.cookie, undefined);
+  assert.doesNotMatch(JSON.stringify([failedLogin.body, failedLogout.body]), /private-session/);
+  assert.equal((await api(server, 'auth/session', { cookie: first.cookie })).body.account.id, first.body.account.id);
+  db.fail(null);
+  assert.equal((await api(server, 'auth/logout', { method: 'POST', cookie: first.cookie })).status, 200);
+  assert.equal((await store.loadSessions(Date.now())).length, 0);
 });
 
 test('SQL write and commit failures never produce successful HTTP saves or publish uncommitted accounts', async t => {

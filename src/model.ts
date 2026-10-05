@@ -757,6 +757,15 @@ export function parseSave(raw: string | null): SaveState | null {
                     s.gear[slot as GearSlot] = id;
             }
         s.hp = Math.min(typeof v.hp === 'number' && Number.isFinite(v.hp) && v.hp >= 0 ? v.hp : 100, maxHp(s));
+        // Migration refunds use the saved difficulty's prices, so restore preferences before the beds.
+        const settings = record(v.settings) ? v.settings : {};
+        s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true, ...(typeof settings.movePad === 'boolean' ? { movePad: settings.movePad } : {}) };
+        if(settings.joystickSide==='left'||settings.joystickSide==='right')s.settings.joystickSide=settings.joystickSide;
+        if(settings.keyboardLayout==='classic'||settings.keyboardLayout==='wasd')s.settings.keyboardLayout=settings.keyboardLayout;
+        if (settings.placeBeds === true) s.settings.placeBeds = true;
+        if (settings.tester === true) s.settings.tester = true;
+        s.settings.difficulty = isDifficulty(settings.difficulty) ? settings.difficulty : 'easy'; // saves from before the setting play on Easy
+        if (typeof settings.difficultyLoweredAt === 'number' && Number.isFinite(settings.difficultyLoweredAt) && settings.difficultyLoweredAt > 0) s.settings.difficultyLoweredAt = settings.difficultyLoweredAt;
         let bedRefund = 0; // energy back for upgrade levels above BED_MAX_LEVEL in older saves
         s.plots = v.plots.slice(0, LEGACY_MAX_PLOTS).map((p: unknown, i: number) => {
             const rawCrop = record(p) && typeof p.crop === 'string' ? canonicalItem(p.crop) : null;
@@ -787,14 +796,6 @@ export function parseSave(raw: string | null): SaveState | null {
         s.planet = planetId(v.planet)!;
         s.visited = [...new Set<PlanetId>(['home', ...(Array.isArray(v.visited) ? v.visited.map(planetId).filter((id: PlanetId | null): id is PlanetId => !!id) : []), s.planet])];
         s.discovered = [...new Set<PlanetId>([...s.visited, ...(Array.isArray(v.discovered) ? v.discovered.map(planetId).filter((id: PlanetId | null): id is PlanetId => !!id) : [])])];
-        const settings = record(v.settings) ? v.settings : {};
-        s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true, ...(typeof settings.movePad === 'boolean' ? { movePad: settings.movePad } : {}) };
-        if(settings.joystickSide==='left'||settings.joystickSide==='right')s.settings.joystickSide=settings.joystickSide;
-        if(settings.keyboardLayout==='classic'||settings.keyboardLayout==='wasd')s.settings.keyboardLayout=settings.keyboardLayout;
-        if (settings.placeBeds === true) s.settings.placeBeds = true;
-        if (settings.tester === true) s.settings.tester = true;
-        s.settings.difficulty = isDifficulty(settings.difficulty) ? settings.difficulty : 'easy'; // saves from before the setting play on Easy
-        if (typeof settings.difficultyLoweredAt === 'number' && Number.isFinite(settings.difficultyLoweredAt) && settings.difficultyLoweredAt > 0) s.settings.difficultyLoweredAt = settings.difficultyLoweredAt;
         const rewards = record(v.worldRewards) ? v.worldRewards : {};
         if (record(rewards.mineReadyAt))
             for (const [key, times] of Object.entries(rewards.mineReadyAt)) {

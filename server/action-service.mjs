@@ -58,13 +58,16 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
     checkAccess?.();
     if(data?.rulesVersion!==ACTION_RULES_VERSION||!validId(data.type)||!data.payload||typeof data.payload!=='object'||Array.isArray(data.payload))fail(400,'This action needs the current game rules.');
     const intent={type:data.type,payload:data.payload},p=data.payload;
+    // The origin is part of the immutable request ID, never the mutable revision used for a safe 409 retry.
+    const bound=typeof data.requestId==='string'?/^r(0|[1-9][0-9]*)-[a-f0-9-]{36}$/.exec(data.requestId):null;
+    const originalRevision=bound?Number(bound[1]):undefined;
     const relatedIds=['stealCrop','claimDrop','releaseDrop','giftFriend','waterFriend'].includes(data.type)&&validId(p.ownerId)?[p.ownerId]:[];
     let reservation;
     try {
-    const committed=await store.command({actorId,requestId:data.requestId,expectedRevision:data.expectedRevision,actionType:data.type,hash:commandHash({rulesVersion:data.rulesVersion,...intent}),relatedIds,checkAccess,run:records=>{
+    const committed=await store.command({actorId,requestId:data.requestId,expectedRevision:data.expectedRevision,originalRevision,requireBoundRevision:true,actionType:data.type,hash:commandHash({rulesVersion:data.rulesVersion,...intent}),relatedIds,checkAccess,run:records=>{
       const account=records.get(actorId),state=Game.parseSave(JSON.stringify(account.profile)),peer=getPeer(actorId),now=Date.now();
       if(!state)fail(409,'Reconnect to load your adventure.');account.profile=state;
-      if(peer&&peer.planet!==state.planet&&!['returnHome','stealCrop'].includes(data.type))fail(409,'Reconnect to load your current planet.');
+      if(peer&&peer.planet!==state.planet&&!['returnHome','stealCrop','waterFriend','giftFriend'].includes(data.type))fail(409,'Reconnect to load your current planet.');
       if(farmActions.has(data.type)&&(state.planet!=='home'||peer?.visit))fail(409,'Return to your own garden first.');
       if(farmHelperActions.has(data.type)&&(state.planet!=='home'||!peer?.active||peer.visit||account.journeyPaid))fail(409,'Return to your own garden first.');
       if(data.type==='homeCleanse'&&(!peer?.active||peer.visit||account.journeyPaid))fail(409,'Return to your own garden first.');

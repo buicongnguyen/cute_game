@@ -182,6 +182,8 @@ export const VI_ONLINE: Record<string, string> = {
   "The reward could not be saved. Please try again.": "Chưa lưu được phần thưởng. Bạn thử lại nhé.",
   "Pending health could not be saved. Please try again.": "Chưa lưu được máu hiện tại. Bạn thử lại nhé.",
   "Account storage is unavailable.": "Kho tài khoản tạm thời không dùng được.",
+  'This pending action is too old to retry safely. Check your latest adventure before trying again.': 'Thao tác đang chờ đã quá cũ để thử lại an toàn. Hãy kiểm tra tiến trình mới nhất trước khi thực hiện lại.',
+  'Reconnect to use server-approved actions.': 'Hãy kết nối lại để thực hiện thao tác được máy chủ xác nhận.',
   // Friends: gifts and watering
   'Send a gift': 'Tặng quà',
   'Give from your bag': 'Tặng từ ba lô',

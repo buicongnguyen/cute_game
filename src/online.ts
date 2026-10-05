@@ -192,7 +192,7 @@ export function initOnline(game:GameBridge) {
   function rejectActions(message:string){for(const waiter of waiting.values())waiter.reject(new Error(message));waiting.clear();actionQueue=[];}
   function queueAction(intent:GameIntent):Promise<ActionReply>{
     if(!account||stopped)return Promise.reject(new Error('Reconnect before changing your online adventure.'));
-    const job:ActionJob={...structuredClone(intent),requestId:crypto.randomUUID(),expectedRevision:revision,rulesVersion:1};actionQueue.push(job);rememberActions();setSaveStatus('◌ Saving online…');
+    const job:ActionJob={...structuredClone(intent),requestId:`r${revision}-${crypto.randomUUID()}`,expectedRevision:revision,rulesVersion:1};actionQueue.push(job);rememberActions();setSaveStatus('◌ Saving online…');
     const answer=new Promise<ActionReply>((resolve,reject)=>waiting.set(job.requestId,{resolve,reject}));void flushSave();return answer;
   }
   async function shareNearbyLoot(){
@@ -219,9 +219,9 @@ export function initOnline(game:GameBridge) {
         status=socket?.readyState===WebSocket.OPEN?'Online':'Reconnecting';setSaveStatus(actionQueue.length?'◌ Saving online…':'● Saved online');refreshButton();
       }catch(error){if(account?.id!==accountId||sessionEpoch!==epoch)return;const statusCode=(error as {status?:number}).status;
         if(statusCode===401){expireSession();return;}
-        if(statusCode===409){try{const fresh=await api<Session>('auth/session');if(account?.id!==accountId||sessionEpoch!==epoch)return;if(!fresh.account){expireSession();return;}if(fresh.account.id!==accountId){begin(fresh);return;}revision=fresh.revision||0;if(fresh.profile)game.applyAuthoritativeState(fresh.profile);
+        if(statusCode===409||statusCode===410||statusCode===426){try{const fresh=await api<Session>('auth/session');if(account?.id!==accountId||sessionEpoch!==epoch)return;if(!fresh.account){expireSession();return;}if(fresh.account.id!==accountId){begin(fresh);return;}revision=fresh.revision||0;if(fresh.profile)game.applyAuthoritativeState(fresh.profile);
           // Someone else changed this account meanwhile (a visitor watered a crop, say): the action itself is fine, so retry it on the new revision instead of dropping it (the server replays it if the first try had gone through).
-          job.retries=(job.retries??0)+1;if(job.retries<=3){job.expectedRevision=revision;rememberActions();continue;}}catch{break;}}
+          if(statusCode===409){job.retries=(job.retries??0)+1;if(job.retries<=3){job.expectedRevision=revision;rememberActions();continue;}}}catch{break;}}
         if(statusCode&&statusCode<500){actionQueue.shift();rememberActions();waiting.get(job.requestId)?.reject(error as Error);waiting.delete(job.requestId);continue;}
         status='Action pending';setSaveStatus('○ Action pending — reconnect to finish');refreshButton();break;
       }

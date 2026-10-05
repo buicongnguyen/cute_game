@@ -1,12 +1,12 @@
 import * as T from 'three';
 import { isShared } from './assets.ts';
-import { fishDrawLook, type FishingView } from './fishing-view.ts';
+import type { FishPose, FishingView } from './fishing-view.ts';
 import { fishHuntKey, fishHuntTargets, type FishHuntTarget, type HuntPond, type HuntingState } from './fish-hunting.ts';
 import { createHarpoonProjectile } from './harpoon-art.ts';
 import { guardianTarget } from './lake-guardian.ts';
 
 type Point = { x: number; z: number };
-type FishModel = { obj: T.Group; tail: T.Object3D | null; id: string };
+type FishModel = { obj: T.Group; tail: T.Object3D | null; id: string; slot: number; depth: number; wag: number };
 /** Only the selected pond uses these targets. Rewards never depend on an animation finishing. */
 export class FishHuntingView {
   readonly group = new T.Group();
@@ -16,17 +16,17 @@ export class FishHuntingView {
   private projectile = createHarpoonProjectile();
   private shot: { from: T.Vector3; to: T.Vector3; elapsed: number } | null = null;
   private kitReady = false;
-  private makeFish: (id: string) => FishModel;
+  private makeFish: (id: string, slot: number) => FishModel;
   private fishing: FishingView;
   private offset = 0;
   /** The rod view's fish poses at handover; targets ease in from them instead of popping. */
-  private from: Array<{ x: number; z: number; heading: number }> = [];
+  private from = new Map<number, FishPose>();
   private blend = 1;
   private world: unknown;
   private owner: unknown;
 
   constructor(scene: T.Scene, fishing: FishingView) {
-    this.fishing = fishing; this.makeFish = id => ({ ...fishing.makeFish(id), id });
+    this.fishing = fishing; this.makeFish = (id, slot) => ({ ...fishing.makeSwimmingFish(id), id, slot });
     this.group.name = 'fish-hunting'; this.projectile.visible = false;
     this.group.add(this.projectile); scene.add(this.group);
   }
@@ -46,12 +46,12 @@ export class FishHuntingView {
       this.clearFish(); this.pond = null;
     }
     if (pond?.id !== this.pond?.id || this.kitReady !== kitReady) {
-      if (this.pond && pond?.id !== this.pond.id) this.fishing.adoptPoses?.(this.pond.id, this.fish.map(f => ({ x: f.obj.position.x, z: f.obj.position.z, heading: f.obj.rotation.y, id: f.id })));
-      if (pond && pond.id !== this.pond?.id) { this.from = this.fishing.ordinaryPoses?.(pond.id) ?? []; this.blend = this.from.length ? 0 : 1; }
+      if (this.pond && pond?.id !== this.pond.id) this.fishing.adoptPoses?.(this.pond.id, this.fish.map(f => ({ slot: f.slot, x: f.obj.position.x, z: f.obj.position.z, heading: f.obj.rotation.y, id: f.id })));
+      if (pond && pond.id !== this.pond?.id) { this.from = new Map((this.fishing.ordinaryPoses?.(pond.id) ?? []).map(p => [p.slot, p])); this.blend = this.from.size ? 0 : 1; }
       this.clearFish(); this.pond = pond; this.kitReady = kitReady;
       if (!pond) { this.shot = null; this.projectile.visible = false; }
       if (pond) for (const target of fishHuntTargets(pond, this.now(), hunting)) {
-        const model = this.makeFish(target.id); this.fish.push(model); this.group.add(model.obj);
+        const model = this.makeFish(target.id, target.slot); this.fish.push(model); this.group.add(model.obj);
       }
     }
     this.fishing.huntingPondId = pond?.id ?? null;
@@ -61,14 +61,13 @@ export class FishHuntingView {
     for (const target of this.targets) {
       let f = this.fish[target.slot]; if (!f) continue;
       // A caught slot restocks with a newly rolled species (fish-hunting.ts): swap the model while the slot is empty.
-      if (f.id !== target.id) { const next = this.makeFish(target.id); next.obj.position.copy(f.obj.position); next.obj.rotation.y = f.obj.rotation.y; this.dispose(f); this.fish[target.slot] = f = next; this.group.add(next.obj); }
+      if (f.id !== target.id) { const next = this.makeFish(target.id, target.slot); next.obj.position.copy(f.obj.position); next.obj.rotation.y = f.obj.rotation.y; this.dispose(f); this.fish[target.slot] = f = next; this.group.add(next.obj); }
       f.obj.visible = now >= (hunting?.readyAt[fishHuntKey(pond!.id, target.slot)] ?? 0);
-      const [scale, top, wag] = fishDrawLook(target.id);
       // Same swim depth as the rod view's fish (FishingView.addFish), so the pond looks the same with either gear.
-      const start = k < 1 ? this.from[target.slot] : undefined;
-      f.obj.position.set(start ? start.x + (target.x - start.x) * k : target.x, pond!.surface - top * scale - .015, start ? start.z + (target.z - start.z) * k : target.z);
+      const start = k < 1 ? this.from.get(target.slot) : undefined;
+      f.obj.position.set(start ? start.x + (target.x - start.x) * k : target.x, pond!.surface - f.depth, start ? start.z + (target.z - start.z) * k : target.z);
       f.obj.rotation.y = start ? start.heading + Math.atan2(Math.sin(target.facing - start.heading), Math.cos(target.facing - start.heading)) * k : target.facing;
-      if (f.tail) f.tail.rotation.y = Math.sin(now / 200 + target.slot) * wag;
+      if (f.tail) f.tail.rotation.y = Math.sin(now / 200 + target.slot) * f.wag;
     }
     this.targets = this.targets.filter(t => this.fish[t.slot]?.obj.visible);
     // The Lake Guardian is drawn by LakeGuardianView (shown with any gear); here it is only a target to aim at.

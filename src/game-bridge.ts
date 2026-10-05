@@ -35,7 +35,7 @@ export interface GameBridge {
   /** AI neighbours (bots.ts): does the player already have this item; hand over a gift (items and/or energy; false when it cannot be given now); may a neighbour walk up and talk now. */
   /** A neighbour's blow on an enemy (bots.ts): the enemy takes the damage and falls, but a kill pays the player nothing, wherever it happens, and it never touches the player's target ring, hit-stop or HUD. */
   botHit(enemyId:string,damage:number):void;
-  ownsItem(id:string):boolean;grantGift(gift:{item?:string;count:number;energy:number}):boolean;botContext():{ready:boolean};
+  ownsItem(id:string):boolean;grantGift(gift:{item?:string;count:number;energy:number}):boolean;botContext():{active:boolean;ready:boolean};
   onFrame(listener:(dt:number)=>void):()=>void;
   onAction(listener:(action:GameAction)=>void):()=>void;
 }

@@ -7,6 +7,7 @@ import { TalkBag } from './house-talk.ts';
 import { BOT_LINES, type BotScenario } from './bot-lines.ts';
 import { iconPath } from './item-icons.ts';
 import { replyTo } from './bot-chat.ts';
+import { neighboursKey } from './profiles.ts';
 import type { GameBridge } from './game-bridge.ts';
 import type { RemotePose } from './world.ts';
 import {
@@ -25,7 +26,7 @@ import './bots.css';
  * The gift is promised in the same step as the friendship (bot-logic befriend) and kept in the saved store until the bag has
  * it, so closing the page, a full bag or a visit in progress can delay it but never lose it.
  */
-const STORE_KEY = 'cute-game-neighbours-v1', ENABLED_KEY = 'cute-game-neighbours-on', COUNT = 5;
+const ENABLED_KEY = 'cute-game-neighbours-on', COUNT = 5;
 const AREA = { radius: 13, centre: { x: 0, z: 2 } }; // where a visiting friend wanders: inside the safe zone
 const FLY_HEIGHT = 3.1, GATE_EXIT = 19.5;
 type Mode = 'wander' | 'approach' | 'talk' | 'ask' | 'fly' | 'commute' | 'rest';
@@ -49,9 +50,10 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') 
 export function initBots(game: GameBridge) {
   const world = game.getWorld(), bag = new TalkBag(), rand = Math.random;
   const seed0 = (Date.now() ^ (Math.random() * 2 ** 32)) >>> 0;
-  let store: BotStore = parseStore(read(STORE_KEY), seed0);
+  const storeKey = neighboursKey(); // fixed for this session, just like the adventure loaded at startup
+  let store: BotStore = parseStore(read(storeKey), seed0);
   const cast = makeCast(store.seed, COUNT), runs = new Map<string, Run>();
-  const save = () => write(STORE_KEY, JSON.stringify(store));
+  const save = () => write(storeKey, JSON.stringify(store));
   save();
   const player = () => game.getState();
   const owns = (item: string) => game.ownsItem(item);
@@ -116,6 +118,7 @@ export function initBots(game: GameBridge) {
     closeCard(); sayLine(r, 'LATER'); store.meetAfter[r.def.id] = Date.now() + MEET_PAUSE_MS.declined; save(); leave(r);
   }
   function accept(r: Run) {
+    if (!active() || !ready().ready) return;
     closeCard(); const now = Date.now();
     if (!isFriend(store, r.def.id)) befriend(store, r.def, now, owns);
     save(); sayLine(r, 'THANKS', 3200); r.mode = 'talk'; r.modeT = 2.8; r.askUntil = 0;
@@ -308,7 +311,7 @@ export function initBots(game: GameBridge) {
     return { name: def.name, discovered: ['home'], plots: s.plots, decorations: s.decorations, farm: s.farm } as Partial<M.SaveState>;
   }
   function visit(def: BotDef) {
-    if (!isFriend(store, def.id)) return;
+    if (!active() || !ready().ready || !isFriend(store, def.id)) return;
     visitingBot = def.id; busy = def.id; closeCard();
     game.setVisiting(def.name, buildHome(def));
     for (const [id, r] of runs) if (id !== def.id) world.removeRemotePlayer(id); else { r.place = 'garden'; r.hidden = false; r.route = []; r.foe = null; r.retreat = 0; r.say = null; r.mode = 'wander'; r.stayUntil = clock + 1e9; r.flyY = 0; r.w.x = 4; r.w.z = 4; pickGoal(r.w, gardenCtx); }
@@ -328,7 +331,7 @@ export function initBots(game: GameBridge) {
   // ---- The neighbours panel ----
   const dialog = el('dialog', 'social-dialog bot-dialog'); dialog.setAttribute('aria-label', t('Neighbours')); document.body.append(dialog);
   // ---- The message box ----
-  const logs = new Map<string, Array<{ me: boolean; text: string }>>(); let chatWith: BotDef | null = null, draft = '';
+  const logs = new Map<string, Array<{ me: boolean; text: string }>>(); let chatWith: BotDef | null = null, draft = '', session = 0;
   function renderChat(d: BotDef) {
     chatWith = d; dialog.replaceChildren();
     const header = el('header', 'social-header'), close = el('button', 'social-close', '✕'); close.setAttribute('aria-label', t('Close')); close.onclick = () => { chatWith = null; dialog.close(); };
@@ -344,7 +347,9 @@ export function initBots(game: GameBridge) {
       input.value = ''; draft = ''; lines.push({ me: true, text }); log.append(el('p', 'bot-msg me', text)); log.scrollTop = log.scrollHeight;
       const typing = el('p', 'bot-msg typing', '…'); log.append(typing); log.scrollTop = log.scrollHeight;
       const reply = replyTo(text, d, isFriend(store, d.id), { pick: (key, pool) => bag.pick(key, pool, rand), rand });
+      const replySession = session;
       window.setTimeout(() => {
+        if (replySession !== session) return;
         const out = t(reply, { name: player().name, me: d.name, level: d.level }); lines.push({ me: false, text: out }); if (lines.length > 40) lines.splice(0, lines.length - 40);
         typing.remove(); if (chatWith === d && dialog.open) { log.append(el('p', 'bot-msg', out)); log.scrollTop = log.scrollHeight; }
         const r = runs.get(d.id); if (r) r.say = { text: out, until: clock + 5 };
@@ -386,10 +391,22 @@ export function initBots(game: GameBridge) {
 
   // ---- Every frame ----
   game.onFrame(dt => {
-    clock += Math.min(.1, dt);
     const on = active();
     if (!on) { endVisit(); for (const id of [...runs.keys()]) { world.removeRemotePlayer(id); bubbles.get(id)?.remove(); bubbles.delete(id); } runs.clear(); busy = null; closeCard(); leaveBtn.hidden = true; visitingBot = null; panelBtn.hidden = !enabled || !!world.networkRole; return; }
-    panelBtn.hidden = false;
+    panelBtn.hidden = world.planet !== 'home' || !!world.interior;
+    if (!ready().active) {
+      // Keep the visit and its timers while a menu is open, but never simulate combat in a paused or different world.
+      for (const [id, r] of runs) {
+        r.moving = false;
+        const remote = world.remotePlayers.get(id); if (remote) remote.pose.moving = false;
+        if (world.planet !== 'home' || world.interior) world.removeRemotePlayer(id);
+      }
+      for (const bubble of bubbles.values()) bubble.style.display = 'none';
+      card.hidden = true;
+      return;
+    }
+    clock += Math.min(.1, dt);
+    if (cardFor) card.hidden = false;
     for (const d of cast) {
       if (visitingBot && d.id !== visitingBot) continue;
       if (!runs.has(d.id)) runs.set(d.id, spawn(d));
@@ -405,7 +422,17 @@ export function initBots(game: GameBridge) {
     giftTimer -= d; if (giftTimer <= 0) { giftTimer = 1.5; deliverGifts(); }
     drawBubbles();
   });
-  return { cast, store: () => store, accept: (id: string) => { const r = runs.get(id); if (r) accept(r); }, runs };
+  function reset() {
+    session++;
+    endVisit(); closeCard(); dialog.close(); logs.clear(); chatWith = null; draft = '';
+    for (const id of runs.keys()) world.removeRemotePlayer(id);
+    for (const id of Object.keys(store.friends)) world.friendIds.delete(id);
+    for (const bubble of bubbles.values()) bubble.remove();
+    bubbles.clear(); runs.clear(); giftTries.clear(); busy = null;
+    clock = pushClock = giftTimer = 0; thinkClock = 2;
+    store = newStore(store.seed); save();
+  }
+  return { cast, store: () => store, accept: (id: string) => { const r = runs.get(id); if (r) accept(r); }, reset, runs };
 }
 export type NeighbourApi = ReturnType<typeof initBots>;
-void BOT_ID_PREFIX; void newStore;
+void BOT_ID_PREFIX;

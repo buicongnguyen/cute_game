@@ -22,12 +22,14 @@ const STATUS=['fear','charm','slow','blind','sheep','taunt'];
 export function createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath=()=>{},onError=()=>{}}){
   const engines=new Map(),queues=new Map();let stopped=false;
   function queue(id,task){const next=(queues.get(id)||Promise.resolve()).catch(()=>{}).then(task);queues.set(id,next);return next;}
-  async function internal(actorId,type,relatedIds,run,requestId=randomUUID(),outbox=true){
+  async function internal(actorId,type,relatedIds,run,requestId=randomUUID(),outbox=true,retryContext={}){
     return queue(actorId,async()=>{
       for(let retry=0;retry<5;retry++){
         const account=await store.get(actorId);if(!account)return null;
+        // Health retains this context with its batch even when commit succeeded but publishing the reply failed.
+        retryContext.originalRevision??=account.profileRevision||0;
         try{
-          const committed=await store.command({actorId,requestId,hash:commandHash({type,requestId}),expectedRevision:account.profileRevision||0,actionType:type,relatedIds,run,outbox});
+          const committed=await store.command({actorId,requestId,hash:commandHash({type,requestId}),expectedRevision:account.profileRevision||0,originalRevision:retryContext.originalRevision,actionType:type,relatedIds,run,outbox});
           // A successful commit may outlive its connection. Receipt replay has no changed
           // records, but connected peers still need the persisted HP and life metadata.
           if(committed.reply.replayed)committed.accounts=(await Promise.all([...new Set([actorId,...relatedIds])].map(id=>store.get(id)))).filter(Boolean);
@@ -187,7 +189,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   function flushHealth(engine){
     if(engine.pendingHealth?.flushing)return engine.pendingHealth.promise;
     if(!engine.pendingHealth&&!engine.healthEvents.length)return Promise.resolve(true);
-    const batch=engine.pendingHealth??={events:engine.healthEvents.splice(0),requestId:randomUUID(),flushing:false},events=batch.events,actorId=engine.peer.account.id;batch.flushing=true;engine.hpAt=Date.now();
+    const batch=engine.pendingHealth??={events:engine.healthEvents.splice(0),requestId:randomUUID(),context:epoch(engine.peer.account),flushing:false},events=batch.events,actorId=engine.peer.account.id;batch.flushing=true;engine.hpAt=Date.now();
     return batch.promise=internal(actorId,'health',[],records=>{
       const account=records.get(actorId),profile=account.profile;let delta=0,died=false;
       for(const event of events){
@@ -196,10 +198,19 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
         if(profile.hp<=0){profile.planet=event.planet;Game.die(profile,event.x,event.z);clearJourney(account);account.lifeEpoch=(account.lifeEpoch||0)+1;died=true;}
       }
       return {delta,died,lifeEpoch:account.lifeEpoch||0};
-    },batch.requestId,false) /* bookkeeping: no event-outbox entry twice a second while hurt */.then(result=>{engine.pendingHealth=null;if(!result)return true;const live=peers.get(actorId);if(!live)return true;
+    },batch.requestId,false,batch) /* bookkeeping: no event-outbox entry twice a second while hurt */.then(result=>{engine.pendingHealth=null;if(!result)return true;const live=peers.get(actorId);if(!live)return true;
       if(result.reply.result.died){resetPeer(live,{newLife:true});onDeath(live);}
       send(live.socket,{type:'healthResult',...result.reply.result});return true;
-    }).catch(()=>{batch.flushing=false;return false;});
+    }).catch(async error=>{
+      if(error.status===410){
+        // The receipt was evicted: its outcome is ambiguous, so reload instead of applying old damage a second time.
+        try{const account=await store.get(actorId),live=peers.get(actorId);
+          if(account){const current=remember(account);if(live){send(live.socket,{type:'profile',profile:current.profile,revision:current.profileRevision,authorityVersion:1});if((account.adventureEpoch||0)===batch.context.adventure&&engine.reconciledLife.adventure===batch.context.adventure&&(account.lifeEpoch||0)>engine.reconciledLife.life){resetPeer(live,{newLife:true});onDeath(live);}}}
+          engine.pendingHealth=null;return true;
+        }catch{/* Keep the same batch identity until the authoritative state can be loaded. */}
+      }
+      batch.flushing=false;return false;
+    });
   }
   /** Settle already observed damage before an inventory action calculates healing. */
   async function flushPeerHealth(peer){
@@ -220,7 +231,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       if(engine.planet!==peer.planet){engine.planet=peer.planet;engine.environment=new EnvironmentSimulation(createEnvironmentLayout(peer.planet));}
       return engine;
     }
-    engine={peer,room:peer.room,planet:peer.planet,lastSeen:Date.now(),nextBasic:0,nextSkill:[0,0,0,0],healthEvents:[],hpAt:0,damageAt:0,lastSkill:new Map(),environment:new EnvironmentSimulation(createEnvironmentLayout(peer.planet))};
+    engine={peer,room:peer.room,planet:peer.planet,reconciledLife:epoch(peer.account),lastSeen:Date.now(),nextBasic:0,nextSkill:[0,0,0,0],healthEvents:[],hpAt:0,damageAt:0,lastSkill:new Map(),environment:new EnvironmentSimulation(createEnvironmentLayout(peer.planet))};
     const current=()=>engine.peer,room=()=>rooms.get(current().room);
     const targets=()=>room()?[...state(room()).enemies.values()]:[];
     engine.sim=new CombatSimulation({position:()=>current().pose,facing:()=>current().pose.facing,face:a=>{current().pose.facing=a;},targets,
@@ -242,7 +253,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   function resetPeer(peer,{newLife=false,reason}={}){
     const engine=engineFor(peer);engine.sim.reset();
     if(newLife||reason==='rest')engine.healthEvents=[];
-    if(newLife){engine.environment=new EnvironmentSimulation(createEnvironmentLayout(peer.planet));engine.damageAt=0;}
+    if(newLife){engine.reconciledLife=epoch(peer.account);engine.environment=new EnvironmentSimulation(createEnvironmentLayout(peer.planet));engine.damageAt=0;}
     if(reason==='reset'){engine.nextBasic=0;engine.nextSkill=[0,0,0,0];}
   }
   function basic(peer,targetId){if(peer.visit||!peer.active||peer.account.profile.hp<=0)return;if(typeof targetId==='string')peer.target=targetId;const e=engineFor(peer),now=Date.now();if(now<e.nextBasic)return;const target=state(rooms.get(peer.room)).enemies.get(targetId);if(e.sim.basic(target)){const weapon=Game.weaponStats(combatProfile(peer));e.nextBasic=now+Math.max(.12,(weapon.cd||.5)/Math.max(.2,1+Game.activeStats(peer.account.profile).haste))*1000;}}
