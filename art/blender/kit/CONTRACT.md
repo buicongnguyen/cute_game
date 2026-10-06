@@ -812,3 +812,26 @@ The fruit generator also renders all eight harvested-fruit inventory icons to pu
 ### Titan inventory images
 
 `build_titan_icons.py` imports the shipped `titans.glb` and renders all nine `hat_t_*` and nine `pet_t_*` meshes with the same item studio. The 18 transparent 160×160 WebP files live under `public/assets/icons/items/`, each below 18 KB (about 85 KB total). The generator verifies alpha and dimensions and updates the `titan_icons` manifest entry. `art/previews/kit/titan-icons.webp` shows full-size and 52px views. No runtime model is altered by rendering these images.
+
+## Delvers' Vault (`build_dungeon.py` → `dungeon.glb`)
+
+One GLB with one top-level empty per piece, named exactly as below, each with a single joined child mesh
+`<name>_body`; origin at the ground centre, front facing Blender -Y (glTF +Z), metres. The game loads it lazily
+(near the vault circle, at the keeper, for a run, or when a vault pet is worn) and draws simple shapes until then.
+
+| Node | Use (`src/dungeon-view.ts`) | Size | Triangles |
+| --- | --- | --- | ---: |
+| `dg_floor` | arena floor, radius 26.5, top at z 0; rune rings at r 5.5 / 13.5 / 21.5 | r 26.5 | ≤ 4,000 |
+| `dg_wall` | 24 pillars and low walls at r 24.5–26 (collision is the game's own ring at r 25.2) | h ≤ 4 | ≤ 7,000 |
+| `dg_portal` | portal ring on a pedestal at the arena centre | r ≤ 2.2, h ≤ 4.3 | ≤ 2,500 |
+| `dg_dress_<room>` | rim props for `grotto`, `belfry`, `coral`, `forge`, `observatory` (radius 19–23) | — | ≤ 5,000 |
+| `dg_lobby`, `dg_keeper` | the circle (r 4.2) by the south gate and Vault Keeper Wren | keeper h ≈ 1.8 | ≤ 2,500 |
+| `dg_<creature>` | 10 creatures at true size (the game's per-type scale is undone) | 0.6–1.4 m | ≤ 1,800 |
+| `dg_<guardian>` | 5 guardians at true size (the game's boss scale 1.85 is undone) | 3.4–4.6 m | ≤ 5,000 |
+| `pet_dg_<guardian>` | 5 companions | h 0.7 | ≤ 3,000 |
+| `item_dg_seal` | Rune Seal, for its icon only | — | ≤ 1,200 |
+
+Per-room tints are applied by material name: `Vault floor`, `Vault inlay`, `Vault tile`, `Vault stone`,
+`Vault stone dark`, `Vault glow`. Run with `-- --icons` to render the five pet icons and the seal icon
+(256×256 transparent WebP, ≤ 30 KB) to `public/assets/icons/items/`. The Delver's Chest is a garden decoration
+drawn by `src/decorations-art.ts` (`deco_dgchest`). `art/previews/kit/dungeon.webp` shows the creatures and guardians.

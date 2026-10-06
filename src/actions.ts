@@ -14,6 +14,7 @@ import { sellProduce } from './item-views.ts';
 import { upgradeGear, upgradeSkill } from './upgrades.ts';
 import { claimProgress, refreshProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 import { refusalReason } from './refusals.ts';
+import { startRun, claimStage, leaveRun } from './dungeon-rules.ts';
 
 export const ACTION_RULES_VERSION = 1;
 export interface GameIntent { type: string; payload?: Record<string, unknown> }
@@ -160,6 +161,10 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'lightBrazier': result = Game.lightBrazier(state, index(), random); break;
     case 'claimCaveChest': result = Game.claimCaveChest(state, now, random); break;
     case 'recoverBag': result = Game.recoverBag(state); break;
+    // The Delvers' Vault (dungeon-rules.ts): one of today's runs, then each stage's rewards in order (server dice online).
+    case 'dungeonStart': result = startRun(state, string(p.runId, 64), now, p.party === undefined ? 1 : integer(p.party)); break;
+    case 'dungeonClaim': result = claimStage(state, string(p.runId, 64), integer(p.stage), now, random); break;
+    case 'dungeonLeave': result = leaveRun(state) || { left: true }; break;
     case 'die': Game.die(state, number(p.x), number(p.z)); result = true; break;
     // Cottage activities: rests and buffs with cooldowns (house-activities.ts).
     case 'houseUse': result = useActivity(state, id(), now); break;

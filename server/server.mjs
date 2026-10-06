@@ -13,6 +13,7 @@ import { lookOf } from '../src/looks.ts';
 import { createAccountStore } from './account-store.mjs';
 import { createActionService, commandHash, logGuest } from './action-service.mjs';
 import { createCombatAuthority } from './combat-authority.mjs';
+import { createDungeonLobby } from './dungeon-lobby.mjs';
 import { EFFECT_LOOKS } from '../src/combat.ts';
 import { rememberAccount } from './account-cache.mjs';
 
@@ -155,7 +156,10 @@ export async function createGameServer(options = {}) {
   function visibleDrop(peer,drop){const space=drop.space||(drop.planet==='home'&&Math.hypot(drop.x,drop.z)<18?`home:${drop.ownerId}`:'wild');return !peer.visit&&drop.room===peer.room&&drop.planet===peer.planet&&(space==='wild'||space===`home:${peer.account.id}`);}
   function respawn(peer){if(peer.visit)endVisit(peer);join(peer,'home',peer.party);peer.pose={...peer.pose,x:0,z:-4.8};arrived(peer);}
   const combatAuthority=createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath:respawn});
-  const executeAction = createActionService({store,getPeer:id=>peers.get(id),getWorld:id=>rooms.has(id)?combatAuthority.state(rooms.get(id)):null,afterCommit:async(committed,intent)=>{
+  // The Delvers' Vault lobby, runs and in-run relay (dungeon-lobby.mjs).
+  const dungeonLobby=createDungeonLobby({peers,rooms,parties,join:(...args)=>join(...args),send,arrived});
+  const dungeonTimer=setInterval(()=>{try{dungeonLobby.tick(.25);}catch(error){console.error('Vault lobby tick failed.',error);}},250);dungeonTimer.unref?.();
+  const executeAction = createActionService({store,getPeer:id=>peers.get(id),getWorld:id=>rooms.has(id)?combatAuthority.state(rooms.get(id)):null,dungeonCheck:(id,type,p)=>dungeonLobby.check(id,type,p),afterCommit:async(committed,intent)=>{
     committed.accounts.forEach(remember);
     if(committed.reply.replayed)return;
     for(const changed of committed.accounts){
@@ -441,6 +445,8 @@ export async function createGameServer(options = {}) {
           }
         } else if(message.type==='damage'&&room?.host===account.id&&room.members.has(message.id)){
           const target=peers.get(message.id);if(target)combatAuthority.damage(target,text(message.enemyId,100),message.source==='shot'?'shot':'melee');
+        } else if (message.type.startsWith('dg')) {
+          dungeonLobby.message(peer, message);
         } else if (message.type === 'effect' && room) {
           const visual=message.visual,cleanVisual=visual&&['arc','ring','impact','trail','beam','cast'].includes(visual.kind)?{kind:visual.kind,x:number(visual.x),z:number(visual.z),radius:number(visual.radius,1,0,40),facing:number(visual.facing,0,-100,100),duration:number(visual.duration,.4,0,12),...(Number.isFinite(visual.arc)?{arc:number(visual.arc,2.2,0,6.3)}:{}),...(Number.isFinite(visual.width)?{width:number(visual.width,.65,.05,4)}:{}),...(EFFECT_LOOKS.includes(visual.look)?{look:visual.look}:{}),color:/^#[a-f0-9]{6}$/i.test(visual.color)?visual.color:'#fff2a0'}:null;
           broadcast(room, { type: 'effect', visual:cleanVisual, by: account.id, effect: text(message.effect, 30), x: number(message.x), z: number(message.z), color: /^#[a-f0-9]{6}$/i.test(message.color) ? message.color : '#fff2a0' }, account.id);
@@ -449,7 +455,7 @@ export async function createGameServer(options = {}) {
     });
     socket.on('close', () => {
       if (peers.get(account.id) !== peer) return;
-      leave(peer); peers.delete(account.id);
+      dungeonLobby.disconnect(peer); leave(peer); peers.delete(account.id);
       for (const id of account.friends) if (accounts.has(id)) tellFriends(accounts.get(id));
     });
     socket.on('error', () => {});
@@ -468,10 +474,10 @@ export async function createGameServer(options = {}) {
     }
   }, 30_000); heartbeat.unref();
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); }); }
-  catch (error) { clearInterval(cleanup); clearInterval(heartbeat); await store.close(); throw error; }
+  catch (error) { clearInterval(cleanup); clearInterval(heartbeat); clearInterval(dungeonTimer); await store.close(); throw error; }
   return {
     server, port: server.address().port, url: `http://${host}:${server.address().port}`,
-    async close() { if (closing) return; closing = true; if (sessionTimer) { clearTimeout(sessionTimer); sessionTimer = null; } await sessionWrite.catch(() => {}); await combatAuthority.close(); clearInterval(cleanup); clearInterval(heartbeat); for (const socket of sockets.clients) socket.terminate(); await new Promise(resolve => sockets.close(resolve)); await new Promise(resolve => server.close(resolve)); await store.close(); },
+    async close() { if (closing) return; closing = true; if (sessionTimer) { clearTimeout(sessionTimer); sessionTimer = null; } await sessionWrite.catch(() => {}); await combatAuthority.close(); clearInterval(cleanup); clearInterval(heartbeat); clearInterval(dungeonTimer); for (const socket of sockets.clients) socket.terminate(); await new Promise(resolve => sockets.close(resolve)); await new Promise(resolve => server.close(resolve)); await store.close(); },
   };
 }
 

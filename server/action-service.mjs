@@ -53,7 +53,7 @@ function saveDrop(account,item,count,peer,now,{owner=account.id,priority=0,life=
 }
 
 /** Account records, receipts, theft ledgers and drops commit in one storage transaction. */
-export function createActionService({store,getPeer,getWorld=()=>null,afterCommit=()=>{}}){
+export function createActionService({store,getPeer,getWorld=()=>null,afterCommit=()=>{},dungeonCheck=()=>true}){
   return async function execute(actorId,data,{checkAccess}={}){
     checkAccess?.();
     if(data?.rulesVersion!==ACTION_RULES_VERSION||!validId(data.type)||!data.payload||typeof data.payload!=='object'||Array.isArray(data.payload))fail(400,'This action needs the current game rules.');
@@ -218,6 +218,8 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         // Friends arrive where the server saw the explorer, not where the client says it is.
         if(data.type==='friendsArrive'){if(!peer||peer.visit)fail(409,'Return to your own garden first.');p.x=peer.pose.x;p.z=peer.pose.z;}
         if(data.type==='travel'&&!account.journeyPaid)fail(409,'Launch your starship first.');
+        // The Delvers' Vault (dungeon-lobby.mjs): only the run the lobby put you in, and only rooms its host cleared.
+        if((data.type==='dungeonStart'||data.type==='dungeonClaim')&&!dungeonCheck(actorId,data.type,p))fail(409,data.type==='dungeonStart'?'Stand in the vault circle with your party first.':'That vault room was already counted, or the run has ended.');
         if(data.type==='die'){if(!peer||peer.visit||state.hp>0)fail(409,'Your adventure is still alive.');p.x=peer.pose.x;p.z=peer.pose.z;}
         // Workers' harvest goes to the chest while the server sees the explorer outside the home circle (delivery.ts).
         // The server's own pose decides; without a game socket the explorer is not away (a bare HTTP client cannot choose the chest).

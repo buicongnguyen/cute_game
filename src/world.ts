@@ -4,6 +4,7 @@ import {TITANS,TITAN_BY_PLANET,type TitanId} from './titan-content.ts';
 import {titanKit,titanArt,titanFallback} from './titan-art.ts';
 import {beginTitanAttack,stepTitanAttack,titanTelegraphs,isTitanSkill,sanitizeTitanAttacks,type TitanAttack,type TitanTarget,type TitanMark} from './titan-patterns.ts';
 import {TitanAttackView} from './titan-view.ts';
+import {dungeonKit} from './dungeon-view.ts';
 import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
 import { buildScatter, disposeScatter, fallbackParts, updateScatterShadows } from './scatter.ts';
 import { OccluderFade } from './occluders.ts';
@@ -679,7 +680,7 @@ export class World {
    * first time; avatars are rebuilt when it arrives, and simple shapes stand in until then.
    */
   private kitFor(id:string){
-    const slot=M.ITEMS[id]?.slot,kit=/^(hat|pet)_t_/.test(id)?titanKit:/^pet_b_/.test(id)?bossPetKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
+    const slot=M.ITEMS[id]?.slot,kit=/^(hat|pet)_t_/.test(id)?titanKit:/^pet_b_/.test(id)?bossPetKit:/^pet_dg_/.test(id)?dungeonKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
     if(!kit.requested)void kit.load().then(()=>{if(kit.ready)this.refreshAvatars();});
     return kit.ready&&kit.has(weaponModelName(id))?kit:null;
   }

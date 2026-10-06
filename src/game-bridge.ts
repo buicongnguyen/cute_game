@@ -36,6 +36,9 @@ export interface GameBridge {
   /** A neighbour's blow on an enemy (bots.ts): the enemy takes the damage and falls, but a kill pays the player nothing, wherever it happens, and it never touches the player's target ring, hit-stop or HUD. */
   botHit(enemyId:string,damage:number):void;
   ownsItem(id:string):boolean;grantGift(gift:{item?:string;count:number;energy:number}):boolean;botContext():{active:boolean;ready:boolean};
+  /** The Delvers' Vault online (dungeon.ts): a dg* message from the server, and the way to send one (null when offline). */
+  dungeonMessage?(message:{type:string;[key:string]:unknown}):void;
+  setDungeonSender?(send:((message:Record<string,unknown>)=>boolean)|null):void;
   onFrame(listener:(dt:number)=>void):()=>void;
   onAction(listener:(action:GameAction)=>void):()=>void;
 }

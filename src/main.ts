@@ -108,6 +108,7 @@ import { WORK_ACTIONS, CATCH_UP_ACTIONS, explorerAway } from './delivery.ts';
 import { initStoredNote } from './delivery-ui.ts';
 import * as IG from './item-groups.ts';
 import { dogMayToss, dogTossFactor, DOG_TOSS_CD } from './guard-dog.ts';
+import { initDungeon, type DungeonApi } from './dungeon.ts';
 
 // The HUD asks for the same ~40 elements several times a second: remember them while they stay in the page.
 const $found=new Map<string,HTMLElement>();
@@ -145,6 +146,8 @@ let shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forg
 let placement:{id:string;rotation:number;x:number;z:number;ok:boolean}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
 let persistence:((state:M.SaveState)=>void)|null=null,network:NetworkHooks={role:null};
 let actionHandler:((intent:GameIntent)=>Promise<ActionReply>)|null=null;
+/** The Delvers' Vault (dungeon.ts), set up at the end of this file: its creatures are fought locally, also online. */
+let dungeonApi:DungeonApi|null=null,dungeonSender:((message:Record<string,unknown>)=>boolean)|null=null;
 /**
  * Runs one intent through the shared rules (actions.ts), or the server online. A refusal comes back with its reason in
  * plain words (refusals.ts) and is shown as a toast. Two kinds stay off the screen and go to the console for developers:
@@ -260,8 +263,8 @@ const combat=new CombatSimulation({
   effect:effect=>{showEffect(effect);emitAction({kind:'effect',effect});},
   heal:fraction=>{if(!actionHandler)state.hp=Math.min(M.maxHp(state),state.hp+M.maxHp(state)*fraction);},
   execute:(target,fraction)=>executeEnemy(target as Enemy,fraction),
-  status:(target,kind,duration)=>{if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
-  moveTarget:(target,x,z)=>{if(actionHandler)return;if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
+  status:(target,kind,duration)=>{if(dungeonApi?.owns(target)){world.statusEnemy(target as Enemy,kind,duration);return;}if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
+  moveTarget:(target,x,z)=>{if(dungeonApi?.owns(target)){moveEnemy(target as Enemy,x,z);return;}if(actionHandler)return;if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
 });
 combatHud.isMarked=id=>combat.marked.has(id);
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
@@ -294,7 +297,7 @@ void cropKit.load();
 let villageNeedsKit=!sceneryKit.ready;
 if(!sceneryKit.ready)void sceneryKit.load().then(()=>{if(sceneryKit.ready&&!started){world.build(state.planet);world.refreshPlayer();villageNeedsKit=false;}});
 frameListeners.add(()=>{if(!villageNeedsKit||!sceneryKit.ready||!started)return;if(world.planet!=='home'){villageNeedsKit=false;return;} // another planet: the next home build has the kit
-  if(modal||visiting||flight||world.interior||fishGame||placement||world.enemies.some(e=>e.hp>0&&aggro(e)))return;
+  if(modal||visiting||flight||world.interior||fishGame||placement||dungeonApi?.active||world.enemies.some(e=>e.hp>0&&aggro(e)))return;
   villageNeedsKit=false;rebuildHomePresentation('home');world.refreshPlayer();});
 // Models that only arrive after their retries (art-retry.ts) swap in without a reload; before Play a rebuild also brings in late trees.
 // Files landing together are handled once per frame, each refreshing only what it dresses (late-art.ts).
@@ -1091,11 +1094,15 @@ function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:stri
   if(loot.pet)toast(`${t(M.ITEMS[loot.pet].name)} joined you! It waits in your bag.`,M.ITEMS[loot.pet].icon);
 }
 function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=false){
-  if(e.hp<=0||(visiting&&!remote))return;if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;
+  if(e.hp<=0||(visiting&&!remote))return;
+  // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
+  const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
+  if(!vault){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}
   world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,damage,!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');
+    if(vault){dungeonApi!.defeated(e);return;}
     const type=(e as Enemy&{type?:string}).type??'slime';if(network.onHostKill)network.onHostKill(e.id,e.xp,e.boss,type);else grantDefeat({...e,type,helper:!!impact?.helper});}
 }
 /** Devour finishes a weakened ordinary creature even through a defensive shell. */
@@ -1187,13 +1194,13 @@ function skill(index:number){
   if(!actionHandler)change(()=>recordEvent(state,'skill'));if(!disguise&&index===0)world.spinT=2.2;else if(disguise?(disguise==='dz_knight'&&index===1)||(disguise==='dz_aodai_man'&&index===2):index===1)world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});tone(skillSound(index,disguise,weapon.special));emitAction({kind:'skill',index,special:disguise??weapon.special});
 }
 let dying=false;
-function checkDefeat(){if(!started||state.hp>0||dying)return false;if(actionHandler){dying=true;void perform('die',{x:world.position.x,z:world.position.z}).then(()=>{dying=false;endFishing();resetCombat();rebuildHomePresentation('home');world.refreshPlayer();toast('You are safe at home.','🏡');});return true;}endFishing();resetCombat();change(()=>M.die(state,world.position.x,world.position.z));rebuildHomePresentation('home');world.refreshPlayer();openDialog('death','A little rest, then try again',`<div class="grow-illustration">🌷</div><p class="center">You’re safe at home. Your level, energy, and equipped gear are safe too.</p><p class="center muted">${state.dropped?'Your loose items are waiting where you fell.':'Nothing was dropped.'}</p><button class="primary wide" data-action="close">Back on my feet →</button>`,'EVERY EXPLORER TAKES A TUMBLE');return true;}
+function checkDefeat(){if(!started||state.hp>0||dying)return false;if(dungeonApi?.active){dungeonApi.knockedOut();return true;}if(actionHandler){dying=true;void perform('die',{x:world.position.x,z:world.position.z}).then(()=>{dying=false;endFishing();resetCombat();rebuildHomePresentation('home');world.refreshPlayer();toast('You are safe at home.','🏡');});return true;}endFishing();resetCombat();change(()=>M.die(state,world.position.x,world.position.z));rebuildHomePresentation('home');world.refreshPlayer();openDialog('death','A little rest, then try again',`<div class="grow-illustration">🌷</div><p class="center">You’re safe at home. Your level, energy, and equipped gear are safe too.</p><p class="center muted">${state.dropped?'Your loose items are waiting where you fell.':'Nothing was dropped.'}</p><button class="primary wide" data-action="close">Back on my feet →</button>`,'EVERY EXPLORER TAKES A TUMBLE');return true;}
 world.onDamage=(amount,source='melee',enemyId)=>{
-  if(actionHandler){if(enemyId&&network.role==='host')network.reportDamage?.(enemyId,source);return;}
+  if(actionHandler&&!dungeonApi?.active){if(enemyId&&network.role==='host')network.reportDamage?.(enemyId,source);return;}
   if(combatTimers.invulnerable>0||combat.invulnerable||(source==='melee'&&(combat.statuses.flight??0)>0)||!started||(!network.role&&uiBlocked())||visiting)return;
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
-  state.hp=Math.max(0,state.hp-damage);combatTimers.invulnerable=.55;world.hurtFeedback(damage);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
+  state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;world.hurtFeedback(damage);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
   checkDefeat();
   updateHud();
 };
@@ -1249,6 +1256,7 @@ export const gameBridge:GameBridge={
     state.energy+=gift.energy;tone('level');save();updateLabels();return true;
   },
   botContext:()=>({active:botActive(),ready:botActive()&&!visiting&&!fishGame}),
+  dungeonMessage:message=>dungeonApi?.message(message),setDungeonSender:send=>{dungeonSender=send;dungeonApi?.setSender(send);},
   onFrame(listener){frameListeners.add(listener);return()=>frameListeners.delete(listener);},
   onAction(listener){actionListeners.add(listener);return()=>actionListeners.delete(listener);},
 };
@@ -1563,6 +1571,13 @@ onLanguageChange(()=>{
 initOnline(gameBridge);
 initHudLayout();
 const neighbours=initBots(gameBridge);if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__bots:neighbours});
+// The Delvers' Vault (dungeon.ts): the keeper and circle by the south gate, the five-room co-op dungeon.
+dungeonApi=initDungeon({world,state:()=>state,started:()=>started,blocked:uiBlocked,visiting:()=>!!visiting,online:()=>!!actionHandler,
+  perform:(type,payload,quiet=false)=>perform(type,payload,{quiet}),toast,tone:kind=>tone(kind as Sound),openDialog,closeDialog,
+  neighbours:()=>({cast:neighbours.cast.map(d=>({id:d.id,name:d.name,level:d.level,color:d.color,gear:d.gear as Record<string,string|undefined>,pets:d.pets})),isFriend:id=>Object.hasOwn(neighbours.store().friends,id)}),
+  attack:()=>M.attack(state),maxHp:()=>M.maxHp(state),hitEnemy:(e,amount)=>hit(e,amount,0,{amount,critical:false,stun:0,lift:0,knock:0,direction:{x:0,z:0},helper:true}),updateHud,save,onFrame:listener=>{frameListeners.add(listener);}});
+dungeonApi.setSender(dungeonSender);
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__vault:dungeonApi});
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
 if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

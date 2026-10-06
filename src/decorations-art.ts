@@ -111,6 +111,16 @@ const builders:Record<string,(s:Sculptor)=>void>={
     for(let i=0;i<7;i++){const a=i*2.39,r=.59;s.ball(i%2?'#e4af62':'#e39870',.14,[Math.sin(a)*r,1.62+(i%3)*.24,Math.cos(a)*r]);}
     s.ball('#d6ae86',.17,[.07,.4,.22],[.7,1,.2]);
   },
+  // The Delvers' Vault prize (dungeon-content.ts): a rounded treasure chest with brass bands, a rune lock and starlight peeking out.
+  deco_dgchest(s){
+    s.box('#7a4a8a',[1.3,.62,.86],[0,.31,0],s.root,true);
+    const lid=s.group([0,.62,-.43],'lid');lid.rotation.x=-.32;
+    const dome=s.mesh(new T.CylinderGeometry(.43,.43,1.3,14,1,false,0,Math.PI),'#8f5aa3',[0,0,.43],lid);dome.rotation.z=Math.PI/2;dome.rotation.y=Math.PI/2;
+    for(const x of [-.5,0,.5]){s.box('#e8b84a',[.09,.64,.9],[x,.31,0]);const band=s.mesh(new T.TorusGeometry(.44,.04,6,14,Math.PI),'#e8b84a',[x,0,.43],lid);band.rotation.y=Math.PI/2;}
+    s.box('#e8b84a',[.26,.3,.08],[0,.4,.45]);s.ball('#9be7ff',.07,[0,.42,.5],[1,1,.6],s.root,.9);
+    for(let i=0;i<4;i++)s.star('#fff36b',.07+i*.012,[-.3+i*.2,.78+Math.sin(i*1.7)*.07,.1+(i%2)*.12]);
+    for(const x of [-.58,.58])for(const z of [-.36,.36])s.ball('#5a3a68',.07,[x,.05,z],[1,.7,1]);
+  },
   deco_aquarium(s){
     s.box('#b59479',[1.8,.2,1.15],[0,.13,0],s.root,true);s.box('#cdd5c4',[1.62,.09,1],[0,.28,0]);
     s.mesh(new T.BoxGeometry(1.62,1.02,1),'#a7d8de',[0,.83,0],s.root,0,.15);s.box('#d5c3a5',[1.77,.09,1.12],[0,1.39,0]);

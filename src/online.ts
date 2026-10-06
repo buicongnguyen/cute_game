@@ -159,7 +159,7 @@ export function initOnline(game:GameBridge) {
   const ago=(at:number)=>{const s=Math.max(0,(Date.now()-at)/1000);return s<60?t('just now'):s<3600?t('{n} min ago',{n:Math.floor(s/60)}):s<86400?t('{n} h ago',{n:Math.floor(s/3600)}):t('{n} d ago',{n:Math.floor(s/86400)});};
   function refreshButton(){const label=account?t(status,{code:party||''}):t('Play together');toggle.textContent=socialSlot?'👥':`👥 ${label}`;toggle.dataset.badge=String(requests.length+unreadLog||'');world().friendIds=new Set(friends.map(f=>f.id));toggle.title=label;toggle.setAttribute('aria-label',t('Play together'));dialog.setAttribute('aria-label',t('Play together'));close.setAttribute('aria-label',t('Close online menu'));toggle.dataset.online=String(!!account);}
   function expireSession(){
-    if(!account)return;sessionEpoch++;stopped=true;if(reconnect)clearTimeout(reconnect);if(saveTimer)clearTimeout(saveTimer);
+    if(!account)return;game.setDungeonSender?.(null);sessionEpoch++;stopped=true;if(reconnect)clearTimeout(reconnect);if(saveTimer)clearTimeout(saveTimer);
     clearChat();const previous=socket;socket=null;previous?.close();account=null;host=null;party=null;visiting=null;players.clear();rejectActions('Your session ended. Pending actions remain on this device.');
     authority(null);world().clearRemotePlayers();game.setVisiting(null);game.setPersistence(null);game.setActionHandler(null);const previousOffline=offline||game.getOfflineState();if(previousOffline)game.applyState(previousOffline);offline=null;
     status='Play together';setSaveStatus('● Offline adventure restored');refreshButton();render();announce('Your online session ended. Sign in again to continue; pending online progress is kept on this device.');
@@ -238,7 +238,7 @@ export function initOnline(game:GameBridge) {
       // A visit changes the room, never the owner's saved adventure planet.
       if(message.enemies?.length)world().applyEnemySnapshots(message.enemies);game.clearNetworkDrops();const dropEpoch=++roomEpoch;void api<{drops:NetworkDrop[]}>('drops').then(result=>{if(socket===connection&&roomEpoch===dropEpoch&&chatRoom===nextRoom&&!visiting&&account)for(const drop of result.drops||[])if(drop.room===nextRoom)game.spawnNetworkDrop(drop,account.id);}).catch(()=>{});if(message.environment)world().applyEnvironmentSnapshot(message.environment);authority(message.host,message.enemies);renderPlayers();status=party?'Party {code}':'Online';refreshButton();if(dialog.open)render();else refreshChatControls();
     }
-    socket.addEventListener('open',()=>{if(socket!==connection)return;status='Online';refreshButton();send({type:'active',active:!document.hidden});void flushSave();});
+    socket.addEventListener('open',()=>{if(socket!==connection)return;status='Online';refreshButton();send({type:'active',active:!document.hidden});void flushSave();game.setDungeonSender?.(value=>socket===connection&&send(value));});
     socket.addEventListener('message',event=>{
       if(socket!==connection)return;let message:any;try{message=JSON.parse(event.data);}catch{return;}
       if(message.type==='welcome'){friends=message.friends||[];requests=message.requests||[];sent=message.sent||[];visitLog=message.visitLog||[];refreshButton();}
@@ -265,6 +265,7 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='dropClaimed')game.removeNetworkDrop(message.id);
       else if(message.type==='dropReleased')game.releaseNetworkDrop(message.id);
       else if(message.type==='healthResult')game.applyAuthorityHealth(message.delta||0,!!message.died);
+      else if(typeof message.type==='string'&&message.type.startsWith('dg'))game.dungeonMessage?.(message);
       else if(message.type==='chatAck')acknowledgeChat(message.requestId,connection);
       else if(message.type==='chat'&&!restoring&&chatRoom){chat.push({name:String(message.name),message:String(message.message)});if(chat.length>60)chat.shift();if(dialog.open&&tab==='world')renderChat();else game.showNotice(`${message.name}: ${message.message}`);}
       else if(message.type==='friends'){const before=requests.length;friends=message.friends||[];requests=message.requests||[];sent=message.sent||[];visitLog=message.visitLog||visitLog;if(requests.length>before)announce('You have a new friend request!');refreshButton();if(dialog.open&&tab==='friends')render();}
@@ -280,7 +281,7 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='error'){if(chatMatches(message.requestId,connection))releaseChat();if(!message.requestId){chatReady=!!chatRoom&&connection.readyState===WebSocket.OPEN;refreshChatControls();}if(restoring&&fallbackJoin){desiredParty=null;restoring=false;joined(fallbackJoin);}announce(message.message||'That action was unavailable.');}
     });
     socket.addEventListener('close',event=>{
-      if(socket!==connection)return;chatReady=false;releaseChat(chatAttempt?.pending?'Connection interrupted. Your chat draft is kept.':undefined);authority(null);world().clearRemotePlayers();players.clear();
+      if(socket!==connection)return;game.setDungeonSender?.(null);chatReady=false;releaseChat(chatAttempt?.pending?'Connection interrupted. Your chat draft is kept.':undefined);authority(null);world().clearRemotePlayers();players.clear();
       if(!account||stopped)return;if(event.code===4001){stopped=true;rejectActions('This online adventure is active in another tab.');if(saveTimer)clearTimeout(saveTimer);game.setPersistence(()=>{});status='Open in another tab';announce('This online adventure is active in another tab. Close it there, then reconnect here.');}
       else{status='Reconnecting';reconnect=window.setTimeout(connect,2500);const epoch=sessionEpoch;void api<Session>('auth/session').then(session=>{if(socket===connection&&sessionEpoch===epoch&&account&&!session.account)expireSession();}).catch(()=>{});}refreshButton();
     });
