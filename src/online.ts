@@ -251,6 +251,7 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='enemies')world().applyEnemySnapshots(message.enemies);
       else if(message.type==='profile'&&message.authorityVersion===1&&message.profile&&message.revision>=revision){revision=message.revision;game.applyAuthoritativeState(message.profile);}
       else if(message.type==='enemyHealth')world().applyAuthoritativeEnemyHealth(message);
+      else if(message.type==='colossus'||message.type==='colossusHit')dispatchEvent(new CustomEvent('zoo-colossus',{detail:message}));// colossus.ts
       else if(message.type==='environment')world().applyEnvironmentSnapshot(message.snapshot);
       else if(message.type==='gardenEvent'){
         if(message.blocked){

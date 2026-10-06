@@ -13,6 +13,10 @@ import {commandHash} from './action-service.mjs';
 import {gearFactor,skillLevel,skillCooldown} from '../src/upgrades.ts';
 import {clearJourney} from './adventure-lifecycle.mjs';
 import {inSafeZone} from '../src/safe-zone.ts';
+import {createColossusAuthority} from './colossus-authority.mjs';
+import {COLOSSUS_STATS,COLOSSUS_TYPE} from '../src/colossus-content.ts';
+import {colossusDamage} from '../src/colossus-patterns.ts';
+import {grantColossusReward} from '../src/colossus-rewards.ts';
 
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const finite=(value,fallback=0,min=-160,max=160)=>Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;
@@ -20,8 +24,10 @@ const snapshot=enemy=>{const {roster,home,changedAt,deadUntil,generation,pending
 const STATUS=['fear','charm','slow','blind','sheep','taunt'];
 
 /** The browser host animates navigation; the server owns HP, skill timing, stats, kills and rewards. */
-export function createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath=()=>{},onError=()=>{}}){
+export function createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath=()=>{},onError=()=>{},colossusClock}){
   const engines=new Map(),queues=new Map();let stopped=false;
+  // The daily world boss in home rooms (colossus-authority.mjs); its hits, kill and rewards go through the paths below.
+  const colossus=createColossusAuthority({send,broadcast,peers,...(colossusClock?{clock:colossusClock}:{})});colossus.setMaxHp(peer=>Game.maxHp(peer.account.profile));
   function queue(id,task){const next=(queues.get(id)||Promise.resolve()).catch(()=>{}).then(task);queues.set(id,next);return next;}
   async function internal(actorId,type,relatedIds,run,requestId=randomUUID(),outbox=true,retryContext={}){
     return queue(actorId,async()=>{
@@ -77,6 +83,11 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);hp(peer,-Math.max(1,Math.round(amount*60/(defense+60))),source);
   }
   function hurtEnemyTarget(peer,enemy,multiplier,source='melee'){hurtPlayer(peer,enemy.damage*multiplier,source);}
+  /** A Colossus blow: the same gates as hurtPlayer, through only a quarter of the defence (colossusDamage). */
+  function hurtColossus(peer,multiplier,factor,roll){
+    const e=engineFor(peer),now=Date.now();if(peer.visit||!peer.active||peer.account.profile.hp<=0||inSafeZone(peer.pose,peer.planet)||now-e.damageAt<550||e.sim.invulnerable)return false;
+    e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);hp(peer,-colossusDamage(COLOSSUS_STATS.atk,multiplier,defense,factor,roll),'melee');return true;
+  }
   function updateCast(room,enemy,dt,now){
     if(enemy.hp<=0||enemy.pending)return;
     for(const cast of enemy.combatAttacks??[])updateAttack(room,enemy,cast,dt,now);
@@ -150,13 +161,13 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   }
   function kill(room,enemy,killer,execute=false){
     if(enemy.pending)return;enemy.pending=true;const now=Date.now(),requestId=randomUUID(),killPoint={x:enemy.x,z:enemy.z},killerEpoch=epoch(killer.account),contributorEpochs=new Map([...room.members].map(id=>[id,peers.get(id)?.account.adventureEpoch||0]));
-    const contributors=[...enemy.contributors].filter(([id,at])=>now-at<30000&&room.members.has(id)&&peers.get(id)?.planet===state(room).planet).map(([id])=>id);
+    const contributors=[...enemy.contributors].filter(([id,at])=>now-at<(enemy.type===COLOSSUS_TYPE?3600000:30000)&&room.members.has(id)&&peers.get(id)?.planet===state(room).planet).map(([id])=>id);
     if(!contributors.includes(killer.account.id))contributors.push(killer.account.id);
     internal(killer.account.id,'combatKill',contributors,records=>{
       // The Hard bonus follows the room's creatures (the host's scale), not each contributor's own setting.
       let loot=[];const bonus=Game.scaleReward(state(room).scale);
       for(const id of contributors){const account=records.get(id);if(!account||(account.adventureEpoch||0)!==contributorEpochs.get(id))continue;const profile=Game.parseSave(JSON.stringify(account.profile));if(!profile)continue;
-        const rolled=Game.grantDefeat(profile,enemy.type,enemy.roster.xp,enemy.boss,Math.random,false,bonus);if(id===killer.account.id)loot=rolled;
+        const rolled=enemy.type===COLOSSUS_TYPE?grantColossusReward(profile,id===killer.account.id,Math.random,false,bonus):Game.grantDefeat(profile,enemy.type,enemy.roster.xp,enemy.boss,Math.random,false,bonus);if(id===killer.account.id)loot=rolled;
         if(execute&&id===killer.account.id&&(account.lifeEpoch||0)===killerEpoch.life)profile.hp=Math.min(Game.maxHp(profile),profile.hp+Game.maxHp(profile)*.25);
         account.profile=profile;
       }
@@ -165,7 +176,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       return {enemyId:enemy.id,drops,execute};
     },requestId).then(committed=>{
       if(!committed)throw new Error('Missing killer');enemy.pending=false;enemy.hp=0;enemy.deadUntil=Date.now()+enemy.roster.respawn*1000;enemy.respawn=enemy.roster.respawn;enemy.titanAttacks=[];enemy.shots=[];enemy.skillEffects=[];enemy.telegraphs=[];enemy.combatAttacks=[];enemy.cast=null;
-      room.killed.add(enemy.id);health(room,enemy);broadcast(room,{type:'defeat',id:enemy.id,by:contributors,eventId:requestId});
+      room.killed.add(enemy.id);health(room,enemy);broadcast(room,{type:'defeat',id:enemy.id,by:contributors,eventId:requestId});colossus.killed(room,enemy,killer.account.id);
       for(const drop of committed.reply.result.drops)broadcast(room,{type:'dropSpawn',drop});
       if(execute&&committed.reply.result.execute)send((peers.get(killer.account.id)||killer).socket,{type:'executeResult',id:enemy.id,requestId,ok:true,profile:committed.reply.profile,revision:committed.reply.revision});
       if(enemy.type==='magmaslime')for(const [i,minion] of [...state(room).enemies.values()].filter(e=>e.type==='minislime'&&e.hp<=0&&!e.pending).slice(0,3).entries()){minion.x=enemy.x+Math.cos(i*Math.PI*2/3)*.9;minion.z=enemy.z+Math.sin(i*Math.PI*2/3)*.9;minion.hp=minion.maxHp;minion.deadUntil=0;minion.respawn=0;minion.generation++;health(room,minion);}
@@ -176,6 +187,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     if(!enemy.scaled&&enemy.boss){const players=[...room.members].map(id=>peers.get(id)).filter(p=>p&&!p.visit&&dist(p.pose,enemy)<28),level=Math.max(...players.map(p=>p.account.profile.level),1),difference=Math.max(0,level-enemy.roster.level);enemy.maxHp=Math.round(enemy.baseMaxHp*(1+.6*Math.max(0,players.length-1))*(enemy.type==='dragon'?1:1+difference*.12));enemy.hp=enemy.maxHp;enemy.damage=enemy.baseDamage*(enemy.type==='dragon'?1:(1+difference*.07)*(1+.1*Math.max(0,players.length-1)));enemy.scaled=true;}
     const control=hitControl(enemy.boss,impact.stun||0);
     if(!hazard&&!execute&&enemy.type==='magmaturtle')impact={...impact,amount:impact.amount*(enemy.phase==='recover'?2:.12)};
+    if(enemy.type===COLOSSUS_TYPE&&!hazard)impact={...impact,amount:colossus.incoming(room,enemy,peer,impact.amount)};
     const dealt=Math.min(enemy.hp,Math.max(0,impact.amount));enemy.contributors.set(peer.account.id,Date.now());enemy.lastHitAt=Date.now();enemy.hp-=dealt;enemy.stun=Math.max(enemy.stun||0,control.stun);
     if(control.slow)enemy.statuses.slow=Math.max(enemy.statuses.slow||0,control.slow);
     if(impact.lift>0){enemy.liftVelocity=Math.max(enemy.liftVelocity||0,Math.sqrt(liftHeight(enemy.boss,impact.lift)*24));enemy.stun=Math.max(enemy.stun||0,.8);enemy.phase='chase';enemy.telegraphs=[];enemy.combatAttacks=(enemy.combatAttacks??[]).filter(c=>c.attack||c.elapsed>0);enemy.cast=enemy.combatAttacks.at(-1)??null;}
@@ -264,7 +276,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     if(peer.visit)return;const room=rooms.get(peer.room),enemy=room&&state(room).enemies.get(enemyId),e=engineFor(peer),now=Date.now();
     if(!enemy||enemy.hp<=0)return;
     if(enemy.boss&&BOSS_SKILLS[enemy.type]?.includes(enemy.skill))return;
-    const def=ENEMY_TYPES[enemy.type],reach=source==='shot'?45:def.reach+enemy.radius+2;
+    const def=ENEMY_TYPES[enemy.type];if(!def)return;const reach=source==='shot'?45:def.reach+enemy.radius+2;
     if(dist(peer.pose,enemy)>reach)return;
     hurtEnemyTarget(peer,enemy,enemy.phase==='charge'?1.3:1,source);
   }
@@ -272,7 +284,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   function tick(dt=.05){
     const now=Date.now();
     for(const room of rooms.values()){
-      const s=state(room),active=[...room.members].map(id=>peers.get(id)).filter(p=>p&&p.active&&!p.visit),actors=[...s.enemies.values()].map(e=>({id:e.id,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,boss:e.boss,flying:ENEMY_TYPES[e.type].flying,lavaImmune:e.type==='lavaworm'}));
+      const s=state(room),active=[...room.members].map(id=>peers.get(id)).filter(p=>p&&p.active&&!p.visit),actors=[...s.enemies.values()].map(e=>({id:e.id,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,boss:e.boss,flying:ENEMY_TYPES[e.type]?.flying,lavaImmune:e.type==='lavaworm'}));
       const liveDragon=[...s.enemies.values()].find(e=>e.type==='dragon'&&e.hp>0);s.environment.dragonPhase=liveDragon?bossPhase(liveDragon.hp,liveDragon.maxHp):0;
       s.environment.nearbyPlayers=active.length;
       const before=environmentSnapshot(s.environment),weatherBefore=structuredClone(before.weather),rainBefore=structuredClone(before.fireRain),lightningBefore=structuredClone(before.lightning);
@@ -284,6 +296,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
         else{enemy.hp=Math.max(0,enemy.hp-strike.amount);if(enemy.hp===0){enemy.deadUntil=now+enemy.roster.respawn*1000;enemy.respawn=enemy.roster.respawn;enemy.shots=[];enemy.titanAttacks=[];enemy.combatAttacks=[];enemy.cast=null;}health(room,enemy);}
       }
       const dragon=[...s.enemies.values()].find(e=>e.type==='dragon');if(dragon&&step.dragonSummon){dragon.hp=dragon.maxHp;dragon.deadUntil=0;dragon.respawn=0;dragon.statuses={};dragon.stun=0;dragon.phase='idle';dragon.cast=null;dragon.combatAttacks=[];health(room,dragon);}if(dragon&&step.dragonDismiss){dragon.hp=0;dragon.deadUntil=Infinity;dragon.respawn=999999;dragon.cast=null;dragon.combatAttacks=[];dragon.titanAttacks=[];dragon.shots=[];dragon.skillEffects=[];dragon.telegraphs=[];health(room,dragon);}
+      colossus.tick(room,s,dt,{targets:()=>aliveTargets(room),hurt:hurtColossus,hurtTrue:(peer,amount)=>{if(!peer.visit&&peer.active&&peer.account.profile.hp>0)hp(peer,-amount,'hazard');}});
       for(const enemy of s.enemies.values()){
         if(enemy.hp>0&&!enemy.pending&&enemy.phase==='return'&&now-(enemy.lastHitAt||0)>4000){enemy.hp=Math.min(enemy.maxHp,enemy.hp+enemy.maxHp*.3*dt);if(enemy.hp===enemy.maxHp)enemy.scaled=false;}
         updateCast(room,enemy,dt,now);
@@ -303,5 +316,5 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   }
   const timer=setInterval(()=>{if(!stopped)try{tick(.05);}catch(error){onError(error);}},50);timer.unref();
   function bomb(peer,radius,multiplier){const room=rooms.get(peer.room);if(!room||peer.visit)return;for(const enemy of state(room).enemies.values())if(enemy.hp>0&&dist(peer.pose,enemy)<=radius+enemy.radius)hit(peer,enemy,{amount:Math.round(Game.attack(combatProfile(peer))*multiplier),critical:false,stun:.5,lift:0,knock:2,direction:{x:0,z:0}});}
-  return {acceptSnapshots,basic,skill,damage,bomb,engineFor,state,internal,resetPeer,flushPeerHealth,async close(){stopped=true;clearInterval(timer);for(const engine of engines.values())flushHealth(engine);await Promise.allSettled([...queues.values()]);}};
+  return {acceptSnapshots,basic,skill,damage,bomb,engineFor,state,internal,resetPeer,flushPeerHealth,colossus,async close(){stopped=true;clearInterval(timer);for(const engine of engines.values())flushHealth(engine);await Promise.allSettled([...queues.values()]);}};
 }
