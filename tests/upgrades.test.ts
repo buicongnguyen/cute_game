@@ -99,7 +99,7 @@ test('gear upgrades need the item, the energy and the materials; weapons and rod
 });
 
 test('a levelled companion shoots harder: its stat line climbs to the pet ceiling, its own shot keeps +4% a level', () => {
-  const s = rich(); s.bag.pet_firefly = 1; M.equip(s, 'pet_firefly'); const atk0 = M.attack(s);
+  const s = rich(); s.level = M.gearLevel('pet_firefly'); s.bag.pet_firefly = 1; assert.equal(M.equip(s, 'pet_firefly'), true); const atk0 = M.attack(s);
   for (let i = 0; i < 5; i++) U.upgradeGear(s, 'pet_firefly');
   // Firefly: 4 attack; the pet ceiling's 23 attack is halfway at +5 (13.5), and the shot factor is 1.2.
   assert.equal(U.gearFactor(s, 'pet_firefly'), 1.2); assert.ok(Math.abs(M.attack(s) - atk0 - 9.5) < 1e-9);

@@ -75,7 +75,8 @@ export function cropBounds(id: string): ViewBounds | null {
  * crown may rise over the next bed).
  */
 export const TREE_BOOST: Readonly<Record<number, number>> = { 2: 1.45, 3: 1.9 };
-export const isTreeCrop = (crop: string) => (CROPS[crop]?.duration ?? 0) >= 8 * 3_600_000;
+export { isTreeCrop } from './tree-crops.ts';
+import { isTreeCrop } from './tree-crops.ts';
 /** Size of a crop at a stage relative to its model: the stage scale times the model's bed scale. */
 export function stageScale(crop: string, stage: CropStage) {
   if (!stage) return 0;

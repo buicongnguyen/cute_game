@@ -242,7 +242,50 @@ export class FishingSimulation<P extends FishPick=FishPick> {
 
 export interface CatchCandidate { id:string; weight:number; min:number; max:number;junk?:boolean }
 export const MYSTERY_TREASURE_WEIGHTS:readonly (readonly [string,number])[]=[['starshard',3],['pearl',3],['amber',3],['moonstone',2],['thunderstone',2],['seed_star',2],['crown',1],['fish_golden',1],['deco_piratechest',1]];
-export const MYSTERY={chance:.6,reach:3.5,firstMin:4,firstMax:20,respawnMin:45,respawnMax:90} as const;
+/**
+ * The mystery shadow (reference F-026): it is never placed at load and does not wait in a pond on a timer. It is called
+ * only while the explorer is fishing: at each attract (a fish setting off for the bobber), when no mystery is already
+ * within `reach` of the bobber, there is a `call` (10 %) chance one rises `near` (2.5–3.2 m) from the bobber, at most
+ * once per `cooldownMs` (60 s) per explorer. It is then the fish that comes; a miss (bite missed, too early, it swam
+ * off, or the cast was ended) brings it back up to `tries` (3) attempts in all, after which it sinks away.
+ * `chance` is the share of supergiant fish among mystery catches (resolveMysteryCatch). The browser offline and the
+ * server online run the same caller (attractMystery and friends) on their own state.
+ */
+export const MYSTERY={chance:.6,reach:3.5,call:.1,cooldownMs:60_000,near:[2.5,3.2],tries:3} as const;
+/** One explorer's mystery state: when one was last called, and the one now waiting (water key, spot, attempts used). */
+export interface MysteryCaller { lastCallAt:number; active?:{ water:string; x:number; z:number; tries:number } }
+export const newMysteryCaller=():MysteryCaller=>({lastCallAt:0});
+/** A spot 2.5–3.2 m from the bobber, kept inside the water when the pond is known (tries a few directions, then pulls it in). */
+export function mysterySpot(cast:Point,random:()=>number=Math.random,water?:Water):Point{
+  const [lo,hi]=MYSTERY.near,d=lo+random()*(hi-lo),a0=random()*Math.PI*2;
+  for(let i=0;i<8;i++){const a=a0+i*Math.PI/4,p={x:cast.x+Math.cos(a)*d,z:cast.z+Math.sin(a)*d};if(!water||Math.hypot(p.x-water.x,p.z-water.z)<=water.r-.4)return p;}
+  const a=a0,p={x:cast.x+Math.cos(a)*d,z:cast.z+Math.sin(a)*d};if(!water)return p;
+  const from=Math.hypot(p.x-water.x,p.z-water.z)||1,inner=Math.max(.2,water.r-.4);return {x:water.x+(p.x-water.x)/from*inner,z:water.z+(p.z-water.z)/from*inner};
+}
+/**
+ * One attract: whether the coming fish is the mystery. A mystery already waiting in this water within reach of the bobber
+ * comes again; one left elsewhere (another pond, far from this cast) is gone. Otherwise a new one may be called.
+ * `now` in ms. Mutates `st`.
+ */
+export function attractMystery(st:MysteryCaller,water:string,cast:Point,now:number,random:()=>number=Math.random,pond?:Water):{mystery:boolean;called:boolean;spot?:Point}{
+  const active=st.active;
+  if(active&&active.water===water&&Math.hypot(active.x-cast.x,active.z-cast.z)<=MYSTERY.reach)return {mystery:true,called:false,spot:{x:active.x,z:active.z}};
+  if(active)delete st.active;
+  if(!(now-st.lastCallAt>=MYSTERY.cooldownMs)||!(random()<MYSTERY.call))return {mystery:false,called:false};
+  const spot=mysterySpot(cast,random,pond);st.lastCallAt=now;st.active={water,x:spot.x,z:spot.z,tries:0};
+  return {mystery:true,called:true,spot};
+}
+/** The mystery got away (or the cast ended before it was landed): true when that was its last try and it is gone. */
+export function mysteryMissed(st:MysteryCaller):boolean{if(!st.active)return true;st.active.tries++;if(st.active.tries>=MYSTERY.tries){delete st.active;return true;}return false;}
+/** The mystery was landed: it is gone (the 60 s wait counts from when it was called). */
+export function mysteryLanded(st:MysteryCaller){delete st.active;}
+/** A saved caller (server account record), checked; anything malformed starts fresh. */
+export function parseMysteryCaller(raw:unknown):MysteryCaller{
+  const v=raw&&typeof raw==='object'?raw as Record<string,unknown>:{},st:MysteryCaller={lastCallAt:Number.isFinite(v.lastCallAt)?v.lastCallAt as number:0};
+  const a=v.active&&typeof v.active==='object'?v.active as Record<string,unknown>:null;
+  if(a&&typeof a.water==='string'&&Number.isFinite(a.x)&&Number.isFinite(a.z)&&Number.isSafeInteger(a.tries)&&(a.tries as number)>=0&&(a.tries as number)<MYSTERY.tries)st.active={water:a.water,x:a.x as number,z:a.z as number,tries:a.tries as number};
+  return st;
+}
 /** Resolve only after landing the silhouette. Server actions use the same table with server-owned randomness. */
 export function resolveMysteryCatch(fish:Pick<CatchCandidate,'id'|'max'>,random:()=>number=Math.random){
   if(random()<MYSTERY.chance)return {id:fish.id,size:Math.round(fish.max*(1.6+random())),huge:true,supergiant:true,mystery:true};

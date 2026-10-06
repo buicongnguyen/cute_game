@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import * as M from '../src/model.ts';
 import { ContextGearSelection } from '../src/context-gear.ts';
-import { FishingSimulation, planCast, selectCatch, catchWeight } from '../src/fishing.ts';
+import { FishingSimulation, planCast, selectCatch, catchWeight, newMysteryCaller, attractMystery, mysteryMissed, mysteryLanded } from '../src/fishing.ts';
 import { FishingInput, CombatTimers, MovementControls } from '../src/gameplay-controls.ts';
 import { BASE_SKILLS, SPECIALS } from '../src/combat.ts';
 import { fightNear } from '../src/hud-combat.ts';
@@ -15,7 +15,7 @@ import { fightNear } from '../src/hud-combat.ts';
 // are intercepted so assertions can inspect which gear reaches each action.
 const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-const names = ['applyContextWeapon', 'prepareCombatWeapon', 'updateContextWeapon', 'fish', 'pondView', 'endFishing', 'updateFishing', 'finishFishingCatch', 'basicAttack', 'skillList', 'skill'];
+const names = ['applyContextWeapon', 'prepareCombatWeapon', 'updateContextWeapon', 'fish', 'pondView', 'endFishing', 'updateFishing', 'finishFishingCatch', 'basicAttack', 'skillList', 'skill', 'mysteryGotAway'];
 const declarations = names.map(name => {
   const node = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
   assert.ok(node, `main.ts must provide the actual ${name} controller`);
@@ -36,7 +36,7 @@ function fixture(...items) {
   const pond = { id: 'pond', kind: 'fish', x: 0, z: 0, radius: 2, pond: { rx: 2, rz: 2, surface: 0 }, waterId: 'home' };
   const combatTimers = new CombatTimers();
   const ctx = vm.createContext({
-    M, ContextGearSelection, FishingSimulation, FishingInput, planCast, selectCatch, catchWeight,
+    M, ContextGearSelection, FishingSimulation, FishingInput, planCast, selectCatch, catchWeight, attractMystery, mysteryMissed, mysteryLanded, mysteryCaller: newMysteryCaller(),
     BASE_SKILLS, SPECIALS, fightNear, recordEvent: M.recordEvent,
     state, gearState: state, gearPlanet: state.planet, gearWater: false, combatGearUntil: 0,actionHandler:null,
     contextGear: new ContextGearSelection(), started: true, visiting: null, blocked: false,
@@ -50,7 +50,7 @@ function fixture(...items) {
       refreshPlayer: () => { calls.refresh++; }, playerAttack() {},
     },
     fishingView: {
-      mysteryNearCast:()=>null,
+      mysteryNearCast:()=>null, mysteryIn: () => null, callMystery() {}, dropMystery() {},
       approachDistance: () => 2,
       begin: (...args) => calls.casts.push(args),
       cancel: () => { calls.cancel++; },

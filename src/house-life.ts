@@ -15,6 +15,7 @@ import { ACTIVITIES, activity, collectionLog, cooldownLeft, decorPlacements, dec
 import { PLANETS, type BuffDef } from './content.ts';
 import * as T from 'three';
 import { activityBox } from './house-hotspots.ts';
+import { audioLevels } from './audio-settings.ts';
 
 export interface LifeDeps {
   world: World; house: HouseSession;
@@ -60,7 +61,7 @@ export class MusicBox {
   start() {
     if (!this.fallback && typeof Audio !== 'undefined') {
       try {
-        this.theme ??= Object.assign(new Audio(`${import.meta.env?.BASE_URL ?? '/'}assets/audio/zoo-garden-theme.mp3`), { loop: true, volume: .45 });
+        this.theme ??= Object.assign(new Audio(`${import.meta.env?.BASE_URL ?? '/'}assets/audio/zoo-garden-theme.mp3`), { loop: true, volume: audioLevels.music });
         this.playing = true;
         void this.theme.play().catch(() => { this.fallback = true; this.theme = null; if (this.playing) this.start(); });
         return;
@@ -73,6 +74,9 @@ export class MusicBox {
   stop() { this.playing = false; this.theme?.pause(); }
   /** Called each frame while inside; schedules a note every 0.32 s. */
   tick(dt: number) {
+    // The Settings music slider (audio-settings.ts audioLevels): the theme file at full level, the music box scaled alike.
+    if (this.theme && this.theme.volume !== audioLevels.music) this.theme.volume = audioLevels.music;
+    if (this.gain) this.gain.gain.value = .07 * audioLevels.music / .45;
     if (!this.playing || !this.fallback || !this.ctx || !this.gain) return;
     if ((this.timer -= dt) > 0) return; this.timer = .32;
     const f = MusicBox.NOTES[this.step++ % MusicBox.NOTES.length]; if (!f) return;
@@ -119,7 +123,7 @@ export function initHouseLife(d: LifeDeps) {
     }
     if (a.kind === 'fun') {
       if (a.id === 'duck') { d.tone('pop'); world.fx?.text(fx(a), t('Squeak!'), 'callout'); world.fx?.burst(fx(a), { n: 8, color: '#ffe36b', speed: 2, up: 3, size: .08, glow: true, y: 0 }); return; }
-      if (a.id === 'radio') { if (music.playing) { music.stop(); d.toast('The radio is off.', '📻'); } else if (d.soundOn()) { music.start(); d.toast('A cosy tune fills the cottage.', '🎶'); } else d.toast('Turn on sound in Settings to hear the radio.', '🔇'); return; }
+      if (a.id === 'radio') { if (music.playing) { music.stop(); d.toast('The radio is off.', '📻'); } else if (d.soundOn()) { music.start(); d.toast('A cosy tune fills the cottage.', '🎶'); } else d.toast('Turn up the music volume in Settings to hear the radio.', '🔇'); return; }
     }
     if (d.visiting()) return d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷');
     const left = cooldownLeft(world.state, a.id, now());
