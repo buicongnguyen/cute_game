@@ -28,6 +28,9 @@ const modelOf = (a: Animal, now: number): ModelId => isAdult(a, now) ? a.kind : 
 const PRODUCT: Record<AnimalKind, ProductId> = { chicken: 'egg', cow: 'milk', duck: 'duck_egg', pig: 'truffle', goat: 'milk', goose: 'duck_egg', dog: 'meat' };
 /** Most animals of one model the pen can hold (cap at the largest pen); a model has up to four legs. */
 const MAX_PER_MODEL: Record<ModelId, number> = { chicken: MAX_ANIMALS_PER_KIND, chick: MAX_ANIMALS_PER_KIND, cow: MAX_ANIMALS_PER_KIND, calf: MAX_ANIMALS_PER_KIND, duck: MAX_ANIMALS_PER_KIND, duckling: MAX_ANIMALS_PER_KIND, pig: MAX_ANIMALS_PER_KIND, piglet: MAX_ANIMALS_PER_KIND, goat: MAX_ANIMALS_PER_KIND, kid: MAX_ANIMALS_PER_KIND, goose: MAX_ANIMALS_PER_KIND, gosling: MAX_ANIMALS_PER_KIND, dog: 1 };
+/** Four-legged walkers and how far each leg swings (radians) at full walking speed: short, natural paces. */
+const QUADRUPED = new Set<AnimalKind>(['cow', 'pig', 'goat', 'dog']);
+const LEG_SWING: Partial<Record<AnimalKind, number>> = { cow: .3, pig: .32, goat: .34, dog: .38 };
 const MAX_LEGS = 4, MAX_PRODUCTS = MAX_ANIMALS_PER_KIND * 24;
 /** Hens and chicks are drawn 1.3x their true size so they read at the game camera (a hen is then about 40 px tall, like a ripe crop); the puppy 1.35x (about knee-high to the explorer). */
 export const SHOWN: Record<AnimalKind, number> = { chicken: 1.3, cow: 1, duck: 1.3, pig: 1, goat: 1, goose: 1.15, dog: 1.35 };
@@ -424,6 +427,9 @@ export class FarmPenView {
     this.flights.push({ product: item, x: at.x - PEN.x, y: item === 'meat' ? .3 : w?this.rigOf(w.model).height + .2:.6, z: at.z - PEN.z, t: 0 });
     this.poseDirty = true;
   }
+  private hips = new Map<ModelId, number>();
+  /** Hip height of a model's legs in its own units (the highest leg hinge), for the speed-true gait. */
+  private hipOf(id: ModelId) { let h = this.hips.get(id); if (h === undefined) { const legs = this.rigOf(id).parts.find(p => p.draw === 'legs'); h = legs ? Math.max(.1, ...legs.pivots.map(v => v.at.y)) : .4; this.hips.set(id, h); } return h; }
   private rigOf(id: ModelId) { let r = this.rigs.get(id); if (!r) { const src = model(id, true); r = rigOf(src, COAT_PARTS[id]); this.rigs.set(id, r); this.disposeSource(src); } return r; }
   /** Frees a stand-in model once its parts are merged; a kit instance shares the kit's geometry and materials. */
   private disposeSource(src: T.Object3D) { src.traverse(o => { if (o instanceof T.Mesh) { if (!o.geometry.userData.sharedKit) o.geometry.dispose(); const m = o.material as T.Material; if (!m.userData.sharedKit) m.dispose(); } }); }
@@ -501,7 +507,11 @@ export class FarmPenView {
       // Casual roaming is calmer on phones; fleeing and guard pursuit retain their normal pace.
       if(!this.stepGuard(w,step))stepRoamer(w, walkers, this.area, this.rng, step * (this.mobile && w.flee <= 0 ? .6 : 1), this.player, this.grid); w.lodDt = 0;
     }
-    for (let n = 0; n < walkers.length; n++) { const w = walkers[n]; w.phase += dt * (w.kind === 'cow' ? 7 : 16) * Math.min(1, w.speed / .3) * (this.mobile && w.flee <= 0 ? .6 : 1); }
+    // Four-legged animals step by the ground they cover (a speed-true gait: each half swing carries the body one step of
+    // 2 x hip height x sin(swing)), so the hooves no longer paddle long strides while the body barely moves. Birds keep their quick patter.
+    for (let n = 0; n < walkers.length; n++) { const w = walkers[n], pace = this.mobile && w.flee <= 0 ? .6 : 1;
+      if (QUADRUPED.has(w.kind)) { const step = 2 * this.hipOf(w.model) * SHOWN[w.kind] * w.size * Math.sin(LEG_SWING[w.kind] ?? .35); w.phase += w.speed * dt * pace / Math.max(.05, step) * Math.PI; }
+      else w.phase += dt * 16 * Math.min(1, w.speed / .3) * pace; }
     for (const m of this.meshes.values()) { m.count = 0; m.userData.animalUids.length=0; }
     for (let n = 0; n < list.length; n++) {
       const a = list[n], w = this.walkers.get(a.uid)!;
@@ -523,7 +533,7 @@ export class FarmPenView {
       const bob = moving ? Math.abs(Math.sin(w.phase)) * (cow ? .03 : .05) * calm : 0, settle = cow ? 0 : -w.sit * .13 * scale, dust = w.rest === 'dust' ? Math.sin(idleTime * 13 + w.seed) * .18 * w.sit * calm : 0;
       const bite=this.guard?.uid===w.uid&&this.guard.bite>=0?Math.sin(this.guard.bite/.45*Math.PI):0;
       this.root.compose(this.v.set(w.x - PEN.x+Math.sin(w.heading)*bite*.35, bob + settle + bite*.2, w.z - PEN.z+Math.cos(w.heading)*bite*.35), this.q.setFromEuler(this.e.set(-bite*.22, w.heading, dust)), this.s.setScalar(scale));
-      const swing = moving ? Math.sin(w.phase) * (cow ? .45 : .7) : 0;
+      const swing = moving ? Math.sin(w.phase) * (QUADRUPED.has(a.kind) ? (LEG_SWING[a.kind] ?? .35) * Math.min(1, w.speed / .25) : .7) : 0;
       // A hop when a hen flaps; a little sway of the body while walking.
       for (let k = 0; k < rig.parts.length; k++) { const p = rig.parts[k];
         if (!p.mesh) {
