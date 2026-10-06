@@ -16,7 +16,8 @@ import { CROPS } from './content.ts';
 
 /** Stages after the reference (RG-01): empty, sprout below 50 %, young until ripe, ripe at 100 %. */
 export type CropStage = 0 | 1 | 2 | 3;
-export function cropStage(crop: string | null | undefined, progress: number): CropStage { return !crop ? 0 : progress >= 1 ? 3 : progress >= .5 ? 2 : 1; }
+/** A fruit tree is a seedling only for its first 15% (its timer is 8 h or more: half of it as a sprout read as nothing growing), then a young tree. */
+export function cropStage(crop: string | null | undefined, progress: number): CropStage { return !crop ? 0 : progress >= 1 ? 3 : progress >= (isTreeCrop(crop) ? .15 : .5) ? 2 : 1; }
 /** Reference stage scales (sprout ×1.4, young ×0.55, ripe ×1.25), here relative to each model's bed scale. */
 export const STAGE_SCALE: readonly [number, number, number, number] = [0, 1.4, .55, 1.25];
 /** The camera's pitch, the direction the atlas is baked from. */
@@ -71,17 +72,18 @@ export function cropBounds(id: string): ViewBounds | null {
 /**
  * Fruit trees (the crops that take 8 hours or more: apple, mango, coconut, durian, lychee, peach, and the grape and pineapple
  * plants) were fitted to the same small height as a radish and read as shrubs next to the village's trees. They now stand
- * taller than the bed: a young one 1.45x, a ripe one 1.9x the standard crop height (the beds are seen from above, so the
- * crown may rise over the next bed).
+ * taller than the bed: a seedling 1.6x, a young tree 3x (about two thirds of its ripe height, so a growing tree reads
+ * as a tree) and a ripe one 2.1x the standard crop height (the beds are seen from above, so the crown may rise over the
+ * next bed).
  */
-export const TREE_BOOST: Readonly<Record<number, number>> = { 2: 1.45, 3: 1.9 };
+export const TREE_BOOST: Readonly<Record<number, number>> = { 1: 1.6, 2: 3, 3: 2.1 };
 export { isTreeCrop } from './tree-crops.ts';
 import { isTreeCrop } from './tree-crops.ts';
 /** Size of a crop at a stage relative to its model: the stage scale times the model's bed scale. */
 export function stageScale(crop: string, stage: CropStage) {
   if (!stage) return 0;
   const b = cropBounds(stage === 1 ? 'sprout' : crop);
-  const boost = stage > 1 && isTreeCrop(crop) ? TREE_BOOST[stage] ?? 1 : 1;
+  const boost = isTreeCrop(crop) ? TREE_BOOST[stage] ?? 1 : 1;
   return b ? STAGE_SCALE[stage] * bedScale(b, stage === 1) * boost : STAGE_SCALE[stage] * boost;
 }
 /** A compact ready badge above the mature silhouette, in the same view plane as crop cards. */
