@@ -35,6 +35,8 @@ export interface GameBridge {
   /** AI neighbours (bots.ts): does the player already have this item; hand over a gift (items and/or energy; false when it cannot be given now); may a neighbour walk up and talk now. */
   /** A neighbour's blow on an enemy (bots.ts): the enemy takes the damage and falls, but a kill pays the player nothing, wherever it happens, and it never touches the player's target ring, hit-stop or HUD. */
   botHit(enemyId:string,damage:number):void;
+  /** The daily Colossus neighbours may help against (solo, at home, awake), and a neighbour's blow on it (never rewarded). */
+  colossusRally?():{id:string;x:number;z:number;r:number}|null;colossusStrike?(botId:string,damage:number):void;
   ownsItem(id:string):boolean;grantGift(gift:{item?:string;count:number;energy:number}):boolean;botContext():{active:boolean;ready:boolean};
   /** The Delvers' Vault online (dungeon.ts): a dg* message from the server, and the way to send one (null when offline). */
   dungeonMessage?(message:{type:string;[key:string]:unknown}):void;

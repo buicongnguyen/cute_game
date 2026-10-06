@@ -9,6 +9,7 @@ import { createAccountStore } from '../server/account-store.mjs';
 import { createActionService, commandHash } from '../server/action-service.mjs';
 import { createGameServer } from '../server/server.mjs';
 import { ACTION_RULES_VERSION } from '../src/actions.ts';
+import { waterXp, waterBoost } from '../src/visit-rules.ts';
 import * as Game from '../src/model.ts';
 import {createEnvironmentLayout} from '../src/environments.ts';
 import {environmentResourceNodes} from '../src/environment-resources.ts';
@@ -102,9 +103,9 @@ test('SQL second account update, receipt insert and COMMIT failures roll back th
   assert.equal((await f.store.get('alice')).profile.energy,3);assert.equal((await f.store.get('bob')).profile.energy,3);
 });
 
-async function service(t){
+async function service(t,options={}){
   const f=await fixture(t);const peers=new Map(),events=[];
-  const execute=createActionService({store:f.store,getPeer:id=>peers.get(id),afterCommit:(committed,intent)=>{if(!committed.reply.replayed)events.push({committed,intent});}});
+  const execute=createActionService({...options,store:f.store,getPeer:id=>peers.get(id),afterCommit:(committed,intent)=>{if(!committed.reply.replayed)events.push({committed,intent});}});
   async function act(id,type,payload={},extra={}){return execute(id,{rulesVersion:ACTION_RULES_VERSION,requestId:randomUUID(),expectedRevision:(await f.store.get(id)).profileRevision||0,type,payload,...extra});}
   return {...f,store:f.store,peers,events,execute,act};
 }
@@ -217,22 +218,35 @@ test('fishing requires an owned rod, server ticket, elapsed reeling proof and on
   await assert.rejects(h.act('alice','fishFinish',payload),status(409));
 });
 
-test('mystery eligibility follows the exact pond and starts its durable cooldown only after a successful catch',async t=>{
-  let at=2_000_000_000_000;t.mock.method(Date,'now',()=>at);const h=await service(t),a=account('alice');a.profile.bag={rod:1};await h.store.create(a);
+test('the server calls the mystery shadow only while fishing: 10 % per cast, once a minute, three tries, then it is gone',async t=>{
+  let at=2_000_000_000_000;t.mock.method(Date,'now',()=>at);
+  let roll=.05;const h=await service(t,{mysteryRandom:()=>roll}),a=account('alice');a.profile.bag={rod:1};await h.store.create(a);
   const peer={planet:'home',room:'public:home',pose:{x:-7.5,z:15.3}};h.peers.set('alice',peer);
-  const cast={rodId:'rod',water:'home',cast:{x:-7.5,z:13.5},mystery:true};
-  const first=await h.act('alice','fishStart',cast);assert.equal(first.result.pick.mystery,true);assert.deepEqual(first.result.mysteryState,{readyAt:0,serverNow:at});
-  await h.act('alice','fishCancel',{ticketId:first.result.ticketId});assert.equal((await h.store.get('alice')).mysteryReadyAt,undefined);
-  const second=await h.act('alice','fishStart',cast);assert.equal(second.result.pick.mystery,true);
+  const cast={rodId:'rod',water:'home',cast:{x:-7.5,z:13.5}};
+  // A client cannot ask for a mystery: the roll decides (here 0.05 < 0.1, so one is called).
+  roll=.5;const plain=await h.act('alice','fishStart',{...cast,mystery:true});assert.equal(plain.result.pick.mystery,false,'a client claim is ignored');assert.equal(plain.result.mysterySpot,undefined);
+  await h.act('alice','fishCancel',{ticketId:plain.result.ticketId});
+  roll=.05;const first=await h.act('alice','fishStart',cast);assert.equal(first.result.pick.mystery,true);
+  const spot=first.result.mysterySpot,d=Math.hypot(spot.x-cast.cast.x,spot.z-cast.cast.z);assert.ok(d>=2.5-1e-9&&d<=3.2+1e-9,`2.5-3.2 m from the bobber, got ${d}`);
+  // Two misses: it comes back to the same spot without a new roll.
+  roll=.99;await h.act('alice','fishCancel',{ticketId:first.result.ticketId});
+  const second=await h.act('alice','fishStart',cast);assert.equal(second.result.pick.mystery,true);assert.deepEqual(second.result.mysterySpot,spot);
+  await h.act('alice','fishCancel',{ticketId:second.result.ticketId});
+  const third=await h.act('alice','fishStart',cast);assert.equal(third.result.pick.mystery,true,'third and last try');
+  await h.act('alice','fishCancel',{ticketId:third.result.ticketId});
+  roll=.05;at+=30_000;const gone=await h.act('alice','fishStart',cast);assert.equal(gone.result.pick.mystery,false,'out of tries, and a minute has not passed');
+  await h.act('alice','fishCancel',{ticketId:gone.result.ticketId});
+  at+=30_000;const again=await h.act('alice','fishStart',cast);assert.equal(again.result.pick.mystery,true,'a new one after 60 s');
+  // Landing it clears it; the minute still counts from the call.
   at+=20_000;const proof={elapsed:20,hookAt:1,samples:[{t:7,held:true,tension:.3,progress:.2},{t:14,held:true,tension:.5,progress:.6},{t:20,held:true,tension:.4,progress:1}]};
-  const requestId=randomUUID(),payload={ticketId:second.result.ticketId,telemetry:proof},finish=await h.act('alice','fishFinish',payload,{requestId});
-  assert.equal(finish.result.mystery,true);assert.equal(finish.result.mysteryState.serverNow,at);assert.ok(finish.result.mysteryState.readyAt>=at+45000&&finish.result.mysteryState.readyAt<=at+90000);
-  const cooldown=finish.result.mysteryState.readyAt;at+=1000;const replay=await h.act('alice','fishFinish',payload,{requestId});assert.deepEqual(replay.result,finish.result);
-  const ordinary=await h.act('alice','fishStart',cast);assert.equal(ordinary.result.pick.mystery,false);assert.equal(ordinary.result.mysteryState.readyAt,cooldown);
-  await h.act('alice','fishCancel',{ticketId:ordinary.result.ticketId});
-  peer.pose={x:10,z:63};const lake={...cast,water:'lake',cast:{x:10,z:59.5}},other=await h.act('alice','fishStart',lake);
-  assert.equal(other.result.pick.mystery,true);assert.equal(other.result.mysteryState.readyAt,0,'another pond does not inherit the home pond cooldown');
-  at+=180001;const expired=await h.act('alice','fishStart',lake);assert.equal(expired.result.pick.mystery,true,'an expired ticket leaves the pond opportunity available');
+  const finish=await h.act('alice','fishFinish',{ticketId:again.result.ticketId,telemetry:proof});assert.equal(finish.result.mystery,true);assert.equal(finish.result.mysteryState,undefined);
+  const stored=await h.store.get('alice');assert.equal(stored.mysteryCaller.active,undefined);assert.equal(stored.mysteryCaller.lastCallAt,at-20_000);
+  const after=await h.act('alice','fishStart',cast);assert.equal(after.result.pick.mystery,false,'within a minute of the last call');
+  await h.act('alice','fishCancel',{ticketId:after.result.ticketId});
+  // Another pond: one waiting at home is gone once the explorer fishes elsewhere.
+  at+=61_000;const home=await h.act('alice','fishStart',cast);assert.equal(home.result.pick.mystery,true);await h.act('alice','fishCancel',{ticketId:home.result.ticketId});
+  peer.pose={x:10,z:63};roll=.99;const lake=await h.act('alice','fishStart',{...cast,water:'lake',cast:{x:10,z:59.5}});assert.equal(lake.result.pick.mystery,false);
+  assert.equal((await h.store.get('alice')).mysteryCaller.active,undefined,'the home shadow did not follow to the lake');
 });
 
 test('interior cave crystals require the opened gate while the exterior crystals remain mineable',async t=>{
@@ -281,4 +295,26 @@ test('friends can gift items from the bag (chest + note, daily limit) and water 
   assert.ok(watered.result.seconds>0);assert.ok((await h.store.get('owner')).profile.plots[0].plantedAt<before);
   await assert.rejects(h.act('alice','waterFriend',payload),status(409),'only once per plant');
   await assert.rejects(h.act('alice','waterFriend',{...payload,generation:'old'}),status(409));
+});
+
+test('watering a friend takes 10% of the remaining time, pays 5 + min(30, level) XP, and stops after five a day in each garden',async t=>{
+  let at=Math.ceil(2e12/864e5)*864e5-120_000;t.mock.method(Date,'now',()=>at); // two minutes before a UTC midnight
+  const h=await service(t);
+  const actor=account('alice'),owner=account('owner'),other=account('olive');actor.friends=['owner','olive'];owner.friends=['alice'];other.friends=['alice'];
+  owner.profile.level=30;other.profile.level=30;actor.profile.level=12;
+  for(let i=0;i<7;i++)assert.ok(Game.plant(owner.profile,i,'melon',at-60_000));
+  assert.ok(Game.plant(other.profile,0,'pumpkin',at-60_000));
+  await h.store.create(actor);await h.store.create(owner);await h.store.create(other);
+  const peer={planet:'home',room:'home',visit:'owner',pose:{x:0,z:0}};h.peers.set('alice',peer);
+  const water=async(ownerId,index)=>{const target=(await h.store.get(ownerId)).profile;peer.visit=ownerId;peer.pose=Game.bedPosition(target,index);return h.act('alice','waterFriend',{ownerId,index,generation:target.plots[index].generation});};
+  for(let i=0;i<5;i++){
+    const plot=(await h.store.get('owner')).profile.plots[i],left=Game.cropDuration(plot)-(at-plot.plantedAt),xpBefore=(await h.store.get('alice')).profile.xp,levelBefore=(await h.store.get('alice')).profile.level;
+    const r=await water('owner',i),after=(await h.store.get('owner')).profile.plots[i];
+    assert.ok(Math.abs(plot.plantedAt-after.plantedAt-left*.1)<1e-6,'10% of what was left');assert.equal(r.result.xp,5+Math.min(30,levelBefore));assert.equal(r.result.left,4-i);
+    const me=(await h.store.get('alice')).profile;if(me.level===levelBefore)assert.equal(me.xp-xpBefore,r.result.xp);
+  }
+  await assert.rejects(water('owner',5),status(429),'five a day in one garden');
+  const elsewhere=await water('olive',0);assert.equal(elsewhere.result.left,4,'another garden has its own five');
+  at+=240_000;const tomorrow=await water('owner',5);assert.equal(tomorrow.result.left,4,'a new day');
+  assert.equal(waterXp(1),6);assert.equal(waterXp(30),35);assert.equal(waterXp(80),35);assert.equal(waterBoost(1000,400),60);assert.equal(waterBoost(1000,1200),0);
 });

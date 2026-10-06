@@ -174,3 +174,7 @@ test('every vault name and line has Vietnamese', () => {
     for (const key of Object.keys(DUNGEON_VI)) assert.ok(DUNGEON_VI[key].length > 0, key);
   } finally { setLanguage('en'); }
 });
+test('vault companions need the vault\'s recommended level to wear; the chest and seals are free', () => {
+  for (const id of Object.keys(DUNGEON_PETS)) { assert.equal(M.gearLevel(id), 20, id); const s = M.newGame(); s.level = 19; s.bag[id] = 1; assert.equal(M.equip(s, id), false); s.level = 20; assert.notEqual(M.equip(s, id), false); }
+  assert.equal(M.gearLevel('deco_dgchest'), 0); assert.equal(M.gearLevel('dg_seal'), 0);
+});

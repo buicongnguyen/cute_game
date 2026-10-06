@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import ts from 'typescript';
 import * as M from '../src/model.ts';
-import {resolveMysteryCatch} from '../src/fishing.ts';
+import {resolveMysteryCatch,newMysteryCaller,mysteryLanded} from '../src/fishing.ts';
 
 const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
 const ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
@@ -13,9 +13,9 @@ const compiled=ts.transpileModule(node.getText(ast),{compilerOptions:{target:ts.
 function fixture(online=false){
  const callbacks=[],notices=[],saved=[],effects=[],availability=[];let resolve;
  const state=M.newGame(),round={pondId:'home:pond',ticket:'ticket',simulation:{pick:{id:'fish_perch',power:.2,size:14,huge:false}},proof:{finish:()=>({})}};
- const context={M,state,resolveMysteryCatch,fishingEpoch:1,fishGame:null,actionHandler:online?()=>{}:null,performance:{now:()=>1000},
+ const context={M,state,resolveMysteryCatch,mysteryLanded,mysteryCaller:newMysteryCaller(),fishingEpoch:1,fishGame:null,actionHandler:online?()=>{}:null,performance:{now:()=>1000},
   world:{root:{},position:{x:0,z:0},fx:{burst:()=>effects.push('burst'),shake:()=>{}}},
-  fishingView:{land:(_target,done)=>callbacks.push(done),cancel:()=>effects.push('cancel'),setMysteryAvailability:(...args)=>availability.push(args)},
+  fishingView:{land:(_target,done)=>callbacks.push(done),cancel:()=>effects.push('cancel'),dropMystery:(...args)=>availability.push(args)},
   perform:()=>new Promise(r=>{resolve=r;}),change:fn=>{const result=fn();saved.push(structuredClone(state));return result;},
   toast:text=>notices.push(text),tone:()=>effects.push('tone'),floating:()=>{},t:text=>text,formatSize:()=>'',showReel:()=>{},setTimeout:()=>{},recastUntil:0};
  const ctx=vm.createContext(context);vm.runInContext(compiled,ctx);
@@ -31,10 +31,16 @@ test('failed catch grant gives no success animation or reward feedback',async()=
 });
 for(const transition of ['new cast','different world','different account'])test(`a delayed catch reply cannot animate over a ${transition}`,async()=>{
  const f=fixture(true),pending=f.start();if(transition==='new cast'){f.ctx.fishingEpoch++;f.ctx.fishGame={};}else if(transition==='different world')f.ctx.world.root={};else f.ctx.state=M.newGame('Other');
- f.resolve({...f.round.simulation.pick,mysteryState:{readyAt:61000,serverNow:1000}});await pending;
+ f.resolve({...f.round.simulation.pick});await pending;
  assert.equal(f.callbacks.length,0);assert.deepEqual(f.effects,[]);assert.deepEqual(f.availability,[]);
 });
-test('successful online catch uses the committed pond cooldown and does not grant a second client reward',async()=>{
- const f=fixture(true),pending=f.start();f.resolve({...f.round.simulation.pick,mysteryState:{readyAt:61000,serverNow:1000}});await pending;
- assert.equal(f.state.bag.fish_perch,undefined);assert.equal(f.callbacks.length,1);assert.deepEqual(f.availability,[['home:pond',60]]);
+test('successful online catch does not grant a second client reward',async()=>{
+ const f=fixture(true),pending=f.start();f.resolve({...f.round.simulation.pick});await pending;
+ assert.equal(f.state.bag.fish_perch,undefined);assert.equal(f.callbacks.length,1);assert.deepEqual(f.availability,[]);
+});
+test('landing a mystery clears the waiting shadow from the caller (the 60 s wait counts from its call)',async()=>{
+ const f=fixture();f.round.simulation.pick={id:'fish_perch',power:.2,size:0,huge:false,mystery:true};f.round.mysteryOut=true;
+ f.ctx.mysteryCaller={lastCallAt:500,active:{water:'home:pond',x:1,z:1,tries:1}};
+ await f.start();assert.equal(f.ctx.mysteryCaller.active,undefined);assert.equal(f.ctx.mysteryCaller.lastCallAt,500);assert.equal(f.round.mysteryOut,false);
+ assert.ok(Object.values(f.state.bag).some(n=>n>0),'the mystery prize is granted');
 });

@@ -221,3 +221,8 @@ export const visitStay = (rand: () => number) => 20 + rand() * 20;
 /** Out hunting 2 to 4 minutes, then a rest at its own safe zone (out of sight) for about as long: half the time they are away. */
 export const huntFor = (rand: () => number) => 120 + rand() * 120;
 export const restFor = (rand: () => number) => 100 + rand() * 140;
+
+/** The daily Colossus's arena while neighbours may help (colossus.ts through the game bridge). */
+export interface RallyPoint { id: string; x: number; z: number; r: number }
+/** Where neighbour number `i` stands round the Colossus: a ring just outside its body, spread by the golden angle. */
+export function rallySpot(r: RallyPoint, i: number) { const a = i * 2.399 + .6, d = r.r + 3 + (i % 3) * 1.5; return { x: r.x + Math.cos(a) * d, z: r.z + Math.sin(a) * d }; }

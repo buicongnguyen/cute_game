@@ -1,6 +1,7 @@
 import { TITAN_ITEMS, TITAN_LOOT } from './titan-content.ts';
 import { BOSS_PET_ITEMS, BOSS_PET_LOOT } from './boss-pet-content.ts';
 import { DUNGEON_ITEMS } from './dungeon-content.ts';
+import { COLOSSUS_ITEMS, COLOSSUS_LOOT, COLOSSUS_TYPE } from './colossus-content.ts';
 // Gameplay facts measured from the public reference client, 2026-09-30.
 // Rendering assets, descriptions and implementation code are independently authored.
 export type GearSlot = 'weapon' | 'hat' | 'outfit' | 'boots' | 'pet' | 'disguise';
@@ -4080,6 +4081,9 @@ Object.assign(LOOT_TABLES, TITAN_LOOT);
 Object.assign(ITEMS, BOSS_PET_ITEMS);
 for (const [boss, drops] of Object.entries(BOSS_PET_LOOT)) (LOOT_TABLES[boss] ??= []).push(...drops);
 Object.assign(ITEMS, DUNGEON_ITEMS); // the Delvers' Vault (dungeon-content.ts): rewards come from its stage claims, not loot tables
+// The daily world boss (colossus-content.ts): its trophies and spoils.
+Object.assign(ITEMS, COLOSSUS_ITEMS);
+LOOT_TABLES[COLOSSUS_TYPE] = COLOSSUS_LOOT;
 
 // New recipes append after the reference catalog so saved/in-flight recipe indexes remain stable.
 // w25: the user's pick (option 2): ϟ1000 and +100 attack, still the fish-hunting tool. One slow heavy throw (1.3 s):

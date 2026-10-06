@@ -47,7 +47,7 @@ test('cooking improves crop and fish value, healing and precise buff strength',(
 test('material purchases and crafting preserve funds and items on failure',()=>{
   const s=M.newGame();const index=M.RECIPES.findIndex(r=>r.station==='craft'&&r.result==='boots_lava'),r=M.RECIPES[index];s.energy=r.energy;
   const before=JSON.stringify(s);assert.equal(M.craft(s,index),false);assert.equal(JSON.stringify(s),before);
-  for(const[id,n]of Object.entries(r.materials))M.addItem(s,id,n);assert.equal(M.craft(s,index),true);assert.equal(s.energy,0);assert.equal(s.bag.boots_lava,1);assert.equal(M.equip(s,'boots_lava'),true);assert.equal(M.activeStats(s).lavaproof,true);
+  for(const[id,n]of Object.entries(r.materials))M.addItem(s,id,n);assert.equal(M.craft(s,index),true);assert.equal(s.energy,0);assert.equal(s.bag.boots_lava,1);assert.equal(M.equip(s,'boots_lava'),false,'lava gear waits for the lava world level');s.level=M.gearLevel('boots_lava');assert.equal(M.equip(s,'boots_lava'),true);assert.equal(M.activeStats(s).lavaproof,true);
   const offer=M.RECIPES.find(r=>r.station==='shop'&&Object.keys(r.materials).length>0)!;s.energy=offer.energy;assert.equal(M.buy(s,offer.result),false);for(const[id,n]of Object.entries(offer.materials))M.addItem(s,id,n);assert.equal(M.buy(s,offer.result),true);
 });
 test('exactly one equipped copy is protected through selling, storage and death',()=>{
@@ -123,7 +123,7 @@ test('inherited IDs, non-object roots and malformed optional state cannot enter 
   for(const id of ['__proto__','constructor','toString']){assert.equal(M.parseSave(JSON.stringify({...s,planet:id})),null);assert.equal(M.addItem(s,id),false);assert.equal(M.plant(s,0,id),false);assert.equal(M.equip(s,id),false);assert.equal(M.sell(s,id),0);}
   const bag=JSON.parse('{"carrot":2,"sword":1,"constructor":3,"__proto__":4,"toString":5,"fish":-2,"wood":1.5,"ember":1e30}');
   const r=M.parseSave(JSON.stringify({...s,bag,chest:null,gear:{weapon:'sword',hat:'constructor',boots:'sword'},counters:null,settings:null,worldRewards:null,plots:[null,{crop:'constructor',plantedAt:1},'berry'],energy:Number.MAX_VALUE,xp:Number.MAX_VALUE,hp:Number.MAX_VALUE,healthUp:Number.MAX_VALUE,attackUp:Number.MAX_VALUE}))!;
-  assert.deepEqual(r.bag,{carrot:2,sword_wood:1});assert.deepEqual(r.gear,{weapon:'sword_wood'});assert.equal(r.plots.length,9);assert.ok(r.plots.every(p=>p.crop===null));assert.ok(Number.isFinite(M.maxHp(r)));assert.ok(Number.isFinite(M.attack(r)));assert.ok(Number.isSafeInteger(r.energy));assert.ok(r.xp<M.xpNeeded(r.level));assert.deepEqual(r.settings,{sound:true,lowGraphics:false,difficulty:'easy'});
+  assert.deepEqual(r.bag,{carrot:2,sword_wood:1});assert.deepEqual(r.gear,{weapon:'sword_wood'});assert.equal(r.plots.length,9);assert.ok(r.plots.every(p=>p.crop===null));assert.ok(Number.isFinite(M.maxHp(r)));assert.ok(Number.isFinite(M.attack(r)));assert.ok(Number.isSafeInteger(r.energy));assert.ok(r.xp<M.xpNeeded(r.level));assert.deepEqual(r.settings,{sound:true,musicVolume:.45,sfxVolume:.8,vibrate:true,lowGraphics:false,difficulty:'easy'});
   assert.equal(M.parseSave(JSON.stringify({...s,dropped:{x:1,z:null,planet:'home',items:{carrot:1}}}))!.dropped,null);
 });
 test('invalid world actions and numeric overflow leave valuable state unchanged',()=>{

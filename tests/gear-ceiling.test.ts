@@ -18,7 +18,7 @@ const OLD_LEVELLED = new Set(['hp', 'atk', 'def', 'regen']);
 const oldStat = (id: string, key: string, level: number) => G.baseLine(id)[key as keyof typeof G.SLOT_CEILING.hat] * (OLD_LEVELLED.has(key) ? 1 + .04 * level : 1);
 /** A fresh explorer wearing only `id` at `level`: what the HUD, the fights and the server read. */
 function wearing(id: string, level: number) {
-  const s = M.newGame(); s.bag[id] = 1; M.equip(s, id); if (level) s.gearLevels = { [id]: level };
+  const s = M.newGame(); s.level = 30; s.bag[id] = 1; M.equip(s, id); if (level) s.gearLevels = { [id]: level };
   const a = M.activeStats(s, NOW); return { maxHp: a.maxHp, attack: a.attack, defense: a.defense, regen: a.regen, critChance: a.critChance, speed: a.speed };
 }
 
@@ -113,7 +113,7 @@ test('the cost: energy per level scales with the gap (at least half the base cur
 
 test('save migration: old saves keep their level numbers and read them through the new formula', () => {
   // A save written before the ceilings: levels only (the stats were always derived).
-  const old = M.newGame(); old.energy = 5; for (const id of ['hat_straw', 'armor_knight', 'boots_rocket', 'pet_robot']) { old.bag[id] = 1; M.equip(old, id); }
+  const old = M.newGame(); old.energy = 5; for (const id of ['hat_straw', 'armor_knight', 'boots_rocket', 'pet_robot']) { old.bag[id] = 1; old.gear[M.ITEMS[id].slot!] = id; } // worn as an old save had it, level gates aside
   const json = JSON.stringify({ ...old, gearLevels: { hat_straw: 4, armor_knight: 10, boots_rocket: 2, pet_robot: 7, hat_t_eye: 3 } });
   const s = M.parseSave(json)!;
   assert.deepEqual(s.gearLevels, { hat_straw: 4, armor_knight: 10, boots_rocket: 2, pet_robot: 7, hat_t_eye: 3 }, 'no level is lost or changed');

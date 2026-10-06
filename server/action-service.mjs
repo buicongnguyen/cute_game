@@ -1,7 +1,8 @@
 import {createHash,randomUUID,randomInt} from 'node:crypto';
 import * as Game from '../src/model.ts';
 import {applyGameAction,ACTION_RULES_VERSION} from '../src/actions.ts';
-import {resolveMysteryCatch,catchWeight,STEADY,lineBreakChance,lineSnaps} from '../src/fishing.ts';
+import {resolveMysteryCatch,catchWeight,STEADY,lineBreakChance,lineSnaps,attractMystery,mysteryMissed,mysteryLanded,parseMysteryCaller} from '../src/fishing.ts';
+import {WATER_RULES,waterBoost,waterXp,waterLedger,waterLeft} from '../src/visit-rules.ts';
 import {createEnvironmentLayout} from '../src/environments.ts';
 import {environmentResourceNodes} from '../src/environment-resources.ts';
 import {LAVA_ORE_RULES} from '../src/lava-weather.ts';
@@ -13,6 +14,7 @@ import {WORK_ACTIONS,CATCH_UP_ACTIONS,explorerAway} from '../src/delivery.ts';
 import {cageCandidates,RESCUE_REACH} from '../src/cage-spots.ts';
 import {activity} from '../src/house-activities.ts';
 import {INDOOR_Y} from '../src/house.ts';
+import {noteProgress} from './ranking.mjs';
 
 const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 const random=()=>randomInt(0,0x100000000)/0x100000000;
@@ -21,7 +23,7 @@ export const commandHash=value=>createHash('sha256').update(JSON.stringify(canon
 const validId=value=>typeof value==='string'&&/^[a-zA-Z0-9:_-]{1,100}$/.test(value)&&!['constructor','prototype','__proto__'].includes(value);
 const point=value=>value&&Number.isFinite(value.x)&&Number.isFinite(value.z);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
-const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','upgradeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','setAutoPlant','clearBedChoices','helperHarvest','helperPlant','rest','houseUse','cook','cookDish','friendsArrive','callHelper','callFriend','friendOutfit','welcomeStart','setFriendPaused','setFriendAutoFeed','friendWork','friendsCatchUp','helperCatchUp','giveFriendGear','takeFriendGear','friendLook','ackStored']);
+const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','upgradeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','setAutoPlant','clearBedChoices','helperHarvest','helperPlant','rest','houseUse','cook','cookDish','cookSellProduce','friendsArrive','callHelper','callFriend','friendOutfit','welcomeStart','setFriendPaused','setFriendAutoFeed','friendWork','friendsCatchUp','helperCatchUp','giveFriendGear','takeFriendGear','friendLook','ackStored']);
 const farmHelperActions=new Set(['buyFarmHelper','setFarmHelperPaused','setFarmHelperAutoFeed','farmHelperCollect','farmHelperFeed','farmHelperCatchUp','upgradeFarmRestock','setFarmRestock','farmHelperRestock']);
 export function waterNodes(planet){
   return huntingPonds(planet).map(pond=>({x:pond.x,z:pond.z,r:pond.rx,water:pond.waterId}));
@@ -53,7 +55,7 @@ function saveDrop(account,item,count,peer,now,{owner=account.id,priority=0,life=
 }
 
 /** Account records, receipts, theft ledgers and drops commit in one storage transaction. */
-export function createActionService({store,getPeer,getWorld=()=>null,afterCommit=()=>{},dungeonCheck=()=>true}){
+export function createActionService({store,getPeer,getWorld=()=>null,afterCommit=()=>{},dungeonCheck=()=>true,mysteryRandom=random}){
   return async function execute(actorId,data,{checkAccess}={}){
     checkAccess?.();
     if(data?.rulesVersion!==ACTION_RULES_VERSION||!validId(data.type)||!data.payload||typeof data.payload!=='object'||Array.isArray(data.payload))fail(400,'This action needs the current game rules.');
@@ -65,7 +67,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
     let reservation;
     try {
     const committed=await store.command({actorId,requestId:data.requestId,expectedRevision:data.expectedRevision,originalRevision,requireBoundRevision:true,actionType:data.type,hash:commandHash({rulesVersion:data.rulesVersion,...intent}),relatedIds,checkAccess,run:records=>{
-      const account=records.get(actorId),state=Game.parseSave(JSON.stringify(account.profile)),peer=getPeer(actorId),now=Date.now();
+      const account=records.get(actorId),before=account.profile,state=Game.parseSave(JSON.stringify(account.profile)),peer=getPeer(actorId),now=Date.now();
       if(!state)fail(409,'Reconnect to load your adventure.');account.profile=state;
       if(peer&&peer.planet!==state.planet&&!['returnHome','stealCrop','waterFriend','giftFriend'].includes(data.type))fail(409,'Reconnect to load your current planet.');
       if(farmActions.has(data.type)&&(state.planet!=='home'||peer?.visit))fail(409,'Return to your own garden first.');
@@ -109,7 +111,8 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         result={ownerId:owner.id,item,count};
         logGuest(owner,{at:now,by:actorId,name:state.name,kind:'gift',what:item,count});
       }else if(data.type==='waterFriend'){
-        // Water a growing crop in a friend's garden you are visiting: it ripens a little sooner, once per visitor per plant.
+        // Water a growing crop in a friend's garden you are visiting (visit-rules.ts): 10 % off its remaining time and
+        // 5 + min(30, level) XP, once per visitor per plant, at most five times a day in each garden.
         const owner=records.get(p.ownerId);
         if(!owner||owner.id===actorId||!account.friends.includes(owner.id)||!owner.friends.includes(actorId)||peer?.visit!==owner.id||peer.planet!=='home')fail(403,'Visit a friend’s garden to water their crops.');
         const target=Game.parseSave(JSON.stringify(owner.profile)),plot=target?.plots[p.index];
@@ -119,11 +122,12 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         for(const k of Object.keys(owner.watered))if(!live.has(k))delete owner.watered[k];
         const key=`${p.index}:${plot.generation}`,by=owner.watered[key]??[];
         if(by.includes(actorId))fail(409,'You already watered this plant.');
-        const day=new Date(now).toISOString().slice(0,10),ledger=account.waterLedger?.day===day?account.waterLedger:{day,count:0};
-        if(ledger.count>=30)fail(429,'You have watered plenty of plants today.');
-        const boost=Math.min(Game.cropDuration(plot)*.1,120000);plot.plantedAt-=boost;by.push(actorId);owner.watered[key]=by.slice(-8);
-        ledger.count++;account.waterLedger=ledger;Game.gainXp(state,2,now,1);owner.profile=target;
-        result={ownerId:owner.id,index:p.index,seconds:Math.round(boost/1000)};
+        const ledger=waterLedger(account.waterHomes,now);
+        if(waterLeft(ledger,owner.id)<1)fail(429,'You have watered this garden five times today. Come back tomorrow.');
+        const boost=waterBoost(Game.cropDuration(plot),now-plot.plantedAt);plot.plantedAt-=boost;by.push(actorId);owner.watered[key]=by.slice(-8);
+        ledger.homes[owner.id]=(ledger.homes[owner.id]||0)+1;account.waterHomes=ledger;delete account.waterLedger;
+        const xp=waterXp(state.level);Game.gainXp(state,xp,now,1);owner.profile=target;
+        result={ownerId:owner.id,index:p.index,seconds:Math.round(boost/1000),xp,left:waterLeft(ledger,owner.id),share:WATER_RULES.share};
         logGuest(owner,{at:now,by:actorId,name:state.name,kind:'water',what:plot.crop,count:1});
       }else if(data.type==='fishHunt'){
         if(!peer?.active||peer.visit||account.journeyPaid||account.fishingTicket&&now-account.fishingTicket.startedAt<180000)fail(409,'Finish your cast and return to your own shore before hunting fish.');
@@ -135,9 +139,10 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         const water=waterNodes(state.planet).find(node=>node.water===p.water&&distance(node,p.cast)<node.r&&distance(node,peer.pose)<=node.r+3.05&&distance(p.cast,peer.pose)<=8);
         if(!water)fail(409,'Move to the pond before casting.');
         if(account.fishingTicket&&now-account.fishingTicket.startedAt<180000)fail(409,'Finish or cancel your current cast first.');
-        const key=`${state.planet}:${water.x}:${water.z}`,readyAt=account.mysteryReadyAt?.[key]||0;
-        // A stale browser silhouette must not reject an otherwise valid ordinary cast.
-        const mystery=p.mystery===true&&now>=readyAt;
+        // The mystery shadow is the server's call, made only while fishing (fishing.ts attractMystery): each cast's attract
+        // rolls 10 % at most once a minute per explorer; one already waiting near this bobber comes back for up to 3 tries.
+        const key=`${state.planet}:${water.x}:${water.z}`,caller=parseMysteryCaller(account.mysteryCaller);
+        const call=attractMystery(caller,key,p.cast,now,mysteryRandom,water);account.mysteryCaller=caller;const mystery=call.mystery;
         const bait=(state.bag.worm||0)>0,bonus=(bait?.8:0)+(rod.quality??.3)-.3+Game.activeStats(state).luck;
         const choices=(Game.FISH_WEIGHTS[p.water]||[]).map(([id,weight])=>[id,catchWeight(weight,Game.FISH[id]?.rarity,bonus)]);
         if(!choices.length)fail(409,'No fish live in this water.');
@@ -147,18 +152,18 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         // The line's strain rolls are seeded here and handed to the browser, so both roll alike (validateFishingProof).
         const ticket={id:randomUUID(),startedAt:now,planet:state.planet,water:key,power:fish.power,steady:rod.steady===true,breakChance:lineBreakChance(rod),seed:randomInt(0,0x7fffffff),outcome,cast:{...p.cast}};
         account.fishingTicket=ticket;if(bait)Game.removeItem(state.bag,'worm');
-        result={ticketId:ticket.id,bait,lineSeed:ticket.seed,pick:{id,power:fish.power,size,huge:fraction>.82,mystery},mysteryState:{readyAt,serverNow:now}};
+        result={ticketId:ticket.id,bait,lineSeed:ticket.seed,pick:{id,power:fish.power,size,huge:fraction>.82,mystery},...(call.spot?{mysterySpot:call.spot}:{})};
       }else if(data.type==='fishFinish'||data.type==='fishCancel'){
         const ticket=account.fishingTicket;
         if(!ticket||ticket.id!==p.ticketId)fail(409,'That cast is no longer available.');
-        if(data.type==='fishCancel'){delete account.fishingTicket;result=true;}
+        if(data.type==='fishCancel'){if(ticket.outcome?.mystery){const caller=parseMysteryCaller(account.mysteryCaller);mysteryMissed(caller);account.mysteryCaller=caller;}delete account.fishingTicket;result=true;}
         else{
           if(ticket.planet!==state.planet||now-ticket.startedAt>180000)fail(409,'That cast has expired.');requireNear(peer,ticket.cast,9);
           validateFishingProof(p.telemetry,ticket,now);const catchResult=ticket.outcome;
           const ok=catchResult.mystery?Game.grantMysteryCatch(state,catchResult.id,catchResult.size,catchResult.supergiant):Game.grantCatch(state,catchResult.id,catchResult.size,catchResult.huge);
           if(!ok)fail(409,'Your bag cannot hold that catch.');
-          if(catchResult.mystery){account.mysteryReadyAt??={};account.mysteryReadyAt[ticket.water]=now+(45+random()*45)*1000;}
-          delete account.fishingTicket;result={...catchResult,mysteryState:{readyAt:account.mysteryReadyAt?.[ticket.water]||0,serverNow:now}};
+          if(catchResult.mystery){const caller=parseMysteryCaller(account.mysteryCaller);mysteryLanded(caller);account.mysteryCaller=caller;}
+          delete account.fishingTicket;result={...catchResult};
         }
       }else if(data.type==='dropItem'){
         if(!peer||peer.visit||!validId(p.id)||!Number.isSafeInteger(p.count)||p.count<1||p.count>Game.looseQuantity(state,p.id))fail(409,'That item cannot be dropped.');
@@ -226,13 +231,14 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         if((WORK_ACTIONS.has(data.type)||CATCH_UP_ACTIONS.has(data.type))&&p&&typeof p==='object')p.away=peer&&!peer.visit?explorerAway(peer.planet,peer.pose.x,peer.pose.z)||CATCH_UP_ACTIONS.has(data.type)&&now-(peer.tripAt||0)<120000:false;
         result=applyGameAction(state,intent,{now,random});
         if(data.type==='rest'||data.type==='houseUse')account.healthBoundaryAt=now;
-        if(data.type==='reset'){account.adventureEpoch=(account.adventureEpoch||0)+1;account.lifeEpoch=(account.lifeEpoch||0)+1;clearJourney(account);for(const key of ['resourceHits','drops','mysteryReadyAt'])delete account[key];}
+        if(data.type==='reset'){account.adventureEpoch=(account.adventureEpoch||0)+1;account.lifeEpoch=(account.lifeEpoch||0)+1;clearJourney(account);for(const key of ['resourceHits','drops','mysteryReadyAt','mysteryCaller'])delete account[key];}
         if(data.type==='die'){account.lifeEpoch=(account.lifeEpoch||0)+1;clearJourney(account);}
         if(data.type==='claimGift'&&state.hp<=0){Game.die(state,peer.pose.x,peer.pose.z);account.lifeEpoch=(account.lifeEpoch||0)+1;clearJourney(account);result={...result,died:true};}
         if(data.type==='launch'){const start=STAR_MAP[state.planet];account.journeyPaid=true;account.flightPoint={x:start.x,z:start.z+start.r+8,at:now};account.flightDust=spaceLayout().dust;}
         if(data.type==='travel'||data.type==='returnHome')clearJourney(account);
       }
       state.savedAt=now;
+      noteProgress(account,before,state,now); // weekly leaderboard counters (ranking.mjs): only what this action earned
       return result;
     }});
     if(reservation)reservation.world.environment.weather.collectOre(reservation.id);

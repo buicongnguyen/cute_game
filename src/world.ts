@@ -5,6 +5,7 @@ import {titanKit,titanArt,titanFallback} from './titan-art.ts';
 import {beginTitanAttack,stepTitanAttack,titanTelegraphs,isTitanSkill,sanitizeTitanAttacks,type TitanAttack,type TitanTarget,type TitanMark} from './titan-patterns.ts';
 import {TitanAttackView} from './titan-view.ts';
 import {dungeonKit} from './dungeon-view.ts';
+import {colossusGearKit} from './colossus-art.ts';
 import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
 import { buildScatter, disposeScatter, fallbackParts, updateScatterShadows } from './scatter.ts';
 import { OccluderFade } from './occluders.ts';
@@ -72,6 +73,8 @@ export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
 export interface AvatarVisual {size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
 export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
+/** An enemy run by its own module (colossus.ts): no generic AI or drawing here; `incoming` may scale a blow before it lands. */
+export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):number}}
 export interface RemotePose {/** More pets that follow this explorer besides gear.pet (the AI neighbours' second pet). */pets?:string[];/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
 export interface EnemySnapshot {homeX?:number;homeZ?:number;titanAttacks?:TitanAttack[];titanLift?:number;chaseGrace?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
@@ -680,7 +683,7 @@ export class World {
    * first time; avatars are rebuilt when it arrives, and simple shapes stand in until then.
    */
   private kitFor(id:string){
-    const slot=M.ITEMS[id]?.slot,kit=/^(hat|pet)_t_/.test(id)?titanKit:/^pet_b_/.test(id)?bossPetKit:/^pet_dg_/.test(id)?dungeonKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
+    const slot=M.ITEMS[id]?.slot,kit=/^(hat|pet)_colossus$/.test(id)?colossusGearKit:/^(hat|pet)_t_/.test(id)?titanKit:/^pet_b_/.test(id)?bossPetKit:/^pet_dg_/.test(id)?dungeonKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
     if(!kit.requested)void kit.load().then(()=>{if(kit.ready)this.refreshAvatars();});
     return kit.ready&&kit.has(weaponModelName(id))?kit:null;
   }
@@ -1207,6 +1210,7 @@ export class World {
   }
   damageEnemy(e:Enemy,amount:number,stun=0,hazard=false) {
     if(e.hp<=0)return;
+    if(e.driver)amount=e.driver.incoming(e,amount,hazard);
     if(!hazard&&e.type==='magmaturtle')amount*=e.phase==='recover'?2:.12;
     // A hit never staggers a boss (its wind-up and skill go on, as in the reference); a hard stun only slows it.
     const control=hitControl(e.boss,stun);if(!hazard)e.lastHitAt=this.time??0;
@@ -1414,6 +1418,7 @@ export class World {
     marker.update(dt,this.time,{x:e.mesh.position.x,y:ground,z:e.mesh.position.z,footprint:data.footprint*s,height:e.mesh.position.y-ground+this.modelHeight(e)},e.radius);
   }
   private updateEnemyAi(e:Enemy,dt:number){
+    if(e.driver)return;
     e.cooldown=Math.max(0,e.cooldown-dt);this.updateTitanAttacks(e,dt);if(e.phase==='titan-leap'&&e.titanAttacks?.some(a=>a.skill==='leap'))return;e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
     if(e.statuses)for(const key in e.statuses)e.statuses[key]=Math.max(0,e.statuses[key]-dt); // no key array per creature per step
     if(e.hp<=0){e.respawn=Math.max(0,e.respawn-dt);if(this.authoritativeAction)return;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.enraged=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];}return;}
@@ -1553,6 +1558,7 @@ export class World {
     }
   }
   private updateEnemyVisual(e:Enemy,dt:number){
+    if(e.driver)return;
     // Only creatures near the view cast shadows; the shadow box reaches well past the screen,
     // and distant creatures would otherwise double their draw cost for shadows nobody sees.
     const view=Math.hypot(e.x-this.cameraTarget.x,e.z-this.cameraTarget.z),near=view<16;
@@ -1582,7 +1588,14 @@ export class World {
     this.animateEnemy(e,dt);
     const shell=part(e.mesh,'shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
   }
+  /** Runs at the start of every world step, after main has set this step's movement lock (colossus.ts: the daily boss). */
+  onStep?:(dt:number)=>void;
+  /** Runs just before each frame is drawn (colossus.ts poses the giant and its attacks). */
+  beforeRender?:()=>void;
+  /** Extra drawn height of the explorer, e.g. while hurled through the air by the Colossus. */
+  playerLift=0;
   update(dt:number,active:boolean,draw=true,simulateWorld=active||this.networkRole==='host') {
+    this.onStep?.(dt);
     this.environment??=new EnvironmentSimulation(createEnvironmentLayout(this.planet));this.enemyShots??=[];this.dynamicObstacles??=[];this.resourceTimers??=new Map();
     const environmentForFrame=this.environment;
     if(active||simulateWorld)this.time+=dt;
@@ -1652,7 +1665,7 @@ export class World {
     if(zone!==this.lastZone&&!this.interior){this.lastZone=zone;this.onZone(zone);} // indoors x/z are the cottage's: no village zone banner
     // Home heals 4x faster (home-care.ts); this line had slipped into the comment above, so offline the village never healed.
     this.homeRecovering=atHome(this.planet,this.position,!!this.interior)&&this.state.hp>0&&this.state.hp<stats.maxHp;if(!this.authoritativeAction&&active&&this.homeRecovering)this.state.hp=Math.min(stats.maxHp,this.state.hp+homeRecoveryBonus(stats.regen)*dt);
-    this.player.position.copy(this.position);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
+    this.player.position.copy(this.position);this.player.position.y+=this.playerLift??0;this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
     (this.petPen??=new PetCompanion()).update(this,dt);
     this.animatePlayer(dt);this.animateRemotes(dt);
@@ -1767,5 +1780,5 @@ export class World {
   }
 
 
-  render(){const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);}this.renderer.render(scene,this.camera);}
+  render(){this.beforeRender?.();const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);}this.renderer.render(scene,this.camera);}
 }

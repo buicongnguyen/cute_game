@@ -34,9 +34,11 @@ test('paid flights validate planet and dust positions, rotate dust on the server
   await assert.rejects(execute('pilot',await job('collectStardust',{dustId:1,position:STAR_MAP.candy})),e=>e.status===409);
 });
 
-test('new mobile preferences and two fertilizer doses on long fruit timers survive save reloads',()=>{
+test('new mobile preferences and two fertilizer doses on long crop timers survive save reloads',()=>{
   const s=Game.newGame();s.settings.movePad=false;s.settings.joystickSide='right';s.level=30;s.bag.manure=2;
-  Game.plant(s,0,'peach',1000);Game.fertilize(s,0,1000,'manure');
+  // Fruit trees refuse fertilizer (tree-crops.ts), so the longest ordinary crop stands in.
+  const crop=Object.keys(Game.CROPS).filter(id=>!Game.isTreeCrop(id)&&Game.CROPS[id].level<=30).sort((a,b)=>Game.CROPS[b].duration-Game.CROPS[a].duration)[0];const seed=Game.CROPS[crop].seed;if(seed)s.bag[seed]=1;
+  assert.equal(Game.plant(s,0,crop,1000),true);assert.equal(Game.fertilize(s,0,1000,'manure'),true);
   const half=Game.parseSave(JSON.stringify(s));assert.equal(Game.cropProgress(half.plots[0],1000),.5);assert.deepEqual(half.settings,s.settings);
-  Game.fertilize(half,0,1000,'manure');const ripe=Game.parseSave(JSON.stringify(half));assert.equal(Game.cropProgress(ripe.plots[0],1000),1);assert.equal(Game.harvest(ripe,0,1000),'peach');
+  Game.fertilize(half,0,1000,'manure');const ripe=Game.parseSave(JSON.stringify(half));assert.equal(Game.cropProgress(ripe.plots[0],1000),1);assert.equal(Game.harvest(ripe,0,1000),crop);
 });

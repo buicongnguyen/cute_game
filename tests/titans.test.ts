@@ -66,6 +66,7 @@ test('each Titan reward can be earned, equipped for real stats, saved, and used 
   const state=Game.newGame(),loot=Game.grantDefeat(state,id,titan.xp,true,()=>0,false),key=id.replace('titan_',''),hat='hat_t_'+key,pet='pet_t_'+key;
   assert.ok(loot.some(d=>d.id===hat));assert.equal(loot.pet,pet);assert.equal(state.bag[pet],1,'first-defeat pet is banked');assert.equal(state.bag[hat],undefined);
   for(const item of loot)assert.equal(Game.addItem(state,item.id,item.count),true);
+  state.level=Math.max(state.level,Game.gearLevel(hat),Game.gearLevel(pet)); // titan trophies wait for their planet's level (level-gates.ts)
   const before=Game.activeStats(state);assert.equal(Game.equip(state,hat),true);assert.notDeepEqual(Game.activeStats(state),before,hat);assert.equal(Game.equip(state,pet),true);
   const restored=Game.parseSave(JSON.stringify(state))!;assert.equal(restored.gear.hat,hat);assert.equal(restored.gear.pet,pet);
   const target={id:'enemy',x:0,z:4,radius:.7,hp:100000},definition=TITAN_ITEMS[pet].pet!;

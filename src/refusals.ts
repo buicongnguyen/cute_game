@@ -25,6 +25,7 @@ const friendName = (p: Payload, key = 'id') => typeof p[key] === 'string' ? (M.F
 
 function buyReason(s: M.SaveState, p: Payload) {
   const price = M.shopPrice(s, id(p)), it = item(p);
+  if (it && M.gearLevel(id(p)) > s.level) return fmt('Needs level {level}.', { level: M.gearLevel(id(p)) });
   if (price === null || !it) return id(p) === 'plot_kit' ? fmt('Your garden already has the maximum {count} beds.', { count: M.MAX_PLOTS }) : 'That item is not for sale.';
   if (s.energy < price) return fmt('You need {cost} energy for that.', { cost: price });
   if (!M.hasMaterials(s, it.materials)) return 'You are missing some materials for that.';
@@ -68,6 +69,7 @@ function harvestReason(s: M.SaveState, p: Payload) {
 function fertilizeReason(s: M.SaveState, p: Payload) {
   const bed = typeof p.index === 'number' ? s.plots[p.index] : undefined;
   if (!bed?.crop) return 'Plant something in this bed first.';
+  if (M.isTreeCrop(bed.crop)) return 'Fruit trees grow at their own pace. Fertilizer does not help them.';
   if (M.cropProgress(bed) >= 1) return 'This crop is already ripe. Tap the bed to harvest it.';
   if (!(s.bag[id(p) || 'spore'] ?? 0)) return 'You have none of that fertilizer left.';
   return 'Fertilizer cannot help this crop right now.';
@@ -156,6 +158,7 @@ export const REFUSALS: Record<string, Reason> = {
   buy: buyReason,
   sell: (s, p) => (s.bag[id(p)] ?? 0) > 0 && !M.looseQuantity(s, id(p)) ? 'Take it off before selling it.' : item(p)?.sell ? 'You have none of that left to sell.' : 'That cannot be sold.',
   sellProduce: 'You have no crops or fish to sell.',
+  cookSellProduce: s => s.planet !== 'home' || !M.kitchenOpen(s) ? kitchenReason(s) : 'You have no crops or fish to sell.',
   craft: craftReason,
   cook: kitchenReason,
   cookDish: kitchenReason,
@@ -163,7 +166,7 @@ export const REFUSALS: Record<string, Reason> = {
   forge: 'You need more energy or materials to forge that.',
   upgradeGear: 'You need more energy or materials to upgrade that.',
   upgradeSkill: 'You need more energy to upgrade that skill, or it is at its best.',
-  equip: 'You do not have that in your backpack.',
+  equip: (s, p) => (s.bag[id(p)] ?? 0) > 0 && M.gearLevel(id(p)) > s.level ? fmt('Needs level {level} to wear.', { level: M.gearLevel(id(p)) }) : 'You do not have that in your backpack.',
   unequip: 'Nothing is worn there.',
   eat: eatReason,
   transfer: (s, p) => s.planet !== 'home' ? 'The chest stands at home. Return home to use it.' : p.toChest === true && (s.bag[id(p)] ?? 0) > 0 ? 'Take it off before storing it.' : 'There is none of that left to move.',

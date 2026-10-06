@@ -42,7 +42,7 @@ interface Session {
   runId: string; role: Role; online: boolean; rng: () => number; flow: DungeonFlow;
   /** Peers mirror the host's stage, phase and clocks. */
   mirror: { stage: number; phase: string; timer: number; elapsed: number };
-  saved: { root: T.Group; entities: Entity[]; enemies: Enemy[]; obstacles: World['obstacles']; detached: T.Object3D[]; background: T.Scene['background']; fog: T.Scene['fog']; onZone: World['onZone']; networkRole: World['networkRole']; onRemoteDamage: World['onRemoteDamage'] };
+  saved: { root: T.Group; entities: Entity[]; enemies: Enemy[]; obstacles: World['obstacles']; detached: T.Object3D[]; background: T.Scene['background']; fog: T.Scene['fog']; onZone: World['onZone']; networkRole: World['networkRole']; onRemoteDamage: World['onRemoteDamage']; onStep: World['onStep']; beforeRender: World['beforeRender'] };
   arena: T.Group; arenaStage: number; portal: Entity | null; view: VaultTelegraphs;
   allies: Ally[]; members: Array<{ id: string; name: string; level?: number }>;
   boss: Enemy | null; attacks: Array<{ a: DgAttack; enemyId: string; mine: boolean }>; skillClock: number; skillIndex: number; outgoing: DgAttack[];
@@ -155,10 +155,13 @@ export function initDungeon(h: DungeonHooks) {
     if (session) return;
     if (world.interior) return;
     requestKit();
-    const saved: Session['saved'] = { root: world.root, entities: world.entities, enemies: world.enemies, obstacles: world.obstacles, detached: [], background: world.scene.background, fog: world.scene.fog, onZone: world.onZone, networkRole: world.networkRole, onRemoteDamage: world.onRemoteDamage };
+    const saved: Session['saved'] = { root: world.root, entities: world.entities, enemies: world.enemies, obstacles: world.obstacles, detached: [], background: world.scene.background, fog: world.scene.fog, onZone: world.onZone, networkRole: world.networkRole, onRemoteDamage: world.onRemoteDamage, onStep: world.onStep, beforeRender: world.beforeRender };
     for (const child of [...world.root.children]) if (child !== world.player && child !== world.companion) { saved.detached.push(child); world.root.remove(child); }
     world.entities = []; world.enemies = []; world.obstacles = wallObstacles();
     world.onZone = () => {};
+    // The village's own per-step modules (the daily Colossus, colossus.ts) pause while you are below: its giant stays in the
+    // set-aside village list, and its sky tint would otherwise repaint the vault's.
+    world.onStep = undefined; world.beforeRender = undefined; world.playerLift = 0;
     const w = world as unknown as Record<string, unknown>;
     w.applyEnemySnapshots = () => {}; w.applyAuthoritativeEnemyHealth = () => {}; w.enemySnapshots = () => [];
     const view = new VaultTelegraphs(); world.scene.add(view.root);
@@ -200,7 +203,7 @@ export function initDungeon(h: DungeonHooks) {
     s.arena.removeFromParent(); world.disposeTree(s.arena);
     for (const ally of s.allies) world.removeRemotePlayer(ally.id);
     const w = world as unknown as Record<string, unknown>; delete w.applyEnemySnapshots; delete w.applyAuthoritativeEnemyHealth; delete w.enemySnapshots;
-    world.onZone = s.saved.onZone; world.onRemoteDamage = s.saved.onRemoteDamage; world.networkRole = s.saved.networkRole;
+    world.onZone = s.saved.onZone; world.onRemoteDamage = s.saved.onRemoteDamage; world.networkRole = s.saved.networkRole; world.onStep = s.saved.onStep; world.beforeRender = s.saved.beforeRender;
     if (!rebuilt) {
       world.entities = s.saved.entities; world.enemies = s.saved.enemies; world.obstacles = s.saved.obstacles;
       for (const child of s.saved.detached) world.root.add(child);

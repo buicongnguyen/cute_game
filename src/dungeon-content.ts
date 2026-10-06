@@ -123,6 +123,8 @@ export const DUNGEON_PETS: Record<string, DungeonPet> = {
 };
 export const DUNGEON_PET_IDS = Object.keys(DUNGEON_PETS);
 
+/** The level the vault recommends; its companions need it to be worn (level-gates.ts). */
+export const DUNGEON_LEVEL = 20;
 export const DUNGEON_SEAL = 'dg_seal', DUNGEON_CHEST = 'deco_dgchest';
 export const DUNGEON_ITEMS: Record<string, ItemDef> = {
   dg_seal: { name: 'Rune Seal', icon: '🔱', type: 'material', sell: 60, rare: true, desc: 'A warm little seal stamped with the vault keeper\'s rune. Delvers trade them like coins.' } as ItemDef,

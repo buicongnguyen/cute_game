@@ -28,7 +28,8 @@ test('both keyboard layouts survive settings commands and save reloads without c
   for (const keyboardLayout of ['wasd', 'classic'] as const) {
     assert.equal(act(state, {keyboardLayout}), true);
     assert.deepEqual(state.settings, {...preferences, keyboardLayout});
-    assert.deepEqual(M.parseSave(JSON.stringify(state))!.settings, {...preferences, keyboardLayout});
+    // The old single sound switch (off) reads back as silence on the new sliders (audio-settings.ts).
+    assert.deepEqual(M.parseSave(JSON.stringify(state))!.settings, {...preferences, keyboardLayout, musicVolume: 0, sfxVolume: 0, vibrate: false});
   }
 });
 

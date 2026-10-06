@@ -835,3 +835,20 @@ Per-room tints are applied by material name: `Vault floor`, `Vault inlay`, `Vaul
 `Vault stone dark`, `Vault glow`. Run with `-- --icons` to render the five pet icons and the seal icon
 (256×256 transparent WebP, ≤ 30 KB) to `public/assets/icons/items/`. The Delver's Chest is a garden decoration
 drawn by `src/decorations-art.ts` (`deco_dgchest`). `art/previews/kit/dungeon.webp` shows the creatures and guardians.
+## The Cinderpeak Colossus (`build_colossus.py` → `public/assets/models/colossus.glb`)
+
+The daily world boss and its trophies, in one file with three roots. Unlike other kits the giant keeps its joint
+hierarchy: `src/colossus-art.ts` loads it whole (not through `KitLibrary`, which flattens) and poses the empties.
+
+| Root | Contents | Size | Triangles |
+| --- | --- | --- | ---: |
+| `colossus` | empties `colossus_leg_l`/`_r` (hips, glTF (±3.7, 7, -0.3)), `colossus_body` (pelvis, (0, 7.2, -0.3)) with children `colossus_head` (neck, +(0, 6.4, 1.2)) and `colossus_arm_l`/`_r` (shoulders, +(±5.7, 5.2, 0.3)); one mesh `<empty>_mesh` under each | 17 m to the crown, 18.8 m to the horn tips; feet centred 8.5 m left and right (the game draws it at 0.85, so 7.2 m: the roar's safe spots) | 3,668 (budget 25,000) |
+| `hat_colossus` | one mesh `hat_colossus@head`, explorer space z 2.02-2.48 | circlet and two horns, 0.86 m across | 412 |
+| `pet_colossus` | one mesh, the giant decimated and shrunk to 0.7 m | 0.7 m tall | 1,579 |
+
+Front is Blender -Y (glTF +Z). Leg_l is the giant's left (+X), the foot `colossusFeet()[0]` in `colossus-patterns.ts`.
+Materials: `Colossus basalt`, `Colossus rock` (flat-shaded faceted stone), `Colossus obsidian` (spikes), `Colossus horn`,
+`Colossus lava` (emissive 4, the jagged cracks and the belly heart) and `Colossus ember` (emissive 8, eyes and heart core).
+The generator also renders 256×256 transparent WebP bag icons for `hat_colossus`, `pet_colossus` and
+`colossus_shard` (an icon-only obsidian cluster) into `public/assets/icons/items/`, writes
+`art/generated/kit/colossus-manifest.json` and the preview `art/previews/kit/colossus.webp` (with a 1.95 m explorer post).

@@ -10,7 +10,8 @@ import { buyLook, wearLook } from './looks.ts';
 import { setFriendLook } from './friend-looks.ts';
 import { huntFish } from './fish-hunting.ts';
 import { useActivity } from './house-activities.ts';
-import { sellProduce } from './item-views.ts';
+import { sellProduce, cookSellProduce } from './item-views.ts';
+import { applyAudio } from './audio-settings.ts';
 import { upgradeGear, upgradeSkill } from './upgrades.ts';
 import { claimProgress, refreshProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 import { refusalReason } from './refusals.ts';
@@ -54,6 +55,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'sell': result = Game.sell(state, id(), integer(p.count, 1)); if (!result) return refuse(); break;
     // The same crop, fish and junk stacks (item-views.ts PRODUCE_TYPES) whose total the button shows.
     case 'sellProduce': result = sellProduce(state); break;
+    // Cook every cookable stack first (item-views.ts cookSellProduce), then sell it all.
+    case 'cookSellProduce': result = cookSellProduce(state); if (!result) return refuse(); break;
     case 'craft': result = Game.craft(state, index()); break;
     case 'cook': result = Game.cook(state, id(), integer(p.count, 1)); break;
     case 'cookDish': result = Game.cookDish(state, id()); break;
@@ -172,7 +175,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'reset': { const fresh=Game.newGame(state.name,state.color); fresh.settings={...state.settings}; delete fresh.settings.tester; /* a new adventure starts outside tester mode */ for(const key of Object.keys(state))delete (state as unknown as Record<string,unknown>)[key]; Object.assign(state,fresh); result=true; break; }
     case 'settings': {
       const settings = p.settings;
-      if (settings && typeof settings === 'object' && !Array.isArray(settings)) for (const key of ['sound', 'lowGraphics', 'movePad', 'placeBeds'] as const) if (typeof (settings as Record<string, unknown>)[key] === 'boolean') state.settings[key] = (settings as Record<string, boolean>)[key];
+      if (settings && typeof settings === 'object' && !Array.isArray(settings)) { applyAudio(state.settings, settings as Record<string, unknown>); for (const key of ['lowGraphics', 'movePad', 'placeBeds'] as const) if (typeof (settings as Record<string, unknown>)[key] === 'boolean') state.settings[key] = (settings as Record<string, boolean>)[key]; }
       const level = settings && typeof settings === 'object' ? (settings as Record<string, unknown>).difficulty : undefined;
       // Raising is free; lowering works once a day (difficulty.ts), so the Normal rules cannot be dodged per action.
       if (Game.isDifficulty(level) && level !== Game.difficultyOf(state)) {

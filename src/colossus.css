@@ -1,0 +1,42 @@
+/* The daily Colossus banner (colossus.ts): top centre under the target frame, between the player card and the menu.
+   It never takes taps. */
+.colossus-banner {
+  position: absolute;
+  top: calc(62px + var(--safe-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(400px, 36vw);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 6px 6px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(58, 20, 32, .9), rgba(32, 12, 22, .88));
+  border: 2px solid rgba(255, 122, 30, .85);
+  box-shadow: 0 0 18px rgba(255, 106, 16, .35), 0 4px 0 rgba(0, 0, 0, .25);
+  color: #fff;
+  pointer-events: none;
+  z-index: 3;
+  animation: colossus-in .45s cubic-bezier(.3, 1.4, .5, 1);
+}
+.colossus-banner[hidden] { display: none; }
+@keyframes colossus-in { from { opacity: 0; translate: 0 -14px; } }
+.colossus-banner .cb-icon { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 122, 30, .22); font-size: 20px; }
+.colossus-banner .cb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.colossus-banner b { font-size: var(--t-sm); color: #ffd27a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.colossus-banner small { font-size: var(--t-xs); font-weight: 800; color: #ffe9d6; opacity: .92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.colossus-banner .cb-meter { height: 12px; margin-top: 3px; }
+.colossus-banner .cb-meter > i { background: linear-gradient(90deg, #ffd24a, #ff6a10 55%, #d4202a); }
+.colossus-banner .cb-pct { flex: none; font-weight: 1000; font-size: var(--t-sm); color: #ffd27a; font-variant-numeric: tabular-nums; }
+.colossus-banner.soon { border-color: rgba(255, 210, 74, .9); animation: colossus-in .45s cubic-bezier(.3, 1.4, .5, 1), colossus-pulse 1.6s ease-in-out infinite; }
+.colossus-banner.done { border-color: rgba(255, 255, 255, .5); }
+/* Near the giant the boss bar shows its health. */
+.colossus-banner.near .cb-meter, .colossus-banner.near .cb-pct { display: none; }
+@keyframes colossus-pulse { 50% { box-shadow: 0 0 26px rgba(255, 210, 74, .55), 0 4px 0 rgba(0, 0, 0, .25); } }
+/* Phones: a slim strip just under the boss bar (which sits under the minimap there), full width between the edges. */
+@media (max-width: 600px) {
+  .colossus-banner { top: calc(244px + var(--safe-top)); left: 10px; right: 10px; width: auto; transform: none; padding: 3px 10px 4px 4px; }
+  .colossus-banner .cb-icon { width: 28px; height: 28px; font-size: 16px; }
+  .colossus-banner .cb-meter { height: 9px; }
+  .colossus-banner.near { display: none; }
+}

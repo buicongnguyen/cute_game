@@ -20,7 +20,7 @@ import {gearCost,gearLevel,gearFactor} from '../src/upgrades.ts';
 const NOW=1_800_000_000_000;
 const pick=a=>({maxHp:a.maxHp,attack:a.attack,defense:a.defense,regen:a.regen,critChance:a.critChance,speed:a.speed});
 function explorer(){
-  const p=Game.newGame('actor');p.planet='home';p.energy=50000;for(const id of ['leather','bone','starshard','moonstone'])p.bag[id]=200;
+  const p=Game.newGame('actor');p.planet='home';p.energy=50000;p.level=Game.gearLevel('pet_firefly');for(const id of ['leather','bone','starshard','moonstone'])p.bag[id]=200;
   for(const id of ['hat_straw','armor_hoodie','boots_flipper','pet_firefly']){p.bag[id]=1;Game.equip(p,id);}
   return p;
 }

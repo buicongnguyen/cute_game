@@ -15,6 +15,11 @@ import { cropLevel, cropXp, cropGrowTime, sellPrice, kitchenOpen, isDifficulty, 
 import { parseHunting, type HuntingState } from './fish-hunting.ts';
 import { looseQuantity, pantry, usePantry, hasMaterials, useMaterials } from './pantry.ts';
 import { specialPrice } from './special-offers.ts';
+import { levelAllows } from './level-gates.ts';
+import { AUDIO_DEFAULTS, parseAudio } from './audio-settings.ts';
+import { isTreeCrop } from './tree-crops.ts';
+export { gearLevel, gearWorld, levelAllows } from './level-gates.ts';
+export { isTreeCrop, TREE_CROP_MS } from './tree-crops.ts';
 export * from './weapon-forge.ts';
 // Purchase-list order and item level tags (main.ts renders them as M.*, which the panel tests already provide).
 export { sortByPower, powerChip, levelTag, ownedScore, gearProgressHtml } from './item-power.ts';
@@ -96,7 +101,12 @@ export interface SaveState {
     /** Planets spotted from the starship; only these show their names on the star map. */
     discovered: PlanetId[];
     settings: {
+        /** Derived: any volume above 0 (audio-settings.ts). Older saves had only this switch. */
         sound: boolean;
+        /** Music and effects volume in [0, 1] (reference defaults 0.45 / 0.8) and the vibration switch (audio-settings.ts). */
+        musicVolume?: number;
+        sfxVolume?: number;
+        vibrate?: boolean;
         lowGraphics: boolean;
         /** The on-screen movement pad; off by default because the reference is tap-to-move only. */
         movePad?: boolean;
@@ -166,7 +176,7 @@ export interface SaveState {
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
-export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 3, forge: {}, nextPlantId: 0, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, lowGraphics: false, difficulty: 'easy' }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now(), welcome: 'pending', looks: { owned: ['tall'], style: 'girl-tall-none-bare' } }; }
+export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 3, forge: {}, nextPlantId: 0, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, musicVolume: AUDIO_DEFAULTS.musicVolume, sfxVolume: AUDIO_DEFAULTS.sfxVolume, vibrate: AUDIO_DEFAULTS.vibrate, lowGraphics: false, difficulty: 'easy' }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now(), welcome: 'pending', looks: { owned: ['tall'], style: 'girl-tall-none-bare' } }; }
 export function xpNeeded(level: number) { return Math.round(25 * Math.pow(Math.max(1, level), 1.55)); }
 function equipped(s: SaveState) { return Object.values(s.gear).map(id => ITEMS[id]).filter(Boolean); }
 // Bench levels (upgrades.ts) scale an item's own flat stats. While a disguise is worn its own weapon fights (weaponStats),
@@ -247,7 +257,8 @@ export function fertilize(s: SaveState, index: number, timeOrItem: number | stri
     const plot = s.plots[index];
     const crop = plot?.crop && Object.hasOwn(CROPS, plot.crop) ? CROPS[plot.crop] : undefined;
     const grow = Object.hasOwn(ITEMS, id) ? ITEMS[id].grow : undefined;
-    if (!crop || !grow || !Number.isFinite(grow) || grow <= 0 ||
+    // Fruit trees (tree-crops.ts) refuse fertilizer: they grow at their own pace.
+    if (!crop || !grow || !Number.isFinite(grow) || grow <= 0 || isTreeCrop(plot.crop!) ||
         !Number.isFinite(now) || now < 0 || now > Number.MAX_SAFE_INTEGER ||
         !Number.isFinite(plot.plantedAt) || Math.abs(plot.plantedAt) > Number.MAX_SAFE_INTEGER || plot.plantedAt > now ||
         !Number.isFinite(crop.duration) || crop.duration <= 0)
@@ -505,7 +516,7 @@ export function craft(s: SaveState, index: number) { if (!canCraft(s, index))
     return false; const r = RECIPES[index]; if (!useMaterials(s, r.materials)) return false; s.energy -= r.energy; addItem(s, r.result, r.count || 1); recordEvent(s, 'craft'); return true; }
 export function buy(s: SaveState, raw: ItemId) { const id = canonicalItem(raw); if (id === 'plot_kit') return buyPlotKit(s); const index = RECIPES.findIndex(r => r.station === 'shop' && r.result === id); return index >= 0 ? craft(s, index) : buySpecial(s, id); }
 /** A special offer (special-offers.ts): crafted or boss-dropped gear and decorations, for energy only, at the server's price. */
-function buySpecial(s: SaveState, id: ItemId) { const price = specialPrice(id); if (price === null || s.energy < price || !addItem(s, id)) return false; s.energy -= price; recordEvent(s, 'craft'); return true; }
+function buySpecial(s: SaveState, id: ItemId) { const price = specialPrice(id); if (price === null || s.energy < price || !levelAllows(s.level, id) || !addItem(s, id)) return false; s.energy -= price; recordEvent(s, 'craft'); return true; }
 /** A garden bed kit costs what the bed it adds would cost by Expand (gardenExpansionCost, counting kits already held); none at the 24-bed cap. */
 export function kitPrice(s: SaveState): number | null { const beds = s.plots.length + (s.bag.plot_kit || 0); return beds >= MAX_PLOTS ? null : bedPrice(beds); }
 /** The shop's price for an item now; null = not on sale (a bed kit at the cap). */
@@ -514,6 +525,9 @@ function buyPlotKit(s: SaveState) { const price = kitPrice(s); if (price === nul
 /** Clothes: drawn on the explorer only without a disguise. */
 export const WEARABLE_SLOTS: readonly GearSlot[] = ['hat', 'outfit', 'boots'];
 export function equip(s: SaveState, raw: ItemId) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item?.slot || !s.bag[id])
+    return false;
+    // Level gates (level-gates.ts): late gear waits for its world's level; a piece already worn (an old save) stays on.
+    if (s.gear[item.slot] !== id && !levelAllows(s.level, id))
     return false; s.gear[item.slot] = id;
     // A disguise covers clothes (World.avatar draws none under it): putting clothes on takes it off, as the try-on
     // preview shows (try-on.ts previewGear). Otherwise the equipped hat stayed invisible under the costume.
@@ -776,7 +790,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.hp = Math.min(typeof v.hp === 'number' && Number.isFinite(v.hp) && v.hp >= 0 ? v.hp : 100, maxHp(s));
         // Migration refunds use the saved difficulty's prices, so restore preferences before the beds.
         const settings = record(v.settings) ? v.settings : {};
-        s.settings = { sound: settings.sound !== false, lowGraphics: settings.lowGraphics === true, ...(typeof settings.movePad === 'boolean' ? { movePad: settings.movePad } : {}) };
+        s.settings = { ...parseAudio(settings), lowGraphics: settings.lowGraphics === true, ...(typeof settings.movePad === 'boolean' ? { movePad: settings.movePad } : {}) };
         if(settings.joystickSide==='left'||settings.joystickSide==='right')s.settings.joystickSide=settings.joystickSide;
         if(settings.keyboardLayout==='classic'||settings.keyboardLayout==='wasd')s.settings.keyboardLayout=settings.keyboardLayout;
         if (settings.placeBeds === true) s.settings.placeBeds = true;
