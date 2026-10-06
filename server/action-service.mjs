@@ -13,6 +13,7 @@ import {WORK_ACTIONS,CATCH_UP_ACTIONS,explorerAway} from '../src/delivery.ts';
 import {cageCandidates,RESCUE_REACH} from '../src/cage-spots.ts';
 import {activity} from '../src/house-activities.ts';
 import {INDOOR_Y} from '../src/house.ts';
+import {noteProgress} from './ranking.mjs';
 
 const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 const random=()=>randomInt(0,0x100000000)/0x100000000;
@@ -65,7 +66,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
     let reservation;
     try {
     const committed=await store.command({actorId,requestId:data.requestId,expectedRevision:data.expectedRevision,originalRevision,requireBoundRevision:true,actionType:data.type,hash:commandHash({rulesVersion:data.rulesVersion,...intent}),relatedIds,checkAccess,run:records=>{
-      const account=records.get(actorId),state=Game.parseSave(JSON.stringify(account.profile)),peer=getPeer(actorId),now=Date.now();
+      const account=records.get(actorId),before=account.profile,state=Game.parseSave(JSON.stringify(account.profile)),peer=getPeer(actorId),now=Date.now();
       if(!state)fail(409,'Reconnect to load your adventure.');account.profile=state;
       if(peer&&peer.planet!==state.planet&&!['returnHome','stealCrop','waterFriend','giftFriend'].includes(data.type))fail(409,'Reconnect to load your current planet.');
       if(farmActions.has(data.type)&&(state.planet!=='home'||peer?.visit))fail(409,'Return to your own garden first.');
@@ -231,6 +232,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         if(data.type==='travel'||data.type==='returnHome')clearJourney(account);
       }
       state.savedAt=now;
+      noteProgress(account,before,state,now); // weekly leaderboard counters (ranking.mjs): only what this action earned
       return result;
     }});
     if(reservation)reservation.world.environment.weather.collectOre(reservation.id);

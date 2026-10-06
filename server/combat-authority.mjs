@@ -13,6 +13,7 @@ import {commandHash} from './action-service.mjs';
 import {gearFactor,skillLevel,skillCooldown} from '../src/upgrades.ts';
 import {clearJourney} from './adventure-lifecycle.mjs';
 import {inSafeZone} from '../src/safe-zone.ts';
+import {noteProgress} from './ranking.mjs';
 
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const finite=(value,fallback=0,min=-160,max=160)=>Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;
@@ -155,10 +156,10 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     internal(killer.account.id,'combatKill',contributors,records=>{
       // The Hard bonus follows the room's creatures (the host's scale), not each contributor's own setting.
       let loot=[];const bonus=Game.scaleReward(state(room).scale);
-      for(const id of contributors){const account=records.get(id);if(!account||(account.adventureEpoch||0)!==contributorEpochs.get(id))continue;const profile=Game.parseSave(JSON.stringify(account.profile));if(!profile)continue;
+      for(const id of contributors){const account=records.get(id);if(!account||(account.adventureEpoch||0)!==contributorEpochs.get(id))continue;const before=account.profile,profile=Game.parseSave(JSON.stringify(account.profile));if(!profile)continue;
         const rolled=Game.grantDefeat(profile,enemy.type,enemy.roster.xp,enemy.boss,Math.random,false,bonus);if(id===killer.account.id)loot=rolled;
         if(execute&&id===killer.account.id&&(account.lifeEpoch||0)===killerEpoch.life)profile.hp=Math.min(Game.maxHp(profile),profile.hp+Game.maxHp(profile)*.25);
-        account.profile=profile;
+        account.profile=profile;noteProgress(account,before,profile,now); // weekly leaderboard counters (ranking.mjs)
       }
       const owner=records.get(killer.account.id);if(!owner||(owner.adventureEpoch||0)!==killerEpoch.adventure)return {enemyId:enemy.id,drops:[],execute:false};owner.drops=(owner.drops||[]).filter(d=>d.expiresAt>now);
       const drops=loot.map(item=>({id:randomUUID(),ownerId:owner.id,item:item.id,count:item.count,room:room.id,planet:state(room).planet,x:killPoint.x,z:killPoint.z,owner:owner.id,releaseAt:now+10000,expiresAt:now+30000}));owner.drops.push(...drops);

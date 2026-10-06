@@ -15,6 +15,7 @@ import { createActionService, commandHash, logGuest } from './action-service.mjs
 import { createCombatAuthority } from './combat-authority.mjs';
 import { EFFECT_LOOKS } from '../src/combat.ts';
 import { rememberAccount } from './account-cache.mjs';
+import { createRanking, RANKING_TTL } from './ranking.mjs';
 
 const derive = promisify(scrypt);
 const SESSION_MS = 60 * 24 * 60 * 60 * 1000; // a sign-in lasts 60 days and survives a server restart
@@ -76,6 +77,7 @@ export async function createGameServer(options = {}) {
   const trustProxy = options.trustProxy ?? process.env.TRUST_PROXY === '1';
   let closing = false;
   const remember=value=>rememberAccount(accounts,value);
+  const ranking=createRanking({source:()=>accounts.values(),ttl:options.rankingTtl??RANKING_TTL});
   try {
     for (const value of await store.list()) remember(value);
   } catch (error) { await store.close(); throw new Error('The account database could not be read. It has not been overwritten.', { cause: error }); }
@@ -283,6 +285,11 @@ export async function createGameServer(options = {}) {
       return respond(response, 200, { ok: true });
     }
     const account = await authenticated(request);
+    // The leaderboard (ranking.mjs): readable without signing in; a signed-in caller also gets their own rank.
+    if (route === 'ranking' && method === 'GET') {
+      rate(`ranking:${clientAddress(request, trustProxy)}`, 90);
+      return respond(response, 200, ranking.query({ board: url.searchParams.get('board') || 'weekly', cat: url.searchParams.get('cat') || undefined, meId: account?.id ?? null }));
+    }
     if (route === 'auth/session' && method === 'GET') {
       const friends = account ? await refreshFriends(account) : {};
       return respond(response, 200, account && validSession(request)?.id === account.id ? { account: publicAccount(account), profile: account.profile, revision:account.profileRevision||0, authorityVersion:1, ...friends } : { account: null });
