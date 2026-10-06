@@ -36,3 +36,10 @@ test('allies build within budget and animate without throwing', () => {
   for (const k of ['clone', 'turret', 'cannon', 'bat', 'snowman'] as const) { const m = makeSummon(k); assert.ok(verts(m) <= 4000, k + ' ' + verts(m)); animateSummon(m, k, 1.7); }
   assert.ok(makeSummon('turret').getObjectByName('spinner') && makeSummon('turret').getObjectByName('flash'));
 });
+test('water and dragon crescents turn to face their flight, so they bulge forward', () => {
+  for (const kind of ['wave', 'dragon']) {
+    const g = makeShot(kind, .4, '#ffffff'); assert.ok(g.userData.yaw || g.userData.yawArc, kind);
+    poseShot(g, 0, 1, 0, 1, 0, 0); assert.ok(Math.abs(g.rotation.y - Math.PI / 2) < 1e-9, kind + ' faces +x');
+    poseShot(g, 0, 1, 0, 0, -1, 0); assert.ok(Math.abs(Math.abs(g.rotation.y) - Math.PI) < 1e-9, kind + ' faces -z');
+  }
+});

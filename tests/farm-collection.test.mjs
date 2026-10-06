@@ -23,6 +23,8 @@ function fullExpiredFarm(now) {
     assert.ok(M.buyAnimal(state, 'chicken', now - M.ANIMAL_LIFESPAN_MS - 10_000));
     assert.ok(M.buyAnimal(state, 'cow', now - M.ANIMAL_LIFESPAN_MS - 10_000));
   }
+  // Their stock was collected just before the end of life, so each pickup is meat alone (stock at expiry: farm tests).
+  for (const a of state.farm.animals) a.cycleAt = M.expiresAt(a);
   return state;
 }
 

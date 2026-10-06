@@ -36,7 +36,7 @@ export interface Plot {
     generation?: string;
     /** The difficulty at planting: the harvest's XP and value follow it, so switching never re-prices a growing crop. */
     difficulty?: Difficulty;
-    /** Bed upgrades (upgradeBed): each level cuts this bed's grow time by 10 %; missing = 0. */
+    /** Bed upgrades (upgradeBed): each level halves this bed's grow time (bedGrowTime, up to BED_MAX_LEVEL 3); missing = 0. */
     level?: number;
     /** The crop the player last planted here by hand (auto-plant.ts): helpers replant only this in the bed. Missing = helpers choose. */
     choice?: CropId;
@@ -166,11 +166,12 @@ export const SAVE_KEY = 'cute-game-save-v1';
 export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 3, forge: {}, nextPlantId: 0, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, lowGraphics: false, difficulty: 'easy' }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now(), welcome: 'pending', looks: { owned: ['tall'], style: 'girl-tall-none-bare' } }; }
 export function xpNeeded(level: number) { return Math.round(25 * Math.pow(Math.max(1, level), 1.55)); }
 function equipped(s: SaveState) { return Object.values(s.gear).map(id => ITEMS[id]).filter(Boolean); }
-// Bench levels (upgrades.ts) scale an item's own flat stats.
-function equipmentStat(s: SaveState, key: string) { return Object.values(s.gear).reduce((sum, id) => sum + levelledStat(s, id, key, (ITEMS[id]?.stats as Record<string, number> | undefined)?.[key] || 0), 0); }
+// Bench levels (upgrades.ts) scale an item's own flat stats. While a disguise is worn its own weapon fights (weaponStats),
+// so the hidden weapon in the hand adds neither its stats nor its forge bonus.
+function equipmentStat(s: SaveState, key: string) { return Object.entries(s.gear).reduce((sum, [slot, id]) => slot === 'weapon' && s.gear.disguise ? sum : sum + levelledStat(s, id, key, (ITEMS[id]?.stats as Record<string, number> | undefined)?.[key] || 0), 0); }
 function effect(s: SaveState, key: BuffKey, now = Date.now()) { const buff = s.buffs[key]; return buff && buff.expiresAt > now ? buff.value : 0; }
 export function maxHp(s: SaveState) { return 100 + (s.level - 1) * 10 + s.healthUp * 25 + equipmentStat(s, 'hp'); }
-export function attack(s: SaveState, now = Date.now()) { return (10 + (s.level - 1) * 1.5 + s.attackUp * 3 + equipmentStat(s, 'atk')) * (1 + (s.gear.weapon ? forgeLevel(s, s.gear.weapon) / 100 : 0)) * (1 + effect(s, 'atk', now)); }
+export function attack(s: SaveState, now = Date.now()) { return (10 + (s.level - 1) * 1.5 + s.attackUp * 3 + equipmentStat(s, 'atk')) * (1 + (s.gear.weapon && !s.gear.disguise ? forgeLevel(s, s.gear.weapon) / 100 : 0)) * (1 + effect(s, 'atk', now)); }
 export function defense(s: SaveState, now = Date.now()) { return s.defenseUp * 4 + (s.level - 1) + equipmentStat(s, 'def') + effect(s, 'def', now); }
 export function activeStats(s: SaveState, now = Date.now()) {
     const gear = equipped(s), dz = s.gear.disguise ? DISGUISES[s.gear.disguise] : undefined;
@@ -574,14 +575,20 @@ export function rollLoot(type: string, luck = 0, rng: () => number = Math.random
 } return loot; }
 /** Whether the explorer already has this item anywhere (bag, chest, worn gear or collection). */
 export function ownsItem(s: SaveState, id: string) { return (s.bag[id] ?? 0) > 0 || (s.chest?.[id] ?? 0) > 0 || Object.values(s.gear ?? {}).includes(id) || !!s.collection?.[id]; }
-/** The first defeat of a boss or titan guarantees its little companion (never a duplicate of one already owned). */
+/** The first defeat of a boss or titan guarantees its little companion (never a duplicate of one already owned). It goes
+ * straight into the bag (whatever `bank` says) so it can never be lost on the ground; any same-pet roll of this kill is
+ * folded into it. Returns the pet's id when one was given (for the client's toast), else undefined. */
 function addFirstDefeatPet(s: SaveState, type: string, loot: { id: string; count: number }[]) {
     const id = type.startsWith('titan_') ? `pet_t_${type.slice(6)}` : `pet_b_${type}`;
-    if (Object.hasOwn(ITEMS, id) && !ownsItem(s, id) && !loot.some(l => l.id === id)) loot.push({ id, count: 1 });
+    if (!Object.hasOwn(ITEMS, id) || ownsItem(s, id)) return undefined;
+    for (let i = loot.length - 1; i >= 0; i--) if (loot[i].id === id) loot.splice(i, 1);
+    addItem(s, id, 1); return id;
 }
+/** Ground loot of a defeat; `pet` names the first-defeat companion already banked into the bag (not part of the list). */
+export type DefeatLoot = { id: string; count: number }[] & { pet?: string };
 /** bank=false leaves the loot out of the bag: the game tosses it onto the ground instead (drops.ts). `bonus`: the Hard
  * reward of the creatures fought (co-op: the room's scale, difficulty.ts scaleReward); solo it is the save's own. */
-export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true, bonus = rewardScale(s)) { gainXp(s, xp, Date.now(), bonus); const first = boss && !(s.bosses ?? []).includes(`${s.planet}:${type}`), loot = rollLoot(type, activeStats(s).luck, rng, bonus); if (first) addFirstDefeatPet(s, type, loot); if (bank) for (const item of loot)
+export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true, bonus = rewardScale(s)): DefeatLoot { gainXp(s, xp, Date.now(), bonus); const first = boss && !(s.bosses ?? []).includes(`${s.planet}:${type}`), loot: DefeatLoot = rollLoot(type, activeStats(s).luck, rng, bonus); if (first) { const pet = addFirstDefeatPet(s, type, loot); if (pet) loot.pet = pet; } if (bank) for (const item of loot)
     addItem(s, item.id, item.count); recordEvent(s, 'kill', 1, type); if (boss)
     { recordEvent(s, 'boss', 1, type); noteBossDefeat(s, type); } return loot; }
 export function chooseFish(s: SaveState, water: string = s.planet, rng: () => number = Math.random) { const choices = FISH_WEIGHTS[water] || FISH_WEIGHTS.home, luck = activeStats(s).luck, weighted = choices.map(([id, weight]) => [id, weight * (ITEMS[id].legend ? 1 + luck * 1.5 : ITEMS[id].rare ? 1 + luck : 1)] as const); let draw = rng() * weighted.reduce((sum, [, w]) => sum + w, 0); for (const [id, weight] of weighted) {

@@ -2,7 +2,7 @@
 
 This is an additional local-game activity, not a claim about the reference game's hunting rules.
 
-Buy the **Hunting harpoon** from **Outfitters → Weapons** for **650 energy**. Equip it from the backpack and tap an ordinary fish swimming in a pond, or use **Hunt** to select a fish in range. The weapon is reusable: it consumes no ammunition. It has 11 m range, 1.3-second throw cooldown, +20 attack and supports normal weapon forging. Each caught pond fish returns after 12 seconds.
+Buy the **Hunting harpoon** from **Outfitters → Weapons** for **1,000 energy**. Equip it from the backpack and tap an ordinary fish swimming in a pond, or use **Hunt** to select a fish in range. The weapon is reusable: it consumes no ammunition. It has 11 m range, 1.3-second throw cooldown, +100 attack and supports normal weapon forging. Each caught pond fish returns after 18 seconds.
 
 Fish hunting uses only the harpoon in this release. Bows retain their existing combat behavior. Harpoon hunting does not reveal mysterious shadows or create giant catches; equip a rod from the backpack to use the existing line-fishing minigame. Ordinary hunting fish occupy canonical pond slots; their availability is separate from line-fishing silhouettes. Online rewards and cooldowns are checked by the action service; a hosted service still needs deployment and multi-client testing.
 
@@ -10,7 +10,7 @@ Six **Great Forest Hawks** live in Mushroom Forest, outside Clover Village's saf
 
 ## Vietnamese guide
 
-Mua **Lao săn ba chĩa** tại **Cửa hàng Trang bị → Vũ khí** với **650 năng lượng**, rồi trang bị từ túi đồ. Chạm cá thường đang bơi trong ao hoặc nhấn **Săn** để chọn cá trong tầm. Lao dùng nhiều lần, không cần đạn; tầm phóng 11 m, hồi sau 1.3 giây, cộng 20 tấn công và có thể cường hóa như vũ khí khác. Cá đã săn xuất hiện lại sau 12 giây.
+Mua **Lao săn ba chĩa** tại **Cửa hàng Trang bị → Vũ khí** với **1.000 năng lượng**, rồi trang bị từ túi đồ. Chạm cá thường đang bơi trong ao hoặc nhấn **Săn** để chọn cá trong tầm. Lao dùng nhiều lần, không cần đạn; tầm phóng 11 m, hồi sau 1.3 giây, cộng 100 tấn công và có thể cường hóa như vũ khí khác. Cá đã săn xuất hiện lại sau 18 giây.
 
 Bản này chỉ dùng lao để săn cá. Cung vẫn dùng trong chiến đấu như trước. Săn bằng lao không bắt được bóng cá bí ẩn hay tạo cá siêu khổng lồ; hãy trang bị cần câu từ túi đồ để chơi câu bằng dây. Cá thường để săn có vị trí riêng trong từng ao, độc lập với bóng cá bí ẩn. Khi chơi online, máy chủ kiểm tra phần thưởng và thời gian hồi; dịch vụ online vẫn cần triển khai và kiểm thử với nhiều người chơi.
 

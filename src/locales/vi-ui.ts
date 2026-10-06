@@ -463,6 +463,7 @@ export const VI_UI: Record<string, string> = {
   'The pen is bigger: room for 3 more chickens and 4 more cows.': 'Chuồng đã rộng hơn: thêm chỗ cho 3 con gà và 4 con bò.',
   'You need {amount} energy to make the pen bigger.': 'Bạn cần {amount} năng lượng để mở rộng chuồng.',
   '{dish} is ready. Enjoy!': '{dish} đã xong. Chúc ngon miệng!',
+  '{pet} joined you! It waits in your bag.': '{pet} đã về với bạn! Bé đang chờ trong túi đồ.',
   'Begin a brand-new story?': 'Bắt đầu câu chuyện hoàn toàn mới?',
   'This replaces your online account adventure, including your garden, items, and levels.': 'Thao tác này thay thế cuộc phiêu lưu trực tuyến, bao gồm vườn, vật phẩm và cấp độ.',
   'This replaces your offline adventure in this browser, including your garden, items, and levels.': 'Thao tác này thay thế cuộc phiêu lưu ngoại tuyến trong trình duyệt này, bao gồm vườn, vật phẩm và cấp độ.',

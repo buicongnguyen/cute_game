@@ -41,7 +41,7 @@ test('a pen holds at most 15 animals in all, the guard dog not counted', () => {
   assert.equal(M.canBuyAnimal(s, 'dog'), 'ok');
 });
 
-test('offline expiry leaves collectible meat until collected exactly once, then frees the pen slot', () => {
+test('offline expiry leaves collectible meat (with the stock earned before it) until collected exactly once, then frees the pen slot', () => {
   let s = garden();
   const chicken = M.buyAnimal(s, 'chicken', start)!, cow = M.buyAnimal(s, 'cow', start)!;
   const end = start + M.ANIMAL_LIFESPAN_MS;
@@ -62,8 +62,9 @@ test('offline expiry leaves collectible meat until collected exactly once, then 
   }
   assert.deepEqual(M.readyAnimals(s, end).map(a => a.uid), [chicken.uid, cow.uid]);
   const got = M.collectProducts(s, end, [cow.uid, cow.uid, chicken.uid, chicken.uid]);
-  assert.deepEqual(got, [{ uid: cow.uid, kind: 'cow', item: 'meat' }, { uid: chicken.uid, kind: 'chicken', item: 'meat' }]);
-  assert.equal(s.bag.meat, 2); assert.equal(s.bag.egg, undefined); assert.equal(s.bag.milk, undefined);
+  const three = (uid: number, kind: 'cow' | 'chicken', item: string) => Array.from({ length: 3 }, () => ({ uid, kind, item }));
+  assert.deepEqual(got, [...three(cow.uid, 'cow', 'milk'), { uid: cow.uid, kind: 'cow', item: 'meat' }, ...three(chicken.uid, 'chicken', 'egg'), { uid: chicken.uid, kind: 'chicken', item: 'meat' }]);
+  assert.equal(s.bag.meat, 2); assert.equal(s.bag.egg, 3); assert.equal(s.bag.milk, 3);
   assert.equal(s.farm.animals.length, 0);
   assert.deepEqual(M.collectProducts(s, end + 1), []);
   assert.deepEqual(M.collectProducts(reload(s), end + 1), []);
@@ -95,7 +96,7 @@ test('failed meat grants preserve the animal and XP; duplicate in-memory UIDs ca
   assert.deepEqual(s, before);
   s.bag.meat = 0;
   s.farm.animals.push({ ...a });
-  assert.equal(M.collectProducts(s, end, [a.uid, a.uid]).length, 1);
+  assert.equal(M.collectProducts(s, end, [a.uid, a.uid]).length, 1 + M.stockAtExpiry(a, end));
   assert.equal(s.bag.meat, 1); assert.equal(s.farm.animals.length, 0);
   assert.deepEqual(M.collectProducts(s, end), []);
 });
@@ -133,4 +134,22 @@ test('late-life feeding still halves production time without changing the lifeti
   assert.equal(M.lifetimeLeft(a, now), 9_000);
   assert.equal(M.expiresAt(a), end);
   assert.equal(M.productFor(a, end), 'meat');
+});
+
+test('an animal that expires keeps the stock it had earned up to its end of life, capped, and collected once with its meat', () => {
+  const s = garden(), cow = M.buyAnimal(s, 'cow', start)!, end = M.expiresAt(cow);
+  // Collected an hour before the end: only what it earned afterwards (capped at its stock) waits.
+  const late = end - M.productDuration(cow) * 1.5; M.collectProducts(s, late, [cow.uid]); const milk = s.bag.milk ?? 0;
+  assert.equal(M.stockAtExpiry(cow, end - 1), 0, 'alive: nothing extra');
+  assert.equal(M.stockAtExpiry(cow, end), 1); assert.equal(M.stockAtExpiry(cow, end + 10 * M.ANIMAL_LIFESPAN_MS), 1, 'nothing is earned after death');
+  assert.equal(M.productCount(cow, end), 1, 'the meat pickup');
+  const got = M.collectProducts(s, end + 5_000);
+  assert.deepEqual(got.map(c => c.item), ['milk', 'meat']); assert.equal(s.bag.milk, milk + 1); assert.equal(s.bag.meat, 1);
+  assert.deepEqual(M.collectProducts(s, end + 6_000), []);
+  // Never collected: the stock is capped by its capacity, however long it lived.
+  const t = garden(), hen = M.buyAnimal(t, 'chicken', start)!;
+  assert.equal(M.stockAtExpiry(hen, M.expiresAt(hen)), M.productCapacity(hen));
+  // A full bag of the product keeps the animal (neither meat nor stock is granted).
+  t.bag.egg = Number.MAX_SAFE_INTEGER; const before = structuredClone(t);
+  assert.deepEqual(M.collectProducts(t, M.expiresAt(hen)), []); assert.deepEqual(t, before);
 });

@@ -4,8 +4,9 @@
  */
 export const safeRadius = (planet: string) => planet === 'home' ? 18 : 11;
 export const inSafeZone = (p: { x: number; z: number }, planet: string) => Math.hypot(p.x, p.z) < safeRadius(planet);
-/** How far from the explorer a creature may fall and still pay out when the explorer stands in the safe zone (a gun's reach at the fence). */
-export const SAFE_ZONE_REWARD_REACH = 14;
+/** How far from the explorer a creature may fall and still pay out when the explorer stands in the safe zone: the longest
+ * reach in the kit (the snowball, 21 m) plus a big creature's radius, so anything you can hit from the fence still pays. */
+export const SAFE_ZONE_REWARD_REACH = 24;
 /**
  * Does a creature's fall pay the explorer (XP orbs, loot)? Alone in the world: not when the explorer stands in the safe zone
  * and the creature fell out of reach, whoever or whatever killed it (a neighbour, another creature, a hazard). Online, shared

@@ -4,7 +4,7 @@ import * as M from '../src/model.ts';
 import { ITEMS } from '../src/content.ts';
 import { BOT_LINES } from '../src/bot-lines.ts';
 import { VI_BOTS } from '../src/locales/vi-bots.ts';
-import { befriend, canMeet, chooseGift, choosePresent, givesPresent, isFriend, makeCast, newStore, parseStore, settleGift, SPARE_GIFTS, ENERGY_GIFT } from '../src/bot-logic.ts';
+import { befriend, canMeet, chooseGift, choosePresent, givesPresent, isFriend, makeCast, newStore, parseStore, settleGift, SPARE_GIFTS, ENERGY_GIFT, PRESENT_GAP_MS } from '../src/bot-logic.ts';
 
 test('the cast is the same for one seed, has a rich flyer, and dresses everyone from real items', () => {
   const a = makeCast(1234), b = makeCast(1234), c = makeCast(99);
@@ -73,6 +73,17 @@ test('meeting a friend gives a present about one time in five, mostly everyday t
   let rare = 0, state = 7; const rand = () => (state = (state * 1103515245 + 12345) % 2147483648) / 2147483648;
   for (let i = 0; i < 400; i++) { const p = choosePresent(newStore(1), () => false, rand); assert.ok(p.item ? ITEMS[p.item] : p.energy > 0); if (p.item && ITEMS[p.item].rare) rare++; }
   assert.ok(rare > 10 && rare < 90, `about one in ten is rare (${rare}/400)`);
+});
+
+test('each friend gives at most one present per five minutes, remembered across saves', () => {
+  const store = newStore(1), [bot, other] = makeCast(2), t0 = 1_800_000_000_000; befriend(store, bot, 0, () => false); befriend(store, other, 0, () => false);
+  assert.equal(PRESENT_GAP_MS, 5 * 60_000);
+  assert.ok(givesPresent(store, bot.id, () => 0, t0)); store.daily[bot.id] = t0; // bots.ts records the handover
+  assert.ok(!givesPresent(store, bot.id, () => 0, t0 + PRESENT_GAP_MS - 1), 'not again within five minutes');
+  assert.ok(givesPresent(store, other.id, () => 0, t0 + 1), 'another friend is not held back');
+  assert.ok(givesPresent(store, bot.id, () => 0, t0 + PRESENT_GAP_MS) && !givesPresent(store, bot.id, () => .21, t0 + PRESENT_GAP_MS), 'then the one-in-five chance again');
+  assert.ok(!givesPresent(parseStore(JSON.stringify(store), 1), bot.id, () => 0, t0 + 1000), 'the last present time survives a reload');
+  assert.ok(givesPresent(store, bot.id, () => 0, t0 - 60_000), 'a clock set back does not block presents forever');
 });
 
 test('the message box sorts English and Vietnamese messages and always answers in a pool with Vietnamese', async () => {

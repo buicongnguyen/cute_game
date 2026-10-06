@@ -1466,7 +1466,7 @@ const ITEM_FACTS: Record<string, any> = {
     "hat_party": {
         "name": "Mũ Tiệc Tùng",
         "type": "hat",
-        "sell": 20,
+        "sell": 7,
         "stats": {
             "hp": 10
         }

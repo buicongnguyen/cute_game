@@ -168,10 +168,18 @@ function firstDuration(a: Animal) { return a.legacyFirstCycleMs ?? (a.timerVersi
 export function productCount(a: Animal, now = Date.now()) {
   if (!validAnimalTime(a, now) || a.kind === 'dog') return 0;
   if (expired(a, now)) return 1;
-  if (!isAdult(a, now)) return 0;
-  const elapsed = now - a.cycleAt, first = firstDuration(a), duration = productDuration(a);
+  return stockAt(a, now);
+}
+/** Products (eggs, milk...) waiting at time `t`, capped by the stock capacity; 0 while young. */
+function stockAt(a: Animal, t: number) {
+  if (!isAdult(a, t)) return 0;
+  const elapsed = t - a.cycleAt, first = firstDuration(a), duration = productDuration(a);
   if (!(first > 0) || !(duration > 0) || elapsed < first) return 0;
   return Math.min(productCapacity(a), 1 + Math.floor((elapsed - first) / duration));
+}
+/** An expired animal's products: what it had earned up to its end of life (capped by its stock), collected with its meat. */
+export function stockAtExpiry(a: Animal, now = Date.now()) {
+  return validAnimalTime(a, now) && a.kind !== 'dog' && expired(a, now) ? stockAt(a, expiresAt(a)) : 0;
 }
 /** 0 → 1 until the first product; a stockpile keeps its full meter until collected. */
 export function productProgress(a: Animal, now = Date.now()) {
@@ -299,12 +307,18 @@ export function collectProducts(s: SaveState, now = Date.now(), uids?: readonly 
     if (!a || !productReady(a, now)) continue;
     const item = productFor(a, now);
     const count = productCount(a, now), full = count >= productCapacity(a);
+    // At end of life the stock it had earned comes along with the meat; both are granted or neither is.
+    const product = ANIMALS[a.kind].product, stock = stockAtExpiry(a, now);
+    if (stock && (!Number.isSafeInteger((s.bag[product] || 0) + stock) || !Number.isSafeInteger((s.bag[item] || 0) + count))) continue;
     if (!addItem(s, item, count)) continue;
+    if (stock) addItem(s, product, stock);
     if (expired(a, now)) {
       // Duplicate requested IDs or malformed in-memory copies can never grant the same animal twice.
       for (let index = animals.length - 1; index >= 0; index--) if (animals[index].uid === uid) animals.splice(index, 1);
     } else { a.cycleAt = full ? now : a.cycleAt + firstDuration(a) + (count - 1) * productDuration(a); a.fed = false; a.timerVersion = 2; delete a.legacyFirstCycleMs; }
-    gainXp(s, ANIMALS[a.kind].xp * count, now); for (let i = 0; i < count; i++) out.push({ uid: a.uid, kind: a.kind, item });
+    gainXp(s, ANIMALS[a.kind].xp * (count + stock), now);
+    for (let i = 0; i < stock; i++) out.push({ uid: a.uid, kind: a.kind, item: product });
+    for (let i = 0; i < count; i++) out.push({ uid: a.uid, kind: a.kind, item });
   }
   return out;
 }

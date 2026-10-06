@@ -39,7 +39,8 @@ test('the helper collects all animal products and expired meat with the same gra
     const expected = M.collectProducts(manual, now, [a.uid]);
     assert.deepEqual(H.helperCollect(s, a.uid, now), expected); assert.equal(expected.length, 2); assert.deepEqual(s, manual);
     const dead = game(), animal = M.buyAnimal(dead, kind, T0)!, expiration = M.expiresAt(animal);
-    assert.deepEqual(H.helperCollect(dead, animal.uid, expiration), [{ uid: animal.uid, kind, item: 'meat' }]);
+    const stock = M.stockAtExpiry(animal, expiration); assert.ok(stock > 0, kind);
+    assert.deepEqual(H.helperCollect(dead, animal.uid, expiration), [...Array.from({ length: stock }, () => ({ uid: animal.uid, kind, item: M.ANIMALS[kind].product })), { uid: animal.uid, kind, item: 'meat' }]);
     assert.equal(dead.farm.animals.length, 0); assert.deepEqual(H.helperCollect(dead, animal.uid, expiration), []);
   }
 });

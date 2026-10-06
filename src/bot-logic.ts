@@ -94,7 +94,7 @@ export interface BotStore {
   given: string[];
   /** Bot id -> earliest time it may start a meeting again. */
   meetAfter: Record<string, number>;
-  /** Bot id -> when a friend last handed over a small daily present. */
+  /** Bot id -> when a friend last handed over a present (at most one per PRESENT_GAP_MS). */
   daily: Record<string, number>;
 }
 export const newStore = (seed: number): BotStore => ({ v: 1, seed, friends: {}, pending: {}, given: [], meetAfter: {}, daily: {} });
@@ -138,10 +138,14 @@ export const MEET_PAUSE_MS = { declined: 8 * 60_000, greeted: 90_000, spoke: 3 *
 export const canMeet = (s: BotStore, id: string, now: number) => (s.meetAfter[id] ?? 0) <= now;
 /**
  * Meeting a friend gives a present about one time in five: mostly everyday things (a snack, seeds, a little energy), now and
- * then (1 time in 10) something rare.
+ * then (1 time in 10) something rare. Each friend gives at most one present per PRESENT_GAP_MS (store.daily holds the last
+ * one's time; bots.ts sets it when a present is handed over). A last time in the future (a changed clock) does not block.
  */
-export const PRESENT_CHANCE = .2, RARE_PRESENT_CHANCE = .1;
-export const givesPresent = (s: BotStore, id: string, rand: () => number) => isFriend(s, id) && rand() < PRESENT_CHANCE;
+export const PRESENT_CHANCE = .2, RARE_PRESENT_CHANCE = .1, PRESENT_GAP_MS = 5 * 60_000;
+export const givesPresent = (s: BotStore, id: string, rand: () => number, now = Date.now()) => {
+  const last = s.daily[id];
+  return isFriend(s, id) && !(last !== undefined && last <= now && now - last < PRESENT_GAP_MS) && rand() < PRESENT_CHANCE;
+};
 const EVERYDAY: Array<[string, number]> = [['carrot', 3], ['radish', 3], ['egg', 2], ['milk', 2], ['pumpkin', 1], ['mint', 2], ['berry', 2], ['leather', 1], ['coral', 1], ['meat', 1]];
 /** The present for this meeting (what the player has is no reason to skip: everyday things stack). */
 export function choosePresent(store: BotStore, owns: (item: string) => boolean, rand: () => number): GiftNote {

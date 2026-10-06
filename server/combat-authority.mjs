@@ -12,6 +12,7 @@ import {trailSpot,dogTossFactor,DOG_TOSS_CD} from '../src/guard-dog.ts';
 import {commandHash} from './action-service.mjs';
 import {gearFactor,skillLevel,skillCooldown} from '../src/upgrades.ts';
 import {clearJourney} from './adventure-lifecycle.mjs';
+import {inSafeZone} from '../src/safe-zone.ts';
 
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const finite=(value,fallback=0,min=-160,max=160)=>Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;
@@ -50,7 +51,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     room.enemies=[...state(room).enemies.values()].map(snapshot);
   }
   function health(room,enemy,impact){publish(room);broadcast(room,{...snapshot(enemy),type:'enemyHealth',enemyType:enemy.type,impact,...(impact?{impactId:randomUUID()}:{})});}
-  const aliveTargets=room=>[...room.members].map(id=>peers.get(id)).filter(p=>p&&p.active&&!p.visit&&p.account.profile.hp>0&&dist(p.pose,{x:0,z:0})>=(p.planet==='home'?18:11));
+  const aliveTargets=room=>[...room.members].map(id=>peers.get(id)).filter(p=>p&&p.active&&!p.visit&&p.account.profile.hp>0&&!inSafeZone(p.pose,p.planet));
   const randomFor=seed=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
   function observeCast(room,enemy,raw,now){
     const previousPhase=enemy.hostPhase,previousCount=enemy.hostAttackCount;enemy.hostPhase=raw.phase;enemy.hostAttackCount=raw.attackCount;
@@ -71,7 +72,8 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     (enemy.combatAttacks??=[]).push(enemy.cast);enemy.nextCastAt=now+(windup+cooldown)*1000;
   }
   function hurtPlayer(peer,amount,source='melee'){
-    const e=engineFor(peer),now=Date.now();if(peer.visit||!peer.active||peer.account.profile.hp<=0||now-e.damageAt<550||e.sim.invulnerable||source==='melee'&&e.sim.statuses.flight>0)return;
+    const e=engineFor(peer),now=Date.now();// Nothing hurts an explorer standing in the safe zone round the cottage (safe-zone.ts), whatever the host reports.
+    if(peer.visit||!peer.active||peer.account.profile.hp<=0||inSafeZone(peer.pose,peer.planet)||now-e.damageAt<550||e.sim.invulnerable||source==='melee'&&e.sim.statuses.flight>0)return;
     e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);hp(peer,-Math.max(1,Math.round(amount*60/(defense+60))),source);
   }
   function hurtEnemyTarget(peer,enemy,multiplier,source='melee'){hurtPlayer(peer,enemy.damage*multiplier,source);}

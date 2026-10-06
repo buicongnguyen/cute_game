@@ -44,3 +44,17 @@ test('bat and sheep forms replace the original silhouette and restore prior visi
  for(const kind of ['bat','sheep'] as const){const mesh=new T.Group(),body=new T.Group(),hidden=new T.Group();hidden.visible=false;mesh.add(body,hidden);disguiseForm(mesh,kind,true,0);assert.equal(body.visible,false);const form=mesh.getObjectByName('form-'+kind)!;assert.equal(form.visible,true);disguiseForm(mesh,kind,true,1);disguiseForm(mesh,kind,false,2);assert.equal(body.visible,true);assert.equal(hidden.visible,false);assert.equal(form.visible,false);}
 });
 test('summons reuse shared geometry and their bat wings animate',()=>{const a=makeSummon('bat'),b=makeSummon('bat');const ma:T.Mesh[]=[],mb:T.Mesh[]=[];a.traverse(o=>{if(o instanceof T.Mesh)ma.push(o);});b.traverse(o=>{if(o instanceof T.Mesh)mb.push(o);});assert.equal(ma[0].geometry,mb[0].geometry);assert.ok(ma.length<=3);animateSummon(a,'bat',.1);assert.notEqual(a.getObjectByName('wing1')!.rotation.z,0);});
+test('the whirlwind follows its explorer, and finished casts drop out while live ones keep their order',()=>{
+ const scene=new T.Group(),model=new T.Object3D();scene.add(model);let asked=0;
+ const fx=new DisguiseFx({ground:()=>0,explorerAt:()=>{asked++;return model;}});
+ assert.equal(fx.play({look:'whirl',kind:'cast',x:0,z:0,radius:3,color:'#e5f6ff',duration:2.2}),true);assert.equal(asked,1,'whirl asks for the explorer to follow');
+ const centre=()=>{let sx=0,n=0;const m=new T.Matrix4(),p=new T.Vector3();for(const c of fx.root.children){const b=c as T.InstancedMesh;for(let i=0;i<b.count;i++){b.getMatrixAt(i,m);p.setFromMatrixPosition(m);sx+=p.x;n++;}}return sx/n;};
+ const before=centre();model.position.x=20;fx.update(.05);assert.ok(centre()-before>15,'the swirl moved with the explorer');
+ fx.clear();fx.play({look:'heal',kind:'cast',x:0,z:0,radius:2,color:'#ffffff',duration:1});fx.play({look:'heal',kind:'cast',x:1,z:0,radius:2,color:'#ffffff',duration:3});fx.play({look:'heal',kind:'cast',x:2,z:0,radius:2,color:'#ffffff',duration:.5});
+ fx.update(1.2);assert.equal(fx.count,1);fx.update(2);assert.equal(fx.count,0);assert.ok(!fx.busy);
+});
+test('a disguise form is built once, cached, and skipped when never active',()=>{
+ const mesh=new T.Group();disguiseForm(mesh,'sheep',false,0);assert.equal(mesh.children.length,0);
+ disguiseForm(mesh,'sheep',true,0);const form=mesh.getObjectByName('form-sheep');assert.ok(form);disguiseForm(mesh,'sheep',false,1);disguiseForm(mesh,'sheep',true,2);
+ assert.equal(mesh.children.filter(c=>c.name==='form-sheep').length,1);assert.equal(mesh.getObjectByName('form-sheep'),form);
+});

@@ -183,9 +183,9 @@ export function initBots(game: GameBridge) {
     r.modeT -= dt; if (r.modeT > 0) return;
     const now = Date.now();
     if (!isFriend(store, r.def.id)) { r.mode = 'ask'; r.askUntil = clock + 30; sayLine(r, 'ASK', 28000); openRequest(r); return; }
-    if (givesPresent(store, r.def.id, rand)) {
+    if (givesPresent(store, r.def.id, rand, now)) {
       const present = choosePresent(store, owns, rand);
-      if (game.grantGift(present)) { if (present.item && ITEMS[present.item]?.rare) store.given.push(present.item); save(); showGift(r.def, present); sayLine(r, 'GIFT', 4500); }
+      if (game.grantGift(present)) { if (present.item && ITEMS[present.item]?.rare) store.given.push(present.item); store.daily[r.def.id] = now; save(); showGift(r.def, present); sayLine(r, 'GIFT', 4500); }
     }
     store.meetAfter[r.def.id] = now + MEET_PAUSE_MS.greeted; save(); leave(r);
   }

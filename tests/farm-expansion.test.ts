@@ -77,8 +77,8 @@ test('livestock expires after two real hours and failed full-stock grants retain
     s.bag[item]=Number.MAX_SAFE_INTEGER;const before=structuredClone(a);
     assert.deepEqual(M.collectProducts(s,at),[]);assert.deepEqual(a,before);
     delete s.bag[item];const end=now+M.ANIMAL_LIFESPAN_MS;
-    assert.equal(M.productFor(a,end),'meat');assert.equal(M.collectProducts(s,end).length,1);
-    assert.equal(s.bag.meat,1);assert.equal(s.farm.animals.length,0);assert.deepEqual(M.collectProducts(s,end),[]);
+    assert.equal(M.productFor(a,end),'meat');const stock=M.stockAtExpiry(a,end);assert.equal(stock,M.productCapacity(a));assert.equal(M.collectProducts(s,end).length,1+stock);
+    assert.equal(s.bag.meat,1);assert.equal(s.bag[item],stock,'the stock it had earned comes with the meat');assert.equal(s.farm.animals.length,0);assert.deepEqual(M.collectProducts(s,end),[]);
   }
 });
 

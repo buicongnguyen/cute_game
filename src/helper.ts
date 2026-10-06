@@ -113,7 +113,7 @@ export function helperPlant(s: M.SaveState, i: number, now = Date.now()) {
 
 /**
  * Catch-up after time away (the game was closed, or the explorer was on another planet): every bed that ripened
- * meanwhile is harvested and replanted once, now. One cycle per bed at most (so at most one crop per bed, 33 beds at
+ * meanwhile is harvested and replanted once, now. One cycle per bed at most (so at most one crop per bed, 24 beds at
  * most): the beds never sit idle while you are gone, but leaving the game closed for a day is not worth more than a
  * single round of tending. Crops replanted now grow from now, so nothing ripens "in the past".
  */

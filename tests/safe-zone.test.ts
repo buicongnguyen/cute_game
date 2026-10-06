@@ -14,3 +14,8 @@ test('in the safe zone a far fight pays nothing, a near one (a gun at the fence)
   assert.equal(defeatPaysPlayer({ x: 25, z: 0 }, far, 'home', false), true, 'fighting outside the safe zone');
   assert.equal(defeatPaysPlayer(inside, far, 'home', true), true, 'online: shared kills follow the server');
 });
+test('the reward reach covers the longest attack in the kit plus a creature radius', () => {
+  assert.equal(SAFE_ZONE_REWARD_REACH, 24);
+  assert.equal(defeatPaysPlayer({ x: 0, z: 0 }, { x: 23, z: 0 }, 'home', false), true, 'a snowball kill at 21 m + radius still pays');
+  assert.equal(defeatPaysPlayer({ x: 0, z: 0 }, { x: 25, z: 0 }, 'home', false), false);
+});

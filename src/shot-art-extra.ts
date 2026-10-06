@@ -32,12 +32,14 @@ export function buildExtra(look: string, k: Kit): { haloSize?: number; haloColor
       add(shared('wave-a', () => new T.RingGeometry(.5, .82, 16, 1, PI / 2 - 1.0, 2.0)), basic('#2f9bff', .96), [r * 4.2, r * 4.2, 1], [0, 0, 0], flat);
       add(shared('wave-b', () => new T.RingGeometry(.74, .88, 16, 1, PI / 2 - .95, 1.9)), basic('#f4feff'), [r * 4.2, r * 4.2, 1], [0, .02, .0], flat);
       for (let i = 0; i < 3; i++) { const d = add(lowBall, basic('#ffffff', .9), [r * .3, r * .3, r * .3], [(i - 1) * r * 1.6, 0, -r * (1.4 + i % 2 * .8)]); note(g, d, 'puff', i / 3, r * 2.4); }
+      g.userData.yaw = true; // the crescent bulges along +z: poseShot turns it to face the flight
       return { haloSize: 3.4, haloColor: '#66c4ff' };
     }
     case 'dragon': { // a golden scale crescent with a red edge and three spines
       add(shared('wave-a', () => new T.RingGeometry(.5, .82, 16, 1, PI / 2 - 1.0, 2.0)), basic('#ffb81f', .98), [r * 3.8, r * 3.8, 1], [0, 0, 0], flat);
       add(shared('wave-c', () => new T.RingGeometry(.8, .92, 16, 1, PI / 2 - .95, 1.9)), basic('#e8352b'), [r * 3.8, r * 3.8, 1], [0, 0, 0], flat);
       for (let i = -1; i <= 1; i++) add(cone(), basic('#fff0a0'), [r * .35, r * .35, r * .5], [i * r * 1.9, 0, r * (3.1 - Math.abs(i) * .9)], [PI / 2, 0, 0]);
+      g.userData.yaw = true;
       return { haloSize: 4, haloColor: '#ffc83a' };
     }
     case 'shuriken': { // four-point steel star with a hub hole, spinning flat

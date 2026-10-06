@@ -46,3 +46,15 @@ test('item power: 100 / 1.3 s = 76.9/s, between the lava sword and the moon scyt
   const weapons = Object.keys(M.ITEMS).filter(id => P.powerKind(M.ITEMS[id]) === 'weapon' && id !== 'harpoon');
   assert.ok(weapons.every(id => (M.ITEMS[id].stats?.atk ?? M.ITEMS[id].attack ?? 0) < 100), 'no other weapon hits as hard per throw');
 });
+
+test('a disguise fights with its own weapon: the hidden harpoon adds no attack and no forge bonus', () => {
+  const bare = M.newGame(); bare.level = 10;
+  const s = M.newGame(); s.level = 10; M.addItem(s, 'harpoon'); assert.equal(M.equip(s, 'harpoon'), true);
+  const harpoon = M.attack(s, 0); assert.ok(harpoon >= M.attack(bare, 0) + 100, 'the harpoon alone adds its +100');
+  M.addItem(s, 'dz_dino'); assert.equal(M.equip(s, 'dz_dino'), true); assert.equal(s.gear.weapon, 'harpoon');
+  M.addItem(bare, 'dz_dino'); assert.equal(M.equip(bare, 'dz_dino'), true);
+  assert.equal(M.attack(s, 0), M.attack(bare, 0), 'harpoon + dz_dino attacks exactly like dz_dino alone');
+  assert.ok(M.attack(s, 0) < harpoon);
+  s.forge = { harpoon: 50 } as typeof s.forge; assert.equal(M.attack(s, 0), M.attack(bare, 0), 'no forge bonus from the hidden weapon');
+  M.unequip(s, 'disguise'); assert.ok(M.attack(s, 0) > harpoon, 'the forge bonus is back once the disguise comes off');
+});

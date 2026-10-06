@@ -154,3 +154,8 @@ test('new beds never land on village obstacles, and saved beds on top of them mo
   assert.ok(r.plots.slice(0, 10).every(p => Math.max(Math.abs(p.x! - stacked.x!), Math.abs(p.z! - stacked.z!)) >= M.BED_GAP));
   assert.deepEqual(r.plots.slice(0, 9).map(p => [p.x, p.z]), M.newGame().plots.map(p => [p.x, p.z]));
 });
+
+test('nothing in the shop sells back for its price or more (the party hat costs 15 and sells for 7)', () => {
+  assert.equal(M.ITEMS.hat_party.sell, 7);
+  for (const c of M.SHOP_CATEGORIES) for (const i of c.items) if (i.cost > 0 && M.ITEMS[i.id]) assert.ok(M.ITEMS[i.id].sell < i.cost, `${i.id}: sells ${M.ITEMS[i.id].sell}, costs ${i.cost}`);
+});

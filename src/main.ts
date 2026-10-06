@@ -1087,6 +1087,8 @@ function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:stri
   // Loot lands on the ground (drops.ts); picking it up shows the +n float.
   drops.spawnLoot(loot,x,z);
   if(e.boss){toast(`${e.name??'Boss'} defeated!`,'👑');tone('level');}
+  // The first-defeat companion is banked straight into the bag (model.ts grantDefeat), never dropped on the ground.
+  if(loot.pet)toast(`${t(M.ITEMS[loot.pet].name)} joined you! It waits in your bag.`,M.ITEMS[loot.pet].icon);
 }
 function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=false){
   if(e.hp<=0||(visiting&&!remote))return;if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;

@@ -23,7 +23,7 @@ test('meat pickups identify their expired animal; collection flights never becom
   const s=farm(),animal=M.buyAnimal(s,'pig',now)!,view=new FarmPenView(),at=now+M.ANIMAL_LIFESPAN_MS;
   view.update(s.farm.animals,.1,1,at);const p=view.positionOf(animal.uid)!;
   assert.equal(view.pickAnimal(ray(p)),animal.uid);
-  assert.equal(M.collectProducts(s,at,[animal.uid]).length,1);view.collect(animal.uid,'meat');view.update(s.farm.animals,.1,1.1,at);
+  assert.equal(M.collectProducts(s,at,[animal.uid]).length,1+M.productCapacity(animal),'meat plus the truffles it had earned');view.collect(animal.uid,'meat');view.update(s.farm.animals,.1,1.1,at);
   assert.equal(view.pickAnimal(ray(p)),null);view.dispose();
 });
 

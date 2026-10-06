@@ -3,7 +3,7 @@ import { ITEMS, type ItemDef, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
 import { farmHelperRow } from './farm-helper-ui.ts';
 import { productPace } from './difficulty.ts';
-import { BREEDS, coatOf, ANIMALS, ANIMAL_KINDS, ANIMAL_LIFESPAN_MS, productCount, productCapacity, productDuration, speciesPenCost, FARM_DISHES, PEN_BUILD, expired, lifetimeLeft, productFor, canBuildPen, penBuilt, animalCount, canBuyAnimal, canCookDish, canFeed, farmOf, playerCanFeed, playerFeedCrop, priceOf, growth, isAdult, penCapacity, penExpandCost, productProgress, productReady, timeLeft, type Animal, type Collected } from './farm.ts';
+import { BREEDS, coatOf, ANIMALS, ANIMAL_KINDS, ANIMAL_LIFESPAN_MS, productCount, productCapacity, productDuration, speciesPenCost, FARM_DISHES, PEN_BUILD, expired, lifetimeLeft, productFor, stockAtExpiry, canBuildPen, penBuilt, animalCount, canBuyAnimal, canCookDish, canFeed, farmOf, playerCanFeed, playerFeedCrop, priceOf, growth, isAdult, penCapacity, penExpandCost, productProgress, productReady, timeLeft, type Animal, type Collected } from './farm.ts';
 
 /**
  * The animal pen's panel and the kitchen's farm recipes, as HTML (main.ts opens them and routes the buttons).
@@ -51,7 +51,7 @@ export function penHtml(s: SaveState, ui: FarmUi, now = Date.now()) {
   if (!penBuilt(s)) return sitePenHtml(s);
   const farm = farmOf(s), ready = farm.animals.filter(a => productReady(a, now)), crop = chosenFeed(s), hungry = farm.animals.filter(a => playerCanFeed(a, now)).length;
   const counts = ANIMAL_KINDS.map(k => `<span class="chip">${ANIMALS[k].icon} ${animalCount(s, k)}/${penCapacity(s, k)} ${t(ANIMALS[k].name)}</span>`).join('');
-  const gathered = ready.reduce<Record<string, number>>((n, a) => { const id = productFor(a, now); n[id] = (n[id] || 0) + productCount(a, now); return n; }, {});
+  const gathered = ready.reduce<Record<string, number>>((n, a) => { const id = productFor(a, now), stock = stockAtExpiry(a, now); n[id] = (n[id] || 0) + productCount(a, now); if (stock) { const p = ANIMALS[a.kind].product; n[p] = (n[p] || 0) + stock; } return n; }, {});
   const collect = ready.length ? `<button class="primary wide" data-action="collect-farm">🧺 ${t('Collect {count}:', { count: Object.values(gathered).reduce((a,b)=>a+b,0) })} ${Object.entries(gathered).map(([id, n]) => `${ui.mini(id)} ${n}`).join(' ')}</button>` : '';
   const feed = `<div class="garden-actions farm-feed"><span>${crop ? `${t('Feed:')} ${ui.mini(crop)} ${feedOptions(s).length > 1 ? `<select data-feed-choice aria-label="${ui.esc(t('Feed:'))}">${feedOptions(s).map(id => `<option value="${id}"${id === crop ? ' selected' : ''}>${ui.esc(t(ITEMS[id].name))} ×${s.bag[id]}</option>`).join('')}</select>` : `${ui.esc(t(ITEMS[crop].name))} ×${s.bag[crop]}`} ${feedChoice.id === crop ? '' : t('(your cheapest crop)')}` : feedOptions(s).length ? `${t('Feed:')} <select data-feed-choice aria-label="${ui.esc(t('Feed:'))}"><option value="" selected>${ui.esc(t('Pick a crop'))}</option>${feedOptions(s).map(id => `<option value="${id}">${ui.esc(t(ITEMS[id].name))} ×${s.bag[id]}</option>`).join('')}</select>` : 'Bring a crop from the garden to feed them: a fed animal finishes its current wait twice as fast.'}</span>${crop && hungry ? `<button class="sky-button" data-action="feed-all">${t('Feed all ({count})', { count: hungry })}</button>` : ''}</div>`;
   const rows = farm.animals.map((a, i) => {

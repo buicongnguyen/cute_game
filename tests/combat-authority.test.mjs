@@ -181,6 +181,12 @@ test('environmental damage shares hit invulnerability and the knight armor defen
  t.mock.timers.tick(50);assert.equal(engine.healthEvents.length,2);assert.equal(engine.healthEvents[1].amount,-9);
 });
 
+test('an explorer inside the safe zone takes no creature or hazard damage online',async t=>{
+ const f=await fixture(t),enemy=f.spawn('mushroom'),engine=f.authority.engineFor(f.peer);engine.hpAt=Date.now()+100000;
+ f.peer.pose={x:-5,z:0,facing:0,moving:false};f.authority.damage(f.peer,enemy.id,'shot');assert.equal(engine.healthEvents.length,0,'a shot reported inside the fence is ignored');
+ f.peer.pose={x:-25,z:0,facing:0,moving:false};f.authority.damage(f.peer,enemy.id,'shot');assert.equal(engine.healthEvents.length,1,'outside the fence it hurts');assert.ok(engine.healthEvents[0].amount<0);
+});
+
 test('validated dinosaur execution ignores an armored turtle shell and heals only after one durable kill',async t=>{
  const f=await fixture(t,{planet:'lava',profile:p=>{p.level=50;p.bag.dz_dino=1;p.gear.disguise='dz_dino';p.hp=20;}}),enemy=f.spawn('magmaturtle');enemy.hp=enemy.maxHp*.39;enemy.phase='idle';
  f.authority.skill(f.peer,0);assert.equal(f.account.profile.hp,20);assert.equal(enemy.pending,true);
