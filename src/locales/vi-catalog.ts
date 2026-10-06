@@ -1,5 +1,6 @@
 import { TITAN_VI } from '../titan-content.ts';
 import { BOSS_PET_VI } from '../boss-pet-content.ts';
+import { COLOSSUS_VI } from '../colossus-content.ts';
 /** Vietnamese catalog labels. Short reference terms matched by stable item IDs;
  * original descriptions and farm additions translated for this game. IDs and game rules stay unchanged.
  * Exact English keys also cover generated cooked names and catalog stat descriptions.
@@ -791,6 +792,7 @@ Object.assign(VI_CATALOG, {
 
 Object.assign(VI_CATALOG, TITAN_VI);
 Object.assign(VI_CATALOG, BOSS_PET_VI);
+Object.assign(VI_CATALOG, COLOSSUS_VI);
 
 Object.assign(VI_CATALOG, {'duck eggs':'trứng vịt','garden truffles':'nấm cục vườn','Bigger pen: +{chickens} chickens, +{ducks} ducks, +{cows} cows, +{pigs} pigs (ϟ {cost})':'Mở rộng chuồng: +{chickens} gà, +{ducks} vịt, +{cows} bò, +{pigs} heo (ϟ {cost})'});
 Object.assign(VI_CATALOG, {'Collect ×{count}':'Thu ×{count}','Collect from {name} {number}':'Thu sản phẩm từ {name} {number}'});

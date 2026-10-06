@@ -61,6 +61,8 @@ import { defeatPaysPlayer } from './safe-zone.ts';
 import { initHudLayout } from './hud-layout.ts';
 import { initRanking } from './ranking.ts';
 import { initBots, neighboursOn, setNeighboursOn } from './bots.ts';
+import { ColossusEvent } from './colossus.ts';
+import { COLOSSUS_ID } from './colossus-content.ts';
 import { initPlatform, toggleFullscreen } from './platform.ts';
 import { Sfx, type Sound } from './sfx.ts';
 import { audioOf, audioRowsHtml, bindAudioSliders, syncAudio } from './audio-settings.ts';
@@ -1105,10 +1107,11 @@ function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:stri
 }
 function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=false){
   if(e.hp<=0||(visiting&&!remote))return;if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;
-  world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,damage,!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
+  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');
+    if(e.driver)return;// the Colossus pays out itself (colossus.ts)
     const type=(e as Enemy&{type?:string}).type??'slime';if(network.onHostKill)network.onHostKill(e.id,e.xp,e.boss,type);else grantDefeat({...e,type,helper:!!impact?.helper});}
 }
 /** Devour finishes a weakened ordinary creature even through a defensive shell. */
@@ -1211,6 +1214,11 @@ world.onDamage=(amount,source='melee',enemyId)=>{
   updateHud();
 };
 world.onHazardEnemy=(enemy,damage)=>hit(enemy,damage,0,undefined,true,true);
+// The daily world boss (colossus.ts): offline it runs here on the local clock, online it mirrors the server's.
+const colossus=new ColossusEvent({world,state:()=>state,online:()=>!!actionHandler,playing:()=>started&&!visiting&&!flight,
+  defence:()=>M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),hurt:amount=>world.onDamage(amount,'melee',COLOSSUS_ID),
+  change,toast,floating:(text,x,z,style)=>floating(text,x,z,style),spawnLoot:(loot,x,z)=>drops.spawnLoot(loot,x,z),tone:kind=>tone(kind as Parameters<typeof tone>[0]),hud:$('#hud')});
+if(new URLSearchParams(location.search).get('colossus')==='1')colossus.start();
 world.onEnvironmentEvent=event=>{if(event.message)toast(event.message,'🌍');save();updateHud();};
 function resetCombat(){combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
@@ -1254,6 +1262,7 @@ export const gameBridge:GameBridge={
     world.refreshPlayer();$('#visit-banner').hidden=!owner;$('#visit-banner').textContent=t(owner?t('Visiting {owner} · look around their garden',{owner}):'');updateLabels();
   },
   showNotice:message=>toast(message),
+  colossusRally:()=>colossus.rally(),colossusStrike:(id,damage)=>colossus.botStrike(id,damage),
   botHit:(id,damage)=>{const e=world.enemies.find(x=>x.id===id);if(!botActive()||visiting||!e||e.hp<=0||!Number.isFinite(damage)||damage<=0)return;world.damageEnemy(e,damage,0,false);},
   ownsItem:id=>(state.bag[id]||0)>0||(state.chest[id]||0)>0||Object.values(state.gear).includes(id),
   grantGift:gift=>{
@@ -1582,4 +1591,4 @@ initHudLayout();
 const neighbours=initBots(gameBridge);if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__bots:neighbours});
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,colossus,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

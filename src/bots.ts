@@ -11,7 +11,7 @@ import { neighboursKey } from './profiles.ts';
 import type { GameBridge } from './game-bridge.ts';
 import type { RemotePose } from './world.ts';
 import {
-  BOT_ID_PREFIX, MEET_PAUSE_MS, SAFE_RADIUS, ZONE_RADIUS, attackDamage, BOSS_SHY, bossDare, huntFor, restFor, visitStay, befriend, canMeet, choosePresent, gateRoute, givesPresent, inSafeZone, isBotId, isFriend, makeCast, newStore, nextVisitIn, parseStore, pickFoe, pickGoal, seeded, settleGift, walk, zoneOf,
+  BOT_ID_PREFIX, MEET_PAUSE_MS, SAFE_RADIUS, ZONE_RADIUS, attackDamage, BOSS_SHY, bossDare, huntFor, restFor, visitStay, befriend, canMeet, choosePresent, gateRoute, givesPresent, inSafeZone, isBotId, isFriend, makeCast, newStore, nextVisitIn, parseStore, pickFoe, pickGoal, rallySpot, seeded, settleGift, walk, zoneOf,
   type BotDef, type BotStore, type GiftNote, type WalkCtx, type Walker, type Zone,
 } from './bot-logic.ts';
 import './bots.css';
@@ -198,6 +198,7 @@ export function initBots(game: GameBridge) {
   /** Out in the common area a neighbour hunts the nearest enemy (a gentle blow every second or so) and wanders when there is none. */
   function hunt(r: Run, dt: number) {
     const w = r.w, c = ctxOf(r); r.foeT -= dt; r.swing = Math.max(0, r.swing - dt);
+    if (r.place === 'zone' && helpColossus(r, dt, c)) return;
     if (r.foe && (r.foe.hp <= 0 || !world.enemies.some(e => e.id === r.foe!.id && e.hp > 0))) r.foe = null;
     const bossFight = !!r.foe && r.bossUntil > 0;
     if (bossFight && clock > r.bossUntil) { // it has had enough: out of reach of the boss, which it leaves for the player
@@ -222,6 +223,24 @@ export function initBots(game: GameBridge) {
     if (w.wait > 0) { w.wait -= dt; r.moving = false; return; }
     r.moving = walk(w, dt, c, false);
     if (!r.moving) { w.wait = 1 + rand() * 3; pickGoal(w, c); }
+  }
+  /**
+   * While the daily Colossus is awake (solo, colossus.ts) every neighbour out in the wild walks to a spot round it and
+   * chips at it about once a second: small blows that never earn it any reward. Paths swing round the village fence.
+   */
+  function helpColossus(r: Run, dt: number, c: WalkCtx) {
+    const rally = game.colossusRally?.() ?? null; if (!rally) return false;
+    const w = r.w, spot = rallySpot(rally, Number(r.def.id.slice(BOT_ID_PREFIX.length)) || 0), d = Math.hypot(spot.x - w.x, spot.z - w.z);
+    r.foe = null; r.bossUntil = 0;
+    if (d > 1.2) {
+      let gx = spot.x, gz = spot.z;
+      const a0 = Math.atan2(w.z, w.x), a1 = Math.atan2(spot.z, spot.x), gap = Math.atan2(Math.sin(a1 - a0), Math.cos(a1 - a0));
+      if (Math.abs(gap) > .9 && Math.hypot(w.x, w.z) < 40) { const a = a0 + Math.sign(gap) * .8; gx = Math.cos(a) * 30; gz = Math.sin(a) * 30; }
+      w.goalX = gx; w.goalZ = gz; w.speed = 4.4; r.moving = walk(w, dt, c, false); return true;
+    }
+    w.facing = Math.atan2(rally.x - w.x, rally.z - w.z); r.moving = false;
+    if (r.foeT <= 0) { r.foeT = .9 + rand() * .6; r.swing = .3; game.colossusStrike?.(r.def.id, attackDamage(r.def.level)); }
+    return true;
   }
   /** Starts the walk through a gate: into the safe zone (a friend's visit) or back out to the hunting ground. */
   function commute(r: Run, to: Place) {
