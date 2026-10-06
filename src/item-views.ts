@@ -33,6 +33,33 @@ export function sellProduce(s: M.SaveState) {
   return gained;
 }
 
+/**
+ * "Cook & sell all" (round 28): the same produce, but every stack the kitchen can cook (crops and fish with a cooked_
+ * form, content.ts) goes through the pot first, since a cooked dish sells for about 2.2x the raw price (+2). `raw` is
+ * what "Sell all" would bring, `cooked` what cooking first brings; both count the chest at home. Cooking follows the
+ * kitchen's own rule (model.ts cook: at home, kitchen open), so away from home or before the kitchen opens `kitchen` is
+ * false and only the raw value is on offer.
+ */
+export function cookSellPlan(s: M.SaveState) {
+  const { lots, chest, total } = produceLots(s), kitchen = s.planet === 'home' && M.kitchenOpen(s);
+  const cookable = (id: string) => kitchen && Object.hasOwn(M.ITEMS, `cooked_${id}`);
+  const cooked = [...lots, ...chest].reduce((sum, l) => sum + l.n * M.sellPrice(s, cookable(l.id) ? `cooked_${l.id}` : l.id), 0);
+  const dishes = [...lots, ...chest].reduce((n, l) => n + (cookable(l.id) ? l.n : 0), 0);
+  return { raw: total, cooked, kitchen, dishes };
+}
+/** Cooks every cookable produce stack (bag and chest), sells exactly those dishes, then sells the rest as "Sell all" does. */
+export function cookSellProduce(s: M.SaveState) {
+  const plan = cookSellPlan(s);
+  if (!plan.kitchen || !plan.raw) return 0;
+  const { lots, chest } = produceLots(s), ids = [...new Set([...lots, ...chest].map(l => l.id))].filter(id => Object.hasOwn(M.ITEMS, `cooked_${id}`));
+  let gained = 0;
+  for (const id of ids) {
+    const n = M.pantry(s, id);
+    if (n > 0 && M.cook(s, id, n)) gained += M.sell(s, `cooked_${id}`, n);
+  }
+  return gained + sellProduce(s);
+}
+
 /** Defence as the reference shows it: "N (−X% damage)", X = def / (def + 60), the same curve the hit formula uses. */
 export const defenseText = (def: number) => t('{defense} (−{percent}% damage)', { defense: def, percent: Math.round(def / (def + 60) * 100) });
 

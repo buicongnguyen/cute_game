@@ -118,7 +118,7 @@ test('layout 3 saves move onto the 6 x 4 grid: starting beds and game-placed bed
 
 for (const difficulty of ['easy', 'normal', 'hard'] as const) test(`${difficulty}: old bed levels are refunded at the saved difficulty's prices, once`, () => {
   const s = M.newGame(); s.energy = 1000; s.plots[0].level = 5; s.plots[1].level = 4; s.plots[2].level = 3;
-  s.settings = {...s.settings, difficulty, sound: false, keyboardLayout: 'wasd'};
+  s.settings = {...s.settings, difficulty, sound: false, musicVolume: 0, sfxVolume: 0, vibrate: false, keyboardLayout: 'wasd'};
   const plantedAt = Date.now(); Object.assign(s.plots[0], {crop, plantedAt, growDuration: base / 2});
   const r = reload(s);
   assert.deepEqual(r.plots.slice(0, 3).map(p => p.level), [3, 3, 3]);

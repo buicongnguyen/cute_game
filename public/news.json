@@ -1,0 +1,149 @@
+{
+  "news": [
+    {
+      "id": "2026-10-06-events",
+      "date": "2026-10-06",
+      "icon": "🗿",
+      "title": { "en": "Big adventures together: the World Colossus, the Ancient Dungeon and a Leaderboard", "vi": "Phiêu lưu lớn cùng nhau: Cự Thần Thế Giới, Hầm Ngục Cổ Xưa và Bảng xếp hạng" },
+      "items": {
+        "en": [
+          "🗿 World Colossus: once a day a towering colossus wakes in the wild. Everyone fights it together, and everyone who helps shares the rewards.",
+          "🏰 Ancient Dungeon: gather a team at the dungeon entrance and clear five rooms of new creatures and bosses, each with its own little pet to win.",
+          "🏆 Leaderboard: see who levelled up, harvested, fished and fought the most this week, and where you stand among every explorer.",
+          "📰 This news board: a red dot on 📰 tells you when something new has arrived."
+        ],
+        "vi": [
+          "🗿 Cự Thần Thế Giới: mỗi ngày một lần, một người khổng lồ cao ngất thức giấc ngoài hoang dã. Mọi người cùng nhau chiến đấu, ai góp sức cũng được chia quà.",
+          "🏰 Hầm Ngục Cổ Xưa: lập đội ở lối vào hầm ngục rồi vượt qua năm phòng đầy sinh vật và trùm mới, mỗi trùm có một thú cưng nhỏ để giành lấy.",
+          "🏆 Bảng xếp hạng: xem ai lên cấp, thu hoạch, câu cá và chiến đấu nhiều nhất tuần này, và bạn đứng ở đâu giữa mọi nhà thám hiểm.",
+          "📰 Bảng tin này: chấm đỏ trên nút 📰 báo cho bạn khi có điều mới."
+        ]
+      }
+    },
+    {
+      "id": "2026-10-06-garden",
+      "date": "2026-10-06",
+      "icon": "🍲",
+      "title": { "en": "Fairer garden and market rules, and new sound settings", "vi": "Luật vườn và chợ công bằng hơn, cùng cài đặt âm thanh mới" },
+      "items": {
+        "en": [
+          "🔥 Cook & sell all: the market can cook every crop and fish first, then sell. It shows both totals, so you can see how much more cooked food brings.",
+          "🌳 Fruit trees grow at their own pace now: fertilizer helps every other crop, but not the trees.",
+          "🔒 Titan trophies, boss pets and special-offer gear need the level of the world they come from, to buy and to wear.",
+          "❓ Mystery shadows only show up while you are fishing, close to your bobber, and give you up to three tries.",
+          "💧 Watering a friend's crop takes 10% off its remaining time and gives more XP. Up to five waterings a day in each garden.",
+          "🎵 Settings: separate music and effects volume sliders and a vibration switch."
+        ],
+        "vi": [
+          "🔥 Nấu & bán hết: ở chợ có thể nấu mọi nông sản và cá trước rồi mới bán. Chợ hiện cả hai tổng, để bạn thấy đồ nấu chín đáng giá hơn bao nhiêu.",
+          "🌳 Cây ăn quả giờ lớn theo nhịp riêng: phân bón giúp mọi loại cây khác, nhưng không giúp cây ăn quả.",
+          "🔒 Chiến lợi phẩm người khổng lồ, thú cưng của trùm và trang bị ưu đãi đặc biệt cần đạt cấp của thế giới chúng đến từ, cả khi mua lẫn khi mặc.",
+          "❓ Bóng cá bí ẩn chỉ xuất hiện khi bạn đang câu, ngay gần phao, và cho bạn tối đa ba lần thử.",
+          "💧 Tưới cây cho bạn bè giảm 10% thời gian còn lại của cây và cho nhiều XP hơn. Tối đa năm lần tưới mỗi ngày ở mỗi khu vườn.",
+          "🎵 Cài đặt: thanh chỉnh âm lượng nhạc và hiệu ứng riêng, cùng công tắc rung."
+        ]
+      }
+    },
+    {
+      "id": "2026-10-06-pets",
+      "date": "2026-10-06",
+      "icon": "🐾",
+      "title": { "en": "Boss pets and brighter skills", "vi": "Thú cưng của trùm và kỹ năng rực rỡ hơn" },
+      "items": {
+        "en": [
+          "🐾 Every boss can leave a tiny copy of itself behind as a pet that fights at your side.",
+          "✨ Skills got new looks: projectiles, summoned allies, area blasts and self effects now match their names.",
+          "🏷️ Some skills were renamed so their names say what they do."
+        ],
+        "vi": [
+          "🐾 Mỗi trùm có thể để lại một bản sao tí hon của chính nó làm thú cưng chiến đấu bên bạn.",
+          "✨ Kỹ năng có diện mạo mới: đạn, đồng minh được triệu hồi, vụ nổ diện rộng và hiệu ứng lên bản thân giờ khớp với tên gọi.",
+          "🏷️ Một số kỹ năng được đổi tên để tên gọi nói đúng việc chúng làm."
+        ]
+      }
+    },
+    {
+      "id": "2026-10-05-neighbours",
+      "date": "2026-10-05",
+      "icon": "🧑‍🌾",
+      "title": { "en": "AI neighbours for solo play", "vi": "Hàng xóm AI khi chơi một mình" },
+      "items": {
+        "en": [
+          "🧑‍🌾 Friendly neighbours explore and fight beyond the gates, send friend requests, chat and sometimes bring presents.",
+          "🐶 The richest neighbours stroll around with two pets.",
+          "😴 Your helpers now rest at home or wander around the farm when there is nothing to do.",
+          "⚙️ Neighbours can be switched off in Settings, and they always stay away while you play online."
+        ],
+        "vi": [
+          "🧑‍🌾 Những người hàng xóm thân thiện khám phá và chiến đấu ngoài cổng, gửi lời mời kết bạn, trò chuyện và đôi khi mang quà đến.",
+          "🐶 Những hàng xóm giàu nhất dắt theo hai thú cưng đi dạo.",
+          "😴 Người giúp việc giờ về nhà nghỉ hoặc đi dạo quanh trang trại khi không có việc gì.",
+          "⚙️ Có thể tắt hàng xóm trong Cài đặt, và họ luôn vắng mặt khi bạn chơi trực tuyến."
+        ]
+      }
+    },
+    {
+      "id": "2026-10-04-farm",
+      "date": "2026-10-04",
+      "icon": "🐐",
+      "title": { "en": "Goats, geese and the big fish of the deep", "vi": "Dê, ngỗng và cá lớn dưới nước sâu" },
+      "items": {
+        "en": [
+          "🐐 Goats and geese moved into the animal pen.",
+          "🐟 Big fish swim in the deep water of every pond: you only see their shadows until you land one.",
+          "📏 Bigger catches are worth more: a size bonus rewards the giants.",
+          "🌱 Bed upgrades make crops grow faster, and fruit trees stand tall over their beds."
+        ],
+        "vi": [
+          "🐐 Dê và ngỗng đã dọn vào chuồng thú.",
+          "🐟 Cá lớn bơi ở vùng nước sâu của mọi ao: bạn chỉ thấy bóng của chúng cho đến khi câu được.",
+          "📏 Cá càng to càng đáng giá: phần thưởng kích thước dành cho những con khổng lồ.",
+          "🌱 Nâng cấp luống giúp cây lớn nhanh hơn, và cây ăn quả vươn cao trên luống."
+        ]
+      }
+    },
+    {
+      "id": "2026-10-04-friends",
+      "date": "2026-10-04",
+      "icon": "💌",
+      "title": { "en": "Friends who help each other", "vi": "Bạn bè giúp đỡ lẫn nhau" },
+      "items": {
+        "en": [
+          "🎁 Send gifts to friends: they land in their chest at home.",
+          "💧 Water a friend's crops while you visit their garden.",
+          "📒 A guest diary shows who came by, watered or gave you something.",
+          "💬 Private messages between friends."
+        ],
+        "vi": [
+          "🎁 Gửi quà cho bạn bè: quà sẽ nằm trong rương ở nhà họ.",
+          "💧 Tưới cây cho bạn khi ghé thăm khu vườn của họ.",
+          "📒 Sổ khách ghi lại ai đã ghé, đã tưới cây hay đã tặng quà cho bạn.",
+          "💬 Nhắn tin riêng giữa bạn bè."
+        ]
+      }
+    }
+  ],
+  "upcoming": [
+    {
+      "id": "soon-pet-show",
+      "icon": "🎀",
+      "title": { "en": "Pet show", "vi": "Hội thi thú cưng" },
+      "text": { "en": "Dress up your companion and show it off to the whole village for small prizes.", "vi": "Diện đồ cho thú cưng và khoe với cả làng để nhận những phần quà nhỏ." },
+      "status": { "en": "Planned", "vi": "Dự kiến" }
+    },
+    {
+      "id": "soon-greenhouse",
+      "icon": "🪴",
+      "title": { "en": "Greenhouse", "vi": "Nhà kính" },
+      "text": { "en": "A glass house next to the garden where rare flowers grow in every weather.", "vi": "Một ngôi nhà kính cạnh khu vườn, nơi hoa hiếm mọc trong mọi thời tiết." },
+      "status": { "en": "In progress", "vi": "Đang làm" }
+    },
+    {
+      "id": "soon-night-market",
+      "icon": "🏮",
+      "title": { "en": "Night market", "vi": "Chợ đêm" },
+      "text": { "en": "Lantern stalls open in the evening with special trades that change every week.", "vi": "Các sạp đèn lồng mở vào buổi tối với những món trao đổi đặc biệt thay đổi mỗi tuần." },
+      "status": { "en": "Planned", "vi": "Dự kiến" }
+    }
+  ]
+}

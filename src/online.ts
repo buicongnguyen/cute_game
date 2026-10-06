@@ -183,7 +183,7 @@ export function initOnline(game:GameBridge) {
     game.setNetworkHooks({role,hit:()=>true,status:()=>true,moveTarget:()=>true,reportDamage:(enemyId,source)=>{if(role==='host')send({type:'damage',id:account?.id,source,enemyId});},visitCrop:index=>{
       const plot=world().state.plots[index];if(!visiting||!plot?.crop)return;
       // A growing crop is watered (it ripens sooner for the owner); a ripe one can be picked as before.
-      if(cropProgress(plot)<1){void queueAction({type:'waterFriend',payload:{ownerId:visiting,index,generation:plot.generation}}).then(()=>announce('You watered the plant. It will ripen a little sooner!')).catch(error=>announce(error.message));return;}
+      if(cropProgress(plot)<1){void queueAction({type:'waterFriend',payload:{ownerId:visiting,index,generation:plot.generation}}).then(reply=>{const r=(reply as {result?:{xp?:number;left?:number}}).result;if(r?.xp)announce('💧 You watered the plant: 10% less time to wait. +{xp} XP · {count} waterings left in this garden today.',{xp:r.xp,count:r.left??0});else announce('You watered the plant. It will ripen a little sooner!');}).catch(error=>announce(error.message));return;}
       void queueAction({type:'stealCrop',payload:{ownerId:visiting,index,generation:plot.generation}}).catch(error=>announce(error.message));
     }});
   }

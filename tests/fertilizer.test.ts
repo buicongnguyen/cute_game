@@ -15,7 +15,8 @@ function garden(crop = 'carrot') {
 }
 
 test('two doses of either fertilizer ripen every crop from newly planted', () => {
-  for (const crop of Object.keys(M.CROPS)) for (const fertilizer of ['manure', 'spore']) {
+  // Fruit trees (8 h or more) refuse fertilizer: fruit-tree-fertilizer in econ-rules.test.ts.
+  for (const crop of Object.keys(M.CROPS).filter(id => !M.isTreeCrop(id))) for (const fertilizer of ['manure', 'spore']) {
     const state = garden(crop);
     assert.equal(M.fertilize(state, 0, plantedAt, fertilizer), true, `${crop}: first ${fertilizer}`);
     assert.equal(M.cropProgress(state.plots[0], plantedAt), .5);

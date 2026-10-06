@@ -1,0 +1,38 @@
+/* News board (news-board.ts): the 📰 menu button with its unread count, and the update cards. */
+.icon-button[data-action="news"] { background: linear-gradient(180deg, #ffe07a, #f2b415); }
+.icon-button[data-action="news"] > i.news-count {
+  width: auto; min-width: 20px; height: 20px; padding: 0 4px; right: -6px; top: -6px;
+  display: grid; place-items: center; border-width: 2px; border-radius: 10px;
+  font: 900 11px/1 inherit; font-style: normal; color: #fff; background: #e5484d;
+}
+.icon-button[data-action="news"] > i.news-count[hidden] { display: none; }
+.news-list { display: grid; gap: 10px; margin-top: 10px; }
+.news-card { display: grid; grid-template-columns: 44px 1fr; gap: 10px; padding: 12px; border: 2px solid var(--line); border-radius: 16px; background: #fff; }
+.news-card.latest { border-color: #f2b415; background: #fffbea; box-shadow: 0 3px 0 #f6d77a; }
+.news-card .news-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: #fff3cf; font-size: 24px; }
+.news-card h3 { margin: 0; font-size: 15px; line-height: 1.3; color: var(--ink); }
+.news-card .news-date { display: block; margin-top: 2px; font-size: 11px; font-weight: 800; color: var(--ink-faint); }
+.news-card ul { margin: 6px 0 0; padding-left: 0; list-style: none; display: grid; gap: 5px; }
+.news-card li { font-size: 13px; line-height: 1.4; color: var(--ink-soft); }
+.news-card p { margin: 4px 0 0; font-size: 13px; color: var(--ink-soft); }
+.news-new { display: inline-block; margin-right: 2px; padding: 2px 7px; border-radius: 999px; background: #e5484d; color: #fff; font-size: 10px; font-weight: 900; letter-spacing: .06em; vertical-align: 2px; }
+.news-status { display: inline-block; margin-left: 4px; padding: 2px 8px; border-radius: 999px; background: #e3f4ff; color: #1f6fa8; font-size: 11px; font-weight: 800; vertical-align: 1px; }
+.news-earlier { margin-top: 6px; }
+@media (max-width: 600px) {
+  .news-card { grid-template-columns: 36px 1fr; gap: 8px; padding: 10px; }
+  .news-card .news-icon { width: 36px; height: 36px; font-size: 20px; border-radius: 11px; }
+  .icon-button[data-action="news"] > i.news-count { min-width: 17px; height: 17px; font-size: 10px; right: -5px; top: -5px; }
+}
+/* Settings: the music and effects volume sliders (audio-settings.ts). */
+.volume-control { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.volume-control input[type="range"] { flex: 1; min-width: 96px; accent-color: #f2a20c; }
+.volume-control output { min-width: 38px; text-align: right; font-weight: 900; font-size: 13px; color: var(--ink-soft); }
+/* Market: "Cook & sell all" with the cooked and raw totals side by side (item-views.ts cookSellPlan). */
+.cook-sell { display: grid; gap: 4px; margin: 8px 0 4px; }
+.cook-sell .compare { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; font-size: 12px; font-weight: 800; color: var(--ink-soft); }
+.cook-sell .compare b { color: #c76a00; }
+.cook-sell-note { margin: 6px 0; font-size: 12px; color: var(--ink-faint); text-align: center; }
+/* Level gates (level-gates.ts): "Needs level N" in the shop and the bag. */
+.chip.chip-gate { background: #fde8e8; color: #b42318; border-color: #f5c2c2; }
+.fertilizer-row.tree-note p { color: var(--ink-faint); }
+.cook-sell .cook-sell-button { background: linear-gradient(180deg, #ffb45e, #f08a1c); }

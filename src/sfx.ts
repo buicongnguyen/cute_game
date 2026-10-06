@@ -7,17 +7,20 @@ export type Sound = 'alert' | 'click' | 'punch' | 'swing' | 'hit' | 'crit' | 'hu
 
 export class Sfx {
   enabled = true;
+  /** Effects volume from Settings (audio-settings.ts), 0-1; the default 0.8 plays at the original loudness. */
+  volume = .8;
   private ctx: AudioContext | null = null;
   private out: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private last = new Map<Sound, number>();
 
   private context() {
-    if (!this.enabled) return null;
+    if (!this.enabled || !(this.volume > 0)) return null;
     try {
       this.ctx ??= new AudioContext();
       if (this.ctx.state === 'suspended') void this.ctx.resume();
-      if (!this.out) { this.out = this.ctx.createGain(); this.out.gain.value = .55; this.out.connect(this.ctx.destination); }
+      if (!this.out) { this.out = this.ctx.createGain(); this.out.connect(this.ctx.destination); }
+      this.out.gain.value = .55 * Math.max(0, Math.min(1, this.volume)) / .8;
       if (!this.noise) {
         this.noise = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
         const data = this.noise.getChannelData(0); let seed = 7;

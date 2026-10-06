@@ -216,7 +216,7 @@ test('active Titan attack snapshots advance without host packets so migration re
 test('Scorpion Titan trophies provide their advertised lava immunity online',async t=>{
  t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
  for(const id of ['hat_t_scorpion','pet_t_scorpion']){
-  const f=await fixture(t,{planet:'lava',profile:p=>{p.bag[id]=1;Game.equip(p,id);}}),engine=f.authority.engineFor(f.peer);engine.hpAt=Date.now()+100000;
+  const f=await fixture(t,{planet:'lava',profile:p=>{p.level=Game.gearLevel(id);p.bag[id]=1;Game.equip(p,id);}}),engine=f.authority.engineFor(f.peer);engine.hpAt=Date.now()+100000;
   let observed;engine.environment.step=(_dt,_pose,_input,traits)=>{observed=traits;return {damage:traits.maxHp*.07*(1-traits.fireResistance),heal:0};};
   t.mock.timers.tick(50);assert.equal(observed.fireResistance,1,id);assert.equal(engine.healthEvents.length,0,id);
  }

@@ -23,13 +23,13 @@ test('original crops receive exactly one growth and reward scaling; reloading ne
   const r=M.parseSave(JSON.stringify(M.parseSave(JSON.stringify(s))))!;
   assert.equal(r.bag.carrot,4);assert.equal(r.xp,3);assert.equal(r.energy,27);
 });
-test('new fruit crops remain single harvests and two fertilizer doses complete their original timer',()=>{
+test('new fruit crops remain single harvests, refuse fertilizer and ripen on their original timer',()=>{
   for(const [id,level] of fruits){
     const s=M.newGame();s.level=level;s.bag.manure=2;const at=1_000_000;
     assert.ok(M.plant(s,0,id,at));assert.equal(M.cropProgress(s.plots[0],at+M.CROPS[id].duration-1)<1,true);
-    assert.ok(M.fertilize(s,0,at,'manure'));assert.equal(M.cropProgress(s.plots[0],at),.5);
-    assert.ok(M.fertilize(s,0,at,'manure'));assert.equal(M.cropProgress(s.plots[0],at),1);
-    assert.equal(M.harvest(s,0,at),id);assert.equal(s.bag[id],1);assert.equal(s.plots[0].crop,null);
-    assert.equal(M.harvest(s,0,at),null);assert.equal(s.bag[id],1);
+    assert.equal(M.fertilize(s,0,at,'manure'),false);assert.equal(s.bag.manure,2,'a refused dose is not spent');assert.equal(M.cropProgress(s.plots[0],at),0);
+    const ripeAt=at+M.cropDuration(s.plots[0]);assert.equal(M.harvest(s,0,ripeAt-1),null);
+    assert.equal(M.harvest(s,0,ripeAt),id);assert.equal(s.bag[id],1);assert.equal(s.plots[0].crop,null);
+    assert.equal(M.harvest(s,0,ripeAt),null);assert.equal(s.bag[id],1);
   }
 });

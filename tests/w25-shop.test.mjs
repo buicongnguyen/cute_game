@@ -30,7 +30,7 @@ test('special offers: crafted and boss-only gear, pets and decorations, never ke
 });
 
 test('buying a special offer costs exactly its energy and adds one to the bag; short energy or a non-offer buys nothing', () => {
-  const s = M.newGame(); s.energy = 10_000;
+  const s = M.newGame(); s.energy = 10_000; s.level = 30; // past every level gate (level-gates.ts)
   assert.equal(M.buy(s, 'hat_t_eye'), false, 'a titan trophy costs 25,000'); assert.equal(s.energy, 10_000);
   assert.equal(M.buy(s, 'pet_dragon'), true); assert.equal(s.energy, 0); assert.equal(s.bag.pet_dragon, 1); assert.equal(s.collection.pet_dragon, 1);
   assert.equal(M.buy(s, 'deco_volcano'), false, 'no energy left'); assert.equal(s.bag.deco_volcano, undefined);
@@ -62,7 +62,7 @@ async function service(t) {
   t.after(async () => { await store.close(); await rm(dir, { recursive: true, force: true }); });
   const execute = createActionService({ store, getPeer: () => undefined });
   const act = async (id, type, payload = {}) => execute(id, { rulesVersion: ACTION_RULES_VERSION, requestId: randomUUID(), expectedRevision: (await store.get(id)).profileRevision || 0, type, payload });
-  const make = async (id, energy) => { const profile = M.newGame(id); profile.energy = energy; await store.create({ id, username: id, hash: 'h', salt: 's', friends: [], requests: [], profile }); };
+  const make = async (id, energy, level = 30) => { const profile = M.newGame(id); profile.energy = energy; profile.level = level; await store.create({ id, username: id, hash: 'h', salt: 's', friends: [], requests: [], profile }); };
   return { store, act, make };
 }
 const status = n => error => error.status === n;
@@ -80,6 +80,10 @@ test('the server prices special offers itself: a client price is ignored, short 
   await h.make('dave', 1e9);
   for (const id of ['bunny', 'obsidian', 'cooked_apple', 'constructor']) await assert.rejects(h.act('dave', 'buy', { id }), status(409), id);
   assert.equal((await h.store.get('dave')).profile.energy, 1e9);
+  // Level gates (level-gates.ts) hold online too: a level-1 explorer with plenty of energy cannot buy a lava boss pet.
+  await h.make('erin', 1e9, 1);
+  await assert.rejects(h.act('erin', 'buy', { id: 'pet_b_dragon' }), error => error.status === 409 && /Needs level 14/.test(error.message), 'below the lava level');
+  assert.equal((await h.store.get('erin')).profile.energy, 1e9);
   await assert.rejects(h.act('dave', 'testerBuy', { id: 'crown' }), error => error.status === 400 || error.status === 409, 'no tester purchases online');
 });
 
