@@ -58,6 +58,7 @@ import { STORY_STEPS } from './content.ts';
 import type { GameBridge, GameAction, NetworkHooks, NetworkDrop } from './game-bridge.ts';
 import { initOnline } from './online.ts';
 import { defeatPaysPlayer } from './safe-zone.ts';
+import { initHudLayout } from './hud-layout.ts';
 import { initBots, neighboursOn, setNeighboursOn } from './bots.ts';
 import { initPlatform, toggleFullscreen } from './platform.ts';
 import { Sfx, type Sound } from './sfx.ts';
@@ -1558,6 +1559,7 @@ onLanguageChange(()=>{
   else if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal==='shop')shop();else if(modal==='sell')market();else if(modal==='chest')storage();else if(modal==='upgrade')upgrades();else if(modal==='cook')cooking();else if(modal==='craft')crafting();else if(modal==='forge')forgeMenu();else if(modal==='decor')decorations();else if(modal==='map')map();else if(modal==='travel')planets();else if(modal==='help')help();else if(modal==='pen')penDialog();else if(modal==='helper')helperDialog();else if(modal==='farm-helper')farmHelperDialog();
 });
 initOnline(gameBridge);
+initHudLayout();
 const neighbours=initBots(gameBridge);if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__bots:neighbours});
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.

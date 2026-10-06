@@ -92,3 +92,8 @@ body.indoors .keys-guide { display: none !important; }
 @media (max-height: 520px) and (orientation: landscape) {
   .tracker-panels:has(#challenge-tracker:not([hidden])) #bounty-tracker { display: none; }
 }
+
+/* The menu wraps to as many rows as its buttons need (the neighbours and full-screen buttons added rows): hud-layout.ts measures
+   where it ends (--menu-bottom), and the minimap and Home button sit just under it instead of at a fixed guess that overlapped. */
+#hud .minimap { top: calc(var(--menu-bottom, calc(var(--edge, 10px) + var(--safe-top, 0px) + var(--b, 44px))) + 8px); }
+#hud .home-button, #hud.joystick-on .home-button, #hud.joystick-on.joystick-right .home-button { top: calc(var(--menu-bottom, calc(var(--edge, 10px) + var(--safe-top, 0px) + var(--b, 44px))) + 8px) !important; }
