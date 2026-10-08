@@ -62,7 +62,7 @@ test('reference terms and all generated cooked names stay consistent with their 
   assert.equal(VI_CATALOG[C.ITEMS.sword_wood.name], 'Kiếm Gỗ');
   assert.equal(VI_CATALOG[ENEMY_TYPES.mushroom.name], 'Nấm Cáu Kỉnh');
   assert.equal(VI_CATALOG[C.PLANETS.home.name], 'Hành Tinh Mầm Xanh');
-  assert.equal(VI_CATALOG[C.DISGUISES.dz_superhero.skills[0].name], 'Bay Lên Trời');
+  assert.equal(VI_CATALOG[C.DISGUISES.dz_superhero.skills[0].name], 'Cất Cánh Bay Cao');
   for (const item of Object.values(C.ITEMS).filter(item => item.cooked)) {
     assert.ok(item.base);
     assert.equal(VI_CATALOG[item.name], `${VI_CATALOG[C.ITEMS[item.base!].name]} · Nướng`);

@@ -6,6 +6,7 @@
  */
 import { t } from './i18n.ts';
 import { skillTuning, levelledCooldown } from './skill-upgrades.ts';
+import { DZ, GAZE, BOULDER } from './combat.ts';
 
 const fix = (n: number) => String(Math.round(n * 100) / 100);
 /** Base whirlwind radius (sword users spin wider), the slam shockwave and the dash length, as combat.ts casts them. */
@@ -39,24 +40,79 @@ export const SPECIAL_INFO: Record<string, { damage: number; text: string; radius
   laser: { damage: 3, text: 'A 14 m rainbow beam straight ahead: ×{dmg} damage to everything in the line.' },
 };
 
-/** Disguise skills (fixed kits, never levelled), by disguise and slot. */
+/**
+ * Disguise skills (fixed kits, never levelled), by disguise and slot. Every number is read from combat.ts (DZ, GAZE,
+ * BOULDER), so a tooltip cannot drift from the hit; locales/vi-skills.ts holds the same sentences in Vietnamese.
+ */
+const pct = (n: number) => fix(n * 100);
+const fanAngle = Math.round(2 * Math.acos(DZ.fan.cone) * 180 / Math.PI);
+const snowMax = Math.min(2.6, .5 + DZ.snowball.grow * DZ.snowball.time);
 export const DISGUISE_INFO: Record<string, readonly string[]> = {
-  dz_army: [SPECIAL_INFO.volley.text, 'Drop a sentry turret that shoots for 12 s.', 'A smoke cloud lasts 5 s within 5 m: enemies inside are blinded and you stay hidden while inside.', 'Up to 6 rockets at enemies within 16 m: ×2 damage and a 2 m blast.'],
-  dz_navy: [SPECIAL_INFO.anchor.text, 'Hook the nearest enemy within 14 m and pull it to you: ×1.5 damage, stunned 2 s.', 'A broadside of 12 cannonballs around your target, ×1.5 damage within 2 m each.', SPECIAL_INFO.tsunami.text],
-  dz_aodai: [SPECIAL_INFO.lotus.text, 'Healing flowers for 8 s: stay within 4 m to heal 3% every half second.', 'Charm your target for 8 s: it fights the other creatures (a boss is only slowed).', SPECIAL_INFO.starfall.text],
-  dz_aodai_man: [SPECIAL_INFO.dragon.text, 'Roar: enemies within 9 m flee in fear for 4 s (a boss is only slowed).', 'Charge 11 m forward, untouchable, ×3 damage to every enemy on the way.', SPECIAL_INFO.thunder.text],
-  dz_usa: [SPECIAL_INFO.eagle.text, 'Raise your shield: no damage for 4 s.', 'Set a cannon that fires for 10 s.', SPECIAL_INFO.nova.text],
-  dz_vietnam: [SPECIAL_INFO.goldstar.text, 'Binding roots within 6 m: ×1 damage and a 4 s stun, plus 8 pulses over 4 s, each dealing ×0.3 damage and healing 1% of your maximum health.', 'After 0.8 s a holy blade strikes your target: ×4 damage within 3.5 m, stuns 1 s.', SPECIAL_INFO.inferno.text],
-  dz_superhero: ['Fly for 12 s (press again to land): ground attacks miss you.', 'Dive 4 m ahead and crash: ×2 damage within 5 m, ×4 if you were flying; stuns 1 s.', 'Twin eye lasers sweep a 13 m line, 1 m wide, across the front for 1.2 s: ×1 damage per touch, leaving scorch marks.', 'Lob a giant rock at the nearest enemy within 14 m (8 m ahead if none): lands in 0.6 s for ×3.2 damage in a 4.5 m blast, launching enemies upward.'],
-  dz_ninja: ['Two shadow clones fight beside you for 8 s.', 'Vanish for 5 s: enemies lose you, and your next hit does triple damage.', 'Blink behind the nearest enemy within 12 m: ×3 damage and stunned for 1 s.', 'A smoke cloud lasts 5 s within 5 m: enemies inside are blinded and you stay hidden while inside.'],
-  dz_mage: ['Charge 0.8 s, then a great fireball: ×3 damage and a 4 m blast (×1.8) that stuns 2 s.', 'Blink 8 m ahead.', 'Turn enemies within 3 m of your target into sheep for 6 s: tiny, slow and harmless (a boss is only slowed).', 'A black hole pulls enemies within 7 m for 3 s, dealing pulses within 5 m, then bursts for ×3 damage.'],
-  dz_knight: ['Raise your shield: no damage for 4 s.', 'Charge 11 m forward, untouchable, ×3 damage to every enemy on the way.', 'Challenge every enemy within 12 m for 6 s; you take far less damage.', 'After 0.8 s a holy blade strikes your target: ×4 damage within 3.5 m, stuns 1 s.'],
-  dz_mecha: ['Tank mode for 6 s: a 2 m electric shockwave every 0.25 s, ×1 damage, stunned 0.3 s.', 'Drop a tesla turret that fires shock bolts for 12 s.', 'Up to 6 shock missiles at enemies within 16 m: ×2 damage and a 2 m electric burst.', 'Energy shield: no damage for 4 s and 20% health back.'],
-  dz_dino: ['Bite an enemy within 3.2 m: a weak one (under 40% health) is swallowed whole and heals you 25%; otherwise ×3 damage (a boss is never swallowed).', 'A tail sweep all around: ×1.8 damage within 3.6 m and a big knock-back.', 'Roar: enemies within 9 m flee in fear for 4 s (a boss is only slowed).', 'Giant form for 10 s: twice as big, +60% damage, +20 defence, and your steps shake the ground.'],
-  dz_fairy: ['Healing flowers for 8 s: stay within 4 m to heal 3% every half second.', 'Float for 8 s: ground attacks miss you.', 'Charm your target for 8 s: it fights the other creatures (a boss is only slowed).', 'Binding roots within 6 m: ×1 damage and a 4 s stun, plus 8 pulses over 4 s, each dealing ×0.3 damage and healing 1% of your maximum health.'],
-  dz_pirate: ['Set a cannon that fires for 10 s.', 'Hook the nearest enemy within 14 m and pull it to you: ×1.5 damage, stunned 2 s.', 'Your parrot marks every enemy within 12 m for 8 s: they take +50% damage, and the mark itself hits for ×0.5.', 'A broadside of 12 cannonballs around your target, ×1.5 damage within 2 m each.'],
-  dz_vampire: ['Drain your target for 2.1 s: 7 bites of ×0.7 damage, each heals you 3.5%.', 'Become bats for 2.5 s: untouchable.', 'Five bats circle you for 8 s, biting enemies and healing you.', 'Blood moon for 6 s: enemies within 7 m take ×0.3 damage every 0.5 s; your hits heal you for 40% of the damage dealt.'],
-  dz_snowman: ['Roll a growing snowball 21 m: ×3 damage to everything it passes, stunned 2 s.', 'A snow decoy for 6 s: enemies within 8 m are blinded, then it bursts for ×2.5 damage within 4 m.', 'An 8 s ice rink 6 m around you: enemies on it are slowed.', 'Freeze every enemy within 8 m for 3 s, then shatter them for ×2.8 damage.'],
+  dz_superhero: [`Fly for ${DZ.flight.time} s, ${pct(DZ.flight.speed)}% faster (press again to land): melee attacks miss you, only shots can reach you.`,
+    `Dive ${DZ.dive.ahead} m ahead and crash down: ×${DZ.dive.power} damage within ${DZ.dive.radius} m, ×${DZ.dive.flying} if you were flying, enemies thrown up.`,
+    `Twin eye lasers sweep a ${GAZE.length} m line, ${GAZE.width} m wide, across the front for ${GAZE.time} s: ×1 damage per touch, leaving scorch marks.`,
+    `Lob a giant rock at the nearest enemy within ${BOULDER.range} m (${BOULDER.fallback} m ahead if none): lands in ${BOULDER.time} s for ×${BOULDER.power} damage in a ${BOULDER.radius} m blast, launching enemies upward.`],
+  dz_ninja: [`Two shadow clones fight beside you for ${DZ.clones.life} s, each hit ×${DZ.clones.power} damage.`,
+    `Vanish for ${DZ.stealth.time} s, ${pct(DZ.stealth.speed)}% faster: enemies lose you, and your next hit does triple damage.`,
+    `Blink behind the nearest enemy within ${DZ.backstab.range} m and strike: ×${DZ.backstab.power} damage, a critical blow.`,
+    `A smoke cloud lasts ${DZ.smoke.time} s within ${DZ.smoke.radius} m: enemies inside are blinded and you stay hidden while inside.`],
+  dz_mage: [`Charge ${DZ.fireball.charge} s, then hurl a great fireball at the nearest enemy within ${DZ.fireball.range} m: ×${DZ.fireball.power} damage in a ${DZ.fireball.radius} m blast, enemies thrown up.`,
+    `Blink ${DZ.teleport.distance} m ahead.`,
+    `Turn the nearest enemy within ${DZ.sheep.range} m, and up to ${DZ.sheep.count - 1} more within ${DZ.sheep.around} m of it, into sheep for ${DZ.sheep.time} s: tiny, slow and harmless (a boss is only slowed).`,
+    `A black hole at your target pulls enemies within ${DZ.blackhole.pull} m for ${DZ.blackhole.time} s, then bursts: ×${DZ.blackhole.power} damage within ${DZ.blackhole.radius} m.`],
+  dz_knight: [`Raise your shield for ${DZ.block.time} s: every blow from in front of you is blocked.`,
+    `Charge ${fix(DZ.knightcharge.speed * DZ.knightcharge.time)} m forward, untouchable, carrying enemies along, then a mighty blow: ×${DZ.knightcharge.power} damage to each of them.`,
+    `Challenge every enemy within ${DZ.taunt.radius} m for ${DZ.taunt.time} s; you gain +${DZ.taunt.defence} defence.`,
+    `A giant sword falls on your target after ${DZ.holy.delay} s: ×${DZ.holy.power} damage within ${DZ.holy.radius} m.`],
+  dz_mecha: [`Tank mode for ${DZ.tank.time} s: ${pct(DZ.tank.speed)}% faster, +${DZ.tank.defence} defence, and you ram every enemy you touch with an electric shockwave (×${DZ.tank.power} damage, once every ${DZ.tank.rehit} s each).`,
+    `Drop a tesla turret that fires shock bolts for ${DZ.turret.life} s, ×${DZ.turret.power} damage each.`,
+    `${DZ.missiles.count} shock missiles home in on up to ${DZ.missiles.count} enemies within ${DZ.missiles.range} m: ×${DZ.missiles.power} damage each in a ${DZ.missiles.radius} m electric burst.`,
+    `Energy shield: no damage for ${DZ.energyshield.time} s and ${pct(DZ.energyshield.heal)}% health back.`],
+  dz_dino: [`Bite an enemy within ${DZ.devour.reach} m: a weak one (under ${pct(DZ.devour.below)}% health) is swallowed whole and heals you ${pct(DZ.devour.heal)}%; otherwise ×${DZ.devour.power} damage (a boss is never swallowed).`,
+    `A tail sweep all around: ×${DZ.tail.power} damage within ${DZ.tail.radius} m and a big knock-back.`,
+    `Roar: enemies within ${DZ.roar.radius} m flee in fear for ${DZ.roar.time} s (a boss is only slowed).`,
+    `Giant form for ${DZ.giant.time} s: twice as big, +60% damage, +${DZ.giant.defence} defence, and your steps shake the ground.`],
+  dz_fairy: [`A healing flower ring for ${DZ.heal.time} s: stay within ${DZ.heal.radius} m to heal ${pct(DZ.heal.perTick / DZ.heal.tick)}% of your health every second.`,
+    `Float for ${DZ.hover.time} s, ${pct(DZ.hover.speed)}% faster: melee attacks miss you.`,
+    `Charm the nearest enemy within ${DZ.charm.range} m for ${DZ.charm.time} s: it fights the other creatures (a boss is only slowed).`,
+    `A binding tree grows ${DZ.tree.ahead} m ahead for ${DZ.tree.life} s: its roots hold every enemy within ${DZ.tree.radius} m for ${DZ.tree.root} s, and it lashes one every ${DZ.tree.cd} s for ×${DZ.tree.power} damage.`],
+  dz_pirate: [`Set a deck cannon that fires exploding shells for ${DZ.cannon.life} s, ×${DZ.cannon.power} damage each.`,
+    `Hook the nearest enemy within ${DZ.hook.range} m and reel it in: ×${DZ.hook.power} damage and slowed for ${DZ.hook.slow} s.`,
+    `A scout parrot flies out for ${DZ.parrot.life} s, pecking enemies (×${DZ.parrot.power} damage) and marking them for ${DZ.parrot.mark} s: marked enemies take +50% damage.`,
+    `A pirate ship's broadside: ${DZ.broadside.count} cannonballs land around your target, ×${DZ.broadside.power} damage within ${DZ.broadside.radius} m each.`],
+  dz_vampire: [`Drain the nearest enemy within ${DZ.drain.range} m: ${DZ.drain.ticks} bites of ×${DZ.drain.power} damage in ${fix(DZ.drain.ticks * DZ.drain.tick)} s, and you heal ${pct(DZ.drain.heal)}% of the damage dealt.`,
+    `Become bats for ${DZ.bats.time} s: untouchable and twice as fast.`,
+    `Five bats circle you for ${DZ.batcircle.life} s, biting enemies (×${DZ.batcircle.power} damage) and healing you ${pct(DZ.batcircle.heal)}% per bite.`,
+    `Blood moon for ${DZ.bloodnova.time} s: enemies within ${DZ.bloodnova.radius} m take ×${DZ.bloodnova.power} damage every ${DZ.bloodnova.tick} s; your hits heal you for ${pct(DZ.bloodnova.lifesteal)}% of the damage dealt.`],
+  dz_snowman: [`Roll a growing snowball ${fix(DZ.snowball.speed * DZ.snowball.time)} m: it hits everything it passes for ×1.5 to ×${fix(1 + snowMax)} damage (more as it grows), slowing them ${DZ.snowball.slow} s.`,
+    `A snow decoy for ${DZ.decoy.life} s: enemies within ${DZ.decoy.lure} m lose track of you, then it bursts for ×${DZ.decoy.power} damage within ${DZ.decoy.radius} m and freezes them ${DZ.decoy.freeze} s.`,
+    `An ${DZ.icefloor.time} s ice rink ${DZ.icefloor.radius} m around you: enemies on it are slowed, and you skate ${pct(DZ.icefloor.speed)}% faster.`,
+    `Freeze every enemy within ${DZ.iceage.radius} m for ${DZ.iceage.freeze} s, then shatter them for ×${DZ.iceage.power} damage.`],
+  // The six uniforms
+  dz_army: [`Pop ${DZ.popgun.count} toy corks in a fan, ${DZ.popgun.range} m ahead: ×${DZ.popgun.power} damage each.`,
+    `Stack a sandbag wall round you for ${DZ.sandbag.time} s: +${DZ.sandbag.defence} defence while you stand inside its ${DZ.sandbag.radius} m ring; enemies inside are pushed out (×${DZ.sandbag.power} damage).`,
+    `Fire a signal flare over the nearest enemy within ${DZ.flare.range} m: after ${DZ.flare.delay} s every enemy within ${DZ.flare.radius} m is dazzled for ${DZ.flare.blind} s and marked for ${DZ.flare.mark} s (+50% damage taken).`,
+    `${DZ.airdrop.count} supply crates parachute around the nearest enemy within ${DZ.airdrop.range} m: each lands for ×${DZ.airdrop.power} damage within ${DZ.airdrop.radius} m, and the supplies heal you ${pct(DZ.airdrop.heal)}%.`],
+  dz_navy: [SPECIAL_INFO.anchor.text,
+    `Ride a wave ${fix(DZ.surfride.speed * DZ.surfride.time)} m forward, untouchable, ×${DZ.surfride.power} damage to every enemy on the way.`,
+    `Blow the bosun's whistle: every enemy within ${DZ.whistle.radius} m stands to attention, stunned for ${DZ.whistle.stun} s.`,
+    `A little lighthouse stands beside you for ${DZ.lighthouse.life} s; its beam sweeps round every ${fix(2 * Math.PI / DZ.lighthouse.turn)} s: ×${DZ.lighthouse.power} damage and a ${DZ.lighthouse.blind} s dazzle to each enemy within ${DZ.lighthouse.reach} m it passes.`],
+  dz_aodai: [SPECIAL_INFO.lotus.text,
+    `Glide ${fix(DZ.ribbon.speed * DZ.ribbon.time)} m on a silk ribbon, untouchable, then move ${pct(DZ.ribbon.boost)}% faster for ${DZ.ribbon.boostTime} s.`,
+    `Open a paper fan: a gust through a ${fanAngle}° cone ${DZ.fan.radius} m ahead, ×${DZ.fan.power} damage, enemies blown back and slowed ${DZ.fan.slow} s.`,
+    `${DZ.lanterns.count} paper lanterns drift out ${DZ.lanterns.ring} m around you and burst one after another: ×${DZ.lanterns.power} damage within ${DZ.lanterns.radius} m each, and each heals you ${pct(DZ.lanterns.heal)}%.`],
+  dz_aodai_man: [SPECIAL_INFO.dragon.text,
+    `Glide under a kite for ${DZ.kite.time} s, ${pct(DZ.kite.speed)}% faster: melee attacks miss you.`,
+    `Brush an ink circle ${DZ.ink.radius} m around you: ×${DZ.ink.power} damage, and enemies inside are held for ${DZ.ink.stun} s.`,
+    `A dragon dance circles you for ${DZ.dragondance.time} s: ×${DZ.dragondance.power} damage every ${DZ.dragondance.tick} s to every enemy within ${DZ.dragondance.radius} m.`],
+  dz_usa: [SPECIAL_INFO.eagle.text,
+    `Raise a star shield: no damage for ${DZ.starshield.time} s, and enemies within ${DZ.starshield.radius} m are bashed back (×${DZ.starshield.power} damage).`,
+    `Raise the liberty torch: +${pct(DZ.torch.bonus)}% damage for ${DZ.torch.time} s, ${pct(DZ.torch.heal)}% health back, and enemies within ${DZ.torch.radius} m are dazzled for ${DZ.torch.blind} s.`,
+    `${DZ.fireworks.count} fireworks shoot up over enemies within ${DZ.fireworks.range} m and burst: ×${DZ.fireworks.power} damage within ${DZ.fireworks.radius} m each.`],
+  dz_vietnam: [SPECIAL_INFO.goldstar.text,
+    `Pole-vault ${fix(DZ.bamboo.speed * DZ.bamboo.time)} m forward on a bamboo pole, untouchable, landing for ×${DZ.bamboo.power} damage within ${DZ.bamboo.radius} m.`,
+    `Beat the bronze drum ${DZ.drum.beats} times: each beat deals ×${DZ.drum.power} damage within ${DZ.drum.radius} m and pushes enemies back; the last stuns them ${DZ.drum.stun} s.`,
+    `A great golden star falls on the nearest enemy within ${DZ.bigstar.range} m after ${DZ.bigstar.delay} s: ×${DZ.bigstar.power} damage within ${DZ.bigstar.radius} m, and enemies there are slowed ${DZ.bigstar.slow} s.`],
 };
 
 export interface SkillView { name: string; icon: string; cd: number }
@@ -84,6 +140,7 @@ export const BUFF_CHIPS: Record<string, { icon: string; name: string }> = {
   flight: { icon: '🕊️', name: 'Flying' }, shield: { icon: '🛡️', name: 'Shielded' }, stealth: { icon: '👻', name: 'Hidden' },
   giant: { icon: '🦖', name: 'Giant' }, tank: { icon: '🤖', name: 'Tank mode' }, armor: { icon: '🪖', name: 'Armoured' },
   lifesteal: { icon: '🩸', name: 'Blood drain' }, bats: { icon: '🦇', name: 'Bat form' },
+  swift: { icon: '💨', name: 'Swift' }, block: { icon: '🛡️', name: 'Blocking' }, cover: { icon: '🧱', name: 'Sandbag cover' }, rally: { icon: '🔥', name: 'Inspired' }, invuln: { icon: '✨', name: 'Untouchable' },
 };
 /** Enemy status marks over their HP bar, in priority order (the first two that apply are shown). */
 export const STATUS_MARKS: readonly [key: string, icon: string][] = [['stun', '💫'], ['shock', '⚡'], ['sheep', '🐑'], ['charm', '💗'], ['fear', '😱'], ['blind', '🌫️'], ['taunt', '💢'], ['slow', '🐌'], ['mark', '🎯']];

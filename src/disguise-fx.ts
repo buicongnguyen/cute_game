@@ -4,7 +4,7 @@ import { LOOKS, LOOK_LIFE, MAX_PER_CAST, SHAPES, screenPulse, type LookContext, 
 
 interface Host { ground(x:number,z:number):number; explorerAt(x:number,z:number):T.Object3D|null; /** 0-1 particle density of the graphics setting. */ density?():number; /** True when the cast is the local player's (screen pulses). */ isLocal?(x:number,z:number):boolean }
 interface Cast { effect:CombatEffect; age:number; life:number; model:T.Object3D|null }
-const FOLLOW=new Set(['charge','parrot','shield','bats','rush','whirl']);
+const FOLLOW=new Set(['tank','charge','parrot','shield','bats','rush','whirl','ribbon','kite','dragondance','starshield','torch']);
 const BATCH=900,MAX_CASTS=48;
 /** Soft hex-cell dome: a fresnel rim plus a faint honeycomb, patched into a plain basic material (no lights, no textures). */
 function domeMaterial(){
@@ -67,8 +67,8 @@ export class DisguiseFx implements Painter {
     for(const batch of this.batchList)batch.count=0;
     const n=Math.max(.25,Math.min(1,this.host.density?.()??1)),c=this.ctx;this.maxPainted=0;
     for(const cast of this.casts){const e=cast.effect;let x=e.x,z=e.z,y=this.host.ground(x,z)+.12;
-      if(cast.model?.parent){cast.model.getWorldPosition(this.origin);x=this.origin.x;z=this.origin.z;y=this.origin.y+.12;}
-      c.x=x;c.y=y;c.z=z;c.r=e.radius;c.t=Math.min(1,cast.age/cast.life);c.a=cast.age;c.f=e.facing??0;c.color=e.color;c.n=n;c.life=cast.life;
+      let facing=e.facing??0;if(cast.model?.parent){cast.model.getWorldPosition(this.origin);x=this.origin.x;z=this.origin.z;y=this.origin.y+.12;/* turn with the explorer it follows */if(Number.isFinite(cast.model.rotation.y))facing=cast.model.rotation.y;}
+      c.x=x;c.y=y;c.z=z;c.r=e.radius;c.t=Math.min(1,cast.age/cast.life);c.a=cast.age;c.f=facing;c.color=e.color;c.n=n;c.life=cast.life;
       this.painted=0;LOOKS[e.look!]?.(this,c);this.maxPainted=Math.max(this.maxPainted,this.painted);
     }
     for(const b of this.batchList){b.instanceMatrix.needsUpdate=true;if(b.instanceColor)b.instanceColor.needsUpdate=true;b.visible=b.count>0;}

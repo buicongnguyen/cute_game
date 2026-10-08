@@ -5,7 +5,12 @@ import type { CombatAlly } from './combat.ts';
 /** Tiny shared models. CombatView owns instances, never disposes their shared resources. */
 const sphere=new T.IcosahedronGeometry(1,1),box=new T.BoxGeometry(1,1,1),cone=new T.ConeGeometry(1,1,6),tube=new T.CylinderGeometry(1,1,1,8);
 const lowSphere=new T.IcosahedronGeometry(1,0),taper=new T.CylinderGeometry(.75,1,1,10);
-const flashMaterial=new T.MeshBasicMaterial({color:'#ffd35a',transparent:true,opacity:.95,depthWrite:false}),flashMaterial2=new T.MeshBasicMaterial({color:'#fff4c0',transparent:true,opacity:.95,depthWrite:false}),sparkMaterial=new T.MeshBasicMaterial({color:'#ffb02e'});
+const sparkMaterial=new T.MeshBasicMaterial({color:'#ffb02e'});
+/** The lighthouse beam: a 12 m open cone from the lamp (combat.ts DZ.lighthouse.reach), glowing additive yellow. */
+const beamGeometry=new T.ConeGeometry(3.2,12,20,1,true).rotateX(-Math.PI/2).translate(0,0,6).rotateX(.15);
+const beamMaterial=new T.MeshBasicMaterial({color:'#fff2a0',transparent:true,opacity:.32,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}),beamMaterial2=new T.MeshBasicMaterial({color:'#fff8d0'});
+/** Tesla turret: the white-hot orb, its blue glow and the little crackling arcs. */
+const coreMaterial=new T.MeshBasicMaterial({color:'#f2fdff'}),haloMaterial=new T.MeshBasicMaterial({color:'#6fdcff',transparent:true,opacity:.45,depthWrite:false,blending:T.AdditiveBlending}),arcMaterial=new T.MeshBasicMaterial({color:'#bff4ff'});
 const mats=new Map<string,T.MeshStandardMaterial>();
 const templates=new Map<string,T.Group>();
 const mergedMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:.85,flatShading:true});
@@ -19,19 +24,15 @@ export function makeSummon(kind:CombatAlly['kind']|'sheep'){
     for(const side of [-1,1]){add(box,'#342f48',side*.16,.26,0,.18,.5,.22).name='leg'+side;add(box,'#70618d',side*.36,.85,0,.18,.6,.2).name='arm'+side;add(sphere,'#181629',side*.12,1.5,.33,.04);}
     add(box,'#bb6689',0,1.15,0,.55,.12,.4);add(box,'#bba7d6',.35,1.1,-.2,.08,1.2,.08).rotation.z=-.5;
   }else if(kind==='turret'){
-    // Sentry nest: a ring of sandbags, a tripod machine gun with an ammo box, a spinning barrel cluster and a brass muzzle flash.
-    for(let i=0;i<9;i++){const a=-Math.PI*.95+i*Math.PI*1.9/8,x=Math.sin(a)*.95,z=-Math.cos(a)*.95;add(lowSphere,i%2?'#d2b27a':'#c29e62',x,.2,z,.34,.2,.26).rotation.y=-a;if(i%2===0)add(lowSphere,'#cfae72',x*.9,.46,z*.9,.3,.18,.24).rotation.y=-a;}
-    add(box,'#6b5a3c',0,.06,0,1.5,.05,1.5);
-    for(const side of [-1,1]){const leg=add(box,'#3a3f47',side*.22,.35,-.05,.06,.7,.06);leg.rotation.z=side*.35;}
-    add(box,'#3a3f47',0,.35,-.3,.06,.7,.06).rotation.x=.4;
-    add(box,'#4d5a3a',0,.78,-.05,.4,.26,.62);add(box,'#2c3138',0,.95,-.05,.14,.1,.4);
-    add(box,'#5b6a45',.4,.2,.18,.3,.22,.3);add(box,'#e3b341',.4,.33,.18,.22,.04,.2);
-    add(box,'#e3b341',.22,.7,.1,.06,.28,.1);
-    const spinner=new T.Group();spinner.name='spinner';spinner.position.set(0,.8,.32);root.add(spinner);
-    for(let i=0;i<3;i++){const a=i*Math.PI*2/3,b=new T.Mesh(tube,material('#202630'));b.scale.set(.05,.9,.05);b.rotation.x=Math.PI/2;b.position.set(Math.cos(a)*.1,Math.sin(a)*.1,.45);spinner.add(b);}
-    const shroud=new T.Mesh(tube,material('#3a424e'));shroud.scale.set(.14,.35,.14);shroud.rotation.x=Math.PI/2;shroud.position.set(0,.8,.42);shroud.name='shroud';root.add(shroud);
-    const flash=new T.Mesh(cone,flashMaterial);flash.name='flash';flash.scale.set(.2,.55,.2);flash.rotation.x=Math.PI/2;flash.position.set(0,.8,1.1);root.add(flash);
-    const flash2=new T.Mesh(cone,flashMaterial2);flash2.name='flash2';flash2.scale.set(.1,.8,.1);flash2.rotation.x=Math.PI/2;flash2.position.set(0,.8,1.2);root.add(flash2);
+    // The battle robot's tesla turret: a steel base on three feet, a coil column wound with copper rings and a glowing
+    // electric orb on top that crackles while it fires shock bolts.
+    add(tube,'#4a5868',0,.08,0,.7,.16,.7);for(let i=0;i<3;i++){const a=i*Math.PI*2/3;add(box,'#2c3440',Math.sin(a)*.62,.08,Math.cos(a)*.62,.22,.12,.36).rotation.y=a;}
+    add(tube,'#8fa3b8',0,.55,0,.16,.8,.16);for(let i=0;i<4;i++)add(tube,i%2?'#d98a3a':'#f0a050',0,.3+i*.17,0,.3-i*.03,.07,.3-i*.03);
+    add(tube,'#4a5868',0,1.0,0,.22,.08,.22);add(box,'#6ff2ff',0,.55,.17,.06,.5,.04);
+    const core=new T.Mesh(sphere,coreMaterial);core.name='flash';core.scale.setScalar(.26);core.position.set(0,1.22,0);root.add(core);
+    const halo=new T.Mesh(sphere,haloMaterial);halo.name='flash2';halo.scale.setScalar(.42);halo.position.set(0,1.22,0);root.add(halo);
+    const spinner=new T.Group();spinner.name='spinner';spinner.position.set(0,1.22,0);root.add(spinner);
+    for(let i=0;i<3;i++){const a=i*Math.PI*2/3,b=new T.Mesh(box,arcMaterial);b.scale.set(.03,.03,.5);b.position.set(Math.sin(a)*.38,Math.cos(a*2)*.08,Math.cos(a)*.38);b.rotation.y=a+.6;spinner.add(b);}
   }else if(kind==='cannon'){
     // Pirate cannon: tapered iron barrel with a flared muzzle on a wooden carriage, spoked wheels, a ball pile and a fuse spark.
     add(box,'#8a5a32',0,.34,-.05,.8,.18,1.1);
@@ -44,6 +45,22 @@ export function makeSummon(kind:CombatAlly['kind']|'sheep'){
   }else if(kind==='bat'){
     add(sphere,'#583963',0,.65,0,.2,.3,.2);add(sphere,'#795182',0,.93,.04,.19);
     for(const side of [-1,1]){add(cone,'#fffdf0',side*.05,.84,.2,.03,.1,.03).rotation.x=Math.PI;add(cone,'#795182',side*.12,1.13,.02,.1,.27,.08);const pivot=new T.Group();pivot.name='wing'+side;pivot.position.set(side*.12,.75,0);root.add(pivot);const wing=new T.Mesh(cone,material('#6c4780'));wing.scale.set(.35,.65,.06);wing.rotation.z=-side*Math.PI/2;wing.position.x=side*.3;pivot.add(wing);add(sphere,'#ffbfa3',side*.07,.96,.2,.035);}
+  }else if(kind==='parrot'){
+    // Scout parrot: red body, yellow-and-blue wings on flapping pivots, a hooked beak and a long tail.
+    add(sphere,'#e8352b',0,0,0,.26,.3,.34);add(sphere,'#ff5a4a',0,.3,.16,.2);add(cone,'#ffd84a',0,.27,.4,.07,.16,.07).rotation.x=Math.PI/2+.4;
+    add(box,'#3c94e4',0,-.05,-.42,.14,.06,.42).rotation.x=.35;add(box,'#ffd84a',0,-.1,-.6,.1,.05,.24).rotation.x=.5;
+    for(const side of [-1,1]){add(sphere,'#ffffff',side*.11,.36,.31,.055);add(sphere,'#1a1a22',side*.12,.36,.34,.03);const pivot=new T.Group();pivot.name='wing'+side;pivot.position.set(side*.2,.08,0);root.add(pivot);const wing=new T.Mesh(box,material(side<0?'#3c94e4':'#ffd84a'));wing.scale.set(.42,.05,.26);wing.position.x=side*.22;pivot.add(wing);}
+  }else if(kind==='tree'){
+    // Binding tree: a stout trunk, round leafy crowns with pink blossoms, and roots spreading on the ground.
+    add(tube,'#8a5a34',0,.75,0,.28,1.5,.28);for(let i=0;i<5;i++){const a=i*Math.PI*2/5;const r=add(box,'#6f4527',Math.sin(a)*.45,.08,Math.cos(a)*.45,.14,.12,.7);r.rotation.y=a;}
+    for(const [x,y,z,s] of [[0,1.9,0,.85],[.5,1.6,.2,.6],[-.45,1.65,-.15,.62],[.1,2.35,-.1,.55]])add(sphere,'#5fbf4a',x,y,z,s);
+    for(let i=0;i<9;i++){const a=i*2.4,h=1.5+(i%3)*.35;add(sphere,i%2?'#ff9ec8':'#fff0f8',Math.sin(a)*.75,h,Math.cos(a)*.75,.1);}
+  }else if(kind==='lighthouse'){
+    // A little lighthouse: red-and-white striped tower, a glowing lamp room, and the beam (pointing +z; the ally's facing turns it).
+    for(let i=0;i<4;i++)add(taper,i%2?'#ffffff':'#e0403a',0,.3+i*.5,0,.48-i*.06,.5,.48-i*.06);
+    add(tube,'#2c3e5a',0,2.12,0,.36,.14,.36);add(sphere,'#fff4b0',0,2.42,0,.26);add(cone,'#e0403a',0,2.85,0,.36,.4,.36);add(tube,'#6b5a3c',0,.04,0,.75,.08,.75);
+    const lamp=new T.Mesh(sphere,beamMaterial2);lamp.name='lamp';lamp.position.set(0,2.42,0);lamp.scale.setScalar(.34);root.add(lamp);
+    const beam=new T.Mesh(beamGeometry,beamMaterial);beam.name='beam';beam.position.set(0,2.35,0);root.add(beam);
   }else if(kind==='sheep'){
     add(sphere,'#f6f0dc',0,.55,0,.65,.43,.45);add(sphere,'#b7a698',0,.62,.49,.23,.26,.24);
     for(const side of [-1,1]){add(sphere,'#e9dbc5',side*.25,.75,.43,.19,.09,.09);for(const z of [-.26,.24])add(box,'#776959',side*.32,.17,z,.12,.3,.12);add(sphere,'#342f34',side*.12,.69,.67,.045);}
@@ -60,8 +77,11 @@ export function makeSummon(kind:CombatAlly['kind']|'sheep'){
   templates.set(kind,root);return root.clone(true);
 }
 export function animateSummon(model:T.Group,kind:string,time:number){
-  if(kind==='turret'){const sp=model.getObjectByName('spinner');if(sp)sp.rotation.z=time*28;const f=model.getObjectByName('flash'),f2=model.getObjectByName('flash2'),on=Math.sin(time*47)>-.2;if(f){f.visible=on;f.scale.set(.2,.35+.3*Math.abs(Math.sin(time*60)),.2);}if(f2)f2.visible=on&&Math.sin(time*31)>0;}
+  if(kind==='turret'){const sp=model.getObjectByName('spinner');if(sp){sp.rotation.y=time*9;sp.visible=Math.sin(time*37)>-.3;}const f=model.getObjectByName('flash'),f2=model.getObjectByName('flash2');if(f)f.scale.setScalar(.24+.04*Math.sin(time*23));if(f2)f2.scale.setScalar(.4+.08*Math.abs(Math.sin(time*31)));}
   if(kind==='cannon'){const sp=model.getObjectByName('spark');if(sp)sp.scale.setScalar(.08+.08*Math.abs(Math.sin(time*22)));}
   if(kind==='bat')for(const side of [-1,1]){const wing=model.getObjectByName('wing'+side);if(wing)wing.rotation.z=side*Math.sin(time*18)*.6;}
+  if(kind==='parrot'){for(const side of [-1,1]){const wing=model.getObjectByName('wing'+side);if(wing)wing.rotation.z=side*Math.sin(time*22)*.7;}model.position.y+=Math.sin(time*5)*.12;}
+  if(kind==='lighthouse'){const lamp=model.getObjectByName('lamp');if(lamp)lamp.scale.setScalar(.32+.05*Math.sin(time*9));}
+  if(kind==='tree')model.scale.setScalar(1+.03*Math.sin(time*3));
   if(kind==='clone')for(const side of [-1,1]){const leg=model.getObjectByName('leg'+side),arm=model.getObjectByName('arm'+side);if(leg)leg.rotation.x=side*Math.sin(time*10)*.35;if(arm)arm.rotation.x=-side*Math.sin(time*10)*.4;}
 }

@@ -124,11 +124,11 @@ test('the battle robot fires electricity: volt bolts, a tesla turret, shock miss
   const shocks = m.effects.filter(e => e.look === 'shock');
   assert.ok(shocks.some(e => e.kind === 'impact') && shocks.some(e => e.kind === 'ring' && e.radius === 2));
   assert.ok(shocks.every(e => e.color === ELECTRIC_COLOR)); assert.ok(m.hits.length > 0 && m.hits.every(h => h.stun === 0));
-  // Tank mode: an electric shockwave that keeps its 0.3 s stun.
+  // Tank mode: rams what it touches (the reference's 1.6 m, ×1.6, knock 5) with an electric shockwave.
   const k = rig([at(0, 1.5, 'near')]); k.sim.disguise('dz_mecha', 0); run(k.sim, .6);
-  assert.ok(k.effects.filter(e => e.kind === 'ring').every(e => e.look === 'shock' && e.radius === 2)); assert.ok(k.hits.every(h => h.stun === .3) && k.hits.length > 0);
+  assert.ok(k.effects.filter(e => e.kind === 'ring').every(e => e.look === 'shock' && e.radius === 1.6)); assert.ok(k.hits.every(h => h.stun === 0) && k.hits.length === 1, 'rammed once in 0.6 s');
   // The turret and the robot's own gun shoot volt bolts.
-  const tr = rig(ring()); tr.sim.disguise('dz_mecha', 1); run(tr.sim, .05); assert.ok(tr.sim.projectiles.length && tr.sim.projectiles.every(p => p.kind === 'volt'));
+  const tr = rig(ring()); tr.sim.disguise('dz_mecha', 1); run(tr.sim, 1 / 60); assert.ok(tr.sim.projectiles.length && tr.sim.projectiles.every(p => p.kind === 'volt'));
   const gun = rig(ring(), M.weaponStats({ ...M.newGame(), gear: { disguise: 'dz_mecha' } } as M.SaveState) as WeaponProfile);
   assert.equal(gun.sim.basic(), true); assert.equal(gun.sim.projectiles[0].kind, 'volt'); run(gun.sim, .5);
   assert.ok(gun.effects.some(e => e.kind === 'impact' && e.look === 'shock'));

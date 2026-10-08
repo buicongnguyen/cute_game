@@ -236,3 +236,11 @@ test('Hard difficulty: the room host save gives server creatures +25% health and
  assert.equal(h.maxHp,Math.round(roster.baseMaxHp*1.25));assert.equal(h.hp,h.maxHp);assert.ok(Math.abs(h.damage-roster.baseDamage*1.2)<1e-9);
  const easy=await fixture(t),e=easy.spawn('mushroom');assert.equal(e.maxHp,roster.baseMaxHp);assert.equal(e.damage,roster.baseDamage);
 });
+test('disguise freezes reach the server and the knight shield blocks only blows from in front',async t=>{
+ const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_navy';p.bag.dz_navy=1;}}),enemy=f.spawn('mushroom',-30,4),boss=f.spawn('treant',-28,3);const engine=f.authority.engineFor(f.peer);
+ // The bosun's whistle stuns everything within 8 m, bosses too; clients hear it as a 'stun' status.
+ const from=f.messages.length;assert.equal(engine.sim.disguise('dz_navy',2),true);assert.equal(enemy.stun,2.5);assert.equal(boss.stun,2.5);assert.ok(f.messages.slice(from).some(m=>m.type==='status'&&m.kind==='stun'&&m.id===enemy.id));
+ f.account.profile.gear.disguise='dz_knight';f.account.profile.bag.dz_knight=1;f.peer.pose.facing=0;assert.equal(engine.sim.disguise('dz_knight',0),true);
+ engine.healthEvents=[];engine.damageAt=0;f.authority.damage(f.peer,enemy.id);assert.equal(engine.healthEvents.length,0,'blocked from the front');
+ f.peer.pose.facing=Math.PI;engine.damageAt=0;f.authority.damage(f.peer,enemy.id);assert.ok(engine.healthEvents.some(e=>e.amount<0),'hurt from behind');
+});

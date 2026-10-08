@@ -55,7 +55,7 @@ test('statuses reach living creatures only; ice age freezes (3 s stun) instead o
   }
   const ice = rig(); ice.sim.disguise('dz_snowman', 3);
   assert.ok(!ice.statuses.some(s => s.k === 'sheep'));
-  assert.ok(ice.hits.filter(h => h.stun === 3).length === 2, 'both living creatures frozen');
+  assert.ok(ice.statuses.filter(s => s.k === 'stun' && s.d === 3).length === 2, 'both living creatures frozen');
 });
 
 test("a pet's ice shot chills briefly instead of freezing for good", () => {

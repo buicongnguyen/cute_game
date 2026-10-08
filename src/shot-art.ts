@@ -8,11 +8,11 @@ import { buildExtra, noteAnim, playAnims, type Kit } from './shot-art-extra.ts';
  * it flies, a fireball drags a flame, a bubble is a glassy ball.
  */
 export type ShotLook = 'bead' | 'star' | 'crescent' | 'shard' | 'thorn' | 'fire' | 'fireball' | 'bubble' | 'arrow' | 'rainbow' | 'missile' | 'rock' | 'snow'
-  | 'water' | 'dragon' | 'shuriken' | 'bolt' | 'cannonball' | 'drain' | 'bat' | 'eagle' | 'parrot' | 'anchor';
+  | 'water' | 'dragon' | 'shuriken' | 'bolt' | 'cannonball' | 'drain' | 'bat' | 'eagle' | 'parrot' | 'anchor' | 'cork';
 export const LOOK_OF: Record<string, ShotLook> = {
   pea: 'bead', star: 'star', lotus: 'star', wave: 'water', surf: 'water', ice: 'shard', spike: 'thorn', thornburst: 'thorn', fire: 'fire', fireball: 'fireball', bubble: 'bubble', bigbubble: 'bubble',
   arrow: 'arrow', rainbow: 'rainbow', missile: 'missile', rocket: 'missile', boulder: 'rock', snowball: 'snow',
-  dragon: 'dragon', shuriken: 'shuriken', thunderbolt: 'bolt', cannonball: 'cannonball', cannon: 'cannonball', drain: 'drain', bat: 'bat', eagle: 'eagle', parrot: 'parrot', anchor: 'anchor', hook: 'anchor',
+  dragon: 'dragon', shuriken: 'shuriken', thunderbolt: 'bolt', cannonball: 'cannonball', cannon: 'cannonball', drain: 'drain', bat: 'bat', eagle: 'eagle', parrot: 'parrot', anchor: 'anchor', hook: 'anchor', cork: 'cork',
 };
 export const lookOf = (kind: string): ShotLook => LOOK_OF[kind] ?? 'bead';
 
@@ -100,6 +100,11 @@ export function makeShot(kind: string, radius: number, color: string): T.Group {
     }
     case 'snow': { inked(r); add(ball, basic('#dcecff'), [r, r, r]); add(ball, basic('#ffffff'), [r * .85, r * .85, r * .85], [-r * .15, r * .2, r * .1]); for (let i = 0; i < 4; i++) { const a = i * 1.7; add(lowBall, basic(i % 2 ? '#ffffff' : '#cfe4fa'), [r * .32, r * .32, r * .32], [Math.cos(a) * r * .8, Math.sin(a * 1.3) * r * .7, Math.sin(a) * r * .5]); }
       kit.sparkle('#ffffff', r * 2.2, [r * .7, r * .8, r * .5], 0); haloColor = '#9fd8ff'; haloSize = 3.2; break; }
+    case 'cork': { // a toy popgun cork: a tan stopper, wider at the back, a darker end and a little string tail
+      const s2 = Math.max(r, .24), plug = shared('cork', () => new T.CylinderGeometry(.75, 1, 1, 10));
+      add(plug, basic('#d9a866'), [s2, s2 * 1.5, s2], [0, 0, 0], [-Math.PI / 2, 0, 0]); add(shared('corkcap', () => new T.CircleGeometry(1, 10)), basic('#a8743e'), [s2 * .98, s2 * .98, 1], [0, 0, -s2 * .76], [0, Math.PI, 0]);
+      add(shared('string', () => new T.CylinderGeometry(.5, .5, 1, 4)), basic('#fff4dc'), [s2 * .12, s2 * 2.2, s2 * .12], [0, 0, -s2 * 1.8], [Math.PI / 2, 0, 0]); kit.sparkle('#ffffff', s2 * 2.2, [s2 * .6, s2 * .6, 0], 0);
+      g.userData.yaw = true; haloColor = '#ffd9a0'; haloSize = 3; break; }
     default: inked(r * 1.45); add(ball, basic(kind === 'pea' ? '#e4ff5e' : col), [r * 1.45, r * 1.45, r * 1.45]); add(ball, basic('#ffffff', .85), [r * .6, r * .6, r * .6], [-r * .3, r * .3, 0]); haloSize = 4.4;
   }
   if (haloSize > 0 && typeof document !== 'undefined') { const s = new T.Sprite(halo(haloColor)); s.scale.setScalar(r * haloSize); s.name = 'halo'; g.add(s); g.userData.haloBase = r * haloSize; }

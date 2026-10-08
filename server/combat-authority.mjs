@@ -83,7 +83,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     if(peer.visit||!peer.active||peer.account.profile.hp<=0||inSafeZone(peer.pose,peer.planet)||now-e.damageAt<550||e.sim.invulnerable||source==='melee'&&e.sim.statuses.flight>0)return;
     e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);hp(peer,-Math.max(1,Math.round(amount*60/(defense+60))),source);
   }
-  function hurtEnemyTarget(peer,enemy,multiplier,source='melee'){hurtPlayer(peer,enemy.damage*multiplier,source);}
+  function hurtEnemyTarget(peer,enemy,multiplier,source='melee'){if(engineFor(peer).sim.blocks(enemy))return;/* the knight's raised shield, facing the creature */hurtPlayer(peer,enemy.damage*multiplier,source);}
   /** A Colossus blow: the same gates as hurtPlayer, through only a quarter of the defence (colossusDamage). */
   function hurtColossus(peer,multiplier,factor,roll){
     const e=engineFor(peer),now=Date.now();if(peer.visit||!peer.active||peer.account.profile.hp<=0||inSafeZone(peer.pose,peer.planet)||now-e.damageAt<550||e.sim.invulnerable)return false;
@@ -261,7 +261,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       // The guard dog throws only while the server says it follows (pose.dog is null at home and on visits); it stands at the trailing spot.
       dog:()=>{const p=current();if(p.visit||typeof p.pose?.dog!=='number'||atHome(p.planet,p.pose))return null;const at=trailSpot(p.pose,p.pose.facing||0);return {x:at.x,z:at.z,dmg:dogTossFactor(p.account.profile.level),cd:DOG_TOSS_CD,target:p.target??null};},
       skillLevel:index=>skillLevel(combatProfile(current()),index),
-      status:(target,kind,duration)=>{if(target.boss&&BOSS_RESISTED.includes(kind)){kind='slow';duration*=RESIST_SLOW;}target.statuses[kind]=Math.max(target.statuses[kind]||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});},
+      status:(target,kind,duration)=>{if(kind==='stun'){/* a freeze or a root holds bosses too */target.stun=Math.max(target.stun||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});return;}if(target.boss&&BOSS_RESISTED.includes(kind)){kind='slow';duration*=RESIST_SLOW;}target.statuses[kind]=Math.max(target.statuses[kind]||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});},
       moveTarget:(target,x,z)=>{if(dist(target,{x,z})>12)return;target.x=x;target.z=z;if(room())broadcast(room(),{type:'moveEnemy',id:target.id,x,z});}});
     engines.set(peer.account.id,engine);return engine;
   }

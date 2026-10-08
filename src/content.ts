@@ -3323,7 +3323,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             },
             {
                 "name": "Quẫy Đuôi",
-                "icon": "💨",
+                "icon": "🌪️",
                 "cd": 5
             },
             {
@@ -3333,7 +3333,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             },
             {
                 "name": "Hoá Khổng Lồ",
-                "icon": "🦖",
+                "icon": "🦕",
                 "cd": 18
             }
         ]
@@ -3375,12 +3375,12 @@ const DISGUISE_FACTS: Record<string, any> = {
         "name": "Army soldier",
         "emoji": "🎖️",
         "color": "#6b7a3a",
-        "weapon": {"kind": "gun", "range": 12, "cd": 0.35, "shot": "pea", "spread": 2},
+        "weapon": {"kind": "gun", "range": 12, "cd": 0.35, "shot": "cork", "spread": 2},
         "skills": [
-            {"name": "Loạt Đạn Liên Thanh", "icon": "🔫", "cd": 7},
-            {"name": "Ổ Súng Máy", "icon": "🧱", "cd": 12},
-            {"name": "Màn Khói", "icon": "💨", "cd": 10},
-            {"name": "Rocket Dẫn Đường", "icon": "🚀", "cd": 14}
+            {"name": "Cork popgun", "icon": "🍾", "cd": 6},
+            {"name": "Sandbag wall", "icon": "🧱", "cd": 10},
+            {"name": "Signal flare", "icon": "🎇", "cd": 12},
+            {"name": "Supply drop", "icon": "🪂", "cd": 16}
         ]
     },
     "dz_navy": {
@@ -3389,10 +3389,10 @@ const DISGUISE_FACTS: Record<string, any> = {
         "color": "#1e3a8a",
         "weapon": {"kind": "sword", "range": 2.4, "cd": 0.55, "arc": 0.4, "fx": "#9fd6ff"},
         "skills": [
-            {"name": "Vung Mỏ Neo", "icon": "⚓", "cd": 8},
-            {"name": "Móc Neo Kéo", "icon": "🪝", "cd": 6},
-            {"name": "Loạt Đại Bác", "icon": "💣", "cd": 14},
-            {"name": "Sóng Thần", "icon": "🌊", "cd": 12}
+            {"name": "Anchor swing", "icon": "⚓", "cd": 7},
+            {"name": "Wave ride", "icon": "🌊", "cd": 7},
+            {"name": "Bosun's whistle", "icon": "🎶", "cd": 12},
+            {"name": "Lighthouse beam", "icon": "🔦", "cd": 15}
         ]
     },
     "dz_aodai": {
@@ -3401,10 +3401,10 @@ const DISGUISE_FACTS: Record<string, any> = {
         "color": "#ff8fb1",
         "weapon": {"kind": "gun", "range": 10, "cd": 0.42, "shot": "bubble"},
         "skills": [
-            {"name": "Cánh Sen Chữa Lành", "icon": "🪷", "cd": 9},
-            {"name": "Hoa Hồi Sinh", "icon": "🌸", "cd": 14},
-            {"name": "Mê Hoặc", "icon": "💖", "cd": 12},
-            {"name": "Mưa Sao Băng", "icon": "🌠", "cd": 16}
+            {"name": "Lotus petals", "icon": "🪷", "cd": 6},
+            {"name": "Silk ribbon glide", "icon": "🎀", "cd": 8},
+            {"name": "Paper fan breeze", "icon": "🪭", "cd": 12},
+            {"name": "Lantern festival", "icon": "🏮", "cd": 15}
         ]
     },
     "dz_aodai_man": {
@@ -3413,10 +3413,10 @@ const DISGUISE_FACTS: Record<string, any> = {
         "color": "#23408f",
         "weapon": {"kind": "sword", "range": 2.4, "cd": 0.55, "arc": 0.4, "fx": "#ffd84a"},
         "skills": [
-            {"name": "Quạt Rồng", "icon": "🐉", "cd": 8},
-            {"name": "Tiếng Gầm", "icon": "📢", "cd": 12},
-            {"name": "Xung Phong", "icon": "🐎", "cd": 9},
-            {"name": "Sấm Chớp Dây Chuyền", "icon": "⚡", "cd": 14}
+            {"name": "Dragon fan", "icon": "🐉", "cd": 7},
+            {"name": "Kite glide", "icon": "🪁", "cd": 10},
+            {"name": "Ink circle", "icon": "🖌️", "cd": 12},
+            {"name": "Dragon dance", "icon": "🐲", "cd": 15}
         ]
     },
     "dz_usa": {
@@ -3425,10 +3425,10 @@ const DISGUISE_FACTS: Record<string, any> = {
         "color": "#d6283a",
         "weapon": {"kind": "gun", "range": 11, "cd": 0.4, "shot": "star"},
         "skills": [
-            {"name": "Đại Bàng Lao Xuống", "icon": "🦅", "cd": 8},
-            {"name": "Dựng Khiên", "icon": "🛡️", "cd": 10},
-            {"name": "Pháo Dã Chiến", "icon": "💣", "cd": 12},
-            {"name": "Bão Sao", "icon": "🌵", "cd": 14}
+            {"name": "Eagle strike", "icon": "🦅", "cd": 7},
+            {"name": "Star shield", "icon": "🛡️", "cd": 9},
+            {"name": "Liberty torch", "icon": "🔥", "cd": 12},
+            {"name": "Fireworks finale", "icon": "🎆", "cd": 15}
         ]
     },
     "dz_vietnam": {
@@ -3437,10 +3437,10 @@ const DISGUISE_FACTS: Record<string, any> = {
         "color": "#da251d",
         "weapon": {"kind": "gun", "range": 10, "cd": 0.42, "shot": "fire"},
         "skills": [
-            {"name": "Sao Vàng Bùng Nổ", "icon": "⭐", "cd": 9},
-            {"name": "Rễ Tre Trói Chặt", "icon": "🎋", "cd": 12},
-            {"name": "Ánh Sáng Thần", "icon": "✨", "cd": 14},
-            {"name": "Vòng Lửa", "icon": "🔥", "cd": 15}
+            {"name": "Golden star burst", "icon": "⭐", "cd": 7},
+            {"name": "Bamboo vault", "icon": "🎋", "cd": 7},
+            {"name": "Bronze drum", "icon": "🥁", "cd": 12},
+            {"name": "Great golden star", "icon": "🌟", "cd": 15}
         ]
     },
     "dz_pirate": {
@@ -3472,7 +3472,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             },
             {
                 "name": "Tàu Bắn Phá",
-                "icon": "💥",
+                "icon": "🏴‍☠️",
                 "cd": 14
             }
         ]
@@ -3502,7 +3502,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             },
             {
                 "name": "Bầy Dơi Quây",
-                "icon": "🦇",
+                "icon": "🌑",
                 "cd": 12
             },
             {
@@ -4054,7 +4054,7 @@ for (const [id, planet] of Object.entries(PLANETS)) {
     planet.name = planetLabels[id as PlanetId];
     planet.description = `${planet.name} · Landing from level ${planet.level}.`;
 }
-const skillLabels: Record<string, string[]> = { dz_army: ['Rifle volley', 'Sentry turret', 'Smoke screen', 'Guided rockets'], dz_navy: ['Anchor swing', 'Grappling hook', 'Cannon barrage', 'Surf blades'], dz_aodai: ['Lotus star burst', 'Healing bloom', 'Charm', 'Starfall'], dz_aodai_man: ['Dragon fan', 'Mighty roar', 'Charge', 'Thunder chain'], dz_usa: ['Eagle strike', 'Raise shield', 'Field cannon', 'Thorn burst'], dz_vietnam: ['Golden star burst', 'Bamboo roots', 'Holy strike', 'Ring of fire'], dz_ninja: ['Shadow clones', 'Vanish', 'Shadow strike', 'Smoke bomb'], dz_mage: ['Great fireball', 'Blink', 'Sheep spell', 'Black hole'], dz_knight: ['Raise shield', 'Charge', 'Challenge', 'Holy blade'], dz_mecha: ['Tank mode', 'Turret', 'Homing missiles', 'Energy shield'], dz_dino: ['Devour', 'Tail sweep', 'Terrifying roar', 'Giant form'], dz_fairy: ['Healing flowers', 'Float', 'Charm', 'Binding roots'], dz_pirate: ['Cannon', 'Hook', 'Scout parrot', 'Cannon rain'], dz_superhero: ['Take flight', 'Meteor dive', 'Laser gaze', 'Boulder throw'], dz_vampire: ['Life drain', 'Bat form', 'Bat swarm', 'Blood moon'], dz_snowman: ['Rolling snowball', 'Snow decoy', 'Ice rink', 'Ice age'] };
+const skillLabels: Record<string, string[]> = { dz_army: ['Cork popgun', 'Sandbag wall', 'Signal flare', 'Supply drop'], dz_navy: ['Anchor swing', 'Wave ride', "Bosun's whistle", 'Lighthouse beam'], dz_aodai: ['Lotus petals', 'Silk ribbon glide', 'Paper fan breeze', 'Lantern festival'], dz_aodai_man: ['Dragon fan', 'Kite glide', 'Ink circle', 'Dragon dance'], dz_usa: ['Eagle strike', 'Star shield', 'Liberty torch', 'Fireworks finale'], dz_vietnam: ['Golden star burst', 'Bamboo vault', 'Bronze drum', 'Great golden star'], dz_ninja: ['Shadow clones', 'Vanish', 'Shadow strike', 'Smoke bomb'], dz_mage: ['Great fireball', 'Blink', 'Sheep spell', 'Black hole'], dz_knight: ['Shield block', "Knight's charge", 'Challenge', 'Sky sword'], dz_mecha: ['Tank mode', 'Tesla turret', 'Homing missiles', 'Energy shield'], dz_dino: ['Devour', 'Tail sweep', 'Terrifying roar', 'Giant form'], dz_fairy: ['Healing flower ring', 'Butterfly float', 'Fairy charm', 'Binding tree'], dz_pirate: ['Deck cannon', 'Grappling hook', 'Scout parrot', 'Ship broadside'], dz_superhero: ['Take flight', 'Meteor dive', 'Laser gaze', 'Boulder throw'], dz_vampire: ['Life drain', 'Bat form', 'Bat swarm', 'Blood moon'], dz_snowman: ['Rolling snowball', 'Snow decoy', 'Ice rink', 'Ice age'] };
 for (const [id, disguise] of Object.entries(DISGUISES)) {
     disguise.name = ITEMS[id].name;
     disguise.skills.forEach((skill, i) => skill.name = skillLabels[id][i]);

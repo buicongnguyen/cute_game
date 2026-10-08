@@ -2,7 +2,7 @@ import type { SaveState } from './model.ts';
 import type { World } from './world.ts';
 import type { CombatHit, CombatEffect } from './combat.ts';
 import type {GameIntent,ActionReply} from './actions.ts';
-export type EnemyStatus='fear'|'charm'|'slow'|'blind'|'sheep'|'taunt';
+export type EnemyStatus='fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun';
 export interface GamePresence { y:number;x:number;z:number;facing:number;planet:string;name:string;color:string;level:number;hp:number;maxHp:number;gear:SaveState['gear'];moving:boolean;visible:boolean;visual?:{size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean} }
 export interface GameAction { kind:'basic'|'skill'|'effect';targetId?:string;index?:number;special?:string;x:number;z:number;facing:number;effect?:unknown }
 export interface NetworkHooks {

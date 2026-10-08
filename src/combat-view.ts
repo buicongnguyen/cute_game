@@ -27,7 +27,7 @@ export class CombatView {
   }
   update(dt:number,projectiles:Projectile[],active=true,allies:CombatAlly[]=[]){
     const allyIds=new Set(allies.map(ally=>ally.id));for(const[id,model]of this.allies)if(!allyIds.has(id)){this.disposeAlly(model);this.allies.delete(id);}
-    for(const ally of allies){let model=this.allies.get(ally.id);if(!model){model=this.spareAllies.get(ally.kind)?.pop()??makeSummon(ally.kind);model.userData.allyKind=ally.kind;this.allies.set(ally.id,model);this.scene.add(model);}model.position.set(ally.x,ally.kind==='bat'?.7:0,ally.z);model.rotation.y=ally.facing??0;animateSummon(model,ally.kind,this.clock);}
+    for(const ally of allies){let model=this.allies.get(ally.id);if(!model){model=this.spareAllies.get(ally.kind)?.pop()??makeSummon(ally.kind);model.userData.allyKind=ally.kind;this.allies.set(ally.id,model);this.scene.add(model);}model.position.set(ally.x,ally.kind==='bat'?.7:ally.kind==='parrot'?1.7:0,ally.z);model.rotation.y=ally.facing??0;animateSummon(model,ally.kind,this.clock);}
     const ids=new Set(projectiles.map(p=>p.id));for(const[id,mesh]of this.shots)if(!ids.has(id)){this.release(mesh);this.shots.delete(id);}
     if(active)this.clock+=dt;
     for(const p of projectiles){let mesh=this.shots.get(p.id);
