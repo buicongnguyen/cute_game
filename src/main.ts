@@ -469,6 +469,8 @@ const clearOfHud=(r:{left:number;right:number;top:number;bottom:number},panels:t
 function updateLabels() {
   if(!started)return;
   if(hudFresh)hudFresh=false;else measureHud();const near=world.nearest(),candidates:{a:LabelAnchor;rank:number;distance:number}[]=[],active=new Set<string>();
+  // Ripe crops wear happy faces now, so only the nearest ripe bed carries the 👆 badge: a full ripe garden no longer shows a badge over every crop.
+  let nearestRipe:object|null=null;{let best=Infinity;for(const e of world.entities){if(e.kind!=='plot')continue;const plot=world.state.plots[e.index!];if(!plot?.crop||M.cropProgress(plot)<1)continue;const d=Math.hypot(e.x-world.position.x,e.z-world.position.z);if(d<best){best=d;nearestRipe=e;}}}
   for(const e of world.entities){
     const distance=Math.hypot(e.x-world.position.x,e.z-world.position.z);
     let text=t(e.name),icon=e.icon,y:number,back=0,dx=0,centre=e.kind==='plot',className='world-label',rank=2,reach=world.selected===e?30:11,aria='',spot:ReturnType<typeof house.house.labelAt>;
@@ -476,7 +478,7 @@ function updateLabels() {
       // Compact crop labels (reference 29/09, RG-05): a ready badge or a 22x5 growth bar on the bed's front edge, nothing on
       // empty beds (the context button says "Plant a seed"); the seconds left are only in the bed panel.
       const plot=world.state.plots[e.index!];if(!plot?.crop)continue;const progress=M.cropProgress(plot);y=.12;back=-.88*M.BED_SCALE;reach=22;text='';
-      if(progress>=1){({y,back}=cropBadgeAnchor(plot.crop,M.CROP_SCALE));icon='👆';className+=' plot-label ready';rank=1;aria=`${t(M.CROPS[plot.crop].name)} ready to harvest in garden bed ${e.index!+1}`;}
+      if(progress>=1&&e!==nearestRipe)continue;if(progress>=1){({y,back}=cropBadgeAnchor(plot.crop,M.CROP_SCALE));icon='👆';className+=' plot-label ready';rank=1;aria=`${t(M.CROPS[plot.crop].name)} ready to harvest in garden bed ${e.index!+1}`;}
       else{icon=`<b style="width:${Math.round(progress*100)}%"></b>`;className+=' plot-label growing';rank=3;aria=`${t(M.CROPS[plot.crop].name)} growing in garden bed ${e.index!+1}, ${Math.ceil((1-progress)*M.cropDuration(plot)/1000)} seconds left`;}
     }else if(e.kind==='fish'&&e.pond){
       if(fishGame&&fishPond===e)continue;y=.35;back=e.pond.rz*1.02;
