@@ -34,7 +34,10 @@ const failed = (result: unknown) => result === false || result === null || resul
 /** Shared deterministic game rules. Online callers must additionally validate session, spatial context and receipts. */
 export function applyGameAction(state: Game.SaveState, intent: GameIntent, context: ActionContext = { now: Date.now(), random: Math.random }): unknown {
   const next = structuredClone(state);
-  const result = reduceAction(next, intent, context);
+  // Workers' harvest bound for the chest (delivery.ts) is limited by the chest's room, not the bag's (storage-slots.ts).
+  const payload = intent?.payload && typeof intent.payload === 'object' && !Array.isArray(intent.payload) ? intent.payload : {};
+  Game.clearFullNote();
+  const result = typeof intent?.type === 'string' && deliversToChest(intent.type, payload, context.now - state.savedAt) ? Game.intoChest(() => reduceAction(next, intent, context)) : reduceAction(next, intent, context);
   for(const key of Object.keys(state))if(!Object.hasOwn(next,key))delete (state as unknown as Record<string,unknown>)[key];
   Object.assign(state, next);
   return result;
@@ -45,7 +48,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
   if (!p || typeof p !== 'object' || Array.isArray(p)) return invalid();
   const id = () => string(p.id), index = () => integer(p.index), kind = () => string(p.kind), now = context.now, random = context.random;
   // A refusal says why in plain words (refusals.ts), read from the state as the rule saw it.
-  const refuse = (): never => { throw new ActionError(409, refusalReason(intent.type, state, p as Record<string, unknown>, now)); };
+  // A grant the bag (or chest) had no slot for says so, whichever action it was (storage-slots.ts).
+  const refuse = (): never => { const full = Game.fullNote(); throw new ActionError(409, full === 'chest' ? Game.CHEST_FULL : full === 'bag' ? Game.BAG_FULL : refusalReason(intent.type, state, p as Record<string, unknown>, now)); };
   const success = <T>(result: T): T => failed(result) ? refuse() : result;
   // Workers' harvest while the explorer is out goes to the house chest (delivery.ts).
   const before = deliversToChest(intent.type, p, now - state.savedAt) ? { ...state.bag } : null, potBefore = before ? potItems(state) : {};
@@ -145,7 +149,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'friendsCatchUp': result = Friends.friendsCatchUp(state, now); break;
     case 'ackStored': result = takeStored(state); break;
     case 'ackTrim': result = Game.takeTrimNote(state); break;
-    case 'takeChest': result = takeFromChest(state, p.items); break;
+    case 'takeChest': result = takeFromChest(state, p.items); if (!(result as { count: number }).count && Game.fullNote()) return refuse(); break;
     case 'giveFriendGear': result = Friends.giveGear(state, string(p.friend, 20) as Friends.FriendId, id()); break;
     case 'takeFriendGear': result = Friends.takeGear(state, string(p.friend, 20) as Friends.FriendId, string(p.slot, 10)); break;
     case 'fishHunt': result = huntFish(state, { weaponId: string(p.weaponId), pondId: string(p.pondId), slot: integer(p.slot), aim: p.aim as { x: number; z: number } }, p.from as { x: number; z: number }, now); break;
@@ -163,12 +167,14 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'openCave': result = Game.openCave(state); break;
     case 'lightBrazier': result = Game.lightBrazier(state, index(), random); break;
     case 'claimCaveChest': result = Game.claimCaveChest(state, now, random); break;
-    case 'recoverBag': result = Game.recoverBag(state); break;
+    case 'recoverBag': result = Game.recoverBag(state, p.id === undefined ? undefined : string(p.id, 40), now); break;
+    // Backpack +4 slots / chest +10 slots for energy and materials (storage-slots.ts, the reference's expansion table).
+    case 'expandStorage': if (!Game.isStorageKind(p.kind)) return invalid(); result = Game.expandStorage(state, p.kind); break;
     // The Delvers' Vault (dungeon-rules.ts): one of today's runs, then each stage's rewards in order (server dice online).
     case 'dungeonStart': result = startRun(state, string(p.runId, 64), now, p.party === undefined ? 1 : integer(p.party)); break;
     case 'dungeonClaim': result = claimStage(state, string(p.runId, 64), integer(p.stage), now, random); break;
     case 'dungeonLeave': result = leaveRun(state) || { left: true }; break;
-    case 'die': Game.die(state, number(p.x), number(p.z)); result = true; break;
+    case 'die': result = { dropped: !!Game.die(state, number(p.x), number(p.z), now) }; break;
     // Cottage activities: rests and buffs with cooldowns (house-activities.ts).
     case 'houseUse': result = useActivity(state, id(), now); break;
     case 'rest': if (state.planet !== 'home') return refuse(); state.hp = Game.maxHp(state); result = true; break;

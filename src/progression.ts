@@ -1,6 +1,6 @@
 import { t } from './i18n.ts';
 import { ITEMS, PLANETS, COLLECTIONS, STORY_STEPS, type Inventory } from './content.ts';
-import { addItem, gainXp, xpNeeded, MAX_PLOTS, type SaveState } from './model.ts';
+import { stowItem, gainXp, xpNeeded, MAX_PLOTS, type SaveState } from './model.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import { kitchenLevel } from './difficulty.ts';
 export { STORY_STEPS } from './content.ts';
@@ -250,7 +250,7 @@ export function fitReward(s: SaveState, r: Reward): Reward {
 }
 function give(s: SaveState, raw: Reward, now: number) { const r = fitReward(s, raw); s.energy += r.energy || 0; if (r.xp)
     gainXp(s, r.xp, now); for (const [id, n] of Object.entries(r.items || {}))
-    addItem(s, id, n); refreshProgress(s, now); s.progression.pass.stars += r.stars || 0; }
+    stowItem(s, id, n); /* a full bag sends rewards to the chest (the reference: "đã vào túi đồ / rương") */ refreshProgress(s, now); s.progression.pass.stars += r.stars || 0; }
 function storyReward(s: SaveState): Reward { const index = s.progression.story.index, step = storyStep(index, s); return { energy: 30 + s.level * 6 + Math.min(index, 40) * 4, xp: Math.round(xpNeeded(s.level) * (index >= 29 ? .3 : .25)), items: step.end, stars: 15 + (step.end ? 40 : 0) }; }
 function taskReward(s: SaveState, t: Task, weekly = false): Reward { if (weekly) {
     const bonus = ['seed_star', 'spore', 'seed_fire', 'seed_ice'][hash(t.type) % 4];

@@ -74,7 +74,7 @@ test('pending damage survives reconnect and travel and lethal damage drops the b
  await f.authority.internal('actor','fixtureJourney',[],records=>{Object.assign(records.get('actor'),{journeyPaid:true,flightDust:[{id:0,x:0,z:0}],flightPoint:{x:0,z:0},rideUntil:Date.now()+45000,ridePlanet:'home',fishingTicket:{id:'old-life'}});return {};});
  const from={...f.peer.pose};f.authority.damage(f.peer,enemy.id);
  const replacement={...f.peer,room:'party:home',pose:{x:0,z:0,facing:0,moving:false},socket:{}};f.peers.set('actor',replacement);f.rooms.set(replacement.room,{id:replacement.room,members:new Set(['actor']),host:'actor',enemies:[],killed:new Set()});f.authority.engineFor(replacement);
- await f.next(m=>m.type==='healthResult'&&m.died,0);const persisted=await f.store.get('actor');assert.equal(f.deaths(),1);assert.equal(persisted.profile.dropped.x,from.x);assert.equal(persisted.profile.dropped.z,from.z);assert.equal(persisted.lifeEpoch,1);assert.equal(persisted.profile.bag.wood,undefined);
+ await f.next(m=>m.type==='healthResult'&&m.died,0);const persisted=await f.store.get('actor');assert.equal(f.deaths(),1);assert.equal(persisted.profile.deathBags.at(-1).x,from.x);assert.equal(persisted.profile.deathBags.at(-1).z,from.z);assert.equal(persisted.lifeEpoch,1);assert.equal(persisted.profile.bag.wood,undefined);
  assert.equal(persisted.journeyPaid,false);for(const key of ['flightDust','flightPoint','rideUntil','ridePlanet','fishingTicket'])assert.equal(persisted[key],undefined,key);
 });
 test('old-life healing and damage cannot cross a reset epoch boundary',async t=>{

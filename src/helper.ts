@@ -88,7 +88,8 @@ export function nextTask(s: M.SaveState, from: { x: number; z: number }, now = D
   const h = s.helper; if (!h?.owned || h.paused || robotResting(s, now)) return null;
   let best: HelperTask | null = null, bestD = Infinity, bestRipe = false;
   s.plots.forEach((p, i) => {
-    const ripe = harvestable(p, now), crop = !p.crop && i !== held ? seedFor(s, i) : null;
+    // A full backpack leaves the crop standing (storage-slots.ts): no trip that the bag would refuse.
+    const ripe = harvestable(p, now) && M.canAddItem(s, p.crop!), crop = !p.crop && i !== held ? seedFor(s, i) : null;
     if (!ripe && !crop) return;
     const b = M.bedPosition(s, i), d = Math.hypot(b.x - from.x, b.z - from.z);
     // Ripe beds come first: a crop left standing is worth more than an empty bed.

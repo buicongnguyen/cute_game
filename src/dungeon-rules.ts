@@ -70,7 +70,7 @@ export function claimStage(s: Game.SaveState, id: string, stage: number, now: nu
   if (!run || run.id !== id || !Number.isInteger(stage) || stage !== run.stage || stage < 0 || stage >= STAGE_COUNT) return false;
   if (now - run.lastAt < DUNGEON.minStageMs || now - run.startedAt > DUNGEON.timeLimit * 1000 + 60_000) return false;
   const loot = rollStageLoot(stage, random);
-  for (const item of loot.items) Game.addItem(s, item.id, item.count); // a full bag keeps what fits, like other rewards
+  for (const item of loot.items) Game.stowItem(s, item.id, item.count); // the bag, else the chest (reference: "đã vào túi đồ / rương")
   Game.gainXp(s, loot.xp, now);
   const st = DUNGEON_STAGES[stage]; Game.recordEvent(s, 'kill', st.mobs.reduce((n, [, c]) => n + c, 0) + 1, st.boss, now); Game.recordEvent(s, 'boss', 1, st.boss, now);
   run.stage++; run.lastAt = now;

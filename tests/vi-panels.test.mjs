@@ -73,7 +73,7 @@ for(const name of wanted)for(const [, other] of declared.get(name).matchAll(/\b(
 const functions=[...wanted].map(name=>declared.get(name)).join('\n');
 // Imports main.ts gets from small UI modules (e.g. house-stores.ts) are given to the renderers too.
 const extraModules={};
-for(const file of ['house-stores.ts','try-on.ts'])try{Object.assign(extraModules,await import('../src/'+file));}catch{/* Not every branch has it. */}
+for(const file of ['house-stores.ts','try-on.ts','bag-slots-ui.ts','install-app.ts','title-card.ts'])try{Object.assign(extraModules,await import('../src/'+file));}catch{/* Not every branch has it. */}
 const declarations=ast.statements.filter(node=>ts.isVariableStatement(node)&&node.declarationList.declarations.some(item=>['BUFF_WORDS','JOURNAL_TABS','SHOP_TABS'].includes(item.name.getText(ast)))).map(node=>node.getText(ast)).join('\n');
 const shell=ast.statements.find(node=>ts.isExpressionStatement(node)&&node.getText(ast).startsWith('app.innerHTML =')).getText(ast).replaceAll('import.meta.env.VITE_STATIC_HOST',"'true'").replaceAll('import.meta.env.VITE_ONLINE_URL',"''");
 const compiled=ts.transpileModule(declarations+'\n'+functions,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;

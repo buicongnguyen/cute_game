@@ -52,7 +52,7 @@ test('material purchases and crafting preserve funds and items on failure',()=>{
 });
 test('exactly one equipped copy is protected through selling, storage and death',()=>{
   const s=M.newGame();M.addItem(s,'hat_straw',3);M.equip(s,'hat_straw');assert.equal(M.looseQuantity(s,'hat_straw'),2);assert.equal(M.sell(s,'hat_straw',3),0);assert.equal(M.sell(s,'hat_straw'),10);
-  assert.equal(M.transfer(s,'hat_straw',true),true);assert.equal(M.transfer(s,'hat_straw',true),false);assert.equal(s.bag.hat_straw,1);M.transfer(s,'hat_straw',false);M.die(s,1,2);assert.equal(s.bag.hat_straw,1);assert.equal(s.dropped?.items.hat_straw,1);assert.equal(M.recoverBag(s),true);
+  assert.equal(M.transfer(s,'hat_straw',true),true);assert.equal(M.transfer(s,'hat_straw',true),false);assert.equal(s.bag.hat_straw,1);M.transfer(s,'hat_straw',false);M.die(s,1,2);assert.equal(s.bag.hat_straw,1);assert.equal(s.deathBags?.[0].items.hat_straw,1);assert.ok(M.recoverBag(s));
   assert.equal(M.unequip(s,'hat'),true);assert.equal(M.looseQuantity(s,'hat_straw'),2);assert.equal(M.unequip(s,'hat'),false);
 });
 test('all sixteen disguises provide four skill definitions and override weapon metadata',()=>{
@@ -70,7 +70,7 @@ test('a launch costs 20 energy, landing follows reference level gates and death 
   const s=M.newGame();s.energy=19;assert.equal(M.launch(s),false);s.energy=100;assert.equal(M.launch(s),true);assert.equal(s.energy,80);
   s.level=5;assert.equal(M.travel(s,'candy'),false);assert.equal(M.canLand(s,'candy'),false);s.level=6;assert.equal(M.travel(s,'candy'),true);assert.equal(s.energy,80,'landing itself is free');
   assert.deepEqual(s.discovered,['home','candy']);assert.equal(M.discover(s,'candy'),false);assert.equal(M.discover(s,'ice'),true);
-  M.addItem(s,'carrot',2);M.die(s,2,3);assert.equal(s.planet,'home');assert.equal(M.recoverBag(s),false);assert.equal(M.travel(s,'candy'),true);assert.equal(M.recoverBag(s),true);assert.equal(M.recoverBag(s),false);M.die(s,2,3);M.addItem(s,'wood',3);M.die(s,1,2);assert.equal(s.chest.carrot,2);assert.equal(s.dropped?.items.wood,3);assert.equal(M.travel(s,'home'),true);
+  M.addItem(s,'carrot',2);M.die(s,2,3);assert.equal(s.planet,'home');assert.equal(M.recoverBag(s),false);assert.equal(M.travel(s,'candy'),true);assert.ok(M.recoverBag(s));assert.equal(M.recoverBag(s),false);M.die(s,2,3);M.addItem(s,'wood',3);M.die(s,1,2);assert.equal(s.deathBags?.length,2,'each defeat keeps its own bag');assert.deepEqual([s.deathBags![0].planet,s.deathBags![0].items.carrot],['candy',2]);assert.deepEqual([s.deathBags![1].planet,s.deathBags![1].items.wood],['home',3]);assert.equal(M.travel(s,'home'),true);
 });
 test('defeats grant reference XP and probabilistic loot without an extra currency reward',()=>{
   const s=M.newGame();const loot=M.grantDefeat(s,'mushroom',8,false,()=>0);assert.equal(s.xp,8);assert.equal(s.energy,0);assert.equal(s.counters.kills,1);assert.deepEqual(loot,[{id:'manure',count:1},{id:'spore',count:1},{id:'meat',count:1}]);assert.equal(s.collection.spore,1);
@@ -103,7 +103,7 @@ test('lava braziers, gate, daily chest and furnace cannot be replayed for reward
 });
 test('version1 migration aliases old inventory, gear, crops and dropped assets without loss',()=>{
   const old={...M.newGame(),contentVersion:undefined,plots:Array.from({length:8},()=>({crop:'turnip',plantedAt:now})),bag:{turnip:3,radish:2,sword:1,crystal:4,wood:2},chest:{fertilizer:3},gear:{weapon:'sword'},dropped:{x:1,z:2,planet:'candy',items:{ember:2,fish:4}},worldRewards:{collectedGifts:{toy:[0]},mineReadyAt:{}},savedAt:now};
-  const r=M.parseSave(JSON.stringify(old))!;assert.equal(r.contentVersion,3);assert.equal(r.plots.length,11);assert.equal(r.plots[0].crop,'radish');assert.deepEqual(r.bag,{radish:5,sword_wood:1,starshard:4,wood:2});assert.deepEqual(r.chest,{spore:3});assert.equal(r.gear.weapon,'sword_wood');assert.deepEqual(r.dropped?.items,{magma:2,fish_perch:4});assert.equal(M.giftAvailable(r,'toy',0,now),false);assert.equal(M.giftAvailable(r,'toy',0,now+45000),true);assert.equal(reload(r).plots.length,11);
+  const r=M.parseSave(JSON.stringify(old))!;assert.equal(r.contentVersion,3);assert.equal(r.plots.length,11);assert.equal(r.plots[0].crop,'radish');assert.deepEqual(r.bag,{radish:5,sword_wood:1,starshard:4,wood:2});assert.deepEqual(r.chest,{spore:3});assert.equal(r.gear.weapon,'sword_wood');assert.deepEqual(r.deathBags?.[0].items,{magma:2,fish_perch:4});assert.equal(r.deathBags?.[0].at,now,'an old bag counts from its last save');assert.equal(M.giftAvailable(r,'toy',0,now),false);assert.equal(M.giftAvailable(r,'toy',0,now+45000),true);assert.equal(reload(r).plots.length,11);
 });
 test('the original six-bed save gains three fully positioned interactive beds and retains its color',()=>{
   const old={...M.newGame('Clover','#69c5ff'),contentVersion:undefined,plots:Array.from({length:6},(_,i)=>({crop:i===2?'carrot':null,plantedAt:i===2?1234:0})),bag:{rod:1,sword:1},energy:32,level:3};
@@ -124,7 +124,7 @@ test('inherited IDs, non-object roots and malformed optional state cannot enter 
   const bag=JSON.parse('{"carrot":2,"sword":1,"constructor":3,"__proto__":4,"toString":5,"fish":-2,"wood":1.5,"ember":1e30}');
   const r=M.parseSave(JSON.stringify({...s,bag,chest:null,gear:{weapon:'sword',hat:'constructor',boots:'sword'},counters:null,settings:null,worldRewards:null,plots:[null,{crop:'constructor',plantedAt:1},'berry'],energy:Number.MAX_VALUE,xp:Number.MAX_VALUE,hp:Number.MAX_VALUE,healthUp:Number.MAX_VALUE,attackUp:Number.MAX_VALUE}))!;
   assert.deepEqual(r.bag,{carrot:2,sword_wood:1});assert.deepEqual(r.gear,{weapon:'sword_wood'});assert.equal(r.plots.length,9);assert.ok(r.plots.every(p=>p.crop===null));assert.ok(Number.isFinite(M.maxHp(r)));assert.ok(Number.isFinite(M.attack(r)));assert.ok(Number.isSafeInteger(r.energy));assert.ok(r.xp<M.xpNeeded(r.level));assert.deepEqual(r.settings,{sound:true,musicVolume:.45,sfxVolume:.8,vibrate:true,lowGraphics:false,difficulty:'easy'});
-  assert.equal(M.parseSave(JSON.stringify({...s,dropped:{x:1,z:null,planet:'home',items:{carrot:1}}}))!.dropped,null);
+  assert.equal(M.parseSave(JSON.stringify({...s,dropped:{x:1,z:null,planet:'home',items:{carrot:1}}}))!.deathBags,undefined);
 });
 test('invalid world actions and numeric overflow leave valuable state unchanged',()=>{
   const s=M.newGame();assert.equal(M.claimMine(s,0,now),false);assert.equal(M.claimGift(s,0,now),false);s.planet='toy';const before=JSON.stringify(s);

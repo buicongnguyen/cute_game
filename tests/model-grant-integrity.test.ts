@@ -3,21 +3,23 @@ import assert from 'node:assert/strict';
 import * as M from '../src/model.ts';
 import { applyGameAction } from '../src/actions.ts';
 
-test('a death bag is retained in full until every item can fit, including action retries', () => {
-  const s = M.newGame();
+test('a death bag keeps whatever does not fit yet, including action retries', () => {
+  const s = M.newGame(), at = Date.now();
   s.bag = { carrot: Number.MAX_SAFE_INTEGER, wood: 5 };
-  s.dropped = { planet: 'home', x: 0, z: 0, items: { wood: 3, carrot: 1 } };
+  s.deathBags = [{ id: 'b1', planet: 'home', x: 0, z: 0, items: { wood: 3, carrot: 1 }, at }];
+  // What fits comes back; the rest stays in the bag (the reference: "Túi đầy! Vẫn còn đồ trong hũ.").
+  assert.deepEqual(M.recoverBag(s, 'b1', at), { id: 'b1', taken: { wood: 3 }, left: 1 });
+  assert.equal(s.bag.wood, 8); assert.deepEqual(s.deathBags?.[0].items, { carrot: 1 });
   const before = structuredClone(s);
-  assert.equal(M.recoverBag(s), false);
+  assert.equal(M.recoverBag(s, 'b1', at), false);
   assert.deepEqual(s, before);
-  assert.throws(() => applyGameAction(s, { type: 'recoverBag' }));
+  assert.throws(() => applyGameAction(s, { type: 'recoverBag', payload: { id: 'b1' } }, { now: at, random: Math.random }));
   assert.deepEqual(s, before);
   assert.ok(M.removeItem(s.bag, 'carrot'));
-  assert.equal(M.recoverBag(s), true);
-  assert.equal(s.bag.wood, 8);
+  assert.ok(M.recoverBag(s, 'b1', at));
   assert.equal(s.bag.carrot, Number.MAX_SAFE_INTEGER);
-  assert.equal(s.dropped, null);
-  assert.equal(M.recoverBag(s), false);
+  assert.equal(s.deathBags, undefined);
+  assert.equal(M.recoverBag(s, 'b1', at), false);
 });
 
 test('an unsuccessful decoration pickup preserves its placed object and collection', () => {
@@ -92,9 +94,10 @@ test('invalid multi-item reward rolls cannot spend a brazier crystal or cave-che
 
 test('banking an older death bag never overflows storage or drops its contents on reload',()=>{
   const s=M.newGame();s.bag.hat_straw=Number.MAX_SAFE_INTEGER;s.gear.hat='hat_straw';s.chest.hat_straw=Number.MAX_SAFE_INTEGER;
-  s.dropped={x:1,z:2,planet:'home',items:{hat_straw:Number.MAX_SAFE_INTEGER}};
-  const total=(state:M.SaveState)=>BigInt(state.bag.hat_straw||0)+BigInt(state.chest.hat_straw||0)+BigInt(state.dropped?.items.hat_straw||0);
-  const before=total(s);M.die(s,3,4);assert.equal(total(s),before);
-  assert.ok([s.bag.hat_straw,s.chest.hat_straw,s.dropped?.items.hat_straw].every(Number.isSafeInteger));
+  // Ten bags already waiting: the eleventh defeat banks the oldest (the reference throws it away).
+  const now=Date.now();s.deathBags=Array.from({length:10},(_,i)=>({id:`b${i}`,x:1,z:2,planet:'home' as M.PlanetId,items:{hat_straw:Number.MAX_SAFE_INTEGER},at:now-1000+i}));
+  const total=(state:M.SaveState)=>BigInt(state.bag.hat_straw||0)+BigInt(state.chest.hat_straw||0)+(state.deathBags??[]).reduce((n,b)=>n+BigInt(b.items.hat_straw||0),0n);
+  const before=total(s);M.die(s,3,4,now);assert.equal(total(s),before);assert.equal(s.deathBags?.length,10);
+  assert.ok([s.bag.hat_straw,s.chest.hat_straw,...s.deathBags!.map(b=>b.items.hat_straw)].every(Number.isSafeInteger));
   const saved=M.parseSave(JSON.stringify(s))!;assert.equal(total(saved),before);assert.equal(saved.gear.hat,'hat_straw');
 });
