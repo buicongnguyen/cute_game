@@ -15,6 +15,12 @@ IDS=['apple','grape','mango','pineapple','coconut','durian','lychee','peach']
 reset_scene()
 colors={'leaf':'#48AC47','light':'#83D949','wood':'#A96534','red':'#EF3B47','purple':'#914FCA','gold':'#FFBD31','green':'#8EAA31','brown':'#805230','pink':'#FF97AF','stem':'#6F7E2B'}
 mats={k:mat('Fruit '+k,v) for k,v in colors.items()}
+# The fruit wear little faces (crop_face.py), like the ripe garden crops; the trees keep their tree look.
+import crop_face
+face_mats=dict(ink=mat('Crop face ink','#2B1B24',.5),shine=mat('Crop face shine','#FFFFFF',.3),blush=mat('Crop face blush','#FF8FB4',.6))
+FRUIT_FACES={'apple':dict(body={'Fruit red'},count=5,min_share=.5),'grape':dict(body={'Fruit purple'},merge=True,scale=.42),'mango':dict(body={'Fruit gold'},count=5,min_share=.5),
+  'pineapple':dict(body={'Fruit gold'},count=1),'coconut':dict(body={'Fruit brown'},count=3,min_share=.5,sclera=True),'durian':dict(body={'Fruit green'},count=5,min_share=.5),
+  'lychee':dict(body={'Fruit pink'},count=5,min_share=.5,scale=1.2),'peach':dict(body={'Fruit pink'},count=5,min_share=.5,scale=1.6)}
 def finish(obj,root,material):
     obj.data.materials.append(mats[material]);obj.parent=root
     bpy.context.view_layer.objects.active=obj;obj.select_set(True)
@@ -82,6 +88,7 @@ for kind in IDS:
     bpy.context.view_layer.objects.active=meshes[0];bpy.ops.object.join();obj=bpy.context.object
     bpy.context.scene.cursor.location=(0,0,0);bpy.ops.object.origin_set(type='ORIGIN_CURSOR');obj.name='crop_'+kind+'_mesh';obj.data.name=obj.name
     obj.select_set(False)
+    crop_face.add_faces(obj,mats=face_mats,body_names=FRUIT_FACES[kind]['body'],**{k:v for k,v in FRUIT_FACES[kind].items() if k!='body'})
 stats={}
 for root in roots:
     vertices=[root.matrix_world @ o.matrix_local @ v.co for o in root.children for v in o.data.vertices]

@@ -61,8 +61,18 @@ colors, including in the occluder fade, without extra materials or textures.
 ## Crops (`build_nature.py` → `public/assets/models/crops.glb`)
 
 Nodes `crop_sprout` plus `crop_<id>` for every crop id below. Each mature crop
-fits 0.7 × 0.7, stands at most 0.9 tall on z 0 and uses at most 400
-triangles. Icons are rendered to `public/assets/icons/crops/<id>.webp`.
+fits 0.7 × 0.7, stands at most 0.9 tall on z 0 and uses at most 520
+triangles: at most 400 for the plant plus its face. Every mature crop is a
+little character: `crop_face.py` paints a face (two oval eyes with a white
+sparkle, pink blush, a smile; ~54 triangles, the shared materials `Crop face
+ink`, `Crop face shine` and `Crop face blush`, which do not count toward the
+2–7 plant materials) on the body facing the game camera, two on berries and
+peppers, and gives leafless bodies a two-leaf sprout of hair (`CROP_FACES` in
+`build_nature.py`). The fruit trees in `fruit_crops.glb` keep their tree look;
+their fruit get the same faces (`FRUIT_FACES` in `build_fruit_crops.py`). In
+the game a ripe crop is drawn about as tall as its bed is wide
+(`CROP_BOOST` in `src/crop-cards.ts`). Icons are rendered to
+`public/assets/icons/crops/<id>.webp`.
 
 `radish carrot pumpkin mint chili candy bean star berry coffee moonflower
 magnetmelon melon clover glowshroom iceberry goldcorn dragonfruit rainbowrose`

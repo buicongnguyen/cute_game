@@ -1,5 +1,6 @@
 // w14-ux: indoor labels sit on their things and a tap on the label or the thing picks it; the indoor stores are their own
 // places; workers' gain effects show only outdoors in the home village (user decision 2026-10-02).
+import { HARVEST } from '../src/feel-rules.ts';
 import './support/midday-clock.mjs'; // helpers work at this hour (their breaks are tested on their own)
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -145,16 +146,16 @@ function run(place: { planet: string; indoors: boolean; x: number; z: number }) 
   const state = M.newGame(); state.helper = { ...(state.helper ?? {}), owned: true, paused: false, last: {} } as M.SaveState['helper'];
   state.plots[0].crop = 'carrot'; state.plots[0].plantedAt = Date.now() - 1e8;
   const effects: string[] = [];
-  const fx = { burst: () => effects.push('burst'), orbs: () => effects.push('orbs'), text: () => effects.push('text') };
+  const fx = { burst: () => effects.push('burst'), orbs: () => effects.push('orbs'), text: () => effects.push('text'), ring: () => effects.push('ring') };
   const world = { planet: place.planet, interior: place.indoors ? {} : null, position: new T.Vector3(place.x, 0, place.z), entities: [{ kind: 'plot', index: 0, x: -4, z: 6 }, { kind: 'chest', x: 3, z: 3 }] as Entity[], fx, syncCrops() {} };
-  const ctx = vm.createContext({ M, state, world, t, tone: () => effects.push('tone'), explorerAway, showsGain, applyGameAction, change: (f: () => unknown) => f(), actionHandler: null, helperPending: new Set(), perform: async () => null });
+  const ctx = vm.createContext({ M, HARVEST, setTimeout: (run: () => void) => run(), state, world, t, tone: () => effects.push('tone'), explorerAway, showsGain, applyGameAction, change: (f: () => unknown) => f(), actionHandler: null, helperPending: new Set(), perform: async () => null });
   const api = vm.runInContext(compiled, ctx) as { harvestBurst(i: number, crop: string, source?: string): void; helperAction(kind: string, i: number): unknown };
   return { state, effects, api };
 }
 test('a helper harvest: effects outdoors in the village only, the carrot arrives everywhere; your own harvest in the wilds still shows', () => {
   const village = run({ planet: 'home', indoors: false, x: 2, z: 2 });
   assert.equal(village.api.helperAction('helperHarvest', 0), true);
-  assert.ok(village.effects.includes('orbs') && village.effects.includes('burst') && village.effects.includes('text'), village.effects.join());
+  assert.ok(village.effects.includes('orbs') && village.effects.includes('burst') && village.effects.includes('text'), village.effects.join()); assert.ok(village.effects.includes('ring'), 'the bed pulses (feel-rules.ts HARVEST)');
   assert.equal(village.state.bag.carrot, 1);
   const indoors = run({ planet: 'home', indoors: true, x: -7, z: 2 });
   indoors.api.helperAction('helperHarvest', 0);

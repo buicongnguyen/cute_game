@@ -25,6 +25,14 @@ export class CombatView {
     if(e.kind==='arc')mesh.rotation.z=-(e.facing??0)+Math.PI/2;
     this.scene.add(mesh);const life=e.duration??(e.kind==='cast'?.7:e.kind==='trail'?.24:.38);this.effects.push({mesh,life,max:life,kind:e.kind});
   }
+  /**
+   * Builds `count` summons of `kind` ahead of time into the spare pool and lets `compile` warm their shaders, so the
+   * first cast shows them on its first frame (the ninja's shadow clones stalled ~60 ms on their first cast).
+   */
+  prewarm(kind:CombatAlly['kind'],count:number,compile?:(group:T.Group)=>void){
+    const list=this.spareAllies.get(kind)??[];while(list.length<count){const model=makeSummon(kind);model.userData.allyKind=kind;list.push(model);}this.spareAllies.set(kind,list);
+    if(compile){const group=new T.Group();for(const model of list)group.add(model);compile(group);for(const model of list)group.remove(model);}
+  }
   /** More summons to draw besides ours (main.ts: other explorers' hittable summons online). */
   extraAllies?:()=>CombatAlly[];
   update(dt:number,projectiles:Projectile[],active=true,own:CombatAlly[]=[]){

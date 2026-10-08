@@ -47,7 +47,7 @@ export class TelegraphDecals {
 
   /** Starts a frame: the rim pulses and the soft area breathes (shared materials, so no per-decal cost). */
   begin() {
-    this.used = 0;
+    this.used = 0; this.conesUsed = 0;
     const t = (typeof performance === 'undefined' ? 0 : performance.now()) / 1000, beat = Math.sin(t * 9);
     for (const set of this.materials.values()) {
       set.edge.opacity = Math.min(1, TELEGRAPH_LOOK.edge * (.82 + .18 * beat));
@@ -76,10 +76,49 @@ export class TelegraphDecals {
     return decal;
   }
 
-  end() { for (let i = this.used; i < this.decals.length; i++) this.decals[i].group.visible = false; }
+  /**
+   * A wedge on the ground (an ordinary creature's melee wind-up, feel-rules.ts MELEE_ARC): `half` radians either side
+   * of `facing` (+z is 0), out to `r`; the fill grows from the creature to the rim as `progress` goes 0 to 1.
+   * Same materials and pooling as the discs; one shared wedge shape per width.
+   */
+  cone(x: number, y: number, z: number, r: number, facing: number, half: number, progress: number, color: string) {
+    let decal = this.cones[this.conesUsed];
+    if (!decal) {
+      const group = new T.Group(), look = this.look(color), shape = this.wedge(half);
+      const base = new T.Mesh(shape.fill, look.base), fill = new T.Mesh(shape.fill, look.fill), edge = new T.Mesh(shape.edge, look.edge);
+      for (const [mesh, order] of [[base, 1], [fill, 2], [edge, 3]] as const) { mesh.renderOrder = order; mesh.raycast = () => {}; mesh.name = 'attack-telegraph-arc'; group.add(mesh); }
+      decal = { group, base, fill, edge }; this.cones.push(decal); this.root.add(group);
+    }
+    this.conesUsed++;
+    const look = this.look(color), shape = this.wedge(half), p = Math.min(1, Math.max(0, progress));
+    decal.base.material = look.base; decal.fill.material = look.fill; decal.edge.material = look.edge;
+    decal.base.geometry = decal.fill.geometry = shape.fill; decal.edge.geometry = shape.edge;
+    decal.group.visible = true; decal.group.position.set(x, y, z); decal.group.rotation.y = facing;
+    decal.base.scale.setScalar(r); decal.edge.scale.setScalar(r);
+    decal.fill.visible = p > .001; decal.fill.scale.setScalar(Math.max(.001, r * p));
+    decal.fill.position.y = .005; decal.edge.position.y = .01;
+    return decal;
+  }
+  private cones: Decal[] = [];
+  private conesUsed = 0;
+  private wedges = new Map<string, { fill: T.BufferGeometry; edge: T.BufferGeometry }>();
+  /** A unit wedge centred on +z (after laying it flat), and its outer rim 0.12 of the radius wide. */
+  private wedge(half: number) {
+    const key = half.toFixed(3);
+    let shape = this.wedges.get(key);
+    if (!shape) {
+      const fill = new T.CircleGeometry(1, 24, -Math.PI / 2 - half, half * 2).rotateX(-Math.PI / 2), edge = new T.RingGeometry(.88, 1, 24, 1, -Math.PI / 2 - half, half * 2).rotateX(-Math.PI / 2);
+      fill.userData.sharedKit = edge.userData.sharedKit = true; shape = { fill, edge }; this.wedges.set(key, shape);
+    }
+    return shape;
+  }
+
+  end() { for (let i = this.used; i < this.decals.length; i++) this.decals[i].group.visible = false; for (let i = this.conesUsed; i < this.cones.length; i++) this.cones[i].group.visible = false; }
 
   /** Decals drawn this frame (tests and probes). */
   get active() { return this.decals.slice(0, this.used).map(d => ({ x: d.group.position.x, z: d.group.position.z, r: d.base.scale.x, fill: d.fill.visible ? d.fill.scale.x / d.base.scale.x : 0, color: '#' + (d.base.material as T.MeshBasicMaterial).color.getHexString() })); }
 
-  clear() { this.used = 0; this.end(); }
+  clear() { this.used = 0; this.conesUsed = 0; this.end(); }
+  /** Arcs drawn this frame (tests and probes): reach, facing and fill. */
+  get activeArcs() { return this.cones.slice(0, this.conesUsed).map(d => ({ x: d.group.position.x, z: d.group.position.z, r: d.base.scale.x, facing: d.group.rotation.y, fill: d.fill.visible ? d.fill.scale.x / d.base.scale.x : 0 })); }
 }

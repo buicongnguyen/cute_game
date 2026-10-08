@@ -1598,6 +1598,15 @@ h1 > span {
 .float.xp { color: #8fe3ff; font-size: 18px; -webkit-text-stroke-color: #0f3d5a; }
 .float.item { font-size: 18px; -webkit-text-stroke-color: #2c5a26; }
 .float.big { font-size: 32px; }
+/* Damage numbers stay small and stack over the creature (fx.ts, feel-rules.ts STACK), like the reference's. */
+.float.dmg { font-size: 17px; -webkit-text-stroke-width: 4px; }
+.float.crit { font-size: 24px; }
+/* The skill's name over the explorer when it is cast, in the slot's colour (Q/J blue, W/K green, E/L orange, R/; purple). */
+.float.skillname { font-size: 19px; letter-spacing: .01em; -webkit-text-stroke-width: 5px; }
+.float.skillname.s0 { color: #8fdcff; -webkit-text-stroke-color: #12405e; }
+.float.skillname.s1 { color: #9cec78; -webkit-text-stroke-color: #1f4d16; }
+.float.skillname.s2 { color: #ffbe6a; -webkit-text-stroke-color: #5a2a06; }
+.float.skillname.s3 { color: #e2b2ff; -webkit-text-stroke-color: #3b1f6b; }
 #damage-flash { position: absolute; inset: 0; box-shadow: inset 0 0 90px rgba(226, 73, 63, .55); opacity: 0; transition: opacity .15s; pointer-events: none; }
 #damage-flash.active { opacity: 1; }
 .fatal { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 40px; text-align: center; background: var(--paper); pointer-events: auto; }

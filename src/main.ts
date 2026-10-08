@@ -117,6 +117,7 @@ import { initStoredNote } from './delivery-ui.ts';
 import * as IG from './item-groups.ts';
 import { dogMayToss, dogTossFactor, DOG_TOSS_CD } from './guard-dog.ts';
 import { initDungeon, type DungeonApi } from './dungeon.ts';
+import { HARVEST, SKILL_NAME_RISE } from './feel-rules.ts';
 
 // The HUD asks for the same ~40 elements several times a second: remember them while they stay in the page.
 const $found=new Map<string,HTMLElement>();
@@ -278,6 +279,7 @@ const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else wo
 // Swings become additive slash trails and area skills become expanding rings with sparks.
 function showEffect(effect:CombatEffect){
   const fx=world.fx,at={x:effect.x,z:effect.z};
+  if(effect.quiet)return; // a repeat tick of a cast already drawn (the whirlwind's hits)
   if(skillFx.disguises.play(effect))return;
   if(effect.kind==='toss'){world.guardDogs?.toss(effect);return;}
   if(effect.look==='boulder'&&effect.kind==='cast'){skillFx.boulders.throw(effect);return;}
@@ -288,8 +290,8 @@ function showEffect(effect:CombatEffect){
   if(effect.look==='shock'&&(effect.kind==='ring'||effect.kind==='impact')){if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.42,y:.1,thick:1,opacity:.18});fx.ring(at,{color:'#d8f4ff',from:effect.radius,to:effect.radius*1.02,life:.42,y:.12,thick:.06,opacity:.9});}skillFx.shock(effect);return;}
   if(fx&&effect.kind==='arc'){const fist=effect.radius<=1.85;fx.slash(at,effect.facing??world.facing,effect.radius+.25,effect.color,fist?{arc:1.4,life:.15,thick:.4}:{arc:Math.min(6.2,effect.arc??2.2)});return;}
   // An area hit also leaves a faint filled disc and a rim at its exact radius (skill-info.ts), so the player sees what the blast covered.
-  if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.42,y:.1,thick:1,opacity:.22});fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius*1.02,life:.42,y:.12,thick:.06,opacity:.85});}
-  if(fx&&(effect.kind==='ring'||effect.kind==='impact')){fx.ring(at,{color:effect.color,from:.3,to:Math.max(.8,effect.radius),life:.35,y:.15,thick:.25});fx.burst(at,{n:6,color:effect.color,glow:true,size:.12,speed:Math.min(8,effect.radius*1.6),up:2,y:.3,life:.4});return;}
+  if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.3,y:.1,thick:1,opacity:.08});fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius*1.02,life:.3,y:.12,thick:.04,opacity:.6});}
+  if(fx&&(effect.kind==='ring'||effect.kind==='impact')){fx.ring(at,{color:effect.color,from:.3,to:Math.max(.8,effect.radius),life:.3,y:.15,thick:.1,opacity:.75});fx.burst(at,{n:4,color:effect.color,glow:true,size:.1,speed:Math.min(6,effect.radius*1.4),up:2,y:.3,life:.35});return;}
   combatView.effect(effect);
 }
 function emitAction(action:Omit<GameAction,'x'|'z'|'facing'>){const value={...action,x:world.position.x,z:world.position.z,facing:world.facing};for(const listener of actionListeners)listener(value);}
@@ -527,12 +529,21 @@ function showTrimNote(){const n=state.gardenTrim;if(!n)return;void perform('ackT
 function gainShows(source:GainSource){return showsGain(source,{planet:world.planet,indoors:!!world.interior,away:explorerOut()});}
 /** Where collected orbs fly: to whoever collected them. A helper's find goes to the helper (it carries it home), never across the yard to the explorer. */
 function orbTarget(by?:{x:number;z:number}){if(by){const at=world.position.clone().set(by.x,.9,by.z);return ()=>at;}if(!explorerOut())return ()=>world.position;const c=world.entities.find(x=>x.kind==='chest'),at=world.position.clone().set(c?.x??0,0,c?.z??0);return ()=>at;}
-/** Sparkles, the XP number and a few orbs flying into the bag when a crop comes up. */
+/**
+ * The harvest beat, after the reference (feel-rules.ts HARVEST): a pulse ring on the bed, sparkles and "+1 <crop>"
+ * at once; the crop card flies in an arc to whoever collected it (orbTarget: the explorer, or the helper who picked
+ * it); "+N XP" pops over the collector as it lands, with a soft chime. About 0.85 s in all.
+ */
 function harvestBurst(index:number,crop:M.CropId,source:GainSource='own',by?:{x:number;z:number}){
   if(!gainShows(source))return;const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(!e)return;
-  world.fx?.burst({x:e.x,z:e.z},{n:10,color:['#9be36f','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.4});
-  world.fx?.orbs({x:e.x,z:e.z},2,'#9be36f',orbTarget(source==='worker'?by:undefined));
-  floating('+'+M.CROPS[crop].xp+' XP',e.x,e.z,'xp');tone('harvest');
+  const fx=world.fx,target=orbTarget(source==='worker'?by:undefined),R=HARVEST.ring;
+  fx?.ring({x:e.x,z:e.z},{color:R.color,from:R.from,to:R.to,life:R.life,y:.3,thick:.22});
+  fx?.burst({x:e.x,z:e.z},{n:10,color:['#9be36f','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.4});
+  fx?.orbs({x:e.x,z:e.z},2,'#7ff0ff',target); // XP motes home in on the collector too
+  world.cropCards?.aim(e.x,e.z,()=>{const p=target();return {x:p.x,y:(p.y||0)+.9,z:p.z};});
+  floating(t('+1 {name}',{name:t(M.CROPS[crop].name)}),e.x,e.z,'item');tone('harvest');
+  const xp=M.CROPS[crop].xp,startedIn=world.root;
+  setTimeout(()=>{if(world.root!==startedIn)return;const p=target();floating('+'+xp+' XP',p.x,p.z,'xp');tone('pop');},HARVEST.xpDelay*1000);
 }
 function plantBurst(index:number,source:GainSource='own'){if(!gainShows(source))return;const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(e)world.fx?.burst({x:e.x,z:e.z},{n:6,color:['#8a5a3a','#6a3f2a'],size:.1,speed:2,up:3,y:.25});}
 /** Ripe tap: harvest every ripe bed in the garden (the user's rule; the reference stops at 5 m), nearest first, 140 ms apart, then one summary toast. */
@@ -1092,6 +1103,8 @@ function spawnNetworkDrop(drop:NetworkDrop,actor:string){
 function removeNetworkDrop(id:string){for(const [uid,meta]of networkDrops)if(meta.drop.id===id){drops.sim.drops=drops.sim.drops.filter(d=>d.uid!==uid);networkDrops.delete(uid);}}
 frameListeners.add(dt=>{for(const [uid,meta]of networkDrops){const d=drops.sim.drops.find(d=>d.uid===uid);if(!d){networkDrops.delete(uid);continue;}d.pickupLocked=meta.drop.owner!==meta.actor&&Date.now()<meta.drop.releaseAt;}drops.update(dt);});
 // Drawn on the next frame's render: a one-frame lag is invisible on a 0.5 m gardener.
+// The ninja's shadow clones appear on the cast frame: their models and shaders are made while the suit is worn, not on the first cast.
+{let warmed=false;frameListeners.add(()=>{if(warmed||!started||state.gear.disguise!=='dz_ninja')return;warmed=true;combatView.prewarm('clone',4,group=>{group.position.copy(world.position);world.scene.add(group);try{world.renderer.compile(world.scene,world.camera);}finally{world.scene.remove(group);}});});}
 frameListeners.add(dt=>helperView.update(dt,{state:!flight&&world.planet==='home'?world.state:null,act:started&&!visiting&&world.state===state&&!document.hidden,now:Date.now(),harvest:helperHarvest,plant:helperPlant,held:heldBed()}));
 frameListeners.add(dt=>{farmHelperController.sync();farmHelperView.update(dt,{state:!flight&&world.planet==='home'?world.state:null,context:world.root,act:!!farmHelperContext(),pending:farmHelperController.pending,now:Date.now(),position:uid=>world.farmView?.positionOf(uid)??undefined,work:task=>farmHelperController.work(task)});});
 function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string;x?:number;z?:number;helper?:boolean}){
@@ -1131,8 +1144,8 @@ function executeEnemy(enemy:Enemy,healFraction:number){
 /** Ground slam impact, after the reference: flying dirt, two shockwaves and a heavy shake. */
 function slamImpact(){
   const fx=world.fx;if(!fx)return;const at=world.position;
-  fx.shake(.7);fx.ring(at,{color:'#fff3c4',to:4.6,life:.45,thick:.25});fx.ring(at,{color:'#ffb347',to:3.5,life:.6,thick:.12});
-  fx.burst(at,{n:26,color:['#b98a5e','#8b5a36','#d9b58a'],speed:7,up:7,size:.18,life:1.1,y:.2});fx.burst(at,{n:14,color:'#ffffff',glow:true,speed:8,up:3,size:.12,life:.5});
+  fx.shake(.32); // the crater look (skill-visuals.ts) draws the one shockwave ring
+  fx.burst(at,{n:12,color:['#b98a5e','#8b5a36','#d9b58a'],speed:6,up:6,size:.14,life:.8,y:.2});fx.burst(at,{n:6,color:'#ffffff',glow:true,speed:7,up:3,size:.1,life:.4});
   tone('crit');vibrate(80);
 }
 /** Standing still near a creature, the explorer fights it automatically, as in the reference. */
@@ -1208,6 +1221,8 @@ function skill(index:number){
   const disguise=state.gear.disguise,weapon=M.weaponStats(state),skills=skillList();
   if(!(disguise?combat.disguise(disguise,index):combat.skill(index,weapon.special??'fist')))return;
   skillDurations[index]=M.skillCooldown(state,index,skills[index].cd,!!disguise)/Math.max(.2,1+M.activeStats(state).haste);cooldowns[index]=skillDurations[index];
+  // The skill's name pops over the explorer in its slot's colour (feel-rules.ts), like the reference's cast callout.
+  world.fx?.text({x:world.position.x,y:SKILL_NAME_RISE,z:world.position.z},t(skills[index].name),`skillname s${index}`);
   if(!actionHandler)change(()=>recordEvent(state,'skill'));if(!disguise&&index===0)world.spinT=2.2;else if(disguise?(disguise==='dz_knight'&&index===1)||(disguise==='dz_vietnam'&&index===1):index===1)world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});tone(skillSound(index,disguise,weapon.special));emitAction({kind:'skill',index,special:disguise??weapon.special});
 }
 let dying=false;

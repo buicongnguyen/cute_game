@@ -55,6 +55,7 @@ import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,
 import {HIP,applyGait,gaitSwing,limbsOf,newGait,stepGait,type Gait} from './walk-cycle.ts';
 import {DEFAULT_PIVOTS,fitOf,lookOf,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {part} from './part-cache.ts';
+import {enemyFlash,HIT_FLASH,HURT_TINT,meleeArc,MELEE_ARC} from './feel-rules.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
@@ -1185,7 +1186,7 @@ export class World {
    * hit-stop but no camera shake: shake stays the signal for "you got hit" and big slams.
    */
   hitFeedback(e:Enemy,amount:number,critical:boolean){
-    e.flash=.14;this.lastHit={e,t:this.time??0};const fx=this.fx;if(!fx)return;
+    e.flash=HIT_FLASH.enemy;this.lastHit={e,t:this.time??0};const fx=this.fx;if(!fx)return;
     const at={x:e.x,y:e.mesh.position.y,z:e.z},colors=[e.definition?.color??'#fff0bb',e.definition?.accent??'#ffffff'],chest=at.y+.8*(e.boss?1.85:1);
     // The contact point: the creature's surface on the explorer's side, at chest height.
     const dx=this.position.x-e.x,dz=this.position.z-e.z,d=Math.hypot(dx,dz)||1,reach=Math.min(e.radius*.8,d*.5);
@@ -1193,7 +1194,7 @@ export class World {
     fx.burst(at,{n:critical?14:8,color:colors,size:.12,speed:5,up:4,y:chest-at.y});
     fx.burst(at,{n:critical?12:5,color:['#ffffff','#fff7a8'],glow:true,size:critical?.16:.1,speed:critical?8:5,up:3,y:chest-at.y,life:.35});
     fx.ring({x:e.x,z:e.z},{color:critical?'#ffe14d':'#ffffff',from:.2,to:critical?1.6:1,life:.2,thick:.35,y:chest});
-    fx.text(at,critical?amount+'!':String(amount),critical?'crit big':'dmg');
+    fx.text(at,critical?amount+'!':String(amount),critical?'crit big':'dmg',e.id);
     if(critical)fx.freeze(.06);
   }
   /** A defeated creature bursts into a puff: a 2.5 m ring, about 25 particles in its colours and a short freeze. */
@@ -1204,9 +1205,9 @@ export class World {
     fx.ring({x:e.x,z:e.z},{color:'#ffffff',from:.3,to:e.boss?4:2.5,life:.45,y:.1});fx.spark({x:e.x,y:at.y+.8,z:e.z},e.boss?2.4:1.6,.14);
     fx.freeze(.05);if(e.boss)fx.shake(.45);
   }
-  /** The player flinches and briefly glows red. */
+  /** The player flinches and briefly glows pink (feel-rules.ts HURT_TINT). */
   hurtFeedback(amount:number){
-    this.hurtT=.25;const fx=this.fx;if(!fx)return;
+    this.hurtT=HIT_FLASH.hero;const fx=this.fx;if(!fx)return;
     fx.text(this.position,'-'+amount,'hurt');fx.shake(Math.min(.35,.12+amount/60));
     fx.burst(this.position,{n:6,color:['#ff7b6b','#ffffff'],size:.1,speed:4,up:3,y:.9});
   }
@@ -1434,7 +1435,9 @@ export class World {
     const progress=this.windupProgress(e),ground=(p:{x:number;z:number})=>Math.max(.04,terrainHeight(this.environment.layout,p)+.04);
     if(e.skill){for(const mark of e.telegraphs??[])decals.draw(mark.x,ground(mark),mark.z,mark.r,progress,('safe' in mark&&mark.safe)?'#5aff9a':BOSS_TELEGRAPH_COLORS[e.skill]);return;}
     if(e.boss&&e.mesh.userData.slam){decals.draw(e.x,ground(e),e.z,4.8,progress,BOSS_TELEGRAPH_COLORS.slam);return;}
-    const look=CREATURE_TELEGRAPHS[e.type??''];if(!look)return;
+    const look=CREATURE_TELEGRAPHS[e.type??''];
+    // Every other ordinary melee creature lays a red arc of its real reach in front of itself (feel-rules.ts MELEE_ARC).
+    if(!look){const def=e.definition;if(!e.boss&&def&&def.behavior!=='shooter'&&def.behavior!=='charger'&&!def.titan){const arc=meleeArc(def.reach);decals.cone(e.x,ground(e),e.z,arc.r,e.mesh.rotation.y,arc.half,progress,MELEE_ARC.color);}return;}
     const facing=e.mesh.rotation.y,at=look.at==='target'?{x:e.targetX??e.x,z:e.targetZ??e.z}:look.at==='front'?{x:e.x+Math.sin(facing)*1.2,z:e.z+Math.cos(facing)*1.2}:{x:e.x,z:e.z};
     decals.draw(at.x,ground(at),at.z,look.r,progress,look.color);
   }
@@ -1615,9 +1618,10 @@ export class World {
     const lod=this.networkRole!=='peer'?e.lod:undefined,glide=lod&&Math.abs(e.x-lod.x)+Math.abs(e.z-lod.z)<.5?Math.min(1,(lod.age+1)/4):1,drawX=lod?lod.x+(e.x-lod.x)*glide:view2?view2.x:e.x,drawZ=lod?lod.z+(e.z-lod.z)*glide:view2?view2.z:e.z;
     e.mesh.position.set(drawX,ground+(e.lift??0)+(e.titanLift??0)+(e.definition?.flying?1+Math.sin(this.time*4+e.homeX)*.15:Math.sin(this.time*3+e.homeX)*.06),drawZ);
     const scale=enemyScale(e.type,e.boss);e.mesh.scale.setScalar(scale);disguiseForm(e.mesh,'sheep',(e.statuses?.sheep??0)>0,this.time,1.2/scale);
-    // Hit reaction: a pop in the creature's own colour (emissive 0.35) and a ×1.15 squash, so the silhouette survives the hit.
+    // Hit reaction, after the reference: a white flash (feel-rules.ts HIT_FLASH, emissive on the creature's own material copies,
+    // made once when it spawned, never per hit) and a ×1.15 squash.
     if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);const k=e.flash!/.14;e.mesh.scale.x*=1+k*.15;e.mesh.scale.z*=1+k*.15;e.mesh.scale.y*=1+k*.06;}
-    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as LitMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.set(e.definition?.color??'#ffffff');m.emissiveIntensity=.35;}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}
+    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as LitMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.setRGB(1,1,1);m.emissiveIntensity=enemyFlash(e.flash??0,!!e.definition?.titan);}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}
     this.animateEnemy(e,dt);
     const shell=part(e.mesh,'shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
   }
@@ -1809,12 +1813,12 @@ export class World {
     p.rotation.y=this.spinT>0?this.facing+(2.2-this.spinT)*22:this.facing+twist;
     p.rotation.x=lean;p.position.y+=lift;p.scale.x*=sx;p.scale.y*=sy;p.scale.z*=sz;
     if(flying){p.position.y-=lift;p.scale.y/=sy;superheroFlightPose(p,this.moving&&this.state.gear.disguise==='dz_superhero');if(head&&gaze!=null){const turn=Math.atan2(Math.sin(gaze-this.facing),Math.cos(gaze-this.facing));head.rotation.y=Math.max(-1.2,Math.min(1.2,turn));}}
-    if(this.spinT>0&&this.fx&&Math.random()<dt*40)this.fx.burst(this.position,{n:1,color:['#ffffff','#d4f1ff'],glow:true,size:.1,speed:6,up:1,life:.35,y:.6,gravity:0});
+    if(this.spinT>0&&this.fx&&Math.random()<dt*12)this.fx.burst(this.position,{n:1,color:['#ffffff','#d4f1ff'],glow:true,size:.08,speed:4,up:1,life:.3,y:.6,gravity:0});
     if(pose?.kind==='dash'&&this.fx)this.fx.burst(this.position,{n:2,color:['#ffffff','#bfe9ff'],size:.13,speed:1,up:1,life:.4,y:.3});
     // Hurt flashes red; invulnerability after a hit blinks white.
     const flash=this.hurtT>0?'hurt':this.invulnerable&&Math.sin(this.time*30)>0?'blink':'';
     for(const m of this.playerMaterials??[])if(m.userData.flash!==flash){m.userData.flash=flash;m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;
-      if(flash==='hurt'){m.emissive.setRGB(.8,.16,.16);m.emissiveIntensity=1;}else if(flash==='blink'){m.emissive.setRGB(.4,.4,.4);m.emissiveIntensity=1;}else{m.emissive.setHex(m.userData.baseEmissive);m.emissiveIntensity=m.userData.baseGlow??1;}}
+      if(flash==='hurt'){m.emissive.setRGB(...HURT_TINT);m.emissiveIntensity=1;}else if(flash==='blink'){m.emissive.setRGB(.4,.4,.4);m.emissiveIntensity=1;}else{m.emissive.setHex(m.userData.baseEmissive);m.emissiveIntensity=m.userData.baseGlow??1;}}
   }
 
 

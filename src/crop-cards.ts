@@ -3,6 +3,7 @@ import { CAMERA } from './camera-rig.ts';
 import { cropKit } from './assets.ts';
 import { toonMaterial } from './toon.ts';
 import { CROPS } from './content.ts';
+import { harvestArc, type Point3 } from './feel-rules.ts';
 
 /**
  * Garden crops as 2D cards (G2D-1/G2D-2). The crops are our own Blender models (crops.glb); once the kit has loaded
@@ -77,13 +78,20 @@ export function cropBounds(id: string): ViewBounds | null {
  * next bed).
  */
 export const TREE_BOOST: Readonly<Record<number, number>> = { 1: 1.6, 2: 3, 3: 2.1 };
+/**
+ * The October feel pass: ripe garden crops are big cute characters with faces (art/blender/kit/crop_face.py), standing
+ * about as tall as their bed is wide and spilling over its rim like the reference's smiling radish (RIPE_BOOST x the
+ * standard ripe size); a young plant grows a little (x1.3) so it still reads, but stays well under half the ripe size.
+ * Fruit trees keep their tree sizes (TREE_BOOST); their fruit wear the faces.
+ */
+export const CROP_BOOST: Readonly<Record<number, number>> = { 1: 1, 2: 1.3, 3: 1.9 };
 export { isTreeCrop } from './tree-crops.ts';
 import { isTreeCrop } from './tree-crops.ts';
 /** Size of a crop at a stage relative to its model: the stage scale times the model's bed scale. */
 export function stageScale(crop: string, stage: CropStage) {
   if (!stage) return 0;
   const b = cropBounds(stage === 1 ? 'sprout' : crop);
-  const boost = isTreeCrop(crop) ? TREE_BOOST[stage] ?? 1 : 1;
+  const boost = (isTreeCrop(crop) ? TREE_BOOST : CROP_BOOST)[stage] ?? 1;
   return b ? STAGE_SCALE[stage] * bedScale(b, stage === 1) * boost : STAGE_SCALE[stage] * boost;
 }
 /** A compact ready badge above the mature silhouette, in the same view plane as crop cards. */
@@ -123,7 +131,13 @@ export class CropCards {
   private cardAttrs: { cell: T.InstancedBufferAttribute; card: T.InstancedBufferAttribute; sway: T.InstancedBufferAttribute };
   private uniforms = { uTime: { value: 0 } };
   private beds: BedState[] = [];
-  private flights: Array<{ crop: string; x: number; z: number; t: number; scale: number; flip: number }> = [];
+  private flights: Array<{ crop: string; x: number; z: number; t: number; scale: number; flip: number; to: (() => Point3) | null }> = [];
+  /** Where the next crop harvested from a bed flies (main.ts: to the explorer, or to the helper who picked it), by bed position. */
+  private aims: Array<{ x: number; z: number; to: () => Point3; at: number }> = [];
+  private arc = { x: 0, y: 0, z: 0, scale: 1, spin: 1, done: false };
+  private clock = 0;
+  /** The crop about to leave the bed at x,z flies in an arc to `to()` (read every frame, so it follows a walking collector). */
+  aim(x: number, z: number, to: () => Point3) { this.aims = this.aims.filter(a => this.clock - a.at < 2 && Math.hypot(a.x - x, a.z - z) > .05); this.aims.push({ x, z, to, at: this.clock }); }
   private matrix = new T.Matrix4();
   private restore = () => { this.ready = false; this.bake(); };
 
@@ -252,7 +266,7 @@ export class CropCards {
 
   /** Lay out this frame's cards: one crop per bed, a sparkle over ripe beds, harvests flying up. */
   update(beds: readonly BedCrop[], time: number, dt: number) {
-    this.uniforms.uTime.value = time;
+    this.uniforms.uTime.value = time; this.clock = time;
     const { cell: cellAttr, card, sway } = this.cardAttrs;
     let n = 0, b = 0;
     const put = (c: Cell, x: number, y: number, z: number, scale: number, flip: number, seed: number, amp: number, freq: number) => {
@@ -265,7 +279,10 @@ export class CropCards {
       const stage = cropStage(bed.crop, bed.progress), key = `${bed.crop}:${stage}`, state = this.beds[i] ??= { key, stage, crop: bed.crop, pop: 1 };
       if (state.key !== key) {
         // A ripe crop that left its bed was harvested: send it flying.
-        if (state.stage === 3 && !bed.crop && state.crop && this.flights.length < MAX_FLIGHTS) this.flights.push({ crop: state.crop, x: bed.x, z: bed.z, t: 0, scale: stageScale(state.crop, 3) / STAGE_SCALE[3] * this.size, flip: bedFlip(i) });
+        if (state.stage === 3 && !bed.crop && state.crop && this.flights.length < MAX_FLIGHTS) {
+          const k = this.aims.findIndex(a => Math.hypot(a.x - bed.x, a.z - bed.z) < .05), to = k >= 0 ? this.aims.splice(k, 1)[0].to : null;
+          this.flights.push({ crop: state.crop, x: bed.x, z: bed.z, t: 0, scale: stageScale(state.crop, 3) * this.size, flip: bedFlip(i), to });
+        }
         Object.assign(state, { key, stage, crop: bed.crop, pop: 0 });
       }
       if (!stage || !bed.crop) return;
@@ -280,8 +297,15 @@ export class CropCards {
     this.beds.length = beds.length;
     for (let i = this.flights.length - 1; i >= 0; i--) {
       const f = this.flights[i]; f.t += dt; const c = this.cells.get(f.crop), e = f.t / HARVEST_TIME;
+      if (f.to) { // the reference-style harvest: an arc into the collector's arms (feel-rules.ts harvestArc)
+        const goal = f.to(), a = c ? harvestArc(f.t, { x: f.x, y: SOIL_Y, z: f.z }, goal, this.arc) : null;
+        if (!c || !a || a.done) { this.flights.splice(i, 1); continue; }
+        const scale = f.scale * a.scale;
+        put(c, a.x, a.y, a.z + c.bounds.front * scale, scale, f.flip * (Math.abs(a.spin) < .15 ? .15 * Math.sign(a.spin || 1) : a.spin), 0, 0, 0);
+        continue;
+      }
       if (!c || e >= 1) { this.flights.splice(i, 1); continue; }
-      const flight = harvestFlight(e), scale = f.scale * flight.scale;
+      const flight = harvestFlight(e), scale = f.scale / STAGE_SCALE[3] * flight.scale;
       put(c, f.x, SOIL_Y + flight.lift, f.z + c.bounds.front * scale, scale, f.flip * (Math.abs(flight.spin) < .15 ? .15 * Math.sign(flight.spin || 1) : flight.spin), 0, 0, 0);
     }
     this.cards.count = n; this.blobs.count = b;
@@ -291,7 +315,7 @@ export class CropCards {
     return n;
   }
   /** Forget per-bed pop and harvest state, for a rebuilt garden. */
-  reset() { this.beds = []; this.flights = []; this.cards.count = this.blobs.count = 0; }
+  reset() { this.beds = []; this.flights = []; this.aims = []; this.cards.count = this.blobs.count = 0; }
   dispose() {
     this.renderer.domElement?.removeEventListener?.('webglcontextrestored', this.restore);
     this.atlas?.dispose(); this.cards.geometry.dispose(); (this.cards.material as T.Material).dispose();
