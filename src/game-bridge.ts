@@ -9,6 +9,8 @@ export interface NetworkHooks {
   role:'host'|'peer'|null;
   visitCrop?:(index:number)=>void;
   reportDamage?:(enemyId:string,source:string)=>void;
+  /** The host saw a creature's blow, shot or area reach a summon (owner null: the host's own); the server settles it. */
+  reportDecoy?:(ownerId:string|null,decoyId:number,enemyId:string,source:string)=>void;
   hit?:(enemyId:string,damage:number,stun:number,impact?:CombatHit)=>boolean;
   status?:(enemyId:string,kind:EnemyStatus,duration:number)=>boolean;
   moveTarget?:(enemyId:string,x:number,z:number)=>boolean;
@@ -29,6 +31,8 @@ export interface GameBridge {
   applyRemoteMove(enemyId:string,x:number,z:number):void;
   applySharedKill(enemyId:string,xp:number,boss:boolean,type?:string):void;
   applyRemoteDamage(amount:number,source?:string):void;
+  /** The server's health count of one of this explorer's summons (0: it popped). */
+  applyDecoyHp(id:number,hp:number,kind:string,x:number,z:number):void;
   applyRemoteEffect(effect:CombatEffect):void;
   setVisiting(owner:string|null,homeState?:Partial<SaveState>):void;
   showNotice(text:string):void;

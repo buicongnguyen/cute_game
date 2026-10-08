@@ -57,7 +57,7 @@ test('reference mechanics: ranges, damage factors and durations match its skill 
   // [value in DZ, reference value] — offsets are the run() of each skill in the reference bundle.
   const pairs: [number, number, string][] = [
     [DZ.flight.time, 12, 'flight 12 s @770980'], [DZ.flight.speed, .35, 'flight +35% @770980'], [DZ.dive.radius, 5, 'dive r5 @771466'], [DZ.dive.power, 2, 'dive ×2'], [DZ.dive.flying, 4, 'dive ×4 flying'],
-    [DZ.clones.count, 2, 'clones 2 @773811'], [DZ.clones.life, 8, 'clones 8 s'], [DZ.clones.power, .5, 'clones ×0.5'], [DZ.stealth.time, 5, 'stealth 5 s @774233'], [DZ.stealth.speed, .3, 'stealth +30%'],
+    [DZ.clones.count, 4, 'clones: the reference makes 2 (@773811); ours make 4 that draw attacks (summon-decoys.test.ts)'], [DZ.clones.life, 8, 'clones 8 s'], [DZ.clones.power, .5, 'clones ×0.5'], [DZ.stealth.time, 5, 'stealth 5 s @774233'], [DZ.stealth.speed, .3, 'stealth +30%'],
     [DZ.backstab.range, 12, 'backstab 12 m @774556'], [DZ.backstab.power, 3.2, 'backstab ×3.2'], [DZ.smoke.radius, 5, 'smoke r5 @775194'], [DZ.smoke.time, 5, 'smoke 5 s'], [DZ.smoke.blind, 1.2, 'blind 1.2 s'],
     [DZ.fireball.charge, .8, 'fireball .8 s @776020'], [DZ.fireball.range, 14, 'fireball 14 m'], [DZ.fireball.radius, 5, 'fireball r5'], [DZ.fireball.power, 3.5, 'fireball ×3.5'], [DZ.teleport.distance, 8, 'blink 8 m @776913'],
     [DZ.sheep.range, 12, 'sheep 12 m @777344'], [DZ.sheep.around, 3, 'sheep +3 m'], [DZ.sheep.count, 3, 'sheep 1+2'], [DZ.sheep.time, 6, 'sheep 6 s'],
@@ -106,10 +106,11 @@ test('every kit skill runs, resets cleanly, and each look it emits is drawn', ()
     a.sim.reset(); assert.equal(a.sim.projectiles.length, 0); assert.equal(a.sim.allies.length, 0); assert.deepEqual(a.sim.statuses, {});
   });
   for (const look of seen) if (!['eyes', 'burn', 'shock', 'boulder'].includes(look)) { assert.ok(LOOKS[look], look); assert.equal(fx.play({ look: look as CombatEffect['look'], kind: 'cast', x: 0, z: 0, radius: 3, color: '#ffffff' }), true, look); }
-  for (const look of ['sandbag', 'flare', 'parachute', 'whistle', 'ribbon', 'fan', 'lantern', 'kite', 'ink', 'dragondance', 'starshield', 'torch', 'firework', 'bamboo', 'drum', 'bigstar']) {
+  for (const look of ['flare', 'parachute', 'whistle', 'ribbon', 'fan', 'lantern', 'kite', 'ink', 'dragondance', 'starshield', 'torch', 'firework', 'bamboo', 'drum', 'bigstar']) {
     assert.ok((DISGUISE_LOOKS as readonly string[]).includes(look)); assert.ok(seen.has(look), `${look} is emitted by its skill`);
   }
-  for (const kind of ['parrot', 'tree', 'lighthouse'] as const) { const model = makeSummon(kind); assert.equal(model.name, 'summon-' + kind); }
+  // The sandbag wall is a summon now (it has hit points), drawn by its model instead of a timed look.
+  for (const kind of ['parrot', 'tree', 'lighthouse', 'sandbag'] as const) { const model = makeSummon(kind); assert.equal(model.name, 'summon-' + kind); }
   assert.equal(lookOf('cork'), 'cork');
 });
 

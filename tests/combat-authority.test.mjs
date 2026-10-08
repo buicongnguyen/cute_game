@@ -244,3 +244,25 @@ test('disguise freezes reach the server and the knight shield blocks only blows 
  engine.healthEvents=[];engine.damageAt=0;f.authority.damage(f.peer,enemy.id);assert.equal(engine.healthEvents.length,0,'blocked from the front');
  f.peer.pose.facing=Math.PI;engine.damageAt=0;f.authority.damage(f.peer,enemy.id);assert.ok(engine.healthEvents.some(e=>e.amount<0),'hurt from behind');
 });
+test('online summons: the server shares checked decoys, a reported blow hurts the clone (never the explorer) and its health goes home',async t=>{
+ const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_ninja';p.bag.dz_ninja=1;}}),enemy=f.spawn('mushroom',-30,4);const engine=f.authority.engineFor(f.peer);
+ f.peer.pose.facing=0;assert.equal(engine.sim.disguise('dz_ninja',0),true);
+ const shared=f.authority.decoys(f.peer);assert.equal(shared.length,4);assert.ok(shared.every(d=>d.kind==='clone'&&d.taunt&&Math.hypot(d.x-f.peer.pose.x,d.z-f.peer.pose.z)<=6));
+ const clone=engine.sim.allies[0],full=clone.hp;engine.healthEvents=[];engine.damageAt=0;const from=f.messages.length;
+ f.authority.damage(f.peer,enemy.id,'melee',clone.id);
+ assert.equal(engine.healthEvents.length,0,'the explorer is not hurt');assert.ok(clone.hp<full,'the clone is');
+ const sent=f.messages.slice(from).find(m=>m.type==='decoyHp');assert.equal(sent?.id,clone.id);assert.equal(sent.hp,clone.hp);
+ // A stale id lands on the nearest live clone the creature can reach; with none in reach nothing is hurt.
+ f.authority.damage(f.peer,enemy.id,'melee',999);assert.equal(engine.healthEvents.length,0);
+ for(const a of engine.sim.allies){a.x=-60;a.z=40;}const hps=engine.sim.allies.map(a=>a.hp);f.authority.damage(f.peer,enemy.id,'melee',engine.sim.allies[1].id);
+ assert.deepEqual(engine.sim.allies.map(a=>a.hp),hps,'a summon far beyond the creature\'s reach is not hurt');assert.equal(engine.healthEvents.length,0);
+ // Out of the lifetime, nothing is shared.
+ engine.sim.update(9);assert.deepEqual(f.authority.decoys(f.peer),[]);
+});
+test("online knight: a shot reported against the raised shield hits the shooter back, not the explorer",async t=>{
+ const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_knight';p.bag.dz_knight=1;}}),enemy=f.spawn('mushroom',-30,6);const engine=f.authority.engineFor(f.peer);
+ f.peer.pose.facing=0;assert.equal(engine.sim.disguise('dz_knight',0),true);const hp=enemy.hp;engine.healthEvents=[];engine.damageAt=0;
+ f.authority.damage(f.peer,enemy.id,'shot');assert.equal(engine.healthEvents.length,0,'blocked');
+ engine.sim.update(.5);assert.ok(enemy.hp<hp,'the shooter is hit by its own shot');
+ f.peer.pose.facing=Math.PI;const after=enemy.hp;engine.damageAt=0;f.authority.damage(f.peer,enemy.id,'shot');engine.sim.update(.5);assert.equal(enemy.hp,after,'from behind nothing bounces');assert.ok(engine.healthEvents.some(e=>e.amount<0));
+});

@@ -42,7 +42,7 @@ import { previewGear, canTryOn, autoHeld } from './try-on.ts';
 import './quick-eat.css';
 import { CombatTimers, FishingInput, MovementControls, gameplayKey, keyboardBindings, movementKey } from './gameplay-controls.ts';
 import {mountJoystick} from './joystick.ts';
-import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatHit, type CombatEffect } from './combat.ts';
+import { CombatSimulation, BASE_SKILLS, SPECIALS, DZ, type CombatHit, type CombatEffect, type CombatAlly } from './combat.ts';
 import { skillPip } from './skill-pip.ts';
 import { skillTip, BUFF_CHIPS } from './skill-info.ts';
 import { skillSound } from './skill-sounds.ts';
@@ -1216,7 +1216,8 @@ world.onDamage=(amount,source='melee',enemyId)=>{
   if(actionHandler&&!dungeonApi?.active){if(enemyId&&network.role==='host')network.reportDamage?.(enemyId,source);return;}
   if(combatTimers.invulnerable>0||combat.invulnerable||(source==='melee'&&(combat.statuses.flight??0)>0)||!started||(!network.role&&uiBlocked())||visiting)return;
   // The knight's raised shield stops blows and shots from creatures in front (combat.blocks).
-  {const from=enemyId?world.enemies.find(e=>e.id===enemyId):undefined;if(from&&combat.blocks(from)){world.fx?.burst(world.position,{n:6,color:['#fff3c4','#ffffff'],glow:true,size:.12,speed:3,up:2,y:1});return;}}
+  // A shot is also bounced back at its shooter (combat.reflect; world.ts flies the ball home).
+  {const from=enemyId?world.enemies.find(e=>e.id===enemyId):undefined;if(from&&combat.blocks(from)){world.fx?.burst(world.position,{n:6,color:['#fff3c4','#ffffff'],glow:true,size:.12,speed:3,up:2,y:1});if(source==='shot'){combat.reflect(from,Math.hypot(from.x-world.position.x,from.z-world.position.z)/DZ.block.speed);tone('hit');}return;}}
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
   state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;world.hurtFeedback(damage);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
@@ -1224,12 +1225,30 @@ world.onDamage=(amount,source='melee',enemyId)=>{
   updateHud();
 };
 world.onHazardEnemy=(enemy,damage)=>hit(enemy,damage,0,undefined,true,true);
+// Summons creatures can fight (combat.ts SUMMON_HP): this explorer's are combat's; offline a blow on one is settled
+// here, online the server owns their health (it answers with decoyHp, applyDecoyHp below).
+world.localDecoys=()=>combat.decoys();
+world.playerBlocks=from=>combat.blocks(from);
+world.onDecoyDamage=(owner,id,amount,source,enemyId)=>{
+  if(network.role){if(network.role==='host'&&enemyId)network.reportDecoy?.(owner,id,enemyId,source);return;}
+  if(owner===null)combat.hurtAlly(id,amount);
+};
 // The daily world boss (colossus.ts): offline it runs here on the local clock, online it mirrors the server's.
 const colossus=new ColossusEvent({world,state:()=>state,online:()=>!!actionHandler,playing:()=>started&&!visiting&&!flight,
   defence:()=>M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),hurt:amount=>world.onDamage(amount,'melee',COLOSSUS_ID),
   change,toast,floating:(text,x,z,style)=>floating(text,x,z,style),spawnLoot:(loot,x,z)=>drops.spawnLoot(loot,x,z),tone:kind=>tone(kind as Parameters<typeof tone>[0]),hud:$('#hud')});
 if(new URLSearchParams(location.search).get('colossus')==='1')colossus.start();
 world.onEnvironmentEvent=event=>{if(event.message)toast(event.message,'🌍');save();updateHud();};
+/**
+ * Other explorers' summons that creatures can fight (their pose's decoys, world.remoteDecoys), drawn with ours: each
+ * gets a stable id from its owner and its own id, so the view keeps the same model while it lives.
+ */
+const remoteSummonIds=new Map<string,number>();let remoteSummonSerial=1e6;
+combatView.extraAllies=()=>{
+  if(!network.role)return [];const remote=world.remoteDecoys();if(!remote.length)return [];
+  if(remoteSummonIds.size>256)remoteSummonIds.clear();
+  return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
+};
 function resetCombat(){combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
@@ -1258,6 +1277,11 @@ export const gameBridge:GameBridge={
   applySharedKill(id,xp,boss,type){if(sharedKills.has(id))return;sharedKills.add(id);if(sharedKills.size>500)sharedKills.delete(sharedKills.values().next().value!);const enemy=world.enemies.find(e=>e.id===id);grantDefeat({id,xp,boss,type,x:enemy?.x,z:enemy?.z});},
   applyRemoteEffect(effect){showEffect(effect);},
   applyRemoteDamage(amount,source){world.onDamage(amount,source==='shot'||source==='hazard'?source:'melee');},
+  applyDecoyHp(id,hp,kind,x,z){
+    // The server's copy of a summon may carry another id than this browser's: the same kind nearest the spot then.
+    const ally=combat.allies.find(a=>a.id===id&&a.kind===kind)??combat.allies.filter(a=>a.kind===kind&&a.hp!==undefined&&Math.hypot(a.x-x,a.z-z)<4).sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z))[0];
+    if(ally)combat.setAllyHp(ally.id,hp);
+  },
   setVisiting(owner,home){
     if(owner&&owner===visiting&&home&&visitHome){
       const expanded=home.plots&&home.plots.length!==visitHome.plots.length,decorChanged=JSON.stringify(home.decorations??[])!==JSON.stringify(visitHome.decorations);

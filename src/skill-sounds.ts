@@ -3,6 +3,8 @@ import type { Sound } from './sfx.ts';
 const SPECIAL: Record<string, Sound> = {
   fist: 'punch', crescent: 'swing', gore: 'swing', wave: 'swing', tsunami: 'splash', peastorm: 'shoot', bigbubble: 'pop', nova: 'shoot',
   blizzard: 'freeze', magma: 'boom', thunder: 'zap', bonk: 'boom', whirl: 'swing', starfall: 'magic', inferno: 'boom', laser: 'zap',
+  // The uniform specials (uniform-skills.ts) sound like the same skill in the uniform's disguise kit: a cork pop, an anchor swing, ...
+  volley: 'pop', anchor: 'swing', lotus: 'magic', dragon: 'swing', eagle: 'swing', goldstar: 'magic',
 };
 const DISGUISE: Record<string, readonly Sound[]> = {
   dz_superhero: ['magic', 'boom', 'zap', 'boom'], dz_ninja: ['poof', 'poof', 'swing', 'poof'], dz_mage: ['cast', 'magic', 'magic', 'magic'],

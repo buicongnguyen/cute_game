@@ -1,6 +1,6 @@
 import * as T from 'three';
 import {ELECTRIC_SHOTS,type CombatAlly,type CombatEffect,type Projectile} from './combat.ts';
-import {makeSummon,animateSummon} from './summon-art.ts';
+import {makeSummon,animateSummon,summonHealth} from './summon-art.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 import {makeShot,poseShot,lookOf} from './shot-art.ts';
 export class CombatView {
@@ -25,9 +25,12 @@ export class CombatView {
     if(e.kind==='arc')mesh.rotation.z=-(e.facing??0)+Math.PI/2;
     this.scene.add(mesh);const life=e.duration??(e.kind==='cast'?.7:e.kind==='trail'?.24:.38);this.effects.push({mesh,life,max:life,kind:e.kind});
   }
-  update(dt:number,projectiles:Projectile[],active=true,allies:CombatAlly[]=[]){
+  /** More summons to draw besides ours (main.ts: other explorers' hittable summons online). */
+  extraAllies?:()=>CombatAlly[];
+  update(dt:number,projectiles:Projectile[],active=true,own:CombatAlly[]=[]){
+    const extra=this.extraAllies?.(),allies=extra?.length?[...own,...extra]:own;
     const allyIds=new Set(allies.map(ally=>ally.id));for(const[id,model]of this.allies)if(!allyIds.has(id)){this.disposeAlly(model);this.allies.delete(id);}
-    for(const ally of allies){let model=this.allies.get(ally.id);if(!model){model=this.spareAllies.get(ally.kind)?.pop()??makeSummon(ally.kind);model.userData.allyKind=ally.kind;this.allies.set(ally.id,model);this.scene.add(model);}model.position.set(ally.x,ally.kind==='bat'?.7:ally.kind==='parrot'?1.7:0,ally.z);model.rotation.y=ally.facing??0;animateSummon(model,ally.kind,this.clock);}
+    for(const ally of allies){let model=this.allies.get(ally.id);if(!model){model=this.spareAllies.get(ally.kind)?.pop()??makeSummon(ally.kind);model.userData.allyKind=ally.kind;this.allies.set(ally.id,model);this.scene.add(model);}model.position.set(ally.x,ally.kind==='bat'?.7:ally.kind==='parrot'?1.7:0,ally.z);model.rotation.y=ally.facing??0;animateSummon(model,ally.kind,this.clock);if(ally.maxHp)summonHealth(model,ally.kind,(ally.hp??0)/ally.maxHp,ally.hurt??0);}
     const ids=new Set(projectiles.map(p=>p.id));for(const[id,mesh]of this.shots)if(!ids.has(id)){this.release(mesh);this.shots.delete(id);}
     if(active)this.clock+=dt;
     for(const p of projectiles){let mesh=this.shots.get(p.id);

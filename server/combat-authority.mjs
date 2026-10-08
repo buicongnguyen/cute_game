@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import * as Game from '../src/model.ts';
 import {ContextGearSelection} from '../src/context-gear.ts';
-import {CombatSimulation,BASE_SKILLS,SPECIALS} from '../src/combat.ts';
+import {CombatSimulation,BASE_SKILLS,SPECIALS,DZ,shareableDecoys,decoyPoint} from '../src/combat.ts';
 import {ENEMY_TYPES} from '../src/enemy-types.ts';
 import {enemyRoster} from '../src/enemy-roster.ts';
 import {zoneAt,createEnvironmentLayout,EnvironmentSimulation} from '../src/environments.ts';
@@ -83,7 +83,26 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     if(peer.visit||!peer.active||peer.account.profile.hp<=0||inSafeZone(peer.pose,peer.planet)||now-e.damageAt<550||e.sim.invulnerable||source==='melee'&&e.sim.statuses.flight>0)return;
     e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);hp(peer,-Math.max(1,Math.round(amount*60/(defense+60))),source);
   }
-  function hurtEnemyTarget(peer,enemy,multiplier,source='melee'){if(engineFor(peer).sim.blocks(enemy))return;/* the knight's raised shield, facing the creature */hurtPlayer(peer,enemy.damage*multiplier,source);}
+  function hurtEnemyTarget(peer,enemy,multiplier,source='melee'){
+    // The knight's raised shield, facing the creature, stops the blow; a shot it stops flies back and hits the shooter (combat.reflect).
+    const sim=engineFor(peer).sim;if(sim.blocks(enemy)){if(source==='shot'&&!peer.visit&&peer.active)sim.reflect(enemy,dist(peer.pose,enemy)/DZ.block.speed);return;}
+    hurtPlayer(peer,enemy.damage*multiplier,source);
+  }
+  /**
+   * A creature's blow, shot or area reached one of `peer`'s summons (the room host reports it; combat.ts SUMMON_HP).
+   * The server's own copy of the summon decides: the reported id, else the same explorer's live summon nearest the
+   * creature; it must be within the creature's reach (a shot: its flight). Its new health goes to its explorer.
+   */
+  function hurtDecoy(peer,enemy,decoyId,multiplier,source='melee',trusted=false){
+    if(peer.visit||!peer.active)return false;const sim=engineFor(peer).sim,list=sim.decoys();if(!list.length)return false;
+    const def=ENEMY_TYPES[enemy.type],reach=source==='shot'?20:(def?.reach??1.5)+enemy.radius+3;
+    const near=d=>trusted||dist(decoyPoint(d,enemy),enemy)<=reach+d.r;
+    const decoy=list.find(d=>d.id===decoyId&&near(d))??list.filter(near).sort((a,b)=>dist(decoyPoint(a,enemy),enemy)-dist(decoyPoint(b,enemy),enemy))[0];
+    if(!decoy)return false;sim.hurtAlly(decoy.id,enemy.damage*multiplier);
+    const left=sim.allies.find(a=>a.id===decoy.id)?.hp??0;send(peer.socket,{type:'decoyHp',id:decoy.id,kind:decoy.kind,x:decoy.x,z:decoy.z,hp:left});return true;
+  }
+  /** The summons `peer` shares with the room (server.mjs pose), from the server's own simulation, checked by combat.ts shareableDecoys. */
+  function decoys(peer){return peer.visit||!peer.active?[]:shareableDecoys(engineFor(peer).sim.decoys(),peer.pose);}
   /** A Colossus blow: the same gates as hurtPlayer, through only a quarter of the defence (colossusDamage). */
   function hurtColossus(peer,multiplier,factor,roll){
     const e=engineFor(peer),now=Date.now();if(peer.visit||!peer.active||peer.account.profile.hp<=0||inSafeZone(peer.pose,peer.planet)||now-e.damageAt<550||e.sim.invulnerable)return false;
@@ -98,7 +117,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     if(now<c.startsAt)return;
     const targets=aliveTargets(room),points=targets.map(p=>({id:p.account.id,x:p.pose.x,z:p.pose.z,airborne:engineFor(p).sim.statuses.flight>0}));c.elapsed+=dt;
     const once=(id,time,fn)=>{if(c.elapsed>=time&&!c.fired.includes(id)){c.fired.push(id);fn();}};
-    const area=(p,r,multiplier,source='melee',inner=-1)=>{for(const peer of targets){const d=dist(peer.pose,p);if(d<r&&d>inner)hurtEnemyTarget(peer,enemy,multiplier,source);}};
+    const area=(p,r,multiplier,source='melee',inner=-1)=>{for(const peer of targets){const d=dist(peer.pose,p);if(d<r&&d>inner)hurtEnemyTarget(peer,enemy,multiplier,source);for(const decoy of engineFor(peer).sim.decoys()){const q=dist(decoyPoint(decoy,p),p);if(q<r&&q>inner)hurtDecoy(peer,enemy,decoy.id,multiplier,source,true);}}};
     if(isTitanSkill(c.skill)){
       c.attack??=beginTitanAttack(c.skill,c.source,c.marks,points);const result=stepTitanAttack(c.attack,dt,enemy,points);
       for(const hit of result.hits){const target=peers.get(hit.id);if(target?.room===room.id)hurtEnemyTarget(target,enemy,hit.multiplier,hit.source);}
@@ -273,12 +292,14 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   }
   function basic(peer,targetId){if(peer.visit||!peer.active||peer.account.profile.hp<=0)return;if(typeof targetId==='string')peer.target=targetId;const e=engineFor(peer),now=Date.now();if(now<e.nextBasic)return;const target=state(rooms.get(peer.room)).enemies.get(targetId);if(e.sim.basic(target)){const weapon=Game.weaponStats(combatProfile(peer));e.nextBasic=now+Math.max(.12,(weapon.cd||.5)/Math.max(.2,1+Game.activeStats(peer.account.profile).haste))*1000;}}
   function skill(peer,index){if(peer.visit||!peer.active||peer.account.profile.hp<=0||!Number.isInteger(index)||index<0||index>3)return;const e=engineFor(peer),now=Date.now();if(now<e.nextSkill[index])return;const profile=combatProfile(peer),dz=profile.gear.disguise,weapon=Game.weaponStats(profile),list=Game.DISGUISES[dz]?.skills||[...BASE_SKILLS,SPECIALS[weapon.special||'fist']||SPECIALS.fist];if(dz?e.sim.disguise(dz,index):e.sim.skill(index,weapon.special||'fist')){e.nextSkill[index]=now+skillCooldown(profile,index,list[index].cd,!!dz)/Math.max(.2,1+Game.activeStats(profile).haste)*1000;internal(peer.account.id,'skill',[],records=>{const s=records.get(peer.account.id).profile;Game.recordEvent(s,'skill');return {index};}).catch(()=>{});}}
-  function damage(peer,enemyId,source='melee'){
+  function damage(peer,enemyId,source='melee',decoyId){
     if(peer.visit)return;const room=rooms.get(peer.room),enemy=room&&state(room).enemies.get(enemyId),e=engineFor(peer),now=Date.now();
     if(!enemy||enemy.hp<=0)return;
     if(enemy.boss&&BOSS_SKILLS[enemy.type]?.includes(enemy.skill))return;
     const def=ENEMY_TYPES[enemy.type];if(!def)return;const reach=source==='shot'?45:def.reach+enemy.radius+2;
     if(dist(peer.pose,enemy)>reach)return;
+    // Aimed at a summon: it takes the blow, never the explorer (a summon already gone means the blow missed).
+    if(decoyId!==undefined){hurtDecoy(peer,enemy,decoyId,enemy.phase==='charge'?1.3:1,source);return;}
     hurtEnemyTarget(peer,enemy,enemy.phase==='charge'?1.3:1,source);
   }
   function environmentSnapshot(env){return {time:env.time,lamps:[...env.lamps],eclipseUntil:env.eclipseUntil,nestLevel:env.nestLevel,fireRain:env.fireRain,lightning:env.lightning,weather:env.weather.snapshot()};}
@@ -317,5 +338,5 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   }
   const timer=setInterval(()=>{if(!stopped)try{tick(.05);}catch(error){onError(error);}},50);timer.unref();
   function bomb(peer,radius,multiplier){const room=rooms.get(peer.room);if(!room||peer.visit)return;for(const enemy of state(room).enemies.values())if(enemy.hp>0&&dist(peer.pose,enemy)<=radius+enemy.radius)hit(peer,enemy,{amount:Math.round(Game.attack(combatProfile(peer))*multiplier),critical:false,stun:.5,lift:0,knock:2,direction:{x:0,z:0}});}
-  return {acceptSnapshots,basic,skill,damage,bomb,engineFor,state,internal,resetPeer,flushPeerHealth,colossus,async close(){stopped=true;clearInterval(timer);for(const engine of engines.values())flushHealth(engine);await Promise.allSettled([...queues.values()]);}};
+  return {acceptSnapshots,basic,skill,damage,decoys,bomb,engineFor,state,internal,resetPeer,flushPeerHealth,colossus,async close(){stopped=true;clearInterval(timer);for(const engine of engines.values())flushHealth(engine);await Promise.allSettled([...queues.values()]);}};
 }

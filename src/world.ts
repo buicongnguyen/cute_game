@@ -38,7 +38,7 @@ import { lateArtParts, type LateArt } from './late-art.ts';
 import type { RoamArea } from './farm-roam.ts';
 import { STARTING_PLOTS, MAX_EXTRA_PLOTS } from './content.ts';
 import { approach, blocked, clearSegment, findRoute, nearbyObstacles, someObstacleNear, WORLD_BOUNDS, type Point, type NavigationOptions } from './navigation.ts';
-import { attackRange } from './combat.ts';
+import { attackRange, decoyPoint, DECOY, DZ, type DecoyPose } from './combat.ts';
 import { type SaveState, type PlanetId, PLANETS, cropProgress, giftAvailable, maxHp } from './model.ts';
 import * as M from './model.ts';
 import {EnvironmentSimulation,createEnvironmentLayout,environmentWalkable,inWater,terrainHeight,zoneAt,type EnvironmentStatus,type EnvironmentEvent,type LightningState} from './environments.ts';
@@ -75,7 +75,7 @@ export interface AvatarVisual {size:number;stealth:boolean;shield:boolean;flight
 export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
 /** An enemy run by its own module (colossus.ts): no generic AI or drawing here; `incoming` may scale a blow before it lands. */
 export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):number}}
-export interface RemotePose {/** More pets that follow this explorer besides gear.pet (the AI neighbours' second pet). */pets?:string[];/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
+export interface RemotePose {/** More pets that follow this explorer besides gear.pet (the AI neighbours' second pet). */pets?:string[];/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;/** The knight's shield is up (server-set): shots from in front bounce back. */block?:boolean;/** Hittable summons (server-checked, combat.ts shareableDecoys). */decoys?:DecoyPose[];id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
 export interface EnemySnapshot {homeX?:number;homeZ?:number;titanAttacks?:TitanAttack[];titanLift?:number;chaseGrace?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
 export interface EnvironmentSnapshot {time:number;lamps:Array<[number,number]>;eclipseUntil?:number;weather?:LavaWeatherSnapshot;nestLevel?:number;fireRain?:EnvironmentSimulation['fireRain'];lightning?:LightningState}
@@ -164,11 +164,19 @@ export class World {
   environment!:EnvironmentSimulation;environmentView!:EnvironmentView;movementLocked=false;/** In the village or the cottage and hurt: home-care.ts heals 4x, the HUD shows a chip. */ homeRecovering=false;playerFlying=false;playerStealth=false;/** Extra move speed from a skill (combat.speedBonus): flight, vanish, tank mode, bat form, the ice rink. */ playerSpeedBonus=0;
   networkRole:'host'|'peer'|null=null;remotePlayers=new Map<string,{mesh:T.Group;pose:RemotePose}>();/** Friends' account ids (online.ts keeps it current): their nameplates get a heart. */friendIds=new Set<string>();remoteRoot=new T.Group();
   onRemoteDamage:(id:string,amount:number,source?:'melee'|'shot'|'hazard',enemyId?:string)=>void=()=>{};
+  /** This explorer's hittable summons (combat.decoys): creatures may go for them instead (combat.ts SUMMON_HP). */
+  localDecoys?:()=>DecoyPose[];
+  /** A creature's blow, shot or area reached a summon: `owner` null for this explorer's, else the remote explorer's id. */
+  onDecoyDamage?:(owner:string|null,id:number,amount:number,source:'melee'|'shot'|'hazard',enemyId?:string)=>void;
+  /** The knight's raised shield faces `from` (combat.blocks): a shot from there bounces back at its shooter. */
+  playerBlocks?:(from:Point)=>boolean;
+  /** Every hittable summon creatures can see this step, this explorer's and the others' (refreshDecoys). */
+  private decoyList:Array<DecoyPose&{owner:string|null}>=[];
   onEnvironmentEvent:(event:EnvironmentEvent)=>void=()=>{};
   onEnvironmentAction:(action:EnvironmentAction)=>void=()=>{};
   onHazardEnemy:(enemy:Enemy,amount:number)=>void=(enemy,amount)=>this.damageEnemy(enemy,amount,0,true);
   private dynamicObstacles:Obstacle[]=[];private environmentSignature='';private gateHits=0;private resourceTimers=new Map<string,number>();
-  private enemyShots:Array<{id:string;ownerId:string;mesh:T.Mesh;vx:number;vz:number;life:number;damage:number;targetId?:string;targetEnemyId?:string;electric?:boolean}>=[];
+  private enemyShots:Array<{id:string;ownerId:string;mesh:T.Mesh;vx:number;vz:number;life:number;damage:number;targetId?:string;targetEnemyId?:string;electric?:boolean;/** Bounced off the knight's shield: the explorer's skill deals its damage (combat.reflect), not the shot. */reflected?:boolean}>=[];
   /** The Giant Toy Robot fires electric orbs (skill-fx.ts): a crackle each frame in flight and a small shock where each one ends. */
   onElectricShot?:(x:number,y:number,z:number,dx:number,dz:number)=>void;onElectricPop?:(x:number,z:number)=>void;
   private sun: T.DirectionalLight; private cropMaterials: T.Material[] = [];
@@ -1283,16 +1291,37 @@ export class World {
   }
   /** The nearest explorer outside the safe village (or, charmed, the nearest other creature). Runs for every creature every step, so it
    *  keeps the nearest as it goes instead of building and sorting a list: one small object per call, for the winner only. */
-  private enemyTarget(e:Enemy):(Point&{id?:string;enemy?:Enemy})|undefined{
+  private enemyTarget(e:Enemy):(Point&{id?:string;enemy?:Enemy;decoy?:{owner:string|null;id:number}})|undefined{
     if((e.statuses?.charm??0)>0){let best:Enemy|undefined,bestD=Infinity;for(const other of this.enemies){if(other===e||other.hp<=0)continue;const d=Math.hypot(other.x-e.x,other.z-e.z);if(d<bestD){bestD=d;best=other;}}return best?{x:best.x,z:best.z,enemy:best}:undefined;}
     const safe=this.planet==='home'?18:11;let bx=0,bz=0,bid:string|undefined,bestD=Infinity;
     if(!this.playerStealth&&Math.hypot(this.position.x,this.position.z)>=safe){bx=this.position.x;bz=this.position.z;bestD=Math.hypot(bx-e.x,bz-e.z);}
     if(this.remotePlayers)for(const [id,remote] of this.remotePlayers)if(remote.mesh.visible&&!remote.pose.visual?.stealth&&(remote.pose.hp??1)>0&&Math.hypot(remote.pose.x,remote.pose.z)>=safe){const d=Math.hypot(remote.pose.x-e.x,remote.pose.z-e.z);if(d<bestD){bestD=d;bx=remote.pose.x;bz=remote.pose.z;bid=id;}}
+    // Summons creatures can fight (combat.ts SUMMON_HP): a decoy within DECOY.lure m wins over every explorer, any other
+    // summon is attacked when it is the nearest target. The knight's challenge (taunt) keeps a creature on the knight.
+    if(this.decoyList?.length&&!((e.statuses?.taunt??0)>0)){let pick:(DecoyPose&{owner:string|null})|undefined,lured=false,pickD=Infinity;
+      for(const d of this.decoyList){const at=d.ring?decoyPoint(d,e):d,dd=Math.hypot(at.x-e.x,at.z-e.z);
+        if(d.taunt&&dd<=DECOY.lure){if(!lured||dd<pickD){pick=d;pickD=dd;lured=true;}}else if(!lured&&dd<bestD&&dd<pickD){pick=d;pickD=dd;}}
+      if(pick&&(lured||pickD<bestD)){const at=pick.ring?decoyPoint(pick,e):pick;return {x:at.x,z:at.z,decoy:{owner:pick.owner,id:pick.id}};}
+    }
     return bestD<Infinity?(bid?{x:bx,z:bz,id:bid}:{x:bx,z:bz}):undefined;
   }
-  private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string){if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id)this.onRemoteDamage?.(target.id,amount,source,enemyId);else if(!this.playerSafe()&&(!this.playerFlying||source!=='melee'))this.onDamage(amount,source,enemyId);}
+  /** The hittable summons of this step: this explorer's (localDecoys) and each other explorer's from its pose, none in the safe zone. */
+  private refreshDecoys(){
+    const list=this.decoyList??=[],safe=this.planet==='home'?18:11;list.length=0;
+    for(const d of this.localDecoys?.()??[])if(Math.hypot(d.x,d.z)>=safe)list.push({...d,owner:null});
+    for(const d of this.remoteDecoys())if(Math.hypot(d.x,d.z)>=safe)list.push(d);
+  }
+  /** Other explorers' hittable summons from their poses (the server checked them; checked again here): for creatures to see and for drawing. */
+  remoteDecoys(){const out:Array<DecoyPose&{owner:string}>=[];for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&Array.isArray(remote.pose.decoys))for(const d of remote.pose.decoys.slice(0,DECOY.max))if(Number.isFinite(d?.x)&&Number.isFinite(d?.z)&&Number.isInteger(d?.id)&&d.hp>0&&Math.hypot(d.x-remote.pose.x,d.z-remote.pose.z)<30)out.push({...d,r:Math.min(1,Math.max(.2,d.r||.5)),owner:id});return out;}
+  private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy;decoy?:{owner:string|null;id:number}},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string){if(target.decoy)this.onDecoyDamage?.(target.decoy.owner,target.decoy.id,amount,source,enemyId);else if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id)this.onRemoteDamage?.(target.id,amount,source,enemyId);else if(!this.playerSafe()&&(!this.playerFlying||source!=='melee'))this.onDamage(amount,source,enemyId);}
   /** Inside the safe zone (18 m at home, 11 m elsewhere) no creature can hurt the explorer, whoever it was aiming at: shots and area attacks aimed at a neighbour or a friend near the gate stop at the fence. */
   private playerSafe(){return inSafeZone(this.position,this.planet);}
+  /** A shot bounced off the knight's shield: it turns round and flies back at its shooter (DZ.block.speed m/s). */
+  private reflectShot(shot:World['enemyShots'][number],owner:Enemy){
+    const p=shot.mesh.position,d=Math.max(.01,Math.hypot(owner.x-p.x,owner.z-p.z)),speed=DZ.block.speed;
+    shot.vx=(owner.x-p.x)/d*speed;shot.vz=(owner.z-p.z)/d*speed;shot.life=d/speed+.2;shot.targetEnemyId=owner.id;shot.reflected=true;
+    this.fx?.burst({x:p.x,z:p.z},{n:10,color:['#fff3c4','#ffe066','#ffffff'],glow:true,size:.14,speed:4,up:2,y:1,life:.35});
+  }
   private shootEnemy(e:Enemy,target:Point&{id?:string;enemy?:Enemy}){
     const electric=e.type==='robot',distance=Math.max(.01,Math.hypot(target.x-e.x,target.z-e.z)),shot=ball(electric?'#e8fbff':e.definition?.accent??'#f5b576',.17,e.x,1.0,e.z,0);this.scene.add(shot);
     this.enemyShots.push({id:e.id+':shot:'+Math.random().toString(36).slice(2,10),ownerId:e.id,mesh:shot,vx:(target.x-e.x)/distance*13,vz:(target.z-e.z)/distance*13,life:1.4,damage:e.damage,...(electric?{electric}:{}),targetId:target.id,targetEnemyId:target.enemy?.id});
@@ -1303,6 +1332,8 @@ export class World {
     const environmentAtStart=this.environment,source=e.skill==='rain'||e.skill==='eclipse'?'shot':'melee';if(hit(this.position))this.hitEnemyTarget(this.position,e.damage*multiplier,source,e.id);
     if(this.environment!==environmentAtStart)return;
     for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&(remote.pose.hp??1)>0&&hit(remote.pose))this.onRemoteDamage?.(id,e.damage*multiplier,source,e.id);
+    // Summons in the blast are hurt too.
+    for(const d of this.decoyList??[])if(hit(d.ring?decoyPoint(d,{x,z}):d))this.onDecoyDamage?.(d.owner,d.id,e.damage*multiplier,source,e.id);
   }
   localPlayerId='local';
   /** The laser gaze's world angle while it sweeps (main.ts from skill-fx.ts), else null. */
@@ -1642,6 +1673,7 @@ export class World {
       if(this.selected){const e=this.selected;this.ring.position.set(e.x,.1,e.z);if(Math.hypot(e.x-this.position.x,e.z-this.position.z)<=this.interactionRange(e)){this.destination=null;this.route=[];this.marker.visible=false;if(e.kind==='enemy')this.onAttackEnemy(e as Enemy);else{this.selected=null;this.ring.visible=false;this.onInteract(e);}}else if((e.kind==='enemy'||e.kind==='turtle'||e.kind==='animal')&&(!this.destination||Math.hypot(this.destination.x-e.x,this.destination.z-e.z)>4))this.select(e);}
     }
     if(simulateWorld&&this.networkRole!=='peer')this.aiStep=(this.aiStep??0)+1;
+    if(simulateWorld&&this.networkRole!=='peer')this.refreshDecoys();
     if(simulateWorld&&this.networkRole!=='peer')for(const enemy of [...this.enemies]){if(!this.enemies.includes(enemy))break;this.updateEnemyAi(enemy,dt);}
     if(this.environment!==environmentForFrame)return;
     if(simulateWorld&&this.networkRole!=='peer')this.separateCreatures();
@@ -1654,10 +1686,14 @@ export class World {
       if(!shot.targetEnemyId&&Math.hypot(shot.mesh.position.x,shot.mesh.position.z)<(this.planet==='home'?18:11)-.3)shot.life=0; // shots aimed at players die at the safe zone's edge
       if(this.networkRole!=='peer'){
       if(!clearSegment(from,shot.mesh.position,this.obstacles,{bounds:WORLD_BOUNDS,clearance:.1}))shot.life=0;
-      if(shot.targetEnemyId){const enemy=this.enemies.find(e=>e.id===shot.targetEnemyId);if(enemy&&enemy.hp>0&&shot.life>0&&Math.hypot(shot.mesh.position.x-enemy.x,shot.mesh.position.z-enemy.z)<enemy.radius+.2){(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(enemy,shot.damage);shot.life=0;}}
+      if(shot.targetEnemyId){const enemy=this.enemies.find(e=>e.id===shot.targetEnemyId);if(enemy&&enemy.hp>0&&shot.life>0&&Math.hypot(shot.mesh.position.x-enemy.x,shot.mesh.position.z-enemy.z)<enemy.radius+.2){if(shot.reflected)this.burst(enemy.x,enemy.z,'#fff3c4',10);else (this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(enemy,shot.damage);shot.life=0;}}
       else{
-        if(shot.life>0&&Math.hypot(shot.mesh.position.x-this.position.x,shot.mesh.position.z-this.position.z)<.65){this.onDamage(shot.damage,'shot',shot.ownerId);shot.life=0;}
-        for(const [id,remote] of this.remotePlayers??[])if(shot.life>0&&remote.mesh.visible&&Math.hypot(shot.mesh.position.x-remote.pose.x,shot.mesh.position.z-remote.pose.z)<.65){this.onRemoteDamage?.(id,shot.damage,'shot',shot.ownerId);shot.life=0;}
+        // A summon in the way takes the shot (decoys, clones, the wall, combat.ts SUMMON_HP).
+        const sp=shot.mesh.position;for(const d of this.decoyList??[]){if(shot.life<=0)break;const at=d.ring?decoyPoint(d,sp):d;if(Math.hypot(sp.x-at.x,sp.z-at.z)<.4+d.r){this.onDecoyDamage?.(d.owner,d.id,shot.damage,'shot',shot.ownerId);shot.life=0;}}
+        // The knight's raised shield sends a shot from in front back at its shooter: the host's rules deal the damage
+        // (onDamage: combat.reflect offline, the server online); here the ball only flies home.
+        if(shot.life>0&&Math.hypot(sp.x-this.position.x,sp.z-this.position.z)<.65){const owner=this.enemies.find(e=>e.id===shot.ownerId);this.onDamage(shot.damage,'shot',shot.ownerId);if(owner&&owner.hp>0&&this.playerBlocks?.(owner))this.reflectShot(shot,owner);else shot.life=0;}
+        for(const [id,remote] of this.remotePlayers??[])if(shot.life>0&&!shot.reflected&&remote.mesh.visible&&Math.hypot(sp.x-remote.pose.x,sp.z-remote.pose.z)<.65){this.onRemoteDamage?.(id,shot.damage,'shot',shot.ownerId);const owner=this.enemies.find(e=>e.id===shot.ownerId),f=remote.pose.facing??0;if(owner&&owner.hp>0&&remote.pose.block&&(owner.x-remote.pose.x)*Math.sin(f)+(owner.z-remote.pose.z)*Math.cos(f)>0)this.reflectShot(shot,owner);else shot.life=0;}
       }
       }
       if(shot.electric){const p=shot.mesh.position;if(shot.life>0)this.onElectricShot?.(p.x,p.y,p.z,shot.vx/13,shot.vz/13);else this.onElectricPop?.(p.x,p.z);}

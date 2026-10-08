@@ -6,7 +6,7 @@
  */
 import { t } from './i18n.ts';
 import { skillTuning, levelledCooldown } from './skill-upgrades.ts';
-import { DZ, GAZE, BOULDER } from './combat.ts';
+import { DZ, GAZE, BOULDER, SUMMON_HP, DECOY } from './combat.ts';
 
 const fix = (n: number) => String(Math.round(n * 100) / 100);
 /** Base whirlwind radius (sword users spin wider), the slam shockwave and the dash length, as combat.ts casts them. */
@@ -31,7 +31,7 @@ export const SPECIAL_INFO: Record<string, { damage: number; text: string; radius
   whirl: { damage: 1.4, radius: 4.4, text: 'Three cyclone pulses around you: ×{dmg} damage within 4.4 m each.' },
   starfall: { damage: 1.1, radius: 1.6, text: '12 stars fall around the nearest enemy, ×{dmg} damage within 1.6 m of each.' },
   inferno: { damage: 1.3, radius: 1.8, text: 'A ring of 10 fire bursts 3.6 m around you, ×{dmg} damage within 1.8 m of each.' },
-  volley: { damage: .7, text: 'Ten rapid shots fly 15 m ahead in one second, ×{dmg} damage each.' },
+  volley: { damage: .7, text: 'Pop ten toy corks 15 m ahead in one second, ×{dmg} damage each.' },
   anchor: { damage: 2, radius: 4.4, text: 'Swing a heavy anchor all around you: ×{dmg} damage within 4.4 m, knocked back.' },
   lotus: { damage: .8, text: 'Twelve lotus petals burst out all around you to 8 m, ×{dmg} damage each, and you heal 8% health.' },
   dragon: { damage: 1.3, text: 'Seven waves in a wide fan fly 12 m, ×{dmg} damage each.' },
@@ -47,12 +47,14 @@ export const SPECIAL_INFO: Record<string, { damage: number; text: string; radius
 const pct = (n: number) => fix(n * 100);
 const fanAngle = Math.round(2 * Math.acos(DZ.fan.cone) * 180 / Math.PI);
 const snowMax = Math.min(2.6, .5 + DZ.snowball.grow * DZ.snowball.time);
+/** A summon's hit points as a share of yours (combat.ts SUMMON_HP). */
+const hp = (kind: string) => pct(SUMMON_HP[kind].hp);
 export const DISGUISE_INFO: Record<string, readonly string[]> = {
   dz_superhero: [`Fly for ${DZ.flight.time} s, ${pct(DZ.flight.speed)}% faster (press again to land): melee attacks miss you, only shots can reach you.`,
     `Dive ${DZ.dive.ahead} m ahead and crash down: ×${DZ.dive.power} damage within ${DZ.dive.radius} m, ×${DZ.dive.flying} if you were flying, enemies thrown up.`,
     `Twin eye lasers sweep a ${GAZE.length} m line, ${GAZE.width} m wide, across the front for ${GAZE.time} s: ×1 damage per touch, leaving scorch marks.`,
     `Lob a giant rock at the nearest enemy within ${BOULDER.range} m (${BOULDER.fallback} m ahead if none): lands in ${BOULDER.time} s for ×${BOULDER.power} damage in a ${BOULDER.radius} m blast, launching enemies upward.`],
-  dz_ninja: [`Two shadow clones fight beside you for ${DZ.clones.life} s, each hit ×${DZ.clones.power} damage.`,
+  dz_ninja: [`Four shadow clones fight beside you for ${DZ.clones.life} s, each hit ×${DZ.clones.power} damage. Creatures within ${DECOY.lure} m of a clone attack it instead of you; each has ${hp('clone')}% of your health and vanishes in a puff when it runs out.`,
     `Vanish for ${DZ.stealth.time} s, ${pct(DZ.stealth.speed)}% faster: enemies lose you, and your next hit does triple damage.`,
     `Blink behind the nearest enemy within ${DZ.backstab.range} m and strike: ×${DZ.backstab.power} damage, a critical blow.`,
     `A smoke cloud lasts ${DZ.smoke.time} s within ${DZ.smoke.radius} m: enemies inside are blinded and you stay hidden while inside.`],
@@ -60,12 +62,12 @@ export const DISGUISE_INFO: Record<string, readonly string[]> = {
     `Blink ${DZ.teleport.distance} m ahead.`,
     `Turn the nearest enemy within ${DZ.sheep.range} m, and up to ${DZ.sheep.count - 1} more within ${DZ.sheep.around} m of it, into sheep for ${DZ.sheep.time} s: tiny, slow and harmless (a boss is only slowed).`,
     `A black hole at your target pulls enemies within ${DZ.blackhole.pull} m for ${DZ.blackhole.time} s, then bursts: ×${DZ.blackhole.power} damage within ${DZ.blackhole.radius} m.`],
-  dz_knight: [`Raise your shield for ${DZ.block.time} s: every blow from in front of you is blocked.`,
+  dz_knight: [`Raise your shield for ${DZ.block.time} s: every blow from in front of you is blocked, and shots that hit it fly back at their shooter for ×${DZ.block.reflect} damage.`,
     `Charge ${fix(DZ.knightcharge.speed * DZ.knightcharge.time)} m forward, untouchable, carrying enemies along, then a mighty blow: ×${DZ.knightcharge.power} damage to each of them.`,
     `Challenge every enemy within ${DZ.taunt.radius} m for ${DZ.taunt.time} s; you gain +${DZ.taunt.defence} defence.`,
     `A giant sword falls on your target after ${DZ.holy.delay} s: ×${DZ.holy.power} damage within ${DZ.holy.radius} m.`],
   dz_mecha: [`Tank mode for ${DZ.tank.time} s: ${pct(DZ.tank.speed)}% faster, +${DZ.tank.defence} defence, and you ram every enemy you touch with an electric shockwave (×${DZ.tank.power} damage, once every ${DZ.tank.rehit} s each).`,
-    `Drop a tesla turret that fires shock bolts for ${DZ.turret.life} s, ×${DZ.turret.power} damage each.`,
+    `Drop a tesla turret that fires shock bolts for ${DZ.turret.life} s, ×${DZ.turret.power} damage each. Creatures may attack it (${hp('turret')}% of your health).`,
     `${DZ.missiles.count} shock missiles home in on up to ${DZ.missiles.count} enemies within ${DZ.missiles.range} m: ×${DZ.missiles.power} damage each in a ${DZ.missiles.radius} m electric burst.`,
     `Energy shield: no damage for ${DZ.energyshield.time} s and ${pct(DZ.energyshield.heal)}% health back.`],
   dz_dino: [`Bite an enemy within ${DZ.devour.reach} m: a weak one (under ${pct(DZ.devour.below)}% health) is swallowed whole and heals you ${pct(DZ.devour.heal)}%; otherwise ×${DZ.devour.power} damage (a boss is never swallowed).`,
@@ -75,8 +77,8 @@ export const DISGUISE_INFO: Record<string, readonly string[]> = {
   dz_fairy: [`A healing flower ring for ${DZ.heal.time} s: stay within ${DZ.heal.radius} m to heal ${pct(DZ.heal.perTick / DZ.heal.tick)}% of your health every second.`,
     `Float for ${DZ.hover.time} s, ${pct(DZ.hover.speed)}% faster: melee attacks miss you.`,
     `Charm the nearest enemy within ${DZ.charm.range} m for ${DZ.charm.time} s: it fights the other creatures (a boss is only slowed).`,
-    `A binding tree grows ${DZ.tree.ahead} m ahead for ${DZ.tree.life} s: its roots hold every enemy within ${DZ.tree.radius} m for ${DZ.tree.root} s, and it lashes one every ${DZ.tree.cd} s for ×${DZ.tree.power} damage.`],
-  dz_pirate: [`Set a deck cannon that fires exploding shells for ${DZ.cannon.life} s, ×${DZ.cannon.power} damage each.`,
+    `A binding tree grows ${DZ.tree.ahead} m ahead for ${DZ.tree.life} s: its roots hold every enemy within ${DZ.tree.radius} m for ${DZ.tree.root} s, and it lashes one every ${DZ.tree.cd} s for ×${DZ.tree.power} damage. Creatures may attack it (${hp('tree')}% of your health).`],
+  dz_pirate: [`Set a deck cannon that fires exploding shells for ${DZ.cannon.life} s, ×${DZ.cannon.power} damage each. Creatures may attack it (${hp('cannon')}% of your health).`,
     `Hook the nearest enemy within ${DZ.hook.range} m and reel it in: ×${DZ.hook.power} damage and slowed for ${DZ.hook.slow} s.`,
     `A scout parrot flies out for ${DZ.parrot.life} s, pecking enemies (×${DZ.parrot.power} damage) and marking them for ${DZ.parrot.mark} s: marked enemies take +50% damage.`,
     `A pirate ship's broadside: ${DZ.broadside.count} cannonballs land around your target, ×${DZ.broadside.power} damage within ${DZ.broadside.radius} m each.`],
@@ -85,12 +87,12 @@ export const DISGUISE_INFO: Record<string, readonly string[]> = {
     `Five bats circle you for ${DZ.batcircle.life} s, biting enemies (×${DZ.batcircle.power} damage) and healing you ${pct(DZ.batcircle.heal)}% per bite.`,
     `Blood moon for ${DZ.bloodnova.time} s: enemies within ${DZ.bloodnova.radius} m take ×${DZ.bloodnova.power} damage every ${DZ.bloodnova.tick} s; your hits heal you for ${pct(DZ.bloodnova.lifesteal)}% of the damage dealt.`],
   dz_snowman: [`Roll a growing snowball ${fix(DZ.snowball.speed * DZ.snowball.time)} m: it hits everything it passes for ×1.5 to ×${fix(1 + snowMax)} damage (more as it grows), slowing them ${DZ.snowball.slow} s.`,
-    `A snow decoy for ${DZ.decoy.life} s: enemies within ${DZ.decoy.lure} m lose track of you, then it bursts for ×${DZ.decoy.power} damage within ${DZ.decoy.radius} m and freezes them ${DZ.decoy.freeze} s.`,
+    `A snow decoy stands ${DZ.decoy.ahead} m ahead for ${DZ.decoy.life} s with ${hp('snowman')}% of your health: creatures within ${DECOY.lure} m attack it instead of you. When it melts or breaks it bursts for ×${DZ.decoy.power} damage within ${DZ.decoy.radius} m and freezes them ${DZ.decoy.freeze} s.`,
     `An ${DZ.icefloor.time} s ice rink ${DZ.icefloor.radius} m around you: enemies on it are slowed, and you skate ${pct(DZ.icefloor.speed)}% faster.`,
     `Freeze every enemy within ${DZ.iceage.radius} m for ${DZ.iceage.freeze} s, then shatter them for ×${DZ.iceage.power} damage.`],
   // The six uniforms
   dz_army: [`Pop ${DZ.popgun.count} toy corks in a fan, ${DZ.popgun.range} m ahead: ×${DZ.popgun.power} damage each.`,
-    `Stack a sandbag wall round you for ${DZ.sandbag.time} s: +${DZ.sandbag.defence} defence while you stand inside its ${DZ.sandbag.radius} m ring; enemies inside are pushed out (×${DZ.sandbag.power} damage).`,
+    `Stack a sandbag wall round you for ${DZ.sandbag.time} s: +${DZ.sandbag.defence} defence while you stand inside its ${DZ.sandbag.radius} m ring; enemies inside are pushed out (×${DZ.sandbag.power} damage). The wall has ${hp('sandbag')}% of your health and creatures may attack it.`,
     `Fire a signal flare over the nearest enemy within ${DZ.flare.range} m: after ${DZ.flare.delay} s every enemy within ${DZ.flare.radius} m is dazzled for ${DZ.flare.blind} s and marked for ${DZ.flare.mark} s (+50% damage taken).`,
     `${DZ.airdrop.count} supply crates parachute around the nearest enemy within ${DZ.airdrop.range} m: each lands for ×${DZ.airdrop.power} damage within ${DZ.airdrop.radius} m, and the supplies heal you ${pct(DZ.airdrop.heal)}%.`],
   dz_navy: [SPECIAL_INFO.anchor.text,

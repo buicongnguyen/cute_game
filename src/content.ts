@@ -3139,7 +3139,7 @@ const CRAFT_FACTS: {
 ];
 const DISGUISE_FACTS: Record<string, any> = {
     "dz_superhero": {
-        "name": "Siêu Anh Hùng",
+        "name": "Superhero",
         "emoji": "🦸",
         "color": "#3f6fff",
         "weapon": {
@@ -3149,29 +3149,29 @@ const DISGUISE_FACTS: Record<string, any> = {
         },
         "skills": [
             {
-                "name": "Bay Lên Trời",
+                "name": "Take flight",
                 "icon": "🦸",
                 "cd": 3
             },
             {
-                "name": "Lao Bổ Xuống",
+                "name": "Meteor dive",
                 "icon": "☄️",
                 "cd": 6
             },
             {
-                "name": "Tia Mắt Laser",
+                "name": "Laser gaze",
                 "icon": "👀",
                 "cd": 7
             },
             {
-                "name": "Ném Tảng Đá",
+                "name": "Boulder throw",
                 "icon": "🪨",
                 "cd": 10
             }
         ]
     },
     "dz_ninja": {
-        "name": "Ninja Bóng Đêm",
+        "name": "Shadow ninja",
         "emoji": "🥷",
         "color": "#c9c9ff",
         "weapon": {
@@ -3183,29 +3183,29 @@ const DISGUISE_FACTS: Record<string, any> = {
         },
         "skills": [
             {
-                "name": "Phân Thân",
+                "name": "Shadow clones",
                 "icon": "👥",
                 "cd": 14
             },
             {
-                "name": "Ẩn Thân",
+                "name": "Vanish",
                 "icon": "👤",
                 "cd": 12
             },
             {
-                "name": "Ảnh Tập Kích",
+                "name": "Shadow strike",
                 "icon": "⚡",
                 "cd": 6
             },
             {
-                "name": "Bom Khói",
+                "name": "Smoke bomb",
                 "icon": "💨",
                 "cd": 12
             }
         ]
     },
     "dz_mage": {
-        "name": "Đại Pháp Sư",
+        "name": "Archmage",
         "emoji": "🧙",
         "color": "#7f6fff",
         "weapon": {
@@ -3216,29 +3216,29 @@ const DISGUISE_FACTS: Record<string, any> = {
         },
         "skills": [
             {
-                "name": "Siêu Hoả Cầu",
+                "name": "Great fireball",
                 "icon": "🔥",
                 "cd": 5
             },
             {
-                "name": "Dịch Chuyển",
+                "name": "Blink",
                 "icon": "✨",
                 "cd": 5
             },
             {
-                "name": "Biến Thành Cừu",
+                "name": "Sheep spell",
                 "icon": "🐑",
                 "cd": 12
             },
             {
-                "name": "Hố Đen",
+                "name": "Black hole",
                 "icon": "🌀",
                 "cd": 13
             }
         ]
     },
     "dz_knight": {
-        "name": "Hiệp Sĩ Ánh Sáng",
+        "name": "Sun knight",
         "emoji": "🛡️",
         "color": "#fff3c4",
         "weapon": {
@@ -3250,29 +3250,29 @@ const DISGUISE_FACTS: Record<string, any> = {
         },
         "skills": [
             {
-                "name": "Giơ Khiên",
+                "name": "Shield block",
                 "icon": "🛡️",
                 "cd": 8
             },
             {
-                "name": "Xung Phong",
+                "name": "Knight's charge",
                 "icon": "🐎",
                 "cd": 7
             },
             {
-                "name": "Khiêu Khích",
+                "name": "Challenge",
                 "icon": "📯",
                 "cd": 12
             },
             {
-                "name": "Kiếm Thánh",
+                "name": "Sky sword",
                 "icon": "🗡️",
                 "cd": 12
             }
         ]
     },
     "dz_mecha": {
-        "name": "Robot Chiến Binh",
+        "name": "Battle robot",
         "emoji": "🤖",
         "color": "#6ff2ff",
         "weapon": {
@@ -3283,29 +3283,29 @@ const DISGUISE_FACTS: Record<string, any> = {
         },
         "skills": [
             {
-                "name": "Chế Độ Xe Tăng",
+                "name": "Tank mode",
                 "icon": "🚜",
                 "cd": 12
             },
             {
-                "name": "Tháp Pháo",
+                "name": "Tesla turret",
                 "icon": "🗼",
                 "cd": 14
             },
             {
-                "name": "Tên Lửa Tầm Nhiệt",
+                "name": "Homing missiles",
                 "icon": "🚀",
                 "cd": 7
             },
             {
-                "name": "Khiên Năng Lượng",
+                "name": "Energy shield",
                 "icon": "🔰",
                 "cd": 16
             }
         ]
     },
     "dz_dino": {
-        "name": "Khủng Long Bạo Chúa",
+        "name": "Tyrannosaur",
         "emoji": "🦖",
         "color": "#5fbf5a",
         "weapon": {
@@ -3317,29 +3317,29 @@ const DISGUISE_FACTS: Record<string, any> = {
         },
         "skills": [
             {
-                "name": "Nuốt Chửng",
+                "name": "Devour",
                 "icon": "😋",
                 "cd": 9
             },
             {
-                "name": "Quẫy Đuôi",
+                "name": "Tail sweep",
                 "icon": "🌪️",
                 "cd": 5
             },
             {
-                "name": "Gầm Kinh Hoàng",
+                "name": "Terrifying roar",
                 "icon": "📢",
                 "cd": 12
             },
             {
-                "name": "Hoá Khổng Lồ",
+                "name": "Giant form",
                 "icon": "🦕",
                 "cd": 18
             }
         ]
     },
     "dz_fairy": {
-        "name": "Tiên Hoa",
+        "name": "Flower fairy",
         "emoji": "🧚",
         "color": "#ff9ec8",
         "weapon": {
@@ -3350,22 +3350,22 @@ const DISGUISE_FACTS: Record<string, any> = {
         },
         "skills": [
             {
-                "name": "Vòng Hoa Hồi Sinh",
+                "name": "Healing flower ring",
                 "icon": "💖",
                 "cd": 12
             },
             {
-                "name": "Bay Lơ Lửng",
+                "name": "Butterfly float",
                 "icon": "🦋",
                 "cd": 10
             },
             {
-                "name": "Mê Hoặc",
+                "name": "Fairy charm",
                 "icon": "💘",
                 "cd": 14
             },
             {
-                "name": "Cây Thần Trói Buộc",
+                "name": "Binding tree",
                 "icon": "🌳",
                 "cd": 14
             }
@@ -3444,7 +3444,7 @@ const DISGUISE_FACTS: Record<string, any> = {
         ]
     },
     "dz_pirate": {
-        "name": "Thuyền Trưởng Hải Tặc",
+        "name": "Pirate captain",
         "emoji": "🏴‍☠️",
         "color": "#ffc93c",
         "weapon": {
@@ -3456,29 +3456,29 @@ const DISGUISE_FACTS: Record<string, any> = {
         },
         "skills": [
             {
-                "name": "Đặt Đại Bác",
+                "name": "Deck cannon",
                 "icon": "💣",
                 "cd": 12
             },
             {
-                "name": "Móc Câu",
+                "name": "Grappling hook",
                 "icon": "🪝",
                 "cd": 6
             },
             {
-                "name": "Vẹt Trinh Sát",
+                "name": "Scout parrot",
                 "icon": "🦜",
                 "cd": 10
             },
             {
-                "name": "Tàu Bắn Phá",
+                "name": "Ship broadside",
                 "icon": "🏴‍☠️",
                 "cd": 14
             }
         ]
     },
     "dz_vampire": {
-        "name": "Bá Tước Ma Cà Rồng",
+        "name": "Vampire count",
         "emoji": "🧛",
         "color": "#b0203a",
         "weapon": {
@@ -3491,29 +3491,29 @@ const DISGUISE_FACTS: Record<string, any> = {
         "lifesteal": 0.1,
         "skills": [
             {
-                "name": "Tia Hút Máu",
+                "name": "Life drain",
                 "icon": "🩸",
                 "cd": 7
             },
             {
-                "name": "Hoá Dơi",
+                "name": "Bat form",
                 "icon": "🦇",
                 "cd": 9
             },
             {
-                "name": "Bầy Dơi Quây",
+                "name": "Bat swarm",
                 "icon": "🌑",
                 "cd": 12
             },
             {
-                "name": "Đêm Trăng Máu",
+                "name": "Blood moon",
                 "icon": "🌕",
                 "cd": 15
             }
         ]
     },
     "dz_snowman": {
-        "name": "Người Tuyết Vui Vẻ",
+        "name": "Snowman",
         "emoji": "⛄",
         "color": "#9fe8ff",
         "weapon": {
@@ -3524,22 +3524,22 @@ const DISGUISE_FACTS: Record<string, any> = {
         },
         "skills": [
             {
-                "name": "Cầu Tuyết Lăn",
+                "name": "Rolling snowball",
                 "icon": "⚪",
                 "cd": 7
             },
             {
-                "name": "Người Tuyết Mồi",
+                "name": "Snow decoy",
                 "icon": "⛄",
                 "cd": 12
             },
             {
-                "name": "Sàn Băng",
+                "name": "Ice rink",
                 "icon": "🧊",
                 "cd": 12
             },
             {
-                "name": "Kỷ Băng Hà",
+                "name": "Ice age",
                 "icon": "❄️",
                 "cd": 16
             }
@@ -3848,7 +3848,7 @@ const FISH_WEIGHTS_RAW: Record<string, [
 export const SPECIALS: Record<string, {
     name: string;
     cd: number;
-}> = { "volley": { "name": "Loạt Đạn Liên Thanh", "cd": 7 }, "anchor": { "name": "Vung Mỏ Neo", "cd": 8 }, "lotus": { "name": "Cánh Sen Chữa Lành", "cd": 9 }, "dragon": { "name": "Quạt Rồng", "cd": 8 }, "eagle": { "name": "Đại Bàng Lao Xuống", "cd": 8 }, "goldstar": { "name": "Sao Vàng Bùng Nổ", "cd": 9 }, "fist": { "name": "Liên Hoàn Quyền", "cd": 6 }, "crescent": { "name": "Chém Trăng Khuyết", "cd": 6 }, "gore": { "name": "Húc Nanh", "cd": 7 }, "wave": { "name": "Kiếm Khí", "cd": 6 }, "peastorm": { "name": "Mưa Đậu", "cd": 8 }, "bigbubble": { "name": "Bong Bóng Nhốt", "cd": 10 }, "nova": { "name": "Bão Gai", "cd": 9 }, "blizzard": { "name": "Bão Tuyết", "cd": 9 }, "magma": { "name": "Cột Dung Nham", "cd": 8 }, "thunder": { "name": "Sấm Sét Trời Giáng", "cd": 9 }, "bonk": { "name": "Búa Nện Chít Chít", "cd": 7 }, "tsunami": { "name": "Sóng Thần", "cd": 9 }, "whirl": { "name": "Lốc Trăng", "cd": 8 }, "starfall": { "name": "Mưa Sao Băng", "cd": 9 }, "inferno": { "name": "Vòng Hoả Ngục", "cd": 9 }, "laser": { "name": "Tia Cầu Vồng", "cd": 8 } };
+}> = { "volley": { "name": "Cork barrage", "cd": 7 }, "anchor": { "name": "Vung Mỏ Neo", "cd": 8 }, "lotus": { "name": "Cánh Sen Chữa Lành", "cd": 9 }, "dragon": { "name": "Quạt Rồng", "cd": 8 }, "eagle": { "name": "Đại Bàng Lao Xuống", "cd": 8 }, "goldstar": { "name": "Sao Vàng Bùng Nổ", "cd": 9 }, "fist": { "name": "Liên Hoàn Quyền", "cd": 6 }, "crescent": { "name": "Chém Trăng Khuyết", "cd": 6 }, "gore": { "name": "Húc Nanh", "cd": 7 }, "wave": { "name": "Kiếm Khí", "cd": 6 }, "peastorm": { "name": "Mưa Đậu", "cd": 8 }, "bigbubble": { "name": "Bong Bóng Nhốt", "cd": 10 }, "nova": { "name": "Bão Gai", "cd": 9 }, "blizzard": { "name": "Bão Tuyết", "cd": 9 }, "magma": { "name": "Cột Dung Nham", "cd": 8 }, "thunder": { "name": "Sấm Sét Trời Giáng", "cd": 9 }, "bonk": { "name": "Búa Nện Chít Chít", "cd": 7 }, "tsunami": { "name": "Sóng Thần", "cd": 9 }, "whirl": { "name": "Lốc Trăng", "cd": 8 }, "starfall": { "name": "Mưa Sao Băng", "cd": 9 }, "inferno": { "name": "Vòng Hoả Ngục", "cd": 9 }, "laser": { "name": "Tia Cầu Vồng", "cd": 8 } };
 export const LOOT_TABLES: Record<string, [
     string,
     number,
@@ -4061,7 +4061,7 @@ for (const [id, disguise] of Object.entries(DISGUISES)) {
 }
 for (const [id, collection] of Object.entries(COLLECTIONS))
     collection.name = planetLabels[sourcePlanet(id) as PlanetId];
-const specialLabels: Record<string, string> = { volley: 'Rifle volley', anchor: 'Anchor swing', lotus: 'Lotus petals', dragon: 'Dragon fan', eagle: 'Eagle strike', goldstar: 'Golden star burst', fist: 'Rapid punches', crescent: 'Crescent slash', gore: 'Tusk charge', wave: 'Blade wave', peastorm: 'Pea storm', bigbubble: 'Bubble cage', nova: 'Spike storm', blizzard: 'Blizzard', magma: 'Magma pillar', thunder: 'Chain lightning', bonk: 'Squeaky smash', tsunami: 'Wave fan', whirl: 'Moon cyclone', starfall: 'Starfall', inferno: 'Inferno ring', laser: 'Prism beam' };
+const specialLabels: Record<string, string> = { volley: 'Cork barrage', anchor: 'Anchor swing', lotus: 'Lotus petals', dragon: 'Dragon fan', eagle: 'Eagle strike', goldstar: 'Golden star burst', fist: 'Rapid punches', crescent: 'Crescent slash', gore: 'Tusk charge', wave: 'Blade wave', peastorm: 'Pea storm', bigbubble: 'Bubble cage', nova: 'Spike storm', blizzard: 'Blizzard', magma: 'Magma pillar', thunder: 'Chain lightning', bonk: 'Squeaky smash', tsunami: 'Wave fan', whirl: 'Moon cyclone', starfall: 'Starfall', inferno: 'Inferno ring', laser: 'Prism beam' };
 for (const [id, special] of Object.entries(SPECIALS))
     special.name = specialLabels[id];
 const categoryLabels = new Map<string, string>();

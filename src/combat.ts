@@ -36,10 +36,10 @@ export const DISGUISE_KITS:Readonly<Record<string,readonly string[]>>={
 /** Disguise skill numbers: metres, seconds, damage factors (× attack). skill-info.ts builds the tooltips from this same table. */
 export const DZ={
   flight:{time:12,speed:.35},dive:{ahead:4,radius:5,power:2,flying:4,lift:2.2,delay:.18,guard:.5},
-  clones:{count:2,life:8,power:.5,cd:.45,reach:1.4},stealth:{time:5,speed:.3,bonus:3},backstab:{range:12,power:3.2},smoke:{radius:5,time:5,blind:1.2,tick:.5},
+  clones:{count:4,life:8,power:.5,cd:.45,reach:1.4,ring:1.6},stealth:{time:5,speed:.3,bonus:3},backstab:{range:12,power:3.2},smoke:{radius:5,time:5,blind:1.2,tick:.5},
   fireball:{charge:.8,range:14,fallback:9,flight:.35,radius:5,power:3.5,lift:1.25},teleport:{distance:8,guard:.4},sheep:{range:12,around:3,count:3,time:6},
   blackhole:{range:12,fallback:6,pull:8,time:3,tick:.25,radius:5,power:3,lift:1.5},
-  block:{time:4},knightcharge:{speed:22,time:.5,grab:2,radius:3,power:2.5,knock:4,lift:1.5},taunt:{radius:12,time:6,defence:80},holy:{range:14,fallback:6,delay:.6,radius:3.5,power:4.5,lift:1.25},
+  block:{time:4,reflect:1.5,speed:16},knightcharge:{speed:22,time:.5,grab:2,radius:3,power:2.5,knock:4,lift:1.5},taunt:{radius:12,time:6,defence:80},holy:{range:14,fallback:6,delay:.6,radius:3.5,power:4.5,lift:1.25},
   tank:{time:6,speed:.8,defence:30,reach:1.6,power:1.6,rehit:.6,knock:5,lift:1},turret:{life:12,power:.55,cd:.35,range:11},missiles:{count:6,range:15,radius:2,power:1.4},energyshield:{time:4,heal:.2},
   devour:{reach:3.2,below:.4,heal:.25,power:3},tail:{radius:3.6,power:1.8,knock:6},roar:{radius:9,time:4},giant:{time:10,defence:20,step:.45,radius:2.5,power:.7,knock:2},
   heal:{radius:4,time:8,tick:.5,perTick:.03},hover:{time:8,speed:.25},charm:{range:12,time:8},tree:{ahead:3,life:6,root:4,radius:5,power:.8,cd:1},
@@ -56,6 +56,36 @@ export const DZ={
   starshield:{time:3,radius:3,power:1,knock:4},torch:{time:6,bonus:.3,heal:.1,radius:6,blind:2},fireworks:{count:10,range:14,fallback:7,spacing:.15,rise:.6,radius:2.2,power:1.5},
   bamboo:{speed:16,time:.5,radius:3,power:1.4,knock:2},drum:{beats:3,gap:.35,radius:7,power:.6,knock:2.5,stun:1.5},bigstar:{range:14,fallback:6,delay:.7,radius:5,power:4,lift:1.25,slow:3},
 } as const;
+/**
+ * Summons creatures can fight: hit points as a fraction of the explorer's max health, body radius (m), and whether it
+ * is a decoy. A creature within DECOY.lure m of a decoy (the ninja's clones, the snow decoy) goes for it before any
+ * explorer; the other summons are attacked when they are a creature's nearest target. A blow, a shot or an area that
+ * reaches a summon hurts the summon, not you; at 0 hit points it pops, as when its time runs out.
+ */
+export const SUMMON_HP:Readonly<Record<string,{hp:number;r:number;taunt?:boolean}>>={
+  clone:{hp:.25,r:.45,taunt:true},snowman:{hp:.6,r:.7,taunt:true},tree:{hp:.8,r:.8},cannon:{hp:.5,r:.7},turret:{hp:.45,r:.6},sandbag:{hp:.9,r:.5},
+};
+/** Online each explorer shares at most `max` hittable summons (server-checked): clones stay within `range` m of their explorer; `lure` is the decoys' pull. */
+export const DECOY={max:4,range:6,lure:8} as const;
+/** A hittable summon as creatures see it (CombatSimulation.decoys, the online pose). `ring`: the sandbag wall's radius round x/z. */
+export interface DecoyPose{id:number;kind:string;x:number;z:number;r:number;hp:number;maxHp:number;taunt:boolean;life:number;ring?:number}
+/** Longest life of each hittable summon (s), for the server's checks. */
+const SUMMON_LIFE:Record<string,number>={clone:8,snowman:6,tree:6,cannon:10,turret:12,sandbag:6};
+/**
+ * The summons an explorer's pose may share with the room (server.mjs): only live hittable ones, at most DECOY.max
+ * (decoys first, then the nearest), a clone no farther than DECOY.range m from its explorer, a fixed summon where it
+ * was set (it never moves), nothing past its kind's lifetime, every number finite and clamped.
+ */
+export function shareableDecoys(list:readonly Partial<DecoyPose>[],at:CombatPoint):DecoyPose[]{
+  const ok=list.filter(d=>d&&typeof d.kind==='string'&&SUMMON_HP[d.kind]&&Number.isInteger(d.id)&&[d.x,d.z,d.hp,d.maxHp,d.life].every(Number.isFinite)&&d.hp!>0&&d.maxHp!>0&&d.life!>0&&d.life!<=SUMMON_LIFE[d.kind]+.5&&(d.kind!=='clone'||Math.hypot(d.x!-at.x,d.z!-at.z)<=DECOY.range))
+    .map(d=>{const s=SUMMON_HP[d.kind!];return {id:d.id!,kind:d.kind!,x:Math.round(d.x!*100)/100,z:Math.round(d.z!*100)/100,r:s.r,hp:Math.round(Math.min(d.hp!,d.maxHp!)),maxHp:Math.round(d.maxHp!),taunt:!!s.taunt,life:Math.round(d.life!*10)/10,...(d.kind==='sandbag'?{ring:DZ.sandbag.radius}:{})};});
+  return ok.sort((a,b)=>Number(b.taunt)-Number(a.taunt)||Math.hypot(a.x-at.x,a.z-at.z)-Math.hypot(b.x-at.x,b.z-at.z)).slice(0,DECOY.max);
+}
+/** Where a creature at `from` strikes a summon: its centre, or for the sandbag ring the nearest point of the wall. */
+export function decoyPoint(d:{x:number;z:number;ring?:number},from:CombatPoint):CombatPoint{
+  if(!d.ring)return {x:d.x,z:d.z};const dx=from.x-d.x,dz=from.z-d.z,l=Math.hypot(dx,dz);
+  return l<1e-6?{x:d.x+d.ring,z:d.z}:{x:d.x+dx/l*d.ring,z:d.z+dz/l*d.ring};
+}
 /** Kit skills that are the uniform weapon specials (special()). */
 const SPECIAL_SKILLS=new Set(['anchor','lotus','dragon','eagle','goldstar']);
 import { skillTuning } from './skill-upgrades.ts';
@@ -83,14 +113,16 @@ export interface Projectile extends CombatPoint { id: number; direction: CombatP
   burst?:number; burstLift?:number;
   /** Seconds a creature it touches is slowed. */
   slow?:number }
-export interface CombatAlly extends CombatPoint {id:number;kind:'clone'|'turret'|'cannon'|'bat'|'snowman'|'parrot'|'tree'|'lighthouse';life:number;cooldown:number;orbit:number;facing?:number}
+export interface CombatAlly extends CombatPoint {id:number;kind:'clone'|'turret'|'cannon'|'bat'|'snowman'|'parrot'|'tree'|'lighthouse'|'sandbag';life:number;cooldown:number;orbit:number;facing?:number;
+  /** Hittable summons (SUMMON_HP): hit points left and at full; `hurt` counts down a short flash after a blow; `ring` is the sandbag wall's radius. */
+  hp?:number;maxHp?:number;hurt?:number;ring?:number}
 export const BASE_SKILLS = [
   { name: 'Whirlwind', icon: '🌀', cd: 7, description: 'Spin for two seconds, striking nearby enemies repeatedly.' },
   { name: 'Dash', icon: '➶', cd: 4, description: 'Rush forward, striking every enemy along your path once.' },
   { name: 'Ground slam', icon: '💥', cd: 9, description: 'Leap and land with a shockwave that throws enemies into the air.' },
 ] as const;
 export const SPECIALS: Record<string,{name:string;icon:string;cd:number}> = {
-  volley:{name:'Rifle volley',icon:'🔫',cd:7},anchor:{name:'Anchor swing',icon:'⚓',cd:8},lotus:{name:'Lotus petals',icon:'🪷',cd:9},dragon:{name:'Dragon fan',icon:'🐉',cd:8},eagle:{name:'Eagle strike',icon:'🦅',cd:8},goldstar:{name:'Golden star burst',icon:'⭐',cd:9},
+  volley:{name:'Cork barrage',icon:'🍾',cd:7},anchor:{name:'Anchor swing',icon:'⚓',cd:8},lotus:{name:'Lotus petals',icon:'🪷',cd:9},dragon:{name:'Dragon fan',icon:'🐉',cd:8},eagle:{name:'Eagle strike',icon:'🦅',cd:8},goldstar:{name:'Golden star burst',icon:'⭐',cd:9},
   fist:{name:'Punch flurry',icon:'👊',cd:6},crescent:{name:'Crescent slash',icon:'🌙',cd:6},gore:{name:'Tusk rush',icon:'🐗',cd:7},wave:{name:'Blade waves',icon:'🌊',cd:6},
   peastorm:{name:'Pea barrage',icon:'🟢',cd:8},bigbubble:{name:'Bubble prison',icon:'🫧',cd:10},nova:{name:'Thorn nova',icon:'🌵',cd:9},blizzard:{name:'Blizzard',icon:'❄️',cd:9},
   magma:{name:'Magma pillars',icon:'🌋',cd:8},thunder:{name:'Thunder chain',icon:'⚡',cd:9},bonk:{name:'Giant bonk',icon:'🔨',cd:7},tsunami:{name:'Wave fan',icon:'🌊',cd:9},
@@ -126,6 +158,7 @@ export class CombatSimulation {
   get visualScale(){return this.statuses.giant>0?2:1;}
   /** Extra defence from skills: giant form, tank mode, and the sandbag wall while you stand behind it (+80 'armor' is added by the hosts). */
   get defenseBonus(){
+    // The wall gives cover until its time or its hit points run out (ended() clears coverAt).
     const p=this.host.position(),cover=(this.statuses.cover??0)>0&&!!this.coverAt&&Math.hypot(p.x-this.coverAt.x,p.z-this.coverAt.z)<=DZ.sandbag.radius;
     return (this.statuses.giant>0?DZ.giant.defence:0)+((this.statuses.tank??0)>0?DZ.tank.defence:0)+(cover?DZ.sandbag.defence:0);
   }
@@ -133,6 +166,39 @@ export class CombatSimulation {
   get speedBonus(){return (this.statuses.swift??0)>0?this.swift:0;}
   /** The knight's raised shield stops every blow from a creature in front of the explorer. */
   blocks(from:CombatPoint){if(!((this.statuses.block??0)>0))return false;const p=this.host.position(),d=direction(this.host.facing());return (from.x-p.x)*d.x+(from.z-p.z)*d.z>0;}
+  /**
+   * The raised shield also turns a creature's shot that strikes it from in front back at the shooter: the shot flies
+   * home at DZ.block.speed m/s (`delay`, the hosts pass the flight time) and hits it for ×DZ.block.reflect. False when
+   * the shield is down or the shot came from behind (then it hurts as usual).
+   */
+  reflect(shooter:CombatTarget,delay=0){
+    if(!this.blocks(shooter))return false;const p=this.host.position();
+    this.emit('impact',{x:p.x+Math.sin(this.host.facing())*.6,z:p.z+Math.cos(this.host.facing())*.6},.9,'#fff3c4',this.host.facing(),'shield');
+    this.later(Math.max(0,Math.min(3,delay)),()=>{if(shooter.hp<=0)return;this.damage(shooter,DZ.block.reflect,.2,0,1.5);this.emit('impact',shooter,.8,'#fff3c4',this.host.facing(),'blast');});
+    return true;
+  }
+  /** Serial of summons only (not shots), so the server's copy of a summon has the same id as the browser's. */
+  private allySerial=0;
+  /** Adds a summon; a hittable kind (SUMMON_HP) gets its hit points from the explorer's max health. */
+  private summon(ally:Omit<CombatAlly,'id'>){const s=SUMMON_HP[ally.kind],maxHp=s?Math.max(1,Math.round((this.host.stats().maxHp??100)*s.hp)):undefined;const made:CombatAlly={...ally,id:++this.allySerial,...(maxHp?{hp:maxHp,maxHp}:{}),...(s&&ally.kind==='sandbag'?{ring:DZ.sandbag.radius}:{})};this.allies.push(made);return made;}
+  /** The live hittable summons, as creatures see them. */
+  decoys():DecoyPose[]{const out:DecoyPose[]=[];for(const a of this.allies){const s=SUMMON_HP[a.kind];if(s&&(a.hp??0)>0)out.push({id:a.id,kind:a.kind,x:a.x,z:a.z,r:s.r,hp:a.hp!,maxHp:a.maxHp!,taunt:!!s.taunt,life:a.life,...(a.ring?{ring:a.ring}:{})});}return out;}
+  /** A creature's blow, shot or area reached summon `id`: it loses `amount` hit points and pops at 0. True when it was hit. */
+  hurtAlly(id:number,amount:number){
+    const ally=this.allies.find(a=>a.id===id);if(!ally||!((ally.hp??0)>0)||!Number.isFinite(amount)||amount<=0)return false;
+    ally.hp=Math.max(0,ally.hp!-amount);ally.hurt=.25;this.emit('impact',{x:ally.x,z:ally.z},.5,'#ffffff');if(ally.hp<=0)this.pop(ally);return true;
+  }
+  /** Online the server owns summon health: its count arrives here (0 pops it). */
+  setAllyHp(id:number,hp:number){const ally=this.allies.find(a=>a.id===id);if(!ally||ally.hp===undefined||!Number.isFinite(hp))return;if(hp<ally.hp)ally.hurt=.25;ally.hp=Math.max(0,Math.min(ally.maxHp??hp,hp));if(ally.hp<=0)this.pop(ally);}
+  private pop(ally:CombatAlly){const i=this.allies.indexOf(ally);if(i<0)return;this.allies.splice(i,1);this.ended(ally);}
+  /** A summon is gone (destroyed or its time ran out): clones vanish in a puff, the snow decoy bursts and freezes, a wall falls. */
+  private ended(ally:CombatAlly){
+    const at={x:ally.x,z:ally.z},K=DZ;
+    if(ally.kind==='clone')this.visual('poof',at,1.2,.6,'#b9a6e8');
+    else if(ally.kind==='snowman'){this.area(at,K.decoy.radius,K.decoy.power,0,0,'#e4f9ff',2,'iceage');for(const t of this.within(at,K.decoy.radius))this.host.status?.(t,'stun',K.decoy.freeze);}
+    else if(ally.kind==='sandbag'){this.statuses.cover=0;this.coverAt=null;this.visual('dust',at,ally.ring??2.6,.8,'#d8c59a');}
+    else if(ally.kind==='tree'||ally.kind==='cannon'||ally.kind==='turret')this.visual('dust',at,1.4,.7,'#d8c59a');
+  }
   private haste(amount:number,time:number){this.swift=(this.statuses.swift??0)>0?Math.max(this.swift,amount):amount;this.statuses.swift=Math.max(this.statuses.swift??0,time);}
   get locksMovement(){return !!this.action;}
   /** Ground slam: a fast leap that snaps down onto the target when the shockwave lands at 0.42 s. */
@@ -140,7 +206,7 @@ export class CombatSimulation {
   /** The movement skill in progress and its elapsed time, for the explorer's pose. */
   get pose(){return this.action?{kind:this.action.kind,t:this.time-this.action.started}:null;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{})});}
@@ -210,8 +276,8 @@ export class CombatSimulation {
   special(id:string){
     const p={...this.host.position()},angle=this.aim(),d=direction(angle);
     switch(id){
-      // Uniform skills (uniform-skills.ts)
-      case 'volley':for(let i=0;i<10;i++)this.later(i*.06,()=>this.shoot('pea',angle+(this.random()-.5)*.14,.7,15));break;
+      // Uniform skills (uniform-skills.ts): toy versions that fit each outfit, drawn and voiced like the disguise kits
+      case 'volley':this.visual('poof',{x:p.x+d.x*.9,z:p.z+d.z*.9},.9,.6,'#f3e2bd');for(let i=0;i<10;i++)this.later(i*.06,()=>{this.shoot('cork',angle+(this.random()-.5)*.14,.7,15);if(i%3===2)this.visual('poof',{x:this.host.position().x+d.x*.9,z:this.host.position().z+d.z*.9},.5,.3,'#f3e2bd');});break;
       case 'anchor':this.visual('anchor',p,4.4,.7,'#9fd6ff',angle);this.later(.15,()=>this.area(p,4.4,2,.4,3,'#9fd6ff'));break;
       case 'lotus':for(let i=0;i<12;i++)this.shoot('lotus',i*Math.PI/6,.8,8);this.host.heal?.(.08);this.visual('lotus',p,3,1.4,'#ffb3cf');break;
       case 'dragon':for(const offset of [-.45,-.3,-.15,0,.15,.3,.45])this.shoot('dragon',angle+offset,1.3,12);break;
@@ -264,7 +330,12 @@ export class CombatSimulation {
         this.host.effect({...p,kind:'cast',look:'boulder',radius:Math.hypot(landing.x-p.x,landing.z-p.z),facing:Math.atan2(landing.x-p.x,landing.z-p.z),duration:BOULDER.time,color:'#c96a3a'});
         this.later(BOULDER.time,()=>this.area(landing,BOULDER.radius,BOULDER.power,0,BOULDER.lift,'#c96a3a',1.2,'boulder'));break;}
       // ---- Shadow ninja
-      case 'clones':for(const side of [-1,1]){const x=p.x+Math.cos(angle)*side*1.5,z=p.z-Math.sin(angle)*side*1.5;this.allies.push({id:++this.serial,kind:'clone',x,z,life:K.clones.life,cooldown:0,orbit:side,facing:angle});}this.visual('poof',p,2.6,.8,'#b9a6e8');break;
+      case 'clones':{
+        // Four clones in a ring round you (a new cast replaces the old ones). They fight (×0.5 a hit), stay within
+        // DECOY.range m of you, and draw the attacks of creatures near them (SUMMON_HP) until their hit points run out.
+        for(const old of this.allies.filter(a=>a.kind==='clone'))this.pop(old);
+        for(let i=0;i<K.clones.count;i++){const a=angle+Math.PI/4+i*Math.PI*2/K.clones.count,x=p.x+Math.sin(a)*K.clones.ring,z=p.z+Math.cos(a)*K.clones.ring;this.summon({kind:'clone',x,z,life:K.clones.life,cooldown:i*.1,orbit:a,facing:angle});this.visual('poof',{x,z},.9,.6,'#b9a6e8');}
+        this.visual('poof',p,2.6,.8,'#b9a6e8');break;}
       case 'stealth':this.statuses.stealth=K.stealth.time;this.haste(K.stealth.speed,K.stealth.time);this.visual('poof',p,2,.7,'#c0ace8');break;
       case 'backstab':{const t=this.nearest(K.backstab.range);if(!t)return false;const behind=direction(t.facing??angle),gap=t.radius+.8;this.visual('portal',p,1,.35);this.host.move(t.x-p.x-behind.x*gap,t.z-p.z-behind.z*gap);this.aim(t);this.visual('portal',this.host.position(),1,.35);this.damage(t,K.backstab.power,0,0,1,true);this.emit('arc',t,2.5,'#c9c9ff');break;}
       case 'smoke':this.visual('smoke',p,K.smoke.radius,K.smoke.time);for(let i=0;i<K.smoke.time/K.smoke.tick;i++)this.later(i*K.smoke.tick,()=>{for(const t of this.within(p,K.smoke.radius))this.host.status?.(t,'blind',K.smoke.blind);const at=this.host.position();if(Math.hypot(at.x-p.x,at.z-p.z)<K.smoke.radius)this.statuses.stealth=Math.max(this.statuses.stealth??0,.6);});break;
@@ -287,7 +358,7 @@ export class CombatSimulation {
       case 'holy':{const c=this.spot(K.holy.range,K.holy.fallback,d);this.visual('holy',c,K.holy.radius,K.holy.delay,'#fff1b0');this.later(K.holy.delay,()=>this.area(c,K.holy.radius,K.holy.power,0,K.holy.lift,'#fff1b0',1.5));break;}
       // ---- Battle robot
       case 'tank':this.statuses.tank=K.tank.time;this.haste(K.tank.speed,K.tank.time);this.visual('tank',p,1.2,K.tank.time,ELECTRIC_COLOR,angle);this.emit('ring',p,K.tank.reach,ELECTRIC_COLOR,angle,'shock');break;
-      case 'turret':this.allies.push({id:++this.serial,kind:'turret',x:p.x+d.x*1.5,z:p.z+d.z*1.5,life:K.turret.life,cooldown:0,orbit:0,facing:angle});this.visual('dust',{x:p.x+d.x*1.5,z:p.z+d.z*1.5},2.2,.8,'#d8c59a');break;
+      case 'turret':this.summon({kind:'turret',x:p.x+d.x*1.5,z:p.z+d.z*1.5,life:K.turret.life,cooldown:0,orbit:0,facing:angle});this.visual('dust',{x:p.x+d.x*1.5,z:p.z+d.z*1.5},2.2,.8,'#d8c59a');break;
       case 'missiles':{const list=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<K.missiles.range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z)).slice(0,K.missiles.count);
         for(let i=0;i<K.missiles.count;i++){const t=list[i%Math.max(1,list.length)],aim=t?Math.atan2(t.x-p.x,t.z-p.z):angle,fan=(i/(K.missiles.count-1)-.5)*1.2;
           this.shoot('missile',aim+fan,K.missiles.power,t?K.missiles.range+4:3,{burst:K.missiles.radius,...(t?{homing:t.id}:{})});}break;}
@@ -304,31 +375,33 @@ export class CombatSimulation {
       case 'heal':this.visual('heal',p,K.heal.radius,K.heal.time,'#bbffb9');for(let i=0;i<K.heal.time/K.heal.tick;i++)this.later(i*K.heal.tick,()=>{if(Math.hypot(this.host.position().x-p.x,this.host.position().z-p.z)<K.heal.radius)this.host.heal?.(K.heal.perTick);});break;
       case 'hover':this.statuses.flight=K.hover.time;this.haste(K.hover.speed,K.hover.time);this.visual('lift',p,2.5,.9,'#ffe1ff');break;
       case 'charm':{const t=this.nearest(K.charm.range);if(!t)return false;this.host.status?.(t,'charm',K.charm.time);this.visual('hearts',t,1,2,'#ff80bd');break;}
-      case 'tree':{const at={x:p.x+d.x*K.tree.ahead,z:p.z+d.z*K.tree.ahead};this.allies.push({id:++this.serial,kind:'tree',...at,life:K.tree.life,cooldown:K.tree.cd,orbit:0,facing:angle});
+      case 'tree':{const at={x:p.x+d.x*K.tree.ahead,z:p.z+d.z*K.tree.ahead};this.summon({kind:'tree',...at,life:K.tree.life,cooldown:K.tree.cd,orbit:0,facing:angle});
         for(const t of this.within(at,K.tree.radius))this.host.status?.(t,'stun',K.tree.root);this.visual('roots',at,K.tree.radius,K.tree.root,'#aad487');break;}
       // ---- Pirate captain
-      case 'cannon':this.allies.push({id:++this.serial,kind:'cannon',x:p.x+d.x*1.5,z:p.z+d.z*1.5,life:K.cannon.life,cooldown:0,orbit:0,facing:angle});this.visual('dust',{x:p.x+d.x*1.5,z:p.z+d.z*1.5},2.2,.8,'#d8c59a');break;
+      case 'cannon':this.summon({kind:'cannon',x:p.x+d.x*1.5,z:p.z+d.z*1.5,life:K.cannon.life,cooldown:0,orbit:0,facing:angle});this.visual('dust',{x:p.x+d.x*1.5,z:p.z+d.z*1.5},2.2,.8,'#d8c59a');break;
       case 'hook':{const t=this.nearest(K.hook.range);if(!t)return false;this.visual('hook',p,Math.hypot(t.x-p.x,t.z-p.z),.25,'#d6c19b',angle);this.later(.25,()=>{if(t.hp<=0)return;this.host.moveTarget?.(t,p.x+d.x*K.hook.gap,p.z+d.z*K.hook.gap);this.damage(t,K.hook.power);this.host.status?.(t,'slow',K.hook.slow);});break;}
-      case 'parrot':this.allies.push({id:++this.serial,kind:'parrot',x:p.x,z:p.z,life:K.parrot.life,cooldown:0,orbit:0,facing:angle});this.visual('poof',p,1.4,.6,'#8ae394');break;
+      case 'parrot':this.summon({kind:'parrot',x:p.x,z:p.z,life:K.parrot.life,cooldown:0,orbit:0,facing:angle});this.visual('poof',p,1.4,.6,'#8ae394');break;
       case 'broadside':{const c=this.spot(K.broadside.range,K.broadside.fallback,d);for(let i=0;i<K.broadside.count;i++){const a=this.random()*Math.PI*2,r=this.random()*K.broadside.spread,point={x:c.x+Math.cos(a)*r,z:c.z+Math.sin(a)*r};
         this.later(i*K.broadside.spacing,()=>this.visual('cannonfall',point,K.broadside.radius,K.broadside.delay,'#dca66c'));this.later(i*K.broadside.spacing+K.broadside.delay,()=>this.area(point,K.broadside.radius,K.broadside.power,0,0,'#ff8a3d',2,'blast'));}break;}
       // ---- Vampire count
       case 'drain':{const t=this.nearest(K.drain.range);if(!t)return false;for(let i=0;i<K.drain.ticks;i++)this.later(i*K.drain.tick,()=>{if(t.hp<=0)return;const at=this.host.position(),dealt=this.damage(t,K.drain.power);this.host.heal?.(dealt*K.drain.heal/(this.host.stats().maxHp??100));this.visual('drain',at,Math.hypot(t.x-at.x,t.z-at.z),K.drain.tick,'#ea7a9c',Math.atan2(t.x-at.x,t.z-at.z));});break;}
       case 'bats':this.statuses.bats=K.bats.time;this.statuses.invuln=Math.max(this.statuses.invuln??0,K.bats.time);this.haste(K.bats.speed,K.bats.time);this.visual('bats',p,2,K.bats.time,'#6a3d9a');break;
-      case 'batcircle':for(let i=0;i<K.batcircle.count;i++){const a=i/K.batcircle.count*Math.PI*2;this.allies.push({id:++this.serial,kind:'bat',x:p.x+Math.cos(a)*2.2,z:p.z+Math.sin(a)*2.2,life:K.batcircle.life,cooldown:i*.12,orbit:a});}this.visual('dust',p,2.6,.8,'#b9a6e8');break;
+      case 'batcircle':for(let i=0;i<K.batcircle.count;i++){const a=i/K.batcircle.count*Math.PI*2;this.summon({kind:'bat',x:p.x+Math.cos(a)*2.2,z:p.z+Math.sin(a)*2.2,life:K.batcircle.life,cooldown:i*.12,orbit:a});}this.visual('dust',p,2.6,.8,'#b9a6e8');break;
       case 'bloodnova':{this.visual('moon',p,K.bloodnova.radius,K.bloodnova.time,'#cf6290');this.statuses.lifesteal=K.bloodnova.time;const targets=this.within(p,K.bloodnova.radius);for(let i=0;i<K.bloodnova.time/K.bloodnova.tick;i++)this.later(i*K.bloodnova.tick,()=>{for(const t of targets)this.damage(t,K.bloodnova.power);});break;}
       // ---- Snowman
       case 'snowball':this.shoot('snowball',angle,1,K.snowball.speed*K.snowball.time,{radius:.5,initialRadius:.5,speed:K.snowball.speed,pierce:true,stun:0,slow:K.snowball.slow});break;
-      case 'decoy':{const point={x:p.x+d.x*K.decoy.ahead,z:p.z+d.z*K.decoy.ahead};this.allies.push({id:++this.serial,kind:'snowman',...point,life:K.decoy.life,cooldown:99,orbit:0});
-        // Creatures near the decoy lose track of you (they mob it); then it bursts and freezes them.
-        for(const t of this.within(point,K.decoy.lure))this.host.status?.(t,'blind',K.decoy.life);
-        this.later(K.decoy.life,()=>{this.area(point,K.decoy.radius,K.decoy.power,0,0,'#e4f9ff',2,'iceage');for(const t of this.within(point,K.decoy.radius))this.host.status?.(t,'stun',K.decoy.freeze);});break;}
+      case 'decoy':{
+        // A snowman decoy: creatures within DECOY.lure m go for it instead of you (SUMMON_HP); when its hit points or
+        // its time run out it bursts for ×2.5 and freezes everything round it (ended()).
+        for(const old of this.allies.filter(a=>a.kind==='snowman'))this.pop(old);
+        const point={x:p.x+d.x*K.decoy.ahead,z:p.z+d.z*K.decoy.ahead};this.summon({kind:'snowman',...point,life:K.decoy.life,cooldown:99,orbit:0,facing:angle});
+        this.visual('poof',point,1.4,.6,'#e4f9ff');this.visual('taunt',point,DECOY.lure,1,'#9fe6ff');break;}
       case 'icefloor':this.visual('icefield',p,K.icefloor.radius,K.icefloor.time,'#c2f1ff');for(let i=0;i<K.icefloor.time*2;i++)this.later(i*.5,()=>{for(const t of this.within(p,K.icefloor.radius))this.host.status?.(t,'slow',1);const at=this.host.position();if(Math.hypot(at.x-p.x,at.z-p.z)<K.icefloor.radius)this.haste(K.icefloor.speed,.6);});break;
       case 'iceage':{const targets=this.within(p,K.iceage.radius);for(const t of targets){this.host.status?.(t,'stun',K.iceage.freeze);this.visual('freeze',t,Math.max(.6,t.radius),K.iceage.freeze,'#d0f7ff');}
         this.visual('iceage',p,K.iceage.radius,2.2,'#d0f7ff');this.later(K.iceage.freeze,()=>{for(const t of targets)this.damage(t,K.iceage.power,0,0,1);});break;}
       // ---- Army soldier (toy-box drill: cork popgun, sandbags, a signal flare, parachute supply crates)
       case 'popgun':for(let i=0;i<K.popgun.count;i++)this.shoot('cork',angle+(i/(K.popgun.count-1)-.5)*K.popgun.spread,K.popgun.power,K.popgun.range);this.visual('poof',{x:p.x+d.x*.9,z:p.z+d.z*.9},.8,.4,'#f3e2bd');break;
-      case 'sandbag':this.statuses.cover=K.sandbag.time;this.coverAt={...p};this.visual('sandbag',p,K.sandbag.radius,K.sandbag.time,'#c9a66b');for(const t of this.within(p,K.sandbag.radius))this.damage(t,K.sandbag.power,0,0,K.sandbag.knock);break;
+      case 'sandbag':for(const old of this.allies.filter(a=>a.kind==='sandbag'))this.pop(old);this.statuses.cover=K.sandbag.time;this.coverAt={...p};this.summon({kind:'sandbag',x:p.x,z:p.z,life:K.sandbag.time,cooldown:99,orbit:0,facing:angle});this.visual('dust',p,K.sandbag.radius,.8,'#d8c59a');for(const t of this.within(p,K.sandbag.radius))this.damage(t,K.sandbag.power,0,0,K.sandbag.knock);break;
       case 'flare':{const c=this.spot(K.flare.range,K.flare.fallback,d);this.visual('flare',c,K.flare.radius,K.flare.delay+.9,'#ff6a3a');this.later(K.flare.delay,()=>{for(const t of this.within(c,K.flare.radius)){this.host.status?.(t,'blind',K.flare.blind);this.marked.set(t.id,K.flare.mark);this.emit('impact',t,1,'#ffb03a');}});break;}
       case 'airdrop':{const c=this.spot(K.airdrop.range,K.airdrop.fallback,d);for(let i=0;i<K.airdrop.count;i++){const a=i*Math.PI/2+angle,point=i?{x:c.x+Math.sin(a)*K.airdrop.ring,z:c.z+Math.cos(a)*K.airdrop.ring}:c;
         this.later(i*K.airdrop.spacing,()=>this.visual('parachute',point,K.airdrop.radius,K.airdrop.fall,'#f0ece0'));this.later(i*K.airdrop.spacing+K.airdrop.fall,()=>this.area(point,K.airdrop.radius,K.airdrop.power,0,.5,'#e8c27a',1.5,'dust'));}
@@ -336,7 +409,7 @@ export class CombatSimulation {
       // ---- Navy sailor (anchor, a wave ride, the bosun's whistle, a lighthouse)
       case 'surfride':this.visual('surf',p,K.surfride.speed*K.surfride.time,.6,'#7fd0ff',angle);this.dash(K.surfride.power,K.surfride.speed,K.surfride.time);break;
       case 'whistle':this.visual('whistle',p,K.whistle.radius,1,'#ffffff');for(const t of this.within(p,K.whistle.radius))this.host.status?.(t,'stun',K.whistle.stun);break;
-      case 'lighthouse':{const at={x:p.x+Math.cos(angle)*1.6,z:p.z-Math.sin(angle)*1.6};this.allies.push({id:++this.serial,kind:'lighthouse',...at,life:K.lighthouse.life,cooldown:0,orbit:0,facing:angle});this.visual('dust',at,1.6,.8,'#d8e8f5');break;}
+      case 'lighthouse':{const at={x:p.x+Math.cos(angle)*1.6,z:p.z-Math.sin(angle)*1.6};this.summon({kind:'lighthouse',...at,life:K.lighthouse.life,cooldown:0,orbit:0,facing:angle});this.visual('dust',at,1.6,.8,'#d8e8f5');break;}
       // ---- Ao dai lady (lotus, silk ribbon, paper fan, lanterns)
       case 'ribbon':this.visual('ribbon',p,2,1.2,'#ff8fb1',angle);this.dash(0,K.ribbon.speed,K.ribbon.time);this.haste(K.ribbon.boost,K.ribbon.boostTime);break;
       case 'fan':this.visual('fan',p,K.fan.radius,.7,'#ffb3cf',angle);for(const t of this.within(p,K.fan.radius)){const x=t.x-p.x,z=t.z-p.z,l=Math.hypot(x,z);if(l===0||(x*d.x+z*d.z)/l>=K.fan.cone){this.damage(t,K.fan.power,0,0,K.fan.knock);this.host.status?.(t,'slow',K.fan.slow);}}break;
@@ -397,7 +470,7 @@ this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot?
     }if(this.time>=a.until){a.then?.();if(this.action===a)this.action=null;}}
     // Tank mode rams every creature it touches, each at most once per DZ.tank.rehit s.
     if((this.statuses.tank??0)>0){const at=this.host.position();for(const t of this.within(at,DZ.tank.reach)){const key='tank:'+t.id;if((this.rehits.get(key)??-1)>this.time)continue;this.rehits.set(key,this.time+DZ.tank.rehit);this.damage(t,DZ.tank.power,0,DZ.tank.lift,DZ.tank.knock);this.emit('ring',t,DZ.tank.reach,ELECTRIC_COLOR,this.host.facing(),'shock');}}
-    for(let i=this.allies.length-1;i>=0;i--){const ally=this.allies[i];ally.life-=dt;ally.cooldown-=dt;if(ally.life<=0){this.allies.splice(i,1);continue;}if(ally.kind==='snowman')continue;
+    for(let i=this.allies.length-1;i>=0;i--){const ally=this.allies[i];if(!ally)continue;ally.life-=dt;ally.cooldown-=dt;if(ally.hurt)ally.hurt=Math.max(0,ally.hurt-dt);if(ally.life<=0){this.allies.splice(i,1);this.ended(ally);continue;}if(ally.kind==='snowman'||ally.kind==='sandbag')continue;
       if(ally.kind==='lighthouse'){
         // The beam turns DZ.lighthouse.turn rad/s; a creature it sweeps over (within reach) is hit and dazzled, at most once per rehit.
         const L=DZ.lighthouse;ally.facing=(ally.facing??0)+dt*L.turn;const beam=direction(ally.facing);
@@ -407,12 +480,14 @@ this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot?
           this.rehits.set(key,this.time+L.rehit);this.damage(t,L.power);this.host.status?.(t,'blind',L.blind);this.emit('impact',t,.9,'#fff4b0');}
         continue;
       }
-      const targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-ally.x,t.z-ally.z)<13).sort((a,b)=>Math.hypot(a.x-ally.x,a.z-ally.z)-Math.hypot(b.x-ally.x,b.z-ally.z)),target=targets[0];
+      const home=this.host.position(),targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-ally.x,t.z-ally.z)<13&&(ally.kind!=='clone'||Math.hypot(t.x-home.x,t.z-home.z)<DECOY.range+DZ.clones.reach+t.radius)).sort((a,b)=>Math.hypot(a.x-ally.x,a.z-ally.z)-Math.hypot(b.x-ally.x,b.z-ally.z)),target=targets[0];
       if(ally.kind==='bat'){const p=this.host.position();ally.x=p.x+Math.cos(this.time*3+ally.orbit)*2.2;ally.z=p.z+Math.sin(this.time*3+ally.orbit)*2.2;}
-      if(!target){if(ally.kind==='parrot'){const p=this.host.position(),gap=Math.hypot(p.x-ally.x,p.z-ally.z);if(gap>1.5){const step=Math.min(gap-1.2,dt*DZ.parrot.speed);ally.x+=(p.x-ally.x)/gap*step;ally.z+=(p.z-ally.z)/gap*step;}}continue;}
+      if(!target){if(ally.kind==='parrot'||ally.kind==='clone'){const p=this.host.position(),gap=Math.hypot(p.x-ally.x,p.z-ally.z),near=ally.kind==='clone'?DZ.clones.ring+.4:1.5;if(gap>near){const step=Math.min(gap-near+.3,dt*(ally.kind==='parrot'?DZ.parrot.speed:8));ally.x+=(p.x-ally.x)/gap*step;ally.z+=(p.z-ally.z)/gap*step;ally.facing=Math.atan2(p.x-ally.x,p.z-ally.z);}}continue;}
       const distance=Math.hypot(target.x-ally.x,target.z-ally.z),angle=Math.atan2(target.x-ally.x,target.z-ally.z);ally.facing=angle;
       const reach=ally.kind==='clone'?DZ.clones.reach:ally.kind==='parrot'?DZ.parrot.reach:ally.kind==='tree'?DZ.tree.radius:1.6;
-      if((ally.kind==='clone'||ally.kind==='parrot')&&distance>target.radius+reach*.85){const step=Math.min(distance-target.radius-reach*.8,dt*(ally.kind==='parrot'?DZ.parrot.speed:8));ally.x+=Math.sin(angle)*step;ally.z+=Math.cos(angle)*step;}
+      if((ally.kind==='clone'||ally.kind==='parrot')&&distance>target.radius+reach*.85){const step=Math.min(distance-target.radius-reach*.8,dt*(ally.kind==='parrot'?DZ.parrot.speed:8));ally.x+=Math.sin(angle)*step;ally.z+=Math.cos(angle)*step;
+        // Clones keep close: never more than DECOY.range m from you (online the server shares them only that near).
+        if(ally.kind==='clone'){const p=this.host.position(),gx=ally.x-p.x,gz=ally.z-p.z,g=Math.hypot(gx,gz),max=DECOY.range-.3;if(g>max){ally.x=p.x+gx/g*max;ally.z=p.z+gz/g*max;}}}
       if(ally.cooldown>0)continue;
       if(ally.kind==='turret'||ally.kind==='cannon'){const T=ally.kind==='turret'?DZ.turret:DZ.cannon;if(distance>T.range+target.radius)continue;this.shoot(ally.kind==='turret'?'volt':'cannonball',angle,T.power,T.range+1,{x:ally.x,z:ally.z,explosion:ally.kind==='cannon'?2:0});ally.cooldown=T.cd;this.emit('cast',ally,.6,ally.kind==='turret'?ELECTRIC_COLOR:'#d2b9ff');}
       else if(distance<target.radius+reach){

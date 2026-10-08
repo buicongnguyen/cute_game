@@ -341,7 +341,7 @@ export const VI_CATALOG: Record<string, string> = {
   "Vietnamese long gown": "Áo Dài Nam Gấm",
   "Stars and stripes outfit": "Áo Cờ Hoa Kỳ",
   "Vietnam flag outfit": "Áo Cờ Đỏ Sao Vàng",
-  "Rifle volley": "Loạt Đạn Liên Thanh",
+  "Cork barrage": "Mưa Nút Bần",
   "Anchor swing": "Vung Mỏ Neo",
   "Lotus petals": "Cánh Sen Toả",
   "Lotus star burst": "Sao Sen Toả Sáng",

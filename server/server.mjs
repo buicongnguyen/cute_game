@@ -401,7 +401,7 @@ export async function createGameServer(options = {}) {
           const combat=combatAuthority.engineFor(peer).sim;
           peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && account.profile.farm?.animals?.find(a => a.kind === 'dog');
           // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.
-          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0} };
+          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
           broadcastPose(room, peer);
         } else if (message.type === 'dm') {
           // A private message to a friend, online or not: it lands in their guest diary (and pops up if they are playing).
@@ -451,7 +451,7 @@ export async function createGameServer(options = {}) {
             if(lamp&&Math.hypot(lamp.x-peer.pose.x,lamp.z-peer.pose.z)<4)env.lightPillar(lamp.id);
           }
         } else if(message.type==='damage'&&room?.host===account.id&&room.members.has(message.id)){
-          const target=peers.get(message.id);if(target)combatAuthority.damage(target,text(message.enemyId,100),message.source==='shot'?'shot':'melee');
+          const target=peers.get(message.id);if(target)combatAuthority.damage(target,text(message.enemyId,100),message.source==='shot'?'shot':'melee',Number.isInteger(message.decoy)?message.decoy:undefined);
         } else if (message.type.startsWith('dg')) {
           dungeonLobby.message(peer, message);
         } else if (message.type === 'effect' && room) {

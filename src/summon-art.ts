@@ -61,6 +61,12 @@ export function makeSummon(kind:CombatAlly['kind']|'sheep'){
     add(tube,'#2c3e5a',0,2.12,0,.36,.14,.36);add(sphere,'#fff4b0',0,2.42,0,.26);add(cone,'#e0403a',0,2.85,0,.36,.4,.36);add(tube,'#6b5a3c',0,.04,0,.75,.08,.75);
     const lamp=new T.Mesh(sphere,beamMaterial2);lamp.name='lamp';lamp.position.set(0,2.42,0);lamp.scale.setScalar(.34);root.add(lamp);
     const beam=new T.Mesh(beamGeometry,beamMaterial);beam.name='beam';beam.position.set(0,2.35,0);root.add(beam);
+  }else if(kind==='sandbag'){
+    // The army's sandbag wall: two courses of plump khaki bags round a 2.6 m ring (combat.ts DZ.sandbag.radius), the top
+    // course offset like brickwork, and a little toy flag on the side it faces. Merged below into one draw.
+    const r=2.4,n=16;
+    for(let row=0;row<2;row++)for(let i=0;i<n;i++){const q=(i+row*.5)/n*Math.PI*2,bag=add(sphere,(i+row)%2?'#e2c98e':'#cdb075',Math.sin(q)*r,.2+row*.34,Math.cos(q)*r,.5,.2,.3);bag.rotation.y=q+Math.PI/2;}
+    add(box,'#6b5a3c',0,1.3,r,.07,1.8,.07);add(box,'#4f8a2e',.36,1.95,r,.7,.42,.04);add(sphere,'#ffe45c',.36,1.95,r+.04,.1,.1,.03);
   }else if(kind==='sheep'){
     add(sphere,'#f6f0dc',0,.55,0,.65,.43,.45);add(sphere,'#b7a698',0,.62,.49,.23,.26,.24);
     for(const side of [-1,1]){add(sphere,'#e9dbc5',side*.25,.75,.43,.19,.09,.09);for(const z of [-.26,.24])add(box,'#776959',side*.32,.17,z,.12,.3,.12);add(sphere,'#342f34',side*.12,.69,.67,.045);}
@@ -75,6 +81,20 @@ export function makeSummon(kind:CombatAlly['kind']|'sheep'){
   for(const child of [...root.children])if(child instanceof T.Mesh&&!child.name){child.updateMatrix();const g=(child.geometry.index?child.geometry.toNonIndexed():child.geometry.clone()).applyMatrix4(child.matrix),colors=new Float32Array(g.getAttribute('position').count*3),color=(child.material as T.MeshStandardMaterial).color;for(let i=0;i<colors.length;i+=3)color.toArray(colors,i);g.setAttribute('color',new T.BufferAttribute(colors,3));pieces.push(g);root.remove(child);}
   if(pieces.length){root.add(new T.Mesh(mergeGeometries(pieces),mergedMaterial));for(const g of pieces)g.dispose();}
   templates.set(kind,root);return root.clone(true);
+}
+/**
+ * A summon's hit points (combat.ts SUMMON_HP): a tiny two-sprite bar over it (shared materials, only scaled), and the
+ * model itself settles lower and smaller as it weakens, with a short jolt when struck.
+ */
+const barBack=new T.SpriteMaterial({color:'#2a2633',depthWrite:false}),barFill={high:new T.SpriteMaterial({color:'#7be36a',depthWrite:false}),mid:new T.SpriteMaterial({color:'#ffc43d',depthWrite:false}),low:new T.SpriteMaterial({color:'#ff5a4a',depthWrite:false})};
+const BAR_HEIGHT:Record<string,number>={clone:2.1,snowman:2.05,tree:3.2,cannon:1.55,turret:1.8,sandbag:2.45};
+export function summonHealth(model:T.Group,kind:string,fraction:number,hurt=0){
+  let bar=model.getObjectByName('hp-bar') as T.Group|undefined;
+  if(!bar){bar=new T.Group();bar.name='hp-bar';const back=new T.Sprite(barBack);back.name='back';back.scale.set(1,.14,1);const fill=new T.Sprite(barFill.high);fill.name='fill';fill.center.set(0,.5);fill.position.x=-.47;fill.scale.set(.94,.09,1);fill.renderOrder=1;bar.add(back,fill);bar.position.set(0,BAR_HEIGHT[kind]??2,kind==='sandbag'?2.4:0);model.add(bar);}
+  // The bar stays square to the world (the model turns to face its foe), so the fill grows from its left end on screen.
+  bar.rotation.y=-model.rotation.y;const f=Math.max(0,Math.min(1,fraction)),fill=bar.getObjectByName('fill') as T.Sprite;
+  fill.scale.x=.94*Math.max(.001,f);fill.material=f>.6?barFill.high:f>.3?barFill.mid:barFill.low;bar.visible=f<.999||hurt>0;
+  const base=kind==='tree'?model.scale.x:1,body=(.82+.18*f)*base,jolt=hurt>0?Math.sin(hurt*80)*.06:0;model.scale.set(body+jolt,body-jolt,body+jolt);
 }
 export function animateSummon(model:T.Group,kind:string,time:number){
   if(kind==='turret'){const sp=model.getObjectByName('spinner');if(sp){sp.rotation.y=time*9;sp.visible=Math.sin(time*37)>-.3;}const f=model.getObjectByName('flash'),f2=model.getObjectByName('flash2');if(f)f.scale.setScalar(.24+.04*Math.sin(time*23));if(f2)f2.scale.setScalar(.4+.08*Math.abs(Math.sin(time*31)));}

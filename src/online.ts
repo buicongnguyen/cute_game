@@ -180,7 +180,7 @@ export function initOnline(game:GameBridge) {
     world().localPlayerId=account?.id??'local';
     world().onRemoteDamage=(id,_amount,source,enemyId)=>{if(role==='host'&&enemyId)send({type:'damage',id,source,enemyId});};
     world().onEnvironmentAction=action=>{send({type:'environmentAction',action});};
-    game.setNetworkHooks({role,hit:()=>true,status:()=>true,moveTarget:()=>true,reportDamage:(enemyId,source)=>{if(role==='host')send({type:'damage',id:account?.id,source,enemyId});},visitCrop:index=>{
+    game.setNetworkHooks({role,hit:()=>true,status:()=>true,moveTarget:()=>true,reportDamage:(enemyId,source)=>{if(role==='host')send({type:'damage',id:account?.id,source,enemyId});},reportDecoy:(owner,decoy,enemyId,source)=>{if(role==='host')send({type:'damage',id:owner??account?.id,source,enemyId,decoy});},visitCrop:index=>{
       const plot=world().state.plots[index];if(!visiting||!plot?.crop)return;
       // A growing crop is watered (it ripens sooner for the owner); a ripe one can be picked as before.
       if(cropProgress(plot)<1){void queueAction({type:'waterFriend',payload:{ownerId:visiting,index,generation:plot.generation}}).then(reply=>{const r=(reply as {result?:{xp?:number;left?:number}}).result;if(r?.xp)announce('💧 You watered the plant: 10% less remaining growing time. +{xp} XP · {count} waterings left in this garden today.',{xp:r.xp,count:r.left??0});else announce('You watered the plant. It will ripen a little sooner!');}).catch(error=>announce(error.message));return;}
@@ -266,6 +266,7 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='dropClaimed')game.removeNetworkDrop(message.id);
       else if(message.type==='dropReleased')game.releaseNetworkDrop(message.id);
       else if(message.type==='healthResult')game.applyAuthorityHealth(message.delta||0,!!message.died);
+      else if(message.type==='decoyHp'&&Number.isFinite(message.id)&&Number.isFinite(message.hp))game.applyDecoyHp(message.id,message.hp,String(message.kind),Number(message.x)||0,Number(message.z)||0);
       else if(typeof message.type==='string'&&message.type.startsWith('dg'))game.dungeonMessage?.(message);
       else if(message.type==='chatAck')acknowledgeChat(message.requestId,connection);
       else if(message.type==='chat'&&!restoring&&chatRoom){chat.push({name:String(message.name),message:String(message.message)});if(chat.length>60)chat.shift();if(dialog.open&&tab==='world')renderChat();else game.showNotice(`${message.name}: ${message.message}`);}
