@@ -186,6 +186,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
       if(settings&&typeof settings==='object'&&['left','right'].includes((settings as Record<string,string>).joystickSide))state.settings.joystickSide=(settings as {joystickSide:'left'|'right'}).joystickSide;
       const keyboardLayout = settings && typeof settings === 'object' && !Array.isArray(settings) ? (settings as Record<string, unknown>).keyboardLayout : undefined;
       if (keyboardLayout === 'classic' || keyboardLayout === 'wasd') state.settings.keyboardLayout = keyboardLayout;
+      const renderRes = settings && typeof settings === 'object' && !Array.isArray(settings) ? (settings as Record<string, unknown>).renderRes : undefined;
+      if (renderRes === 'auto') delete state.settings.renderRes; else if (renderRes === 'sharp' || renderRes === 'balanced' || renderRes === 'saver') state.settings.renderRes = renderRes; // anything else is ignored, like the other preferences
       if (p.name !== undefined) state.name = string(p.name, 20).trim() || state.name;
       if (p.color !== undefined) { if (!Game.COLORS.includes(string(p.color))) return invalid(); state.color = string(p.color); }
       result = true; break;

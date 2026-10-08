@@ -27,7 +27,7 @@ function scan(n){if(ts.isCaseClause(n)&&n.expression.getText(mainAst)==="'reset'
 const resetCompiled=ts.transpileModule(`globalThis.resetAdventure=async()=>{switch('reset'){case 'reset':${resetCase}}};`,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
 
 class Element{
-  constructor(tag){this.tag=tag;this.children=[];this.style={};this.hidden=false;this.open=false;this.classList={add(){},remove(){}};this.textContent='';}
+  constructor(tag){this.tag=tag;this.children=[];this.style={};this.hidden=false;this.open=false;const cls=new Set();this.classList={add:c=>cls.add(c),remove:c=>cls.delete(c),toggle:(c,on)=>{if(on??!cls.has(c))cls.add(c);else cls.delete(c);},contains:c=>cls.has(c)};this.textContent='';}
   append(...children){for(const c of children){c.parent=this;this.children.push(c);}}
   replaceChildren(...children){this.children=[];this.append(...children);}
   setAttribute(){}
@@ -38,7 +38,7 @@ class Element{
 }
 function fixture({slot=0,storage=new Map()}={}){
   const body=new Element('body'),elements=[],callbacks=[],timers=[],damage=[],gifts=[],visits=[];
-  const document={body,hidden:false,createElement(tag){const e=new Element(tag);elements.push(e);return e;},createTextNode:text=>({textContent:text}),querySelector:q=>q==='dialog[open]'?elements.find(e=>e.tag==='dialog'&&e.open):null};
+  const document={body,hidden:false,createElement(tag){const e=new Element(tag);elements.push(e);return e;},createTextNode:text=>({textContent:text}),getElementById:id=>elements.find(e=>e.id===id)??null,querySelector:q=>q==='dialog[open]'?elements.find(e=>e.tag==='dialog'&&e.open):null};
   const world={planet:'home',interior:null,networkRole:null,position:{x:0,z:0},camera:new T.PerspectiveCamera(),remotePlayers:new Map(),friendIds:new Set(),enemies:[],blocked:()=>false,burst(){},
     removeRemotePlayer(id){this.remotePlayers.delete(id);},addRemotePlayer(id,pose){this.remotePlayers.set(id,{pose,mesh:{visible:pose.planet===this.planet,position:{x:pose.x,y:pose.y,z:pose.z},scale:{x:1}}});},updateRemotePlayer(id,pose){this.addRemotePlayer(id,pose);},damageEnemy(e,n){e.hp=Math.max(0,e.hp-n);damage.push(n);}};
   const state=M.newGame('Explorer');
@@ -49,6 +49,7 @@ function fixture({slot=0,storage=new Map()}={}){
   const game={getWorld:()=>world,getState:()=>state,ownsItem:id=>!!state.bag[id],botContext:()=>ctx.hooks.botContext(),botHit:(...a)=>ctx.hooks.botHit(...a),
     grantGift(g){if(g.item&&!M.addItem(state,g.item,g.count))return false;state.energy+=g.energy;gifts.push(g);return true;},
     setVisiting(name){ctx.visiting=name;world.planet='home';world.position={x:0,z:0};visits.push(name);},showNotice(){},onFrame:fn=>callbacks.push(fn)};
+  vm.runInContext('{const real=Math.random;globalThis.fixedRandom=null;Math.random=()=>globalThis.fixedRandom??real();}',ctx); // tests may pin the neighbours’ dice
   vm.runInContext(compiled,ctx);const api=ctx.exports.initBots(game);
   const frame=(dt=.1)=>callbacks.forEach(fn=>fn(dt));
   return {ctx,world,state,api,frame,storage,damage,gifts,visits,elements,timers,game};
@@ -122,4 +123,38 @@ test('actual Start fresh routing resets neighbours only after a successful offli
     let resets=0;const state={welcome:'done'},ctx=vm.createContext({perform:async()=>success,actionHandler:online?()=>{}:null,neighbours:{reset(){resets++;}},state,world:{refreshPlayer(){}},structuredClone,rebuildHomePresentation(){},resetCombat(){},selectedItem:null,save(){},closeDialog(){},welcomeDialog(){},updateHud(){},toast(){}});
     vm.runInContext(resetCompiled,ctx);const pending=ctx.resetAdventure();if(disconnect)ctx.actionHandler=null;await pending;assert.equal(resets,success&&!online?1:0);
   }
+});
+
+// Quiet during fights: three meetings in four wait while the player fights (bot-logic FightWatch / FIGHT_PASS_CHANCE).
+function meetingSetup(){
+  const f=fixture();f.frame();const runs=[...f.api.runs.values()],r=runs[0];
+  for(const o of runs)if(o!==r)Object.assign(o,{hidden:true,mode:'rest',restUntil:1e9});
+  Object.assign(r,{mode:'wander',hidden:false,place:'zone',nextPlan:99,huntUntil:1e9,visitAt:1e9,retreat:0,foe:null,foeT:99});
+  f.world.position={x:r.zone.x,z:r.zone.z};r.w.x=r.zone.x+2.5;r.w.z=r.zone.z;
+  const card=f.elements.find(e=>e.className==='bot-card');
+  const roll=v=>{f.ctx.fixedRandom=v;};
+  const foe={id:'home:enemy:9',x:r.zone.x-3,z:r.zone.z,hp:50,maxHp:50,phase:'chase',boss:true};
+  const run=s=>{for(let i=0;i<s*10;i++)f.frame(.1);};
+  return {f,r,card,roll,foe,run};
+}
+test('no neighbour walks up during a fight when the 1-in-4 roll fails, and one does once the fight is 8 s over',()=>{
+  const {f,r,card,roll,foe,run}=meetingSetup();roll(.4); // passes the usual .55 meeting chance, fails the .25 fight roll
+  f.world.enemies=[foe];run(10);
+  assert.equal(f.api.fighting(),true);assert.equal(r.mode,'wander');assert.equal(card.hidden,true);
+  foe.phase='idle';foe.x+=40;run(5);assert.equal(f.api.fighting(),true,'the fight is remembered for 8 s');assert.equal(r.mode,'wander');
+  run(7);assert.equal(f.api.fighting(),false);assert.notEqual(r.mode,'wander','after the fight the neighbour comes over');
+});
+test('a meeting that passes its fight roll goes on, with the request card set aside at the bottom left',()=>{
+  const {f,r,card,roll,foe,run}=meetingSetup();roll(.1);f.world.enemies=[foe];run(12);
+  assert.equal(r.fightOk,true);assert.equal(r.mode,'ask');assert.equal(card.hidden,false);assert.equal(card.classList.contains('aside'),true);
+});
+test('a request card already open waits for the end of a fight that fails its roll, then comes back',()=>{
+  const {f,r,card,roll,foe,run}=meetingSetup();roll(.4);run(12);assert.equal(r.mode,'ask');assert.equal(card.hidden,false);assert.equal(card.classList.contains('aside'),false);
+  roll(.9);f.world.enemies=[foe];run(25);assert.equal(f.api.fighting(),true);assert.equal(r.fightOk,false);assert.equal(card.hidden,true,'hidden during the fight');
+  assert.equal(r.mode,'ask','the request is kept');assert.equal(f.ctx.document.body.children.filter(b=>b.className==='bot-bubble'&&b.style.display!=='none').length,0,'no bubble near the fight');
+  f.world.enemies=[];run(10);assert.equal(f.api.fighting(),false);assert.equal(r.mode,'ask','25 s of fighting did not use up the request');assert.equal(card.hidden,false);
+});
+test('gifts wait for the end of a fight',()=>{
+  const {f,r,roll,foe,run}=meetingSetup();roll(.9);f.api.store().pending[r.def.id]={item:undefined,count:0,energy:50};
+  f.world.enemies=[foe];run(5);assert.equal(f.gifts.length,0);f.world.enemies=[];run(10);assert.equal(f.gifts.length,1);
 });

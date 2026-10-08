@@ -121,7 +121,8 @@ test('the news board: our own entries in both languages, newest first, unread re
   for (const e of [...raw.news, ...raw.upcoming]) { assert.ok(e.title.vi && e.title.vi !== e.title.en, `${e.id} has Vietnamese`); }
   for (const e of raw.news) assert.equal(e.items.vi.length, e.items.en.length, `${e.id} lines match`);
   assert.ok(data.news.every((e, i) => i === 0 || data.news[i - 1].date >= e.date), 'newest first');
-  const first = JSON.stringify(data.news[0]); for (const word of ['Colossus', "Delvers' Vault", 'Leaderboard']) assert.match(first, new RegExp(word), `${word} is listed as new`);
+  const events = JSON.stringify(data.news.find(e => e.id === '2026-10-06-events')); for (const word of ['Colossus', "Delvers' Vault", 'Leaderboard']) assert.match(events, new RegExp(word), `${word} is announced`);
+  const first = JSON.stringify(data.news[0]); for (const word of ['4%', '30%', '0.15%', '12%', '6%', '3,000,000', '80%', '3.000.000', 'Render resolution']) assert.ok(first.includes(word), `the 2026-10-09 balance entry says ${word}`);
   const text = JSON.stringify(raw); for (const word of ['neighbour', 'boss', 'oat', 'deep', 'size', 'kill']) assert.match(text, new RegExp(word, 'i'));
   assert.doesNotMatch(text, /Zoo Pet|KNDARK|Khương/, 'nothing copied from the reference');
   // Malformed input never breaks the board; sorting is by date, stable within a day.

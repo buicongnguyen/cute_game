@@ -14,9 +14,9 @@ test('Vietnamese dictionaries preserve every interpolation placeholder',async()=
 test('blood moon healing uses damage dealt, and both help languages say so',()=>{
  const target={id:'a',x:0,z:1,radius:.5,hp:100},heals=[];
  const sim=new CombatSimulation({position:()=>({x:0,z:0}),facing:()=>0,face(){},targets:()=>[target],weapon:()=>({kind:'fist'}),stats:()=>({attack:10,maxHp:200,critChance:0}),move(){},hit:()=>5,effect(){},heal:f=>heals.push(f)},()=>.5);
- sim.disguise('dz_vampire',3);sim.basic(target);assert.equal(heals[0],5*.4/200);
- assert.match(DISGUISE_INFO.dz_vampire[3],/40% of the damage dealt/);
- try{setLanguage('vi');assert.match(t(DISGUISE_INFO.dz_vampire[3]),/40% sát thương thực tế/);assert.match(t(DISGUISE_INFO.dz_fairy[3]),/3 m.*5 m.*4 giây.*0,8/);}finally{setLanguage('en');}
+ sim.disguise('dz_vampire',3);sim.basic(target);assert.equal(heals[0],5*.12/200,'12% since the 2026-10-07 balance patch');
+ assert.match(DISGUISE_INFO.dz_vampire[3],/12% of the damage dealt/);
+ try{setLanguage('vi');assert.match(t(DISGUISE_INFO.dz_vampire[3]),/12% sát thương thực tế/);assert.match(t(DISGUISE_INFO.dz_fairy[3]),/3 m.*5 m.*4 giây.*0,8/);}finally{setLanguage('en');}
 });
 test('dungeon binds follow simulation time rather than expiring while the game is paused',async()=>{
  const source=await readFile(new URL('../src/dungeon.ts',import.meta.url),'utf8'),ast=ts.createSourceFile('dungeon.ts',source,99,true);let fn;

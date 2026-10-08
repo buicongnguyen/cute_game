@@ -11,7 +11,7 @@ import { FISH } from './model.ts';
 import { makeCast, parseStore } from './bot-logic.ts';
 import { activeSlot, neighboursKey } from './profiles.ts';
 import {
-  categoriesOf, profileTotals, advanceSoloWeek, soloWeekGains, soloBoard, weekEnds, weekStart,
+  categoriesOf, profileTotals, advanceSoloWeek, soloWeekGains, soloBoard, weekEnds, weekStart, rankingReplyKind,
   type Board, type BoardReply, type Category, type RankedEntry, type SoloWeekState,
 } from './ranking-logic.ts';
 
@@ -44,6 +44,8 @@ function untilReset(now: number) {
 export function initRanking(game: GameBridge) {
   const staticHost = import.meta.env.VITE_STATIC_HOST === 'true';
   let board: Board = 'weekly', cat: Category = 'exp', reply: BoardReply | null = null, status: 'loading' | 'error' | 'ready' = 'loading', solo = staticHost, request = 0;
+  /** No game server behind this page (the Vite dev server, a static host): learnt from the first reply, kept for the session. */
+  let noServer = staticHost;
 
   // ---- The player's own weekly gains in solo play: a snapshot of lifetime totals, moved on now and then ----
   let week: SoloWeekState | null = null;
@@ -94,7 +96,7 @@ export function initRanking(game: GameBridge) {
     const meId = reply.me?.id;
     if (!reply.top.length) { const box = el('li', 'ranking-empty'); box.append(el('p', '', t('Nobody is on this board yet.')), el('small', '', t('Be the first!'))); list.append(box); }
     for (const entry of reply.top) list.append(row(entry, entry.id === meId));
-    if (reply.solo) list.append(el('li', 'ranking-note', `${t('Neighbourhood board: you and the neighbours who live nearby.')}${staticHost ? '' : ' ' + t('Sign in under Play together to join the server leaderboard.')}`));
+    if (reply.solo) list.append(el('li', 'ranking-note', `${t('Neighbourhood board: you and the neighbours who live nearby.')}${noServer ? '' : ' ' + t('Sign in under Play together to join the server leaderboard.')}`));
     else list.append(el('li', 'ranking-note', t('Server leaderboard · refreshed about every minute')));
     if (reply.me) {
       const [, label] = CATEGORY[cat];
@@ -109,7 +111,11 @@ export function initRanking(game: GameBridge) {
     status = 'loading'; render();
     try {
       const response = await fetch(`${import.meta.env.BASE_URL}api/ranking?board=${board}&cat=${cat}`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error(String(response.status));
+      const kind = rankingReplyKind(response.status, response.headers.get('content-type'));
+      if (ticket !== request) return;
+      // No API here (dev server or static host): the neighbourhood board, at once and from now on.
+      if (kind === 'absent' || kind === 'down') { if (kind === 'absent') noServer = true; solo = true; reply = localBoard(); status = 'ready'; render(); return; }
+      if (kind === 'error') throw new Error(String(response.status));
       const data = await response.json() as BoardReply;
       if (ticket !== request) return;
       // Not signed in: the server board has no place for this player, so show the neighbourhood instead.
@@ -118,7 +124,7 @@ export function initRanking(game: GameBridge) {
     } catch { if (ticket !== request) return; status = 'error'; reply = null; }
     render();
   }
-  function open() { if (!staticHost) solo = false; render(); if (!dialog.open) dialog.showModal(); void load(); }
+  function open() { if (!noServer) solo = false; render(); if (!dialog.open) dialog.showModal(); void load(); }
 
   const trigger = document.querySelector<HTMLButtonElement>('#hud [data-action="ranking"]');
   trigger?.addEventListener('click', open);

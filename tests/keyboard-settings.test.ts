@@ -57,3 +57,15 @@ test('a rejected difficulty change cannot partially switch keyboard layout', () 
   assert.equal(state.settings.difficulty, 'hard');
   assert.equal(state.settings.difficultyLoweredAt, before.settings.difficultyLoweredAt);
 });
+
+test('Render resolution survives settings commands and reloads; Auto (the default) is stored as nothing; bad values are ignored', () => {
+  const state = M.newGame();
+  assert.equal(state.settings.renderRes ?? 'auto', 'auto');
+  for (const renderRes of ['sharp', 'balanced', 'saver'] as const) {
+    assert.equal(act(state, {renderRes}), true); assert.equal(state.settings.renderRes, renderRes);
+    assert.equal(M.parseSave(JSON.stringify(state))!.settings.renderRes, renderRes);
+  }
+  for (const renderRes of ['ultra', 'AUTO', 2, null, {}, []]) { assert.equal(act(state, {renderRes, sound: false}), true); assert.equal(state.settings.renderRes, 'saver'); assert.equal(state.settings.sound, false); }
+  assert.equal(act(state, {renderRes: 'auto'}), true); assert.equal(state.settings.renderRes, undefined);
+  for (const renderRes of ['ultra', 3, 'auto']) assert.equal(M.parseSave(JSON.stringify({...state, settings: {...state.settings, renderRes}}))!.settings.renderRes, undefined);
+});

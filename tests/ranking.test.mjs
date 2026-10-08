@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import * as M from '../src/model.ts';
 import { ACTION_RULES_VERSION } from '../src/actions.ts';
 import { makeCast } from '../src/bot-logic.ts';
-import { weekKey, weekStart, weekEnds, addProgress, profileTotals, totalXp, rankEntries, boardReply, entryFor, soloBoard, botTotals, advanceSoloWeek, soloWeekGains, WEEKLY_CATEGORIES, ALL_TIME_CATEGORIES } from '../src/ranking-logic.ts';
+import { weekKey, weekStart, weekEnds, addProgress, profileTotals, totalXp, rankEntries, boardReply, entryFor, soloBoard, rankingReplyKind, botTotals, advanceSoloWeek, soloWeekGains, WEEKLY_CATEGORIES, ALL_TIME_CATEGORIES } from '../src/ranking-logic.ts';
 import { createAccountStore } from '../server/account-store.mjs';
 import { createActionService } from '../server/action-service.mjs';
 import { createCombatAuthority } from '../server/combat-authority.mjs';
@@ -177,6 +177,7 @@ test('GET /api/ranking works signed out and signed in, and stays same-origin', a
     const anonymous = await fetch(game.url + '/api/ranking?board=weekly&cat=exp');
     assert.equal(anonymous.status, 200);
     assert.equal(anonymous.headers.get('access-control-allow-origin'), null, 'no cross-origin access');
+    assert.equal(rankingReplyKind(anonymous.status, anonymous.headers.get('content-type')), 'json', 'the real server answers JSON');
     const body = await anonymous.json(); assert.deepEqual(body.top, []); assert.equal(body.me, undefined);
     const registered = await fetch(game.url + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'ranky', password: 'password-r', name: 'Ranky' }) });
     const cookie = registered.headers.get('set-cookie').split(';')[0];
@@ -227,4 +228,12 @@ test('the solo week keeps a base from the start of the week and rolls it on Mond
   // A new game (totals fell) restarts the week's base.
   s = advanceSoloWeek(s, mk(10, 0), at('2027-01-05T11:00:00Z'));
   assert.deepEqual(soloWeekGains(s, mk(10, 0)), mk(0, 0));
+});
+
+test('with no game server behind the page (Vite dev server, static host) the board falls back to the neighbourhood', () => {
+  assert.equal(rankingReplyKind(200, 'text/html'), 'absent', 'the dev server answers /api/* with index.html');
+  assert.equal(rankingReplyKind(404, 'text/plain'), 'absent'); assert.equal(rankingReplyKind(404, null), 'absent'); assert.equal(rankingReplyKind(405, null), 'absent');
+  assert.equal(rankingReplyKind(200, 'application/json; charset=utf-8'), 'json');
+  assert.equal(rankingReplyKind(500, 'text/plain'), 'down', 'the dev server proxy with no game server on :8787'); assert.equal(rankingReplyKind(502, 'text/html'), 'down');
+  assert.equal(rankingReplyKind(500, 'application/json'), 'error', 'the game server failing offers a retry'); assert.equal(rankingReplyKind(400, 'application/json'), 'error');
 });

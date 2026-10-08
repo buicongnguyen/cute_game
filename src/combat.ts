@@ -45,7 +45,8 @@ export const DZ={
   heal:{radius:4,time:8,tick:.5,perTick:.03},hover:{time:8,speed:.25},charm:{range:12,time:8},tree:{ahead:3,life:6,root:4,radius:5,power:.8,cd:1},
   cannon:{life:10,power:1.4,cd:1.3,range:12},hook:{range:14,power:1.2,slow:2,gap:1.5},parrot:{life:8,power:.4,cd:.6,reach:1.4,speed:7,mark:8},
   broadside:{range:15,fallback:7,count:12,spacing:.13,spread:5,delay:.5,radius:1.8,power:1.4},
-  drain:{range:11,ticks:8,tick:.35,power:.7,heal:.8},bats:{time:2.5,speed:1},batcircle:{count:5,life:8,power:.35,heal:.01},bloodnova:{radius:7,time:6,tick:.5,power:.3,lifesteal:.4},
+  // The reference's 2026-10-07 balance patch: drain heals 30% (was 80%), a bat bite 0.15% of max HP (was 1%), blood moon steals 12% (was 40%).
+  drain:{range:11,ticks:8,tick:.35,power:.7,heal:.3},bats:{time:2.5,speed:1},batcircle:{count:5,life:8,power:.35,heal:.0015},bloodnova:{radius:7,time:6,tick:.5,power:.3,lifesteal:.12},
   snowball:{time:2.4,speed:9,grow:.9,slow:3},decoy:{ahead:2.5,life:6,lure:8,radius:4,power:2.5,freeze:2},icefloor:{radius:6,time:8,speed:.5},iceage:{radius:8,freeze:3,power:2.8},
   // The uniforms
   popgun:{count:5,spread:.4,power:1.2,range:12},sandbag:{time:6,radius:2.6,defence:60,power:.5,knock:4},flare:{range:12,fallback:6,delay:.5,radius:5,blind:4,mark:6},
@@ -65,6 +66,8 @@ export const DZ={
 export const SUMMON_HP:Readonly<Record<string,{hp:number;r:number;taunt?:boolean}>>={
   clone:{hp:.25,r:.45,taunt:true},snowman:{hp:.6,r:.7,taunt:true},tree:{hp:.8,r:.8},cannon:{hp:.5,r:.7},turret:{hp:.45,r:.6},sandbag:{hp:.9,r:.5},
 };
+/** Stolen life (weapon life steal, blood moon, life drain, bat bites) heals at most this share of max HP per second, all sources together. */
+export const LIFESTEAL_CAP_PER_SECOND=.06;
 /** Online each explorer shares at most `max` hittable summons (server-checked): clones stay within `range` m of their explorer; `lure` is the decoys' pull. */
 export const DECOY={max:4,range:6,lure:8} as const;
 /** A hittable summon as creatures see it (CombatSimulation.decoys, the online pose). `ring`: the sandbag wall's radius round x/z. */
@@ -108,7 +111,7 @@ export interface CombatHost {
   /** Upgrade level of base skill slot 0-3 (skill-upgrades.ts); missing = 0. */
   skillLevel?(index:number):number;
 }
-export interface Projectile extends CombatPoint { id: number; direction: CombatPoint; speed: number; remaining: number; radius: number; color: string; kind: string; multiplier: number; hit: Set<string>; pierce: boolean; stun: number; lift: number; explosion: number; homing?:string; initialRadius?:number; helper?: boolean;
+export interface Projectile extends CombatPoint { id: number; direction: CombatPoint; speed: number; remaining: number; radius: number; color: string; kind: string; multiplier: number; hit: Set<string>; pierce: boolean; stun: number; lift: number; explosion: number; homing?:string; initialRadius?:number; helper?: boolean; /** Fired by a summon (turret, cannon): it never heals the explorer. */ summoned?: boolean;
   /** Bursts in an area of this radius where it lands (first creature, or the end of its flight) instead of a direct hit. */
   burst?:number; burstLift?:number;
   /** Seconds a creature it touches is slowed. */
@@ -206,7 +209,7 @@ export class CombatSimulation {
   /** The movement skill in progress and its elapsed time, for the explorer's pose. */
   get pose(){return this.action?{kind:this.action.kind,t:this.time-this.action.started}:null;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{})});}
@@ -214,6 +217,13 @@ export class CombatSimulation {
   private later(delay:number,run:()=>void){const power=this.power;this.jobs.push({at:this.time+delay,run:power===1?run:()=>{const old=this.power;this.power=power;try{run();}finally{this.power=old;}}});}
   /** Set while a pet projectile deals its damage. */
   private helperShot=false;
+  /** Set while a summon (clone, bat, parrot, tree, lighthouse, turret, cannon) deals damage: pets and summons never heal their owner. */
+  private summonHit=false;
+  /** Life stolen in the current one-second window (HP); see LIFESTEAL_CAP_PER_SECOND. */
+  private leechAt=-Infinity;private leechGot=0;
+  /** Heals `amount` HP of stolen life, at most LIFESTEAL_CAP_PER_SECOND of max HP per second over every source; returns the HP healed. */
+  private leech(amount:number){const max=this.host.stats().maxHp??100;if(!(amount>0)||!(max>0))return 0;if(this.time-this.leechAt>=1){this.leechAt=this.time;this.leechGot=0;}
+    const healed=Math.max(0,Math.min(amount,max*LIFESTEAL_CAP_PER_SECOND-this.leechGot));if(healed<=0)return 0;this.leechGot+=healed;this.host.heal?.(healed/max);return healed;}
   /** One hit; returns the damage dealt. `shown` marks it critical on screen without doubling it (the ninja's strike). */
   private damage(target:CombatTarget,multiplier:number,stun=0,lift=0,knock=0,shown=false){
     if(target.hp<=0)return 0;const stats=this.host.stats(),p=this.host.position();
@@ -224,7 +234,7 @@ export class CombatSimulation {
     const applied=this.host.hit(target,{amount,critical:critical||shown,stun,lift,knock,direction:direction(angle),...(this.helperShot?{helper:true}:{})});
     const dealt=typeof applied==='number'?Math.max(0,Math.min(amount,applied)):amount;
     const lifesteal=(stats.lifesteal??0)+(this.statuses.lifesteal>0?DZ.bloodnova.lifesteal:0);
-    if(lifesteal>0&&dealt>0)this.host.heal?.(dealt*lifesteal/(stats.maxHp??100));
+    if(lifesteal>0&&dealt>0&&!this.helperShot&&!this.summonHit)this.leech(dealt*lifesteal);
     return dealt;
   }
   private within(point:CombatPoint,radius:number){return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-point.x,t.z-point.z)<=radius+t.radius);}
@@ -384,7 +394,7 @@ export class CombatSimulation {
       case 'broadside':{const c=this.spot(K.broadside.range,K.broadside.fallback,d);for(let i=0;i<K.broadside.count;i++){const a=this.random()*Math.PI*2,r=this.random()*K.broadside.spread,point={x:c.x+Math.cos(a)*r,z:c.z+Math.sin(a)*r};
         this.later(i*K.broadside.spacing,()=>this.visual('cannonfall',point,K.broadside.radius,K.broadside.delay,'#dca66c'));this.later(i*K.broadside.spacing+K.broadside.delay,()=>this.area(point,K.broadside.radius,K.broadside.power,0,0,'#ff8a3d',2,'blast'));}break;}
       // ---- Vampire count
-      case 'drain':{const t=this.nearest(K.drain.range);if(!t)return false;for(let i=0;i<K.drain.ticks;i++)this.later(i*K.drain.tick,()=>{if(t.hp<=0)return;const at=this.host.position(),dealt=this.damage(t,K.drain.power);this.host.heal?.(dealt*K.drain.heal/(this.host.stats().maxHp??100));this.visual('drain',at,Math.hypot(t.x-at.x,t.z-at.z),K.drain.tick,'#ea7a9c',Math.atan2(t.x-at.x,t.z-at.z));});break;}
+      case 'drain':{const t=this.nearest(K.drain.range);if(!t)return false;for(let i=0;i<K.drain.ticks;i++)this.later(i*K.drain.tick,()=>{if(t.hp<=0)return;const at=this.host.position(),dealt=this.damage(t,K.drain.power);this.leech(dealt*K.drain.heal);this.visual('drain',at,Math.hypot(t.x-at.x,t.z-at.z),K.drain.tick,'#ea7a9c',Math.atan2(t.x-at.x,t.z-at.z));});break;}
       case 'bats':this.statuses.bats=K.bats.time;this.statuses.invuln=Math.max(this.statuses.invuln??0,K.bats.time);this.haste(K.bats.speed,K.bats.time);this.visual('bats',p,2,K.bats.time,'#6a3d9a');break;
       case 'batcircle':for(let i=0;i<K.batcircle.count;i++){const a=i/K.batcircle.count*Math.PI*2;this.summon({kind:'bat',x:p.x+Math.cos(a)*2.2,z:p.z+Math.sin(a)*2.2,life:K.batcircle.life,cooldown:i*.12,orbit:a});}this.visual('dust',p,2.6,.8,'#b9a6e8');break;
       case 'bloodnova':{this.visual('moon',p,K.bloodnova.radius,K.bloodnova.time,'#cf6290');this.statuses.lifesteal=K.bloodnova.time;const targets=this.within(p,K.bloodnova.radius);for(let i=0;i<K.bloodnova.time/K.bloodnova.tick;i++)this.later(i*K.bloodnova.tick,()=>{for(const t of targets)this.damage(t,K.bloodnova.power);});break;}
@@ -477,7 +487,7 @@ this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot?
         for(const t of this.host.targets()){const x=t.x-ally.x,z=t.z-ally.z,l=Math.hypot(x,z);if(t.hp<=0||l>L.reach+t.radius||l<.01)continue;
           const off=Math.abs(Math.atan2(x*beam.z-z*beam.x,x*beam.x+z*beam.z)),key=ally.id+':'+t.id;
           if(off>L.width+Math.atan2(t.radius,l)||(this.rehits.get(key)??-1)>this.time)continue;
-          this.rehits.set(key,this.time+L.rehit);this.damage(t,L.power);this.host.status?.(t,'blind',L.blind);this.emit('impact',t,.9,'#fff4b0');}
+          this.rehits.set(key,this.time+L.rehit);this.summonHit=true;this.damage(t,L.power);this.summonHit=false;this.host.status?.(t,'blind',L.blind);this.emit('impact',t,.9,'#fff4b0');}
         continue;
       }
       const home=this.host.position(),targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-ally.x,t.z-ally.z)<13&&(ally.kind!=='clone'||Math.hypot(t.x-home.x,t.z-home.z)<DECOY.range+DZ.clones.reach+t.radius)).sort((a,b)=>Math.hypot(a.x-ally.x,a.z-ally.z)-Math.hypot(b.x-ally.x,b.z-ally.z)),target=targets[0];
@@ -489,23 +499,23 @@ this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot?
         // Clones keep close: never more than DECOY.range m from you (online the server shares them only that near).
         if(ally.kind==='clone'){const p=this.host.position(),gx=ally.x-p.x,gz=ally.z-p.z,g=Math.hypot(gx,gz),max=DECOY.range-.3;if(g>max){ally.x=p.x+gx/g*max;ally.z=p.z+gz/g*max;}}}
       if(ally.cooldown>0)continue;
-      if(ally.kind==='turret'||ally.kind==='cannon'){const T=ally.kind==='turret'?DZ.turret:DZ.cannon;if(distance>T.range+target.radius)continue;this.shoot(ally.kind==='turret'?'volt':'cannonball',angle,T.power,T.range+1,{x:ally.x,z:ally.z,explosion:ally.kind==='cannon'?2:0});ally.cooldown=T.cd;this.emit('cast',ally,.6,ally.kind==='turret'?ELECTRIC_COLOR:'#d2b9ff');}
+      if(ally.kind==='turret'||ally.kind==='cannon'){const T=ally.kind==='turret'?DZ.turret:DZ.cannon;if(distance>T.range+target.radius)continue;this.shoot(ally.kind==='turret'?'volt':'cannonball',angle,T.power,T.range+1,{x:ally.x,z:ally.z,explosion:ally.kind==='cannon'?2:0,summoned:true});ally.cooldown=T.cd;this.emit('cast',ally,.6,ally.kind==='turret'?ELECTRIC_COLOR:'#d2b9ff');}
       else if(distance<target.radius+reach){
-        if(ally.kind==='tree'){this.damage(target,DZ.tree.power,0,0,.5);ally.cooldown=DZ.tree.cd;this.emit('ring',ally,DZ.tree.radius,'#8dff8a');continue;}
+        if(ally.kind==='tree'){this.summonHit=true;this.damage(target,DZ.tree.power,0,0,.5);this.summonHit=false;ally.cooldown=DZ.tree.cd;this.emit('ring',ally,DZ.tree.radius,'#8dff8a');continue;}
         const power=ally.kind==='bat'?DZ.batcircle.power:ally.kind==='parrot'?DZ.parrot.power:DZ.clones.power;
-        this.damage(target,power,.1);ally.cooldown=ally.kind==='parrot'?DZ.parrot.cd:ally.kind==='clone'?DZ.clones.cd:.7;this.emit('arc',ally,1,ally.kind==='parrot'?'#ff5a4a':'#c6b2ee',angle);
-        if(ally.kind==='bat')this.host.heal?.(DZ.batcircle.heal);if(ally.kind==='parrot'&&target.hp>0)this.marked.set(target.id,DZ.parrot.mark);}
+        this.summonHit=true;this.damage(target,power,.1);this.summonHit=false;ally.cooldown=ally.kind==='parrot'?DZ.parrot.cd:ally.kind==='clone'?DZ.clones.cd:.7;this.emit('arc',ally,1,ally.kind==='parrot'?'#ff5a4a':'#c6b2ee',angle);
+        if(ally.kind==='bat')this.leech(DZ.batcircle.heal*(this.host.stats().maxHp??100));if(ally.kind==='parrot'&&target.hp>0)this.marked.set(target.id,DZ.parrot.mark);}
     }
     for(let i=this.projectiles.length-1;i>=0;i--){const shot=this.projectiles[i];if(shot.kind==='snowball')shot.radius=Math.min(2.6,shot.radius+DZ.snowball.grow*dt);if(shot.homing){const target=this.host.targets().find(t=>t.id===shot.homing&&t.hp>0);if(target){const a=Math.atan2(target.x-shot.x,target.z-shot.z),old=Math.atan2(shot.direction.x,shot.direction.z),turn=Math.atan2(Math.sin(a-old),Math.cos(a-old));shot.direction=direction(old+Math.max(-dt*5,Math.min(dt*5,turn)));}}const from={x:shot.x,z:shot.z},step=Math.min(shot.speed*dt,shot.remaining),to={x:shot.x+shot.direction.x*step,z:shot.z+shot.direction.z*step};
       if(this.host.clearShot&&!this.host.clearShot(from,to)){if(shot.burst)this.burst(shot,from);else this.emit('impact',from,.4,shot.color);this.projectiles.splice(i,1);continue;}
       shot.x=to.x;shot.z=to.z;shot.remaining-=step;let consumed=false;
       const targets=this.host.targets().filter(t=>t.hp>0&&!shot.hit.has(t.id)&&distanceToSegment(t,from,to)<=t.radius+shot.radius).sort((a,b)=>Math.hypot(a.x-from.x,a.z-from.z)-Math.hypot(b.x-from.x,b.z-from.z));
-      this.helperShot=!!shot.helper;for(const target of targets){shot.hit.add(target.id);
+      this.helperShot=!!shot.helper;this.summonHit=!!shot.summoned;for(const target of targets){shot.hit.add(target.id);
         if(shot.burst){this.burst(shot,{x:target.x,z:target.z});consumed=true;break;}
         // The rolling snowball hits harder as it grows: ×(1 + its radius), and knocks creatures aside.
         this.damage(target,shot.kind==='snowball'?shot.multiplier*(1+shot.radius):shot.multiplier,shot.stun,shot.lift,shot.kind==='snowball'?3:1);if(shot.slow)this.host.status?.(target,'slow',shot.slow);
         const look=ELECTRIC_SHOTS.has(shot.kind)?'shock' as const:shot.explosion?'blast' as const:undefined;this.emit('impact',target,shot.radius+.3,shot.color,this.host.facing(),look);if(shot.explosion)this.area(target,shot.explosion,shot.multiplier*.6,shot.stun,0,shot.color,1.2,look);if(!shot.pierce){consumed=true;break;}}
-      this.helperShot=false;if(!consumed&&shot.remaining<=0&&shot.burst)this.burst(shot,to);if(consumed||shot.remaining<=0)this.projectiles.splice(i,1);
+      if(!consumed&&shot.remaining<=0&&shot.burst)this.burst(shot,to);this.helperShot=false;this.summonHit=false;if(consumed||shot.remaining<=0)this.projectiles.splice(i,1);
     }
   }
 }

@@ -1,6 +1,33 @@
 {
   "news": [
     {
+      "id": "2026-10-09-balance",
+      "date": "2026-10-09",
+      "icon": "⚖️",
+      "title": {
+        "en": "Balance: the vampire, the World Colossus, and calmer neighbours",
+        "vi": "Cân bằng: Ma cà rồng, Cự Thần Thế Giới và hàng xóm bớt làm phiền"
+      },
+      "items": {
+        "en": [
+          "🧛 The vampire costume drinks less: each hit steals 4% of the damage (was 10%), Life drain heals 30% (was 80%), each bat bite heals 0.15% of your health (was 1%) and Blood moon steals 12% (was 40%).",
+          "🩸 Stolen life now heals at most 6% of your max health per second, from every source together, so one sweep through a crowd no longer refills your bar.",
+          "🐾 Pets and summons (clones, bats, turrets, cannons, trees, the parrot and the lighthouse) no longer heal you when they hit.",
+          "🗿 The World Colossus is far tougher: 3,000,000 health for one explorer, and 80% more for every extra explorer (was 520,000 and +35%). Bring the whole neighbourhood.",
+          "🤫 AI neighbours let you fight: while you are in a fight they usually wait to say hello, ask to be friends or hand over gifts, and their speech bubbles never cover your target.",
+          "📱 New setting, Render resolution: Auto now draws phones at a lighter resolution, like the original, for smoother play and a cooler phone. Choose Sharp for the old crispness."
+        ],
+        "vi": [
+          "🧛 Trang phục Ma cà rồng hút máu ít hơn: mỗi đòn hút 4% sát thương (trước 10%), Hút máu hồi 30% (trước 80%), mỗi cú cắn của dơi hồi 0,15% máu (trước 1%) và Trăng máu hút 12% (trước 40%).",
+          "🩸 Máu hút được giờ hồi tối đa 6% máu tối đa mỗi giây, cộng tất cả các nguồn, nên quét một vòng qua đám đông không còn làm đầy máu ngay.",
+          "🐾 Thú cưng và vật triệu hồi (phân thân, dơi, tháp pháo, đại bác, cây, vẹt và hải đăng) không còn hồi máu cho bạn khi chúng đánh trúng.",
+          "🗿 Cự Thần Thế Giới trâu hơn nhiều: 3.000.000 máu khi một người đánh, mỗi người góp sức thêm 80% máu (trước 520.000 và +35%). Hãy rủ cả xóm cùng đánh.",
+          "🤫 Hàng xóm AI để bạn đánh cho xong: khi bạn đang chiến đấu, họ thường chờ rồi mới chào hỏi, kết bạn hay tặng quà, và bong bóng lời nói không bao giờ che mục tiêu của bạn.",
+          "📱 Cài đặt mới, Độ phân giải hiển thị: chế độ Tự động giờ vẽ trên điện thoại ở độ phân giải nhẹ hơn, như bản gốc, để chơi mượt và máy mát hơn. Chọn Sắc nét để có độ nét như trước."
+        ]
+      }
+    },
+    {
       "id": "2026-10-06-events",
       "date": "2026-10-06",
       "icon": "🗿",

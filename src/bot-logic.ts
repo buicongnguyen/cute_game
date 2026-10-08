@@ -226,3 +226,39 @@ export const restFor = (rand: () => number) => 100 + rand() * 140;
 export interface RallyPoint { id: string; x: number; z: number; r: number }
 /** Where neighbour number `i` stands round the Colossus: a ring just outside its body, spread by the golden angle. */
 export function rallySpot(r: RallyPoint, i: number) { const a = i * 2.399 + .6, d = r.r + 3 + (i % 3) * 1.5; return { x: r.x + Math.cos(a) * d, z: r.z + Math.sin(a) * d }; }
+
+/**
+ * Quiet during fights: neighbours do not interrupt the player in about three fights out of four. While the player is in
+ * a fight (a creature within FIGHT_RANGE m is after them, the player lost health, the target they picked is hurt, or the
+ * boss bar shows) and for FIGHT_MEMORY s after the last such sign, a meeting may only start when a FIGHT_PASS_CHANCE
+ * roll passes; a meeting already under way when the fight starts rolls once too, and waits for the fight to end if it fails.
+ */
+export const FIGHT_MEMORY = 8, FIGHT_PASS_CHANCE = .25, FIGHT_RANGE = 14;
+export interface FightFoe { id: string; x: number; z: number; hp: number; maxHp: number; phase?: string }
+export interface FightSense { playerHp: number; px: number; pz: number; enemies: readonly FightFoe[]; selectedId?: string | null; bossBar?: boolean }
+/** A creature chasing or striking (hud-combat's aggro: any phase but idle and return). */
+const chasing = (e: FightFoe) => !!e.phase && e.phase !== 'idle' && e.phase !== 'return';
+export class FightWatch {
+  private hp = NaN; private lastAt = -Infinity;
+  /** Feeds one frame's signs at clock time `clock` (s) and says whether the player counts as fighting. */
+  update(clock: number, s: FightSense) {
+    const hurt = Number.isFinite(this.hp) && s.playerHp < this.hp - .01; this.hp = s.playerHp;
+    const sign = hurt || !!s.bossBar || s.enemies.some(e => e.hp > 0 && (chasing(e) && Math.hypot(e.x - s.px, e.z - s.pz) < FIGHT_RANGE
+      || e.id === s.selectedId && e.hp < e.maxHp && Math.hypot(e.x - s.px, e.z - s.pz) < FIGHT_RANGE + 8));
+    if (sign) this.lastAt = clock;
+    return this.fighting(clock);
+  }
+  fighting(clock: number) { return clock - this.lastAt < FIGHT_MEMORY; }
+  reset() { this.hp = NaN; this.lastAt = -Infinity; }
+}
+/** One roll per meeting attempt during a fight: true about one time in four. */
+export const fightPass = (rand: () => number) => rand() < FIGHT_PASS_CHANCE;
+/** The creature the player is fighting: the picked target, else the nearest one chasing within FIGHT_RANGE m. */
+export function fightTarget(s: FightSense) {
+  const picked = s.enemies.find(e => e.id === s.selectedId && e.hp > 0); if (picked) return picked;
+  let best: FightFoe | null = null, bestD = FIGHT_RANGE;
+  for (const e of s.enemies) if (e.hp > 0 && chasing(e)) { const d = Math.hypot(e.x - s.px, e.z - s.pz); if (d < bestD) { best = e; bestD = d; } }
+  return best;
+}
+/** True when a speech bubble anchored at its bottom centre (bx, by) would cover the screen point (tx, ty) of the target. */
+export const bubbleCovers = (bx: number, by: number, tx: number, ty: number) => Math.abs(tx - bx) < 150 && ty > by - 90 && ty < by + 60;

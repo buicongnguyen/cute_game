@@ -185,3 +185,17 @@ export function soloBoard(player: RankedProfile, weekGains: Totals, cast: BotDef
   if (reply.me && !(reply.me.value > 0)) reply.me.rank = null;
   return { ...reply, solo: true };
 }
+
+/**
+ * What a GET api/ranking reply means. `json`: the server board. `absent`: no game server behind this page (a static host,
+ * or the Vite dev server answering /api/* with index.html or a 404), so the neighbourhood board is shown at once and the API
+ * is not asked again this session. `down`: a failure that is not the game server's own JSON (the dev server's proxy finds
+ * no server on :8787 and answers 500 text/plain; a host's 502 page): the neighbourhood board for now, asked again next time.
+ * `error`: the game server itself failed (a JSON 4xx/5xx): the retry is offered.
+ */
+export function rankingReplyKind(status: number, contentType: string | null): 'json' | 'absent' | 'down' | 'error' {
+  const json = /json/i.test(contentType ?? '');
+  if (status === 404 || status === 405 || status === 501) return 'absent';
+  if (status >= 200 && status < 300) return json ? 'json' : 'absent';
+  return json ? 'error' : 'down';
+}

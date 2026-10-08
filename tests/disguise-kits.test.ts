@@ -3,7 +3,7 @@
 // DisguiseFx draws, and the tooltips state the numbers the simulation uses.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CombatSimulation, DISGUISE_KITS, DISGUISE_LOOKS, DZ, type CombatEffect, type CombatTarget } from '../src/combat.ts';
+import { CombatSimulation, DISGUISE_KITS, DISGUISE_LOOKS, DZ, LIFESTEAL_CAP_PER_SECOND, type CombatEffect, type CombatTarget } from '../src/combat.ts';
 import { DISGUISES } from '../src/content.ts';
 import { DISGUISE_INFO, skillDescription } from '../src/skill-info.ts';
 import { skillSound } from '../src/skill-sounds.ts';
@@ -75,9 +75,9 @@ test('reference mechanics: ranges, damage factors and durations match its skill 
     [DZ.cannon.life, 10, 'cannon 10 s @786651'], [DZ.cannon.power, 1.4, 'cannon ×1.4'], [DZ.cannon.cd, 1.3, 'cannon every 1.3 s'], [DZ.hook.range, 14, 'hook 14 m @786952'], [DZ.hook.power, 1.2, 'hook ×1.2'], [DZ.hook.slow, 2, 'hook slow 2 s'],
     [DZ.parrot.life, 8, 'parrot 8 s @787504'], [DZ.parrot.power, .4, 'parrot ×0.4'], [DZ.parrot.mark, 8, 'mark 8 s'],
     [DZ.broadside.count, 12, '12 cannonballs @787880'], [DZ.broadside.range, 15, 'broadside 15 m'], [DZ.broadside.radius, 1.8, 'ball r1.8'], [DZ.broadside.power, 1.4, 'ball ×1.4'],
-    [DZ.drain.range, 11, 'drain 11 m @788531'], [DZ.drain.power, .7, 'drain ×0.7'], [DZ.drain.tick, .35, 'drain tick .35 s'], [DZ.drain.heal, .8, 'drain heals 80%'],
-    [DZ.bats.time, 2.5, 'bat form 2.5 s @789463'], [DZ.bats.speed, 1, 'bat form +100%'], [DZ.batcircle.count, 5, '5 bats @790040'], [DZ.batcircle.life, 8, 'bats 8 s'], [DZ.batcircle.power, .35, 'bat ×0.35'],
-    [DZ.bloodnova.radius, 7, 'blood moon 7 m @790531'], [DZ.bloodnova.time, 6, 'bleed 6 s'], [DZ.bloodnova.power / DZ.bloodnova.tick, .6, 'bleed atk×0.6/s'], [DZ.bloodnova.lifesteal, .4, 'lifesteal 40%'],
+    [DZ.drain.range, 11, 'drain 11 m @788531'], [DZ.drain.power, .7, 'drain ×0.7'], [DZ.drain.tick, .35, 'drain tick .35 s'], [DZ.drain.heal, .3, 'drain heals 30% (2026-10-07 patch)'],
+    [DZ.bats.time, 2.5, 'bat form 2.5 s @789463'], [DZ.bats.speed, 1, 'bat form +100%'], [DZ.batcircle.count, 5, '5 bats @790040'], [DZ.batcircle.life, 8, 'bats 8 s'], [DZ.batcircle.power, .35, 'bat ×0.35'], [DZ.batcircle.heal, .0015, 'bat bite heals 0.15% @792690'], [DISGUISES.dz_vampire.lifesteal, .04, 'vampire lifesteal 4% @790689'],
+    [DZ.bloodnova.radius, 7, 'blood moon 7 m @790531'], [DZ.bloodnova.time, 6, 'bleed 6 s'], [DZ.bloodnova.power / DZ.bloodnova.tick, .6, 'bleed atk×0.6/s'], [DZ.bloodnova.lifesteal, .12, 'lifesteal 12% @793163'], [LIFESTEAL_CAP_PER_SECOND, .06, 'lifesteal cap 6%/s @892473'],
     [DZ.snowball.time, 2.4, 'snowball 2.4 s @791134'], [DZ.snowball.speed, 9, 'snowball 9 m/s'], [DZ.snowball.slow, 3, 'snowball slow 3 s'],
     [DZ.decoy.life, 6, 'decoy 6 s @791968'], [DZ.decoy.radius, 4, 'decoy burst r4'], [DZ.decoy.power, 2.5, 'decoy ×2.5'], [DZ.decoy.freeze, 2, 'decoy freeze 2 s'],
     [DZ.icefloor.time, 8, 'ice rink 8 s @792466'], [DZ.icefloor.radius, 6, 'ice rink r6'], [DZ.icefloor.speed, .5, 'ice rink +50%'], [DZ.iceage.radius, 8, 'ice age 8 m @792933'], [DZ.iceage.freeze, 3, 'freeze 3 s'], [DZ.iceage.power, 2.8, 'shatter ×2.8'],
@@ -142,8 +142,10 @@ test('reference behaviours: frozen, rooted, blocked, rammed, carried, drained', 
   const tank = arena(); tank.sim.disguise('dz_mecha', 0); assert.equal(tank.sim.defenseBonus, 30); assert.equal(tank.sim.speedBonus, .8);
   // Ninja strike: ×3.2, shown as a critical blow.
   const ninja = arena(); ninja.sim.disguise('dz_ninja', 2); assert.equal(ninja.hits[0].amount, 32); assert.equal(ninja.hits[0].critical, true);
-  // Life drain: 8 bites of ×0.7, healing 80% of the damage.
-  const drain = arena(); drain.sim.disguise('dz_vampire', 0); drain.run(3); assert.equal(drain.hits.length, 8); assert.ok(Math.abs(drain.healed() - 8 * 7 * .8 / 100) < 1e-9);
+  // Life drain: 8 bites of ×0.7, healing 30% of the damage (2.1 HP a bite), at most 6 HP in any one second: 6 + 6 + 4.2.
+  const drain = arena(); drain.sim.disguise('dz_vampire', 0); drain.run(3); assert.equal(drain.hits.length, 8); assert.ok(Math.abs(drain.healed() - .162) < 1e-9, `healed ${drain.healed()}`);
+  // Bat swarm: each bite heals 0.15% of max HP.
+  const bats = arena(); bats.sim.disguise('dz_vampire', 2); bats.run(2); assert.ok(bats.hits.length > 0); assert.ok(Math.abs(bats.healed() - bats.hits.length * .0015) < 1e-9);
   // Sheep: the nearest and at most two around it.
   const sheep = arena([{ x: .5, z: 3.5 }, { x: -.5, z: 3.5 }, { x: 0, z: 4.5 }]); sheep.sim.disguise('dz_mage', 2); assert.equal(sheep.statuses.filter(s => s.kind === 'sheep').length, 3);
 });

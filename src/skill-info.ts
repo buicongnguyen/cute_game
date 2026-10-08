@@ -6,7 +6,7 @@
  */
 import { t } from './i18n.ts';
 import { skillTuning, levelledCooldown } from './skill-upgrades.ts';
-import { DZ, GAZE, BOULDER, SUMMON_HP, DECOY } from './combat.ts';
+import { DZ, GAZE, BOULDER, SUMMON_HP, DECOY, LIFESTEAL_CAP_PER_SECOND } from './combat.ts';
 
 const fix = (n: number) => String(Math.round(n * 100) / 100);
 /** Base whirlwind radius (sword users spin wider), the slam shockwave and the dash length, as combat.ts casts them. */
@@ -82,10 +82,10 @@ export const DISGUISE_INFO: Record<string, readonly string[]> = {
     `Hook the nearest enemy within ${DZ.hook.range} m and reel it in: ×${DZ.hook.power} damage and slowed for ${DZ.hook.slow} s.`,
     `A scout parrot flies out for ${DZ.parrot.life} s, pecking enemies (×${DZ.parrot.power} damage) and marking them for ${DZ.parrot.mark} s: marked enemies take +50% damage.`,
     `A pirate ship's broadside: ${DZ.broadside.count} cannonballs land around your target, ×${DZ.broadside.power} damage within ${DZ.broadside.radius} m each.`],
-  dz_vampire: [`Drain the nearest enemy within ${DZ.drain.range} m: ${DZ.drain.ticks} bites of ×${DZ.drain.power} damage in ${fix(DZ.drain.ticks * DZ.drain.tick)} s, and you heal ${pct(DZ.drain.heal)}% of the damage dealt.`,
+  dz_vampire: [`Drain the nearest enemy within ${DZ.drain.range} m: ${DZ.drain.ticks} bites of ×${DZ.drain.power} damage in ${fix(DZ.drain.ticks * DZ.drain.tick)} s, and you heal ${pct(DZ.drain.heal)}% of the damage dealt (stolen life: at most ${pct(LIFESTEAL_CAP_PER_SECOND)}% of your health per second).`,
     `Become bats for ${DZ.bats.time} s: untouchable and twice as fast.`,
     `Five bats circle you for ${DZ.batcircle.life} s, biting enemies (×${DZ.batcircle.power} damage) and healing you ${pct(DZ.batcircle.heal)}% per bite.`,
-    `Blood moon for ${DZ.bloodnova.time} s: enemies within ${DZ.bloodnova.radius} m take ×${DZ.bloodnova.power} damage every ${DZ.bloodnova.tick} s; your hits heal you for ${pct(DZ.bloodnova.lifesteal)}% of the damage dealt.`],
+    `Blood moon for ${DZ.bloodnova.time} s: enemies within ${DZ.bloodnova.radius} m take ×${DZ.bloodnova.power} damage every ${DZ.bloodnova.tick} s; your hits heal you for ${pct(DZ.bloodnova.lifesteal)}% of the damage dealt (stolen life: at most ${pct(LIFESTEAL_CAP_PER_SECOND)}% of your health per second).`],
   dz_snowman: [`Roll a growing snowball ${fix(DZ.snowball.speed * DZ.snowball.time)} m: it hits everything it passes for ×1.5 to ×${fix(1 + snowMax)} damage (more as it grows), slowing them ${DZ.snowball.slow} s.`,
     `A snow decoy stands ${DZ.decoy.ahead} m ahead for ${DZ.decoy.life} s with ${hp('snowman')}% of your health: creatures within ${DECOY.lure} m attack it instead of you. When it melts or breaks it bursts for ×${DZ.decoy.power} damage within ${DZ.decoy.radius} m and freezes them ${DZ.decoy.freeze} s.`,
     `An ${DZ.icefloor.time} s ice rink ${DZ.icefloor.radius} m around you: enemies on it are slowed, and you skate ${pct(DZ.icefloor.speed)}% faster.`,

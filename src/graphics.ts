@@ -21,6 +21,21 @@ const MOBILE_REDUCED: Record<QualityLevel, QualityProfile> = {
   medium: { ...QUALITY.medium, shadow: 0, particles: .45 },
   high: { ...QUALITY.high, shadow: 0, particles: .45 },
 };
+/**
+ * Render resolution (Settings, saved with the adventure: settings.renderRes): the most device pixels drawn per CSS pixel.
+ * Auto caps phones at PHONE_AUTO_RATIO, as the reference does (487×1055 on a 390×844 phone, 2.6× fewer pixels than our
+ * old 2×), and leaves desktops to the Graphics level. It is a ceiling: the Graphics level's own ratio and the automatic
+ * governor (for a slow device) may still go lower; Sharp gives the old behaviour.
+ */
+export type ResolutionSetting = 'auto' | 'sharp' | 'balanced' | 'saver';
+export const RESOLUTION: Record<Exclude<ResolutionSetting, 'auto'>, { label: string; ratio: number }> = {
+  sharp: { label: 'Sharp', ratio: 2 }, balanced: { label: 'Balanced', ratio: 1.25 }, saver: { label: 'Battery saver', ratio: .85 },
+};
+export const PHONE_AUTO_RATIO = 1.25;
+export const RESOLUTION_SETTINGS: readonly ResolutionSetting[] = ['auto', 'sharp', 'balanced', 'saver'];
+export const isResolution = (v: unknown): v is ResolutionSetting => typeof v === 'string' && (RESOLUTION_SETTINGS as readonly string[]).includes(v);
+/** The highest ratio a resolution setting allows on this device (Infinity: no cap beyond the quality level). */
+export const resolutionCap = (setting: ResolutionSetting, mobile: boolean) => setting === 'auto' ? (mobile ? PHONE_AUTO_RATIO : Infinity) : RESOLUTION[setting].ratio;
 export const QUALITY_KEY = 'zoo-garden-graphics';
 /** Old mobile Auto levels were learned before the farm rendering optimizations and Sharp default. */
 export const AUTO_GRAPHICS_VERSION = 2;
@@ -62,7 +77,11 @@ export class GraphicsGovernor {
     return this.autoLevel ?? this.defaultLevel;
   }
   get profile() { return this.env.mobile && this.setting === 'auto' && this.effectsReduced ? MOBILE_REDUCED[this.level] : QUALITY[this.level]; }
-  targetRatio() { return Math.min(this.env.devicePixelRatio, this.profile.ratio); }
+  /** The Render resolution setting (settings.renderRes); see RESOLUTION. */
+  resolution: ResolutionSetting = 'auto';
+  targetRatio() { return Math.min(this.env.devicePixelRatio, this.profile.ratio, resolutionCap(this.resolution, this.env.mobile)); }
+  /** Applies the Render resolution setting; the ratio moves to its target at once. */
+  setResolution(setting: ResolutionSetting) { this.resolution = isResolution(setting) ? setting : 'auto'; this.ratio = this.targetRatio(); }
 
   choose(setting: QualitySetting) {
     this.setting = setting; this.effectsReduced = false; this.frames = this.elapsed = this.slowSeconds = this.goodSeconds = 0;

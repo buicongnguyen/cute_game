@@ -3488,7 +3488,7 @@ const DISGUISE_FACTS: Record<string, any> = {
             "arc": 0.3,
             "fx": "#b0203a"
         },
-        "lifesteal": 0.1,
+        "lifesteal": 0.04,
         "skills": [
             {
                 "name": "Life drain",

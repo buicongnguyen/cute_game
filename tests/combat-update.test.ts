@@ -30,6 +30,20 @@ test('equipped combat pet fires a real travelling projectile, pauses and observe
  a.sim.reset();a.host.pet=()=>null;a.run(1);assert.equal(a.hits.length,1);
 });
 
+test('stolen life is capped at 6% of max HP per second over every source (2026-10-07 balance patch)',()=>{
+ const a=arena(),target=a.add(1e5,1e5);target.z=1;a.host.stats=()=>({attack:10,maxHp:100,critChance:0,lifesteal:1});
+ assert.equal(a.sim.basic(target),true);assert.ok(Math.abs(a.heals()-.06)<1e-9,'10 HP stolen, 6 healed');
+ a.run(.6);a.sim.basic(target);assert.ok(Math.abs(a.heals()-.06)<1e-9,'nothing more within the same second');
+ a.run(.6);assert.equal(a.sim.basic(target),true);assert.ok(Math.abs(a.heals()-.12)<1e-9,'the next second heals again');
+});
+test('pets and summons never heal their owner, even with life steal',()=>{
+ const pet=arena(),target=pet.add(1e5,1e5);target.z=5;pet.host.stats=()=>({attack:10,maxHp:100,critChance:0,lifesteal:.5});pet.host.pet=()=>({x:0,z:0,dmg:.6,cd:1,shot:'fire'});
+ pet.run(2);assert.ok(pet.hits.length>0,'the pet hit');assert.equal(pet.heals(),0);
+ const clones=arena(),t2=clones.add(1e5,1e5);t2.z=2;clones.host.stats=()=>({attack:10,maxHp:100,critChance:0,lifesteal:.5});clones.sim.disguise('dz_ninja',0);
+ clones.run(3);assert.ok(clones.hits.length>0,'the clones hit');assert.equal(clones.heals(),0);
+ const turret=arena(),t3=turret.add(1e5,1e5);t3.z=4;turret.host.stats=()=>({attack:10,maxHp:100,critChance:0,lifesteal:.5});turret.sim.disguise('dz_mecha',1);
+ turret.run(3);assert.ok(turret.hits.length>0,'the turret hit');assert.equal(turret.heals(),0);
+});
 test('lifesteal heals only accepted damage, not rejected or overkill damage',()=>{
  for(const dealt of [0,3]){const a=arena(),target=a.add();target.z=1;a.host.stats=()=>({attack:10,maxHp:100,critChance:0,lifesteal:.5});a.host.hit=()=>dealt;assert.equal(a.sim.basic(target),true);assert.equal(a.heals(),dealt*.5/100);}
 });

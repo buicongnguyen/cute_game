@@ -13,11 +13,11 @@ export const COLOSSUS_ID = 'home:colossus';
 export const COLOSSUS_SCHEDULE = { hour: 20, minute: 0, duration: 3600, utcOffsetHours: 7, warn: 10, x: 78, z: 0, facing: -Math.PI / 2, arenaR: 30 } as const;
 
 /**
- * Combat facts. Hit points and attack are fixed (no zone or difficulty scaling); offline the health grows by 35% per
- * extra explorer, like the reference. `pierce` is the share of the target's defence its blows ignore.
+ * Combat facts. Hit points and attack are fixed (no zone or difficulty scaling); health grows by 80% per extra
+ * explorer, online and offline (the reference's 2026-10-07 balance patch: 3,000,000 for one, was 520,000 +35%). `pierce` is the share of the target's defence its blows ignore.
  */
 export const COLOSSUS_STATS = {
-  hp: 520000, atk: 3200, xp: 30000, radius: 9, height: 26, sight: 70, cooldown: 2.6, pierce: .75,
+  hp: 3000000, atk: 3200, xp: 30000, radius: 9, height: 26, sight: 70, cooldown: 2.6, pierce: .75,
   headMultiplier: 2.5, headReach: 10, kneelAt: .25, enrageAt: .3, fasterAt: .5,
   /** The giant is drawn at this scale (colossus.glb is modelled at 1:1, 17 m to the crown, horns 18.8 m). */
   modelScale: .85,
@@ -31,7 +31,7 @@ export const COLOSSUS_STATS = {
   grabShare: .25, throwDistance: 18, throwSeconds: 1.4, throwHeight: 14,
   /** An explorer counts as a helper offline when their last blow was this recent at the kill (seconds). */
   contributionWindow: 20,
-  perExtraPlayer: .35,
+  perExtraPlayer: .8,
 } as const;
 
 export const COLOSSUS_NAME = 'Cinderpeak Colossus';
@@ -121,5 +121,5 @@ export function clockText(ms: number) {
   const total = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(total / 3600), m = Math.floor(total / 60) % 60, sec = total % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 }
-/** Offline health: 520,000 for one explorer, +35% for every other explorer nearby. */
+/** Health: 3,000,000 for one explorer, +80% for every other explorer nearby (server: every explorer on the home world). */
 export const colossusMaxHp = (players: number) => Math.round(COLOSSUS_STATS.hp * (1 + COLOSSUS_STATS.perExtraPlayer * Math.max(0, Math.floor(players) - 1)));

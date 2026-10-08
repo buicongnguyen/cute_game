@@ -108,6 +108,8 @@ export interface SaveState {
         sfxVolume?: number;
         vibrate?: boolean;
         lowGraphics: boolean;
+        /** Render resolution (graphics.ts RESOLUTION): Auto (default: phones at the reference's 1.25×), Sharp, Balanced or Battery saver. */
+        renderRes?: 'auto' | 'sharp' | 'balanced' | 'saver';
         /** The on-screen movement pad; off by default because the reference is tap-to-move only. */
         movePad?: boolean;
         joystickSide?: 'left'|'right';
@@ -793,6 +795,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.settings = { ...parseAudio(settings), lowGraphics: settings.lowGraphics === true, ...(typeof settings.movePad === 'boolean' ? { movePad: settings.movePad } : {}) };
         if(settings.joystickSide==='left'||settings.joystickSide==='right')s.settings.joystickSide=settings.joystickSide;
         if(settings.keyboardLayout==='classic'||settings.keyboardLayout==='wasd')s.settings.keyboardLayout=settings.keyboardLayout;
+        if (settings.renderRes === 'sharp' || settings.renderRes === 'balanced' || settings.renderRes === 'saver') s.settings.renderRes = settings.renderRes;
         if (settings.placeBeds === true) s.settings.placeBeds = true;
         if (settings.tester === true) s.settings.tester = true;
         s.settings.difficulty = isDifficulty(settings.difficulty) ? settings.difficulty : 'easy'; // saves from before the setting play on Easy

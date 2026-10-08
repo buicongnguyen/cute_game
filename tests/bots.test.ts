@@ -122,3 +122,18 @@ test('compound and everyday messages are sorted by the most specific intent', as
   assert.equal(intentOf('we met yesterday'), 'other'); assert.equal(intentOf('trong nhà bạn có gì?'), 'question'); assert.equal(intentOf('representative'), 'other');
   assert.equal(intentOf('mình mệt quá'), 'sad'); assert.equal(intentOf('đưa mình cái mũ'), 'outfit'); assert.equal(intentOf('xin chào'), 'hello');
 });
+
+test('a fight keeps neighbours quiet: aggro, a hurt player, a hurt target, the boss bar, and 8 s after the last sign', async () => {
+  const { FightWatch, FIGHT_MEMORY, fightPass, fightTarget, bubbleCovers } = await import('../src/bot-logic.ts');
+  const w = new FightWatch(), calm = { playerHp: 100, px: 0, pz: 0, enemies: [] as { id: string; x: number; z: number; hp: number; maxHp: number; phase?: string }[] };
+  assert.equal(w.update(0, calm), false);
+  assert.equal(w.update(1, { ...calm, enemies: [{ id: 'a', x: 30, z: 0, hp: 9, maxHp: 9, phase: 'chase' }] }), false, 'a chase far away is not your fight');
+  assert.equal(w.update(2, { ...calm, enemies: [{ id: 'a', x: 5, z: 0, hp: 9, maxHp: 9, phase: 'chase' }] }), true);
+  assert.equal(w.update(2 + FIGHT_MEMORY - .1, calm), true); assert.equal(w.update(2 + FIGHT_MEMORY + .1, calm), false);
+  assert.equal(w.update(20, { ...calm, playerHp: 90 }), true, 'losing health'); w.reset();
+  assert.equal(w.update(40, { ...calm, bossBar: true }), true, 'boss bar'); w.reset();
+  assert.equal(w.update(60, { ...calm, selectedId: 'b', enemies: [{ id: 'b', x: 10, z: 0, hp: 5, maxHp: 9, phase: 'idle' }] }), true, 'a hurt target you picked');
+  let pass = 0; for (let i = 0; i < 1000; i++) if (fightPass(() => i / 1000)) pass++; assert.equal(pass, 250, 'one in four');
+  assert.equal(fightTarget({ ...calm, enemies: [{ id: 'x', x: 9, z: 0, hp: 1, maxHp: 1, phase: 'chase' }, { id: 'y', x: 3, z: 0, hp: 1, maxHp: 1, phase: 'chase' }] })?.id, 'y');
+  assert.equal(bubbleCovers(400, 300, 420, 280), true); assert.equal(bubbleCovers(400, 300, 700, 280), false); assert.equal(bubbleCovers(400, 300, NaN, NaN), false);
+});

@@ -33,8 +33,9 @@ test('the day rolls over at midnight UTC+7, not UTC: late evening and after midn
   assert.equal(colossusClock(at('2026-10-07T06:59:00Z')).startsAt, at('2026-10-07T13:00:00Z'));
   assert.equal(clockText(425000), '7:05'); assert.equal(clockText(3723000), '1:02:03'); assert.equal(clockText(-5), '0:00');
 });
-test('offline health is 520,000 for one explorer and grows 35% per extra explorer', () => {
-  assert.equal(colossusMaxHp(1), 520000); assert.equal(colossusMaxHp(3), 884000); assert.equal(colossusMaxHp(0), 520000);
+test('health is 3,000,000 for one explorer and grows 80% per extra explorer (2026-10-07 balance patch)', () => {
+  assert.equal(S.hp, 3000000, 'bundle sb_colossus hp:3e6 @660630'); assert.equal(S.perExtraPlayer, .8);
+  assert.equal(colossusMaxHp(1), 3000000); assert.equal(colossusMaxHp(3), 7800000); assert.equal(colossusMaxHp(0), 3000000);
 });
 test('its blows pierce 75% of defence, cracked armour and scorching halve what is left, and never deal less than 1', () => {
   assert.equal(colossusDamage(3200, 1, 0), 3200);

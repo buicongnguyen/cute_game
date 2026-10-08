@@ -11,6 +11,7 @@ import { neighboursKey } from './profiles.ts';
 import type { GameBridge } from './game-bridge.ts';
 import type { RemotePose } from './world.ts';
 import {
+  FightWatch, bubbleCovers, fightPass, fightTarget, type FightSense,
   BOT_ID_PREFIX, MEET_PAUSE_MS, SAFE_RADIUS, ZONE_RADIUS, attackDamage, BOSS_SHY, bossDare, huntFor, restFor, visitStay, befriend, canMeet, choosePresent, gateRoute, givesPresent, inSafeZone, isBotId, isFriend, makeCast, newStore, nextVisitIn, parseStore, pickFoe, pickGoal, rallySpot, seeded, settleGift, walk, zoneOf,
   type BotDef, type BotStore, type GiftNote, type WalkCtx, type Walker, type Zone,
 } from './bot-logic.ts';
@@ -38,6 +39,8 @@ interface Run {
   huntUntil: number; restUntil: number; hidden: boolean;
   place: Place; zone: Zone; /** Clock time of the next trip into the safe zone (friends) and when the visit ends. */ visitAt: number; stayUntil: number;
   foe: { id: string; x: number; z: number; hp: number } | null; bossUntil: number; bossShy: number; retreat: number; foeT: number; swing: number; route: Array<{ x: number; z: number }>; commuteTo: Place;
+  /** This meeting passed its fight roll (bot-logic FIGHT_PASS_CHANCE), or began with no fight: it may go on during one. */
+  fightOk: boolean;
 }
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode: friendships last for this visit only */ } };
@@ -70,7 +73,7 @@ export function initBots(game: GameBridge) {
   };
   const spawn = (def: BotDef): Run => {
     const w: Walker = { x: 0, z: 0, facing: rand() * 6.28, goalX: 0, goalZ: 0, wait: 1 + rand() * 3, speed: 2.1 }, zone = zoneOf(def);
-    const r: Run = { def, w, y: 0, mode: 'wander', modeT: 0, flyY: 0, say: null, moving: false, nextPlan: 4 + rand() * 8, chase: 0, askUntil: 0, place: 'zone', zone, huntUntil: 0, restUntil: 0, hidden: false, visitAt: 0, stayUntil: 0, foe: null, bossUntil: 0, bossShy: 0, retreat: 0, foeT: 0, swing: 0, route: [], commuteTo: 'zone' };
+    const r: Run = { def, w, y: 0, mode: 'wander', modeT: 0, flyY: 0, say: null, moving: false, nextPlan: 4 + rand() * 8, chase: 0, askUntil: 0, place: 'zone', zone, huntUntil: 0, restUntil: 0, hidden: false, visitAt: 0, stayUntil: 0, foe: null, bossUntil: 0, bossShy: 0, retreat: 0, foeT: 0, swing: 0, route: [], commuteTo: 'zone', fightOk: false };
     placeInZone(r); r.huntUntil = clock + 60 + rand() * 120; r.visitAt = clock + 60 + nextVisitIn(rand);
     if (rand() < .5) { r.mode = 'rest'; r.hidden = true; r.restUntil = clock + rand() * restFor(rand); } // about half are away resting when the game starts
     return r;
@@ -82,6 +85,15 @@ export function initBots(game: GameBridge) {
   let visitingBot: string | null = null, busy: string | null = null, giftTimer = 0, clock = 0, pushClock = 0, thinkClock = 2;
   const ready = () => game.botContext();
   const active = () => enabled && !world.networkRole && ![...world.remotePlayers.keys()].some(id => !isBotId(id));
+  // ---- Quiet during fights (bot-logic FightWatch): no meetings, cards, gifts or bubbles near the fight, bar a 1-in-4 roll ----
+  const fight = new FightWatch(), bossBar = document.getElementById('boss-bar');
+  let fighting = false, fightSense: FightSense | null = null;
+  const sense = (): FightSense => {
+    const sel = world.selected as { id?: string; kind?: string } | null;
+    return { playerHp: player().hp, px: world.position.x, pz: world.position.z, enemies: world.enemies, selectedId: sel?.kind === 'enemy' ? sel.id ?? null : null, bossBar: !!bossBar && !bossBar.hidden };
+  };
+  /** A meeting with `r` waits: the player is fighting and this meeting did not pass its roll. */
+  const held = (r: Run) => fighting && !r.fightOk;
 
   // ---- Speech bubbles ----
   const bubbles = new Map<string, HTMLDivElement>(), v = new T.Vector3();
@@ -90,13 +102,18 @@ export function initBots(game: GameBridge) {
     r.say = { text: t(line, { name: player().name, me: botName(r.def) }), until: clock + ms / 1000 };
   };
   const drawBubbles = () => {
+    // In a fight: no bubble near it (unless that neighbour's meeting passed its roll), and never one over the target.
+    let tx = NaN, ty = NaN;
+    const foe = fighting && fightSense ? fightTarget(fightSense) : null;
+    if (foe) { v.set(foe.x, 1, foe.z).project(world.camera); if (v.z <= 1) { tx = (v.x + 1) / 2 * innerWidth; ty = (1 - v.y) / 2 * innerHeight; } }
     for (const [id, r] of runs) {
-      let b = bubbles.get(id); const on = !!r.say && r.say.until > clock && world.remotePlayers.get(id)?.mesh.visible;
+      const quiet = fighting && !(busy === id && r.fightOk) && Math.hypot(r.w.x - world.position.x, r.w.z - world.position.z) < 40;
+      let b = bubbles.get(id); const on = !quiet && !!r.say && r.say.until > clock && world.remotePlayers.get(id)?.mesh.visible;
       if (!on) { if (b) b.style.display = 'none'; continue; }
       if (!b) { b = el('div', 'bot-bubble'); document.body.append(b); bubbles.set(id, b); }
       const mesh = world.remotePlayers.get(id)!.mesh; v.set(mesh.position.x, mesh.position.y + 2.7 * Math.max(.6, mesh.scale.x), mesh.position.z).project(world.camera);
       const x = (v.x + 1) / 2 * innerWidth, y = (1 - v.y) / 2 * innerHeight;
-      if (v.z > 1 || x < -60 || x > innerWidth + 60 || y < 0 || y > innerHeight) { b.style.display = 'none'; continue; }
+      if (v.z > 1 || x < -60 || x > innerWidth + 60 || y < 0 || y > innerHeight || bubbleCovers(x, y, tx, ty)) { b.style.display = 'none'; continue; }
       if (b.textContent !== r.say!.text) b.textContent = r.say!.text;
       b.style.display = ''; b.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -100%)`;
     }
@@ -108,7 +125,7 @@ export function initBots(game: GameBridge) {
   const closeCard = () => { card.hidden = true; cardFor = null; };
   const outfitName = (d: BotDef) => d.gear.disguise ? t(ITEMS[d.gear.disguise]?.name ?? 'Costume') : d.gear.outfit ? t(ITEMS[d.gear.outfit]?.name ?? 'Outfit') : '';
   function openRequest(r: Run) {
-    cardFor = r.def.id; card.replaceChildren();
+    cardFor = r.def.id; card.replaceChildren(); card.classList.toggle('aside', fighting);
     const title = el('h3', '', `${botName(r.def)} · Lv ${r.def.level}`), text = el('p', '', t('{name} would like to be your friend.', { name: botName(r.def) }));
     const yes = el('button', 'bot-yes', t('Be friends')), no = el('button', 'bot-no', t('Maybe later'));
     yes.onclick = () => accept(r); no.onclick = () => decline(r);
@@ -122,10 +139,10 @@ export function initBots(game: GameBridge) {
     closeCard(); const now = Date.now();
     if (!isFriend(store, r.def.id)) befriend(store, r.def, now, owns);
     save(); sayLine(r, 'THANKS', 3200); r.mode = 'talk'; r.modeT = 2.8; r.askUntil = 0;
-    giftTimer = 0; // the promised gift follows at once (deliverGifts)
+    giftTimer = 0; giftNow = true; // the promised gift follows at once (deliverGifts)
     world.friendIds.add(r.def.id);
   }
-  function leave(r: Run) { r.mode = 'wander'; r.modeT = 0; r.w.speed = 2.1; r.flyY = 0; busy = busy === r.def.id ? null : busy; pickGoal(r.w, ctxOf(r)); r.nextPlan = 5 + rand() * 8; }
+  function leave(r: Run) { r.fightOk = false; r.mode = 'wander'; r.modeT = 0; r.w.speed = 2.1; r.flyY = 0; busy = busy === r.def.id ? null : busy; pickGoal(r.w, ctxOf(r)); r.nextPlan = 5 + rand() * 8; }
 
   // ---- Gifts ----
   function showGift(def: BotDef, g: GiftNote) {
@@ -136,8 +153,10 @@ export function initBots(game: GameBridge) {
     box.append(icon, text); document.body.append(box); setTimeout(() => box.classList.add('leaving'), 5200); setTimeout(() => box.remove(), 5600);
   }
   /** Hands over any gift still waiting in the store. A grant that fails (nothing playing yet, a full bag) is tried again later. */
-  const giftTries = new Map<string, number>();
+  const giftTries = new Map<string, number>(); let giftNow = false;
   function deliverGifts() {
+    if (fighting && !giftNow) return; // a gift waits for the end of a fight, unless the player just said yes
+    giftNow = false;
     for (const [id, gift] of Object.entries(store.pending)) {
       const def = cast.find(d => d.id === id); if (!def) { settleGift(store, id, true); save(); continue; }
       if (!ready().ready) return;
@@ -164,10 +183,12 @@ export function initBots(game: GameBridge) {
     const list = [...runs.values()].filter(meetable).filter(r => canMeet(store, r.def.id, now)).sort((a, b) => Math.hypot(a.w.x - p.x, a.w.z - p.z) - Math.hypot(b.w.x - p.x, b.w.z - p.z));
     // friends say hello more rarely than strangers ask, and every meeting is worth waiting a little for
     const r = list[0]; if (!r || rand() > .55) return;
-    r.mode = 'approach'; r.chase = 0; busy = r.def.id; r.w.speed = r.def.flies ? 6.2 : 3.3;
+    if (fighting && !fightPass(rand)) return; // three times in four a fight keeps them away
+    r.fightOk = fighting; r.mode = 'approach'; r.chase = 0; busy = r.def.id; r.w.speed = r.def.flies ? 6.2 : 3.3;
   }
   function approach(r: Run, dt: number) {
     const p = playerPos(), dx = p.x - r.w.x, dz = p.z - r.w.z, d = Math.hypot(dx, dz);
+    if (held(r)) { r.w.goalX = r.w.x; r.w.goalZ = r.w.z; return; } // waits at a distance until the fight is over
     r.chase += dt; r.w.goalX = p.x - dx / (d || 1) * 2.1; r.w.goalZ = p.z - dz / (d || 1) * 2.1;
     if (r.def.flies) r.flyY = d > 6 ? FLY_HEIGHT : Math.max(0, (d - 2.4) * .5);
     if (!ready().ready || (r.place === 'zone' && inSafeZone(p.x, p.z))) { leave(r); return; } // (a stranger never follows you through the gate)
@@ -180,6 +201,7 @@ export function initBots(game: GameBridge) {
   }
   function talk(r: Run, dt: number) {
     const p = playerPos(); r.w.facing = Math.atan2(p.x - r.w.x, p.z - r.w.z);
+    if (held(r)) return;
     r.modeT -= dt; if (r.modeT > 0) return;
     const now = Date.now();
     if (!isFriend(store, r.def.id)) { r.mode = 'ask'; r.askUntil = clock + 30; sayLine(r, 'ASK', 28000); openRequest(r); return; }
@@ -189,8 +211,9 @@ export function initBots(game: GameBridge) {
     }
     store.meetAfter[r.def.id] = now + MEET_PAUSE_MS.greeted; save(); leave(r);
   }
-  function ask(r: Run) {
+  function ask(r: Run, dt: number) {
     const p = playerPos(); r.w.facing = Math.atan2(p.x - r.w.x, p.z - r.w.z);
+    if (held(r)) { r.askUntil += dt; if (r.say) r.say.until += dt; if (Math.hypot(p.x - r.w.x, p.z - r.w.z) < 30) return; } // the card waits for the end of the fight
     if (!ready().ready || Math.hypot(p.x - r.w.x, p.z - r.w.z) > 9 || clock > r.askUntil) { if (cardFor === r.def.id) closeCard(); store.meetAfter[r.def.id] = Date.now() + MEET_PAUSE_MS.spoke; save(); leave(r); }
   }
 
@@ -296,7 +319,7 @@ export function initBots(game: GameBridge) {
       }
       case 'approach': approach(r, dt); r.moving = walk(w, dt, ctxOf(r), r.def.flies); break;
       case 'talk': talk(r, dt); r.moving = false; break;
-      case 'ask': ask(r); r.moving = false; break;
+      case 'ask': ask(r, dt); r.moving = false; break;
     }
     // altitude eases toward the plan; walking bots stay on the ground
     r.y += (r.flyY - r.y) * Math.min(1, dt * 3);
@@ -404,7 +427,7 @@ export function initBots(game: GameBridge) {
   world.onRemotePlayerClick = id => {
     if (!isBotId(id)) { previousClick?.(id); return; }
     const r = runs.get(id); if (!r) return;
-    if (!isFriend(store, id) && !busy && ready().ready) { r.mode = 'approach'; r.chase = 0; busy = id; r.w.speed = r.def.flies ? 6.2 : 3.3; return; }
+    if (!isFriend(store, id) && !busy && ready().ready) { r.fightOk = true; r.mode = 'approach'; r.chase = 0; busy = id; r.w.speed = r.def.flies ? 6.2 : 3.3; return; }
     const d = cast.find(b => b.id === id); if (d) { renderChat(d); dialog.showModal(); }
   };
 
@@ -425,7 +448,9 @@ export function initBots(game: GameBridge) {
       return;
     }
     clock += Math.min(.1, dt);
-    if (cardFor) card.hidden = false;
+    const wasFighting = fighting; fightSense = sense(); fighting = fight.update(clock, fightSense);
+    if (fighting && !wasFighting && busy) { const r = runs.get(busy); if (r && !r.fightOk) r.fightOk = fightPass(rand); } // a meeting under way rolls once
+    if (cardFor) { const r = runs.get(cardFor); card.hidden = !!r && held(r); card.classList.toggle('aside', fighting); }
     for (const d of cast) {
       if (visitingBot && d.id !== visitingBot) continue;
       if (!runs.has(d.id)) runs.set(d.id, spawn(d));
@@ -448,10 +473,10 @@ export function initBots(game: GameBridge) {
     for (const id of Object.keys(store.friends)) world.friendIds.delete(id);
     for (const bubble of bubbles.values()) bubble.remove();
     bubbles.clear(); runs.clear(); giftTries.clear(); busy = null;
-    clock = pushClock = giftTimer = 0; thinkClock = 2;
+    clock = pushClock = giftTimer = 0; thinkClock = 2; fight.reset(); fighting = false; giftNow = false;
     store = newStore(store.seed); save();
   }
-  return { cast, store: () => store, accept: (id: string) => { const r = runs.get(id); if (r) accept(r); }, reset, runs };
+  return { cast, store: () => store, accept: (id: string) => { const r = runs.get(id); if (r) accept(r); }, reset, runs, fighting: () => fighting };
 }
 export type NeighbourApi = ReturnType<typeof initBots>;
 void BOT_ID_PREFIX;
