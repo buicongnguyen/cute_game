@@ -48,7 +48,7 @@ interface Session {
   boss: Enemy | null; attacks: Array<{ a: DgAttack; enemyId: string; mine: boolean }>; skillClock: number; skillIndex: number; outgoing: DgAttack[];
   /** Rooms cleared (here, or by the host for a peer) and rooms whose rewards were claimed. */
   cleared: number; claimed: number; claiming: boolean; lastClaimAt: number; startedAt: number;
-  root: { until: number; x: number; z: number }; slow: number; lastPos?: { x: number; z: number }; hpShadow: { damage: number; set: number } | null;
+  root: { remaining: number; x: number; z: number }; slow: number; lastPos?: { x: number; z: number }; hpShadow: { damage: number; set: number } | null;
   syncClock: number; spawnIndex: number; ended: boolean; knocked: boolean; done: boolean;
 }
 const C = DUNGEON.arena, ARENA_R = DUNGEON.arenaR, TAU = Math.PI * 2;
@@ -168,7 +168,7 @@ export function initDungeon(h: DungeonHooks) {
     session = {
       runId: o.runId, role: o.role, online: o.online, rng: seeded(o.seed), flow: new DungeonFlow(), mirror: { stage: 0, phase: 'intro', timer: DUNGEON.introTime, elapsed: 0 },
       saved, arena: new T.Group(), arenaStage: -1, portal: null, view, allies: [], members: o.members, boss: null, attacks: [], skillClock: 3, skillIndex: 0, outgoing: [],
-      cleared: 0, claimed: 0, claiming: false, lastClaimAt: Date.now(), startedAt: Date.now(), root: { until: 0, x: 0, z: 0 }, slow: 0,
+      cleared: 0, claimed: 0, claiming: false, lastClaimAt: Date.now(), startedAt: Date.now(), root: { remaining: 0, x: 0, z: 0 }, slow: 0,
       hpShadow: o.online ? { damage: 0, set: h.state().hp } : null, syncClock: 0, spawnIndex: 0, ended: false, knocked: false, done: false,
     };
     restage(0);
@@ -350,7 +350,7 @@ export function initDungeon(h: DungeonHooks) {
       const out = stepSkill(x.a, dt, e2, targets());
       for (const hit of out.hits) if (hit.id === 'me') {
         world.onDamage(e2.damage * hit.mult, hit.source, e2.id);
-        if (hit.root) { s.root = { until: performance.now() + hit.root * 1000, x: world.position.x, z: world.position.z }; world.fx?.text({ x: world.position.x, y: 2.2, z: world.position.z }, '⛓', 'alert'); }
+        if (hit.root) { s.root = { remaining: hit.root, x: world.position.x, z: world.position.z }; world.fx?.text({ x: world.position.x, y: 2.2, z: world.position.z }, '⛓', 'alert'); }
         if (hit.slow) s.slow = Math.max(s.slow, hit.slow);
       }
       if (out.move && s.role !== 'peer') { const d = Math.hypot(out.move.x - C.x, out.move.z - C.z), lim = ARENA_R - 2; e2.x = d > lim ? C.x + (out.move.x - C.x) / d * lim : out.move.x; e2.z = d > lim ? C.z + (out.move.z - C.z) / d * lim : out.move.z; }
@@ -369,8 +369,9 @@ export function initDungeon(h: DungeonHooks) {
   /** Binds and slows: the explorer is held where the bind caught them (or pulled back toward it). */
   function statusFrame(dt: number) {
     const s = session!; s.slow = Math.max(0, s.slow - dt);
-    if (performance.now() < s.root.until) { world.position.x = s.root.x; world.position.z = s.root.z; world.destination = null; world.route = []; }
+    if (s.root.remaining > 0) { world.position.x = s.root.x; world.position.z = s.root.z; world.destination = null; world.route = []; }
     else if (s.slow > 0 && s.lastPos) { world.position.x = s.lastPos.x + (world.position.x - s.lastPos.x) * .55; world.position.z = s.lastPos.z + (world.position.z - s.lastPos.z) * .55; }
+    s.root.remaining = Math.max(0, s.root.remaining - dt);
     s.lastPos = { x: world.position.x, z: world.position.z };
     // The wall holds everyone in; anyone who slips past it (a dash, a knock) is put back inside.
     const d = Math.hypot(world.position.x - C.x, world.position.z - C.z); if (d > ARENA_R + 4) teleport(C.x + (world.position.x - C.x) / d * (ARENA_R - 1), C.z + (world.position.z - C.z) / d * (ARENA_R - 1));

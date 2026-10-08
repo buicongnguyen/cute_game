@@ -139,8 +139,8 @@ export const DUNGEON_ITEMS: Record<string, ItemDef> = {
 /** Vietnamese for every name and line the dungeon shows (merged into the catalogue by locales/vi-catalog.ts). */
 export const DUNGEON_VI: Record<string, string> = {
   'Rune Seal': 'Ấn Phù Văn',
-  'A warm little seal stamped with the vault keeper\'s rune. Delvers trade them like coins.': 'Một chiếc ấn nhỏ ấm áp khắc phù văn của người giữ hầm. Các nhà thám hầm trao đổi chúng như tiền xu.',
-  'Delver\'s Chest': 'Rương Thám Hầm',
+  'A warm little seal stamped with the vault keeper\'s rune. Delvers trade them like coins.': 'Một chiếc ấn nhỏ ấm áp khắc phù văn của người giữ hầm. Các nhà thám hiểm trao đổi chúng như tiền xu.',
+  'Delver\'s Chest': 'Rương Thám Hiểm',
   'A treasure chest carried up from the deepest vault. It still hums with starlight.': 'Chiếc rương báu mang lên từ tầng hầm sâu nhất. Nó vẫn ngân nga ánh sao.',
   'Little Morel': 'Nấm Morel Con',
   'A sleepy mushroom from the Glowcap Grotto. Now and then it bursts spores or shines a glow beam.': 'Một cây nấm buồn ngủ từ Hang Nấm Phát Sáng. Thỉnh thoảng bé nổ bào tử hoặc chiếu tia sáng.',
@@ -149,7 +149,7 @@ export const DUNGEON_VI: Record<string, string> = {
   'Little Anemone': 'Hải Quỳ Con',
   'A wiggly sea anemone from the Coral Throne. It pops bubbles and flicks tiny tentacles.': 'Một bé hải quỳ ngọ nguậy từ Ngai Vàng San Hô. Bé làm nổ bong bóng và quất xúc tu tí hon.',
   'Little Bellows': 'Ống Bễ Con',
-  'A pocket forge golem. It drops a mini anvil and showers sparks when you fight.': 'Một người máy lò rèn bỏ túi. Khi bạn chiến đấu, bé thả đe nhỏ và rắc mưa tia lửa.',
+  'A pocket forge golem. It drops a mini anvil and showers sparks when you fight.': 'Một người đá lò rèn nhỏ xíu. Khi bạn chiến đấu, bé thả đe nhỏ và rắc mưa tia lửa.',
   'Little Moon Moth': 'Bướm Trăng Con',
   'A moth with moonlight on its wings. It sends moonbeams and sprinkles stardust.': 'Chú bướm mang ánh trăng trên cánh. Bé phóng tia trăng và rắc bụi sao.',
   // Creatures and bosses

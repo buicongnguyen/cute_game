@@ -34,6 +34,6 @@ export const VI_ECON: Record<string, string> = {
   'More plans are on the way.': 'Còn nhiều kế hoạch đang chờ.',
   'WHAT IS NEW IN ZOO GARDEN': 'CÓ GÌ MỚI Ở ZOO GARDEN',
   // Watering a friend's crops (visit-rules.ts, server/action-service.mjs)
-  '💧 You watered the plant: 10% less time to wait. +{xp} XP · {count} waterings left in this garden today.': '💧 Bạn đã tưới cây: bớt 10% thời gian chờ. +{xp} XP · hôm nay còn {count} lần tưới ở khu vườn này.',
+  '💧 You watered the plant: 10% less remaining growing time. +{xp} XP · {count} waterings left in this garden today.': '💧 Bạn đã tưới cây: giảm 10% thời gian sinh trưởng còn lại. +{xp} XP · hôm nay còn {count} lần tưới ở khu vườn này.',
   'You have watered this garden five times today. Come back tomorrow.': 'Hôm nay bạn đã tưới khu vườn này năm lần rồi. Mai quay lại nhé.',
 };

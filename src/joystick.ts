@@ -13,7 +13,9 @@ export function mountJoystick(host:HTMLElement,canMove:()=>boolean,change:(direc
   stick.addEventListener('pointerdown',event=>{if(event.button!==0||!enabled||!canMove()||!input.begin(event.pointerId))return;event.preventDefault();event.stopPropagation();const rect=stick.getBoundingClientRect();cx=rect.left+rect.width/2;cy=rect.top+rect.height/2;stick.setPointerCapture(event.pointerId);input.move(event.pointerId,event.clientX-cx,event.clientY-cy);render();});
   stick.addEventListener('pointermove',event=>{if(event.pointerId!==input.pointer)return;event.preventDefault();event.stopPropagation();if(!enabled||!canMove()){clear();return;}input.move(event.pointerId,event.clientX-cx,event.clientY-cy);render();});
   for(const name of ['pointerup','pointercancel','lostpointercapture'] as const)stick.addEventListener(name,event=>{if(event.pointerId!==input.pointer)return;event.stopPropagation();clear();});
-  window.addEventListener('blur',clear);document.addEventListener('visibilitychange',clear);
+  window.addEventListener('blur',clear);
+window.addEventListener('pagehide', clear);
+window.addEventListener('mobile-game-interruption', clear);document.addEventListener('visibilitychange',clear);
   // Rotation moves the stick's centre; require a fresh press in the new layout.
   window.addEventListener('resize',clear);window.addEventListener('orientationchange',clear);
   return {clear,setEnabled(value:boolean){enabled=value;stick.hidden=!value;host.classList.toggle('joystick-on',value);clear();},update(){if(input.pointer!==null){if(!enabled||!canMove())clear();else render();}}};

@@ -17,6 +17,24 @@ function setup() {
 }
 const L = DUNGEON.lobby;
 
+test('departed players can claim only rooms cleared before they left, until the grace period ends',()=>{
+  const w=setup(),a=w.add('a',L.x,L.z),b=w.add('b',L.x+1,L.z);w.tick(10.5);const run=a.dungeon;
+  w.lobby.message(a,{type:'dgClear',runId:run.id,stage:0});
+  w.lobby.message(b,{type:'dgLeave',runId:run.id});
+  w.lobby.message(a,{type:'dgClear',runId:run.id,stage:1});
+  assert.equal(w.lobby.check('b','dungeonClaim',{runId:run.id,stage:0}),true);
+  assert.equal(w.lobby.check('b','dungeonClaim',{runId:run.id,stage:1}),false);
+  assert.equal(w.lobby.check('b','dungeonClaim',{runId:run.id,stage:-1}),false);
+  assert.equal(w.lobby.check('a','dungeonClaim',{runId:run.id,stage:1}),true);
+  w.tick(121);assert.equal(w.lobby.check('b','dungeonClaim',{runId:run.id,stage:0}),false);
+});
+
+test('a delayed leave packet for an old run cannot eject a player from the current run',()=>{
+  const w=setup(),a=w.add('a',L.x,L.z);w.tick(10.5);const run=a.dungeon;
+  w.lobby.message(a,{type:'dgLeave',runId:'old-run'});assert.equal(a.dungeon,run);
+  w.lobby.message(a,{type:'dgLeave',runId:run.id});assert.equal(a.dungeon,null);
+});
+
 test('everyone in the circle when the 10 s countdown ends goes in together (at most five), in a private room', () => {
   const w = setup();
   for (let i = 0; i < 6; i++) w.add('p' + i, L.x + (i % 3) - 1, L.z + Math.floor(i / 3));

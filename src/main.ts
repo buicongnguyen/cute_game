@@ -1,3 +1,4 @@
+import './mobile-game-init.mjs';
 import {cropBadgeAnchor} from './crop-cards.ts';
 import {HELP_TOPICS} from './help-topics.ts';
 import './farm.css';
@@ -1533,7 +1534,9 @@ document.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=
 const releasePointer=(e:PointerEvent)=>{gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);fishGame?.input.releasePointer(e.pointerId);};
 document.addEventListener('pointerup',releasePointer);document.addEventListener('pointercancel',releasePointer);document.addEventListener('lostpointercapture',releasePointer);
 function clearHeldInput(){cancelLongPresses();cancelButtonTouches();movement.clear();joystick.clear();fishGame?.input.clear();gestures.clear();spaceKeys.clear();spacePointer=null;boostPointers.clear();boostHeld=false;}
-window.addEventListener('blur',()=>{clearHeldInput();save();});window.addEventListener('beforeunload',save);document.addEventListener('visibilitychange',()=>{clearHeldInput();save();});
+window.addEventListener('blur',()=>{clearHeldInput();save();});
+window.addEventListener('pagehide', ()=>{clearHeldInput();save();});
+window.addEventListener('mobile-game-interruption', ()=>{clearHeldInput();save();});window.addEventListener('beforeunload',save);document.addEventListener('visibilitychange',()=>{clearHeldInput();save();});
 window.addEventListener('resize',clearHeldInput);window.addEventListener('orientationchange',clearHeldInput);
 mountTouchButtons();
 let previous=performance.now(),wasAirborne=false;

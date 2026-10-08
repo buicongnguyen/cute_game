@@ -54,7 +54,7 @@ export function createDungeonLobby({ peers, rooms, parties, join, send, arrived,
   /** A member leaves (or the run ends): back to the world room it came from, standing by the circle. */
   function leave(peer, reason = 'leave') {
     const run = peer?.dungeon; if (!run) return;
-    peer.dungeon = null; peer.dungeonPast = { run, until: now() + 120_000 }; run.members = run.members.filter(id => id !== peer.account.id);
+    peer.dungeon = null; peer.dungeonPast = { run: { id: run.id, cleared: run.cleared }, until: now() + 120_000 }; run.members = run.members.filter(id => id !== peer.account.id);
     const back = peer.dungeonReturn && parties.has(peer.dungeonReturn) ? peer.dungeonReturn : null; delete peer.dungeonReturn;
     try { join(peer, 'home', back); } catch { try { join(peer, 'home', null); } catch { /* the public village is full: the client reconnects */ } }
     peer.pose = { ...peer.pose, x: DUNGEON.lobby.x, z: DUNGEON.lobby.z - 6 }; arrived(peer);
@@ -67,7 +67,7 @@ export function createDungeonLobby({ peers, rooms, parties, join, send, arrived,
   /** A socket message of type dg*; returns true when handled. */
   function message(peer, m) {
     const run = peer.dungeon;
-    if (m.type === 'dgLeave') { leave(peer); return true; }
+    if (m.type === 'dgLeave') { if (run && m.runId === run.id) leave(peer); return true; }
     if (!run || m.runId !== run.id) return m.type?.startsWith('dg') ?? false;
     const json = s => { const text = JSON.stringify(s); return text.length < 60_000 ? text : null; };
     if (m.type === 'dgSync' && run.host === peer.account.id) { const body = json({ type: 'dgSync', runId: run.id, state: m.state }); if (body) for (const p of others(run, peer.account.id)) send(p.socket, body); }
@@ -82,7 +82,7 @@ export function createDungeonLobby({ peers, rooms, parties, join, send, arrived,
     if (type === 'dungeonStart') return !!run && run.id === p.runId;
     // Rooms cleared before you left can still be claimed for two minutes (claims are paced 15 s apart).
     const past = peers.get(actorId)?.dungeonPast, claimable = run ?? (past && now() < past.until ? past.run : null);
-    if (type === 'dungeonClaim') return !!claimable && claimable.id === p.runId && Number.isInteger(p.stage) && p.stage < claimable.cleared;
+    if (type === 'dungeonClaim') return !!claimable && claimable.id === p.runId && Number.isInteger(p.stage) && p.stage >= 0 && p.stage < claimable.cleared;
     return true;
   }
   function disconnect(peer) { if (peer?.dungeon) leave(peer, 'disconnect'); sent.delete(peer?.account?.id); }
