@@ -128,7 +128,7 @@ function bedTask(s: M.SaveState, from: { x: number; z: number }, now: number, pl
   let best: FriendTask | null = null, bestD = Infinity, bestRipe = false;
   s.plots.forEach((p, i) => {
     if (i === skip) return;
-    const r = ripe(p, now); if (!r && !(plant && !p.crop && i !== held && seedFor(s, i))) return;
+    const r = ripe(p, now) && M.canAddItem(s, p.crop!); if (!r && !(plant && !p.crop && i !== held && seedFor(s, i))) return;
     const d = dist(M.bedPosition(s, i), from);
     if (r && !bestRipe || r === bestRipe && d < bestD) { best = { kind: r ? 'harvest' : 'plant', index: i }; bestD = d; bestRipe = r; }
   });
@@ -154,7 +154,7 @@ export function nextFriendTask(s: M.SaveState, id: FriendId, from: { x: number; 
   if (f.role === 'farm') return animalTask(s, from, now, f.autoFeed === true, skipAnimal);
   // The cook shops for the pot, not for the beds: a bed only once two are ripe (one trip for a basket, so she no
   // longer shadows the gardener bed by bed), farm products only when no farmer is working them.
-  if (s.plots.filter(p => ripe(p, now)).length >= 2) { const bed = bedTask(s, from, now, false, skipBed); if (bed) return bed; }
+  if (s.plots.filter(p => ripe(p, now) && M.canAddItem(s, p.crop!)).length >= 2) { const bed = bedTask(s, from, now, false, skipBed); if (bed) return bed; }
   return working(s, friendOf(s, 'clover'), now) ? null : animalTask(s, from, now, false, skipAnimal);
 }
 

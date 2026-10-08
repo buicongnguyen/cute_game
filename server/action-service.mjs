@@ -87,7 +87,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
           const day=new Date(now).toISOString().slice(0,10);account.theftLedger??={};
           const ledger=account.theftLedger[owner.id]?.day===day?account.theftLedger[owner.id]:{day,count:0};
           if(ledger.count>=6)fail(409,'You have collected six crops from this garden today.');
-          const item=plot.crop;if(!Game.addItem(state,item))fail(409,'Your bag cannot hold that crop.');
+          const item=plot.crop;if(!Game.addItem(state,item))fail(409,Game.BAG_FULL);
           plot.crop=null;plot.plantedAt=0;delete plot.growDuration;delete plot.generation;
           owner.profile=target;ledger.count++;account.theftLedger[owner.id]=ledger;
           result={blocked:false,ownerId:owner.id,index:p.index,item,count:1,remaining:6-ledger.count};
@@ -104,7 +104,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         const day=new Date(now).toISOString().slice(0,10),ledger=account.giftLedger?.day===day?account.giftLedger:{day,count:0};
         if(ledger.count+count>60)fail(429,'You have given plenty of gifts today. Try again tomorrow.');
         const target=Game.parseSave(JSON.stringify(owner.profile));if(!target)fail(409,'That friend could not be reached.');
-        if(!Number.isSafeInteger((target.chest[item]??0)+count)||!Number.isSafeInteger(((target.awayStore??{})[item]??0)+count))fail(409,'Their chest is full of that already.');
+        if(!Number.isSafeInteger((target.chest[item]??0)+count)||!Number.isSafeInteger(((target.awayStore??{})[item]??0)+count)||!Game.chestFits(target,item))fail(409,'Their chest is full of that already.');
         if(!Game.removeItem(state.bag,item,count))fail(409,'You do not have enough of that to give.');
         target.chest[item]=(target.chest[item]??0)+count;(target.awayStore??={})[item]=(target.awayStore[item]??0)+count;
         owner.profile=target;ledger.count+=count;account.giftLedger=ledger;
@@ -161,7 +161,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
           if(ticket.planet!==state.planet||now-ticket.startedAt>180000)fail(409,'That cast has expired.');requireNear(peer,ticket.cast,9);
           validateFishingProof(p.telemetry,ticket,now);const catchResult=ticket.outcome;
           const ok=catchResult.mystery?Game.grantMysteryCatch(state,catchResult.id,catchResult.size,catchResult.supergiant):Game.grantCatch(state,catchResult.id,catchResult.size,catchResult.huge);
-          if(!ok)fail(409,'Your bag cannot hold that catch.');
+          if(!ok)fail(409,Game.BAG_FULL);
           if(catchResult.mystery){const caller=parseMysteryCaller(account.mysteryCaller);mysteryLanded(caller);account.mysteryCaller=caller;}
           delete account.fishingTicket;result={...catchResult};
         }
@@ -174,7 +174,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         const space=drop.space||(drop.planet==='home'&&Math.hypot(drop.x,drop.z)<18?`home:${drop.ownerId}`:'wild');
         if(space!=='wild'&&space!==`home:${actorId}`)fail(403,'This dropped item belongs to a private garden.');
         if(data.type==='releaseDrop'){if(drop.owner!==actorId)fail(403,'Only the owner can release this item.');drop.releaseAt=now;result=drop;}
-        else{if(distance(peer.pose,drop)>4.5||now<drop.releaseAt&&drop.owner!==actorId)fail(409,'Move closer or wait for the owner to release this item.');if(!Game.addItem(state,drop.item,drop.count))fail(409,'Your bag cannot hold that item.');drop.claimed=actorId;drop.claimedAt=now;result={id:drop.id,item:drop.item,count:drop.count,ownerId:owner.id,room:drop.room,planet:drop.planet,space,x:drop.x,z:drop.z};}
+        else{if(distance(peer.pose,drop)>4.5||now<drop.releaseAt&&drop.owner!==actorId)fail(409,'Move closer or wait for the owner to release this item.');if(!Game.addItem(state,drop.item,drop.count))fail(409,Game.BAG_FULL);drop.claimed=actorId;drop.claimedAt=now;result={id:drop.id,item:drop.item,count:drop.count,ownerId:owner.id,room:drop.room,planet:drop.planet,space,x:drop.x,z:drop.z};}
       }else if(data.type==='rideTurtle'){
         const turtle=createEnvironmentLayout(state.planet).turtles[p.index];if(state.planet!=='ocean'||!turtle)fail(400,'That turtle is not here.');requireNear(peer,turtle,4);account.rideUntil=now+45000;account.ridePlanet=state.planet;result={until:account.rideUntil};
       }else if(data.type==='collectMeteor'){
@@ -183,7 +183,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         world.oreClaims??=new Set();if(world.oreClaims.has(p.id))fail(409,'This meteor is already being collected.');
         const rules=LAVA_ORE_RULES[ore.kind],progress=strike(account,`${world.id}:${p.id}`,rules.hits,now);
         if(progress)result=progress;
-        else{world.oreClaims.add(p.id);reservation={world,id:p.id};const rewards=[];for(const[id,chance,min,max]of rules.loot)if(random()<chance){const count=min+Math.floor(random()*(max-min+1));if(!Game.addItem(state,id,count))fail(409,'Your bag cannot hold that resource.');rewards.push({id,count});}Game.recordEvent(state,'mine',1,undefined,now);result={rewards};}
+        else{world.oreClaims.add(p.id);reservation={world,id:p.id};const rewards=[];for(const[id,chance,min,max]of rules.loot)if(random()<chance){const count=min+Math.floor(random()*(max-min+1));if(!Game.addItem(state,id,count))fail(409,Game.BAG_FULL);rewards.push({id,count});}Game.recordEvent(state,'mine',1,undefined,now);result={rewards};}
       }else if(data.type==='openCave'){
         if(state.planet!=='lava'||state.worldRewards.lava.gateOpen)fail(409,'That gate is already open.');requireNear(peer,createEnvironmentLayout('lava').cave.gate);
         result=strike(account,'lava:cave-gate',8,now)||Game.openCave(state);
@@ -204,7 +204,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         }else if(node.item){
           const progress=strike(account,node.id,node.hits,now);
           if(progress)result={kind:node.kind,...progress};
-          else{const rules=node.kind==='clam'?{loot:[['coral',1,1,2],['pearl',.3,1,1]]}:LAVA_ORE_RULES[node.kind==='fire-crystal'?'ore_fire':node.kind==='magma-ore'?'ore_magma':'ore_obsidian'];const rewards=[];for(const[id,chance,min,max]of rules.loot)if(random()<chance){const count=min+Math.floor(random()*(max-min+1));if(!Game.addItem(state,id,count))fail(409,'Your bag cannot hold that resource.');rewards.push({id,count});}state.worldRewards.resourceReadyAt[node.id]=now+(node.cooldown||60000);Game.recordEvent(state,'mine',1,undefined,now);result={kind:node.kind,rewards};}
+          else{const rules=node.kind==='clam'?{loot:[['coral',1,1,2],['pearl',.3,1,1]]}:LAVA_ORE_RULES[node.kind==='fire-crystal'?'ore_fire':node.kind==='magma-ore'?'ore_magma':'ore_obsidian'];const rewards=[];for(const[id,chance,min,max]of rules.loot)if(random()<chance){const count=min+Math.floor(random()*(max-min+1));if(!Game.addItem(state,id,count))fail(409,Game.BAG_FULL);rewards.push({id,count});}state.worldRewards.resourceReadyAt[node.id]=now+(node.cooldown||60000);Game.recordEvent(state,'mine',1,undefined,now);result={kind:node.kind,rewards};}
         }else fail(400,'Use the interaction for that landmark.');
       }else{
         if(data.type==='rest')requireNear(peer,{x:0,z:-8},7);
@@ -212,7 +212,8 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         if(data.type==='houseUse'){if(!peer||peer.visit||state.planet!=='home'||!(peer.pose.y>=INDOOR_Y-1))fail(409,'Go inside your cottage first.');const spot=activity(typeof p.id==='string'?p.id:'');if(!spot||distance(peer.pose,spot.at)>3)fail(409,'Walk up to it first.');}
         // The upgrade bench stands in the cottage's craft room (upgrade-bench.ts).
         if(data.type==='upgradeGear'||data.type==='upgradeSkill'){const bench=activity('bench');if(!peer||peer.visit||state.planet!=='home'||!(peer.pose.y>=INDOOR_Y-1))fail(409,'Go inside your cottage first.');if(!bench||distance(peer.pose,bench.at)>3)fail(409,'Walk up to it first.');}
-        if(data.type==='recoverBag'){if(!state.dropped||state.dropped.planet!==state.planet)fail(409,'That bag is not here.');requireNear(peer,state.dropped,4);}
+        // A dropped bag (death-bags.ts): only the owner's own save holds it; the server's pose must be beside it, within its 24 hours.
+        if(data.type==='recoverBag'){const bag=Game.liveBags(state,now,state.planet).find(b=>p.id===undefined||b.id===p.id);if(!bag)fail(409,'That bag is not here.');requireNear(peer,bag,4);}
         if(data.type==='claimMine')requireNear(peer,p.index===0?{x:-6,z:3}:{x:9,z:-8});
         if(data.type==='claimGift'){const a=p.index*2.399+.4,d=24+Math.sqrt(p.index/25)*95;requireNear(peer,{x:Math.cos(a)*d,z:Math.sin(a)*d});}
         if(['openCave','lightBrazier','claimCaveChest'].includes(data.type)){

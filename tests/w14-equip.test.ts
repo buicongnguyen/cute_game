@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import * as M from '../src/model.ts';
 import * as IG from '../src/item-groups.ts';
+import { slotMeterHtml, expandCardHtml } from '../src/bag-slots-ui.ts';
 import * as F from '../src/friends.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { ContextGearSelection, type GearContext } from '../src/context-gear.ts';
@@ -97,7 +98,7 @@ const compiled = ts.transpileModule(`${fn('inventory')}\n${fn('tryOnButton')}\na
 function fixture(...items: string[]) {
   const state = owning(...items), gear = new ContextGearSelection(), html: string[] = [], calls: string[] = [];
   const ctx = vm.createContext({
-    M, IG, state, contextGear: gear, canTryOn, autoHeld, selectedItem: null, tryingOn: null, modal: 'bag', bagMode: 'bag', wardrobeItem: (item?: { slot?: string }) => !!item?.slot,
+    M, IG, state, contextGear: gear, canTryOn, autoHeld, slotMeterHtml, expandCardHtml, mini: (id: string) => id, selectedItem: null, tryingOn: null, modal: 'bag', bagMode: 'bag', wardrobeItem: (item?: { slot?: string }) => !!item?.slot,
     // As main.ts perform: a refused action is a toast and resolves undefined.
     perform: async (type: string, payload: Record<string, unknown>) => { calls.push(type); try { return applyGameAction(state, { type, payload }); } catch { return undefined; } },
     world: { refreshPlayer() {}, position: { x: 0, z: 0 } }, save() {}, shop() { calls.push('shop'); }, equipFeedback(id: string) { calls.push(`feedback:${id}`); },

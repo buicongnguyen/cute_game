@@ -1,5 +1,5 @@
 import { ITEMS, CROPS, canonicalItem, type ItemId, type Inventory } from './content.ts';
-import { addItem, gainXp, pantry, pantryIds, usePantry, type SaveState } from './model.ts';
+import { addItem, canAddAll, noteFull, delivering, gainXp, pantry, pantryIds, usePantry, type SaveState } from './model.ts';
 import { gameHours } from './farm-clock.ts';
 import { recordEvent } from './progression.ts';
 import { newFarmHelper, parseFarmHelper, type FarmHelperState } from './farm-helper-state.ts';
@@ -310,6 +310,8 @@ export function collectProducts(s: SaveState, now = Date.now(), uids?: readonly 
     // At end of life the stock it had earned comes along with the meat; both are granted or neither is.
     const product = ANIMALS[a.kind].product, stock = stockAtExpiry(a, now);
     if (stock && (!Number.isSafeInteger((s.bag[product] || 0) + stock) || !Number.isSafeInteger((s.bag[item] || 0) + count))) continue;
+    // Both stacks need room together (storage-slots.ts): a full bag leaves the animal's stock waiting.
+    if (!canAddAll(s, { [item]: count, ...(stock ? { [product]: stock } : {}) })) { noteFull(delivering() ? 'chest' : 'bag'); continue; }
     if (!addItem(s, item, count)) continue;
     if (stock) addItem(s, product, stock);
     if (expired(a, now)) {
@@ -332,7 +334,7 @@ export function expandPen(s: SaveState) {
 }
 export function canCookDish(s: SaveState, id: ItemId) {
   const dish = FARM_DISHES.find(d => d.id === id);
-  return !!dish && s.planet === 'home' && kitchenOpen(s) && Number.isSafeInteger((s.bag[id] || 0) + 1) && Object.entries(dish.materials).every(([m, n]) => pantry(s, m) >= n!);
+  return !!dish && s.planet === 'home' && kitchenOpen(s) && Number.isSafeInteger((s.bag[id] || 0) + 1) && canAddAll(s, { [id]: 1 }) && Object.entries(dish.materials).every(([m, n]) => pantry(s, m) >= n!);
 }
 /** Cooks one farm dish at the kitchen (free, counts as a meal for the journal). */
 export function cookDish(s: SaveState, id: ItemId) {

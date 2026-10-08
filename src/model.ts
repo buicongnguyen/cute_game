@@ -18,6 +18,10 @@ import { specialPrice } from './special-offers.ts';
 import { levelAllows } from './level-gates.ts';
 import { AUDIO_DEFAULTS, parseAudio } from './audio-settings.ts';
 import { isTreeCrop } from './tree-crops.ts';
+import { fits, noteFull, noteDelivered, clearFullNote, delivering, chestFits, nextExpansion, hasExpansionMaterials, isStorageKind, type StorageKind } from './storage-slots.ts';
+import { pruneBags, bagId, parseDeathBags, MAX_DEATH_BAGS, type DeathBag } from './death-bags.ts';
+export * from './storage-slots.ts';
+export * from './death-bags.ts';
 export { gearLevel, gearWorld, levelAllows } from './level-gates.ts';
 export { isTreeCrop, TREE_CROP_MS } from './tree-crops.ts';
 export * from './weapon-forge.ts';
@@ -138,12 +142,11 @@ export interface SaveState {
     collection: Record<string, number>;
     fishRecords: Record<string, number>;
     progression: ProgressionState;
-    dropped: {
-        x: number;
-        z: number;
-        planet: PlanetId;
-        items: Inventory;
-    } | null;
+    /** Bags dropped where the explorer fell (death-bags.ts): up to 10, each kept 24 hours; missing = none. */
+    deathBags?: DeathBag[];
+    /** Backpack and chest expansions bought (storage-slots.ts); missing = 0. */
+    bagUp?: number;
+    chestUp?: number;
     savedAt: number;
     /** The animal pen (farm.ts); older saves get an empty one. */
     farm: FarmState;
@@ -178,7 +181,7 @@ export interface SaveState {
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
-export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 3, forge: {}, nextPlantId: 0, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, musicVolume: AUDIO_DEFAULTS.musicVolume, sfxVolume: AUDIO_DEFAULTS.sfxVolume, vibrate: AUDIO_DEFAULTS.vibrate, lowGraphics: false, difficulty: 'easy' }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), dropped: null, savedAt: Date.now(), welcome: 'pending', looks: { owned: ['tall'], style: 'girl-tall-none-bare' } }; }
+export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 3, forge: {}, nextPlantId: 0, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, musicVolume: AUDIO_DEFAULTS.musicVolume, sfxVolume: AUDIO_DEFAULTS.sfxVolume, vibrate: AUDIO_DEFAULTS.vibrate, lowGraphics: false, difficulty: 'easy' }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), savedAt: Date.now(), welcome: 'pending', looks: { owned: ['tall'], style: 'girl-tall-none-bare' } }; }
 export function xpNeeded(level: number) { return Math.round(25 * Math.pow(Math.max(1, level), 1.55)); }
 function equipped(s: SaveState) { return Object.values(s.gear).map(id => ITEMS[id]).filter(Boolean); }
 // Bench levels (upgrades.ts) scale an item's own flat stats. While a disguise is worn its own weapon fights (weaponStats),
@@ -219,7 +222,30 @@ export function tickEffects(s: SaveState, dt: number, now = Date.now()) { if (!N
         delete s.buffs[key]; s.hp = Math.min(maxHp(s), s.hp + activeStats(s, now).regen * Math.min(dt, 1)); }
 export function addItem(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw); if (!Object.hasOwn(ITEMS, id) || !Number.isSafeInteger(count) || count < 1)
     return false; const next = (s.bag[id] || 0) + count; if (!Number.isSafeInteger(next))
-    return false; s.bag[id] = next; s.collection[id] = 1; return true; }
+    return false;
+    // The one slot check (storage-slots.ts): a new id needs a free slot; a full bag refuses and says so.
+    if (!fits(s, { [id]: count })) { noteFull(delivering() ? 'chest' : 'bag'); return false; }
+    noteDelivered(s, id); s.bag[id] = next; s.collection[id] = 1; return true; }
+/** Whether the bag (or, while delivering, the chest) has room for all these items at once. */
+export function canAddAll(s: SaveState, items: Inventory) { return fits(s, items); }
+export const canAddItem = (s: SaveState, id: ItemId, count = 1) => fits(s, { [canonicalItem(id)]: count });
+/** Grants that must never be lost (a first-defeat companion, quest and vault rewards): the bag when it has room, else the chest. */
+export function stowItem(s: SaveState, raw: ItemId, count = 1): 'bag' | 'chest' | false {
+    if (addItem(s, raw, count)) return 'bag';
+    const id = canonicalItem(raw); if (!Object.hasOwn(ITEMS, id) || !Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger((s.chest[id] || 0) + count)) return false;
+    clearFullNote(); s.chest[id] = (s.chest[id] || 0) + count; s.collection[id] = 1; return 'chest';
+}
+/**
+ * Expands the backpack (+4 slots, 5 times) or the chest (+10 slots, 4 times) for the reference's energy and materials
+ * (storage-slots.ts expansionCost), taken from the backpack. Returns the new size.
+ */
+export function expandStorage(s: SaveState, kind: StorageKind): { kind: StorageKind; level: number; size: number } | false {
+    if (!isStorageKind(kind)) return false; const next = nextExpansion(s, kind);
+    if (!next || s.energy < next.energy || !hasExpansionMaterials(s, next.materials)) return false;
+    s.energy -= next.energy; for (const [id, n] of Object.entries(next.materials)) if (n) removeItem(s.bag, id, n);
+    if (kind === 'bag') s.bagUp = next.level + 1; else s.chestUp = next.level + 1;
+    return { kind, level: next.level + 1, size: next.next };
+}
 /** A reward bundle is one grant: never consume its source after receiving only some items. */
 function addItems(s: SaveState, items: Inventory) {
     const next = { ...s, bag: { ...s.bag }, collection: { ...s.collection } };
@@ -512,10 +538,10 @@ export * from './difficulty.ts';
 export function sell(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item || !Number.isSafeInteger(count) || count < 1 || !item.sell || count > looseQuantity(s, id))
     return 0; const value = sellPrice(s, id) * count; if (!Number.isSafeInteger(value) || !Number.isSafeInteger(s.energy + value) || !removeItem(s.bag, id, count))
     return 0; s.energy += value; recordEvent(s, 'sell', value); return value; }
-export function canCraft(s: SaveState, index: number) { const r = RECIPES[index]; return !!r && Number.isSafeInteger((s.bag[r.result] || 0) + (r.count || 1)) && s.energy >= r.energy && (r.station !== 'forge' || furnaceReady(s)) && hasMaterials(s, r.materials); }
+export function canCraft(s: SaveState, index: number) { const r = RECIPES[index]; return !!r && Number.isSafeInteger((s.bag[r.result] || 0) + (r.count || 1)) && fits(s, { [r.result]: r.count || 1 }) && s.energy >= r.energy && (r.station !== 'forge' || furnaceReady(s)) && hasMaterials(s, r.materials); }
 // Materials come from the bag first, then the house chest at home (pantry.ts), as the kitchen's ingredients do.
 export function craft(s: SaveState, index: number) { if (!canCraft(s, index))
-    return false; const r = RECIPES[index]; if (!useMaterials(s, r.materials)) return false; s.energy -= r.energy; addItem(s, r.result, r.count || 1); recordEvent(s, 'craft'); return true; }
+    return (RECIPES[index] && !fits(s, { [RECIPES[index].result]: 1 }) && noteFull('bag'), false); const r = RECIPES[index]; if (!useMaterials(s, r.materials)) return false; s.energy -= r.energy; addItem(s, r.result, r.count || 1); recordEvent(s, 'craft'); return true; }
 export function buy(s: SaveState, raw: ItemId) { const id = canonicalItem(raw); if (id === 'plot_kit') return buyPlotKit(s); const index = RECIPES.findIndex(r => r.station === 'shop' && r.result === id); return index >= 0 ? craft(s, index) : buySpecial(s, id); }
 /** A special offer (special-offers.ts): crafted or boss-dropped gear and decorations, for energy only, at the server's price. */
 function buySpecial(s: SaveState, id: ItemId) { const price = specialPrice(id); if (price === null || s.energy < price || !levelAllows(s.level, id) || !addItem(s, id)) return false; s.energy -= price; recordEvent(s, 'craft'); return true; }
@@ -537,8 +563,12 @@ export function equip(s: SaveState, raw: ItemId) { const id = canonicalItem(raw)
     s.hp = Math.min(s.hp, maxHp(s)); if (item.slot === 'weapon' || item.slot === 'disguise')
     s.counters.equipped++; return true; }
 // Own slots only: 'constructor' or '__proto__' from a client read Object.prototype and "succeeded" on the server.
-export function unequip(s: SaveState, slot: GearSlot) { if (!Object.hasOwn(s.gear, slot) || !s.gear[slot])
-    return false; delete s.gear[slot]; s.hp = Math.min(s.hp, maxHp(s)); return true; }
+export function unequip(s: SaveState, slot: GearSlot, auto = false) { if (!Object.hasOwn(s.gear, slot) || !s.gear[slot])
+    return false;
+    // Taken off, it needs a bag slot of its own unless loose copies are there already (reference: "Túi đồ đầy, không tháo ra được!").
+    // The shore's automatic weapon swap (context-gear.ts) is not the player taking it off: it never fails on slots.
+    if (!auto && !fits(s, { [s.gear[slot]!]: 1 })) { noteFull('bag'); return false; }
+    delete s.gear[slot]; s.hp = Math.min(s.hp, maxHp(s)); return true; }
 export function eat(s: SaveState, raw: ItemId, now = Date.now()) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item || !item.heal && !item.buff || !item.buff && s.hp >= maxHp(s) || !removeItem(s.bag, id))
     return false; if (item.heal)
     s.hp = Math.min(maxHp(s), s.hp + item.heal); if (item.buff)
@@ -546,10 +576,10 @@ export function eat(s: SaveState, raw: ItemId, now = Date.now()) { const id = ca
 // Ingredients within reach (bag, plus the chest at home) live in pantry.ts, shared by every home station.
 export { looseQuantity, pantry, pantryIds, usePantry, hasMaterials, useMaterials, fromChest } from './pantry.ts';
 export { SPECIAL_PRICE, TITAN_PRICE, isSpecial, specialPrice, specialSource, specialIds, SOURCE_NOTE } from './special-offers.ts';
-export function cook(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw), result = `cooked_${id}`; if (!Object.hasOwn(ITEMS, result) || s.planet !== 'home' || !kitchenOpen(s) || !Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger((s.bag[result] || 0) + count) || !usePantry(s, id, count))
+export function cook(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw), result = `cooked_${id}`; if (!Object.hasOwn(ITEMS, result) || s.planet !== 'home' || !kitchenOpen(s) || !Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger((s.bag[result] || 0) + count) || !canAddItem(s, result, count) && (noteFull('bag'), true) || !usePantry(s, id, count))
     return false; addItem(s, result, count); recordEvent(s, 'cook', count); return true; }
 export function transfer(s: SaveState, raw: ItemId, toChest: boolean) { const id = canonicalItem(raw); if (toChest && looseQuantity(s, id) < 1)
-    return false; const from = toChest ? s.bag : s.chest, to = toChest ? s.chest : s.bag; if (!Number.isSafeInteger((to[id] || 0) + 1) || !removeItem(from, id))
+    return false; const from = toChest ? s.bag : s.chest, to = toChest ? s.chest : s.bag; if (Object.hasOwn(ITEMS, id) && (from[id] || 0) > 0 && !(toChest ? chestFits(s, id) : fits(s, { [id]: 1 }))) { noteFull(toChest ? 'chest' : 'bag'); return false; } if (!Number.isSafeInteger((to[id] || 0) + 1) || !removeItem(from, id))
     return false; to[id] = (to[id] || 0) + 1; return true; }
 export function upgradeCost(s: SaveState, kind: keyof typeof UPGRADES) { const rank = kind === 'health' ? s.healthUp : kind === 'attack' ? s.attackUp : kind === 'defense' ? s.defenseUp : s.critUp; return Math.min(Number.MAX_SAFE_INTEGER, Math.ceil(UPGRADES[kind].base * Math.pow(1.38, rank))); }
 export function upgrade(s: SaveState, kind: keyof typeof UPGRADES) { if (!Object.hasOwn(UPGRADES, kind) || kind === 'crit' && s.critUp >= 28)
@@ -579,8 +609,7 @@ export function travel(s: SaveState, id: PlanetId) { if (!canLand(s, id))
     s.visited.push(id); if (id !== 'home')
     recordEvent(s, 'planet'); return true; }
 /** Stardust collected in space: a little energy and, now and then, a star shard. */
-export function collectStardust(s: SaveState, rng: () => number = Math.random) { s.energy += 3; const shard = rng() < .08; if (shard)
-    addItem(s, 'starshard'); return shard; }
+export function collectStardust(s: SaveState, rng: () => number = Math.random) { s.energy += 3; const shard = rng() < .08 && addItem(s, 'starshard'); return shard; }
 export const QUESTS = STORY_STEPS.map((q, i) => ({ title: q.title, task: q.title, target: q.target, icon: q.icon, counter: q.condition || q.event || 'level', energy: 0, xp: 0, hint: `Chapter ${q.chapter + 1} · Step ${i + 1}` }));
 export function questProgress(s: SaveState) { return progressEntries(s, 'story')[0]?.progress || 0; }
 export function claimQuest(s: SaveState) { return claimProgress(s, 'story', `story:${s.progression.story.index}`); }
@@ -601,14 +630,14 @@ function addFirstDefeatPet(s: SaveState, type: string, loot: { id: string; count
     const id = type.startsWith('titan_') ? `pet_t_${type.slice(6)}` : `pet_b_${type}`;
     if (!Object.hasOwn(ITEMS, id) || ownsItem(s, id)) return undefined;
     for (let i = loot.length - 1; i >= 0; i--) if (loot[i].id === id) loot.splice(i, 1);
-    addItem(s, id, 1); return id;
+    stowItem(s, id, 1); return id; // a full bag sends it to the chest: never lost
 }
 /** Ground loot of a defeat; `pet` names the first-defeat companion already banked into the bag (not part of the list). */
 export type DefeatLoot = { id: string; count: number }[] & { pet?: string };
 /** bank=false leaves the loot out of the bag: the game tosses it onto the ground instead (drops.ts). `bonus`: the Hard
  * reward of the creatures fought (co-op: the room's scale, difficulty.ts scaleReward); solo it is the save's own. */
 export function grantDefeat(s: SaveState, type: string, xp: number, boss = false, rng: () => number = Math.random, bank = true, bonus = rewardScale(s)): DefeatLoot { gainXp(s, xp, Date.now(), bonus); const first = boss && !(s.bosses ?? []).includes(`${s.planet}:${type}`), loot: DefeatLoot = rollLoot(type, activeStats(s).luck, rng, bonus); if (first) { const pet = addFirstDefeatPet(s, type, loot); if (pet) loot.pet = pet; } if (bank) for (const item of loot)
-    addItem(s, item.id, item.count); recordEvent(s, 'kill', 1, type); if (boss)
+    stowItem(s, item.id, item.count); recordEvent(s, 'kill', 1, type); if (boss)
     { recordEvent(s, 'boss', 1, type); noteBossDefeat(s, type); } return loot; }
 export function chooseFish(s: SaveState, water: string = s.planet, rng: () => number = Math.random) { const choices = FISH_WEIGHTS[water] || FISH_WEIGHTS.home, luck = activeStats(s).luck, weighted = choices.map(([id, weight]) => [id, weight * (ITEMS[id].legend ? 1 + luck * 1.5 : ITEMS[id].rare ? 1 + luck : 1)] as const); let draw = rng() * weighted.reduce((sum, [, w]) => sum + w, 0); for (const [id, weight] of weighted) {
     draw -= weight;
@@ -733,23 +762,39 @@ export function claimCaveChest(s: SaveState, now = Date.now(), rng: () => number
     const rewards:Inventory={obsidian:3+Math.floor(rolls[0]*3),firecore:1+Math.floor(rolls[1]*2)};
     if(rolls[2]<.35)rewards.dragonegg=1;if(rolls[3]<.3)rewards.deco_nest=1;if(rolls[4]<.5)rewards.starshard=1;
     if(!addItems(s,rewards))return false;lava.caveChestDay=date;return true; }
-export function die(s: SaveState, x: number, z: number) { const items: Inventory = {}; for (const id of Object.keys(s.bag)) {
-    const n = looseQuantity(s, id);
-    if (n) {
-        items[id] = n;
-        removeItem(s.bag, id, n);
+/**
+ * Knocked out: every loose item in the backpack drops in a bag at the spot (death-bags.ts; the reference's whole-bag
+ * drop), worn gear, the chest, level and energy stay. Up to 10 bags wait 24 hours each; an 11th banks the oldest into
+ * the chest. Back home with full health. Returns the new bag, or null when the backpack was empty.
+ */
+export function die(s: SaveState, x: number, z: number, now = Date.now()): DeathBag | null {
+    const items: Inventory = {};
+    for (const id of Object.keys(s.bag)) { const n = looseQuantity(s, id); if (n) { items[id] = n; removeItem(s.bag, id, n); } }
+    pruneBags(s, now);
+    let bag: DeathBag | null = null;
+    if (Object.keys(items).length && Number.isFinite(x) && Number.isFinite(z)) { bag = { id: bagId(s, now), x, z, planet: s.planet, items, at: now }; (s.deathBags ??= []).push(bag); }
+    while ((s.deathBags?.length ?? 0) > MAX_DEATH_BAGS) {
+        const old = s.deathBags!.shift()!;
+        // Bank the oldest bag. At the numeric storage limit, keep the overflow in the newly emptied bag or the newest bag
+        // instead of serializing an unsafe integer that a reload would discard.
+        for (const [id, n] of Object.entries(old.items)) { let remaining = n!; for (const target of [s.chest, s.bag, ...(bag ? [bag.items] : [])]) { const moved = Math.min(remaining, Number.MAX_SAFE_INTEGER - (target[id] || 0)); if (moved > 0) target[id] = (target[id] || 0) + moved; remaining -= moved; if (!remaining) break; } }
     }
-} if (s.dropped)
-    for (const [id, n] of Object.entries(s.dropped.items)) {
-        // Bank the old stash first. At the numeric storage limit, preserve overflow in the
-        // newly emptied bag/current stash instead of serializing an unsafe integer that reload discards.
-        let remaining=n!;
-        for(const target of [s.chest,s.bag,items]){const moved=Math.min(remaining,Number.MAX_SAFE_INTEGER-(target[id]||0));if(moved>0)target[id]=(target[id]||0)+moved;remaining-=moved;if(!remaining)break;}
-    } s.dropped = Object.keys(items).length ? { x, z, planet: s.planet, items } : null; s.planet = 'home'; s.hp = maxHp(s); s.buffs = {}; s.sizeEffect = null; }
-export function recoverBag(s: SaveState) { if (!s.dropped || s.dropped.planet !== s.planet)
-    return false;
-    // Stage the entire pickup: a failed grant must preserve every item for a later retry.
-    if(!addItems(s,s.dropped.items))return false;s.dropped = null; return true; }
+    s.planet = 'home'; s.hp = maxHp(s); s.buffs = {}; s.sizeEffect = null; return bag;
+}
+/**
+ * Picks a dropped bag back up (`id`, else the oldest on this planet): what fits goes into the backpack, the rest stays
+ * in the bag (reference: "Túi đầy! Vẫn còn đồ trong hũ."). False when there is no live bag here or nothing fits.
+ */
+export function recoverBag(s: SaveState, id?: string, now = Date.now()): { id: string; taken: Inventory; left: number } | false {
+    pruneBags(s, now);
+    const bag = (s.deathBags ?? []).find(b => b.planet === s.planet && (id === undefined || b.id === id)); if (!bag) return false;
+    const taken: Inventory = {};
+    for (const [item, n] of Object.entries(bag.items)) if (n && addItem(s, item, n)) { taken[item] = n; delete bag.items[item]; }
+    if (!Object.keys(taken).length) return false;
+    const left = Object.values(bag.items).reduce((sum: number, n) => sum + (n ?? 0), 0);
+    if (!left) { s.deathBags = s.deathBags!.filter(b => b !== bag); if (!s.deathBags.length) delete s.deathBags; }
+    clearFullNote(); return { id: bag.id, taken, left };
+}
 function record(value: unknown): value is Record<string, any> { return !!value && typeof value === 'object' && !Array.isArray(value); }
 function integer(value: unknown, fallback = 0, max = Number.MAX_SAFE_INTEGER) { return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(max, Math.floor(value)) : fallback; }
 function planetId(value: unknown): PlanetId | null { const id = value === 'sky' ? 'cloud' : value === 'dark' ? 'shadow' : value; return typeof id === 'string' && Object.hasOwn(PLANETS, id) ? id as PlanetId : null; }
@@ -904,13 +949,10 @@ export function parseSave(raw: string | null): SaveState | null {
             for (const [id, n] of Object.entries(v.fishRecords))
                 if (Object.hasOwn(FISH, id) && typeof n === 'number' && Number.isFinite(n) && n > 0)
                     s.fishRecords[id] = n;
-        const d = v.dropped;
-        if (record(d) && Number.isFinite(d.x) && Number.isFinite(d.z) && planetId(d.planet)) {
-            const items = inventory(d.items);
-            if (Object.keys(items).length)
-                s.dropped = { x: d.x, z: d.z, planet: planetId(d.planet)!, items };
-        }
         s.savedAt = integer(v.savedAt, s.savedAt);
+        // Dropped bags (death-bags.ts); an older save's single `dropped` bag counts from its last save.
+        { const bags = parseDeathBags(v.deathBags, v.dropped, s.savedAt, inventory); if (bags.length) s.deathBags = bags; }
+        for (const kind of ['bagUp', 'chestUp'] as const) { const level = integer(v[kind], 0, kind === 'bagUp' ? 5 : 4); if (level) s[kind] = level; }
         s.progression = normalizeProgression(v.progression, s);
         s.quest = s.progression.story.index;
         // Carry any old threshold overflow forward instead of silently deleting XP.

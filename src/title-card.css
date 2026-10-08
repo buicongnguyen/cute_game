@@ -1,0 +1,42 @@
+/* The title card over the live village (title-card.ts). Overrides the older tall welcome card where they meet. */
+#title-screen.title-live { align-items: flex-end; justify-content: center; padding: 16px 16px calc(20px + var(--safe-bottom, 0px)); overflow: auto; }
+#title-screen.title-live .title-shade { background: linear-gradient(180deg, rgba(255, 250, 220, 0) 40%, rgba(30, 72, 24, .32)); }
+.title-stack { position: relative; width: min(460px, 100%); display: grid; gap: 12px; justify-items: center; animation: appear .5s ease; }
+.title-logo { text-align: center; pointer-events: none; }
+#title-screen .title-logo h1 { margin: 0; display: flex; align-items: center; justify-content: center; gap: .24em; font-size: clamp(46px, 6.4vw, 66px); line-height: 1; }
+#title-screen .title-logo .brand-sprout { margin: 0 4px 0 0; font-size: .62em; -webkit-text-stroke: 0; text-shadow: none; }
+.title-tagline { display: inline-block; margin-top: 10px; padding: 7px 16px; border-radius: 999px; background: rgba(255, 255, 255, .94); color: var(--ink); font-weight: 900; font-size: 13.5px; line-height: 1.35; box-shadow: 0 3px 0 rgba(44, 58, 38, .16); }
+#title-screen.title-live .welcome-card { margin: 0; width: 100%; max-height: none; overflow: visible; padding: 14px 16px 12px; border-radius: 26px; background: rgba(255, 251, 240, .95); animation: none; }
+#title-screen .title-card .welcome-form { margin: 0; gap: 10px; }
+.title-row { display: flex; align-items: center; gap: 10px; }
+#title-screen .title-row > input { flex: 1; min-width: 0; width: auto; padding: 10px 14px; border-radius: 14px; border: 3px solid var(--line); background: #fff; font-size: 16px; font-weight: 800; color: var(--ink); }
+#title-screen .title-row .color-picker { margin: 0; gap: 7px; flex-wrap: nowrap; }
+#title-screen .title-row .color-picker > button { width: 26px; height: 26px; flex: none; }
+#title-screen .title-card .start-button { justify-content: center; gap: 10px; padding: 13px 22px; font-size: 20px; border-radius: 18px; }
+#title-screen .title-card .start-button > span { font-size: 16px; }
+.title-links { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
+.title-link { min-height: 36px; padding: 6px 14px; border-radius: 999px; border: 2px solid #fff; background: #e6f4ff; color: #22679e; font: inherit; font-size: 13px; font-weight: 900; cursor: pointer; box-shadow: 0 2px 0 rgba(44, 58, 38, .12); }
+.title-link.install-app { background: #ffe2ef; color: #ad3570; }
+.title-link[aria-expanded="true"] { background: #fff; color: var(--grass-deep); }
+.title-links .language-picker { gap: 0; }
+.title-links .language-picker label { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.title-links .language-picker select { min-height: 36px; padding: 6px 26px 6px 12px; border-radius: 999px; font-size: 13px; }
+.title-profiles { margin-top: 10px; }
+.title-profiles .profile-picker { margin: 0; }
+#title-screen .online-link { display: block; margin-top: 8px; text-align: center; }
+@media (pointer: coarse) { .title-link, .title-links .language-picker select { min-height: 44px; } }
+@media (max-width: 480px) {
+  #title-screen.title-live { padding: 12px 12px calc(14px + var(--safe-bottom, 0px)); }
+  .title-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  #title-screen .title-row .color-picker { justify-content: center; gap: 10px; }
+  #title-screen .title-row .color-picker > button { width: 30px; height: 30px; }
+  .title-tagline { font-size: 12.5px; padding: 6px 12px; }
+}
+@media (max-height: 520px) {
+  #title-screen.title-live { padding-top: 8px; padding-bottom: 8px; }
+  .title-stack { gap: 6px; width: min(520px, 100%); }
+  #title-screen .title-logo h1 { font-size: 38px; }
+  .title-tagline { display: none; }
+  #title-screen.title-live .welcome-card { padding: 10px 14px 8px; }
+  .title-links { margin-top: 6px; }
+}

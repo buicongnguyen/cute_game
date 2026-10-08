@@ -242,6 +242,7 @@ export const REFUSALS: Record<string, Reason> = {
   lightBrazier: 'You need a fire crystal to light this brazier.',
   claimCaveChest: 'Light all three braziers to open the cave chest.',
   recoverBag: 'Your lost bag is not on this planet.',
+  expandStorage: (s, p) => { const kind = M.isStorageKind(p.kind) ? p.kind : 'bag', next = M.nextExpansion(s, kind); if (!next) return kind === 'bag' ? 'Your backpack is already as big as it gets.' : 'Your chest is already as big as it gets.'; if (s.energy < next.energy) return fmt('You need {cost} energy for that.', { cost: next.energy }); return 'You are missing some materials for that.'; },
   dungeonStart: s => s.planet !== 'home' ? 'The vault is reached from Clover Village.' : 'You have been through the vault twice today. Come back tomorrow!',
   dungeonClaim: 'That vault room was already counted, or the run has ended.',
   dungeonLeave: 'You are not in the vault.',

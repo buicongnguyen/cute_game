@@ -24,6 +24,7 @@ import { keepAlive } from './dispose-tree.ts';
 import { hardScale, type Difficulty } from './difficulty.ts';
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, heroKitFor, tuckEars, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, bossPetKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
+import { deathBagModel, deathBagEntityId } from './death-bags-view.ts';
 import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
 import { CropCards, CROP_PRESENTATION_SCALE, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
@@ -922,7 +923,7 @@ export class World {
       if(rules){e.mesh.userData.hits=(e.mesh.userData.hits??0)+1;this.burst(e.x,e.z,'#d3bc88',5);if(e.mesh.userData.hits<rules.hits)return {message:t('Mining {count}/{total} strikes.', { count: e.mesh.userData.hits, total: rules.hits })};e.mesh.userData.hits=0;}
       const item=e.kind==='fire-crystal'?'fcrystal':e.kind==='magma-ore'?'mcrystal':e.kind==='obsidian-ore'?'obsidian':'coral';const success=M.claimEnvironmentResource(this.state,e.id,item,Date.now(),e.kind==='obsidian-ore'?180000:e.kind==='fire-crystal'?120000:150000);
       if(success){this.burst(e.x,e.z,e.kind==='clam'?'#d3f5fa':'#ffc76b');if(e.kind==='clam'&&Math.random()<.3)M.addItem(this.state,'pearl');if(rules)for(const [id,chance,min,max] of rules.loot)if(Math.random()<chance)M.addItem(this.state,id,min+Math.floor(Math.random()*(max-min+1))-(id===item?1:0));}
-      this.refreshEnvironmentNodes();return {message:t(success?e.kind==='clam'?'Clam opened: coral and a chance of a pearl.':t('{name} collected.', { name: t(M.ITEMS[item]?.name??item) }):'This resource is regrowing.')};
+      this.refreshEnvironmentNodes();return {message:t(!success&&!M.canAddItem(this.state,item)?M.BAG_FULL:success?e.kind==='clam'?'Clam opened: coral and a chance of a pearl.':t('{name} collected.', { name: t(M.ITEMS[item]?.name??item) }):'This resource is regrowing.')};
     }
     return null;
   }
@@ -1058,8 +1059,9 @@ export class World {
     return this.cropCards.ready;
   }
   syncDropped() {
-    const old=this.entities.find(e=>e.kind==='dropped');if(old){this.root.remove(old.mesh);this.disposeTree(old.mesh);this.entities=this.entities.filter(e=>e!==old);}
-    const d=this.state.dropped;if(d&&d.planet===this.planet)this.addEntity('dropped','Your dropped backpack','🎒',group(ball('#dd94b6',.5,0,.5),cyl('#e5bad0',.17,.17,.25,0,1)),d.x,d.z,.8);
+    // Every live bag dropped on this planet (death-bags.ts, drawn by death-bags-view.ts).
+    for(const old of this.entities.filter(e=>e.kind==='dropped')){this.root.remove(old.mesh);this.disposeTree(old.mesh);}this.entities=this.entities.filter(e=>e.kind!=='dropped');
+    for(const bag of M.liveBags(this.state,Date.now(),this.planet)){const e=this.addEntity('dropped','Your dropped backpack','🎒',deathBagModel(),bag.x,bag.z,.8);e.id=deathBagEntityId(bag.id);}
   }
   /** CSS pixels of a world point. `front` is false behind the (perspective) camera, where x and y come out mirrored. */
   private screenPoint=new T.Vector3();

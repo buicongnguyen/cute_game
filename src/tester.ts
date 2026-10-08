@@ -79,12 +79,12 @@ export const FRIEND_PRICE = 500;
 /** Tester workshop/furnace craft: the recipe's energy only. */
 export function testerCraft(s: M.SaveState, index: number) {
   const r = isTester(s) ? RECIPES[index] : undefined, n = r?.count || 1;
-  if (!r || !Object.hasOwn(ITEMS, r.result) || s.energy < r.energy || !Number.isSafeInteger((s.bag[r.result] || 0) + n)) return false;
+  if (!r || !Object.hasOwn(ITEMS, r.result) || s.energy < r.energy || !Number.isSafeInteger((s.bag[r.result] || 0) + n) || !M.canAddItem(s, r.result, n)) return false;
   s.energy -= r.energy; M.addItem(s, r.result, n); return true;
 }
 /** Tester kitchen: any cooked food or farm dish, free, without the raw food or the kitchen level. */
 export function testerCook(s: M.SaveState, id: string) {
-  if (!isTester(s) || !COOKABLE.some(c => c.id === id) || !Number.isSafeInteger((s.bag[id] || 0) + 1)) return false;
+  if (!isTester(s) || !COOKABLE.some(c => c.id === id) || !Number.isSafeInteger((s.bag[id] || 0) + 1) || !M.canAddItem(s, id)) return false;
   M.addItem(s, id, 1); return true;
 }
 const forgeable = (id: string) => Object.hasOwn(ITEMS, id) && ITEMS[id].slot === 'weapon' && !!ITEMS[id].weapon && ITEMS[id].weapon!.kind !== 'rod';
@@ -117,7 +117,7 @@ export function testerKitchenHtml(s: M.SaveState, art: Art = emoji) {
 
 export function testerBuy(s: M.SaveState, id: string) {
   const item = isTester(s) ? TESTER_ITEMS.find(i => i.id === id) : undefined;
-  if (!item || s.energy < item.price || !Number.isSafeInteger((s.bag[id] || 0) + 1)) return false;
+  if (!item || s.energy < item.price || !Number.isSafeInteger((s.bag[id] || 0) + 1) || !M.canAddItem(s, id)) return false;
   s.energy -= item.price; M.addItem(s, id, 1); return true;
 }
 /** Counts as a real rescue that already walked home: the friend stands at its post and its cage disappears. */

@@ -1,0 +1,21 @@
+/* Bag slots and the expand card (bag-slots-ui.ts), dropped-bag tags (death-bags-view.ts), the iPhone install steps (install-app.ts). */
+.slot-meter { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; color: var(--ink-soft); letter-spacing: 0; text-transform: none; }
+.slot-meter > i { position: relative; width: 54px; height: 8px; border-radius: 99px; background: #e8e1cf; overflow: hidden; }
+.slot-meter > i::after { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--fill); border-radius: inherit; background: linear-gradient(90deg, #7dd36a, #4cb83f); }
+.slot-meter > b { color: var(--ink); }
+.slot-meter.full > i::after { background: linear-gradient(90deg, #ff9a8a, #e85a5a); }
+.slot-meter.full > b { color: #c43d3d; }
+.expand-card { display: flex; align-items: center; gap: 12px; margin: 12px 0 4px; padding: 10px 12px; border-radius: 16px; background: #fff7e6; border: 2px solid #f3e2bb; }
+.expand-card > .expand-icon { font-size: 28px; line-height: 1; flex: none; }
+.expand-card > div { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.expand-card strong { font-size: 14px; }
+.expand-card strong em { font-style: normal; margin-left: 6px; padding: 1px 8px; border-radius: 99px; background: #3f3549; color: #fff; font-size: 11px; vertical-align: 1px; }
+.expand-card small { color: var(--ink-soft); font-size: 12px; line-height: 1.35; }
+.expand-card .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.expand-card .expand-button { flex: none; min-width: 92px; }
+.expand-card.maxed { background: #effbe8; border-color: #cfeebd; }
+@media (max-width: 480px) { .expand-card { flex-wrap: wrap; } .expand-card .expand-button { width: 100%; } }
+.death-bag-tag { position: absolute; left: 0; top: 0; padding: 4px 10px; border-radius: 999px; background: rgba(255, 122, 176, .92); border: 2px solid #fff; color: #fff; font-size: 12px; font-weight: 900; white-space: nowrap; pointer-events: none; box-shadow: 0 2px 0 rgba(120, 30, 70, .25); }
+.ios-install-steps { margin: 4px 0 10px; padding: 0; list-style: none; display: grid; gap: 8px; counter-reset: step; }
+.ios-install-steps > li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: #fff; border: 2px solid var(--line, #eadfca); font-weight: 800; }
+.ios-install-steps > li > span { font-size: 20px; }

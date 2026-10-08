@@ -59,7 +59,7 @@ test('malformed progression tasks regenerate and prototype-named events are reje
   const before=JSON.stringify(r);P.recordEvent(r,'constructor',2);P.recordEvent(r,'__proto__',2);assert.equal(JSON.stringify(r),before);assert.equal(P.startChallenge(r,'constructor',start),false);
 });
 test('all29 story milestones are reachable using real farming, reward, purchase and travel operations',()=>{
-  const s=M.newGame('Journey tester');let clock=Date.now(),harvests=0,kills=0;
+  const s=M.newGame('Journey tester');s.bagUp=5;/* a 40-slot bag (storage-slots.ts): the loot of every story fight stays in reach */let clock=Date.now(),harvests=0,kills=0;
   const farm=()=>{const crop=s.level>=13?'goldcorn':s.level>=9?'melon':s.level>=6?'star':s.level>=4?'candy':s.level>=2?'pumpkin':'radish';M.plantAll(s,crop,clock);clock+=M.CROPS[crop].duration;const items=M.harvestAll(s,clock);assert.ok(items.length);harvests+=items.length;for(const id of new Set(items))M.sell(s,id,M.looseQuantity(s,id));assert.ok(harvests<30000,'farming must progress without a softlock');};
   const fund=(amount:number)=>{while(s.energy<amount)farm();};const level=(target:number)=>{while(s.level<target)farm();};
   const defeat=(type='mushroom',boss=false,count=1)=>{for(let i=0;i<count;i++){M.grantDefeat(s,type,boss?100:8,boss,()=>0);kills++;}};
