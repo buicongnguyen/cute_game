@@ -862,3 +862,27 @@ Materials: `Colossus basalt`, `Colossus rock` (flat-shaded faceted stone), `Colo
 The generator also renders 256×256 transparent WebP bag icons for `hat_colossus`, `pet_colossus` and
 `colossus_shard` (an icon-only obsidian cluster) into `public/assets/icons/items/`, writes
 `art/generated/kit/colossus-manifest.json` and the preview `art/previews/kit/colossus.webp` (with a 1.95 m explorer post).
+
+## Flag Rush (`build_ctf.py` → `public/assets/models/ctf.glb`)
+
+The Multiworld Gate by the south gate and the Capture the Flag isle (`src/ctf-view.ts`). One top-level empty per piece
+with one joined child `<name>_body`; origin at the ground centre, front Blender -Y (glTF +Z), metres. Loaded lazily
+(near the gate or for a match); simple shapes stand in until then. The isle's ground, river water and paths are drawn
+at runtime (a canvas texture), not in the file.
+
+| Node | Use | Size | Triangles |
+| --- | --- | --- | ---: |
+| `ctf_gate` | the gate: plinth r 2.3, ring r 1.85 leaning back 28° about z 0.5 (so the top-down camera sees its face) | h ≈ 4.7 | ≤ 4,000 |
+| `ctf_gate_swirl` | the swirl disc in the ring's plane; the game spins it about the ring's leaned axis (`GATE_LEAN`) | r 1.55 | ≤ 2,000 |
+| `ctf_keeper` | Gatekeeper Orrin (cloak, hood, star staff) at (-6.8, 24) | h ≈ 2.1 | ≤ 2,500 |
+| `ctf_stand`, `ctf_flag` | flag stand (r 1.25) and flag (pole 2.6 m, cloth along -Y; the game turns it 90°) | — | ≤ 1,200 / 600 |
+| `ctf_pad` | jump pad (r 1.35); the trigger is the game's r 1.4 | h ≈ 0.45 | ≤ 1,500 |
+| `ctf_bridge` | plank bridge across the river, 8 m along X, 5.4 m wide (bridges are 5.6 m in the rules) | — | ≤ 1,200 |
+| `ctf_post`, `ctf_rock`, `ctf_tree` | base fence post, cover rock (≈ r 1.05, scaled to the rule radius), border tree; drawn instanced | — | ≤ 120 / 400 / 500 |
+| `ctf_banner` | base banner, cloth faces glTF +Z | h ≈ 2.9 | ≤ 700 |
+| `ctf_power_ring` | the ring a power-up floats over | r 0.95 | ≤ 400 |
+| `ctf_pw_<kind>` | `zip`, `bubble`, `pumpkin`, `wisp`, `bigcap`, `frost`, `apple` (~0.8 m, the game scales 1.25) | — | ≤ 1,500 |
+
+Team colour by material name: `CTF team` (blue `#3f8cff`, red `#ff5a5f`, neutral pads gold) and `CTF team glow`.
+Run with `-- --icons` for 160×160 transparent WebP icons in `public/assets/icons/ctf/` (the seven power-ups, `flag`,
+`gate`, `keeper`). The file is about 250 KB; `art/previews/kit/ctf.webp` shows every piece.

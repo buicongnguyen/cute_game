@@ -124,6 +124,7 @@ import * as IG from './item-groups.ts';
 import { dogMayToss, dogTossFactor, DOG_TOSS_CD } from './guard-dog.ts';
 import { initDungeon, type DungeonApi } from './dungeon.ts';
 import { HARVEST, SKILL_NAME_RISE } from './feel-rules.ts';
+import { initCtf, type CtfApi } from './ctf.ts';
 
 // The HUD asks for the same ~40 elements several times a second: remember them while they stay in the page.
 const $found=new Map<string,HTMLElement>();
@@ -162,6 +163,8 @@ let persistence:((state:M.SaveState)=>void)|null=null,network:NetworkHooks={role
 let actionHandler:((intent:GameIntent)=>Promise<ActionReply>)|null=null;
 /** The Delvers' Vault (dungeon.ts), set up at the end of this file: its creatures are fought locally, also online. */
 let dungeonApi:DungeonApi|null=null,dungeonSender:((message:Record<string,unknown>)=>boolean)|null=null;
+/** Flag Rush at the Multiworld Gate (ctf.ts): its AI heroes are fought locally, also online. */
+let ctfApi:CtfApi|null=null;
 /**
  * Runs one intent through the shared rules (actions.ts), or the server online. A refusal comes back with its reason in
  * plain words (refusals.ts) and is shown as a toast. Two kinds stay off the screen and go to the console for developers:
@@ -279,8 +282,8 @@ const combat=new CombatSimulation({
   effect:effect=>{showEffect(effect);emitAction({kind:'effect',effect});},
   heal:fraction=>{if(!actionHandler)state.hp=Math.min(M.maxHp(state),state.hp+M.maxHp(state)*fraction);},
   execute:(target,fraction)=>executeEnemy(target as Enemy,fraction),
-  status:(target,kind,duration)=>{if(dungeonApi?.owns(target)){world.statusEnemy(target as Enemy,kind,duration);return;}if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
-  moveTarget:(target,x,z)=>{if(dungeonApi?.owns(target)){moveEnemy(target as Enemy,x,z);return;}if(actionHandler)return;if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
+  status:(target,kind,duration)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)){world.statusEnemy(target as Enemy,kind,duration);return;}if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
+  moveTarget:(target,x,z)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)){moveEnemy(target as Enemy,x,z);return;}if(actionHandler)return;if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
 });
 combatHud.isMarked=id=>combat.marked.has(id);
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
@@ -1137,7 +1140,7 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   if(e.hp<=0||(visiting&&!remote))return;
   // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
-  if(!vault){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}
+  if(!vault&&!ctfApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
   const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
@@ -1237,7 +1240,7 @@ function skill(index:number){
   if(!actionHandler)change(()=>recordEvent(state,'skill'));if(!disguise&&index===0)world.spinT=2.2;else if(disguise?(disguise==='dz_knight'&&index===1)||(disguise==='dz_vietnam'&&index===1):index===1)world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});tone(skillSound(index,disguise,weapon.special));emitAction({kind:'skill',index,special:disguise??weapon.special});
 }
 let dying=false;
-function checkDefeat(){if(!started||state.hp>0||dying)return false;if(dungeonApi?.active){dungeonApi.knockedOut();return true;}if(actionHandler){dying=true;void perform<{dropped?:boolean}>('die',{x:world.position.x,z:world.position.z}).then(r=>{dying=false;endFishing();resetCombat();rebuildHomePresentation('home');world.refreshPlayer();if(r)deathDialog(!!r.dropped);else toast('You are safe at home.','🏡');});return true;}endFishing();resetCombat();const bag=change(()=>M.die(state,world.position.x,world.position.z));rebuildHomePresentation('home');world.refreshPlayer();deathDialog(!!bag);return true;}
+function checkDefeat(){if(!started||state.hp>0||dying)return false;if(dungeonApi?.active){dungeonApi.knockedOut();return true;}if(ctfApi?.active){state.hp=1;return true;}/* Flag Rush respawns by its own rules: a match never drops a death bag */if(actionHandler){dying=true;void perform<{dropped?:boolean}>('die',{x:world.position.x,z:world.position.z}).then(r=>{dying=false;endFishing();resetCombat();rebuildHomePresentation('home');world.refreshPlayer();if(r)deathDialog(!!r.dropped);else toast('You are safe at home.','🏡');});return true;}endFishing();resetCombat();const bag=change(()=>M.die(state,world.position.x,world.position.z));rebuildHomePresentation('home');world.refreshPlayer();deathDialog(!!bag);return true;}
 /** The knock-out card: where the backpack went (death-bags.ts) and what stays safe. */
 function deathDialog(dropped:boolean){openDialog('death','A little rest, then try again',`<div class="grow-illustration">${dropped?'🎒':'🌷'}</div><p class="center">${dropped?'Your backpack dropped where you fell. Walk back to the pink bag within 24 hours to pick everything up.':'Your backpack was empty, so nothing was lost.'}</p><p class="center muted">Your level, energy, worn gear and chest are safe.</p><button class="primary wide" data-action="close">Back on my feet →</button>`,'EVERY EXPLORER TAKES A TUMBLE');}
 world.onDamage=(amount,source='melee',enemyId)=>{
@@ -1667,6 +1670,12 @@ dungeonApi=initDungeon({world,state:()=>state,started:()=>started,blocked:uiBloc
   attack:()=>M.attack(state),maxHp:()=>M.maxHp(state),hitEnemy:(e,amount)=>hit(e,amount,0,{amount,critical:false,stun:0,lift:0,knock:0,direction:{x:0,z:0},helper:true}),updateHud,save,onFrame:listener=>{frameListeners.add(listener);}});
 dungeonApi.setSender(dungeonSender);
 if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__vault:dungeonApi});
+// The Multiworld Gate (ctf.ts): Gatekeeper Orrin by the south gate and Flag Rush against an AI team.
+ctfApi=initCtf({world,state:()=>state,started:()=>started,blocked:uiBlocked,visiting:()=>!!visiting,online:()=>!!actionHandler,
+  perform:(type,payload,quiet=false)=>perform(type,payload,{quiet}),toast,tone:kind=>tone(kind as Sound),openDialog,closeDialog,
+  neighbours:()=>({cast:neighbours.cast.map(d=>({id:d.id,name:d.name,level:d.level,color:d.color,gear:d.gear as Record<string,string|undefined>,pets:d.pets}))}),
+  attack:()=>M.attack(state),maxHp:()=>M.maxHp(state),updateHud,refreshPlayer:()=>world.refreshPlayer(),onFrame:listener=>{frameListeners.add(listener);}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__ctf:ctfApi});
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
 if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,colossus,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
