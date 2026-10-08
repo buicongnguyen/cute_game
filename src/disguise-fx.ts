@@ -8,7 +8,7 @@ const FOLLOW=new Set(['tank','charge','parrot','shield','bats','rush','whirl','r
 const BATCH=900,MAX_CASTS=48;
 /** Soft hex-cell dome: a fresnel rim plus a faint honeycomb, patched into a plain basic material (no lights, no textures). */
 function domeMaterial(){
-  const m=new T.MeshBasicMaterial({color:'#ffffff',transparent:true,opacity:.5,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending});
+  const m=new T.MeshBasicMaterial({color:'#ffffff',transparent:true,opacity:.3,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending});
   m.onBeforeCompile=shader=>{
     shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vN;varying vec3 vV;varying vec3 vP;').replace('#include <project_vertex>','#include <project_vertex>\nvec3 nn=normal;\n#ifdef USE_INSTANCING\nnn=mat3(instanceMatrix)*nn;\n#endif\nvN=normalize(normalMatrix*nn);vV=normalize(-mvPosition.xyz);vP=position;');
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vN;varying vec3 vV;varying vec3 vP;\nfloat hexd(vec2 p){p=abs(p);return max(dot(p,vec2(.866,.5)),p.y);}')
@@ -33,12 +33,12 @@ export class DisguiseFx implements Painter {
     this.host=host;this.root.name='disguise-effects';this.dummy.rotation.order='YXZ';
     const heart=new T.Shape();heart.moveTo(0,-.6);heart.bezierCurveTo(-1,.05,-.65,.85,0,.4);heart.bezierCurveTo(.65,.85,1,.05,0,-.6);
     const star=new T.Shape();for(let i=0;i<10;i++){const a=i/10*Math.PI*2,r=i%2?.42:1;if(i)star.lineTo(Math.sin(a)*r,Math.cos(a)*r);else star.moveTo(Math.sin(a)*r,Math.cos(a)*r);}
-    const geometries:Record<Shape,T.BufferGeometry>={orb:new T.IcosahedronGeometry(1,1),mist:new T.IcosahedronGeometry(1,1),box:new T.BoxGeometry(1,1,1),cone:new T.ConeGeometry(1,1,6),ring:new T.RingGeometry(.94,1,40).rotateX(-Math.PI/2),heart:new T.ShapeGeometry(heart),star:new T.ShapeGeometry(star),petal:new T.CircleGeometry(1,10).rotateX(-Math.PI/2),rock:new T.IcosahedronGeometry(1,0),gorb:new T.IcosahedronGeometry(1,1),gbox:new T.BoxGeometry(1,1,1),gring:new T.RingGeometry(.9,1,48).rotateX(-Math.PI/2),dome:new T.SphereGeometry(1,20,10,0,Math.PI*2,0,Math.PI/2)};
+    const geometries:Record<Shape,T.BufferGeometry>={orb:new T.IcosahedronGeometry(1,1),mist:new T.IcosahedronGeometry(1,1),box:new T.BoxGeometry(1,1,1),cone:new T.ConeGeometry(1,1,6),ring:new T.RingGeometry(.94,1,40).rotateX(-Math.PI/2),heart:new T.ShapeGeometry(heart),star:new T.ShapeGeometry(star),petal:new T.CircleGeometry(1,10).rotateX(-Math.PI/2),rock:new T.IcosahedronGeometry(1,0),gorb:new T.IcosahedronGeometry(1,1),gbox:new T.BoxGeometry(1,1,1),gring:new T.RingGeometry(.95,1,48).rotateX(-Math.PI/2),dome:new T.SphereGeometry(1,20,10,0,Math.PI*2,0,Math.PI/2)};
     const glow=(opacity:number)=>new T.MeshBasicMaterial({color:'#ffffff',side:T.DoubleSide,transparent:true,opacity,depthWrite:false});
     const materials:Record<Shape,T.Material>={
       orb:new T.MeshBasicMaterial({color:'#ffffff',side:T.DoubleSide}),box:new T.MeshBasicMaterial({color:'#ffffff'}),cone:new T.MeshBasicMaterial({color:'#ffffff'}),heart:new T.MeshBasicMaterial({color:'#ffffff',side:T.DoubleSide}),star:new T.MeshBasicMaterial({color:'#ffffff',side:T.DoubleSide}),petal:new T.MeshBasicMaterial({color:'#ffffff',side:T.DoubleSide}),
-      mist:new T.MeshLambertMaterial({color:'#ffffff',transparent:true,opacity:.72,depthWrite:false}),rock:new T.MeshLambertMaterial({color:'#ffffff',flatShading:true}),
-      ring:new T.MeshBasicMaterial({color:'#ffffff',side:T.DoubleSide,transparent:true,opacity:.8,depthWrite:false}),gorb:glow(.85),gbox:glow(.8),gring:glow(.9),dome:domeMaterial()};
+      mist:new T.MeshLambertMaterial({color:'#ffffff',transparent:true,opacity:.5,depthWrite:false}),rock:new T.MeshLambertMaterial({color:'#ffffff',flatShading:true}),
+      ring:new T.MeshBasicMaterial({color:'#ffffff',side:T.DoubleSide,transparent:true,opacity:.75,depthWrite:false}),gorb:glow(.6),gbox:glow(.6),gring:glow(.55),dome:domeMaterial()};
     this.batches={} as Record<Shape,T.InstancedMesh>;
     for(const kind of SHAPES){const mesh=new T.InstancedMesh(geometries[kind],materials[kind],BATCH);mesh.count=0;mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.setColorAt(0,this.color.set('#ffffff'));mesh.instanceColor!.setUsage(T.DynamicDrawUsage);mesh.renderOrder=kind.startsWith('g')||kind==='dome'||kind==='mist'?3:2;mesh.name=kind;mesh.visible=false;this.batches[kind]=mesh;this.batchList.push(mesh);this.root.add(mesh);}
   }

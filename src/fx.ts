@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { toonMaterial } from './toon.ts';
+import { nextStackSlot, stackLift, STACK } from './feel-rules.ts';
 
 /**
  * Pooled visual feedback: particles, glow sparks, rings, flashes, slash arcs and
@@ -170,6 +171,9 @@ export class Effects {
   private camera: T.Camera;
   private project = new T.Vector3();
   private side = 1;
+  /** Damage-number stacks by key (a creature's id): the slot of its last number and when it showed. */
+  private stacks = new Map<string, { slot: number; t: number }>();
+  private textClock = 0;
 
   constructor(scene: T.Scene, camera: T.Camera, layer?: HTMLElement | null) {
     this.camera = camera; this.layer = layer ?? null;
@@ -263,13 +267,22 @@ export class Effects {
    * Numbers land alternately left and right of the point, within ±0.3 m, so two creatures hit by
    * one spin tick never stack their numbers.
    */
-  text(at: Point3, message: string, style = '') {
+  text(at: Point3, message: string, style = '', stack?: string) {
     if (!this.layer) return;
     const el = document.createElement('span');
     el.className = `float ${style}`; el.textContent = message;
     this.layer.append(el);
-    // Numbers alternate left and right of the hit point and drift outward, so quick hits do not stack on one spot.
-    const side = this.side = -this.side, centred = style.includes('callout') || style.includes('alert');
+    // A creature's damage numbers stack upwards while blows keep landing (feel-rules.ts STACK), like the reference;
+    // other numbers alternate left and right of the point and drift outward, so quick hits do not land on one spot.
+    if (stack) {
+      const last = this.stacks.get(stack), slot = last ? nextStackSlot(last.slot, last.t, this.textClock) : 0;
+      this.stacks.set(stack, { slot, t: this.textClock });
+      if (this.stacks.size > 64) for (const [key, value] of this.stacks) if (this.textClock - value.t > STACK.gap) this.stacks.delete(key);
+      this.floaters.push({ el, pos: new T.Vector3(at.x + between(-.12, .12), (at.y ?? 0) + 1.6 + stackLift(slot), at.z), t: 0, life: style.includes('big') ? 1.1 : .85, vx: 0 });
+      if (this.floaters.length > 40) { const old = this.floaters.shift()!; old.el.remove(); }
+      return;
+    }
+    const side = this.side = -this.side, centred = style.includes('callout') || style.includes('alert') || style.includes('skillname');
     this.floaters.push({ el, pos: new T.Vector3(at.x + (centred ? 0 : side * between(.25, .5)), (at.y ?? 0) + 1.8, at.z + (centred ? 0 : between(-.3, .3))), t: 0, life: style.includes('callout') ? 1.6 : style.includes('big') ? 1.3 : 1, vx: centred ? 0 : side * .6 });
     if (this.floaters.length > 40) { const old = this.floaters.shift()!; old.el.remove(); }
   }
@@ -303,6 +316,7 @@ export class Effects {
 
   /** Floating text follows its world point every frame, so it never lags the camera. */
   updateText(dt: number, width: number, height: number) {
+    this.textClock += dt;
     for (let i = this.floaters.length - 1; i >= 0; i--) {
       const f = this.floaters[i]; f.t += dt; f.pos.y += dt * 1.4; f.pos.x += dt * f.vx;
       const r = f.t / f.life;
@@ -320,7 +334,7 @@ export class Effects {
     for (const fx of this.transients) this.release(fx);
     this.transients = [];
     for (const f of this.floaters) f.el.remove();
-    this.floaters = [];
+    this.floaters = []; this.stacks.clear();
     this.shakeAmp = 0; this.shakeTime = 0; this.hitstop = 0;
   }
 

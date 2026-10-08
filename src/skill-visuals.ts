@@ -18,7 +18,13 @@ export interface LookContext {
 }
 export type Builder = (p: Painter, c: LookContext) => void;
 const S = Math.sin, C = Math.cos, PI = Math.PI, TAU = PI * 2;
-const cnt = (c: LookContext, n: number) => Math.max(1, Math.ceil(n * c.n));
+/**
+ * Share of each look's authored particle count that is drawn. The October feel pass measured our casts covering about
+ * five times the screen the reference's do (a whirlwind ~500 px across vs one thin ~180 px ring), so every look now
+ * paints 55% of its pieces on top of the graphics density, and the shared materials are fainter (disguise-fx.ts).
+ */
+export const LOOK_DENSITY = .55;
+const cnt = (c: LookContext, n: number) => Math.max(1, Math.ceil(n * c.n * LOOK_DENSITY));
 const fadeOut = (c: LookContext, k = 5) => Math.min(1, (1 - c.t) * k);
 const grow = (c: LookContext, k = 6) => Math.min(1, c.t * k);
 const hash = (i: number) => { const s = S(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -28,7 +34,7 @@ const smoke: Builder = (p, c) => {
   p.put('gring', '#6d6788', c.x, c.y, c.z, c.r * grow(c), 1, c.r * grow(c));
   for (let i = 0; i < cnt(c, 20); i++) {
     const q = i * 2.4 + c.a * (.18 + (i % 3) * .05), rr = c.r * (.1 + (i % 5) * .17) * Math.min(1, .4 + c.t * 3), s = (.42 + .18 * S(c.a * 1.6 + i) + (i % 3) * .1) * f;
-    p.put('mist', cols[i % 4], c.x + S(q) * rr, c.y + .45 + (i % 4) * .3 + .2 * S(c.a * 1.2 + i * 2), c.z + C(q) * rr, s * 1.3, s * .9, s * 1.3, 0, q);
+    p.put('mist', cols[i % 4], c.x + S(q) * rr, c.y + .35 + (i % 4) * .22 + .15 * S(c.a * 1.2 + i * 2), c.z + C(q) * rr, s * .62, s * .45, s * .62, 0, q);
   }
 };
 const heal: Builder = (p, c) => {
@@ -74,8 +80,8 @@ const roots: Builder = (p, c) => {
   }
 };
 const holy: Builder = (p, c) => {
-  const h = 9, w = (.35 + .85 * grow(c, 2.5)) * fadeOut(c, 3), strike = c.t > .85 ? 1 : 0;
-  p.put('gring', '#ffd95e', c.x, c.y, c.z, c.r * (1.15 - c.t * .15), 1, c.r * (1.15 - c.t * .15)); p.put('gring', '#fff3b8', c.x, c.y + .01, c.z, c.r * (1 - grow(c, 1.4) * .6), 1, c.r * (1 - grow(c, 1.4) * .6));
+  const h = 9, w = (.12 + .26 * grow(c, 2.5)) * fadeOut(c, 3), strike = c.t > .85 ? 1 : 0;
+  p.put('ring', '#ffd95e', c.x, c.y, c.z, c.r, 1, c.r); p.put('ring', '#fff3b8', c.x, c.y + .01, c.z, c.r * (1 - grow(c, 1.4) * .6), 1, c.r * (1 - grow(c, 1.4) * .6));
   p.put('gbox', '#ffcf5a', c.x, c.y + h / 2, c.z, w * 1.6, h, w * 1.6); p.put('gbox', '#fff6c8', c.x, c.y + h / 2, c.z, w * .7, h, w * .7, 0, c.a * 2);
   for (let i = 0; i < cnt(c, 10); i++) { const k = (c.a * 1.6 + i / 10) % 1; p.put('gorb', '#fff1a8', c.x + S(i * 2.4 + c.a) * w * .9, c.y + k * h, c.z + C(i * 2.4 + c.a) * w * .9, .1 + .05 * strike); }
   const s = (1 - c.t) * 3 + .6; p.put('box', '#fff0a0', c.x, c.y + 1 + (1 - c.t) * 6, c.z, .12, 1.4 * s * .5, .12); p.put('box', '#fff0a0', c.x, c.y + 1.6 + (1 - c.t) * 6, c.z, .55 * s * .5, .12, .12);
@@ -88,10 +94,10 @@ const shield: Builder = (p, c) => {
   for (let i = 0; i < cnt(c, 6); i++) { const q = i * PI / 3 + c.a * 1.6; p.put('gorb', '#ffffff', c.x + S(q) * r, c.y + .3 + (r * .8) * (.5 + .5 * S(c.a * 2 + i)), c.z + C(q) * r, .1); }
 };
 const roar: Builder = (p, c) => {
-  for (let i = 0; i < 3; i++) { const k = Math.max(0, c.t * 1.6 - i * .22), s = Math.min(1, k) * c.r; if (k <= 0) continue; p.put('gring', i ? '#ffd35e' : c.color, c.x, c.y + .7, c.z, s, 1, s, 0, 0, 0); p.put('gring', c.color, c.x, c.y + .05, c.z, s, 1, s); }
+  for (let i = 0; i < 2; i++) { const k = Math.max(0, c.t * 1.6 - i * .3), s = Math.min(1, k) * c.r; if (k <= 0 || k >= 1) continue; p.put('ring', i ? '#ffd35e' : c.color, c.x, c.y + .05, c.z, s, 1, s); }
   const s = Math.min(1, c.t * 2) * c.r * .85;
-  for (let i = 0; i < cnt(c, 16); i++) { const q = i * TAU / 16; p.put('gbox', '#fff1b8', c.x + S(q) * s, c.y + .7, c.z + C(q) * s, .06, .06, 1.1 * fadeOut(c, 3), 0, q); }
-  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + .2, d = s * .95; p.put('mist', '#d8cfae', c.x + S(q) * d, c.y + .3 + c.t, c.z + C(q) * d, .6 * fadeOut(c, 3)); }
+  for (let i = 0; i < cnt(c, 16); i++) { const q = i * TAU / 16; p.put('gbox', '#fff1b8', c.x + S(q) * s, c.y + .7, c.z + C(q) * s, .04, .04, .45 * fadeOut(c, 3), 0, q); }
+  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + .2, d = s * .95; p.put('mist', '#d8cfae', c.x + S(q) * d, c.y + .2 + c.t * .5, c.z + C(q) * d, .28 * fadeOut(c, 3)); }
 };
 const rush: Builder = (p, c) => {
   const f = fadeOut(c, 3), bx = -S(c.f), bz = -C(c.f), px = C(c.f), pz = -S(c.f);
@@ -155,17 +161,19 @@ const iceage: Builder = (p, c) => {
 };
 const blackhole: Builder = (p, c) => {
   const g = grow(c, 6) * fadeOut(c, 8), core = (1 + .08 * S(c.a * 6)) * g;
-  p.put('petal', '#1b1030', c.x, c.y - .08, c.z, c.r * g, .01, c.r * g); p.put('gring', '#9770ff', c.x, c.y, c.z, c.r * g, 1, c.r * g);
-  p.put('gorb', '#7a3dd8', c.x, c.y + 1.5, c.z, 2.2 * g); p.put('orb', '#0a0414', c.x, c.y + 1.5, c.z, 1.15 * core);
+  p.put('petal', '#1b1030', c.x, c.y - .08, c.z, Math.min(1.6, c.r * .22) * g, .01, Math.min(1.6, c.r * .22) * g); p.put('ring', '#9770ff', c.x, c.y, c.z, c.r * g, 1, c.r * g);
+  p.put('gorb', '#7a3dd8', c.x, c.y + 1.5, c.z, 1.1 * g); p.put('orb', '#0a0414', c.x, c.y + 1.5, c.z, .6 * core);
   const cols = ['#ffb347', '#ff7ad9', '#a58bff'];
-  for (let i = 0; i < 3; i++) { const s = (1.8 + i * .55) * g; p.put('gring', cols[i], c.x, c.y + 1.5, c.z, s, 1, s, .3 + i * .05, c.a * (1.5 + i * .6), .15); }
+  for (let i = 0; i < 2; i++) { const s = (1 + i * .35) * g; p.put('ring', cols[i], c.x, c.y + 1.5, c.z, s, 1, s, .3 + i * .05, c.a * (1.5 + i * .6), .15); }
   for (let i = 0; i < cnt(c, 24); i++) { const k = (c.a * .35 + i / 24) % 1, q = i * 2.4 + c.a * 3 + (1 - k) * 4, rr = c.r * (1 - k) + 1, yy = c.y + .3 + (1.2 * (1 - rr / (c.r + 1)) + .2) * (1 - k) * 2; p.put('gorb', i % 3 ? '#d6a8ff' : '#ffc27a', c.x + S(q) * rr, yy, c.z + C(q) * rr, .09 + .06 * k); }
 };
 const crater: Builder = (p, c) => {
-  const w = Math.min(1, c.t * 4), f = fadeOut(c, 2.2), r = c.r * w;
-  p.put('gring', c.color, c.x, c.y, c.z, r, 1, r); p.put('gring', '#ffffff', c.x, c.y + .02, c.z, r * .75, 1, r * .75);
-  for (let i = 0; i < cnt(c, 10); i++) { const q = i * TAU / 10 + .3, d = r * .8, s = (.6 + hash(i) * .5) * f * (1.2 - c.t * .4); p.put('mist', '#cdb994', c.x + S(q) * d, c.y + .3 + c.t * .8, c.z + C(q) * d, s, s * .8, s); }
-  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + hash(i), u = c.t * (1.2 + hash(i + 1)), d = r * .3 + u * c.r * .5, hy = Math.max(0, 3.5 * u * (1 - u / 1.4)); p.put('rock', '#8b6a48', c.x + S(q) * d, c.y + hy, c.z + C(q) * d, .22 * f, .18 * f, .22 * f, c.a * 4, c.a * 3); }
+  // A thin shockwave ring racing out to the hit radius, a few low dust puffs left on its path (never a cloud over the
+  // explorer: they start once the wave is a third of the way out), and pebbles kicked up.
+  const w = 1 - (1 - Math.min(1, c.t * 2.5)) ** 2, f = fadeOut(c, 3), r = c.r * w;
+  p.put('ring', c.color, c.x, c.y + .02, c.z, r, 1, r);
+  if (w > .35) for (let i = 0; i < cnt(c, 10); i++) { const q = i * TAU / 10 + .3, d = r * .85, s = (.18 + hash(i) * .14) * f; p.put('mist', '#cdb994', c.x + S(q) * d, c.y + .15 + c.t * .3, c.z + C(q) * d, s, s * .7, s); }
+  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + hash(i), u = c.t * (1.2 + hash(i + 1)), d = c.r * .2 + u * c.r * .4, hy = Math.max(0, 2.2 * u * (1 - u / 1.4)); p.put('rock', '#8b6a48', c.x + S(q) * d, c.y + hy, c.z + C(q) * d, .12 * f, .1 * f, .12 * f, c.a * 4, c.a * 3); }
 };
 const lift: Builder = (p, c) => {
   const f = fadeOut(c, 3), w = Math.min(1, c.t * 3);
@@ -244,11 +252,16 @@ const bonk: Builder = (p, c) => {
   for (let i = 0; i < 5; i++) { const q = i * TAU / 5 + c.a * 6; p.put('star', '#ffe14d', c.x + S(q) * 1, c.y + 2.2 + .15 * S(c.a * 9 + i), c.z + C(q) * 1, .3 * f, .3 * f, .3 * f, 0, c.a * 6); }
   for (let i = 0; i < cnt(c, 6); i++) { const q = i * 1.05 + .3, d = r * .8; p.put('mist', '#ddc88e', c.x + S(q) * d, c.y + .3 + c.t, c.z + C(q) * d, .55 * f); }
 };
+/**
+ * Whirlwind, after the reference: ONE thin ring that swells out from the explorer and fades, again every 0.45 s
+ * (about 1.6 m across at its widest for the 2.8 m hit), plus a few short white wisps whirling close round the body.
+ */
+export const WHIRL_PULSE = .45;
+export function whirlRing(age: number, radius: number) { const k = (age % WHIRL_PULSE) / WHIRL_PULSE; return { r: radius * (.25 + .4 * (1 - (1 - k) ** 2)), fade: 1 - k }; }
 const whirl: Builder = (p, c) => {
-  const f = fadeOut(c, 3), g = grow(c, 6), tint = c.color;
-  p.put('gring', tint, c.x, c.y, c.z, c.r * g, 1, c.r * g);
-  for (let i = 0; i < cnt(c, 20); i++) { const k = i / 20, q = i * 2.2 + c.a * 9, rr = c.r * (.35 + .6 * k) * g, yy = .2 + k * 2.4; p.put('gbox', i % 3 ? tint : '#ffffff', c.x + S(q) * rr, c.y + yy, c.z + C(q) * rr, .07, .05, .9 * f, 0, q + PI / 2); }
-  for (let i = 0; i < cnt(c, 5); i++) { const q = c.a * 7 + i * 1.26, rr = c.r * .55; p.put('petal', '#bfe8a0', c.x + S(q) * rr, c.y + .8 + i * .3, c.z + C(q) * rr, .16, .02, .07, c.a * 8, q); }
+  const f = fadeOut(c, 6), g = grow(c, 8), ring = whirlRing(c.a, c.r);
+  if (ring.fade > .05) p.put('ring', '#ffffff', c.x, c.y + .02, c.z, ring.r, 1, ring.r);
+  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 4 + c.a * 11 + (i > 3 ? .6 : 0), rr = (.55 + (i % 2) * .3) * g, yy = .35 + (i % 4) * .28; p.put('gbox', '#ffffff', c.x + S(q) * rr, c.y + yy, c.z + C(q) * rr, .04, .03, .42 * f, 0, q + PI / 2); }
 };
 const surf: Builder = (p, c) => {
   const run = Math.min(1, c.t * 1.25), f = fadeOut(c, 4), n = cnt(c, 13), reach = c.r;
@@ -262,7 +275,7 @@ const surf: Builder = (p, c) => {
 };
 const poof: Builder = (p, c) => {
   const w = Math.min(1, c.t * 4), f = fadeOut(c, 2.2), col = c.color;
-  for (let i = 0; i < cnt(c, 9); i++) { const q = i * TAU / 9 + hash(i), d = c.r * .5 * w, s = (.45 + hash(i + 3) * .35) * f * (.7 + w * .5); p.put('mist', i % 2 ? '#ece8f6' : col, c.x + S(q) * d, c.y + .35 + c.t * 1.2 * (.5 + hash(i)), c.z + C(q) * d, s, s * .8, s); }
+  for (let i = 0; i < cnt(c, 9); i++) { const q = i * TAU / 9 + hash(i), d = c.r * .5 * w, s = (.18 + hash(i + 3) * .14) * f * (.7 + w * .5) * Math.min(1.6, .6 + c.r * .4); p.put('mist', i % 2 ? '#ece8f6' : col, c.x + S(q) * d, c.y + .35 + c.t * 1.2 * (.5 + hash(i)), c.z + C(q) * d, s, s * .8, s); }
   p.put('gring', col, c.x, c.y, c.z, c.r * w, 1, c.r * w);
   for (let i = 0; i < cnt(c, 8); i++) { const q = i * 2.4; p.put('gorb', '#ffffff', c.x + S(q) * c.r * w * .8, c.y + .5 + hash(i) * 1.4 * c.t + .2, c.z + C(q) * c.r * w * .8, .08 * f + .01); }
 };

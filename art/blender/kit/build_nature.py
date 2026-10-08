@@ -1373,11 +1373,41 @@ CROP_BUILDERS = dict(radish=crop_radish, carrot=crop_carrot, pumpkin=crop_pumpki
                      goldcorn=crop_goldcorn, dragonfruit=crop_dragonfruit, rainbowrose=crop_rainbowrose)
 
 
+# Ripe crops are little characters (the October feel pass, after the reference's smiling radish): each gets a face on
+# its body (crop_face.py: eyes with a sparkle, blush, a smile) and bodies without leaves of their own get a leaf
+# sprout of hair. body = the materials of the body; count = how many islands of it get a face (berries, cherries...).
+CROP_FACES = {
+    'radish': dict(body={'Crop radish'}), 'carrot': dict(body={'Crop carrot', 'Crop carrot ridge'}),
+    'pumpkin': dict(body={'Crop pumpkin'}), 'mint': dict(body={'Crop mint', 'Crop mint light'}, merge=True, scale=.6),
+    'chili': dict(body={'Crop chili'}, count=2, scale=1.3), 'candy': dict(body={'Crop candy pink', 'Crop candy white', 'Crop candy yellow'}, hair=True),
+    'bean': dict(body={'Crop bean shield'}), 'star': dict(body={'Crop star fruit'}, hair=True),
+    'berry': dict(body={'Crop strawberry'}, count=2), 'coffee': dict(body={'Crop coffee cherry ripe', 'Crop coffee cherry', 'Crop coffee leaf'}, merge=True, scale=.7, sclera=True),
+    'moonflower': dict(body={'Crop moonflower', 'Crop moonflower centre'}, merge=True, scale=.7), 'magnetmelon': dict(body={'Crop magnet red', 'Crop magnet silver'}, hair=True),
+    'melon': dict(body={'Crop melon light', 'Crop melon dark'}), 'clover': dict(body={'Crop clover', 'Crop clover light'}, merge=True, scale=.75),
+    'glowshroom': dict(body={'Crop glowshroom cap', 'Crop glowshroom spots'}, merge=True, scale=.6), 'iceberry': dict(body={'Crop ice berry'}, count=2, hair=True),
+    'goldcorn': dict(body={'Crop corn gold'}, scale=1.4), 'dragonfruit': dict(body={'Crop dragonfruit'}),
+    'rainbowrose': dict(body={'Crop rose red', 'Crop rose orange', 'Crop rose yellow', 'Crop rose blue', 'Crop rose violet'}, merge=True, scale=1.25),
+}
+FACE_MATERIALS = ('Crop face ink', 'Crop face shine', 'Crop face blush')
+
+
+def face_materials():
+    return dict(ink=M('Crop face ink', '#2B1B24', 0.5), shine=M('Crop face shine', '#FFFFFF', 0.3),
+                blush=M('Crop face blush', '#FF8FB4', 0.6))
+
+
 def build_crops():
+    import crop_face  # noqa: E402 (same folder)
     cm = CropMats()
+    faces = face_materials()
     out = {'crop_sprout': crop_sprout(cm).build()}
     for cid in CROP_IDS:
-        out['crop_' + cid] = CROP_BUILDERS[cid](cm).build()
+        obj = CROP_BUILDERS[cid](cm).build()
+        spec = CROP_FACES[cid]
+        if spec.get('hair'):
+            crop_face.leaf_hair(obj, spec['body'], cm.leaf_light)
+        crop_face.add_faces(obj, spec['body'], faces, count=spec.get('count', 1), scale=spec.get('scale', 1.0), merge=spec.get('merge', False), sclera=spec.get('sclera', False))
+        out['crop_' + cid] = obj
     return out
 
 
@@ -1438,10 +1468,14 @@ def check_scenery(name, s):
 def check_crop(name, s):
     errors = []
     lo, hi = s['bounds']['min'], s['bounds']['max']
-    if s['triangles'] > 400:
-        errors.append(f"{s['triangles']} triangles > 400")
-    if not 2 <= len(s['materials']) <= 6:
-        errors.append(f"{len(s['materials'])} materials")
+    # 400 for the plant plus up to ~110 for its face (two faces on berries and pods) and leaf hair.
+    if s['triangles'] > 520:
+        errors.append(f"{s['triangles']} triangles > 520")
+    own = [m for m in s['materials'] if m not in FACE_MATERIALS]
+    if not 2 <= len(own) <= 7:
+        errors.append(f"{len(own)} materials")
+    if name != 'crop_sprout' and not set(FACE_MATERIALS) <= set(s['materials']):
+        errors.append('no face')
     if max(abs(lo[0]), abs(hi[0]), abs(lo[1]), abs(hi[1])) > 0.35:
         errors.append(f'footprint x {lo[0]}..{hi[0]} y {lo[1]}..{hi[1]} beyond 0.7 x 0.7')
     limit = 0.35 if name == 'crop_sprout' else 0.9
