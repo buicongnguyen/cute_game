@@ -28,6 +28,33 @@
       }
     },
     {
+      "id": "2026-10-09-rescue-call",
+      "date": "2026-10-09",
+      "icon": "📯",
+      "title": {
+        "en": "Rescue Call: hold the line on Toybox, Candy and the Wild Jungle",
+        "vi": "Lời Kêu Cứu: giữ vững phòng tuyến ở Đồ chơi, Kẹo và Rừng Hoang"
+      },
+      "items": {
+        "en": [
+          "📯 Now and then a friend on another planet sends an SOS: a cracked portal opens by the south square (and on the map). Answer it to defend their farm. Calls can be turned off in Settings.",
+          "🏰 Hold the Line: raiders march down lanes that merge and fork. Build popcorn turrets, tesla coils, deck cannons, sandbag walls and frost lanterns on the pads between waves, upgrade them twice, and sell what you no longer need.",
+          "🧑‍🤝‍🧑 Bring up to four friends: your rescued helpers and AI neighbours. They start with plain clothes and a punch; spend Spark and Star bits to climb their gear ladder up to a disguise with its own skills and ultimate. Try the next step on before you buy it.",
+          "🗡️ The Me tab buys your own boosts for the mission: sharper hits, quick hands, calm focus, heal potions and a bubble shield.",
+          "❤️ Raiders get tougher every wave (more health, not bigger). A raider that gets through costs a heart; nobody drops a death bag in a rescue, and a fallen friend just rests at the camp for 15 seconds.",
+          "🎁 Waves you hold pay EXP and energy; five wins a day also bring the friend's thank-you gift. Phones held upright play the field top to bottom."
+        ],
+        "vi": [
+          "📯 Thỉnh thoảng một người bạn ở hành tinh khác gửi tín hiệu SOS: một cổng nứt mở ra cạnh quảng trường phía nam (và hiện trên bản đồ). Hãy đáp lời để bảo vệ nông trại của họ. Có thể tắt lời kêu cứu trong Cài đặt.",
+          "🏰 Giữ Vững Phòng Tuyến: kẻ địch tiến theo các làn đường nhập và tách nhau. Giữa các đợt, hãy xây tháp bỏng ngô, cuộn Tesla, đại bác boong, tường bao cát và đèn lồng băng trên các ô xây, nâng cấp hai lần và bán đi khi không cần.",
+          "🧑‍🤝‍🧑 Mang theo tối đa bốn người bạn: các bạn nhỏ đã giải cứu và hàng xóm AI. Họ bắt đầu với quần áo thường và nắm đấm; dùng Tia Sáng và Mảnh Sao để leo thang trang bị tới bộ hoá trang có chiêu và tuyệt chiêu riêng. Có thể mặc thử bậc tiếp theo trước khi mua.",
+          "🗡️ Thẻ Tôi mua tăng cường cho riêng bạn trong nhiệm vụ: đòn sắc hơn, tay nhanh, tập trung, bình hồi máu và khiên bong bóng.",
+          "❤️ Kẻ địch mạnh hơn sau mỗi đợt (nhiều máu hơn, không to hơn). Mỗi kẻ lọt qua làm mất một tim; đi giải cứu không bao giờ rơi túi đồ, và bạn bè bị hạ chỉ nghỉ ở trại 15 giây.",
+          "🎁 Các đợt giữ được cho EXP và năng lượng; năm trận thắng mỗi ngày còn có quà cảm ơn của người bạn. Điện thoại cầm dọc sẽ chơi phòng tuyến từ trên xuống dưới."
+        ]
+      }
+    },
+    {
       "id": "2026-10-06-events",
       "date": "2026-10-06",
       "icon": "🗿",

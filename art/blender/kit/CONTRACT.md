@@ -886,3 +886,34 @@ at runtime (a canvas texture), not in the file.
 Team colour by material name: `CTF team` (blue `#3f8cff`, red `#ff5a5f`, neutral pads gold) and `CTF team glow`.
 Run with `-- --icons` for 160×160 transparent WebP icons in `public/assets/icons/ctf/` (the seven power-ups, `flag`,
 `gate`, `keeper`). The file is about 250 KB; `art/previews/kit/ctf.webp` shows every piece.
+
+## Rescue Call (`build_rescue.py` → `public/assets/models/rescue.glb`)
+
+The SOS portal by the south square and the Hold the Line fields (`src/rescue-view.ts`, docs/RESCUE-CALL-PLAN.md). One
+top-level empty per piece with a joined child `<name>_body`; the turning turrets also have `<name>_head`, whose origin is
+the pivot the game aims about (the game reparents the head's meshes under a pivot group). Origin at the ground centre,
+front Blender -Y (glTF +Z), metres. Loaded lazily (when a call opens the portal or a mission starts); simple shapes stand
+in until then and the field is redrawn when the file arrives. The field's ground, dirt paths and the camp's sand are a
+runtime canvas texture, not in the file. Every repeated piece is drawn instanced; each defence is baked to one or two
+draws per pad (`bakeModel`). One material per colour across the file (`RS <hex>`).
+
+| Node | Use | Size | Triangles |
+| --- | --- | --- | ---: |
+| `rs_portal`, `rs_portal_swirl` | the cracked SOS portal (ring r 1.7 leaning back 28° about z 0.4, two lantern posts, a horn on top) and its swirl disc; the game spins the swirl | h ≈ 4.4 | 1,092 / 452 |
+| `rs_pad` | an octagonal build pad (r 1.25) | h 0.21 | 584 |
+| `rs_post` | a squad guard post (shield on a stake) | h 1.2 | 206 |
+| `rs_chevron` | a flat lane arrow, drawn instanced along every route pointing at your end | 0.6 m | 24 |
+| `rs_camp` | the squad's camp: tent, campfire (glowing), supplies, banner | 4 × 4 m | 346 |
+| `rs_farmhouse` | the friend's farmhouse with a silo and a fence; roof `RS roof` tinted per planet | 6 × 5 m | 548 |
+| `rs_popcorn_1..3` | popcorn turret: striped tub + head (popcorn heap, 1–3 barrels), gold rim at 3 | h ≈ 1.4 | 384 / 492 / 696 |
+| `rs_tesla_1..3` | tesla coil: tripod + head (copper coils, glowing ball, a halo at 3); the head spins | h ≈ 1.9 | 640 / 736 / 1,000 |
+| `rs_cannon_1..3` | deck cannon: wooden carriage + head (barrel, brass at 3) | h ≈ 0.9 | 340 / 384 / 480 |
+| `rs_wall_1..3` | sandbag wall: 1–3 rows, posts from 2, a steel plate at 3; laid across the blocked lane | 2.8 m | 100 / 220 / 424 |
+| `rs_frost_1..3` | frost lantern: post with an arm; head = the hanging glowing lantern (icicles from 2, a snowflake crown at 3), sways | h ≈ 2.1 | 368 / 400 / 472 |
+| `rs_helmet`, `rs_scarf`, `rs_banner` | raider props for stronger waves (scarf from wave 3, helmet from 5, banner from 7; brutes and the boss wear the helmet), sized for a 0.8 m head and scaled by the game | — | 144 / 196 / 52 |
+| `rs_blocks`, `rs_ball`, `rs_crate`, `rs_candyrock`, `rs_bush`, `rs_tree` | field decor; `RS leaf` tinted per planet | — | 168 / 560 / 92 / 376 / 120 / 60 |
+
+Run with `-- --icons` for 160×160 transparent WebP icons in `public/assets/icons/rescue/` (`popcorn`, `tesla`,
+`cannon`, `wall`, `frost` from their level-2 look, `portal`, `farmhouse`, `camp`). The file is about 400 KB;
+`art/previews/kit/rescue.webp` shows every piece. Raiders are the planets' own creatures (creatures.glb or the
+procedural shapes) at their normal size, drawn instanced per kind with a light raider tint.

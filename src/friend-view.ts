@@ -99,14 +99,24 @@ function standIn(tint: string, hair: string, wear: SaveState['gear'] = {}) {
  */
 export function buildFriend(id: FriendId, gear: Friend['gear'] = {}, stage = 0, look: LookId = DEFAULT_LOOK): T.Group {
   const colours = FRIENDS[id], wear: SaveState['gear'] = { hat: gear.hat, outfit: gear.outfit, boots: gear.boots, weapon: gear.weapon, pet: gear.pet };
+  const root = buildAvatar(colours.tint, colours.hair, wear, friendHeight(stage), look);
+  root.name = 'friend-' + id; root.userData.stage = stage;
+  return root;
+}
+/**
+ * The same cheap merged avatar for anyone drawn like a friend: `height` is the share of the explorer's height, `hair`
+ * recolours the baked hair (null keeps it), and `gear` may hold a disguise too (Rescue Call's squad, rescue.ts).
+ */
+export function buildAvatar(tint: string, hair: string | null, gear: SaveState['gear'], height: number, look: LookId = DEFAULT_LOOK): T.Group {
+  const wear: SaveState['gear'] = { ...gear };
   for (const k of Object.keys(wear) as (keyof typeof wear)[]) if (!wear[k]) delete wear[k];
-  const model = dresser ? dresser(colours.tint, wear, look) : standIn(colours.tint, colours.hair, wear);
-  recolourHair(model, colours.hair); mergeParts(model);
+  const model = dresser ? dresser(tint, wear, look) : standIn(tint, hair ?? '#7C4527', wear);
+  if (hair) recolourHair(model, hair); mergeParts(model);
   model.rotation.order = 'YXZ';
   model.traverse(o => { if (o instanceof T.Mesh) { o.castShadow = false; o.receiveShadow = false; } });
   const ratio = HEIGHT_RATIO[splitLook(toLook(model.userData.look) ?? DEFAULT_LOOK).height];
-  const pet = model.getObjectByName('remote-pet'); if (pet) pet.scale.setScalar(.7 * ratio / friendHeight(stage)); // a pet stays readable beside a small friend (1.4 at half size)
-  const scale = friendScale(stage) / ratio, root = new T.Group(); root.name = 'friend-' + id; root.scale.setScalar(scale); root.add(model); root.userData.stage = stage;
+  const pet = model.getObjectByName('remote-pet'); if (pet) pet.scale.setScalar(.7 * ratio / height); // a pet stays readable beside a small friend (1.4 at half size)
+  const scale = HERO_SCALE * height / ratio, root = new T.Group(); root.scale.setScalar(scale); root.add(model);
   blobGeometry ??= new T.CircleGeometry(.36, 14); blobMaterial ??= new T.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: .2, depthWrite: false });
   blobGeometry.userData.sharedKit = true; blobMaterial.userData.sharedKit = true;
   const blob = new T.Mesh(blobGeometry, blobMaterial); blob.scale.setScalar(ratio / FRIEND_SCALE) /* grows with the friend: .36 m at half size */; blob.rotation.x = -Math.PI / 2; blob.position.y = .03 / scale; blob.name = 'friend-blob'; root.add(blob);

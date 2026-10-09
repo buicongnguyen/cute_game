@@ -246,6 +246,7 @@ export const REFUSALS: Record<string, Reason> = {
   dungeonStart: s => s.planet !== 'home' ? 'The vault is reached from Clover Village.' : 'You have been through the vault twice today. Come back tomorrow!',
   dungeonClaim: 'That vault room was already counted, or the run has ended.',
   ctfClaim: 'That match was already counted, or it was too short for EXP.',
+  rescueClaim: 'That rescue was already counted, or it ended too quickly.',
   dungeonLeave: 'You are not in the vault.',
   die: 'That cannot happen right now.',
   houseUse: houseReason,

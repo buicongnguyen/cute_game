@@ -1,0 +1,144 @@
+/* Rescue Call (rescue.ts): the briefing, the mission HUD, the build panel (Defences / Squad / Me), squad tags, banners. */
+.rescue-dialog p { margin: .45em 0; }
+.rescue-lead { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: center; padding: 10px 12px; border-radius: 16px; background: linear-gradient(180deg, #fff3dc, #ffe6c4); }
+.rescue-lead .rescue-friend { grid-row: span 2; font-size: 34px; line-height: 1; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .12)); }
+.rescue-lead i { font-weight: 700; color: #5a3410; }
+.rescue-lead b { font-size: 12px; color: #a0521c; }
+.rescue-facts { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 2px; }
+.rescue-facts span { padding: 4px 10px; border-radius: 999px; background: #eef6ff; font-weight: 800; font-size: 12.5px; color: #24406b; }
+.rescue-facts span.warn { background: #ffe1d6; color: #9a2d10; }
+.rescue-dialog h4 { margin: 10px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; opacity: .8; }
+.rescue-dialog h4 small { text-transform: none; letter-spacing: 0; font-weight: 700; opacity: .8; margin-left: 4px; }
+.rescue-foes { display: flex; flex-wrap: wrap; gap: 5px; }
+.rescue-foes span { padding: 4px 9px; border-radius: 12px; background: #fff1f1; color: #6b1d1d; font-weight: 800; font-size: 12.5px; }
+.rescue-foes span small { font-weight: 700; opacity: .7; }
+.rescue-foes span.boss { background: #ffe14d; color: #4a3400; }
+.rescue-rule { padding: 8px 10px; border-radius: 12px; background: #f0fff0; font-size: 13px; line-height: 1.4; color: #1f4d22; }
+.rescue-squad { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+.rescue-squad button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 9px; border-radius: 12px; border: 2px solid #e2dcf2; background: #fff; cursor: pointer; font: inherit; text-align: left; min-height: 48px; }
+.rescue-squad button b { font-size: 13px; display: flex; align-items: center; gap: 5px; }
+.rescue-squad button b i { width: 11px; height: 11px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgba(0, 0, 0, .25); }
+.rescue-squad button small { font-size: 11px; opacity: .75; }
+.rescue-squad button.sel { border-color: #ff8a3d; background: #fff1e0; box-shadow: 0 0 0 2px rgba(255, 138, 61, .3); }
+.rescue-squad button.me { opacity: 1; cursor: default; border-color: #3f8cff; background: #eaf3ff; }
+.rescue-note { font-size: 12px; opacity: .9; }
+.rescue-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+.rescue-actions button { padding: 10px 18px; border-radius: 14px; font-weight: 800; min-height: 44px; }
+.rescue-end .rescue-score { text-align: center; font-size: 26px; font-weight: 900; margin: 0; color: #4a2a00; }
+.rescue-pay { text-align: center; font-size: 17px; color: #1a7c45; }
+.rescue-badge { text-align: center; font-weight: 900; color: #a0521c; font-size: 16px; }
+.rescue-gift { margin: 8px auto; padding: 8px 10px; border-radius: 14px; background: #fff6d8; text-align: center; }
+.rescue-gift h4 { margin: 0 0 4px; }
+.rescue-gift span { display: inline-flex; align-items: center; gap: 4px; margin: 2px 6px; font-weight: 800; }
+.rescue-gift img { width: 28px; height: 28px; object-fit: contain; }
+.rescue-gift small { display: block; opacity: .75; margin-top: 2px; }
+.rescue-stats { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.rescue-table { margin: 6px auto; border-collapse: collapse; font-size: 12.5px; }
+.rescue-table td { padding: 2px 10px; }
+
+/* ---- the mission HUD (top centre) */
+#rescue-hud {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 84px); left: 50%; transform: translateX(-50%); z-index: 30;
+  width: min(440px, calc(100vw - 20px)); padding: 6px 10px 7px; border-radius: 18px; box-sizing: border-box; text-align: center;
+  background: linear-gradient(180deg, rgba(58, 30, 12, .9), rgba(40, 20, 8, .86)); color: #fff6e6;
+  box-shadow: 0 6px 22px rgba(30, 12, 0, .45), inset 0 0 0 2px rgba(255, 190, 110, .35);
+  font: 800 13px/1.25 'Nunito Variable', system-ui, sans-serif; pointer-events: auto;
+}
+#rescue-hud .rescue-top { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+#rescue-hud .hearts { display: inline-flex; gap: 0; font-size: 14px; letter-spacing: -1px; }
+#rescue-hud .hearts i { font-style: normal; color: rgba(255, 255, 255, .18); text-shadow: none; }
+#rescue-hud .hearts i.on { color: #ff4d6d; text-shadow: 0 1px 0 rgba(0, 0, 0, .35); }
+#rescue-hud .wave, #rescue-hud .spark, #rescue-hud .stars { padding: 2px 8px; border-radius: 10px; background: rgba(255, 255, 255, .12); font-variant-numeric: tabular-nums; }
+#rescue-hud .spark { color: #ffe680; } #rescue-hud .stars { color: #ffd23f; }
+#rescue-hud button { border: 0; border-radius: 12px; background: rgba(255, 255, 255, .16); color: inherit; font: inherit; font-size: 13px; padding: 4px 9px; cursor: pointer; min-height: 30px; }
+#rescue-hud .rescue-mid { display: flex; gap: 6px; align-items: center; justify-content: center; margin-top: 5px; flex-wrap: wrap; }
+#rescue-hud .rescue-phase { font-size: 13px; }
+#rescue-hud .rescue-phase.build { color: #9be7ff; }
+#rescue-hud .rescue-phase.wave { color: #ffb38a; }
+#rescue-hud button.go { background: linear-gradient(180deg, #ffd23f, #ff9f1c); color: #3a2200; box-shadow: 0 2px 0 #b86b00; font-weight: 900; }
+#rescue-hud button.order { background: rgba(120, 190, 255, .25); }
+#rescue-hud .rescue-squadbar { display: flex; gap: 6px; justify-content: center; margin-top: 5px; }
+#rescue-hud .rescue-squadbar span { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; }
+#rescue-hud .rescue-squadbar span i { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgba(0, 0, 0, .3); }
+#rescue-hud .rescue-squadbar .hp { display: inline-block; width: 34px; height: 6px; border-radius: 4px; background: rgba(255, 255, 255, .18); overflow: hidden; }
+#rescue-hud .rescue-squadbar .hp em { display: block; height: 100%; background: #7aff9a; }
+#rescue-hud .rescue-squadbar span.down { opacity: .55; }
+#rescue-hud .rescue-squadbar span.down small { color: #ffb0b0; }
+#rescue-hud .rescue-shield { font-size: 12px; color: #9be7ff; margin-top: 2px; }
+
+/* ---- the build panel: right side on wide screens, a bottom sheet on phones held upright */
+#rescue-build {
+  position: fixed; z-index: 31; right: calc(env(safe-area-inset-right, 0px) + 12px); top: calc(env(safe-area-inset-top, 0px) + 178px);
+  width: 340px; max-height: calc(100vh - 250px); overflow: auto; box-sizing: border-box; padding: 8px; border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 250, 240, .97), rgba(255, 241, 222, .97)); color: #3a2410;
+  box-shadow: 0 10px 28px rgba(40, 20, 0, .35), inset 0 0 0 2px rgba(255, 170, 90, .45);
+  font: 700 13px/1.3 'Nunito Variable', system-ui, sans-serif; pointer-events: auto; overscroll-behavior: contain;
+}
+body[data-rescue-orient="portrait"] #rescue-build { left: calc(env(safe-area-inset-left, 0px) + 8px); right: calc(env(safe-area-inset-right, 0px) + 8px); top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); width: auto; max-height: 44vh; }
+#rescue-build.folded .rescue-body { display: none; }
+#rescue-build.folded .fold { transform: rotate(180deg); }
+.rescue-tabs { display: flex; gap: 4px; position: sticky; top: -8px; background: inherit; padding-bottom: 6px; z-index: 1; }
+.rescue-tabs button { flex: 1; padding: 7px 6px; border-radius: 12px; border: 2px solid #f0d8bc; background: #fff; font: inherit; font-weight: 900; cursor: pointer; min-height: 40px; color: #6a3a10; }
+.rescue-tabs button.sel { background: #ff8a3d; border-color: #ff8a3d; color: #fff; box-shadow: 0 2px 0 #c45a10; }
+.rescue-tabs button.fold { flex: 0 0 40px; }
+.rescue-pads { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.rescue-pads button { width: 40px; height: 40px; border-radius: 12px; border: 2px dashed #d9b98a; background: #fffaf2; font: inherit; font-weight: 900; cursor: pointer; color: #8a5a2c; position: relative; font-size: 15px; }
+.rescue-pads button.built { border-style: solid; background: #fff3d6; }
+.rescue-pads button sup { position: absolute; right: 2px; top: 1px; font-size: 9px; color: #c45a10; }
+.rescue-pads button.sel { border-color: #ffb300; background: #ffe680; box-shadow: 0 0 0 2px rgba(255, 179, 0, .4); }
+.rescue-cards, .rescue-boosts { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+body[data-rescue-orient="portrait"] .rescue-cards, body[data-rescue-orient="portrait"] .rescue-boosts { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
+.rescue-cards .card, .rescue-boosts .card { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: auto auto auto; gap: 0 6px; align-items: center; text-align: left; padding: 6px 7px; border-radius: 14px; border: 2px solid #f0d8bc; background: #fff; cursor: pointer; font: inherit; color: inherit; min-height: 64px; }
+.rescue-cards .card img, .rescue-boosts .card .ic { grid-row: span 3; width: 40px; height: 40px; object-fit: contain; font-size: 28px; text-align: center; }
+.rescue-cards .card b, .rescue-boosts .card b { font-size: 12.5px; line-height: 1.15; }
+.rescue-cards .card small, .rescue-boosts .card small { font-size: 10.5px; opacity: .78; line-height: 1.2; }
+body[data-rescue-orient="portrait"] .rescue-cards .card small { display: none; }
+.rescue-cards .card em, .rescue-boosts .card em { font-style: normal; font-weight: 900; color: #c45a10; font-size: 12px; }
+.rescue-cards .card:hover, .rescue-boosts .card:hover { border-color: #ff8a3d; }
+.card.poor, button.poor { opacity: .55; filter: saturate(.6); }
+.rescue-built { display: flex; gap: 8px; align-items: center; padding: 6px; border-radius: 14px; background: #fff; }
+.rescue-built img { width: 52px; height: 52px; object-fit: contain; }
+.rescue-built b { display: block; } .rescue-built small { display: block; font-size: 11.5px; opacity: .85; } .rescue-built small.next { color: #1a7c45; }
+.rescue-row { display: flex; gap: 6px; margin-top: 6px; }
+.rescue-row button { flex: 1; padding: 8px 10px; border-radius: 12px; font-weight: 900; min-height: 40px; }
+.rescue-member { padding: 7px 8px; border-radius: 14px; background: #fff; margin-bottom: 6px; border: 2px solid transparent; }
+.rescue-member.trying { border-color: #7fd0ff; background: #f0faff; }
+.rescue-member .who { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.rescue-member .who i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1.5px rgba(0, 0, 0, .25); }
+.rescue-member .who small { opacity: .75; font-size: 11px; }
+.rescue-member .gear { display: flex; gap: 4px; margin: 4px 0; font-size: 20px; min-height: 30px; align-items: center; }
+.rescue-member img { width: 30px; height: 30px; object-fit: contain; border-radius: 8px; background: #fff6e6; }
+.rescue-member .next { font-size: 12px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; color: #1a6c3c; }
+.rescue-member .next img { width: 26px; height: 26px; }
+#rescue-build .muted { opacity: .7; } #rescue-build .small { font-size: 11px; }
+
+/* ---- squad tags, the downed banner, the portal's call-out, banners */
+#rescue-tags { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+.rescue-tag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font: 800 11px/1 'Nunito Variable', system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); white-space: nowrap; }
+.rescue-tag sup { color: #ffe14d; }
+.rescue-tag .hp { width: 38px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, .45); overflow: hidden; }
+.rescue-tag .hp i { display: block; height: 100%; background: #7aff9a; }
+.rescue-tag .rec { color: #ffd0d0; }
+#rescue-down { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 32; padding: 12px 20px; border-radius: 18px; background: rgba(40, 10, 10, .78); color: #fff; font: 900 16px/1.3 'Nunito Variable', system-ui, sans-serif; pointer-events: none; text-align: center; }
+#rescue-say { position: fixed; left: 0; top: 0; z-index: 19; max-width: 230px; padding: 7px 11px; border-radius: 14px; background: #fff6e0; color: #6a3a10; font: 800 12.5px/1.3 'Nunito Variable', system-ui, sans-serif; box-shadow: 0 4px 14px rgba(60, 30, 0, .3); pointer-events: none; animation: rescue-bob 1.6s ease-in-out infinite; }
+@keyframes rescue-bob { 50% { margin-top: -4px; } }
+.rescue-banner { position: fixed; left: 50%; top: 32%; transform: translate(-50%, -50%); z-index: 33; padding: 10px 26px 12px; border-radius: 22px; text-align: center; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 160, 60, .95), rgba(230, 100, 30, .95)); color: #fff; box-shadow: 0 10px 30px rgba(60, 20, 0, .4); animation: rescue-pop .35s cubic-bezier(.2, 1.6, .4, 1); font-family: 'Nunito Variable', system-ui, sans-serif; }
+.rescue-banner strong { display: block; font-size: 26px; font-weight: 900; text-shadow: 0 2px 0 rgba(0, 0, 0, .2); }
+.rescue-banner span { display: block; font-size: 14px; font-weight: 800; opacity: .95; }
+.rescue-banner.good { background: linear-gradient(180deg, rgba(90, 210, 120, .95), rgba(40, 160, 80, .95)); }
+.rescue-banner.bad { background: linear-gradient(180deg, rgba(255, 90, 100, .95), rgba(200, 40, 60, .95)); }
+.rescue-banner.leaving { opacity: 0; transition: opacity .5s; }
+@keyframes rescue-pop { from { transform: translate(-50%, -50%) scale(.6); opacity: 0; } }
+@media (max-width: 520px) {
+  .rescue-banner strong { font-size: 21px; }
+  #rescue-hud { top: calc(env(safe-area-inset-top, 0px) + 146px); width: calc(100vw - 16px); padding: 5px 8px 6px; font-size: 12px; }
+  #rescue-hud .hearts { font-size: 12px; }
+  #rescue-hud .rescue-top { gap: 5px; }
+  /* Names and health ride over the squad's heads on a phone: the HUD keeps to two rows, the boss bar sits under it. */
+  #rescue-hud .rescue-squadbar { display: none; }
+  body.in-rescue #boss-bar { top: calc(env(safe-area-inset-top, 0px) + 222px); }
+}
+body.in-rescue .minimap, body.in-rescue .tracker-stack, body.in-rescue #discovery-progress, body.in-rescue #zone-banner { display: none !important; }
+body.in-rescue #zone-name { opacity: .9; }
+@media (prefers-reduced-motion: reduce) { #rescue-say, .rescue-banner { animation: none; } }

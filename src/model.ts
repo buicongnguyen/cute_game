@@ -4,6 +4,7 @@ import { parseHelper, type HelperState } from './helper-state.ts';
 import { parseFriends, parseBosses, noteBossDefeat, type Friend } from './friends-state.ts';
 import { parseDungeon, type DungeonSave } from './dungeon-save.ts';
 import { parseCtf, type CtfSave } from './ctf-save.ts';
+import { parseRescue, type RescueSave } from './rescue-save.ts';
 import { parseHouse, type HouseState } from './house-activities.ts';
 import { parseLooks, type Looks } from './looks.ts';
 import { uniformSpecial } from './uniform-skills.ts';
@@ -177,6 +178,8 @@ export interface SaveState {
     dungeon?: DungeonSave;
     /** Flag Rush (ctf-claim.ts): today's rewarded matches and the matches already paid. */
     ctf?: CtfSave;
+    /** Rescue Call (rescue-claim.ts): today's paid waves and wins, best waves held per mission, badges, runs already paid. */
+    rescue?: RescueSave;
     /** Explorer body styles bought at the mirror (looks.ts); missing in older saves = the default look only. */
     looks?: Looks;
     /** Cottage activities (house-activities.ts): when each was last used, paintings made. */
@@ -940,6 +943,7 @@ export function parseSave(raw: string | null): SaveState | null {
         for (const f of friends) if (!f.borrowed) { for (const item of Object.values(f.gear)) if (item && !(s.bag[item] ?? 0)) addItem(s, item); f.borrowed = true; } if (bosses.length) s.bosses = bosses; const house = parseHouse(v.house); if (house) s.house = house;
         const dungeon = parseDungeon(v.dungeon); if (dungeon) s.dungeon = dungeon;
         const ctf = parseCtf(v.ctf); if (ctf) s.ctf = ctf;
+        const rescue = parseRescue(v.rescue); if (rescue) s.rescue = rescue;
         const looks = parseLooks(v.looks); if (looks) s.looks = looks; else delete s.looks; // older saves keep the look they had: the default hero
         dropUnownedFriendLooks(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));

@@ -17,6 +17,7 @@ import { claimProgress, refreshProgress, rerollDaily, startChallenge, type Progr
 import { refusalReason } from './refusals.ts';
 import { startRun, claimStage, leaveRun } from './dungeon-rules.ts';
 import { claimMatch } from './ctf-claim.ts';
+import { claimRescue } from './rescue-claim.ts';
 
 export const ACTION_RULES_VERSION = 1;
 export interface GameIntent { type: string; payload?: Record<string, unknown> }
@@ -176,6 +177,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'dungeonClaim': result = claimStage(state, string(p.runId, 64), integer(p.stage), now, random); break;
     case 'dungeonLeave': result = leaveRun(state) || { left: true }; break;
     // Flag Rush (ctf-claim.ts): a finished match's EXP, once per match, six a day, never faster than it was played.
+    // Rescue Call (rescue-claim.ts): waves held pay EXP and energy (capped a day), five wins a day pay in full with the gift.
+    case 'rescueClaim': result = claimRescue(state, { runId: string(p.runId, 64), mission: string(p.mission, 16), waves: integer(p.waves), won: p.won === true, seconds: integer(p.seconds) }, now, random); break;
     case 'ctfClaim': result = claimMatch(state, { matchId: string(p.matchId, 64), won: p.won === true, draw: p.draw === true, caps: integer(p.caps), rets: integer(p.rets), kills: integer(p.kills), size: integer(p.size), seconds: integer(p.seconds) }, now); break;
     case 'die': result = { dropped: !!Game.die(state, number(p.x), number(p.z), now) }; break;
     // Cottage activities: rests and buffs with cooldowns (house-activities.ts).

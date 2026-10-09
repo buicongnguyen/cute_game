@@ -84,6 +84,7 @@ export function drawMarkers(ctx: Ctx, view: MapView) {
     else if (e.kind === 'dropped') { ctx.fillStyle = '#ff7ab0'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; const p = mapPoint(e.x, e.z); ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, TAU); ctx.fill(); ctx.stroke(); }
     else if (e.kind === 'pen' && view.penBuilt === false) { const c = mapPoint(e.x, e.z); ctx.fillStyle = '#c9a46a'; ctx.fillRect(c.x - 2.5, c.y - 2.5, 5, 5); }
     else if (e.kind === 'pen') { const c = mapPoint(e.x, e.z); ctx.fillStyle = '#efc879'; ctx.strokeStyle = '#8a5a3b'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(c.x, c.y, YARD.rx * MAP_SCALE, YARD.rz * MAP_SCALE, 0, 0, TAU); ctx.fill(); ctx.stroke(); }
+    else if (e.kind === 'rescue-portal') { const p = mapPoint(e.x, e.z); ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, TAU); ctx.fill(); ctx.fillText('📯', p.x, p.y + .5); }
     else if (e.kind === 'travel') { const p = mapPoint(e.x, e.z); ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🚀', p.x, p.y); }
   }
   ctx.fillStyle = '#ffe66d'; for (const b of view.ready) { const p = mapPoint(b.x, b.z); ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
