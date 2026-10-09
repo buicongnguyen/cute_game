@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import ts from 'typescript';
+import {readFile} from 'node:fs/promises';
+async function extract(name){const source=await readFile(new URL('../src/rescue.ts',import.meta.url),'utf8'),ast=ts.createSourceFile('rescue.ts',source,99,true);let found;const walk=n=>{if(ts.isFunctionDeclaration(n)&&n.name?.text===name)found=n;ts.forEachChild(n,walk)};walk(ast);assert.ok(found);return ts.transpileModule(found.getText(ast),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;}
+test('rescue recovery sends one optional reminder without waiting for a random call',async()=>{let left=3;const notices=[];const ctx={h:{started:()=>true,visiting:()=>false,toast:x=>notices.push(x)},document:{hidden:false},session:null,sos:{play:0},saveT:0,wasRecovering:true,recoveryLeft:()=>left,callsOn:()=>true,t:x=>x,saveSos(){}};vm.createContext(ctx);vm.runInContext(await extract('sosFrame'),ctx);ctx.sosFrame(1);assert.equal(notices.length,0);left=0;ctx.sosFrame(1);ctx.sosFrame(1);assert.deepEqual(notices,['Rescue ready — choose a mission!']);});
+test('rescue entry enforces recovery and level even when invoked outside the briefing button',async()=>{let left=180;const notices=[];const ctx={session:null,world:{interior:false,planet:'home'},h:{visiting:()=>false,toast:x=>notices.push(x)},recoveryLeft:()=>left,recoveryText:()=> 'recovering',openBriefing(){},isMission:x=>x==='toy',open:()=>[],MISSIONS:{toy:{level:5}},t:x=>x};vm.createContext(ctx);vm.runInContext(await extract('start'),ctx);assert.equal(ctx.start('toy',[]),false);assert.equal(notices[0],'recovering');left=0;assert.equal(ctx.start('toy',[]),false);assert.match(notices[1],/Locked/);});

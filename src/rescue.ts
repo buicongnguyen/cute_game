@@ -49,6 +49,8 @@ export interface RescueHooks {
   /** The explorer's attack and skill timers (gameplay-controls.ts CombatTimers) and the skills' full lengths, for the Me tab's boosts. */
   combatTimers?: { attackCooldown: number; skills: number[] }; skillDurations?: number[];
 }
+const COOLDOWN_KEY = 'zoo-rescue-ready-at';
+const RECOVERY_MS = 3 * 60_000;
 const SOS_KEY = 'zoo-rescue-sos', CALLS_KEY = 'zoo-rescue-calls';
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const itemIcon = (id: string) => `${import.meta.env.BASE_URL}assets/icons/items/${id}.webp`;
@@ -79,6 +81,9 @@ export function initRescue(h: RescueHooks) {
   let briefing: { mission: MissionId; picks: string[] } | null = null, lastClaim: RescueClaimResult | null = null, lastResult: RsRun['result'] = null;
   let sos: SosState = loadSos(), saveT = 0, said = false, sayT = 0;
 
+  const recoveryLeft = () => { try { const at = Number(localStorage.getItem(COOLDOWN_KEY)); return Number.isFinite(at) ? Math.max(0, Math.ceil((Math.min(at, Date.now() + RECOVERY_MS) - Date.now()) / 1000)) : 0; } catch { return 0; } };
+  const recoveryText = () => t('Rescue team recovering: {n}s remaining.', { n: recoveryLeft() });
+
   // ---------------------------------------------------------------- DOM
   const hud = div('rescue-hud'), panel = div('rescue-build'), tags = div('rescue-tags'), down = div('rescue-down'), bubble = div('rescue-say');
   hud.setAttribute('role', 'status'); hud.hidden = panel.hidden = tags.hidden = down.hidden = bubble.hidden = true;
@@ -88,6 +93,7 @@ export function initRescue(h: RescueHooks) {
     const el = (event.target as HTMLElement).closest<HTMLElement>('[data-rescue]'); if (!el) return;
     const what = el.dataset.rescue!, s = session;
     if (what === 'calls') { event.preventDefault(); event.stopPropagation(); setCalls(!callsOn()); el.classList.toggle('on', callsOn()); el.setAttribute('aria-checked', String(callsOn())); return; }
+    if (what === 'mission' && isMission(el.dataset.mission)) { briefing = { mission: el.dataset.mission, picks: defaultPicks() }; openBriefing(); return; }
     if (what === 'pick' && briefing) { togglePick(el.dataset.id!); openBriefing(); return; }
     if (what === 'go' && briefing) { h.closeDialog(); start(briefing.mission, briefing.picks); return; }
     if (what === 'later') { h.closeDialog(); return; }
@@ -124,18 +130,16 @@ export function initRescue(h: RescueHooks) {
     return fresh;
   }
   function saveSos() { try { localStorage.setItem(SOS_KEY, JSON.stringify(sos)); } catch { /* optional */ } }
-  const today = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+  // Mission unlocks and reward caps are independent of portal availability.
   /** Missions the explorer's level opens (their planet's landing level). */
   const open = () => MISSION_IDS.filter(id => h.state().level >= PLANETS[MISSIONS[id].planet].level);
+  let wasRecovering = recoveryLeft() > 0;
   function sosFrame(dt: number) {
     if (!h.started() || h.visiting() || document.hidden || session) return;
     sos.play += dt; saveT += dt;
-    if (sos.call && sos.play > sos.call.until) { sos.call = null; h.toast(t('The call faded. Another friend will ask for help later.'), '📯'); decorateHome(); saveSos(); }
-    if (!sos.call && callsOn() && sos.play >= sos.next) {
-      if (sos.day !== today()) { sos.day = today(); sos.calls = 0; }
-      const list = open(); const [lo, hi] = SOS.every; sos.next = sos.play + (lo + Math.random() * (hi - lo)) * 60;
-      if (list.length && sos.calls < SOS.perDay) { sos.calls++; call(list[Math.floor(Math.random() * list.length)]); }
-    }
+    const recovering = recoveryLeft() > 0;
+    if (wasRecovering && !recovering && callsOn()) h.toast(t('Rescue ready — choose a mission!'), '📯');
+    wasRecovering = recovering;
     if (saveT > 10) { saveT = 0; saveSos(); }
   }
   function call(mission: MissionId) {
@@ -147,7 +151,7 @@ export function initRescue(h: RescueHooks) {
   function decorateHome() {
     if (portal) { const p = portal; world.entities = world.entities.filter(e => e !== p); retire(p.mesh); world.obstacles = world.obstacles.filter(o => o.tag !== 'rescue-portal'); }
     portal = null; portalMesh = null;
-    if (world.planet !== 'home' || session || !sos.call || world.interior) return;
+    if (world.planet !== 'home' || session || world.interior) return;
     const P = RESCUE.portal, inWay = (p: { x: number; z: number }) => Math.hypot(p.x - P.x, p.z - P.z) < 3.2;
     const kept = world.decor.filter(p => !inWay(p)); if (kept.length !== world.decor.length) { world.decor = kept; world.obstacles = world.obstacles.filter(o => !inWay(o)); world.refreshScenery(); }
     if (!rescueKit.requested) void rescueKit.load().then(() => { if (!session) decorateHome(); });
@@ -158,7 +162,7 @@ export function initRescue(h: RescueHooks) {
   const previousBuilt = world.onBuilt; world.onBuilt = () => { previousBuilt?.(); decorateHome(); };
   decorateHome();
   const previousInteract = world.onInteract;
-  world.onInteract = e => { if (e.kind === 'rescue-portal') { if (sos.call) { briefing = { mission: sos.call.mission, picks: defaultPicks() }; openBriefing(); } return; } previousInteract(e); };
+  world.onInteract = e => { if (e.kind === 'rescue-portal') { briefing = { mission: sos.call?.mission ?? open()[0] ?? 'toy', picks: defaultPicks() }; openBriefing(); return; } previousInteract(e); };
 
   // ---------------------------------------------------------------- briefing and squad pick
   interface Candidate { id: string; name: string; kind: 'helper' | 'neighbour'; role: SquadRole | null; color: string; look?: string; friend?: string; level?: number }
@@ -177,6 +181,9 @@ export function initRescue(h: RescueHooks) {
     const boss = md.kinds.boss ? enemyName(md.kinds.boss) : '';
     const locked = st.level < PLANETS[md.planet].level;
     h.openDialog('rescue', md.title, `<div class="rescue-dialog">
+      <p>${esc(t('Choose a rescue any time. The team rests for 3 minutes after each run.'))}</p>
+      <div class="rescue-actions">${MISSION_IDS.map(id => `<button data-rescue="mission" data-mission="${id}" aria-pressed="${briefing!.mission === id}">${esc(planetName(id))}</button>`).join('')}</div>
+      ${recoveryLeft() ? `<p role="status">${esc(recoveryText())}</p>` : ''}
       <p class="rescue-lead"><span class="rescue-friend">${md.friendIcon}</span><i>“${esc(t(md.story))}”</i><b>— ${esc(t(md.friend))}</b></p>
       <div class="rescue-facts"><span>🪐 ${esc(planetName(briefing.mission))}</span><span>🌊 ${esc(t('{n} waves', { n: md.waves.length }))}</span><span class="${locked ? 'warn' : ''}">⭐ ${esc(t('Recommended level {n}', { n: md.level }))}</span><span>❤️ ${RESCUE.hearts}</span></div>
       <h4>${esc(t('Enemies'))}</h4><div class="rescue-foes">${[...roles].map(([role, kind]) => `<span title="${esc(t(role))}">${ENEMY_ROLE_ICON[role]} ${esc(enemyName(kind))} <small>${esc(t(role))}</small></span>`).join('')}<span class="boss">👑 ${esc(t('Last wave: {boss}', { boss }))}</span></div>
@@ -190,6 +197,8 @@ export function initRescue(h: RescueHooks) {
   // ---------------------------------------------------------------- the mission
   function start(mission: MissionId, picks: string[], o?: Orientation, seed = (Date.now() ^ 0x5c0e) >>> 0) {
     if (session || world.interior || world.planet !== 'home' || h.visiting()) return false;
+    if (recoveryLeft()) { h.toast(recoveryText(), '⏳'); openBriefing(); return false; }
+    if (!isMission(mission) || !open().includes(mission)) { h.toast(t('Locked: level {n}', { n: MISSIONS[mission]?.level ?? 1 }), '🔒'); return false; }
     void rescueKit.load();
     const orient = o ?? chooseOrientation(innerWidth, innerHeight), wide = wideScreen(orient, innerWidth);
     const pool = candidates(), chosen = picks.map(id => pool.find(c => c.id === id)).filter((c): c is Candidate => !!c).slice(0, RESCUE.maxSquad - 1);
@@ -290,6 +299,8 @@ export function initRescue(h: RescueHooks) {
     } else for (const child of s.saved.detached) world.disposeTree(child);
     world.zoom = s.saved.zoom; world.resize();
     const st = h.state(); st.hp = Math.max(1, Math.min(h.maxHp(), s.saved.hp));
+    wasRecovering = true;
+    try { localStorage.setItem(COOLDOWN_KEY, String(Date.now() + RECOVERY_MS)); } catch { /* storage optional */ }
     session = null; world.selected = null; world.ring.visible = false; world.movementLocked = false;
     try { localStorage.removeItem('zoo-rescue-restore'); } catch { /* fine */ }
     document.body.classList.remove('in-rescue'); delete document.body.dataset.rescueOrient;
@@ -297,7 +308,7 @@ export function initRescue(h: RescueHooks) {
     decorateHome(); h.refreshPlayer(); h.updateHud(); h.toast(t('Welcome back from the rescue.'), '📯');
   }
   /** A reload in the middle of a mission: the explorer's health comes back (nothing else was ever saved). */
-  function restoreAfterReload() { try { const raw = localStorage.getItem('zoo-rescue-restore'); if (!raw) return; localStorage.removeItem('zoo-rescue-restore'); const v = JSON.parse(raw) as { hp: number }; if (Number.isFinite(v.hp) && v.hp > 0) h.state().hp = Math.min(h.maxHp(), v.hp); } catch { /* nothing */ } }
+  function restoreAfterReload() { try { const raw = localStorage.getItem('zoo-rescue-restore'); if (!raw) return; localStorage.setItem(COOLDOWN_KEY, String(Date.now() + RECOVERY_MS)); wasRecovering = true; localStorage.removeItem('zoo-rescue-restore'); const v = JSON.parse(raw) as { hp: number }; if (Number.isFinite(v.hp) && v.hp > 0) h.state().hp = Math.min(h.maxHp(), v.hp); } catch { /* nothing */ } }
 
   // ---------------------------------------------------------------- the frame
   const camQ = new T.Quaternion(), rootQ = new T.Quaternion(), lookAt = new T.Vector3(), LOOK_AHEAD = 5;
@@ -594,7 +605,7 @@ export function initRescue(h: RescueHooks) {
     const scr = world.screen(P.x, 4.8, P.z), show = scr.visible && d < 34 && !h.blocked();
     if (!said && d < 9) { said = true; sayT = 4; } if (d > 15) said = false;
     sayT -= dt; bubble.hidden = !(show && (sayT > 0 || d < 22));
-    if (!bubble.hidden) { const half = (bubble.offsetWidth || 200) / 2, x = Math.max(half + 8, Math.min(innerWidth - half - 8, scr.x)); bubble.style.transform = `translate(${x.toFixed(0)}px, ${(scr.y - 10).toFixed(0)}px) translate(-50%, -100%)`; const md = sos.call ? MISSIONS[sos.call.mission] : null; const text = `📯 ${md ? md.friendIcon + ' ' : ''}${t('Touch the portal to answer the SOS!')}`; if (bubble.textContent !== text) bubble.textContent = text; }
+    if (!bubble.hidden) { const half = (bubble.offsetWidth || 200) / 2, x = Math.max(half + 8, Math.min(innerWidth - half - 8, scr.x)); bubble.style.transform = `translate(${x.toFixed(0)}px, ${(scr.y - 10).toFixed(0)}px) translate(-50%, -100%)`; const md = sos.call ? MISSIONS[sos.call.mission] : null; const text = `📯 ${md ? md.friendIcon + ' ' : ''}${(recoveryLeft() ? recoveryText() : t('Rescue ready — choose a mission!'))}`; if (bubble.textContent !== text) bubble.textContent = text; }
   }
 
   // ---------------------------------------------------------------- the Me tab's boosts on the explorer's real combat
@@ -621,9 +632,9 @@ export function initRescue(h: RescueHooks) {
     get attackHaste() { return session ? heroHaste(session.m) : 1; },
     get cooldownScale() { return session ? heroCooldownScale(session.m) : 1; },
     /** A settings row (main.ts settings()): rescue calls on or off. */
-    settingsRow: () => `<div class="settings-row"><div><strong>${esc(t('Rescue calls'))}</strong><small>${esc(t('Now and then a friend on another planet asks for help through a portal by the south square.'))}</small></div><button class="toggle ${callsOn() ? 'on' : ''}" role="switch" aria-checked="${callsOn()}" aria-label="${esc(t('Rescue calls'))}" data-rescue="calls"></button></div>`,
+    settingsRow: () => `<div class="settings-row"><div><strong>${esc(t('Rescue calls'))}</strong><small>${esc(t('Optional rescue reminders. The portal is always available by the south square.'))}</small></div><button class="toggle ${callsOn() ? 'on' : ''}" role="switch" aria-checked="${callsOn()}" aria-label="${esc(t('Rescue calls'))}" data-rescue="calls"></button></div>`,
     /** The 📯 marker for the map: where the portal stands while a call waits. */
-    get call() { return sos.call && !session ? { ...sos.call, x: RESCUE.portal.x, z: RESCUE.portal.z } : null; },
+    get call() { return !session ? { mission: sos.call?.mission ?? open()[0] ?? 'toy', until: 0, x: RESCUE.portal.x, z: RESCUE.portal.z } : null; },
     confirmLeave,
     // ---- development hooks (window.__rescue)
     callNow(mission: MissionId = 'toy') { call(mission); return !!portal; },

@@ -119,7 +119,7 @@ export function initCtf(h: CtfHooks) {
     }
     const kit = DISGUISES[hero], st = heroStats(hero), def = HEROES[hero];
     h.openDialog('ctf', 'Flag Rush', `<div class="ctf-dialog">
-      <p class="ctf-rule">🚩 ${esc(t('Touch the enemy flag to take it. Bring it to your own stand while your flag is home: +1. A downed carrier drops the flag; a teammate touching it sends it home at once, or it flies home by itself after 15 s. The carrier runs 15% slower, is always seen and cannot teleport.'))}</p>
+      <p class="ctf-rule"><b>${esc(t('You are blue. Cross the river and take the red flag.'))} ${esc(t('Bring the red flag back to the blue base.'))}</b></p><p class="ctf-rule">🚩 ${esc(t('Touch the enemy flag to take it. Bring it to your own stand while your flag is home: +1. A downed carrier drops the flag; a teammate touching it sends it home at once, or it flies home by itself after 15 s. The carrier runs 15% slower, is always seen and cannot teleport.'))}</p>
       <p class="ctf-sub">${esc(t('First to 3 · 8 minutes · everyone at level 8 with the ultimate ready · no gear lost · EXP for winners'))}</p>
       <h4>${esc(t('Team size'))}</h4><div class="ctf-sizes">${CTF.sizes.map(n => `<button data-ctf="size" data-size="${n}" class="${n === size ? 'sel' : ''}" aria-pressed="${n === size}">${n}v${n}</button>`).join('')}</div>
       <h4>${esc(t('Pick your hero'))}</h4><div class="ctf-heroes">${HERO_IDS.map(id => `<button data-ctf="hero" data-hero="${id}" class="${id === hero ? 'sel' : ''}" aria-pressed="${id === hero}" title="${esc(heroName(id))}"><img src="${heroIcon(id)}" alt="" loading="lazy"><b>${esc(heroName(id))}</b><small>${esc(t(HEROES[id].role))}</small></button>`).join('')}</div>
@@ -180,7 +180,7 @@ export function initCtf(h: CtfHooks) {
     for (const b of s.bots) showBot(b);
     world.onRemotePlayerClick = id => { const b = s.bots.find(v => v.id === id); if (b?.proxy && b.proxy.hp > 0) { world.select(b.proxy); } };
     document.body.classList.add('in-ctf'); hud.hidden = false; feed.hidden = false; tags.hidden = false; keeperTag.hidden = true; bubble.hidden = true;
-    h.refreshPlayer(); h.tone('level'); banner(t('Flag Rush Isle'), `${teamSize}v${teamSize} · ${t('First to 3 points')}`);
+    h.refreshPlayer(); h.tone('level'); banner(t('Flag Rush Isle'), `${teamSize}v${teamSize} · ${t('Red team: AI opponents')}`);
     world.fx?.burst({ x: world.position.x, z: world.position.z }, { n: 40, color: ['#7a8aff', '#ff7a8a', '#ffffff'], glow: true, speed: 5, up: 9 });
     h.updateHud();
     return true;
@@ -267,6 +267,8 @@ export function initCtf(h: CtfHooks) {
     h.refreshPlayer(); h.updateHud(); h.toast(t('Welcome back from Flag Rush Isle.'), '🌀');
   }
 
+  // HUD map updates at 10 Hz; keep movement/rendering smooth without rebuilding SVG every frame.
+  let hudElapsed = 0;
   // ---------------------------------------------------------------- the frame
   h.onFrame(dt => {
     if (!h.started()) return;
@@ -292,7 +294,7 @@ export function initCtf(h: CtfHooks) {
       if (!session) return;
       outputFrame(s, me);
     }
-    s.shots.update(dt); drawStrikes(s); drawFlags(s, dt); drawPowers(s, dt); botsFrame(s); hudFrame(s); tagsFrame(s);
+    s.shots.update(dt); drawStrikes(s); drawFlags(s, dt); drawPowers(s, dt); botsFrame(s); hudElapsed += dt; if (hudElapsed >= .1) { hudElapsed = 0; hudFrame(s); } tagsFrame(s);
   });
   function inputFrame(s: Session, me: CtfPlayer) {
     const p = world.position, m = s.m;
@@ -491,9 +493,11 @@ export function initCtf(h: CtfHooks) {
     const m = s.m, me = rulesPlayer(m, ME)!, golden = m.phase === 'overtime';
     const time = m.phase === 'intro' ? `${Math.ceil(m.timer)}` : clock(m.phase === 'over' ? 0 : m.timer);
     const buffs = [me.buffs.zip > 0 ? `👟${Math.ceil(me.buffs.zip)}` : '', me.buffs.shield > 0 ? `🫧${Math.round(me.buffs.shield)}` : '', me.buffs.wisp > 0 && me.carrying === null ? `👻${Math.ceil(me.buffs.wisp)}` : '', me.buffs.bigcap > 0 ? `🍄${Math.ceil(me.buffs.bigcap)}` : '', me.buffs.pumpkin > 0 ? `🎃${Math.ceil(me.buffs.pumpkin)}` : '', me.stun > 0 ? '❄️' : ''].filter(Boolean).join(' ');
-    const html = `<div class="ctf-score-row"><span class="ctf-team blue"><i>${esc(t('Blue team'))}</i><b>${m.score[0]}</b></span><span class="ctf-clock ${golden ? 'golden' : ''}">${golden ? '⚡ ' : '⏱ '}${time}</span><span class="ctf-team red"><b>${m.score[1]}</b><i>${esc(t('Red team'))}</i></span><button data-ctf="leave" title="${esc(t('Leave the match'))}" aria-label="${esc(t('Leave the match'))}">🚪</button></div>
+    const goal = me.carrying !== null ? (m.flags[s.team].state === 'home' ? 'Bring the red flag back to the blue base.' : 'Recover your blue flag before you can score.') : 'You are blue. Cross the river and take the red flag.';
+    const map = `<svg class="ctf-map" viewBox="-52 -32 104 64" role="img" aria-label="${esc(t('Arena map: blue allies, red AI opponents, white ring is you.'))}"><rect x="-52" y="-32" width="104" height="64" rx="4" fill="#284d43"/><path d="M0 -32V32" stroke="#62bddb" stroke-width="7"/>${FIELD.river.bridges.map(z=>`<path d="M-5 ${z}H5" stroke="#e1c28b" stroke-width="4"/>`).join('')}${m.flags.map(f=>`<rect x="${f.x-2}" y="${f.z-2}" width="4" height="4" fill="${TEAM_COLORS[f.team]}" stroke="white" stroke-width=".5"/>`).join('')}${m.players.filter(p=>p.alive).map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.z.toFixed(1)}" r="${p.id===ME?2.2:1.6}" fill="${TEAM_COLORS[p.team]}" stroke="${p.id===ME?'white':'#142635'}" stroke-width=".8"/>`).join('')}</svg>`;
+    const html = `<div class="ctf-score-row"><span class="ctf-team blue"><i>${esc(t('Blue team'))}</i><b>${m.score[0]}</b></span><span class="ctf-clock ${golden ? 'golden' : ''}">${golden ? '⚡ ' : '⏱ '}${time}</span><span class="ctf-team red"><b>${m.score[1]}</b><i>${esc(t('Red team: AI opponents'))}</i></span><button data-ctf="leave" title="${esc(t('Leave the match'))}" aria-label="${esc(t('Leave the match'))}">🚪</button></div>
       <div class="ctf-wave ${golden ? 'golden' : ''}">${golden ? esc(t('GOLDEN POINT — the next capture wins!')) : `🚩 ${esc(t('First to 3 points'))}`}</div>
-      <div class="ctf-flags"><span class="${m.flags[s.team].state !== 'home' ? 'alarm' : ''}">${esc(flagLine(s, s.team))}</span><span class="${m.flags[otherTeam(s.team)].state === 'carried' && me.carrying !== null ? 'mine' : ''}">${esc(flagLine(s, otherTeam(s.team)))}</span></div>${buffs ? `<div class="ctf-buffs">${buffs}</div>` : ''}`;
+      <div class="ctf-objective">${esc(t(goal))}</div>${map}<div class="ctf-map-key">${esc(t('Arena map: blue allies, red AI opponents, white ring is you.'))}</div><div class="ctf-flags"><span class="${m.flags[s.team].state !== 'home' ? 'alarm' : ''}">${esc(flagLine(s, s.team))}</span><span class="${m.flags[otherTeam(s.team)].state === 'carried' && me.carrying !== null ? 'mine' : ''}">${esc(flagLine(s, otherTeam(s.team)))}</span></div>${buffs ? `<div class="ctf-buffs">${buffs}</div>` : ''}`;
     if (html !== hudShown) { hudShown = html; hud.innerHTML = html; }
     down.hidden = me.alive || m.phase === 'over';
     if (!down.hidden) { const text = `<b>${esc(t('You were knocked down'))}</b><span>${esc(t('Respawning in {s}s', { s: Math.max(1, Math.ceil(me.respawn)) }))}</span>`; if (down.dataset.html !== text) { down.dataset.html = text; down.innerHTML = text; } }

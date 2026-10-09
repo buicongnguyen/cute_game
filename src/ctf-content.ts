@@ -114,6 +114,12 @@ export function heroStats(id: string, level: number = CTF.level) {
 
 /** Vietnamese for everything this mode says (registered in locales/vi-catalog.ts). */
 export const CTF_VI: Record<string, string> = {
+  'Red team: AI opponents': 'Đội đỏ: đối thủ máy',
+  'You are blue. Cross the river and take the red flag.': 'Bạn thuộc đội xanh. Qua sông và lấy cờ đỏ.',
+  'Bring the red flag back to the blue base.': 'Mang cờ đỏ về căn cứ xanh để ghi điểm.',
+  'Recover your blue flag before you can score.': 'Lấy lại cờ xanh của đội mình trước khi ghi điểm.',
+  'Arena map: blue allies, red AI opponents, white ring is you.': 'Bản đồ: xanh là đồng đội, đỏ là đối thủ máy, viền trắng là bạn.',
+
   ...Object.fromEntries(Object.values(POWERS).flatMap(p => [[p.name, p.vi], [p.desc, p.viDesc]])),
   ...Object.fromEntries(Object.values(HEROES).map(h => [h.role, h.vi])),
   'Multiworld Gate': 'Cổng Đa Thế Giới',

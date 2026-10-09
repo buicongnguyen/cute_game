@@ -249,6 +249,11 @@ export const SOS = {
 
 /** Vietnamese for every Rescue Call text (merged into the catalog in locales/vi-catalog.ts). */
 export const RESCUE_VI: Record<string, string> = {
+  'Rescue team recovering: {n}s remaining.': 'Đội cứu viện đang nghỉ: còn {n} giây.',
+  'Choose a rescue any time. The team rests for 3 minutes after each run.': 'Chọn nhiệm vụ cứu viện bất cứ lúc nào. Đội nghỉ 3 phút sau mỗi lượt.',
+  'Rescue ready — choose a mission!': 'Cứu viện sẵn sàng — chọn nhiệm vụ!',
+  'Optional rescue reminders. The portal is always available by the south square.': 'Thông báo nhắc cứu viện tùy chọn. Cổng luôn có ở quảng trường phía nam.',
+
   'Rescue Call': 'Lời Kêu Cứu',
   'RESCUE CALL': 'LỜI KÊU CỨU',
   'Hold the Line on Toybox': 'Giữ Vững Phòng Tuyến ở Hành tinh Đồ chơi',
