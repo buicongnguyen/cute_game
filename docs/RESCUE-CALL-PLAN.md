@@ -1,6 +1,6 @@
 # Rescue Call — squad tower defence on other planets
 
-Status: planned (2026-10-09). Owner of the idea: the game owner; design written with Claude.
+Status: planned (2026-10-09; updated the same day: same-size enemies with rising health, an in-mission upgrade ladder for friends and the hero). Owner of the idea: the game owner; design written with Claude.
 
 ## 1. The idea in one paragraph
 
@@ -71,14 +71,43 @@ when blocked.
 - You (the hero) are the strongest unit: disguise skills, weapon specials, potions. If you fall, you respawn at the
   camp after 5 s.
 
-### Enemies (re-using current assets)
-- Each planet uses its own creatures from `enemy-types.ts` (`PLANET_SPAWNS`), plus a **defence variant** look:
-  a tint shift, a small prop (helmet, scarf, banner) and 0.9–1.1× scale, so they read as an invading army but stay
-  the same models (no new heavy art).
+### Enemies (re-using current assets, same size)
+- Each planet uses its own creatures from `enemy-types.ts` (`PLANET_SPAWNS`) at their **normal size**; a defence raider
+  only gets a light tint and, from wave 3 on, a small prop (helmet, scarf, banner) so stronger ones are recognisable.
+- **Difficulty rises through health, not size**: every wave adds HP (about +18% per wave, +40% on boss waves) and a few
+  more enemies; damage rises slowly (+6% per wave). This forces the player to **upgrade during the mission**.
 - Enemy roles: **runner** (fast, low HP), **brute** (slow, tanky, attacks defences), **flyer** (skips walls, hit only
   by towers that hit air), **shooter** (attacks towers from range), **splitter** (breaks into small ones),
   **wave boss** (the planet's boss, on the last wave).
-- Waves are data (`wave tables`): per wave, which kinds, how many, on which lanes, spacing.
+- Waves are data (`wave tables`): per wave, which kinds, how many, on which lanes, spacing, HP factor.
+
+### Growing stronger inside the mission (the upgrade ladder)
+Kills drop **Spark ✨** and sometimes a **Star bit ⭐** (rarer; bosses and brutes drop more). Between waves, the build
+panel has three tabs: **Defences**, **Squad**, **Me**.
+
+**Squad members start weak**: plain clothes and a **basic punch** (low damage, short reach). Spending Spark/Star bits
+moves each friend up their own ladder, one step at a time. Each step visibly changes what they wear or hold:
+
+| Step | Friend gets | Effect |
+|---|---|---|
+| 0 | plain clothes, punch | basic hits |
+| 1 | a starter weapon (wooden sword / toy slingshot / bubble wand by role) | +damage, a little range |
+| 2 | a work outfit (leather / chef / hoodie by role) | +HP, +defence |
+| 3 | a better weapon (iron sword / star bow / magic wand) | +damage, faster |
+| 4 | a **disguise** with one skill | an area or control skill on a cooldown |
+| 5 | the disguise's second skill + armour (knight / kimono / angel …) | stronger skill, more HP |
+| 6 | top weapon + **ultimate** of the disguise | big ultimate on a long cooldown |
+
+- Gear is ordered **weak → strong** by its real stats (the game's item stats: atk, def, hp), and each step is the next
+  item in that list for the friend's role. The order is computed from the item data, so new items slot in automatically.
+- **Friends never wear the same disguise as the hero**, and no two friends share one. Each friend has a role
+  (fighter / ranged / support) that decides which branch of weapons and disguises they climb.
+- Mission gear is **borrowed for the mission only** (it is not added to the save), so it cannot be farmed; outside
+  the mission the friends keep their own clothes.
+- **Me tab**: the hero can buy mission boosts with Spark/Star bits: +damage, +attack speed, skill cooldown −10%,
+  a heal potion, a temporary shield. They reset at the end of the mission.
+- Choices matter: Spark spent on a friend is not spent on a tower; the build panel shows each option's cost and the
+  next step's preview (the friend tries the new gear on in place).
 
 ## 5. Missions (first set)
 
@@ -110,7 +139,8 @@ co-op squads of real friends (shared Spark, each player builds on their own pads
 |---|---|
 | `src/rescue-content.ts` | missions, maps (lanes, pads, camp), wave tables, defences, enemy variants, EN+VI text |
 | `src/rescue-rules.ts` | pure, seeded, tested: waves, paths, Spark, placing/upgrading/selling, targeting, hearts, fall-back, win/lose |
-| `src/rescue-ai.ts` | squad behaviour (hold/follow, pick targets, fall back) |
+| `src/rescue-ai.ts` | squad behaviour (hold/follow, pick targets, fall back, punch at step 0, use disguise skills from step 4) |
+| `src/rescue-ladder.ts` | the weak → strong gear ladder per role, computed from item stats; distinct disguises per friend and the hero; mission-only borrowing |
 | `src/rescue.ts` | runtime: SOS schedule, portal, briefing + build UI, arena on the home map far from the village (like the Vault and Flag Rush), orientation choice, HUD (hearts, wave, Spark, build pads) |
 | `src/rescue-view.ts` | drawing: instanced enemies with variant props, defences, lane markers, pads |
 | `art/blender/kit/build_rescue.py` | portal, pads, lane markers, camp, farmhouse, defence models, variant props; low triangles |
@@ -122,15 +152,15 @@ Performance: at most ~40 live enemies, instanced per kind; defences are pooled; 
 ## 9. Phases
 
 1. **Phase 1 — Hold the Line on 3 planets** (Toybox, Candy, Jungle): SOS + portal, squad pick, build pads,
-   5 defence kinds, wave tables, fall-back rule, portrait/landscape fields, rewards, tests, screenshots on phone and
-   desktop.
+   5 defence kinds, wave tables with rising HP, the squad/hero upgrade ladder, fall-back rule, portrait/landscape
+   fields, rewards, tests, screenshots on phone and desktop.
 2. **Phase 2 — all planets**, remaining defences (healing flower, squad post skills), the planet bosses as last
    waves, leaderboard entries.
 3. **Phase 3 — Hold the Camp** map type (centre defence, enemies from all sides).
 4. **Phase 4 — online co-op** on the server.
 
-## 10. Open questions for the owner
+## 10. Defaults (the owner may change them later)
 
-- SOS frequency: 30–60 minutes of play feels right? (A setting can turn calls off.)
-- Should a failed rescue cost anything at all? (Plan: no.)
-- Daily cap on paid missions (plan: 5 wins a day pay full rewards).
+- SOS every 30–60 minutes of play; a setting turns calls off.
+- A failed rescue costs nothing.
+- 5 winning missions a day pay full rewards.
