@@ -15,8 +15,8 @@ test('a stroll visits up to three different spots, nearest first, standing off t
   assert.equal(route.length, 3); assert.equal(new Set(route.map(r => `${r.at.x},${r.at.z}`)).size, 3);
   for (const stop of route) assert.ok(Math.abs(Math.hypot(stop.x - stop.at.x, stop.z - stop.at.z) - .9) < 1e-9);
   assert.deepEqual(strollRoute([], { x: 0, z: 0 }, rand), []); assert.equal(strollRoute([{ x: 1, z: 1 }], { x: 0, z: 0 }, rand).length, 1);
-  assert.ok(idleAfter(() => 0) >= 10 && idleAfter(() => .9999) <= 25 && lookFor(() => 0) >= 2 && lookFor(() => .9999) <= 4);
-  assert.equal(idleChoice(() => .1), 'home'); assert.equal(idleChoice(() => .9), 'stroll');
+  assert.ok(idleAfter(() => 0) >= 4 && idleAfter(() => .9999) <= 8 && lookFor(() => 0) >= 2 && lookFor(() => .9999) <= 4);
+  assert.equal(idleChoice(() => .1), 'home'); assert.equal(idleChoice(() => .2), 'stroll'); assert.equal(idleChoice(() => .9), 'stroll');
 });
 
 function crewWorld(state: SaveState) {
@@ -36,7 +36,7 @@ test('a helper with no job does not stand at its post for ever: it strolls round
   const w = crewWorld(s), post = postFor('sprout'), poses = new Set<string>();
   const crew = new FriendCrew({ world: w, own: () => s, visiting: () => false, flying: () => false, started: () => true, robotBed: () => undefined, animalAt: () => undefined, perform: async () => undefined, rescued() {}, locked() {}, worked() {}, arrived() {} });
   let far = 0, wentHome = false, back = false;
-  for (let i = 0; i < 20 * 300; i++) { // five minutes at 20 steps a second
+  for (let i = 0; i < 20 * 900; i++) { // fifteen minutes at 20 steps a second (home rests are rarer now: mostly strolls)
     crew.update(.05); const a = crew.actors.get('sprout')!; poses.add(a.pose);
     far = Math.max(far, Math.hypot(a.x - post.x, a.z - post.z)); if (a.trip === 2) wentHome = true; if (wentHome && a.trip === 0 && Math.hypot(a.x - post.x, a.z - post.z) < 1) back = true;
   }

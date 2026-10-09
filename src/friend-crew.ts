@@ -256,7 +256,7 @@ export class FriendCrew {
       if ((a.inT -= dt) > 0) { this.goInside(a, a.inT); return; }
       this.comeOut(a, f); return;
     }
-    if (a.trip === 1) { a.task = null; if (this.walk(a, COTTAGE_DOOR, dt)) this.goInside(a, 12 + Math.random() * 16); return; }
+    if (a.trip === 1) { a.task = null; if (this.walk(a, COTTAGE_DOOR, dt)) this.goInside(a, 6 + Math.random() * 6); return; }
     if (f.paused) { a.task = null; if (this.walk(a, post, dt)) this.place(a, 'idle'); return; }
     // A friendly word when the explorer is near (the pool for it is in friend-lines.ts).
     if ((a.nice -= dt) <= 0) { a.nice = 14 + Math.random() * 16; if (Math.hypot(a.x - this.host.world.position.x, a.z - this.host.world.position.z) < 3.6) this.speak(a, 'NICE'); }
@@ -323,7 +323,7 @@ export class FriendCrew {
   private goInside(a: Actor, left: number) { a.trip = 2; a.inT = left; this.place(a, 'idle'); a.root.visible = false; this.setEntity(a, false); }
   /** Out of the cottage door: a new outfit for the cook, a word about it. */
   private comeOut(a: Actor, f: Friend) {
-    a.trip = 0; a.jobs = 0; a.tripAt = 3 + Math.floor(Math.random() * 3); a.x = COTTAGE_DOOR.x; a.z = COTTAGE_DOOR.z + .5; a.root.visible = true; this.setEntity(a, true);
+    a.trip = 0; a.jobs = 0; a.tripAt = 6 + Math.floor(Math.random() * 4); a.x = COTTAGE_DOOR.x; a.z = COTTAGE_DOOR.z + .5; a.root.visible = true; this.setEntity(a, true);
     // Only when there is something new to wear: a fresh game has nothing, and asking anyway was a refused action every trip.
     if (f.role === 'cook' && this.host.own().friends?.includes(f) && canChangeOutfit(this.host.own(), a.id)) void this.host.perform<{ changed: boolean }>('friendOutfit', { id: a.id, pick: Math.random() }).then(r => { if (r?.changed) this.speak(a, 'OUTFIT'); });
   }

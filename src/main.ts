@@ -60,6 +60,7 @@ import type { GameBridge, GameAction, NetworkHooks, NetworkDrop } from './game-b
 import { initOnline } from './online.ts';
 import { defeatPaysPlayer } from './safe-zone.ts';
 import { initHudLayout } from './hud-layout.ts';
+import { fits as fitsBag } from './storage-slots.ts';
 import { initRanking } from './ranking.ts';
 import { initBots, neighboursOn, setNeighboursOn } from './bots.ts';
 import { ColossusEvent } from './colossus.ts';
@@ -575,7 +576,7 @@ async function harvestNearby(index:number){
   };if(n)setTimeout(run,n*140);else run();});
 }
 // A fruit tree takes 8 to 14 hours: hours and minutes read better than 28,799 seconds.
-function growText(plot:M.Plot){const progress=M.cropProgress(plot),left=Math.ceil((1-progress)*M.cropDuration(plot)/1000);return progress>=1?'Ripe! Close this panel and tap the bed to harvest.':left>=3600?`About ${Math.floor(left/3600)} h ${Math.floor(left%3600/60)} min until ripe`:`About ${left} seconds until ripe`;}
+function growText(plot:M.Plot){const progress=M.cropProgress(plot),left=Math.ceil((1-progress)*M.cropDuration(plot)/1000);return progress>=1?(fitsBag(state,{[plot.crop!]:1})?'Ripe! Close this panel and tap the bed to harvest.':'Ripe, but your backpack is full. Sell or store something, or expand the bag, then tap the bed to harvest.'):left>=3600?`About ${Math.floor(left/3600)} h ${Math.floor(left%3600/60)} min until ripe`:`About ${left} seconds until ripe`;}
 /**
  * The garden's grow button (reference openSeeds/openPlot): place a kit already in the bag, else buy one with energy
  * (grey while it is out of reach), or a note at the cap. Only at home, never while visiting.
@@ -619,12 +620,14 @@ function stockKey(){let k='';for(const id in state.bag)k+=id+':'+state.bag[id]+'
 function plotDialog(index:number) {
   if(visiting){network.visitCrop?.(index);return;}
   activePlot=index;const plot=state.plots[index];if(!plot)return;
-  if(plot.crop&&M.cropProgress(plot)>=1){harvestNearby(index);return;}
+  // A ripe bed harvests on tap; when the backpack has no room for it, the tap opens the bed's panel instead (with what to do), never nothing.
+  const ripe=!!plot.crop&&M.cropProgress(plot)>=1,noRoom=ripe&&!fitsBag(state,{[plot.crop!]:1});
+  if(ripe&&!noRoom){harvestNearby(index);return;}
   if(plot.crop){
     // Reference openPlot: the crop with a big progress bar, a card per fertilizer, a tip when there is none, then expand.
     const crop=M.CROPS[plot.crop],progress=M.cropProgress(plot),fertilizer=M.isTreeCrop(plot.crop)?treeFertilizerNote():(['manure','spore'] as const).map(id=>{const n=state.bag[id]||0,item=M.ITEMS[id];
       return `<div class="crop-row garden-row fertilizer-row"><span class="crop-art">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))} <span class="chip">×${n}</span></strong><p>${esc(item.desc)}</p></div><button class="primary" data-action="${id==='spore'?'fertilize':'fertilize-manure'}" ${n?'':'disabled'}>Use</button></div>`;}).join('');
-    openDialog('plot','Growing bed',`<div class="crop-row garden-row bed-status"><span class="crop-art">${art(plot.crop,crop.icon)}</span><div><strong>${esc(t(crop.name))}</strong><div class="grow-meter big"><i id="grow-fill" style="width:${progress*100}%"></i></div><p class="muted" id="grow-time">${growText(plot)}</p></div></div>${fertilizer}${!M.isTreeCrop(plot.crop)&&!state.bag.manure&&!state.bag.spore?'<p class="garden-tip">💡 Defeat Grumpy Mushrooms, Wild Boars, Snapping Flowers… to collect fertilizer, or buy it at the equipment shop.</p>':''}${bedUpgradeRow(index)}${expandButton(true)}${helperRow(state,!!visiting,index)}`,'GARDEN BED '+(index+1),art(plot.crop,crop.icon));return;
+    openDialog('plot','Growing bed',`<div class="crop-row garden-row bed-status"><span class="crop-art">${art(plot.crop,crop.icon)}</span><div><strong>${esc(t(crop.name))}</strong><div class="grow-meter big"><i id="grow-fill" style="width:${progress*100}%"></i></div><p class="muted" id="grow-time">${growText(plot)}</p></div></div>${noRoom?`<div class="button-row"><button class="primary" data-action="bag">🎒 ${esc(t('Open backpack'))}</button><button class="soft-button" data-action="open-market">🧺 ${esc(t('Sell produce'))}</button></div>`:''}${ripe?'':fertilizer}${!M.isTreeCrop(plot.crop)&&!state.bag.manure&&!state.bag.spore?'<p class="garden-tip">💡 Defeat Grumpy Mushrooms, Wild Boars, Snapping Flowers… to collect fertilizer, or buy it at the equipment shop.</p>':''}${bedUpgradeRow(index)}${expandButton(true)}${helperRow(state,!!visiting,index)}`,'GARDEN BED '+(index+1),art(plot.crop,crop.icon));return;
   }
   const empty=state.plots.filter(p=>!p.crop).length;
   // Unlocked crops first, then locked ones by the level that opens them.
@@ -1456,7 +1459,7 @@ app.addEventListener('click',async event=>{
     case 'craft-back':crafting();break;
     case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'level':'pop');}forgeMenu(id);break;}
     case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
-    case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;
+    case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'open-market':market();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;
     case 'claim':if(await perform('claimQuest')){tone('success');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
     case 'plant':{const i=activePlot,opened=modal,root=world.root,taken=state.plots[i]?.crop;if(taken){toast(t('This bed already grows {crop}.',{crop:t(M.CROPS[taken].name)}),'🌱');refreshPlot();break;}if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
     case 'cook-everything':{let made=0;for(const id of M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id])){const n=M.pantry(state,id);if(n>0&&await perform('cook',{id,count:n}))made+=n;}if(made){tone('success');toast(t('Cooked {count} meals. Enjoy!',{count:made}),'🍲');}cooking();break;}

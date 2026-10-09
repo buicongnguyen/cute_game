@@ -5,12 +5,12 @@
  */
 export interface Spot { x: number; z: number }
 export interface Stop { x: number; z: number; /** What it looks at while it stops. */ at: Spot }
-/** Seconds without a job before it does something (10 to 25). */
-export const idleAfter = (rand: () => number) => 10 + rand() * 15;
+/** Seconds without a job before it does something (4 to 8): a helper never stands still for long. */
+export const idleAfter = (rand: () => number) => 4 + rand() * 4;
 /** How long it stops to look at something (2 to 4 seconds). */
 export const lookFor = (rand: () => number) => 2 + rand() * 2;
-/** Mostly a stroll; about one idle time in three it goes home for a while instead. */
-export const idleChoice = (rand: () => number): 'home' | 'stroll' => rand() < .35 ? 'home' : 'stroll';
+/** Mostly a stroll round the farm; about one idle time in seven it goes home for a short rest instead. */
+export const idleChoice = (rand: () => number): 'home' | 'stroll' => rand() < .15 ? 'home' : 'stroll';
 /** Up to three different things to look at, in the order that keeps the walk short (each next one is the nearest left). */
 export function strollRoute(spots: readonly Spot[], from: Spot, rand: () => number, count = 3, standOff = .9): Stop[] {
   const pool = spots.filter(s => Number.isFinite(s.x) && Number.isFinite(s.z)), picked: Spot[] = [];

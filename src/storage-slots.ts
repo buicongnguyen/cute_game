@@ -17,7 +17,9 @@ import { looseQuantity } from './pantry.ts';
  * While a worker's harvest is being delivered to the chest (delivery.ts, actions.ts `intoChest`), the gains pass
  * through the bag on their way, so the check reads the chest's room instead (and counts the ids already on their way).
  */
-export const STORAGE = { bag: { base: 20, add: 4, max: 5 }, chest: { base: 40, add: 10, max: 4 } } as const;
+// The owner chose roomier storage than the reference (20 + 4x5 / 40 + 10x4 felt cramped with this game's many items): a bag of 60 kinds
+// growing by 10 up to 110, a chest of 120 growing by 20 up to 200. Upgrade costs keep the reference's formula.
+export const STORAGE = { bag: { base: 60, add: 10, max: 5 }, chest: { base: 120, add: 20, max: 4 } } as const;
 export type StorageKind = keyof typeof STORAGE;
 export const isStorageKind = (value: unknown): value is StorageKind => value === 'bag' || value === 'chest';
 type Holder = { bag: Inventory; chest: Inventory; gear: Partial<Record<string, string>>; planet: string; bagUp?: number; chestUp?: number; settings?: { tester?: boolean } };

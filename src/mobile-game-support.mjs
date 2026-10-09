@@ -1,11 +1,11 @@
 // Adapted from 3d_astra ee51f0a: safe touch interruptions and opt-in fullscreen.
 // Canvas coordinates stay unchanged; safe margins apply to DOM controls only.
-export function installMobileGameSupport({ menus = [], controls = [], existingButtons = [], fullscreen = true, fullViewport = true, classifyCanvasTaps = true } = {}) {
+export function installMobileGameSupport({ menus = [], controls = [], existingButtons = [], fullscreen = true, fullViewport = true, classifyCanvasTaps = true, translate } = {}) {
   if (window.__mobileGameSupport) return;
   window.__mobileGameSupport = true;
   const pointers = new Map(), retired = new Set(), keys = new Map();
   let suppressClickUntil = 0;
-  const ownUI = node => node instanceof Element && !!node.closest('[data-mobile-display], #mobile-display-help');
+  const ownUI = node => node instanceof Element && !!node.closest(['[data-mobile-display]', '#mobile-display-help', ...existingButtons].join(','));
   const surface = node => node instanceof Element && !ownUI(node) && node.closest(['canvas', ...controls].join(','));
   const cancel = (id, p) => {
     p.node.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, composed: true,
@@ -16,7 +16,7 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
     const active = [...pointers];
     pointers.clear(); // Clear first: capture release can synchronously reenter listeners.
     for (const [id, p] of active) { retired.add(id); cancel(id, p); }
-    for (const [code, key] of keys) document.dispatchEvent(new KeyboardEvent('keyup', { code, key, bubbles: true }));
+    for (const [code, key] of keys) window.dispatchEvent(new KeyboardEvent('keyup', { code, key, bubbles: true }));
     keys.clear();
     if (active.length) suppressClickUntil = performance.now() + 700;
   };
@@ -44,7 +44,7 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
     }
     pointers.delete(e.pointerId);
     p.x = e.clientX; p.y = e.clientY;
-    if (classifyCanvasTaps && p.type !== 'mouse' && p.canvas && (p.moved || p.multi || Math.hypot(p.x - p.sx, p.y - p.sy) > 9)) {
+    if (p.type !== 'mouse' && p.canvas && (p.multi || classifyCanvasTaps && (p.moved || Math.hypot(p.x - p.sx, p.y - p.sy) > 9))) {
       suppressClickUntil = performance.now() + 700;
       e.preventDefault(); e.stopImmediatePropagation(); cancel(e.pointerId, p);
     }
@@ -60,6 +60,12 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
     }
   }, true);
   window.addEventListener('keydown', e => {
+    const dialog = document.getElementById('mobile-display-help');
+    if (dialog?.open) {
+      if (e.key === 'Escape') { e.preventDefault(); dialog.close(); }
+      e.stopImmediatePropagation(); return;
+    }
+    if (ownUI(e.target)) { e.stopImmediatePropagation(); return; }
     if (!e.target?.closest?.('input, textarea, select, [contenteditable]')) keys.set(e.code, e.key);
   }, true);
   window.addEventListener('keyup', e => keys.delete(e.code), true);
@@ -103,14 +109,11 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
   let pending = false, returnFocus = null;
   const active = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
   const vi = () => /^vi\b/i.test(document.documentElement.lang);
-  const text = (en, vn) => vi() ? vn : en;
+  const text = (en, vn) => translate ? translate(en) : vi() ? vn : en;
   const refresh = () => {
     for (const button of document.querySelectorAll(['[data-mobile-display]', ...existingButtons].join(','))) {
       const label = active() ? text('Exit full screen', 'Thoát toàn màn hình') : text('Full screen', 'Toàn màn hình');
-      // Existing HUD buttons can be icons with deliberately compact geometry.
-      if (button.hasAttribute('data-mobile-display') && button.textContent !== label) button.textContent = label;
-      button.setAttribute('aria-label', label);
-      button.title = label;
+      if (button.textContent !== label) button.textContent = label;
       button.setAttribute('aria-pressed', String(active()));
       button.setAttribute('aria-disabled', String(pending));
     }
@@ -129,13 +132,11 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
         target?.focus({ preventScroll: true });
       });
     }
-    const appleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
     dialog.innerHTML = `<h2 id="mobile-display-heading">${text('Full screen', 'Toàn màn hình')}</h2><p>${reason === 'exit'
       ? text('Use your browser’s exit control or press Esc to leave full screen.', 'Dùng nút thoát của trình duyệt hoặc nhấn Esc để thoát toàn màn hình.')
       : standalone ? text('You are already playing from a home-screen web app.', 'Bạn đang chơi trong ứng dụng web từ màn hình chính.')
-      : !appleMobile ? text('Use your browser’s full screen option, or its install option if available.', 'Dùng tùy chọn toàn màn hình của trình duyệt hoặc tùy chọn cài đặt nếu có.')
-      : text('Open the game in Safari if you are using an in-app browser. Tap Share → Add to Home Screen → enable Open as Web App if shown, then launch the new icon.', 'Nếu đang dùng trình duyệt trong ứng dụng, hãy mở trò chơi bằng Safari. Chạm Chia sẻ → Thêm vào Màn hình chính → bật Mở dưới dạng ứng dụng web nếu có, rồi mở biểu tượng mới.')}</p><p>${text('Start drags away from screen edges. System gestures still work.', 'Bắt đầu kéo cách xa mép màn hình. Các cử chỉ hệ thống vẫn hoạt động.')}</p><button type="button">${text('Back', 'Quay lại')}</button>`;
+      : text('Open the game in Safari if you are using an in-app browser. Tap Share → Add to Home Screen → enable Open as Web App if shown, then launch the new icon.', 'Nếu đang dùng trình duyệt trong ứng dụng, hãy mở trò chơi bằng Safari. Chạm Chia sẻ → Thêm vào Màn hình chính → bật Mở dưới dạng ứng dụng web nếu có, rồi mở biểu tượng mới.')}</p><p>${text('Start drags away from screen edges. iPhone system gestures still work.', 'Bắt đầu kéo cách xa mép màn hình. Các cử chỉ hệ thống iPhone vẫn hoạt động.')}</p><button type="button">${text('Back', 'Quay lại')}</button>`;
     dialog.querySelector('button').onclick = () => dialog.close();
     if (!dialog.open) dialog.showModal();
     dialog.querySelector('button').focus({ preventScroll: true });
@@ -183,7 +184,9 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
   };
   // Menus in these games are rebuilt when opening pause/settings or changing language.
   let queued = false;
-  const observer = new MutationObserver(() => {
+  const observer = new MutationObserver(records => {
+    // HUD clocks and counters change text every frame; they do not need layout scans.
+    if (!records.some(record => [...record.addedNodes, ...record.removedNodes].some(node => node.nodeType === 1))) return;
     if (queued) return; queued = true;
     requestAnimationFrame(() => { queued = false; mount(); });
   });

@@ -1,5 +1,8 @@
 /** Round 3 extras (title card, bag slots, dropped bags, install as app) in Vietnamese. */
 export const VI_EXTRAS: Record<string, string> = {
+  'Open backpack': 'Mở túi đồ',
+  'Sell produce': 'Bán nông sản',
+  'Ripe, but your backpack is full. Sell or store something, or expand the bag, then tap the bed to harvest.': 'Đã chín, nhưng túi đồ đầy rồi. Hãy bán hoặc cất bớt đồ, hoặc mở rộng túi, rồi chạm vào luống để thu hoạch.',
   // Title card (title-card.ts)
   'Grow a garden · Catch fish · Battle monsters · Fly to new planets': 'Trồng vườn · Câu cá · Đánh quái · Bay tới hành tinh mới',
   'Profiles': 'Hồ sơ',

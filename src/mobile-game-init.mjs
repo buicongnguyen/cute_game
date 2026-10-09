@@ -8,6 +8,6 @@ installMobileGameSupport({
   "controls": [
     ".platform-tools",
     "#touch-controls",
-    "#movement-joystick"
+    ".bottom-bar"
   ]
 });

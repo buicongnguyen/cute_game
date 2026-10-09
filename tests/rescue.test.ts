@@ -260,7 +260,10 @@ test('rescueClaim: validated, once per run, never faster than played, waves capp
   for (let i = 0; i < 12; i++) { t += 500_000; const k = claimRescue(w, { runId: 'loss-' + i, mission: 'toy', waves: 5, won: false, seconds: 300 }, t, () => .5)!; assert.ok(k); if (k.energy) paid += 5; }
   assert.equal(paid, RESCUE_REWARD.wavesPerDay); assert.equal(wavesLeft(w, t), 0);
   // The gift goes to the chest when the bag is full; the rare Defender hat sometimes.
-  const full = fresh(10); for (let i = 0; i < 40; i++) full.bag['filler_' + i] = 1;
+  // A truly full backpack: as many real item kinds as it has slots (the size comes from the storage table).
+  const full = fresh(10), gifts = new Set(Object.values(MISSIONS.jungle.gift)), kinds = Object.keys(M.ITEMS).filter(id => !gifts.has(id) && !M.ITEMS[id].slot);
+  assert.ok(kinds.length >= M.bagCapacity(full), 'enough item kinds to fill the backpack'); for (const id of kinds.slice(0, M.bagCapacity(full))) full.bag[id] = 1;
+  assert.equal(M.bagSlotsUsed(full), M.bagCapacity(full), 'the backpack is full');
   const g = claimRescue(full, { runId: 'chest-1', mission: 'jungle', waves: 8, won: true, seconds: 600 }, T0, () => 0)!;
   assert.ok(g.gift.some(x => x.where === 'chest')); assert.ok(g.gift.some(x => x.id === MISSIONS.jungle.gift.rare));
   // The save keeps it, and rubbish is dropped.
