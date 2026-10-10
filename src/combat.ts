@@ -122,13 +122,13 @@ export interface CombatAlly extends CombatPoint {id:number;kind:'clone'|'turret'
   /** Hittable summons (SUMMON_HP): hit points left and at full; `hurt` counts down a short flash after a blow; `ring` is the sandbag wall's radius. */
   hp?:number;maxHp?:number;hurt?:number;ring?:number}
 export const BASE_SKILLS = [
-  { name: 'Whirlwind', icon: '🌀', cd: 7, description: 'Spin for two seconds, striking nearby enemies repeatedly.' },
-  { name: 'Dash', icon: '➶', cd: 4, description: 'Rush forward, striking every enemy along your path once.' },
-  { name: 'Ground slam', icon: '💥', cd: 9, description: 'Leap and land with a shockwave that throws enemies into the air.' },
+  { name: 'Petal Gale', icon: '🌸', cd: 7, description: 'Spin for two seconds, striking nearby enemies repeatedly.' },
+  { name: 'Breeze Step', icon: '🍃', cd: 4, description: 'Rush forward, striking every enemy along your path once.' },
+  { name: 'Root Quake', icon: '🪨', cd: 9, description: 'Leap and land with a shockwave that throws enemies into the air.' },
 ] as const;
 export const SPECIALS: Record<string,{name:string;icon:string;cd:number}> = {
   volley:{name:'Cork barrage',icon:'🍾',cd:7},anchor:{name:'Anchor swing',icon:'⚓',cd:8},lotus:{name:'Lotus petals',icon:'🪷',cd:9},dragon:{name:'Dragon fan',icon:'🐉',cd:8},eagle:{name:'Eagle strike',icon:'🦅',cd:8},goldstar:{name:'Golden star burst',icon:'⭐',cd:9},
-  fist:{name:'Punch flurry',icon:'👊',cd:6},crescent:{name:'Crescent slash',icon:'🌙',cd:6},gore:{name:'Tusk rush',icon:'🐗',cd:7},wave:{name:'Blade waves',icon:'🌊',cd:6},
+  fist:{name:'Paw Storm',icon:'🐾',cd:6},crescent:{name:'Crescent slash',icon:'🌙',cd:6},gore:{name:'Tusk rush',icon:'🐗',cd:7},wave:{name:'Blade waves',icon:'🌊',cd:6},
   peastorm:{name:'Pea barrage',icon:'🟢',cd:8},bigbubble:{name:'Bubble prison',icon:'🫧',cd:10},nova:{name:'Thorn nova',icon:'🌵',cd:9},blizzard:{name:'Blizzard',icon:'❄️',cd:9},
   magma:{name:'Magma pillars',icon:'🌋',cd:8},thunder:{name:'Thunder chain',icon:'⚡',cd:9},bonk:{name:'Giant bonk',icon:'🔨',cd:7},tsunami:{name:'Wave fan',icon:'🌊',cd:9},
   whirl:{name:'Moon cyclone',icon:'🌪️',cd:8},starfall:{name:'Starfall',icon:'🌠',cd:9},inferno:{name:'Inferno ring',icon:'🔥',cd:9},laser:{name:'Rainbow laser',icon:'🌈',cd:8},

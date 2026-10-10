@@ -857,4 +857,6 @@ Object.assign(VI_CATALOG, {
   'Arrows: move · Q/W/E/R: skills · J: journal':'Mũi tên: di chuyển · Q/W/E/R: kỹ năng · J: nhật ký',
   'WASD to move':'WASD để di chuyển',
   'Journal · {key}':'Nhật ký · {key}',
+  // The four starting skills under their own names (stage 2 of docs/QUALITY-PLAN.md); the old names above stay for old text.
+  'Petal Gale': 'Lốc Cánh Hoa', 'Breeze Step': 'Bước Gió', 'Root Quake': 'Địa Chấn', 'Paw Storm': 'Mưa Đấm',
 });

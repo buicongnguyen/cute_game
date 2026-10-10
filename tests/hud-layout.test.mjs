@@ -49,7 +49,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
       const r = await page.evaluate(() => {
         const box = el => { const b = el.getBoundingClientRect(); return b.width && b.height && getComputedStyle(el).visibility !== 'hidden' ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
         const all = sel => [...document.querySelectorAll(sel)].filter(el => !el.closest('[hidden]')).map(box).filter(Boolean);
-        const panels = { player: all('.player-card'), buttons: all('.top-actions button'), minimap: all('.minimap'), trackers: all('.tracker-stack > :not([hidden]):not(.quick-eat)'), skills: all('.skill'), toasts: all('.toast'), prompt: all('#context-prompt button'), pad: all('#touch-controls button'), joystick:all('#movement-joystick'), home: all('.home-button') };
+        const panels = { player: all('.player-card'), buttons: all('.top-actions button'), minimap: all('.minimap'), trackers: all('.tracker-stack > :not([hidden]):not(.quick-eat)'), skills: all('.skill'), heel: all('#hud .attack-pad'), energy: all('#hud .top-actions > .energy'), toasts: all('.toast'), prompt: all('#context-prompt button'), pad: all('#touch-controls button'), joystick:all('#movement-joystick'), home: all('.home-button') };
         const W = innerWidth, H = innerHeight; let hits = 0, n = 0;
         for (let y = 4; y < H; y += 8) for (let x = 4; x < W; x += 8) { n++; const el = document.elementFromPoint(x, y); if (el && el.closest('#hud') && getComputedStyle(el).pointerEvents !== 'none') hits++; }
         return { boss: all('#boss-bar')[0] ?? null, target: all('#target-frame')[0] ?? null, panels, tappable: hits / n, W, H };
@@ -63,7 +63,19 @@ for (const [name, view] of Object.entries(VIEWS)) {
         assert.ok(home && home.t < r.H / 3, 'Home is in the upper HUD, away from the combat thumb');
         assert.ok(home.r - home.l >= 44 && home.b - home.t >= 44, 'Home has a full touch target');
         assert.equal(skills.length, 4);
-        assert.ok(Math.max(...skills.map(b => b.b)) >= r.H - 30, 'fight buttons sit near the bottom edge');
+        // Stage 2: the paw. The attack pad is the heel near the bottom edge; the four skills arc over it in key order.
+        const pad = r.panels.heel[0], mid = b => [(b.l + b.r) / 2, (b.t + b.b) / 2];
+        assert.ok(pad && pad.b >= r.H - 30, `the attack pad sits near the bottom edge: ${JSON.stringify(pad)} of ${r.H}`);
+        assert.ok(pad.r - pad.l >= 52 && pad.b - pad.t >= 52, 'the attack pad is a large target');
+        for (const [i, b] of skills.entries()) {
+          assert.ok(b.r - b.l >= 44 && b.b - b.t >= 44, 'every skill is a full touch target');
+          assert.ok(mid(b)[1] < mid(pad)[1], 'every skill sits above the middle of the pad');
+          assert.ok(Math.hypot(mid(b)[0] - mid(pad)[0], mid(b)[1] - mid(pad)[1]) >= (b.r - b.l + pad.r - pad.l) / 2, 'no skill touches the pad');
+          if (i) assert.ok(mid(b)[0] > mid(skills[i - 1])[0], 'skills run left to right in key order');
+          for (const o of skills.slice(0, i)) assert.ok(Math.hypot(mid(b)[0] - mid(o)[0], mid(b)[1] - mid(o)[1]) >= 44, 'skill centres are at least 44 px apart');
+        }
+        assert.ok(mid(skills[1])[1] < mid(skills[0])[1] && mid(skills[2])[1] < mid(skills[3])[1], 'the middle skills are the top of the arc');
+        assert.ok(!r.panels.joystick.some(j => overlap(pad, j)), 'the attack pad stays clear of movement');
         assert.ok(Math.max(...skills.map(b => b.r)) >= r.W - 24, 'default fight buttons sit near the right edge');
         for (const [panel, boxes] of Object.entries(r.panels)) if(panel !== 'home') for(const b of boxes) assert.ok(!overlap(home,b), `Home overlaps ${panel} at ${name}`);
         assert.ok(skills.every(b=>!r.panels.joystick.some(j=>overlap(b,j))), 'fight buttons stay clear of movement');
@@ -224,6 +236,54 @@ for (const name of ['phone 390x844', 'landscape 844x390']) {
       assert.ok(!overlaps(r.eat, r.joystick), 'quick eat stays clear of the stick');
       for (const s of r.skills) assert.ok(!overlaps(s, r.chal));
       if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/phone-${name.split(' ')[1]}.png` });
+    } finally { await browser.close(); }
+  });
+}
+
+// Stage 2 (docs/QUALITY-PLAN.md): our own arrangement. With the level-41 save (the fullest dock) nothing overlaps, nothing
+// leaves the screen and every touch control is a full target, at every supported size, in English and Vietnamese, while
+// calm, in a boss fight with a target and a timed task, and by the pond with the harpoon out.
+import { readFileSync } from 'node:fs';
+import { SIZES, STATES, measureHud, findings } from './support/hud-measure.mjs';
+const fullSave = readFileSync(new URL('../promo/save.json', import.meta.url), 'utf8');
+for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
+  test(`our HUD: nothing overlaps or leaves the screen at ${size} in ${lang}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 180000 }, async () => {
+    const [width, height, touch] = SIZES[size];
+    const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+    try {
+      const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: touch ? 2 : 1, hasTouch: touch, isMobile: touch });
+      await context.addInitScript(([s, l]) => { try { localStorage.setItem('cute-game-save-v1', s); localStorage.setItem('cute-game-slot', '0'); localStorage.setItem('cute-game-language', l); localStorage.setItem('cute-game-tutorial', 'done'); } catch { /* storage blocked */ } }, [fullSave, lang]);
+      const page = await context.newPage();
+      await page.routeWebSocket(socketUrl => new URL(socketUrl).searchParams.has('token'), () => {});
+      await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await page.waitForSelector('[data-action="start"]', { timeout: 60000 });
+      await page.evaluate(() => document.querySelector('[data-action="start"]').click());
+      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(6000);
+      await page.evaluate(() => { document.querySelector('.tutorial,.welcome')?.remove(); document.querySelectorAll('dialog[open]').forEach(d => d.close()); (document.querySelector('#dialog-layer [data-action="close"]') || document.querySelector('#dialog-close'))?.click(); });
+      for (const [state, enter] of Object.entries(STATES)) {
+        await enter(page);
+        const m = await page.evaluate(measureHud);
+        assert.deepEqual(findings(m), [], `${state} at ${size} in ${lang}`);
+        if (state !== 'calm') continue;
+        const g = m.groups, dock = g.dock, map = g.map[0], energy = g.energy[0];
+        // The dock: every menu button, in whole columns at the right edge, each cell at least 44 px.
+        assert.ok(dock.length >= 8, 'the level-41 dock shows every menu button');
+        const columns = [...new Set(dock.map(b => Math.round(b.l)))].sort((a, b) => a - b);
+        assert.ok(columns.length <= 3 && Math.max(...dock.map(b => b.r)) >= m.W - 24, `the dock hugs the right edge in at most three columns: ${columns}`);
+        for (const x of columns) { const ys = dock.filter(b => Math.round(b.l) === x).map(b => b.t).sort((a, b) => a - b); for (let i = 1; i < ys.length; i++) assert.ok(ys[i] - ys[i - 1] >= 44 - .5, 'dock buttons are at least 44 px apart'); }
+        if (columns.length > 1) assert.ok(columns[1] - columns[0] >= 44 - .5, 'dock columns are at least 44 px apart');
+        // The energy tag, the map panel and the Home tab hang left of the dock; the map is a panel, not a disc.
+        const dockLeft = Math.min(...dock.map(b => b.l));
+        assert.ok(energy.r <= dockLeft && map.r <= dockLeft && g.home[0].r <= dockLeft, 'energy, map and Home sit left of the dock');
+        assert.ok(map.t >= energy.b - .5, 'the map hangs under the energy tag');
+        const look = await page.evaluate(() => { const map = document.querySelector('#hud .minimap'), cap = document.querySelector('#map-caption').getBoundingClientRect(), box = map.getBoundingClientRect(), cs = getComputedStyle(map); return { radius: parseFloat(cs.borderTopLeftRadius) / box.width, inside: cap.width > 0 && cap.top >= box.top && cap.bottom <= box.bottom + .5 && cap.left >= box.left - .5 && cap.right <= box.right + .5, emoji: [...document.querySelectorAll('#hud .top-actions button')].filter(b => !b.querySelector('svg') && !getComputedStyle(b).backgroundImage.includes('svg')).length }; });
+        assert.ok(look.radius < .3, `the map is a rounded panel (corner ${look.radius.toFixed(2)} of its width)`);
+        assert.ok(look.inside, 'the place name is on a strip inside the map');
+        assert.equal(look.emoji, 0, 'every dock button carries a drawing from the icon set');
+        if (width >= 601 && height >= 521) assert.ok(g.slips.every(s => s.t >= map.b && s.r <= dockLeft), 'on roomy screens the quest slips hang under the map');
+        else assert.ok(g.slips.every(s => s.r <= map.l && s.t >= g.hero[0].b - .5), 'on phones the quest chips stay under the hero plate, left of the map');
+      }
+      if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/ours-${size}-${lang}.png` });
     } finally { await browser.close(); }
   });
 }
