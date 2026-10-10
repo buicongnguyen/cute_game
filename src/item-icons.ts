@@ -8,5 +8,7 @@ import { ITEMS, CROPS, FISH } from './content.ts';
  */
 export function iconPath(id: string): string | null {
   if (!Object.hasOwn(ITEMS, id) || ITEMS[id].type === 'decor') return null;
-  return `${Object.hasOwn(CROPS, id) ? 'crops' : Object.hasOwn(FISH, id) ? 'fish' : 'items'}/${id}.webp`;
+  // A dye (dye-skins.ts) shows its base piece's icon; the style's CSS filter does the recolouring (dye-ui.css).
+  const file = ITEMS[id].dye?.base ?? id;
+  return `${Object.hasOwn(CROPS, id) ? 'crops' : Object.hasOwn(FISH, id) ? 'fish' : 'items'}/${file}.webp`;
 }

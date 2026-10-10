@@ -24,6 +24,8 @@ import { disposeOwnedTextures, keepAlive } from './dispose-tree.ts';
 import { hardScale, creatureLevelScale, type Difficulty } from './difficulty.ts';
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, heroKitFor, tuckEars, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, bossPetKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
+import { applyDye } from './dye-render.ts';
+import { baseOf } from './dye-skins.ts';
 import { deathBagModel, deathBagEntityId } from './death-bags-view.ts';
 import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
@@ -672,7 +674,7 @@ export class World {
   }
   /** Puts a kit gear piece on the explorer; each piece rides the body part named by its tag. */
   private wearKit(hero:T.Object3D,id:string|undefined,fallback:string){
-    const kit=id?this.kitFor(id):null,item=kit&&heroKit.ready?kit.instance(weaponModelName(id!)):null;if(!item)return false;
+    const kit=id?this.kitFor(id):null,item=kit&&heroKit.ready?applyDye(kit.instance(weaponModelName(baseOf(id!))),id):null;if(!item)return false;
     hero.updateMatrixWorld(true);const toHero=hero.matrixWorld.clone().invert(),fits=hero.userData.fit as Partial<Record<string,Fit>>|undefined;
     for(const piece of [...item.children]){
       const tag=piece.userData.tag??fallback,part=hero.getObjectByName(tag)??hero,fit=part!==hero?fits?.[tag]:undefined;
@@ -686,8 +688,8 @@ export class World {
   }
   /** A companion model: from the pet kit when it has loaded, otherwise the simple shapes. */
   petFor(id:string){
-    const model=this.kitFor(id)?.instance(id)??this.petModel(id);
-    model.userData.flying=FLYING_PETS.includes(id);
+    const model=applyDye(this.kitFor(id)?.instance(baseOf(id))??this.petModel(id),id);
+    model.userData.flying=FLYING_PETS.includes(baseOf(id));
     // The kit's convention: the right wing lifts with +z, the left with -z.
     model.userData.wings=model.children.filter(c=>/_wing_[lr]/.test(c.name)).map(c=>({node:c,base:c.rotation.z,side:/_wing_l/.test(c.name)?-1:1}));
     return model;
@@ -696,8 +698,8 @@ export class World {
    * The loaded kit holding a gear item, or null. Asking starts that file's download the
    * first time; avatars are rebuilt when it arrives, and simple shapes stand in until then.
    */
-  private kitFor(id:string){
-    const slot=M.ITEMS[id]?.slot,kit=/^(hat|pet)_colossus$/.test(id)?colossusGearKit:/^(hat|pet)_t_/.test(id)?titanKit:/^pet_b_/.test(id)?bossPetKit:/^pet_dg_/.test(id)?dungeonKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
+  private kitFor(raw:string){
+    const id=baseOf(raw),slot=M.ITEMS[raw]?.slot,kit=/^(hat|pet)_colossus$/.test(id)?colossusGearKit:/^(hat|pet)_t_/.test(id)?titanKit:/^pet_b_/.test(id)?bossPetKit:/^pet_dg_/.test(id)?dungeonKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
     if(!kit.requested)void kit.load().then(()=>{if(kit.ready)this.refreshAvatars();});
     return kit.ready&&kit.has(weaponModelName(id))?kit:null;
   }

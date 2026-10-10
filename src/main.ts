@@ -120,6 +120,8 @@ import { initHouse } from './house-ui.ts';
 import { indoorStore, purposeHtml, wardrobeItem } from './house-stores.ts';
 import { showsGain, type GainSource } from './work-effects.ts';
 import { initLookShop } from './look-shop.ts';
+import { initDyeUi } from './dye-ui.ts';
+import { dyeIconClass } from './dye-skins.ts';
 import { GROWTH } from './growth.ts';
 import * as Tester from './tester.ts';
 import './tester.css';
@@ -366,8 +368,8 @@ const iconUrl=(path:string)=>assetUrl(`icons/${path}`);
 const missingIcons=new Set<string>();
 function art(id:string,icon:string):string{
   if(Object.hasOwn(M.ITEMS,id)&&M.ITEMS[id].type==='decor'){const url=decorIcon(id);return url?`<img class="art-icon" src="${url}" alt="" draggable="false">`:icon;}
-  const path=iconPath(id);
-  return path&&!missingIcons.has(id)?`<img class="art-icon" src="${iconUrl(path)}" alt="" draggable="false" data-id="${esc(id)}" data-fallback="${esc(icon)}">`:icon;
+  const path=iconPath(id),dye=dyeIconClass(id);
+  return path&&!missingIcons.has(id)?`<img class="art-icon${dye?' '+dye:''}" src="${iconUrl(path)}" alt="" draggable="false" data-id="${esc(id)}" data-fallback="${esc(icon)}">`:icon;
 }
 /** A small inline icon for ingredient lists and chips. */
 const mini=(id:string)=>`<span class="mini-art">${art(id,M.ITEMS[id]?.icon??'✨')}</span>`;
@@ -701,7 +703,7 @@ function quests(){
     list.insertAdjacentHTML('beforeend',localizeHtml(next));
   }
 }
-const SHOP_TABS=['Weapons','Clothing','Pets','Disguises','Supplies','Decor'];
+const SHOP_TABS=['Weapons','Clothing','Pets','Disguises','Supplies','Decor','Dyes'];
 /** "Try on" for wearable gear not already worn; pressed while the explorer is wearing it as a preview. */
 function tryOnButton(id:M.ItemId){return canTryOn(id)&&!Object.values(state.gear).includes(id)?`<button class="soft-button try-on" data-action="try-on" data-item="${id}" aria-pressed="${tryingOn===id}">${tryingOn===id?'👀 Trying on':'👕 Try on'}</button>`:'';}
 function shop(){
@@ -712,6 +714,7 @@ function shop(){
   const entries=IG.groupItems(Object.entries(M.ITEMS).filter(([id,item])=>M.shopPrice(state,id)!==null&&matches(item)),([id])=>id,IG.GEAR_ORDER,([id])=>M.isSpecial(id)?M.ITEMS[id].sell:M.shopPrice(state,id)??0);
   openDialog('shop','Little outfitters',`<nav class="panel-tabs" aria-label="Shop categories">${SHOP_TABS.map(tab=>`<button class="${shopTab===tab?'active':''}" aria-pressed="${shopTab===tab}" data-action="shop-tab" data-kind="${tab}">${tab}</button>`).join('')}</nav>${IG.groupedHtml('shop',entries,([id,item])=>`<div class="shop-item${M.isSpecial(id)?' special-offer':''}"><span class="shop-icon">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))}${specialTag(id)}${state.bag[id]?M.levelTag(state,id):''}${state.bag[id]?` <small>×${state.bag[id]}</small>`:''}</strong>${M.powerChip(id)}<p>${esc(item.desc)}</p>${specialNote(id)}${gate(id)}${materialChips(item.materials)}</div>${Tester.isTester(state)&&M.isSpecial(id)?'<div class="button-row tester-row">':''}<button class="primary${buyState(id,item).short?' looks-disabled':''}" data-action="buy" data-item="${id}" ${buyState(id,item).disabled?'disabled':''} ${buyState(id,item).short?'aria-disabled="true"':''}>ϟ ${M.shopPrice(state,id)!.toLocaleString()}</button>${Tester.isTester(state)&&M.isSpecial(id)?Tester.testerBuyButton(state,id)+'</div>':''}${item.weapon?.kind==='rod'&&state.bag[id]?'<span class="chip">Used automatically near ponds</span>':item.slot?Object.values(state.gear).includes(id)?'<span class="chip chip-seed">✓ Equipped</span>':state.bag[id]?`<button class="sky-button" data-action="equip" data-item="${id}" ${gated(id)?'disabled':''}>Equip</button>`:'':''}${tryOnButton(id)}</div>`)||'<p class="empty-state">Visit the workshop for this collection.</p>'}`,energyKicker(state.energy));
   if(shopTab==='Pets'&&state.planet==='home'&&!visiting)$('#dialog-body').insertAdjacentHTML('beforeend',localizeHtml('<div class="button-row"><button class="soft-button" data-action="pen-menu">🐔 Animal pen</button></div>'));
+  if(shopTab==='Dyes')dyes.fill(); // the Dyes tab body (dye-ui.ts)
 }
 
 // The market, like the reference's (bundle @939401): one big button sells every crop, fish and junk stack; rows sell 1 or all.
@@ -1129,6 +1132,7 @@ const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked
 // The bedroom mirror's Look shop (look-shop.ts): body styles bought with energy, previewed like gear try-on.
 // A tap on an indoor label picks its thing, like a tap on the thing (labels themselves never take pointer events).
 house.house.labelBox=id=>{const a=labelAnchors.get(id);return a&&!a.off&&!modal&&labelNodes.get(id)?.hidden===false?labelRect(a):null;};
+const dyes=initDyeUi({state:()=>state,perform:(type,payload)=>perform(type,payload),art,refresh:()=>shop(),wear:async id=>{if(await perform('equip',{id}))equipFeedback(id);},toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),modal:()=>modal});
 const lookShop=initLookShop({world,perform:(type,payload)=>perform(type,payload),openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),endGearTryOn:()=>{if(tryingOn){tryingOn=null;world.tryOnGear=null;}}});
 frameListeners.add(dt=>house.frame(dt));frameListeners.add(dt=>challenges.tick(dt));
 // The craft room's upgrade bench (upgrade-bench.ts): gear levels and skill levels, both run through actions.ts.
