@@ -1,5 +1,9 @@
 /** The leaderboard (ranking.ts). Interpolation values are deliberately not translated. */
 export const VI_RANKING: Record<string, string> = {
+  'Real players on the online server. Open "Play online with friends" on the title screen to join the board.': 'Người chơi thật trên máy chủ online. Mở "Chơi trực tuyến cùng bạn bè" ở màn hình đầu để vào bảng xếp hạng.',
+  'The online server is off right now.': 'Máy chủ online đang tắt.',
+  'Showing the neighbourhood board.': 'Đang hiện bảng của hàng xóm.',
+  'Try the online server board': 'Thử bảng của máy chủ online',
   'Ranking': 'Xếp hạng',
   'Leaderboard': 'Bảng xếp hạng',
   'Close the leaderboard': 'Đóng bảng xếp hạng',

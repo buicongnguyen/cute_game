@@ -46,6 +46,9 @@ export function initRanking(game: GameBridge) {
   let board: Board = 'weekly', cat: Category = 'exp', reply: BoardReply | null = null, status: 'loading' | 'error' | 'ready' = 'loading', solo = staticHost, request = 0;
   /** No game server behind this page (the Vite dev server, a static host): learnt from the first reply, kept for the session. */
   let noServer = staticHost;
+  /** The static (Pages) build knows the owner's server address (VITE_ONLINE_URL, set as the repository variable ONLINE_URL): while that PC server is on, its real-player list is shown. */
+  const remote = staticHost ? String(import.meta.env.VITE_ONLINE_URL || '').replace(/\/+$/, '') : '';
+  let serverOff = false, preferLocal = false;
 
   // ---- The player's own weekly gains in solo play: a snapshot of lifetime totals, moved on now and then ----
   let week: SoloWeekState | null = null;
@@ -96,8 +99,13 @@ export function initRanking(game: GameBridge) {
     const meId = reply.me?.id;
     if (!reply.top.length) { const box = el('li', 'ranking-empty'); box.append(el('p', '', t('Nobody is on this board yet.')), el('small', '', t('Be the first!'))); list.append(box); }
     for (const entry of reply.top) list.append(row(entry, entry.id === meId));
-    if (reply.solo) list.append(el('li', 'ranking-note', `${t('Neighbourhood board: you and the neighbours who live nearby.')}${noServer ? '' : ' ' + t('Sign in under Play together to join the server leaderboard.')}`));
-    else list.append(el('li', 'ranking-note', t('Server leaderboard · refreshed about every minute')));
+    if (reply.remote) {
+      const note = el('li', 'ranking-note', t('Real players on the online server. Open "Play online with friends" on the title screen to join the board.'));
+      note.append(' ', button(t('Show the neighbourhood board'), () => { preferLocal = true; void load(); }, 'ranking-link')); list.append(note);
+    } else if (reply.solo) {
+      list.append(el('li', 'ranking-note', `${t('Neighbourhood board: you and the neighbours who live nearby.')}${remote ? ' ' + (serverOff ? t('The online server is off right now.') : t('Showing the neighbourhood board.')) : noServer ? '' : ' ' + t('Sign in under Play together to join the server leaderboard.')}`));
+      if (remote && preferLocal) { const again = el('li', 'ranking-note'); again.append(button(t('Try the online server board'), () => { preferLocal = false; serverOff = false; void load(); }, 'ranking-link')); list.append(again); }
+    } else list.append(el('li', 'ranking-note', t('Server leaderboard · refreshed about every minute')));
     if (reply.me) {
       const [, label] = CATEGORY[cat];
       mine.hidden = false;
@@ -107,6 +115,20 @@ export function initRanking(game: GameBridge) {
   }
   async function load() {
     const ticket = ++request;
+    if (remote && !preferLocal) {
+      status = 'loading'; render();
+      const abort = new AbortController(), timer = window.setTimeout(() => abort.abort(), 5000);
+      try {
+        const response = await fetch(`${remote}/api/ranking?board=${board}&cat=${cat}`, { credentials: 'omit', cache: 'no-store', headers: { Accept: 'application/json', 'ngrok-skip-browser-warning': '1' }, signal: abort.signal });
+        if (response.ok && /json/i.test(response.headers.get('content-type') ?? '')) {
+          const data = await response.json() as BoardReply;
+          if (ticket !== request) return;
+          if (Array.isArray(data.top)) { serverOff = false; reply = { ...data, me: undefined, remote: true, solo: false }; status = 'ready'; render(); return; }
+        }
+      } catch { /* the server is off: the neighbourhood board below */ } finally { clearTimeout(timer); }
+      if (ticket !== request) return;
+      serverOff = true;
+    }
     if (solo) { reply = localBoard(); status = 'ready'; render(); return; }
     status = 'loading'; render();
     try {

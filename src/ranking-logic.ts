@@ -110,6 +110,8 @@ export interface BoardReply {
   /** The caller's place: rank null while they have nothing on this board. Absent when nobody is signed in. */
   me?: { rank: number | null; value: number; id: string } | null;
   solo?: boolean;
+  /** Read from the owner's game server by the static (Pages) build: the list only, no rank of the caller. */
+  remote?: boolean;
 }
 /** Top `limit` rows plus the caller's own rank, from an already ranked list. */
 export function boardReply(ranked: RankedEntry[], board: Board, cat: Category, now: number, players: number, meId?: string | null, limit = BOARD_SIZE): BoardReply {

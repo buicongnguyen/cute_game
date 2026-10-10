@@ -39,7 +39,10 @@ if (have('cloudflared')) {
   const watch = chunk => { const match = String(chunk).match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/); if (match) announce(match[0]); };
   tunnel.stdout.on('data', watch); tunnel.stderr.on('data', watch);
 } else if (have('ngrok')) {
-  tunnel = spawn('ngrok', ['http', String(port), '--log=stdout'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  // A free ngrok account includes one fixed address (dashboard -> Domains). Put it in NGROK_DOMAIN (for example my-name.ngrok-free.app) and the
+  // address never changes, so the github.io build, which has it baked in as ONLINE_URL, always finds this PC.
+  const fixed = String(process.env.NGROK_DOMAIN || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  tunnel = spawn('ngrok', ['http', String(port), '--log=stdout', ...(fixed ? [`--domain=${fixed}`] : [])], { stdio: ['ignore', 'pipe', 'pipe'] });
   const poll = setInterval(async () => {
     try { const list = await (await fetch('http://127.0.0.1:4040/api/tunnels')).json(); const url = list.tunnels?.find(t => t.public_url?.startsWith('https'))?.public_url; if (url) { clearInterval(poll); announce(url); } } catch { /* ngrok is still starting */ }
   }, 1500);

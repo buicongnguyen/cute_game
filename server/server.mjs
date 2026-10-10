@@ -256,6 +256,13 @@ export async function createGameServer(options = {}) {
         return respond(response, 200, { ok: true, online: peers.size, version: 1, storage: store.kind }, cors);
       }
     }
+    // The leaderboard list is also public and read-only from other sites (the solo github.io build shows it while this server is on). A request from a site that is not allowed gets the list without the caller's own rank; credentials are never accepted across origins, and nothing else is cross-origin.
+    if (url.pathname === '/api/ranking' && (request.method === 'GET' || request.method === 'OPTIONS') && !allowedOrigin(request)) {
+      const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'ngrok-skip-browser-warning, Content-Type, Accept', 'Access-Control-Max-Age': '600' };
+      if (request.method === 'OPTIONS') { response.writeHead(204, cors); return response.end(); }
+      rate(`ranking:${clientAddress(request, trustProxy)}`, 90);
+      return respond(response, 200, ranking.query({ board: url.searchParams.get('board') || 'weekly', cat: url.searchParams.get('cat') || undefined, meId: null }), cors);
+    }
     if (!allowedOrigin(request)) throw failure(403, 'This origin is not allowed.');
     const route = url.pathname.slice(5), method = request.method;
     if (route === 'health' && method === 'GET') {

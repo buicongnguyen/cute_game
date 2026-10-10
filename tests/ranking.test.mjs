@@ -184,7 +184,13 @@ test('GET /api/ranking works signed out and signed in, and stays same-origin', a
     const mine = await (await fetch(game.url + '/api/ranking?board=all&cat=level', { headers: { Cookie: cookie } })).json();
     assert.equal(mine.top[0].name, 'Ranky'); assert.equal(mine.me.rank, 1); assert.equal(mine.players, 1);
     assert.equal((await fetch(game.url + '/api/ranking?board=all&cat=exp')).status, 400);
-    assert.equal((await fetch(game.url + '/api/ranking', { headers: { Origin: 'https://evil.example' } })).status, 403);
+    // Another site (the github.io build) may read the public list, with no cookies and no rank of the caller; every other route stays closed to it.
+    const foreign = await fetch(game.url + '/api/ranking?board=all&cat=level', { headers: { Origin: 'https://buicongnguyen.github.io', Cookie: cookie } });
+    assert.equal(foreign.status, 200); assert.equal(foreign.headers.get('access-control-allow-origin'), '*');
+    const foreignBody = await foreign.json(); assert.equal(foreignBody.top[0].name, 'Ranky'); assert.equal(foreignBody.me, undefined, 'a foreign site never gets the callers own rank');
+    assert.equal((await fetch(game.url + '/api/ranking', { method: 'OPTIONS', headers: { Origin: 'https://buicongnguyen.github.io', 'Access-Control-Request-Method': 'GET' } })).status, 204);
+    assert.equal((await fetch(game.url + '/api/ranking?board=all&cat=level', { method: 'POST', headers: { Origin: 'https://evil.example' } })).status, 403);
+    assert.equal((await fetch(game.url + '/api/auth/session', { headers: { Origin: 'https://evil.example' } })).status, 403);
     const health = await fetch(game.url + '/api/health', { headers: { Origin: 'https://buicongnguyen.github.io' } });
     assert.equal(health.headers.get('access-control-allow-origin'), '*', 'health stays public');
   } finally { await game.close(); await rm(dataDir, { recursive: true, force: true }); }
