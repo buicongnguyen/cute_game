@@ -18,7 +18,7 @@ import { buildPond } from './pond-view.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
 import * as T from 'three';
 import {superheroFlightPose,clearSuperheroFlightPose} from './flight-pose.ts';
-import { manageSceneMatrices, updateSceneMatrices } from './scene-matrices.ts';
+import { manageSceneMatrices, updateSceneMatrices, freezeStaticTree } from './scene-matrices.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { disposeOwnedTextures, keepAlive } from './dispose-tree.ts';
 import { hardScale, creatureLevelScale, type Difficulty } from './difficulty.ts';
@@ -58,6 +58,8 @@ import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,
 import {HIP,applyGait,gaitSwing,limbsOf,newGait,stepGait,type Gait} from './walk-cycle.ts';
 import {DEFAULT_PIVOTS,fitOf,lookOf,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {part} from './part-cache.ts';
+import {mergeParts} from './avatar-merge.ts';
+import {perfFlags} from './perf-flags.ts';
 import {enemyFlash,HIT_FLASH,HURT_TINT,meleeArc,MELEE_ARC} from './feel-rules.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
@@ -321,7 +323,7 @@ export class World {
     const coverKinds=[...new Set((this.decor??[]).filter(p=>DECOR[p.type]?.cover).map(p=>p.type))];
     if(this.renderer&&coverKinds.length)this.coverAtlas=bakeCoverAtlas(this.renderer,coverKinds,type=>parts(type)??fallbackParts(type));
     const atlas=this.coverAtlas;
-    this.scatterGroup=buildScatter(this.decor??[],parts,this.detail,atlas?list=>coverCards(atlas,list):undefined);this.root.add(this.scatterGroup);
+    this.scatterGroup=buildScatter(this.decor??[],parts,this.detail,atlas?list=>coverCards(atlas,list):undefined);freezeStaticTree(this.scatterGroup);this.root.add(this.scatterGroup);
     this.occluders=new OccluderFade(this.scatterGroup);this.shadowsAt=undefined;
   }
   /**
@@ -999,8 +1001,8 @@ export class World {
     }
   }
   receiveRemoteHit(id:string,amount:number,stun=0){const e=this.enemies.find(e=>e.id===id);if(!e||e.hp<=0||!Number.isFinite(amount)||amount<0)return false;this.damageEnemy(e,amount,stun);return true;}
-  addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear,pose.look);avatar.userData.remoteId=id;this.remoteRoot.add(avatar);pose.pets?.slice(0,2).forEach((petId,i)=>{const pet=this.petFor(petId);pet.name='remote-pet';pet.position.set(1,0,-.6-i*.6);avatar.add(pet);addOutlines(pet,{merge:true});});this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
-  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear,pose.look??remote.pose.look);this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;// Each pose is a target the avatar glides to (per frame, below): poses arrive about every 100 ms and a tunnel bunches them, so setting the position outright made others jump and blink. First sight, big jumps and rebuilds snap.
+  addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear,pose.look);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});avatar.userData.remoteId=id;this.remoteRoot.add(avatar);pose.pets?.slice(0,2).forEach((petId,i)=>{const pet=this.petFor(petId);pet.name='remote-pet';pet.position.set(1,0,-.6-i*.6);avatar.add(pet);addOutlines(pet,{merge:true});});this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
+  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear,pose.look??remote.pose.look);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;// Each pose is a target the avatar glides to (per frame, below): poses arrive about every 100 ms and a tunnel bunches them, so setting the position outright made others jump and blink. First sight, big jumps and rebuilds snap.
     {const ty=(current.y??0)-(indoor?INDOOR_Y:0),u=remote.mesh.userData,p=remote.mesh.position;u.target={x:current.x,y:ty,z:current.z,f:current.facing??0};
       if(!u.placed||Math.hypot(p.x-current.x,p.z-current.z)>8||Math.abs(p.y-ty)>3){p.set(current.x,ty,current.z);remote.mesh.rotation.y=u.target.f;u.placed=true;}}
     this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}

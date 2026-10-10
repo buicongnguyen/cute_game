@@ -126,6 +126,8 @@ import './item-groups.css';
 import './special-offers.css';
 import './hud-desk.css'; // last: the timed bonus line, level chip and desktop layout override the older HUD sheets
 import './tap-targets.css'; // very last: 44 px hit areas (promo/tap-probe.mjs)
+import {perfFlags} from './perf-flags.ts';
+import {matrixStats,updateSceneMatrices} from './scene-matrices.ts';
 import {setDock,initDockFraming} from './dialog-dock';
 import {iconPath} from './item-icons.ts';
 import { WORK_ACTIONS, CATCH_UP_ACTIONS, explorerAway } from './delivery.ts';
@@ -1767,4 +1769,4 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,get colossus(){return colossus;},panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

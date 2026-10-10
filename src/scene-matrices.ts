@@ -1,4 +1,5 @@
 import type * as T from 'three';
+import { perfFlags } from './perf-flags.ts';
 
 /**
  * Matrix upkeep for big scenes, after the reference (it turns the scene's automatic matrix update off and runs its own).
@@ -10,7 +11,20 @@ import type * as T from 'three';
  * catch up the frame they show again. Code that sets `matrix` by hand (matrixAutoUpdate off) keeps working
  * through `matrixWorldNeedsUpdate`, as in three.js.
  */
-type Tracked = T.Object3D & { _trs?: Float64Array; _stale?: boolean; _parent?: T.Object3D | null };
+type Tracked = T.Object3D & { _trs?: Float64Array; _stale?: boolean; _parent?: T.Object3D | null; _settled?: number };
+
+/** Objects visited and hidden subtrees skipped by the last pass (read by tests and the perf probe). */
+export const matrixStats = { visited: 0, frozenSkips: 0 };
+let hiddenSkips = 0;
+
+/**
+ * Marks a subtree whose descendants never move on their own (scatter tiles: instanced scenery with identity transforms).
+ * Once its matrices have settled the pass stops at its root until the root itself moves, a child is added or removed,
+ * or `thawStaticTree` is called, so the ~500 tiles of the village cost nothing per frame.
+ */
+export function freezeStaticTree(root: T.Object3D) { root.userData.staticTree = true; }
+/** Makes a frozen subtree update again (call after editing the transform of anything inside it). */
+export function thawStaticTree(root: T.Object3D) { (root as Tracked)._settled = undefined; }
 
 /** True when the object's TRS differs from the cached copy (and refreshes the cache). */
 function moved(o: Tracked) {
@@ -22,16 +36,30 @@ function moved(o: Tracked) {
 }
 
 function visit(o: Tracked, parentChanged: boolean) {
-  if (!o.visible) { o._stale = true; return; }
+  if (!o.visible) { o._stale = true; hiddenSkips++; return; }
+  matrixStats.visited++;
   // A move to another parent changes the world matrix without touching the local one.
-  let changed = parentChanged || o.matrixWorldNeedsUpdate || !!o._stale || o._parent !== o.parent;
+  // three.js raises matrixWorldNeedsUpdate on every ancestor whenever code asks an object for its world position or
+  // quaternion (updateWorldMatrix(true) -> updateMatrix), which made the whole scene look changed every frame. For an
+  // object whose matrix is composed here the flag says nothing the position/rotation/scale cache does not already say.
+  const auto = o.matrixAutoUpdate && perfFlags.trustTransforms;
+  let changed = parentChanged || (o.matrixWorldNeedsUpdate && !auto) || !!o._stale || o._parent !== o.parent;
   o._parent = o.parent;
   if (o.matrixAutoUpdate && moved(o)) { o.matrix.compose(o.position, o.quaternion, o.scale); changed = true; }
   if (changed) {
     if (o.matrixWorldAutoUpdate) { if (o.parent === null) o.matrixWorld.copy(o.matrix); else o.matrixWorld.multiplyMatrices(o.parent.matrixWorld, o.matrix); }
     o.matrixWorldNeedsUpdate = false; o._stale = false;
-  }
+  } else if (auto) o.matrixWorldNeedsUpdate = false;
   const children = o.children;
+  if (o.userData.staticTree && perfFlags.freezeStaticTrees) {
+    // A settled tree (same children as when it was walked, nothing hidden in it) has nothing to recompute.
+    if (!changed && o._settled === children.length) { matrixStats.frozenSkips++; return; }
+    const hiddenBefore = hiddenSkips;
+    for (let i = 0, n = children.length; i < n; i++) visit(children[i] as Tracked, changed);
+    o._settled = hiddenSkips === hiddenBefore ? children.length : undefined;
+    return;
+  }
+  if (o._settled !== undefined) o._settled = undefined;
   for (let i = 0, n = children.length; i < n; i++) visit(children[i] as Tracked, changed);
 }
 
@@ -39,4 +67,4 @@ function visit(o: Tracked, parentChanged: boolean) {
 export function manageSceneMatrices(scene: T.Scene) { scene.matrixWorldAutoUpdate = false; }
 
 /** Brings every visible object's world matrix up to date, touching only what moved. */
-export function updateSceneMatrices(scene: T.Scene) { visit(scene as Tracked, false); }
+export function updateSceneMatrices(scene: T.Scene) { matrixStats.visited = 0; matrixStats.frozenSkips = 0; visit(scene as Tracked, false); }

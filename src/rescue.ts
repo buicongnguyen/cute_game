@@ -443,7 +443,7 @@ export function initRescue(h: RescueHooks) {
   function handle(events: RsEvent[]) {
     const s = session; if (!s) return; const fx = world.fx, m = s.m;
     for (const ev of events) switch (ev.kind) {
-      case 'wave': { const md = MISSIONS[m.mission]; banner(t('Wave {n}!', { n: ev.wave + 1 }), ev.boss ? t('The boss is coming!') : md.waves[ev.wave].groups.some(g => g.role === 'flyer') ? '🪽 ' + t('Flyers ahead') : '', ev.boss ? 'bad' : ''); h.tone(ev.boss ? 'alert' : 'level'); s.pad = -1; renderPanel(true); break; }
+      case 'wave': { panel.classList.add('folded'); /* the build sheet steps aside once a wave starts; a tap on a pad or its chip opens it again */ const md = MISSIONS[m.mission]; banner(t('Wave {n}!', { n: ev.wave + 1 }), ev.boss ? t('The boss is coming!') : md.waves[ev.wave].groups.some(g => g.role === 'flyer') ? '🪽 ' + t('Flyers ahead') : '', ev.boss ? 'bad' : ''); h.tone(ev.boss ? 'alert' : 'level'); s.pad = -1; renderPanel(true); break; }
       case 'clear': banner(t('Wave cleared!'), t('+{spark} Spark · +{stars} Star bit', { spark: ev.spark, stars: ev.stars }), 'good'); h.tone('success'); fx?.burst({ x: world.position.x, z: world.position.z }, { n: 24, color: ['#ffd23f', '#ffffff', '#7fd0ff'], glow: true, speed: 4, up: 8 }); s.pad = nearestEmptyPad(s); renderPanel(true); break;
       case 'spawn': if (ev.boss) { banner('👑 ' + enemyName(ev.enemy), t('The boss is coming!'), 'bad'); world.fx?.shake?.(.4); h.tone('alert'); } break;
       case 'leak': { banner('💔 ' + t('A raider got through!'), `❤️ ${ev.hearts}/${RESCUE.hearts}`, 'bad'); h.tone('hurt'); fx?.shake?.(.35); fx?.burst(at(ev), { n: 20, color: ['#ff5a5f', '#ffffff'], glow: true, speed: 4, up: 6 }); break; }

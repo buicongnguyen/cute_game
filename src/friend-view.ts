@@ -1,6 +1,5 @@
 import * as T from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { toonMaterial } from './toon.ts';
+import { mergeParts } from './avatar-merge.ts';
 import { HERO_SCALE } from './world.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends-state.ts';
 import { friendHeight, friendStage } from './growth.ts';
@@ -45,39 +44,6 @@ function recolourHair(model: T.Object3D, hair: string) {
     for (let i = 0; i < cc.count; i++) if (near(cc.getX(i), cc.getY(i), cc.getZ(i))) cc.setXYZ(i, colour.r, colour.g, colour.b);
     o.geometry = g;
   });
-}
-let merged: T.MeshToonMaterial | null = null;
-/**
- * Merges each rigid part's meshes (skin, shirt, hair, the hat's pieces...) into one vertex-coloured mesh with one shared
- * toon material: a friend then costs one draw per part plus its merged outline, not three or four per part. Textured,
- * see-through or glowing pieces stay as they are.
- */
-function mergeParts(model: T.Object3D) {
-  const byParent = new Map<T.Object3D, T.Mesh[]>();
-  model.traverse(o => {
-    if (!(o instanceof T.Mesh) || o.userData.outline || o.userData.gear || !o.parent || Array.isArray(o.material) || o.parent.name === 'remote-pet' || o.parent.parent?.name === 'remote-pet') return;
-    const m = o.material as T.MeshToonMaterial;
-    if (m.map || m.transparent || (m.emissive && m.emissive.getHex() !== 0) || !m.color) return;
-    const list = byParent.get(o.parent) ?? []; list.push(o); byParent.set(o.parent, list);
-  });
-  merged ??= toonMaterial({ vertexColors: true }); merged.userData.sharedKit = true;
-  for (const [parent, list] of byParent) {
-    if (list.length < 2) continue;
-    const pieces = list.map(mesh => {
-      const src = mesh.geometry, g = new T.BufferGeometry(); g.setAttribute('position', src.getAttribute('position').clone());
-      const n = src.getAttribute('normal'); if (n) g.setAttribute('normal', n.clone());
-      const col = src.getAttribute('color'); if (col) g.setAttribute('color', col.clone());
-      if (src.index) g.setIndex(src.index.clone());
-      const flat = g.index ? g.toNonIndexed() : g; if (flat !== g) g.dispose();
-      mesh.updateMatrix(); flat.applyMatrix4(mesh.matrix); if (!n) flat.computeVertexNormals();
-      const tint = (mesh.material as T.MeshToonMaterial).color, count = flat.getAttribute('position').count, old = flat.getAttribute('color') as T.BufferAttribute | undefined, colors = new Float32Array(count * 3);
-      for (let i = 0; i < count; i++) colors.set(old ? [old.getX(i) * tint.r, old.getY(i) * tint.g, old.getZ(i) * tint.b] : [tint.r, tint.g, tint.b], i * 3);
-      flat.setAttribute('color', new T.BufferAttribute(colors, 3)); return flat;
-    });
-    const geometry = mergeGeometries(pieces, false); pieces.forEach(p => p.dispose()); if (!geometry) continue;
-    for (const mesh of list) { mesh.removeFromParent(); if (!mesh.geometry.userData.sharedKit) mesh.geometry.dispose(); }
-    const one = new T.Mesh(geometry, merged); one.name = parent.name + '-merged'; parent.add(one);
-  }
 }
 /** A stand-in until the world registers its dresser (tests, or a friend shown before the world exists). */
 function standIn(tint: string, hair: string, wear: SaveState['gear'] = {}) {

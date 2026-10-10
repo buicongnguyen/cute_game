@@ -77,6 +77,12 @@
 body[data-rescue-orient="portrait"] #rescue-build { left: calc(env(safe-area-inset-left, 0px) + 8px); right: calc(env(safe-area-inset-right, 0px) + 8px); top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); width: auto; max-height: 44vh; }
 #rescue-build.folded .rescue-body { display: none; }
 #rescue-build.folded .fold { transform: rotate(180deg); }
+/* Portrait: a folded sheet is a small chip above the stick, so the four skill buttons (bottom right) are never covered by it. */
+body[data-rescue-orient="portrait"] #rescue-build.folded { left: calc(env(safe-area-inset-left, 0px) + 8px); right: auto; width: auto; max-height: none; overflow: visible; padding: 4px; bottom: calc(env(safe-area-inset-bottom, 0px) + 196px); border-radius: 24px; }
+body[data-rescue-orient="portrait"] #rescue-build.folded .rescue-tabs { position: static; padding: 0; background: none; }
+body[data-rescue-orient="portrait"] #rescue-build.folded .rescue-tabs button:not(.fold) { display: none; }
+body[data-rescue-orient="portrait"] #rescue-build.folded .rescue-tabs button.fold { flex: 0 0 auto; min-width: 64px; min-height: 44px; transform: none; font-size: 0; }
+body[data-rescue-orient="portrait"] #rescue-build.folded .rescue-tabs button.fold::before { content: '🏰 ▴'; font-size: 18px; }
 .rescue-tabs { display: flex; gap: 4px; position: sticky; top: -8px; background: inherit; padding-bottom: 6px; z-index: 1; }
 .rescue-tabs button { flex: 1; padding: 7px 6px; border-radius: 12px; border: 2px solid #f0d8bc; background: #fff; font: inherit; font-weight: 900; cursor: pointer; min-height: 40px; color: #6a3a10; }
 .rescue-tabs button.sel { background: #ff8a3d; border-color: #ff8a3d; color: #fff; box-shadow: 0 2px 0 #c45a10; }
@@ -179,7 +185,9 @@ body.in-rescue #zone-name { opacity: .9; }
 @media (max-height: 500px) and (orientation: landscape) {
   #rescue-hud { top: calc(env(safe-area-inset-top, 0px) + 50px); width: min(400px, calc(100vw - 440px)); min-width: 300px; padding: 4px 8px 5px; }
   #rescue-hud .rescue-squadbar { display: none; }
-  #rescue-build { top: calc(env(safe-area-inset-top, 0px) + 142px); bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); right: calc(env(safe-area-inset-right, 0px) + 112px); width: min(330px, calc(100vw - 460px)); min-width: 270px; max-height: none; }
+  #rescue-build { top: calc(env(safe-area-inset-top, 0px) + 142px); bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); right: calc(env(safe-area-inset-right, 0px) + 140px); width: min(330px, calc(100vw - 460px)); min-width: 270px; max-height: none; }
+  /* Folded, the panel is just its tab row (it used to stay a tall empty card over the field and the skill buttons). */
+  #rescue-build.folded, body[data-rescue-orient="portrait"] #rescue-build.folded { bottom: auto; }
   body[data-rescue-orient="portrait"] #rescue-build { left: auto; width: min(330px, calc(100vw - 460px)); max-height: none; }
   .rescue-cards, .rescue-boosts, body[data-rescue-orient="portrait"] .rescue-cards, body[data-rescue-orient="portrait"] .rescue-boosts { grid-template-columns: 1fr 1fr; }
 }

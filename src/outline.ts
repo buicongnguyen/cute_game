@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { perfFlags } from './perf-flags.ts';
 
 /**
  * Ink outlines for the play layer (explorer, pets, creatures, the target arrow), after the
@@ -54,6 +55,29 @@ function outlinable(o: T.Object3D): o is T.Mesh {
  * cracks at hard edges (flat-shaded kit parts have split normals).
  */
 function mergedHull(meshes: T.Mesh[]) {
+  // Every explorer, friend and neighbour made from the same kit part (same geometry, same place in its parent) has the
+  // same hull: build it once. Welding and smoothing normals was the biggest part of making an avatar.
+  const key = perfFlags.cacheHulls ? hullKey(meshes) : '';
+  if (key) { const hit = hulls.get(key); if (hit) return hit; }
+  const made = buildHull(meshes);
+  if (made && key) {
+    made.userData.sharedKit = true; // shared by every outline using it: disposeTree leaves it alone
+    hulls.set(key, made);
+    if (hulls.size > HULL_CACHE_MAX) { const [oldest] = hulls.keys(); hulls.get(oldest)!.dispose(); hulls.delete(oldest); }
+  }
+  return made;
+}
+/** Hulls made so far, by the geometry and placement of the pieces they cover (oldest dropped past the cap). */
+const hulls = new Map<string, T.BufferGeometry>();
+export const HULL_CACHE_MAX = 192;
+export function hullCacheSize() { return hulls.size; }
+export function clearHullCache() { for (const g of hulls.values()) g.dispose(); hulls.clear(); }
+function hullKey(meshes: T.Mesh[]) {
+  let key = '';
+  for (const mesh of meshes) { mesh.updateMatrix(); key += mesh.geometry.uuid + '@' + mesh.matrix.elements.join(',') + ';'; }
+  return key;
+}
+function buildHull(meshes: T.Mesh[]) {
   const pieces = meshes.map(mesh => {
     let geometry = new T.BufferGeometry();
     geometry.setAttribute('position', mesh.geometry.getAttribute('position').clone());
