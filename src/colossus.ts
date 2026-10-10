@@ -12,7 +12,7 @@ import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage
 import { colossusContributors, grantColossusReward } from './colossus-rewards.ts';
 import { loadColossusArt, makeColossusRig, poseColossus, colossusArtReady, type ColossusRig } from './colossus-art.ts';
 import { ColossusAttackView } from './colossus-view.ts';
-import { colossusSleeps, colossusSoothed, SOOTHE_FACTOR } from './colossus-sleep.ts';
+import { colossusSleeps, colossusSoothed, SOOTHE_FACTOR, SOOTHE_HP_DIVISOR } from './colossus-sleep.ts';
 
 /** What the runtime needs from the game (main.ts wires it). */
 export interface ColossusHost {
@@ -205,10 +205,10 @@ export class ColossusEvent {
   }
 
   // ---- Offline fight ----
-  /** Solo, with the Ember Well's lid at "soothed": 1/50 of the health and of every hit (online is never weakened). */
+  /** Solo, with the Ember Well's lid at "soothed": hits 50 times lighter and a fifth of the health, about 200,000 (online is never weakened). */
   private get weak() { return !this.h.online() && colossusSoothed() ? SOOTHE_FACTOR : 1; }
   private spawnedWeak = 1;
-  private soloMaxHp() { return Math.max(1, Math.round(colossusMaxHp(1 + this.nearbyExplorers(), true) / this.weak)); }
+  private soloMaxHp() { return Math.max(1, Math.round(colossusMaxHp(1 + this.nearbyExplorers(), true) / (this.weak > 1 ? SOOTHE_HP_DIVISOR : 1))); }
   private resetDay(day: number) {
     this.day = day; this.count = 0; this.attacks = []; this.nextAt = this.time + 3; this.facing = W.facing; this.lastHits.clear(); this.killer = null;
     this.minionsUsed = []; this.announced = { kneel: false, enrage: false }; this.kneel = 0;
