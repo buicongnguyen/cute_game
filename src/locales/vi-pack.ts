@@ -1,5 +1,6 @@
 import { VI_CATALOG } from './vi-catalog.ts';
 import { ROAR_VI } from './vi-roar.ts';
+import { CAMERA_VI } from './vi-camera.ts';
 import { VI_GAMEPLAY } from './vi-gameplay.ts';
 import { VI_ONLINE } from './vi-online.ts';
 import { VI_UI } from './vi-ui.ts';
@@ -29,5 +30,6 @@ import { VI_MOBILE } from './vi-mobile.ts';
 export const VI_PACK: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS, VI_HOUSE, VI_HOUSE_TALK, VI_FRIEND_LINES, VI_LOOKS, VI_UPGRADES, VI_TESTER, VI_SKILLS, VI_GROUPS, VI_DOG_TOSS, VI_SHOP, VI_LAKE, VI_GARDEN, VI_REFUSALS, VI_RANKING, VI_FIXES, VI_BOTS, VI_ECON, VI_EXTRAS, VI_SAVE);
 Object.assign(VI_PACK, VI_GUIDE, VI_MOBILE);
 Object.assign(VI_PACK, ROAR_VI);
+Object.assign(VI_PACK, CAMERA_VI);
 /** The time words a counter may carry in a template slot (i18n.ts compileTemplates): h/m/s/p/g plus the spelled-out units. */
 export const VI_TIME_UNITS = 'h|m|s|p|g|giờ|phút|giây';

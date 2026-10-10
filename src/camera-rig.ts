@@ -20,9 +20,25 @@ export const SHADOW = { near: 10, far: 70, bias: -.0008, normalBias: .03, margin
 export function clampZoom(value: number, kind: 'wheel' | 'pinch') { const [low, high] = ZOOM[kind]; return Math.min(high, Math.max(low, value)); }
 
 /** Camera position relative to its target, for a screen aspect and zoom. */
+/**
+ * The view the player picked in Settings: the same distance, a lower pitch. Classic is the camera above, untouched.
+ * A lower camera sees further, so it draws more (docs/QUALITY-PLAN.md section 5: 48° is about free, 43° about 10-20% more work).
+ */
+export const CAMERA_VIEWS = { classic: 51.5, tilted: 47, low: 43 } as const;
+export type CameraView = keyof typeof CAMERA_VIEWS;
+let view: CameraView = 'classic';
+const viewOffset: [number, number, number] = [...CAMERA.offset];
+export const cameraView = () => view;
+export function setCameraView(next: CameraView) {
+  view = Object.hasOwn(CAMERA_VIEWS, next) ? next : 'classic';
+  if (view === 'classic') { viewOffset[1] = CAMERA.offset[1]; viewOffset[2] = CAMERA.offset[2]; return view; }
+  const distance = Math.hypot(CAMERA.offset[1], CAMERA.offset[2]), pitch = CAMERA_VIEWS[view] * Math.PI / 180;
+  viewOffset[1] = distance * Math.sin(pitch); viewOffset[2] = distance * Math.cos(pitch); return view;
+}
+
 export function cameraOffset(aspect: number, zoom = 1, out = new T.Vector3()) {
   const scale = zoom * (aspect < CAMERA.portraitAspect ? CAMERA.portraitScale : 1);
-  return out.set(CAMERA.offset[0], CAMERA.offset[1], CAMERA.offset[2]).multiplyScalar(scale);
+  return out.set(viewOffset[0], viewOffset[1], viewOffset[2]).multiplyScalar(scale);
 }
 
 /** Share of the remaining distance the camera covers in dt: 9/s while playing, 5/s in cut-scenes. */
