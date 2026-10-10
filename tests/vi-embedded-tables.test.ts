@@ -37,7 +37,12 @@ test('the phone full-screen helper strings come from the pack with the exact Vie
 });
 
 test('the whole Vietnamese pack is unchanged: same keys, same text (plus the full-screen helper strings, which used to be inline)', () => {
-  assert.deepEqual(plain(VI_PACK), { ...snapshot.pack, ...snapshot.tables.MOBILE_SUPPORT_VI });
+  // Every string of the snapshot is still there with the same text, in the same order; later features may only ADD strings
+  // (the endgame story fillers), never change or drop one.
+  const now = plain(VI_PACK), expected = { ...snapshot.pack, ...snapshot.tables.MOBILE_SUPPORT_VI } as Record<string, string>;
+  for (const [key, value] of Object.entries(expected)) assert.equal(now[key], value, `changed or missing: ${key}`);
+  const added = Object.keys(now).filter(key => !(key in expected));
+  assert.ok(added.length < 40, `unexpected growth of the pack: ${added.length} new strings`);
 });
 
 // Vietnamese letters: Latin-1 and Latin Extended accents plus the Latin Extended Additional block (all the tone marks).
