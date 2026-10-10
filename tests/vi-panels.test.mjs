@@ -3,6 +3,7 @@
 // module renderers (friends, helpers, pen, tester, dress, look shop, house, delivery,
 // difficulty) are imported directly. Item names and other data are covered by catalog tests.
 import test, {afterEach} from 'node:test';
+import {hudIcon} from '../src/hud-icons.ts';
 import assert from 'node:assert/strict';
 import {readFile,readdir} from 'node:fs/promises';
 import {registerHooks} from 'node:module';
@@ -92,7 +93,7 @@ function advancedState(){
 function mainPanels(state){
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
-  const context={...GUIDE,cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},...extraModules,M,IG,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,iconUrl:p=>'/assets/icons/'+p,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
+  const context={hudIcon,...GUIDE,cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},...extraModules,M,IG,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,iconUrl:p=>'/assets/icons/'+p,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
     HELP_TOPICS,restoreRowHtml:()=>'',saveGuard:null,activeKey:()=>'cute-game-save-v1',joystickEnabled:()=>state.settings.movePad??false,neighboursOn:()=>true,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},

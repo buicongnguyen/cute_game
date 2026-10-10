@@ -1,4 +1,5 @@
 import { t, getLanguage, onLanguageChange, type Language } from './i18n.ts';
+import { hudIcon } from './hud-icons.ts';
 
 /**
  * The news board (reference F-002): a 📰 button in the top-right menu with a red unread count, and a panel with two tabs,
@@ -80,7 +81,7 @@ export function initNewsBoard(d: NewsDeps) {
   let data: NewsData = { news: [], upcoming: [] }, tab: NewsTab = 'news', fresh = new Set<string>(), loaded = false;
   // The 📰 button sits after the journal, like the reference's menu (F-005); added here so main.ts's menu markup stays as it is.
   const menu = d.root.querySelector<HTMLElement>('#hud .top-actions'), button = document.createElement('button');
-  button.type = 'button'; button.className = 'icon-button'; button.dataset.action = 'news'; button.innerHTML = '📰<i class="news-count" hidden></i>';
+  button.type = 'button'; button.className = 'icon-button'; button.dataset.action = 'news'; button.innerHTML = hudIcon('news') + '<i class="news-count" hidden></i>';
   const label = () => { button.title = t('News'); button.setAttribute('aria-label', t('News')); };
   label(); onLanguageChange(label);
   menu?.insertBefore(button, menu.querySelector('#social-slot'));
