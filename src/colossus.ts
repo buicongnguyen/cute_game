@@ -1,5 +1,5 @@
 import * as T from 'three';
-import './colossus.css';
+// colossus.css is imported by main.ts (this module is a lazy chunk: its sheet must keep its place in the cascade)
 import { t } from './i18n.ts';
 import * as M from './model.ts';
 import type { World, Enemy } from './world.ts';
@@ -44,6 +44,8 @@ type Driven = Enemy & { driver?: { incoming(e: Enemy, amount: number, hazard: bo
 const SKY = new T.Color('#2a1420'), DUSK_SKY_LIGHT = new T.Color('#c87a6a'), DUSK_SUN = new T.Color('#ff9a62'), sky = new T.Color(), fogColor = new T.Color();
 /** The arena camera pulls back this much (× the player's zoom) near the Colossus, so more of the giant fits in view. */
 const ARENA_ZOOM = 1.4, ARENA_RANGE = 48;
+/** Closer than this (about the giant's sight, S.sight), the real model is fetched; far away the fog hides it anyway. */
+const ART_RANGE = 70;
 const BOT_PREFIX = 'bot:';
 /** A toast shows its own icon: drop the emoji a message starts with. */
 const bare = (text: string) => text.replace(/^[^\p{L}\p{N}]+\s/u, '');
@@ -60,6 +62,7 @@ export class ColossusEvent {
   private rig: ColossusRig | null = null;
   private view = new ColossusAttackView();
   private enemy: Driven | null = null;
+  private artAsked = false;
   private time = 0;
   /** Offline fight state for today's window. */
   private day = -1; private killedDay = -1; private attacks: ColossusAttack[] = []; private count = 0; private nextAt = 0; private facing: number = W.facing;
@@ -153,6 +156,7 @@ export class ColossusEvent {
     if (this.enemy && !w.enemies.includes(this.enemy)) { this.enemy = null; this.rig = null; this.minions = []; }
     this.stepPlayer(dt);
     const e = this.enemy;
+    if (e && !this.artAsked && (colossusArtReady() || Math.hypot(w.position.x - e.x, w.position.z - e.z) < ART_RANGE)) { this.artAsked = true; loadColossusArt(() => this.restyle()); }
     if (e) {
       this.rise = Math.min(1, this.rise + dt / 2.5);
       if (e.hp > 0) { if (online) this.stepOnline(dt); else this.stepOffline(dt); }
@@ -313,7 +317,7 @@ export class ColossusEvent {
     if (this.enemy && w.enemies.includes(this.enemy)) return;
     // A server snapshot may have spawned a plain creature under our id first: replace it.
     for (const old of w.enemies.filter(x => x.id === COLOSSUS_ID)) { w.enemies.splice(w.enemies.indexOf(old), 1); w.entities = w.entities.filter(x => x !== old); old.mesh.removeFromParent(); }
-    loadColossusArt(() => this.restyle());
+    this.artAsked = false; // colossus.glb (130 KB) downloads once the explorer is within ART_RANGE of the giant (step); the stand-in stands until then
     const rig = makeColossusRig(), e = w.addEntity('enemy', COLOSSUS_NAME, '👑', rig.root, W.x, W.z, S.radius) as Driven;
     e.id = COLOSSUS_ID;
     const maxHp = online ? Math.max(1, this.server?.maxHp ?? S.hp) : colossusMaxHp(1 + this.nearbyExplorers(), true), hp = online ? Math.max(0, this.server?.hp ?? maxHp) : maxHp;

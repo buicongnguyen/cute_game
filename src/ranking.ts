@@ -4,7 +4,7 @@
  * build, or not signed in) it shows the neighbourhood board, the player and the AI neighbours (ranking-logic.ts soloBoard),
  * so it is never empty. The rules live in ranking-logic.ts; this file is only the dialog.
  */
-import './ranking.css';
+// ranking.css is imported by main.ts (this module is a lazy chunk: its sheet must keep its place in the cascade)
 import type { GameBridge } from './game-bridge.ts';
 import { t, getLanguage, onLanguageChange } from './i18n.ts';
 import { FISH } from './model.ts';

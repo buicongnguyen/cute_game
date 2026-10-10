@@ -1,33 +1,11 @@
-import { VI_CATALOG } from './locales/vi-catalog.ts';
-import { VI_GAMEPLAY } from './locales/vi-gameplay.ts';
-import { VI_ONLINE } from './locales/vi-online.ts';
-import { VI_UI } from './locales/vi-ui.ts';
-import { VI_FRIENDS } from './locales/vi-friends.ts';
-import { VI_BOTS } from './locales/vi-bots.ts';
-import { VI_LOOKS } from './locales/vi-looks.ts';
-import { VI_UPGRADES } from './locales/vi-upgrades.ts';
-import { VI_HOUSE } from './locales/vi-house.ts';
-import { VI_HOUSE_TALK } from './locales/vi-house-talk.ts';
-import { VI_FRIEND_LINES } from './locales/vi-friend-lines.ts';
-import { VI_TESTER } from './locales/vi-tester.ts';
-import { VI_FIXES } from './locales/vi-fixes.ts';
-import { VI_SKILLS } from './locales/vi-skills.ts';
-import { VI_GROUPS, VI_DOG_TOSS } from './locales/vi-groups.ts';
-import { VI_SHOP } from './locales/vi-shop.ts';
-import { VI_LAKE } from './locales/vi-lake.ts';
-import { VI_GARDEN } from './locales/vi-garden.ts';
-import { VI_REFUSALS } from './locales/vi-refusals.ts';
-import { VI_RANKING } from './locales/vi-ranking.ts';
-import { VI_ECON } from './locales/vi-econ.ts';
-import { VI_EXTRAS } from './locales/vi-extras.ts';
-import { VI_GUIDE } from './locales/vi-guide.ts';
-import { VI_SAVE } from './locales/vi-save.ts';
-
 export type Language = 'en' | 'vi';
 export const LANGUAGE_KEY = 'cute-game-language';
-const vi: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS, VI_HOUSE, VI_HOUSE_TALK, VI_FRIEND_LINES, VI_LOOKS, VI_UPGRADES, VI_TESTER, VI_SKILLS, VI_GROUPS, VI_DOG_TOSS, VI_SHOP, VI_LAKE, VI_GARDEN, VI_REFUSALS, VI_RANKING, VI_FIXES, VI_BOTS, VI_ECON, VI_EXTRAS, VI_SAVE);
-Object.assign(vi, VI_GUIDE);
-const folded = new Map(Object.entries(vi).map(([key, value]) => [key.toLowerCase(), value]));
+// The Vietnamese phrases (about 250 KB of source) are a separate chunk: English players never download them, Vietnamese
+// players load them before the first screen (the top-level await below) or when they switch language (switchLanguage).
+let vi: Record<string, string> = Object.create(null);
+let folded = new Map<string, string>();
+let templates: Rule[] = [];
+let viLoading: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 const cache = new Map<string, string>();
 function initialLanguage(): Language {
@@ -38,11 +16,25 @@ let language: Language = initialLanguage();
 function documentLanguage() { if (typeof document !== 'undefined') document.documentElement.lang = language; }
 documentLanguage();
 export function getLanguage(): Language { return language; }
+/** Loads the Vietnamese phrases (once); the page re-renders through onLanguageChange when they arrive after a switch. */
+export function loadVietnamese(): Promise<void> {
+  viLoading ??= import('./locales/vi-pack.ts').then(({ VI_PACK }) => {
+    vi = VI_PACK; folded = new Map(Object.entries(VI_PACK).map(([key, value]) => [key.toLowerCase(), value])); templates = compileTemplates(VI_PACK); cache.clear();
+    if (language === 'vi') for (const listener of listeners) listener();
+  }, error => { viLoading = null; throw error; });
+  return viLoading;
+}
+/** Switches language once its phrases are in memory, so the page never shows a half-translated flash. */
+export async function switchLanguage(next: Language) {
+  if (next === 'vi') { try { await loadVietnamese(); } catch { /* Offline and uncached: setLanguage still switches; the phrases follow when the load succeeds. */ } }
+  setLanguage(next);
+}
 export function setLanguage(next: Language) {
   if (next !== 'en' && next !== 'vi') return;
   try { globalThis.localStorage?.setItem(LANGUAGE_KEY, next); } catch { /* Keep playing without storage. */ }
   if (language === next) { documentLanguage(); return; }
   language = next; cache.clear(); documentLanguage();
+  if (next === 'vi' && !viLoading) void loadVietnamese().catch(() => { /* English text stays until a later switch retries. */ });
   for (const listener of listeners) listener();
 }
 export function onLanguageChange(callback: () => void): () => void { listeners.add(callback); return () => { listeners.delete(callback); }; }
@@ -51,7 +43,8 @@ const interpolate = (value: string, params: Params) => value.replace(/\{(\w+)\}/
 const quoteRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Template matching keeps legacy generated labels localizable. Explicit parameters are
 // preferred for player text; their values are never translated or interpreted as markup.
-const templates = Object.entries(vi).filter(([key]) => /\{\w+\}/.test(key)).map(([source, target]) => {
+type Rule = { regex: RegExp; names: string[]; target: string; specificity: number };
+const compileTemplates = (table: Record<string, string>): Rule[] => Object.entries(table).filter(([key]) => /\{\w+\}/.test(key)).map(([source, target]) => {
   const names: string[] = [], parts: string[] = []; let cursor = 0;
   for (const match of source.matchAll(/\{(\w+)\}/g)) {
     const numeric = /^(amount|count|seconds|minutes|hours|days|level|ratio|cost|price|total|current|max|progress|target|chapter|rank|step|percent|defense|hp|xp|energy|stars|index|empty|beds|caught|all|need|have|gain)$/i.test(match[1]);
@@ -167,3 +160,6 @@ export function bindLanguage(root: Element): () => void {
   } };
   refresh(); return refresh;
 }
+// A Vietnamese player waits for the phrases before the first screen is drawn. Node (tests, tools) has no window and keeps the
+// old behaviour: the phrases are there when the module is.
+if (language === 'vi' || typeof window === 'undefined') { try { await loadVietnamese(); } catch { /* The game starts untranslated rather than not at all. */ } }

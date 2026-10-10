@@ -8,7 +8,7 @@ import { FishingProof } from './fishing-proof.ts';
 import '@fontsource-variable/nunito';
 import './style.css';
 import './skills.css';
-import { t, localizeHtml, getLanguage, setLanguage, onLanguageChange, bindLanguage } from './i18n.ts';
+import { t, localizeHtml, getLanguage, switchLanguage, onLanguageChange, bindLanguage } from './i18n.ts';
 import './menus.css';
 import { Box3, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
@@ -65,10 +65,11 @@ import { defeatPaysPlayer } from './safe-zone.ts';
 import { initHudLayout } from './hud-layout.ts';
 import { compileAsyncSafe } from './safe-compile.ts';
 import { fits as fitsBag } from './storage-slots.ts';
-import { initRanking } from './ranking.ts';
+import './ranking.css'; // ranking.ts itself is lazy (modes.ts); its sheet keeps its place in the cascade
 import './tab-cues.ts';
 import { initBots, neighboursOn, setNeighboursOn } from './bots.ts';
-import { ColossusEvent } from './colossus.ts';
+import type { ColossusEvent } from './colossus.ts';
+import './colossus.css';
 import { COLOSSUS_ID } from './colossus-content.ts';
 import { initPlatform, toggleFullscreen } from './platform.ts';
 import { titleCardHtml, titleOrbit, toggleProfiles } from './title-card.ts';
@@ -85,7 +86,6 @@ import { createDrops } from './drops-view.ts';
 import { Minimap } from './minimap.ts';
 import { produceLots, sellProduce, upgradeCards, cookSellPlan } from './item-views.ts';
 import { cookSellHtml, treeFertilizerNote } from './econ-ui.ts';
-import { initNewsBoard } from './news-board.ts';
 import './econ-ui.css';
 import './item-views.css';
 import { penHtml, penSignature, tickPen, collectText, dishesHtml, chosenFeed, feedChoice, type FarmUi } from './farm-ui.ts';
@@ -130,10 +130,10 @@ import { WORK_ACTIONS, CATCH_UP_ACTIONS, explorerAway } from './delivery.ts';
 import { initStoredNote } from './delivery-ui.ts';
 import * as IG from './item-groups.ts';
 import { dogMayToss, dogTossFactor, DOG_TOSS_CD } from './guard-dog.ts';
-import { initDungeon, type DungeonApi } from './dungeon.ts';
+import type { DungeonApi } from './dungeon.ts';
 import { HARVEST, SKILL_NAME_RISE } from './feel-rules.ts';
-import { initCtf, type CtfApi } from './ctf.ts';
-import { initRescue, type RescueApi } from './rescue.ts';
+import type { CtfApi } from './ctf.ts';
+import type { RescueApi } from './rescue.ts';
 
 // The HUD asks for the same ~40 elements several times a second: remember them while they stay in the page.
 const $found=new Map<string,HTMLElement>();
@@ -177,6 +177,9 @@ let dungeonApi:DungeonApi|null=null,dungeonSender:((message:Record<string,unknow
 let ctfApi:CtfApi|null=null;
 /** Rescue Call (rescue.ts): its raiders' stand-in bodies are fought locally, also online. */
 let rescueApi:RescueApi|null=null;
+/** The daily Colossus (colossus.ts), built with the other optional modes once their chunk is in (loadModes). */
+let colossus:ColossusEvent|null=null;
+let modes:typeof import('./modes.ts')|null=null,modesLoading:Promise<void>|null=null,rankingApi:{open():void}|null=null,rankingTapOff:(()=>void)|null=null;
 /**
  * Runs one intent through the shared rules (actions.ts), or the server online. A refusal comes back with its reason in
  * plain words (refusals.ts) and is shown as a toast. Two kinds stay off the screen and go to the console for developers:
@@ -1095,8 +1098,12 @@ async function finishFishingCatch(f:FishingRound){
 world.onAlert=()=>tone('alert');
 world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();minimap.invalidate();};
 stockPonds();
-// Fish models stream in after the first build; restock the ponds when they arrive.
-void fishKit.load().then(()=>{if(fishKit.ready&&!fishGame)stockPonds();});
+// fish.glb (153 KB) streams in once the explorer is within 30 m of the water's edge (or casts a line), then the ponds are restocked.
+// Ponds out of sight keep their code stand-ins and cost no download.
+{let fishKitAt=0;
+frameListeners.add(()=>{if(fishKit.requested)return;const now=performance.now();if(now<fishKitAt&&!fishGame)return;fishKitAt=now+400;
+  const p=world.position;if(!fishGame&&!world.outdoorEntities.some(e=>e.kind==='fish'&&Math.hypot(e.x-p.x,e.z-p.z)<e.radius+30))return;
+  void fishKit.load().then(()=>{if(fishKit.ready&&!fishGame)stockPonds();});});}
 // The Blender explorer, gear and pets stream in after the world is playable.
 // Gear and pet files load on demand as the explorer puts them on (see World.kitFor).
 void heroKit.load().then(()=>{if(heroKit.ready)world.refreshAvatars();});
@@ -1295,12 +1302,6 @@ world.onDecoyDamage=(owner,id,amount,source,enemyId)=>{
   if(network.role){if(network.role==='host'&&enemyId)network.reportDecoy?.(owner,id,enemyId,source);return;}
   if(owner===null)combat.hurtAlly(id,amount);
 };
-// The daily world boss (colossus.ts): offline it runs here on the local clock, online it mirrors the server's.
-const colossus=new ColossusEvent({world,state:()=>state,online:()=>!!actionHandler,playing:()=>started&&!visiting&&!flight,
-  defence:()=>M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),hurt:amount=>world.onDamage(amount,'melee',COLOSSUS_ID),
-  change,toast,floating:(text,x,z,style)=>floating(text,x,z,style),spawnLoot:(loot,x,z)=>drops.spawnLoot(loot,x,z),tone:kind=>tone(kind as Parameters<typeof tone>[0]),hud:$('#hud')});
-if(new URLSearchParams(location.search).get('colossus')==='1')colossus.start();
-$('#colossus-banner')?.addEventListener('click',()=>document.body.classList.toggle('guide-colossus-fold')); // a tap folds the banner to a chip (guide.css)
 watchTabScroll($('#dialog-body'));
 const gardenGuide=mountGardenGuide({world,hud:$('#hud'),state:()=>state,bedAt:i=>M.bedPosition(state,i),active:()=>started&&!uiBlocked()&&!visiting&&!world.interior&&state.hp>0&&world.state===state&&world.planet==='home'});frameListeners.add(dt=>gardenGuide.frame(dt));
 world.onEnvironmentEvent=event=>{if(event.message)toast(event.message,'🌍');save();updateHud();};
@@ -1361,7 +1362,7 @@ export const gameBridge:GameBridge={
     world.refreshPlayer();$('#visit-banner').hidden=!owner;$('#visit-banner').textContent=t(owner?t('Visiting {owner} · look around their garden',{owner}):'');updateLabels();
   },
   showNotice:message=>toast(message),
-  colossusRally:()=>colossus.rally(),colossusStrike:(id,damage)=>colossus.botStrike(id,damage),
+  colossusRally:()=>colossus?.rally()??null,colossusStrike:(id,damage)=>colossus?.botStrike(id,damage),
   botHit:(id,damage)=>{const e=world.enemies.find(x=>x.id===id);if(!botActive()||visiting||!e||e.hp<=0||!Number.isFinite(damage)||damage<=0)return;world.damageEnemy(e,damage,0,false);},
   ownsItem:id=>(state.bag[id]||0)>0||(state.chest[id]||0)>0||Object.values(state.gear).includes(id),
   grantGift:gift=>{
@@ -1699,7 +1700,7 @@ function refreshDocumentLanguage(){
   document.querySelector('meta[name="description"]')?.setAttribute('content',t('A cozy little 3D world. Plant a garden, catch fish, battle monsters, and explore new planets.'));
 }
 refreshDocumentLanguage();
-app.addEventListener('change',event=>{const input=event.target;if(input instanceof HTMLSelectElement&&input.hasAttribute('data-language'))setLanguage(input.value==='vi'?'vi':'en');if(input instanceof HTMLSelectElement&&input.hasAttribute('data-feed-choice'))feedChoice.id=input.value;});
+app.addEventListener('change',event=>{const input=event.target;if(input instanceof HTMLSelectElement&&input.hasAttribute('data-language'))void switchLanguage(input.value==='vi'?'vi':'en');if(input instanceof HTMLSelectElement&&input.hasAttribute('data-feed-choice'))feedChoice.id=input.value;});
 onLanguageChange(()=>{
   refreshStaticLanguage();refreshWorldLanguage();refreshDocumentLanguage();
   app.querySelectorAll<HTMLSelectElement>('[data-language]').forEach(input=>{input.value=getLanguage();});
@@ -1709,30 +1710,54 @@ onLanguageChange(()=>{
   else if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal==='shop')shop();else if(modal==='sell')market();else if(modal==='chest')storage();else if(modal==='upgrade')upgrades();else if(modal==='cook')cooking();else if(modal==='craft')crafting();else if(modal==='forge')forgeMenu();else if(modal==='decor')decorations();else if(modal==='map')map();else if(modal==='travel')planets();else if(modal==='help')help();else if(modal==='pen')penDialog();else if(modal==='helper')helperDialog();else if(modal==='farm-helper')farmHelperDialog();
 });
 initOnline(gameBridge);
-initRanking(gameBridge); // the 🏆 leaderboard (ranking.ts)
-// The 📰 news board (news-board.ts): its menu button, unread count and the panel that opens itself once for new updates.
-const newsBoard=initNewsBoard({openDialog,idle:()=>started&&!modal&&!uiBlocked(),root:app,url:`${import.meta.env.BASE_URL}news.json`});
 initHudLayout();
 const neighbours=initBots(gameBridge);if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__bots:neighbours});
+// The optional modes (the Vault, Flag Rush, Rescue Call, the daily Colossus, the leaderboard and the news board) are one lazy chunk
+// (modes.ts): fetched at idle shortly after the title is up (Play never waits for it and does not start it: mounting is a long task) and by a tap on their own HUD buttons, and
+// mounted exactly as they used to be at start-up (the portals stand 25 m or more from the start, so they are in place before anyone can walk to one).
+function loadModes():Promise<void>{
+  return modesLoading??=import('./modes.ts').then(m=>{modes=m;mountModes(m);},error=>{modesLoading=null;throw error;});
+}
+function mountModes(m:typeof import('./modes.ts')){
+// The daily world boss (colossus.ts): offline it runs here on the local clock, online it mirrors the server's.
+colossus=new m.ColossusEvent({world,state:()=>state,online:()=>!!actionHandler,playing:()=>started&&!visiting&&!flight,
+  defence:()=>M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),hurt:amount=>world.onDamage(amount,'melee',COLOSSUS_ID),
+  change,toast,floating:(text,x,z,style)=>floating(text,x,z,style),spawnLoot:(loot,x,z)=>drops.spawnLoot(loot,x,z),tone:kind=>tone(kind as Parameters<typeof tone>[0]),hud:$('#hud')});
+if(new URLSearchParams(location.search).get('colossus')==='1')colossus.start();
+$('#colossus-banner')?.addEventListener('click',()=>document.body.classList.toggle('guide-colossus-fold')); // a tap folds the banner to a chip (guide.css)
+rankingApi=m.initRanking(gameBridge);rankingTapOff?.(); // the 🏆 leaderboard (ranking.ts)
+// The 📰 news board (news-board.ts): its menu button, unread count and the panel that opens itself once for new updates.
+m.initNewsBoard({openDialog,idle:()=>started&&!modal&&!uiBlocked(),root:app,url:`${import.meta.env.BASE_URL}news.json`});
 // The Delvers' Vault (dungeon.ts): the keeper and circle by the south gate, the five-room co-op dungeon.
-dungeonApi=initDungeon({world,state:()=>state,started:()=>started,blocked:uiBlocked,visiting:()=>!!visiting,online:()=>!!actionHandler,
+dungeonApi=m.initDungeon({world,state:()=>state,started:()=>started,blocked:uiBlocked,visiting:()=>!!visiting,online:()=>!!actionHandler,
   perform:(type,payload,quiet=false)=>perform(type,payload,{quiet}),toast,tone:kind=>tone(kind as Sound),openDialog,closeDialog,
   neighbours:()=>({cast:neighbours.cast.map(d=>({id:d.id,name:d.name,level:d.level,color:d.color,gear:d.gear as Record<string,string|undefined>,pets:d.pets})),isFriend:id=>Object.hasOwn(neighbours.store().friends,id)}),
   attack:()=>M.attack(state),maxHp:()=>M.maxHp(state),hitEnemy:(e,amount)=>hit(e,amount,0,{amount,critical:false,stun:0,lift:0,knock:0,direction:{x:0,z:0},helper:true}),updateHud,save,onFrame:listener=>{frameListeners.add(listener);}});
 dungeonApi.setSender(dungeonSender);
 if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__vault:dungeonApi});
 // The Multiworld Gate (ctf.ts): Gatekeeper Orrin by the south gate and Flag Rush against an AI team.
-ctfApi=initCtf({world,state:()=>state,started:()=>started,blocked:uiBlocked,visiting:()=>!!visiting,online:()=>!!actionHandler,
+ctfApi=m.initCtf({world,state:()=>state,started:()=>started,blocked:uiBlocked,visiting:()=>!!visiting,online:()=>!!actionHandler,
   perform:(type,payload,quiet=false)=>perform(type,payload,{quiet}),toast,tone:kind=>tone(kind as Sound),openDialog,closeDialog,
   neighbours:()=>({cast:neighbours.cast.map(d=>({id:d.id,name:d.name,level:d.level,color:d.color,gear:d.gear as Record<string,string|undefined>,pets:d.pets}))}),
   attack:()=>M.attack(state),maxHp:()=>M.maxHp(state),updateHud,refreshPlayer:()=>world.refreshPlayer(),onFrame:listener=>{frameListeners.add(listener);}});
 if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__ctf:ctfApi});
 // Rescue Call (rescue.ts): SOS calls, the portal by the south square and Hold the Line tower defence with the squad.
-rescueApi=initRescue({world,state:()=>state,started:()=>started,blocked:uiBlocked,visiting:()=>!!visiting,online:()=>!!actionHandler,
+rescueApi=m.initRescue({world,state:()=>state,started:()=>started,blocked:uiBlocked,visiting:()=>!!visiting,online:()=>!!actionHandler,
   perform:(type,payload,quiet=false)=>perform(type,payload,{quiet}),toast,tone:kind=>tone(kind as Sound),openDialog,closeDialog,
   neighbours:()=>neighboursOn()?({cast:neighbours.cast.map(d=>({id:d.id,name:d.name,level:d.level,color:d.color,gear:d.gear as Record<string,string|undefined>}))}):null,
   attack:()=>M.attack(state),maxHp:()=>M.maxHp(state),updateHud,refreshPlayer:()=>world.refreshPlayer(),onFrame:listener=>{frameListeners.add(listener);},combatTimers,skillDurations});
 if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__rescue:rescueApi});
+}
+{
+  const prefetchModes=()=>{if(!modes)void loadModes().catch(()=>{/* Offline and uncached: Play and the next tap try again. */});};
+  if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)prefetchModes(); // the dev hooks (window.__vault, __ctf, __rescue, __zoo.colossus) exist as soon as the page does
+  else setTimeout(()=>{if(typeof requestIdleCallback==='function')requestIdleCallback(prefetchModes,{timeout:4000});else prefetchModes();},2000);
+  addEventListener('online',prefetchModes);
+  // A tap on the leaderboard button before its chunk has arrived waits for it (the module binds its own click handler on mount).
+  const rankingTap=()=>{if(!modes)void loadModes().then(()=>rankingApi?.open()).catch(()=>{});};
+  $('#hud [data-action="ranking"]')?.addEventListener('click',rankingTap);
+  rankingTapOff=()=>$('#hud [data-action="ranking"]')?.removeEventListener('click',rankingTap);
+}
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,colossus,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{world,get colossus(){return colossus;},panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

@@ -537,7 +537,7 @@ export function initCtf(h: CtfHooks) {
   function homeFrame(dt: number) {
     if (world.planet !== 'home' || world.interior || h.visiting() || !keeper) { keeperTag.hidden = bubble.hidden = true; return; }
     const p = world.position, K = GATE.keeper, d = Math.hypot(p.x - K.x, p.z - K.z);
-    if (d < 40) requestKit();
+    if (d < 22) requestKit(); // ctf.glb (63 KB): fetched only when the keeper is about to come into view
     const swirl = gateMesh?.getObjectByName('swirl'); if (swirl) swirl.rotation.z -= dt * 1.6;
     if (gateMesh && d < 30 && Math.random() < dt * 6) world.fx?.burst({ x: GATE.gate.x + (Math.random() - .5) * 3, z: GATE.gate.z }, { n: 1, color: ['#a86aff', '#6af0ff', '#ffffff'], glow: true, size: .12, speed: .6, up: 3, y: 1 + Math.random() * 3, life: .9, gravity: -1 });
     if (d < 10) { const target = Math.atan2(p.x - K.x, p.z - K.z), cur = keeper.mesh.rotation.y; keeper.mesh.rotation.y = cur + Math.atan2(Math.sin(target - cur), Math.cos(target - cur)) * Math.min(1, dt * 3); }

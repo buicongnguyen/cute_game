@@ -149,13 +149,16 @@ export function initRescue(h: RescueHooks) {
     h.toast(`${t('An SOS from {planet}!', { planet: planetName(mission) })} ${t('{friend} needs help! A rescue portal opened by the south square.', { friend: t(md.friend) })}`, '📯');
     h.tone('alert'); decorateHome();
   }
+  /** rescue.glb (80 KB) is fetched when the explorer comes within KIT_RANGE of the portal, or for a briefing or mission; the code stand-in stands until then. */
+  let kitHooked = false;
+  const KIT_RANGE = 28;
+  const requestKit = () => { if (kitHooked) return; kitHooked = true; void rescueKit.load().then(() => { if (!session) decorateHome(); }); };
   function decorateHome() {
     if (portal) { const p = portal; world.entities = world.entities.filter(e => e !== p); retire(p.mesh); world.obstacles = world.obstacles.filter(o => o.tag !== 'rescue-portal'); }
     portal = null; portalMesh = null;
     if (world.planet !== 'home' || session || world.interior) return;
     const P = RESCUE.portal, inWay = (p: { x: number; z: number }) => Math.hypot(p.x - P.x, p.z - P.z) < 3.2;
     const kept = world.decor.filter(p => !inWay(p)); if (kept.length !== world.decor.length) { world.decor = kept; world.obstacles = world.obstacles.filter(o => !inWay(o)); world.refreshScenery(); }
-    if (!rescueKit.requested) void rescueKit.load().then(() => { if (!session) decorateHome(); });
     portalMesh = buildPortal(); portalMesh.rotation.y = -.25;
     portal = world.addEntity('rescue-portal', 'Rescue portal', '📯', portalMesh, P.x, P.z, 2.2);
     for (const s of [-1, 1]) world.obstacles.push({ x: P.x + s * 2.3, z: P.z, r: .45, tag: 'rescue-portal' } as World['obstacles'][number]);
@@ -176,7 +179,7 @@ export function initRescue(h: RescueHooks) {
   const defaultPicks = () => candidates().slice(0, RESCUE.maxSquad - 1).map(c => c.id);
   function togglePick(id: string) { if (!briefing) return; const i = briefing.picks.indexOf(id); if (i >= 0) briefing.picks.splice(i, 1); else if (briefing.picks.length < RESCUE.maxSquad - 1) briefing.picks.push(id); }
   function openBriefing() {
-    if (!briefing) return; void rescueKit.load();
+    if (!briefing) return; requestKit();
     const md = MISSIONS[briefing.mission], list = candidates(), st = h.state();
     const roles = new Map<EnemyRole, string>(); for (const w of md.waves) for (const g of w.groups) if (g.role !== 'boss' && md.kinds[g.role]) roles.set(g.role, md.kinds[g.role]!);
     const boss = md.kinds.boss ? enemyName(md.kinds.boss) : '';
@@ -200,7 +203,7 @@ export function initRescue(h: RescueHooks) {
     if (session || world.interior || world.planet !== 'home' || h.visiting()) return false;
     if (recoveryLeft()) { h.toast(recoveryText(), '⏳'); openBriefing(); return false; }
     if (!isMission(mission) || !open().includes(mission)) { h.toast(t('Locked: level {n}', { n: MISSIONS[mission]?.level ?? 1 }), '🔒'); return false; }
-    void rescueKit.load();
+    requestKit();
     const orient = o ?? chooseOrientation(innerWidth, innerHeight), wide = wideScreen(orient, innerWidth);
     const pool = candidates(), chosen = picks.map(id => pool.find(c => c.id === id)).filter((c): c is Candidate => !!c).slice(0, RESCUE.maxSquad - 1);
     const roles = spreadRoles(chosen.map(c => c.role));
@@ -602,6 +605,7 @@ export function initRescue(h: RescueHooks) {
   function homeFrame(dt: number) {
     if (!portal || world.planet !== 'home' || world.interior || h.visiting()) { bubble.hidden = true; return; }
     const P = RESCUE.portal, d = Math.hypot(world.position.x - P.x, world.position.z - P.z);
+    if (d < KIT_RANGE) requestKit();
     const swirl = portalMesh?.getObjectByName('swirl'); if (swirl) swirl.rotation.z += dt * 2.2;
     if (d < 30 && Math.random() < dt * 7) world.fx?.burst({ x: P.x + (Math.random() - .5) * 3, z: P.z }, { n: 1, color: ['#ff8a4d', '#ffd23f', '#ffffff'], glow: true, size: .12, speed: .6, up: 3, y: 1 + Math.random() * 3, life: .9, gravity: -1 });
     const scr = world.screen(P.x, 4.8, P.z), show = scr.visible && d < 34 && !h.blocked();

@@ -820,10 +820,15 @@ export class World {
     if(def.boss){g.scale.setScalar(1.85);g.add(cyl('#ffda5a',.36,.3,.28,0,2.1,0,5));}
     return g;
   }
+  /** titans.glb (227 KB) downloads once a titan stands within 45 m of the explorer (or a titan gear piece is worn: kitFor); its code stand-in stands until then. */
+  private wantTitanKit(){
+    if(titanKit.requested||typeof document==='undefined')return;const p=this.position;
+    for(const e of this.enemies)if(Object.hasOwn(TITANS,e.type??'')&&Math.hypot(e.x-p.x,e.z-p.z)<45){void titanKit.load().then(()=>{if(titanKit.ready){this.restyleCreatures();this.refreshAvatars();}});return;}
+  }
   /** A creature's drawn model: its creatures.glb art once that has loaded (creature-art.ts), else the procedural shapes. */
   private enemyModel(type:string,def:EnemyDefinition){
     if(!creatureKit.requested&&typeof document!=='undefined')void creatureKit.load().then(()=>{if(creatureKit.ready)this.restyleCreatures();});
-    const titan=Object.hasOwn(TITANS,type);if(titan&&!titanKit.requested&&typeof document!=='undefined')void titanKit.load().then(()=>{if(titanKit.ready){this.restyleCreatures();this.refreshAvatars();}});
+    const titan=Object.hasOwn(TITANS,type); // titans.glb is fetched by wantTitanKit once one is near
     const art=titan?titanArt(type as TitanId):creatureArt(type);
     // Plain body parts become one or two meshes; named parts (legs, wings, shell) keep animating on their own.
     const model=art??bakeModel(titan?titanFallback(type as TitanId):this.speciesModel(def),{deep:false,keep:o=>!!o.name}),flash:LitMaterial[]=[];
@@ -1682,6 +1687,7 @@ export class World {
     if(simulateWorld&&this.networkRole!=='peer')this.refreshDecoys();
     if(simulateWorld&&this.networkRole!=='peer')for(const enemy of [...this.enemies]){if(!this.enemies.includes(enemy))break;this.updateEnemyAi(enemy,dt);}
     if(this.environment!==environmentForFrame)return;
+    this.wantTitanKit();
     if(simulateWorld&&this.networkRole!=='peer')this.separateCreatures();
     if(simulateWorld&&this.networkRole==='peer')for(const enemy of this.enemies)this.updateTitanAttacks(enemy,dt,false);
     // Indoors the outdoor scene is not drawn: posing every creature there was a third of the cottage's frame on slow phones.

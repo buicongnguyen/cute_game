@@ -122,7 +122,7 @@ export function initDungeon(h: DungeonHooks) {
   function lobbyFrame(dt: number) {
     const s = h.state(), p = world.position, home = world.planet === 'home' && !world.interior && !h.visiting() && h.started();
     const here = home && inLobby(p) && s.hp > 0, left = runsLeft(s, Date.now());
-    if (home && Math.hypot(p.x - DUNGEON.lobby.x, p.z - DUNGEON.lobby.z) < 45) requestKit();
+    if (home && Math.hypot(p.x - DUNGEON.lobby.x, p.z - DUNGEON.lobby.z) < 26) requestKit(); // dungeon.glb (275 KB): fetched only when the circle is about to come into view
     if (h.online()) {
       const info = lobbyOnline; lobbyPanel.hidden = !(here && (info || left <= 0));
       if (!lobbyPanel.hidden) setLobby(left <= 0 ? null : info, left);
