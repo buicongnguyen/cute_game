@@ -7,9 +7,9 @@ import type { EnemyDefinition } from './enemy-types.ts';
 import { terrainHeight } from './environments.ts';
 import { planetLight } from './toon.ts';
 import { cameraOffset } from './camera-rig.ts';
-import { COLOSSUS_ID, COLOSSUS_MINIONS, COLOSSUS_MINION_SHARD, COLOSSUS_NAME, COLOSSUS_SCHEDULE as W, COLOSSUS_STATS as S, COLOSSUS_TYPE, clockText, colossusClock, colossusMaxHp, NEIGHBOUR_HIT_CAP } from './colossus-content.ts';
+import { COLOSSUS_ID, COLOSSUS_MINIONS, COLOSSUS_MINION_SHARD, COLOSSUS_NAME, COLOSSUS_SCHEDULE as W, COLOSSUS_STATS as S, COLOSSUS_TYPE, clockText, colossusClock, colossusMaxHp, NEIGHBOUR_HIT_CAP, roarHours } from './colossus-content.ts';
 import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage, colossusSkill, colossusTelegraphs, headMultiplier, headPoint, sanitizeColossusAttack, stepColossusAttack, throughDefence, type ColossusAttack, type ColossusEffect, type ColossusHit, type ColossusSource } from './colossus-patterns.ts';
-import { colossusContributors, grantColossusReward } from './colossus-rewards.ts';
+import { colossusContributors, grantColossusReward, grantRoarBonus } from './colossus-rewards.ts';
 import { loadColossusArt, makeColossusRig, poseColossus, colossusArtReady, type ColossusRig } from './colossus-art.ts';
 import { ColossusAttackView } from './colossus-view.ts';
 import { colossusSleeps, colossusSoothed, SOOTHE_FACTOR, SOOTHE_HP_DIVISOR } from './colossus-sleep.ts';
@@ -380,9 +380,11 @@ export class ColossusEvent {
     this.killedDay = this.window(now).day; try { if (this.killedDay >= 0) localStorage.setItem('zoo-colossus-killed', String(this.killedDay)); } catch { /* a private window forgets it */ }
     this.crumble();
     if (helpers.includes('local')) {
-      const lastHit = this.killer === 'local', loot = this.h.change(() => grantColossusReward(this.h.state(), lastHit, Math.random, false));
+      const lastHit = this.killer === 'local', roar = roarHours(now).active; let extraXp = 0;
+      // Roar hour bonus (+25% EXP and loot counts): solo/offline only, this method returns early online (server-authoritative).
+      const loot = this.h.change(() => { const l = grantColossusReward(this.h.state(), lastHit, Math.random, false); if (roar) extraXp = grantRoarBonus(this.h.state(), l); return l; });
       this.h.spawnLoot(loot, e.x - 6, e.z);
-      this.h.floating(`+${S.xp} EXP`, e.x - 6, e.z, 'xp');
+      this.h.floating(extraXp ? t('+{xp} EXP (roar hour)', { xp: S.xp + Math.round(extraXp) }) : `+${S.xp} EXP`, e.x - 6, e.z, 'xp');
       this.h.world.fx?.orbs({ x: e.x, z: e.z }, 8, '#7ff0ff', () => this.h.world.position, () => this.h.tone('coin'));
       if (lastHit) this.h.toast(bare(t('👑 You landed the FINAL BLOW! Little Cinderpeak joins you.')), '👑');
       else this.h.toast(t('A neighbour landed the final blow. Your share of the spoils is on the ground.'), '🎁');
@@ -447,11 +449,18 @@ export class ColossusEvent {
     const hp = e && e.hp > 0 ? e.hp / e.maxHp : (online && s?.maxHp ? (s.hp ?? 0) / s.maxHp : 1);
     // Close by, the boss bar already shows its health: the banner steps back (hidden on phones, no meter on desktop).
     const bar = document.getElementById('boss-bar'), near = mode === 'awake' && !!bar && !bar.hidden && !!e && Math.hypot(this.h.world.position.x - e.x, this.h.world.position.z - e.z) < 36;
-    const key = `${mode}|${near}|${Math.ceil(left / 1000)}|${Math.round(hp * 1000)}`;
+    // Roar hours (bonus hours on top of our long window): an extra line while one is on, else the next local start inside the window.
+    // Online the bonus itself is not paid (the server decides rewards), so the line only announces the hour.
+    const roar = roarHours(now); let roarLine = '';
+    if (mode === 'awake') {
+      if (roar.active) roarLine = online ? t('Roar hour is on') : t('Roar hour: +25% EXP and spoils');
+      else if (roar.next < clock.endsAt) roarLine = t('Roar hour at {time}', { time: new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(roar.next) });
+    }
+    const key = `${mode}|${near}|${Math.ceil(left / 1000)}|${Math.round(hp * 1000)}|${roarLine}`;
     if (key === this.bannerKey) return; this.bannerKey = key;
     this.banner.hidden = mode === 'none'; this.banner.className = 'colossus-banner ' + mode + (near ? ' near' : '');
     if (mode === 'soon') this.banner.innerHTML = `<span class="cb-icon">⏳</span><span class="cb-text"><b>${t('The Cinderpeak Colossus wakes at 08:00')}</b><small>${t('in {time}', { time: clockText(left) })}</small></span>`;
-    else if (mode === 'awake') this.banner.innerHTML = `<span class="cb-icon">🌋</span><span class="cb-text"><b>${t(COLOSSUS_NAME)}</b><small>${t('Redrock Canyon · until 24:00')} · ${clockText(left)}</small><span class="boss-meter cb-meter"><i style="width:${(hp * 100).toFixed(1)}%"></i></span></span><span class="cb-pct">${Math.ceil(hp * 100)}%</span>`;
+    else if (mode === 'awake') this.banner.innerHTML = `<span class="cb-icon">🌋</span><span class="cb-text"><b>${t(COLOSSUS_NAME)}</b><small>${t('Redrock Canyon · until 24:00')} · ${clockText(left)}</small>${roarLine ? `<small class="cb-roar">🦖 ${roarLine}</small>` : ''}<span class="boss-meter cb-meter"><i style="width:${(hp * 100).toFixed(1)}%"></i></span></span><span class="cb-pct">${Math.ceil(hp * 100)}%</span>`;
     else if (mode === 'done') this.banner.innerHTML = `<span class="cb-icon">🏆</span><span class="cb-text"><b>${t(COLOSSUS_NAME)}</b><small>${t('Defeated today · back tomorrow at 08:00')}</small></span>`;
   }
 }

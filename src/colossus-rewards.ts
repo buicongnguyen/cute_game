@@ -1,6 +1,6 @@
 // Who gets what when the Colossus falls. Shared by the browser (offline) and the server (online rooms).
 import * as M from './model.ts';
-import { COLOSSUS_STATS, COLOSSUS_TYPE } from './colossus-content.ts';
+import { COLOSSUS_STATS, COLOSSUS_TYPE, ROAR_BONUS, roarBonusCount } from './colossus-content.ts';
 
 export const COLOSSUS_PET = 'pet_colossus';
 /**
@@ -22,4 +22,16 @@ export function grantColossusReward(s: M.SaveState, lastHit: boolean, rng: () =>
   M.recordEvent(s, 'colossus');
   if (lastHit && M.stowItem(s, COLOSSUS_PET, 1)) loot.pet = COLOSSUS_PET;
   return loot;
+}
+
+/**
+ * Roar hour bonus for the offline/solo kill only (colossus.ts defeated()); the online server never calls this, so online
+ * the roar hour is a banner only. Adds 25% of the Colossus's EXP and grows every loot stack by roarBonusCount (mutates `loot`).
+ * Returns the extra EXP granted.
+ */
+export function grantRoarBonus(s: M.SaveState, loot: { id: string; count: number }[], rng: () => number = Math.random) {
+  const extra = COLOSSUS_STATS.xp * ROAR_BONUS;
+  M.gainXp(s, extra);
+  for (const item of loot) item.count += roarBonusCount(item.count, rng);
+  return extra;
 }

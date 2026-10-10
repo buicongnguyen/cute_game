@@ -90,3 +90,33 @@ export const colossusMaxHp = (players: number, solo = false) => Math.round(COLOS
 export const SOLO_HP_SHARE = 1 / 3;
 /** The most one AI neighbour's blow can take off the Colossus (offline; was 400). */
 export const NEIGHBOUR_HIT_CAP = 1200;
+
+// ---- Roar hours (added 2026-10-10; the reference now wakes its Colossus at 02:00, 12:00 and 19:00 UTC for an hour each) ----
+// Our own long daily window (COLOSSUS_SCHEDULE, 08:00-24:00 UTC+7) is unchanged. Roar hours only sit on top of it as a bonus.
+export const ROAR_HOURS_UTC = [2, 12, 19] as const;
+export const ROAR_DURATION_MS = 3600000;
+/** +25% EXP and +25% of every loot stack's count, solo (offline) only: the online path is server-authoritative and unchanged. */
+export const ROAR_BONUS = .25;
+export interface RoarHours { active: boolean; startsAt: number; endsAt: number; next: number }
+/**
+ * The three UTC roar windows at `now` (ms since epoch). Start inclusive, end exclusive: 12:00:00.000 is in, 13:00:00.000 is out.
+ * `startsAt`/`endsAt` are the current window when `active`, else the coming one; `next` is the start of the first window
+ * that begins strictly after `now` (the one after the current window when active). Day wrap: after 19:00 the next is 02:00 tomorrow.
+ */
+export function roarHours(now: number): RoarHours {
+  const dayMs = 86400000, day = Math.floor(now / dayMs) * dayMs;
+  const starts: number[] = [];
+  for (let d = -1; d <= 1; d++) for (const h of ROAR_HOURS_UTC) starts.push(day + d * dayMs + h * 3600000);
+  const cur = starts.find(s => now >= s && now < s + ROAR_DURATION_MS);
+  const upcoming = starts.find(s => s > now)!;
+  const startsAt = cur ?? upcoming;
+  return { active: cur !== undefined, startsAt, endsAt: startsAt + ROAR_DURATION_MS, next: upcoming };
+}
+/**
+ * Roar bonus on a loot list: each stack gains floor(count x 25%), plus 1 more with the fractional part as its chance
+ * (a stack of 1 therefore has a 25% chance of +1, never more). `rng` is injectable so tests are deterministic.
+ */
+export function roarBonusCount(count: number, rng: () => number = Math.random) {
+  const exact = Math.max(0, count) * ROAR_BONUS, whole = Math.floor(exact);
+  return whole + (rng() < exact - whole ? 1 : 0);
+}

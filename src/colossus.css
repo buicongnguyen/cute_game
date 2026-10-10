@@ -25,6 +25,7 @@
 .colossus-banner .cb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
 .colossus-banner b { font-size: var(--t-sm); color: #ffd27a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .colossus-banner small { font-size: var(--t-xs); font-weight: 800; color: #ffe9d6; opacity: .92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.colossus-banner .cb-roar { color: #ffb347; }
 .colossus-banner .cb-meter { height: 12px; margin-top: 3px; }
 .colossus-banner .cb-meter > i { background: linear-gradient(90deg, #ffd24a, #ff6a10 55%, #d4202a); }
 .colossus-banner .cb-pct { flex: none; font-weight: 1000; font-size: var(--t-sm); color: #ffd27a; font-variant-numeric: tabular-nums; }
