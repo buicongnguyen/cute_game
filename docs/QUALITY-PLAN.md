@@ -98,6 +98,17 @@ Optional and off by default: a "Fancy effects" switch for strong PCs (glow, a sl
 
 Done when: before-and-after pictures of the village, the wilds and three planets are clearly better, and the gate passes.
 
+**Built on the `dev-light` branch (2026-10-11), not yet merged.** The code is `src/look.ts`; `perfFlags.richLook` switches it off for a before and after.
+
+- Colour curve: a few multiply-adds inside the shaders that already draw (three's custom tone-mapping slot), no extra pass. More contrast and saturation, and a soft roll-off so sunlit surfaces no longer clip to pastel. The interface's own small pictures (item icons, the mirror) do not use it and did not change.
+- A light setup per planet: sun colour and direction, sky light, fog and sky colours for all nine.
+- Sky gradient: drawn only while sky can be on screen. With today's steep camera that is almost never, so it costs nothing in normal play. It is ready for a lower camera (stage 7).
+- Ground: deeper colours, broad light and dark drifts, shade under trees and rocks, lusher banks round ponds, worn earth along trails and in the village, glow beside lava and night flowers. Same triangles.
+- Night Planet: the dark overlay went from 93% to 61% opaque, fog starts further away, small plants glow, and a pool of light follows the explorer. The pool is as wide as the explorer can see, so the Light buff visibly more than doubles it. Creatures outside the light stay hidden, as before.
+- Soft shading on models: a cheap version is baked once when scenery and buildings load (darker near the ground and under overhangs, lighter at the top). True ray-traced shading baked in Blender was skipped: it would add a colour channel to every model file and so grow the download.
+- Speed: draw calls and triangles are unchanged (the scenery is the same 665,198 triangles in the same batches with the look off and on). The Night Planet draws one more small mesh.
+- Not done: the optional "Fancy effects" switch.
+
 ### Stage 2. Our own village and screen layout
 
 - A new hub shape of our own in place of the fenced circle, for example a terraced village built around the Ember Well, with redesigned silhouettes for the well, fountain, stall and launch pad.

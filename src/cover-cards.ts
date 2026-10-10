@@ -50,7 +50,7 @@ function averageColor(parts: KitPart[]) {
 }
 
 /** Renders every cover kind into one atlas with the given renderer, restoring its state afterwards. */
-export function bakeCoverAtlas(renderer: T.WebGLRenderer, kinds: readonly string[], parts: (type: string) => KitPart[]): CoverAtlas {
+export function bakeCoverAtlas(renderer: T.WebGLRenderer, kinds: readonly string[], parts: (type: string) => KitPart[], glow = 0): CoverAtlas {
   const count = kinds.length * CARD.turns.length, columns = Math.ceil(Math.sqrt(count)), size = T.MathUtils.ceilPowerOfTwo(columns * CARD.cell);
   const target = new T.WebGLRenderTarget(size, size, { generateMipmaps: true, minFilter: T.LinearMipmapLinearFilter, magFilter: T.LinearFilter });
   const scene = new T.Scene(), camera = new T.OrthographicCamera(-1, 1, 1, -1, .1, 40), cells: CoverAtlas['cells'] = new Map(), temporary: T.Material[] = [];
@@ -85,13 +85,15 @@ export function bakeCoverAtlas(renderer: T.WebGLRenderer, kinds: readonly string
   renderer.autoClear = saved.autoClear; renderer.setClearColor(saved.color, saved.alpha); renderer.shadowMap.autoUpdate = saved.shadows;
   renderer.setRenderTarget(saved.target);
   temporary.forEach(m => m.dispose());
-  const material = cardMaterial(target.texture, CARD.cell / size);
+  const material = cardMaterial(target.texture, CARD.cell / size, glow);
   return { cells, cellUv: CARD.cell / size, material, texture: target.texture, target, dispose() { material.dispose(); target.dispose(); } };
 }
 
-function cardMaterial(map: T.Texture, cellUv: number) {
+function cardMaterial(map: T.Texture, cellUv: number, glow = 0) {
   // Toon-lit like the ground under it (RC-05), so a card matches the grass around it.
   const material = new T.MeshToonMaterial({ map, alphaTest: CARD.alphaTest, gradientMap: TOON_RAMP });
+  // On the Night Planet the plants give off their own colour as light (the same texture, read once more).
+  if (glow > 0) { material.emissive.setScalar(glow); material.emissiveMap = map; }
   material.userData.sharedKit = true;
   material.onBeforeCompile = shader => {
     shader.uniforms.cardTime = time; shader.uniforms.cardUp = { value: cardUp }; shader.uniforms.cellUv = { value: cellUv };
@@ -111,7 +113,7 @@ function cardMaterial(map: T.Texture, cellUv: number) {
         // Only the upper part bends, more at the tip; neighbours sway a little out of step.
         `transformed.x += sin(cardTime * 1.9 + cardRoot.x * .35 + cardRoot.z * .27 + aCell.z) * ${CARD.sway.toFixed(3)} * cardV * cardV * aCard.z;`,
       ].join('\n'))
-      .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell.xy + vec2(aCard.w > 0.0 ? uv.x : 1.0 - uv.x, uv.y) * cellUv;\n#endif');
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell.xy + vec2(aCard.w > 0.0 ? uv.x : 1.0 - uv.x, uv.y) * cellUv;\n#ifdef USE_EMISSIVEMAP\nvEmissiveMapUv = vMapUv;\n#endif\n#endif');
   };
   material.customProgramCacheKey = () => 'cover-card';
   return material;

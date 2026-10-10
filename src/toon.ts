@@ -20,7 +20,9 @@ function makeRamp() {
 /** The one shared ramp texture. */
 export const TOON_RAMP = makeRamp();
 
-/** Hemisphere sky/ground and sun colours per planet, from the reference's planet table (bundle @655491…659918). */
+/** Hemisphere sky/ground and sun colours per planet, from the reference's planet table (bundle @655491…659918).
+ *  The world now wears our own rig per planet (look.ts); these still light the UI's own small renderers (item icons, the
+ *  mirror), which must not change colour, and the world when perfFlags.richLook is off. */
 export const PLANET_LIGHT: Record<PlanetId, { hemi: [string, string]; sun: string }> = {
   home: { hemi: ['#e8f6ff', '#9ccf7a'], sun: '#fff4dd' },
   candy: { hemi: ['#fff0fa', '#ff9fd0'], sun: '#fff0f6' },

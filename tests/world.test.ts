@@ -308,7 +308,8 @@ test('the camera follows the explorer at 9/s, looks straight at it, and the sun 
   assert.ok(look.distanceTo(new T.Vector3(0,-17,-13.5).normalize())<1e-6);
   const sun=(w as unknown as {sun:T.DirectionalLight}).sun;
   assert.ok(sun.target.position.distanceTo(new T.Vector3(w.cameraTarget.x,0,w.cameraTarget.z))<.05);
-  w.build('shadow');assert.deepEqual([(w.scene.fog as T.Fog).near,(w.scene.fog as T.Fog).far],[14,55]);
+  // The Night Planet's fog used to start at 14 m and hide the top of the screen; our look (look.ts) pushes it back so the planet reads.
+  w.build('shadow');assert.deepEqual([(w.scene.fog as T.Fog).near,(w.scene.fog as T.Fog).far],[24,78]);
 });
 
 test('explorers are drawn at the reference hero size, online ones too',()=>{

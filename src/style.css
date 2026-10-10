@@ -85,7 +85,7 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 /* Damage numbers and pop-up text sit above world labels but below panels and messages. */
 #floating-text { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
 #dialog-layer { z-index: 4; }
-#darkness { position: absolute; inset: 0; background: #0b0c23ed; pointer-events: none; z-index: 0; }
+#darkness { position: absolute; inset: 0; background: #070a2a9c; pointer-events: none; z-index: 0; }
 .eyebrow { font-size: var(--t-xs); letter-spacing: 1.3px; font-weight: 900; text-transform: uppercase; color: var(--ink-faint); }
 
 /* ---------------------------------------------------------------- HUD */

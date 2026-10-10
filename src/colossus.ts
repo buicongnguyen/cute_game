@@ -5,7 +5,7 @@ import * as M from './model.ts';
 import type { World, Enemy } from './world.ts';
 import type { EnemyDefinition } from './enemy-types.ts';
 import { terrainHeight } from './environments.ts';
-import { planetLight } from './toon.ts';
+import { planetLook } from './look.ts';
 import { cameraOffset } from './camera-rig.ts';
 import { COLOSSUS_ID, COLOSSUS_MINIONS, COLOSSUS_MINION_SHARD, COLOSSUS_NAME, COLOSSUS_SCHEDULE as W, COLOSSUS_STATS as S, COLOSSUS_TYPE, clockText, colossusClock, colossusMaxHp, NEIGHBOUR_HIT_CAP, roarHours } from './colossus-content.ts';
 import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage, colossusSkill, colossusTelegraphs, headMultiplier, headPoint, sanitizeColossusAttack, stepColossusAttack, throughDefence, type ColossusAttack, type ColossusEffect, type ColossusHit, type ColossusSource } from './colossus-patterns.ts';
@@ -429,14 +429,15 @@ export class ColossusEvent {
     if (this.dark === 0 && target === 0) return;
     this.dark = Math.max(0, Math.min(1, this.dark + (target - this.dark) * Math.min(1, dt * 1.2) + (target > this.dark ? .0005 : -.0005)));
     if (w.interior) return;
-    const l = planetLight(w.planet), k = this.dark;
+    const l = w.look ?? planetLook(w.planet, M.PLANETS[w.planet].sky), k = this.dark;
     for (const o of w.scene.children) {
-      if (o instanceof T.HemisphereLight) { o.intensity = l.hemi * (1 - .55 * k); o.color.set(l.sky).lerp(DUSK_SKY_LIGHT, .55 * k); }
-      else if (o instanceof T.DirectionalLight && o.castShadow) { o.intensity = l.sunIntensity * (1 - .6 * k); o.color.set(l.sun).lerp(DUSK_SUN, .6 * k); }
+      if (o instanceof T.HemisphereLight) { o.intensity = l.hemi[2] * (1 - .55 * k); o.color.set(l.hemi[0]).lerp(DUSK_SKY_LIGHT, .55 * k); }
+      else if (o instanceof T.DirectionalLight && o.castShadow) { o.intensity = l.sun[1] * (1 - .6 * k); o.color.set(l.sun[0]).lerp(DUSK_SUN, .6 * k); }
     }
-    const base = w.planet === 'home' ? '#aee4ff' : M.PLANETS[w.planet].sky;
-    sky.set(base).lerp(SKY, .85 * k); if (w.scene.background instanceof T.Color) w.scene.background.copy(sky);
-    if (w.scene.fog instanceof T.Fog) w.scene.fog.color.copy(fogColor.set(M.PLANETS[w.planet].sky).lerp(SKY, .75 * k));
+    // The sky gradient (world.updateSky) stays off while the dusk tints the flat sky colour.
+    w.flatSky = k > 0;
+    sky.set(w.skyBase ?? l.sky[1]).lerp(SKY, .85 * k); if (w.scene.background instanceof T.Color) w.scene.background.copy(sky);
+    if (w.scene.fog instanceof T.Fog) w.scene.fog.color.copy(fogColor.set(l.sky[1]).lerp(SKY, .75 * k));
   }
 
   // ---- Banner ----

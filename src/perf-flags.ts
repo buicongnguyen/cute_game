@@ -13,4 +13,7 @@ export const perfFlags = {
   /** Merged outline hulls are built once per kit part and placement and shared (outline.ts).
    * Off builds every hull again, as before. */
   cacheHulls: true,
+  /** Our own look (look.ts): the colour curve, the per-planet light rigs and skies, the shaded ground and the contact
+   * shading on scenery. Off draws the reference's flat rig; a world must be rebuilt (world.build) to switch. */
+  richLook: true,
 };

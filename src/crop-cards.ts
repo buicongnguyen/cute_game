@@ -2,6 +2,7 @@ import * as T from 'three';
 import { CAMERA } from './camera-rig.ts';
 import { cropKit } from './assets.ts';
 import { toonMaterial } from './toon.ts';
+import { perfFlags } from './perf-flags.ts';
 import { CROPS } from './content.ts';
 import { harvestArc, type Point3 } from './feel-rules.ts';
 
@@ -149,9 +150,10 @@ export class CropCards {
     const attr = (size: number) => { const a = new T.InstancedBufferAttribute(new Float32Array(max * size), size); a.setUsage(T.DynamicDrawUsage); return a; };
     this.cardAttrs = { cell: attr(4), card: attr(4), sway: attr(2) };
     geometry.setAttribute('aCell', this.cardAttrs.cell); geometry.setAttribute('aCard', this.cardAttrs.card); geometry.setAttribute('aSway', this.cardAttrs.sway);
-    // Colours are lit and tone-mapped in the bake; the cards only need fog on top.
+    // Colours are lit in the bake; the cards only need fog on top, and the screen's colour curve (look.ts) like the
+    // models beside them (the bake draws into a texture, where three applies no curve).
     // Alpha to coverage only with multisampling: on a plain framebuffer some GPUs dither it into dotted edges.
-    const material = new T.MeshBasicMaterial({ alphaTest: .5, alphaToCoverage: !!renderer.getContextAttributes?.()?.antialias, side: T.DoubleSide, toneMapped: false });
+    const material = new T.MeshBasicMaterial({ alphaTest: .5, alphaToCoverage: !!renderer.getContextAttributes?.()?.antialias, side: T.DoubleSide, toneMapped: perfFlags.richLook });
     material.onBeforeCompile = shader => {
       shader.uniforms.uTime = this.uniforms.uTime;
       shader.vertexShader = shader.vertexShader

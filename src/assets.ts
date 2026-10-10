@@ -1,6 +1,8 @@
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { perfFlags } from './perf-flags.ts';
+import { shadeGeometry } from './look.ts';
 import { toToon, toonify } from './toon.ts';
 import { BUILD, DEFAULT_LOOK, DEFAULT_PIVOTS, bodyFile, fitOf, splitLook, type Body, type Fit, type LookId } from './looks.ts';
 import { loadWithRetry, DEFAULT_POLICY, type RetryPolicy } from './art-retry.ts';
@@ -69,7 +71,7 @@ export class RefinedAssetLibrary {
     // An unavailable optional model must never stop the procedural game loading: the entity keeps
     // its procedural model until a later retry brings the file in (art-retry.ts).
     this.loading ??= Promise.all((Object.keys(REFINED_ASSET_FILES) as RefinedAsset[]).map(async name => {
-      const url = REFINED_ASSET_FILES[name], keep = (scene: T.Group) => { this.scenes.set(name, bakeModel(scene)); };
+      const url = REFINED_ASSET_FILES[name], keep = (scene: T.Group) => { this.scenes.set(name, bakeModel(scene, { shade: perfFlags.richLook })); };
       const scene = await loadWithRetry(url, () => this.loadScene(url), keep, this.policy);
       if (scene) keep(scene);
     })).then(() => {});
@@ -138,7 +140,7 @@ function bakedMaterial(signature: string, like: Plain) {
  * coloured pieces then costs two or three draw calls instead of twelve. Glowing, see-through
  * and textured meshes, and any that `keep` names, are left as they are.
  */
-export function bakeModel<O extends T.Object3D>(node: O, { deep = true, keep = () => false }: { deep?: boolean; keep?: (mesh: T.Mesh) => boolean } = {}) {
+export function bakeModel<O extends T.Object3D>(node: O, { deep = true, keep = () => false, shade = false }: { deep?: boolean; keep?: (mesh: T.Mesh) => boolean; /** Bake contact shading into the merged colours (look.ts): for models that stand on the ground with their base at y = 0. */ shade?: boolean } = {}) {
   node.updateMatrixWorld(true);
   const toNode = node.matrixWorld.clone().invert(), groups = new Map<string, { meshes: T.Mesh[]; like: Plain }>();
   const candidates: T.Mesh[] = [];
@@ -169,6 +171,7 @@ export function bakeModel<O extends T.Object3D>(node: O, { deep = true, keep = (
     if (pieces.some(p => !p.getAttribute('normal')) && pieces.some(p => p.getAttribute('normal'))) { pieces.forEach(p => p.dispose()); continue; }
     const geometry = mergeGeometries(pieces, false); pieces.forEach(p => p.dispose());
     if (!geometry) continue;
+    if (shade) shadeGeometry(geometry);
     const material = like.clone(); material.color.set('#ffffff'); material.vertexColors = true; refinish(material, like); material.name = `Baked ${signature.split('|')[1]}`;
     const merged = new T.Mesh(geometry, material); merged.name = 'baked'; merged.castShadow = meshes.some(m => m.castShadow); merged.receiveShadow = true;
     // A one-material glTF node is a Mesh that can have children (sockets, limbs): hide it
@@ -309,7 +312,8 @@ export class KitLibrary {
    * transparent or textured parts stay separate so they keep their look.
    */
   mergedParts(name: string, tint?: Record<string, string>): KitPart[] | undefined {
-    const key = `${name}|${tint ? JSON.stringify(tint) : ''}`, known = this.merged.get(key);
+    // Contact shading (look.ts) is baked here, once per model and tint, so a lone plain part is baked too.
+    const shade = perfFlags.richLook, key = `${name}|${tint ? JSON.stringify(tint) : ''}${shade ? '' : '|flat'}`, known = this.merged.get(key);
     if (known) return known;
     const parts = this.parts(name, tint);
     if (!parts) return undefined;
@@ -321,7 +325,7 @@ export class KitLibrary {
     }
     const result = [...kept];
     for (const [signature, list] of groups) {
-      if (list.length === 1) { result.push(list[0]); continue; }
+      if (list.length === 1 && !shade) { result.push(list[0]); continue; }
       const pieces = list.map(part => {
         let geometry = new T.BufferGeometry();
         geometry.setAttribute('position', part.geometry.getAttribute('position').clone());
@@ -337,6 +341,7 @@ export class KitLibrary {
       const geometry = mergeGeometries(pieces, false);
       pieces.forEach(p => p.dispose());
       if (!geometry) { result.push(...list); continue; }
+      if (shade) shadeGeometry(geometry);
       geometry.userData.sharedKit = true;
       result.push({ geometry, material: bakedMaterial(signature, list[0].material as Plain), matrix: new T.Matrix4(), name, tag: list[0].tag });
     }

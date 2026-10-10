@@ -12,7 +12,7 @@ import { OccluderFade } from './occluders.ts';
 import { INDOOR_Y } from './house.ts';
 import {atHome,homeRecoveryBonus} from './home-care.ts';
 import { bakeCoverAtlas, coverCards, tickCoverCards, type CoverAtlas } from './cover-cards.ts';
-import { buildGround } from './ground.ts';
+import { buildGround, shadeField, type GroundDetail } from './ground.ts';
 import { inSafeZone } from './safe-zone.ts';
 import { buildPond } from './pond-view.ts';
 import { circlesAt, holdsHero, ignoreRetarget, nearRay, pickCircle, pickScale, RAYCAST_ONLY, type PickCircle } from './picking.ts';
@@ -27,7 +27,7 @@ import { Effects } from './fx.ts';
 import { applyDye } from './dye-render.ts';
 import { baseOf } from './dye-skins.ts';
 import { deathBagModel, deathBagEntityId } from './death-bags-view.ts';
-import { CAMERA, FOG, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
+import { CAMERA, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
 import { CropCards, CROP_PRESENTATION_SCALE, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
 import { GardenBeds } from './garden-beds.ts';
@@ -51,7 +51,8 @@ import {bossCalloutText,bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CAL
 import {addOutlines,setOutlinesEnabled,showOutlines} from './outline.ts';
 import {viewWidth,viewHeight} from './viewport.ts';
 import {deferFlash,flashMaterialsOf,flashMaterialsSoFar} from './flash-materials.ts';
-import {SUN_OFFSET,applyPlanetLight,isLit,toonMaterial,type LitMaterial} from './toon.ts';
+import {SUN_OFFSET,isLit,toonMaterial,type LitMaterial} from './toon.ts';
+import {applyLook,planetLook,setGrade,skyTexture,skyInView,lightPool,NIGHT_GLOW,type PlanetLook} from './look.ts';
 import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
 import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
@@ -220,6 +221,7 @@ export class World {
     this.renderer.shadowMap.type = T.PCFShadowMap; // what the reference really gets: its three.js turns PCFSoft into PCF (renderer.shadowMap.type reads 1 there)
     this.renderer.outputColorSpace = T.SRGBColorSpace;
     // The reference's pipeline (RC-05): no tone mapping, toon materials, per-planet hemisphere 1.5 + sun 2.4 (build sets the colours).
+    // On top of it our own look (look.ts): a colour curve inside the material shaders and a light rig per planet.
     this.renderer.toneMapping = T.NoToneMapping;
     this.hemi = new T.HemisphereLight('#e8f6ff', '#9ccf7a', 1.5); this.scene.add(this.hemi);
     this.sun = new T.DirectionalLight('#fff4dd', 2.4); this.sun.position.set(...SUN_OFFSET); this.sun.castShadow = true;
@@ -323,7 +325,7 @@ export class World {
     // Ground cover becomes 2D cards baked from this world's own (tinted) cover models; without a renderer (tests) it stays 3D.
     this.coverAtlas?.dispose();this.coverAtlas=undefined;
     const coverKinds=[...new Set((this.decor??[]).filter(p=>DECOR[p.type]?.cover).map(p=>p.type))];
-    if(this.renderer&&coverKinds.length)this.coverAtlas=bakeCoverAtlas(this.renderer,coverKinds,type=>parts(type)??fallbackParts(type));
+    if(this.renderer&&coverKinds.length)this.coverAtlas=bakeCoverAtlas(this.renderer,coverKinds,type=>parts(type)??fallbackParts(type),perfFlags.richLook&&this.planet==='shadow'?NIGHT_GLOW:0);
     const atlas=this.coverAtlas;
     this.scatterGroup=buildScatter(this.decor??[],parts,this.detail,atlas?list=>coverCards(atlas,list):undefined);freezeStaticTree(this.scatterGroup);this.root.add(this.scatterGroup);
     this.occluders=new OccluderFade(this.scatterGroup);this.shadowsAt=undefined;
@@ -355,7 +357,16 @@ export class World {
     }
     return out;
   }
-  private eyeMesh?:T.InstancedMesh;
+  private eyeMesh?:T.InstancedMesh;private heroLight?:T.Mesh;
+  /** How far the explorer sees in the dark: the Light buff more than doubles it, an eclipse shrinks it. */
+  heroLightRadius(){return (M.activeStats(this.state).light?7.5:3.6)*(this.environment&&this.environment.time<this.environment.eclipseUntil?.4:1);}
+  /** The Night Planet's pool of light round the explorer (look.ts), as wide as the explorer can see. */
+  private updateHeroLight(){
+    const on=perfFlags.richLook&&this.planet==='shadow'&&!this.interior&&!this.boarded;
+    if(!on){if(this.heroLight)this.heroLight.visible=false;return;}
+    const pool=this.heroLight??=lightPool();if(pool.parent!==this.scene)this.scene.add(pool);
+    pool.visible=true;pool.position.x=this.position.x;pool.position.z=this.position.z;pool.scale.setScalar(this.heroLightRadius()*1.15);
+  }
   /** Places the glowing eyes; they show only in the dark, where main.ts also opens a small hole in the darkness at each. */
   private updateEyeGlints(){
     const glints=this.darknessActive?.()?this.eyeGlints():[];
@@ -545,8 +556,7 @@ export class World {
     for(const shot of this.enemyShots??[]){this.scene.remove(shot.mesh);shot.mesh.geometry.dispose();}this.enemyShots=[];
     this.environment=new EnvironmentSimulation(createEnvironmentLayout(planet));this.environmentView=new EnvironmentView(this.environment.layout);
     const theme=PLANETS[planet],rng=seeded(9281+Object.keys(PLANETS).indexOf(planet)*399);
-    this.scene.background=new T.Color(planet==='home'?'#aee4ff':theme.sky);this.scene.fog=new T.Fog(theme.sky,planet==='shadow'?14:FOG.near,planet==='shadow'?55:FOG.far);
-    applyPlanetLight(planet,this.hemi,this.sun);
+    this.dressLook(planet);
     if(planet==='home'){
       this.addEntity('home','Your cottage','🏡',this.house(),0,-8,3.2);this.obstacle(0,-8,2.7);
       this.addEntity('sell','Harvest market','🧺',this.stall('#f291a9','sell'),9,2.5,2);this.obstacle(9,2.5,1.7);
@@ -600,7 +610,6 @@ export class World {
     // Lava pools and the dragon nest sit below the rock; stones and mesas are their own solid pieces.
     // Ponds draw their own soft sandy shore (pond-view.ts): a halo on the ground's 3 m vertex grid came out jagged.
     const sunk=planet==='lava'?(x:number,z:number)=>layout.pools.some(p=>Math.hypot(x-p.x,z-p.z)<p.r+1)?-1.12:Math.hypot(x-layout.nest.x,z-layout.nest.z)<layout.nest.r+1?-.25:0:undefined;
-    this.root.add(buildGround({planet,layout,ponds:[],base:planet==='cloud'?-30:planet==='ocean'?-1.15:0,height:sunk,segments:planet==='lava'?20:12}));
     // Creatures are placed before the scenery, which then leaves a clearing around each spawn point (CC-7).
     const angles:Record<string,number>={canyon:0,meadow:Math.PI/2,forest:Math.PI,swamp:-Math.PI/2};let enemyIndex=0;
     const placeEnemy=(type:string,zone?:string,boss=false)=>{
@@ -626,6 +635,8 @@ export class World {
     const free=(x:number,z:number,r:number)=>!someObstacleNear(this.obstacles,x,z,x,z,r,o=>Math.hypot(x-o.x,z-o.z)<o.r+r)&&!this.entities.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+r);
     this.decor=planDecor({planet,layout,random:rng,free,ponds,clearings:this.enemies.filter(e=>e.respawn<999999).map(e=>({x:e.homeX,z:e.homeZ,type:e.type}))});
     for(const piece of this.decor)if(piece.radius>0)this.obstacle(piece.x,piece.z,piece.radius);
+    // The ground is coloured last, once it is known what stands on it (ground.ts: shade under trees, lush banks, glow, wear).
+    this.root.add(buildGround({planet,layout,ponds:[],base:planet==='cloud'?-30:planet==='ocean'?-1.15:0,height:sunk,segments:planet==='lava'?20:12,detail:perfFlags.richLook?this.groundDetail(ponds):undefined}));
     for(const name of kitsFor(planet)){const kit=SCENERY_KITS[name];if(!kit.ready)void kit.load().then(()=>{if(kit.ready&&this.planet===planet)this.refreshScenery();});}
     this.batchScenery();this.refreshScenery();this.root.add(this.player,this.companion);this.cameraTarget.copy(this.position);this.cropCards?.reset();this.syncCrops();this.syncDropped();this.applyRefinedAssets();this.syncDecorations();this.refreshEnvironmentNodes();
     if(this.remoteRoot&&!this.remoteRoot.parent)this.scene.add(this.remoteRoot);
@@ -861,7 +872,7 @@ export class World {
   }
   environmentStatus():EnvironmentStatus[]{return this.environment?.status(this.position)??[];}
   lightSources(){
-    if(!this.environment)return[];const stats=M.activeStats(this.state),radius=(stats.light?7.5:3.6)*(this.environment.time<this.environment.eclipseUntil?.4:1);
+    if(!this.environment)return[];const radius=this.heroLightRadius();
     const sources=[{x:this.position.x,z:this.position.z,radius}];
     for(const lamp of this.environment.layout.lamps)if(this.environment.lampLit(lamp.id))sources.push({x:lamp.x,z:lamp.z,radius:lamp.r});
     for(const e of this.enemies)if(e.hp>0&&e.definition?.titan)sources.push({x:e.x,z:e.z,radius:e.radius+8});
@@ -1736,8 +1747,8 @@ export class World {
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);
     if(this.fx)this.camera.position.add(this.fx.shakeOffset(dt,this.shakeOffset));
-    this.updateScenery(dt);this.updateEyeGlints();
-    this.followSun();
+    this.updateScenery(dt);this.updateEyeGlints();this.updateHeroLight();
+    this.followSun();this.updateSky();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
     this.animateCrops(dt);
     if(this.farmView&&this.planet==='home'){this.farmView.setSpeciesPens(this.state.farm?.speciesPens);if((this.penKeepClock=(this.penKeepClock??0)-dt)<=0){this.penKeepClock=1;this.roamKeep=this.penKeepOut();}this.farmView.update(this.state.farm?.animals??[],dt,this.time,Date.now(),this.position);}
@@ -1769,6 +1780,38 @@ export class World {
     });
   }
   private sunOffset=new T.Vector3(...SUN_OFFSET);private sunAxes:[T.Vector3,T.Vector3]|null=null;
+  /** The flat sky colour (also what the Colossus dims) and the gradient that replaces it while sky is on screen. */
+  skyColor=new T.Color();private skyStrip:T.Texture|null=null;/** The look in force and its flat sky colour. */ look?:PlanetLook;skyBase?:string;/** Set while something else tints the sky (the Colossus's dusk): the gradient stays off. */ flatSky=false;
+  /** What the richer ground reads from this world: scenery overhead, water, glow and worn spots. */
+  private groundDetail(ponds:readonly {x:number;z:number;r:number}[]):GroundDetail{
+    const layout=this.environment.layout,tree=/tree|pine|palm/;
+    const shade=shadeField((this.decor??[]).filter(p=>p.radius>0).map(p=>({x:p.x,z:p.z,r:(tree.test(p.type)?2.8:1.4)*p.scale,weight:tree.test(p.type)?1.15:.6})));
+    const glow=this.planet==='lava'?[...layout.pools.map(p=>({x:p.x,z:p.z,r:p.r,color:'#d8502a',strength:.6})),{x:layout.nest.x,z:layout.nest.z,r:layout.nest.r,color:'#d8502a',strength:.5}]
+      :this.planet==='shadow'?[...layout.flowers.map(p=>({x:p.x,z:p.z,r:p.r*.5,color:'#3fd8c8',strength:.55})),...layout.lamps.map(p=>({x:p.x,z:p.z,r:1,color:'#5a6ad8',strength:.4}))]:[];
+    const worn=this.planet==='home'?[{x:0,z:-3.5,r:6.5},{x:7.4,z:5.6,r:7.5},{x:0,z:4,r:6}]:[];
+    return{shade,water:ponds,glow,worn};
+  }
+  /** A planet's look (look.ts): colour curve, sky, fog, light colours and where the sun stands. */
+  private dressLook(planet:PlanetId){
+    const look=planetLook(planet,PLANETS[planet].sky);
+    this.look=look;this.skyBase=look.sky[perfFlags.richLook?1:0];this.flatSky=false;
+    this.skyColor=new T.Color(this.skyBase);this.skyStrip=perfFlags.richLook?skyTexture(look.sky[0],look.sky[1]):null;
+    this.scene.background=this.skyColor;this.scene.fog=new T.Fog(look.sky[1],look.fog[0],look.fog[1]);
+    if(this.renderer)setGrade(this.renderer,look);
+    applyLook(look,this.hemi,this.sun,this.sunOffset??=new T.Vector3());this.sunAxes=null;
+    // The shadow box lies in the sun's own axes, so it is fitted again when the sun moves.
+    const box=this.sun?.shadow?.camera;if(box&&this.camera){Object.assign(box,shadowBox(viewFootprint(this.camera.aspect,this.zoom),this.sunAxes=lightAxes(this.sunOffset)));box.updateProjectionMatrix();}
+  }
+  /**
+   * The sky gradient costs one draw, so it is on only while sky can be on screen: when the view reaches past the edge of
+   * the ground (zoomed far out at the world's rim). Everywhere else the screen is all ground and the plain clear colour does.
+   * A mode that set its own background (dungeon, flag rush, rescue) is left alone.
+   */
+  private updateSky(){
+    const bg=this.scene.background;if(bg!==this.skyColor&&bg!==this.skyStrip)return;
+    const want=this.skyStrip&&!this.flatSky&&skyInView(this.cameraTarget.x,this.cameraTarget.z,(this.viewReach??40)+(this.planet==='cloud'?60:0))?this.skyStrip:this.skyColor;
+    if(bg!==want)this.scene.background=want;
+  }
   /**
    * The sun follows the ground under the camera target, where resize fitted the shadow box to the
    * view, snapped to whole shadow texels along the shadow camera's own axes (the box need not be
