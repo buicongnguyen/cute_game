@@ -2,13 +2,13 @@ import { ITEMS, PLANETS, canonicalItem, type Inventory, type PlanetId } from './
 
 /**
  * Bags dropped where the explorer fell, like the reference (Zoo Pet `onPlayerDeath`: the whole backpack is cleared into
- * a bag at the spot; `lootBags` keep x, z, planet, items and the time; a bag lasts `X_=864e5` = 24 hours and at most 10
+ * a bag at the spot; `lootBags` keep x, z, planet, items and the time; a bag lasts 7 days (the reference's `X_=864e5` is 24 hours) and at most 20
  * are kept, `.slice(-10)`). Picking one up puts what fits into the backpack and leaves the rest in the bag ("Túi đầy!
  * Vẫn còn đồ trong hũ."). Worn gear, the chest, level and energy are never dropped.
  *
  * Here the bags live in the save (server-authoritative online: only the owner's account holds them, the server checks
  * the spot and the lifetime). Where the reference throws an 11th bag's oldest away, the oldest is banked into the chest
- * instead, so dying often never destroys items that were still within their 24 hours.
+ * instead, so dying often never destroys items that were still within their 7 days.
  */
 export interface DeathBag { id: string; x: number; z: number; planet: PlanetId; items: Inventory; at: number }
 export const DEATH_BAG_MS = 7 * 24 * 3600_000, MAX_DEATH_BAGS = 20, DEATH_BAG_REACH = 1.6;

@@ -60,6 +60,7 @@ import type { GameBridge, GameAction, NetworkHooks, NetworkDrop } from './game-b
 import { initOnline } from './online.ts';
 import { defeatPaysPlayer } from './safe-zone.ts';
 import { initHudLayout } from './hud-layout.ts';
+import { compileAsyncSafe } from './safe-compile.ts';
 import { fits as fitsBag } from './storage-slots.ts';
 import { initRanking } from './ranking.ts';
 import { initBots, neighboursOn, setNeighboursOn } from './bots.ts';
@@ -402,7 +403,7 @@ function profilePicker(){
 function welcomeDialog(){
   openDialog('welcome',t('Welcome to the game!'),`<p class="intro">${t('Hi boss! I am Pepper, your cook. Welcome to the game!')}</p><p>${t('Guess what? You are lucky today! I played the lottery and won 1,000,000 energy. Do you want it?')}</p><div class="button-row"><button class="primary" data-action="welcome-take">${t('Yes, take it!')}</button><button class="soft-button" data-action="welcome-pass">${t('No, thanks')}</button></div>`,t('YOUR COOK'),'🍳');
 }
-async function start() {settle();showTrimNote();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{}); // warm the village's shaders off the first walk
+async function start() {settle();showTrimNote();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();void compileAsyncSafe(world.renderer,world.scene,world.camera); // warm the village's shaders off the first walk
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
@@ -1420,7 +1421,7 @@ async function arrive(id:M.PlanetId){
     if(flight)exitSpace();
     ship.reset();world.build(id);world.refreshPlayer();world.applyRefinedAssets();updateLabels();settle();
     // Compile the new world's shaders in the background, so the first frames after landing don't hitch.
-    void world.renderer.compileAsync(world.scene,world.camera).catch(()=>{});
+    void compileAsyncSafe(world.renderer,world.scene,world.camera);
     const p=M.PLANETS[id];
     ship.land(()=>{showZone(id==='home'?'Clover Village':t(p.name));floating(`${p.icon} ${t(p.name)}`,world.position.x,world.position.z,'level',1);toast(id==='home'?'Home, sweet home!':t('Welcome to {planet}! Watch out for its creatures.',{planet:t(p.name)}),p.icon);
       if(typeof arrived==='object'&&arrived.cleansed)cleansedFx();if(homeQueued){homeQueued=false;if(state.planet!=='home')flyHome();}});

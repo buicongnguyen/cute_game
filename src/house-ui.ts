@@ -24,6 +24,7 @@ import { toonMaterial } from './toon.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { part } from './part-cache.ts';
 import { initHouseLife } from './house-life.ts';
+import { compileAsyncSafe } from './safe-compile.ts';
 
 export interface HouseDeps {
   world: World;
@@ -149,7 +150,7 @@ export function initHouse(d: HouseDeps) {
     // stall for 100-150 ms (merging the furniture, then a synchronous shader link on the first indoor frame).
     if (!prewarmed && !house.inside && houseKit.ready) {
       prewarmed = true; const idle = (globalThis as { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback ?? ((f: () => void) => setTimeout(f, 200));
-      idle(() => { void house.view.refine().then(() => world.renderer.compileAsync(house.view.scene, world.camera)).catch(() => {}); }, { timeout: 3000 });
+      idle(() => { void house.view.refine().then(() => compileAsyncSafe(world.renderer, house.view.scene, world.camera)).catch(() => {}); }, { timeout: 3000 });
     }
     if (fadeTarget !== fade) {
       fade = fadeTarget > fade ? Math.min(1, fade + dt * 5) : Math.max(0, fade - dt * 4);

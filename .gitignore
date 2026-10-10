@@ -17,3 +17,7 @@ TEST_RESULTS.txt
 TEST_RESULTS.md
 
 __pycache__/
+
+# Big promo renders stay on disk but out of git (regenerate with promo/render.sh)
+promo/*.mp4
+promo/*.wav

@@ -239,7 +239,7 @@ test('orientation: chosen once from the screen; landscape puts your end left, po
   for (const o of ['landscape', 'portrait'] as const) for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const w = toWorld({ x: sx * (RESCUE.half.x + 1), z: sz * (RESCUE.half.z + 1) }, o); assert.ok(Math.hypot(w.x, w.z) < 148, o); }
 });
 
-test('rescueClaim: validated, once per run, never faster than played, waves capped a day, five full wins a day with the gift', () => {
+test('rescueClaim: validated, once per run, never faster than played, waves capped a day, eight full wins a day with the gift', () => {
   const s = fresh(10), act = (p: Record<string, unknown>, now: number) => applyGameAction(s, { type: 'rescueClaim', payload: p }, { now, random: () => .99 });
   const ok = { runId: 'run-1', mission: 'toy', waves: 6, won: true, seconds: 400 };
   for (const bad of [{ ...ok, mission: 'mars' }, { ...ok, waves: 7 }, { ...ok, won: false }, { ...ok, waves: 3 }, { ...ok, seconds: 30 }, { ...ok, runId: '<x>' }])

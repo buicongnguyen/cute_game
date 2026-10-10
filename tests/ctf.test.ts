@@ -163,7 +163,7 @@ test('bots play whole matches on their own, the same way every time for a seed, 
   assert.ok(a.players.some(p => p.stats.downs > 0), 'they fight');
 });
 
-test('rewards: winners get the big share; a claim pays once, never faster than played, six a day', () => {
+test('rewards: winners get the big share; a claim pays once, never faster than played, twelve a day', () => {
   assert.ok(matchXp({ won: true, draw: false, caps: 0, rets: 0, kills: 0, size: 1 }) > matchXp({ won: false, draw: true, caps: 0, rets: 0, kills: 0, size: 1 }));
   assert.equal(matchXp({ won: false, draw: false, caps: 0, rets: 0, kills: 0, size: 3 }), 0);
   assert.ok(matchXp({ won: false, draw: false, caps: 1, rets: 1, kills: 0, size: 1 }) > 0);

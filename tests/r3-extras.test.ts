@@ -119,7 +119,7 @@ test('expansion costs follow the reference table exactly and use backpack materi
   assert.equal(M.parseSave(JSON.stringify({ ...c, bagUp: -1, chestUp: 'x' }))!.bagUp, undefined);
 });
 
-test('a defeat drops the loose backpack in a bag at the spot; it lasts 24 hours and up to ten are kept', () => {
+test('a defeat drops the loose backpack in a bag at the spot; it lasts 7 days and up to twenty are kept', () => {
   const now = 1_000_000_000_000, s = M.newGame(); s.bag = { carrot: 3, hat_straw: 1 }; s.gear.hat = 'hat_straw'; s.planet = 'candy';
   const bag = M.die(s, 4, 5, now)!;
   assert.deepEqual(bag, { id: bag.id, x: 4, z: 5, planet: 'candy', items: { carrot: 3 }, at: now });

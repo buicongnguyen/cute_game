@@ -2,9 +2,10 @@ import { canonicalItem, type Inventory } from './content.ts';
 import { looseQuantity } from './pantry.ts';
 
 /**
- * Backpack and chest slots, like the reference (Zoo Pet `ym={bag:{base:20,add:4,max:5},chest:{base:40,add:10,max:4}}`,
- * cost `function Cm(e,t)`, server `case\`expand\``): the bag starts with 20 slots and grows by 4 per expansion (5 times,
- * up to 40); the chest starts with 40 and grows by 10 (4 times, up to 80).
+ * Backpack and chest slots in the reference's shape (Zoo Pet `ym={bag:{base:20,add:4,max:5},chest:{base:40,add:10,max:4}}`,
+ * cost `function Cm(e,t)`, server `case\`expand\``) but roomier on purpose, because this game has far more kinds of item:
+ * the bag starts with 100 slots and grows by 10 per expansion (5 times, up to 150); the chest starts with 120 and grows
+ * by 20 (4 times, up to 200). Expansion costs keep the reference's formula (see STORAGE below).
  *
  * Here an inventory is a stack per item id, so a slot is one item id: any number of carrots take one slot (the
  * reference stacks 99 per slot; our stacks never split). Worn gear sits in its equipment slot, so only the loose copies

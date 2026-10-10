@@ -15,7 +15,7 @@ const seeded = (seed: number) => () => { seed = (Math.imul(seed, 1664525) + 1013
 const fresh = () => { const s = M.newGame('Ann'); s.welcome = 'done'; return s; };
 const act = (s: M.SaveState, type: string, payload: Record<string, unknown>, now = T0, random = () => .5) => applyGameAction(s, { type, payload }, { now, random });
 
-test('the reference config: 2 runs a day, 10 s countdown, 30 minutes, arena radius 23, five stages', () => {
+test('the config: 6 runs a day, 10 s countdown, 30 minutes, arena radius 23, five stages', () => {
   assert.equal(DUNGEON.perDay, 6); assert.equal(DUNGEON.countdown, 10); assert.equal(DUNGEON.timeLimit, 1800); assert.equal(DUNGEON.arenaR, 23);
   assert.equal(STAGE_COUNT, 5); assert.deepEqual(DUNGEON_STAGES.map(s => DUNGEON_BOSSES[s.boss].hp), [3000, 3800, 4600, 5400, 6800]);
   for (const b of Object.values(DUNGEON_BOSSES)) { assert.equal(b.skills.length, 4); assert.ok(DUNGEON_PETS[b.pet]); assert.ok(DUNGEON_ITEMS[b.pet]); }
