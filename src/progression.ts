@@ -232,7 +232,7 @@ function condition(s: SaveState, key: string) { switch (key) {
     default: return s.progression.totals[key] || 0;
 } }
 let helperCredit = 0;
-/** Runs work done by a helper (garden robot, pet): it still counts for quests, totals and bounties, but not for the timed challenge. */
+/** Runs work done by a helper (garden robot, pet, friend, neighbour): it counts for quests, totals and bounties. A helper's harvests and skills stay off the timed challenge, but its kills count (below). */
 export function asHelper<T>(work: () => T): T { helperCredit++; try { return work(); } finally { helperCredit--; } }
 /** Which surprise challenges make sense right now (reference Og[type].ok): the game reports what is nearby. */
 export interface ChallengeChances { kill: boolean; skill: boolean; harvest: boolean; fish: boolean; boss: boolean }
@@ -265,8 +265,9 @@ export function recordEvent(s: SaveState, event: string, amount = 1, detail?: st
         p.story.progress = Math.min(step.target, p.story.progress + amount);
     if (event === 'kill' && p.bounty && p.bounty.type === detail && !p.bounty.claimed)
         p.bounty.progress = Math.min(p.bounty.target, p.bounty.progress + amount);
-    // Timed challenges count the player's own actions only: the garden helper's harvests and the pet's shots do not (asHelper).
-    if (p.challenge?.type === event && !p.challenge.claimed && !helperCredit)
+    // Timed challenges count the player's own actions, except that an AI friend's kill counts as yours: the garden helper's
+    // harvests and skills do not (asHelper), but a pet, a rescued friend or a neighbour defeating an enemy does.
+    if (p.challenge?.type === event && !p.challenge.claimed && (!helperCredit || event === 'kill' || event === 'boss'))
         p.challenge.progress = Math.min(p.challenge.target, p.challenge.progress + amount);
 }
 function rewardLabel(r: Reward) { return [r.energy ? t('{count} energy', { count: r.energy }) : '', r.xp ? `${r.xp} XP` : '', r.stars ? t('{count} stars', { count: r.stars }) : '', ...Object.entries(r.items || {}).map(([id, n]) => `${t(ITEMS[id]?.name || id)} ×${n}`)].filter(Boolean).join(' · '); }

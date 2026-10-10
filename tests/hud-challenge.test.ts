@@ -72,7 +72,7 @@ test('a completed challenge is not lost to the clock before it is paid', () => {
   P.refreshProgress(s, start + 60000); assert.ok(s.progression.challenge && !s.progression.challenge.claimed, 'still there to be won');
 });
 
-test('only the player earns timed-challenge progress: the garden helper and the pet do not', () => {
+test('the player earns timed-challenge progress; the garden helper does not, but an AI friend kill counts', () => {
   const s = M.newGame(); s.level = 2; P.startChallenge(s, 'harvest', start);
   s.helper = { ...M.newHelper(), owned: true } as typeof s.helper;
   const now = start + 1000; s.plots[0].crop = 'carrot'; s.plots[0].plantedAt = 0; s.plots[0].growDuration = 1;
@@ -83,6 +83,13 @@ test('only the player earns timed-challenge progress: the garden helper and the 
   s.plots[1].crop = 'carrot'; s.plots[1].plantedAt = 0; s.plots[1].growDuration = 1; M.harvest(s, 1, now);
   assert.equal(s.progression.challenge!.progress, 1, 'the player\'s own harvest counts');
   assert.equal(P.asHelper(() => 7), 7);
+  // ... but an AI friend's kill is the player's for a kill challenge.
+  const k = M.newGame(); k.level = 2; P.startChallenge(k, 'kill', start);
+  P.asHelper(() => P.recordEvent(k, 'kill', 1, 'slime', start + 1000));
+  assert.equal(k.progression.challenge!.progress, 1, 'a helper kill counts for the kill challenge');
+  const sk = M.newGame(); sk.level = 2; P.startChallenge(sk, 'skill', start);
+  P.asHelper(() => P.recordEvent(sk, 'skill', 1, undefined, start + 1000));
+  assert.equal(sk.progression.challenge!.progress, 0, 'a helper skill does not');
   // A pet's projectile is tagged so main.ts grants its kill under asHelper.
   const hits: { helper?: boolean }[] = [], target = { id: 'a', x: 0, z: 3, hp: 50, radius: .6 };
   const sim = new CombatSimulation({ position: () => ({ x: 0, z: 0 }), facing: () => 0, face() {}, moving: () => false, skillLevel: () => 1, targets: () => [target], weapon: () => ({ kind: 'melee', attack: 1 }) as never, stats: () => ({ attack: 10, critChance: 0 }) as never, move() {}, hit: (_t, h) => { hits.push(h); }, effect() {}, pet: () => ({ x: 0, z: 0, dmg: 1, cd: 1 }) } as never);

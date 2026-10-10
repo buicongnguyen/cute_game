@@ -1178,7 +1178,7 @@ function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:stri
   if(actionHandler)return;
   // In the safe zone nothing that falls far outside it pays you: no EXP, no orbs, no loot (safe-zone.ts).
   if(!defeatPaysPlayer(world.position,{x:e.x??world.position.x,z:e.z??world.position.z},world.planet,!!world.networkRole))return;
-  const defeat=()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss,Math.random,false),loot=change(()=>e.helper?asHelper(defeat):defeat());// a pet's kill is not the player's for the timed challenge
+  const defeat=()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss,Math.random,false),loot=change(()=>e.helper?asHelper(defeat):defeat());// a helper's kill still counts for the timed challenge (progression.ts recordEvent)
   // Experience flies in as cyan orbs; the loot is tossed onto the ground where the creature fell.
   const x=e.x??world.position.x,z=e.z??world.position.z;
   world.fx?.orbs({x,z},Math.min(8,3+Math.floor(e.xp/20)),'#7ff0ff',()=>world.position,()=>tone('coin'));
