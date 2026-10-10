@@ -1,5 +1,7 @@
 import { installMobileGameSupport } from './mobile-game-support.mjs';
+import { t } from './i18n.ts';
 installMobileGameSupport({
+  "translate": t,
   "menus": [],
   "fullscreen": false,
   "existingButtons": [

@@ -161,7 +161,7 @@ export const LINES: Record<LineScenario, string[]> = {
   ],
 };
 import { MORE_LINES } from "./friend-lines-more.ts";
-for (const k of Object.keys(LINES) as LineScenario[]) LINES[k].push(...MORE_LINES[k].map(p => p[0]));
+for (const k of Object.keys(LINES) as LineScenario[]) LINES[k].push(...MORE_LINES[k]);
 const bag = new TalkBag();
 /** One line for the scenario, from its own shuffled-like pool. `who` keeps each helper's own recent lines apart. */
 export const lineFor = (who: string, scenario: LineScenario, random = Math.random) => bag.pick(who + ':' + scenario, LINES[scenario], random);

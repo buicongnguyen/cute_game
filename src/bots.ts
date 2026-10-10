@@ -100,7 +100,7 @@ export function initBots(game: GameBridge) {
   // ---- Speech bubbles ----
   const bubbles = new Map<string, HTMLDivElement>(), v = new T.Vector3();
   const sayLine = (r: Run, scenario: BotScenario, ms = 4200) => {
-    const line = bag.pick(scenario, BOT_LINES[scenario].map(p => p[0]), rand);
+    const line = bag.pick(scenario, BOT_LINES[scenario], rand);
     r.say = { text: t(line, { name: player().name, me: botName(r.def) }), until: clock + ms / 1000 };
   };
   const drawBubbles = () => {

@@ -69,10 +69,11 @@ test('the first-defeat pet lands in the bag even when the loot is tossed on the 
 
 test('Vietnamese pet descriptions name the boss in Vietnamese, as the catalog does', async () => {
   const { VI_CATALOG } = await import('../src/locales/vi-catalog.ts');
-  const { BOSS_PET_VI } = await import('../src/boss-pet-content.ts');
-  for (const [, b] of Object.entries(BOSS_PETS)) {
-    assert.equal(b.bossVi, VI_CATALOG[b.boss], b.boss);
+  const { BOSS_PET_VI, BOSS_PET_NAMES } = await import('../src/locales/vi-boss-pets.ts');
+  for (const [key, b] of Object.entries(BOSS_PETS)) {
+    const bossVi = BOSS_PET_NAMES[key].bossVi;
+    assert.equal(bossVi, VI_CATALOG[b.boss], b.boss);
     const vi = BOSS_PET_VI[`A little companion won from ${b.boss}. It follows you and attacks nearby enemies.`];
-    assert.ok(vi.includes(b.bossVi) && !vi.includes(b.boss), vi);
+    assert.ok(vi.includes(bossVi) && !vi.includes(b.boss), vi);
   }
 });

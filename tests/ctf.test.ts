@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CTF, FIELD, HEROES, HERO_IDS, POWERS, POWER, heroStats, CTF_VI } from '../src/ctf-content.ts';
+import { CTF, FIELD, HEROES, HERO_IDS, POWERS, POWER, heroStats } from '../src/ctf-content.ts';
+import { CTF_VI } from '../src/locales/vi-ctf.ts';
 import { createMatch, stepMatch, movePlayer, hurt, playerHit, castAi, basicAttack, speedFactor, canTeleport, rollPower, fieldObstacles, onLand, forfeit, matchXp, rewardFor, applyPower, player, CTF_REWARD, type CtfMatch, type RosterEntry } from '../src/ctf-rules.ts';
 import { assignRoles, planBot, routeTo, pickHeroes, stepBots, newMinds } from '../src/ctf-ai.ts';
 import { claimMatch, rewardedLeft, ctfDay } from '../src/ctf-claim.ts';

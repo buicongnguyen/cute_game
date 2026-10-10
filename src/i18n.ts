@@ -18,8 +18,8 @@ documentLanguage();
 export function getLanguage(): Language { return language; }
 /** Loads the Vietnamese phrases (once); the page re-renders through onLanguageChange when they arrive after a switch. */
 export function loadVietnamese(): Promise<void> {
-  viLoading ??= import('./locales/vi-pack.ts').then(({ VI_PACK }) => {
-    vi = VI_PACK; folded = new Map(Object.entries(VI_PACK).map(([key, value]) => [key.toLowerCase(), value])); templates = compileTemplates(VI_PACK); cache.clear();
+  viLoading ??= import('./locales/vi-pack.ts').then(({ VI_PACK, VI_TIME_UNITS }) => {
+    vi = VI_PACK; folded = new Map(Object.entries(VI_PACK).map(([key, value]) => [key.toLowerCase(), value])); templates = compileTemplates(VI_PACK, VI_TIME_UNITS); cache.clear();
     if (language === 'vi') for (const listener of listeners) listener();
   }, error => { viLoading = null; throw error; });
   return viLoading;
@@ -44,12 +44,12 @@ const quoteRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&
 // Template matching keeps legacy generated labels localizable. Explicit parameters are
 // preferred for player text; their values are never translated or interpreted as markup.
 type Rule = { regex: RegExp; names: string[]; target: string; specificity: number };
-const compileTemplates = (table: Record<string, string>): Rule[] => Object.entries(table).filter(([key]) => /\{\w+\}/.test(key)).map(([source, target]) => {
+const compileTemplates = (table: Record<string, string>, units: string): Rule[] => Object.entries(table).filter(([key]) => /\{\w+\}/.test(key)).map(([source, target]) => {
   const names: string[] = [], parts: string[] = []; let cursor = 0;
   for (const match of source.matchAll(/\{(\w+)\}/g)) {
     const numeric = /^(amount|count|seconds|minutes|hours|days|level|ratio|cost|price|total|current|max|progress|target|chapter|rank|step|percent|defense|hp|xp|energy|stars|index|empty|beds|caught|all|need|have|gain)$/i.test(match[1]);
     const time = /^(time|interval)$/i.test(match[1]);
-    const capture = numeric ? '([+−-]?\\d+(?:[.,]\\d+)*)' : time ? '(\\d+(?:[.,]\\d+)?(?:\\s*(?:h|m|s|p|g|giờ|phút|giây)(?:\\s+\\d+(?:[.,]\\d+)?\\s*(?:h|m|s|p|g|giờ|phút|giây))*)?)' : '(.+?)';
+    const capture = numeric ? '([+−-]?\\d+(?:[.,]\\d+)*)' : time ? '(\\d+(?:[.,]\\d+)?(?:\\s*(?:' + units + ')(?:\\s+\\d+(?:[.,]\\d+)?\\s*(?:' + units + '))*)?)' : '(.+?)';
     parts.push(quoteRegex(source.slice(cursor, match.index)), capture); names.push(match[1]); cursor = match.index! + match[0].length;
   }
   parts.push(quoteRegex(source.slice(cursor)));

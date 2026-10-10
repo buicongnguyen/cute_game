@@ -108,11 +108,10 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
   };
   let pending = false, returnFocus = null;
   const active = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
-  const vi = () => /^vi\b/i.test(document.documentElement.lang);
-  const text = (en, vn) => translate ? translate(en) : vi() ? vn : en;
+  const text = en => translate ? translate(en) : en;
   const refresh = () => {
     for (const button of document.querySelectorAll(['[data-mobile-display]', ...existingButtons].join(','))) {
-      const label = active() ? text('Exit full screen', 'Thoát toàn màn hình') : text('Full screen', 'Toàn màn hình');
+      const label = active() ? text('Exit full screen') : text('Full screen');
       if (button.hasAttribute('data-mobile-display') && button.textContent !== label) button.textContent = label;
       button.setAttribute('aria-label', label); button.title = label;
       button.setAttribute('aria-pressed', String(active()));
@@ -134,10 +133,10 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
       });
     }
     const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-    dialog.innerHTML = `<h2 id="mobile-display-heading">${text('Full screen', 'Toàn màn hình')}</h2><p>${reason === 'exit'
-      ? text('Use your browser’s exit control or press Esc to leave full screen.', 'Dùng nút thoát của trình duyệt hoặc nhấn Esc để thoát toàn màn hình.')
-      : standalone ? text('You are already playing from a home-screen web app.', 'Bạn đang chơi trong ứng dụng web từ màn hình chính.')
-      : text('Open the game in Safari if you are using an in-app browser. Tap Share → Add to Home Screen → enable Open as Web App if shown, then launch the new icon.', 'Nếu đang dùng trình duyệt trong ứng dụng, hãy mở trò chơi bằng Safari. Chạm Chia sẻ → Thêm vào Màn hình chính → bật Mở dưới dạng ứng dụng web nếu có, rồi mở biểu tượng mới.')}</p><p>${text('Start drags away from screen edges. iPhone system gestures still work.', 'Bắt đầu kéo cách xa mép màn hình. Các cử chỉ hệ thống iPhone vẫn hoạt động.')}</p><button type="button">${text('Back', 'Quay lại')}</button>`;
+    dialog.innerHTML = `<h2 id="mobile-display-heading">${text('Full screen')}</h2><p>${reason === 'exit'
+      ? text('Use your browser’s exit control or press Esc to leave full screen.')
+      : standalone ? text('You are already playing from a home-screen web app.')
+      : text('Open the game in Safari if you are using an in-app browser. Tap Share → Add to Home Screen → enable Open as Web App if shown, then launch the new icon.')}</p><p>${text('Start drags away from screen edges. iPhone system gestures still work.')}</p><button type="button">${text('Back')}</button>`;
     dialog.querySelector('button').onclick = () => dialog.close();
     if (!dialog.open) dialog.showModal();
     dialog.querySelector('button').focus({ preventScroll: true });

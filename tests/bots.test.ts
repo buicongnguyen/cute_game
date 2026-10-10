@@ -4,6 +4,8 @@ import * as M from '../src/model.ts';
 import { ITEMS } from '../src/content.ts';
 import { BOT_LINES } from '../src/bot-lines.ts';
 import { VI_BOTS } from '../src/locales/vi-bots.ts';
+import { BOT_LINE_PAIRS } from '../src/locales/vi-bot-lines.ts';
+import { CHAT_VI } from '../src/locales/vi-bot-chat.ts';
 import { befriend, canMeet, chooseGift, choosePresent, givesPresent, isFriend, makeCast, newStore, parseStore, settleGift, SPARE_GIFTS, ENERGY_GIFT, PRESENT_GAP_MS } from '../src/bot-logic.ts';
 
 test('the cast is the same for one seed, has a rich flyer, and dresses everyone from real items', () => {
@@ -52,7 +54,7 @@ test('friendship, pending gifts and pauses survive a save, and a damaged save st
 });
 
 test('every neighbour line has a Vietnamese version and each pool is big enough', () => {
-  for (const [k, pool] of Object.entries(BOT_LINES)) { assert.ok(pool.length >= (k === 'FLYBY' || k === 'WANDER' || k === 'LATER' || k === 'WITHDRAW' ? 5 : 8), k); for (const [en, vi] of pool) { assert.equal(VI_BOTS[en], vi); assert.notEqual(vi, en); } }
+  for (const [k, pool] of Object.entries(BOT_LINES)) { assert.ok(pool.length >= (k === 'FLYBY' || k === 'WANDER' || k === 'LATER' || k === 'WITHDRAW' ? 5 : 8), k); for (const en of pool) { assert.equal(VI_BOTS[en], BOT_LINE_PAIRS[en]); assert.ok(BOT_LINE_PAIRS[en]); assert.notEqual(BOT_LINE_PAIRS[en], en); } }
 });
 
 test('a neighbour house builds into a valid garden with crops, animals and decorations', () => {
@@ -87,12 +89,12 @@ test('each friend gives at most one present per five minutes, remembered across 
 });
 
 test('the message box sorts English and Vietnamese messages and always answers in a pool with Vietnamese', async () => {
-  const { intentOf, replyTo, CHAT_REPLIES, CHAT_VI, normalize } = await import('../src/bot-chat.ts');
+  const { intentOf, replyTo, CHAT_REPLIES, normalize } = await import('../src/bot-chat.ts');
   assert.equal(intentOf('Hello there!'), 'hello'); assert.equal(intentOf('Xin chào bạn'), 'hello'); assert.equal(intentOf('cảm ơn nha'), 'thanks');
   assert.equal(intentOf('Can I get a gift?'), 'gift'); assert.equal(intentOf('Tạm biệt'), 'bye'); assert.equal(intentOf('mình buồn quá'), 'sad');
   assert.equal(intentOf('tell me about your garden'), 'garden'); assert.equal(intentOf('what is that?'), 'question'); assert.equal(intentOf('blah'), 'other');
   assert.equal(normalize('Đẹp Quá!'), 'dep qua');
-  for (const [k, pool] of Object.entries(CHAT_REPLIES)) { assert.ok(pool.length >= 2, k); for (const [en, vi] of pool) { assert.equal(CHAT_VI[en], vi); assert.notEqual(vi, en); } }
+  for (const [k, pool] of Object.entries(CHAT_REPLIES)) { assert.ok(pool.length >= 2, k); for (const en of pool) { assert.ok(CHAT_VI[en], en); assert.notEqual(CHAT_VI[en], en); } }
   const bot = makeCast(1)[0], seen = new Set<string>(); let n = 7; const rand = () => (n = (n * 48271) % 2147483647) / 2147483647;
   for (let i = 0; i < 30; i++) seen.add(replyTo('haha funny', bot, true, { pick: (_k, pool) => pool[Math.floor(rand() * pool.length)], rand }));
   assert.ok(seen.size >= 3);

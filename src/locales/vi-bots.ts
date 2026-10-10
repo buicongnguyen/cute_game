@@ -1,5 +1,5 @@
-import { BOT_LINE_PAIRS } from '../bot-lines.ts';
-import { CHAT_VI } from '../bot-chat.ts';
+import { BOT_LINE_PAIRS } from './vi-bot-lines.ts';
+import { CHAT_VI } from './vi-bot-chat.ts';
 /** Vietnamese copy for the AI neighbours (bots.ts): the speech lines come from bot-lines.ts, the rest is here. */
 export const VI_BOTS: Record<string, string> = {
   ...BOT_LINE_PAIRS,

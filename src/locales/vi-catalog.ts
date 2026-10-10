@@ -1,9 +1,9 @@
-import { TITAN_VI } from '../titan-content.ts';
-import { BOSS_PET_VI } from '../boss-pet-content.ts';
-import { DUNGEON_VI } from '../dungeon-content.ts';
-import { COLOSSUS_VI } from '../colossus-content.ts';
-import { CTF_VI } from '../ctf-content.ts';
-import { RESCUE_VI } from '../rescue-content.ts';
+import { TITAN_VI } from './vi-titan.ts';
+import { BOSS_PET_VI } from './vi-boss-pets.ts';
+import { DUNGEON_VI } from './vi-dungeon.ts';
+import { COLOSSUS_VI } from './vi-colossus.ts';
+import { CTF_VI } from './vi-ctf.ts';
+import { RESCUE_VI } from './vi-rescue.ts';
 /** Vietnamese catalog labels. Short reference terms matched by stable item IDs;
  * original descriptions and farm additions translated for this game. IDs and game rules stay unchanged.
  * Exact English keys also cover generated cooked names and catalog stat descriptions.

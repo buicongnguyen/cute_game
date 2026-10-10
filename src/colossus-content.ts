@@ -68,43 +68,6 @@ export const COLOSSUS_LOOT: [string, number, number, number][] = [
 /** A spat-out minion also drops a heartstone half the time. */
 export const COLOSSUS_MINION_SHARD = .5;
 
-export const COLOSSUS_VI: Record<string, string> = {
-  'Cinderpeak Colossus': 'Cự Thạch Núi Tro',
-  'Cinderhorn Crown': 'Vương Miện Sừng Tro',
-  'Two glowing horns from the Cinderpeak Colossus. Lava cannot hurt the one who wears them.': 'Đôi sừng rực lửa của Cự Thạch Núi Tro. Dung nham không làm hại được người đội nó.',
-  'Little Cinderpeak': 'Cự Thạch Tí Hon',
-  'A pebble-sized colossus that follows the explorer who landed the final blow, spitting embers at enemies.': 'Một cự thạch bé bằng hòn sỏi, theo chân người tung đòn kết liễu và phun than hồng vào kẻ thù.',
-  'Cinder Heartstone': 'Đá Tim Tro',
-  'A warm stone that fell from the Cinderpeak Colossus. It never quite cools down.': 'Viên đá ấm rơi ra từ Cự Thạch Núi Tro. Nó chẳng bao giờ nguội hẳn.',
-  '⚠️ ARMOUR-CRACKING STOMP': '⚠️ GIẪM NỨT GIÁP',
-  '⚠️ HEAD-DIVE BITE': '⚠️ CÚI ĐẦU ĐỚP',
-  '⚠️ BOULDER SLAP': '⚠️ CÚ TÁT TẢNG ĐÁ',
-  '⚠️ CINDER BREATH': '⚠️ HƠI THỞ THAN HỒNG',
-  '⚠️ GRAB AND HURL': '⚠️ TÓM VÀ NÉM',
-  '⚠️ IT SPITS OUT A MINION': '⚠️ NÓ NHỔ RA TAY SAI',
-  '⚠️ GROUND-SWEEPING ARM': '⚠️ CÁNH TAY QUÉT ĐẤT',
-  '⚠️ ASH METEOR SHOWER': '⚠️ MƯA THIÊN THẠCH TRO',
-  '⚠️ QUAKE ROAR — HIDE BY A FOOT!': '⚠️ GẦM RUNG ĐẤT — NÚP CẠNH BÀN CHÂN!',
-  '💥 WEAK POINT ×2.5': '💥 ĐIỂM YẾU ×2.5',
-  '💔 Armour cracked! −50% DEF for 30 s (it mends by itself).': '💔 Giáp bị nứt! −50% phòng thủ trong 30 giây (giáp tự liền lại).',
-  '🔥 Scorched! −50% DEF for 12 s and burning.': '🔥 Bị thiêu! −50% phòng thủ trong 12 giây và đang cháy.',
-  '😵 Stunned by the roar!': '😵 Choáng vì tiếng gầm!',
-  '🪨 Grabbed and hurled!': '🪨 Bị tóm và ném đi!',
-  'The Cinderpeak Colossus falls to its knees! Its head is in reach.': 'Cự Thạch Núi Tro quỵ gối! Đầu nó đã trong tầm với.',
-  'The Cinderpeak Colossus is enraged! Its attacks come faster.': 'Cự Thạch Núi Tro nổi giận! Đòn đánh nhanh hơn.',
-  'The Cinderpeak Colossus has woken in Redrock Canyon! The sky darkens over every planet.': 'Cự Thạch Núi Tro đã thức giấc ở Hẻm Núi Đá Đỏ! Bầu trời mọi hành tinh tối sầm lại.',
-  'The Cinderpeak Colossus sinks back into the canyon. It wakes again tomorrow at 08:00.': 'Cự Thạch Núi Tro chìm lại vào hẻm núi. Nó sẽ thức dậy lúc 08:00 ngày mai.',
-  'The Cinderpeak Colossus crumbles! The sky clears.': 'Cự Thạch Núi Tro sụp đổ! Bầu trời quang đãng trở lại.',
-  '👑 You landed the FINAL BLOW! Little Cinderpeak joins you.': '👑 Bạn tung ĐÒN KẾT LIỄU! Cự Thạch Tí Hon theo bạn về nhà.',
-  'A neighbour landed the final blow. Your share of the spoils is on the ground.': 'Một người hàng xóm tung đòn kết liễu. Phần thưởng của bạn nằm trên mặt đất.',
-  'Hit the Colossus within the last {seconds} seconds to share its spoils.': 'Hãy đánh Cự Thạch trong {seconds} giây cuối để được chia chiến lợi phẩm.',
-  '{name} (Minion)': '{name} (Tay Sai)',
-  'The Cinderpeak Colossus wakes at 08:00': 'Cự Thạch Núi Tro thức giấc lúc 08:00',
-  'in {time}': 'sau {time}',
-  'Redrock Canyon · until 24:00': 'Hẻm Núi Đá Đỏ · đến 24:00',
-  'Defeated today · back tomorrow at 08:00': 'Đã bị hạ hôm nay · trở lại lúc 08:00 ngày mai',
-};
-
 /** Where today's (or the next) window stands at `now` (ms since epoch). Days roll over at midnight UTC+7. */
 export interface ColossusClock { phase: 'idle' | 'soon' | 'active'; day: number; startsAt: number; endsAt: number; left: number }
 export function colossusClock(now: number, s: { hour: number; minute: number; duration: number; utcOffsetHours: number; warn: number } = COLOSSUS_SCHEDULE): ColossusClock {

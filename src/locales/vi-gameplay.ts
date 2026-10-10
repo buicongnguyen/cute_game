@@ -1,7 +1,7 @@
-import {HELP_TOPICS} from '../help-topics.ts';
+import {HELP_TOPICS_VI} from './vi-help-topics.ts';
 /** Vietnamese presentation text. Runtime IDs, user names and saved values are never translated. */
 export const VI_GAMEPLAY: Record<string, string> = {
-  ...Object.fromEntries(HELP_TOPICS.flatMap(([,title,body,viTitle,viBody])=>[[title,viTitle],[body,viBody]])),
+  ...HELP_TOPICS_VI,
   '{count} energy': '{count} năng lượng',
   '{count} stars': '{count} sao',
   'Defeat creatures': 'Đánh bại quái',

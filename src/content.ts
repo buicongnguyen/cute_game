@@ -105,14 +105,14 @@ export interface Recipe {
 }
 const CROP_FACTS: Record<string, any> = {
     "radish": {
-        "name": "Củ Cải Cười",
+        "name": "Radish",
         "lvl": 1,
         "time": 15,
         "exp": 6,
         "energy": 4
     },
     "carrot": {
-        "name": "Cà Rốt Tốc Hành",
+        "name": "Carrot",
         "lvl": 1,
         "time": 10,
         "exp": 4,
@@ -123,14 +123,14 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "pumpkin": {
-        "name": "Bí Ngô Mũm Mĩm",
+        "name": "Pumpkin",
         "lvl": 2,
         "time": 30,
         "exp": 14,
         "energy": 10
     },
     "mint": {
-        "name": "Bạc Hà Mát Lạnh",
+        "name": "Mint",
         "lvl": 3,
         "time": 35,
         "exp": 14,
@@ -141,7 +141,7 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "chili": {
-        "name": "Ớt Rồng Lửa",
+        "name": "Chili",
         "lvl": 4,
         "time": 40,
         "exp": 18,
@@ -152,14 +152,14 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "candy": {
-        "name": "Hoa Kẹo Bông",
+        "name": "Candy bloom",
         "lvl": 4,
         "time": 50,
         "exp": 26,
         "energy": 18
     },
     "bean": {
-        "name": "Đậu Thần Khổng Lồ",
+        "name": "Shield bean",
         "lvl": 5,
         "time": 60,
         "exp": 24,
@@ -170,14 +170,14 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "star": {
-        "name": "Nấm Sao Lấp Lánh",
+        "name": "Star fruit",
         "lvl": 6,
         "time": 80,
         "exp": 45,
         "energy": 32
     },
     "berry": {
-        "name": "Dâu Tiên Lấp Lánh",
+        "name": "Berry",
         "lvl": 6,
         "time": 70,
         "exp": 30,
@@ -188,7 +188,7 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "coffee": {
-        "name": "Cà Phê Tỉnh Táo",
+        "name": "Coffee bean",
         "lvl": 7,
         "time": 60,
         "exp": 28,
@@ -199,7 +199,7 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "moonflower": {
-        "name": "Hoa Trăng Rằm",
+        "name": "Moonflower",
         "lvl": 8,
         "time": 90,
         "exp": 40,
@@ -210,7 +210,7 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "magnetmelon": {
-        "name": "Dưa Nam Châm",
+        "name": "Magnet melon",
         "lvl": 9,
         "time": 100,
         "exp": 44,
@@ -221,14 +221,14 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "melon": {
-        "name": "Dưa Cầu Vồng",
+        "name": "Melon",
         "lvl": 9,
         "time": 120,
         "exp": 80,
         "energy": 60
     },
     "clover": {
-        "name": "Cỏ Bốn Lá May Mắn",
+        "name": "Lucky clover",
         "lvl": 10,
         "time": 110,
         "exp": 50,
@@ -239,7 +239,7 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "glowshroom": {
-        "name": "Nấm Đèn Lồng",
+        "name": "Glow mushroom",
         "lvl": 11,
         "time": 100,
         "exp": 48,
@@ -251,7 +251,7 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "iceberry": {
-        "name": "Dâu Băng Giá",
+        "name": "Ice berry",
         "lvl": 12,
         "time": 120,
         "exp": 60,
@@ -263,14 +263,14 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "goldcorn": {
-        "name": "Ngô Vàng Ròng",
+        "name": "Golden corn",
         "lvl": 13,
         "time": 150,
         "exp": 70,
         "energy": 110
     },
     "dragonfruit": {
-        "name": "Thanh Long Lửa",
+        "name": "Dragon fruit",
         "lvl": 15,
         "time": 160,
         "exp": 90,
@@ -284,7 +284,7 @@ const CROP_FACTS: Record<string, any> = {
         }
     },
     "rainbowrose": {
-        "name": "Hồng Cầu Vồng",
+        "name": "Rainbow rose",
         "lvl": 18,
         "time": 200,
         "exp": 120,
@@ -303,65 +303,65 @@ const CROP_FACTS: Record<string, any> = {
 };
 const ITEM_FACTS: Record<string, any> = {
     "seed_fire": {
-        "name": "Hạt Giống Lửa",
+        "name": "Fire seed",
         "type": "material",
         "sell": 30,
         "rare": true
     },
     "seed_ice": {
-        "name": "Hạt Giống Băng",
+        "name": "Ice seed",
         "type": "material",
         "sell": 25,
         "rare": true
     },
     "seed_star": {
-        "name": "Hạt Giống Sao",
+        "name": "Star seed",
         "type": "material",
         "sell": 60,
         "rare": true
     },
     "plot_kit": {
-        "name": "Luống Đất Mới",
+        "name": "Garden bed kit",
         "type": "placeable",
         "sell": 20
     },
     "meat": {
-        "name": "Thịt Tươi",
+        "name": "Meat",
         "type": "food",
         "sell": 3,
         "heal": 25
     },
     "leather": {
-        "name": "Da Thú",
+        "name": "Leather",
         "type": "material",
         "sell": 4
     },
     "bone": {
-        "name": "Xương",
+        "name": "Bone",
         "type": "material",
         "sell": 3
     },
     "manure": {
-        "name": "Phân Bón",
+        "name": "Fertilizer",
         "type": "farm",
         "sell": 2,
         "grow": 0.5
     },
     "spore": {
-        "name": "Bào Tử Kỳ Diệu",
+        "name": "Magic spore",
         "type": "farm",
         "sell": 25,
         "grow": 0.5,
         "rare": true
     },
     "tusk": {
-        "name": "Nanh Heo Rừng",
+        "name": "Tusk",
         "type": "material",
         "sell": 20,
         "rare": true
     },
     "claw": {
-        "name": "Vuốt Sói",
+        "name": "Claw",
         "type": "food",
         "sell": 22,
         "buff": {
@@ -371,12 +371,12 @@ const ITEM_FACTS: Record<string, any> = {
         "rare": true
     },
     "sap": {
-        "name": "Nhựa Cây Dính",
+        "name": "Sap",
         "type": "material",
         "sell": 5
     },
     "nectar": {
-        "name": "Mật Hoa Độc",
+        "name": "Nectar",
         "type": "food",
         "sell": 24,
         "buff": {
@@ -386,12 +386,12 @@ const ITEM_FACTS: Record<string, any> = {
         "rare": true
     },
     "spine": {
-        "name": "Gai Xương Rồng",
+        "name": "Cactus spine",
         "type": "material",
         "sell": 4
     },
     "cwater": {
-        "name": "Nước Xương Rồng",
+        "name": "Cactus water",
         "type": "food",
         "sell": 8,
         "heal": 40,
@@ -401,7 +401,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "bloom": {
-        "name": "Hoa Sa Mạc",
+        "name": "Wild flower",
         "type": "food",
         "sell": 30,
         "buff": {
@@ -411,7 +411,7 @@ const ITEM_FACTS: Record<string, any> = {
         "rare": true
     },
     "honey": {
-        "name": "Mật Ong Vàng",
+        "name": "Honey",
         "type": "food",
         "sell": 40,
         "heal": 9999,
@@ -422,155 +422,155 @@ const ITEM_FACTS: Record<string, any> = {
         "rare": true
     },
     "sugar": {
-        "name": "Đường Kẹo Sao",
+        "name": "Sugar",
         "type": "material",
         "sell": 7
     },
     "icecrystal": {
-        "name": "Tinh Thể Băng",
+        "name": "Ice crystal",
         "type": "material",
         "sell": 10
     },
     "magma": {
-        "name": "Lõi Magma",
+        "name": "Magma",
         "type": "material",
         "sell": 14
     },
     "starshard": {
-        "name": "Mảnh Sao Băng",
+        "name": "Star shard",
         "type": "material",
         "sell": 60,
         "rare": true
     },
     "mcrystal": {
-        "name": "Tinh Thể Magma",
+        "name": "Magma crystal",
         "type": "material",
         "sell": 12
     },
     "obsidian": {
-        "name": "Đá Vỏ Chai",
+        "name": "Obsidian",
         "type": "material",
         "sell": 18
     },
     "firecore": {
-        "name": "Lõi Lửa",
+        "name": "Fire core",
         "type": "material",
         "sell": 45,
         "rare": true
     },
     "dragonscale": {
-        "name": "Vảy Rồng",
+        "name": "Dragon scale",
         "type": "material",
         "sell": 120,
         "rare": true
     },
     "fcrystal": {
-        "name": "Pha Lê Lửa",
+        "name": "Fire crystal",
         "type": "material",
         "sell": 15
     },
     "gear": {
-        "name": "Bánh Răng Đồ Chơi",
+        "name": "Toy gear",
         "type": "material",
         "sell": 10
     },
     "battery": {
-        "name": "Pin Siêu Cấp",
+        "name": "Battery",
         "type": "material",
         "sell": 40,
         "rare": true
     },
     "vine": {
-        "name": "Dây Leo Bền Chắc",
+        "name": "Vine",
         "type": "material",
         "sell": 12
     },
     "amber": {
-        "name": "Hổ Phách Cổ",
+        "name": "Amber",
         "type": "material",
         "sell": 55,
         "rare": true
     },
     "pearl": {
-        "name": "Ngọc Trai",
+        "name": "Pearl",
         "type": "material",
         "sell": 60,
         "rare": true
     },
     "coral": {
-        "name": "San Hô Đỏ",
+        "name": "Coral",
         "type": "material",
         "sell": 14
     },
     "feather": {
-        "name": "Lông Vũ Mây",
+        "name": "Feather",
         "type": "material",
         "sell": 16
     },
     "thunderstone": {
-        "name": "Đá Sấm Sét",
+        "name": "Thunder stone",
         "type": "material",
         "sell": 70,
         "rare": true
     },
     "shadow": {
-        "name": "Tinh Chất Bóng Đêm",
+        "name": "Shadow essence",
         "type": "material",
         "sell": 22
     },
     "moonstone": {
-        "name": "Đá Mặt Trăng",
+        "name": "Moonstone",
         "type": "material",
         "sell": 90,
         "rare": true
     },
     "dragonegg": {
-        "name": "Trứng Rồng Lửa",
+        "name": "Dragon egg",
         "type": "material",
         "sell": 200,
         "rare": true
     },
     "potion": {
-        "name": "Bình Máu",
+        "name": "Healing potion",
         "type": "food",
         "sell": 6,
         "heal": 70
     },
     "worm": {
-        "name": "Mồi Giun",
+        "name": "Worm bait",
         "type": "bait",
         "sell": 1
     },
     "fish_perch": {
-        "name": "Cá Rô Tí Hon",
+        "name": "Perch",
         "type": "fish",
         "sell": 6,
         "heal": 15,
         "power": 0.2
     },
     "fish_clown": {
-        "name": "Cá Hề Cam",
+        "name": "Clownfish",
         "type": "fish",
         "sell": 10,
         "heal": 20,
         "power": 0.3
     },
     "fish_puffer": {
-        "name": "Cá Nóc Tròn",
+        "name": "Pufferfish",
         "type": "fish",
         "sell": 18,
         "heal": 10,
         "power": 0.45
     },
     "fish_carp": {
-        "name": "Cá Chép Vàng",
+        "name": "Carp",
         "type": "fish",
         "sell": 28,
         "heal": 35,
         "power": 0.62
     },
     "fish_shark": {
-        "name": "Cá Mập Con",
+        "name": "Shark",
         "type": "fish",
         "sell": 65,
         "heal": 60,
@@ -578,7 +578,7 @@ const ITEM_FACTS: Record<string, any> = {
         "power": 0.92
     },
     "fish_rainbow": {
-        "name": "Cá Cầu Vồng",
+        "name": "Rainbow fish",
         "type": "fish",
         "sell": 160,
         "heal": 100,
@@ -591,7 +591,7 @@ const ITEM_FACTS: Record<string, any> = {
         "power": 0.8
     },
     "fish_catfish": {
-        "name": "Cá Trê Râu Dài",
+        "name": "Catfish",
         "type": "fish",
         "sell": 22,
         "heal": 30,
@@ -602,7 +602,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_koi": {
-        "name": "Cá Koi Rồng",
+        "name": "Koi",
         "type": "fish",
         "sell": 45,
         "heal": 30,
@@ -618,7 +618,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_eel": {
-        "name": "Lươn Điện",
+        "name": "Eel",
         "type": "fish",
         "sell": 70,
         "heal": 25,
@@ -634,7 +634,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_swordfish": {
-        "name": "Cá Kiếm",
+        "name": "Swordfish",
         "type": "fish",
         "sell": 90,
         "heal": 50,
@@ -650,7 +650,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_jelly": {
-        "name": "Sứa Kẹo Dẻo",
+        "name": "Jellyfish",
         "type": "fish",
         "sell": 26,
         "heal": 25,
@@ -661,7 +661,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_icepike": {
-        "name": "Cá Chó Băng",
+        "name": "Ice pike",
         "type": "fish",
         "sell": 48,
         "heal": 40,
@@ -676,7 +676,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_whale": {
-        "name": "Cá Voi Con KHỦNG",
+        "name": "Whale",
         "type": "fish",
         "sell": 420,
         "heal": 200,
@@ -694,7 +694,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_kraken": {
-        "name": "Bạch Tuộc Khổng Lồ",
+        "name": "Kraken",
         "type": "fish",
         "sell": 380,
         "heal": 150,
@@ -711,7 +711,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_golden": {
-        "name": "Cá Rồng Vàng",
+        "name": "Golden fish",
         "type": "fish",
         "sell": 600,
         "heal": 9999,
@@ -731,7 +731,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_sunfish": {
-        "name": "Cá Mặt Trăng",
+        "name": "Sunfish",
         "type": "fish",
         "sell": 60,
         "heal": 60,
@@ -746,7 +746,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_angler": {
-        "name": "Cá Lồng Đèn",
+        "name": "Anglerfish",
         "type": "fish",
         "sell": 85,
         "heal": 40,
@@ -762,7 +762,7 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "fish_manta": {
-        "name": "Cá Đuối Khổng Lồ",
+        "name": "Manta ray",
         "type": "fish",
         "sell": 320,
         "heal": 150,
@@ -780,13 +780,13 @@ const ITEM_FACTS: Record<string, any> = {
         ]
     },
     "boot": {
-        "name": "Chiếc Ủng Cũ",
+        "name": "Old boot",
         "type": "junk",
         "sell": 1,
         "power": 0.15
     },
     "sword_wood": {
-        "name": "Kiếm Gỗ",
+        "name": "Wood sword",
         "type": "weapon",
         "sell": 10,
         "stats": {
@@ -801,7 +801,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "sword_tusk": {
-        "name": "Kiếm Nanh Heo",
+        "name": "Tusk sword",
         "type": "weapon",
         "sell": 45,
         "stats": {
@@ -817,7 +817,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "sword_crystal": {
-        "name": "Kiếm Pha Lê",
+        "name": "Crystal sword",
         "type": "weapon",
         "sell": 150,
         "stats": {
@@ -833,7 +833,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "gun_pea": {
-        "name": "Súng Hạt Đậu",
+        "name": "Pea blaster",
         "type": "weapon",
         "sell": 20,
         "stats": {
@@ -848,7 +848,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "gun_bubble": {
-        "name": "Súng Bong Bóng",
+        "name": "Bubble blaster",
         "type": "weapon",
         "sell": 70,
         "stats": {
@@ -863,7 +863,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "gun_spike": {
-        "name": "Súng Gai",
+        "name": "Spike blaster",
         "type": "weapon",
         "sell": 110,
         "stats": {
@@ -879,7 +879,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "sword_candy": {
-        "name": "Kiếm Kẹo Gậy",
+        "name": "Candy sword",
         "type": "weapon",
         "sell": 90,
         "stats": {
@@ -895,7 +895,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "gun_ice": {
-        "name": "Súng Băng",
+        "name": "Ice blaster",
         "type": "weapon",
         "sell": 130,
         "stats": {
@@ -910,7 +910,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "sword_lava": {
-        "name": "Kiếm Dung Nham",
+        "name": "Lava sword",
         "type": "weapon",
         "sell": 220,
         "stats": {
@@ -926,7 +926,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "sword_obsidian": {
-        "name": "Kiếm Hắc Diện",
+        "name": "Obsidian sword",
         "type": "weapon",
         "sell": 260,
         "stats": {
@@ -942,7 +942,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hammer_thunder": {
-        "name": "Búa Sấm Sét",
+        "name": "Thunder hammer",
         "type": "weapon",
         "sell": 300,
         "rare": true,
@@ -960,7 +960,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "scythe_moon": {
-        "name": "Lưỡi Hái Trăng",
+        "name": "Moon scythe",
         "type": "weapon",
         "sell": 320,
         "rare": true,
@@ -978,7 +978,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "bow_star": {
-        "name": "Cung Sao Băng",
+        "name": "Star bow",
         "type": "weapon",
         "sell": 280,
         "rare": true,
@@ -995,7 +995,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "staff_fire": {
-        "name": "Trượng Hoả Long",
+        "name": "Fire staff",
         "type": "weapon",
         "sell": 340,
         "rare": true,
@@ -1011,7 +1011,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "blaster_rainbow": {
-        "name": "Súng Cầu Vồng",
+        "name": "Rainbow blaster",
         "type": "weapon",
         "sell": 380,
         "rare": true,
@@ -1028,7 +1028,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "toy_hammer": {
-        "name": "Búa Kêu Chít Chít",
+        "name": "Toy hammer",
         "type": "weapon",
         "sell": 120,
         "stats": {
@@ -1045,7 +1045,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "trident": {
-        "name": "Đinh Ba Thuỷ Thần",
+        "name": "Ocean trident",
         "type": "weapon",
         "sell": 340,
         "rare": true,
@@ -1063,7 +1063,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "rod": {
-        "name": "Cần Câu Tre",
+        "name": "Fishing rod",
         "type": "weapon",
         "sell": 10,
         "weapon": {
@@ -1072,7 +1072,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "rod_gold": {
-        "name": "Cần Câu Vàng",
+        "name": "Golden fishing rod",
         "type": "weapon",
         "sell": 75,
         "weapon": {
@@ -1081,7 +1081,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "rod_steady": {
-        "name": "Cần Câu Vững Chãi",
+        "name": "Steady fishing rod",
         "type": "weapon",
         "sell": 300,
         "weapon": {
@@ -1091,7 +1091,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_straw": {
-        "name": "Mũ Rơm",
+        "name": "Straw hat",
         "type": "hat",
         "sell": 10,
         "stats": {
@@ -1100,7 +1100,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_leather": {
-        "name": "Mũ Phi Công Da",
+        "name": "Leather hat",
         "type": "hat",
         "sell": 25,
         "stats": {
@@ -1109,7 +1109,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_bear": {
-        "name": "Mũ Trùm Gấu",
+        "name": "Bear hat",
         "type": "hat",
         "sell": 90,
         "rare": true,
@@ -1120,7 +1120,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "crown": {
-        "name": "Vương Miện Gấu",
+        "name": "Royal crown",
         "type": "hat",
         "sell": 200,
         "rare": true,
@@ -1130,7 +1130,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_space": {
-        "name": "Mũ Phi Hành Gia",
+        "name": "Space hat",
         "type": "hat",
         "sell": 120,
         "stats": {
@@ -1140,7 +1140,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_leather": {
-        "name": "Áo Da",
+        "name": "Leather outfit",
         "type": "armor",
         "sell": 30,
         "stats": {
@@ -1149,7 +1149,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_wolf": {
-        "name": "Áo Lông Sói",
+        "name": "Wolf outfit",
         "type": "armor",
         "sell": 65,
         "stats": {
@@ -1159,7 +1159,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_space": {
-        "name": "Bộ Đồ Phi Hành Gia",
+        "name": "Space outfit",
         "type": "armor",
         "sell": 180,
         "stats": {
@@ -1169,7 +1169,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_bone": {
-        "name": "Giáp Xương",
+        "name": "Bone outfit",
         "type": "armor",
         "sell": 100,
         "stats": {
@@ -1178,7 +1178,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_leaf": {
-        "name": "Áo Lá Rừng Xanh",
+        "name": "Leaf outfit",
         "type": "armor",
         "sell": 140,
         "stats": {
@@ -1189,7 +1189,7 @@ const ITEM_FACTS: Record<string, any> = {
         "antidote": true
     },
     "armor_cloud": {
-        "name": "Áo Mây Bồng Bềnh",
+        "name": "Cloud outfit",
         "type": "armor",
         "sell": 260,
         "stats": {
@@ -1200,7 +1200,7 @@ const ITEM_FACTS: Record<string, any> = {
         "featherfall": true
     },
     "hat_lantern": {
-        "name": "Mũ Đèn Lồng Hồn",
+        "name": "Lantern hat",
         "type": "hat",
         "sell": 200,
         "stats": {
@@ -1210,7 +1210,7 @@ const ITEM_FACTS: Record<string, any> = {
         "light": true
     },
     "armor_wings": {
-        "name": "Cánh Lửa",
+        "name": "Dragon wings",
         "type": "armor",
         "sell": 240,
         "stats": {
@@ -1220,7 +1220,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "dz_ninja": {
-        "name": "🥷 Cải Trang Ninja",
+        "name": "Shadow ninja",
         "type": "disguise",
         "sell": 200,
         "rare": true,
@@ -1231,7 +1231,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "dz_mage": {
-        "name": "🧙 Cải Trang Pháp Sư",
+        "name": "Archmage",
         "type": "disguise",
         "sell": 220,
         "rare": true,
@@ -1241,7 +1241,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "dz_knight": {
-        "name": "🛡️ Cải Trang Hiệp Sĩ",
+        "name": "Sun knight",
         "type": "disguise",
         "sell": 220,
         "rare": true,
@@ -1252,7 +1252,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "dz_mecha": {
-        "name": "🤖 Cải Trang Robot",
+        "name": "Battle robot",
         "type": "disguise",
         "sell": 260,
         "rare": true,
@@ -1263,7 +1263,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "dz_dino": {
-        "name": "🦖 Cải Trang Khủng Long",
+        "name": "Tyrannosaur",
         "type": "disguise",
         "sell": 240,
         "rare": true,
@@ -1273,7 +1273,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "dz_fairy": {
-        "name": "🧚 Cải Trang Tiên Hoa",
+        "name": "Flower fairy",
         "type": "disguise",
         "sell": 200,
         "rare": true,
@@ -1284,7 +1284,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "dz_pirate": {
-        "name": "🏴‍☠️ Cải Trang Hải Tặc",
+        "name": "Pirate captain",
         "type": "disguise",
         "sell": 230,
         "rare": true,
@@ -1295,49 +1295,49 @@ const ITEM_FACTS: Record<string, any> = {
         "luck": 0.25
     },
     "dz_army": {
-        "name": "🎖️ Cải Trang Chiến Sĩ",
+        "name": "Army soldier",
         "type": "disguise",
         "sell": 230,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
     "dz_navy": {
-        "name": "⚓ Cải Trang Thủy Thủ",
+        "name": "Navy sailor",
         "type": "disguise",
         "sell": 230,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
     "dz_aodai": {
-        "name": "🪷 Cải Trang Áo Dài",
+        "name": "Ao dai lady",
         "type": "disguise",
         "sell": 230,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
     "dz_aodai_man": {
-        "name": "🐉 Cải Trang Áo Dài Nam",
+        "name": "Ao dai gentleman",
         "type": "disguise",
         "sell": 230,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
     "dz_usa": {
-        "name": "🦅 Cải Trang Cờ Hoa Kỳ",
+        "name": "Stars and stripes",
         "type": "disguise",
         "sell": 230,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
     "dz_vietnam": {
-        "name": "⭐ Cải Trang Cờ Đỏ Sao Vàng",
+        "name": "Vietnam flag",
         "type": "disguise",
         "sell": 230,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
     "dz_superhero": {
-        "name": "🦸 Cải Trang Siêu Anh Hùng",
+        "name": "Superhero",
         "type": "disguise",
         "sell": 300,
         "rare": true,
@@ -1348,7 +1348,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "dz_vampire": {
-        "name": "🧛 Cải Trang Ma Cà Rồng",
+        "name": "Vampire count",
         "type": "disguise",
         "sell": 280,
         "rare": true,
@@ -1358,7 +1358,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "dz_snowman": {
-        "name": "⛄ Cải Trang Người Tuyết",
+        "name": "Snowman",
         "type": "disguise",
         "sell": 180,
         "rare": true,
@@ -1368,7 +1368,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_cowboy": {
-        "name": "Mũ Cao Bồi",
+        "name": "Cowboy hat",
         "type": "hat",
         "sell": 30,
         "stats": {
@@ -1378,7 +1378,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_wizard": {
-        "name": "Mũ Phù Thuỷ",
+        "name": "Wizard hat",
         "type": "hat",
         "sell": 60,
         "stats": {
@@ -1388,7 +1388,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_pirate": {
-        "name": "Mũ Thuyền Trưởng",
+        "name": "Pirate hat",
         "type": "hat",
         "sell": 50,
         "stats": {
@@ -1398,7 +1398,7 @@ const ITEM_FACTS: Record<string, any> = {
         "luck": 0.1
     },
     "hat_chef": {
-        "name": "Mũ Đầu Bếp",
+        "name": "Chef hat",
         "type": "hat",
         "sell": 35,
         "stats": {
@@ -1407,7 +1407,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_bunny": {
-        "name": "Băng Đô Tai Thỏ",
+        "name": "Bunny hat",
         "type": "hat",
         "sell": 30,
         "stats": {
@@ -1417,7 +1417,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_cat": {
-        "name": "Mũ Mèo Cam",
+        "name": "Cat hat",
         "type": "hat",
         "sell": 40,
         "stats": {
@@ -1426,7 +1426,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_viking": {
-        "name": "Mũ Sừng Viking",
+        "name": "Viking hat",
         "type": "hat",
         "sell": 80,
         "stats": {
@@ -1436,7 +1436,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_santa": {
-        "name": "Mũ Ông Già Noel",
+        "name": "Santa hat",
         "type": "hat",
         "sell": 45,
         "stats": {
@@ -1446,7 +1446,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_graduate": {
-        "name": "Mũ Tốt Nghiệp",
+        "name": "Graduation cap",
         "type": "hat",
         "sell": 70,
         "stats": {
@@ -1456,7 +1456,7 @@ const ITEM_FACTS: Record<string, any> = {
         "xp": 0.1
     },
     "hat_samurai": {
-        "name": "Mũ Giáp Samurai",
+        "name": "Samurai hat",
         "type": "hat",
         "sell": 110,
         "stats": {
@@ -1466,7 +1466,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_party": {
-        "name": "Mũ Tiệc Tùng",
+        "name": "Party hat",
         "type": "hat",
         "sell": 7,
         "stats": {
@@ -1474,7 +1474,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "hat_halo": {
-        "name": "Vầng Hào Quang",
+        "name": "Halo",
         "type": "hat",
         "sell": 150,
         "rare": true,
@@ -1486,7 +1486,7 @@ const ITEM_FACTS: Record<string, any> = {
         "light": true
     },
     "hat_frog": {
-        "name": "Mũ Ếch Xanh",
+        "name": "Frog hat",
         "type": "hat",
         "sell": 35,
         "stats": {
@@ -1496,7 +1496,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_knight": {
-        "name": "Giáp Hiệp Sĩ",
+        "name": "Knight outfit",
         "type": "armor",
         "sell": 160,
         "stats": {
@@ -1506,7 +1506,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_pirate": {
-        "name": "Áo Choàng Hải Tặc",
+        "name": "Pirate outfit",
         "type": "armor",
         "sell": 90,
         "stats": {
@@ -1517,7 +1517,7 @@ const ITEM_FACTS: Record<string, any> = {
         "luck": 0.1
     },
     "armor_chef": {
-        "name": "Áo Đầu Bếp",
+        "name": "Chef outfit",
         "type": "armor",
         "sell": 40,
         "stats": {
@@ -1527,7 +1527,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_tux": {
-        "name": "Áo Vest Lịch Lãm",
+        "name": "Tuxedo",
         "type": "armor",
         "sell": 120,
         "stats": {
@@ -1537,7 +1537,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_kimono": {
-        "name": "Áo Kimono Hoa",
+        "name": "Kimono",
         "type": "armor",
         "sell": 100,
         "stats": {
@@ -1547,7 +1547,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_hawaii": {
-        "name": "Áo Hawaii Mùa Hè",
+        "name": "Island shirt",
         "type": "armor",
         "sell": 45,
         "stats": {
@@ -1557,7 +1557,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_superhero": {
-        "name": "Bộ Đồ Siêu Anh Hùng",
+        "name": "Superhero outfit",
         "type": "armor",
         "sell": 220,
         "rare": true,
@@ -1569,7 +1569,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_angel": {
-        "name": "Áo Cánh Thiên Thần",
+        "name": "Angel outfit",
         "type": "armor",
         "sell": 260,
         "rare": true,
@@ -1581,7 +1581,7 @@ const ITEM_FACTS: Record<string, any> = {
         "featherfall": true
     },
     "armor_santa": {
-        "name": "Áo Ông Già Noel",
+        "name": "Santa outfit",
         "type": "armor",
         "sell": 70,
         "stats": {
@@ -1590,7 +1590,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_hoodie": {
-        "name": "Áo Hoodie Cam",
+        "name": "Hoodie",
         "type": "armor",
         "sell": 35,
         "stats": {
@@ -1600,43 +1600,43 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "armor_army": {
-        "name": "Quân Phục Sao Đỏ",
+        "name": "Army uniform",
         "type": "armor",
         "sell": 90,
         "stats": {"def": 14, "hp": 45, "crit": 0.05}
     },
     "armor_navy": {
-        "name": "Quân Phục Hải Quân",
+        "name": "Navy uniform",
         "type": "armor",
         "sell": 90,
         "stats": {"def": 12, "hp": 40, "speed": 0.04}
     },
     "armor_aodai": {
-        "name": "Áo Dài Việt Nam",
+        "name": "Vietnamese long dress",
         "type": "armor",
         "sell": 95,
         "stats": {"def": 10, "hp": 50, "regen": 1}
     },
     "armor_aodai_man": {
-        "name": "Áo Dài Nam Gấm",
+        "name": "Vietnamese long gown",
         "type": "armor",
         "sell": 95,
         "stats": {"def": 13, "hp": 40, "crit": 0.06}
     },
     "armor_usa": {
-        "name": "Áo Cờ Hoa Kỳ",
+        "name": "Stars and stripes outfit",
         "type": "armor",
         "sell": 85,
         "stats": {"def": 11, "hp": 35, "speed": 0.05}
     },
     "armor_vietnam": {
-        "name": "Áo Cờ Đỏ Sao Vàng",
+        "name": "Vietnam flag outfit",
         "type": "armor",
         "sell": 85,
         "stats": {"def": 11, "hp": 45, "crit": 0.05}
     },
     "boots_rocket": {
-        "name": "Giày Tên Lửa",
+        "name": "Rocket boots",
         "type": "feet",
         "sell": 200,
         "rare": true,
@@ -1646,7 +1646,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "boots_cowboy": {
-        "name": "Ủng Cao Bồi",
+        "name": "Cowboy boots",
         "type": "feet",
         "sell": 50,
         "stats": {
@@ -1655,7 +1655,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "boots_flipper": {
-        "name": "Chân Vịt Lặn",
+        "name": "Swim flippers",
         "type": "feet",
         "sell": 90,
         "stats": {
@@ -1663,7 +1663,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "boots_cloud": {
-        "name": "Giày Mây Bay",
+        "name": "Cloud boots",
         "type": "feet",
         "sell": 160,
         "stats": {
@@ -1673,7 +1673,7 @@ const ITEM_FACTS: Record<string, any> = {
         "featherfall": true
     },
     "boots_lava": {
-        "name": "Giày Chống Dung Nham",
+        "name": "Lava boots",
         "type": "feet",
         "sell": 90,
         "stats": {
@@ -1696,7 +1696,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "pet_parrot": {
-        "name": "Vẹt Nhí Nhảnh",
+        "name": "Parrot companion",
         "type": "pet",
         "sell": 160,
         "stats": {
@@ -1711,7 +1711,7 @@ const ITEM_FACTS: Record<string, any> = {
         "luck": 0.15
     },
     "pet_turtle": {
-        "name": "Rùa Biển Con",
+        "name": "Turtle companion",
         "type": "pet",
         "sell": 180,
         "stats": {
@@ -1725,7 +1725,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "pet_sheep": {
-        "name": "Cừu Mây Con",
+        "name": "Sheep companion",
         "type": "pet",
         "sell": 220,
         "stats": {
@@ -1739,7 +1739,7 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "pet_firefly": {
-        "name": "Đom Đóm Sáng",
+        "name": "Firefly companion",
         "type": "pet",
         "sell": 260,
         "stats": {
@@ -1754,7 +1754,7 @@ const ITEM_FACTS: Record<string, any> = {
         "light": true
     },
     "pet_dragon": {
-        "name": "Rồng Con",
+        "name": "Dragon companion",
         "type": "pet",
         "sell": 300,
         "rare": true,
@@ -1768,14 +1768,14 @@ const ITEM_FACTS: Record<string, any> = {
         }
     },
     "deco_volcano": {
-        "name": "Núi Lửa Mini",
+        "name": "Little volcano",
         "type": "decor",
         "sell": 20,
         "collider": 0.8,
         "set": "lava"
     },
     "deco_lamp": {
-        "name": "Đèn Dung Nham",
+        "name": "Lava lamp",
         "type": "decor",
         "sell": 30,
         "light": "#ff8a3d",
@@ -1783,14 +1783,14 @@ const ITEM_FACTS: Record<string, any> = {
         "set": "lava"
     },
     "deco_table": {
-        "name": "Bàn Hắc Diện",
+        "name": "Obsidian table",
         "type": "decor",
         "sell": 45,
         "collider": 1.1,
         "set": "lava"
     },
     "deco_statue": {
-        "name": "Tượng Người Đá",
+        "name": "Golem statue",
         "type": "decor",
         "sell": 80,
         "rare": true,
@@ -1798,7 +1798,7 @@ const ITEM_FACTS: Record<string, any> = {
         "set": "lava"
     },
     "deco_nest": {
-        "name": "Tổ Trứng Rồng",
+        "name": "Dragon nest",
         "type": "decor",
         "sell": 90,
         "rare": true,
@@ -1806,7 +1806,7 @@ const ITEM_FACTS: Record<string, any> = {
         "set": "lava"
     },
     "deco_trophy": {
-        "name": "Cúp Đầu Rồng",
+        "name": "Dragon trophy",
         "type": "decor",
         "sell": 150,
         "rare": true,
@@ -1814,21 +1814,21 @@ const ITEM_FACTS: Record<string, any> = {
         "set": "lava"
     },
     "deco_teddy": {
-        "name": "Gấu Bông Khổng Lồ",
+        "name": "Giant teddy",
         "type": "decor",
         "sell": 40,
         "collider": 0.6,
         "set": "toy"
     },
     "deco_musicbox": {
-        "name": "Hộp Nhạc Vũ Công",
+        "name": "Music box",
         "type": "decor",
         "sell": 55,
         "collider": 0.5,
         "set": "toy"
     },
     "deco_traincar": {
-        "name": "Đầu Tàu Đồ Chơi",
+        "name": "Toy train",
         "type": "decor",
         "sell": 80,
         "rare": true,
@@ -1836,21 +1836,21 @@ const ITEM_FACTS: Record<string, any> = {
         "set": "toy"
     },
     "deco_totem": {
-        "name": "Cột Totem Rừng Sâu",
+        "name": "Forest totem",
         "type": "decor",
         "sell": 60,
         "collider": 0.4,
         "set": "jungle"
     },
     "deco_rafflesia": {
-        "name": "Hoa Xác Thối Khổng Lồ",
+        "name": "Giant forest flower",
         "type": "decor",
         "sell": 45,
         "collider": 0.8,
         "set": "jungle"
     },
     "deco_fruittree": {
-        "name": "Cây Quả Rừng",
+        "name": "Fruit tree",
         "type": "decor",
         "sell": 90,
         "rare": true,
@@ -1858,21 +1858,21 @@ const ITEM_FACTS: Record<string, any> = {
         "set": "jungle"
     },
     "deco_aquarium": {
-        "name": "Bể Cá San Hô",
+        "name": "Coral aquarium",
         "type": "decor",
         "sell": 90,
         "collider": 0.8,
         "set": "ocean"
     },
     "deco_shell": {
-        "name": "Vỏ Ốc Khổng Lồ",
+        "name": "Giant seashell",
         "type": "decor",
         "sell": 50,
         "collider": 0.6,
         "set": "ocean"
     },
     "deco_piratechest": {
-        "name": "Rương Hải Tặc",
+        "name": "Pirate treasure",
         "type": "decor",
         "sell": 150,
         "rare": true,
@@ -1880,21 +1880,21 @@ const ITEM_FACTS: Record<string, any> = {
         "set": "ocean"
     },
     "deco_cloudsofa": {
-        "name": "Ghế Mây Êm Ái",
+        "name": "Cloud sofa",
         "type": "decor",
         "sell": 70,
         "collider": 0.8,
         "set": "sky"
     },
     "deco_windchime": {
-        "name": "Chuông Gió Pha Lê",
+        "name": "Crystal wind chime",
         "type": "decor",
         "sell": 60,
         "collider": 0.3,
         "set": "sky"
     },
     "deco_rainbow": {
-        "name": "Cổng Cầu Vồng",
+        "name": "Rainbow arch",
         "type": "decor",
         "sell": 160,
         "rare": true,
@@ -1902,21 +1902,21 @@ const ITEM_FACTS: Record<string, any> = {
         "set": "sky"
     },
     "deco_ghostlantern": {
-        "name": "Đèn Lồng Ma",
+        "name": "Ghost lantern",
         "type": "decor",
         "sell": 60,
         "collider": 0.3,
         "set": "dark"
     },
     "deco_nightcrystal": {
-        "name": "Pha Lê Đêm",
+        "name": "Night crystal",
         "type": "decor",
         "sell": 90,
         "collider": 0.6,
         "set": "dark"
     },
     "deco_owlstatue": {
-        "name": "Tượng Cú Đêm",
+        "name": "Owl statue",
         "type": "decor",
         "sell": 180,
         "rare": true,
@@ -1926,7 +1926,7 @@ const ITEM_FACTS: Record<string, any> = {
 };
 const PLANET_FACTS: Record<string, any> = {
     "home": {
-        "name": "Hành Tinh Mầm Xanh",
+        "name": "Clover Village",
         "emoji": "🌱",
         "lvl": 1,
         "fuel": 0,
@@ -1938,7 +1938,7 @@ const PLANET_FACTS: Record<string, any> = {
         ]
     },
     "candy": {
-        "name": "Hành Tinh Kẹo Ngọt",
+        "name": "Candy Planet",
         "emoji": "🍭",
         "lvl": 6,
         "fuel": 40,
@@ -1983,7 +1983,7 @@ const PLANET_FACTS: Record<string, any> = {
         ]
     },
     "ice": {
-        "name": "Hành Tinh Băng Giá",
+        "name": "Frost Planet",
         "emoji": "❄️",
         "lvl": 10,
         "fuel": 80,
@@ -2028,7 +2028,7 @@ const PLANET_FACTS: Record<string, any> = {
         ]
     },
     "lava": {
-        "name": "Hành Tinh Dung Nham",
+        "name": "Volcano Planet",
         "emoji": "🌋",
         "lvl": 14,
         "fuel": 140,
@@ -2080,7 +2080,7 @@ const PLANET_FACTS: Record<string, any> = {
         ]
     },
     "toy": {
-        "name": "Hành Tinh Đồ Chơi",
+        "name": "Toybox Planet",
         "emoji": "🧸",
         "lvl": 4,
         "fuel": 30,
@@ -2115,7 +2115,7 @@ const PLANET_FACTS: Record<string, any> = {
         ]
     },
     "jungle": {
-        "name": "Rừng Rậm Nguyên Sinh",
+        "name": "Wild Jungle",
         "emoji": "🌿",
         "lvl": 8,
         "fuel": 60,
@@ -2154,7 +2154,7 @@ const PLANET_FACTS: Record<string, any> = {
         ]
     },
     "ocean": {
-        "name": "Hành Tinh Đại Dương",
+        "name": "Ocean Planet",
         "emoji": "🌊",
         "lvl": 12,
         "fuel": 90,
@@ -2193,7 +2193,7 @@ const PLANET_FACTS: Record<string, any> = {
         ]
     },
     "sky": {
-        "name": "Quần Đảo Mây Trời",
+        "name": "Cloud Islands",
         "emoji": "☁️",
         "lvl": 16,
         "fuel": 120,
@@ -2228,7 +2228,7 @@ const PLANET_FACTS: Record<string, any> = {
         ]
     },
     "dark": {
-        "name": "Tinh Cầu Bóng Đêm",
+        "name": "Night Planet",
         "emoji": "🌑",
         "lvl": 20,
         "fuel": 160,
@@ -2273,7 +2273,7 @@ const SHOP_FACTS: {
     }[];
 }[] = [
     {
-        "tab": "Vũ khí",
+        "tab": "Weapons",
         "items": [
             {
                 "id": "sword_wood",
@@ -2318,7 +2318,7 @@ const SHOP_FACTS: {
         ]
     },
     {
-        "tab": "Trang phục",
+        "tab": "Equipment",
         "items": [
             {
                 "id": "hat_straw",
@@ -2357,7 +2357,7 @@ const SHOP_FACTS: {
         ]
     },
     {
-        "tab": "Thời trang",
+        "tab": "Fashion",
         "items": [
             {
                 "id": "hat_party",
@@ -2599,7 +2599,7 @@ const SHOP_FACTS: {
         ]
     },
     {
-        "tab": "🎭 Cải trang",
+        "tab": "Disguises",
         "items": [
             {
                 "id": "dz_snowman",
@@ -2721,7 +2721,7 @@ const SHOP_FACTS: {
         ]
     },
     {
-        "tab": "Vật dụng",
+        "tab": "Supplies",
         "items": [
             {
                 "id": "potion",
@@ -2763,7 +2763,7 @@ const SHOP_FACTS: {
         ]
     },
     {
-        "tab": "Vũ trụ",
+        "tab": "Space gear",
         "items": [
             {
                 "id": "sword_candy",
@@ -2809,7 +2809,7 @@ const SHOP_FACTS: {
         ]
     },
     {
-        "tab": "Huyền thoại",
+        "tab": "Legendary",
         "items": [
             {
                 "id": "bow_star",
@@ -2870,7 +2870,7 @@ const CRAFT_FACTS: {
     }[];
 }[] = [
     {
-        "tab": "🌋 Trang bị",
+        "tab": "Volcano equipment",
         "items": [
             {
                 "id": "boots_lava",
@@ -2901,7 +2901,7 @@ const CRAFT_FACTS: {
         ]
     },
     {
-        "tab": "🐉 Thú cưng",
+        "tab": "Companions",
         "items": [
             {
                 "id": "pet_dragon",
@@ -3086,7 +3086,7 @@ const CRAFT_FACTS: {
         ]
     },
     {
-        "tab": "🏡 Trang trí",
+        "tab": "Toybox and jungle",
         "items": [
             {
                 "id": "deco_volcano",
@@ -3848,7 +3848,7 @@ const FISH_WEIGHTS_RAW: Record<string, [
 export const SPECIALS: Record<string, {
     name: string;
     cd: number;
-}> = { "volley": { "name": "Cork barrage", "cd": 7 }, "anchor": { "name": "Vung Mỏ Neo", "cd": 8 }, "lotus": { "name": "Cánh Sen Chữa Lành", "cd": 9 }, "dragon": { "name": "Quạt Rồng", "cd": 8 }, "eagle": { "name": "Đại Bàng Lao Xuống", "cd": 8 }, "goldstar": { "name": "Sao Vàng Bùng Nổ", "cd": 9 }, "fist": { "name": "Liên Hoàn Quyền", "cd": 6 }, "crescent": { "name": "Chém Trăng Khuyết", "cd": 6 }, "gore": { "name": "Húc Nanh", "cd": 7 }, "wave": { "name": "Kiếm Khí", "cd": 6 }, "peastorm": { "name": "Mưa Đậu", "cd": 8 }, "bigbubble": { "name": "Bong Bóng Nhốt", "cd": 10 }, "nova": { "name": "Bão Gai", "cd": 9 }, "blizzard": { "name": "Bão Tuyết", "cd": 9 }, "magma": { "name": "Cột Dung Nham", "cd": 8 }, "thunder": { "name": "Sấm Sét Trời Giáng", "cd": 9 }, "bonk": { "name": "Búa Nện Chít Chít", "cd": 7 }, "tsunami": { "name": "Sóng Thần", "cd": 9 }, "whirl": { "name": "Lốc Trăng", "cd": 8 }, "starfall": { "name": "Mưa Sao Băng", "cd": 9 }, "inferno": { "name": "Vòng Hoả Ngục", "cd": 9 }, "laser": { "name": "Tia Cầu Vồng", "cd": 8 } };
+}> = { "volley": { "name": "Cork barrage", "cd": 7 }, "anchor": { "name": "Anchor swing", "cd": 8 }, "lotus": { "name": "Lotus petals", "cd": 9 }, "dragon": { "name": "Dragon fan", "cd": 8 }, "eagle": { "name": "Eagle strike", "cd": 8 }, "goldstar": { "name": "Golden star burst", "cd": 9 }, "fist": { "name": "Rapid punches", "cd": 6 }, "crescent": { "name": "Crescent slash", "cd": 6 }, "gore": { "name": "Tusk charge", "cd": 7 }, "wave": { "name": "Blade wave", "cd": 6 }, "peastorm": { "name": "Pea storm", "cd": 8 }, "bigbubble": { "name": "Bubble cage", "cd": 10 }, "nova": { "name": "Spike storm", "cd": 9 }, "blizzard": { "name": "Blizzard", "cd": 9 }, "magma": { "name": "Magma pillar", "cd": 8 }, "thunder": { "name": "Chain lightning", "cd": 9 }, "bonk": { "name": "Squeaky smash", "cd": 7 }, "tsunami": { "name": "Wave fan", "cd": 9 }, "whirl": { "name": "Moon cyclone", "cd": 8 }, "starfall": { "name": "Starfall", "cd": 9 }, "inferno": { "name": "Inferno ring", "cd": 9 }, "laser": { "name": "Prism beam", "cd": 8 } };
 export const LOOT_TABLES: Record<string, [
     string,
     number,
@@ -3859,7 +3859,7 @@ export const COLLECTIONS: Record<string, {
     name: string;
     emoji: string;
     items: string[];
-}> = { "toy": { "name": "Hành Tinh Đồ Chơi", "emoji": "🧸", "items": ["deco_teddy", "deco_musicbox", "deco_traincar", "toy_hammer", "pet_robot", "battery"] }, "jungle": { "name": "Rừng Rậm Nguyên Sinh", "emoji": "🌿", "items": ["deco_totem", "deco_rafflesia", "deco_fruittree", "armor_leaf", "pet_parrot", "amber"] }, "ocean": { "name": "Hành Tinh Đại Dương", "emoji": "🌊", "items": ["deco_aquarium", "deco_shell", "deco_piratechest", "trident", "pet_turtle", "pearl", "fish_manta"] }, "sky": { "name": "Quần Đảo Mây Trời", "emoji": "☁️", "items": ["deco_cloudsofa", "deco_windchime", "deco_rainbow", "armor_cloud", "pet_sheep", "thunderstone"] }, "dark": { "name": "Tinh Cầu Bóng Đêm", "emoji": "🌑", "items": ["deco_ghostlantern", "deco_nightcrystal", "deco_owlstatue", "hat_lantern", "pet_firefly", "moonstone"] }, "lava": { "name": "Hành Tinh Dung Nham", "emoji": "🌋", "items": ["deco_volcano", "deco_lamp", "deco_table", "deco_statue", "deco_nest", "deco_trophy", "dragonegg", "pet_dragon", "boots_lava", "armor_wings", "sword_obsidian"] } };
+}> = { "toy": { "name": "Toybox Planet", "emoji": "🧸", "items": ["deco_teddy", "deco_musicbox", "deco_traincar", "toy_hammer", "pet_robot", "battery"] }, "jungle": { "name": "Wild Jungle", "emoji": "🌿", "items": ["deco_totem", "deco_rafflesia", "deco_fruittree", "armor_leaf", "pet_parrot", "amber"] }, "ocean": { "name": "Ocean Planet", "emoji": "🌊", "items": ["deco_aquarium", "deco_shell", "deco_piratechest", "trident", "pet_turtle", "pearl", "fish_manta"] }, "sky": { "name": "Cloud Islands", "emoji": "☁️", "items": ["deco_cloudsofa", "deco_windchime", "deco_rainbow", "armor_cloud", "pet_sheep", "thunderstone"] }, "dark": { "name": "Night Planet", "emoji": "🌑", "items": ["deco_ghostlantern", "deco_nightcrystal", "deco_owlstatue", "hat_lantern", "pet_firefly", "moonstone"] }, "lava": { "name": "Volcano Planet", "emoji": "🌋", "items": ["deco_volcano", "deco_lamp", "deco_table", "deco_statue", "deco_nest", "deco_trophy", "dragonegg", "pet_dragon", "boots_lava", "armor_wings", "sword_obsidian"] } };
 export const CROP_TIMER_VERSION = 3;
 /** These baseline definitions are scaled once on module load, never on saved inventory or EXP. */
 export const LEGACY_CROP_IDS = Object.freeze(Object.keys(CROP_FACTS));
@@ -3919,7 +3919,7 @@ for (const [id, base] of Object.entries({ ...ITEMS })) {
         for (const key of Object.keys(buff) as (keyof BuffDef)[])
             if (!['time', 'light', 'magnet'].includes(key))
                 buff[key] = (buff[key] || 0) * 1.35;
-    ITEMS[`cooked_${id}`] = { ...base, name: `${base.name} · Nướng`, icon: '🔥', type: 'food', slot: undefined, price: undefined, base: id, cooked: true, sell: Math.round(base.sell * 2.2) + 2, heal: base.heal! >= 9999 ? 9999 : (base.heal || 15) * 2, buff, desc: 'Cooked at home. Stronger healing and longer effects.' };
+    ITEMS[`cooked_${id}`] = { ...base, name: `${base.name} · Roasted`, icon: '🔥', type: 'food', slot: undefined, price: undefined, base: id, cooked: true, sell: Math.round(base.sell * 2.2) + 2, heal: base.heal! >= 9999 ? 9999 : (base.heal || 15) * 2, buff, desc: 'Cooked at home. Stronger healing and longer effects.' };
 }
 export const DISGUISES: Record<string, {
     name: string;
