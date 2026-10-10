@@ -3,6 +3,7 @@ import { ITEMS, PLANETS, COLLECTIONS, STORY_STEPS, type Inventory } from './cont
 import { stowItem, gainXp, xpNeeded, MAX_PLOTS, type SaveState } from './model.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import { kitchenLevel } from './difficulty.ts';
+import { catchUpStory } from './story-catchup.ts';
 export { STORY_STEPS } from './content.ts';
 export type ProgressKind = 'story' | 'daily' | 'weekly' | 'achievements' | 'pass' | 'bounties' | 'collection' | 'challenges';
 export interface ProgressEntry {
@@ -167,6 +168,7 @@ export function refreshProgress(s: SaveState, now = Date.now()) {
     // with the kitchen lock), progress made toward the other event does not count.
     const event = storyStep(p.story.index, s).event ?? '';
     if (p.story.event === undefined) p.story.event = event; else if (p.story.event !== event) { p.story.event = event; p.story.progress = 0; }
+    catchUpStory(s, storyStep(p.story.index, s)); // owning counts: story-catchup.ts
     if (!(p.pass.season >= season))
         p.pass = { season, stars: 0, claimed: [] };
     const key = `${s.planet}:${Math.floor(now / 1800000)}`;

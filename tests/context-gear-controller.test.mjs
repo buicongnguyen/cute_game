@@ -37,7 +37,7 @@ function fixture(...items) {
   const combatTimers = new CombatTimers();
   const ctx = vm.createContext({
     M, ContextGearSelection, FishingSimulation, FishingInput, planCast, selectCatch, catchWeight, attractMystery, mysteryMissed, mysteryLanded, mysteryCaller: newMysteryCaller(),
-    BASE_SKILLS, SPECIALS, fightNear, recordEvent: M.recordEvent,
+    BASE_SKILLS, SPECIALS, fightNear, recordEvent: M.recordEvent, esc: v => String(v),
     state, gearState: state, gearPlanet: state.planet, gearWater: false, combatGearUntil: 0,actionHandler:null,ctfApi:null,
     contextGear: new ContextGearSelection(), started: true, visiting: null, blocked: false,
     document: { hidden: false }, now: 1000, performance: { now: () => ctx.now },
@@ -146,7 +146,7 @@ test('without an owned rod casting opens the shop help and never starts a simula
   f.ctx.fish(f.pond);
   assert.equal(f.ctx.fishGame, null); assert.equal(f.calls.casts.length, 0); assert.equal(f.calls.dialogs.length, 1);
   assert.equal(f.calls.dialogs[0][0], 'fish-help');
-  assert.match(f.calls.dialogs[0][2], /data-action="go" data-kind="shop"/);
+  assert.match(f.calls.dialogs[0][2], /data-action="shop-rod"/); assert.match(f.calls.dialogs[0][2], /bamboo rod costs/);
   assert.doesNotMatch(f.calls.dialogs[0][2], /equip-rod/);
   assert.equal(f.calls.refresh, 0); assert.equal(f.calls.save, 0);
   f.ctx.world.position.x = 50; f.ctx.fish(f.pond);

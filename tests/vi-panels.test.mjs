@@ -10,6 +10,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 // look-shop.ts and others import their stylesheet; Node only needs the code.
 registerHooks({load(url,context,next){return url.endsWith('.css')?{format:'module',source:'',shortCircuit:true}:next(url,context);}});
+const GUIDE=await import('../src/guide.ts');
 const M=await import('../src/model.ts');
 const P=await import('../src/progression.ts');
 const {t,localizeHtml,setLanguage,getLanguage}=await import('../src/i18n.ts');
@@ -91,7 +92,7 @@ function advancedState(){
 function mainPanels(state){
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
-  const context={cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},...extraModules,M,IG,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,ICON_BASE:'/assets/icons/',localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
+  const context={...GUIDE,cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},...extraModules,M,IG,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,ICON_BASE:'/assets/icons/',localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
     HELP_TOPICS,joystickEnabled:()=>state.settings.movePad??false,neighboursOn:()=>true,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},

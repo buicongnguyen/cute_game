@@ -22,7 +22,7 @@ function fixture(){
   const ctx=vm.createContext({M,graphics,frameTime:0,previous:0,elapsed:0,uiElapsed:0,flight,arriving:false,
     document:{hidden:false,addEventListener:(name,fn)=>handlers.set(name,fn)},performance:{now:()=>now},
     spaceKeys:new Set(),spacePointer:null,boostHeld:false,innerWidth:390,innerHeight:844,
-    world:{renderer:{}},state:{level:60,energy:100},spaceView:{update:noop,render:()=>draws++,drawRadar:noop},
+    world:{renderer:{}},state:{level:60,energy:100},spaceHome:{update:noop},spaceView:{update:noop,render:()=>draws++,drawRadar:noop},
     onSpaceEvent:event=>events.push(event),$:()=>({style:{},classList:{toggle:noop},getContext:()=>null}),
     t:text=>text,updateHud:noop,save:()=>saves++,requestAnimationFrame:()=>scheduled++});
   vm.runInContext(code,ctx);
