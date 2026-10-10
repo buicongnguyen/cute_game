@@ -47,6 +47,8 @@ import {EnvironmentView} from './environment-art.ts';
 import {buildDecoration} from './decorations-art.ts';
 import {bossCalloutText,bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,CALLOUT_RANGE,CREATURE_TELEGRAPHS,telegraphProgress,hitControl,liftHeight,keepsChasing,BOSS_RESISTED,RESIST_SLOW,KNOCK_IMPULSE,BOSS_KNOCK,BOSS_REACH,BOSS_SKILLS,LEASH,type BossSkill} from './boss-patterns.ts';
 import {addOutlines,setOutlinesEnabled,showOutlines} from './outline.ts';
+import {viewWidth,viewHeight} from './viewport.ts';
+import {deferFlash,flashMaterialsOf,flashMaterialsSoFar} from './flash-materials.ts';
 import {SUN_OFFSET,applyPlanetLight,isLit,toonMaterial,type LitMaterial} from './toon.ts';
 import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
 import {TelegraphDecals} from './telegraph.ts';
@@ -831,8 +833,8 @@ export class World {
     const titan=Object.hasOwn(TITANS,type); // titans.glb is fetched by wantTitanKit once one is near
     const art=titan?titanArt(type as TitanId):creatureArt(type);
     // Plain body parts become one or two meshes; named parts (legs, wings, shell) keep animating on their own.
-    const model=art??bakeModel(titan?titanFallback(type as TitanId):this.speciesModel(def),{deep:false,keep:o=>!!o.name}),flash:LitMaterial[]=[];
-    model.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();flash.push(o.material);}});model.userData.flashMaterials=flash;model.userData.creatureArt=!!art;model.scale.setScalar(enemyScale(type,def.boss));addOutlines(model);showOutlines(model,false);
+    const model=art??bakeModel(titan?titanFallback(type as TitanId):this.speciesModel(def),{deep:false,keep:o=>!!o.name});
+    deferFlash(model);model.userData.creatureArt=!!art;model.scale.setScalar(enemyScale(type,def.boss));addOutlines(model);showOutlines(model,false);
     return model;
   }
   /** Re-dresses creatures that spawned before creatures.glb arrived; each keeps its entity, pose and fight state. */
@@ -1070,7 +1072,14 @@ export class World {
   }
   /** CSS pixels of a world point. `front` is false behind the (perspective) camera, where x and y come out mirrored. */
   private screenPoint=new T.Vector3();
-  screen(x:number,y:number,z:number) { const v=(this.screenPoint??=new T.Vector3()).set(x,y,z).project(this.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2,visible:v.z<1&&Math.abs(v.x)<1.3&&Math.abs(v.y)<1.3,front:v.z<1}; }
+  /** Projection x view, rebuilt once per render (the camera's view matrix only changes inside renderer.render), so a label costs one 4x4 multiply-free projection instead of two matrix passes. */
+  private screenVP=new T.Matrix4();private screenVPSerial=-1;private screenVPKey=NaN;private renderSerial=0;
+  screen(x:number,y:number,z:number) {
+    const cam=this.camera,pm=cam.projectionMatrix.elements,key=pm[0]+pm[5]*1e3;
+    if(this.screenVPSerial!==this.renderSerial||this.screenVPKey!==key){this.screenVP.multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse);this.screenVPSerial=this.renderSerial;this.screenVPKey=key;}
+    const e=this.screenVP.elements,w=1/(e[3]*x+e[7]*y+e[11]*z+e[15]),vx=(e[0]*x+e[4]*y+e[8]*z+e[12])*w,vy=(e[1]*x+e[5]*y+e[9]*z+e[13])*w,vz=(e[2]*x+e[6]*y+e[10]*z+e[14])*w;
+    return {x:(vx+1)*viewWidth()/2,y:(1-vy)*viewHeight()/2,visible:vz<1&&Math.abs(vx)<1.3&&Math.abs(vy)<1.3,front:vz<1};
+  }
   /** A tap: an entity picked in screen space (or by the short raycast fallback), else a walk unless it would change nothing. */
   pointer(clientX:number,clientY:number) {
     if(this.onRemotePlayerClick&&this.remotePlayers?.size){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const meshes=[...this.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh);for(const hit of this.raycaster.intersectObjects(meshes,true)){let o:T.Object3D|null=hit.object;while(o&&!o.userData.remoteId)o=o.parent;if(o){this.destination=null;this.route=[];this.selected=null;this.onRemotePlayerClick(o.userData.remoteId);return;}}}
@@ -1628,7 +1637,7 @@ export class World {
     // Hit reaction, after the reference: a white flash (feel-rules.ts HIT_FLASH, emissive on the creature's own material copies,
     // made once when it spawned, never per hit) and a ×1.15 squash.
     if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);const k=e.flash!/.14;e.mesh.scale.x*=1+k*.15;e.mesh.scale.z*=1+k*.15;e.mesh.scale.y*=1+k*.06;}
-    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of (e.mesh.userData.flashMaterials??[]) as LitMaterial[]){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.setRGB(1,1,1);m.emissiveIntensity=enemyFlash(e.flash??0,!!e.definition?.titan);}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}
+    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of lit?flashMaterialsOf(e.mesh):flashMaterialsSoFar(e.mesh)){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.setRGB(1,1,1);m.emissiveIntensity=enemyFlash(e.flash??0,!!e.definition?.titan);}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}
     this.animateEnemy(e,dt);
     const shell=part(e.mesh,'shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
   }
@@ -1830,5 +1839,5 @@ export class World {
   }
 
 
-  render(){this.beforeRender?.();const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);}this.renderer.render(scene,this.camera);}
+  render(){this.beforeRender?.();const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);}this.renderer.render(scene,this.camera);this.renderSerial++;}
 }

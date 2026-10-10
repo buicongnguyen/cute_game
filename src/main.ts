@@ -8,6 +8,7 @@ import { FishingProof } from './fishing-proof.ts';
 import '@fontsource-variable/nunito';
 import './style.css';
 import './skills.css';
+import { viewWidth, viewHeight } from './viewport.ts';
 import { t, localizeHtml, getLanguage, switchLanguage, onLanguageChange, bindLanguage } from './i18n.ts';
 import './menus.css';
 import { Box3, Vector3 } from 'three';
@@ -423,6 +424,9 @@ async function start() {settle();showTrimNote();const name=$<HTMLInputElement>('
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
 async function helperCatchUp(){const r=actionHandler?await workPerform<ReturnType<typeof Helper.catchUp>>('helperCatchUp'):change(()=>applyGameAction(state,{type:'helperCatchUp',payload:{away:catchUpAway()}}) as ReturnType<typeof Helper.catchUp>);if(r&&(r.harvested.length||r.planted.length))setTimeout(()=>toast(t('While you were away, Bolt harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length}),'🤖'),2600);}
+/** The skill button's text nodes, looked up once (a selector per child per button, eight times a second, was a measurable slice of the HUD tick). */
+const skillPartsOf=new WeakMap<HTMLElement,{kbd:Element;icon:Element;name:Element;cooldown:Element}>();
+function skillParts(button:HTMLElement){let p=skillPartsOf.get(button);if(!p){p={kbd:button.querySelector('kbd')!,icon:button.querySelector('span')!,name:button.querySelector('small')!,cooldown:button.querySelector('.cooldown')!};skillPartsOf.set(button,p);}return p;}
 function updateHud() {
   const known=new Set(world.state.discovered),discoveryCount=t('Discovered {count}/{total} planets',{count:known.size,total:Object.keys(M.PLANETS).length});
   if(setHtml($('#discovery-text'),`<strong>🔭 ${esc(world.state.name)}</strong><span>${esc(discoveryCount)}</span><small aria-hidden="true">${Object.entries(M.PLANETS).map(([id,planet])=>known.has(id as M.PlanetId)?planet.icon:'❔').join(' ')}</small>`)){$('#discovery-progress').setAttribute('aria-label',`${world.state.name} · ${discoveryCount} · ${t('Discovery log')}`);}
@@ -431,15 +435,15 @@ function updateHud() {
   setWidth($('#hp-fill'),`${state.hp/M.maxHp(state)*100}%`);setText($('#hp-text'),t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`));setWidth($('#xp-fill'),`${state.xp/M.xpNeeded(state.level)*100}%`);
   updateQuickEat();
   setText($('#xp-text'),`EXP ${Math.floor(state.xp)} / ${M.xpNeeded(state.level)}`);
-  $('.experience').setAttribute('title',t(`${Math.floor(state.xp)} / ${M.xpNeeded(state.level)} experience`));
+  {const xpTitle=t(`${Math.floor(state.xp)} / ${M.xpNeeded(state.level)} experience`),xpNode=$('.experience');if(xpNode.getAttribute('title')!==xpTitle)xpNode.setAttribute('title',xpTitle);}
   const q=progressEntries(state,'story')[0],progress=q?.progress??0;
   setText($('#quest-chapter'),t(state.quest<M.QUESTS.length?`${state.quest+1} / ${M.QUESTS.length}`:'ONGOING'));setText($('#quest-icon'),t(q?.icon??'🚀'));setText($('#quest-title'),t(q?.title??'A world of possibilities'));setText($('#quest-task'),t(q?`${q.description} · ${progress} / ${q.target}`:'Your next chapter awaits.'));setText($('#quest-count'),t(q?`${progress}/${q.target}`:''));
   const walk=questTarget();$('#quest-summary').classList.toggle('can-walk',!!walk);document.body.classList.toggle('guide-low-level',state.level<COLOSSUS_BANNER_LEVEL);
   setWidth($('#quest-fill'),`${q?progress/q.target*100:100}%`);$('#quick-claim').hidden=!q?.complete;$('#quest-dot').hidden=!q?.complete;
   const skills=skillList(),bindings=keyboardBindings(state.settings.keyboardLayout);
   setText($('#movement-hint'),t(bindings.movement));
-  $('.top-actions [data-action="quests"]').setAttribute('title',t('Journal · {key}',{key:bindings.journal.toUpperCase()}));
-  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i],key=bindings.skills[i].toUpperCase();setText(button.querySelector('kbd')!,key);setText(button.querySelector('span')!,t(skill.icon));setText(button.querySelector('small')!,t(skill.name));button.setAttribute('aria-label',t(`${key} ${t(skill.name)}`));const tip=currentSkillTip(i);if(button.title!==tip)button.title=tip;if(readyWas[i]>0&&cooldowns[i]<=0){button.classList.remove('ready-pop');void button.offsetWidth;button.classList.add('ready-pop');tone('ready');}readyWas[i]=cooldowns[i];button.classList.toggle('on-cooldown',cooldowns[i]>0);setText(button.querySelector('.cooldown')!,t(cooldowns[i]>0?Math.ceil(cooldowns[i]).toString():''));skillPip(button,state.gear.disguise?0:M.skillLevel(state,i));const cd=`${cooldowns[i]/skillDurations[i]*100}%`;if(button.style.getPropertyValue('--cooldown')!==cd)button.style.setProperty('--cooldown',cd);});
+  {const journalTitle=t('Journal · {key}',{key:bindings.journal.toUpperCase()}),journalNode=$('.top-actions [data-action="quests"]');if(journalNode.getAttribute('title')!==journalTitle)journalNode.setAttribute('title',journalTitle);}
+  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i],key=bindings.skills[i].toUpperCase();const parts=skillParts(button);setText(parts.kbd,key);setText(parts.icon,t(skill.icon));setText(parts.name,t(skill.name));const aria=t(`${key} ${t(skill.name)}`);if(button.getAttribute('aria-label')!==aria)button.setAttribute('aria-label',aria);const tip=currentSkillTip(i);if(button.title!==tip)button.title=tip;if(readyWas[i]>0&&cooldowns[i]<=0){button.classList.remove('ready-pop');void button.offsetWidth;button.classList.add('ready-pop');tone('ready');}readyWas[i]=cooldowns[i];button.classList.toggle('on-cooldown',cooldowns[i]>0);setText(parts.cooldown,t(cooldowns[i]>0?Math.ceil(cooldowns[i]).toString():''));skillPip(button,state.gear.disguise?0:M.skillLevel(state,i));const cd=`${cooldowns[i]/skillDurations[i]*100}%`;if(button.style.getPropertyValue('--cooldown')!==cd)button.style.setProperty('--cooldown',cd);});
   setHtml($('#buff-bar'),localizeHtml(M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,left])=>{const chip=BUFF_CHIPS[name];return `<span class="skill-buff">${chip?.icon??'✨'} ${esc(t(chip?.name??name))} <b>${Math.ceil(left)}s</b></span>`;}).join('')+homeChip(world.homeRecovering&&!visiting,t('Home: fast recovery'))));
   setHtml($('#environment-bar'),localizeHtml(world.environmentStatus().map(e=>`<span>${e.icon??''} ${esc(e.label)} <b>${esc(String(e.value))}</b></span>`).join('')));
   const dark=$('#darkness');dark.hidden=!world.darknessActive()||!started;
@@ -483,7 +487,7 @@ let hudFresh=false;
 function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#keys-guide,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
 /** The label's screen box at its anchor: bottom centre for buildings, centre for the small crop marks. */
 function labelRect(a:LabelAnchor){const p=world.screen(a.e.x+a.dx,a.wy,a.e.z-a.back),top=p.y-(a.centre?a.h/2:a.h);return {x:p.x,y:p.y,front:p.front,left:p.x-a.w/2,right:p.x+a.w/2,top,bottom:top+a.h};}
-const smallLabels=()=>innerWidth<=600||innerHeight<=520;
+const smallLabels=()=>viewWidth()<=600||viewHeight()<=520;
 const boxesMeet=(a:{left:number;right:number;top:number;bottom:number},b:{left:number;right:number;top:number;bottom:number})=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
 /** True when a box touches none of the HUD panels (measureHud). */
 const clearOfHud=(r:{left:number;right:number;top:number;bottom:number},panels:typeof hudPanels)=>!panels.some(p=>boxesMeet(p,r));
@@ -515,7 +519,7 @@ function updateLabels() {
     const html=localizeHtml(e.kind==='plot'?`<span>${icon}</span>`:`<span>${icon}</span>${esc(text)}`);let a=labelAnchors.get(e.id);
     if(label.className!==className){label.className=className;if(a)a.w=0;}
     if(label.innerHTML!==html){label.innerHTML=html;if(a)a.w=0;}
-    label.setAttribute('aria-label',t(e.kind==='plot'?aria:text));label.hidden=!!modal;
+    {const al=t(e.kind==='plot'?aria:text);if(label.getAttribute('aria-label')!==al)label.setAttribute('aria-label',al);}if(label.hidden!==!!modal)label.hidden=!!modal;
     if(!a){a={e,wy:y,back,dx,centre,w:0,h:0,covered:false,off:false};labelAnchors.set(e.id,a);}
     a.e=e;a.wy=y;a.back=back;a.dx=dx;a.centre=centre;if(!a.w){a.w=label.offsetWidth;a.h=label.offsetHeight;}
     active.add(e.id);candidates.push({a,rank,distance});
@@ -528,7 +532,7 @@ function updateLabels() {
   positionLabels();
 }
 /** On screen in full and clear of the HUD panels. */
-const labelShows=(r:ReturnType<typeof labelRect>)=>r.front&&r.left>=2&&r.right<=innerWidth-2&&r.top>=2&&r.bottom<=innerHeight-2&&!hudPanels.some(p=>boxesMeet(p,r));
+const labelShows=(r:ReturnType<typeof labelRect>)=>r.front&&r.left>=2&&r.right<=viewWidth()-2&&r.top>=2&&r.bottom<=viewHeight()-2&&!hudPanels.some(p=>boxesMeet(p,r));
 
 /** Re-project the labels after each render so they move in step with the camera instead of trailing it. */
 let labelFrame=0;
@@ -539,7 +543,7 @@ function positionLabels(){
   // Its rect comes from the left/top it is given plus the cached size (translateX(-50%) centres it): no layout read per frame.
   let pill={left:0,right:0,top:0,bottom:0};
   if(!discoveryObserver){discoveryObserver=new ResizeObserver(([e])=>{const b=e.borderBoxSize?.[0];discoverySize.w=b?b.inlineSize:(e.target as HTMLElement).offsetWidth;discoverySize.h=b?b.blockSize:(e.target as HTMLElement).offsetHeight;});discoveryObserver.observe(discovery,{box:'border-box'});}
-  if(!discovery.hidden&&discoverySize.w){const width=discoverySize.w,left=Math.max(width/2+8,Math.min(innerWidth-width/2-8,point.x)),top=Math.max(90,Math.min(innerHeight-discoverySize.h-8,point.y));pill={left:left-width/2,right:left+width/2,top,bottom:top+discoverySize.h};const l=left.toFixed(1)+'px',tp=top.toFixed(1)+'px';if(discovery.style.left!==l){discovery.style.left=l;discovery.style.bottom='auto';}if(discovery.style.top!==tp)discovery.style.top=tp;}
+  if(!discovery.hidden&&discoverySize.w){const width=discoverySize.w,left=Math.max(width/2+8,Math.min(viewWidth()-width/2-8,point.x)),top=Math.max(90,Math.min(viewHeight()-discoverySize.h-8,point.y));pill={left:left-width/2,right:left+width/2,top,bottom:top+discoverySize.h};const l=left.toFixed(1)+'px',tp=top.toFixed(1)+'px';if(discovery.style.left!==l){discovery.style.left=l;discovery.style.bottom='auto';}if(discovery.style.top!==tp)discovery.style.top=tp;}
   // Never over the fight buttons, the stick or any other HUD panel (phones): hide it while they meet.
   const vis=!discovery.hidden&&discoverySize.w>0&&clearOfHud(pill,hudPanels)?'':'hidden';if(discovery.style.visibility!==vis)discovery.style.visibility=vis;
   combatHud.frame(world.enemies,world.selected,world.position.x,world.position.z,!started||!!modal||!!world.interior);
@@ -1259,7 +1263,9 @@ function basicAttack(e?:Enemy){
 }
 world.onAttackEnemy=basicAttack;
 /** The tooltip and long-press tip of skill slot i, with the numbers at the current level (skill-info.ts). */
-function currentSkillTip(i:number){const disguise=state.gear.disguise,weapon=M.weaponStats(state);return skillTip(skillList()[i],i,{special:weapon.special??'fist',weaponKind:weapon.kind,level:disguise?0:M.skillLevel(state,i),disguise});}
+const skillTips=new Map<string,string>();
+/** Memoised by everything the text depends on (skill, level, weapon, disguise, language): the tooltip is rebuilt only when one of them changes, not eight times a second. */
+function currentSkillTip(i:number){const disguise=state.gear.disguise,weapon=M.weaponStats(state),skill=skillList()[i],level=disguise?0:M.skillLevel(state,i),special=weapon.special??'fist',key=`${i}|${skill.name}|${level}|${special}|${weapon.kind}|${disguise??''}|${getLanguage()}`;let tip=skillTips.get(key);if(tip===undefined){if(skillTips.size>200)skillTips.clear();tip=skillTip(skill,i,{special,weaponKind:weapon.kind,level,disguise});skillTips.set(key,tip);}return tip;}
 const readyWas=[0,0,0,0];
 // Long-press a skill button (phones have no hover): its tip shows for a few seconds and the press does not cast.
 {let hide=0;const tipEl=document.createElement('div');tipEl.id='skill-tip';tipEl.hidden=true;tipEl.setAttribute('role','status');document.body.append(tipEl);

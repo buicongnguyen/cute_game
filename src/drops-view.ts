@@ -87,6 +87,7 @@ export class DropView {
 
   /** Re-pose every card toward the camera and refresh the pills. Call with up-to-date camera matrices. */
   sync(drops: Drop[], time: number, camera: T.Camera, hero: { x: number; z: number }, width: number, height: number) {
+    if (!drops.length && this.idle) return; // nothing lying about and the meshes are already hidden: no sets, uploads or tag work
     if (drops.length > this.capacity) this.grow(Math.max(drops.length, this.capacity * 2));
     const live = new Set(drops.map(d => d.item)), cam = camera.position;
     let n = 0;
@@ -108,7 +109,9 @@ export class DropView {
     this.cards.instanceMatrix.needsUpdate = this.rings.instanceMatrix.needsUpdate = this.cell.needsUpdate = true;
     if (this.rings.instanceColor) this.rings.instanceColor.needsUpdate = true;
     this.syncTags(drops, camera, hero, width, height);
+    this.idle = n === 0;
   }
+  private idle = false;
 
   private syncTags(_drops:Drop[],_camera:T.Camera,_hero:{x:number;z:number},_width:number,_height:number){
     for(const tag of this.tags.values())tag.el.remove();this.tags.clear();
