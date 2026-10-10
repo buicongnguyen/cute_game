@@ -81,6 +81,7 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
     ${fullViewport ? 'html, body { overscroll-behavior: none; }' : ''}
     canvas { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
     [data-mobile-display] { min-height: 44px; padding: 8px 14px; margin: 6px; cursor: pointer; font: inherit; }
+    [data-mobile-display][data-mobile-display] { font-size: max(1em, 14px); }
     [data-mobile-display][aria-disabled="true"] { opacity: .65; cursor: progress; }
     #mobile-display-help { box-sizing: border-box; color: #f4f5f2; background: #172528; border: 1px solid #829496;
       border-radius: 14px; padding: 20px; width: min(440px, calc(100vw - 32px));
@@ -91,20 +92,40 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
   `;
   document.head.append(style);
   // Clamp fixed/absolute touch controls inside the existing layout instead of shifting the canvas.
-  const keepControlsSafe = () => {
-    if (!matchMedia('(pointer: coarse)').matches) return;
-    for (const node of document.querySelectorAll(controls.join(',') || '[data-no-mobile-controls]')) {
+  // mobile-safe v2: each pass first undoes the previous adjustment, so the stylesheet's CURRENT rule
+  // (it changes with game state, orientation and breakpoints) decides, never a stale snapshot.
+  const SAFE_MIN = { left: 12, right: 12, bottom: 16 };
+  let layoutObserver = null;
+  let keepControlsSafeNow = () => {};
+  const keepControlsSafe = () => keepControlsSafeNow();
+  keepControlsSafeNow = () => {
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const selector = controls.join(',') || '[data-no-mobile-controls]';
+    for (const node of document.querySelectorAll(selector)) {
+      for (const edge of Object.keys(SAFE_MIN)) {
+        const mine = node.dataset['mobileSafe' + edge];
+        if (!mine) continue;
+        // Undo our value only if the game has not replaced it since.
+        if (node.style.getPropertyValue(edge) === mine) {
+          const original = node.dataset['mobileOrig' + edge];
+          if (original) node.style.setProperty(edge, original); else node.style.removeProperty(edge);
+        }
+        delete node.dataset['mobileSafe' + edge];
+        delete node.dataset['mobileOrig' + edge];
+      }
+      if (!coarse) continue;
       const css = getComputedStyle(node);
       if (!['fixed', 'absolute'].includes(css.position)) continue;
-      for (const edge of ['left', 'right', 'bottom']) {
+      for (const [edge, min] of Object.entries(SAFE_MIN)) {
         const value = css[edge];
-        if (value === 'auto' || node.dataset['mobileSafe' + edge]) continue;
-        if (Number.parseFloat(value) < (edge === 'bottom' ? 16 : 12)) {
-          node.style.setProperty(edge, `max(${value}, ${edge === 'bottom' ? '16px' : '12px'}, calc(env(safe-area-inset-${edge}, 0px) + 8px))`);
-          node.dataset['mobileSafe' + edge] = 'true';
-        }
+        if (value === 'auto' || !(Number.parseFloat(value) < min)) continue;
+        const override = `max(${value}, ${min}px, calc(env(safe-area-inset-${edge}, 0px) + 8px))`;
+        node.dataset['mobileOrig' + edge] = node.style.getPropertyValue(edge);
+        node.style.setProperty(edge, override);
+        node.dataset['mobileSafe' + edge] = node.style.getPropertyValue(edge);
       }
     }
+    layoutObserver?.takeRecords(); // our own writes are not layout changes
   };
   let pending = false, returnFocus = null;
   const active = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
@@ -193,5 +214,11 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
   observer.observe(document.body, { childList: true, subtree: true });
   new MutationObserver(refresh).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
   window.addEventListener('resize', keepControlsSafe);
+  window.addEventListener('orientationchange', () => setTimeout(keepControlsSafe, 250));
+  // Games move their controls by toggling classes (mission started, panel opened, landscape layout).
+  // Refresh in the same microtask batch as the class change, so a read right after the game moves
+  // its controls never sees the previous (now stale) adjustment.
+  layoutObserver = new MutationObserver(() => keepControlsSafe());
+  layoutObserver.observe(document.body, { attributes: true, attributeFilter: ['class', 'hidden'], subtree: true });
   mount();
 }

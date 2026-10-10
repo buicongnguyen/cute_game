@@ -139,21 +139,22 @@ Speed: this is the stage most able to slow the game down. More things on screen 
 
 The question was whether lowering the camera would hurt the frame rate. It would. A lower camera sees much further, so the game has to draw much more.
 
-Measured on 2026-10-11 by tilting the camera at the same distance (one run, same tool):
+Measured on 2026-10-11 by tilting the camera at the same distance (one run, same tool; draw calls / triangles):
 
-| Camera pitch | Village draw calls / triangles | Canyon draw calls / triangles | Slow-CPU frame rate, village |
-|---|---|---|---|
-| 51.5° (today) | 248 / 200,000 | 124 / 73,000 | 60 |
-| 40° | 317 / 244,000 | 253 / 226,000 | 59 |
-| 30° | 405 / 360,000 | 373 / 354,000 | 54 |
-| 22° | 495 / 465,000 | 470 / 462,000 | 46 |
-| 30° with a shorter view distance | 369 / 294,000 | 343 / 294,000 | 60 |
+| Camera pitch | Village | Wilds | Redrock Canyon | Slow-CPU frame rate, village |
+|---|---|---|---|---|
+| 51.5° (today) | 269 / 219,000 | 98 / 84,000 | 128 / 70,000 | 59 |
+| 48° | 264 / 213,000 | 103 / 88,000 | 132 / 81,000 | 59 |
+| 45° | 292 / 232,000 | 107 / 94,000 | 151 / 86,000 | 56 |
+| 42° | 291 / 232,000 | 115 / 114,000 | 177 / 91,000 | 59 |
+| 40° | 314 / 253,000 | 118 / 125,000 | 154 / 99,000 | 56 |
+| 30° | 378 / 349,000 | 144 / 177,000 | 180 / 144,000 | 45 |
 
-- At 30° the village needs about 1.6 times the draw calls and 1.8 times the triangles. The canyon needs about 3 times and 5 times.
-- A shorter view distance wins back only part of it.
-- The lower view does look better and more like its own game: building fronts and faces become visible, and trees close the horizon.
+- A tilt to 48° is inside the measuring noise. 45° costs roughly 10 to 20 percent more work. 30° costs 1.4 to 2 times.
+- The lower view does look better and more like its own game: building fronts and faces become visible.
+- An earlier version of this table showed the canyon tripling. That was wrong: a boss had knocked the hero out during the measurement, and those rows measured the village. The tool now guards against it.
 
-**Decision for now:** the camera stays where it is through stages 1 to 3. A lower camera is tried only after stage 4 has set up less detail in the distance, and it ships only if the gate passes. Two cheaper options to try first: a mild tilt of about 44 to 45 degrees, and a lower camera only in calm moments (walking up to the cottage, cut-scenes, a photo mode), never in fights.
+**Decision for now:** the camera stays where it is through stages 1 to 3. A lower camera is tried only after stage 4 has set up less detail in the distance, and it ships only if the gate passes. A mild tilt to about 48 degrees can be tried early, since it is nearly free. Further options: about 45 degrees with a shorter view distance, and a lower camera only in calm moments (walking up to the cottage, cut-scenes, a photo mode), never in fights.
 
 ## 6. Order, and what is not in this plan
 

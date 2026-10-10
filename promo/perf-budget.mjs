@@ -21,13 +21,19 @@ await page.evaluate(async () => { window.__cam = (await import('/src/camera-rig.
 const tilt = (deg, far) => page.evaluate(([deg, far, d]) => { const r = deg * Math.PI / 180, w = __zoo.world; __cam.offset[1] = d * Math.sin(r); __cam.offset[2] = d * Math.cos(r); w.camera.far = far; w.camera.updateProjectionMatrix(); w.resize(); }, [deg, far, DISTANCE]);
 const frame = () => page.evaluate(() => new Promise(done => { const r = __zoo.world.renderer; requestAnimationFrame(() => { r.info.autoReset = false; r.info.reset(); requestAnimationFrame(() => { const o = { calls: r.info.render.calls, triangles: r.info.render.triangles }; r.info.autoReset = true; done(o); }); }); }));
 const fps = ms => page.evaluate(ms => new Promise(done => { const d = []; let last = performance.now(); const end = last + ms, f = now => { d.push(now - last); last = now; if (now < end) requestAnimationFrame(f); else { d.shift(); const sum = d.reduce((a, b) => a + b, 0); d.sort((a, b) => a - b); done({ fps: +(d.length / (sum / 1000)).toFixed(1), p95: +d[Math.floor(d.length * .95)].toFixed(1) }); } }; requestAnimationFrame(f); }), ms);
-for (const [scene, [x, z]] of Object.entries(SCENES)) {
-  await page.evaluate(([x, z]) => { const w = __zoo.world; w.position.set(x, 0, z); w.facing = 0; w.zoom = 1; w.resize(); }, [x, z]);
+// A creature must not knock the hero out mid-measure (the first version of this tool did not guard against it: the hero
+// woke up in the village and the "canyon" rows silently measured the village). Health is topped up all along, the hero is
+// put back before every row, and a row is marked invalid if the hero is not where it should be or a dialog is open.
+await page.evaluate(() => { const s = __zoo.state, full = s.hp; setInterval(() => { if (__zoo.state.hp < full) __zoo.state.hp = full; }, 50); });
+const stand = ([x, z]) => page.evaluate(([x, z]) => { const w = __zoo.world; w.position.set(x, 0, z); w.facing = 0; w.zoom = 1; w.resize(); }, [x, z]);
+const astray = ([x, z]) => page.evaluate(([x, z]) => { const p = __zoo.world.position, d = document.querySelector('#dialog-layer'); return Math.hypot(p.x - x, p.z - z) > 8 ? 'the hero left the spot' : __zoo.state.planet !== 'home' ? 'not on the home map' : d && !d.hidden ? 'a dialog is open' : null; }, [x, z]);
+for (const [scene, spot] of Object.entries(SCENES)) {
   for (const [label, deg, far] of rows) {
-    await tilt(deg, far); await page.waitForTimeout(2500);
+    await stand(spot); await tilt(deg, far); await page.waitForTimeout(2500);
     const a = await frame(), b = await frame();
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); await page.waitForTimeout(1500); const slow = await fps(5000); await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-    console.log(JSON.stringify({ scene, camera: label, drawCalls: Math.max(a.calls, b.calls), triangles: Math.max(a.triangles, b.triangles), slowCpuFps: slow.fps, slowCpuP95ms: slow.p95 }));
+    const invalid = await astray(spot);
+    console.log(JSON.stringify({ scene, camera: label, drawCalls: Math.max(a.calls, b.calls), triangles: Math.max(a.triangles, b.triangles), slowCpuFps: slow.fps, slowCpuP95ms: slow.p95, ...(invalid ? { invalid } : {}) }));
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/budget-${scene}-${String(deg).replace('.', '_')}.png` });
   }
 }
