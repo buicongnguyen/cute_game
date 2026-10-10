@@ -1,0 +1,28 @@
+/*
+ * Tap targets (promo/tap-probe.mjs): every control a finger can press has a 44 x 44 CSS px hit area that no neighbour
+ * steals. Boxes keep their drawn size; the extra area is an invisible ::before / ::after (the panels already do this
+ * for height in menus.css and online.css; this sheet adds the width, and spaces the controls that sit too close).
+ * Imported last in main.ts so it wins over every older sheet.
+ */
+@media (pointer: coarse) {
+  /* Title card: six colour swatches on a 44 px pitch (the hit area is 44 wide) with the drawn swatch unchanged. */
+  #title-screen .title-row .color-picker { gap: 18px; }
+
+  /* Panels: narrow buttons ("ϟ 6", "Use", ✕) grow their hit area sideways to 44 px as well as upwards. */
+  #dialog-body button::before, .social-dialog button::before { left: min(0px, calc(50% - 22px)); right: min(0px, calc(50% - 22px)); }
+  /* The close ✕ sits against the dialog's clipped edge: its area grows to the left (and down), not past the edge. */
+  .social-dialog .social-close::before { left: -13px; right: -1px; }
+
+  /* Quick eat: the "choose food" tab's hit area grows to the right only, so it never covers the eat button. */
+  .quick-eat-pick::before, .quick-eat-pick::after { left: -2px; transform: translateY(-50%); }
+
+  /* Wrapped button rows (quick challenges, the forge shortcut) leave room for two 44 px strips instead of overlapping them. */
+  #dialog:not([data-tone="garden"]) #dialog-body .button-row, #dialog-body .button-row { row-gap: 12px; }
+  #dialog-body .button-row:has(> [data-action="forge-menu"]) { margin-bottom: 8px; }
+
+  /* Ranking: stacked pills get a full 44 px row each instead of overlapping 6 px hit strips. */
+  .ranking-tabs button, .ranking-cats button { min-height: 44px; }
+}
+@media (pointer: coarse) and (max-width: 480px) {
+  #title-screen .title-row .color-picker { gap: 14px; }
+}

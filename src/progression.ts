@@ -187,15 +187,29 @@ export function refreshProgress(s: SaveState, now = Date.now()) {
         p.streak = 0;
     }
 }
-/** The first steps past the written story: a try of every mode and the level goals 30, 40, 50 and 60 (the endless cycle follows). */
+/** The first steps past the written story: a try of every mode, fillers, and the level goals 30, 40, 50 and 60 (the endless cycle follows). */
 export const ENDGAME_STEPS: { title: string; event?: string; condition?: string; target: number; icon: string; end?: Inventory }[] = [
+    // The four mode tries first, then fillers (steps of ordinary play that need nothing locked), so that between two level
+    // gates there is always a step to finish: a level-25 explorer is never parked on "Reach level 30" with nothing to claim.
     { title: 'Answer a Rescue call', event: 'rescue', target: 1, icon: '🛟' },
     { title: 'Win a Flag Rush match', event: 'ctf', target: 1, icon: '🚩' },
-    { title: 'Reach level 30', condition: 'level', target: 30, icon: '⭐', end: { starshard: 2, seed_star: 2 } },
     { title: "Clear the Delvers' Vault", event: 'dungeon', target: 1, icon: '🗝️' },
     { title: 'Hurt the Cinderpeak Colossus', event: 'colossus', target: 1, icon: '🌋' },
+    { title: 'Harvest 100 crops', event: 'harvest', target: 100, icon: '🌾' },
+    { title: 'Catch 10 fish', event: 'fish', target: 10, icon: '🎣' },
+    { title: 'Defeat 5 bosses', event: 'boss', target: 5, icon: '👑' },
+    { title: 'Reach level 30', condition: 'level', target: 30, icon: '⭐', end: { starshard: 2, seed_star: 2 } },
+    { title: 'Complete 5 bounties', event: 'bounty', target: 5, icon: '🎯' },
+    { title: 'Gather 30 resources', event: 'mine', target: 30, icon: '⛏️' },
+    { title: 'Answer 3 Rescue calls', event: 'rescue', target: 3, icon: '🛟' },
     { title: 'Reach level 40', condition: 'level', target: 40, icon: '⭐', end: { moonstone: 1, thunderstone: 2 } },
+    { title: 'Harvest 250 crops', event: 'harvest', target: 250, icon: '🌾' },
+    { title: 'Defeat 10 bosses', event: 'boss', target: 10, icon: '👑' },
+    { title: 'Catch 40 fish', event: 'fish', target: 40, icon: '🎣', end: { potion: 3 } },
     { title: 'Reach level 50', condition: 'level', target: 50, icon: '⭐', end: { starshard: 4, moonstone: 1 } },
+    { title: 'Complete 10 bounties', event: 'bounty', target: 10, icon: '🎯' },
+    { title: 'Defeat 400 creatures', event: 'kill', target: 400, icon: '⚔️' },
+    { title: 'Answer 5 Rescue calls', event: 'rescue', target: 5, icon: '🛟', end: { honey: 3 } },
     { title: 'Reach level 60', condition: 'level', target: 60, icon: '⭐', end: { moonstone: 2, thunderstone: 3 } },
 ];
 /** Stands in for "Cook three meals" while the kitchen is still locked (Normal and Hard open it at level 14, long after chapter 2). */
