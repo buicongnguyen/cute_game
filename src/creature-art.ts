@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { transferFlash } from './flash-materials.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { KitLibrary, KIT_FILES, type KitPart } from './assets.ts';
 import { toToon } from './toon.ts';
@@ -116,5 +117,5 @@ export function adoptCreatureModel(root: T.Object3D, model: T.Object3D, dispose:
   for (const child of [...root.children]) { root.remove(child); dispose(child); }
   for (const child of [...model.children]) root.add(child);
   for (const key of MODEL_CACHE) delete root.userData[key];
-  root.userData.flashMaterials = model.userData.flashMaterials; root.userData.outlines = model.userData.outlines; root.userData.creatureArt = true;
+  transferFlash(model, root); root.userData.outlines = model.userData.outlines; root.userData.creatureArt = true;
 }

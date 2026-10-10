@@ -46,7 +46,7 @@ export function nearbyObstacles(obstacles:Obstacle[],x:number,z:number,reach:num
 
 export function blocked(point: Point, obstacles: Obstacle[],options:NavigationOptions={}) {
   const clearance=options.clearance??CLEARANCE;
-  return Math.abs(point.x)>(options.bounds??49) || Math.abs(point.z)>(options.bounds??49) || options.walkable?.(point)===false || someObstacleNear(obstacles,point.x,point.z,point.x,point.z,clearance,o=>Math.hypot(point.x-o.x,point.z-o.z)<o.r+clearance);
+  return Math.abs(point.x)>(options.bounds??49) || Math.abs(point.z)>(options.bounds??49) || options.walkable?.(point)===false || someObstacleNear(obstacles,point.x,point.z,point.x,point.z,clearance,o=>{const ox=point.x-o.x,oz=point.z-o.z,r=o.r+clearance;return r>0&&ox*ox+oz*oz<r*r;}); // squared compare: Math.hypot is the slow path of this per-creature, per-frame check
 }
 
 export function clearSegment(from: Point, to: Point, obstacles: Obstacle[],options:NavigationOptions={}) {
@@ -56,7 +56,7 @@ export function clearSegment(from: Point, to: Point, obstacles: Obstacle[],optio
   const clearance=options.clearance??CLEARANCE;
   return !someObstacleNear(obstacles,Math.min(from.x,to.x),Math.min(from.z,to.z),Math.max(from.x,to.x),Math.max(from.z,to.z),clearance,obstacle => {
     const t = lengthSquared ? Math.max(0, Math.min(1, ((obstacle.x-from.x)*dx+(obstacle.z-from.z)*dz)/lengthSquared)) : 0;
-    return Math.hypot(from.x+t*dx-obstacle.x, from.z+t*dz-obstacle.z) < obstacle.r+clearance;
+    const ox=from.x+t*dx-obstacle.x,oz=from.z+t*dz-obstacle.z,r=obstacle.r+clearance;return r>0&&ox*ox+oz*oz<r*r;
   });
 }
 

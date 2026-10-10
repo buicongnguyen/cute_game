@@ -5,7 +5,8 @@
  */
 import * as T from 'three';
 import { KitLibrary, modelUrl } from './assets.ts';
-import { toonMaterial, isLit, type LitMaterial } from './toon.ts';
+import { toonMaterial } from './toon.ts';
+import { deferFlash } from './flash-materials.ts';
 import { addOutlines, showOutlines } from './outline.ts';
 import { TelegraphDecals } from './telegraph.ts';
 import { TELEGRAPH_LOOK } from './boss-patterns.ts';
@@ -52,10 +53,9 @@ export function buildKeeper(): T.Group {
  */
 export function creatureModel(type: string, worldScale: number): T.Group | null {
   const kit = dungeonKit.ready ? dungeonKit.instance(type) : null; if (!kit) return null;
-  const outer = new T.Group(), flash: LitMaterial[] = [];
+  const outer = new T.Group();
   kit.scale.setScalar(1 / Math.max(.05, worldScale)); outer.add(kit);
-  outer.traverse(o => { if (o instanceof T.Mesh && isLit(o.material)) { o.material = o.material.clone(); o.material.userData.sharedKit = false; flash.push(o.material as LitMaterial); } });
-  outer.userData.flashMaterials = flash; addOutlines(outer); showOutlines(outer, false);
+  deferFlash(outer); outer.userData.flashOwns = true; addOutlines(outer); showOutlines(outer, false);
   return outer;
 }
 function shade(hex: string, k: number) { const c = new T.Color(hex); c.r = Math.min(1, c.r * k); c.g = Math.min(1, c.g * k); c.b = Math.min(1, c.b * k); return '#' + c.getHexString(); }

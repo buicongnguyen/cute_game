@@ -1,3 +1,4 @@
+import { flashMaterialsOf } from '../src/flash-materials.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -129,7 +130,9 @@ test('creatures that spawned before the kit arrived are re-dressed in place, kee
   assert.equal(boar.mesh, root, 'same entity root');
   assert.equal(root.userData.creatureArt, true);
   assert.equal(root.rotation.y, 1.2); assert.ok(root.position.equals(at)); assert.equal(root.scale.x, scale); assert.equal(boar.hp, 30);
-  assert.ok((root.userData.flashMaterials as T.Material[]).length >= 1, 'hit flash materials point at the new parts');
+  const parts = root.userData.flashMeshes as T.Mesh[]; // hit flash copies are made on the first hit (flash-materials.ts), so the parts are what must point at the new art
+  assert.ok(parts.length >= 1 && parts.every(m => { let p: T.Object3D | null = m; while (p && p !== root) p = p.parent; return p === root; }), 'hit flash parts are the new parts');
+  assert.ok(flashMaterialsOf(root).length >= 1 && flashMaterialsOf(root).every(m => parts.some(p => p.material === m)), 'hit flash materials point at the new parts');
   assert.ok((root.userData.outlines as T.Mesh[]).length >= 5, 'outlines follow the new parts');
   assert.equal(root.userData.legs, undefined, 'animation lookups are redone on the new parts');
   assert.ok(root.getObjectByName('creature-body'));

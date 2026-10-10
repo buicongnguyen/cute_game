@@ -1,3 +1,4 @@
+import { viewWidth, viewHeight } from './viewport.ts';
 import * as T from 'three';
 import type { World } from './world.ts';
 import { t } from './i18n.ts';
@@ -8,11 +9,13 @@ import { t } from './i18n.ts';
  */
 const MAX_PLATES = 24, REACH = 38;
 export class Nameplates {
-  private plates = new Map<string, { el: HTMLDivElement; text: string; friend: boolean }>();
+  private plates = new Map<string, { el: HTMLDivElement; text: string; friend: boolean; tf?: string }>();
   private v = new T.Vector3();
   constructor(private world: World, private hidden: () => boolean = () => false) {}
   frame() {
-    const w = this.world, off = w.interior || this.hidden(), seen = new Set<string>();
+    const w = this.world;
+    if (!this.plates.size && !(w.remotePlayers && w.remotePlayers.size)) return; // solo with nobody around: nothing to place or clean up
+    const off = w.interior || this.hidden(), seen = new Set<string>();
     if (!off && w.remotePlayers) {
       let shown = 0;
       const near = [...w.remotePlayers.entries()].filter(([, r]) => r.mesh.visible && r.pose.name).map(([id, r]) => ({ id, r, d: Math.hypot(r.mesh.position.x - w.position.x, r.mesh.position.z - w.position.z) })).filter(x => x.d < REACH).sort((a, b) => a.d - b.d);
@@ -20,14 +23,16 @@ export class Nameplates {
         if (shown >= MAX_PLATES) break;
         const p = r.mesh.position, scale = r.mesh.scale.x / 1.0;
         this.v.set(p.x, p.y + 2.35 * Math.max(.5, scale), p.z).project(w.camera);
-        const x = (this.v.x + 1) / 2 * innerWidth, y = (1 - this.v.y) / 2 * innerHeight;
-        if (this.v.z > 1 || x < 20 || x > innerWidth - 20 || y < 20 || y > innerHeight - 20) continue;
+        const x = (this.v.x + 1) / 2 * viewWidth(), y = (1 - this.v.y) / 2 * viewHeight();
+        if (this.v.z > 1 || x < 20 || x > viewWidth() - 20 || y < 20 || y > viewHeight() - 20) continue;
         const friend = w.friendIds.has(id), text = `${friend ? '💚 ' : ''}${r.pose.name} · ${t('Lv {level}', { level: r.pose.level ?? 1 })}`;
         let plate = this.plates.get(id);
         if (!plate) { const el = document.createElement('div'); el.className = 'player-plate'; document.body.append(el); plate = { el, text: '', friend: false }; this.plates.set(id, plate); }
         if (plate.text !== text) { plate.text = text; plate.el.textContent = text; }
         if (plate.friend !== friend) { plate.friend = friend; plate.el.classList.toggle('friend', friend); }
-        plate.el.style.visibility = ''; plate.el.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -100%)`;
+        const tf = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -100%)`; // written only on change: a still plate costs no style work
+        if (plate.tf === undefined) plate.el.style.visibility = '';
+        if (plate.tf !== tf) { plate.tf = tf; plate.el.style.transform = tf; }
         seen.add(id); shown++;
       }
     }

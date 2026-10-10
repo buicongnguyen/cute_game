@@ -1,3 +1,4 @@
+import { viewWidth, viewHeight } from './viewport.ts';
 import { t } from './i18n.ts';
 import * as T from 'three';
 import type { Enemy, Entity } from './world.ts';
@@ -105,7 +106,7 @@ const portrait = (e: Enemy) => { if ((e.flash ?? 0) > 0) return null; const url 
 
 /** DOM side: owns the over-head bars in the label layer and fills the target frame and boss bar. */
 export class CombatHud {
-  private bars = new Map<string, { el: HTMLDivElement; fill: HTMLElement; lv: HTMLElement; mark: HTMLElement; marks: string; pct: number; level: number; sel: boolean }>();
+  private bars = new Map<string, { el: HTMLDivElement; fill: HTMLElement; lv: HTMLElement; mark: HTMLElement; marks: string; pct: number; level: number; sel: boolean; tf?: string }>();
   /** Parrot marks live in the combat simulation, not on the creature (main.ts sets this). */
   isMarked: (id: string) => boolean = () => false;
   private lastHit: { e: Enemy; at: number } | null = null;
@@ -123,12 +124,12 @@ export class CombatHud {
       const d = Math.hypot(e.x - px, e.z - pz); if (d > 18) continue;
       // The target's bobbing arrow (target-marker.ts) rises to model height + 0.7 m: its bar sits above the arrow, not on it.
       const p = this.screen(e.x, barHeight(e) + (targetOf(selected, this.lastHit, performance.now()) === e ? .95 : 0), e.z);
-      if (!p.front || p.x < -40 || p.x > innerWidth + 40 || p.y < -60 || p.y > innerHeight + 20) continue;
+      if (!p.front || p.x < -40 || p.x > viewWidth() + 40 || p.y < -60 || p.y > viewHeight() + 20) continue;
       items.push({ id: e.id, x: p.x, y: p.y, e, d });
     }
     // The selected creature first, then nearest: they keep their natural spot, others make room.
     items.sort((a, b) => (b.e === selected ? 1 : 0) - (a.e === selected ? 1 : 0) || a.d - b.d);
-    const spots = placeBars(items, { width: innerWidth, height: innerHeight }), live = new Set<string>();
+    const spots = placeBars(items, { width: viewWidth(), height: viewHeight() }), live = new Set<string>();
     spots.forEach((s, i) => {
       const e = items[i].e; live.add(s.id);
       let bar = this.bars.get(s.id);
@@ -143,10 +144,14 @@ export class CombatHud {
       const marks = statusMarks(e, this.isMarked(e.id));
       if (marks !== bar.marks) { bar.mark.textContent = marks; bar.mark.hidden = !marks; bar.marks = marks; }
       if (sel !== bar.sel) { bar.el.classList.toggle('sel', sel); bar.sel = sel; }
-      bar.el.style.transform = `translate(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px) translate(-50%,-100%)`;
+      const tf = `translate(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px) translate(-50%,-100%)`; // written only when it changed: a still bar costs no style work
+      if (tf !== bar.tf) { bar.tf = tf; bar.el.style.transform = tf; }
     });
     for (const [id, bar] of this.bars) if (!live.has(id)) { bar.el.remove(); this.bars.delete(id); }
   }
+
+  /** Text written only when it differs: an unchanged write still replaces the node and dirties style. */
+  private put(el: Element, text: string) { if (el.textContent !== text) el.textContent = text; }
 
   /** A few times a second: the target frame and the boss bar. Returns whether each shows, for layout classes. */
   panels(enemies: readonly Enemy[], selected: Entity | null, px: number, pz: number, on: boolean): { target: boolean; boss: boolean } {
@@ -154,17 +159,17 @@ export class CombatHud {
     frame.hidden = !target;
     if (target) {
       if (target.id !== this.targetId) { const icon = portrait(target); frame.querySelector('.target-icon')!.innerHTML = icon ?? ''; frame.querySelector('strong')!.textContent = t(target.name); if (icon !== null) this.targetId = target.id; }
-      frame.querySelector('strong')!.textContent = t(target.name);
-      frame.querySelector('.target-level')!.textContent = t('Lv {level}', { level: target.level ?? 1 });
-      (frame.querySelector('.target-meter i') as HTMLElement).style.width = `${target.hp / target.maxHp * 100}%`;
-      frame.querySelector('.target-hp')!.textContent = `${Math.ceil(target.hp)} / ${target.maxHp}`;
+      this.put(frame.querySelector('strong')!, t(target.name));
+      this.put(frame.querySelector('.target-level')!, t('Lv {level}', { level: target.level ?? 1 }));
+      const meter = frame.querySelector('.target-meter i') as HTMLElement, width = `${target.hp / target.maxHp * 100}%`; if (meter.style.width !== width) meter.style.width = width;
+      this.put(frame.querySelector('.target-hp')!, `${Math.ceil(target.hp)} / ${target.maxHp}`);
     } else this.targetId = '';
     const boss = on ? bossFor(enemies, px, pz) : null, bar = document.getElementById('boss-bar')!;
     bar.hidden = !boss;
     if (boss) {
       if (boss.id !== this.bossId) { const icon = portrait(boss); document.getElementById('boss-icon')!.innerHTML = icon ?? '👑'; document.getElementById('boss-name')!.textContent = `👑 ${t(boss.name)}`; if (icon !== null) this.bossId = boss.id; }
-      document.getElementById('boss-name')!.textContent = `👑 ${t(boss.name)}`;
-      document.getElementById('boss-fill')!.style.width = `${boss.hp / boss.maxHp * 100}%`;
+      this.put(document.getElementById('boss-name')!, `👑 ${t(boss.name)}`);
+      const fill = document.getElementById('boss-fill')!, bw = `${boss.hp / boss.maxHp * 100}%`; if (fill.style.width !== bw) fill.style.width = bw;
     } else this.bossId = '';
     return { target: !!target, boss: !!boss };
   }
