@@ -33,16 +33,16 @@ async function buildFixture(t, files, {base='/',error}={}) {
 }
 
 function cacheStorage() {
-  const entries=new Map(),requests=[];
+  const entries=new Map(),requests=[],stats={live:0,peak:0};
   const key=request=>new URL(typeof request==='string'?request:request.url,origin).href;
   return {
-    entries,requests,
+    entries,requests,stats,
     async open(name) {
       if(!entries.has(name)) entries.set(name,new Map());
       const data=entries.get(name);
       return {
         async addAll(urls) { for(const url of urls)await this.add(url); },
-        async add(request) { const url=typeof request==='string'?request:new URL(request.url).pathname+new URL(request.url).search; requests.push(url); data.set(key(request),new Response(`cached:${url}`)); },
+        async add(request) { stats.live++;stats.peak=Math.max(stats.peak,stats.live);await new Promise(r=>setTimeout(r,1));stats.live--;const url=typeof request==='string'?request:new URL(request.url).pathname+new URL(request.url).search; requests.push(url); data.set(key(request),new Response(`cached:${url}`)); },
         async match(request,{ignoreSearch=false}={}) {const want=key(request),bare=u=>u.split('?')[0];for(const [k,v]of data)if(k===want||ignoreSearch&&bare(k)===bare(want))return v.clone();},
         async put(request,response) {data.set(key(request),response.clone());},
       };
@@ -63,6 +63,7 @@ function worker(source, caches=cacheStorage()) {
   });
   return {
     caches,network,messages,get claimed(){return claimed;},get skipped(){return skipped;},setNetwork(fn){responder=fn;},
+    async message(data) {let promise;listeners.get('message')({data,waitUntil:value=>{promise=value;}});assert.ok(promise);await promise;},
     async lifecycle(name) {let promise;listeners.get(name)({waitUntil:value=>{promise=value;}});assert.ok(promise);await promise;},
     request(url,{method='GET',mode='cors'}={}) {
       let response;
@@ -292,4 +293,44 @@ test('a new worker installs past the HTTP cache, takes over at once, drops old c
   await next.lifecycle('activate');
   assert.equal((await storage.keys()).includes(oldName),false);
   assert.deepEqual(JSON.parse(JSON.stringify(next.messages.map(m=>({...m,version:typeof m.version})))),[{type:'zoo-sw-ready',version:'string',scripts:['/assets/index-BBBBBBBB.js']}]);
+});
+
+const shortHash=bytes=>createHash('sha256').update(bytes).digest('hex').slice(0,8);
+test('install fetches at most 5 files at once; on-demand models come in later, 4 at a time, and survive an update without the network',async t=>{
+  const files={'index.html':'shell','assets/index-AAAAAAAA.js':'js','assets/models/farm.glb':'farm','assets/models/creatures.glb':'creatures','assets/models/titans.glb':'titans','assets/models/worlds-ice.glb':'ice','assets/models/worlds-sand.glb':'sand','assets/models/cottage.glb':'cottage'};
+  for(let i=0;i<14;i++)files['assets/icons/items/i'+i+'.webp']='icon'+i;
+  const storage=cacheStorage(),app=worker(await buildFixture(t,files),storage);
+  await app.lifecycle('install');
+  const stats=app.caches.stats;assert.ok(stats.peak>1&&stats.peak<=5,'install concurrency '+stats.peak);
+  const later=['farm','creatures','titans','worlds-ice','worlds-sand'];
+  const key=name=>`/assets/models/${name}.glb?v=${glbHash(files['assets/models/'+name+'.glb'])}`;
+  for(const name of later)assert.equal(app.caches.requests.includes(key(name)),false,name+' is not part of the install');
+  stats.peak=0;await app.message({type:'zoo-fill'});
+  assert.ok(stats.peak>1&&stats.peak<=4,'background concurrency '+stats.peak);
+  for(const name of later)assert.ok(app.caches.requests.includes(key(name)),name+' stored by the background fill');
+  // Offline now: every file, models included, answers from the cache.
+  app.setNetwork(async()=>{throw new Error('offline');});
+  for(const name of [...later,'cottage'])assert.equal(await(await app.request(key(name))).text(),`cached:${key(name)}`);
+  // An update that left a model alone copies it from the old cache at install, with no download.
+  const old0=app.caches.requests.length;
+  const next=worker(await buildFixture(t,{...files,'assets/index-BBBBBBBB.js':'js2'}),storage);
+  await next.lifecycle('install');
+  assert.deepEqual(next.caches.requests.slice(old0).filter(u=>/models/.test(u)),[],'unchanged models are not downloaded again');
+  await next.lifecycle('activate');
+  assert.equal(await(await next.request(key('farm'))).text(),`cached:${key('farm')}`);
+});
+
+test('icons and audio are pinned by content hash: unchanged ones are copied from the old cache, changed ones are downloaded',async t=>{
+  const base={'index.html':'shell','assets/index-AAAAAAAA.js':'js','assets/icons/items/a.webp':'icon a','assets/icons/items/b.webp':'icon b','assets/audio/theme.mp3':'tune'};
+  const storage=cacheStorage(),old=worker(await buildFixture(t,base),storage);
+  await old.lifecycle('install');
+  const key=(name,body)=>`/assets/${name}?v=${shortHash(body)}`;
+  assert.ok(old.caches.requests.includes(key('icons/items/a.webp','icon a')));assert.ok(old.caches.requests.includes(key('audio/theme.mp3','tune')));
+  const seen=old.caches.requests.length;
+  const next=worker(await buildFixture(t,{...base,'assets/icons/items/b.webp':'icon b v2','assets/index-BBBBBBBB.js':'js2'}),storage);
+  await next.lifecycle('install');
+  const fetched=next.caches.requests.slice(seen);
+  assert.deepEqual(fetched.filter(u=>/icons|audio/.test(u)),[key('icons/items/b.webp','icon b v2')],'only the changed icon is fetched');
+  const calls=next.network.length;
+  assert.equal(await(await next.request(key('icons/items/a.webp','icon a'))).text(),`cached:${key('icons/items/a.webp','icon a')}`);assert.equal(next.network.length,calls,'a hashed icon is cache-first');
 });

@@ -1,3 +1,4 @@
+import { assetUrl } from './asset-url.ts';
 import { t } from './i18n.ts';
 import { OPTIONS, ROWS, ROW_NAMES, lookOptions, ownsOption, splitLook, type LookId, type LookOption, type LookRow, type Looks } from './looks.ts';
 
@@ -10,9 +11,9 @@ import { OPTIONS, ROWS, ROW_NAMES, lookOptions, ownsOption, splitLook, type Look
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 /** The combination's name, e.g. "Girl · Tall · Cat ears · Fox hood" (the free defaults "No ears" and "No hood" left out). */
 export const lookName = (id: LookId) => lookOptions(id).filter((o, i) => i < 2 || OPTIONS[o].price > 0).map(o => t(OPTIONS[o].name)).join(' · ');
-const ART_BASE = `${import.meta.env?.BASE_URL ?? '/'}assets/icons/looks/`;
+const ART_BASE = "icons/looks/";
 /** An option's portrait (128 px webp); its emoji is the alt text, shown if the picture cannot load. */
-export const lookArt = (o: LookOption) => `${ART_BASE}${o}.webp`;
+export const lookArt = (o: LookOption) => assetUrl(`${ART_BASE}${o}.webp`);
 const tileArt = (o: LookOption) => `<img class="look-chip-art" src="${lookArt(o)}" alt="${OPTIONS[o].icon}" width="128" height="128" loading="lazy" decoding="async">`;
 /** The headline option of a combination, for toasts: its hood, else its ears, else its body. */
 export const headline = (id: LookId) => { const l = splitLook(id); return l.deco !== 'bare' ? l.deco : l.ears !== 'none' ? l.ears : l.body; };

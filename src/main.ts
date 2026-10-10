@@ -1,3 +1,4 @@
+import { assetUrl } from './asset-url.ts';
 import './mobile-game-init.mjs';
 import {cropBadgeAnchor} from './crop-cards.ts';
 import {HELP_TOPICS} from './help-topics.ts';
@@ -13,7 +14,7 @@ import { Box3, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
 import { dogCoatOf } from './dog-world.ts';
 import { dogFollows } from './guard-dog.ts';
-import { refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, KIT_FILES } from './assets.ts';
+import { KitLibrary, refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, KIT_FILES } from './assets.ts';
 import { onArtLoaded } from './art-retry.ts';
 import { LateArtQueue } from './late-art.ts';
 import { parseHouse } from './house-activities.ts';
@@ -101,6 +102,8 @@ import * as Restock from './farm-restock.ts';
 import './helper.css';
 import { FriendCrew, postFor } from './friend-crew.ts';
 import { setFriendDresser } from './friend-view.ts';
+import { SaveGuard } from './save-guard.ts';
+import { installSaveGuardUi, restoreBackup, restoreRowHtml } from './save-guard-ui.ts';
 import { PROFILE_SLOTS, activeSlot, activeKey, slotKey, setActiveSlot } from './profiles.ts';
 import { ChatBubbles } from './friend-chat.ts';
 import { Nameplates } from './nameplates.ts';
@@ -144,7 +147,8 @@ const discoverySize={w:0,h:0};
 let discoveryObserver:ResizeObserver|null=null;
 const esc = (value: string) => value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 let saved: M.SaveState | null = null;
-try { saved = M.parseSave(localStorage.getItem(activeKey())); } catch { /* Play remains available without storage. */ }
+const saveGuard = new SaveGuard((() => { try { return localStorage; } catch { return null; } })());
+try { saved = saveGuard.load(activeKey(), M.parseSave).state; } catch { /* Play remains available without storage. */ }
 let state = saved ?? M.newGame();
 let started = false, modal = '', selectedItem: M.ItemId | null = null, activePlot = 0, lastFocused: HTMLElement | null = null;
 let saveFailed = false, elapsed = 0, uiElapsed = 0, frameTime = 16;
@@ -326,7 +330,8 @@ frameListeners.add(()=>{if(!villageNeedsKit||!sceneryKit.ready||!started)return;
   villageNeedsKit=false;rebuildHomePresentation('home');world.refreshPlayer();});
 // Models that only arrive after their retries (art-retry.ts) swap in without a reload; before Play a rebuild also brings in late trees.
 // Files landing together are handled once per frame, each refreshing only what it dresses (late-art.ts).
-initArtNote();const lateArt=new LateArtQueue();onArtLoaded(url=>lateArt.add(url));
+KitLibrary.warmer=kit=>{void kit.warm(world.renderer,world.camera,world.scene);};
+initArtNote();installSaveGuardUi(saveGuard);window.addEventListener('storage',e=>{if(e.storageArea===localStorage)saveGuard.external(e,activeKey());});const lateArt=new LateArtQueue();onArtLoaded(url=>lateArt.add(url));
 frameListeners.add(()=>{const urls=lateArt.take();if(!urls.length)return;if(!started){world.build(state.planet);world.refreshPlayer();}else{world.refreshArt(urls);if(house.inside&&urls.includes(HOUSE_FILE))void house.house.view.refine();}if(urls.includes(KIT_FILES.fish)&&!fishGame)stockPonds();});
 
 const sfx=new Sfx();
@@ -334,7 +339,7 @@ const sfx=new Sfx();
 bindAudioSliders(app,(kind,value)=>{if(kind==='sfx'){sfx.volume=value;sfx.play('click');}},(kind,value)=>{void perform('settings',{settings:kind==='music'?{musicVolume:value}:{sfxVolume:value}}).then(()=>syncAudio(state.settings));});
 function tone(kind: Sound = 'click') { sfx.volume = audioOf(state.settings).sfxVolume; sfx.play(kind); }
 const vibrate=(ms:number)=>{try{if(audioOf(state.settings).vibrate&&matchMedia('(pointer: coarse)').matches)navigator.vibrate?.(ms);}catch{/* Optional. */}};
-function save() { if(!started)return;if(persistence){persistence(state);return;}try { state.savedAt=Date.now();localStorage.setItem(activeKey(),JSON.stringify(contextGear.persisted(state)));saveFailed=false;$('#save-status').textContent=t('● Saved on this device'); } catch { saveFailed=true;$('#save-status').textContent=t('○ Saving unavailable'); } }
+function save() { if(!started)return;if(persistence){persistence(state);return;}if(!saveGuard.canWrite(activeKey()))return;try { state.savedAt=Date.now();localStorage.setItem(activeKey(),JSON.stringify(contextGear.persisted(state)));saveGuard.wrote(activeKey(),state.savedAt);saveFailed=false;$('#save-status').textContent=t('● Saved on this device'); } catch { saveFailed=true;$('#save-status').textContent=t('○ Saving unavailable'); } }
 // Keep at most three messages on screen (two on phones, where they also leave sooner); older ones fade out instead of stacking up the view.
 const phoneScreen=matchMedia('(max-width: 600px), (max-height: 520px)');
 function toast(message: string, icon='✨') {
@@ -346,12 +351,12 @@ function toast(message: string, icon='✨') {
 }
 // Blender-rendered icons for crops, fish, gear, items, cooked food and dishes (item-icons.ts); decorations are drawn
 // from their 3D models by the game. Emoji remain the fallback.
-const ICON_BASE=`${import.meta.env.BASE_URL}assets/icons/`;
+const iconUrl=(path:string)=>assetUrl(`icons/${path}`);
 const missingIcons=new Set<string>();
 function art(id:string,icon:string):string{
   if(Object.hasOwn(M.ITEMS,id)&&M.ITEMS[id].type==='decor'){const url=decorIcon(id);return url?`<img class="art-icon" src="${url}" alt="" draggable="false">`:icon;}
   const path=iconPath(id);
-  return path&&!missingIcons.has(id)?`<img class="art-icon" src="${ICON_BASE}${path}" alt="" draggable="false" data-id="${esc(id)}" data-fallback="${esc(icon)}">`:icon;
+  return path&&!missingIcons.has(id)?`<img class="art-icon" src="${iconUrl(path)}" alt="" draggable="false" data-id="${esc(id)}" data-fallback="${esc(icon)}">`:icon;
 }
 /** A small inline icon for ingredient lists and chips. */
 const mini=(id:string)=>`<span class="mini-art">${art(id,M.ITEMS[id]?.icon??'✨')}</span>`;
@@ -515,6 +520,7 @@ function updateLabels() {
 const labelShows=(r:ReturnType<typeof labelRect>)=>r.front&&r.left>=2&&r.right<=innerWidth-2&&r.top>=2&&r.bottom<=innerHeight-2&&!hudPanels.some(p=>boxesMeet(p,r));
 
 /** Re-project the labels after each render so they move in step with the camera instead of trailing it. */
+let labelFrame=0;
 function positionLabels(){
   const discovery=$('#discovery-progress'),point=world.screen(2.6,2.7,14.5);
   const hide=!started||world.planet!=='home'||Math.hypot(world.position.x-2.6,world.position.z-14.5)>16||!point.front||!!modal||!!world.interior; // indoors the well is out of sight
@@ -527,7 +533,10 @@ function positionLabels(){
   const vis=!discovery.hidden&&discoverySize.w>0&&clearOfHud(pill,hudPanels)?'':'hidden';if(discovery.style.visibility!==vis)discovery.style.visibility=vis;
   combatHud.frame(world.enemies,world.selected,world.position.x,world.position.z,!started||!!modal||!!world.interior);
   if(!started||modal)return;
+  // Labels more than ~9 m away re-project every other frame (alternating halves): a one-frame lag is invisible on something that far, and each projection costs.
+  labelFrame^=1;let li=0;
   for(const [id,a] of labelAnchors){
+    if(((li++^labelFrame)&1)&&Math.abs(a.e.x-world.position.x)+Math.abs(a.e.z-world.position.z)>9)continue;
     const node=labelNodes.get(id);if(!node)continue;const r=labelRect(a),off=a.covered||!labelShows(r);
     const tf=`translate(${r.x.toFixed(1)}px,${r.y.toFixed(1)}px) translate(-50%,${a.centre?'-50%':'-100%'})`;if(!off&&a.tf!==tf){a.tf=tf;node.style.transform=tf;} // a hidden label stays put: no style work for it
     if(off!==a.off){a.off=off;node.toggleAttribute('data-off',off);}
@@ -822,7 +831,8 @@ async function testerApply(){testerOpen=true;if(testerOnline()){toast(t('Tester 
   if(!testerTry()){toast(t('Too many tries. Wait a minute and try again.'),'⏳');return;}
   if(!(await Tester.codeMatches(code))){if(input)input.value='';toast(t('That code is not quite right.'),'💭');return;}
   testerDo(Tester.unlockTester);toast(t('Tester mode on: {count} energy',{count:Tester.TESTER_ENERGY.toLocaleString()}),'🧪');settings();}
-function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Full screen</strong><small>Fill the whole screen; press again to leave.</small></div><button class="toggle ${document.fullscreenElement?'on':''}" role="switch" aria-checked="${!!document.fullscreenElement}" aria-label="Full screen" data-action="fullscreen"></button></div>${installRowHtml(t)}${audioRowsHtml(state.settings)}<div class="settings-row"><div><strong>AI neighbours</strong><small>Friendly explorers who fight in the wild, make friends and give gifts. Always off while you play online.</small></div><button class="toggle ${neighboursOn()?'on':''}" role="switch" aria-checked="${neighboursOn()}" aria-label="AI neighbours" data-action="neighbours"></button></div><div class="settings-row"><div><strong>Show joystick</strong><small>Drag the stick to walk in any direction. Skill buttons move to the opposite side.</small></div><button class="toggle ${joystickEnabled()?'on':''}" role="switch" aria-checked="${joystickEnabled()}" aria-label="Show joystick" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Joystick side</strong><small>Choose the hand you use to move</small></div><div class="segmented" role="radiogroup" aria-label="Joystick side">${(['left','right'] as const).map(side=>`<button role="radio" aria-checked="${(state.settings.joystickSide??'left')===side}" data-action="joystick-side" data-kind="${side}">${side==='left'?'Left':'Right'}</button>`).join('')}</div></div>${keyboardSettings()}<div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row" id="render-res-row"><div><strong>Render resolution</strong><small>${graphics.resolution==='auto'?(graphics.mobile?'Light on phones, like the original':'Follows the Graphics setting'):({sharp:'Crisp, but phones work harder',balanced:'Smoother play and a cooler phone',saver:'Fewest pixels for the longest battery'} as Record<string,string>)[graphics.resolution]}${typeof innerWidth==='number'?` · ${innerWidth*graphics.ratio|0}×${innerHeight*graphics.ratio|0} px`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Render resolution">${RESOLUTION_SETTINGS.map(r=>`<button role="radio" aria-checked="${graphics.resolution===r}" class="${graphics.resolution===r?'on':''}" data-action="render-res" data-kind="${r}">${r==='auto'?'Auto':RESOLUTION[r].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Difficulty</strong><small>${M.DIFFICULTY_NOTE[M.difficultyOf(state)]}${world.roomDifficulty&&world.roomDifficulty!==M.difficultyOf(state)?` <span class="host-difficulty">${esc(t('Host difficulty: {level}',{level:t(M.DIFFICULTY_LABEL[world.roomDifficulty])}))}</span>`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Difficulty">${M.DIFFICULTIES.map(d=>`<button role="radio" aria-checked="${M.difficultyOf(state)===d}" class="${M.difficultyOf(state)===d?'on':''}" data-action="difficulty" data-kind="${d}">${M.DIFFICULTY_LABEL[d]}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div>${testerMore()}<div class="settings-row"><div><strong>${t('Keep backpack on defeat')}</strong><small>${t('Keep carried items when defeated. Existing dropped bags stay recoverable.')}</small></div><button class="toggle ${M.keepsBag(state)?'on':''}" role="switch" aria-checked="${M.keepsBag(state)}" aria-label="${t('Keep backpack on defeat')}" data-action="keep-bag"></button></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
+function restoreBackupRow(){return restoreRowHtml(saveGuard,activeKey());}
+function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Full screen</strong><small>Fill the whole screen; press again to leave.</small></div><button class="toggle ${document.fullscreenElement?'on':''}" role="switch" aria-checked="${!!document.fullscreenElement}" aria-label="Full screen" data-action="fullscreen"></button></div>${installRowHtml(t)}${restoreBackupRow()}${audioRowsHtml(state.settings)}<div class="settings-row"><div><strong>AI neighbours</strong><small>Friendly explorers who fight in the wild, make friends and give gifts. Always off while you play online.</small></div><button class="toggle ${neighboursOn()?'on':''}" role="switch" aria-checked="${neighboursOn()}" aria-label="AI neighbours" data-action="neighbours"></button></div><div class="settings-row"><div><strong>Show joystick</strong><small>Drag the stick to walk in any direction. Skill buttons move to the opposite side.</small></div><button class="toggle ${joystickEnabled()?'on':''}" role="switch" aria-checked="${joystickEnabled()}" aria-label="Show joystick" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Joystick side</strong><small>Choose the hand you use to move</small></div><div class="segmented" role="radiogroup" aria-label="Joystick side">${(['left','right'] as const).map(side=>`<button role="radio" aria-checked="${(state.settings.joystickSide??'left')===side}" data-action="joystick-side" data-kind="${side}">${side==='left'?'Left':'Right'}</button>`).join('')}</div></div>${keyboardSettings()}<div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row" id="render-res-row"><div><strong>Render resolution</strong><small>${graphics.resolution==='auto'?(graphics.mobile?'Light on phones, like the original':'Follows the Graphics setting'):({sharp:'Crisp, but phones work harder',balanced:'Smoother play and a cooler phone',saver:'Fewest pixels for the longest battery'} as Record<string,string>)[graphics.resolution]}${typeof innerWidth==='number'?` · ${innerWidth*graphics.ratio|0}×${innerHeight*graphics.ratio|0} px`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Render resolution">${RESOLUTION_SETTINGS.map(r=>`<button role="radio" aria-checked="${graphics.resolution===r}" class="${graphics.resolution===r?'on':''}" data-action="render-res" data-kind="${r}">${r==='auto'?'Auto':RESOLUTION[r].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Difficulty</strong><small>${M.DIFFICULTY_NOTE[M.difficultyOf(state)]}${world.roomDifficulty&&world.roomDifficulty!==M.difficultyOf(state)?` <span class="host-difficulty">${esc(t('Host difficulty: {level}',{level:t(M.DIFFICULTY_LABEL[world.roomDifficulty])}))}</span>`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Difficulty">${M.DIFFICULTIES.map(d=>`<button role="radio" aria-checked="${M.difficultyOf(state)===d}" class="${M.difficultyOf(state)===d?'on':''}" data-action="difficulty" data-kind="${d}">${M.DIFFICULTY_LABEL[d]}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div>${testerMore()}<div class="settings-row"><div><strong>${t('Keep backpack on defeat')}</strong><small>${t('Keep carried items when defeated. Existing dropped bags stay recoverable.')}</small></div><button class="toggle ${M.keepsBag(state)?'on':''}" role="switch" aria-checked="${M.keepsBag(state)}" aria-label="${t('Keep backpack on defeat')}" data-action="keep-bag"></button></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
 function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div><div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
 
 // Fishing happens in the world: no panel, just the pond, the line and a big Reel button.
@@ -837,7 +847,7 @@ const guardianView=new LakeGuardianView(world.scene,fishingView);
 let huntingPending:{owner:M.SaveState;scene:typeof world.root}|null=null;
 // The garden helper (helper.ts rules, helper-view.ts walking and poses, helper-ui.ts panels).
 const helperView=new HelperView();world.scene.add(helperView.group);
-function helperDialog(){if(visiting)return;openDialog('helper','Garden helper',helperPanel(state,{esc,mini,picture:`${ICON_BASE}helper.webp`}),'GARDEN HELPER','🤖');}
+function helperDialog(){if(visiting)return;openDialog('helper','Garden helper',helperPanel(state,{esc,mini,picture:iconUrl('helper.webp')}),'GARDEN HELPER','🤖');}
 const helperPending=new Set<string>();
 /** The empty bed whose seed list the player has open: no helper plants it until the panel closes (auto-plant.ts). */
 function heldBed(){return modal==='plant'&&!visiting?activePlot:undefined;}
@@ -852,7 +862,7 @@ const helperHarvest=(i:number)=>helperAction('helperHarvest',i),helperPlant=(i:n
 
 const farmHelperView=new FarmHelperView();world.scene.add(farmHelperView.group);
 function farmHelperContext(){return started&&!document.hidden&&!flight&&!visiting&&(!actionHandler||network.role!==null)&&world.planet==='home'&&world.state===state?world.root:null;}
-function farmHelperDialog(){if(visiting||world.planet!=='home'||!M.penBuilt(state))return;openDialog('farm-helper','Animal pen helper',farmHelperPanel(state,`${ICON_BASE}helper.webp`),'ANIMAL PEN','🤖');}
+function farmHelperDialog(){if(visiting||world.planet!=='home'||!M.penBuilt(state))return;openDialog('farm-helper','Animal pen helper',farmHelperPanel(state,iconUrl('helper.webp')),'ANIMAL PEN','🤖');}
 const farmHelperController=new FarmHelperController({state:()=>state,context:farmHelperContext,perform:workPerform,completed(result,catchUp){
   farmCollectFeedback(result.collected,undefined,'worker');for(const uid of result.fed)feedBurst(uid,'worker');
   if(result.fed.length&&gainShows('worker'))tone('pop');
@@ -1081,7 +1091,7 @@ void fishKit.load().then(()=>{if(fishKit.ready&&!fishGame)stockPonds();});
 // Gear and pet files load on demand as the explorer puts them on (see World.kitFor).
 void heroKit.load().then(()=>{if(heroKit.ready)world.refreshAvatars();});
 // The cottage interior (house-ui.ts): the door, walking in and out, friends and their Dress panel.
-const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked:uiBlocked,perform:(type,payload)=>perform(type,payload),openDialog,closeDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ownGear:()=>{bagMode='wardrobe';inventory();},looks:()=>lookShop.open(),bench:()=>bench.open(),quests,soundOn:()=>syncAudio(state.settings).musicVolume>0,iconUrl:id=>`${ICON_BASE}items/${id}.webp`});
+const house=initHouse({world,started:()=>started,visiting:()=>!!visiting,blocked:uiBlocked,perform:(type,payload)=>perform(type,payload),openDialog,closeDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ownGear:()=>{bagMode='wardrobe';inventory();},looks:()=>lookShop.open(),bench:()=>bench.open(),quests,soundOn:()=>syncAudio(state.settings).musicVolume>0,iconUrl:id=>`${iconUrl(`items/${id}.webp`)}`});
 // The bedroom mirror's Look shop (look-shop.ts): body styles bought with energy, previewed like gear try-on.
 // A tap on an indoor label picks its thing, like a tap on the thing (labels themselves never take pointer events).
 house.house.labelBox=id=>{const a=labelAnchors.get(id);return a&&!a.off&&!modal&&labelNodes.get(id)?.hidden===false?labelRect(a):null;};
@@ -1103,7 +1113,7 @@ world.onInteract=async(e)=>{
 };
 // Loot lands on the ground (drops.ts) and reaches the bag through the pickup magnet, with a '+n name' float.
 const drops=createDrops(world,{layer:$('#world-labels'),alive:()=>state.hp>0&&!world.interior,item:id=>Object.hasOwn(M.ITEMS,id)?M.ITEMS[id]:undefined,
-  iconUrl:id=>Object.hasOwn(M.ITEMS,id)&&M.ITEMS[id].type==='decor'?decorIcon(id)||null:iconPath(id)?ICON_BASE+iconPath(id):null,
+  iconUrl:id=>Object.hasOwn(M.ITEMS,id)&&M.ITEMS[id].type==='decor'?decorIcon(id)||null:iconPath(id)?iconUrl(iconPath(id)!):null,
   canAdd:(id,n)=>Number.isSafeInteger((state.bag[id]??0)+n)&&M.canAddItem(state,id,n),onPick:(d,stack)=>{
     const feedback=(id:string,count:number)=>{floating('+'+count+' '+t(M.ITEMS[id].name),world.position.x,world.position.z,'item',stack*.7);tone('coin');};
     if(actionHandler){const meta=networkDrops.get(d.uid);if(!meta)return;networkDrops.delete(d.uid);const collectingState=state,root=world.root;
@@ -1564,6 +1574,7 @@ app.addEventListener('click',async event=>{
     case 'expand-pen':{const cost=M.penExpandCost(state);if(cost!==null&&state.energy<cost){toast(t('You need {amount} energy to make the pen bigger.',{amount:cost}),'ϟ');break;} // one toast: the reason, before asking the rules
       if(await perform('expandPen')){tone('success');toast('The pen is bigger: room for 3 more chickens and 4 more cows.','🐔');}penDialog();break;}
     case 'friend-feed':{const id=button.dataset.kind as FriendId,f=state.friends?.find(f=>f.id===id);if(f&&await perform('setFriendAutoFeed',{id,autoFeed:!f.autoFeed}))friendDialog(id);break;}
+    case 'restore-backup':restoreBackup(saveGuard,activeKey());break;
     case 'fullscreen':{void toggleFullscreen(message=>toast(message,'⛶')).then(()=>setTimeout(()=>{if(modal==='settings')settings();},250));break;}
     case 'title-profiles':toggleProfiles();break;
     // Install as app (install-app.ts): the browser's own dialog, or the Add to Home Screen steps on iPhone and iPad.

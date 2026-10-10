@@ -4,13 +4,14 @@
  * bots' strike marks and shots (pooled: nothing is created or disposed mid-match). Simple shapes stand in until the
  * file arrives.
  */
+import { assetUrl } from './asset-url.ts';
 import * as T from 'three';
 import { KitLibrary, modelUrl } from './assets.ts';
 import { toonMaterial } from './toon.ts';
 import { CTF, FIELD, POWERS, type PowerKind, type TeamId } from './ctf-content.ts';
 import { fieldObstacles } from './ctf-rules.ts';
 
-export const ctfKit = new KitLibrary([modelUrl('ctf.glb')]);
+export const ctfKit = new KitLibrary([modelUrl('ctf.glb')]); ctfKit.warmOnLoad = true;
 export const TEAM_COLORS = ['#3f8cff', '#ff5a5f'] as const;
 const TEAM_GLOW = ['#9fd0ff', '#ffb0b0'] as const;
 export const NEUTRAL = '#ffc94a';
@@ -172,4 +173,4 @@ export class Shots {
   }
   update(dt: number) { for (const s of this.list) { if (s.t >= 1) { s.mesh.visible = false; continue; } s.t = Math.min(1, s.t + dt / .22); s.mesh.position.set(s.fx + (s.tx - s.fx) * s.t, 1.1 + Math.sin(s.t * Math.PI) * .4, s.fz + (s.tz - s.fz) * s.t); } }
 }
-export const powerIcon = (kind: PowerKind) => `${import.meta.env.BASE_URL}assets/icons/ctf/${kind}.webp`;
+export const powerIcon = (kind: PowerKind) => assetUrl(`icons/ctf/${kind}.webp`);

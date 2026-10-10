@@ -13,7 +13,7 @@ import { DUNGEON_SKILL_INFO, type DungeonStage } from './dungeon-content.ts';
 import { markProgress, type DgAttack, type DgMark } from './dungeon-patterns.ts';
 
 export const dungeonKitFile = modelUrl('dungeon.glb');
-export const dungeonKit = new KitLibrary([dungeonKitFile]);
+export const dungeonKit = new KitLibrary([dungeonKitFile]); dungeonKit.warmOnLoad = true;
 const mats = new Map<string, T.MeshToonMaterial>();
 const mat = (color: string, glow = 0) => { const key = color + glow; let m = mats.get(key); if (!m) { m = toonMaterial({ color, emissive: glow ? color : '#000000', emissiveIntensity: glow }); m.userData.sharedKit = true; mats.set(key, m); } return m; };
 function mesh(geometry: T.BufferGeometry, color: string, x = 0, y = 0, z = 0, glow = 0) { const m = new T.Mesh(geometry, mat(color, glow)); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; return m; }

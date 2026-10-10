@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { modelVersions } from './model-versions.mjs';
+import { assetVersions, modelVersions } from './model-versions.mjs';
 import { staleCaches, strategy, isHashedBuildFile } from './sw-logic.mjs';
 
 // Keep the worker's paths aligned with Vite's deployment base. GitHub project
@@ -31,7 +31,14 @@ const files = (await walk(dist)).sort();
 const urls = files.map(file => base + path.relative(dist, file).split(path.sep).join('/'));
 // Models keep fixed names; the client asks for them with ?v=<content hash> (vite.config.ts), and so do these lists.
 const versions = modelVersions(path.join(dist, 'assets', 'models'));
-const versioned = url => { const name = url.match(/\/assets\/models\/([^/]+\.glb)$/)?.[1]; return name && versions[name] ? `${url}?v=${versions[name]}` : url; };
+// Icons and audio get the same treatment (src/asset-url.ts), keyed by their path under assets/.
+const assets = assetVersions(path.join(dist, 'assets'));
+const versioned = url => {
+  const name = url.match(/\/assets\/models\/([^/]+\.glb)$/)?.[1];
+  if (name) return versions[name] ? `${url}?v=${versions[name]}` : url;
+  const rel = url.match(/\/assets\/((?:icons|audio)\/.+)$/)?.[1];
+  return rel && assets[rel] ? `${url}?v=${assets[rel]}` : url;
+};
 // Gear models download only when something from them is first worn, planet scenery only
 // when that planet is first visited and the farm pen kit only when the pen is first shown,
 // so the worker keeps each one the first time it is fetched instead of fetching them all
@@ -41,7 +48,8 @@ const index = base + 'index.html';
 // The page and its hashed scripts must install together, or the worker is not worth activating.
 const core = urls.filter(url => url === index || (isHashedBuildFile(url) && /\.(js|css)$/.test(url)));
 const extra = urls.filter(url => !core.includes(url) && !onDemand(url)).map(versioned);
-const pinned = urls.filter(url => isHashedBuildFile(url) || versions[url.split('/').pop()]).map(versioned);
+const pinned = urls.map(versioned).filter((url, i) => isHashedBuildFile(urls[i]) || url !== urls[i]);
+const later = urls.filter(onDemand).map(versioned);
 const scripts = core.filter(url => url.endsWith('.js'));
 const hash = createHash('sha256');
 for (let i = 0; i < files.length; i++) hash.update(urls[i]).update('\0').update(await readFile(files[i])).update('\0');
@@ -54,6 +62,7 @@ const PREFIX=${JSON.stringify(prefix)};
 const VERSION=${JSON.stringify(version)};
 const CORE=${JSON.stringify(core)};
 const EXTRA=${JSON.stringify(extra)};
+const LATER=${JSON.stringify(later)};
 const KNOWN=${JSON.stringify(urls)};
 const PINNED=${JSON.stringify(pinned)};
 const SCRIPTS=${JSON.stringify(scripts)};
@@ -67,11 +76,18 @@ const fresh=url=>new Request(url,{cache:'reload'});
 const older=()=>caches.keys().then(keys=>keys.filter(key=>key!==VERSION&&key.startsWith(PREFIX)));
 const copied=(url,names)=>names.reduce((found,name)=>found.then(hit=>hit||caches.open(name).then(cache=>cache.match(url))),Promise.resolve(undefined));
 const fill=(cache,url,names)=>PINNED_SET.has(url)?copied(url,names).then(hit=>hit?cache.put(url,hit):cache.add(url)):cache.add(fresh(url));
+// Runs job over items with at most n in flight, so a big list does not fight the game for the connection. Never rejects.
+const pool=(items,n,job)=>new Promise(done=>{let next=0,live=0;const go=()=>{if(next>=items.length&&!live)return done();while(live<n&&next<items.length){live++;const item=items[next++];Promise.resolve().then(()=>job(item)).catch(()=>{}).then(()=>{live--;go();});}};go();});
+// On-demand files (models the game fetches only when first needed): copy any this build can take from an older cache at
+// install (no network), and download the rest in the background once the page asks (message 'zoo-fill'), a few at a time.
+const inherit=(cache,names)=>pool(LATER,6,url=>copied(url,names).then(hit=>hit&&cache.put(url,hit)));
+const backfill=()=>Promise.all([caches.open(VERSION),older()]).then(([cache,names])=>pool(LATER,4,url=>cache.match(url).then(hit=>hit||fill(cache,url,names))));
+self.addEventListener('message',event=>{if(event.data&&event.data.type==='zoo-fill')event.waitUntil(backfill());});
 // A new build takes over at once: its pinned URLs carry content hashes, so an open page of an older
 // build still gets matching files (other versions go to the network), and the page offers a reload.
 self.addEventListener('install',event=>{
   event.waitUntil(Promise.all([caches.open(VERSION),older()]).then(([cache,names])=>Promise.all(CORE.map(url=>fill(cache,url,names)))
-    .then(()=>Promise.allSettled(EXTRA.map(url=>fill(cache,url,names))))).then(()=>self.skipWaiting()));
+    .then(()=>pool(EXTRA,5,url=>fill(cache,url,names))).then(()=>inherit(cache,names))).then(()=>self.skipWaiting()));
 });
 // Older caches go only once this build holds every EXTRA file: a flaky install keeps the last complete copy for offline play.
 const complete=()=>caches.open(VERSION).then(cache=>Promise.all(EXTRA.map(url=>cache.match(url)))).then(found=>found.every(Boolean));

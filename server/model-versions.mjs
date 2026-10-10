@@ -16,3 +16,22 @@ export function modelVersions(directory) {
   }
   return versions;
 }
+
+/**
+ * Content hash per icon and audio file, keyed by the path under assets/ ('icons/items/apple.webp'). The client appends it
+ * as ?v= (src/asset-url.ts) and build-offline.mjs computes the same ones from dist, so a redeploy that left a file alone
+ * keeps its URL: the offline worker copies it from the previous cache and the browser's own cache keeps answering it.
+ */
+export function assetVersions(directory) {
+  const versions = {};
+  const walk = (dir, prefix) => {
+    let entries = [];
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (entry.isDirectory()) walk(path.join(dir, entry.name), `${prefix}${entry.name}/`);
+      else if (/\.(webp|png|mp3|ogg)$/.test(entry.name)) versions[`${prefix}${entry.name}`] = createHash('sha256').update(readFileSync(path.join(dir, entry.name))).digest('hex').slice(0, 8);
+    }
+  };
+  for (const folder of ['icons', 'audio']) walk(path.join(directory, folder), `${folder}/`);
+  return versions;
+}

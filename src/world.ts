@@ -20,7 +20,7 @@ import * as T from 'three';
 import {superheroFlightPose,clearSuperheroFlightPose} from './flight-pose.ts';
 import { manageSceneMatrices, updateSceneMatrices } from './scene-matrices.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { keepAlive } from './dispose-tree.ts';
+import { disposeOwnedTextures, keepAlive } from './dispose-tree.ts';
 import { hardScale, creatureLevelScale, type Difficulty } from './difficulty.ts';
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, heroKitFor, tuckEars, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, bossPetKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
@@ -258,7 +258,7 @@ export class World {
     if (detail !== this.detail) { this.detail = detail; if (this.scatterGroup) this.refreshScenery(); }
     this.resize();
   }
-  disposeTree(g: T.Object3D) { g.traverse(o => { if (o instanceof T.Mesh) { if (!isShared(o.geometry)) o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (!isShared(material) && ![...matCache.values()].includes(material as T.MeshToonMaterial)) material.dispose(); } }); }
+  disposeTree(g: T.Object3D) { g.traverse(o => { if (o instanceof T.Mesh) { if (!isShared(o.geometry)) o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) if (!isShared(material) && ![...matCache.values()].includes(material as T.MeshToonMaterial)) { disposeOwnedTextures(material); material.dispose(); } } }); }
   applyRefinedAssets(assets: RefinedAssetLibrary = refinedAssets) {
     // Indoors the entity list is the interior's: a model that lands then must still dress the outdoor buildings.
     for (const entity of this.outdoorEntities) { this.applyRefinedAsset(entity, assets); if (entity.kind === 'travel') this.dressRocket(entity); }

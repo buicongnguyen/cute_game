@@ -11,6 +11,7 @@
  * - shots and zaps are pooled.
  * Simple shapes stand in until the kit file arrives.
  */
+import { assetUrl } from './asset-url.ts';
 import * as T from 'three';
 import { KitLibrary, modelUrl, bakeModel } from './assets.ts';
 import { toonMaterial } from './toon.ts';
@@ -18,14 +19,14 @@ import { ENEMY_TYPES } from './enemy-types.ts';
 import { RESCUE, MISSIONS, DEFENCES, FIELDS, type MissionId, type DefenceKind, type Point } from './rescue-content.ts';
 import { pointAt, type Field, type RsRun, type RsEnemy, type RsDefence } from './rescue-rules.ts';
 
-export const rescueKit = new KitLibrary([modelUrl('rescue.glb')]);
+export const rescueKit = new KitLibrary([modelUrl('rescue.glb')]); rescueKit.warmOnLoad = true;
 const mats = new Map<string, T.Material>();
 const mat = (color: string, glow = 0) => { const key = color + glow; let m = mats.get(key); if (!m) { m = toonMaterial({ color, emissive: glow ? color : '#000000', emissiveIntensity: glow }); m.userData.sharedKit = true; mats.set(key, m); } return m; };
 const basic = (color: string, opacity = 1) => { const key = 'b' + color + opacity; let m = mats.get(key); if (!m) { m = new T.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: opacity >= 1, toneMapped: false }); m.userData.sharedKit = true; mats.set(key, m); } return m; };
 function mesh(g: T.BufferGeometry, color: string, x = 0, y = 0, z = 0, glow = 0) { const m = new T.Mesh(g, mat(color, glow)); m.position.set(x, y, z); return m; }
 const noPick = <O extends T.Object3D>(o: O) => { o.traverse(c => { c.raycast = () => {}; }); return o; };
 const kit = (name: string, tint?: Record<string, string>) => (rescueKit.ready ? rescueKit.instance(name, tint) : null);
-export const rescueIcon = (name: string) => `${import.meta.env.BASE_URL}assets/icons/rescue/${name}.webp`;
+export const rescueIcon = (name: string) => assetUrl(`icons/rescue/${name}.webp`);
 
 // ---------------------------------------------------------------- the portal by the south square
 const LEAN = 28 * Math.PI / 180, PORTAL_CENTRE = { y: .4 + 1.8 * Math.cos(LEAN), z: -1.8 * Math.sin(LEAN) };
