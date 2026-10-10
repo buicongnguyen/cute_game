@@ -328,11 +328,13 @@ test('a host message for another planet cannot leave undefeatable creatures on t
   assert.equal(peer.enemies.filter(e=>e.hp>0).length,0,'nothing alive is left for the minimap to draw');
 });
 
-test('the well by the storage chest is scenery only, like the reference: no entity, prompt or label',()=>{
+test('the well by the storage chest is the Ember Well: one interactive entity that opens the Colossus lid dialog (our own story, not in the reference)',()=>{
   const w=world();w.build('home');
   let well:T.Object3D|undefined;w.root.traverse(o=>{if(o.userData.prop==='well')well=o;});
-  assert.ok(well,'the well is built');assert.equal(well!.userData.entity,undefined);
-  assert.ok(!w.entities.some(e=>Math.hypot(e.x-well!.position.x,e.z-well!.position.z)<1.5),'no interactive entity sits on the well');
+  assert.ok(well,'the well is built');
+  const near=w.entities.filter(e=>Math.hypot(e.x-well!.position.x,e.z-well!.position.z)<1.5);
+  assert.equal(near.length,1,'exactly one entity sits on the well');
+  assert.equal(near[0].kind,'well');assert.equal(well!.userData.entity,near[0]);
 });
 
 test('Titan summon recalls living mobile creatures, stacks their attack and never creates or revives one',()=>{

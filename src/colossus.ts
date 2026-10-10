@@ -12,6 +12,7 @@ import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage
 import { colossusContributors, grantColossusReward } from './colossus-rewards.ts';
 import { loadColossusArt, makeColossusRig, poseColossus, colossusArtReady, type ColossusRig } from './colossus-art.ts';
 import { ColossusAttackView } from './colossus-view.ts';
+import { colossusSleeps } from './colossus-sleep.ts';
 
 /** What the runtime needs from the game (main.ts wires it). */
 export interface ColossusHost {
@@ -148,7 +149,7 @@ export class ColossusEvent {
     if (!(dt > 0)) return;
     this.time += dt;
     const now = Date.now(), w = this.h.world, clock = this.window(now), online = this.h.online();
-    const awake = online ? !!this.server?.on && !this.server?.killed : clock.phase === 'active' && this.killedDay !== clock.day;
+    const awake = online ? !!this.server?.on && !this.server?.killed : clock.phase === 'active' && this.killedDay !== clock.day && !colossusSleeps();
     if (!online && clock.phase === 'active' && this.day !== clock.day) this.resetDay(clock.day);
     if (clock.phase !== this.lastPhase) { if (this.lastPhase === 'active' && clock.phase !== 'active' && !online) this.retreat(); this.lastPhase = clock.phase; }
     const home = w.planet === 'home' && !w.interior && this.h.playing();
@@ -435,7 +436,7 @@ export class ColossusEvent {
     const now = Date.now(), online = this.h.online(), clock = this.window(now), e = this.enemy, s = this.server;
     let mode: 'none' | 'soon' | 'awake' | 'done' = 'none', left = clock.left;
     if (online && s) { if (s.on && !s.killed) mode = 'awake'; else if (s.soon) mode = 'soon'; else if (s.on && s.killed) mode = 'done'; if (s.startsAt && mode === 'soon') left = s.startsAt - now; if (s.endsAt && mode === 'awake') left = s.endsAt - now; }
-    else if (!online) { if (clock.phase === 'soon') mode = 'soon'; else if (clock.phase === 'active') mode = this.killedDay === clock.day ? 'done' : 'awake'; }
+    else if (!online && !colossusSleeps()) { if (clock.phase === 'soon') mode = 'soon'; else if (clock.phase === 'active') mode = this.killedDay === clock.day ? 'done' : 'awake'; }
     if (!this.h.playing()) mode = 'none';
     const hp = e && e.hp > 0 ? e.hp / e.maxHp : (online && s?.maxHp ? (s.hp ?? 0) / s.maxHp : 1);
     // Close by, the boss bar already shows its health: the banner steps back (hidden on phones, no meter on desktop).

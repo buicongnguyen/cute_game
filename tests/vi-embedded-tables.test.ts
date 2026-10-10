@@ -26,8 +26,10 @@ test('every moved Vietnamese table equals the snapshot taken before the move', (
   for (const [name, expected] of Object.entries(snapshot.tables)) {
     if (name === 'MOBILE_SUPPORT_VI') continue;
     assert.ok(moved[name], name + ' has a new home');
-    assert.deepEqual(plain(moved[name]), expected, name);
-    assert.deepEqual(Object.keys(moved[name]), Object.keys(expected), name + ' keeps its key order');
+    // Later features may append strings to a table; every snapshot entry keeps its text and its place.
+    const now = plain(moved[name]), keys = Object.keys(expected);
+    for (const key of keys) assert.equal(now[key], expected[key], `${name}: ${key}`);
+    assert.deepEqual(Object.keys(now).slice(0, keys.length), keys, name + ' keeps its key order');
   }
 });
 
