@@ -15,6 +15,7 @@
  * Star bits, defences, the squad's borrowed gear and the hero's boosts end with the mission; only the validated
  * `rescueClaim` pays (rescue-claim.ts). There is no death bag inside a mission (main.ts checkDefeat asks `active`).
  */
+import { assetUrl } from './asset-url.ts';
 import * as T from 'three';
 import './rescue.css';
 import type { World, Enemy, Entity } from './world.ts';
@@ -53,7 +54,7 @@ const COOLDOWN_KEY = 'zoo-rescue-ready-at';
 const RECOVERY_MS = 3 * 60_000;
 const SOS_KEY = 'zoo-rescue-sos', CALLS_KEY = 'zoo-rescue-calls';
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const itemIcon = (id: string) => `${import.meta.env.BASE_URL}assets/icons/items/${id}.webp`;
+const itemIcon = (id: string) => assetUrl(`icons/items/${id}.webp`);
 const planetName = (id: MissionId) => t(PLANETS[MISSIONS[id].planet].name);
 const enemyName = (kind: string) => t(ENEMY_TYPES[kind]?.name ?? kind);
 const ROLE_ICON: Record<SquadRole, string> = { fighter: '⚔️', ranged: '🏹', support: '💚' };

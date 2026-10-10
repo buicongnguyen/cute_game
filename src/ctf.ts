@@ -12,6 +12,7 @@
  * share of the explorer's health as of a level-8 hero's. Teammates are the explorer's AI neighbours (bots.ts) and the
  * other team comes from bot-logic.ts makeCast. Online rooms are not open yet: the picker shows them as coming soon.
  */
+import { assetUrl } from './asset-url.ts';
 import * as T from 'three';
 import './ctf.css';
 import type { World, Enemy, Entity, RemotePose } from './world.ts';
@@ -43,7 +44,7 @@ const RESTORE_KEY = 'zoo-ctf-restore';
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const clock = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
 const teamName = (team: TeamId) => t(team === 0 ? 'blue' : 'red');
-const heroIcon = (id: string) => `${import.meta.env.BASE_URL}assets/icons/items/${id}.webp`;
+const heroIcon = (id: string) => assetUrl(`icons/items/${id}.webp`);
 const heroName = (id: string) => t(DISGUISES[id]?.name ?? id);
 
 interface Bot { id: string; def: { name: string; color: string; gear: Record<string, string | undefined> }; team: TeamId; proxy: Enemy | null; shown: boolean }
@@ -109,7 +110,7 @@ export function initCtf(h: CtfHooks) {
     requestKit();
     const left = rewardedLeft(h.state(), Date.now());
     if (view === 'modes') {
-      h.openDialog('ctf', 'Multiworld Gate', `<div class="ctf-dialog"><p class="ctf-lead"><img src="${import.meta.env.BASE_URL}assets/icons/ctf/keeper.webp" alt="" width="44" height="44"><i>“${esc(t('Beyond this gate wait many other worlds. Fancy a match? Pick a mode!'))}”</i></p>
+      h.openDialog('ctf', 'Multiworld Gate', `<div class="ctf-dialog"><p class="ctf-lead"><img src="${assetUrl("icons/ctf/keeper.webp")}" alt="" width="44" height="44"><i>“${esc(t('Beyond this gate wait many other worlds. Fancy a match? Pick a mode!'))}”</i></p>
         <div class="ctf-modes">
           <button class="ctf-mode on" data-ctf="mode-ctf"><b>🚩 ${esc(t('Flag Rush'))}</b><small>1v1 · 2v2 · 3v3 · 5v5 — ${esc(t('Grab the other team\'s flag, carry it home to your own stand while your flag is safe, and score. First to 3 wins. Jump pads fling you over the river, 7 fun power-ups, 10 heroes with their ultimate ready. No gear is ever lost, and winners earn EXP.'))}</small><em>${esc(t('PLAY'))}</em></button>
           <button class="ctf-mode" disabled aria-disabled="true"><b>⚔️ ${esc(t('Lane Clash'))}</b><small>${esc(t('Three lanes, towers and a big boss. Being polished so it is easier to play.'))}</small><em>🔒 ${esc(t('Locked'))}</em></button>

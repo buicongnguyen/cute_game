@@ -8,10 +8,10 @@ import type * as T from 'three';
  * fine because every caller fires it and forgets it (nothing awaits a warm-up).
  */
 let guarded = false;
-export function compileAsyncSafe(renderer: T.WebGLRenderer, scene: T.Object3D, camera: T.Camera): Promise<unknown> {
+export function compileAsyncSafe(renderer: T.WebGLRenderer, scene: T.Object3D, camera: T.Camera, lightsFrom?: T.Scene): Promise<unknown> {
   if (!guarded && typeof window !== 'undefined') {
     guarded = true;
     window.addEventListener('error', event => { if (/reading 'isReady'/.test(event.message ?? '')) event.preventDefault(); });
   }
-  return renderer.compileAsync(scene, camera).catch(() => undefined);
+  return renderer.compileAsync(scene, camera, lightsFrom).catch(() => undefined);
 }

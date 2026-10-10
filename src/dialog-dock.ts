@@ -15,9 +15,12 @@ export const dockable = (type: string) => !CENTRED.has(type);
 /** True while a docked panel is actually laid out on the right (the media query matched). */
 export function dockedNow(): boolean {
   const layer = document.querySelector('#dialog-layer');
-  return !!layer && !(layer as HTMLElement).hidden && layer.classList.contains('docked') && matchMedia(DOCK_QUERY).matches;
+  return !!layer && !(layer as HTMLElement).hidden && layer.classList.contains('docked') && dockMedia().matches;
 }
 export const DOCK_QUERY = '(pointer: fine) and (min-width: 1000px)';
+/** One MediaQueryList for the session: its `matches` is live, so asking each frame costs nothing and creates nothing. */
+let dockList: MediaQueryList | null = null;
+const dockMedia = () => dockList ??= matchMedia(DOCK_QUERY);
 
 export function setDock(type: string) {
   document.querySelector('#dialog-layer')?.classList.toggle('docked', dockable(type));
@@ -34,8 +37,10 @@ export function initDockFraming(camera: ViewCamera) {
   let shift = 0;
   const tick = () => {
     requestAnimationFrame(tick);
+    // Phones and narrow windows never dock: nothing to measure once the picture has settled back.
+    if (shift === 0 && !dockMedia().matches) return;
     // The docked menu, or the docked "Play together" modal (online.ts; dialog-dock.css docks it the same way).
-    const W = innerWidth, panel = dockedNow() ? document.querySelector('#dialog') : matchMedia(DOCK_QUERY).matches ? document.querySelector('#online-dialog[open]') : null;
+    const W = innerWidth, panel = dockedNow() ? document.querySelector('#dialog') : dockMedia().matches ? document.querySelector('#online-dialog[open]') : null;
     let want = 0;
     if (panel) want = Math.max(0, (W / 2 + 96 - (panel.getBoundingClientRect().left - 24)) / W); // hero half-width up to ~90px with a wide hat
     if (Math.abs(want - shift) < 1e-4) { if (shift === want) return; shift = want; } else shift += (want - shift) * .18;

@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toToon, toonify } from './toon.ts';
 import { BUILD, DEFAULT_LOOK, DEFAULT_PIVOTS, bodyFile, fitOf, splitLook, type Body, type Fit, type LookId } from './looks.ts';
 import { loadWithRetry, DEFAULT_POLICY, type RetryPolicy } from './art-retry.ts';
+import { compileAsyncSafe } from './safe-compile.ts';
 
 // Vite supplies the deployment prefix; direct Node tests use the root default.
 const assetBase = import.meta.env?.BASE_URL ?? '/';
@@ -224,7 +225,7 @@ export class KitLibrary {
     this.loading ??= Promise.all(this.urls.map(async url => {
       const scene = await loadWithRetry(url, () => this.loadScene(url), keep, this.policy);
       if (scene) { try { this.ingest(scene); } catch { /* The procedural scenery remains. */ } }
-    })).then(() => { this.ready = this.models.size > 0; });
+    })).then(() => { this.ready = this.models.size > 0; if (this.ready && this.warmOnLoad) { try { KitLibrary.warmer?.(this); } catch { /* A warm-up is optional. */ } } });
     return this.loading;
   }
 
@@ -259,6 +260,24 @@ export class KitLibrary {
   }
   /** True once `load` has been called, whether or not the file has arrived. */
   get requested() { return this.loading !== null; }
+  /**
+   * Mode kits (vault, flag rush, rescue, colossus gear) set this: once the file has arrived, `KitLibrary.warmer` (main.ts)
+   * compiles its shaders in the background, so entering the mode does not stall on programs it has never drawn.
+   */
+  warmOnLoad = false;
+  static warmer: ((kit: KitLibrary) => void) | null = null;
+  /**
+   * Compiles this kit's shader programs without drawing it: one plain and one instanced mesh per material (instanced copies
+   * are what the modes draw, and they are a different program), lit and fogged like `lightsFrom` (the world's scene).
+   */
+  warm(renderer: T.WebGLRenderer, camera: T.Camera, lightsFrom: T.Scene): Promise<unknown> {
+    const group = new T.Group(), seen = new Set<T.Material>();
+    for (const parts of this.models.values()) for (const part of parts) {
+      if (seen.has(part.material)) continue; seen.add(part.material);
+      for (const m of [new T.Mesh(part.geometry, part.material), new T.InstancedMesh(part.geometry, part.material, 1)]) { m.castShadow = m.receiveShadow = true; group.add(m); } // lit and shadowed like the modes draw them
+    }
+    return seen.size ? compileAsyncSafe(renderer, group, camera, lightsFrom) : Promise.resolve();
+  }
 
   /** A new group for `name`; `tint` maps material names to replacement colours. */
   instance(name: string, tint?: Record<string, string>): T.Group | null {

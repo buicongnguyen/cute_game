@@ -73,3 +73,17 @@ test('friend crew: repeated give/take and leaving friends free their models', ()
   assert.ok(counts.slice(0, 4).every(c => c === counts[0]), `stable: ${counts}`);
   assert.equal(counts[4], 0, 'all friend geometry freed once they leave');
 });
+
+test('disposeTree frees the drawn ground texture of an owned material but not kit-shared or image textures', () => {
+  const canvas = { width: 2, height: 2 } as unknown as HTMLCanvasElement;
+  const ground = new T.CanvasTexture(canvas), kit = new T.CanvasTexture(canvas), image = new T.Texture();
+  kit.userData.sharedKit = true;
+  const g = new T.Group();
+  g.add(new T.Mesh(new T.PlaneGeometry(), new T.MeshBasicMaterial({ map: ground })));
+  g.add(new T.Mesh(new T.PlaneGeometry(), new T.MeshBasicMaterial({ map: kit })));
+  g.add(new T.Mesh(new T.PlaneGeometry(), new T.MeshBasicMaterial({ map: image })));
+  const freed: unknown[] = [];
+  for (const tex of [ground, kit, image]) tex.addEventListener('dispose', () => freed.push(tex));
+  disposeTree(g);
+  assert.deepEqual(freed, [ground]);
+});

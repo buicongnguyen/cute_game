@@ -13,7 +13,7 @@ import { COLOSSUS_STATS } from './colossus-content.ts';
 export const colossusFile = modelUrl('colossus.glb');
 let scene: Promise<T.Group> | null = null;
 const loadScene = () => scene ??= new GLTFLoader().loadAsync(colossusFile).then(g => g.scene);
-export const colossusGearKit = new KitLibrary([colossusFile], () => loadScene());
+export const colossusGearKit = new KitLibrary([colossusFile], () => loadScene()); colossusGearKit.warmOnLoad = true;
 let template: T.Object3D | null = null, failed = false;
 /** Starts the download once; `then` runs when the model is ready (not on failure: the stand-in stays). */
 export function loadColossusArt(then: () => void) {

@@ -47,4 +47,7 @@ export function registerWorker(url: string, entry = new URL(import.meta.url).pat
     if (data?.type === 'zoo-sw-ready' && Array.isArray(data.scripts) && !data.scripts.includes(entry)) prompt.hidden = false;
   });
   void navigator.serviceWorker.register(url).catch(() => {});
+  // The first page of a first visit is not controlled by the worker, so the models it loads never reach the cache. Once the
+  // worker is active and the game has settled, ask it to fetch the on-demand files (a few at a time) for the next offline visit.
+  void navigator.serviceWorker.ready.then(reg => { setTimeout(() => reg.active?.postMessage({ type: 'zoo-fill' }), 8000); }).catch(() => {});
 }

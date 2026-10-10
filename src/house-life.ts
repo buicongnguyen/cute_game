@@ -6,6 +6,7 @@
  * Per frame it only measures distances to a fixed list and moves one bubble; the prompt's DOM changes only when the
  * nearest activity (or its cooldown second) changes.
  */
+import { assetUrl } from './asset-url.ts';
 import { t } from './i18n.ts';
 import type { Entity, World } from './world.ts';
 import type { HouseSession, ActivityEntity } from './house-session.ts';
@@ -61,7 +62,7 @@ export class MusicBox {
   start() {
     if (!this.fallback && typeof Audio !== 'undefined') {
       try {
-        this.theme ??= Object.assign(new Audio(`${import.meta.env?.BASE_URL ?? '/'}assets/audio/zoo-garden-theme.mp3`), { loop: true, volume: audioLevels.music });
+        this.theme ??= Object.assign(new Audio(assetUrl("audio/zoo-garden-theme.mp3")), { loop: true, volume: audioLevels.music });
         this.playing = true;
         void this.theme.play().catch(() => { this.fallback = true; this.theme = null; if (this.playing) this.start(); });
         return;
