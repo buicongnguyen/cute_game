@@ -1,5 +1,5 @@
 /* AI neighbours (bots.ts): speech bubbles, the friend request, the gift pop-up and the neighbours list. */
-.bot-bubble { position: fixed; left: 0; top: 0; z-index: 31; max-width: min(240px, 60vw); padding: 6px 11px; border-radius: 14px; background: #fff; color: #2c3a26; border: 2px solid #ffd76b; font: 800 13px/1.3 Nunito, system-ui, sans-serif; text-align: center; pointer-events: none; box-shadow: 0 3px 0 rgba(44, 58, 38, .16); }
+.bot-bubble { position: fixed; left: 0; top: 0; z-index: 1; max-width: min(240px, 60vw); padding: 6px 11px; border-radius: 14px; background: #fff; color: #2c3a26; border: 2px solid #ffd76b; font: 800 13px/1.3 Nunito, system-ui, sans-serif; text-align: center; pointer-events: none; box-shadow: 0 3px 0 rgba(44, 58, 38, .16); }
 .bot-bubble::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 11px; height: 11px; background: #fff; border-right: 2px solid #ffd76b; border-bottom: 2px solid #ffd76b; transform: translateX(-50%) rotate(45deg); }
 .bot-card { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60; width: min(340px, calc(100vw - 32px)); padding: 12px 16px 14px; border: 4px solid #fff; border-radius: 22px; background: #fffaf0; color: #2c3a26; font: 800 14px Nunito, system-ui, sans-serif; box-shadow: 0 6px 0 rgba(44, 58, 38, .16), 0 14px 30px rgba(34, 60, 24, .25); text-align: center; }
 .bot-card[hidden] { display: none; }
@@ -27,7 +27,13 @@
 .bot-list { display: grid; gap: 8px; padding: 12px; }
 .bot-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 14px; background: #fff; border: 2px solid #efe2c2; }
 .bot-info { display: grid; gap: 2px; }
-.bot-toggle { display: flex; align-items: center; gap: 6px; font-weight: 800; }
+.bot-dialog { --tone: #ffd1de; --tone-top: #ffe8ef; --tone-edge: #ff94b3; --tone-ink: #5e1830; }
+/* "Show AI neighbours" is the Settings switch (.settings-row + .toggle), restyled here because .social-dialog buttons are pills. */
+.bot-toggle { gap: 10px; padding: 8px 12px; border-radius: 14px; background: #fff; border: 2px solid #efe2c2; }
+.bot-toggle > div { flex: 1; min-width: 0; }
+.bot-toggle strong { font-size: 14px; }
+.social-dialog .toggle { flex: none; width: 52px; min-width: 52px; height: 30px; min-height: 30px; padding: 3px; border: 0; border-radius: 999px; background: #d9d3c1; box-shadow: none; }
+.social-dialog .toggle.on { background: var(--grass, #4cb83b); }
 @media (prefers-reduced-motion: reduce) { .bot-gift { animation: none; } }
 .bot-acts { display: flex; gap: 6px; }
 .bot-back { margin-right: auto; }

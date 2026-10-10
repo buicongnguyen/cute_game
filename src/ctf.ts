@@ -179,7 +179,7 @@ export function initCtf(h: CtfHooks) {
     for (const e of list) if (e.id !== ME) s.bots.push({ id: e.id, def: e.def, team: e.team, proxy: null, shown: false });
     for (const b of s.bots) showBot(b);
     world.onRemotePlayerClick = id => { const b = s.bots.find(v => v.id === id); if (b?.proxy && b.proxy.hp > 0) { world.select(b.proxy); } };
-    document.body.classList.add('in-ctf'); hud.hidden = false; feed.hidden = false; tags.hidden = false; keeperTag.hidden = true; bubble.hidden = true;
+    document.body.classList.add('in-ctf', 'in-mode'); hud.hidden = false; feed.hidden = false; tags.hidden = false; keeperTag.hidden = true; bubble.hidden = true;
     h.refreshPlayer(); h.tone('level'); banner(t('Flag Rush Isle'), `${teamSize}v${teamSize} · ${t('Red team: AI opponents')}`);
     world.fx?.burst({ x: world.position.x, z: world.position.z }, { n: 40, color: ['#7a8aff', '#ff7a8a', '#ffffff'], glow: true, speed: 5, up: 9 });
     h.updateHud();
@@ -263,7 +263,7 @@ export function initCtf(h: CtfHooks) {
     session = null;
     try { localStorage.removeItem(RESTORE_KEY); } catch { /* fine */ }
     world.selected = null; world.ring.visible = false;
-    document.body.classList.remove('in-ctf'); hud.hidden = feed.hidden = down.hidden = tags.hidden = true; tags.innerHTML = ''; tagEls.clear(); world.movementLocked = false;
+    document.body.classList.remove('in-ctf', 'in-mode'); hud.hidden = feed.hidden = down.hidden = tags.hidden = true; tags.innerHTML = ''; tagEls.clear(); world.movementLocked = false;
     h.refreshPlayer(); h.updateHud(); h.toast(t('Welcome back from Flag Rush Isle.'), '🌀');
   }
 

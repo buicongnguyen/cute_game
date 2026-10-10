@@ -26,7 +26,7 @@
 #vault-lobby .vault-count { font-size: 17px; color: #ffd23f; }
 #vault-lobby .vault-names { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
 #vault-lobby .vault-names i { font-style: normal; font-size: 11px; padding: 1px 7px; border-radius: 9px; background: rgba(255, 255, 255, .14); }
-.vault-keeper-tag { position: fixed; left: 0; top: 0; z-index: 5; pointer-events: none; padding: 2px 9px; border-radius: 10px; background: rgba(40, 30, 80, .72); color: #e9f7ff; font: 800 12px 'Nunito Variable', system-ui, sans-serif; }
+.vault-keeper-tag { position: fixed; left: 0; top: 0; z-index: 1; pointer-events: none; padding: 2px 9px; border-radius: 10px; background: rgba(40, 30, 80, .72); color: #e9f7ff; font: 800 12px 'Nunito Variable', system-ui, sans-serif; }
 .vault-banner {
   position: fixed; left: 50%; top: 28%; transform: translate(-50%, -50%); z-index: 40; pointer-events: none; text-align: center;
   display: flex; flex-direction: column; gap: 2px; padding: 14px 28px; border-radius: 22px; color: #fff;

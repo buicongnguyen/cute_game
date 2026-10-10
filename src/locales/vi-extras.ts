@@ -40,4 +40,5 @@ export const VI_EXTRAS: Record<string, string> = {
   'Your backpack was empty, so nothing was lost.': 'Ba lô trống nên không mất gì cả.',
   'Your level, energy, worn gear and chest are safe.': 'Cấp độ, năng lượng, trang bị đang mặc và đồ trong rương vẫn giữ nguyên.',
   'Back on my feet →': 'Đứng dậy thôi →',
+  '(you)': '(bạn)',
 };

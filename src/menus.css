@@ -194,8 +194,9 @@
 /* Short landscape phones: a wider sheet that uses the full height, with list rows in two columns. */
 @media (max-height: 500px) and (orientation: landscape) {
   #dialog-layer { padding: calc(6px + var(--safe-top)) 6px calc(6px + var(--safe-bottom)); }
-  #dialog { width: min(820px, 100%); max-height: calc(100dvh - 12px - var(--safe-top) - var(--safe-bottom)); }
-  #dialog-body .shop-grid, #dialog-body .quest-list, #dialog-body .planet-grid, #dialog-body .upgrade-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  /* A 640 px sheet (it was 820): one row per line so four or five rows show, not two columns of two. */
+  #dialog { width: min(640px, 100%); max-height: calc(100dvh - 12px - var(--safe-top) - var(--safe-bottom)); }
+  #dialog-body .upgrade-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   #dialog-body .chapter-banner { grid-column: 1 / -1; }
   #dialog-body .help-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #dialog-body .map-illustration { display: none; }
@@ -260,3 +261,18 @@
   .shop-item:has(> [data-action="equip"]) > div:nth-child(2) { flex: 1 1 calc(100% - 52px); }
   .shop-item:has(> [data-action="equip"]) > [data-action="buy"] { margin-left: 44px; }
 }
+
+/* ---------------------------------------------------- Tab strips that scroll (tab-cues.ts)
+   The old always-on right fade made the last tab look cut off by accident. Now a strip that really overflows shows a chevron on the
+   hidden side (sticky, over a soft fade), and the active tab is scrolled into view when the strip is drawn. */
+.panel-tabs, .ranking-cats { -webkit-mask-image: none; mask-image: none; scroll-behavior: smooth; --cue-bg: var(--paper, #fffaf0); }
+.panel-tabs.more-r::after, .panel-tabs.more-l::before, .ranking-cats.more-r::after, .ranking-cats.more-l::before {
+  flex: none; position: sticky; display: grid; place-items: center; align-self: stretch; width: 34px; font-size: 22px; font-weight: 900; line-height: 1; color: var(--ink-soft, #5d6b52); pointer-events: none; z-index: 3;
+}
+.panel-tabs.more-r::after, .ranking-cats.more-r::after { content: '›'; right: 0; margin-left: -34px; padding-left: 8px; background: linear-gradient(90deg, transparent, var(--cue-bg) 60%); }
+.panel-tabs.more-l::before, .ranking-cats.more-l::before { content: '‹'; left: 0; margin-right: -34px; padding-right: 8px; background: linear-gradient(270deg, transparent, var(--cue-bg) 60%); }
+@media (pointer: fine) and (min-width: 1000px) { #dialog-layer.docked .panel-tabs.more-r::after, #dialog-layer.docked .panel-tabs.more-l::before { display: none; } }
+@media (prefers-reduced-motion: reduce) { .panel-tabs, .ranking-cats { scroll-behavior: auto; } }
+
+/* Sliders (music, effects) are 44 px tall touch targets; the visible track stays slim. */
+@media (pointer: coarse) { #dialog-body input[type="range"] { min-height: 44px; margin-block: 0; } }

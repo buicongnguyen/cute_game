@@ -49,6 +49,8 @@ let enabled = read(ENABLED_KEY) !== '0';
 export const neighboursOn = () => enabled;
 export function setNeighboursOn(on: boolean) { enabled = on; write(ENABLED_KEY, on ? '1' : '0'); }
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+// Header of the native panels as in the bottom-sheet panels: icon tile, kicker, title. Kept local so each file loads standalone.
+const headerParts = (icon: string, kicker: string, heading: HTMLElement) => { const tile = el('span', 'social-icon', icon); tile.setAttribute('aria-hidden', 'true'); const text = el('div', 'social-title'); text.append(el('span', 'social-kicker eyebrow', t(kicker)), heading); return [tile, text]; };
 
 export function initBots(game: GameBridge) {
   const world = game.getWorld(), bag = new TalkBag(), rand = Math.random;
@@ -126,7 +128,7 @@ export function initBots(game: GameBridge) {
   const outfitName = (d: BotDef) => d.gear.disguise ? t(ITEMS[d.gear.disguise]?.name ?? 'Costume') : d.gear.outfit ? t(ITEMS[d.gear.outfit]?.name ?? 'Outfit') : '';
   function openRequest(r: Run) {
     cardFor = r.def.id; card.replaceChildren(); card.classList.toggle('aside', fighting);
-    const title = el('h3', '', `${botName(r.def)} · Lv ${r.def.level}`), text = el('p', '', t('{name} would like to be your friend.', { name: botName(r.def) }));
+    const title = el('h3', '', `${botName(r.def)} · ${t('Lv {level}', { level: r.def.level })}`), text = el('p', '', t('{name} would like to be your friend.', { name: botName(r.def) }));
     const yes = el('button', 'bot-yes', t('Be friends')), no = el('button', 'bot-no', t('Maybe later'));
     yes.onclick = () => accept(r); no.onclick = () => decline(r);
     card.append(title, text, el('div', 'bot-actions')); card.lastElementChild!.append(yes, no); card.hidden = false;
@@ -374,11 +376,12 @@ export function initBots(game: GameBridge) {
   const dialog = el('dialog', 'social-dialog bot-dialog'); dialog.setAttribute('aria-label', t('Neighbours')); document.body.append(dialog);
   // ---- The message box ----
   const logs = new Map<string, Array<{ me: boolean; text: string }>>(); let chatWith: BotDef | null = null, draft = '', session = 0;
+  dialog.onkeydown = event => { if (event.key === 'Escape' && dialog.open) { event.preventDefault(); chatWith = null; dialog.close(); } };
   function renderChat(d: BotDef) {
     chatWith = d; dialog.replaceChildren();
     const header = el('header', 'social-header'), close = el('button', 'social-close', '✕'); close.setAttribute('aria-label', t('Close')); close.onclick = () => { chatWith = null; dialog.close(); };
     const back = el('button', 'bot-back', '‹ ' + t('Back')); back.onclick = () => { chatWith = null; renderPanel(); };
-    header.append(back, el('h2', '', `${isFriend(store, d.id) ? '💚 ' : ''}${d.name} · Lv ${d.level}`), close);
+    header.append(back, ...headerParts('💬', 'CHAT WITH A NEIGHBOUR', el('h2', '', `${isFriend(store, d.id) ? '💚 ' : ''}${d.name} · ${t('Lv {level}', { level: d.level })}`)), close);
     const body = el('div', 'social-content bot-chat'), log = el('div', 'bot-log'), form = el('form', 'bot-form'), input = el('input'), send = el('button', 'bot-send', t('Send'));
     input.type = 'text'; input.maxLength = 160; input.placeholder = t('Type a message…'); input.value = draft; input.autocomplete = 'off'; input.setAttribute('aria-label', t('Message'));
     input.oninput = () => { draft = input.value; }; send.type = 'submit';
@@ -402,14 +405,17 @@ export function initBots(game: GameBridge) {
   function renderPanel() {
     chatWith = null; dialog.replaceChildren();
     const header = el('header', 'social-header'), close = el('button', 'social-close', '✕'); close.setAttribute('aria-label', t('Close')); close.onclick = () => dialog.close();
-    header.append(el('h2', '', `🏘️ ${t('Neighbours')}`), close);
+    header.append(...headerParts('🏘️', 'MEET THE VILLAGE', el('h2', '', t('Neighbours'))), close);
     const body = el('div', 'social-content bot-list');
-    const toggle = el('label', 'bot-toggle'), box = el('input'); box.type = 'checkbox'; box.checked = enabled; box.onchange = () => { setNeighboursOn(box.checked); renderPanel(); };
-    toggle.append(box, document.createTextNode(' ' + t('Show AI neighbours')));
+    // The same switch the Settings panel uses (.settings-row + .toggle), not a bare checkbox.
+    const toggle = el('div', 'settings-row bot-toggle'), label = el('div', ''), box = el('button', `toggle${enabled ? ' on' : ''}`);
+    label.append(el('strong', '', t('Show AI neighbours')));
+    box.type = 'button'; box.setAttribute('role', 'switch'); box.setAttribute('aria-checked', String(enabled)); box.setAttribute('aria-label', t('Show AI neighbours')); box.onclick = () => { setNeighboursOn(!enabled); renderPanel(); };
+    toggle.append(label, box);
     body.append(el('p', 'social-small', t('Neighbours fight enemies in the wild beyond the four gates, so go out and meet them there. Some are rich and wear rare outfits. Become friends and they give you gifts, let you visit their gardens, and sometimes walk in through a gate to visit yours.')), toggle);
     for (const d of cast) {
       const row = el('section', 'bot-row'), friend = isFriend(store, d.id);
-      const info = el('div', 'bot-info'); info.append(el('b', '', `${friend ? '💚 ' : ''}${d.name} · Lv ${d.level}`), el('span', 'social-small', `${d.tier === 'rich' ? '💎 ' : ''}${outfitName(d)}${d.flies ? ' · ' + t('flies') : ''}`));
+      const info = el('div', 'bot-info'); info.append(el('b', '', `${friend ? '💚 ' : ''}${d.name} · ${t('Lv {level}', { level: d.level })}`), el('span', 'social-small', `${d.tier === 'rich' ? '💎 ' : ''}${outfitName(d)}${d.flies ? ' · ' + t('flies') : ''}`));
       const visitBtn = el('button', '', t('Visit garden')); visitBtn.disabled = !friend || !!visitingBot; visitBtn.title = friend ? '' : t('Become friends first.');
       visitBtn.onclick = () => { dialog.close(); visit(d); };
       const chatBtn = el('button', '', `💬 ${t('Chat')}`); chatBtn.onclick = () => renderChat(d);

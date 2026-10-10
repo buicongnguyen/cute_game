@@ -78,7 +78,7 @@ strong { font-weight: 900; }
 kbd { font-family: var(--font); }
 
 #world { position: fixed; inset: 0; width: 100%; height: 100%; outline: none; touch-action: none; }
-#app { position: fixed; inset: 0; pointer-events: none; }
+#app { position: fixed; inset: 0; pointer-events: none; z-index: 2; } /* world-anchored plates and bubbles (body children, z-index 1) sit under the HUD, never over it */
 button, input, #dialog, #title-screen { pointer-events: auto; }
 #hud { position: absolute; inset: 0; z-index: 1; }
 #world-labels { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
@@ -1982,7 +1982,7 @@ h1 > span {
 .profile-picker button.selected{border-color:#5fb04a;background:#fff}
 .profile-picker small{opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.friend-bubble{position:fixed;left:0;top:0;z-index:40;max-width:220px;padding:7px 12px;border-radius:14px;background:#fffdf3;color:#40502c;font:700 13px/1.3 Nunito,system-ui,sans-serif;box-shadow:0 3px 10px rgba(0,0,0,.25);pointer-events:none;text-align:center}
+.friend-bubble{position:fixed;left:0;top:0;z-index:1;max-width:220px;padding:7px 12px;border-radius:14px;background:#fffdf3;color:#40502c;font:700 13px/1.3 Nunito,system-ui,sans-serif;box-shadow:0 3px 10px rgba(0,0,0,.25);pointer-events:none;text-align:center}
 .friend-bubble::after{content:"";position:absolute;left:50%;bottom:-6px;width:12px;height:12px;background:#fffdf3;transform:translateX(-50%) rotate(45deg);border-radius:2px}
 
 .online-link{display:block;margin:10px 0 2px;padding:9px 14px;border-radius:14px;background:#e9f6ff;color:#1f5f99;font-weight:800;text-align:center;text-decoration:none}

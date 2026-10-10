@@ -1,5 +1,6 @@
 import * as T from 'three';
 import type { World } from './world.ts';
+import { t } from './i18n.ts';
 
 /**
  * Name and level above other explorers' heads, so people can tell each other apart in the shared world. One small DOM
@@ -21,7 +22,7 @@ export class Nameplates {
         this.v.set(p.x, p.y + 2.35 * Math.max(.5, scale), p.z).project(w.camera);
         const x = (this.v.x + 1) / 2 * innerWidth, y = (1 - this.v.y) / 2 * innerHeight;
         if (this.v.z > 1 || x < 20 || x > innerWidth - 20 || y < 20 || y > innerHeight - 20) continue;
-        const friend = w.friendIds.has(id), text = `${friend ? '💚 ' : ''}${r.pose.name} · Lv ${r.pose.level ?? 1}`;
+        const friend = w.friendIds.has(id), text = `${friend ? '💚 ' : ''}${r.pose.name} · ${t('Lv {level}', { level: r.pose.level ?? 1 })}`;
         let plate = this.plates.get(id);
         if (!plate) { const el = document.createElement('div'); el.className = 'player-plate'; document.body.append(el); plate = { el, text: '', friend: false }; this.plates.set(id, plate); }
         if (plate.text !== text) { plate.text = text; plate.el.textContent = text; }

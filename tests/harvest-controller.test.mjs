@@ -51,3 +51,10 @@ test('the growing-bed countdown uses the saved planting duration after crop migr
   // M.cropProgress has its own real clock; allow one elapsed second at the boundary.
   assert.match(f.ctx.growText(plot),/About [45] seconds until ripe/);
 });
+test('the growing-bed countdown shows minutes under an hour, never raw thousands of seconds',()=>{
+  const f=fixture(),plot=f.state.plots[0];
+  plot.plantedAt=f.now-1000;plot.growDuration=1_441_000;
+  assert.match(f.ctx.growText(plot),/About (23|24) min until ripe/);
+  plot.plantedAt=f.now-1000;plot.growDuration=3_601_000;
+  assert.match(f.ctx.growText(plot),/About 1 h 0 min until ripe/);
+});

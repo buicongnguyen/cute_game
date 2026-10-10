@@ -71,7 +71,7 @@
 @keyframes ctf-feed-in { from { opacity: 0; transform: translateX(20px); } }
 #ctf-down { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 35; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 26px; border-radius: 20px; background: rgba(20, 16, 40, .82); color: #fff; font: 800 15px 'Nunito Variable', system-ui, sans-serif; }
 #ctf-down b { font-size: 20px; color: #ff9aa0; }
-#ctf-tags { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+#ctf-tags { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
 .ctf-tag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .ctf-tag .n { font: 800 11px 'Nunito Variable', system-ui, sans-serif; color: #fff; padding: 0 6px; border-radius: 8px; white-space: nowrap; text-shadow: 0 1px 1px rgba(0, 0, 0, .5); }
 .ctf-tag .n.t0 { background: rgba(40, 110, 230, .85); }
@@ -80,9 +80,9 @@
 .ctf-tag .hp i { display: block; height: 100%; }
 .ctf-tag .hp i.t0 { background: #5fe07a; }
 .ctf-tag .hp i.t1 { background: #ff6b6b; }
-#ctf-keeper-tag { position: fixed; left: 0; top: 0; z-index: 5; pointer-events: none; padding: 2px 9px; border-radius: 10px; background: rgba(40, 30, 80, .76); color: #e9f7ff; font: 800 12px 'Nunito Variable', system-ui, sans-serif; white-space: nowrap; }
+#ctf-keeper-tag { position: fixed; left: 0; top: 0; z-index: 1; pointer-events: none; padding: 2px 9px; border-radius: 10px; background: rgba(40, 30, 80, .76); color: #e9f7ff; font: 800 12px 'Nunito Variable', system-ui, sans-serif; white-space: nowrap; }
 #ctf-keeper-tag span { margin-left: 4px; padding: 0 6px; border-radius: 8px; background: #ff7ab0; color: #fff; }
-#ctf-say { position: fixed; left: 0; top: 0; z-index: 5; pointer-events: none; padding: 6px 12px; border-radius: 14px; background: #fff; color: #2c2450; font: 800 13px 'Nunito Variable', system-ui, sans-serif; box-shadow: 0 4px 12px rgba(0, 0, 0, .18); max-width: 220px; text-align: center; }
+#ctf-say { position: fixed; left: 0; top: 0; z-index: 1; pointer-events: none; padding: 6px 12px; border-radius: 14px; background: #fff; color: #2c2450; font: 800 13px 'Nunito Variable', system-ui, sans-serif; box-shadow: 0 4px 12px rgba(0, 0, 0, .18); max-width: 220px; text-align: center; }
 .ctf-banner {
   position: fixed; left: 50%; top: 30%; transform: translate(-50%, -50%); z-index: 40; pointer-events: none; text-align: center;
   display: flex; flex-direction: column; gap: 2px; padding: 12px 28px; border-radius: 22px; color: #fff;

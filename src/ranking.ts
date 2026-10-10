@@ -26,6 +26,8 @@ const read = (key: string) => { try { return localStorage.getItem(key); } catch 
 const write = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* the week starts again next visit */ } };
 const weekKeyFor = () => `cute-game-ranking-week-v1-slot${activeSlot() + 1}`;
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') => { const node = document.createElement(tag); if (className) node.className = className; if (text) node.textContent = text; return node; };
+// Header of the native panels as in the bottom-sheet panels: icon tile, kicker, title. Kept local so each file loads standalone.
+const headerParts = (icon: string, kicker: string, heading: HTMLElement) => { const tile = el('span', 'social-icon', icon); tile.setAttribute('aria-hidden', 'true'); const text = el('div', 'social-title'); text.append(el('span', 'social-kicker eyebrow', t(kicker)), heading); return [tile, text]; };
 
 export const formatSize = (cm: number) => cm >= 100 ? `${(cm / 100).toFixed(2).replace(/\.?0+$/, '')} m` : `${cm} cm`;
 /** The number a row shows for its category. */
@@ -65,7 +67,7 @@ export function initRanking(game: GameBridge) {
   // ---- The dialog ----
   const dialog = el('dialog', 'social-dialog ranking-dialog'); dialog.id = 'ranking-dialog';
   const header = el('header', 'social-header'), heading = el('h2'), close = el('button', 'social-close', '✕');
-  close.type = 'button'; close.addEventListener('click', () => dialog.close()); header.append(heading, close);
+  close.type = 'button'; close.addEventListener('click', () => dialog.close()); header.append(...headerParts('🏆', 'CLIMB THE RANKS', heading), close); dialog.addEventListener('keydown', event => { if (event.key === 'Escape' && dialog.open) { event.preventDefault(); dialog.close(); } });
   const tabs = el('nav', 'ranking-tabs'), chips = el('nav', 'ranking-cats'), hint = el('p', 'ranking-hint'), list = el('ol', 'ranking-list'), mine = el('footer', 'ranking-mine');
   list.setAttribute('aria-live', 'polite');
   dialog.append(header, tabs, chips, hint, list, mine); document.body.append(dialog);
@@ -83,7 +85,7 @@ export function initRanking(game: GameBridge) {
     return item;
   }
   function render() {
-    heading.textContent = `🏆 ${t('Leaderboard')}`; close.setAttribute('aria-label', t('Close the leaderboard')); dialog.setAttribute('aria-label', t('Leaderboard'));
+    heading.textContent = t('Leaderboard'); close.setAttribute('aria-label', t('Close the leaderboard')); dialog.setAttribute('aria-label', t('Leaderboard'));
     tabs.replaceChildren(...BOARDS.map(([id, icon, label]) => { const b = button(`${icon} ${t(label)}`, () => { if (board === id) return; board = id; cat = categoriesOf(id)[0]; void load(); }); b.setAttribute('aria-pressed', String(board === id)); return b; }));
     chips.replaceChildren(...categoriesOf(board).map(id => { const [icon, label] = CATEGORY[id], b = button(`${icon} ${t(label)}`, () => { if (cat === id) return; cat = id; void load(); }); b.setAttribute('aria-pressed', String(cat === id)); return b; }));
     const now = Date.now();

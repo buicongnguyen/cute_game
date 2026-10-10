@@ -20,5 +20,6 @@ export const VI_GARDEN: Record<string, string> = {
   'Plant {crop} there too': 'Trồng {crop} ở đó luôn',
   'This bed already grows {crop}.': 'Luống này đang trồng {crop} rồi.',
   'Bolt now plants {crop} in every bed.': 'Từ giờ Bolt trồng {crop} ở mọi luống.',
+  'About {minutes} min until ripe': 'Còn khoảng {minutes} phút nữa là chín',
   'About {hours} h {minutes} min until ripe': 'Còn khoảng {hours} giờ {minutes} phút nữa là chín',
 };

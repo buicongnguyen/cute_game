@@ -3,7 +3,8 @@
 #title-screen.title-live .title-shade { background: linear-gradient(180deg, rgba(255, 250, 220, 0) 40%, rgba(30, 72, 24, .32)); }
 .title-stack { position: relative; width: min(460px, 100%); display: grid; gap: 12px; justify-items: center; animation: appear .5s ease; }
 .title-logo { text-align: center; pointer-events: none; }
-#title-screen .title-logo h1 { margin: 0; display: flex; align-items: center; justify-content: center; gap: .24em; font-size: clamp(46px, 6.4vw, 66px); line-height: 1; }
+#title-screen .title-logo h1 { margin: 0; display: flex; align-items: center; justify-content: center; gap: .24em; font-size: clamp(34px, 12.5vw, 66px); line-height: 1; max-width: 100%; white-space: nowrap; }
+@media (min-width: 640px) { #title-screen .title-logo h1 { font-size: clamp(46px, 6.4vw, 66px); } }
 #title-screen .title-logo .brand-sprout { margin: 0 4px 0 0; font-size: .62em; -webkit-text-stroke: 0; text-shadow: none; }
 .title-tagline { display: inline-block; margin-top: 10px; padding: 7px 16px; border-radius: 999px; background: rgba(255, 255, 255, .94); color: var(--ink); font-weight: 900; font-size: 13.5px; line-height: 1.35; box-shadow: 0 3px 0 rgba(44, 58, 38, .16); }
 #title-screen.title-live .welcome-card { margin: 0; width: 100%; max-height: none; overflow: visible; padding: 14px 16px 12px; border-radius: 26px; background: rgba(255, 251, 240, .95); animation: none; }

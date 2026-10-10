@@ -244,3 +244,23 @@
 @media (orientation: portrait) and (max-width: 600px) {
   .skill > small { white-space: normal; text-overflow: clip; overflow: visible; text-wrap: balance; max-width: calc(var(--sk) + 10px); width: max-content; text-align: center; line-height: 1.15; padding: 1px 5px; }
 }
+
+/* ---- polish round (small phones, tap targets, z-order) */
+/* The planet name is one line with an ellipsis: a long Vietnamese name used to wrap into the quest card below. */
+.player-details { min-width: 0; }
+.location { min-width: 0; max-width: 100%; }
+.location > .location-dot { flex: none; }
+.location > #zone-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Tracker buttons that are smaller than a finger keep a 44 px hit area (the trackers themselves never take taps on touch). */
+#quick-claim { position: relative; }
+@media (pointer: coarse) {
+  #quick-claim::after, .quick-eat-pick::after { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: 44px; transform: translate(-50%, -50%); }
+  #quick-claim { margin-bottom: 4px; }
+}
+/* 360 px and narrower: skill names stay on one short line, and the toast lane moves under the Colossus banner so they never overlap. */
+@media (max-width: 360px) {
+  html[lang] #hud .skill > small { font-size: 8px; white-space: nowrap; width: max-content; max-width: none; padding: 0 4px; line-height: 1.3; text-wrap: nowrap; letter-spacing: -.1px; }
+}
+@media (orientation: portrait) and (max-width: 600px) and (max-height: 700px) {
+  #app:has(#hud.joystick-on) #toasts, #app.target-on:has(#hud.joystick-on) #toasts { top: calc(300px + var(--safe-top)); bottom: auto; }
+}

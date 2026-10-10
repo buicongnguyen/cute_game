@@ -65,6 +65,7 @@ import { initHudLayout } from './hud-layout.ts';
 import { compileAsyncSafe } from './safe-compile.ts';
 import { fits as fitsBag } from './storage-slots.ts';
 import { initRanking } from './ranking.ts';
+import './tab-cues.ts';
 import { initBots, neighboursOn, setNeighboursOn } from './bots.ts';
 import { ColossusEvent } from './colossus.ts';
 import { COLOSSUS_ID } from './colossus-content.ts';
@@ -584,7 +585,7 @@ async function harvestNearby(index:number){
   };if(n)setTimeout(run,n*140);else run();});
 }
 // A fruit tree takes 8 to 14 hours: hours and minutes read better than 28,799 seconds.
-function growText(plot:M.Plot){const progress=M.cropProgress(plot),left=Math.ceil((1-progress)*M.cropDuration(plot)/1000);return progress>=1?(fitsBag(state,{[plot.crop!]:1})?'Ripe! Tap Harvest now to collect it.':'Ripe, but your backpack is full. Sell or store something, or expand the bag, then tap the bed to harvest.'):left>=3600?`About ${Math.floor(left/3600)} h ${Math.floor(left%3600/60)} min until ripe`:`About ${left} seconds until ripe`;}
+function growText(plot:M.Plot){const progress=M.cropProgress(plot),left=Math.ceil((1-progress)*M.cropDuration(plot)/1000);return progress>=1?(fitsBag(state,{[plot.crop!]:1})?'Ripe! Tap Harvest now to collect it.':'Ripe, but your backpack is full. Sell or store something, or expand the bag, then tap the bed to harvest.'):left>=3600?`About ${Math.floor(left/3600)} h ${Math.floor(left%3600/60)} min until ripe`:left>=60?`About ${Math.ceil(left/60)} min until ripe`:`About ${left} seconds until ripe`;}
 /**
  * The garden's grow button (reference openSeeds/openPlot): place a kit already in the bag, else buy one with energy
  * (grey while it is out of reach), or a note at the cap. Only at home, never while visiting.
