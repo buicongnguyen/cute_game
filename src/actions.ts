@@ -7,6 +7,7 @@ import { cleanseDebuffs, homeCleanseAllowed } from './home-care.ts';
 import * as Friends from './friends.ts';
 import { deliversToChest, potItems, storeGains, takeFromChest, takeStored } from './delivery.ts';
 import { buyLook, wearLook } from './looks.ts';
+import { buyDye, buyDyeSet } from './dye-rules.ts';
 import { setFriendLook } from './friend-looks.ts';
 import { huntFish } from './fish-hunting.ts';
 import { useActivity } from './house-activities.ts';
@@ -145,6 +146,9 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
       result = Friends.friendWork(state, string(p.id, 40) as Friends.FriendId, task as Friends.FriendTask, now) ?? { kind: task.kind, raw: {}, cooked: {}, skipped: true }; break;
     }
     case 'buyLook': result = buyLook(state, string(p.id, 40)); break;
+    // Dyes (dye-rules.ts): energy-priced recolours, singly or a style's set; the price is computed here, never sent.
+    case 'buyDye': result = buyDye(state, id()); break;
+    case 'buyDyeSet': result = buyDyeSet(state, string(p.style, 20)); break;
     case 'wearLook': result = wearLook(state, string(p.id, 40)); break;
     // A friend's look (friend-looks.ts): owned options are free; `buy` buys the missing ones for the player first.
     case 'friendLook': result = setFriendLook(state, string(p.friend, 20) as Friends.FriendId, string(p.id, 40), p.buy === true); break;

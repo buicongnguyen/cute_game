@@ -1,0 +1,22 @@
+/* Outfitters' Dyes tab (dye-ui.ts): one card per style, rows share the shop's .shop-item look, 44 px buttons everywhere. */
+.dye-tab { display: grid; gap: 10px; }
+.dye-intro { margin: 2px 0 0; }
+.dye-card { border: 2px solid #e8e2f3; border-radius: 16px; padding: 6px 8px 10px; background: linear-gradient(180deg, #fffdfa, #fff); box-shadow: 0 2px 0 var(--line, #e3ebe6); }
+.dye-card header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 2px 4px; }
+.dye-card h4 { margin: 0; font-size: 16px; }
+.dye-card .dye-piece { margin: 4px 0; }
+.dye-card .dye-piece > div:nth-child(2) { flex: 1 1 auto; min-width: 0; }
+#dialog #dialog-body .dye-card button.dye-btn { min-width: 84px; min-height: 44px; white-space: nowrap; }
+.dye-card .dye-chip { white-space: nowrap; }
+#dialog #dialog-body .dye-card button.dye-set { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 8px; width: 100%; min-height: 44px; margin-top: 6px; white-space: normal; }
+.dye-card .dye-set small { font-size: 11.5px; font-weight: 800; opacity: .95; }
+.dye-card .dye-set s { opacity: .75; }
+.dye-card.dye-gilded { border-color: #f0d27a; } .dye-card.dye-prism { border-color: #cdb4ff; } .dye-card.dye-frost { border-color: #a9e4f7; } .dye-card.dye-shade { border-color: #b7aedd; } .dye-card.dye-ruby { border-color: #f1a2b3; }
+/* The 2D preview: the base icon through a style filter (the 3D model is recoloured by dye-render.ts). */
+.art-icon.dye-gilded { filter: sepia(1) saturate(2.4) brightness(1.12); }
+.art-icon.dye-frost { filter: sepia(1) saturate(3) hue-rotate(135deg) brightness(1.2); }
+.art-icon.dye-ruby { filter: sepia(1) saturate(4.5) hue-rotate(-38deg) brightness(.95); }
+.art-icon.dye-shade { filter: sepia(1) saturate(1.6) hue-rotate(215deg) brightness(.55) contrast(1.25); }
+.art-icon.dye-prism { filter: saturate(2.2) hue-rotate(60deg); animation: dye-prism-cycle 6s linear infinite; }
+@keyframes dye-prism-cycle { to { filter: saturate(2.2) hue-rotate(420deg); } }
+@media (prefers-reduced-motion: reduce) { .art-icon.dye-prism { animation: none; } }

@@ -1,3 +1,4 @@
+import { registerDyes } from './dye-skins.ts';
 import { TITAN_ITEMS, TITAN_LOOT } from './titan-content.ts';
 import { BOSS_PET_ITEMS, BOSS_PET_LOOT } from './boss-pet-content.ts';
 import { DUNGEON_ITEMS } from './dungeon-content.ts';
@@ -64,6 +65,10 @@ export interface ItemDef {
     size?: number[];
     cooked?: boolean;
     base?: string;
+    /** Untradeable: never sold or given away (dyes, dye-skins.ts). */
+    noTrade?: boolean;
+    /** Set on generated dye variants only (dye-skins.ts): the style, the base item they recolour and their single price. */
+    dye?: { style: string; base: string; price: number };
 }
 export interface CropDef {
     name: string;
@@ -4096,3 +4101,5 @@ RECIPES.push({result:'harpoon',energy:1000,materials:{},category:'Weapons',stati
 ITEMS.fish_guardian={name:'Lake Guardian',icon:'🎏',desc:'A glowing koi that guards the big meadow lake. It surfaces now and then, only a harpoon can catch it, and it comes back for you once every 6 hours.',type:'fish',sell:450,heal:250,buff:{luck:.4,regen:6,time:240},rare:true,legend:true,power:.98,size:[180,260]};
 FISH.fish_guardian={id:'fish_guardian',name:ITEMS.fish_guardian.name,icon:ITEMS.fish_guardian.icon,rarity:'legendary',speed:.98,power:.98,stamina:.98,sell:450,xp:Math.round((4+.98*25)*4),size:[180,260],planet:['home']};
 LOOT_TABLES.forest_raptor=[['feather',1,1,2],['meat',.7,1,2]];
+// Dyes (dye-skins.ts): energy-priced recolours of existing gear, generated last so every base item exists.
+registerDyes(ITEMS);

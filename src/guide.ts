@@ -100,6 +100,7 @@ export function shopTabMatches(tab: string, item: ShopItem) {
     case 'Pets': return item.slot === 'pet';
     case 'Disguises': return item.slot === 'disguise';
     case 'Decor': return item.type === 'decor';
+    case 'Dyes': return false; // its body is dye-ui.ts's
     default: return (!item.slot && item.type !== 'decor') || item.weapon?.kind === 'rod';
   }
 }

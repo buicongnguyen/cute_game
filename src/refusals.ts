@@ -7,6 +7,7 @@ import { RESTOCK_MAX_LEVEL } from './farm-helper-state.ts';
 import { friendOf, resting, type FriendId } from './friends.ts';
 import { cooldownLeft, activity } from './house-activities.ts';
 import { toLook, missingOptions } from './looks.ts';
+import { dyeReason } from './dye-rules.ts';
 
 /**
  * Why the shared rules (actions.ts) refused an intent, in plain words for the player's toast. Every intent the reducer
@@ -217,6 +218,8 @@ export const REFUSALS: Record<string, Reason> = {
   setFriendPaused: (s, p) => friendReason(s, p),
   friendWork: (s, p) => friendReason(s, p),
   buyLook: 'You need more energy for that look, or you already own it.',
+  buyDye: dyeReason,
+  buyDyeSet: dyeReason,
   wearLook: 'Buy that look first.',
   friendLook: (s, p) => { const f = friendOf(s, p.friend as FriendId), look = toLook(p.id); if (!f) return friendReason(s, p, 'friend'); if (!look) return 'That look does not exist.'; if (!missingOptions(s, look).length) return 'Your friend already has that look.'; return p.buy === true ? 'You need more energy for that look.' : 'Buy that look first.'; },
   friendsCatchUp: home,

@@ -47,7 +47,7 @@ export function gearWorld(raw: string): PlanetId | null {
   return world;
 }
 /** The level needed to buy or wear this gear piece; 0 when anyone may (no gate, or a level-1 world). */
-export function gearLevel(raw: string): number { if (raw.startsWith('pet_dg_') && Object.hasOwn(ITEMS, raw)) return DUNGEON_LEVEL; const world = gearWorld(raw), level = world ? planetLevel(world) : 0; return level > 1 ? level : 0; }
+export function gearLevel(raw: string): number { if (Object.hasOwn(ITEMS, raw) && ITEMS[raw].dye) return gearLevel(ITEMS[raw].dye!.base); /* a dye waits for its base piece's level */ if (raw.startsWith('pet_dg_') && Object.hasOwn(ITEMS, raw)) return DUNGEON_LEVEL; const world = gearWorld(raw), level = world ? planetLevel(world) : 0; return level > 1 ? level : 0; }
 /** Whether an explorer of `level` may buy or put on `id`. */
 export const levelAllows = (level: number, id: string) => level >= gearLevel(id);
 /** Every gated gear piece and its level, for tests and the docs. */

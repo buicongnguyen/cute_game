@@ -22,7 +22,7 @@ const titan = (id: string) => !!ITEMS[id].legend && /^(hat|pet)_t_/.test(id);
 export function isSpecial(id: string): boolean {
   if (!Object.hasOwn(ITEMS, id)) return false;
   const item = ITEMS[id];
-  return (!!item.slot || item.type === 'decor') && item.price === undefined && !item.keepsake;
+  return (!!item.slot || item.type === 'decor') && item.price === undefined && !item.keepsake && !item.dye; // dyes (dye-skins.ts) have their own tab and price
 }
 /** The special energy price, or null when the item is not a special offer. */
 export function specialPrice(id: string): number | null { return isSpecial(id) ? titan(id) ? TITAN_PRICE : SPECIAL_PRICE : null; }
