@@ -25,7 +25,8 @@ export function clampZoom(value: number, kind: 'wheel' | 'pinch') { const [low, 
  * view. 51.5 is the camera above, untouched. A lower camera sees further, so it draws more (docs/QUALITY-PLAN.md
  * section 5: 48 is about free, 43 about 10-20% more work, 30 about 1.4 to 2 times).
  */
-export const CAMERA_PITCH = { min: 30, max: 51.5, presets: { classic: 51.5, tilted: 47, low: 43, lower: 36, lowest: 30 } } as const;
+/** `initial` is what a player who never touched the setting gets (the owner's pick, 2026-10-11); Classic is still one tap away. */
+export const CAMERA_PITCH = { min: 30, max: 51.5, initial: 42, presets: { classic: 51.5, tilted: 47, low: 43, lower: 36, lowest: 30 } } as const;
 export type CameraPreset = keyof typeof CAMERA_PITCH.presets;
 let pitch: number = CAMERA_PITCH.max;
 const viewOffset: [number, number, number] = [...CAMERA.offset];

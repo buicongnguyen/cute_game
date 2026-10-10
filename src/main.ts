@@ -84,7 +84,7 @@ import { initDeathBags } from './death-bags-view.ts';
 import { Sfx, type Sound } from './sfx.ts';
 import { audioOf, audioRowsHtml, bindAudioSliders, syncAudio } from './audio-settings.ts';
 import { CAMERA_PITCH, cameraPitch, setCameraPitch, type CameraPreset } from './camera-rig.ts';
-try{setCameraPitch(localStorage.getItem('zoo-camera-view')??'classic');}catch{/* classic */}
+try{setCameraPitch(localStorage.getItem('zoo-camera-view')??CAMERA_PITCH.initial);}catch{setCameraPitch(CAMERA_PITCH.initial);}
 function saveCameraPitch(){try{localStorage.setItem('zoo-camera-view',String(cameraPitch()));}catch{/* this visit only */}}
 // The slider turns the camera while it is dragged and saves when it is let go.
 if(typeof document!=='undefined'){document.addEventListener('input',e=>{const i=e.target as HTMLInputElement|null;if(!i?.matches?.('[data-camera-pitch]'))return;setCameraPitch(Number(i.value)>=52?CAMERA_PITCH.max:Number(i.value));world.resize();const o=document.querySelector('[data-camera-pitch-out]');if(o)o.textContent=`${Math.round(cameraPitch())}°`;});document.addEventListener('change',e=>{if((e.target as Element|null)?.matches?.('[data-camera-pitch]')){saveCameraPitch();settings();}});}
