@@ -26,12 +26,14 @@ interface Session { authorityVersion?:number;account:Explorer|null;profile?:Save
 interface ActionJob extends GameIntent {requestId:string;expectedRevision:number;rulesVersion:1;submitted?:boolean;retries?:number}
 interface ChatAttempt { requestId:string;draft:string;accountId:string;room:string;connection:WebSocket;pending:boolean;timer?:number }
 const el = <K extends keyof HTMLElementTagNameMap>(tag:K,className='',text='') => {const node=document.createElement(tag);node.className=className;node.textContent=text;return node;};
+// Header of the native panels as in the bottom-sheet panels: icon tile, kicker, title. Kept local so each file loads standalone.
+const headerParts = (icon: string, kicker: string, heading: HTMLElement) => { const tile = el('span', 'social-icon', icon); tile.setAttribute('aria-hidden', 'true'); const text = el('div', 'social-title'); text.append(el('span', 'social-kicker eyebrow', t(kicker)), heading); return [tile, text]; };
 const button=(label:string,action:()=>void,className='')=>{const node=el('button',className,t(label));node.type='button';node.addEventListener('click',action);return node;};
 
 function initSoloEdition() {
   const dialog=el('dialog','social-dialog');dialog.id='online-dialog';
   const close=button('✕',()=>dialog.close(),'social-close');
-  const header=el('header','social-header'),heading=el('h2');header.append(heading,close);
+  const header=el('header','social-header'),heading=el('h2');header.append(...headerParts('🌱','JUST YOU AND YOUR GARDEN',heading),close);dialog.addEventListener('keydown', event => { if (event.key === 'Escape' && dialog.open) { event.preventDefault(); dialog.close(); } });
   const content=el('div','social-content'),intro=el('p','social-intro'),details=el('p','social-small'),keepPlaying=button('Keep playing',()=>dialog.close(),'social-primary');
   content.append(intro,details,keepPlaying);dialog.append(header,content);document.body.append(dialog);
   const slot=document.querySelector('#social-slot');
@@ -73,7 +75,7 @@ export function initOnline(game:GameBridge) {
   let sharingLoot=false;
   const toggle=button(`👥 ${t('Play together')}`,()=>{render();dialog.showModal();},'social-toggle');toggle.id='online-button';const socialSlot=document.querySelector('#social-slot');if(socialSlot){socialSlot.append(toggle);toggle.classList.add('social-inline-toggle');}else document.body.append(toggle);toggle.setAttribute('aria-label',t('Play together'));
   const dialog=el('dialog','social-dialog');dialog.id='online-dialog';dialog.setAttribute('aria-label',t('Play together'));document.body.append(dialog);
-  const header=el('header','social-header'),heading=el('h2','',t('Play together')),close=button('✕',()=>dialog.close(),'social-close');close.setAttribute('aria-label',t('Close online menu'));header.append(heading,close);
+  const header=el('header','social-header'),heading=el('h2','',t('Play together')),close=button('✕',()=>dialog.close(),'social-close');close.setAttribute('aria-label',t('Close online menu'));header.append(...headerParts('👥','MEET BEYOND THE GATE',heading),close);dialog.addEventListener('keydown', event => { if (event.key === 'Escape' && dialog.open) { event.preventDefault(); dialog.close(); } });
   const tabs=el('nav','social-tabs'),content=el('div','social-content'),notice=el('p','social-notice');notice.setAttribute('role','status');dialog.append(header,tabs,notice,content);
   dialog.addEventListener('click',event=>{if(event.target===dialog&&event.clientX&&(event.clientX<dialog.getBoundingClientRect().left||event.clientX>dialog.getBoundingClientRect().right))dialog.close();});
   const world=()=>game.getWorld() as ReturnType<GameBridge['getWorld']> & NetworkWorld;
@@ -314,15 +316,24 @@ export function initOnline(game:GameBridge) {
   function personRow(person:Explorer,actions:HTMLElement[]){const row=el('div','social-person');const badge=el('span','social-avatar','●');badge.style.color=person.color;const name=el('span','',t('{name} · Lv {level}{online}',{name:person.name,level:person.level,online:person.online?t(' · online'):''}));row.append(badge,name,...actions);return row;}
   async function friendAction(action:string,id:string){try{const list=await api<{friends:Explorer[];requests:Explorer[];sent?:Explorer[]}>(`friends/${action}`,{id});friends=list.friends;requests=list.requests;sent=list.sent??sent;refreshButton();render();}catch(error){announce((error as Error).message);}}
   function renderChat(){const log=content.querySelector('.social-chat-log');if(!log)return;log.replaceChildren(...chat.slice(-30).map(entry=>{const line=el('p');line.append(el('strong','',entry.name+': '),document.createTextNode(entry.message));return line;}));log.scrollTop=log.scrollHeight;}
+  // Whether the multiplayer server answered the first check: with none running (a static or solo build, a sleeping server) the panel
+  // says so kindly instead of showing a sign-in form that can only fail.
+  let serverDown=false,probing=false;
+  async function probeServer(){if(probing)return;probing=true;render();try{const session=await api<Session>('auth/session');serverDown=false;if(session.account&&!account)begin(session);}catch(error){serverDown=!(error as {status?:number}).status;}finally{probing=false;render();}}
   function render(){
     captureChatDraft();content.replaceChildren();tabs.replaceChildren();authSubmit=null;setNotice('');heading.textContent=t(account?'Your online world':'Play together');
+    if(!account&&(serverDown||probing)){
+      const card=el('div','social-offline');card.setAttribute('role','status');
+      card.append(el('span','social-offline-icon','📡'),el('strong','',t(probing?'Looking for the game server…':'The game server is not reachable right now.')),el('p','social-small',t('You can keep playing on your own: your adventure saves on this device. Come back later to play together.')));
+      const retry=button('Try again',()=>void probeServer(),'social-primary');retry.disabled=probing;content.append(card,retry);return;
+    }
     if(!account){
       content.append(el('p','social-intro',t('Make a home, meet friends, and explore the same world. Your offline adventure stays saved separately.')));
       const form=el('form','social-auth');const username=labeledInput('Username','text','username'),password=labeledInput('Password','password','password');username.input.autocomplete='username';username.input.pattern='[a-zA-Z0-9_]{3,24}';username.input.minLength=3;username.input.maxLength=24;password.input.autocomplete=register?'new-password':'current-password';password.input.minLength=4;password.input.maxLength=128;
       form.append(username.wrapper,password.wrapper);let display:HTMLInputElement|undefined;
       if(register){const name=labeledInput('Explorer name','text','display-name');name.input.maxLength=20;name.input.value=game.getState().name;display=name.input;form.append(name.wrapper);}
       const submit=el('button','social-primary',t(register?'Create online adventure':'Sign in'));submit.type='submit';submit.disabled=authBusy;authSubmit=submit;form.append(submit);
-      form.addEventListener('submit',async event=>{event.preventDefault();if(authBusy)return;authBusy=true;submit.disabled=true;try{begin(await api<Session>(`auth/${register?'register':'login'}`,{username:username.input.value,password:password.input.value,name:display?.value,color:game.getState().color}));}catch(error){setNotice((error as Error).message);}finally{authBusy=false;submit.disabled=false;if(authSubmit)authSubmit.disabled=false;}});
+      form.addEventListener('submit',async event=>{event.preventDefault();if(authBusy)return;authBusy=true;submit.disabled=true;try{begin(await api<Session>(`auth/${register?'register':'login'}`,{username:username.input.value,password:password.input.value,name:display?.value,color:game.getState().color}));}catch(error){if(!(error as {status?:number}).status){serverDown=true;render();return;}setNotice((error as Error).message);}finally{authBusy=false;submit.disabled=false;if(authSubmit)authSubmit.disabled=false;}});
       content.append(form,button(register?'Already have an account? Sign in':'New here? Create an adventure',()=>{register=!register;render();},'social-link'),el('p','social-small',t('Accounts are stored on this game server. No email address is needed.')));return;
     }
     for(const [id,label]of [['world','🌍 World'],['friends',`${t('👥 Friends')}${requests.length?` (${requests.length})`:''}`],['diary',`${t('📒 Guest diary')}${unreadLog?` (${unreadLog})`:''}`],['account','🏡 Account']]as const){const item=button(label,()=>{tab=id;if(id==='diary'){unreadLog=0;refreshButton();}render();});item.setAttribute('aria-pressed',String(tab===id));tabs.append(item);}
@@ -370,5 +381,5 @@ export function initOnline(game:GameBridge) {
     if(saveStatusSource)setSaveStatus(saveStatusSource);
   });
   refreshButton();
-  const initialEpoch=sessionEpoch;void api<Session>('auth/session').then(session=>{if(sessionEpoch===initialEpoch&&session.account)begin(session);}).catch(()=>{/* Offline play works without a server. */});
+  const initialEpoch=sessionEpoch;void api<Session>('auth/session').then(session=>{if(sessionEpoch===initialEpoch&&session.account)begin(session);}).catch(error=>{/* Offline play works without a server. */if(sessionEpoch===initialEpoch&&!(error as {status?:number}).status){serverDown=true;if(dialog.open)render();}});
 }

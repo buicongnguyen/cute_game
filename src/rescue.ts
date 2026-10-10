@@ -189,7 +189,7 @@ export function initRescue(h: RescueHooks) {
       <h4>${esc(t('Enemies'))}</h4><div class="rescue-foes">${[...roles].map(([role, kind]) => `<span title="${esc(t(role))}">${ENEMY_ROLE_ICON[role]} ${esc(enemyName(kind))} <small>${esc(t(role))}</small></span>`).join('')}<span class="boss">👑 ${esc(t('Last wave: {boss}', { boss }))}</span></div>
       <p class="rescue-rule">${esc(t('Place defences on the pads, then start the wave. Enemies walk in from the far end; stop them before they reach the farmhouse.'))}</p>
       <h4>${esc(t('Pick your squad'))} <small>${esc(t('Up to {n} with you', { n: RESCUE.maxSquad - 1 }))}</small></h4>
-      <div class="rescue-squad"><button class="sel me" disabled><b>🧑 ${esc(st.name)}</b><small>${esc(t('You'))}</small></button>${list.length ? list.map(c => { const on = briefing!.picks.includes(c.id); return `<button data-rescue="pick" data-id="${esc(c.id)}" class="${on ? 'sel' : ''}" aria-pressed="${on}"><b data-i18n-skip><i style="background:${esc(c.color)}"></i>${esc(c.name)}</b><small>${esc(t(c.kind === 'helper' ? 'Helper' : 'Neighbour'))}${c.role ? ' · ' + ROLE_ICON[c.role] + ' ' + esc(t(c.role)) : ''}</small></button>`; }).join('') : `<p class="muted">${esc(t('No squad yet: rescue friends or turn on AI neighbours.'))}</p>`}</div>
+      <div class="rescue-squad"><button class="sel me" disabled><b>🧑 ${esc(st.name)}</b><small>${esc(t('(you)'))}</small></button>${list.length ? list.map(c => { const on = briefing!.picks.includes(c.id); return `<button data-rescue="pick" data-id="${esc(c.id)}" class="${on ? 'sel' : ''}" aria-pressed="${on}"><b data-i18n-skip><i style="background:${esc(c.color)}"></i>${esc(c.name)}</b><small>${esc(t(c.kind === 'helper' ? 'Helper' : 'Neighbour'))}${c.role ? ' · ' + ROLE_ICON[c.role] + ' ' + esc(t(c.role)) : ''}</small></button>`; }).join('') : `<p class="muted">${esc(t('No squad yet: rescue friends or turn on AI neighbours.'))}</p>`}</div>
       <p class="rescue-note">${esc(t('Your squad starts with plain clothes and a punch. Spend Spark and Star bits to climb their gear ladder.'))} <b>${esc(t('Rescues with full rewards left today: {n}', { n: fullWinsLeft(st, Date.now()) }))}</b></p>
       <div class="rescue-actions">${locked ? `<button class="primary" disabled aria-disabled="true">🔒 ${esc(t('Locked: level {n}', { n: md.level }))}</button>` : `<button class="primary" data-rescue="go">📯 ${esc(t('Go to the rescue'))}</button>`}<button data-rescue="later">${esc(t('Not now'))}</button></div></div>`, 'RESCUE CALL', '📯');
   }
@@ -235,7 +235,7 @@ export function initRescue(h: RescueHooks) {
     const me = runHero(m); const at = toWorld(me, o); teleport(at.x, at.z, facingToWorld(Math.PI / 2, o));
     st.hp = h.maxHp(); s.hpWritten = st.hp;
     try { localStorage.setItem('zoo-rescue-restore', JSON.stringify({ hp: saved.hp })); } catch { /* optional */ }
-    document.body.classList.add('in-rescue'); document.body.dataset.rescueOrient = o;
+    document.body.classList.add('in-rescue', 'in-mode'); document.body.dataset.rescueOrient = o;
     hud.hidden = false; tags.hidden = false; panel.hidden = false; panel.classList.remove('folded'); bubble.hidden = true;
     selectPad(nearestEmptyPad(s), false);
     h.refreshPlayer(); h.tone('level'); banner(t(md.title), `${md.friendIcon} ${t(md.friend)} · ${t('{n} waves', { n: md.waves.length })}`);
@@ -303,7 +303,7 @@ export function initRescue(h: RescueHooks) {
     try { localStorage.setItem(COOLDOWN_KEY, String(Date.now() + RECOVERY_MS)); } catch { /* storage optional */ }
     session = null; world.selected = null; world.ring.visible = false; world.movementLocked = false;
     try { localStorage.removeItem('zoo-rescue-restore'); } catch { /* fine */ }
-    document.body.classList.remove('in-rescue'); delete document.body.dataset.rescueOrient;
+    document.body.classList.remove('in-rescue', 'in-mode'); delete document.body.dataset.rescueOrient;
     hud.hidden = panel.hidden = tags.hidden = down.hidden = true; tags.innerHTML = ''; tagEls.clear();
     decorateHome(); h.refreshPlayer(); h.updateHud(); h.toast(t('Welcome back from the rescue.'), '📯');
   }
@@ -546,16 +546,17 @@ export function initRescue(h: RescueHooks) {
       body = `<div class="rescue-pads">${chips}</div>${detail}`;
     } else if (s.tab === 'squad') {
       const members = m.units.slice(1);
-      body = members.length ? members.map(u => {
+      const meRow = `<div class="rescue-member me"><div class="who"><i style="background:${esc(m.units[0].color)}"></i><b data-i18n-skip>${esc(m.units[0].name)}</b><small>🧑 ${esc(t('(you)'))}</small></div></div>`;
+      body = meRow + (members.length ? members.map(u => {
         const cost = stepCost(u), next = u.ladder[u.step + 1], gear = u.ladder[u.step] ?? {}, trying = s.tryOn?.id === u.id;
         const icons = [gear.weapon, gear.outfit, gear.disguise].filter(Boolean).map(id => `<img src="${itemIcon(id!)}" alt="" title="${esc(t(ITEMS[id!]?.name ?? id!))}">`).join('') || '👊';
         const nextGear: string[] = next ? [next.weapon !== gear.weapon ? next.weapon : '', next.outfit !== gear.outfit ? next.outfit : '', next.disguise !== gear.disguise ? next.disguise : ''].filter((id): id is string => !!id) : [];
         const ok = cost && m.spark >= cost.spark && m.stars >= cost.stars;
-        return `<div class="rescue-member ${trying ? 'trying' : ''}"><div class="who"><i style="background:${esc(u.color)}"></i><b data-i18n-skip>${esc(u.name)}</b><small>${ROLE_ICON[u.role]} ${esc(t(u.role))} · ${esc(t('Step {n}/{total}', { n: u.step, total: LADDER_STEPS }))}</small></div>
+        return `<div class="rescue-member ${trying ? 'trying' : ''}"><div class="who"><i style="background:${esc(u.color)}"></i><b data-i18n-skip>${esc(u.name)}</b><small>${esc(t(u.kind === 'helper' ? 'Helper' : 'Neighbour'))} · ${ROLE_ICON[u.role]} ${esc(t(u.role))} · ${esc(t('Step {n}/{total}', { n: u.step, total: LADDER_STEPS }))}</small></div>
           <div class="gear">${icons}</div>
           ${cost && next ? `<div class="next">→ ${esc(t(STEP_TEXT[u.step + 1]))}${nextGear.length ? ': ' + nextGear.map(id => `<img src="${itemIcon(id)}" alt="" title="${esc(t(ITEMS[id]?.name ?? id))}">`).join('') : ''}</div>
           <div class="rescue-row"><button data-rescue="try" data-id="${esc(u.id)}">👀 ${esc(t('Try on'))}</button><button class="primary ${ok ? '' : 'poor'}" data-rescue="step" data-id="${esc(u.id)}">⬆️ ✨${cost.spark}${cost.stars ? ` ⭐${cost.stars}` : ''}</button></div>` : `<div class="next">🌟 ${esc(t('Top of the ladder'))}</div>`}</div>`;
-      }).join('') + `<p class="muted small">${esc(t('Squad gear is borrowed for this mission only.'))}</p>` : `<p class="muted">${esc(t('No squad yet: rescue friends or turn on AI neighbours.'))}</p>`;
+      }).join('') + `<p class="muted small">${esc(t('Squad gear is borrowed for this mission only.'))}</p>` : `<p class="muted">${esc(t('No squad yet: rescue friends or turn on AI neighbours.'))}</p>`);
     } else {
       body = `<div class="rescue-boosts">${BOOST_KINDS.map(k => { const b = BOOSTS[k], n = m.boosts[k], max = n >= b.max, ok = !max && m.spark >= b.spark && m.stars >= b.stars; return `<button class="card ${ok ? '' : 'poor'}" data-rescue="boost" data-kind="${k}" ${max ? 'disabled' : ''}><span class="ic">${b.icon}</span><b>${esc(t(b.name))}${b.max < 99 ? ` <sup>${n}/${b.max}</sup>` : ''}</b><small>${esc(t(b.desc))}</small><em>✨ ${b.spark}${b.stars ? ` ⭐${b.stars}` : ''}</em></button>`; }).join('')}</div><p class="muted small">${esc(t('Boosts last until the end of the mission.'))}</p>`;
     }

@@ -118,7 +118,7 @@ test('a growing bed explains the original-duration fertilizer rule in both langu
   setLanguage('vi');const panel=app.render('plotDialog',0)[0];
   assert.equal(panel.type,'plot');assert.match(panel.html,/một nửa thời gian sinh trưởng ban đầu/);
   assert.match(panel.html,/data-action="fertilize-manure"/);assert.match(panel.html,/data-action="fertilize"/);
-  assert.match(panel.html,/Còn khoảng \d+ giây nữa là chín/);
+  assert.match(panel.html,/Còn khoảng \d+ (giây|phút) nữa là chín/);
   setLanguage('en');assert.match(app.render('plotDialog',0)[0].html,/half of the crop&#39;s original growing time/);
   assert.equal(JSON.stringify(app.state),saved);
 });

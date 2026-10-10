@@ -4,8 +4,7 @@
 .ranking-dialog { width: min(520px, calc(100vw - 28px)); height: min(640px, 86dvh); }
 .ranking-dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
 .ranking-dialog > :not(.ranking-list) { flex: 0 0 auto; }
-.ranking-dialog .social-header { background: linear-gradient(180deg, #fff3c4, #ffe08a); border-bottom-color: #f2b11f; }
-.ranking-dialog .social-header h2 { color: #5a3a00; }
+.ranking-dialog { --tone: #ffe08a; --tone-top: #fff3c4; --tone-edge: #f2b11f; --tone-ink: #5a3a00; }
 
 .ranking-tabs, .ranking-cats { display: flex; gap: 6px; padding: 8px 14px 0; }
 .ranking-tabs button { flex: 1; border-radius: 999px; }

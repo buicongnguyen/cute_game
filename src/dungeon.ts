@@ -176,7 +176,7 @@ export function initDungeon(h: DungeonHooks) {
     teleport(spawn.x, spawn.z, Math.PI);
     o.allies.forEach((def, i) => { const a = (i + 1) * TAU / (o.allies.length + 1) - Math.PI / 2; session!.allies.push({ def, id: 'vault-ally:' + def.id, x: spawn.x + Math.sin(a) * 2.6, z: spawn.z + Math.cos(a) * 2, facing: Math.PI, cd: 1 + i * .3, swing: 0, target: null, moving: false }); });
     for (const ally of session.allies) world.addRemotePlayer(ally.id, allyPose(ally));
-    document.body.classList.add('in-vault'); hud.hidden = false; lobbyPanel.hidden = true; keeperLabel.hidden = true;
+    document.body.classList.add('in-vault', 'in-mode'); hud.hidden = false; lobbyPanel.hidden = true; keeperLabel.hidden = true;
     h.tone('level'); for (const ally of session.allies) h.toast(t('{name} joins the party', { name: ally.def.name }), '🤝');
     banner(0);
   }
@@ -210,7 +210,7 @@ export function initDungeon(h: DungeonHooks) {
       world.scene.background = s.saved.background; world.scene.fog = s.saved.fog;
       teleport(DUNGEON.lobby.x - 1.5, DUNGEON.lobby.z - 6.5, Math.PI);
     } else for (const child of s.saved.detached) world.disposeTree(child);
-    document.body.classList.remove('in-vault'); hud.hidden = true; world.movementLocked = false;
+    document.body.classList.remove('in-vault', 'in-mode'); hud.hidden = true; world.movementLocked = false;
     if (s.online) { if (reason !== 'server') sender?.({ type: 'dgLeave', runId: s.runId }); if (s.hpShadow) h.state().hp = Math.max(1, h.state().hp + s.hpShadow.damage); }
     if (reason === 'knocked' && !s.online) { const st = h.state(); st.hp = Math.max(1, Math.round(h.maxHp() * .3)); h.save(); }
     void finishClaims(s);

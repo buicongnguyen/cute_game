@@ -113,14 +113,14 @@ body[data-rescue-orient="portrait"] .rescue-cards .card small { display: none; }
 #rescue-build .muted { opacity: .7; } #rescue-build .small { font-size: 11px; }
 
 /* ---- squad tags, the downed banner, the portal's call-out, banners */
-#rescue-tags { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+#rescue-tags { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
 .rescue-tag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font: 800 11px/1 'Nunito Variable', system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); white-space: nowrap; }
 .rescue-tag sup { color: #ffe14d; }
 .rescue-tag .hp { width: 38px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, .45); overflow: hidden; }
 .rescue-tag .hp i { display: block; height: 100%; background: #7aff9a; }
 .rescue-tag .rec { color: #ffd0d0; }
 #rescue-down { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 32; padding: 12px 20px; border-radius: 18px; background: rgba(40, 10, 10, .78); color: #fff; font: 900 16px/1.3 'Nunito Variable', system-ui, sans-serif; pointer-events: none; text-align: center; }
-#rescue-say { position: fixed; left: 0; top: 0; z-index: 19; max-width: 230px; padding: 7px 11px; border-radius: 14px; background: #fff6e0; color: #6a3a10; font: 800 12.5px/1.3 'Nunito Variable', system-ui, sans-serif; box-shadow: 0 4px 14px rgba(60, 30, 0, .3); pointer-events: none; animation: rescue-bob 1.6s ease-in-out infinite; }
+#rescue-say { position: fixed; left: 0; top: 0; z-index: 1; max-width: 230px; padding: 7px 11px; border-radius: 14px; background: #fff6e0; color: #6a3a10; font: 800 12.5px/1.3 'Nunito Variable', system-ui, sans-serif; box-shadow: 0 4px 14px rgba(60, 30, 0, .3); pointer-events: none; animation: rescue-bob 1.6s ease-in-out infinite; }
 @keyframes rescue-bob { 50% { margin-top: -4px; } }
 .rescue-banner { position: fixed; left: 50%; top: 32%; transform: translate(-50%, -50%); z-index: 33; padding: 10px 26px 12px; border-radius: 22px; text-align: center; pointer-events: none;
   background: linear-gradient(180deg, rgba(255, 160, 60, .95), rgba(230, 100, 30, .95)); color: #fff; box-shadow: 0 10px 30px rgba(60, 20, 0, .4); animation: rescue-pop .35s cubic-bezier(.2, 1.6, .4, 1); font-family: 'Nunito Variable', system-ui, sans-serif; }
@@ -142,3 +142,47 @@ body[data-rescue-orient="portrait"] .rescue-cards .card small { display: none; }
 body.in-rescue .minimap, body.in-rescue .tracker-stack, body.in-rescue #discovery-progress, body.in-rescue #zone-banner { display: none !important; }
 body.in-rescue #zone-name { opacity: .9; }
 @media (prefers-reduced-motion: reduce) { #rescue-say, .rescue-banner { animation: none; } }
+
+/* ---- polish round: button affordance, 44 px hit areas, a usable landscape panel, a calmer HUD while a mode runs */
+/* Mission picks in the briefing are real buttons: raised pill, ringed when chosen. */
+.rescue-dialog .rescue-actions button { border: 2px solid #e8d3ae; background: #fff; color: #5a3410; box-shadow: 0 3px 0 #e2cf9f; cursor: pointer; }
+.rescue-dialog .rescue-actions button[aria-pressed="true"] { border-color: #ff8a3d; background: #fff1e0; color: #8a3d05; box-shadow: 0 3px 0 #e07a2a, 0 0 0 3px rgba(255, 138, 61, .28); }
+.rescue-dialog .rescue-actions button.primary { border-color: transparent; color: #fff; }
+/* Small HUD buttons keep their look and grow an invisible 44 px hit area. */
+#rescue-hud button, .rescue-tabs button.fold { position: relative; }
+#rescue-hud button::after, .rescue-tabs button.fold::after { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+#rescue-hud .rescue-mid { gap: 8px; margin-top: 12px; }
+#rescue-hud button { min-height: 32px; }
+.rescue-tabs button { min-height: 44px; }
+.rescue-pads { gap: 8px 6px; padding-top: 4px; }
+.rescue-pads button { width: 44px; height: 44px; }
+.rescue-row button { min-height: 44px; }
+/* Squad tab: a slim "you" row, then each helper in at most three short lines. */
+.rescue-member.me { padding: 5px 8px; background: #eaf3ff; border-color: #bcd6ff; }
+.rescue-member { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; }
+.rescue-member .who { flex: 1 0 100%; }
+.rescue-member .gear { flex: none; margin: 2px 0; min-height: 0; }
+.rescue-member .next { flex: 1 1 0; min-width: 0; margin: 2px 0; }
+.rescue-member .rescue-row { flex: 1 0 100%; margin-top: 2px; }
+@media (max-width: 400px) {
+  #rescue-build { padding: 6px; }
+  .rescue-tabs button { padding: 4px 4px; font-size: 12.5px; }
+  .rescue-member { padding: 5px 6px; margin-bottom: 4px; }
+  .rescue-member .who { font-size: 12.5px; }
+  .rescue-member .who small { font-size: 10.5px; }
+  .rescue-member img { width: 24px; height: 24px; }
+  .rescue-row button { padding: 4px 8px; font-size: 12.5px; }
+  .rescue-pads button { width: 40px; height: 40px; }
+  .rescue-pads button::after { content: ''; position: absolute; inset: -4px; }
+}
+/* Short landscape phones: the panel is a tall column to the left of the skill buttons, under the two-row HUD (it used to be a 140 px bar). */
+@media (max-height: 500px) and (orientation: landscape) {
+  #rescue-hud { top: calc(env(safe-area-inset-top, 0px) + 50px); width: min(400px, calc(100vw - 440px)); min-width: 300px; padding: 4px 8px 5px; }
+  #rescue-hud .rescue-squadbar { display: none; }
+  #rescue-build { top: calc(env(safe-area-inset-top, 0px) + 142px); bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); right: calc(env(safe-area-inset-right, 0px) + 112px); width: min(330px, calc(100vw - 460px)); min-width: 270px; max-height: none; }
+  body[data-rescue-orient="portrait"] #rescue-build { left: auto; width: min(330px, calc(100vw - 460px)); max-height: none; }
+  .rescue-cards, .rescue-boosts, body[data-rescue-orient="portrait"] .rescue-cards, body[data-rescue-orient="portrait"] .rescue-boosts { grid-template-columns: 1fr 1fr; }
+}
+/* While Rescue, Flag Rush or the Vault runs (body.in-mode): the daily Colossus banner and the "away" toasts step aside. */
+body.in-mode .colossus-banner, body.in-mode .tracker-stack { display: none !important; }
+body.in-mode #toasts .toast:not(:last-child) { display: none; }
