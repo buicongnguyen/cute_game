@@ -40,3 +40,8 @@
   .colossus-banner .cb-meter { height: 9px; }
   .colossus-banner.near { display: none; }
 }
+
+/* The Ember Well's three lid choices (main.ts wellDialog). */
+.well-choices { flex-direction: column; align-items: stretch; gap: 8px; }
+.well-choice { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; text-align: left; min-height: 44px; }
+.well-choice small { grid-column: 2; font-weight: 500; opacity: .8; }

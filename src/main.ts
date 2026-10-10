@@ -72,7 +72,7 @@ import { initBots, neighboursOn, setNeighboursOn } from './bots.ts';
 import type { ColossusEvent } from './colossus.ts';
 import './colossus.css';
 import { COLOSSUS_ID } from './colossus-content.ts';
-import { colossusSleeps, setColossusSleeps } from './colossus-sleep.ts';
+import { colossusLid, setColossusLid } from './colossus-sleep.ts';
 import { initPlatform, toggleFullscreen } from './platform.ts';
 import { titleCardHtml, titleOrbit, toggleProfiles } from './title-card.ts';
 import './title-card.css';
@@ -728,11 +728,11 @@ function applyMovePad(){$('#hud').classList.remove('move-pad');joystick.setEnabl
 function upgrades(){openDialog('upgrade','A wish for something more',`<div class="en-head">Energy: <b>ϟ ${state.energy.toLocaleString()}</b></div><div class="upgrade-cards">${upgradeCards(state).map(c=>`<div class="upgrade-card"><span class="upgrade-icon">${c.icon}</span><div><strong>${t(c.name)} <small>Level ${c.level}</small></strong><p>Now: ${c.now} • ${c.gain}</p></div><button class="primary" data-action="upgrade" data-kind="${c.kind}" ${c.affordable?'':'disabled'}>${c.max?'MAX':`ϟ ${c.cost}`}</button></div>`).join('')}</div>`,'THE WISHING CRYSTAL');}
 /** The Ember Well: lower its stone lid to keep the Cinderpeak Colossus asleep (solo play), lift it to let the daily event come (colossus-sleep.ts). */
 function wellDialog(){
-  const online=!!actionHandler||!!persistence,asleep=colossusSleeps();
+  const online=!!actionHandler||!!persistence,lid=colossusLid();
   const story=`<p class="intro">${esc(t('The old well was dug on the Cinderpeak Colossus’s sleeping shoulder. Its water stays warm because the giant is breathing under the stones.'))}</p>`;
+  const choice=(action:string,icon:string,label:string,hint:string,on:boolean)=>`<button class="${on?'primary':'soft-button'} well-choice" data-action="${action}" aria-pressed="${on}">${icon} <span>${esc(t(label))}</span><small>${esc(t(hint))}</small></button>`;
   const body=online?`<p>${esc(t('In a shared world the Colossus belongs to everyone, so the lid will not budge. It wakes on the server’s clock.'))}</p>`
-    :asleep?`<p>${esc(t('The stone lid is down. The sky stays bright and the Colossus sleeps through its hour. Lift the lid whenever you want a fight.'))}</p><div class="button-row"><button class="primary" data-action="well-wake">🌋 <span>${esc(t('Lift the lid'))}</span></button></div>`
-    :`<p>${esc(t('A heavy lid hangs on a chain beside the bucket. Lower it for peaceful days; leave it up and the Colossus wakes at its daily hour.'))}</p><div class="button-row"><button class="primary" data-action="well-sleep">🪨 <span>${esc(t('Lower the lid'))}</span></button></div>`;
+    :`<p>${esc(t(lid==='soothed'?'The well water glows soft blue. The Colossus will still come, but gentle as a sleepy pup: fifty times weaker, under a normal sky.':lid==='asleep'?'The stone lid is down. The sky stays bright and the Colossus sleeps through its hour.':'A heavy lid hangs on a chain beside the bucket, and a cool spring runs beneath it. Choose how the Colossus should wake.'))}</p><div class="button-row well-choices">${choice('well-wild','🌋','Let it wake','The canyon darkens and the giant fights at full strength.',lid==='wild')}${choice('well-soothe','💧','Soothe it','It comes 50 times weaker and the sky stays bright.',lid==='soothed')}${choice('well-sleep','🪨','Lower the lid','It sleeps through its hour. Nothing happens.',lid==='asleep')}</div>`;
   openDialog('well','The Ember Well',story+body,'REDROCK SPRING','🪨');
 }
 function cooking(){if(!M.kitchenOpen(state)&&!Tester.isTester(state)){openDialog('cook','A warm meal for the trail',`<p class="intro">🔒 ${esc(t('Unlocks at level {level}',{level:M.KITCHEN_LEVEL}))}</p>`,'VOLCANO KITCHEN');return;}const ingredients=M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id]).map(id=>[id,M.pantry(state,id)] as const);const cookTotal=ingredients.reduce((a,[,n])=>a+n,0);openDialog('cook','A warm meal for the trail',`<p class="intro">Cooked food heals more and lasts longer. Cooking here is free.</p>${cookTotal?`<button class="primary sell-produce cook-everything" data-action="cook-everything">${esc(t('Cook all → {count} meals',{count:cookTotal}))}</button>`:''}<div class="shop-grid">${ingredients.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} <small>×${n}</small></strong><p>${esc(M.ITEMS['cooked_'+id].desc)}</p><span class="chips"><span class="chip cook-result">→ ${mini('cooked_'+id)} ${esc(t(M.ITEMS['cooked_'+id].name))}</span></span></div><div class="button-row"><button class="soft-button" data-action="cook-one" data-item="${id}">Cook 1</button><button class="primary" data-action="cook-all" data-item="${id}" aria-label="Cook all">All</button></div></div>`).join('')||'<p class="empty-state">Bring crops, fish, or meat from your adventures.</p>'}</div>${dishesHtml(state,farmUi)}${Tester.testerKitchenHtml(state,art)}`,'VOLCANO KITCHEN');}
@@ -1607,8 +1607,9 @@ app.addEventListener('click',async event=>{
     case 'tester-buy':if(id&&testerDo(s=>Tester.testerBuy(s,id)))toast(t(M.ITEMS[id].name),M.ITEMS[id].icon);if(modal==='shop')shop();else testerShop();break;
     case 'tester-friend':if(id&&testerDo(s=>Tester.testerFriend(s,id as FriendId)))toast(t('{name} is home!',{name:t(FRIENDS[id as FriendId].name)}),'🏡');testerShop();break;
     case 'tester-planets':if(!button.dataset.sure){button.dataset.sure='1';button.textContent=t('Tap again to confirm');break;}if(testerDo(Tester.testerPlanets))toast(t('All planets unlocked'),'🪐');testerShop();break;
-    case 'well-sleep':setColossusSleeps(true);toast(t('The lid thuds down. The canyon goes quiet and the sky clears.'),'🪨');wellDialog();break;
-    case 'well-wake':setColossusSleeps(false);toast(t('You lift the lid. Far away, something heavy turns over.'),'🌋');wellDialog();break;
+    case 'well-sleep':setColossusLid('asleep');toast(t('The lid thuds down. The canyon goes quiet and the sky clears.'),'🪨');wellDialog();break;
+    case 'well-soothe':setColossusLid('soothed');toast(t('Cool spring water runs over the stones. The giant will be gentle today.'),'💧');wellDialog();break;
+    case 'well-wild':setColossusLid('wild');toast(t('You lift the lid. Far away, something heavy turns over.'),'🌋');wellDialog();break;
     case 'tester-exit':if(testerDo(Tester.exitTester)){toast(t('Tester mode is off. Your energy stays.'),'🧪');settings();}break;
     case 'tester-level':if(!button.dataset.sure){button.dataset.sure='1';button.textContent=t('Tap again to confirm');break;}if(testerDo(Tester.testerMaxLevel))world.refreshPlayer();testerShop();break;
     case 'keep-bag':await perform('settings',{settings:{keepBagOnDeath:!M.keepsBag(state)}});settings();break;

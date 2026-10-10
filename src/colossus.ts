@@ -12,7 +12,7 @@ import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage
 import { colossusContributors, grantColossusReward } from './colossus-rewards.ts';
 import { loadColossusArt, makeColossusRig, poseColossus, colossusArtReady, type ColossusRig } from './colossus-art.ts';
 import { ColossusAttackView } from './colossus-view.ts';
-import { colossusSleeps } from './colossus-sleep.ts';
+import { colossusSleeps, colossusSoothed, SOOTHE_FACTOR } from './colossus-sleep.ts';
 
 /** What the runtime needs from the game (main.ts wires it). */
 export interface ColossusHost {
@@ -153,6 +153,7 @@ export class ColossusEvent {
     if (!online && clock.phase === 'active' && this.day !== clock.day) this.resetDay(clock.day);
     if (clock.phase !== this.lastPhase) { if (this.lastPhase === 'active' && clock.phase !== 'active' && !online) this.retreat(); this.lastPhase = clock.phase; }
     const home = w.planet === 'home' && !w.interior && this.h.playing();
+    if (awake && this.enemy && this.enemy.hp > 0 && !this.dying && !online && this.spawnedWeak !== this.weak) this.despawn(); // the well's lid changed mid-fight: it comes back at the new strength
     if (awake && home) this.ensureSpawned(online); else if (!awake && this.enemy && this.enemy.hp > 0 && !this.dying) this.despawn();
     if (this.enemy && !w.enemies.includes(this.enemy)) { this.enemy = null; this.rig = null; this.minions = []; }
     this.stepPlayer(dt);
@@ -164,7 +165,7 @@ export class ColossusEvent {
       else if (this.dying > 0) { this.dying = Math.min(1, this.dying + dt / 3); if (this.dying >= 1) this.removeEnemy(); }
     }
     this.stepMinions();
-    this.darken(dt, awake && (!e || e.hp > 0));
+    this.darken(dt, awake && (!e || e.hp > 0) && this.weak === 1);
     const close = !!this.enemy && this.enemy.hp > 0 && w.planet === 'home' && !w.interior && Math.hypot(w.position.x - this.enemy.x, w.position.z - this.enemy.z) < ARENA_RANGE;
     this.zoomK += ((close ? ARENA_ZOOM : 1) - this.zoomK) * Math.min(1, dt * 1.6);
     if (Math.abs(this.zoomK - 1) < .002) this.zoomK = 1;
@@ -204,10 +205,14 @@ export class ColossusEvent {
   }
 
   // ---- Offline fight ----
+  /** Solo, with the Ember Well's lid at "soothed": 1/50 of the health and of every hit (online is never weakened). */
+  private get weak() { return !this.h.online() && colossusSoothed() ? SOOTHE_FACTOR : 1; }
+  private spawnedWeak = 1;
+  private soloMaxHp() { return Math.max(1, Math.round(colossusMaxHp(1 + this.nearbyExplorers(), true) / this.weak)); }
   private resetDay(day: number) {
     this.day = day; this.count = 0; this.attacks = []; this.nextAt = this.time + 3; this.facing = W.facing; this.lastHits.clear(); this.killer = null;
     this.minionsUsed = []; this.announced = { kneel: false, enrage: false }; this.kneel = 0;
-    if (this.enemy) { this.enemy.maxHp = colossusMaxHp(1 + this.nearbyExplorers(), !this.h.online()); this.enemy.hp = this.enemy.maxHp; }
+    if (this.enemy) { this.enemy.maxHp = this.soloMaxHp(); this.enemy.hp = this.enemy.maxHp; this.spawnedWeak = this.weak; }
   }
   private window(now: number) {
     const c = colossusClock(now);
@@ -272,7 +277,7 @@ export class ColossusEvent {
     if (r > 5) fx.burst({ x, z }, { n: 14, color: '#ffffff', glow: true, speed: 5, up: 3, size: .16, life: .5 });
   }
   private hitPlayer(hit: ColossusHit) {
-    const s = this.h.state(), def = this.h.defence(), damage = colossusDamage(S.atk, hit.multiplier, def, this.defenceFactor, .9 + Math.random() * .2);
+    const s = this.h.state(), def = this.h.defence(), damage = colossusDamage(S.atk / this.weak, hit.multiplier, def, this.defenceFactor, .9 + Math.random() * .2);
     this.h.hurt(throughDefence(damage, def));
     if (hit.effect) this.effect(hit.effect, s);
   }
@@ -296,12 +301,12 @@ export class ColossusEvent {
       const th = this.throwing, k0 = th.t / S.throwSeconds; th.t = Math.min(S.throwSeconds, th.t + dt); const k1 = th.t / S.throwSeconds;
       w.move((th.toX - th.fromX) * (k1 - k0), (th.toZ - th.fromZ) * (k1 - k0), true);
       this.lift = Math.sin(k1 * Math.PI) * S.throwHeight;
-      if (k1 >= 1) { this.throwing = null; this.lift = 0; w.landT = .25; w.fx?.shake(.6); w.fx?.ring(w.position, { color: '#ffb13d', to: 3.5, life: .45 }); if (th.land) this.h.hurt(throughDefence(Math.round(M.maxHp(s) * S.grabShare), this.h.defence())); }
+      if (k1 >= 1) { this.throwing = null; this.lift = 0; w.landT = .25; w.fx?.shake(.6); w.fx?.ring(w.position, { color: '#ffb13d', to: 3.5, life: .45 }); if (th.land) this.h.hurt(throughDefence(Math.max(1, Math.round(M.maxHp(s) * S.grabShare / this.weak)), this.h.defence())); }
     } else this.lift = 0;
     w.playerLift = this.lift;
     if (offline && this.time < this.burnUntil && s.hp > 0) {
       this.burnTick -= dt;
-      if (this.burnTick <= 0) { this.burnTick = S.burnTick; this.h.hurt(throughDefence(Math.max(1, Math.round(M.maxHp(s) * S.burnShare)), this.h.defence())); w.fx?.burst(w.position, { n: 4, color: ['#ff7a1e', '#ffd27a'], glow: true, size: .1, speed: 1.5, up: 3, y: 1, life: .5 }); }
+      if (this.burnTick <= 0) { this.burnTick = S.burnTick; this.h.hurt(throughDefence(Math.max(1, Math.round(M.maxHp(s) * S.burnShare / this.weak)), this.h.defence())); w.fx?.burst(w.position, { n: 4, color: ['#ff7a1e', '#ffd27a'], glow: true, size: .1, speed: 1.5, up: 3, y: 1, life: .5 }); }
     }
   }
 
@@ -321,12 +326,12 @@ export class ColossusEvent {
     this.artAsked = false; // colossus.glb (130 KB) downloads once the explorer is within ART_RANGE of the giant (step); the stand-in stands until then
     const rig = makeColossusRig(), e = w.addEntity('enemy', COLOSSUS_NAME, '👑', rig.root, W.x, W.z, S.radius) as Driven;
     e.id = COLOSSUS_ID;
-    const maxHp = online ? Math.max(1, this.server?.maxHp ?? S.hp) : colossusMaxHp(1 + this.nearbyExplorers(), true), hp = online ? Math.max(0, this.server?.hp ?? maxHp) : maxHp;
-    Object.assign(e, { type: COLOSSUS_TYPE, definition: COLOSSUS_DEFINITION, hp, maxHp, baseMaxHp: maxHp, baseDamage: S.atk, damage: S.atk, xp: S.xp, level: 40, homeX: W.x, homeZ: W.z, cooldown: 0, respawn: 0, boss: true, stun: 0, phase: 'chase', phaseTime: 0, route: [], routeTime: 0, lift: 0, liftVelocity: 0, statuses: {}, scaled: true, lastHitAt: Infinity });
+    const maxHp = online ? Math.max(1, this.server?.maxHp ?? S.hp) : this.soloMaxHp(), hp = online ? Math.max(0, this.server?.hp ?? maxHp) : maxHp;
+    Object.assign(e, { type: COLOSSUS_TYPE, definition: COLOSSUS_DEFINITION, hp, maxHp, baseMaxHp: maxHp, baseDamage: S.atk / this.weak, damage: S.atk / this.weak, xp: S.xp, level: 40, homeX: W.x, homeZ: W.z, cooldown: 0, respawn: 0, boss: true, stun: 0, phase: 'chase', phaseTime: 0, route: [], routeTime: 0, lift: 0, liftVelocity: 0, statuses: {}, scaled: true, lastHitAt: Infinity });
     e.driver = { incoming: (target, amount, hazard) => this.incoming(target, amount, hazard) };
     // Tap and target-ring height: about the lower body, which is what the game camera shows.
     rig.root.userData.pickHeight = 9 / 1.85; rig.root.userData.pickHeightAsset = null; rig.root.userData.footprint = S.radius * .8;
-    w.enemies.push(e); this.enemy = e; this.rig = rig; this.rise = online && (this.server?.hp ?? 1) < (this.server?.maxHp ?? 1) ? 1 : 0; this.dying = 0;
+    w.enemies.push(e); this.enemy = e; this.spawnedWeak = this.weak; this.rig = rig; this.rise = online && (this.server?.hp ?? 1) < (this.server?.maxHp ?? 1) ? 1 : 0; this.dying = 0;
     if (!online && this.day < 0) this.resetDay(this.window(Date.now()).day);
     if (!online) { this.nextAt = this.time + 3; this.h.toast(t('The Cinderpeak Colossus has woken in Redrock Canyon! The sky darkens over every planet.'), '🌋'); this.h.tone('level'); }
   }
@@ -399,6 +404,7 @@ export class ColossusEvent {
     const type = COLOSSUS_MINIONS.find(id => !this.minionsUsed.includes(id)) ?? COLOSSUS_MINIONS[0]; this.minionsUsed.push(type);
     const m = w.spawnSpecies(type, at.x, at.z, 900 + (this.minionIndex++ % 50)); if (!m) return;
     m.name = t('{name} (Minion)', { name: t(m.name) }); m.phase = 'chase'; m.lastHitAt = w.time; m.homeX = at.x; m.homeZ = at.z;
+    if (this.weak > 1) { m.maxHp = Math.max(1, Math.round(m.maxHp / this.weak)); m.hp = m.maxHp; m.damage = Math.max(1, Math.round(m.damage / this.weak)); }
     this.minions.push(m); w.fx?.burst({ x: at.x, z: at.z }, { n: 30, color: ['#ffe14d', '#ff7a1e', '#ffffff'], glow: true, speed: 6, up: 8, size: .2 });
   }
   private stepMinions() {
