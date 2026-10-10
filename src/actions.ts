@@ -187,9 +187,9 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'reset': { const fresh=Game.newGame(state.name,state.color); fresh.settings={...state.settings}; delete fresh.settings.tester; /* a new adventure starts outside tester mode */ for(const key of Object.keys(state))delete (state as unknown as Record<string,unknown>)[key]; Object.assign(state,fresh); result=true; break; }
     case 'settings': {
       const settings = p.settings;
-      if (settings && typeof settings === 'object' && !Array.isArray(settings)) { applyAudio(state.settings, settings as Record<string, unknown>); for (const key of ['lowGraphics', 'movePad', 'placeBeds'] as const) if (typeof (settings as Record<string, unknown>)[key] === 'boolean') state.settings[key] = (settings as Record<string, boolean>)[key]; }
+      if (settings && typeof settings === 'object' && !Array.isArray(settings)) { applyAudio(state.settings, settings as Record<string, unknown>); for (const key of ['lowGraphics', 'movePad', 'placeBeds', 'keepBagOnDeath'] as const) if (typeof (settings as Record<string, unknown>)[key] === 'boolean') state.settings[key] = (settings as Record<string, boolean>)[key]; }
       const level = settings && typeof settings === 'object' ? (settings as Record<string, unknown>).difficulty : undefined;
-      // Raising is free; lowering works once a day (difficulty.ts), so the Normal rules cannot be dodged per action.
+      // Raising is free; lowering works once an hour (difficulty.ts), so the Normal rules cannot be dodged per action.
       if (Game.isDifficulty(level) && level !== Game.difficultyOf(state)) {
         if (Game.isLowering(Game.difficultyOf(state), level)) { if (Game.lowerReadyAt(state) > now) return refuse(); state.settings.difficultyLoweredAt = now; }
         state.settings.difficulty = level;

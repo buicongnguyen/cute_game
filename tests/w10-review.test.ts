@@ -75,7 +75,7 @@ test('4. raising is free; lowering works once per 24 h; growing crops keep their
   const s = game('easy', 10);
   act(s, 'settings', { settings: { difficulty: 'hard' } }); assert.equal(M.difficultyOf(s), 'hard'); assert.equal(s.settings.difficultyLoweredAt, undefined);
   act(s, 'settings', { settings: { difficulty: 'normal' } }); assert.equal(M.difficultyOf(s), 'normal'); assert.equal(s.settings.difficultyLoweredAt, T0);
-  assert.throws(() => act(s, 'settings', { settings: { difficulty: 'easy' } }, T0 + DAY - 1)); assert.equal(M.difficultyOf(s), 'normal');
+  assert.throws(() => act(s, 'settings', { settings: { difficulty: 'easy' } }, T0 + 3600_000 - 1)); assert.equal(M.difficultyOf(s), 'normal');
   act(s, 'settings', { settings: { difficulty: 'hard' } }, T0 + 1000); assert.equal(M.difficultyOf(s), 'hard', 'raising stays free in the cooldown');
   act(s, 'settings', { settings: { difficulty: 'easy' } }, T0 + DAY); assert.equal(M.difficultyOf(s), 'easy');
   assert.equal(M.parseSave(JSON.stringify(s))!.settings.difficultyLoweredAt, T0 + DAY, 'the timestamp is saved');

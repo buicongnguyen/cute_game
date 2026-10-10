@@ -114,7 +114,7 @@ export function initDungeon(h: DungeonHooks) {
       <p class="muted">${esc(h.online() ? t('Online, the party is everyone standing in the circle when the countdown ends (up to 5).') : t('Your AI neighbours come along to fill the party, friends first. They help a little and never take your loot.'))}</p>
       <p class="muted">${esc(t('Each guardian may drop its own little companion (25%), always drops Rune Seals, and the last one may leave a Delver\'s Chest (50%).'))}</p>
       <p class="vault-stats"><b>${esc(t('Runs left today: {n} / {max}', { n: left, max: DUNGEON.perDay }))}</b> · ${esc(t('Cleared so far: {n}', { n: clears }))} · ${esc(t('Recommended: level 20 or higher.'))}</p>
-      <div class="vault-actions">${left > 0 ? `<button class="primary" data-vault="walk">${esc(t('Walk into the circle'))}</button>` : `<p class="vault-none">${esc(t('You have been through the vault twice today. Come back tomorrow!'))}</p>`}<button data-vault="close">${esc(t('Got it'))}</button></div></div>`,
+      <div class="vault-actions">${left > 0 ? `<button class="primary" data-vault="walk">${esc(t('Walk into the circle'))}</button>` : `<p class="vault-none">${esc(t('You have used all six vault runs today. Come back tomorrow!'))}</p>`}<button data-vault="close">${esc(t('Got it'))}</button></div></div>`,
       'FIVE ROOMS, FIVE GUARDIANS', '🏰');
   }
 
@@ -135,7 +135,7 @@ export function initDungeon(h: DungeonHooks) {
     if (party) void startOffline();
   }
   function setLobby(info: { n: number; cd: number | null; names: string[]; left?: number } | null, left: number) {
-    const html = !info ? `<b>🏰 ${esc(t('Delvers\' Vault'))}</b><span>${esc(t('You have been through the vault twice today. Come back tomorrow!'))}</span>`
+    const html = !info ? `<b>🏰 ${esc(t('Delvers\' Vault'))}</b><span>${esc(t('You have used all six vault runs today. Come back tomorrow!'))}</span>`
       : `<b>🏰 ${esc(t('Delvers\' Vault'))} <em>${esc(t('Runs left today: {n} / {max}', { n: left, max: DUNGEON.perDay }))}</em></b><span class="vault-count">${esc(info.cd === null ? t('Party {n}/{max} · waiting for explorers', { n: info.n, max: DUNGEON.maxParty }) : info.cd <= 0 ? t('The vault is opening…') : t('Party {n}/{max} · the vault opens in {s}s', { n: info.n, max: DUNGEON.maxParty, s: info.cd }))}</span><span class="vault-names">${info.names.map(n => `<i>${esc(n)}</i>`).join('')}</span>`;
     if (lobbyPanel.dataset.html !== html) { lobbyPanel.dataset.html = html; lobbyPanel.innerHTML = html; }
   }
@@ -228,7 +228,7 @@ export function initDungeon(h: DungeonHooks) {
   }
   function confirmLeave() {
     if (!session) return;
-    h.openDialog('vault-leave', 'Leave the vault', `<p class="center">${esc(t('Leave the vault? You cannot come back into this run.'))}</p><div class="vault-actions"><button class="primary" data-vault="leave-yes">${esc(t('Leave'))}</button><button data-vault="close">${esc(t('Stay'))}</button></div>`, 'Delvers\' Vault · 2 runs a day', '🚪');
+    h.openDialog('vault-leave', 'Leave the vault', `<p class="center">${esc(t('Leave the vault? You cannot come back into this run.'))}</p><div class="vault-actions"><button class="primary" data-vault="leave-yes">${esc(t('Leave'))}</button><button data-vault="close">${esc(t('Stay'))}</button></div>`, 'Delvers\' Vault · 6 runs a day', '🚪');
   }
   function leaveRun() { if (session) exit('leave'); }
 

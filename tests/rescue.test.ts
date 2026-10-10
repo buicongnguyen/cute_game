@@ -253,11 +253,11 @@ test('rescueClaim: validated, once per run, never faster than played, waves capp
   assert.throws(() => act(ok, T0 + 3_600_000), /already counted/, 'once per run');
   assert.throws(() => act({ ...ok, runId: 'run-2' }, T0 + 60_000), /already counted/, 'not faster than the run');
   // Five full wins a day; the sixth pays a quarter and no gift.
-  let now = T0; for (let i = 2; i <= 6; i++) { now += 500_000; const k = claimRescue(s, { ...ok, runId: 'run-' + i }, now, () => .99)!; assert.ok(k, 'run ' + i); assert.equal(k.full, i <= 5, 'full ' + i); if (i > 5) assert.equal(k.gift.length, 0); }
+  let now = T0; for (let i = 2; i <= 9; i++) { now += 500_000; const k = claimRescue(s, { ...ok, runId: 'run-' + i }, now, () => .99)!; assert.ok(k, 'run ' + i); assert.equal(k.full, i <= 8, 'full ' + i); if (i > 8) assert.equal(k.gift.length, 0); }
   assert.equal(fullWinsLeft(s, now), 0); assert.equal(fullWinsLeft(s, now + 86_400_000), RESCUE_REWARD.winsPerDay);
   // Waves are capped a day (losses pay their waves too).
   const w = fresh(10); let t = T0, paid = 0;
-  for (let i = 0; i < 12; i++) { t += 500_000; const k = claimRescue(w, { runId: 'loss-' + i, mission: 'toy', waves: 5, won: false, seconds: 300 }, t, () => .5)!; assert.ok(k); if (k.energy) paid += 5; }
+  for (let i = 0; i < 18; i++) { t += 500_000; const k = claimRescue(w, { runId: 'loss-' + i, mission: 'toy', waves: 5, won: false, seconds: 300 }, t, () => .5)!; assert.ok(k); if (k.energy) paid += 5; }
   assert.equal(paid, RESCUE_REWARD.wavesPerDay); assert.equal(wavesLeft(w, t), 0);
   // The gift goes to the chest when the bag is full; the rare Defender hat sometimes.
   // A truly full backpack: as many real item kinds as it has slots (the size comes from the storage table).

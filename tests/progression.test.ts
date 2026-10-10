@@ -14,7 +14,7 @@ test('story progression counts only actions performed during the current event s
 test('daily and weekly selections are deterministic, unique and level eligible',()=>{
   const a=M.newGame('Tester'),b=M.newGame('Tester');P.refreshProgress(a,start);P.refreshProgress(b,start);
   assert.deepEqual(a.progression.daily,b.progression.daily);assert.equal(a.progression.daily.tasks.length,3);assert.equal(new Set(a.progression.daily.tasks.map(t=>t.type)).size,3);assert.equal(a.progression.weekly.tasks.length,4);assert.equal(new Set(a.progression.weekly.tasks.map(t=>t.type)).size,4);
-  assert.ok(a.progression.daily.tasks.every(t=>!['boss','planet'].includes(t.type)));const prior=a.progression.daily.tasks.map(t=>t.type);assert.equal(P.rerollDaily(a,0,start),true);assert.ok(!prior.includes(a.progression.daily.tasks[0].type));assert.equal(P.rerollDaily(a,1,start),false);
+  assert.ok(a.progression.daily.tasks.every(t=>!['boss','planet'].includes(t.type)));const prior=a.progression.daily.tasks.map(t=>t.type);assert.equal(P.rerollDaily(a,0,start),true);assert.ok(!prior.includes(a.progression.daily.tasks[0].type));assert.equal(P.rerollDaily(a,1,start),true);assert.equal(P.rerollDaily(a,2,start),true);assert.equal(P.rerollDaily(a,0,start),false);
 });
 test('daily quests, daily chest and check-in each award once and persist',()=>{
   const s=M.newGame();P.refreshProgress(s,start);

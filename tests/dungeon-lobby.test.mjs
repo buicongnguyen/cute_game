@@ -41,7 +41,7 @@ test('everyone in the circle when the 10 s countdown ends goes in together (at m
   w.add('far', 0, 0);
   w.tick(5);
   const update = w.outbox.filter(m => m.type === 'dgLobby' && m.to === 'p0').at(-1);
-  assert.equal(update.n, 5); assert.equal(update.waiting, 1); assert.ok(update.cd > 0 && update.cd <= 5); assert.equal(update.left, 2);
+  assert.equal(update.n, 5); assert.equal(update.waiting, 1); assert.ok(update.cd > 0 && update.cd <= 5); assert.equal(update.left, 6);
   assert.ok(!w.outbox.some(m => m.to === 'far'), 'only those in the circle hear the countdown');
   w.tick(5.5);
   const go = w.outbox.filter(m => m.type === 'dgGo');
@@ -56,7 +56,7 @@ test('stepping out resets the countdown; a run spent today keeps you out of the 
   w.tick(6); a.pose = { x: 0, z: 0 }; w.tick(.5); a.pose = { x: L.x, z: L.z }; w.tick(6);
   assert.equal(w.outbox.filter(m => m.type === 'dgGo').length, 0, 'the countdown started over');
   w.tick(5); assert.equal(w.outbox.filter(m => m.type === 'dgGo').length, 1);
-  const tired = setup(), b = tired.add('b', L.x, L.z); b.account.profile.dungeon = { day: '2026-10-06', runs: 2, clears: 0 };
+  const tired = setup(), b = tired.add('b', L.x, L.z); b.account.profile.dungeon = { day: '2026-10-06', runs: 6, clears: 0 };
   tired.tick(12); assert.equal(tired.outbox.filter(m => m.type === 'dgGo').length, 0);
 });
 

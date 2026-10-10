@@ -16,7 +16,7 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
     const active = [...pointers];
     pointers.clear(); // Clear first: capture release can synchronously reenter listeners.
     for (const [id, p] of active) { retired.add(id); cancel(id, p); }
-    for (const [code, key] of keys) window.dispatchEvent(new KeyboardEvent('keyup', { code, key, bubbles: true }));
+    for (const [code, key] of keys) document.dispatchEvent(new KeyboardEvent('keyup', { code, key, bubbles: true }));
     keys.clear();
     if (active.length) suppressClickUntil = performance.now() + 700;
   };
@@ -113,7 +113,8 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
   const refresh = () => {
     for (const button of document.querySelectorAll(['[data-mobile-display]', ...existingButtons].join(','))) {
       const label = active() ? text('Exit full screen', 'Thoát toàn màn hình') : text('Full screen', 'Toàn màn hình');
-      if (button.textContent !== label) button.textContent = label;
+      if (button.hasAttribute('data-mobile-display') && button.textContent !== label) button.textContent = label;
+      button.setAttribute('aria-label', label); button.title = label;
       button.setAttribute('aria-pressed', String(active()));
       button.setAttribute('aria-disabled', String(pending));
     }

@@ -44,6 +44,7 @@ export interface ProgressionState {
         tasks: Task[];
         chest: boolean;
         rerolled: boolean;
+        rerolls?: number;
     };
     weekly: {
         key: string;
@@ -152,7 +153,7 @@ export function refreshProgress(s: SaveState, now = Date.now()) {
         p.weekly = { key: monday, tasks: tasks(s, WEEKLY, 4, hash(monday + 'w' + s.name), Math.floor(s.level / 10), s.level), chest: false };
     for (const [list, spent] of [[p.daily, spentDay], [p.weekly, spentWeek]] as const)
         if (spent) { list.chest = true; for (const task of list.tasks) task.claimed = true; }
-    if (spentDay) p.daily.rerolled = true;
+    if (spentDay) { p.daily.rerolled = true; p.daily.rerolls = 3; }
     remember(rolled.daily, p.daily.key); remember(rolled.weekly, p.weekly.key);
     // While the kitchen is locked (Normal/Hard below level 14, e.g. after raising the difficulty) a cook task cannot be
     // done: it becomes a harvest task (or another the list lacks), like the story's stand-in step.
@@ -351,9 +352,10 @@ export function claimProgress(s: SaveState, kind: ProgressKind, id: string, now 
     give(s, reward, now);
     return true;
 }
-export function rerollDaily(s: SaveState, index: number, now = Date.now()): boolean { refreshProgress(s, now); const d = s.progression.daily, old = d.tasks[index]; if (d.rerolled || !old || old.claimed)
+export const dailyRerollsUsed = (d: ProgressionState['daily']) => d.rerolls ?? (d.rerolled ? 1 : 0);
+export function rerollDaily(s: SaveState, index: number, now = Date.now()): boolean { refreshProgress(s, now); const d = s.progression.daily, old = d.tasks[index]; if (dailyRerollsUsed(d) >= 3 || !old || old.claimed)
     return false; const choices = Object.keys(DAILY).filter(k => s.level >= specLevel(s, DAILY[k]) && !d.tasks.some(t => t.type === k)); if (!choices.length)
-    return false; const type = choices[hash(d.key + s.name) % choices.length], spec = DAILY[type]; d.tasks[index] = { type, target: spec.targets[Math.min(Math.floor(s.level / 7), spec.targets.length - 1)], progress: 0, claimed: false, bonus: old.bonus }; d.rerolled = true; return true; }
+    return false; const type = choices[hash(d.key + s.name) % choices.length], spec = DAILY[type]; d.tasks[index] = { type, target: spec.targets[Math.min(Math.floor(s.level / 7), spec.targets.length - 1)], progress: 0, claimed: false, bonus: old.bonus }; d.rerolls = dailyRerollsUsed(d) + 1; d.rerolled = d.rerolls >= 3; return true; }
 export function startChallenge(s: SaveState, type = 'kill', now = Date.now()): boolean { refreshProgress(s, now); const spec = Object.hasOwn(CHALLENGES, type) ? CHALLENGES[type] : undefined; if (!spec || s.level < 2 || s.progression.challenge && !s.progression.challenge.claimed)
     return false; s.progression.challenge = { type, target: spec.target + (type === 'kill' ? Math.floor(s.level / 8) : 0), progress: 0, ends: now + spec.seconds * 1000, claimed: false }; return true; }
 export function normalizeProgression(raw: unknown, s: SaveState): ProgressionState {
@@ -392,6 +394,7 @@ export function normalizeProgression(raw: unknown, s: SaveState): ProgressionSta
             p[key].key = '';
         if (key === 'daily')
             p.daily.rerolled = r.rerolled === true;
+        if (key === 'daily' && r.rerolls !== undefined) p.daily.rerolls = typeof r.rerolls === 'number' && Number.isFinite(r.rerolls) ? Math.max(0, Math.min(3, Math.floor(r.rerolls))) : r.rerolled === true ? 1 : 0;
     }
     if (record(raw.pass))
         p.pass = { season: typeof raw.pass.season === 'string' && /^\d{4}-\d{2}$/.test(raw.pass.season) ? raw.pass.season : '', stars: number(raw.pass.stars), claimed: Array.isArray(raw.pass.claimed) ? [...new Set<number>(raw.pass.claimed.filter((x: any) => Number.isInteger(x) && x >= 0 && x < PASS_REWARDS.length))] : [] };

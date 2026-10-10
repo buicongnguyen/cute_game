@@ -1,5 +1,15 @@
 /** Round 28 (economy, news board, sound settings, fishing and watering rules) in Vietnamese. */
 export const VI_ECON: Record<string, string> = {
+  "Removes half of the crop's original growing time. Two uses ripen a newly planted non-tree crop. Fruit trees: up to 2 hours per dose.": 'Giảm thời gian chờ bằng một nửa thời gian sinh trưởng ban đầu của cây. Dùng hai lần làm cây mới trồng chín ngay, trừ cây ăn quả: mỗi lần giảm tối đa 2 giờ.',
+  'Rerolls left today: {n}': 'Lượt đổi nhiệm vụ còn lại hôm nay: {n}',
+
+  'Keep backpack on defeat': 'Giữ ba lô khi bị hạ',
+  'Keep carried items when defeated. Existing dropped bags stay recoverable.': 'Giữ đồ mang theo khi bị hạ. Các túi đã rơi vẫn có thể nhặt lại.',
+  'Your backpack is safe.': 'Ba lô của bạn vẫn an toàn.',
+  'Fruit tree fertilizer': 'Phân bón cho cây ăn quả',
+  'Each dose removes half the original growing time, up to 2 hours for fruit trees.': 'Mỗi lần bón giảm một nửa thời gian trồng ban đầu, tối đa 2 giờ với cây ăn quả.',
+  'You have used all three rerolls today, or this task cannot be rerolled.': 'Bạn đã dùng hết ba lượt đổi hôm nay, hoặc nhiệm vụ này không thể đổi.',
+
   // Level gates (level-gates.ts, refusals.ts)
   'Needs level {level}': 'Cần cấp {level}',
   'Needs level {level}.': 'Cần đạt cấp {level}.',
@@ -35,5 +45,5 @@ export const VI_ECON: Record<string, string> = {
   'WHAT IS NEW IN ZOO GARDEN': 'CÓ GÌ MỚI Ở ZOO GARDEN',
   // Watering a friend's crops (visit-rules.ts, server/action-service.mjs)
   '💧 You watered the plant: 10% less remaining growing time. +{xp} XP · {count} waterings left in this garden today.': '💧 Bạn đã tưới cây: giảm 10% thời gian sinh trưởng còn lại. +{xp} XP · hôm nay còn {count} lần tưới ở khu vườn này.',
-  'You have watered this garden five times today. Come back tomorrow.': 'Hôm nay bạn đã tưới khu vườn này năm lần rồi. Mai quay lại nhé.',
+  'You have watered this garden ten times today. Come back tomorrow.': 'Hôm nay bạn đã tưới khu vườn này mười lần rồi. Mai quay lại nhé.',
 };

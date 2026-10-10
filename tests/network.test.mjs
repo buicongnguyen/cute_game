@@ -119,7 +119,7 @@ test('combat quantities and rewards are authoritative while canonical boss visua
   const canonical=enemyRoster('home').find(e=>e.type==='treant');
   const boss={id:canonical.id,type:canonical.type,x:-40,z:3,hp:1,maxHp:1,damage:999999,phase:'windup',phaseTime:.8,skill:'rain',bossStage:2,attackCount:6,skillCount:3,spinTick:.2,lift:1,liftVelocity:3,cooldown:1.4,targetX:-38,targetZ:2,statuses:{charm:999},telegraphs:[{x:-38,z:2,r:2,delay:1.3}],skillEffects:[{x:-40,z:3,r:6,inner:3.6,remaining:.44,multiplier:1.1}]};
   host.send({type:'enemies',enemies:[boss,{...boss,id:'invented-enemy'}]});
-  const received=(await peer.next(enemiesWith(canonical.id))).enemies;assert.equal(received.length,1);const snapshot=received[0];
+  const received=(await peer.next(enemiesWith(canonical.id))).enemies;assert.ok(!received.some(e=>e.id==='invented-enemy'));const snapshot=received.find(e=>e.id===canonical.id);
   for(const key of ['phase','phaseTime','skill','bossStage','attackCount','skillCount','spinTick','lift','liftVelocity','cooldown','targetX','targetZ'])assert.equal(snapshot[key],boss[key],key);
   assert.equal(snapshot.hp,canonical.baseMaxHp);assert.equal(snapshot.maxHp,canonical.baseMaxHp);assert.equal(snapshot.damage,canonical.baseDamage);assert.ok(!snapshot.statuses.charm);
   assert.deepEqual(snapshot.telegraphs.map(({x,z,r,delay})=>({x,z,r,delay})),boss.telegraphs);

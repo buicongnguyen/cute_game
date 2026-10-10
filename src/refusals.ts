@@ -69,7 +69,6 @@ function harvestReason(s: M.SaveState, p: Payload) {
 function fertilizeReason(s: M.SaveState, p: Payload) {
   const bed = typeof p.index === 'number' ? s.plots[p.index] : undefined;
   if (!bed?.crop) return 'Plant something in this bed first.';
-  if (M.isTreeCrop(bed.crop)) return 'Fruit trees grow at their own pace. Fertilizer does not help them.';
   if (M.cropProgress(bed) >= 1) return 'This crop is already ripe. Tap the bed to harvest it.';
   if (!(s.bag[id(p) || 'spore'] ?? 0)) return 'You have none of that fertilizer left.';
   return 'Fertilizer cannot help this crop right now.';
@@ -229,7 +228,7 @@ export const REFUSALS: Record<string, Reason> = {
   fishHunt: 'No fish is in reach. Move closer to the pond and try again.',
   claimProgress: progressReason,
   claimQuest: 'Finish this step of your story first.',
-  rerollDaily: 'You already rerolled a task today.',
+  rerollDaily: 'You have used all three rerolls today, or this task cannot be rerolled.',
   startChallenge: s => s.level < 2 ? 'Quick challenges open at level 2.' : 'Finish or collect your current challenge first.',
   launch: fmt('You need {cost} energy to launch your starship.', { cost: M.LAUNCH_COST }),
   travel: (s, p) => { const planet = typeof p.id === 'string' && Object.hasOwn(M.PLANETS, p.id) ? M.PLANETS[p.id as M.PlanetId] : undefined; return planet ? fmt('You can land there from level {level}.', { level: planet.level }) : 'That planet cannot be reached.'; },
@@ -243,7 +242,7 @@ export const REFUSALS: Record<string, Reason> = {
   claimCaveChest: 'Light all three braziers to open the cave chest.',
   recoverBag: 'Your lost bag is not on this planet.',
   expandStorage: (s, p) => { const kind = M.isStorageKind(p.kind) ? p.kind : 'bag', next = M.nextExpansion(s, kind); if (!next) return kind === 'bag' ? 'Your backpack is already as big as it gets.' : 'Your chest is already as big as it gets.'; if (s.energy < next.energy) return fmt('You need {cost} energy for that.', { cost: next.energy }); return 'You are missing some materials for that.'; },
-  dungeonStart: s => s.planet !== 'home' ? 'The vault is reached from Clover Village.' : 'You have been through the vault twice today. Come back tomorrow!',
+  dungeonStart: s => s.planet !== 'home' ? 'The vault is reached from Clover Village.' : 'You have used all six vault runs today. Come back tomorrow!',
   dungeonClaim: 'That vault room was already counted, or the run has ended.',
   ctfClaim: 'That match was already counted, or it was too short for EXP.',
   rescueClaim: 'That rescue was already counted, or it ended too quickly.',

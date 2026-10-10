@@ -48,7 +48,7 @@ export interface Plot {
     generation?: string;
     /** The difficulty at planting: the harvest's XP and value follow it, so switching never re-prices a growing crop. */
     difficulty?: Difficulty;
-    /** Bed upgrades (upgradeBed): each level halves this bed's grow time (bedGrowTime, up to BED_MAX_LEVEL 3); missing = 0. */
+    /** Bed upgrades (upgradeBed): each level halves this bed's grow time (bedGrowTime, up to BED_MAX_LEVEL 5); missing = 0. */
     level?: number;
     /** The crop the player last planted here by hand (auto-plant.ts): helpers replant only this in the bed. Missing = helpers choose. */
     choice?: CropId;
@@ -122,9 +122,10 @@ export interface SaveState {
         keyboardLayout?: 'classic'|'wasd';
         /** "Place new beds myself": a bought bed opens the see-through placement instead of going down automatically. */
         placeBeds?: boolean;
+        keepBagOnDeath?: boolean;
         /** Easy (default; every old save), Normal or Hard: difficulty.ts reads prices and rules through it. */
         difficulty?: Difficulty;
-        /** When the difficulty was last lowered (difficulty.ts LOWER_COOLDOWN_MS: once a day). */
+        /** When the difficulty was last lowered (difficulty.ts LOWER_COOLDOWN_MS: once an hour). */
         difficultyLoweredAt?: number;
         /** Tester mode (tester.ts): set only by the solo tester code; opens the Tester shop. */
         tester?: boolean;
@@ -291,8 +292,8 @@ export function fertilize(s: SaveState, index: number, timeOrItem: number | stri
     const plot = s.plots[index];
     const crop = plot?.crop && Object.hasOwn(CROPS, plot.crop) ? CROPS[plot.crop] : undefined;
     const grow = Object.hasOwn(ITEMS, id) ? ITEMS[id].grow : undefined;
-    // Fruit trees (tree-crops.ts) refuse fertilizer: they grow at their own pace.
-    if (!crop || !grow || !Number.isFinite(grow) || grow <= 0 || isTreeCrop(plot.crop!) ||
+    // Trees accept fertilizer too, capped at two hours per dose.
+    if (!crop || !grow || !Number.isFinite(grow) || grow <= 0 ||
         !Number.isFinite(now) || now < 0 || now > Number.MAX_SAFE_INTEGER ||
         !Number.isFinite(plot.plantedAt) || Math.abs(plot.plantedAt) > Number.MAX_SAFE_INTEGER || plot.plantedAt > now ||
         !Number.isFinite(crop.duration) || crop.duration <= 0)
@@ -301,7 +302,7 @@ export function fertilize(s: SaveState, index: number, timeOrItem: number | stri
     if (elapsed >= duration || !removeItem(s.bag, id))
         return false;
     // Each dose advances a fixed share of the original timer; excess never carries into the next crop.
-    plot.plantedAt = now - Math.min(duration, elapsed + duration * grow);
+    plot.plantedAt = now - Math.min(duration, elapsed + Math.min(duration * grow, isTreeCrop(plot.crop!) ? 2 * 3600_000 : Infinity));
     return true;
 }
 /**
@@ -451,11 +452,11 @@ export function trimGarden(s: SaveState, now = Date.now()) {
 export function takeTrimNote(s: SaveState): TrimNote | Record<string, never> { const note = s.gardenTrim ?? {}; delete s.gardenTrim; return note; }
 /**
  * Bed upgrades: each level HALVES that bed's grow time (level 1 = half, 2 = a quarter, 3 = an eighth), up to
- * BED_MAX_LEVEL 3. The level-L -> L+1 price doubles each step from 120 energy (120, 240, 480: 840 per bed); Normal and
+ * BED_MAX_LEVEL 5. The level-L -> L+1 price doubles each step from 120 energy (120, 240, 480: 840 per bed); Normal and
  * Hard pay 1.5x (difficulty.ts). Saves from when a bed had five gentler 10 % levels (up to level 5) are set to level 3
  * on loading and get the energy of the two levels removed back (parseSave).
  */
-export const BED_MAX_LEVEL = 3, BED_UPGRADE_BASE = 120, LEGACY_BED_MAX_LEVEL = 5;
+export const BED_MAX_LEVEL = 5, BED_UPGRADE_BASE = 120, LEGACY_BED_MAX_LEVEL = 5;
 export const bedLevel = (p: Plot | undefined) => p && Number.isSafeInteger(p.level) && p.level! > 0 ? Math.min(BED_MAX_LEVEL, p.level!) : 0;
 /** How many times faster a bed of this level grows its crops (2, 4, 8). */
 export const bedSpeedUp = (level: number) => 2 ** Math.max(0, Math.min(BED_MAX_LEVEL, level));
@@ -697,7 +698,7 @@ export function removeDecoration(s: SaveState, uid: string) { const index = s.de
 export const MINE_REGROW_MS = 20000;
 export function mineAvailable(s: SaveState, planet: PlanetId, index: number, now = Date.now()) { return Object.hasOwn(PLANETS, planet) && planet !== 'home' && Number.isInteger(index) && index >= 0 && index < 2 && Number.isFinite(now) && now >= 0 && now <= Number.MAX_SAFE_INTEGER - MINE_REGROW_MS && now >= (s.worldRewards.mineReadyAt[planet]?.[index] || 0); }
 export function claimMine(s: SaveState, index: number, now = Date.now()) { if (!mineAvailable(s, s.planet, index, now))
-    return false; const material: Record<PlanetId, string> = { home: 'stone', candy: 'sugar', ice: 'icecrystal', lava: 'mcrystal', toy: 'gear', jungle: 'vine', ocean: 'coral', cloud: 'feather', shadow: 'shadow' }; if (!addItem(s, material[s.planet])) return false; (s.worldRewards.mineReadyAt[s.planet] ??= [0, 0])[index] = now + MINE_REGROW_MS; recordEvent(s, 'mine', 1, undefined, now); return true; }
+    return false; const material: Record<PlanetId, string> = { home: 'stone', candy: 'sugar', ice: 'icecrystal', lava: 'mcrystal', toy: 'gear', jungle: 'vine', ocean: 'coral', cloud: 'feather', shadow: 'shadow' }; if (!stowItem(s, material[s.planet])) return false; (s.worldRewards.mineReadyAt[s.planet] ??= [0, 0])[index] = now + MINE_REGROW_MS; recordEvent(s, 'mine', 1, undefined, now); return true; }
 export const GIFT_REGROW_MS = 45000, GIFT_COUNT = 26;
 export interface GiftOutcome {
     kind: 'giant' | 'tiny' | 'coins' | 'heal' | 'bomb' | 'toys' | 'curse';
@@ -752,7 +753,7 @@ export function claimGift(s: SaveState, index: number, now = Date.now(), rng: ()
     return result;
 }
 export function claimEnvironmentResource(s: SaveState, key: string, raw: ItemId, now = Date.now(), cooldownMs = 20000) { const id = canonicalItem(raw); if (!/^[a-zA-Z0-9:_-]{1,100}$/.test(key) || ['constructor', '__proto__', 'prototype'].includes(key) || !Object.hasOwn(ITEMS, id) || !Number.isFinite(now) || now < 0 || now > 8.64e15-86400000 || !Number.isFinite(cooldownMs) || cooldownMs < 0 || now < (s.worldRewards.resourceReadyAt[key] || 0))
-    return false; if (!addItem(s, id)) return false; s.worldRewards.resourceReadyAt[key] = now + Math.min(cooldownMs, 86400000); recordEvent(s, 'mine', 1, undefined, now); return true; }
+    return false; if (!stowItem(s, id)) return false; s.worldRewards.resourceReadyAt[key] = now + Math.min(cooldownMs, 86400000); recordEvent(s, 'mine', 1, undefined, now); return true; }
 export function openCave(s: SaveState) { if (s.planet !== 'lava' || s.worldRewards.lava.gateOpen)
     return false; s.worldRewards.lava.gateOpen = true; return true; }
 export function lightBrazier(s: SaveState, index: number, rng:()=>number=Math.random) { const lava = s.worldRewards.lava; if (s.planet !== 'lava' || !Number.isInteger(index) || index < 0 || index > 2 || lava.braziers.includes(index) || !(s.bag.fcrystal!>=1))
@@ -770,12 +771,12 @@ export function claimCaveChest(s: SaveState, now = Date.now(), rng: () => number
     if(!addItems(s,rewards))return false;lava.caveChestDay=date;return true; }
 /**
  * Knocked out: every loose item in the backpack drops in a bag at the spot (death-bags.ts; the reference's whole-bag
- * drop), worn gear, the chest, level and energy stay. Up to 10 bags wait 24 hours each; an 11th banks the oldest into
+ * drop), worn gear, the chest, level and energy stay. Up to 20 bags wait 7 days each; a 21st banks the oldest into
  * the chest. Back home with full health. Returns the new bag, or null when the backpack was empty.
  */
 export function die(s: SaveState, x: number, z: number, now = Date.now()): DeathBag | null {
     const items: Inventory = {};
-    for (const id of Object.keys(s.bag)) { const n = looseQuantity(s, id); if (n) { items[id] = n; removeItem(s.bag, id, n); } }
+    for (const id of (s.settings.keepBagOnDeath ? [] : Object.keys(s.bag))) { const n = looseQuantity(s, id); if (n) { items[id] = n; removeItem(s.bag, id, n); } }
     pruneBags(s, now);
     let bag: DeathBag | null = null;
     if (Object.keys(items).length && Number.isFinite(x) && Number.isFinite(z)) { bag = { id: bagId(s, now), x, z, planet: s.planet, items, at: now }; (s.deathBags ??= []).push(bag); }
@@ -848,6 +849,7 @@ export function parseSave(raw: string | null): SaveState | null {
         if(settings.keyboardLayout==='classic'||settings.keyboardLayout==='wasd')s.settings.keyboardLayout=settings.keyboardLayout;
         if (settings.renderRes === 'sharp' || settings.renderRes === 'balanced' || settings.renderRes === 'saver') s.settings.renderRes = settings.renderRes;
         if (settings.placeBeds === true) s.settings.placeBeds = true;
+        if (settings.keepBagOnDeath === true) s.settings.keepBagOnDeath = true;
         if (settings.tester === true) s.settings.tester = true;
         s.settings.difficulty = isDifficulty(settings.difficulty) ? settings.difficulty : 'easy'; // saves from before the setting play on Easy
         if (typeof settings.difficultyLoweredAt === 'number' && Number.isFinite(settings.difficultyLoweredAt) && settings.difficultyLoweredAt > 0) s.settings.difficultyLoweredAt = settings.difficultyLoweredAt;

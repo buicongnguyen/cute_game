@@ -5,7 +5,7 @@ const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const BROADCAST_MS=250;
 /**
  * The daily Colossus in online rooms. Every home room ('<party>:home') wakes its own Colossus with shared health during
- * the 20:00-21:00 (UTC+7) window; the server runs its attacks (colossus-patterns.ts, the same code as offline) and
+ * the 08:00-24:00 (UTC+7) window; the server runs its attacks (colossus-patterns.ts, the same code as offline) and
  * hurts explorers through 75% of their defence. Other rooms only learn that it is up, so their sky darkens too.
  * The enemy lives in the room's combat state like any creature, so hits, contributors and the kill commit go through
  * combat-authority.mjs; this module adds spawning, attacks, the head weak point and the status effects.

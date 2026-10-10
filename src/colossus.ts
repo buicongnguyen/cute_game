@@ -336,7 +336,7 @@ export class ColossusEvent {
     this.retreatMinions(); e.hp = 0; this.dying = .001; this.attacks = []; this.serverAttacks = [];
   }
   private retreat() {
-    if (this.enemy && this.enemy.hp > 0) { this.despawn(); this.h.toast(t('The Cinderpeak Colossus sinks back into the canyon. It wakes again tomorrow at 20:00.'), '🌙'); }
+    if (this.enemy && this.enemy.hp > 0) { this.despawn(); this.h.toast(t('The Cinderpeak Colossus sinks back into the canyon. It wakes again tomorrow at 08:00.'), '🌙'); }
     this.forcedUntil = 0;
   }
   private removeEnemy() {
@@ -438,8 +438,8 @@ export class ColossusEvent {
     const key = `${mode}|${near}|${Math.ceil(left / 1000)}|${Math.round(hp * 1000)}`;
     if (key === this.bannerKey) return; this.bannerKey = key;
     this.banner.hidden = mode === 'none'; this.banner.className = 'colossus-banner ' + mode + (near ? ' near' : '');
-    if (mode === 'soon') this.banner.innerHTML = `<span class="cb-icon">⏳</span><span class="cb-text"><b>${t('The Cinderpeak Colossus wakes at 20:00')}</b><small>${t('in {time}', { time: clockText(left) })}</small></span>`;
-    else if (mode === 'awake') this.banner.innerHTML = `<span class="cb-icon">🌋</span><span class="cb-text"><b>${t(COLOSSUS_NAME)}</b><small>${t('Redrock Canyon · until 21:00')} · ${clockText(left)}</small><span class="boss-meter cb-meter"><i style="width:${(hp * 100).toFixed(1)}%"></i></span></span><span class="cb-pct">${Math.ceil(hp * 100)}%</span>`;
-    else if (mode === 'done') this.banner.innerHTML = `<span class="cb-icon">🏆</span><span class="cb-text"><b>${t(COLOSSUS_NAME)}</b><small>${t('Defeated today · back tomorrow at 20:00')}</small></span>`;
+    if (mode === 'soon') this.banner.innerHTML = `<span class="cb-icon">⏳</span><span class="cb-text"><b>${t('The Cinderpeak Colossus wakes at 08:00')}</b><small>${t('in {time}', { time: clockText(left) })}</small></span>`;
+    else if (mode === 'awake') this.banner.innerHTML = `<span class="cb-icon">🌋</span><span class="cb-text"><b>${t(COLOSSUS_NAME)}</b><small>${t('Redrock Canyon · until 24:00')} · ${clockText(left)}</small><span class="boss-meter cb-meter"><i style="width:${(hp * 100).toFixed(1)}%"></i></span></span><span class="cb-pct">${Math.ceil(hp * 100)}%</span>`;
+    else if (mode === 'done') this.banner.innerHTML = `<span class="cb-icon">🏆</span><span class="cb-text"><b>${t(COLOSSUS_NAME)}</b><small>${t('Defeated today · back tomorrow at 08:00')}</small></span>`;
   }
 }

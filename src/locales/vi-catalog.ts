@@ -9,6 +9,8 @@ import { RESCUE_VI } from '../rescue-content.ts';
  * Exact English keys also cover generated cooked names and catalog stat descriptions.
  */
 export const VI_CATALOG: Record<string, string> = {
+  "Removes half of the crop's original growing time. Two uses ripen a newly planted non-tree crop. Fruit trees: up to 2 hours per dose.": "Giảm thời gian chờ bằng một nửa thời gian sinh trưởng ban đầu của cây. Dùng hai lần làm cây mới trồng chín ngay, trừ cây ăn quả: mỗi lần giảm tối đa 2 giờ.",
+
   "Wild wood": "Gỗ rừng",
   "Mochi bunny": "Thỏ Mochi",
   "Chicken": "Gà",
@@ -836,7 +838,7 @@ Object.assign(VI_CATALOG, {
   'Great Forest Hawk':'Diều hâu rừng lớn',
   'A heavy reusable throwing fork: +100 attack in fights, and the tool for hunting pond fish, large forest birds and the rare Lake Guardian. No ammunition needed.':'Lao ba chĩa nặng, dùng nhiều lần: +100 tấn công khi chiến đấu, và là công cụ săn cá trong ao, chim lớn trong rừng và Cá Thần Hồ hiếm có. Không cần đạn.',
   'Lake Guardian':'Cá Thần Hồ',
-  'A glowing koi that guards the big meadow lake. It surfaces now and then, only a harpoon can catch it, and it comes back for you about once a day.':'Cá koi phát sáng canh giữ hồ lớn trên đồng cỏ. Thỉnh thoảng nó nổi lên, chỉ lao săn mới bắt được, và mỗi ngày nó quay lại với bạn khoảng một lần.',
+  'A glowing koi that guards the big meadow lake. It surfaces now and then, only a harpoon can catch it, and it comes back for you once every 6 hours.':'Cá koi phát sáng canh giữ hồ lớn trên đồng cỏ. Thỉnh thoảng nó nổi lên, chỉ lao săn mới bắt được, và nó quay lại với bạn sau mỗi 6 giờ.',
   'Hunt':'Săn',
   'Hunt a fish':'Săn cá',
   'Tap a fish to throw your harpoon.':'Chạm vào cá để phóng lao.',

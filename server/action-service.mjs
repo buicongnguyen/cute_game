@@ -123,7 +123,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         const key=`${p.index}:${plot.generation}`,by=owner.watered[key]??[];
         if(by.includes(actorId))fail(409,'You already watered this plant.');
         const ledger=waterLedger(account.waterHomes,now);
-        if(waterLeft(ledger,owner.id)<1)fail(429,'You have watered this garden five times today. Come back tomorrow.');
+        if(waterLeft(ledger,owner.id)<1)fail(429,'You have watered this garden ten times today. Come back tomorrow.');
         const boost=waterBoost(Game.cropDuration(plot),now-plot.plantedAt);plot.plantedAt-=boost;by.push(actorId);owner.watered[key]=by.slice(-8);
         ledger.homes[owner.id]=(ledger.homes[owner.id]||0)+1;account.waterHomes=ledger;delete account.waterLedger;
         const xp=waterXp(state.level);Game.gainXp(state,xp,now,1);owner.profile=target;

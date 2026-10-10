@@ -178,7 +178,7 @@ export const DUNGEON_VI: Record<string, string> = {
   'Online, the party is everyone standing in the circle when the countdown ends (up to 5).': 'Khi chơi trực tuyến, đội là tất cả những ai đứng trong vòng tròn khi đếm ngược kết thúc (tối đa 5).',
   'Walk into the circle': 'Bước vào vòng tròn',
   'Got it': 'Đã hiểu',
-  'You have been through the vault twice today. Come back tomorrow!': 'Hôm nay bạn đã vào hầm hai lần rồi. Mai quay lại nhé!',
+  'You have used all six vault runs today. Come back tomorrow!': 'Hôm nay bạn đã dùng hết sáu lượt vào hầm. Mai quay lại nhé!',
   'Party {n}/{max} · the vault opens in {s}s': 'Đội {n}/{max} · hầm mở sau {s} giây',
   'Party {n}/{max} · waiting for explorers': 'Đội {n}/{max} · đang chờ nhà thám hiểm',
   'The vault is opening…': 'Hầm đang mở…',
@@ -208,5 +208,5 @@ export const DUNGEON_VI: Record<string, string> = {
   'That vault room was already counted, or the run has ended.': 'Căn phòng này đã được tính rồi, hoặc lượt đi hầm đã kết thúc.',
   'You are not in the vault.': 'Bạn không ở trong hầm.',
   'Stand in the vault circle with your party first.': 'Hãy cùng cả đội đứng vào vòng tròn của hầm trước.',
-  'Delvers\' Vault · 2 runs a day': 'Hầm Thám Hiểm · 2 lượt mỗi ngày',
+  'Delvers\' Vault · 6 runs a day': 'Hầm Thám Hiểm · 6 lượt mỗi ngày',
 };

@@ -16,7 +16,7 @@ const fresh = () => { const s = M.newGame('Ann'); s.welcome = 'done'; return s; 
 const act = (s: M.SaveState, type: string, payload: Record<string, unknown>, now = T0, random = () => .5) => applyGameAction(s, { type, payload }, { now, random });
 
 test('the reference config: 2 runs a day, 10 s countdown, 30 minutes, arena radius 23, five stages', () => {
-  assert.equal(DUNGEON.perDay, 2); assert.equal(DUNGEON.countdown, 10); assert.equal(DUNGEON.timeLimit, 1800); assert.equal(DUNGEON.arenaR, 23);
+  assert.equal(DUNGEON.perDay, 6); assert.equal(DUNGEON.countdown, 10); assert.equal(DUNGEON.timeLimit, 1800); assert.equal(DUNGEON.arenaR, 23);
   assert.equal(STAGE_COUNT, 5); assert.deepEqual(DUNGEON_STAGES.map(s => DUNGEON_BOSSES[s.boss].hp), [3000, 3800, 4600, 5400, 6800]);
   for (const b of Object.values(DUNGEON_BOSSES)) { assert.equal(b.skills.length, 4); assert.ok(DUNGEON_PETS[b.pet]); assert.ok(DUNGEON_ITEMS[b.pet]); }
   assert.equal(new Set(Object.values(DUNGEON_BOSSES).flatMap(b => b.skills)).size, 20, 'twenty different guardian skills');
@@ -25,18 +25,19 @@ test('the reference config: 2 runs a day, 10 s countdown, 30 minutes, arena radi
 
 test('two runs a day, counted at the start; the day turns at midnight in Vietnam', () => {
   const s = fresh();
-  assert.equal(runsLeft(s, T0), 2);
-  assert.deepEqual(act(s, 'dungeonStart', { runId: 'run-a' }), { left: 1 });
-  assert.deepEqual(act(s, 'dungeonStart', { runId: 'run-b' }), { left: 0 });
-  assert.throws(() => act(s, 'dungeonStart', { runId: 'run-c' }), /twice today/);
+  assert.equal(runsLeft(s, T0), 6);
+  assert.deepEqual(act(s, 'dungeonStart', { runId: 'run-a' }), { left: 5 });
+  assert.deepEqual(act(s, 'dungeonStart', { runId: 'run-b' }), { left: 4 });
+  for(let i=0;i<4;i++) assert.ok(startRun(s, 'extra-'+i, T0));
+  assert.throws(() => act(s, 'dungeonStart', { runId: 'run-c' }), /six vault runs/);
   assert.equal(runsLeft(s, T0), 0);
   const midnight = Date.UTC(2026, 9, 6, 17); // 00:00 on the 7th in Vietnam
   assert.equal(dayKey(midnight - 1), '2026-10-06'); assert.equal(dayKey(midnight), '2026-10-07');
-  assert.equal(runsLeft(s, midnight - 1), 0); assert.equal(runsLeft(s, midnight), 2);
+  assert.equal(runsLeft(s, midnight - 1), 0); assert.equal(runsLeft(s, midnight), 6);
   assert.ok(startRun(s, 'run-d', midnight)); assert.equal(s.dungeon!.runs, 1);
   const away = fresh(); away.planet = 'lava'; assert.equal(startRun(away, 'run-e', T0), false);
   // The counter survives a save and reload.
-  const back = M.parseSave(JSON.stringify(s))!; assert.equal(runsLeft(back, midnight), 1); assert.equal(back.dungeon!.run!.id, 'run-d');
+  const back = M.parseSave(JSON.stringify(s))!; assert.equal(runsLeft(back, midnight), 5); assert.equal(back.dungeon!.run!.id, 'run-d');
   assert.equal(parseDungeon({ day: 'x', runs: 'many' }), undefined);
 });
 

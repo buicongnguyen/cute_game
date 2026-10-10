@@ -157,7 +157,7 @@ test('crop theft checks friendship, visit, generation, ripeness, range and six s
   let at=2_000_000_000_000;t.mock.method(Date,'now',()=>at);const h=await service(t);
   const actor=account('alice'),owner=account('owner');actor.friends=['owner'];owner.friends=['alice'];owner.profile.level=30;
   while(owner.profile.plots.length<7)owner.profile.plots.push({crop:null,plantedAt:0});
-  for(let i=0;i<7;i++)assert.ok(Game.plant(owner.profile,i,'carrot',at-Game.CROPS.carrot.duration-1-300000));
+  owner.profile.energy=1e6;for(let i=0;i<3;i++){Game.addItem(owner.profile,'plot_kit');Game.expandGarden(owner.profile);}for(let i=0;i<12;i++)assert.ok(Game.plant(owner.profile,i,'carrot',at-Game.CROPS.carrot.duration-1-300000));
   await h.store.create(actor);await h.store.create(owner);
   const peer={planet:'home',room:'home',visit:'owner',pose:Game.bedPosition(owner.profile,0)};h.peers.set('alice',peer);
   const payload=i=>({ownerId:'owner',index:i,generation:owner.profile.plots[i].generation});
@@ -234,14 +234,14 @@ test('the server calls the mystery shadow only while fishing: 10 % per cast, onc
   await h.act('alice','fishCancel',{ticketId:second.result.ticketId});
   const third=await h.act('alice','fishStart',cast);assert.equal(third.result.pick.mystery,true,'third and last try');
   await h.act('alice','fishCancel',{ticketId:third.result.ticketId});
-  roll=.05;at+=30_000;const gone=await h.act('alice','fishStart',cast);assert.equal(gone.result.pick.mystery,false,'out of tries, and a minute has not passed');
+  roll=.05;at+=10_000;const gone=await h.act('alice','fishStart',cast);assert.equal(gone.result.pick.mystery,false,'out of tries, and a minute has not passed');
   await h.act('alice','fishCancel',{ticketId:gone.result.ticketId});
-  at+=30_000;const again=await h.act('alice','fishStart',cast);assert.equal(again.result.pick.mystery,true,'a new one after 60 s');
+  at+=10_000;const again=await h.act('alice','fishStart',cast);assert.equal(again.result.pick.mystery,true,'a new one after 60 s');
   // Landing it clears it; the minute still counts from the call.
   at+=20_000;const proof={elapsed:20,hookAt:1,samples:[{t:7,held:true,tension:.3,progress:.2},{t:14,held:true,tension:.5,progress:.6},{t:20,held:true,tension:.4,progress:1}]};
   const finish=await h.act('alice','fishFinish',{ticketId:again.result.ticketId,telemetry:proof});assert.equal(finish.result.mystery,true);assert.equal(finish.result.mysteryState,undefined);
   const stored=await h.store.get('alice');assert.equal(stored.mysteryCaller.active,undefined);assert.equal(stored.mysteryCaller.lastCallAt,at-20_000);
-  const after=await h.act('alice','fishStart',cast);assert.equal(after.result.pick.mystery,false,'within a minute of the last call');
+  const after=await h.act('alice','fishStart',cast);assert.equal(after.result.pick.mystery,true,'20 seconds have passed since the last call');
   await h.act('alice','fishCancel',{ticketId:after.result.ticketId});
   // Another pond: one waiting at home is gone once the explorer fishes elsewhere.
   at+=61_000;const home=await h.act('alice','fishStart',cast);assert.equal(home.result.pick.mystery,true);await h.act('alice','fishCancel',{ticketId:home.result.ticketId});
@@ -302,19 +302,19 @@ test('watering a friend takes 10% of the remaining time, pays 5 + min(30, level)
   const h=await service(t);
   const actor=account('alice'),owner=account('owner'),other=account('olive');actor.friends=['owner','olive'];owner.friends=['alice'];other.friends=['alice'];
   owner.profile.level=30;other.profile.level=30;actor.profile.level=12;
-  for(let i=0;i<7;i++)assert.ok(Game.plant(owner.profile,i,'melon',at-60_000));
+  owner.profile.energy=1e6;for(let i=0;i<3;i++){Game.addItem(owner.profile,'plot_kit');Game.expandGarden(owner.profile);}for(let i=0;i<12;i++)assert.ok(Game.plant(owner.profile,i,'melon',at-60_000));
   assert.ok(Game.plant(other.profile,0,'pumpkin',at-60_000));
   await h.store.create(actor);await h.store.create(owner);await h.store.create(other);
   const peer={planet:'home',room:'home',visit:'owner',pose:{x:0,z:0}};h.peers.set('alice',peer);
   const water=async(ownerId,index)=>{const target=(await h.store.get(ownerId)).profile;peer.visit=ownerId;peer.pose=Game.bedPosition(target,index);return h.act('alice','waterFriend',{ownerId,index,generation:target.plots[index].generation});};
-  for(let i=0;i<5;i++){
+  for(let i=0;i<10;i++){
     const plot=(await h.store.get('owner')).profile.plots[i],left=Game.cropDuration(plot)-(at-plot.plantedAt),xpBefore=(await h.store.get('alice')).profile.xp,levelBefore=(await h.store.get('alice')).profile.level;
     const r=await water('owner',i),after=(await h.store.get('owner')).profile.plots[i];
-    assert.ok(Math.abs(plot.plantedAt-after.plantedAt-left*.1)<1e-6,'10% of what was left');assert.equal(r.result.xp,5+Math.min(30,levelBefore));assert.equal(r.result.left,4-i);
+    assert.ok(Math.abs(plot.plantedAt-after.plantedAt-left*.1)<1e-6,'10% of what was left');assert.equal(r.result.xp,5+Math.min(30,levelBefore));assert.equal(r.result.left,9-i);
     const me=(await h.store.get('alice')).profile;if(me.level===levelBefore)assert.equal(me.xp-xpBefore,r.result.xp);
   }
-  await assert.rejects(water('owner',5),status(429),'five a day in one garden');
-  const elsewhere=await water('olive',0);assert.equal(elsewhere.result.left,4,'another garden has its own five');
-  at+=240_000;const tomorrow=await water('owner',5);assert.equal(tomorrow.result.left,4,'a new day');
+  await assert.rejects(water('owner',10),status(429),'five a day in one garden');
+  const elsewhere=await water('olive',0);assert.equal(elsewhere.result.left,9,'another garden has its own five');
+  at+=240_000;const tomorrow=await water('owner',10);assert.equal(tomorrow.result.left,9,'a new day');
   assert.equal(waterXp(1),6);assert.equal(waterXp(30),35);assert.equal(waterXp(80),35);assert.equal(waterBoost(1000,400),60);assert.equal(waterBoost(1000,1200),0);
 });

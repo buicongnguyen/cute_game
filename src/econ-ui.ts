@@ -14,5 +14,5 @@ export function cookSellHtml(plan: CookSellPlan, esc: (v: string) => string) {
     + `<span class="compare"><span>${esc(t('Cooked: ϟ {amount}', { amount: plan.cooked }))}</span><span>·</span><span>${esc(t('Raw: ϟ {amount}', { amount: plan.raw }))}</span><b>${esc(t('+{amount} more by cooking', { amount: plan.cooked - plan.raw }))}</b></span></div>`;
 }
 export function treeFertilizerNote() {
-  return `<div class="crop-row garden-row fertilizer-row tree-note"><span class="crop-art">🌳</span><div><strong>${t('Fruit trees grow at their own pace')}</strong><p>${t('Fertilizer does not help fruit trees. Use it on your other crops.')}</p></div></div>`;
+  return `<div class="crop-row garden-row fertilizer-row tree-note"><span class="crop-art">🌳</span><div><strong>${t('Fruit tree fertilizer')}</strong><p>${t('Each dose removes half the original growing time, up to 2 hours for fruit trees.')}</p></div></div>`;
 }

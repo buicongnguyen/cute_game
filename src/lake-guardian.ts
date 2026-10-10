@@ -10,7 +10,7 @@
  *  - Catch: harpoon only. It is in no FISH_WEIGHTS table, so no rod cast and no ordinary hunting slot can roll it; the
  *    hunt intent names it with GUARDIAN_SLOT and huntFish (fish-hunting.ts) validates the throw like any harpoon catch
  *    (equipped harpoon, shot cooldown, standing on the shore, aim inside the lake, reach) plus a wider hit radius.
- *  - Economy: one per explorer per GUARDIAN_COOLDOWN_MS (20 h, a cooldown rather than a calendar day so time zones do
+ *  - Economy: one per explorer per GUARDIAN_COOLDOWN_MS (6 h, a cooldown rather than a calendar day so time zones do
  *    not matter); the save keeps `hunting.guardianAt`. It sells for 450 (a golden fish sells for 600), so even a
  *    daily catch is pocket money next to the ~8k/h a lake slot pays (the round-3 harpoon farm was ~200k/h).
  *  - Collection: it is a FISH entry (content.ts), so the journal's fish log lists it like every other fish.
@@ -24,7 +24,7 @@ export const GUARDIAN_SLOT = 100;
 export const GUARDIAN_CYCLE_MS = 6 * 60_000, GUARDIAN_UP_MS = 2 * 60_000, GUARDIAN_STIR_MS = 20_000;
 /** Seconds it takes to rise or sink (the view fades its glow and depth over this). */
 export const GUARDIAN_FADE_MS = 4_000;
-export const GUARDIAN_COOLDOWN_MS = 20 * 3_600_000;
+export const GUARDIAN_COOLDOWN_MS = 6 * 3_600_000;
 /** It is big (about 2 m): a throw within this of its centre hits (ordinary fish: 0.9). */
 export const GUARDIAN_HIT_RADIUS = 1.2;
 /** Fraction of the lake's radius its loop keeps to (inside the 0.3-0.62 band the ordinary fish swim, mostly beyond it). */

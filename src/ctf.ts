@@ -20,8 +20,8 @@ import { t } from './i18n.ts';
 import { DISGUISES } from './content.ts';
 import { makeCast } from './bot-logic.ts';
 import { CTF, FIELD, HEROES, HERO_IDS, POWERS, heroStats, type PowerKind, type TeamId } from './ctf-content.ts';
-import { createMatch, stepMatch, movePlayer, playerHit, setImmune, fieldObstacles, forfeit, rewardFor, jumpLift, player as rulesPlayer, otherTeam, type CtfMatch, type CtfEvent, type CtfPlayer, type RosterEntry } from './ctf-rules.ts';
-import { stepBots, newMinds, pickHeroes, type BotMinds } from './ctf-ai.ts';
+import { createMatch, stepMatch, canAct, movePlayer, playerHit, setImmune, fieldObstacles, forfeit, rewardFor, jumpLift, player as rulesPlayer, otherTeam, type CtfMatch, type CtfEvent, type CtfPlayer, type RosterEntry } from './ctf-rules.ts';
+import { stepPractice, newMinds, pickHeroes, type BotMinds } from './ctf-ai.ts';
 import { CTF_REWARD } from './ctf-rules.ts';
 import { rewardedLeft } from './ctf-claim.ts';
 import { ctfKit, buildGate, buildKeeper, buildArena, buildPower, StrikeMarks, Shots, TEAM_COLORS, powerIcon, type ArenaParts } from './ctf-view.ts';
@@ -279,7 +279,8 @@ export function initCtf(h: CtfHooks) {
     const m = s.m, me = rulesPlayer(m, ME)!, st = h.state();
     // An action replaces the gear object (actions.ts clones the save): wear the hero again, still never saved.
     if (st.gear.disguise !== s.hero || !Object.hasOwn(st.gear, 'toJSON')) { const changed = st.gear.disguise !== s.hero; wearHero(s.hero); if (changed) h.refreshPlayer(); }
-    const paused = h.blocked() && m.phase !== 'over' && !h.online();
+    // Flag Rush is local AI practice even when the account is connected online.
+    const paused = h.blocked();
     if (!paused) {
       // The explorer's moves into the match: carrier slowdown and slows, no teleporting with the flag, frozen when stunned or down.
       inputFrame(s, me);
@@ -289,7 +290,7 @@ export function initCtf(h: CtfHooks) {
       if (world.playerStealth && me.carrying === null && me.alive) me.buffs.wisp = Math.max(me.buffs.wisp, .2);
       foeStatuses(s, dt);
       const out = [...s.pendingHits.splice(0)];
-      stepBots(m, dt, s.minds, s.obstacles, out); out.push(...stepMatch(m, dt));
+      stepPractice(m, dt, s.minds, s.obstacles, out);
       handle(out);
       if (!session) return;
       outputFrame(s, me);
@@ -298,8 +299,9 @@ export function initCtf(h: CtfHooks) {
   });
   function inputFrame(s: Session, me: CtfPlayer) {
     const p = world.position, m = s.m;
-    if (!me.alive || me.jump || me.stun > 0 || m.phase === 'intro') {
-      const hold = me.alive ? (me.jump ? { x: me.x + C.x, z: me.z + C.z } : s.frozen ?? { x: s.last.x, z: s.last.z }) : { x: me.x + C.x, z: me.z + C.z };
+    if (!canAct(m, me)) {
+      // Follow the rules position: knockback and respawn may have moved it while input was locked.
+      const hold = { x: me.x + C.x, z: me.z + C.z };
       if (!s.frozen) s.frozen = { x: hold.x, z: hold.z };
       p.x = hold.x; p.z = hold.z; world.destination = null; world.route = [];
     } else {
@@ -493,8 +495,9 @@ export function initCtf(h: CtfHooks) {
     const m = s.m, me = rulesPlayer(m, ME)!, golden = m.phase === 'overtime';
     const time = m.phase === 'intro' ? `${Math.ceil(m.timer)}` : clock(m.phase === 'over' ? 0 : m.timer);
     const buffs = [me.buffs.zip > 0 ? `👟${Math.ceil(me.buffs.zip)}` : '', me.buffs.shield > 0 ? `🫧${Math.round(me.buffs.shield)}` : '', me.buffs.wisp > 0 && me.carrying === null ? `👻${Math.ceil(me.buffs.wisp)}` : '', me.buffs.bigcap > 0 ? `🍄${Math.ceil(me.buffs.bigcap)}` : '', me.buffs.pumpkin > 0 ? `🎃${Math.ceil(me.buffs.pumpkin)}` : '', me.stun > 0 ? '❄️' : ''].filter(Boolean).join(' ');
-    const goal = me.carrying !== null ? (m.flags[s.team].state === 'home' ? 'Bring the red flag back to the blue base.' : 'Recover your blue flag before you can score.') : 'You are blue. Cross the river and take the red flag.';
-    const map = `<svg class="ctf-map" viewBox="-52 -32 104 64" role="img" aria-label="${esc(t('Arena map: blue allies, red AI opponents, white ring is you.'))}"><rect x="-52" y="-32" width="104" height="64" rx="4" fill="#284d43"/><path d="M0 -32V32" stroke="#62bddb" stroke-width="7"/>${FIELD.river.bridges.map(z=>`<path d="M-5 ${z}H5" stroke="#e1c28b" stroke-width="4"/>`).join('')}${m.flags.map(f=>`<rect x="${f.x-2}" y="${f.z-2}" width="4" height="4" fill="${TEAM_COLORS[f.team]}" stroke="white" stroke-width=".5"/>`).join('')}${m.players.filter(p=>p.alive).map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.z.toFixed(1)}" r="${p.id===ME?2.2:1.6}" fill="${TEAM_COLORS[p.team]}" stroke="${p.id===ME?'white':'#142635'}" stroke-width=".8"/>`).join('')}</svg>`;
+    const enemyFlag = m.flags[otherTeam(s.team)];
+    const goal = me.carrying !== null ? (m.flags[s.team].state === 'home' ? 'Bring the red flag back to the blue base.' : 'Recover your blue flag before you can score.') : enemyFlag.state === 'carried' ? 'Your teammate has the red flag. Protect them on the way home.' : enemyFlag.state === 'dropped' ? 'The red flag was dropped. Walk onto it to pick it up.' : 'Cross a bridge to the red base on the right of the map. Walk onto the red flag to pick it up.';
+    const map = `<svg class="ctf-map" viewBox="-52 -32 104 64" role="img" aria-label="${esc(t('Arena map: blue allies, red AI opponents, white ring is you.'))}"><rect x="-52" y="-32" width="104" height="64" rx="4" fill="#284d43"/><path d="M0 -32V32" stroke="#62bddb" stroke-width="7"/>${FIELD.river.bridges.map(z=>`<path d="M-5 ${z}H5" stroke="#e1c28b" stroke-width="4"/>`).join('')}${m.players.filter(p=>p.alive).map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.z.toFixed(1)}" r="${p.id===ME?2.2:1.6}" fill="${TEAM_COLORS[p.team]}" stroke="${p.id===ME?'white':'#142635'}" stroke-width=".8"/>`).join('')}${m.flags.map(f=>{ const carrier = f.state === 'carried' ? rulesPlayer(m, f.carrier ?? '') : null; const x = carrier?.x ?? f.x, z = carrier?.z ?? f.z; return `<g class="ctf-map-flag" data-team="${f.team}" transform="translate(${x} ${z})"><path d="M0 1V-8H6L4 -5H0" fill="${TEAM_COLORS[f.team]}" stroke="white" stroke-width="1" stroke-linejoin="round"/><title>${esc(teamName(f.team))}</title></g>`; }).join('')}</svg>`;
     const html = `<div class="ctf-score-row"><span class="ctf-team blue"><i>${esc(t('Blue team'))}</i><b>${m.score[0]}</b></span><span class="ctf-clock ${golden ? 'golden' : ''}">${golden ? '⚡ ' : '⏱ '}${time}</span><span class="ctf-team red"><b>${m.score[1]}</b><i>${esc(t('Red team: AI opponents'))}</i></span><button data-ctf="leave" title="${esc(t('Leave the match'))}" aria-label="${esc(t('Leave the match'))}">🚪</button></div>
       <div class="ctf-wave ${golden ? 'golden' : ''}">${golden ? esc(t('GOLDEN POINT — the next capture wins!')) : `🚩 ${esc(t('First to 3 points'))}`}</div>
       <div class="ctf-objective">${esc(t(goal))}</div>${map}<div class="ctf-map-key">${esc(t('Arena map: blue allies, red AI opponents, white ring is you.'))}</div><div class="ctf-flags"><span class="${m.flags[s.team].state !== 'home' ? 'alarm' : ''}">${esc(flagLine(s, s.team))}</span><span class="${m.flags[otherTeam(s.team)].state === 'carried' && me.carrying !== null ? 'mine' : ''}">${esc(flagLine(s, otherTeam(s.team)))}</span></div>${buffs ? `<div class="ctf-buffs">${buffs}</div>` : ''}`;
@@ -548,6 +551,7 @@ export function initCtf(h: CtfHooks) {
   // ---------------------------------------------------------------- main.ts hooks
   const api = {
     get active() { return !!session; },
+    get canAct() { const p = session && rulesPlayer(session.m, ME); return !session || !!p && canAct(session.m, p); },
     owns: (e: { id: string }) => !!session && session.bots.some(b => b.proxy?.id === e.id),
     open() { view = 'modes'; openGate(); },
     confirmLeave,

@@ -14,7 +14,7 @@ import type { DungeonSave } from './dungeon-save.ts';
 import type { EnemyDefinition } from './enemy-types.ts';
 
 export const DUNGEON = {
-  perDay: 2, countdown: 10, timeLimit: 1800, arenaR: 23, maxParty: 5,
+  perDay: 6, countdown: 10, timeLimit: 1800, arenaR: 23, maxParty: 5,
   /** Players needed in the circle before the countdown starts (the reference needs 5 online; neighbours fill ours). */
   need: 1,
   portalAuto: 8, returnDelay: 25, introTime: 2.5,

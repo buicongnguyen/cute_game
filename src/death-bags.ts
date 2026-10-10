@@ -11,7 +11,7 @@ import { ITEMS, PLANETS, canonicalItem, type Inventory, type PlanetId } from './
  * instead, so dying often never destroys items that were still within their 24 hours.
  */
 export interface DeathBag { id: string; x: number; z: number; planet: PlanetId; items: Inventory; at: number }
-export const DEATH_BAG_MS = 24 * 3600_000, MAX_DEATH_BAGS = 10, DEATH_BAG_REACH = 1.6;
+export const DEATH_BAG_MS = 7 * 24 * 3600_000, MAX_DEATH_BAGS = 20, DEATH_BAG_REACH = 1.6;
 export const bagAlive = (bag: DeathBag, now: number) => now - bag.at < DEATH_BAG_MS;
 /** Bags still within their lifetime (on `planet` when given), oldest first. */
 export function liveBags(s: { deathBags?: DeathBag[] }, now: number, planet?: string) { return (s.deathBags ?? []).filter(b => bagAlive(b, now) && (planet === undefined || b.planet === planet)); }

@@ -9,7 +9,7 @@
  * cheaper of a bridge or a jump pad and enter a base through a gap in its fence; steer() slides around rocks.
  */
 import { CTF, FIELD, HEROES, heroStats, type TeamId } from './ctf-content.ts';
-import { otherTeam, visible, canAct, fenceGates, rand, castAi, basicAttack, movePlayer, speedFactor, type CtfMatch, type CtfPlayer, type CtfEvent } from './ctf-rules.ts';
+import { stepMatch, otherTeam, visible, canAct, fenceGates, rand, castAi, basicAttack, movePlayer, speedFactor, type CtfMatch, type CtfPlayer, type CtfEvent } from './ctf-rules.ts';
 
 export type BotRole = 'carry' | 'return' | 'chase' | 'escort' | 'defend' | 'attack';
 export interface BotPlan { role: BotRole; move: { x: number; z: number } | null; attack: string | null; cast: { index: number; x: number; z: number } | null; goal: { x: number; z: number } }
@@ -186,3 +186,16 @@ export function stepBots(m: CtfMatch, dt: number, minds: BotMinds, obstacles: Re
   return out;
 }
 export { CTF };
+
+/** Advance AI and match clocks with the same bounded steps, including a slow phone frame. */
+export function stepPractice(m: CtfMatch, dt: number, minds: BotMinds, obstacles: ReadonlyArray<{x:number;z:number;r:number}>, out: CtfEvent[] = []) {
+  if (!Number.isFinite(dt) || dt <= 0) return out;
+  let left = Math.min(dt, 1);
+  while (left > 1e-9 && m.phase !== 'over') {
+    const step = Math.min(left, .05);
+    stepBots(m, step, minds, obstacles, out);
+    out.push(...stepMatch(m, step));
+    left -= step;
+  }
+  return out;
+}

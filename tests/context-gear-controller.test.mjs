@@ -38,7 +38,7 @@ function fixture(...items) {
   const ctx = vm.createContext({
     M, ContextGearSelection, FishingSimulation, FishingInput, planCast, selectCatch, catchWeight, attractMystery, mysteryMissed, mysteryLanded, mysteryCaller: newMysteryCaller(),
     BASE_SKILLS, SPECIALS, fightNear, recordEvent: M.recordEvent,
-    state, gearState: state, gearPlanet: state.planet, gearWater: false, combatGearUntil: 0,actionHandler:null,
+    state, gearState: state, gearPlanet: state.planet, gearWater: false, combatGearUntil: 0,actionHandler:null,ctfApi:null,
     contextGear: new ContextGearSelection(), started: true, visiting: null, blocked: false,
     document: { hidden: false }, now: 1000, performance: { now: () => ctx.now },
     fishGame: null, fishPond: null, fishingWater: 'home', lastCast: null, recastUntil: 0,fishingEpoch:0,
@@ -288,4 +288,10 @@ for (const online of [false, true]) test(`${online ? 'online' : 'offline'} Home 
   assert.ok(f.ctx.fishingEpoch > epoch); assert.equal(f.ctx.huntingPending, null); assert.equal(f.calls.cancel, 1);
   f.ctx.updateFishing(1); assert.equal(simulation.time, 0, 'the old cast cannot keep progressing at home');
   if (online) { assert.equal(cancels.length, 1); assert.equal(cancels[0].type, 'fishCancel'); assert.equal(cancels[0].payload.ticketId, 'pending-cast'); assert.notEqual(cancels[0].from, 0, 'the cancellation is sent before teleport'); }
+});
+
+test('Flag Rush input lock prevents attacks, skills and cooldown spending until control returns',()=>{
+ const f=fixture('sword_wood');f.ctx.ctfApi={active:true,canAct:false};
+ f.ctx.basicAttack();f.ctx.skill(3);assert.equal(f.calls.attacks.length,0);assert.equal(f.calls.skills.length,0);assert.equal(f.ctx.cooldowns[3],0);assert.equal(f.state.counters.skills,0);
+ f.ctx.ctfApi.canAct=true;f.ctx.basicAttack();f.ctx.skill(3);assert.equal(f.calls.attacks.length,1);assert.equal(f.calls.skills.length,1);
 });

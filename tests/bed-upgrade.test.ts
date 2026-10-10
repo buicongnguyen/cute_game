@@ -7,15 +7,15 @@ import { helperPlant } from '../src/helper.ts';
 const reload = (s: M.SaveState) => M.parseSave(JSON.stringify(s))!;
 const crop = 'carrot' as M.CropId, base = M.CROPS[crop].duration;
 
-test('each bed level halves the grow time, up to 3 levels (an eighth of the time)', () => {
+test('each bed level halves the grow time, up to 5 levels (one thirty-second of the time)', () => {
   const s = M.newGame(); s.energy = 1e6;
   assert.equal(M.bedGrowTime(s.plots[0], base), base);
-  for (let level = 1; level <= 3; level++) { assert.ok(M.upgradeBed(s, 0)); assert.equal(M.bedLevel(s.plots[0]), level); assert.equal(M.bedGrowTime(s.plots[0], base), Math.round(base / 2 ** level)); }
-  const left = s.energy; assert.equal(M.upgradeBed(s, 0), false, 'level 3 is the cap'); assert.equal(s.energy, left);
+  for (let level = 1; level <= 5; level++) { assert.ok(M.upgradeBed(s, 0)); assert.equal(M.bedLevel(s.plots[0]), level); assert.equal(M.bedGrowTime(s.plots[0], base), Math.round(base / 2 ** level)); }
+  const left = s.energy; assert.equal(M.upgradeBed(s, 0), false, 'level 5 is the cap'); assert.equal(s.energy, left);
   // Planting reads the level: the crop ripens in an eighth of the time on a level-3 bed, at full time on a plain one.
   assert.ok(M.plant(s, 0, crop, 1000)); assert.ok(M.plant(s, 1, crop, 1000));
-  assert.equal(M.cropDuration(s.plots[0]), base / 8); assert.equal(M.cropDuration(s.plots[1]), base);
-  assert.equal(M.cropProgress(s.plots[0], 1000 + base / 8), 1); assert.ok(M.cropProgress(s.plots[1], 1000 + base / 8) < 1);
+  assert.equal(M.cropDuration(s.plots[0]), base / 32); assert.equal(M.cropDuration(s.plots[1]), base);
+  assert.equal(M.cropProgress(s.plots[0], 1000 + base / 32), 1); assert.ok(M.cropProgress(s.plots[1], 1000 + base / 32) < 1);
 });
 
 test('upgrade prices double per level from 120, cost 1.5x off Easy, and need the energy', () => {
@@ -53,7 +53,7 @@ test('bed levels survive a save round-trip, are clamped on load, and an upgraded
   const s = M.newGame(); s.energy = 1e6; M.addItem(s, 'plot_kit'); assert.ok(M.expandGarden(s)); M.upgradeBed(s, 9); M.upgradeBed(s, 9);
   assert.equal(reload(s).plots[9].level, 2); assert.equal(reload(s).plots[0].level, undefined);
   const odd = JSON.parse(JSON.stringify(s)); odd.plots[0].level = 99; odd.plots[1].level = -2; odd.plots[2].level = 'x'; odd.plots[3].level = 2.5;
-  const r = M.parseSave(JSON.stringify(odd))!; assert.deepEqual(r.plots.slice(0, 4).map(p => p.level), [3, undefined, undefined, undefined]);
+  const r = M.parseSave(JSON.stringify(odd))!; assert.deepEqual(r.plots.slice(0, 4).map(p => p.level), [5, undefined, undefined, undefined]);
   assert.equal(M.storeBed(s, 9), false, 'its level would be lost in a kit'); assert.equal(s.plots.length, 10);
 });
 
@@ -116,13 +116,13 @@ test('layout 3 saves move onto the 6 x 4 grid: starting beds and game-placed bed
   assert.equal(r.plots[4].crop, crop); assert.equal(r.plots[4].plantedAt, now); assert.equal(r.plots[4].level, 2); assert.equal(r.plots[10].plantedAt, 7);
 });
 
-for (const difficulty of ['easy', 'normal', 'hard'] as const) test(`${difficulty}: old bed levels are refunded at the saved difficulty's prices, once`, () => {
+for (const difficulty of ['easy', 'normal', 'hard'] as const) test(`${difficulty}: old bed levels are preserved without a refund`, () => {
   const s = M.newGame(); s.energy = 1000; s.plots[0].level = 5; s.plots[1].level = 4; s.plots[2].level = 3;
   s.settings = {...s.settings, difficulty, sound: false, musicVolume: 0, sfxVolume: 0, vibrate: false, keyboardLayout: 'wasd'};
   const plantedAt = Date.now(); Object.assign(s.plots[0], {crop, plantedAt, growDuration: base / 2});
   const r = reload(s);
-  assert.deepEqual(r.plots.slice(0, 3).map(p => p.level), [3, 3, 3]);
-  const refund = difficulty === 'easy' ? 3840 : 5760;
+  assert.deepEqual(r.plots.slice(0, 3).map(p => p.level), [5, 4, 3]);
+  const refund = 0;
   assert.equal(r.energy, 1000 + refund, 'Normal/Hard paid 1.5x for the removed levels');
   assert.deepEqual(r.settings, s.settings);
   assert.equal(r.plots[0].plantedAt, plantedAt); assert.equal(r.plots[0].growDuration, base / 2, 'migration preserves the growing crop deadline');

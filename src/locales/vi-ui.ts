@@ -554,7 +554,7 @@ export const VI_UI: Record<string, string> = {
   "Unlocks at level {level}": "Mở khóa ở cấp {level}",
   "You can lower the difficulty again in {hours} h.": "Bạn có thể giảm độ khó lần nữa sau {hours} giờ.",
   "Lower the difficulty?": "Giảm độ khó?",
-  "Switch to {level}? You can lower the difficulty only once a day; raising it is always free. Crops already planted keep their value.": "Chuyển sang {level}? Mỗi ngày chỉ được giảm độ khó một lần; tăng độ khó thì lúc nào cũng được. Cây đã trồng vẫn giữ giá trị cũ.",
+  "Switch to {level}? You can lower the difficulty only once an hour; raising it is always free. Crops already planted keep their value.": "Chuyển sang {level}? Mỗi giờ chỉ được giảm độ khó một lần; tăng độ khó thì lúc nào cũng được. Cây đã trồng vẫn giữ giá trị cũ.",
   "Keep {level}": "Giữ mức {level}",
   "Lower to {level}": "Giảm xuống {level}",
   "Host difficulty: {level}": "Độ khó của chủ phòng: {level}",

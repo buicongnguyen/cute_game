@@ -9,7 +9,7 @@ export const FISH_HUNT_COOLDOWN_MS = 1300;
  * A caught slot restocks after 18 s with a freshly rolled species. History: a 12 s restock of a fixed golden fish paid ~200k
  * energy an hour (review), so it went to 90 s; in round 26 the user chose fast restocks and accepts fishing as a money farm,
  * so it is 18 s again. What still holds: ordinary slots never stock legendary fish (huntChoices) and the Lake Guardian keeps
- * its own 20 h limit (lake-guardian.ts), so a slot pays only ordinary fish.
+ * its own 6 h limit (lake-guardian.ts), so a slot pays only ordinary fish.
  */
 export const FISH_HUNT_RESTOCK_MS = 18_000;
 export const FISH_HUNT_HIT_RADIUS = .9;
@@ -18,7 +18,7 @@ const MAX_TIME = Number.MAX_SAFE_INTEGER - FISH_HUNT_RESTOCK_MS;
 interface Point { x: number; z: number }
 export interface HuntPond extends Point { id: string; rx: number; rz: number; surface: number; waterId: string }
 export interface FishHuntTarget extends Point { slot: number; id: string; size: number; facing: number }
-export interface HuntingState { lastShotAt: number; readyAt: Record<string, number>; /** Fish caught per slot: seeds the species that restocks there. */ caught?: Record<string, number>; /** Distinguishes an initial zero timestamp from a shot at time zero. */ hasShot?: boolean; /** When this explorer last caught the Lake Guardian (lake-guardian.ts: one per 20 h). */ guardianAt?: number }
+export interface HuntingState { lastShotAt: number; readyAt: Record<string, number>; /** Fish caught per slot: seeds the species that restocks there. */ caught?: Record<string, number>; /** Distinguishes an initial zero timestamp from a shot at time zero. */ hasShot?: boolean; /** When this explorer last caught the Lake Guardian (lake-guardian.ts: one per 6 h). */ guardianAt?: number }
 export interface FishHuntIntent { weaponId: string; pondId: string; slot: number; aim: Point }
 export interface FishHuntResult { hit: boolean; count: 0 | 1; id: string; size: number; huge: false; pondId: string; slot: number; readyAt: number; shotReadyAt: number; serverNow: number }
 const validTime = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= MAX_TIME;
@@ -82,7 +82,7 @@ export function huntFish(s: SaveState, intent: FishHuntIntent, from: Point, now 
   if (!intent || intent.weaponId !== 'harpoon' || s.gear.weapon !== 'harpoon' || s.gear.disguise || !(s.bag.harpoon! >= 1) || s.hp <= 0 || !validTime(now) || !point(from) || !point(intent.aim)) return null;
   const weapon = ITEMS.harpoon?.weapon, pond = huntingPonds(s.planet).find(p => p.id === intent.pondId);
   if (!weapon || !pond || s.hunting && (s.hunting.hasShot || s.hunting.lastShotAt > 0) && now - s.hunting.lastShotAt < FISH_HUNT_COOLDOWN_MS) return null;
-  // The Lake Guardian (lake-guardian.ts) has its own slot: up, in its lake, and not caught by this explorer for 20 h.
+  // The Lake Guardian (lake-guardian.ts) has its own slot: up, in its lake, and not caught by this explorer for 6 h.
   const guardian = intent.slot === GUARDIAN_SLOT;
   const target = guardian ? guardianTarget(pond, now, s.hunting) : fishHuntTarget(pond, intent.slot, now, s.hunting); if (!target) return null;
   const key = fishHuntKey(pond.id, target.slot), readyAt = guardian ? 0 : s.hunting?.readyAt[key] ?? 0;

@@ -201,7 +201,7 @@ test('kit fish are instanced: a species is one body and one tail draw however ma
 
 // ---- 4. Harpoon restock ------------------------------------------------------------------------------------------
 test('a harpoon slot restocks in 18 s, the Lake Guardian still waits 20 h', () => {
-  assert.ok(FISH_HUNT_RESTOCK_MS >= 15_000 && FISH_HUNT_RESTOCK_MS <= 20_000); assert.equal(GUARDIAN_COOLDOWN_MS, 20 * 3_600_000);
+  assert.ok(FISH_HUNT_RESTOCK_MS >= 15_000 && FISH_HUNT_RESTOCK_MS <= 20_000); assert.equal(GUARDIAN_COOLDOWN_MS, 6 * 3_600_000);
   const T0 = Date.parse('2026-10-03T10:00:00Z'), pond = huntingPonds('home')[1], s = M.newGame(); s.level = 10; s.bag.harpoon = 1; s.gear.weapon = 'harpoon';
   const shore = { x: pond.x, z: pond.z + pond.rz + .6 }, target = fishHuntTargets(pond, T0).sort((a, b) => Math.hypot(a.x - shore.x, a.z - shore.z) - Math.hypot(b.x - shore.x, b.z - shore.z))[0];
   const r = huntFish(s, { weaponId: 'harpoon', pondId: pond.id, slot: target.slot, aim: target }, shore, T0)!;

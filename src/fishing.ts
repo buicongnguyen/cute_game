@@ -251,7 +251,7 @@ export const MYSTERY_TREASURE_WEIGHTS:readonly (readonly [string,number])[]=[['s
  * `chance` is the share of supergiant fish among mystery catches (resolveMysteryCatch). The browser offline and the
  * server online run the same caller (attractMystery and friends) on their own state.
  */
-export const MYSTERY={chance:.6,reach:3.5,call:.1,cooldownMs:60_000,near:[2.5,3.2],tries:3} as const;
+export const MYSTERY={chance:.6,reach:3.5,call:.2,cooldownMs:20_000,near:[2.5,3.2],tries:3} as const;
 /** One explorer's mystery state: when one was last called, and the one now waiting (water key, spot, attempts used). */
 export interface MysteryCaller { lastCallAt:number; active?:{ water:string; x:number; z:number; tries:number } }
 export const newMysteryCaller=():MysteryCaller=>({lastCallAt:0});

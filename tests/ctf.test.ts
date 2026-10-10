@@ -176,9 +176,9 @@ test('rewards: winners get the big share; a claim pays once, never faster than p
   assert.equal(claimMatch(s, { ...claim, matchId: 'match-2' }, now + 60_000), false, 'not faster than the match');
   assert.equal(claimMatch(s, { ...claim, matchId: 'short', seconds: 20 }, now + 600_000), false, 'too short');
   assert.equal(claimMatch(s, { ...claim, matchId: 'odd', size: 4 }, now + 600_000), false);
-  let t0 = now; for (let i = 2; i <= 7; i++) { t0 += 400_000; const k = claimMatch(s, { ...claim, matchId: 'match-' + i }, t0); assert.ok(k); if (i <= 6) assert.ok(k.xp > 0, 'match ' + i); else assert.equal(k.xp, 0, 'seventh is unpaid'); }
+  let t0 = now; for (let i = 2; i <= 13; i++) { t0 += 400_000; const k = claimMatch(s, { ...claim, matchId: 'match-' + i }, t0); assert.ok(k); if (i <= 12) assert.ok(k.xp > 0, 'match ' + i); else assert.equal(k.xp, 0, 'thirteenth is unpaid'); }
   assert.equal(rewardedLeft(s, t0), 0); assert.equal(rewardedLeft(s, t0 + 86_400_000), CTF_REWARD.perDay);
-  assert.equal(s.ctf!.day, ctfDay(now)); assert.equal(s.ctf!.played, 7);
+  assert.equal(s.ctf!.day, ctfDay(now)); assert.equal(s.ctf!.played, 13);
   // The answer is the EXP itself (not levels), also when no level is gained.
   const big = M.newGame('Veteran'); big.level = 40; const paid = claimMatch(big, { ...claim, matchId: 'vet-1' }, now);
   assert.ok(paid && paid.xp >= matchXp(claim) && Math.abs(big.xp - paid.xp) < 1, JSON.stringify(paid));

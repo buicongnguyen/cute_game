@@ -36,7 +36,7 @@ test('an unsuccessful decoration pickup preserves its placed object and collecti
 });
 
 test('failed mine and environment grants do not spend their resource cooldown or advance quests', () => {
-  const s = M.newGame(); s.planet = 'candy'; s.bag.sugar = Number.MAX_SAFE_INTEGER;
+  const s = M.newGame(); s.planet = 'candy'; s.bag.sugar = Number.MAX_SAFE_INTEGER; s.chest.sugar = Number.MAX_SAFE_INTEGER;
   const before = structuredClone(s), now = 1_000_000;
   assert.equal(M.claimMine(s, 0, now), false);
   assert.equal(M.claimEnvironmentResource(s, 'candy:sugar:0', 'sugar', now), false);
@@ -95,9 +95,9 @@ test('invalid multi-item reward rolls cannot spend a brazier crystal or cave-che
 test('banking an older death bag never overflows storage or drops its contents on reload',()=>{
   const s=M.newGame();s.bag.hat_straw=Number.MAX_SAFE_INTEGER;s.gear.hat='hat_straw';s.chest.hat_straw=Number.MAX_SAFE_INTEGER;
   // Ten bags already waiting: the eleventh defeat banks the oldest (the reference throws it away).
-  const now=Date.now();s.deathBags=Array.from({length:10},(_,i)=>({id:`b${i}`,x:1,z:2,planet:'home' as M.PlanetId,items:{hat_straw:Number.MAX_SAFE_INTEGER},at:now-1000+i}));
+  const now=Date.now();s.deathBags=Array.from({length:20},(_,i)=>({id:`b${i}`,x:1,z:2,planet:'home' as M.PlanetId,items:{hat_straw:Number.MAX_SAFE_INTEGER},at:now-1000+i}));
   const total=(state:M.SaveState)=>BigInt(state.bag.hat_straw||0)+BigInt(state.chest.hat_straw||0)+(state.deathBags??[]).reduce((n,b)=>n+BigInt(b.items.hat_straw||0),0n);
-  const before=total(s);M.die(s,3,4,now);assert.equal(total(s),before);assert.equal(s.deathBags?.length,10);
+  const before=total(s);M.die(s,3,4,now);assert.equal(total(s),before);assert.equal(s.deathBags?.length,20);
   assert.ok([s.bag.hat_straw,s.chest.hat_straw,...s.deathBags!.map(b=>b.items.hat_straw)].every(Number.isSafeInteger));
   const saved=M.parseSave(JSON.stringify(s))!;assert.equal(total(saved),before);assert.equal(saved.gear.hat,'hat_straw');
 });

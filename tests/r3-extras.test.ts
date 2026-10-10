@@ -57,7 +57,7 @@ test('every way into a full backpack refuses with the same clear message and lea
   if (M.kitchenOpen(s)) refused(s, 'cook', { id: 'meat' });
   s = full(); s.chest.carrot = 3; refused(s, 'transfer', { id: 'carrot', toChest: false });
   s = full(); s.chest.carrot = 3; refused(s, 'takeChest');
-  s = full(); s.planet = 'candy'; refused(s, 'claimMine', { index: 0 });
+  s = full(); s.planet = 'candy'; assert.ok(act(s, 'claimMine', { index: 0 })); assert.equal(s.chest.sugar, 1);
   s = full(); s.deathBags = [{ id: 'b1', x: 0, z: 0, planet: 'home', items: { carrot: 2 }, at: Date.now() }]; refused(s, 'recoverBag', { id: 'b1' });
   s = full(); assert.equal(M.grantCatch(s, 'fish_perch', 20), false, 'a catch needs a slot'); assert.equal(s.bag.fish_perch, undefined);
   s = full(); assert.equal(M.canAddItem(s, 'carrot'), false, 'ground loot stays on the ground (drops.ts canAdd)');
@@ -129,9 +129,9 @@ test('a defeat drops the loose backpack in a bag at the spot; it lasts 24 hours 
   assert.deepEqual(M.liveBags(s, now + M.DEATH_BAG_MS - 1, 'candy').length, 1);
   assert.equal(M.recoverBag(s, bag.id, now + M.DEATH_BAG_MS), false, 'after 24 hours the bag is gone'); assert.equal(s.deathBags, undefined);
   // Ten bags at once; an eleventh banks the oldest into the chest.
-  const many = M.newGame(); for (let i = 0; i < 11; i++) { many.bag[FILLER[i]] = i + 1; M.die(many, i, i, now + i); }
-  assert.equal(many.deathBags!.length, 10); assert.equal(many.chest[FILLER[0]], 1); assert.equal(many.deathBags![0].items[FILLER[1]], 2);
-  assert.match(M.bagTimeLeft(many.deathBags![0], now + 3600_000 + 5 * 60_000), /^22h 5[45]m$/);
+  const many = M.newGame(); for (let i = 0; i < 21; i++) { many.bag[FILLER[i]] = i + 1; M.die(many, i, i, now + i); }
+  assert.equal(many.deathBags!.length, 20); assert.equal(many.chest[FILLER[0]], 1); assert.equal(many.deathBags![0].items[FILLER[1]], 2);
+  assert.match(M.bagTimeLeft(many.deathBags![0], now + 3600_000 + 5 * 60_000), /^166h 5[45]m$/);
   // The action says whether anything dropped (main.ts shows the matching card).
   const a = M.newGame(); a.bag.carrot = 1; a.hp = 0; assert.deepEqual(act(a, 'die', { x: 1, z: 2 }), { dropped: true });
   const b = M.newGame(); b.hp = 0; assert.deepEqual(act(b, 'die', { x: 1, z: 2 }), { dropped: false });

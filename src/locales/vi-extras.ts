@@ -1,5 +1,9 @@
 /** Round 3 extras (title card, bag slots, dropped bags, install as app) in Vietnamese. */
 export const VI_EXTRAS: Record<string, string> = {
+  'Your teammate has the red flag. Protect them on the way home.': 'Đồng đội đang giữ cờ đỏ. Hãy bảo vệ họ trên đường về căn cứ.',
+  'The red flag was dropped. Walk onto it to pick it up.': 'Cờ đỏ đã rơi. Hãy đi tới chỗ cờ để nhặt.',
+  'Cross a bridge to the red base on the right of the map. Walk onto the red flag to pick it up.': 'Qua cầu tới căn cứ đỏ bên phải bản đồ. Đi tới chỗ cờ đỏ để nhặt.',
+
   'Open backpack': 'Mở túi đồ',
   'Sell produce': 'Bán nông sản',
   'Ripe, but your backpack is full. Sell or store something, or expand the bag, then tap the bed to harvest.': 'Đã chín, nhưng túi đồ đầy rồi. Hãy bán hoặc cất bớt đồ, hoặc mở rộng túi, rồi chạm vào luống để thu hoạch.',
@@ -32,7 +36,7 @@ export const VI_EXTRAS: Record<string, string> = {
   // Dropped bags (death-bags.ts, death-bags-view.ts, main.ts)
   '{time} left': 'còn {time}',
   'Your backpack is full. The rest is still waiting in the dropped bag.': 'Ba lô đã đầy! Phần còn lại vẫn nằm trong túi bị rơi.',
-  'Your backpack dropped where you fell. Walk back to the pink bag within 24 hours to pick everything up.': 'Ba lô đã rơi ngay chỗ bạn ngã. Hãy quay lại túi màu hồng trong vòng 24 giờ để nhặt lại mọi thứ.',
+  'Your backpack dropped where you fell. Walk back to the pink bag within 7 days to pick everything up.': 'Ba lô đã rơi ngay chỗ bạn ngã. Hãy quay lại túi màu hồng trong vòng 7 ngày để nhặt lại mọi thứ.',
   'Your backpack was empty, so nothing was lost.': 'Ba lô trống nên không mất gì cả.',
   'Your level, energy, worn gear and chest are safe.': 'Cấp độ, năng lượng, trang bị đang mặc và đồ trong rương vẫn giữ nguyên.',
   'Back on my feet →': 'Đứng dậy thôi →',

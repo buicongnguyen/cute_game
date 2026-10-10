@@ -10,7 +10,7 @@ export const VI_FIXES: Record<string, string> = {
   // Bed upgrades.
   'Bed level {level} of {max}': 'Luống cấp {level}/{max}',
   '−{percent}% grow time ({ratio}× harvests)': '−{percent}% thời gian lớn ({ratio}× số lần thu hoạch)',
-  'Each level halves this bed’s grow time: level 3 grows 8× faster.': 'Mỗi cấp giảm một nửa thời gian lớn của luống này: cấp 3 lớn nhanh gấp 8 lần.',
+  'Each level halves this bed’s grow time: level 5 grows 32× faster.': 'Mỗi cấp giảm một nửa thời gian lớn của luống này: cấp 5 lớn nhanh gấp 32 lần.',
   'Bed upgraded to level {level}: −{percent}% grow time ({ratio}× harvests).': 'Luống đã lên cấp {level}: −{percent}% thời gian lớn ({ratio}× số lần thu hoạch).',
   'Upgrade bed (ϟ {cost})': 'Nâng cấp luống (ϟ {cost})',
   'Fully upgraded': 'Đã nâng cấp tối đa',

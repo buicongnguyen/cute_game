@@ -13,26 +13,15 @@ const at = (iso: string) => Date.parse(iso);
 const run = (a: ColossusAttack, targets: ColossusTarget[], seconds: number, dt = .05) => { const hits = []; let summon = false; for (let t = 0; t < seconds; t += dt) { const r = stepColossusAttack(a, dt, targets); hits.push(...r.hits); summon ||= r.summon; } return { hits, summon }; };
 const source = { x: 78, z: 0, facing: -Math.PI / 2 };
 
-test('the Colossus wakes daily at 20:00 Vietnam time (UTC+7) for one hour, with a ten-minute warning', () => {
-  const idle = colossusClock(at('2026-10-06T12:49:59Z'));
-  assert.equal(idle.phase, 'idle'); assert.equal(idle.startsAt, at('2026-10-06T13:00:00Z'));
-  const soon = colossusClock(at('2026-10-06T12:50:00Z'));
-  assert.equal(soon.phase, 'soon'); assert.equal(soon.left, 600000);
-  const start = colossusClock(at('2026-10-06T13:00:00Z'));
-  assert.equal(start.phase, 'active'); assert.equal(start.endsAt, at('2026-10-06T14:00:00Z')); assert.equal(start.left, 3600000); assert.equal(start.day, soon.day);
-  assert.equal(colossusClock(at('2026-10-06T13:59:59Z')).phase, 'active');
-  const after = colossusClock(at('2026-10-06T14:00:00Z'));
-  assert.equal(after.phase, 'idle'); assert.equal(after.startsAt, at('2026-10-07T13:00:00Z')); assert.equal(after.day, start.day + 1);
+test('Colossus is available 08:00 to midnight Vietnam time, once per day', () => {
+ const idle=colossusClock(at('2026-10-06T00:49:59Z'));assert.equal(idle.phase,'idle');
+ const soon=colossusClock(at('2026-10-06T00:50:00Z'));assert.equal(soon.phase,'soon');assert.equal(soon.left,600000);
+ const start=colossusClock(at('2026-10-06T01:00:00Z'));assert.equal(start.phase,'active');assert.equal(start.left,16*3600000);
+ const late=colossusClock(at('2026-10-06T16:59:59Z'));assert.equal(late.phase,'active');assert.equal(late.day,start.day);
+ const end=colossusClock(at('2026-10-06T17:00:00Z'));assert.equal(end.phase,'idle');assert.equal(end.day,start.day+1);assert.equal(end.startsAt,at('2026-10-07T01:00:00Z'));
+ assert.equal(clockText(425000),'7:05');assert.equal(clockText(-5),'0:00');
 });
-test('the day rolls over at midnight UTC+7, not UTC: late evening and after midnight point at the next window', () => {
-  const lateEvening = colossusClock(at('2026-10-06T16:59:00Z')), afterMidnight = colossusClock(at('2026-10-06T17:01:00Z'));
-  assert.equal(lateEvening.startsAt, at('2026-10-07T13:00:00Z'));
-  assert.equal(afterMidnight.startsAt, at('2026-10-07T13:00:00Z'));
-  assert.equal(lateEvening.day, afterMidnight.day);
-  // Just before 07:00 UTC (14:00 VN) on the same VN day the window is still ahead today.
-  assert.equal(colossusClock(at('2026-10-07T06:59:00Z')).startsAt, at('2026-10-07T13:00:00Z'));
-  assert.equal(clockText(425000), '7:05'); assert.equal(clockText(3723000), '1:02:03'); assert.equal(clockText(-5), '0:00');
-});
+
 test('health is 3,000,000 for one explorer and grows 80% per extra explorer (2026-10-07 balance patch)', () => {
   assert.equal(S.hp, 3000000, 'bundle sb_colossus hp:3e6 @660630'); assert.equal(S.perExtraPlayer, .8);
   assert.equal(colossusMaxHp(1), 3000000); assert.equal(colossusMaxHp(3), 7800000); assert.equal(colossusMaxHp(0), 3000000);

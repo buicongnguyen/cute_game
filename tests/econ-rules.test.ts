@@ -16,15 +16,15 @@ import { setLanguage, t } from '../src/i18n.ts';
 const NOW = 1_800_000_000_000;
 const refusal = (s: M.SaveState, type: string, payload: Record<string, unknown>) => { try { applyGameAction(s, { type, payload }, { now: NOW, random: () => .5 }); return ''; } catch (error) { return (error as Error).message; } };
 
-test('fruit trees (8 h or more) refuse both fertilizers with a clear reason; every other crop still takes them', () => {
+test('fruit trees (8 h or more) accept both fertilizers with a two-hour cap; every other crop still takes them', () => {
   const trees = Object.keys(M.CROPS).filter(M.isTreeCrop);
   assert.deepEqual(trees.sort(), ['apple', 'coconut', 'durian', 'grape', 'lychee', 'mango', 'peach', 'pineapple']);
   for (const crop of trees) for (const item of ['manure', 'spore']) {
     const s = M.newGame(); s.level = 30; s.bag[item] = 3;
     assert.ok(M.plant(s, 0, crop, NOW - 1000));
-    assert.equal(M.fertilize(s, 0, NOW, item), false, `${crop} + ${item}`);
-    assert.equal(s.bag[item], 3, 'nothing spent');
-    assert.match(refusal(s, 'fertilize', { index: 0, id: item }), /Fruit trees grow at their own pace/);
+    const before = s.plots[0].plantedAt; assert.equal(M.fertilize(s, 0, NOW, item), true, `${crop} + ${item}`);
+    assert.equal(s.bag[item], 2, 'one dose spent');
+    assert.equal(before - s.plots[0].plantedAt, 2 * 3600_000);
   }
   const s = M.newGame(); s.bag.manure = 1; assert.ok(M.plant(s, 0, 'carrot', NOW - 1000)); assert.equal(M.fertilize(s, 0, NOW, 'manure'), true);
   setLanguage('vi'); try { assert.notEqual(t('Fruit trees grow at their own pace. Fertilizer does not help them.'), 'Fruit trees grow at their own pace. Fertilizer does not help them.'); } finally { setLanguage('en'); }
@@ -147,7 +147,7 @@ test('the news board: our own entries in both languages, newest first, unread re
 test('the mystery shadow is called only while fishing: 10% per attract, once a minute, near the bobber, three tries', () => {
   const pond = { x: 0, z: 0, r: 6 }, cast = { x: 1, z: 0 };
   const st = newMysteryCaller();
-  assert.deepEqual(attractMystery(st, 'home', cast, 100_000, () => .1), { mystery: false, called: false }, 'exactly 10% misses');
+  assert.deepEqual(attractMystery(st, 'home', cast, 100_000, () => .2), { mystery: false, called: false }, 'exactly 20% misses');
   let roll = .05; const random = () => roll;
   const call = attractMystery(st, 'home', cast, 100_000, random, pond);
   assert.equal(call.mystery, true); assert.equal(call.called, true);
@@ -157,10 +157,10 @@ test('the mystery shadow is called only while fishing: 10% per attract, once a m
   roll = .99; assert.equal(mysteryMissed(st), false); assert.deepEqual(attractMystery(st, 'home', cast, 101_000, random), { mystery: true, called: false, spot: call.spot });
   assert.equal(mysteryMissed(st), false); assert.equal(attractMystery(st, 'home', cast, 102_000, random).mystery, true);
   assert.equal(mysteryMissed(st), true, 'the third miss and it is gone'); assert.equal(st.active, undefined);
-  roll = .05; assert.equal(attractMystery(st, 'home', cast, 159_999, random).mystery, false, 'not within 60 s of the last call');
-  assert.equal(attractMystery(st, 'home', cast, 160_000, random).called, true, 'a new one after a minute');
+  roll = .05; assert.equal(attractMystery(st, 'home', cast, 119_999, random).mystery, false, 'not within 20 s of the last call');
+  assert.equal(attractMystery(st, 'home', cast, 120_000, random).called, true, 'a new one after 20 seconds');
   // Fishing elsewhere: the waiting one sinks away (another pond, or far from this bobber).
-  roll = .99; assert.equal(attractMystery(st, 'lake', cast, 161_000, random).mystery, false); assert.equal(st.active, undefined);
+  roll = .99; assert.equal(attractMystery(st, 'lake', cast, 121_000, random).mystery, false); assert.equal(st.active, undefined);
   roll = .05; attractMystery(st, 'home', cast, 300_000, random); assert.ok(st.active);
   roll = .99; assert.equal(attractMystery(st, 'home', { x: cast.x + 9, z: 0 }, 301_000, random).mystery, false, 'far from the bobber');
   roll = .05; attractMystery(st, 'home', cast, 400_000, random); mysteryLanded(st); assert.equal(st.active, undefined); assert.equal(st.lastCallAt, 400_000);
@@ -171,10 +171,10 @@ test('the mystery shadow is called only while fishing: 10% per attract, once a m
 });
 
 test('watering numbers: 10% of the remaining time, 5 + min(30, level) XP, five a day per garden', () => {
-  assert.equal(WATER_RULES.share, .1); assert.equal(WATER_RULES.perHomePerDay, 5);
+  assert.equal(WATER_RULES.share, .1); assert.equal(WATER_RULES.perHomePerDay, 10);
   assert.equal(waterBoost(600_000, 100_000), 50_000); assert.equal(waterBoost(600_000, 600_000), 0); assert.equal(waterBoost(NaN, 0), 0);
   assert.deepEqual([waterXp(1), waterXp(10), waterXp(30), waterXp(99)], [6, 15, 35, 35]);
   const day = waterLedger({ day: new Date(NOW).toISOString().slice(0, 10), homes: { bob: 3, bad: -1 } }, NOW);
-  assert.deepEqual(day.homes, { bob: 3 }); assert.equal(waterLeft(day, 'bob'), 2); assert.equal(waterLeft(day, 'cara'), 5);
+  assert.deepEqual(day.homes, { bob: 3 }); assert.equal(waterLeft(day, 'bob'), 7); assert.equal(waterLeft(day, 'cara'), 10);
   assert.deepEqual(waterLedger({ day: '2000-01-01', homes: { bob: 5 } }, NOW).homes, {}, 'a new day starts fresh');
 });

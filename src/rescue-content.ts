@@ -233,8 +233,8 @@ export const RESCUE_REWARD = {
   xpPerWave: { base: 40, perLevel: 10 }, energyPerWave: { base: 30, perLevel: 10 },
   winXp: 200,
   /** Waves that pay per day (all missions together), and winning missions that pay in full (with the gift). */
-  wavesPerDay: 40, winsPerDay: 5,
-  /** A win after the daily five pays this share of the EXP and energy, and no gift. */
+  wavesPerDay: 80, winsPerDay: 8,
+  /** A win after the daily eight pays this share of the EXP and energy, and no gift. */
   afterCap: .25,
   rareChance: .06,
   /** No wave is cleared faster than this (seconds per wave, counting the build phase). */

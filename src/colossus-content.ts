@@ -7,10 +7,10 @@ export const COLOSSUS_TYPE = 'colossus';
 export const COLOSSUS_ID = 'home:colossus';
 
 /**
- * When and where it wakes: every day at 20:00 Vietnam time (UTC+7) for one hour, in Redrock Canyon on the home
+ * When and where it wakes: every day at 08:00 Vietnam time (UTC+7) until midnight, in Redrock Canyon on the home
  * world. `warn` is the countdown banner before it (minutes).
  */
-export const COLOSSUS_SCHEDULE = { hour: 20, minute: 0, duration: 3600, utcOffsetHours: 7, warn: 10, x: 78, z: 0, facing: -Math.PI / 2, arenaR: 30 } as const;
+export const COLOSSUS_SCHEDULE = { hour: 8, minute: 0, duration: 16 * 3600, utcOffsetHours: 7, warn: 10, x: 78, z: 0, facing: -Math.PI / 2, arenaR: 30 } as const;
 
 /**
  * Combat facts. Hit points and attack are fixed (no zone or difficulty scaling); health grows by 80% per extra
@@ -93,16 +93,16 @@ export const COLOSSUS_VI: Record<string, string> = {
   'The Cinderpeak Colossus falls to its knees! Its head is in reach.': 'Cự Thạch Núi Tro quỵ gối! Đầu nó đã trong tầm với.',
   'The Cinderpeak Colossus is enraged! Its attacks come faster.': 'Cự Thạch Núi Tro nổi giận! Đòn đánh nhanh hơn.',
   'The Cinderpeak Colossus has woken in Redrock Canyon! The sky darkens over every planet.': 'Cự Thạch Núi Tro đã thức giấc ở Hẻm Núi Đá Đỏ! Bầu trời mọi hành tinh tối sầm lại.',
-  'The Cinderpeak Colossus sinks back into the canyon. It wakes again tomorrow at 20:00.': 'Cự Thạch Núi Tro chìm lại vào hẻm núi. Nó sẽ thức dậy lúc 20:00 ngày mai.',
+  'The Cinderpeak Colossus sinks back into the canyon. It wakes again tomorrow at 08:00.': 'Cự Thạch Núi Tro chìm lại vào hẻm núi. Nó sẽ thức dậy lúc 08:00 ngày mai.',
   'The Cinderpeak Colossus crumbles! The sky clears.': 'Cự Thạch Núi Tro sụp đổ! Bầu trời quang đãng trở lại.',
   '👑 You landed the FINAL BLOW! Little Cinderpeak joins you.': '👑 Bạn tung ĐÒN KẾT LIỄU! Cự Thạch Tí Hon theo bạn về nhà.',
   'A neighbour landed the final blow. Your share of the spoils is on the ground.': 'Một người hàng xóm tung đòn kết liễu. Phần thưởng của bạn nằm trên mặt đất.',
   'Hit the Colossus within the last {seconds} seconds to share its spoils.': 'Hãy đánh Cự Thạch trong {seconds} giây cuối để được chia chiến lợi phẩm.',
   '{name} (Minion)': '{name} (Tay Sai)',
-  'The Cinderpeak Colossus wakes at 20:00': 'Cự Thạch Núi Tro thức giấc lúc 20:00',
+  'The Cinderpeak Colossus wakes at 08:00': 'Cự Thạch Núi Tro thức giấc lúc 08:00',
   'in {time}': 'sau {time}',
-  'Redrock Canyon · until 21:00': 'Hẻm Núi Đá Đỏ · đến 21:00',
-  'Defeated today · back tomorrow at 20:00': 'Đã bị hạ hôm nay · trở lại lúc 20:00 ngày mai',
+  'Redrock Canyon · until 24:00': 'Hẻm Núi Đá Đỏ · đến 24:00',
+  'Defeated today · back tomorrow at 08:00': 'Đã bị hạ hôm nay · trở lại lúc 08:00 ngày mai',
 };
 
 /** Where today's (or the next) window stands at `now` (ms since epoch). Days roll over at midnight UTC+7. */

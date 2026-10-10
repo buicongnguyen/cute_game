@@ -5,7 +5,7 @@ import { CROPS, ITEMS, type ItemId } from './content.ts';
  * slower; Hard also makes creatures tougher and pays +15% XP and drop chance for it. Base tables are never changed:
  * prices and rules are read through these helpers with the save. Switching takes effect for new purchases, plantings
  * and spawns: a crop keeps the difficulty it was planted under (plot.difficulty), an animal its product pace. Raising
- * the difficulty is free; lowering it asks first and works once a day (LOWER_COOLDOWN_MS), so the Normal rules
+ * the difficulty is free; lowering it asks first and works once an hour (LOWER_COOLDOWN_MS), so the Normal rules
  * cannot be dodged action by action. In co-op the room host's difficulty scales the creatures (hardScale): the server
  * rescales live ones when the host or the host's setting changes, and every browser spawns with the host's scale.
  */
@@ -64,7 +64,7 @@ export const rewardScale = (s: WithSettings | null | undefined) => difficultyOf(
 export const scaleReward = (scale: { hp: number } | null | undefined) => (scale?.hp ?? 1) > 1 ? HARD_BONUS : 1;
 const RANK: Record<Difficulty, number> = { easy: 0, normal: 1, hard: 2 };
 /** Lowering the difficulty works once per this long (stored settings.difficultyLoweredAt). */
-export const LOWER_COOLDOWN_MS = 24 * 3_600_000;
+export const LOWER_COOLDOWN_MS = 3_600_000;
 export const isLowering = (from: Difficulty, to: Difficulty) => RANK[to] < RANK[from];
 /** When the save may lower its difficulty again (0 = now). */
 export const lowerReadyAt = (s: { settings?: { difficultyLoweredAt?: number } }) => { const at = s.settings?.difficultyLoweredAt; return typeof at === 'number' && Number.isFinite(at) ? at + LOWER_COOLDOWN_MS : 0; };

@@ -130,7 +130,7 @@ export const canAct = (m: CtfMatch, p: CtfPlayer) => live(m) && p.alive && !p.ju
 // ---------------------------------------------------------------- inputs
 /** A position report (the explorer's browser or a bot). Ignored while down, flying off a pad or before the start. */
 export function movePlayer(m: CtfMatch, id: string, x: number, z: number) {
-  const p = player(m, id); if (!p || !p.alive || p.jump || !Number.isFinite(x) || !Number.isFinite(z)) return false;
+  const p = player(m, id); if (!p || !canAct(m, p) || !Number.isFinite(x) || !Number.isFinite(z)) return false;
   if (m.phase === 'intro' || m.phase === 'over') return false;
   const dx = x - p.x, dz = z - p.z; if (Math.hypot(dx, dz) > .001) p.facing = Math.atan2(dx, dz);
   p.x = Math.max(-FIELD.hx, Math.min(FIELD.hx, x)); p.z = Math.max(-FIELD.hz, Math.min(FIELD.hz, z));
@@ -148,7 +148,7 @@ export function damageOf(attacker: CtfPlayer, target: CtfPlayer, mult: number) {
 export function hurt(m: CtfMatch, targetId: string, amount: number, byId: string | null, out: CtfEvent[] = []) {
   const p = player(m, targetId); if (!p || !p.alive || !live(m) || !(amount > 0)) return 0;
   const by = byId ? player(m, byId) : undefined; if (by && by.team === p.team) return 0;
-  if (p.guard > 0 || p.buffs.evade > 0 || p.immune || p.jump) return 0;
+  if (protectedFromHit(p)) return 0;
   let left = amount;
   if (p.buffs.shield > 0) { const soak = Math.min(p.buffs.shield, left); p.buffs.shield -= soak; left -= soak; }
   const lost = Math.min(p.hp, left); p.hp -= lost; if (byId) p.lastHitBy = byId;
@@ -193,7 +193,7 @@ export function castAi(m: CtfMatch, id: string, index: number, tx: number, tz: n
   const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
   p.facing = Math.atan2(dx, dz);
   out.push({ kind: 'cast', id, skill: index, x: tx, z: tz });
-  const foes = () => m.players.filter(o => o.team !== p.team && o.alive);
+  const foes = () => m.players.filter(o => o.team !== p.team && o.alive && !protectedFromHit(o));
   const strike = (x: number, z: number, extra: Partial<CtfStrike> = {}) => { const s: CtfStrike = { id: ++m.strikeSeq, by: id, team: p.team, kind: 'blast', x, z, r: skill.r ?? 3, at: skill.delay ?? 0, total: skill.delay ?? 0, power: skill.power ?? 1, stun: skill.stun, slow: skill.slow, heal: skill.heal, pull: skill.pull, ...extra }; m.strikes.push(s); out.push({ kind: 'strike', strike: s }); return s; };
   switch (skill.kind) {
     case 'blast': { const reach = Math.min(d, skill.range ?? 10); strike(p.x + ux * reach, p.z + uz * reach); break; }
@@ -281,7 +281,7 @@ function stepStrikes(m: CtfMatch, dt: number, out: CtfEvent[]) {
     s.at -= dt; if (s.at > 0) continue;
     const by = player(m, s.by);
     if (s.kind === 'pumpkin') {
-      for (const o of m.players) if (o.team !== s.team && o.alive && dist(o, s) < s.r) {
+      for (const o of m.players) if (o.team !== s.team && visibleToArea(o) && dist(o, s) < s.r) {
         const a = by ?? o; hurt(m, o.id, POWER.pumpkinPower * CTF.damageScale * 100 / (100 + o.def), by ? by.id : null, out); void a;
         if (o.alive) { const d = dist(o, s) || 1, k = POWER.pumpkinKnock; const at = clampLand(o.x + (o.x - s.x) / d * k, o.z + (o.z - s.z) / d * k, o.x, o.z); o.x = at.x; o.z = at.z; out.push({ kind: 'knock', id: o.id }); }
       }
@@ -300,7 +300,8 @@ function stepStrikes(m: CtfMatch, dt: number, out: CtfEvent[]) {
   }
 }
 /** Areas hit the unseen too (a cloak hides you from aim, not from a blast); only evasion and the jump save you. */
-const visibleToArea = (p: CtfPlayer) => p.alive && p.buffs.evade <= 0 && !p.jump;
+const protectedFromHit = (p: CtfPlayer) => p.guard > 0 || p.buffs.evade > 0 || p.immune || !!p.jump;
+const visibleToArea = (p: CtfPlayer) => p.alive && !protectedFromHit(p);
 function stepFlags(m: CtfMatch, dt: number, out: CtfEvent[]) {
   for (const f of m.flags) if (f.state === 'dropped') { f.returnIn -= dt; if (f.returnIn <= 0) { sendHome(f); out.push({ kind: 'return', flag: f.team, by: null }); } }
 }
@@ -344,7 +345,7 @@ export function applyPower(m: CtfMatch, p: CtfPlayer, k: PowerKind, out: CtfEven
   else if (k === 'pumpkin') b.pumpkin = POWER.pumpkinFuse;
   else if (k === 'wisp') { if (p.carrying === null) b.wisp = POWER.wispTime; }
   else if (k === 'bigcap') b.bigcap = POWER.bigcapTime;
-  else if (k === 'frost') { for (const o of m.players) if (o.team !== p.team && o.alive && dist(o, p) < POWER.frostR) o.stun = Math.max(o.stun, POWER.frostTime); }
+  else if (k === 'frost') { for (const o of m.players) if (o.team !== p.team && visibleToArea(o) && dist(o, p) < POWER.frostR) o.stun = Math.max(o.stun, POWER.frostTime); }
   else if (k === 'apple') heal(m, p.id, p.maxHp, out);
 }
 function finish(m: CtfMatch, winner: TeamId | -1, reason: CtfResult['reason'], out: CtfEvent[]) {
@@ -355,7 +356,7 @@ export function forfeit(m: CtfMatch, team: TeamId) { const out: CtfEvent[] = [];
 
 // ---------------------------------------------------------------- rewards
 /** EXP for a finished match (our numbers; the reference keeps its own on the server). Winners get the big share. */
-export const CTF_REWARD = { win: 600, draw: 200, loss: 0, perCapture: 120, perReturn: 40, perKnock: 10, max: 1400, perDay: 6, minSeconds: 45 } as const;
+export const CTF_REWARD = { win: 600, draw: 200, loss: 0, perCapture: 120, perReturn: 40, perKnock: 10, max: 1400, perDay: 12, minSeconds: 45 } as const;
 export function matchXp(o: { won: boolean; draw: boolean; caps: number; rets: number; kills: number; size: number }) {
   const base = o.won ? CTF_REWARD.win : o.draw ? CTF_REWARD.draw : CTF_REWARD.loss;
   const extra = Math.min(6, o.caps) * CTF_REWARD.perCapture + Math.min(10, o.rets) * CTF_REWARD.perReturn + Math.min(20, o.kills) * CTF_REWARD.perKnock;

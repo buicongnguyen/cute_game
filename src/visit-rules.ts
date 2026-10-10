@@ -4,7 +4,7 @@
  * garden (counted per visitor and garden, by UTC day). The server applies it (server/action-service.mjs waterFriend);
  * the numbers live here so the client's hint and the tests read the same rule.
  */
-export const WATER_RULES = { share: .1, perHomePerDay: 5, xpBase: 5, xpLevelCap: 30 } as const;
+export const WATER_RULES = { share: .1, perHomePerDay: 10, xpBase: 5, xpLevelCap: 30 } as const;
 /** Milliseconds a watering takes off: 10 % of what is left (0 for a ripe or empty bed). */
 export function waterBoost(duration: number, elapsed: number) {
   if (!Number.isFinite(duration) || !Number.isFinite(elapsed) || duration <= 0) return 0;

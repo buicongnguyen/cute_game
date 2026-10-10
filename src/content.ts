@@ -3970,7 +3970,7 @@ for (const [id, item] of Object.entries(ITEMS))
         FISH[id] = { id, name: item.name, icon: item.icon, rarity: item.legend ? 'legendary' : item.rare ? 'rare' : id === 'boot' ? 'junk' : 'common', speed: power, power, stamina: power, sell: item.sell, xp: Math.round((4 + power * 25) * (item.legend ? 4 : 1)), size: item.size || [10, 60], planet: Object.entries(FISH_WEIGHTS).filter(([, items]) => items.some(([key]) => key === id)).map(([key]) => key) };
     }
 /** The garden holds at most 24 beds (a 6 x 4 grid): the 9 starting beds and 15 more. Saves made before the cap had 33 (LEGACY_MAX_PLOTS). */
-export const STARTING_PLOTS = 9, MAX_EXTRA_PLOTS = 15, MAX_DECORATIONS = 40, LEGACY_MAX_PLOTS = 33;
+export const STARTING_PLOTS = 9, MAX_EXTRA_PLOTS = 15, MAX_DECORATIONS = 80, LEGACY_MAX_PLOTS = 33;
 export const UPGRADES = { health: { name: 'Health', icon: '❤️', base: 12, step: 25 }, attack: { name: 'Attack', icon: '👊', base: 15, step: 3 }, defense: { name: 'Defense', icon: '🛡️', base: 14, step: 4 }, crit: { name: 'Critical chance', icon: '💥', base: 18, step: .025, max: 28 } } as const;
 export const STORY_STEPS: {
     title: string;
@@ -4047,7 +4047,7 @@ for (const [id, item] of Object.entries(ITEMS)) {
 // The garden items say what they do (the growing-bed panel shows these lines beside its Use buttons).
 ITEMS.plot_kit.desc = 'One more garden bed for home. Place it from your backpack, or tap a garden bed and choose ➕ Expand garden.';
 // Both fertilizers advance half the original timer, as requested for the updated game.
-ITEMS.manure.desc = "Removes half of the crop's original growing time. Two uses ripen a newly planted crop.";
+ITEMS.manure.desc = "Removes half of the crop's original growing time. Two uses ripen a newly planted non-tree crop. Fruit trees: up to 2 hours per dose.";
 ITEMS.spore.desc = ITEMS.manure.desc;
 const planetLabels: Record<PlanetId, string> = { home: 'Clover Village', candy: 'Candy Planet', ice: 'Frost Planet', lava: 'Volcano Planet', toy: 'Toybox Planet', jungle: 'Wild Jungle', ocean: 'Ocean Planet', cloud: 'Cloud Islands', shadow: 'Night Planet' };
 for (const [id, planet] of Object.entries(PLANETS)) {
@@ -4093,6 +4093,6 @@ SHOP_CATEGORIES.find(category=>category.tab==='Weapons')!.items.push({id:'harpoo
 RECIPES.push({result:'harpoon',energy:1000,materials:{},category:'Weapons',station:'shop'});
 // The Lake Guardian (lake-guardian.ts): harpoon only, at most one a day per explorer. It is in no FISH_WEIGHTS table,
 // so no rod cast or ordinary hunting slot can roll it; it is registered in FISH by hand (the FISH loop has already run).
-ITEMS.fish_guardian={name:'Lake Guardian',icon:'🎏',desc:'A glowing koi that guards the big meadow lake. It surfaces now and then, only a harpoon can catch it, and it comes back for you about once a day.',type:'fish',sell:450,heal:250,buff:{luck:.4,regen:6,time:240},rare:true,legend:true,power:.98,size:[180,260]};
+ITEMS.fish_guardian={name:'Lake Guardian',icon:'🎏',desc:'A glowing koi that guards the big meadow lake. It surfaces now and then, only a harpoon can catch it, and it comes back for you once every 6 hours.',type:'fish',sell:450,heal:250,buff:{luck:.4,regen:6,time:240},rare:true,legend:true,power:.98,size:[180,260]};
 FISH.fish_guardian={id:'fish_guardian',name:ITEMS.fish_guardian.name,icon:ITEMS.fish_guardian.icon,rarity:'legendary',speed:.98,power:.98,stamina:.98,sell:450,xp:Math.round((4+.98*25)*4),size:[180,260],planet:['home']};
 LOOT_TABLES.forest_raptor=[['feather',1,1,2],['meat',.7,1,2]];
