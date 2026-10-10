@@ -112,7 +112,7 @@ export function initBots(game: GameBridge) {
       const quiet = fighting && !(busy === id && r.fightOk) && Math.hypot(r.w.x - world.position.x, r.w.z - world.position.z) < 40;
       let b = bubbles.get(id); const on = !quiet && !!r.say && r.say.until > clock && world.remotePlayers.get(id)?.mesh.visible;
       if (!on) { if (b) b.style.display = 'none'; continue; }
-      if (!b) { b = el('div', 'bot-bubble'); document.body.append(b); bubbles.set(id, b); }
+      if (!b) { b = el('div', 'bot-bubble'); (document.getElementById('bubble-layer') ?? document.body).append(b); bubbles.set(id, b); }
       const mesh = world.remotePlayers.get(id)!.mesh; v.set(mesh.position.x, mesh.position.y + 2.7 * Math.max(.6, mesh.scale.x), mesh.position.z).project(world.camera);
       const x = (v.x + 1) / 2 * innerWidth, y = (1 - v.y) / 2 * innerHeight;
       if (v.z > 1 || x < -60 || x > innerWidth + 60 || y < 0 || y > innerHeight || bubbleCovers(x, y, tx, ty)) { b.style.display = 'none'; continue; }

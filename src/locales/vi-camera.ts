@@ -6,4 +6,7 @@ export const CAMERA_VI: Record<string, string> = {
   'Classic': 'Cổ điển',
   'Tilted': 'Nghiêng',
   'Low': 'Thấp',
+  'Lower': 'Thấp hơn',
+  'Lowest': 'Thấp nhất',
+  'Camera angle presets': 'Góc máy có sẵn',
 };

@@ -15,7 +15,7 @@ export class ChatBubbles {
   speaking(who: string) { return this.bubbles.has(who); }
   say(who: string, text: string, at: () => { x: number; z: number }, seconds = 3.4) {
     let b = this.bubbles.get(who);
-    if (!b) { const el = document.createElement('div'); el.className = 'friend-bubble'; document.body.append(el); b = { el, left: 0, at }; this.bubbles.set(who, b); }
+    if (!b) { const el = document.createElement('div'); el.className = 'friend-bubble'; (document.getElementById('bubble-layer') ?? document.body).append(el); b = { el, left: 0, at }; this.bubbles.set(who, b); }
     b.el.textContent = t(text); b.left = seconds; b.at = at;
   }
   frame(dt: number) {

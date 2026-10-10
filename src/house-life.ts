@@ -90,7 +90,7 @@ export class MusicBox {
 export function initHouseLife(d: LifeDeps) {
   const { world, house } = d, view = house.view;
   const prompt = document.createElement('button'); prompt.id = 'house-prompt'; prompt.type = 'button'; prompt.hidden = true; document.body.append(prompt);
-  const bubble = document.createElement('div'); bubble.id = 'house-bubble'; bubble.hidden = true; document.body.append(bubble);
+  const bubble = document.createElement('div'); bubble.id = 'house-bubble'; bubble.hidden = true; (document.getElementById('bubble-layer') ?? document.body).append(bubble);
   const music = new MusicBox();
   let near: Activity | null = null, shown = '', scan = 0, chatClock = 4, chatLeft = 0, chatFriend: T.Object3D | null = null, decorClock = 0, bubbleAt = '';
   // Online the cooldown stamps are the server's: measure them on its clock (the last reply's `at`), as fish-hunting-view does.

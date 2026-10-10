@@ -21,19 +21,22 @@ export function clampZoom(value: number, kind: 'wheel' | 'pinch') { const [low, 
 
 /** Camera position relative to its target, for a screen aspect and zoom. */
 /**
- * The view the player picked in Settings: the same distance, a lower pitch. Classic is the camera above, untouched.
- * A lower camera sees further, so it draws more (docs/QUALITY-PLAN.md section 5: 48° is about free, 43° about 10-20% more work).
+ * The pitch the player picked in Settings (a slider, 30 to 51.5 degrees above the ground): the same distance, a lower
+ * view. 51.5 is the camera above, untouched. A lower camera sees further, so it draws more (docs/QUALITY-PLAN.md
+ * section 5: 48 is about free, 43 about 10-20% more work, 30 about 1.4 to 2 times).
  */
-export const CAMERA_VIEWS = { classic: 51.5, tilted: 47, low: 43 } as const;
-export type CameraView = keyof typeof CAMERA_VIEWS;
-let view: CameraView = 'classic';
+export const CAMERA_PITCH = { min: 30, max: 51.5, presets: { classic: 51.5, tilted: 47, low: 43, lower: 36, lowest: 30 } } as const;
+export type CameraPreset = keyof typeof CAMERA_PITCH.presets;
+let pitch: number = CAMERA_PITCH.max;
 const viewOffset: [number, number, number] = [...CAMERA.offset];
-export const cameraView = () => view;
-export function setCameraView(next: CameraView) {
-  view = Object.hasOwn(CAMERA_VIEWS, next) ? next : 'classic';
-  if (view === 'classic') { viewOffset[1] = CAMERA.offset[1]; viewOffset[2] = CAMERA.offset[2]; return view; }
-  const distance = Math.hypot(CAMERA.offset[1], CAMERA.offset[2]), pitch = CAMERA_VIEWS[view] * Math.PI / 180;
-  viewOffset[1] = distance * Math.sin(pitch); viewOffset[2] = distance * Math.cos(pitch); return view;
+export const cameraPitch = () => pitch;
+/** Accepts degrees, or a preset name (also what the first version of the setting saved). */
+export function setCameraPitch(next: number | string) {
+  const asked = typeof next === 'string' && Object.hasOwn(CAMERA_PITCH.presets, next) ? CAMERA_PITCH.presets[next as CameraPreset] : Number(next);
+  pitch = Number.isFinite(asked) ? Math.min(CAMERA_PITCH.max, Math.max(CAMERA_PITCH.min, asked)) : CAMERA_PITCH.max;
+  if (pitch >= CAMERA_PITCH.max) { viewOffset[1] = CAMERA.offset[1]; viewOffset[2] = CAMERA.offset[2]; return pitch; }
+  const distance = Math.hypot(CAMERA.offset[1], CAMERA.offset[2]), r = pitch * Math.PI / 180;
+  viewOffset[1] = distance * Math.sin(r); viewOffset[2] = distance * Math.cos(r); return pitch;
 }
 
 export function cameraOffset(aspect: number, zoom = 1, out = new T.Vector3()) {
