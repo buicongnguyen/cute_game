@@ -11,7 +11,7 @@ export const STAR_MAP: Record<PlanetId, StarPlanet> = {
   candy: { id: 'candy', x: 250, z: -150, r: 19, ring: '#ffe0f2' },
   ice: { id: 'ice', x: -290, z: -230, r: 21 },
   lava: { id: 'lava', x: 150, z: 360, r: 17, ring: '#ffb070' },
-  toy: { id: 'toy', x: -170, z: 170, r: 15, ring: '#ffe14d' },
+  toy: { id: 'toy', x: -45, z: 150, r: 15, ring: '#ffe14d' }, // the first planet a straight flight from home spots, and the easiest (Lv 4)
   jungle: { id: 'jungle', x: -440, z: 90, r: 20 },
   ocean: { id: 'ocean', x: 440, z: 120, r: 23, ring: '#bff0ff' },
   cloud: { id: 'cloud', x: -80, z: -500, r: 18, ring: '#ffffff' },

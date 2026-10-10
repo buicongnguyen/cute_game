@@ -56,6 +56,8 @@ import { ZOOM, clampZoom } from './camera-rig.ts';
 import {clearSegment,WORLD_BOUNDS} from './navigation.ts';
 import { progressEntries, claimProgress, recordEvent, dailyRerollsUsed, rerollDaily, startChallenge, storyStep, challengeTitle, asHelper, type ProgressKind } from './progression.ts';
 import { STORY_STEPS } from './content.ts';
+import { refuelForHome, questPlace, wildRoute, wildDanger, shopTabMatches, rodShopTab, energyKicker, chooseOwnPathHint, surpriseOk, COLOSSUS_BANNER_LEVEL, priceButtonState, formatEnergy } from './guide.ts';
+import { mountGardenGuide, mountSpaceHome, watchTabScroll } from './guide-ui.ts';
 import type { GameBridge, GameAction, NetworkHooks, NetworkDrop } from './game-bridge.ts';
 import { initOnline } from './online.ts';
 import { defeatPaysPlayer } from './safe-zone.ts';
@@ -160,7 +162,7 @@ let fishingEpoch=0;
 /** Where the last line went in, so the Cast button and F recast to the same spot. */
 let lastCast:{id:string;x:number;z:number}|null=null;
 let fishingWater='home';
-let shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forge'='craft',craftTab='All';
+let wildArmed:{kind:string;until:number}|null=null,shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forge'='craft',craftTab='All';
 let placement:{id:string;rotation:number;x:number;z:number;ok:boolean}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
 let persistence:((state:M.SaveState)=>void)|null=null,network:NetworkHooks={role:null};
 let actionHandler:((intent:GameIntent)=>Promise<ActionReply>)|null=null;
@@ -253,7 +255,7 @@ world.petStaysHome=()=>!!visiting; // and your pet waits there too (pet-pen.ts)
 world.applyGraphics(graphics.profile, graphics.ratio);world.fx?.setTextLayer($('#floating-text'));
 // Over-head HP bars, target frame and boss bar; the trackers fold to a chip in fights ('auto'), or as the player asks.
 // The timed bonus line (hud-challenge.ts) and the desktop keyboard guide (hud-keys.ts).
-const challenges=new ChallengeDirector({state:()=>state,active:()=>started&&!modal&&!visiting&&!flight&&!world.interior&&state.hp>0&&world.state===state,
+const challenges=new ChallengeDirector({state:()=>state,active:()=>started&&surpriseOk(state.level,world.enemies.some(e=>e.hp>0&&aggro(e)))&&!modal&&!visiting&&!flight&&!world.interior&&state.hp>0&&world.state===state,
   chances:()=>{const p=world.position,near=(r:number,boss:boolean)=>world.enemies.some(e=>e.hp>0&&e.boss===boss&&Math.hypot(e.x-p.x,e.z-p.z)<r);
     return {kill:near(45,false),skill:near(30,false)||near(30,true),harvest:world.planet==='home'&&state.plots.filter(x=>x.crop).length>=4,fish:!!contextGear.forFishing(state)&&world.entities.some(e=>e.pond&&Math.hypot(e.x-p.x,e.z-p.z)<25),boss:world.enemies.some(e=>e.boss&&e.hp>0&&aggro(e)&&Math.hypot(e.x-p.x,e.z-p.z)<25)};},
   start:async type=>!!await perform('startChallenge',{kind:type}),claim:async id=>!!await perform('claimProgress',{kind:'challenges',id}),toast:(text,icon)=>toast(text,icon),won:()=>tone('success')});
@@ -388,8 +390,12 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   const bodyNode=$('#dialog-body'),scroll=bodyNode.scrollTop,tab=bodyNode.querySelector('.panel-tabs .active')?.textContent;
   $('#dialog-title').textContent=t(title);$('#dialog-kicker').textContent=t(kicker);bodyNode.innerHTML=localizeHtml(body);$('#dialog-layer').hidden=false;$('#hud').inert=true;$('#world-labels').inert=true;
   bodyNode.scrollTop=reopened&&bodyNode.querySelector('.panel-tabs .active')?.textContent===tab?scroll:0;
+  if(type==='shop'&&shopFocus)focusShopRow();
   $('.close-button').focus({preventScroll:true});
 }
+/** The outfitters opened from a hint (the fishing help): scrolls to that item's row and lights it for a moment. */
+let shopFocus='';
+function focusShopRow(){const id=shopFocus;shopFocus='';const row=$('#dialog-body').querySelector(`[data-action="buy"][data-item="${id}"]`)?.closest<HTMLElement>('.shop-item');if(!row)return;row.scrollIntoView({block:'center'});row.classList.add('shop-focus');setTimeout(()=>row.classList.remove('shop-focus'),2600);}
 // The Mirror docks with 'trying-on' even before a preview (look-shop.ts), so closing always clears it: a later panel or confirmation must not inherit it.
 function closeDialog(){endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();clearHeldInput();}
 /** The three save profiles on the title screen: name and level of each, or an empty slot for a new game. */
@@ -419,6 +425,7 @@ function updateHud() {
   $('.experience').setAttribute('title',t(`${Math.floor(state.xp)} / ${M.xpNeeded(state.level)} experience`));
   const q=progressEntries(state,'story')[0],progress=q?.progress??0;
   setText($('#quest-chapter'),t(state.quest<M.QUESTS.length?`${state.quest+1} / ${M.QUESTS.length}`:'ONGOING'));setText($('#quest-icon'),t(q?.icon??'🚀'));setText($('#quest-title'),t(q?.title??'A world of possibilities'));setText($('#quest-task'),t(q?`${q.description} · ${progress} / ${q.target}`:'Your next chapter awaits.'));setText($('#quest-count'),t(q?`${progress}/${q.target}`:''));
+  const walk=questTarget();$('#quest-summary').classList.toggle('can-walk',!!walk);document.body.classList.toggle('guide-low-level',state.level<COLOSSUS_BANNER_LEVEL);
   setWidth($('#quest-fill'),`${q?progress/q.target*100:100}%`);$('#quick-claim').hidden=!q?.complete;$('#quest-dot').hidden=!q?.complete;
   const skills=skillList(),bindings=keyboardBindings(state.settings.keyboardLayout);
   setText($('#movement-hint'),t(bindings.movement));
@@ -577,7 +584,7 @@ async function harvestNearby(index:number){
   };if(n)setTimeout(run,n*140);else run();});
 }
 // A fruit tree takes 8 to 14 hours: hours and minutes read better than 28,799 seconds.
-function growText(plot:M.Plot){const progress=M.cropProgress(plot),left=Math.ceil((1-progress)*M.cropDuration(plot)/1000);return progress>=1?(fitsBag(state,{[plot.crop!]:1})?'Ripe! Close this panel and tap the bed to harvest.':'Ripe, but your backpack is full. Sell or store something, or expand the bag, then tap the bed to harvest.'):left>=3600?`About ${Math.floor(left/3600)} h ${Math.floor(left%3600/60)} min until ripe`:`About ${left} seconds until ripe`;}
+function growText(plot:M.Plot){const progress=M.cropProgress(plot),left=Math.ceil((1-progress)*M.cropDuration(plot)/1000);return progress>=1?(fitsBag(state,{[plot.crop!]:1})?'Ripe! Tap Harvest now to collect it.':'Ripe, but your backpack is full. Sell or store something, or expand the bag, then tap the bed to harvest.'):left>=3600?`About ${Math.floor(left/3600)} h ${Math.floor(left%3600/60)} min until ripe`:`About ${left} seconds until ripe`;}
 /**
  * The garden's grow button (reference openSeeds/openPlot): place a kit already in the bag, else buy one with energy
  * (grey while it is out of reach), or a note at the cap. Only at home, never while visiting.
@@ -617,6 +624,8 @@ function bedUpgradeRow(index:number){
 /** Redraws the open bed panel as the bed is now; a ripe bed is left alone (opening it harvests). */
 function refreshPlot(){const p=state.plots[activePlot];if((modal==='plot'||modal==='plant')&&p&&!(p.crop&&M.cropProgress(p)>=1))plotDialog(activePlot);}
 let plotSeen='',stockShown='';
+/** A bed that ripens while its panel is open gets a Harvest button (the panel used to say "close this panel and tap the bed"). */
+function ripeHarvestButton(p:M.Plot){if(!p.crop||M.cropProgress(p)<1||!fitsBag(state,{[p.crop]:1})||document.getElementById('harvest-bed'))return;document.querySelectorAll('#dialog-body .fertilizer-row,#dialog-body .garden-tip').forEach(e=>e.remove());$('#grow-time').closest('.bed-status')?.insertAdjacentHTML('afterend',localizeHtml(`<button class="primary harvest-ready" id="harvest-bed" data-action="harvest-bed">🧺 ${esc(t('Harvest now'))}</button>`));}
 function stockKey(){let k='';for(const id in state.bag)k+=id+':'+state.bag[id]+',';k+='|';for(const id in state.chest)k+=id+':'+state.chest[id]+',';return k;}
 function plotDialog(index:number) {
   if(visiting){network.visitCrop?.(index);return;}
@@ -635,10 +644,10 @@ function plotDialog(index:number) {
   const crops=Object.entries(M.CROPS).sort(([,a],[,b])=>Number(state.level<a.level)-Number(state.level<b.level)||a.level-b.level);
   // Reference openSeeds: the grow button first, "store this bed" on an extra bed, then the seeds. A ripe tap gathers the
   // ripe beds around it, so the old "Harvest all" button is gone from here.
-  openDialog('plant','Choose a seed',`${expandButton(false)}${helperRow(state,!!visiting,index)}<div class="garden-actions">${bedUpgradeRow(index)}${M.isExtraBed(state,index)&&!M.bedLevel(state.plots[index])?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.MAX_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
+  openDialog('plant','Choose a seed',`<div class="garden-actions">${M.isExtraBed(state,index)&&!M.bedLevel(state.plots[index])?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.MAX_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
     const level=M.cropLevel(state,id),locked=state.level<level,needsSeed=!!c.seed&&!state.bag[c.seed],item=M.ITEMS[id],effect=item?effectText(item):'';
     return `<div class="crop-row garden-row ${locked?'locked':''}"><span class="crop-art">${art(id,c.icon)}</span><div><strong>${esc(t(c.name))}</strong>${effect?`<p>${esc(effect)}</p>`:''}<div class="chips"><span class="chip chip-time">⏱ ${(ms=>ms>=3_600_000?`${+(ms/3_600_000).toFixed(1)} h`:`${ms/1000}s`)(M.bedGrowTime(state.plots[index],M.cropGrowTime(state,id)))}</span><span class="chip chip-xp">✨ ${M.cropXp(state,id)} XP</span>${item?`<span class="chip chip-energy">ϟ ${M.sellPrice(state,id)}</span>`:''}${c.seed?`<span class="chip chip-seed">${M.ITEMS[c.seed]?mini(c.seed):'🌰'} ${state.bag[c.seed]||0} seeds</span>`:''}</div></div>${locked?`<span class="chip chip-lock">🔒 Level ${level}</span>`:`<div class="button-row"><button class="primary" data-action="plant" data-item="${id}" ${needsSeed?'disabled':''}>Plant</button><button class="sky-button" data-action="plant-all" data-item="${id}" ${needsSeed||!empty?'disabled':''}>All (${c.seed?Math.min(empty,state.bag[c.seed]||0):empty})</button></div>`}</div>`;
-  }).join('')}</div>`,'YOUR GARDEN');
+  }).join('')}</div><div class="garden-secondary">${bedUpgradeRow(index)}${expandButton(false)}${helperRow(state,!!visiting,index)}</div>`,'YOUR GARDEN');
 }
 function inventory() {
   const entries=Object.entries(state.bag).filter(([id,n])=>n!>0&&(bagMode!=='wardrobe'||wardrobeItem(M.ITEMS[id]))) as [M.ItemId,number][];
@@ -677,15 +686,15 @@ function tryOnButton(id:M.ItemId){return canTryOn(id)&&!Object.values(state.gear
 function shop(){
   // Special offers (special-offers.ts): a tag by the name and a line on how the item is usually obtained.
   const specialTag=(id:string)=>M.isSpecial(id)?` <span class="special-tag">${esc(t('✨ Special'))}</span>`:'',gated=(id:string)=>M.gearLevel(id)>state.level,gate=(id:string)=>gated(id)?`<span class="chips"><span class="chip chip-gate">🔒 ${esc(t('Needs level {level}',{level:M.gearLevel(id)}))}</span></span>`:'',specialNote=(id:string)=>M.isSpecial(id)?`<p class="special-note">${esc(t(M.SOURCE_NOTE[M.specialSource(id)]))}</p>`:'';
-  const matches=(item:M.ItemDef)=>shopTab==='Weapons'?item.slot==='weapon':shopTab==='Clothing'?['hat','outfit','boots'].includes(item.slot??''):shopTab==='Pets'?item.slot==='pet':shopTab==='Disguises'?item.slot==='disguise':shopTab==='Decor'?item.type==='decor':!item.slot&&item.type!=='decor';
+  const matches=(item:M.ItemDef)=>shopTabMatches(shopTab,item),buyState=(id:string,item:M.ItemDef)=>priceButtonState(gated(id),state.energy<M.shopPrice(state,id)!||!M.hasMaterials(state,item.materials));
   // Weakest to strongest (item-power.ts), ties by price; special offers (one flat price) tie by their usual worth.
   const entries=IG.groupItems(Object.entries(M.ITEMS).filter(([id,item])=>M.shopPrice(state,id)!==null&&matches(item)),([id])=>id,IG.GEAR_ORDER,([id])=>M.isSpecial(id)?M.ITEMS[id].sell:M.shopPrice(state,id)??0);
-  openDialog('shop','Little outfitters',`<nav class="panel-tabs" aria-label="Shop categories">${SHOP_TABS.map(tab=>`<button class="${shopTab===tab?'active':''}" aria-pressed="${shopTab===tab}" data-action="shop-tab" data-kind="${tab}">${tab}</button>`).join('')}</nav>${IG.groupedHtml('shop',entries,([id,item])=>`<div class="shop-item${M.isSpecial(id)?' special-offer':''}"><span class="shop-icon">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))}${specialTag(id)}${state.bag[id]?M.levelTag(state,id):''}${state.bag[id]?` <small>×${state.bag[id]}</small>`:''}</strong>${M.powerChip(id)}<p>${esc(item.desc)}</p>${specialNote(id)}${gate(id)}${materialChips(item.materials)}</div>${Tester.isTester(state)&&M.isSpecial(id)?'<div class="button-row tester-row">':''}<button class="primary" data-action="buy" data-item="${id}" ${state.energy<M.shopPrice(state,id)!||!M.hasMaterials(state,item.materials)||gated(id)?'disabled':''}>ϟ ${M.shopPrice(state,id)!.toLocaleString()}</button>${Tester.isTester(state)&&M.isSpecial(id)?Tester.testerBuyButton(state,id)+'</div>':''}${item.weapon?.kind==='rod'&&state.bag[id]?'<span class="chip">Used automatically near ponds</span>':item.slot?Object.values(state.gear).includes(id)?'<span class="chip chip-seed">✓ Equipped</span>':state.bag[id]?`<button class="sky-button" data-action="equip" data-item="${id}" ${gated(id)?'disabled':''}>Equip</button>`:'':''}${tryOnButton(id)}</div>`)||'<p class="empty-state">Visit the workshop for this collection.</p>'}`,'ϟ '+state.energy+' ENERGY');
+  openDialog('shop','Little outfitters',`<nav class="panel-tabs" aria-label="Shop categories">${SHOP_TABS.map(tab=>`<button class="${shopTab===tab?'active':''}" aria-pressed="${shopTab===tab}" data-action="shop-tab" data-kind="${tab}">${tab}</button>`).join('')}</nav>${IG.groupedHtml('shop',entries,([id,item])=>`<div class="shop-item${M.isSpecial(id)?' special-offer':''}"><span class="shop-icon">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))}${specialTag(id)}${state.bag[id]?M.levelTag(state,id):''}${state.bag[id]?` <small>×${state.bag[id]}</small>`:''}</strong>${M.powerChip(id)}<p>${esc(item.desc)}</p>${specialNote(id)}${gate(id)}${materialChips(item.materials)}</div>${Tester.isTester(state)&&M.isSpecial(id)?'<div class="button-row tester-row">':''}<button class="primary${buyState(id,item).short?' looks-disabled':''}" data-action="buy" data-item="${id}" ${buyState(id,item).disabled?'disabled':''} ${buyState(id,item).short?'aria-disabled="true"':''}>ϟ ${M.shopPrice(state,id)!.toLocaleString()}</button>${Tester.isTester(state)&&M.isSpecial(id)?Tester.testerBuyButton(state,id)+'</div>':''}${item.weapon?.kind==='rod'&&state.bag[id]?'<span class="chip">Used automatically near ponds</span>':item.slot?Object.values(state.gear).includes(id)?'<span class="chip chip-seed">✓ Equipped</span>':state.bag[id]?`<button class="sky-button" data-action="equip" data-item="${id}" ${gated(id)?'disabled':''}>Equip</button>`:'':''}${tryOnButton(id)}</div>`)||'<p class="empty-state">Visit the workshop for this collection.</p>'}`,energyKicker(state.energy));
   if(shopTab==='Pets'&&state.planet==='home'&&!visiting)$('#dialog-body').insertAdjacentHTML('beforeend',localizeHtml('<div class="button-row"><button class="soft-button" data-action="pen-menu">🐔 Animal pen</button></div>'));
 }
 
 // The market, like the reference's (bundle @939401): one big button sells every crop, fish and junk stack; rows sell 1 or all.
-function market(){const sellable=(Object.keys(state.bag) as M.ItemId[]).map(id=>[id,M.looseQuantity(state,id)] as [M.ItemId,number]).filter(([id,n])=>M.ITEMS[id].sell>0&&n>0),produce=produceLots(state);openDialog('sell','From your garden, with love',`<div class="owl-note"><span>🧺</span><p><strong>Harvest market</strong>Trade treasures for energy. Keep a snack for the trail!</p></div>${produce.total?`<button class="primary sell-produce" data-action="sell-produce">Sell all produce &amp; fish → ϟ ${produce.total}${produce.fromChest?`<small class="from-chest">${esc(t('{count} from the chest',{count:produce.fromChest}))}</small>`:''}</button>${cookSellHtml(cookSellPlan(state),esc)}`:''}${IG.groupedHtml('sell',IG.groupItems(sellable,([id])=>id,IG.BAG_ORDER),([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} <small>×${n}</small></strong><div class="chips"><span class="chip chip-energy">ϟ ${M.sellPrice(state,id)} each</span></div></div><div class="button-row"><button class="soft-button" data-action="sell-one" data-item="${id}">Sell 1</button>${n>1?`<button class="primary" data-action="sell-all" data-item="${id}" aria-label="Sell all for ${n*M.sellPrice(state,id)} energy">All · ϟ ${n*M.sellPrice(state,id)}</button>`:''}</div></div>`)||'<div class="empty-state"><span>🌾</span><strong>Something good is growing</strong><p>Bring crops, fish, or materials to sell here.</p><button class="primary" data-action="go" data-kind="plot">Visit the garden →</button></div>'}`,'ϟ '+state.energy+' ENERGY');}
+function market(){const sellable=(Object.keys(state.bag) as M.ItemId[]).map(id=>[id,M.looseQuantity(state,id)] as [M.ItemId,number]).filter(([id,n])=>M.ITEMS[id].sell>0&&n>0),produce=produceLots(state);openDialog('sell','From your garden, with love',`<div class="owl-note"><span>🧺</span><p><strong>Harvest market</strong>Trade treasures for energy. Keep a snack for the trail!</p></div>${produce.total?`<button class="primary sell-produce" data-action="sell-produce">Sell all produce &amp; fish → ϟ ${produce.total}${produce.fromChest?`<small class="from-chest">${esc(t('{count} from the chest',{count:produce.fromChest}))}</small>`:''}</button>${cookSellHtml(cookSellPlan(state),esc)}`:''}${IG.groupedHtml('sell',IG.groupItems(sellable,([id])=>id,IG.BAG_ORDER),([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} <small>×${n}</small></strong><div class="chips"><span class="chip chip-energy">ϟ ${M.sellPrice(state,id)} each</span></div></div><div class="button-row"><button class="soft-button" data-action="sell-one" data-item="${id}">Sell 1</button>${n>1?`<button class="primary" data-action="sell-all" data-item="${id}" aria-label="Sell all for ${n*M.sellPrice(state,id)} energy">All · ϟ ${n*M.sellPrice(state,id)}</button>`:''}</div></div>`)||'<div class="empty-state"><span>🌾</span><strong>Something good is growing</strong><p>Bring crops, fish, or materials to sell here.</p><button class="primary" data-action="go" data-kind="plot">Visit the garden →</button></div>'}`,energyKicker(state.energy));}
 // The chest as two grids of big item tiles, like the reference: tap a tile to move that stack across.
 function storage(){const tiles=(inv:M.Inventory,toChest:boolean)=>IG.groupedHtml(toChest?'chest-bag':'chest',IG.groupItems((Object.entries(inv)as[M.ItemId,number][]).filter(([,n])=>n>0),([id])=>id,IG.BAG_ORDER),([id,n])=>{const name=esc(t(M.ITEMS[id].name)),locked=toChest&&M.looseQuantity(state,id)===0;return `<button class="chest-slot" data-action="transfer" data-item="${id}" data-direction="${toChest?'store':'take'}" ${locked?'disabled':''} title="${name}" aria-label="${toChest?'Store':'Take'} ${name}, ${n}${locked?' (equipped)':''}"><span>${art(id,M.ITEMS[id].icon)}</span>${n>1?`<b>${n}</b>`:''}</button>`;},'chest-grid');openDialog('chest','Keep your treasures safe',`<p class="intro">Tap an item to move it between your backpack and the chest. Chest items stay safe if you get knocked out.</p><div class="storage-columns"><div><h3>🎒 Backpack ${slotMeterHtml(state,'bag',t)}</h3>${tiles(state.bag,true)?tiles(state.bag,true):'<p class="muted">Nothing here yet.</p>'}</div><div><h3>📦 Chest ${slotMeterHtml(state,'chest',t)}</h3>${tiles(state.chest,false)?`<button class="soft-button take-all" data-action="take-all">Take all</button>${tiles(state.chest,false)}`:'<p class="muted">Room for something special.</p>'}</div></div>${expandCardHtml(state,'chest',t,mini)}`,'YOUR STORAGE CHEST');}
 // The wishing crystal, like the reference's openUpgrade: energy on top, one compact card per stat with level, current value and gain.
@@ -809,7 +818,7 @@ function planets(){
     <p class="intro">${t('Pick a planet and the autopilot flies you there and lands, or take off and fly it yourself.')}</p>
     <h3 class="starmap-title">🔭 Discovery log · ${state.discovered.length} / ${all} · ${t('easiest first')}</h3><div class="planet-grid route-list">${routes.map(card).join('')}</div>`,'STAR MAP','🚀');
 }
-function map(){openDialog('map','Every path is a possibility',`<p class="intro">Choose a place and your explorer will walk there.</p><div class="map-illustration"><div class="map-path"></div><span class="map-house">🏡</span><span class="map-trees">🌳 🌲 🌳</span><span class="map-garden">🌱 🌱</span><span class="map-pond">🎣</span><span class="map-rocket">🚀</span><span class="map-stall">🧺</span><b>Clover Village</b></div><div class="map-destinations">${(state.planet==='home'?[['plot','🌱','Garden'],['sell','🧺','Market'],['shop','🛍️','Outfitters'],['fish','🎣','Pond'],['upgrade','💎','Crystal'],['craft','🔨','Workshop'],['chest','📦','Storage'],['travel','🚀','Rocket']]:[['mine','💎','Crystal vein'],['travel','🚀','Rocket']]).map(([kind,icon,name])=>`<button class="soft-button" data-action="go" data-kind="${kind}">${icon} ${name}</button>`).join('')}${(world.planet==='home'?[['forest','🍄 Mushroom Forest'],['meadow','🌊 Lake Meadow'],['swamp','🌿 Chomper Swamp'],['canyon','🏜️ Redrock Canyon']]:[['wild','Explore the wild']]).map(([kind,label])=>`<button class="soft-button" data-action="wild" data-kind="${kind}">${label}</button>`).join('')}</div><p class="fineprint">${state.discovered.length} of 9 worlds discovered · Click the ground to choose your own path.</p>`,'YOUR EXPLORER’S MAP');}
+function map(){openDialog('map','Every path is a possibility',`<p class="intro">Choose a place and your explorer will walk there.</p><div class="map-illustration"><div class="map-path"></div><span class="map-house">🏡</span><span class="map-trees">🌳 🌲 🌳</span><span class="map-garden">🌱 🌱</span><span class="map-pond">🎣</span><span class="map-rocket">🚀</span><span class="map-stall">🧺</span><b>Clover Village</b></div><div class="map-destinations">${(state.planet==='home'?[['plot','🌱','Garden'],['sell','🧺','Market'],['shop','🛍️','Outfitters'],['fish','🎣','Pond'],['upgrade','💎','Crystal'],['craft','🔨','Workshop'],['chest','📦','Storage'],['travel','🚀','Rocket']]:[['mine','💎','Crystal vein'],['travel','🚀','Rocket']]).map(([kind,icon,name])=>`<button class="soft-button" data-action="go" data-kind="${kind}">${icon} ${name}</button>`).join('')}${(world.planet==='home'?[['forest','🍄 Mushroom Forest'],['meadow','🌊 Lake Meadow'],['swamp','🌿 Chomper Swamp'],['canyon','🏜️ Redrock Canyon']]:[['wild','Explore the wild']]).map(([kind,label])=>`<button class="soft-button" data-action="wild" data-kind="${kind}">${label}</button>`).join('')}</div><p class="fineprint">${state.discovered.length} of 9 worlds discovered · ${chooseOwnPathHint()}</p>`,'YOUR EXPLORER’S MAP');}
 // Tester code (tester.ts): solo only, so the online server never sees these rules.
 function testerOnline(){return !!actionHandler||!!persistence;}
 const testerTry=Tester.attemptLimiter(undefined,undefined,Tester.savedTries());let testerOpen=false;
@@ -978,7 +987,7 @@ function fish(pond?:Entity|null){
   if(!pond?.pond||Math.hypot(pond.x-world.position.x,pond.z-world.position.z)>pond.radius+3){toast('Walk up to a pond to cast your line.','🎣');return;}
   if(state.gear.weapon==='harpoon'&&!state.gear.disguise){const tap=world.pondTap?.id===pond.id?world.pondTap:undefined;world.pondTap=null;void throwHarpoon(tap);return;}
   const rodId=contextGear.forFishing(state);
-  if(!rodId){openDialog('fish-help','A quiet moment by the water',`<div class="grow-illustration">🎣</div><p class="center">Keep a fishing rod in your backpack to cast your line. Your best rod is held automatically near water, and your combat weapon returns when you leave or fight.</p><button class="primary wide" data-action="go" data-kind="shop">Visit the outfitters</button>`,'FISHING');return;}
+  if(!rodId){openDialog('fish-help','A quiet moment by the water',`<div class="grow-illustration">🎣</div><p class="center">Keep a fishing rod in your backpack to cast your line. Your best rod is held automatically near water, and your combat weapon returns when you leave or fight.</p><p class="center">${esc(t('A bamboo rod costs ϟ {price} in the outfitters, under Supplies › Rods & tools.',{price:M.shopPrice(state,'rod')??20}))}</p><button class="primary wide" data-action="shop-rod">${esc(t('Visit the outfitters'))}</button>`,'FISHING');return;}
   applyContextWeapon(rodId);combatGearUntil=0;
   // Read the owned rod directly so a costume's combat skills cannot prevent casting.
   const rod=M.ITEMS[rodId].weapon!;
@@ -1280,6 +1289,9 @@ const colossus=new ColossusEvent({world,state:()=>state,online:()=>!!actionHandl
   defence:()=>M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),hurt:amount=>world.onDamage(amount,'melee',COLOSSUS_ID),
   change,toast,floating:(text,x,z,style)=>floating(text,x,z,style),spawnLoot:(loot,x,z)=>drops.spawnLoot(loot,x,z),tone:kind=>tone(kind as Parameters<typeof tone>[0]),hud:$('#hud')});
 if(new URLSearchParams(location.search).get('colossus')==='1')colossus.start();
+$('#colossus-banner')?.addEventListener('click',()=>document.body.classList.toggle('guide-colossus-fold')); // a tap folds the banner to a chip (guide.css)
+watchTabScroll($('#dialog-body'));
+const gardenGuide=mountGardenGuide({world,hud:$('#hud'),state:()=>state,bedAt:i=>M.bedPosition(state,i),active:()=>started&&!uiBlocked()&&!visiting&&!world.interior&&state.hp>0&&world.state===state&&world.planet==='home'});frameListeners.add(dt=>gardenGuide.frame(dt));
 world.onEnvironmentEvent=event=>{if(event.message)toast(event.message,'🌍');save();updateHud();};
 /**
  * Other explorers' summons that creatures can fight (their pose's decoys, world.remoteDecoys), drawn with ours: each
@@ -1352,11 +1364,19 @@ export const gameBridge:GameBridge={
   onAction(listener){actionListeners.add(listener);return()=>actionListeners.delete(listener);},
 };
 
+/** The story step's place (garden, market, outfitters...) while it is not done and the explorer is not already there: the tracker row walks there. */
+function questTarget(){
+  if(!started||visiting||state.planet!=='home'||world.interior||world.state!==state||fightNear(world.enemies,world.position.x,world.position.z))return null;
+  const entry=progressEntries(state,'story')[0],place=entry&&!entry.complete?questPlace(storyStep(state.progression.story.index,state)):null;if(!place)return null;
+  const target=world.entities.find(e=>e.kind===place&&(place!=='plot'||!state.plots[e.index!]?.crop))??world.entities.find(e=>e.kind===place);
+  return target&&Math.hypot(target.x-world.position.x,target.z-world.position.z)>7?{place,target}:null;
+}
+function walkToQuest(){const goal=questTarget();if(!goal)return false;tone('click');go(goal.place);return true;}
 function go(kind:string){closeDialog();const entities=world.entities.filter(e=>e.kind===kind);const entity=kind==='plot'?entities.find(e=>!world.state.plots[e.index!]?.crop)||entities[0]:entities[0];if(entity){world.select(entity);toast(`Off to ${kind==='plot'?'the garden':entity.name.toLowerCase()}…`,'👣');}else toast('That place is back in Clover Village.','🏡');}
 // ---- The starship: take-off, a piloted flight between planets, and landing ----
 const SCENERY_KITS={scenery:sceneryKit,wilds:wildsKit,bright:brightKit,harsh:harshKit,dressing:dressingKit};
 shipSequence=new ShipSequence(world,tone);const ship=shipSequence;
-const spaceView=new SpaceView($('#space-labels'),spaceKit);
+const spaceView=new SpaceView($('#space-labels'),spaceKit);const spaceHome=mountSpaceHome($('#space-hud'));
 const spaceKeys=new Set<string>(),boostPointers=new Set<number>();let spacePointer:{pointerId:number;x:number;y:number}|null=null,boostHeld=false;
 const prefetch=(id:M.PlanetId)=>{for(const name of kitsFor(id))void SCENERY_KITS[name].load();};
 function leaveWorld(){if(house.inside)house.house.leave();/* the globe's Fly here starts indoors */closeDialog();resetCombat();cancelPlacement();endFishing();world.destination=null;world.route=[];world.selected=null;world.marker.visible=false;world.ring.visible=false;movement.clear();}
@@ -1378,7 +1398,12 @@ async function flyTo(id:M.PlanetId){
 /** A quick trip home with the starship, without piloting: the old free ride back. */
 /** Set when "return home" is pressed while the ship is still coming down: it takes off again once landed. */
 let homeQueued=false;
-function flyHome(){if(ship.phase==='land'||arriving){if(!homeQueued){homeQueued=true;toast('Heading home once we land…','🚀');}return;}if(ship.busy||flight||launchPending)return;leaveWorld();ship.launch(()=>void arrive('home'));}
+/** Return home pressed while flying: refuel if the tank is dry (the launch cost, or a free tow with no energy), then the autopilot flies home and lands. */
+async function homeFromFlight(){const journey=flight;if(!journey||journey.landing||arriving)return;if(journey.autopilot?.id==='home')return;const plan=refuelForHome(journey.fuel,state.energy,M.LAUNCH_COST);
+  if(plan.pay){const paid=await perform('launch');if(flight!==journey)return;if(paid)toast(t('Tank refilled for ϟ {cost}.',{cost:M.LAUNCH_COST}),'⛽');else plan.fuel=Math.max(journey.fuel,40);}
+  else if(plan.fuel>journey.fuel)toast('Out of fuel and out of energy: a friendly tow gets you home.','🛟');
+  journey.fuel=Math.max(journey.fuel,plan.fuel);journey.setAutopilot('home');spaceHint(t('🧭 Autopilot to {planet}: sit back, or press Skip.',{planet:`${M.PLANETS.home.icon} ${t(M.PLANETS.home.name)}`}),5);tone('cast');}
+function flyHome(){if(flight){void homeFromFlight();return;}if(ship.phase==='land'||arriving){if(!homeQueued){homeQueued=true;toast('Heading home once we land…','🚀');}return;}if(ship.busy||flight||launchPending)return;leaveWorld();ship.launch(()=>void arrive('home'));}
 function warp(then:()=>void){const flash=$('#warp-flash');flash.classList.add('show');setTimeout(()=>{then();setTimeout(()=>flash.classList.remove('show'),150);},600);}
 function enterSpace(){
   flight=new SpaceFlight(state.planet,state.discovered);flight.setAutopilot(autopilotTarget);autopilotTarget=null;spaceView.build(flight,graphics.level==='low');
@@ -1399,8 +1424,8 @@ async function onSpaceEvent(event:SpaceEvent){
   switch(event.kind){
     case 'boost':tone('swing');break;
     case 'bump':spaceView.shake=.5;tone('hit');break;
-    case 'empty':spaceHint('⛽ Out of fuel! The starship can only crawl. Collect <b>stardust</b> ✨ to refuel.',5);break;
-    case 'edge':spaceHint('🌌 This is the edge of the universe. Time to turn back!',3);break;
+    case 'empty':spaceHint('⛽ Out of fuel! Tap <b>Return home</b> to refill (ϟ 20) and fly back, or collect <b>stardust</b> ✨.',6);break;
+    case 'edge':spaceHint('🌌 This is the edge of the universe. Tap <b>Return home</b> to fly back!',4);break;
     case 'dust':{const journey=flight,reward=await perform<{shard:boolean;nextDust?:{id:number;x:number;z:number}}>('collectStardust',{position:journey?{x:journey.x,z:journey.z}:undefined,dustId:event.id});if(!reward)break;if(journey&&flight===journey&&reward.nextDust){const dust=journey.layout.dust.find(d=>d.id===reward.nextDust!.id);if(dust)Object.assign(dust,reward.nextDust);}spaceFloat(`✨ +14 fuel · +3 ϟ${reward.shard?' · 🌟 Star shard!':''}`);tone(reward.shard?'level':'coin');break;}
     case 'discover':{if(!await perform('discover',{id:event.planet,position:flight?{x:flight.x,z:flight.z}:undefined}))break;prefetch(event.planet);const p=M.PLANETS[event.planet];
       spaceHint(`🔭 New planet discovered: <b>${p.icon} ${t(p.name)}</b><br><small>Bosses: ${p.bosses.map(b=>t(ENEMY_TYPES[b]?.name)??b).join(', ')} · landing from level ${p.level}</small>`,6);tone('level');break;}
@@ -1438,7 +1463,7 @@ function updateSpace(dt:number){
   spaceView.drawRadar($<HTMLCanvasElement>('#space-radar').getContext('2d')!,flight,flight.discovered,flight.time);
   $('#fuel-fill').style.width=`${flight.fuel}%`;$('#fuel-fill').classList.toggle('low',flight.fuel<20);$('#fuel-text').textContent=t(String(Math.round(flight.fuel)));
   $('#space-speed').textContent=t(String(Math.round(flight.speed*10)));$('#space-energy').textContent=t(String(state.energy));
-  $('#autopilot-skip').hidden=!flight.autopilot;$('#boost-button').hidden=!!flight.autopilot;const land=$('#land-button'),over=flight.autopilot?null:flight.over;land.hidden=!over||!!flight.landing;
+  spaceHome.update(flight);$('#autopilot-skip').hidden=!flight.autopilot;$('#boost-button').hidden=!!flight.autopilot;const land=$('#land-button'),over=flight.autopilot?null:flight.over;land.hidden=!over||!!flight.landing;
   if(over&&!flight.landing){const p=M.PLANETS[over.id],locked=state.level<p.level;land.classList.toggle('locked',locked);$('#land-title').textContent=t(locked?`🔒 ${t(p.name)}`:'🛬 Land');$('#land-name').textContent=t(locked?`Needs level ${p.level}`:`${p.icon} ${t(p.name)}`);}
 }
 $('#world').addEventListener('pointerdown',event=>{if(!flight||arriving||spacePointer||event.button!==0)return;event.preventDefault();spacePointer={pointerId:event.pointerId,x:event.clientX,y:event.clientY};$('#world').setPointerCapture(event.pointerId);});
@@ -1462,7 +1487,7 @@ app.addEventListener('click',async event=>{
     case 'craft-back':crafting();break;
     case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'level':'pop');}forgeMenu(id);break;}
     case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
-    case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'open-market':market();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;
+    case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'open-market':market();break;case 'inspect':if(id){selectedItem=id;inventory();}break;case 'quests':if(button.id==='quest-summary'&&walkToQuest())break;quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;
     case 'claim':if(await perform('claimQuest')){tone('success');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
     case 'plant':{const i=activePlot,opened=modal,root=world.root,taken=state.plots[i]?.crop;if(taken){toast(t('This bed already grows {crop}.',{crop:t(M.CROPS[taken].name)}),'🌱');refreshPlot();break;}if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
     case 'cook-everything':{let made=0;for(const id of M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id])){const n=M.pantry(state,id);if(n>0&&await perform('cook',{id,count:n}))made+=n;}if(made){tone('success');toast(t('Cooked {count} meals. Enjoy!',{count:made}),'🍲');}cooking();break;}
@@ -1524,9 +1549,11 @@ app.addEventListener('click',async event=>{
     case 'take-all':{const r=await perform<{count:number}>('takeChest');if(r?.count){tone('click');toast(t('Took {count} items from the chest.',{count:r.count}),'📦');}storage();break;}
     case 'upgrade':{const kind=button.dataset.kind as keyof typeof M.UPGRADES;if(await perform('upgrade',{kind})){upgradeFeedback(kind);upgrades();tone('success');}break;}
     case 'craft':if(await perform('craft',{index})){crafting();toast('Made with your own two hands. Check your backpack!','🔨');}break;
-    case 'launch':launch();break;case 'land':case 'autopilot-skip':tryLanding();break;case 'fly-to':flyTo(button.dataset.kind as M.PlanetId);break;
+    case 'launch':launch();break;case 'space-home':flyHome();break;case 'land':case 'autopilot-skip':tryLanding();break;case 'fly-to':flyTo(button.dataset.kind as M.PlanetId);break;
+    case 'harvest-bed':{const i=activePlot;closeDialog();harvestNearby(i);break;}
     case 'go':go(button.dataset.kind!);break;
-    case 'wild':{closeDialog();const destinations:Record<string,[number,number]>={forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]};const destination=destinations[button.dataset.kind??'forest']??[0,-30];world.walkTo(destination[0],destination[1]);toast('Follow the path beyond the garden gate.','🍄');break;}
+    case 'shop-rod':shopTab=rodShopTab;shopFocus='rod';if(IG.isFolded('shop','tool'))IG.toggleFold('shop','tool');go('shop');break;
+    case 'wild':{closeDialog();const destinations:Record<string,[number,number]>={forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]};const kind=button.dataset.kind??'forest',destination=destinations[kind]??[0,-30],armed=wildArmed?.kind===kind&&Date.now()<wildArmed.until,route=wildRoute(destination,armed);world.walkTo(route.x,route.z);if(route.inside){wildArmed=null;toast('Follow the path beyond the garden gate.','🍄');}else{wildArmed={kind,until:Date.now()+45000};toast(wildDanger(state.level)?'Wild creatures ahead, and they come in packs! Get ready at the village edge, then choose this place on the map again to walk in.':'You are at the edge of the wild. Choose this place on the map again to walk in.','⚠️');}break;}
     case 'return-home':if(state.planet!=='home')flyHome();else{endFishing();huntingPending=null;movement.clear();closeDialog();world.position.set(0,0,0);world.destination=null;world.route=[];world.selected=null;world.pondTap=null;updateHunting(0);toast('Home, sweet home.','🏡');}break;
     case 'interact':world.interactNearest();break;case 'attack':basicAttack();break;case 'skill':skill(index);break;
     case 'fish-again':fish(fishPond);break;
@@ -1647,7 +1674,7 @@ function frame(now:number){
   const graphicsChange=graphics.sample(realDt,started&&!document.hidden&&!uiBlocked()&&performance.now()>settledAt);if(graphicsChange)world.applyGraphics(graphics.profile,graphics.ratio);if(graphics.takeSave())saveGraphics(graphics);
   world.render();positionLabels();minimap.frame(realDt);fx?.updateText(realDt,innerWidth,innerHeight);
   for(const listener of frameListeners)listener(dt);
-  if(uiElapsed>.12){uiElapsed=0;world.syncCrops();updateHud();updateLabels();if(modal==='plot'||modal==='plant'){const p=state.plots[activePlot],seen=p?`${activePlot}|${p.crop??''}|${p.generation??''}|${state.plots.filter(q=>!q.crop).length}|${autoPlantRow(state,activePlot)}`:'';if(plotSeen&&seen&&seen!==plotSeen)refreshPlot();plotSeen=seen;}else plotSeen='';if(modal==='plot'){const p=state.plots[activePlot];if(p?.crop&&$('#grow-fill')){$('#grow-fill').style.width=`${M.cropProgress(p)*100}%`;$('#grow-time').textContent=t(growText(p));}}if(modal==='pen'){if(penSignature(state)!==penShown)penDialog();else tickPen($('#dialog-body'),state);}
+  if(uiElapsed>.12){uiElapsed=0;world.syncCrops();updateHud();updateLabels();if(modal==='plot'||modal==='plant'){const p=state.plots[activePlot],seen=p?`${activePlot}|${p.crop??''}|${p.generation??''}|${state.plots.filter(q=>!q.crop).length}|${autoPlantRow(state,activePlot)}`:'';if(plotSeen&&seen&&seen!==plotSeen)refreshPlot();plotSeen=seen;}else plotSeen='';if(modal==='plot'){const p=state.plots[activePlot];if(p?.crop&&$('#grow-fill')){$('#grow-fill').style.width=`${M.cropProgress(p)*100}%`;$('#grow-time').textContent=t(growText(p));ripeHarvestButton(p);}}if(modal==='pen'){if(penSignature(state)!==penShown)penDialog();else tickPen($('#dialog-body'),state);}
     // Helpers keep working while the market, chest or kitchen is open: redraw it when the bag or chest changes, so no row offers what is gone.
     if(modal==='sell'||modal==='chest'||modal==='cook'){const k=stockKey();if(stockShown&&k!==stockShown){if(modal==='sell')market();else if(modal==='chest')storage();else cooking();}stockShown=k;}else stockShown='';}
   if(elapsed>8){elapsed=0;if(started)save();}requestAnimationFrame(frame);

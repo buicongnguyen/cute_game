@@ -3,6 +3,7 @@ import { ITEMS, type ItemDef, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
 import { farmHelperRow } from './farm-helper-ui.ts';
 import { productPace } from './difficulty.ts';
+import { sortAnimalKinds } from './guide.ts';
 import { BREEDS, coatOf, ANIMALS, ANIMAL_KINDS, ANIMAL_LIFESPAN_MS, productCount, productCapacity, productDuration, speciesPenCost, FARM_DISHES, PEN_BUILD, expired, lifetimeLeft, productFor, stockAtExpiry, canBuildPen, penBuilt, animalCount, canBuyAnimal, canCookDish, canFeed, farmOf, playerCanFeed, playerFeedCrop, priceOf, growth, isAdult, penCapacity, penExpandCost, productProgress, productReady, timeLeft, type Animal, type Collected } from './farm.ts';
 
 /**
@@ -58,7 +59,7 @@ export function penHtml(s: SaveState, ui: FarmUi, now = Date.now()) {
     const d = ANIMALS[a.kind], adult = isAdult(a, now), dead = expired(a, now), product = productFor(a, now), st = animalStatus(a, now), name = dead ? t('{name} · Meat ready', { name: t(d.name) }) : t(adult ? d.name : d.baby);
     return `<div class="crop-row garden-row animal-row${st.ready ? ' ready' : ''}" data-animal="${a.uid}"><span class="crop-art">${dead ? ITEMS.meat.icon : adult ? d.icon : d.babyIcon}</span><div><strong>${name} ${i + 1} <span class="muted">· ${ui.esc(t(BREEDS[a.kind][coatOf(a)]))}</span>${st.ready ? ` <span class="chip chip-energy">${ui.mini(product)} ×${productCount(a, now)}</span>` : ''}</strong><div class="grow-meter"><i style="width:${st.progress * 100}%"></i></div><p class="muted animal-time">${ui.esc(st.text)}</p></div>${a.kind === 'dog' ? '' : st.ready ? `<button class="primary" data-action="collect-animal" data-id="${a.uid}" aria-label="${ui.esc(t('Collect from {name} {number}', { name, number: i + 1 }))}">${t('Collect ×{count}', { count: productCount(a, now) })}</button>` : `<button class="soft-button" data-action="feed-animal" data-id="${a.uid}" ${crop && playerCanFeed(a, now) ? '' : 'disabled'} aria-label="${ui.esc(t('Feed {name} {number}', { name, number: i + 1 }))}">Feed</button>`}</div>`;
   }).join('') || '<p class="empty-state">The farm is empty. Choose a new friend below.</p>';
-  const shop = ANIMAL_KINDS.map(k => {
+  const shop = sortAnimalKinds(ANIMAL_KINDS, k => ANIMALS[k].level, k => priceOf(s, k)).map(k => {
     const d = ANIMALS[k], check = canBuyAnimal(s, k), product = ITEMS[d.product];
     const label = check === 'level' ? `🔒 ${t('Level {level}', { level: d.level })}` : check === 'full' ? 'Pen full' : t('Buy · ϟ {price}', { price: priceOf(s, k) });
     const description = k === 'dog' ? t('Protects ripe crops from theft and helps you fight: out with you it tosses bones at creatures. No feeding, products or lifespan limit.') : t('Grows up in {time}, then gives {product} every {interval}.', { time: seconds(d.growMs), product: `${ui.mini(d.product)} ${t(product.name).toLowerCase()}`, interval: seconds(d.productMs * productPace(s)) });
