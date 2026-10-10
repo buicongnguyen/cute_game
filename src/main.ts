@@ -125,6 +125,7 @@ import './tester.css';
 import './item-groups.css';
 import './special-offers.css';
 import './hud-desk.css'; // last: the timed bonus line, level chip and desktop layout override the older HUD sheets
+import './tap-targets.css'; // very last: 44 px hit areas (promo/tap-probe.mjs)
 import {setDock,initDockFraming} from './dialog-dock';
 import {iconPath} from './item-icons.ts';
 import { WORK_ACTIONS, CATCH_UP_ACTIONS, explorerAway } from './delivery.ts';

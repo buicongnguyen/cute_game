@@ -30,27 +30,63 @@ test('gainXp pays the milestone once per level passed (the same code the server 
   M.gainXp(f, M.xpNeeded(34), T, 1); assert.equal(f.level, 35); assert.equal((f.bag.moonstone ?? 0) + (f.chest.moonstone ?? 0), 1); assert.equal(f.energy, 17500);
 });
 
-test('the endless story points at the modes and the levels 30, 40, 50 and 60', () => {
+test('the endless story points at the modes, fillers and the levels 30, 40, 50 and 60', () => {
   const n = P.STORY_STEPS.length, steps = Array.from({ length: P.ENDGAME_STEPS.length }, (_, i) => P.storyStep(n + i));
-  assert.deepEqual(steps.map(x => x.title), ['Answer a Rescue call', 'Win a Flag Rush match', 'Reach level 30', "Clear the Delvers' Vault", 'Hurt the Cinderpeak Colossus', 'Reach level 40', 'Reach level 50', 'Reach level 60']);
+  assert.deepEqual(steps.slice(0, 4).map(x => x.event), ['rescue', 'ctf', 'dungeon', 'colossus'], 'the four mode tries come first');
   assert.deepEqual(steps.filter(x => x.condition === 'level').map(x => x.target), [30, 40, 50, 60]);
-  assert.deepEqual(steps.filter(x => x.event).map(x => x.event), ['rescue', 'ctf', 'dungeon', 'colossus']);
+  assert.equal(steps.at(-1)!.title, 'Reach level 60');
   assert.equal(P.storyStep(n + steps.length).event, 'kill', 'the old endless cycle follows');
 });
 
+test('between two level gates the story always has a doable filler (a level-25 explorer is never parked on a gate)', () => {
+  const EVENTS = new Set(['kill', 'harvest', 'sell', 'craft', 'fish', 'boss', 'mine', 'bounty', 'rescue', 'ctf', 'dungeon', 'colossus']);
+  const steps = P.ENDGAME_STEPS;
+  let run = 0, fillers = 0;
+  steps.forEach((x, i) => {
+    if (x.condition === 'level') { assert.ok(i === 0 || !steps[i - 1].condition, 'no two gates in a row'); if (x.target > 30) assert.ok(fillers >= 2, `at least two fillers before level ${x.target}`); fillers = 0; run = 0; }
+    else { assert.ok(x.event && EVENTS.has(x.event), `${x.title} uses a recorded event`); assert.ok(x.target > 0); fillers++; run++; }
+  });
+  // Play it through: level 25, every earlier step done. Each step is either done by actions or waits only on the level.
+  const s = M.newGame('Walker'); s.level = 25; s.progression.story.index = P.STORY_STEPS.length;
+  let waits = 0;
+  for (let i = 0; i < steps.length; i++) {
+    const step = P.storyStep(s.progression.story.index, s);
+    if (step.condition === 'level') { assert.ok(s.level >= step.target - 5 || s.level < step.target, 'gate'); s.level = step.target; }
+    else P.recordEvent(s, step.event!, step.target, undefined, T);
+    const e = P.progressEntries(s, 'story', T)[0]; assert.equal(e.complete, true, step.title);
+    assert.equal(P.claimProgress(s, 'story', e.id, T), true, step.title);
+    const next = P.storyStep(s.progression.story.index, s);
+    if (next.condition === 'level' && s.level < next.target) waits++;
+  }
+  assert.ok(s.progression.story.index >= P.STORY_STEPS.length + steps.length);
+  // At level 25 the first gate is only reached after at least 7 steps that need no level.
+  assert.ok(steps.findIndex(x => x.condition === 'level') >= 7);
+  void waits; void run;
+});
+
+test('story fillers pay modest rewards (more only at the gates)', () => {
+  const n = P.STORY_STEPS.length;
+  for (let i = 0; i < P.ENDGAME_STEPS.length; i++) {
+    const s = M.newGame('Pay'); s.level = 25; s.progression.story.index = n + i;
+    const step = P.ENDGAME_STEPS[i], e = P.progressEntries(s, 'story', T)[0];
+    assert.ok(e.rewardLabel.length > 0, step.title);
+    if (!step.end) assert.ok(!/moonstone|thunderstone|starshard/.test(e.rewardLabel), step.title);
+  }
+});
+
 test('mode events advance their story steps and nothing else', () => {
-  for (const [at, event] of [[0, 'rescue'], [1, 'ctf'], [3, 'dungeon'], [4, 'colossus']] as const) {
+  for (const [at, event] of [[0, 'rescue'], [1, 'ctf'], [2, 'dungeon'], [3, 'colossus']] as const) {
     const s = M.newGame(); s.progression.story.index = P.STORY_STEPS.length + at;
     P.recordEvent(s, 'kill', 5, undefined, T); assert.equal(s.progression.story.progress, 0);
     P.recordEvent(s, event, 1, undefined, T); assert.equal(s.progression.story.progress, 1, event);
     assert.equal(P.progressEntries(s, 'story', T)[0].complete, true);
   }
-  const s = M.newGame(); s.progression.story.index = P.STORY_STEPS.length + 2; s.level = 29;
+  const s = M.newGame(); s.progression.story.index = P.STORY_STEPS.length + P.ENDGAME_STEPS.findIndex(x => x.target === 30 && x.condition === 'level'); s.level = 29;
   assert.equal(P.progressEntries(s, 'story', T)[0].complete, false); s.level = 30; assert.equal(P.progressEntries(s, 'story', T)[0].complete, true);
 });
 
 test('the colossus reward path counts the colossus step (offline and server)', () => {
-  const s = M.newGame(); s.progression.story.index = P.STORY_STEPS.length + 4;
+  const s = M.newGame(); s.progression.story.index = P.STORY_STEPS.length + 3;
   grantColossusReward(s, false, () => .99, true); assert.equal(s.progression.story.progress, 1);
 });
 
