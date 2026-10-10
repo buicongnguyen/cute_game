@@ -122,4 +122,8 @@ export function clockText(ms: number) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 }
 /** Health: 3,000,000 for one explorer, +80% for every other explorer nearby (server: every explorer on the home world). */
-export const colossusMaxHp = (players: number) => Math.round(COLOSSUS_STATS.hp * (1 + COLOSSUS_STATS.perExtraPlayer * Math.max(0, Math.floor(players) - 1)));
+export const colossusMaxHp = (players: number, solo = false) => Math.round(COLOSSUS_STATS.hp * (1 + COLOSSUS_STATS.perExtraPlayer * Math.max(0, Math.floor(players) - 1)) * (solo ? SOLO_HP_SHARE : 1));
+/** Offline (no server, no room) the Colossus has a third of the online health: about 1,000,000 for one explorer. Online keeps 3,000,000. */
+export const SOLO_HP_SHARE = 1 / 3;
+/** The most one AI neighbour's blow can take off the Colossus (offline; was 400). */
+export const NEIGHBOUR_HIT_CAP = 1200;

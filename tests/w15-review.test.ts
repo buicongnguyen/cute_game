@@ -105,7 +105,7 @@ test('2. difficulty round trips pay nothing extra: no harvest top-up, one price 
   const s = M.newGame(); s.level = 25; s.energy = 1e6; while (M.expandGarden(s)); s.energy = 0;
   for (let i = 0; i < s.plots.length; i++) assert.ok(M.plant(s, i, 'peach', T0));
   act(s, 'settings', { settings: { difficulty: 'normal' } });
-  const e0 = s.energy; M.harvestAll(s, T0 + M.CROPS.peach.duration + 1); assert.equal(s.energy - e0, 0, 'review: 39,600 top-up before');
+  const e0 = s.energy, l0 = s.level; M.harvestAll(s, T0 + M.CROPS.peach.duration + 1); assert.equal(s.energy - e0 - M.milestonesBetween(l0, s.level).reduce((n, l) => n + M.milestoneReward(l).energy, 0), 0, 'review: 39,600 top-up before');
   act(s, 'settings', { settings: { difficulty: 'easy' } }, T0 + M.CROPS.peach.duration + 2);
   assert.equal(sellProduce(s), s.plots.length * M.ITEMS.peach.sell, 'the legit Easy value, not 1.75x');
   // Planted on Normal: twice the grow time and 0.3x XP, kept when the setting changes; no +15% on a harvest planted off Hard.

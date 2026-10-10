@@ -88,12 +88,26 @@ test('the bed panel row and the helper panel are localized without changing acti
   } finally { setLanguage('en'); }
 });
 
-test('helpers let a fully grown bed stand for five minutes before harvesting it', () => {
+test('the hold before a helper harvests is a quarter of the growing time, between 20 seconds and 5 minutes', () => {
+  assert.equal(H.growHold(10_000), 20_000); assert.equal(H.growHold(80_000), 20_000); assert.equal(H.growHold(100_000), 25_000);
+  assert.equal(H.growHold(180_000), 45_000); assert.equal(H.growHold(300_000), 75_000); assert.equal(H.growHold(20 * 60_000), 5 * 60_000);
+  assert.equal(H.growHold(8 * 3_600_000), 5 * 60_000); assert.equal(H.GROWN_HOLD_MS, 5 * 60_000); assert.equal(H.GROWN_HOLD_MIN_MS, 20_000);
+});
+
+test('helpers let a fully grown bed stand for a quarter of its growing time before harvesting it', () => {
   const s = owned(); s.plots[0].crop = 'pumpkin'; s.plots[0].plantedAt = T0 - M.CROPS.pumpkin.duration - 1;
+  const hold = H.growHold(M.CROPS.pumpkin.duration); assert.equal(hold, 75_000);
   assert.equal(H.nextTask(s, { x: 0, z: 0 }, T0)?.kind === 'harvest', false);
   assert.equal(H.helperHarvest(s, 0, T0), null); assert.equal(H.catchUp(s, T0).harvested.length, 0);
-  assert.equal(H.nextTask(s, { x: 0, z: 0 }, T0 + H.GROWN_HOLD_MS)?.kind, 'harvest');
-  assert.equal(H.helperHarvest(s, 0, T0 + H.GROWN_HOLD_MS), 'pumpkin');
+  assert.equal(H.nextTask(s, { x: 0, z: 0 }, T0 + hold)?.kind, 'harvest');
+  assert.equal(H.helperHarvest(s, 0, T0 + hold), 'pumpkin');
+});
+
+test('a quick crop on a high-level bed (short grow time) is re-harvested within 20 to 45 seconds', () => {
+  const s = owned(); s.plots[0].crop = 'radish'; s.plots[0].growDuration = 60_000; s.plots[0].plantedAt = T0 - 60_000;
+  assert.equal(H.harvestable(s.plots[0], T0 + 19_000), false); assert.equal(H.harvestable(s.plots[0], T0 + 20_000), true);
+  s.plots[0].growDuration = 180_000; s.plots[0].plantedAt = T0 - 180_000;
+  assert.equal(H.harvestable(s.plots[0], T0 + 44_000), false); assert.equal(H.harvestable(s.plots[0], T0 + 45_000), true);
 });
 
 test('daily rests: Bolt rests the last 3 UTC hours, the cook the last hour of every 4, and either can be asked to work', async () => {

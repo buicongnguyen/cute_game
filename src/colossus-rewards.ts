@@ -19,6 +19,7 @@ export function colossusContributors(lastHits: ReadonlyMap<string, number>, kill
  */
 export function grantColossusReward(s: M.SaveState, lastHit: boolean, rng: () => number = Math.random, bank = true, bonus?: number): M.DefeatLoot {
   const loot = M.grantDefeat(s, COLOSSUS_TYPE, COLOSSUS_STATS.xp, true, rng, bank, bonus);
+  M.recordEvent(s, 'colossus');
   if (lastHit && M.stowItem(s, COLOSSUS_PET, 1)) loot.pet = COLOSSUS_PET;
   return loot;
 }

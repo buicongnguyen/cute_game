@@ -58,5 +58,6 @@ export function claimRescue(s: Game.SaveState, c: RescueClaim, now: number, rand
   if (xp > 0) { const level = s.level, had = s.xp; Game.gainXp(s, xp, now); gained = s.xp - had; for (let l = level; l < s.level; l++) gained += Game.xpNeeded(l); }
   if (energy > 0 && Number.isSafeInteger(s.energy + energy)) s.energy += energy;
   s.rescue = d;
+  if (c.waves > 0) Game.recordEvent(s, 'rescue', 1, undefined, now);
   return { xp: Math.round(gained), energy, gift, badge, full, winsLeft: Math.max(0, RESCUE_REWARD.winsPerDay - d.wins), wavesLeft: Math.max(0, RESCUE_REWARD.wavesPerDay - d.waves), level: s.level };
 }

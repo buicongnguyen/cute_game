@@ -21,7 +21,7 @@ export const VI_UPGRADES: Record<string, string> = {
   '{name} is now +{level}!': '{name} đã lên +{level}!',
   '{skill} reached level {level}!': '{skill} đã đạt cấp {level}!',
   // Gear ceilings (gear-ceiling.ts): every item of a kind is equally strong at +10.
-  "Level hats, outfits, boots and companions up to +10. At +10 every item of a kind is equally strong, so wear the look you like; items further behind cost more. Weapons use the forge: a 30% chance per attempt, +1% attack per level, up to +15.": 'Nâng mũ, trang phục, giày và thú đồng hành tối đa +10. Ở +10 mọi món cùng loại đều mạnh như nhau, nên hãy mặc kiểu bạn thích; món càng kém xa càng tốn nhiều. Vũ khí dùng lò rèn: mỗi lần thử có 30% cơ hội, +1% tấn công mỗi cấp, tối đa +15.',
+  "Level hats, outfits, boots and companions up to +10. At +10 every item of a kind is equally strong, so wear the look you like; items further behind cost more. Weapons use the forge: a 50% chance per attempt up to +5, then 30%, +1% attack per level, up to +15.": 'Nâng mũ, trang phục, giày và thú đồng hành tối đa +10. Ở +10 mọi món cùng loại đều mạnh như nhau, nên hãy mặc kiểu bạn thích; món càng kém xa càng tốn nhiều. Vũ khí dùng lò rèn: mỗi lần thử có 50% cơ hội đến +5, sau đó 30%, +1% tấn công mỗi cấp, tối đa +15.',
   'Lv {level}/{max} · at max: {stats}': 'Cấp {level}/{max} · khi tối đa: {stats}',
   'same for every hat': 'mọi mũ đều như nhau',
   'same for every outfit': 'mọi trang phục đều như nhau',

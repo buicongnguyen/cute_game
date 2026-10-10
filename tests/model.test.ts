@@ -51,7 +51,7 @@ test('material purchases and crafting preserve funds and items on failure',()=>{
   const offer=M.RECIPES.find(r=>r.station==='shop'&&Object.keys(r.materials).length>0)!;s.energy=offer.energy;assert.equal(M.buy(s,offer.result),false);for(const[id,n]of Object.entries(offer.materials))M.addItem(s,id,n);assert.equal(M.buy(s,offer.result),true);
 });
 test('exactly one equipped copy is protected through selling, storage and death',()=>{
-  const s=M.newGame();M.addItem(s,'hat_straw',3);M.equip(s,'hat_straw');assert.equal(M.looseQuantity(s,'hat_straw'),2);assert.equal(M.sell(s,'hat_straw',3),0);assert.equal(M.sell(s,'hat_straw'),10);
+  const s=M.newGame();s.settings.keepBagOnDeath=false;M.addItem(s,'hat_straw',3);M.equip(s,'hat_straw');assert.equal(M.looseQuantity(s,'hat_straw'),2);assert.equal(M.sell(s,'hat_straw',3),0);assert.equal(M.sell(s,'hat_straw'),10);
   assert.equal(M.transfer(s,'hat_straw',true),true);assert.equal(M.transfer(s,'hat_straw',true),false);assert.equal(s.bag.hat_straw,1);M.transfer(s,'hat_straw',false);M.die(s,1,2);assert.equal(s.bag.hat_straw,1);assert.equal(s.deathBags?.[0].items.hat_straw,1);assert.ok(M.recoverBag(s));
   assert.equal(M.unequip(s,'hat'),true);assert.equal(M.looseQuantity(s,'hat_straw'),2);assert.equal(M.unequip(s,'hat'),false);
 });
@@ -67,7 +67,7 @@ test('fifteen paid or kit garden expansions and decoration movement are lossless
   assert.equal(M.moveDecoration(d,uid,7,5,.4),true);const restored=reload(d);assert.deepEqual(restored.decorations,d.decorations);assert.equal(M.removeDecoration(restored,uid),true);assert.equal(restored.bag.deco_lamp,1);assert.equal(M.removeDecoration(restored,uid),false);
 });
 test('a launch costs 20 energy, landing follows reference level gates and death bags survive multiple defeats',()=>{
-  const s=M.newGame();s.energy=19;assert.equal(M.launch(s),false);s.energy=100;assert.equal(M.launch(s),true);assert.equal(s.energy,80);
+  const s=M.newGame();s.settings.keepBagOnDeath=false;s.energy=19;assert.equal(M.launch(s),false);s.energy=100;assert.equal(M.launch(s),true);assert.equal(s.energy,80);
   s.level=5;assert.equal(M.travel(s,'candy'),false);assert.equal(M.canLand(s,'candy'),false);s.level=6;assert.equal(M.travel(s,'candy'),true);assert.equal(s.energy,80,'landing itself is free');
   assert.deepEqual(s.discovered,['home','candy']);assert.equal(M.discover(s,'candy'),false);assert.equal(M.discover(s,'ice'),true);
   M.addItem(s,'carrot',2);M.die(s,2,3);assert.equal(s.planet,'home');assert.equal(M.recoverBag(s),false);assert.equal(M.travel(s,'candy'),true);assert.ok(M.recoverBag(s));assert.equal(M.recoverBag(s),false);M.die(s,2,3);M.addItem(s,'wood',3);M.die(s,1,2);assert.equal(s.deathBags?.length,2,'each defeat keeps its own bag');assert.deepEqual([s.deathBags![0].planet,s.deathBags![0].items.carrot],['candy',2]);assert.deepEqual([s.deathBags![1].planet,s.deathBags![1].items.wood],['home',3]);assert.equal(M.travel(s,'home'),true);

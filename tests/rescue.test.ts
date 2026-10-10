@@ -187,7 +187,7 @@ test('borrowed for the mission only: nothing of a run reaches the save, and the 
   const r = claimRescue(s, { runId: 'run-borrow', mission: 'toy', waves: 6, won: true, seconds: 400 }, T0, () => .99);
   assert.ok(r); const after = JSON.parse(JSON.stringify(s)) as Record<string, unknown>, was = JSON.parse(before) as Record<string, unknown>;
   const changed = Object.keys(after).filter(k => JSON.stringify(after[k]) !== JSON.stringify(was[k])).sort();
-  for (const k of changed) assert.ok(['rescue', 'xp', 'level', 'energy', 'bag', 'chest', 'collection', 'hp', 'savedAt', 'events', 'progress', 'stats'].includes(k), 'unexpected save change: ' + k);
+  for (const k of changed) assert.ok(['rescue', 'xp', 'level', 'energy', 'bag', 'chest', 'collection', 'hp', 'savedAt', 'events', 'progress', 'stats', 'progression'].includes(k), 'unexpected save change: ' + k);
   assert.ok(!/spark|stars|ladder|defence/i.test(JSON.stringify(s.rescue)));
   assert.deepEqual(s.gear, JSON.parse(before).gear, 'the explorer\'s gear is untouched'); assert.deepEqual(s.friends ?? [], JSON.parse(before).friends ?? []);
   // The runtime shows mission gear through poses only: it never assigns to the save's gear or a friend's gear.

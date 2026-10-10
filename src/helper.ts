@@ -77,10 +77,14 @@ export function cropFor(s: M.SaveState, i: number): M.CropId | null {
 /** What a helper plants in bed `i` now: nothing at all while auto-planting is off (every planting path asks here). */
 export function seedFor(s: M.SaveState, i: number): M.CropId | null { return autoPlanting(s) ? cropFor(s, i) : null; }
 
-/** Helpers leave a fully grown bed standing this long before they harvest it, so the garden is seen at its best. The player may harvest any time. */
+/** The longest a helper leaves a fully grown bed standing, so the garden is seen at its best. The player may harvest any time. */
 export const GROWN_HOLD_MS = 5 * 60_000;
-/** True once the crop in this bed has been ripe for the hold; the one rule for the robot, Sprout and every catch-up. */
-export const harvestable = (p: M.Plot, now: number) => !!p.crop && M.cropProgress(p, now) >= 1 && now - (p.plantedAt + M.cropDuration(p)) >= GROWN_HOLD_MS;
+/** The shortest hold: a quick crop is still seen ripe for a moment. */
+export const GROWN_HOLD_MIN_MS = 20_000;
+/** How long a helper waits after a crop of this growing time (ms) is ripe: a quarter of it, between 20 s and 5 min, so quick crops on high-level beds cycle in 20 to 45 s. */
+export const growHold = (durationMs: number) => Math.min(GROWN_HOLD_MS, Math.max(GROWN_HOLD_MIN_MS, durationMs / 4));
+/** True once the crop in this bed has been ripe for its hold; the one rule for the robot, Sprout and every catch-up. */
+export const harvestable = (p: M.Plot, now: number) => { if (!p.crop || M.cropProgress(p, now) < 1) return false; const d = M.cropDuration(p); return now - (p.plantedAt + d) >= growHold(d); };
 
 export interface HelperTask { kind: 'harvest' | 'plant'; index: number; crop?: M.CropId }
 /** The next job: the nearest ripe bed, else the nearest empty bed it has a seed for; null = nothing to do (idle). `held` is the empty bed whose seed list the player has open: it is the player's until the panel closes. */

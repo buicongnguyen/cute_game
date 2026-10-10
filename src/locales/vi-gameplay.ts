@@ -197,7 +197,7 @@ export const VI_GAMEPLAY: Record<string, string> = {
   "Strengthen your weapon": "Cường hóa vũ khí",
   "Strengthen weapons": "Cường hóa vũ khí",
   "🔨 Strengthen weapons": "🔨 Cường hóa vũ khí",
-  "Each attempt has a 30% chance to add one forge level, up to +15. Each level adds 1% attack. Failed attempts consume materials and energy, but never lower your weapon level.": "Mỗi lần có 30% cơ hội tăng một cấp cường hóa, tối đa +15. Mỗi cấp tăng 1% tấn công. Thất bại vẫn tiêu hao vật liệu và năng lượng nhưng không làm giảm cấp vũ khí.",
+  "Each attempt has a 50% chance to add one forge level up to +5, then 30%, up to +15 (about 2 tries per level at first, then about 3.3). Each level adds 1% attack. Failed attempts consume materials and energy, but never lower your weapon level.": "Mỗi lần có 50% cơ hội tăng một cấp cường hóa đến +5, sau đó 30%, tối đa +15 (đầu khoảng 2 lần thử mỗi cấp, sau đó khoảng 3,3). Mỗi cấp tăng 1% tấn công. Thất bại vẫn tiêu hao vật liệu và năng lượng nhưng không làm giảm cấp vũ khí.",
   "Attack bonus: {count}%": "Tăng tấn công: {count}%",
   "Maximum forge level": "Đạt cấp cường hóa tối đa",
   "Maximum": "Tối đa",

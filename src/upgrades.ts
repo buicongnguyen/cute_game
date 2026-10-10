@@ -7,7 +7,7 @@
  * item of a slot has the same stats and the player wears the look they like. An item further from the ceiling costs
  * more energy per level (its gap share x 1.5 of the base curve, at least half of it); materials are the same for all.
  * A companion's shot is its own ability: it still grows +4% per level (gearFactor) and does not converge.
- * Weapons stay on the ember forge (+1% attack per level, 30% chance per attempt, up to +15): the bench offers the
+ * Weapons stay on the ember forge (+1% attack per level, 50% chance per attempt up to +5 then 30%, up to +15): the bench offers the
  * same forge attempt with the same cost and odds, so there is one rule for weapons wherever you stand.
  * Saves keep only the level number (gearLevels), so older saves simply read their levels through the new formula.
  */

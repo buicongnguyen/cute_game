@@ -74,6 +74,9 @@ export function hardScale(d: Difficulty | WithSettings | null | undefined) {
   const level = typeof d === 'string' ? d : difficultyOf(d);
   return level === 'hard' ? { hp: 1.25, damage: 1.2 } : { hp: 1, damage: 1 };
 }
+/** Offline only: zone creatures (not bosses or titans) grow 3% tougher (health and damage) for every level above 25, fixed at spawn. */
+export const CREATURE_SCALE_FROM = 25, CREATURE_SCALE_STEP = 0.03;
+export const creatureLevelScale = (level: number) => 1 + CREATURE_SCALE_STEP * Math.max(0, (Number.isFinite(level) ? Math.floor(level) : 0) - CREATURE_SCALE_FROM);
 /** Bed upgrades (model.ts upgradeBed) cost 1.5x off Easy, like the dearer livestock. */
 export const BED_UPGRADE_SCALE = 1.5;
 export const bedUpgradeScale = (s: WithSettings | null | undefined) => harsh(s) ? BED_UPGRADE_SCALE : 1;

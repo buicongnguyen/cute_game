@@ -70,7 +70,7 @@ test('canonical Titan summon recalls existing eligible mobs with stacked attack 
  for(const i of [0,5]){assert.equal(mobs[i].hp,1);assert.equal(mobs[i].x,before[i].x);assert.equal(mobs[i].damage,before[i].damage);}
 });
 test('pending damage survives reconnect and travel and lethal damage drops the bag at its original location',async t=>{
- const f=await fixture(t,{profile:p=>{p.hp=1;p.bag.wood=2;}}),enemy=f.spawn('mushroom');
+ const f=await fixture(t,{profile:p=>{p.hp=1;p.bag.wood=2;p.settings.keepBagOnDeath=false;}}),enemy=f.spawn('mushroom');
  await f.authority.internal('actor','fixtureJourney',[],records=>{Object.assign(records.get('actor'),{journeyPaid:true,flightDust:[{id:0,x:0,z:0}],flightPoint:{x:0,z:0},rideUntil:Date.now()+45000,ridePlanet:'home',fishingTicket:{id:'old-life'}});return {};});
  const from={...f.peer.pose};f.authority.damage(f.peer,enemy.id);
  const replacement={...f.peer,room:'party:home',pose:{x:0,z:0,facing:0,moving:false},socket:{}};f.peers.set('actor',replacement);f.rooms.set(replacement.room,{id:replacement.room,members:new Set(['actor']),host:'actor',enemies:[],killed:new Set()});f.authority.engineFor(replacement);

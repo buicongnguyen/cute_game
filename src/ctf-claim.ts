@@ -36,5 +36,6 @@ export function claimMatch(s: Game.SaveState, c: CtfClaim, now: number): CtfClai
     }
   }
   s.ctf = d;
+  if (c.won) Game.recordEvent(s, 'ctf', 1, undefined, now);
   return { xp, left: Math.max(0, CTF_REWARD.perDay - d.rewarded), level: s.level };
 }

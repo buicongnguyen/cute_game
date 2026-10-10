@@ -74,7 +74,7 @@ export function claimStage(s: Game.SaveState, id: string, stage: number, now: nu
   Game.gainXp(s, loot.xp, now);
   const st = DUNGEON_STAGES[stage]; Game.recordEvent(s, 'kill', st.mobs.reduce((n, [, c]) => n + c, 0) + 1, st.boss, now); Game.recordEvent(s, 'boss', 1, st.boss, now);
   run.stage++; run.lastAt = now;
-  if (loot.cleared) { s.dungeon!.clears++; delete s.dungeon!.run; }
+  if (loot.cleared) { Game.recordEvent(s, 'dungeon', 1, undefined, now); s.dungeon!.clears++; delete s.dungeon!.run; }
   return loot;
 }
 

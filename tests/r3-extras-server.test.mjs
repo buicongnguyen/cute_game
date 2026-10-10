@@ -39,7 +39,7 @@ test('a dropped bag online: only its owner, standing beside it, within 24 hours'
 });
 
 test('online defeat drops a bag at the server pose; slots, expansion and gifts follow the same limits', async t => {
-  const f = await fixture(t, s => { s.hp = 0; s.bag = { carrot: 2 }; }, s => { for (const id of FILLER.slice(0, CHEST.base)) s.chest[id] = 1; });
+  const f = await fixture(t, s => { s.hp = 0; s.bag = { carrot: 2 }; s.settings.keepBagOnDeath = false; }, s => { for (const id of FILLER.slice(0, CHEST.base)) s.chest[id] = 1; });
   f.peers.alice.pose = { x: 5, z: 6 };
   assert.deepEqual((await f.command('alice', 'die', { x: 99, z: 99 })).result, { dropped: true });
   const bag = (await f.profile('alice')).deathBags[0]; assert.deepEqual([bag.x, bag.z, bag.items], [5, 6, { carrot: 2 }], 'the server pose, not the client\'s');

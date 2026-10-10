@@ -108,7 +108,7 @@ const ACHIEVEMENTS: [
     number[],
     string,
     string
-][] = [['kills', 'kill', [50, 200, 1000, 5000], 'Creature hunter', '⚔️'], ['boss', 'boss', [1, 10, 50, 200], 'Boss hunter', '👑'], ['farm', 'harvest', [20, 100, 500, 2000], 'Gardener', '🌾'], ['fish', 'fish', [10, 50, 200, 1000], 'Angler', '🎣'], ['legend', 'legendFish', [1, 3, 10], 'Legendary angler', '🐋'], ['cook', 'cook', [10, 50, 200], 'Volcano chef', '🔥'], ['mine', 'mine', [20, 100, 500], 'Space miner', '⛏️'], ['planets', 'visited', [2, 3, 5, 9], 'Explorer', '🔭'], ['decor', 'decor', [3, 10, 25], 'Decorator', '🏡'], ['quests', 'questsDone', [5, 30, 100, 300], 'Helpful neighbor', '📜'], ['bounty', 'bounty', [1, 10, 50, 150], 'Bounty hunter', '🎯'], ['chal', 'chal', [5, 30, 100, 300], 'Challenge champion', '⏱️'], ['streak', 'bestStreak', [3, 5, 8, 12], 'Winning streak', '🔥'], ['story', 'story', [9, 15, 21, 29], 'Storyteller', '🧭'], ['level', 'level', [5, 10, 20, 30], 'Growing stronger', '⭐']];
+][] = [['kills', 'kill', [50, 200, 1000, 5000], 'Creature hunter', '⚔️'], ['boss', 'boss', [1, 10, 50, 200], 'Boss hunter', '👑'], ['farm', 'harvest', [20, 100, 500, 2000], 'Gardener', '🌾'], ['fish', 'fish', [10, 50, 200, 1000], 'Angler', '🎣'], ['legend', 'legendFish', [1, 3, 10], 'Legendary angler', '🐋'], ['cook', 'cook', [10, 50, 200], 'Volcano chef', '🔥'], ['mine', 'mine', [20, 100, 500], 'Space miner', '⛏️'], ['planets', 'visited', [2, 3, 5, 9], 'Explorer', '🔭'], ['decor', 'decor', [3, 10, 25], 'Decorator', '🏡'], ['quests', 'questsDone', [5, 30, 100, 300], 'Helpful neighbor', '📜'], ['bounty', 'bounty', [1, 10, 50, 150], 'Bounty hunter', '🎯'], ['chal', 'chal', [5, 30, 100, 300], 'Challenge champion', '⏱️'], ['streak', 'bestStreak', [3, 5, 8, 12], 'Winning streak', '🔥'], ['story', 'story', [9, 15, 21, 29], 'Storyteller', '🧭'], ['level', 'level', [5, 10, 20, 30, 40, 50, 60], 'Growing stronger', '⭐']];
 const CHALLENGES: Record<string, {
     target: number;
     seconds: number;
@@ -185,13 +185,25 @@ export function refreshProgress(s: SaveState, now = Date.now()) {
         p.streak = 0;
     }
 }
+/** The first steps past the written story: a try of every mode and the level goals 30, 40, 50 and 60 (the endless cycle follows). */
+export const ENDGAME_STEPS: { title: string; event?: string; condition?: string; target: number; icon: string; end?: Inventory }[] = [
+    { title: 'Answer a Rescue call', event: 'rescue', target: 1, icon: '🛟' },
+    { title: 'Win a Flag Rush match', event: 'ctf', target: 1, icon: '🚩' },
+    { title: 'Reach level 30', condition: 'level', target: 30, icon: '⭐', end: { starshard: 2, seed_star: 2 } },
+    { title: "Clear the Delvers' Vault", event: 'dungeon', target: 1, icon: '🗝️' },
+    { title: 'Hurt the Cinderpeak Colossus', event: 'colossus', target: 1, icon: '🌋' },
+    { title: 'Reach level 40', condition: 'level', target: 40, icon: '⭐', end: { moonstone: 1, thunderstone: 2 } },
+    { title: 'Reach level 50', condition: 'level', target: 50, icon: '⭐', end: { starshard: 4, moonstone: 1 } },
+    { title: 'Reach level 60', condition: 'level', target: 60, icon: '⭐', end: { moonstone: 2, thunderstone: 3 } },
+];
 /** Stands in for "Cook three meals" while the kitchen is still locked (Normal and Hard open it at level 14, long after chapter 2). */
 const NO_KITCHEN_STEP = { title: 'Harvest ten crops', event: 'harvest', target: 10, icon: '🌾' };
 /** The story step at index; pass the save so a cooking step becomes a doable one while its kitchen is locked. */
 export function storyStep(index: number, s?: SaveState | null) { if (index < STORY_STEPS.length) {
     const step = STORY_STEPS[index];
     return step.event === 'cook' && s && s.level < kitchenLevel(s) ? { ...step, ...NO_KITCHEN_STEP } : step;
-} const round = index - STORY_STEPS.length, [event, base, title, icon] = ENDLESS[round % ENDLESS.length]; return { event, target: Math.round(base * (1 + Math.floor(round / ENDLESS.length) * .5)), title, icon, chapter: 4, condition: undefined, end: undefined }; }
+} const late = index - STORY_STEPS.length; if (late < ENDGAME_STEPS.length) return { event: undefined as string | undefined, condition: undefined as string | undefined, end: undefined as Inventory | undefined, ...ENDGAME_STEPS[late], chapter: 4 };
+ const round = late - ENDGAME_STEPS.length, [event, base, title, icon] = ENDLESS[round % ENDLESS.length]; return { event, target: Math.round(base * (1 + Math.floor(round / ENDLESS.length) * .5)), title, icon, chapter: 4, condition: undefined, end: undefined }; }
 function condition(s: SaveState, key: string) { switch (key) {
     case 'level': return s.level;
     case 'visited': return s.visited.length;
@@ -220,7 +232,7 @@ export function nextChallengeDelay(after: 'start' | 'won' | 'failed' | 'none', r
 /** Seconds each surprise challenge lasts (reference Og[type].time). */
 export function challengeSeconds(type: string) { return Object.hasOwn(CHALLENGES, type) ? CHALLENGES[type].seconds : 0; }
 export function recordEvent(s: SaveState, event: string, amount = 1, detail?: string, now = Date.now()) {
-    if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(now) || !Object.hasOwn({ kill: 1, harvest: 1, sell: 1, craft: 1, fish: 1, skill: 1, upgrade: 1, boss: 1, fishrare: 1, legendFish: 1, cook: 1, mine: 1, planet: 1, expand: 1, decorate: 1, bounty: 1, chal: 1 }, event))
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(now) || !Object.hasOwn({ kill: 1, harvest: 1, sell: 1, craft: 1, fish: 1, skill: 1, upgrade: 1, boss: 1, fishrare: 1, legendFish: 1, cook: 1, mine: 1, planet: 1, expand: 1, decorate: 1, bounty: 1, chal: 1, rescue: 1, ctf: 1, dungeon: 1, colossus: 1 }, event))
         return;
     refreshProgress(s, now);
     const p = s.progression;
@@ -257,8 +269,11 @@ function taskReward(s: SaveState, t: Task, weekly = false): Reward { if (weekly)
     const bonus = ['seed_star', 'spore', 'seed_fire', 'seed_ice'][hash(t.type) % 4];
     return { energy: 150 + s.level * 20, xp: Math.round(xpNeeded(s.level) * .35), items: { starshard: 1, [bonus]: 2 }, stars: 30 };
 } return { energy: Math.round(20 + s.level * 6 + t.target * (t.type === 'sell' ? .2 : 1.5)), xp: 15 + s.level * 8, items: { [t.bonus]: 1 }, stars: 10 }; }
-function dailyChest(s: SaveState, now: number): Reward { const ids = ['seed_star', 'starshard', 'honey', 'fish_golden', 'seed_fire', 'seed_ice']; return { energy: 60 + s.level * 10, xp: 40 + s.level * 12, items: { [ids[hash(day(now) + 'x') % ids.length]]: 1, spore: 2 }, stars: 20 }; }
-function weeklyChest(s: SaveState): Reward { return { energy: 400 + s.level * 30, xp: Math.round(xpNeeded(s.level) * .8), items: { seed_star: 2, spore: 4, starshard: 2, moonstone: 1 }, stars: 60 }; }
+/** Chest sums: daily 200 + 25 per level energy; weekly 3,000 + 100 per level energy and 2 firecore. */
+export const DAILY_CHEST_BASE = 200, DAILY_CHEST_PER_LEVEL = 25, WEEKLY_CHEST_BASE = 3000, WEEKLY_CHEST_PER_LEVEL = 100;
+export const dailyChestEnergy = (level: number) => DAILY_CHEST_BASE + level * DAILY_CHEST_PER_LEVEL, weeklyChestEnergy = (level: number) => WEEKLY_CHEST_BASE + level * WEEKLY_CHEST_PER_LEVEL;
+function dailyChest(s: SaveState, now: number): Reward { const ids = ['seed_star', 'starshard', 'honey', 'fish_golden', 'seed_fire', 'seed_ice']; return { energy: DAILY_CHEST_BASE + s.level * DAILY_CHEST_PER_LEVEL, xp: 40 + s.level * 12, items: { [ids[hash(day(now) + 'x') % ids.length]]: 1, spore: 2 }, stars: 20 }; }
+function weeklyChest(s: SaveState): Reward { return { energy: WEEKLY_CHEST_BASE + s.level * WEEKLY_CHEST_PER_LEVEL, xp: Math.round(xpNeeded(s.level) * .8), items: { seed_star: 2, spore: 4, starshard: 2, moonstone: 1, firecore: 2 }, stars: 60 }; }
 function loginReward(s: SaveState, now: number): Reward { const streak = s.progression.login.day === day(now - 86400000) ? s.progression.login.streak + 1 : 1; return { energy: 25 + Math.min(streak, 30) * 5 + (streak % 7 === 0 ? 150 : 0), xp: 10 + s.level * 3, items: streak % 7 === 0 ? { seed_star: 1, spore: 2 } : { potion: 1 }, stars: 5 }; }
 function bountyReward(s: SaveState): Reward { return { energy: 40 + s.level * 8, xp: Math.round(xpNeeded(s.level) * .15), items: { [BONUS[hash(s.progression.bounty?.key || '') % BONUS.length]]: 1 }, stars: 15 }; }
 function achievementReward(tier: number, target: number): Reward { return { energy: 40 * (tier + 1) + Math.min(300, Math.round(target / 10)), xp: 30 * (tier + 1), stars: 10 }; }

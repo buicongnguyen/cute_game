@@ -263,6 +263,13 @@ const validRoll = (value: number) => Number.isFinite(value) && value >= 0 && val
 export function removeItem(inv: Inventory, raw: ItemId, count = 1) { const id = canonicalItem(raw); if (!Object.hasOwn(ITEMS, id) || !Number.isSafeInteger(count) || count < 1 || (inv[id] || 0) < count)
     return false; inv[id]! -= count; if (!inv[id])
     delete inv[id]; return true; }
+/** Every 5th level above 25 pays a milestone: 500 x level energy and one moonstone (to the chest when the bag is full). Works offline and on the server, which share gainXp. */
+export const MILESTONE_FROM = 25;
+export const isMilestoneLevel = (level: number) => Number.isInteger(level) && level > MILESTONE_FROM && level % 5 === 0;
+export const milestoneReward = (level: number) => ({ energy: 500 * level, items: { moonstone: 1 } as Inventory });
+/** The milestone levels passed going from level `before` to `after` (for the client's toast). */
+export const milestonesBetween = (before: number, after: number) => { const out: number[] = []; for (let l = before + 1; l <= after; l++) if (isMilestoneLevel(l)) out.push(l); return out; };
+function grantMilestone(s: SaveState) { if (!isMilestoneLevel(s.level)) return; const r = milestoneReward(s.level); if (Number.isSafeInteger(s.energy + r.energy)) s.energy += r.energy; for (const [id, n] of Object.entries(r.items)) stowItem(s, id, n); }
 /** `bonus` is the Hard reward (+15%): the save's own by default; kills pass the room's creature scale, harvests the planting difficulty. */
 export function gainXp(s: SaveState, amount: number, now = Date.now(), bonus = rewardScale(s)): number { if (!Number.isFinite(amount) || amount <= 0)
     return 0; const before = s.level; const gained = amount * (1 + activeStats(s, now).xp) * bonus; /* Hard: +15% */ if (!Number.isFinite(gained))
@@ -270,7 +277,7 @@ export function gainXp(s: SaveState, amount: number, now = Date.now(), bonus = r
     return 0; s.xp += gained; let guard = 0; while (s.xp >= xpNeeded(s.level) && guard++ < 10000) {
     s.xp -= xpNeeded(s.level);
     s.level++;
-    s.hp = maxHp(s);
+    s.hp = maxHp(s); grantMilestone(s);
 } return s.level - before; }
 export function plant(s: SaveState, index: number, raw: CropId, now = Date.now()) { const crop = canonicalItem(raw), p = s.plots[index], def = Object.hasOwn(CROPS, crop) ? CROPS[crop] : undefined; if (!p || p.crop || !def || cropLevel(s, crop) > s.level || !Number.isFinite(now) || now < 0)
     return false; if (def.seed && !removeItem(s.bag, def.seed))
@@ -774,9 +781,11 @@ export function claimCaveChest(s: SaveState, now = Date.now(), rng: () => number
  * drop), worn gear, the chest, level and energy stay. Up to 20 bags wait 7 days each; a 21st banks the oldest into
  * the chest. Back home with full health. Returns the new bag, or null when the backpack was empty.
  */
+/** Keep-my-bag-on-defeat is ON unless the player explicitly switched it off (settings.keepBagOnDeath === false); saves that never chose keep it. Differs from the reference on purpose (docs/PARITY.md). */
+export const keepsBag = (s: { settings?: { keepBagOnDeath?: boolean } }) => s.settings?.keepBagOnDeath !== false;
 export function die(s: SaveState, x: number, z: number, now = Date.now()): DeathBag | null {
     const items: Inventory = {};
-    for (const id of (s.settings.keepBagOnDeath ? [] : Object.keys(s.bag))) { const n = looseQuantity(s, id); if (n) { items[id] = n; removeItem(s.bag, id, n); } }
+    for (const id of (keepsBag(s) ? [] : Object.keys(s.bag))) { const n = looseQuantity(s, id); if (n) { items[id] = n; removeItem(s.bag, id, n); } }
     pruneBags(s, now);
     let bag: DeathBag | null = null;
     if (Object.keys(items).length && Number.isFinite(x) && Number.isFinite(z)) { bag = { id: bagId(s, now), x, z, planet: s.planet, items, at: now }; (s.deathBags ??= []).push(bag); }
@@ -849,7 +858,7 @@ export function parseSave(raw: string | null): SaveState | null {
         if(settings.keyboardLayout==='classic'||settings.keyboardLayout==='wasd')s.settings.keyboardLayout=settings.keyboardLayout;
         if (settings.renderRes === 'sharp' || settings.renderRes === 'balanced' || settings.renderRes === 'saver') s.settings.renderRes = settings.renderRes;
         if (settings.placeBeds === true) s.settings.placeBeds = true;
-        if (settings.keepBagOnDeath === true) s.settings.keepBagOnDeath = true;
+        if (typeof settings.keepBagOnDeath === 'boolean') s.settings.keepBagOnDeath = settings.keepBagOnDeath; // false is a real choice; absent means the default (on)
         if (settings.tester === true) s.settings.tester = true;
         s.settings.difficulty = isDifficulty(settings.difficulty) ? settings.difficulty : 'easy'; // saves from before the setting play on Easy
         if (typeof settings.difficultyLoweredAt === 'number' && Number.isFinite(settings.difficultyLoweredAt) && settings.difficultyLoweredAt > 0) s.settings.difficultyLoweredAt = settings.difficultyLoweredAt;

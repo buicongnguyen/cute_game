@@ -120,7 +120,7 @@ test('expansion costs follow the reference table exactly and use backpack materi
 });
 
 test('a defeat drops the loose backpack in a bag at the spot; it lasts 7 days and up to twenty are kept', () => {
-  const now = 1_000_000_000_000, s = M.newGame(); s.bag = { carrot: 3, hat_straw: 1 }; s.gear.hat = 'hat_straw'; s.planet = 'candy';
+  const now = 1_000_000_000_000, s = M.newGame(); s.settings.keepBagOnDeath = false; s.bag = { carrot: 3, hat_straw: 1 }; s.gear.hat = 'hat_straw'; s.planet = 'candy';
   const bag = M.die(s, 4, 5, now)!;
   assert.deepEqual(bag, { id: bag.id, x: 4, z: 5, planet: 'candy', items: { carrot: 3 }, at: now });
   assert.deepEqual(s.bag, { hat_straw: 1 }, 'worn gear stays on'); assert.equal(s.planet, 'home');
@@ -129,12 +129,12 @@ test('a defeat drops the loose backpack in a bag at the spot; it lasts 7 days an
   assert.deepEqual(M.liveBags(s, now + M.DEATH_BAG_MS - 1, 'candy').length, 1);
   assert.equal(M.recoverBag(s, bag.id, now + M.DEATH_BAG_MS), false, 'after 24 hours the bag is gone'); assert.equal(s.deathBags, undefined);
   // Ten bags at once; an eleventh banks the oldest into the chest.
-  const many = M.newGame(); for (let i = 0; i < 21; i++) { many.bag[FILLER[i]] = i + 1; M.die(many, i, i, now + i); }
+  const many = M.newGame(); many.settings.keepBagOnDeath = false; for (let i = 0; i < 21; i++) { many.bag[FILLER[i]] = i + 1; M.die(many, i, i, now + i); }
   assert.equal(many.deathBags!.length, 20); assert.equal(many.chest[FILLER[0]], 1); assert.equal(many.deathBags![0].items[FILLER[1]], 2);
   assert.match(M.bagTimeLeft(many.deathBags![0], now + 3600_000 + 5 * 60_000), /^166h 5[45]m$/);
   // The action says whether anything dropped (main.ts shows the matching card).
-  const a = M.newGame(); a.bag.carrot = 1; a.hp = 0; assert.deepEqual(act(a, 'die', { x: 1, z: 2 }), { dropped: true });
-  const b = M.newGame(); b.hp = 0; assert.deepEqual(act(b, 'die', { x: 1, z: 2 }), { dropped: false });
+  const a = M.newGame(); a.settings.keepBagOnDeath = false; a.bag.carrot = 1; a.hp = 0; assert.deepEqual(act(a, 'die', { x: 1, z: 2 }), { dropped: true });
+  const b = M.newGame(); b.settings.keepBagOnDeath = false; b.hp = 0; assert.deepEqual(act(b, 'die', { x: 1, z: 2 }), { dropped: false });
 });
 
 test('picking a bag up takes what fits and leaves the rest; saves keep bags and migrate the old single bag', () => {

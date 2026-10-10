@@ -7,7 +7,7 @@ import type { EnemyDefinition } from './enemy-types.ts';
 import { terrainHeight } from './environments.ts';
 import { planetLight } from './toon.ts';
 import { cameraOffset } from './camera-rig.ts';
-import { COLOSSUS_ID, COLOSSUS_MINIONS, COLOSSUS_MINION_SHARD, COLOSSUS_NAME, COLOSSUS_SCHEDULE as W, COLOSSUS_STATS as S, COLOSSUS_TYPE, clockText, colossusClock, colossusMaxHp } from './colossus-content.ts';
+import { COLOSSUS_ID, COLOSSUS_MINIONS, COLOSSUS_MINION_SHARD, COLOSSUS_NAME, COLOSSUS_SCHEDULE as W, COLOSSUS_STATS as S, COLOSSUS_TYPE, clockText, colossusClock, colossusMaxHp, NEIGHBOUR_HIT_CAP } from './colossus-content.ts';
 import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage, colossusSkill, colossusTelegraphs, headMultiplier, headPoint, sanitizeColossusAttack, stepColossusAttack, throughDefence, type ColossusAttack, type ColossusEffect, type ColossusHit, type ColossusSource } from './colossus-patterns.ts';
 import { colossusContributors, grantColossusReward } from './colossus-rewards.ts';
 import { loadColossusArt, makeColossusRig, poseColossus, colossusArtReady, type ColossusRig } from './colossus-art.ts';
@@ -109,7 +109,7 @@ export class ColossusEvent {
   /** A neighbour's blow: small damage that never earns it a reward. */
   botStrike(botId: string, amount: number) {
     const e = this.enemy; if (!e || e.hp <= 0 || !(amount > 0) || this.h.online()) return;
-    this.striker = BOT_PREFIX + botId; try { this.h.world.damageEnemy(e, Math.min(amount, 400)); } finally { this.striker = null; }
+    this.striker = BOT_PREFIX + botId; try { this.h.world.damageEnemy(e, Math.min(amount, NEIGHBOUR_HIT_CAP)); } finally { this.striker = null; }
     this.h.world.burst(e.x + (Math.random() - .5) * 6, e.z + (Math.random() - .5) * 6, '#ffd27a', 5);
   }
   /** Testing: wake it now for `minutes` (offline only). */
@@ -202,7 +202,7 @@ export class ColossusEvent {
   private resetDay(day: number) {
     this.day = day; this.count = 0; this.attacks = []; this.nextAt = this.time + 3; this.facing = W.facing; this.lastHits.clear(); this.killer = null;
     this.minionsUsed = []; this.announced = { kneel: false, enrage: false }; this.kneel = 0;
-    if (this.enemy) { this.enemy.maxHp = colossusMaxHp(1 + this.nearbyExplorers()); this.enemy.hp = this.enemy.maxHp; }
+    if (this.enemy) { this.enemy.maxHp = colossusMaxHp(1 + this.nearbyExplorers(), !this.h.online()); this.enemy.hp = this.enemy.maxHp; }
   }
   private window(now: number) {
     const c = colossusClock(now);
@@ -316,7 +316,7 @@ export class ColossusEvent {
     loadColossusArt(() => this.restyle());
     const rig = makeColossusRig(), e = w.addEntity('enemy', COLOSSUS_NAME, '👑', rig.root, W.x, W.z, S.radius) as Driven;
     e.id = COLOSSUS_ID;
-    const maxHp = online ? Math.max(1, this.server?.maxHp ?? S.hp) : colossusMaxHp(1 + this.nearbyExplorers()), hp = online ? Math.max(0, this.server?.hp ?? maxHp) : maxHp;
+    const maxHp = online ? Math.max(1, this.server?.maxHp ?? S.hp) : colossusMaxHp(1 + this.nearbyExplorers(), true), hp = online ? Math.max(0, this.server?.hp ?? maxHp) : maxHp;
     Object.assign(e, { type: COLOSSUS_TYPE, definition: COLOSSUS_DEFINITION, hp, maxHp, baseMaxHp: maxHp, baseDamage: S.atk, damage: S.atk, xp: S.xp, level: 40, homeX: W.x, homeZ: W.z, cooldown: 0, respawn: 0, boss: true, stun: 0, phase: 'chase', phaseTime: 0, route: [], routeTime: 0, lift: 0, liftVelocity: 0, statuses: {}, scaled: true, lastHitAt: Infinity });
     e.driver = { incoming: (target, amount, hazard) => this.incoming(target, amount, hazard) };
     // Tap and target-ring height: about the lower body, which is what the game camera shows.
@@ -360,6 +360,7 @@ export class ColossusEvent {
       }
     }
     this.lastHits.set(who, Date.now());
+    if (who === 'local' && !hazard && !this.h.online()) M.recordEvent(this.h.state(), 'colossus');
     if (e.hp - dealt <= 0) { this.killer = who; queueMicrotask(() => this.defeated()); }
     return dealt;
   }

@@ -46,4 +46,16 @@ export const VI_ECON: Record<string, string> = {
   // Watering a friend's crops (visit-rules.ts, server/action-service.mjs)
   '💧 You watered the plant: 10% less remaining growing time. +{xp} XP · {count} waterings left in this garden today.': '💧 Bạn đã tưới cây: giảm 10% thời gian sinh trưởng còn lại. +{xp} XP · hôm nay còn {count} lần tưới ở khu vườn này.',
   'You have watered this garden ten times today. Come back tomorrow.': 'Hôm nay bạn đã tưới khu vườn này mười lần rồi. Mai quay lại nhé.',
+  // Endgame goals, milestones, forge odds (econ round 2)
+  'Milestone: level {level}! +{energy} energy and a moonstone. Onward, legend!': 'Cột mốc cấp {level}! +{energy} năng lượng và một đá mặt trăng. Tiến lên nào, huyền thoại!',
+  'Answer a Rescue call': 'Đáp lại một Lời Kêu Cứu',
+  'Win a Flag Rush match': 'Thắng một trận Giật Cờ',
+  'Reach level 30': 'Đạt cấp 30',
+  'Reach level 40': 'Đạt cấp 40',
+  'Reach level 50': 'Đạt cấp 50',
+  'Reach level 60': 'Đạt cấp 60',
+  "Clear the Delvers' Vault": 'Vượt qua Hầm Thám Hiểm',
+  'Hurt the Cinderpeak Colossus': 'Làm đau Cự Thạch Núi Tro',
+  'Chance {chance}% · about ϟ {energy} per level on average': 'Cơ hội {chance}% · trung bình khoảng ϟ {energy} mỗi cấp',
+  'On average about {tries} tries, ϟ {energy} for +1': 'Trung bình khoảng {tries} lần thử, ϟ {energy} cho +1',
 };

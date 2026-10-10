@@ -10,9 +10,11 @@ test('forging costs match level thresholds, exclude rods, and never exceed +15',
   for(let i=1;i<=15;i++){assert.equal(M.forgeWeapon(s,'sword_wood',()=>0)?.level,i);assert.equal(s.bag.sword_wood,2);}
   const before=structuredClone(s);assert.equal(M.forgeWeapon(s,'sword_wood',()=>0),null);assert.deepEqual(s,before);
 });
-test('the 30% boundary consumes one full cost on failure without downgrading; invalid RNG and missing resources do not mutate',()=>{
-  const s=equipped();assert.equal(M.forgeWeapon(s,'sword_wood',()=>.299999)?.success,true);const cost=M.forgeCost(1),energy=s.energy;
-  const outcome=M.forgeWeapon(s,'sword_wood',()=>.3);assert.equal(outcome?.success,false);assert.equal(M.forgeLevel(s,'sword_wood'),1);assert.equal(s.energy,energy-cost.energy);
+test('the odds are 50% for +1..+5 and 30% from +6; the boundary consumes one full cost on failure without downgrading; invalid RNG and missing resources do not mutate',()=>{
+  for(let l=0;l<5;l++)assert.equal(M.forgeChance(l),.5);for(let l=5;l<15;l++)assert.equal(M.forgeChance(l),.3);
+  assert.equal(M.forgeExpected(0).tries,2);assert.equal(M.forgeExpected(0).energy,160);assert.equal(M.forgeExpected(5).energy,Math.round(380/.3));assert.ok(Math.abs(M.forgeExpected(9).tries-10/3)<1e-9);
+  const s=equipped();assert.equal(M.forgeWeapon(s,'sword_wood',()=>.499999)?.success,true);const cost=M.forgeCost(1),energy=s.energy;
+  const outcome=M.forgeWeapon(s,'sword_wood',()=>.5);assert.equal(outcome?.success,false);assert.equal(M.forgeLevel(s,'sword_wood'),1);assert.equal(s.energy,energy-cost.energy);
   for(const value of [NaN,Infinity,-.1,1]){const before=structuredClone(s);assert.equal(M.forgeWeapon(s,'sword_wood',()=>value),null);assert.deepEqual(s,before);}
   delete s.bag.bone;const before=structuredClone(s);assert.equal(M.forgeWeapon(s,'sword_wood',()=>0),null);assert.deepEqual(s,before);
 });

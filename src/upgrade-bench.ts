@@ -9,7 +9,7 @@
 import { t } from './i18n.ts';
 import { ITEMS, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
-import { forgeCost, forgeLevel, canForge, MAX_FORGE_LEVEL, FORGE_SUCCESS_CHANCE, type ForgeOutcome } from './weapon-forge.ts';
+import { forgeCost, forgeLevel, canForge, MAX_FORGE_LEVEL, forgeChance, forgeExpected, type ForgeOutcome } from './weapon-forge.ts';
 import { MAX_GEAR_LEVEL, canUpgradeGear, canUpgradeSkill, gearCost, gearCostToMax, gearLevel, skillCost, skillLevel, upgradableGear } from './upgrades.ts';
 import { MAX_SKILL_LEVEL, SKILL_LEVEL_TEXT, levelledCooldown, skillTuning } from './skill-upgrades.ts';
 import { whirlRadius, slamRadius } from './skill-info.ts';
@@ -40,7 +40,7 @@ function gearRows(s: SaveState, ui: BenchUi) {
     const item = ITEMS[id], name = esc(t(item.name)), icon = ui.art(id, item.icon);
     if (!upgradableGear(id)) {
       const level = forgeLevel(s, id), top = level >= MAX_FORGE_LEVEL, cost = forgeCost(level);
-      const line = `<p>${esc(t('Forge attempt: {chance}% chance of +1 · attack +{now}%', { chance: Math.round(FORGE_SUCCESS_CHANCE * 100), now: level }))}</p>`;
+      const line = `<p>${esc(t('Forge attempt: {chance}% chance of +1 · attack +{now}%', { chance: Math.round(forgeChance(level) * 100), now: level }))}</p>` + (top ? '' : `<p class="muted">${esc(t('On average about {tries} tries, ϟ {energy} for +1', { tries: +forgeExpected(level).tries.toFixed(1), energy: forgeExpected(level).energy.toLocaleString() }))}</p>`);
       return row(icon, `${name} <span class="level-tag">+${level}</span>`, powerChip(id, s) + line + (top ? '' : ui.chips(cost.materials)), top ? maxed() : buy(`data-bench-action="forge" data-item="${id}"`, cost.energy, canForge(s, id)));
     }
     const level = gearLevel(s, id), top = level >= MAX_GEAR_LEVEL, cost = gearCost(id, level);
@@ -65,7 +65,7 @@ function skillRows(s: SaveState, ui: BenchUi) {
 export function benchHtml(s: SaveState, tab: BenchTab, ui: BenchUi) {
   const tabs = (['gear', 'skills'] as const).map(id => `<button class="${tab === id ? 'active' : ''}" aria-pressed="${tab === id}" data-bench-tab="${id}">${esc(t(id === 'gear' ? 'Gear' : 'Skills'))}</button>`).join('');
   const intro = tab === 'gear'
-    ? t("Level hats, outfits, boots and companions up to +10. At +10 every item of a kind is equally strong, so wear the look you like; items further behind cost more. Weapons use the forge: a 30% chance per attempt, +1% attack per level, up to +15.")
+    ? t("Level hats, outfits, boots and companions up to +10. At +10 every item of a kind is equally strong, so wear the look you like; items further behind cost more. Weapons use the forge: a 50% chance per attempt up to +5, then 30%, +1% attack per level, up to +15.")
     : t('Each skill levels up to 5. Levels work in every fight, online too.');
   return `<nav class="panel-tabs" aria-label="${esc(t('Upgrade bench'))}">${tabs}</nav><p class="intro">${esc(intro)}</p>${tab === 'gear' ? gearRows(s, ui) : skillRows(s, ui)}`;
 }
