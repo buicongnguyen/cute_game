@@ -7,8 +7,10 @@ const sphere=new T.IcosahedronGeometry(1,1),box=new T.BoxGeometry(1,1,1),cone=ne
 const lowSphere=new T.IcosahedronGeometry(1,0),taper=new T.CylinderGeometry(.75,1,1,10);
 const sparkMaterial=new T.MeshBasicMaterial({color:'#ffb02e'});
 /** The lighthouse beam: a 12 m open cone from the lamp (combat.ts DZ.lighthouse.reach), glowing additive yellow. */
+/** The beam is drawn double-sided and additive, so its two walls add up: 0.14 keeps the ground and creatures readable through it for its 6 s. */
+export const BEAM_OPACITY=.14;
 const beamGeometry=new T.ConeGeometry(3.2,12,20,1,true).rotateX(-Math.PI/2).translate(0,0,6).rotateX(.15);
-const beamMaterial=new T.MeshBasicMaterial({color:'#fff2a0',transparent:true,opacity:.32,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}),beamMaterial2=new T.MeshBasicMaterial({color:'#fff8d0'});
+const beamMaterial=new T.MeshBasicMaterial({color:'#fff2a0',transparent:true,opacity:BEAM_OPACITY,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}),beamMaterial2=new T.MeshBasicMaterial({color:'#fff8d0'});
 /** Tesla turret: the white-hot orb, its blue glow and the little crackling arcs. */
 const coreMaterial=new T.MeshBasicMaterial({color:'#f2fdff'}),haloMaterial=new T.MeshBasicMaterial({color:'#6fdcff',transparent:true,opacity:.45,depthWrite:false,blending:T.AdditiveBlending}),arcMaterial=new T.MeshBasicMaterial({color:'#bff4ff'});
 const mats=new Map<string,T.MeshStandardMaterial>();
