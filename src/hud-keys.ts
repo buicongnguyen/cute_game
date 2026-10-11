@@ -16,12 +16,12 @@ export function readGuide(store: Pick<Storage, 'getItem'> | null): KeysGuideMemo
 export const guideFolded = (m: KeysGuideMemory) => m.mode === 'closed' || m.mode === 'auto' && m.uses >= KEYS_LEARNED;
 
 const key = (k: string) => `<kbd>${k === ' ' ? 'Space' : k.length === 1 ? k.toUpperCase() : k}</kbd>`;
-/** The guide's rows for a layout ('classic' arrows + QWER, or 'wasd' + JKL;). */
-export function keysGuideHtml(layout: string | undefined, folded: boolean) {
+/** The guide's rows for a layout ('classic' arrows + QWER, or 'wasd' + JKL;). `space`: what the Space key does with jumping on (Settings); without it the guide is the one from before jumping. */
+export function keysGuideHtml(layout: string | undefined, folded: boolean, space?: 'jump' | 'attack') {
   const b = keyboardBindings(layout), wasd = layout !== 'classic';
   const rows: [string, string][] = [
     [t('Move'), wasd ? ['W', 'A', 'S', 'D'].map(key).join('') : ['↑', '←', '↓', '→'].map(key).join('')],
-    [t('Basic attack'), key(' ')], [t('Skills'), b.skills.map(key).join('')], [t('Interact'), key('f')],
+    ...(space ? [[t('Jump'), key(space === 'jump' ? ' ' : 'Shift')], [t('Basic attack'), space === 'jump' ? key('f') : key(' ') + key('f')]] as [string, string][] : [[t('Basic attack'), key(' ')] as [string, string]]), [t('Skills'), b.skills.map(key).join('')], [t('Interact'), key('f')],
     [t('Journal'), key(b.journal)], [t('Backpack'), key('i')], [t('Eat'), key('h')], [t('Map'), key('m')],
   ];
   const label = folded ? t('Show keyboard controls') : t('Hide keyboard controls');
@@ -35,8 +35,8 @@ export class KeysGuide {
   /** A game key was used; saved every 10 presses and when the guide folds itself. */
   used() { if (this.memory.mode !== 'auto' || this.memory.uses >= KEYS_LEARNED) return; this.memory.uses++; if (this.memory.uses % 10 === 0 || this.memory.uses >= KEYS_LEARNED) this.save(); }
   toggle() { this.memory.mode = guideFolded(this.memory) ? 'open' : 'closed'; this.save(); this.shown = ''; }
-  render(layout: string | undefined, language: string) {
-    const folded = guideFolded(this.memory), sig = `${layout}|${folded}|${language}`; if (sig === this.shown) return; this.shown = sig;
-    this.root.classList.toggle('folded', folded); this.root.innerHTML = keysGuideHtml(layout, folded);
+  render(layout: string | undefined, language: string, space?: 'jump' | 'attack') {
+    const folded = guideFolded(this.memory), sig = `${layout}|${folded}|${language}|${space}`; if (sig === this.shown) return; this.shown = sig;
+    this.root.classList.toggle('folded', folded); this.root.innerHTML = keysGuideHtml(layout, folded, space);
   }
 }

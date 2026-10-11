@@ -34,6 +34,7 @@ import { decorIcon } from './icons.ts';
 import { CombatHud, fightNear, lootText, zoneInfo, aggro } from './hud-combat.ts';
 import { ChallengeDirector, renderChallenge } from './hud-challenge.ts';
 import { KeysGuide } from './hud-keys.ts';
+import { readAirCombat, saveAirCombat, AIR, AIR_WINDOW, BLOCK, COMBO, ComboMeter, SlideCombo, airWindow, pressKind, DIVE, DODGE, JumpInput, blockShare, hitShare, jumpsFor, canJump, diveCap, diveCritical, diveMultiplier, dodges, jumpKeyAction, perfectDodge, readSpaceKey, saveSpaceKey, type ComboHit, type Landing, type SpaceKey } from './jump-rules.ts';
 import * as M from './model.ts';
 import {applyGameAction,isMalformedAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
@@ -51,7 +52,7 @@ import { skillSound } from './skill-sounds.ts';
 import { initUpgradeBench as mountUpgradeBench } from './upgrade-bench.ts';
 import { CombatView } from './combat-view.ts';
 import { SkillFx } from './skill-fx.ts';
-import { terrainHeight } from './environments.ts';
+import { terrainHeight, inWater } from './environments.ts';
 import { FishingSimulation, selectCatch, planCast, catchWeight, resolveMysteryCatch, newMysteryCaller, attractMystery, mysteryMissed, mysteryLanded } from './fishing.ts';
 import { GroundGestures } from './gestures.ts';
 import { ZOOM, clampZoom } from './camera-rig.ts';
@@ -219,10 +220,18 @@ let shipSequence:ShipSequence|undefined,flight:SpaceFlight|null=null,arriving=fa
 let settledAt=0;const settle=()=>{settledAt=performance.now()+4000;};
 const frameListeners=new Set<(dt:number)=>void>(),actionListeners=new Set<(action:GameAction)=>void>();
 function languageSelector(place:string){return `<div class="language-picker"><label for="language-${place}">Language</label><select id="language-${place}" data-language aria-label="Language"><option value="en" data-i18n-skip ${getLanguage()==='en'?'selected':''}>English</option><option value="vi" data-i18n-skip ${getLanguage()==='vi'?'selected':''}>Tiếng Việt</option></select></div>`;}
+/** Space jumps by default; 'attack' is the old way (then Left Shift jumps). Per device, like the keyboard guide (jump-rules.ts). */
+let spaceKey:SpaceKey=readSpaceKey((()=>{try{return localStorage;}catch{return null;}})());
+/** The one switch for jumping and air combat (jump-rules.ts AIR_COMBAT_STORE): on by default, per device. airOn() is what the game obeys: online it stays off for now, so a room never mixes rules. */
+let airCombat=readAirCombat((()=>{try{return localStorage;}catch{return null;}})());
+function airOn(){return airCombat&&!actionHandler;}
 function keyboardSettings(){
   const selected=state.settings.keyboardLayout==='classic'?'classic':'wasd';
   const description=selected==='wasd'?'WASD: move · J/K/L/;: skills · P: journal':'Arrows: move · Q/W/E/R: skills · J: journal';
-  return `<div class="settings-row keyboard-settings"><div><strong>PC keyboard layout</strong><small>${description}</small></div><div class="segmented" role="radiogroup" aria-label="PC keyboard layout">${(['classic','wasd'] as const).map(layout=>`<button role="radio" aria-checked="${selected===layout}" class="${selected===layout?'on':''}" data-action="keyboard-layout" data-kind="${layout}">${layout==='wasd'?'WASD + JKL;':'Arrows + QWER'}</button>`).join('')}</div></div>`;
+  const store=(()=>{try{return localStorage;}catch{return null;}})();void store;
+  const master=`<div class="settings-row air-combat-settings"><div><strong>Jump and air combat</strong><small>${airCombat?(actionHandler?'On in solo play. Online play uses the classic rules for now.':'Jump, air moves, dodging and combos.'):'Off: the classic fight, with Space as the basic attack.'}</small></div><button class="toggle ${airCombat?'on':''}" role="switch" aria-checked="${airCombat}" data-action="air-combat" aria-label="Jump and air combat">${airCombat?'On':'Off'}</button></div>`;
+  const space=!airOn()?'':`<div class="settings-row keyboard-settings space-key-settings"><div><strong>Space key</strong><small>${spaceKey==='jump'?'Space: jump · F: attack':'Space: attack · Left Shift: jump · F: attack'}</small></div><div class="segmented" role="radiogroup" aria-label="Space key">${(['jump','attack'] as const).map(kind=>`<button role="radio" aria-checked="${spaceKey===kind}" class="${spaceKey===kind?'on':''}" data-action="space-key" data-kind="${kind}">${kind==='jump'?'Jump':'Basic attack'}</button>`).join('')}</div></div>`;
+  return master+space+`<div class="settings-row keyboard-settings"><div><strong>PC keyboard layout</strong><small>${description}</small></div><div class="segmented" role="radiogroup" aria-label="PC keyboard layout">${(['classic','wasd'] as const).map(layout=>`<button role="radio" aria-checked="${selected===layout}" class="${selected===layout?'on':''}" data-action="keyboard-layout" data-kind="${layout}">${layout==='wasd'?'WASD + JKL;':'Arrows + QWER'}</button>`).join('')}</div></div>`;
 }
 const app = $('#app');
 app.innerHTML = `
@@ -466,7 +475,7 @@ function updateHud() {
   const folded=trackerMode==='fold'||trackerMode==='auto'&&(fight||shown.boss||innerWidth<600&&(state.planet!=='home'||world.lastZone!=='Clover Village'));
   $('.tracker-stack').classList.toggle('folded',folded);$('#tracker-chip').hidden=!folded;
   const bounty=progressEntries(state,'bounties')[0];$('#bounty-tracker').hidden=!bounty;if(bounty){$('#bounty-title').textContent=t(bounty.title);$('#bounty-task').textContent=t(`${bounty.progress}/${bounty.target} · ${bounty.claimed?'Complete':bounty.description}`);$('#bounty-count').textContent=t(bounty.claimed?'✓':`${bounty.progress}/${bounty.target}`);}
-  const chal=challenges.view();renderChallenge($('#challenge-tracker'),chal);setText($('#chip-chal'),chal?chal.chip:'');keysGuide.render(state.settings.keyboardLayout,getLanguage());
+  const chal=challenges.view();renderChallenge($('#challenge-tracker'),chal);setText($('#chip-chal'),chal?chal.chip:'');keysGuide.render(state.settings.keyboardLayout,getLanguage(),airOn()?spaceKey:undefined);
   if(folded){$('#chip-quest').textContent=t(q?`${q.icon} ${progress}/${q.target}`:'🚀');$('#chip-bounty').textContent=t(bounty?`🎯 ${bounty.progress}/${bounty.target}`:'');}
   // Light pools cut holes in the darkness; a lamp behind the perspective camera would project mirrored, so it is skipped.
   if(!dark.hidden){const holes=world.lightSources().flatMap(light=>{const p=world.screen(light.x,.7,light.z),edge=world.screen(light.x+light.radius,.7,light.z);return p.front?[`radial-gradient(circle ${Math.abs(edge.x-p.x)}px at ${p.x}px ${p.y}px, transparent 65%, black 100%)`]:[];});
@@ -873,7 +882,7 @@ async function testerApply(){testerOpen=true;if(testerOnline()){toast(t('Tester 
   testerDo(Tester.unlockTester);toast(t('Tester mode on: {count} energy',{count:Tester.TESTER_ENERGY.toLocaleString()}),'🧪');settings();}
 function restoreBackupRow(){return restoreRowHtml(saveGuard,activeKey());}
 function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Full screen</strong><small>Fill the whole screen; press again to leave.</small></div><button class="toggle ${document.fullscreenElement?'on':''}" role="switch" aria-checked="${!!document.fullscreenElement}" aria-label="Full screen" data-action="fullscreen"></button></div>${installRowHtml(t)}${restoreBackupRow()}${audioRowsHtml(state.settings)}<div class="settings-row"><div><strong>AI neighbours</strong><small>Friendly explorers who fight in the wild, make friends and give gifts. Always off while you play online.</small></div><button class="toggle ${neighboursOn()?'on':''}" role="switch" aria-checked="${neighboursOn()}" aria-label="AI neighbours" data-action="neighbours"></button></div><div class="settings-row"><div><strong>Show joystick</strong><small>Drag the stick to walk in any direction. Skill buttons move to the opposite side.</small></div><button class="toggle ${joystickEnabled()?'on':''}" role="switch" aria-checked="${joystickEnabled()}" aria-label="Show joystick" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Joystick side</strong><small>Choose the hand you use to move</small></div><div class="segmented" role="radiogroup" aria-label="Joystick side">${(['left','right'] as const).map(side=>`<button role="radio" aria-checked="${(state.settings.joystickSide??'left')===side}" data-action="joystick-side" data-kind="${side}">${side==='left'?'Left':'Right'}</button>`).join('')}</div></div>${keyboardSettings()}<div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Camera angle</strong><small>${cameraPitch()>=CAMERA_PITCH.max?'Looking down from above':'A lower view shows more of the world and may run a little slower'}</small></div><div class="camera-angle"><div class="volume-control"><input type="range" min="${CAMERA_PITCH.min}" max="52" step="1" value="${Math.round(cameraPitch())}" data-camera-pitch aria-label="Camera angle"><output data-camera-pitch-out>${Math.round(cameraPitch())}°</output></div><div class="segmented" role="group" aria-label="Camera angle presets">${(Object.keys(CAMERA_PITCH.presets) as CameraPreset[]).map(v=>`<button aria-pressed="${cameraPitch()===CAMERA_PITCH.presets[v]}" class="${cameraPitch()===CAMERA_PITCH.presets[v]?'on':''}" data-action="camera-view" data-kind="${v}">${({classic:'Classic',tilted:'Tilted',low:'Low',lower:'Lower',lowest:'Lowest'})[v]}</button>`).join('')}</div></div></div><div class="settings-row" id="render-res-row"><div><strong>Render resolution</strong><small>${graphics.resolution==='auto'?(graphics.mobile?'Light on phones, like the original':'Follows the Graphics setting'):({sharp:'Crisp, but phones work harder',balanced:'Smoother play and a cooler phone',saver:'Fewest pixels for the longest battery'} as Record<string,string>)[graphics.resolution]}${typeof innerWidth==='number'?` · ${innerWidth*graphics.ratio|0}×${innerHeight*graphics.ratio|0} px`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Render resolution">${RESOLUTION_SETTINGS.map(r=>`<button role="radio" aria-checked="${graphics.resolution===r}" class="${graphics.resolution===r?'on':''}" data-action="render-res" data-kind="${r}">${r==='auto'?'Auto':RESOLUTION[r].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Difficulty</strong><small>${M.DIFFICULTY_NOTE[M.difficultyOf(state)]}${world.roomDifficulty&&world.roomDifficulty!==M.difficultyOf(state)?` <span class="host-difficulty">${esc(t('Host difficulty: {level}',{level:t(M.DIFFICULTY_LABEL[world.roomDifficulty])}))}</span>`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Difficulty">${M.DIFFICULTIES.map(d=>`<button role="radio" aria-checked="${M.difficultyOf(state)===d}" class="${M.difficultyOf(state)===d?'on':''}" data-action="difficulty" data-kind="${d}">${M.DIFFICULTY_LABEL[d]}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div>${testerMore()}<div class="settings-row"><div><strong>${t('Keep backpack on defeat')}</strong><small>${t('Keep carried items when defeated. Existing dropped bags stay recoverable.')}</small></div><button class="toggle ${M.keepsBag(state)?'on':''}" role="switch" aria-checked="${M.keepsBag(state)}" aria-label="${t('Keep backpack on defeat')}" data-action="keep-bag"></button></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
-function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div><div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
+function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.filter(([,title])=>airOn()||title!=='Jump and air combat').map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div><div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
 
 // Fishing happens in the world: no panel, just the pond, the line and a big Reel button.
 let fishPond:Entity|null=null,recastUntil=0;
@@ -1143,7 +1152,7 @@ const dyes=initDyeUi({state:()=>state,perform:(type,payload)=>perform(type,paylo
 const lookShop=initLookShop({world,perform:(type,payload)=>perform(type,payload),openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),endGearTryOn:()=>{if(tryingOn){tryingOn=null;world.tryOnGear=null;}}});
 frameListeners.add(dt=>house.frame(dt));frameListeners.add(dt=>challenges.tick(dt));
 // The craft room's upgrade bench (upgrade-bench.ts): gear levels and skill levels, both run through actions.ts.
-const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:[...BASE_SKILLS,SPECIALS[M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist']??SPECIALS.fist],disguised:!!state.gear.disguise,weaponKind:M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).kind})});
+const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:[...BASE_SKILLS,SPECIALS[M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist']??SPECIALS.fist],jump:airOn(),disguised:!!state.gear.disguise,weaponKind:M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).kind})});
 world.onInteract=async(e)=>{
   if(!started||uiBlocked())return;tone();if(house.interact(e))return;if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='well')wellDialog();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
@@ -1202,6 +1211,8 @@ function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:stri
 }
 function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=false){
   if(e.hp<=0||(visiting&&!remote))return;
+  if(impact&&!remote&&!hazard&&!impact.helper)noteComboHit(e,impact);
+  if(impact?.blocked&&!remote)world.blockFeedback(e);
   // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
   if(!vault&&!ctfApi?.owns(e)&&!rescueApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
@@ -1279,9 +1290,132 @@ function tryOn(id:M.ItemId){
   if(modal==='shop')shop();else if(modal==='bag')inventory();
 }
 function endTryOn(){if(!tryingOn&&!world.tryOnGear&&!world.tryOnLook)return;tryingOn=null;world.tryOnGear=null;world.tryOnLook=null;$('#dialog-layer').classList.remove('trying-on');world.refreshPlayer();}
+// ---- Jumping and air combat (jump-rules.ts). The jump is a height on world.jump; the rules below turn presses into
+// jumps, air swings and dives, count the combo and settle dodges. Online only the height and the dodge are used: creature
+// damage stays the server's, so the air bonuses, the combo ramp and the sure criticals are solo rules.
+const jumpInput=new JumpInput(),comboMeter=new ComboMeter(),jumpPointers=new Set<number>();
+/** Which step of the chain the hit being dealt belongs to (the dive strike sets 'dive'); seconds the perfect dodge's sure critical lasts; when the last dodge was shown. */
+let comboKind:ComboHit|null=null,sureLeft=0,dodgeShown=-1,comboShown='';
+/** The last jump came from a finger: touch play has wider timing (perfect dodge 0.4 s, combo timer 2 s) and aim help for the dive. */
+let touchFight=false;
+/** The touch slide (Jump, then the same finger onto a skill toe or the pad), a late press waiting for the landing, and the HUD's air look. */
+const slideCombo=new SlideCombo();let pendingPress:{kind:'attack'}|{kind:'skill';index:number}|null=null,pendingLeft=0,airLook='';
+/** The fight button under a screen point: 'attack', 'skill0' to 'skill3', or null (the Jump toe itself and everything else). */
+function fightButtonAt(x:number,y:number){const b=(document.elementFromPoint(x,y) as HTMLElement|null)?.closest<HTMLElement>('#hud .skills button');return !b?null:b.dataset.action==='attack'?'attack':b.dataset.action==='skill'?'skill'+b.dataset.index:null;}
+function fireSlide(move:string|null){if(!move)return;if(move==='attack')basicAttack();else skill(Number(move.slice(5)));}
+/** A press too late in the fall: it becomes the ground move on landing. */
+function bufferPress(press:NonNullable<typeof pendingPress>){pendingPress=press;pendingLeft=AIR_WINDOW.buffer;}
+/** The height and jumps a strike counts as coming from while it lands (a dive, a Root Quake cast in the air); null = where the explorer is now. */
+let strikeFrom:{height:number;jumps:number}|null=null,skyQuake:{height:number;jumps:number}|null=null;
+// Bosses block low hits (jump-rules.ts BLOCK; solo: online the server deals the damage): hits from the ground or a single jump keep a share, hits from double-jump height get through.
+combat.edge.scale=target=>{const e=target as Enemy;if(!airOn()||!(e.boss||e.definition?.titan)||e.driver)return 1;const from=strikeFrom??world.jump;return hitShare(blockShare(e.type,M.PLANETS[world.planet]?.level??0),from.height,from.jumps);};
+/**
+ * Applies the switch (and online play, where it is off): the world's ground-attack rules, the Jump toe and the combo chip
+ * (made on first use; the page's own markup is the one from before jumping), the page class the paw's layout hangs on,
+ * and the hint under the screen. Called every step; it does its work only when the answer changes.
+ */
+let airApplied:boolean|null=null,airLanguage='';
+function syncAirCombat(){
+  const on=airOn(),language=getLanguage();if(on===airApplied&&language===airLanguage)return;airApplied=on;airLanguage=language;
+  world.jumpRules=on;document.body.classList.toggle('air-combat',on);
+  if(on&&!document.querySelector('#hud .jump-pad')){
+    $('#hud .skills').insertAdjacentHTML('beforeend',`<button class="jump-pad" data-action="jump">${hudIcon('jump')}</button>`);
+    $('#context-prompt').insertAdjacentHTML('beforebegin','<div id="combo-chip" hidden aria-hidden="true"><b id="combo-count"></b><span id="combo-word"></span><i id="combo-bonus"></i><em id="combo-steps"><u></u><u></u><u></u><u></u></em></div>');
+  }
+  const pad=document.querySelector<HTMLElement>('#hud .jump-pad');if(pad){pad.hidden=!on;pad.setAttribute('aria-label',t('Jump'));pad.title=t('Jump');}
+  const hint=document.querySelector('#hud .control-hint kbd:last-of-type')?.nextSibling;if(hint)hint.textContent=' '+t(on&&spaceKey==='jump'?'jump':'attack');
+  if(!on){world.jump.cancel();jumpInput.clear();slideCombo.cancel();pendingPress=null;comboMeter.reset();sureLeft=0;combat.edge.sure=false;combat.edge.bonus=1;combat.edge.launch=0;comboShown=' ';showCombo();const cluster=$('#hud .skills');cluster.classList.remove('air','dive');airLook='';}
+}
+function jumpBlock(){
+  if(!airOn())return 'idle' as const;
+  const layout=world.environment?.layout,flying=world.playerFlying||!!M.activeStats(state).flying;
+  return canJump({playing:started&&!document.hidden,down:state.hp<=0,menu:uiBlocked(),cutscene:!!shipSequence?.busy||arriving,starship:!!flight||world.boarded,indoors:!!world.interior,fishing:!!fishGame||world.fishing!=='idle',placing:!!placement,
+    stunned:!!colossus?.locked||(!!ctfApi?.active&&!ctfApi.canAct),thrown:(world.playerLift??0)>0,swimming:!!layout&&inWater(layout,world.position)&&!flying,flying:world.playerFlying,riding:!!world.environment?.airborne||!!world.environment?.riding,casting:combat.locksMovement});
+}
+/** One jump, if the explorer may: from the ground, or the next of the three in the air. */
+function tryJump(){
+  if(jumpBlock())return false;
+  const n=world.jump.jump();if(!n)return false;
+  jumpInput.done();world.jumpFeedback(n);tone(n===1?'jump':'flip');if(n===1)keysGuide.used();
+  return true;
+}
+/** Starts the dive: straight down, to strike where the explorer lands. */
+function startDive(){if(!world.jump.dive())return false;
+  // Touch aim help: drift toward the nearest creature in reach (through world.move, so obstacles block as ever).
+  if(touchFight){const t=combat.nearest(AIR.homingRange),p=world.position;if(t){const d=Math.hypot(t.x-p.x,t.z-p.z),go=Math.min(AIR.homing,Math.max(0,d-t.radius-.6));if(go>0&&d>0){const n=Math.ceil(go/.2);for(let i=0;i<n;i++)world.move((t.x-p.x)/d*go/n,(t.z-p.z)/d*go/n);}world.facing=Math.atan2(t.x-p.x,t.z-p.z);}}combatTimers.attackCooldown=Math.max(combatTimers.attackCooldown,.15);world.diveFeedback();tone('swing');return true;}
+/** The landing: dust and a thud; a dive strikes (solo: the dive rules; online: a plain basic hit, the server's), and a Root Quake cast in the air lands its shockwave. */
+world.onLanded=(landing:Landing)=>{
+  queueMicrotask(()=>{const p=pendingPress;if(!p||pendingLeft<=0)return;pendingPress=null;if(p.kind==='attack')basicAttack();else skill(p.index);}); // a late press: its ground move, now
+  world.landFeedback(landing);tone(landing.dive?'boom':'land');if(landing.dive)vibrate(40);
+  if(combat.plunging){strikeFrom=skyQuake;try{combat.land();}finally{strikeFrom=null;skyQuake=null;}slamImpact();return;}
+  if(!landing.dive||!started||visiting||state.hp<=0)return;
+  prepareCombatWeapon();
+  if(actionHandler&&!dungeonApi?.active){if(combat.basic()){emitAction({kind:'basic'});world.playerAttack(M.weaponStats(state).kind);}return;}
+  const finisher=comboMeter.finisherReady;comboKind='dive';strikeFrom={height:landing.from,jumps:landing.jumps};
+  let hits=0;try{hits=combat.dive(diveMultiplier(landing.from)*(finisher?COMBO.finisher:1),DIVE.radius,DIVE.stun,DIVE.knock,target=>diveCritical(landing.jumps,landing.from,target),diveCap).length;}finally{comboKind=null;strikeFrom=null;}
+  combatTimers.attackCooldown=Math.max(combatTimers.attackCooldown,.25);world.fx?.shake(.16+.05*landing.jumps);
+  if(hits&&finisher){world.fx?.text({x:world.position.x,y:1.2,z:world.position.z},t('FINISHER!'),'crit big');tone('crit');}
+};
+/** A hit of the explorer's own landed: the chain grows, the chip follows, and an air hit keeps a launched creature up. */
+function noteComboHit(e:Enemy,impact:CombatHit){
+  if(!airOn())return;
+  const kind:ComboHit=comboKind??(world.jump.airborne?'air':impact.lift>0?'launcher':'ground'),first=kind==='launcher'&&!comboMeter.launched;
+  if(kind==='air'&&!actionHandler&&!e.boss&&(e.lift??0)>.05&&e.hp>0)world.knockUpEnemy(e,AIR.juggle,.5);
+  if(!comboMeter.hit(kind))return;
+  if(first&&comboMeter.count>1)world.fx?.text({x:e.x,y:e.mesh.position.y+.6,z:e.z},t('LAUNCH!'),'xp');
+  showCombo();
+}
+/** The combo chip: the count, the damage bonus and four pips (ground, launch, air, finisher). Written only when it changes. */
+function showCombo(){
+  const chip=document.querySelector<HTMLElement>('#combo-chip');if(!chip)return;
+  const v=comboMeter.view(),sig=v.count<2?'':`${v.count}|${actionHandler?0:v.bonus}|${+v.launched}${+v.aired}${+v.finished}|${+v.live}|${getLanguage()}`;if(sig===comboShown)return;comboShown=sig;
+  chip.hidden=!sig;if(!sig)return;
+  setText($('#combo-count'),String(v.count));setText($('#combo-word'),t(v.finished?'FINISHER!':'HITS'));setText($('#combo-bonus'),!actionHandler&&v.bonus>0?`+${v.bonus}%`:'');
+  chip.classList.toggle('done',!v.live);
+  const pips=$('#combo-steps').children;[true,v.launched,v.aired,v.finished].forEach((on,i)=>pips[i]?.classList.toggle('on',on));
+}
+/** A ground attack passed under the explorer. A perfect one (solo) slows the moment and makes the next hit a sure critical. */
+function dodged(perfect:boolean){
+  const now=world.time,at={x:world.position.x,y:world.jump.height*.5,z:world.position.z};
+  if(perfect&&!actionHandler){
+    sureLeft=DODGE.sure;combat.edge.sure=true;world.fx?.freeze(DODGE.slow);world.fx?.flash({x:at.x,y:world.position.y+world.jump.height+1,z:at.z},'#fff3a8',2.4,.2);
+    world.fx?.ring(world.position,{color:'#fff3a8',from:.4,to:2.6,life:.3,thick:.14});world.fx?.text(at,t('PERFECT DODGE!'),'crit big');tone('ready');vibrate(30);dodgeShown=now;return;
+  }
+  if(now-dodgeShown<.4)return;dodgeShown=now;world.fx?.text(at,t('DODGE'),'xp');
+}
+/** Every step: the jump key, the chain's clock, the combo ramp and the perfect dodge's sure critical (solo). */
+function stepFight(dt:number,active:boolean,combatActive:boolean){
+  syncAirCombat();if(!airOn())return;
+  world.jump.max=jumpsFor(M.jumpLevel(state),Tester.isTester(state));comboMeter.window=touchFight?COMBO.windowTouch:COMBO.window;
+  if(pendingLeft>0&&(pendingLeft-=dt)<=0)pendingPress=null;
+  if(slideCombo.active)fireSlide(slideCombo.poll(performance.now()/1000));
+  // The air look of the fight buttons: on while a press would be an air move, with the pad showing the dive on the way down. One class write per change.
+  {const j=world.jump,look=!airWindow(j)?'':j.falling&&j.height>=DIVE.minHeight?'air dive':'air';if(look!==airLook){airLook=look;const cluster=$('#hud .skills');cluster.classList.toggle('air',!!look);cluster.classList.toggle('dive',look==='air dive');}}
+  if(active&&jumpInput.wants(world.jump,dt))tryJump();
+  if(!combatActive)return;
+  comboMeter.step(dt);if(comboShown)showCombo();
+  if(sureLeft>0){sureLeft-=dt;if(sureLeft<=0)combat.edge.sure=false;}
+  combat.edge.bonus=actionHandler?1:comboMeter.bonus;combat.edge.launch=actionHandler?0:AIR.launch;
+}
+combat.edge.spent=()=>{sureLeft=0;};
+/** `e`: the creature the explorer walked up to (tap, auto-attack); a press of the attack key or pad passes none. */
 function basicAttack(e?:Enemy){
   if(ctfApi?.active&&!ctfApi.canAct)return;
-  if(!started||uiBlocked()||visiting||combatTimers.attackCooldown>0)return;
+  if(!started||uiBlocked()||visiting)return;
+  // The dive is its own move: a press while falling from height starts it even while the last swing's cooldown still runs.
+  if(!e&&world.jump?.airborne&&!world.jump.diving&&world.jump.falling&&world.jump.height>=DIVE.minHeight&&pressKind(world.jump)==='air'&&startDive())return;
+  if(combatTimers.attackCooldown>0)return;
+  // In the air: a press while falling is the dive; otherwise a quick, lighter swing (a whiff still swings).
+  const jump=world.jump;
+  if(jump?.airborne){
+    // The air window (jump-rules.ts): shut late in the fall, where a press waits and becomes the ground attack on landing.
+    if(pressKind(jump)!=='air'){if(!e)bufferPress({kind:'attack'});return;}
+    if(!e&&jump.falling&&jump.height>=DIVE.minHeight&&startDive())return;
+    prepareCombatWeapon();const weapon=M.weaponStats(state),cd=(weapon.cd??.4)/Math.max(.2,1+M.activeStats(state).haste)*AIR.swing;
+    if(combat.basic(e,actionHandler?1:AIR.swing)){combatTimers.attackCooldown=cd;world.playerAttack(weapon.kind);tone(weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
+    else if(!e&&weapon.kind!=='rod'){combatTimers.attackCooldown=cd*.6;world.playerAttack(weapon.kind);tone('swing');}
+    return;
+  }
   prepareCombatWeapon();
   if(combat.basic(e)){const stats=M.activeStats(state),weapon=M.weaponStats(state);combatTimers.attackCooldown=(weapon.cd??.4)/Math.max(.2,1+stats.haste);const volt=weapon.shot==='volt';world.playerAttack(weapon.kind,volt?'#bfefff':undefined);tone(volt?'zap':weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
 }
@@ -1301,17 +1435,25 @@ function skill(index:number){
   if(!started||uiBlocked()||visiting||cooldowns[index]>0||index<0||index>3)return;
   prepareCombatWeapon();
   const disguise=state.gear.disguise,weapon=M.weaponStats(state),skills=skillList();
-  if(!(disguise?combat.disguise(disguise,index):combat.skill(index,weapon.special??'fist')))return;
+  // Two of the starting skills have an air form (solo): Breeze Step dashes at its height, Root Quake plunges for a wider shockwave.
+  const jump=world.jump,press=jump?.airborne?pressKind(jump):'ground';if(press==='buffer'){bufferPress({kind:'skill',index});return;}
+  const air=!actionHandler&&!disguise&&(index===1||index===2)&&press==='air'?AIR:undefined;
+  if(!(disguise?combat.disguise(disguise,index):combat.skill(index,weapon.special??'fist',air)))return;
+  if(air&&index===1)jump.hold(.24);if(air&&index===2){skyQuake={height:jump.height,jumps:jump.jumps};if(!jump.dive()){jump.diving=true;jump.diveFrom=jump.height;jump.velocity=-34;}}
   skillDurations[index]=M.skillCooldown(state,index,skills[index].cd,!!disguise)/Math.max(.2,1+M.activeStats(state).haste);cooldowns[index]=skillDurations[index];
   // The skill's name pops over the explorer in its slot's colour (feel-rules.ts), like the reference's cast callout.
-  world.fx?.text({x:world.position.x,y:SKILL_NAME_RISE,z:world.position.z},t(skills[index].name),`skillname s${index}`);
+  world.fx?.text({x:world.position.x,y:SKILL_NAME_RISE+(world.jump?.height??0),z:world.position.z},t(air?(index===1?'Sky Step':'Sky Quake'):skills[index].name),`skillname s${index}`);
   if(!actionHandler)change(()=>recordEvent(state,'skill'));if(!disguise&&index===0)world.spinT=2.2;else if(disguise?(disguise==='dz_knight'&&index===1)||(disguise==='dz_vietnam'&&index===1):index===1)world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});tone(skillSound(index,disguise,weapon.special));emitAction({kind:'skill',index,special:disguise??weapon.special});
 }
 let dying=false;
 function checkDefeat(){if(!started||state.hp>0||dying)return false;if(dungeonApi?.active){dungeonApi.knockedOut();return true;}if(ctfApi?.active||rescueApi?.active){state.hp=1;return true;}/* Flag Rush respawns by its own rules: a match never drops a death bag */if(actionHandler){dying=true;void perform<{dropped?:boolean}>('die',{x:world.position.x,z:world.position.z}).then(r=>{dying=false;endFishing();resetCombat();rebuildHomePresentation('home');world.refreshPlayer();if(r)deathDialog(!!r.dropped);else toast('You are safe at home.','🏡');});return true;}endFishing();resetCombat();const bag=change(()=>M.die(state,world.position.x,world.position.z));rebuildHomePresentation('home');world.refreshPlayer();deathDialog(!!bag);return true;}
 /** The knock-out card: where the backpack went (death-bags.ts) and what stays safe. */
 function deathDialog(dropped:boolean){openDialog('death','A little rest, then try again',`<div class="grow-illustration">${dropped?'🎒':'🌷'}</div><p class="center">${dropped?'Your backpack dropped where you fell. Walk back to the pink bag within 7 days to pick everything up.':M.keepsBag(state)?t('Your backpack is safe.'):t('Your backpack was empty, so nothing was lost.')}</p><p class="center muted">Your level, energy, worn gear and chest are safe.</p><button class="primary wide" data-action="close">Back on my feet →</button>`,'EVERY EXPLORER TAKES A TUMBLE');}
-world.onDamage=(amount,source='melee',enemyId)=>{
+world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
+  // A ground attack passes under a jump (jump-rules.ts). Online this client is the room's host when it gets here, so a
+  // dodged blow is simply never reported; the server still checks every hit that is.
+  if(airOn()&&dodges(cls,world.jump.height)){if(started&&!visiting)dodged(perfectDodge(cls,world.jump.height,world.jump.airTime,touchFight));return;}
+  if(!(amount>0))return;
   if(actionHandler&&!dungeonApi?.active){if(enemyId&&network.role==='host')network.reportDamage?.(enemyId,source);return;}
   if(combatTimers.invulnerable>0||combat.invulnerable||(source==='melee'&&(combat.statuses.flight??0)>0)||!started||(!network.role&&uiBlocked())||visiting)return;
   // The knight's raised shield stops blows and shots from creatures in front (combat.blocks).
@@ -1319,7 +1461,7 @@ world.onDamage=(amount,source='melee',enemyId)=>{
   {const from=enemyId?world.enemies.find(e=>e.id===enemyId):undefined;if(from&&combat.blocks(from)){world.fx?.burst(world.position,{n:6,color:['#fff3c4','#ffffff'],glow:true,size:.12,speed:3,up:2,y:1});if(source==='shot'){combat.reflect(from,Math.hypot(from.x-world.position.x,from.z-world.position.z)/DZ.block.speed);tone('hit');}return;}}
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
-  state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;world.hurtFeedback(damage);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
+  state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();world.hurtFeedback(damage);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
   checkDefeat();
   updateHud();
 };
@@ -1345,7 +1487,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1354,7 +1496,7 @@ function rebuildHomePresentation(planet:M.PlanetId){
 const sharedKills=new Set<string>();
 export const gameBridge:GameBridge={
   getState:()=>state,getWorld:()=>world,
-  getPresence:()=>({y:house.poseY(world.position.y),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot(),dog:(()=>{const dog=world.ownDog?.();return dog!==null&&dog!==undefined&&dogFollows(world.planet,world.position,!!world.interior)?dog:null;})()}),
+  getPresence:()=>({y:house.poseY(world.position.y+world.jump.height),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot(),dog:(()=>{const dog=world.ownDog?.();return dog!==null&&dog!==undefined&&dogFollows(world.planet,world.position,!!world.interior)?dog:null;})()}),
   getOfflineState:()=>{try{return M.parseSave(localStorage.getItem(activeKey()));}catch{return null;}},
   applyState(next){fishingEpoch++;mysteryCaller=newMysteryCaller();fishingView.dropMystery();if(flight)exitSpace();shipSequence?.reset();arriving=false;autopilotTarget=null;homeQueued=false;state=next;applyMovePad();graphics.setResolution(state.settings.renderRes??'auto');world.applyGraphics(graphics.profile,graphics.ratio);const nameInput=document.querySelector<HTMLInputElement>('#name-input');if(nameInput)nameInput.value=state.name;visiting=null;visitHome=null;world.state=state;resetCombat();world.build(state.planet);world.refreshPlayer();if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal)closeDialog();updateHud();updateLabels();},
   setPersistence(handler){persistence=handler;},
@@ -1597,10 +1739,12 @@ app.addEventListener('click',async event=>{
     case 'shop-rod':shopTab=rodShopTab;shopFocus='rod';if(IG.isFolded('shop','tool'))IG.toggleFold('shop','tool');go('shop');break;
     case 'wild':{closeDialog();const destinations:Record<string,[number,number]>={forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]};const kind=button.dataset.kind??'forest',destination=destinations[kind]??[0,-30],armed=wildArmed?.kind===kind&&Date.now()<wildArmed.until,route=wildRoute(destination,armed);world.walkTo(route.x,route.z);if(route.inside){wildArmed=null;toast('Follow the path beyond the garden gate.','🍄');}else{wildArmed={kind,until:Date.now()+45000};toast(wildDanger(state.level)?'Wild creatures ahead, and they come in packs! Get ready at the village edge, then choose this place on the map again to walk in.':'You are at the edge of the wild. Choose this place on the map again to walk in.','⚠️');}break;}
     case 'return-home':if(state.planet!=='home')flyHome();else{endFishing();huntingPending=null;movement.clear();closeDialog();world.position.set(0,0,0);world.destination=null;world.route=[];world.selected=null;world.pondTap=null;updateHunting(0);toast('Home, sweet home.','🏡');}break;
-    case 'interact':world.interactNearest();break;case 'attack':basicAttack();break;case 'skill':skill(index);break;
+    case 'interact':world.interactNearest();break;case 'attack':basicAttack();break;case 'jump':if(airOn()&&(event as MouseEvent).detail===0){jumpInput.down();jumpInput.up();}break;/* a pointer already jumped on the way down (below): this is the keyboard's press of the button */case 'skill':skill(index);break;
     case 'fish-again':fish(fishPond);break;
     case 'reel':if(fishGame){if(event.detail===0)fishGame.input.toggle();}else if(button.classList.contains('hunt'))void throwHarpoon();else if(button.classList.contains('cast'))fish(fishPond);break;
     case 'render-res':{const res=button.dataset.kind as ResolutionSetting;graphics.setResolution(res);world.applyGraphics(graphics.profile,graphics.ratio);await perform('settings',{settings:{renderRes:res}});settings();break;}
+    case 'air-combat':airCombat=!airCombat;saveAirCombat((()=>{try{return localStorage;}catch{return null;}})(),airCombat);syncAirCombat();settings();updateHud();break;
+    case 'space-key':spaceKey=button.dataset.kind==='attack'?'attack':'jump';saveSpaceKey((()=>{try{return localStorage;}catch{return null;}})(),spaceKey);jumpInput.clear();settings();updateHud();break;
     case 'keyboard-layout':movement.clear();await perform('settings',{settings:{keyboardLayout:button.dataset.kind}});movement.clear();settings();break;
     case 'move-pad':await perform('settings',{settings:{movePad:!joystickEnabled()}});applyMovePad();settings();break;
     case 'joystick-side':await perform('settings',{settings:{joystickSide:button.dataset.kind}});applyMovePad();settings();break;
@@ -1672,16 +1816,24 @@ document.addEventListener('keydown',event=>{
   if(!started||uiBlocked())return;
   const direction=movementKey(pressed,state.settings.keyboardLayout);
   if(direction){event.preventDefault();movement.pressKey(direction,event.code||event.key);return;}
+  // Space jumps (Settings can give it back to the basic attack; then Left Shift jumps). Holding it performs the extra jumps.
+  const spaceAction=jumpKeyAction(event.code||'',spaceKey,airOn());
+  if(spaceAction==='jump'){event.preventDefault();if(!event.repeat){touchFight=false;jumpInput.down();}return;}
   if(event.repeat)return;
-  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=(bindings.skills as readonly string[]).indexOf(key);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f')world.interactNearest();else if(key==='h')void quickEat();else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(pressed===' '){event.preventDefault();basicAttack();}
+  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=(bindings.skills as readonly string[]).indexOf(key);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f'){if(!airOn())world.interactNearest();else if(world.jump?.airborne||!world.interactNearest())basicAttack();}else if(key==='h')void quickEat();else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();basicAttack();}
 });
 // The keyboard guide counts game keys to learn when to fold itself (hud-keys.ts).
 window.addEventListener('keydown',event=>{if(started&&!uiBlocked()&&!event.repeat&&gameplayKey(event))keysGuide.used();});
-document.addEventListener('keyup',e=>{const key=gameplayKey({...e,code:e.code,key:e.key});spaceKeys.delete(key.toLowerCase());movement.releaseKey(e.code||e.key);if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
-document.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=(e.target as HTMLElement).closest<HTMLElement>('button');if(target?.dataset.move){e.preventDefault();movement.pressPointer(e.pointerId,target.dataset.move);target.setPointerCapture(e.pointerId);}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}});
-const releasePointer=(e:PointerEvent)=>{gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);fishGame?.input.releasePointer(e.pointerId);};
+document.addEventListener('keyup',e=>{const key=gameplayKey({...e,code:e.code,key:e.key});spaceKeys.delete(key.toLowerCase());movement.releaseKey(e.code||e.key);if(e.code==='Space'||e.code==='ShiftLeft')jumpInput.up();if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
+document.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=(e.target as HTMLElement).closest<HTMLElement>('button');if(target?.dataset.move){e.preventDefault();movement.pressPointer(e.pointerId,target.dataset.move);target.setPointerCapture(e.pointerId);}
+  // The Jump button acts as the finger lands (a click would wait for the release); holding it performs the extra jumps.
+  if(target?.dataset.action==='jump'&&started&&!uiBlocked()&&airOn()){e.preventDefault();jumpPointers.add(e.pointerId);touchFight=e.pointerType==='touch';jumpInput.down();
+    // The slide: this same finger may go on to the pad or a skill toe for the air move (jump-rules.ts SlideCombo).
+    if(e.pointerType!=='mouse'){slideCombo.begin(e.pointerId);try{target.setPointerCapture(e.pointerId);}catch{/* already captured */}}}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}});
+document.addEventListener('pointermove',e=>{if(slideCombo.owns(e.pointerId))fireSlide(slideCombo.move(e.pointerId,fightButtonAt(e.clientX,e.clientY),performance.now()/1000));});
+const releasePointer=(e:PointerEvent)=>{if(slideCombo.owns(e.pointerId)){if(e.type==='pointerup'){slideCombo.move(e.pointerId,fightButtonAt(e.clientX,e.clientY),-1);fireSlide(slideCombo.release(e.pointerId));}else if(e.type==='pointercancel')slideCombo.cancel();}gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);if(jumpPointers.delete(e.pointerId)&&!jumpPointers.size)jumpInput.up();fishGame?.input.releasePointer(e.pointerId);};
 document.addEventListener('pointerup',releasePointer);document.addEventListener('pointercancel',releasePointer);document.addEventListener('lostpointercapture',releasePointer);
-function clearHeldInput(){cancelLongPresses();cancelButtonTouches();movement.clear();joystick.clear();fishGame?.input.clear();gestures.clear();spaceKeys.clear();spacePointer=null;boostPointers.clear();boostHeld=false;}
+function clearHeldInput(){cancelLongPresses();cancelButtonTouches();jumpInput.clear();jumpPointers.clear();slideCombo.cancel();movement.clear();joystick.clear();fishGame?.input.clear();gestures.clear();spaceKeys.clear();spacePointer=null;boostPointers.clear();boostHeld=false;}
 window.addEventListener('blur',()=>{clearHeldInput();save();});
 window.addEventListener('pagehide', ()=>{clearHeldInput();save();});
 window.addEventListener('mobile-game-interruption', ()=>{clearHeldInput();save();});window.addEventListener('beforeunload',save);document.addEventListener('visibilitychange',()=>{clearHeldInput();save();});
@@ -1705,7 +1857,7 @@ function frame(now:number){
   // browser throttles rendering, and collisions do not tunnel at a low frame rate. At most four steps
   // run per frame; a longer stall turns into slow motion rather than a spiral of ever longer frames.
   updateContextWeapon();joystick.update();
-  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);combat.update(step,combatActive);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerSpeedBonus=combat.speedBonus;world.playerStealth=(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);skillFx.disguises.update(combatActive?step:0);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
+  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);stepFight(step,active,combatActive);combat.update(step,combatActive);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerSpeedBonus=combat.speedBonus;world.playerStealth=(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);skillFx.disguises.update(combatActive?step:0);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
   // Landing from the ground slam squashes the explorer and jolts the camera.
   const airborne=combat.airborne>0;if(wasAirborne&&!airborne){world.landT=.25;slamImpact();}wasAirborne=airborne;
   // The explorer's pose follows the weapon, skills, fishing line and hit invulnerability.
@@ -1754,7 +1906,7 @@ function loadModes():Promise<void>{
 function mountModes(m:typeof import('./modes.ts')){
 // The daily world boss (colossus.ts): offline it runs here on the local clock, online it mirrors the server's.
 colossus=new m.ColossusEvent({world,state:()=>state,online:()=>!!actionHandler,playing:()=>started&&!visiting&&!flight,
-  defence:()=>M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),hurt:amount=>world.onDamage(amount,'melee',COLOSSUS_ID),
+  defence:()=>M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),hurt:(amount,cls)=>world.onDamage(amount,'melee',COLOSSUS_ID,cls),
   change,toast,floating:(text,x,z,style)=>floating(text,x,z,style),spawnLoot:(loot,x,z)=>drops.spawnLoot(loot,x,z),tone:kind=>tone(kind as Parameters<typeof tone>[0]),hud:$('#hud')});
 if(new URLSearchParams(location.search).get('colossus')==='1')colossus.start();
 $('#colossus-banner')?.addEventListener('click',()=>document.body.classList.toggle('guide-colossus-fold')); // a tap folds the banner to a chip (guide.css)
@@ -1793,4 +1945,4 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,fight:{get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

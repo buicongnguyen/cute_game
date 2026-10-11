@@ -33,13 +33,14 @@ export class ColossusAttackView {
   }
   begin() { this.used = 0; this.decals.begin(); }
   /** `head`: where the fire leaves the mouth (world space), for the breath stream. */
-  draw(a: ColossusAttack, ground: (x: number, z: number) => number, time: number, head?: { x: number; y: number; z: number }) {
+  /** `low`: a ground attack a jump clears (solo), drawn with the rippling rim. */
+  draw(a: ColossusAttack, ground: (x: number, z: number) => number, time: number, head?: { x: number; y: number; z: number }, low = false) {
     const color = COLOSSUS_COLORS[a.skill], progress = Math.min(1, a.age / Math.max(.05, a.windup)), after = a.age - a.windup, src = a.source;
     const y = (x: number, z: number) => Math.max(.04, ground(x, z) + .05), m = a.marks[0];
     if (after < 0) {
       if ((a.skill === 'stomp' || a.skill === 'bite' || a.skill === 'slap' || a.skill === 'grab' || a.skill === 'spit') && m) {
-        this.decals.draw(m.x, y(m.x, m.z), m.z, m.r, progress, color);
-        if (a.skill === 'stomp') this.decals.draw(m.x, y(m.x, m.z) - .01, m.z, 15, progress * .45, '#ffb13d');
+        this.decals.draw(m.x, y(m.x, m.z), m.z, m.r, progress, color, low);
+        if (a.skill === 'stomp') this.decals.draw(m.x, y(m.x, m.z) - .01, m.z, 15, progress * .45, '#ffb13d', low);
       }
       if (a.skill === 'roar') {
         this.decals.draw(src.x, y(src.x, src.z), src.z, COLOSSUS_STATS.roarRange, progress * .35, color);
@@ -63,7 +64,7 @@ export class ColossusAttackView {
       // A glowing footprint that cools over its eight seconds.
       const fade = 1 - after / COLOSSUS_ACTIVE.stomp, d = this.mesh(this.disc, this.mat('#ff6a10', .55 * fade + .1, true));
       d.position.set(m.x, y(m.x, m.z) + .03, m.z); d.scale.setScalar(4 * (1 + .04 * Math.sin(time * 6)));
-      this.decals.draw(m.x, y(m.x, m.z), m.z, 4, 1, '#ff6a10');
+      this.decals.draw(m.x, y(m.x, m.z), m.z, 4, 1, '#ff6a10', low);
     }
     if (a.skill === 'breath' && m && after < COLOSSUS_ACTIVE.breath) {
       const from = head ?? { x: src.x, y: 6, z: src.z }, end = { x: src.x + forwardOf(a.aim).x * BREATH, z: src.z + forwardOf(a.aim).z * BREATH };

@@ -11,7 +11,7 @@ import { uniformSpecial } from './uniform-skills.ts';
 import { dropUnownedFriendLooks } from './friend-looks.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
-import { levelledStat, parseGearLevels, parseSkillLevels } from './upgrades.ts';
+import { levelledStat, parseGearLevels, parseJumpLevel, parseSkillLevels } from './upgrades.ts';
 import { LEGACY_CROP_IDS } from './content.ts';
 import { cropLevel, cropXp, cropGrowTime, sellPrice, kitchenOpen, isDifficulty, difficultyOf, rewardScale, bedUpgradeScale, type Difficulty } from './difficulty.ts';
 import { parseHunting, type HuntingState } from './fish-hunting.ts';
@@ -29,7 +29,7 @@ export { isTreeCrop, TREE_CROP_MS } from './tree-crops.ts';
 export * from './weapon-forge.ts';
 // Purchase-list order and item level tags (main.ts renders them as M.*, which the panel tests already provide).
 export { sortByPower, powerChip, levelTag, ownedScore, gearProgressHtml } from './item-power.ts';
-export { gearFactor, skillLevel, skillCooldown } from './upgrades.ts';
+export { gearFactor, skillLevel, skillCooldown, jumpLevel } from './upgrades.ts';
 export * from './content.ts';
 export * from './farm.ts';
 export * from './helper-state.ts';
@@ -164,6 +164,8 @@ export interface SaveState {
     gearLevels?: Record<string, number>;
     /** Upgrade levels of the skills Q, W, E, R (skill-upgrades.ts); missing = all 0. */
     skillLevels?: number[];
+    /** The Jump skill (upgrades.ts): 0 or absent one jump, 1 the double jump, 2 the triple. */
+    jumpLevel?: number;
     nextPlantId?: number;
     /** The beds a save from before the 24-bed cap lost and what it got back (trimGarden), until the note is shown. */
     gardenTrim?: TrimNote;
@@ -842,7 +844,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.bag = inventory(v.bag);
         s.chest = inventory(v.chest);
         s.forge = parseForge(v.forge);
-        { const gear = parseGearLevels(v.gearLevels), skills = parseSkillLevels(v.skillLevels); if (gear) s.gearLevels = gear; if (skills) s.skillLevels = skills; }
+        { const gear = parseGearLevels(v.gearLevels), skills = parseSkillLevels(v.skillLevels); if (gear) s.gearLevels = gear; if (skills) s.skillLevels = skills; const jump = parseJumpLevel(v.jumpLevel); if (jump) s.jumpLevel = jump; }
         s.nextPlantId = integer(v.nextPlantId);
         if (record(v.gear))
             for (const [rawSlot, rawId] of Object.entries(v.gear)) {

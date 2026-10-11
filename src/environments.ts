@@ -11,7 +11,7 @@ export interface EnvironmentLayout {
   thorns:Array<Circle&{angle:number;phase:number}>;poison:Circle[];fruit:Circle[];lamps:Circle[];flowers:Circle[];bubbles:Circle[];turtles:Circle[];
   cave:{x:number;z:number;r:number;gate:Point};furnace:Point;braziers:Point[];nest:Circle;nestIslands:Circle[];
 }
-export interface EnvironmentTraits {speed:number;maxHp:number;fireResistance?:number;poisonImmune?:boolean;flippers?:boolean;featherFall?:boolean;lightRadius?:number;flying?:boolean}
+export interface EnvironmentTraits {speed:number;maxHp:number;fireResistance?:number;poisonImmune?:boolean;flippers?:boolean;featherFall?:boolean;lightRadius?:number;flying?:boolean;/** High enough in a jump to clear the floor (jump-rules.ts): lava burns again the moment the explorer lands in it. */hop?:boolean}
 export interface EnvironmentActor extends Point {id:string;hp:number;maxHp:number;boss:boolean;flying?:boolean;lavaImmune?:boolean}
 export interface EnvironmentStatus {label:string;value:string;icon?:string;fraction?:number}
 export interface EnvironmentEvent {kind:string;message?:string;id?:string}
@@ -129,6 +129,7 @@ export class EnvironmentSimulation {
     return this.layout.thorns.flatMap(w=>thornRaised(this.time,w.phase)?[-3,-1.5,0,1.5,3].map(t=>({x:w.x+Math.cos(w.angle)*t,z:w.z+Math.sin(w.angle)*t,r:.75})):[]);
   }
   enemyLightObstacles():Obstacle[]{return this.layout.lamps.filter(l=>this.lampLit(l.id)).map(l=>({x:l.x,z:l.z,r:l.r}));}
+  private lavaDue=false;
   private tick(key:string,period:number,dt:number){const remaining=(this.timers.get(key)??0)-dt;if(remaining<=0){this.timers.set(key,period);return true;}this.timers.set(key,remaining);return false;}
   private warning(key:string,value:string,message:string,events:EnvironmentEvent[]){if(this.warnings.get(key)!==value){this.warnings.set(key,value);if(value==='warning')events.push({kind:key,message:t(message)});}}
   step(dt:number,player:Point&{y?:number},input:Point,traits:EnvironmentTraits,enemies:EnvironmentActor[]):EnvironmentStep{
@@ -162,7 +163,8 @@ export class EnvironmentSimulation {
       for(const impact of weather.impacts){if(length(player,impact)<impact.radius&&!traits.flying)out.damage+=traits.maxHp*impact.playerFraction*resistance;for(const enemy of enemies)if(enemy.hp>0&&length(enemy,impact)<impact.radius)out.enemyHits.push({id:enemy.id,amount:enemy.maxHp*impact.enemyFraction});}
       let onRaft=false;
       for(const pool of this.layout.pools){const previous=raftPosition(pool,previousTime);if(length(player,previous)<1.3){const next=raftPosition(pool,this.time);out.push.x+=next.x-previous.x;out.push.z+=next.z-previous.z;out.y=next.y+this.weather.tideOffset;onRaft=true;break;}}
-      if(!traits.flying&&!onRaft&&this.lavaAt(player)&&this.tick('lava',.5,dt))out.damage+=traits.maxHp*.07*resistance;
+      // A jump clears lava only if it ends on dry ground: a burn that came due in the air waits for the landing.
+      {const inLava=!traits.flying&&!onRaft&&this.lavaAt(player);if(!inLava)this.lavaDue=false;else{if(this.tick('lava',.5,dt))this.lavaDue=true;if(this.lavaDue&&!traits.hop){this.lavaDue=false;out.damage+=traits.maxHp*.07*resistance;}}}
       for(const enemy of enemies)if(enemy.hp>0&&!enemy.flying&&!enemy.lavaImmune&&this.lavaAt(enemy)&&this.tick('lava-enemy-'+enemy.id,.5,dt))out.enemyHits.push({id:enemy.id,amount:enemy.maxHp*(enemy.boss?.02:.09)});
       for(const vent of this.layout.vents){
         const phase=ventPhase(this.time,vent.phase,this.ventPeriod);this.warning('vent-'+vent.id,phase,'Volcano warning! Leave the red circle or reach high ground.',length(player,vent)<35?out.events:[]);

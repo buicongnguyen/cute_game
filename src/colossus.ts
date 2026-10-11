@@ -1,3 +1,4 @@
+import { attackClass, dodges, type AttackClass } from './jump-rules.ts';
 import * as T from 'three';
 // colossus.css is imported by main.ts (this module is a lazy chunk: its sheet must keep its place in the cascade)
 import { t } from './i18n.ts';
@@ -25,7 +26,7 @@ export interface ColossusHost {
   /** The explorer's defence as the hurt rule counts it (gear, skills, armour buff). */
   defence(): number;
   /** The game's own hurt path (invulnerability frames, death and so on); amount before defence. */
-  hurt(amount: number): void;
+  hurt(amount: number, cls?: AttackClass): void;
   change<R>(fn: () => R): R;
   toast(message: string, icon?: string): void;
   floating(text: string, x: number, z: number, style?: string): void;
@@ -179,7 +180,7 @@ export class ColossusEvent {
       poseColossus(this.rig, { x: e.x, z: e.z, ground, facing: this.facing, time: this.time, attack: a, kneel: this.kneel, dying: this.dying, rise: this.rise });
       if (e.hp > 0) {
         this.rig.root.updateMatrixWorld(true); const head = this.rig.parts.head.getWorldPosition(new T.Vector3()).add(new T.Vector3(Math.sin(this.facing) * 2.5, -.6, Math.cos(this.facing) * 2.5));
-        for (const b of this.h.online() ? this.serverAttacks : this.attacks) if (!b.done) this.view.draw(b, (x, z) => terrainHeight(w.environment.layout, { x, z }), this.time, head);
+        for (const b of this.h.online() ? this.serverAttacks : this.attacks) if (!b.done) this.view.draw(b, (x, z) => terrainHeight(w.environment.layout, { x, z }), this.time, head, !this.h.online() && !!w.jumpRules && attackClass(b.skill) === 'ground');
       }
       e.mesh.visible = true;
     }
@@ -240,7 +241,7 @@ export class ColossusEvent {
     for (const a of this.attacks) {
       const result = stepColossusAttack(a, dt, near);
       if (result.landed) this.landed(a);
-      for (const hit of result.hits) if (hit.id === 'local') this.hitPlayer(hit);
+      for (const hit of result.hits) if (hit.id === 'local') this.hitPlayer(hit, attackClass(a.skill));
       if (result.summon) this.spawnMinion(a.marks[0] ?? e);
       for (const b of result.bursts) this.burst(b.x, b.z, b.r, a.skill);
     }
@@ -276,9 +277,11 @@ export class ColossusEvent {
     fx.burst({ x, z }, { n: Math.min(40, 10 + Math.round(r * 2)), color: ['#5a4448', '#ff7a1e', '#ffd27a'], speed: 6 + r * .5, up: 7, size: .22, life: 1 });
     if (r > 5) fx.burst({ x, z }, { n: 14, color: '#ffffff', glow: true, speed: 5, up: 3, size: .16, life: .5 });
   }
-  private hitPlayer(hit: ColossusHit) {
+  /** `cls`: the stomp's shockwave and lava footprint and the slap are ground attacks, which a jump clears (jump-rules.ts). */
+  private hitPlayer(hit: ColossusHit, cls: AttackClass = 'body') {
+    if (this.h.world.jumpRules && dodges(cls, this.h.world.jump?.height ?? 0)) { this.h.hurt(0, cls); return; } // dodged: no damage and no crack, the game shows the dodge
     const s = this.h.state(), def = this.h.defence(), damage = colossusDamage(S.atk / this.weak, hit.multiplier, def, this.defenceFactor, .9 + Math.random() * .2);
-    this.h.hurt(throughDefence(damage, def));
+    this.h.hurt(throughDefence(damage, def), cls);
     if (hit.effect) this.effect(hit.effect, s);
   }
   /** Status effects on the explorer: the same in both modes (online the server already counted the damage). */

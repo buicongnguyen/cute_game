@@ -39,6 +39,8 @@ const BODIES = {
   /** The energy spark. */
   bolt: `<path d="M13.600 2.500 5 13.600h5.600l-1.100 7.900L18.600 10h-5.500z" fill="#ffc93a"/>`,
   /** The attack pad: three claw strokes. */
+  /** Jump: two chevrons pointing up, cream on ink like the attack claws. */
+  jump: `<path d="M5.200 12.800 12 6l6.800 6.800" stroke="${INK}" stroke-width="5.400"/><path d="M5.200 12.800 12 6l6.800 6.800" stroke="#fff6e0" stroke-width="2.900"/><path d="M7.600 19.200 12 14.800l4.400 4.400" stroke="${INK}" stroke-width="4.600"/><path d="M7.600 19.200 12 14.800l4.400 4.400" stroke="#fff6e0" stroke-width="2.200"/>`,
   attack: `<path d="M5.200 4.500c3.900 3.200 5.800 8 5.300 14.700M11.200 3.300c4.100 3.700 5.700 8.800 5 15.800M17 5c2.600 3.100 3.300 6.900 2.600 11" stroke="${INK}" stroke-width="4.600"/><path d="M5.200 4.500c3.900 3.200 5.800 8 5.300 14.700M11.200 3.300c4.100 3.700 5.700 8.800 5 15.800M17 5c2.600 3.100 3.300 6.900 2.600 11" stroke="#fff6e0" stroke-width="2.300"/>`,
   // ---- The four starting skills
   /** Petal Gale: four petals turning around a golden heart. */

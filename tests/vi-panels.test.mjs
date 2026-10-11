@@ -100,6 +100,7 @@ function mainPanels(state){
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},
     farmUi:{art,esc,mini,chips:()=>'',effect:item=>t(item.desc)},
   };
+  context.spaceKey='jump';context.airCombat=true;context.airOn=()=>true;context.actionHandler??=null;
   const ctx=vm.createContext(context);vm.runInContext(compiled,ctx);
   const render=(name,...args)=>{panels=[];ctx[name](...args);return panels;};
   const all=[];

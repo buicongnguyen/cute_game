@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import ts from 'typescript';
 import * as Controls from '../src/gameplay-controls.ts';
+import {JumpInput,jumpKeyAction} from '../src/jump-rules.ts';
 
 // Execute the actual production DOM routing, not a second implementation of its bindings.
 const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
@@ -19,7 +20,8 @@ function fixture(layout='classic'){
   const calls=[],keys=new Set(),documentHandlers=new Map(),windowHandlers=new Map(),body=target();
   const register=(handlers,name,fn)=>{const list=handlers.get(name)??[];list.push(fn);handlers.set(name,list);};
   const state={settings:{keyboardLayout:layout}},movement=new Controls.MovementControls(keys);
-  const ctx=vm.createContext({...Controls,state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
+  const jumpInput=new JumpInput();
+  const ctx=vm.createContext({...Controls,jumpKeyAction,jumpInput,jumpPointers:new Set(),slideCombo:{cancel(){}},air:true,airOn:()=>ctx.air,spaceKey:'jump',state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
     world:{keys,interactNearest:()=>calls.push(['interact'])},document:{hidden:false,activeElement:body,addEventListener:(name,fn)=>register(documentHandlers,name,fn),querySelector:selector=>selector==='dialog[open]'&&ctx.nativeDialog?{}:null},window:{addEventListener:(name,fn)=>register(windowHandlers,name,fn)},
     previous:0,performance:{now:()=>12345},graphics:{sample:(...args)=>calls.push(['graphicsSample',...args])},
     $:()=>({querySelectorAll:()=>[]}),uiBlocked:()=>!!ctx.modal||ctx.nativeDialog,
@@ -34,7 +36,7 @@ function fixture(layout='classic'){
     for(const field of ['code','key','shiftKey','ctrlKey','metaKey','altKey','isComposing','keyCode'])if(field in event)Object.defineProperty(event,field,{value:event[field],enumerable:false});
     for(const handler of documentHandlers.get(type)??[])handler(event);return event;
   }
-  return {ctx,calls,keys,state,movement,body,fire,documentHandlers,windowHandlers};
+  return {ctx,calls,keys,state,movement,body,fire,documentHandlers,windowHandlers,jumpInput};
 }
 
 test('classic bindings keep QWER skills, J journal and arrow movement',()=>{
@@ -96,4 +98,28 @@ test('blur and visibility loss clear held ground, space, boost, pointer and reel
     assert.equal(f.keys.size,0);assert.equal(f.ctx.spaceKeys.size,0);assert.equal(f.ctx.boostHeld,false);assert.equal(f.ctx.spacePointer,null);assert.equal(input.held,false);
     if(kind==='visibilitychange'){assert.equal(f.ctx.previous,12345);assert.ok(f.calls.some(([call,dt,playing])=>call==='graphicsSample'&&dt===0&&playing===false));}
   }
+});
+
+test('Space jumps by default and F attacks when nothing is in reach; the old way puts the attack back on Space and the jump on Left Shift',()=>{
+  const f=fixture('wasd');
+  assert.equal(f.fire('keydown','Space').defaultPrevented,true);assert.equal(f.jumpInput.held,true);assert.deepEqual(f.calls,[],'Space no longer attacks');
+  f.fire('keydown','Space',' ',{repeat:true});f.fire('keyup','Space');assert.equal(f.jumpInput.held,false);
+  // F is interact first (the stub finds something), and the basic attack when nothing is in reach or the explorer is in the air.
+  f.fire('keydown','KeyF');assert.deepEqual(f.calls,[['interact']]);
+  f.ctx.world.interactNearest=()=>false;f.fire('keydown','KeyF');assert.deepEqual(f.calls,[['interact'],['attack']]);
+  f.ctx.world.jump={airborne:true};f.ctx.world.interactNearest=()=>{throw new Error('no interacting in the air');};f.fire('keydown','KeyF');assert.deepEqual(f.calls.at(-1),['attack']);
+  f.fire('keydown','ShiftLeft','Shift');assert.equal(f.jumpInput.held,false,'Left Shift does nothing while Space jumps');
+  const old=fixture('classic');old.ctx.spaceKey='attack';
+  assert.equal(old.fire('keydown','Space').defaultPrevented,true);assert.deepEqual(old.calls,[['attack']]);assert.equal(old.jumpInput.held,false);
+  old.fire('keydown','ShiftLeft','Shift');assert.equal(old.jumpInput.held,true);old.fire('keyup','ShiftLeft','Shift');assert.equal(old.jumpInput.held,false);
+  // A menu, typing and losing focus never leave the jump held.
+  const m=fixture();m.ctx.modal='settings';m.fire('keydown','Space');assert.equal(m.jumpInput.held,false);
+  const b=fixture();b.fire('keydown','Space');for(const handler of b.windowHandlers.get('blur')??[])handler();assert.equal(b.jumpInput.held,false);
+});
+
+test('with jumping switched off the keys are the ones from before: Space attacks, F only interacts, nothing jumps',()=>{
+  const f=fixture('wasd');f.ctx.air=false;
+  assert.equal(f.fire('keydown','Space').defaultPrevented,true);assert.deepEqual(f.calls,[['attack']]);assert.equal(f.jumpInput.held,false);
+  f.ctx.world.interactNearest=()=>{f.calls.push(['interact']);return false;};f.fire('keydown','KeyF');assert.deepEqual(f.calls,[['attack'],['interact']],'F never attacks');
+  f.fire('keydown','ShiftLeft','Shift');assert.equal(f.jumpInput.held,false);f.ctx.spaceKey='attack';f.fire('keydown','ShiftLeft','Shift');assert.equal(f.jumpInput.held,false,'not even with the old-way choice saved');
 });
