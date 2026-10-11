@@ -47,7 +47,7 @@ function fixture(...items) {
     world: {
       entities: [pond], enemies: [], position: { x: 5, z: 0 }, selected: null,
       destination: null, route: [], moving: false, keys: new Set(), pondTap: null, ring: { visible: false },
-      refreshPlayer: () => { calls.refresh++; }, playerAttack() {},
+      refreshPlayer: () => { calls.refresh++; }, playerAttack() {}, jump: { airborne: false, diving: false, height: 0, jumps: 0 },
     },
     fishingView: {
       mysteryNearCast:()=>null, mysteryIn: () => null, callMystery() {}, dropMystery() {},

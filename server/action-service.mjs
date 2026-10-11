@@ -211,7 +211,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         // Cottage activities: in your own cottage (an indoor pose is raised by INDOOR_Y) and within reach of the thing.
         if(data.type==='houseUse'){if(!peer||peer.visit||state.planet!=='home'||!(peer.pose.y>=INDOOR_Y-1))fail(409,'Go inside your cottage first.');const spot=activity(typeof p.id==='string'?p.id:'');if(!spot||distance(peer.pose,spot.at)>3)fail(409,'Walk up to it first.');}
         // The upgrade bench stands in the cottage's craft room (upgrade-bench.ts).
-        if(data.type==='upgradeGear'||data.type==='upgradeSkill'){const bench=activity('bench');if(!peer||peer.visit||state.planet!=='home'||!(peer.pose.y>=INDOOR_Y-1))fail(409,'Go inside your cottage first.');if(!bench||distance(peer.pose,bench.at)>3)fail(409,'Walk up to it first.');}
+        if(data.type==='upgradeGear'||data.type==='upgradeSkill'||data.type==='upgradeJump'){const bench=activity('bench');if(!peer||peer.visit||state.planet!=='home'||!(peer.pose.y>=INDOOR_Y-1))fail(409,'Go inside your cottage first.');if(!bench||distance(peer.pose,bench.at)>3)fail(409,'Walk up to it first.');}
         // A dropped bag (death-bags.ts): only the owner's own save holds it; the server's pose must be beside it, within its 24 hours.
         if(data.type==='recoverBag'){const bag=Game.liveBags(state,now,state.planet).find(b=>p.id===undefined||b.id===p.id);if(!bag)fail(409,'That bag is not here.');requireNear(peer,bag,4);}
         if(data.type==='claimMine')requireNear(peer,p.index===0?{x:-6,z:3}:{x:9,z:-8});

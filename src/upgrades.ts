@@ -15,6 +15,7 @@ import { ITEMS, canonicalItem, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
 import { hasMaterials, useMaterials } from './pantry.ts';
 import { MAX_SKILL_LEVEL, SKILL_SLOTS, clampSkillLevel, levelledCooldown } from './skill-upgrades.ts';
+import { JUMP_UNLOCKS, MAX_JUMP_LEVEL, clampJumpLevel } from './jump-rules.ts';
 import { CONVERGED_STATS, MAX_GEAR_LEVEL, baseLine, gapShare, lerpStat, lineAtLevel, SLOT_CEILING, isCeilingSlot, type StatLine } from './gear-ceiling.ts';
 
 export { MAX_GEAR_LEVEL };
@@ -23,7 +24,7 @@ export const GEAR_STEP = .04;
 export const LEVELLED_SLOTS = ['hat', 'outfit', 'boots', 'pet'] as const;
 /** Energy per level = the base curve x max(GAP_COST_MIN, GAP_COST_SCALE x gap share): a full gap pays 1.5x, a near-ceiling item half. */
 export const GAP_COST_SCALE = 1.5, GAP_COST_MIN = .5;
-type Upgraded = SaveState & { gearLevels?: Record<string, number>; skillLevels?: number[] };
+type Upgraded = SaveState & { gearLevels?: Record<string, number>; skillLevels?: number[]; jumpLevel?: number };
 type Cost = { energy: number; materials: Inventory };
 
 /** Gear that levels on the bench (weapons use the forge, disguises are their own power spike, rods are tools). */
@@ -97,6 +98,19 @@ export function upgradeSkill(s: SaveState, index: number): { index: number; leve
   const levels = skillLevels(s); levels[index] = level + 1; (s as Upgraded).skillLevels = levels;
   return { index, level: level + 1 };
 }
+/**
+ * The Jump skill (jump-rules.ts JUMP_UNLOCKS): level 0 is the single jump every explorer has, 1 the double jump, 2 the
+ * triple. Each step needs an explorer level and a price; a save without the field is level 0.
+ */
+export function jumpLevel(s: SaveState) { return clampJumpLevel((s as Upgraded).jumpLevel); }
+export function jumpCost(level: number): Cost & { level: number } { const step = JUMP_UNLOCKS[Math.max(0, Math.min(MAX_JUMP_LEVEL - 1, Math.floor(Number.isFinite(level) ? level : 0)))]; return { level: step.level, energy: step.energy, materials: { ...step.materials } }; }
+export function canUpgradeJump(s: SaveState) { const level = jumpLevel(s); if (level >= MAX_JUMP_LEVEL) return false; const cost = jumpCost(level); return s.level >= cost.level && affordable(s, cost); }
+export function upgradeJump(s: SaveState): { level: number } | null {
+  if (!canUpgradeJump(s)) return null;
+  const level = jumpLevel(s); pay(s, jumpCost(level)); (s as Upgraded).jumpLevel = level + 1;
+  return { level: level + 1 };
+}
+export function parseJumpLevel(value: unknown): number | undefined { return clampJumpLevel(value) || undefined; }
 /** The cooldown both main.ts and combat-authority start after a cast. */
 export function skillCooldown(s: SaveState, index: number, base: number, disguised: boolean) { return levelledCooldown(index, base, skillLevel(s, index), disguised); }
 

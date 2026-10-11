@@ -3,6 +3,7 @@
  * there is nothing to download and the game stays playable offline.
  */
 export type Sound = 'alert' | 'click' | 'punch' | 'swing' | 'hit' | 'crit' | 'hurt' | 'pop' | 'splash' | 'cast' | 'reel' | 'snap'
+  | 'jump' | 'flip' | 'land'
   | 'success' | 'level' | 'harvest' | 'shoot' | 'poof' | 'coin' | 'ready' | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock';
 
 export class Sfx {
@@ -56,6 +57,10 @@ export class Sfx {
       case 'alert': this.tone(ctx, t, 'square', 660, 990, .07, .035); this.tone(ctx, t + .07, 'square', 990, 1320, .08, .03); break;
       case 'click': this.tone(ctx, t, 'sine', 740, 520, .06, .05); break;
       case 'pop': this.tone(ctx, t, 'sine', 420, 980, .09, .09); break;
+      // Jumping (jump-rules.ts): a soft rising hop, a brighter one for the extra jumps, a low thud on landing.
+      case 'jump': this.tone(ctx, t, 'sine', 300, 620, .1, .07); this.hiss(ctx, t, 'bandpass', 900, 1600, .07, .05, 1.2); break;
+      case 'flip': this.tone(ctx, t, 'triangle', 520, 1040, .1, .06); this.hiss(ctx, t, 'bandpass', 1800, 2800, .08, .05, 1.4); break;
+      case 'land': this.tone(ctx, t, 'sine', 170, 70, .1, .1); this.hiss(ctx, t, 'lowpass', 900, 200, .09, .07); break;
       case 'coin': this.tone(ctx, t, 'square', 1320, 1320, .05, .025); this.tone(ctx, t + .05, 'square', 1760, 1760, .09, .025); break;
       case 'punch': case 'swing': this.hiss(ctx, t, 'bandpass', sound === 'swing' ? 2200 : 1400, 380, .11, .16, 1.4); break;
       case 'hit': this.hiss(ctx, t, 'lowpass', 2400, 300, .07, .22); this.tone(ctx, t, 'triangle', 190, 80, .1, .2); break;

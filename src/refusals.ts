@@ -166,6 +166,7 @@ export const REFUSALS: Record<string, Reason> = {
   forge: 'You need more energy or materials to forge that.',
   upgradeGear: 'You need more energy or materials to upgrade that.',
   upgradeSkill: 'You need more energy to upgrade that skill, or it is at its best.',
+  upgradeJump: 'You need a higher level or more energy and materials to improve your jump, or it is at its best.',
   equip: (s, p) => (s.bag[id(p)] ?? 0) > 0 && M.gearLevel(id(p)) > s.level ? fmt('Needs level {level} to wear.', { level: M.gearLevel(id(p)) }) : 'You do not have that in your backpack.',
   unequip: 'Nothing is worn there.',
   eat: eatReason,

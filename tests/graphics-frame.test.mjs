@@ -31,7 +31,7 @@ function fixture() {
     wasAirborne: false, fishGame: null, recastUntil: 0, modal: '',
     state: M.newGame(), document: { hidden: false }, performance: { now: () => now },
     innerWidth: 1280, innerHeight: 720, network: { role: null },
-    ship: { update: noop }, gestures: { update: noop }, joystick:{update:noop},combatTimers: { advance: noop },
+    ship: { update: noop }, gestures: { update: noop }, joystick:{update:noop},combatTimers: { advance: noop }, stepFight: noop,
     combat: { update: noop, statuses: {}, airborne: 0, projectiles: [], allies: [], pose: 'idle' },
     combatView: { update: noop }, fishingView: { update: noop, active: false }, rodTip: {}, skillFx: { disguises: new DisguiseFx({ground:()=>0,explorerAt:()=>null}), boulders, update: noop, gazeAngle: () => null },
     uiBlocked: () => context.blocked,

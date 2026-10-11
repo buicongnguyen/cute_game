@@ -13,7 +13,7 @@ import { huntFish } from './fish-hunting.ts';
 import { useActivity } from './house-activities.ts';
 import { sellProduce, cookSellProduce } from './item-views.ts';
 import { applyAudio } from './audio-settings.ts';
-import { upgradeGear, upgradeSkill } from './upgrades.ts';
+import { upgradeGear, upgradeSkill, upgradeJump } from './upgrades.ts';
 import { claimProgress, refreshProgress, rerollDaily, startChallenge, type ProgressKind } from './progression.ts';
 import { refusalReason } from './refusals.ts';
 import { startRun, claimStage, leaveRun } from './dungeon-rules.ts';
@@ -72,6 +72,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     // The cottage upgrade bench (upgrades.ts): deterministic gear levels and skill levels.
     case 'upgradeGear': result = upgradeGear(state, id()); break;
     case 'upgradeSkill': result = upgradeSkill(state, index()); break;
+    case 'upgradeJump': result = upgradeJump(state); break;
     // Taking the weapon off by hand means fists, saved so a reload and the server's combat honour it; a combat weapon put on ends it.
     case 'equip': result = Game.equip(state, id()); if (result && ['sword', 'gun', 'fist'].includes(Game.ITEMS[state.gear.weapon ?? '']?.weapon?.kind ?? '') && Game.ITEMS[id()]?.slot === 'weapon') delete state.fists; break;
     case 'unequip': result = Game.unequip(state, string(p.slot) as Game.GearSlot); if (result && p.slot === 'weapon') state.fists = true; break;

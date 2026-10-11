@@ -64,6 +64,7 @@ import {part} from './part-cache.ts';
 import {mergeParts} from './avatar-merge.ts';
 import {perfFlags} from './perf-flags.ts';
 import {enemyFlash,HIT_FLASH,HURT_TINT,meleeArc,MELEE_ARC} from './feel-rules.ts';
+import {AFTERSHOCK,BLOCK,JumpState,JUMP,MAX_AIR_SECONDS,MAX_HEIGHT,attackClass,dodges,poseAir,type AttackClass,type Landing} from './jump-rules.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
@@ -76,7 +77,7 @@ interface Obstacle { x: number; z: number; r: number;tag?:string }
  */
 export interface Enemy { /** A peer's drawn position, gliding to the host's latest snapshot (world.ts stepCreatureMotion). */smooth?:{x:number;z:number};resting?:boolean;lod?:{wait:number;age:number;x:number;z:number;slot:number} }
 /** windupTotal: the length of the current wind-up, so its telegraph fills exactly when the blow lands; enraged: below 30% HP (one toast). */
-export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;resistAt?:number }
+export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;resistAt?:number;blockAt?:number }
 /** A boss attacks faster as it weakens, like the reference (bundle @837714): ×0.7 below half health, ×0.6 once enraged.
  * Applies to its skills and its basic attacks and charges alike. */
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
@@ -131,7 +132,7 @@ export const HERO_SCALE = .84;
 export const HERO_MODEL_HEIGHT = 2.3;
 export {DEFAULT_PIVOTS};
 // Creature AI level of detail, as in the reference: calm creatures farther than this from every explorer do not think.
-const AI_REST_RANGE=48,EXPLORER_RADIUS=.45;
+const AI_REST_RANGE=48,EXPLORER_RADIUS=.45,DIVE_RING=2.4;
 /** The AI numbers of a creature without its own definition, made once rather than per creature per step. */
 /** Disguises that show the flying pose while airborne (the fairy hovers upright-ish, the superhero glides). */
 const FLIGHT_POSE_DISGUISES:readonly string[]=['dz_superhero','dz_fairy'];
@@ -160,7 +161,7 @@ export class World {
   viewOffset = cameraOffset(16 / 9);
   /** The explorer is inside the starship: hidden, with the companion. */
   boarded = false;
-  onInteract: (e: Entity) => void = () => {}; onAttackEnemy: (e: Enemy) => void = () => {}; onDamage: (amount: number,source?:'melee'|'shot'|'hazard',enemyId?:string) => void = () => {};
+  onInteract: (e: Entity) => void = () => {}; onAttackEnemy: (e: Enemy) => void = () => {}; /** `cls`: 'ground' attacks pass under a jumping explorer (jump-rules.ts); everything else is 'body'. */ onDamage: (amount: number,source?:'melee'|'shot'|'hazard',enemyId?:string,cls?:AttackClass) => void = () => {};
   onZone: (name: string) => void = () => {}; lastZone = ''; hazardTimer = 0;
   /** Called after every world build, so views such as the fishing ponds can restock. */
   onBuilt?: () => void;
@@ -1017,6 +1018,8 @@ export class World {
   addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear,pose.look);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});avatar.userData.remoteId=id;this.remoteRoot.add(avatar);pose.pets?.slice(0,2).forEach((petId,i)=>{const pet=this.petFor(petId);pet.name='remote-pet';pet.position.set(1,0,-.6-i*.6);avatar.add(pet);addOutlines(pet,{merge:true});});this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
   updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear,pose.look??remote.pose.look);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;// Each pose is a target the avatar glides to (per frame, below): poses arrive about every 100 ms and a tunnel bunches them, so setting the position outright made others jump and blink. First sight, big jumps and rebuilds snap.
     {const ty=(current.y??0)-(indoor?INDOOR_Y:0),u=remote.mesh.userData,p=remote.mesh.position;u.target={x:current.x,y:ty,z:current.z,f:current.facing??0};
+      // Its jump height, for ground attacks (remoteDodges): read from the pose, and only for as long as a real jump can last.
+      {const air=indoor||!this.environment?0:poseAir(ty,terrainHeight(this.environment.layout,current),current.visual?.flight?1.7:0),now=this.time??0;if(air>0){u.airSince??=now;u.air=now-u.airSince<=MAX_AIR_SECONDS?air:0;}else{u.airSince=undefined;u.air=0;}}
       if(!u.placed||Math.hypot(p.x-current.x,p.z-current.z)>8||Math.abs(p.y-ty)>3){p.set(current.x,ty,current.z);remote.mesh.rotation.y=u.target.f;u.placed=true;}}
     this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
   visualSnapshot():AvatarVisual{return {size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat};}
@@ -1202,7 +1205,8 @@ export class World {
   }
   /** The thing the context button acts on: the current target while it is still in reach (so the prompt and the target frame agree and a press never swaps creatures mid-fight), else the nearest valid entity in reach. */
   nearest() {const s=this.selected;if(s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2)return s;/* The cottage door wins over a helper standing in front of it (a friend coming out used to take the Interact button, so the house seemed locked). */const gap=(e:Entity)=>Math.hypot(e.x-this.position.x,e.z-this.position.z)-e.radius-(e.kind==='home'?1.6:0);return this.entities.filter(e=>this.validTarget(e)).sort((a,b)=>gap(a)-gap(b)).find(e=>Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.radius+2);}
-  interactNearest() {const e=this.nearest();if(e)this.select(e);}
+  /** True when something was in reach to act on. */
+  interactNearest() {const e=this.nearest();if(e)this.select(e);return !!e;}
   burst(x:number,z:number,color:string,count=14) {
     if(this.fx){this.fx.burst({x,z},{n:count,color:[color,'#ffffff'],speed:4,up:5,size:.13});this.fx.burst({x,z},{n:Math.ceil(count/2),color,glow:true,size:.12,speed:3,up:4,life:.5});return;}
     for(let i=0;i<count;i++){const p=ball(color,.06+Math.random()*.05,x,.6,z,0);this.scene.add(p);this.particles.push({mesh:p,velocity:new T.Vector3((Math.random()-.5)*4,2+Math.random()*3,(Math.random()-.5)*4),life:.6+Math.random()*.4,max:1});}
@@ -1241,6 +1245,28 @@ export class World {
     this.hurtT=HIT_FLASH.hero;const fx=this.fx;if(!fx)return;
     fx.text(this.position,'-'+amount,'hurt');fx.shake(Math.min(.35,.12+amount/60));
     fx.burst(this.position,{n:6,color:['#ff7b6b','#ffffff'],size:.1,speed:4,up:3,y:.9});
+  }
+  /** A boss blocked a low hit (jump-rules.ts BLOCK): a blue shield ring at its chest and a 'Blocked' float, at most every BLOCK.textGap s. */
+  blockFeedback(e:Enemy){
+    const now=this.time??0;if(now-(e.blockAt??-1)<BLOCK.textGap)return;e.blockAt=now;const fx=this.fx;if(!fx)return;
+    const chest=e.mesh.position.y+.8*(e.boss?1.85:1);
+    fx.ring({x:e.x,z:e.z},{color:'#8fd0ff',from:e.radius*.7,to:e.radius*1.25,life:.28,y:chest,thick:.22,opacity:.9});
+    fx.text({x:e.x,y:e.mesh.position.y+1,z:e.z},t('🛡️ Blocked'),'dmg block');
+  }
+  /** Leaving the ground: dust at the feet. An extra jump in the air: a small ring and sparks at that height. Pooled effects only. */
+  jumpFeedback(n:number){
+    const fx=this.fx;if(!fx)return;const p=this.position,h=this.jump.height;
+    if(n<=1){fx.burst(p,{n:7,color:['#eadfc6','#ffffff','#cdbb98'],size:.13,speed:2.8,up:1.2,y:.08,life:.4,gravity:3});return;}
+    fx.ring(p,{color:n>=3?'#ffe89a':'#ffffff',from:.25,to:n>=3?1.3:1,life:.24,y:p.y+h+.05,thick:.16,opacity:.85});
+    fx.burst({x:p.x,y:p.y+h,z:p.z},{n:n>=3?8:5,color:n>=3?['#ffe89a','#ffffff']:'#ffffff',glow:true,size:.09,speed:2.4,up:.4,y:.1,life:.3,gravity:2});
+  }
+  /** The dive begins: a streak above the explorer. */
+  diveFeedback(){const p=this.position;this.fx?.burst({x:p.x,y:p.y+this.jump.height,z:p.z},{n:6,color:['#ffffff','#ffe89a'],glow:true,size:.1,speed:1.2,up:5,y:1.2,life:.25,gravity:0});}
+  /** Touching down: dust in a ring; a dive adds a wider ring and flying dirt. */
+  landFeedback(landing:Landing){
+    const fx=this.fx;if(!fx)return;const p=this.position,big=landing.dive||landing.peak>2.6;
+    fx.burst(p,{n:big?12:6,color:['#eadfc6','#cdbb98','#ffffff'],size:big?.16:.12,speed:big?5:3,up:big?2.4:1,y:.08,life:big?.6:.38,gravity:5});
+    if(landing.dive)fx.ring(p,{color:'#fff1c2',from:.3,to:DIVE_RING,life:.3,y:p.y+.1,thick:.14,opacity:.8});
   }
   /** Swing arcs and animation for the player's own attacks. */
   playerAttack(kind:'fist'|'sword'|'gun'|'rod',muzzle='#fff8c8'){
@@ -1345,7 +1371,12 @@ export class World {
   }
   /** Other explorers' hittable summons from their poses (the server checked them; checked again here): for creatures to see and for drawing. */
   remoteDecoys(){const out:Array<DecoyPose&{owner:string}>=[];for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&Array.isArray(remote.pose.decoys))for(const d of remote.pose.decoys.slice(0,DECOY.max))if(Number.isFinite(d?.x)&&Number.isFinite(d?.z)&&Number.isInteger(d?.id)&&d.hp>0&&Math.hypot(d.x-remote.pose.x,d.z-remote.pose.z)<30)out.push({...d,r:Math.min(1,Math.max(.2,d.r||.5)),owner:id});return out;}
-  private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy;decoy?:{owner:string|null;id:number}},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string){if(target.decoy)this.onDecoyDamage?.(target.decoy.owner,target.decoy.id,amount,source,enemyId);else if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id)this.onRemoteDamage?.(target.id,amount,source,enemyId);else if(!this.playerSafe()&&(!this.playerFlying||source!=='melee'))this.onDamage(amount,source,enemyId);}
+  private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy;decoy?:{owner:string|null;id:number}},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string,cls:AttackClass='body'){if(target.decoy)this.onDecoyDamage?.(target.decoy.owner,target.decoy.id,amount,source,enemyId);else if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id){if(!this.remoteDodges(target.id,cls))this.onRemoteDamage?.(target.id,amount,source,enemyId);}else if(!this.playerSafe()&&(!this.playerFlying||source!=='melee'))this.onDamage(amount,source,enemyId,cls);}
+  /**
+   * Another explorer is in the air over a ground attack, as this host sees it (jump-rules.ts poseAir): its pose height above
+   * the ground it stands on, honoured for at most MAX_AIR_SECONDS in one go (updateRemotePlayer keeps the clock).
+   */
+  private remoteDodges(id:string,cls:AttackClass){if(cls!=='ground'||!this.jumpRules)return false;const u=this.remotePlayers?.get(id)?.mesh.userData;return !!u&&dodges(cls,u.air??0);}
   /** Inside the safe zone (18 m at home, 11 m elsewhere) no creature can hurt the explorer, whoever it was aiming at: shots and area attacks aimed at a neighbour or a friend near the gate stop at the fence. */
   private playerSafe(){return inSafeZone(this.position,this.planet);}
   /** A shot bounced off the knight's shield: it turns round and flies back at its shooter (DZ.block.speed m/s). */
@@ -1358,12 +1389,12 @@ export class World {
     const electric=e.type==='robot',distance=Math.max(.01,Math.hypot(target.x-e.x,target.z-e.z)),shot=ball(electric?'#e8fbff':e.definition?.accent??'#f5b576',.17,e.x,1.0,e.z,0);this.scene.add(shot);
     this.enemyShots.push({id:e.id+':shot:'+Math.random().toString(36).slice(2,10),ownerId:e.id,mesh:shot,vx:(target.x-e.x)/distance*13,vz:(target.z-e.z)/distance*13,life:1.4,damage:e.damage,...(electric?{electric}:{}),targetId:target.id,targetEnemyId:target.enemy?.id});
   }
-  private areaDamage(e:Enemy,x:number,z:number,radius:number,multiplier:number,inner=0){
+  private areaDamage(e:Enemy,x:number,z:number,radius:number,multiplier:number,inner=0,cls:AttackClass='body'){
     const hit=(p:Point)=>{const d=Math.hypot(p.x-x,p.z-z);return d<radius&&d>=inner;};
     if((e.statuses?.charm??0)>0){for(const target of this.enemies)if(target!==e&&target.hp>0&&hit(target))(this.onHazardEnemy??((v,d)=>this.damageEnemy(v,d)))(target,e.damage*multiplier);return;}
-    const environmentAtStart=this.environment,source=e.skill==='rain'||e.skill==='eclipse'?'shot':'melee';if(hit(this.position))this.hitEnemyTarget(this.position,e.damage*multiplier,source,e.id);
+    const environmentAtStart=this.environment,source=e.skill==='rain'||e.skill==='eclipse'?'shot':'melee';if(hit(this.position))this.hitEnemyTarget(this.position,e.damage*multiplier,source,e.id,cls);
     if(this.environment!==environmentAtStart)return;
-    for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&(remote.pose.hp??1)>0&&hit(remote.pose))this.onRemoteDamage?.(id,e.damage*multiplier,source,e.id);
+    for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&(remote.pose.hp??1)>0&&hit(remote.pose)&&!this.remoteDodges(id,cls))this.onRemoteDamage?.(id,e.damage*multiplier,source,e.id);
     // Summons in the blast are hurt too.
     for(const d of this.decoyList??[])if(hit(d.ring?decoyPoint(d,{x,z}):d))this.onDecoyDamage?.(d.owner,d.id,e.damage*multiplier,source,e.id);
   }
@@ -1379,7 +1410,7 @@ export class World {
     if(!e.titanAttacks?.length)return;if(e.hp<=0){e.titanAttacks=[];e.titanLift=0;return;}
     const environment=this.environment;
     for(const a of e.titanAttacks){const result=stepTitanAttack(a,dt,e,this.titanTargets());
-      if(authoritative)for(const hit of result.hits){if(hit.id===(this.localPlayerId??'local'))this.onDamage(e.damage*hit.multiplier,hit.source,e.id);else this.onRemoteDamage?.(hit.id,e.damage*hit.multiplier,hit.source,e.id);if(this.environment!==environment)return;}
+      if(authoritative)for(const hit of result.hits){const cls=attackClass(a.skill);if(hit.id===(this.localPlayerId??'local'))this.onDamage(e.damage*hit.multiplier,hit.source,e.id,cls);else if(!this.remoteDodges(hit.id,cls))this.onRemoteDamage?.(hit.id,e.damage*hit.multiplier,hit.source,e.id);if(this.environment!==environment)return;}
       // Each client applies its own pull from shared state; damage still belongs to the host.
       for(const p of result.pulls)if(p.id===(this.localPlayerId??'local'))this.move(p.x,p.z,true);
       if(result.move){e.x=result.move.x;e.z=result.move.z;e.titanLift=result.move.y;if(result.done){e.titanLift=0;e.phase='recover';e.phaseTime=.5;}}
@@ -1417,7 +1448,7 @@ export class World {
     if(e.hp<e.maxHp*.3)this.enrageBoss(e);
     if(Math.hypot(e.x-this.position.x,e.z-this.position.z)>CALLOUT_RANGE)return;
     const fx=this.fx;if(!fx)return;const top=e.mesh.position.y+(this.modelHeight?.(e)??2.6)*.6-1.8;
-    fx.text({x:e.x,y:top,z:e.z},t(bossCalloutText(skill,e.type)),'alert callout');
+    fx.text({x:e.x,y:top,z:e.z},t(bossCalloutText(skill,e.type))+(this.jumpRules&&attackClass(skill)==='ground'?' ⤴':''),'alert callout'); // the arrow: a ground attack, jump over it
     fx.burst({x:e.x,y:top+1.2,z:e.z},{n:24,color:[BOSS_TELEGRAPH_COLORS[skill],'#ffffff'],glow:true,size:.12,speed:5,up:4,life:.5});
   }
   /** '🛡️ RESIST' over a boss that shrugged off a stun or a status, at most every 0.7 s like the reference's. */
@@ -1440,7 +1471,7 @@ export class World {
     const skill=e.skill;if(!skill)return;
     e.phase='recover';e.phaseTime=.7;e.cooldown=(e.definition?.cooldown??2)*bossCooldownScale(e)*((e.bossStage??1)>=3?.8:1);
     if(isTitanSkill(skill)){e.titanAttacks??=[];e.titanAttacks.push(beginTitanAttack(skill,{x:e.x,z:e.z,radius:e.radius,facing:e.mesh.rotation.y},e.telegraphs as TitanMark[]??[],this.titanTargets()));if(skill==='leap'){e.phase='titan-leap';e.phaseTime=.8;}e.telegraphs=[];return;}
-    if(skill==='slam')this.areaDamage(e,e.x,e.z,4.8,1.6);
+    if(skill==='slam'){this.areaDamage(e,e.x,e.z,4.8,1.6,0,attackClass('slam'));if(this.jumpRules)e.skillEffects=[{x:e.x,z:e.z,r:4.8,inner:0,remaining:AFTERSHOCK.delay,multiplier:1.6*AFTERSHOCK.power}];}
     if(skill==='quake')e.skillEffects=[3,6,9].map((r,index)=>({x:e.x,z:e.z,r:r+.4,inner:r-2.4,remaining:.12+index*.32,multiplier:1.1}));
     if(skill==='rain')for(const p of e.telegraphs??[])this.areaDamage(e,p.x,p.z,p.r,1.3);
     if(skill==='barrage'){
@@ -1462,15 +1493,19 @@ export class World {
    * only, so red on the ground stays rare and the red ring keeps meaning "your target".
    */
   private drawTelegraphs(e:Enemy){
-    const decals=this.decals;if(!decals||e.hp<=0||e.phase!=='windup')return;
+    const decals=this.decals;if(!decals||e.hp<=0)return;
+    // With jumping on, the rings still to come (a slam's aftershock, a quake's later waves) show as they close in.
+    if(this.jumpRules&&e.skillEffects?.length)for(const p of e.skillEffects)if(p.remaining<AFTERSHOCK.delay+.05)decals.draw(p.x,Math.max(.04,terrainHeight(this.environment.layout,p)+.04),p.z,p.r,1-p.remaining/AFTERSHOCK.delay,BOSS_TELEGRAPH_COLORS.slam,true);
+    if(e.phase!=='windup')return;
     const progress=this.windupProgress(e),ground=(p:{x:number;z:number})=>Math.max(.04,terrainHeight(this.environment.layout,p)+.04);
-    if(e.skill){for(const mark of e.telegraphs??[])decals.draw(mark.x,ground(mark),mark.z,mark.r,progress,('safe' in mark&&mark.safe)?'#5aff9a':BOSS_TELEGRAPH_COLORS[e.skill]);return;}
-    if(e.boss&&e.mesh.userData.slam){decals.draw(e.x,ground(e),e.z,4.8,progress,BOSS_TELEGRAPH_COLORS.slam);return;}
+    // Ground-class attacks (jump-rules.ts) ripple: rings run out from the centre, so one look says 'jump over this'.
+    if(e.skill){const low=!!this.jumpRules&&attackClass(e.skill)==='ground';for(const mark of e.telegraphs??[]){const safe='safe' in mark&&!!mark.safe;decals.draw(mark.x,ground(mark),mark.z,mark.r,progress,safe?'#5aff9a':BOSS_TELEGRAPH_COLORS[e.skill],low&&!safe);}return;}
+    if(e.boss&&e.mesh.userData.slam){decals.draw(e.x,ground(e),e.z,4.8,progress,BOSS_TELEGRAPH_COLORS.slam,!!this.jumpRules);return;}
     const look=CREATURE_TELEGRAPHS[e.type??''];
     // Every other ordinary melee creature lays a red arc of its real reach in front of itself (feel-rules.ts MELEE_ARC).
     if(!look){const def=e.definition;if(!e.boss&&def&&def.behavior!=='shooter'&&def.behavior!=='charger'&&!def.titan){const arc=meleeArc(def.reach);decals.cone(e.x,ground(e),e.z,arc.r,e.mesh.rotation.y,arc.half,progress,MELEE_ARC.color);}return;}
     const facing=e.mesh.rotation.y,at=look.at==='target'?{x:e.targetX??e.x,z:e.targetZ??e.z}:look.at==='front'?{x:e.x+Math.sin(facing)*1.2,z:e.z+Math.cos(facing)*1.2}:{x:e.x,z:e.z};
-    decals.draw(at.x,ground(at),at.z,look.r,progress,look.color);
+    decals.draw(at.x,ground(at),at.z,look.r,progress,look.color,!!this.jumpRules&&look.at==='self');
   }
   /** The red ring and arrow follow the selected creature, or the last one hit for TARGET_HOLD seconds. */
   private updateTarget(dt:number){
@@ -1505,7 +1540,7 @@ export class World {
       if(((this.aiStep??0)+lod.slot)%4){lod.age++;return;}
       dt=lod.wait;lod.wait=0;lod.age=0;lod.x=e.x;lod.z=e.z;
     }else e.lod=undefined;
-    if(e.boss){e.bossStage=e.type==='dragon'?bossPhase(e.hp,e.maxHp):1;for(const pulse of e.skillEffects??[]){pulse.remaining-=dt;if(pulse.remaining<=0){this.areaDamage(e,pulse.x,pulse.z,pulse.r,pulse.multiplier,pulse.inner);this.burst(pulse.x,pulse.z,'#edb875',12);}}e.skillEffects=e.skillEffects?.filter(p=>p.remaining>0);}
+    if(e.boss){e.bossStage=e.type==='dragon'?bossPhase(e.hp,e.maxHp):1;for(const pulse of e.skillEffects??[]){pulse.remaining-=dt;if(pulse.remaining<=0){this.areaDamage(e,pulse.x,pulse.z,pulse.r,pulse.multiplier,pulse.inner,attackClass('quake'));this.burst(pulse.x,pulse.z,'#edb875',12);}}e.skillEffects=e.skillEffects?.filter(p=>p.remaining>0);}
     const statuses=e.statuses??{},noAttack=(statuses.blind??0)>0||(statuses.sheep??0)>0||(statuses.fear??0)>0;
     if(e.boss&&!e.enraged&&e.hp<e.maxHp*.3&&e.phase!=='idle'&&e.phase!=='return')this.enrageBoss(e);
     if(e.stun>0){e.phase='chase';e.telegraphs=[];return;}
@@ -1514,13 +1549,13 @@ export class World {
       if(e.phaseTime<=0){
         if(e.skill&&!noAttack){this.castBossSkill(e);return;}
         if(e.type==='magmaturtle'||e.type==='lavaworm'){
-          if(!noAttack)this.areaDamage(e,e.x,e.z,e.type==='magmaturtle'?2.6:2,e.type==='magmaturtle'?1.1:1.3);e.phase='recover';e.phaseTime=e.type==='magmaturtle'?3:3.2;e.cooldown=def.cooldown*bossCooldownScale(e);this.burst(e.x,e.z,'#ffc976',18);return;
+          if(!noAttack)this.areaDamage(e,e.x,e.z,e.type==='magmaturtle'?2.6:2,e.type==='magmaturtle'?1.1:1.3,0,attackClass('burst'));e.phase='recover';e.phaseTime=e.type==='magmaturtle'?3:3.2;e.cooldown=def.cooldown*bossCooldownScale(e);this.burst(e.x,e.z,'#ffc976',18);return;
         }
         if(def.behavior==='charger'&&!noAttack){e.phase='charge';e.phaseTime=.75;e.mesh.userData.chargeHit=false;if(target){const dx=target.x-e.x,dz=target.z-e.z,d=Math.hypot(dx,dz)||1;e.targetX=e.x+dx/d*13*.75;e.targetZ=e.z+dz/d*13*.75;}}
         else{
           if(target&&!noAttack){const reach=e.mesh.userData.slam?5.5:def.reach+(e.boss?BOSS_REACH.strike-.4:0);
             if(def.behavior==='shooter')this.shootEnemy(e,target);
-            else if(distance<reach+.4&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1),'melee',e.id);
+            else if(distance<reach+.4&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1),'melee',e.id,attackClass(e.mesh.userData.slam?'slam':'melee'));
           }
           e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);
         }
@@ -1530,7 +1565,7 @@ export class World {
     if(e.phase==='charge'){
       const dx=(e.targetX??e.x)-e.x,dz=(e.targetZ??e.z)-e.z,d=Math.hypot(dx,dz);
       if(d>.1)this.moveCreature(e,dx/d*(e.skill==='charge'?18:13)*dt,dz/d*(e.skill==='charge'?18:13)*dt);
-      if(target&&distance<(e.boss&&e.skill==='charge'?e.radius+.6:def.reach+.4)&&!e.mesh.userData.chargeHit){this.hitEnemyTarget(target,e.damage*1.3,'melee',e.id);e.mesh.userData.chargeHit=true;}
+      if(target&&distance<(e.boss&&e.skill==='charge'?e.radius+.6:def.reach+.4)&&!e.mesh.userData.chargeHit){this.hitEnemyTarget(target,e.damage*1.3,'melee',e.id,attackClass(e.boss?'charge':'rush'));e.mesh.userData.chargeHit=true;}
       e.phaseTime=(e.phaseTime??0)-dt;if((e.phaseTime??0)<=0||d<.3){e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);}return;
     }
     if(e.phase==='recover'){e.phaseTime=(e.phaseTime??0)-dt;if(e.phaseTime!<=0)e.phase='chase';return;}
@@ -1662,8 +1697,17 @@ export class World {
   beforeRender?:()=>void;
   /** Extra drawn height of the explorer, e.g. while hurled through the air by the Colossus. */
   playerLift=0;
+  /** The explorer's jump (jump-rules.ts): a height only. Where the explorer may stand is decided by move() as on foot. */
+  jump=new JumpState();
+  /** Jumping and air combat are on (main.ts airOn: the Settings switch, solo play). Off, ground attacks look and hit as they always did. */
+  jumpRules=false;
+  /** The explorer touched down from a jump (main.ts: dust, sound, the dive strike). */
+  onLanded?:(landing:Landing)=>void;
   update(dt:number,active:boolean,draw=true,simulateWorld=active||this.networkRole==='host') {
     this.onStep?.(dt);
+    // The jump runs on the world's clock. Indoors, aboard the ship, thrown by the Colossus or carried by the world it ends at once.
+    {const j=this.jump??=new JumpState();if(j.airborne&&(this.interior||this.boarded||(this.playerLift??0)>0||this.environment?.airborne))j.cancel();
+      if(active||simulateWorld){const landing=j.step(dt);if(landing){this.landT=.2;this.onLanded?.(landing);}}}
     this.environment??=new EnvironmentSimulation(createEnvironmentLayout(this.planet));this.enemyShots??=[];this.dynamicObstacles??=[];this.resourceTimers??=new Map();
     const environmentForFrame=this.environment;
     if(active||simulateWorld)this.time+=dt;
@@ -1678,7 +1722,7 @@ export class World {
     if(active||simulateWorld){
       const environmentAtStart=this.environment;
       this.environment.authoritative=!this.authoritativeAction&&this.networkRole!=='peer';const dragon=this.enemies.find(e=>e.type==='dragon'&&e.hp>0);this.environment.dragonPhase=dragon?bossPhase(dragon.hp,dragon.maxHp):0;this.environment.nearbyPlayers=1+[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&Math.hypot(r.pose.x-this.position.x,r.pose.z-this.position.z)<40).length;this.environment.weatherBlocked=(x,z,r)=>this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+r);
-      const step=this.environment.step(dt,this.position,input,{speed:stats.speed*(1+Math.max(0,this.playerSpeedBonus||0)),maxHp:stats.maxHp,fireResistance:stats.lavaproof?1:stats.fireResistance,poisonImmune:stats.poisonImmune,flippers:stats.flippers,featherFall:stats.featherFall,flying:this.playerFlying||stats.flying},this.networkRole==='peer'?[]:this.enemies.map(e=>({id:e.id,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,boss:e.boss,flying:e.definition?.flying||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''),lavaImmune:e.type==='lavaworm'})));
+      const step=this.environment.step(dt,this.position,input,{speed:stats.speed*(1+Math.max(0,this.playerSpeedBonus||0)),maxHp:stats.maxHp,fireResistance:stats.lavaproof?1:stats.fireResistance,poisonImmune:stats.poisonImmune,flippers:stats.flippers,featherFall:stats.featherFall,flying:this.playerFlying||stats.flying,hop:!!this.jumpRules&&dodges('ground',this.jump.height)},this.networkRole==='peer'?[]:this.enemies.map(e=>({id:e.id,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,boss:e.boss,flying:e.definition?.flying||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''),lavaImmune:e.type==='lavaworm'})));
       this.dynamicObstacles=this.environment.dynamicObstacles();const signature=this.dynamicObstacles.map(o=>o.x+','+o.z).join(';');
       if(signature!==this.environmentSignature){this.environmentSignature=signature;this.resolveOverlap(this.position,this.collisionObstacles(),.36);if(this.destination)this.route=this.findPath(this.destination);}
       if(step.relocate){this.position.set(step.relocate.x,step.relocate.y??0,step.relocate.z);this.destination=null;this.route=[];this.selected=null;}
@@ -1716,7 +1760,10 @@ export class World {
     if(simulateWorld&&this.networkRole==='peer')for(const enemy of this.enemies)this.updateTitanAttacks(enemy,dt,false);
     // Indoors the outdoor scene is not drawn: posing every creature there was a third of the cottage's frame on slow phones.
     if(active||simulateWorld)for(const enemy of this.enemies)this.stepCreatureMotion(enemy,dt);
-    if(!this.interior){this.drawTitanAttacks();this.decals?.begin();for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);this.decals?.end();}
+    if(!this.interior){this.drawTitanAttacks();this.decals?.begin();for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);
+      // The jump's blob shadow: under the explorer, smaller and fainter the higher the jump (one pooled disc, only while in the air).
+      {const h=this.jump.height;if(h>.04&&!this.boarded){const k=Math.min(1,h/(MAX_HEIGHT+1));this.decals?.shadow(this.position.x,this.position.y+.05,this.position.z,.62*(1-.55*k),.42*(1-.5*k));}}
+      this.decals?.end();}
     if(simulateWorld)for(let i=this.enemyShots.length-1;i>=0;i--){
       const shot=this.enemyShots[i],from={x:shot.mesh.position.x,z:shot.mesh.position.z};shot.mesh.position.x+=shot.vx*dt;shot.mesh.position.z+=shot.vz*dt;shot.life-=dt;
       if(!shot.targetEnemyId&&Math.hypot(shot.mesh.position.x,shot.mesh.position.z)<(this.planet==='home'?18:11)-.3)shot.life=0; // shots aimed at players die at the safe zone's edge
@@ -1739,7 +1786,7 @@ export class World {
     if(zone!==this.lastZone&&!this.interior){this.lastZone=zone;this.onZone(zone);} // indoors x/z are the cottage's: no village zone banner
     // Home heals 4x faster (home-care.ts); this line had slipped into the comment above, so offline the village never healed.
     this.homeRecovering=atHome(this.planet,this.position,!!this.interior)&&this.state.hp>0&&this.state.hp<stats.maxHp;if(!this.authoritativeAction&&active&&this.homeRecovering)this.state.hp=Math.min(stats.maxHp,this.state.hp+homeRecoveryBonus(stats.regen)*dt);
-    this.player.position.copy(this.position);this.player.position.y+=this.playerLift??0;this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
+    this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height;this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
     (this.petPen??=new PetCompanion()).update(this,dt);
     this.animatePlayer(dt);this.animateRemotes(dt);
@@ -1843,8 +1890,19 @@ export class World {
     // Base: walk cycle or idle breathing.
     if(this.moving){armL?.rotation.set(-c*.8,0,-.3);armR?.rotation.set(c*.8,0,.3);legL?.rotation.set(c*.7,0,0);legR?.rotation.set(-c*.7,0,0);lift=Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
     else{armL?.rotation.set(0,0,-.3-Math.sin(o)*.05);armR?.rotation.set(0,0,.3+Math.sin(o)*.05);legL?.rotation.set(0,0,0);legR?.rotation.set(0,0,0);sy=1+Math.sin(o*1.2)*.025;if(head)head.rotation.set(0,Math.sin(o*.4)*.15,0);}
+    // In the air (jump-rules.ts): a squash as the feet leave, a stretch going up, a tuck at the top, a head-first dive.
+    const jump=this.jump,air=jump?.airborne?jump:null;
+    if(air){
+      const up=Math.max(0,Math.min(1,air.velocity/16)),down=Math.max(0,Math.min(1,-air.velocity/18)),tuck=1-Math.max(up,down);lift=0;
+      armL?.rotation.set(-2.5*up-.5*tuck+.4*down,0,-.35-.5*down);armR?.rotation.set(-2.5*up-.5*tuck+.4*down,0,.35+.5*down);
+      legL?.rotation.set(.9*tuck-.25*up,0,0);legR?.rotation.set(-.55*tuck+.25*up,0,0);lean=.12*up-.1*down;
+      if(air.jumps===1&&air.airTime<.06){sy*=.86;sx*=1.1;sz*=1.1;}else{sy*=1+.13*up+.06*down;sx*=1-.06*up;sz*=1-.06*up;}
+      if(air.diving){lean=.85;armL?.rotation.set(-2.9,0,-.15);armR?.rotation.set(-2.9,0,.15);legL?.rotation.set(.5,0,0);legR?.rotation.set(.7,0,0);sy*=1.1;}
+      // The flourish of a double or triple jump: one quick turn, two for the triple.
+      if(air.spin>0)twist+=(1-air.spin/JUMP.flourish)*Math.PI*2*(air.jumps>=3?2:1);
+    }
     // Weapon stance.
-    if(armR){
+    if(armR&&!air){
       if(kind==='sword'){armR.rotation.x=this.moving?-.3+c*.3:-.45;armR.rotation.z=.18;}
       else if(kind==='gun'){if(this.aimT>0){armR.rotation.set(-1.5,0,.05);armL?.rotation.set(-1.3,0,.45);twist=.12;}else{armR.rotation.x=this.moving?-.25+c*.2:-.35;armR.rotation.z=.2;}}
       else if(kind==='rod')armR.rotation.x=this.moving?-.2+c*.2:-.3;

@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TELEGRAPH_LOOK } from './boss-patterns.ts';
 
 /**
@@ -10,7 +11,9 @@ import { TELEGRAPH_LOOK } from './boss-patterns.ts';
  * disposed while fighting, so no shader is relinked mid-fight. They are unlit 2D geometry, a
  * handful of triangles each.
  */
-interface Decal { group: T.Group; base: T.Mesh; fill: T.Mesh; edge: T.Mesh }
+interface Decal { group: T.Group; base: T.Mesh; fill: T.Mesh; edge: T.Mesh; ground?: boolean }
+/** Ripple rings per ground telegraph, the frames of their run outward and how fast they play. */
+export const RIPPLE_RINGS = 3, RIPPLE_FRAMES = 8, RIPPLE_FPS = 12;
 
 const circle = new T.CircleGeometry(1, 40).rotateX(-Math.PI / 2);
 circle.userData.sharedKit = true;
@@ -45,20 +48,53 @@ export class TelegraphDecals {
     return ring;
   }
 
+  /**
+   * The look of a ground-class attack (jump-rules.ts: a jump clears it): the rim plus three thin rings that run out from the
+   * centre like ripples. The ripple is RIPPLE_FRAMES ready-made rim shapes per radius, swapped by the clock: no extra mesh,
+   * draw or shader, and nothing is computed per decal.
+   */
+  private ripples = new Map<string, T.BufferGeometry[]>();
+  private frame = 0;
+  private ripple(r: number) {
+    const key = r.toFixed(1);
+    let frames = this.ripples.get(key);
+    if (!frames) {
+      const size = Math.max(.2, r), width = .09 / size, rim = Math.max(.05, 1 - TELEGRAPH_LOOK.edgeWidth / size);
+      frames = Array.from({ length: RIPPLE_FRAMES }, (_, frame) => {
+        const rings = [new T.RingGeometry(rim, 1, 48)];
+        for (let i = 0; i < RIPPLE_RINGS; i++) { const at = (i + frame / RIPPLE_FRAMES) / RIPPLE_RINGS; if (at > .12 && at < rim - width) rings.push(new T.RingGeometry(at - width / 2, at + width / 2, 40)); }
+        const shape = (mergeGeometries(rings, false) ?? rings[0]).rotateX(-Math.PI / 2); shape.userData.sharedKit = true;
+        for (const ring of rings) if (ring !== shape) ring.dispose();
+        return shape;
+      });
+      this.ripples.set(key, frames);
+    }
+    return frames[this.frame];
+  }
+  /** The jump's blob shadow (world.ts): one dark disc under the explorer, drawn only on frames that ask for it. */
+  private blob: T.Mesh | null = null; private blobUsed = false;
+  shadow(x: number, y: number, z: number, r: number, opacity: number) {
+    if (!this.blob) {
+      const material = new T.MeshBasicMaterial({ color: '#160b14', transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, toneMapped: false });
+      material.userData.sharedKit = true; this.blob = new T.Mesh(circle, material); this.blob.name = 'jump-shadow'; this.blob.raycast = () => {}; this.blob.renderOrder = 4; this.root.add(this.blob);
+    }
+    this.blobUsed = true; this.blob.visible = true; this.blob.position.set(x, y, z); this.blob.scale.setScalar(r); (this.blob.material as T.MeshBasicMaterial).opacity = opacity;
+  }
+
   /** Starts a frame: the rim pulses and the soft area breathes (shared materials, so no per-decal cost). */
   begin() {
-    this.used = 0; this.conesUsed = 0;
+    this.used = 0; this.conesUsed = 0; this.blobUsed = false;
     const t = (typeof performance === 'undefined' ? 0 : performance.now()) / 1000, beat = Math.sin(t * 9);
     for (const set of this.materials.values()) {
       set.edge.opacity = Math.min(1, TELEGRAPH_LOOK.edge * (.82 + .18 * beat));
       set.base.opacity = TELEGRAPH_LOOK.base * (.9 + .1 * Math.sin(t * 4));
     }
-    this.beat = beat;
+    this.beat = beat; this.frame = Math.floor(t * RIPPLE_FPS) % RIPPLE_FRAMES;
   }
   private beat = 0;
 
-  /** One decal: centre, ground height, radius, progress 0–1 of the wind-up and its colour. */
-  draw(x: number, y: number, z: number, r: number, progress: number, color: string) {
+  /** One decal: centre, ground height, radius, progress 0–1 of the wind-up and its colour. `ground`: the rippling look of an attack a jump clears. */
+  draw(x: number, y: number, z: number, r: number, progress: number, color: string, ground = false) {
     let decal = this.decals[this.used];
     if (!decal) {
       const group = new T.Group(), look = this.look(color);
@@ -68,7 +104,7 @@ export class TelegraphDecals {
     }
     this.used++;
     const look = this.look(color), p = Math.min(1, Math.max(0, progress));
-    decal.base.material = look.base; decal.fill.material = look.fill; decal.edge.material = look.edge; decal.edge.geometry = this.edge(r);
+    decal.base.material = look.base; decal.fill.material = look.fill; decal.edge.material = look.edge; decal.edge.geometry = ground ? this.ripple(r) : this.edge(r); decal.ground = ground;
     decal.group.visible = true; decal.group.position.set(x, y, z);
     decal.base.scale.setScalar(r); decal.edge.scale.setScalar(r * (1 + .012 * this.beat * (.4 + .6 * p)));
     decal.fill.visible = p > .001; decal.fill.scale.setScalar(Math.max(.001, r * p));
@@ -113,12 +149,12 @@ export class TelegraphDecals {
     return shape;
   }
 
-  end() { for (let i = this.used; i < this.decals.length; i++) this.decals[i].group.visible = false; for (let i = this.conesUsed; i < this.cones.length; i++) this.cones[i].group.visible = false; }
+  end() { if (this.blob && !this.blobUsed) this.blob.visible = false; for (let i = this.used; i < this.decals.length; i++) this.decals[i].group.visible = false; for (let i = this.conesUsed; i < this.cones.length; i++) this.cones[i].group.visible = false; }
 
   /** Decals drawn this frame (tests and probes). */
-  get active() { return this.decals.slice(0, this.used).map(d => ({ x: d.group.position.x, z: d.group.position.z, r: d.base.scale.x, fill: d.fill.visible ? d.fill.scale.x / d.base.scale.x : 0, color: '#' + (d.base.material as T.MeshBasicMaterial).color.getHexString() })); }
+  get active() { return this.decals.slice(0, this.used).map(d => ({ x: d.group.position.x, z: d.group.position.z, r: d.base.scale.x, fill: d.fill.visible ? d.fill.scale.x / d.base.scale.x : 0, color: '#' + (d.base.material as T.MeshBasicMaterial).color.getHexString(), ground: !!d.ground })); }
 
-  clear() { this.used = 0; this.conesUsed = 0; this.end(); }
+  clear() { this.used = 0; this.conesUsed = 0; this.blobUsed = false; this.end(); }
   /** Arcs drawn this frame (tests and probes): reach, facing and fill. */
   get activeArcs() { return this.cones.slice(0, this.conesUsed).map(d => ({ x: d.group.position.x, z: d.group.position.z, r: d.base.scale.x, facing: d.group.rotation.y, fill: d.fill.visible ? d.fill.scale.x / d.base.scale.x : 0 })); }
 }

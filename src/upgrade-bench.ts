@@ -10,7 +10,8 @@ import { t } from './i18n.ts';
 import { ITEMS, type Inventory } from './content.ts';
 import type { SaveState } from './model.ts';
 import { forgeCost, forgeLevel, canForge, MAX_FORGE_LEVEL, forgeChance, forgeExpected, type ForgeOutcome } from './weapon-forge.ts';
-import { MAX_GEAR_LEVEL, canUpgradeGear, canUpgradeSkill, gearCost, gearCostToMax, gearLevel, skillCost, skillLevel, upgradableGear } from './upgrades.ts';
+import { MAX_GEAR_LEVEL, canUpgradeGear, canUpgradeSkill, canUpgradeJump, jumpCost, jumpLevel, gearCost, gearCostToMax, gearLevel, skillCost, skillLevel, upgradableGear } from './upgrades.ts';
+import { MAX_JUMP_LEVEL } from './jump-rules.ts';
 import { MAX_SKILL_LEVEL, SKILL_LEVEL_TEXT, levelledCooldown, skillTuning } from './skill-upgrades.ts';
 import { whirlRadius, slamRadius } from './skill-info.ts';
 import { sortByPower, powerChip, ownedScore, gearProgressHtml } from './item-power.ts';
@@ -19,7 +20,7 @@ import './upgrade-bench.css';
 
 export type BenchTab = 'gear' | 'skills';
 export interface BenchSkill { name: string; icon: string; cd: number }
-export interface BenchUi { art(id: string, icon: string): string; chips(materials?: Inventory): string; skills: readonly BenchSkill[]; disguised?: boolean; weaponKind?: string }
+export interface BenchUi { art(id: string, icon: string): string; chips(materials?: Inventory): string; skills: readonly BenchSkill[]; disguised?: boolean; weaponKind?: string; /** Jumping is on (Settings): the Skills tab offers the Jump skill. */ jump?: boolean }
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const fix = (v: number) => (Math.round(v * 100) / 100).toString();
 
@@ -60,7 +61,16 @@ function skillRows(s: SaveState, ui: BenchUi) {
     const pips = `<span class="bench-pips" aria-label="${esc(t('Level {level} / {max}', { level, max: MAX_SKILL_LEVEL }))}">${Array.from({ length: MAX_SKILL_LEVEL }, (_, n) => `<i class="${n < level ? 'on' : ''}"></i>`).join('')}</span>`;
     const now = `<p>${esc(skillEffect(i, level, skill.cd, ui.weaponKind))}${top ? '' : ` → ${esc(skillEffect(i, level + 1, skill.cd, ui.weaponKind))}`}</p><p class="muted">${esc(t(SKILL_LEVEL_TEXT[i]))}</p>`;
     return row(`<span class="bench-skill-icon">${esc(t(skill.icon))}<kbd>${key}</kbd></span>`, `${esc(t(skill.name))} ${pips}`, now + (top ? '' : ui.chips(cost.materials)), top ? maxed() : buy(`data-bench-action="skill" data-index="${i}"`, cost.energy, canUpgradeSkill(s, i)));
-  }).join('')}</div>`;
+  }).join('')}${ui.jump ? jumpRow(s, ui) : ''}</div>`;
+}
+/** The Jump skill: one jump to start with, the double jump and then the triple, each behind a level and a price. */
+function jumpRow(s: SaveState, ui: BenchUi) {
+  const level = jumpLevel(s), top = level >= MAX_JUMP_LEVEL, cost = jumpCost(level), locked = !top && s.level < cost.level;
+  const names = ['Single jump', 'Double jump', 'Triple jump'];
+  const pips = `<span class="bench-pips" aria-label="${esc(t('Level {level} / {max}', { level, max: MAX_JUMP_LEVEL }))}">${Array.from({ length: MAX_JUMP_LEVEL }, (_, n) => `<i class="${n < level ? 'on' : ''}"></i>`).join('')}</span>`;
+  const now = `<p>${esc(t(names[level]))}${top ? '' : ` → ${esc(t(names[level + 1]))}`}</p><p class="muted">${esc(t('A higher jump dodges more and hits harder from above. Bosses block hits from the ground and from a single jump; the double jump gets past their guard.'))}</p>`
+    + (locked ? `<p class="muted">🔒 ${esc(t('Unlocks at level {level}', { level: cost.level }))}</p>` : '');
+  return row(`<span class="bench-skill-icon">⤴</span>`, `${esc(t('Jump'))} ${pips}`, now + (top ? '' : ui.chips(cost.materials)), top ? maxed() : buy(`data-bench-action="jump"`, cost.energy, canUpgradeJump(s)));
 }
 export function benchHtml(s: SaveState, tab: BenchTab, ui: BenchUi) {
   const tabs = (['gear', 'skills'] as const).map(id => `<button class="${tab === id ? 'active' : ''}" aria-pressed="${tab === id}" data-bench-tab="${id}">${esc(t(id === 'gear' ? 'Gear' : 'Skills'))}</button>`).join('');
@@ -95,6 +105,10 @@ export function initUpgradeBench(d: BenchDeps) {
     } else if (action === 'skill') {
       const done = await d.perform<{ index: number; level: number }>('upgradeSkill', { index });
       if (done) { d.tone('level'); d.toast(t('{skill} reached level {level}!', { skill: t(d.ui().skills[done.index]?.name ?? ''), level: done.level }), '🌀'); }
+    }
+    else if (action === 'jump') {
+      const done = await d.perform<{ level: number }>('upgradeJump', {});
+      if (done) { d.tone('level'); d.toast(t(done.level >= 2 ? 'Triple jump learned! Jump three times in the air.' : 'Double jump learned! Jump again in the air.'), '⤴'); }
     }
     if (d.modal() === 'bench') open();
   });

@@ -27,7 +27,7 @@ function fixture() {
   const world = surface('world'), boost = surface('boost-button'), document = surface(), window = surface();
   const keys = new Set(), movement = new MovementControls(keys), cleared = [];
   const ctx = vm.createContext({ document, window, addEventListener: window.addEventListener.bind(window), $: id => id === '#world' ? world : boost,
-    started: true, flight: {}, arriving: false, spacePointer: null, boostHeld: false, boostPointers: new Set(), spaceKeys: new Set(), fishGame: null,
+    jumpInput: { down() {}, up() {}, clear() {} }, jumpPointers: new Set(), slideCombo: { owns: () => false, cancel() {} }, airOn: () => true, started: true, flight: {}, arriving: false, spacePointer: null, boostHeld: false, boostPointers: new Set(), spaceKeys: new Set(), fishGame: null,
     movement, joystick: { clear: () => cleared.push('joystick') }, cancelLongPresses: () => cleared.push('longPress'), cancelButtonTouches() {}, mountTouchButtons() {}, gestures: { up() {}, clear() {} }, save() {}, uiBlocked: () => false,
   });
   vm.runInContext(compile(flightRouting + '\n' + groundRouting), ctx);
