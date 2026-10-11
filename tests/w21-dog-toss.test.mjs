@@ -67,13 +67,15 @@ test('out of range: no throw',()=>{
   for(let i=0;i<40;i++)s.update(.05);assert.equal(effects.filter(e=>e.kind==='toss').length,0);
 });
 test('online: the server\'s simulation throws for a following dog and lands real damage; none at home or on a visit',async t=>{
-  const f=await fixture(t),enemy=f.spawn('mushroom',-30,4);enemy.hp=enemy.maxHp=500;
+  // The dog is a pet now (pet-slots.ts): it comes along only while its item is worn in a pet slot.
+  const f=await fixture(t,{profile:p=>{p.bag.pet_dog=1;p.gear.pet2='pet_dog';}}),enemy=f.spawn('mushroom',-30,4);enemy.hp=enemy.maxHp=500;
   f.peer.pose.dog=0;// the wilds of home (x -30): the server set dog because it follows
   const engine=f.authority.engineFor(f.peer);for(let i=0;i<14;i++)engine.sim.update(.05);
   assert.ok(enemy.hp<500,'the bone landed on the server');
   const toss=f.messages.find(m=>m.type==='effect'&&m.visual?.kind==='toss');assert.ok(toss,'others see the throw');
   const before=enemy.hp;f.peer.pose.dog=null;for(let i=0;i<80;i++)engine.sim.update(.05);assert.equal(enemy.hp,before,'no dog following: no throws');
   f.peer.pose.dog=0;f.peer.visit={owner:'x'};for(let i=0;i<80;i++)engine.sim.update(.05);assert.equal(enemy.hp,before,'visiting: no throws');
+  f.peer.visit=null;delete f.peer.account.profile.gear.pet2;for(let i=0;i<80;i++)engine.sim.update(.05);assert.equal(enemy.hp,before,'the dog left at home (not worn): no throws, whatever the pose says');
 });
 test('online at home the server ignores a client claiming a following dog',async t=>{
   const f=await fixture(t),enemy=f.spawn('mushroom');enemy.x=2;enemy.z=1;enemy.hp=enemy.maxHp=500;f.peer.pose={x:0,z:0,facing:0,moving:false,dog:0};

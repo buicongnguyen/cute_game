@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as Game from '../src/model.ts';
 import { dogFollows } from '../src/guard-dog.ts';
+import { dogWorn } from '../src/pet-slots.ts';
 import { lookOf } from '../src/looks.ts';
 import { createAccountStore } from './account-store.mjs';
 import { createActionService, commandHash, logGuest } from './action-service.mjs';
@@ -406,7 +407,7 @@ export async function createGameServer(options = {}) {
           // nor a stream of small jumps adds up to a teleport; the Home button's snap to the village centre stays allowed.
           const move = poseStep(peer, { x, z }, distance, now); if (!move) { const fix = poseFix(peer, now); if (fix) send(socket, fix); return; } // the client goes back to the server's spot
           const combat=combatAuthority.engineFor(peer).sim;
-          peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && account.profile.farm?.animals?.find(a => a.kind === 'dog');
+          peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && dogWorn(account.profile.gear) && account.profile.farm?.animals?.find(a => a.kind === 'dog'); // only a dog worn as a pet comes along (pet-slots.ts)
           // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.
           peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
           broadcastPose(room, peer);

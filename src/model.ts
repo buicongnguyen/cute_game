@@ -16,6 +16,8 @@ import { LEGACY_CROP_IDS } from './content.ts';
 import { cropLevel, cropXp, cropGrowTime, sellPrice, kitchenOpen, isDifficulty, difficultyOf, rewardScale, bedUpgradeScale, type Difficulty } from './difficulty.ts';
 import { parseHunting, type HuntingState } from './fish-hunting.ts';
 import { looseQuantity, pantry, usePantry, hasMaterials, useMaterials } from './pantry.ts';
+import { isPetSlot, isPenned, slotKind, wornCount, freePetSlot, syncDogPet } from './pet-slots.ts';
+export { PET_SLOTS, DOG_PET, isPetSlot, isPenned, slotKind, wornCount, slotWearing, freePetSlot, petIds, dogWorn, companionId, ownsDog, syncDogPet, type PetSlot } from './pet-slots.ts';
 import { specialPrice } from './special-offers.ts';
 import { levelAllows } from './level-gates.ts';
 import { AUDIO_DEFAULTS, parseAudio } from './audio-settings.ts';
@@ -575,8 +577,15 @@ export function shopPrice(s: SaveState, id: ItemId): number | null { return id =
 function buyPlotKit(s: SaveState) { const price = kitPrice(s); if (price === null || s.energy < price || !addItem(s, 'plot_kit')) return false; s.energy -= price; recordEvent(s, 'craft'); return true; }
 /** Clothes: drawn on the explorer only without a disguise. */
 export const WEARABLE_SLOTS: readonly GearSlot[] = ['hat', 'outfit', 'boots'];
-export function equip(s: SaveState, raw: ItemId) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item?.slot || !s.bag[id])
+/**
+ * Puts an item on. Pets have two slots (pet-slots.ts): `to` names one ('pet' | 'pet2'); without it the pet takes the
+ * free slot, or replaces slot 1 when both are taken. A pet already worn is not worn twice unless the bag holds a second
+ * copy: naming its other slot swaps the two slots instead. For every other item `to` must be its own slot (or absent).
+ */
+export function equip(s: SaveState, raw: ItemId, to?: GearSlot) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item?.slot || !s.bag[id])
     return false;
+    if (item.slot === 'pet') return equipPet(s, id, to);
+    if (to !== undefined && to !== item.slot) return false;
     // Level gates (level-gates.ts): late gear waits for its world's level; a piece already worn (an old save) stays on.
     if (s.gear[item.slot] !== id && !levelAllows(s.level, id))
     return false; s.gear[item.slot] = id;
@@ -585,6 +594,15 @@ export function equip(s: SaveState, raw: ItemId) { const id = canonicalItem(raw)
     if (WEARABLE_SLOTS.includes(item.slot)) delete s.gear.disguise;
     s.hp = Math.min(s.hp, maxHp(s)); if (item.slot === 'weapon' || item.slot === 'disguise')
     s.counters.equipped++; return true; }
+function equipPet(s: SaveState, id: ItemId, to?: GearSlot) {
+    if (to !== undefined && !isPetSlot(to)) return false;
+    const worn = wornCount(s.gear, id), spare = (s.bag[id] || 0) > worn;
+    if (to ? s.gear[to] === id : worn > 0 && !spare) return true; // already there
+    if (!worn && !levelAllows(s.level, id)) return false;
+    if (to && !spare) { const other = to === 'pet' ? 'pet2' : 'pet', was = s.gear[to]; s.gear[to] = id; if (was) s.gear[other] = was; else delete s.gear[other]; } // its only copy moves: the slots swap
+    else s.gear[to ?? freePetSlot(s.gear) ?? 'pet'] = id;
+    s.hp = Math.min(s.hp, maxHp(s)); return true;
+}
 // Own slots only: 'constructor' or '__proto__' from a client read Object.prototype and "succeeded" on the server.
 export function unequip(s: SaveState, slot: GearSlot, auto = false) { if (!Object.hasOwn(s.gear, slot) || !s.gear[slot])
     return false;
@@ -601,7 +619,7 @@ export { looseQuantity, pantry, pantryIds, usePantry, hasMaterials, useMaterials
 export { SPECIAL_PRICE, TITAN_PRICE, isSpecial, specialPrice, specialSource, specialIds, SOURCE_NOTE } from './special-offers.ts';
 export function cook(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw), result = `cooked_${id}`; if (!Object.hasOwn(ITEMS, result) || s.planet !== 'home' || !kitchenOpen(s) || !Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger((s.bag[result] || 0) + count) || !canAddItem(s, result, count) && (noteFull('bag'), true) || !usePantry(s, id, count))
     return false; addItem(s, result, count); recordEvent(s, 'cook', count); return true; }
-export function transfer(s: SaveState, raw: ItemId, toChest: boolean) { const id = canonicalItem(raw); if (toChest && looseQuantity(s, id) < 1)
+export function transfer(s: SaveState, raw: ItemId, toChest: boolean) { const id = canonicalItem(raw); if (isPenned(id) || toChest && looseQuantity(s, id) < 1)
     return false; const from = toChest ? s.bag : s.chest, to = toChest ? s.chest : s.bag; if (Object.hasOwn(ITEMS, id) && (from[id] || 0) > 0 && !(toChest ? chestFits(s, id) : fits(s, { [id]: 1 }))) { noteFull(toChest ? 'chest' : 'bag'); return false; } if (!Number.isSafeInteger((to[id] || 0) + 1) || !removeItem(from, id))
     return false; to[id] = (to[id] || 0) + 1; return true; }
 export function upgradeCost(s: SaveState, kind: keyof typeof UPGRADES) { const rank = kind === 'health' ? s.healthUp : kind === 'attack' ? s.attackUp : kind === 'defense' ? s.defenseUp : s.critUp; return Math.min(Number.MAX_SAFE_INTEGER, Math.ceil(UPGRADES[kind].base * Math.pow(1.38, rank))); }
@@ -794,7 +812,7 @@ export function claimCaveChest(s: SaveState, now = Date.now(), rng: () => number
 export const keepsBag = (s: { settings?: { keepBagOnDeath?: boolean } }) => s.settings?.keepBagOnDeath !== false;
 export function die(s: SaveState, x: number, z: number, now = Date.now()): DeathBag | null {
     const items: Inventory = {};
-    for (const id of (keepsBag(s) ? [] : Object.keys(s.bag))) { const n = looseQuantity(s, id); if (n) { items[id] = n; removeItem(s.bag, id, n); } }
+    for (const id of (keepsBag(s) ? [] : Object.keys(s.bag))) { const n = isPenned(id) ? 0 : looseQuantity(s, id); /* the dog waits at its pen, never in a dropped bag */ if (n) { items[id] = n; removeItem(s.bag, id, n); } }
     pruneBags(s, now);
     let bag: DeathBag | null = null;
     if (Object.keys(items).length && Number.isFinite(x) && Number.isFinite(z)) { bag = { id: bagId(s, now), x, z, planet: s.planet, items, at: now }; (s.deathBags ??= []).push(bag); }
@@ -856,9 +874,11 @@ export function parseSave(raw: string | null): SaveState | null {
                 if (typeof rawId !== 'string')
                     continue;
                 const id = canonicalItem(rawId), slot = rawSlot === 'armor' ? 'outfit' : rawSlot === 'feet' ? 'boots' : rawSlot;
-                if (Object.hasOwn(ITEMS, id) && s.bag[id] && ITEMS[id].slot === slot)
+                if (Object.hasOwn(ITEMS, id) && s.bag[id] && ITEMS[id].slot === slotKind(slot))
                     s.gear[slot as GearSlot] = id;
             }
+        // Two pet slots (pet-slots.ts): the same pet in both needs two in the bag.
+        if (s.gear.pet2 && s.gear.pet2 === s.gear.pet && (s.bag[s.gear.pet2] || 0) < 2) delete s.gear.pet2;
         s.hp = Math.min(typeof v.hp === 'number' && Number.isFinite(v.hp) && v.hp >= 0 ? v.hp : 100, maxHp(s));
         // Migration refunds use the saved difficulty's prices, so restore preferences before the beds.
         const settings = record(v.settings) ? v.settings : {};
@@ -949,6 +969,8 @@ export function parseSave(raw: string | null): SaveState | null {
         if (v.gardenLayout === GARDEN_LAYOUT) { trimGarden(s); settleBeds(s); } else shrinkGarden(s, v.gardenLayout === 3 ? 3 : v.gardenLayout === 2 ? 2 : 1);
         if (!s.gardenTrim && record(v.gardenTrim) && Number.isSafeInteger(v.gardenTrim.beds) && v.gardenTrim.beds > 0) s.gardenTrim = { beds: Math.min(99, v.gardenTrim.beds), energy: integer(v.gardenTrim.energy), items: inventory(v.gardenTrim.items) };
         s.farm = parseFarm(v.farm);
+        // The guard dog is a pet now (pet-slots.ts): a save that owns the dog gets its item, worn in the free pet slot, so it follows as before.
+        syncDogPet(s);
         const hunting = parseHunting(v.hunting); if (hunting) s.hunting = hunting;
         if (v.fists === true && !s.gear.weapon) s.fists = true;
         if (record(v.helper)) {

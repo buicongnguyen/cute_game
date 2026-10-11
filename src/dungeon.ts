@@ -16,6 +16,7 @@ import * as T from 'three';
 import './dungeon.css';
 import type { World, Enemy, Entity, RemotePose } from './world.ts';
 import type { SaveState } from './model.ts';
+import { companionId } from './pet-slots.ts';
 import { t } from './i18n.ts';
 import { ENEMY_TYPES, enemyScale } from './enemy-types.ts';
 import { adoptCreatureModel } from './creature-art.ts';
@@ -63,7 +64,7 @@ export function initDungeon(h: DungeonHooks) {
   let keeper: Entity | null = null, lobbyMesh: T.Object3D | null = null;
   const lobby = new LobbyCountdown(DUNGEON.need, DUNGEON.countdown, DUNGEON.maxParty);
   let lobbyOnline: { n: number; cd: number | null; names: string[]; left: number } | null = null, starting = false;
-  let petClock = 3, onlineId = '', lastExit = '';
+  let onlineId = '', lastExit = ''; const petClocks = [3, 3.6]; // one skill clock per pet slot, a little apart so two vault pets do not cast on the same frame
 
   // ---------------------------------------------------------------- HUD
   const hud = document.createElement('div'); hud.id = 'vault-hud'; hud.hidden = true; hud.setAttribute('role', 'status');
@@ -156,7 +157,7 @@ export function initDungeon(h: DungeonHooks) {
     if (world.interior) return;
     requestKit();
     const saved: Session['saved'] = { root: world.root, entities: world.entities, enemies: world.enemies, obstacles: world.obstacles, detached: [], background: world.scene.background, fog: world.scene.fog, onZone: world.onZone, networkRole: world.networkRole, onRemoteDamage: world.onRemoteDamage, onStep: world.onStep, beforeRender: world.beforeRender };
-    for (const child of [...world.root.children]) if (child !== world.player && child !== world.companion) { saved.detached.push(child); world.root.remove(child); }
+    for (const child of [...world.root.children]) if (child !== world.player && child !== world.companion && child !== world.companion2) { saved.detached.push(child); world.root.remove(child); }
     world.entities = []; world.enemies = []; world.obstacles = wallObstacles();
     world.onZone = () => {};
     // The village's own per-step modules (the daily Colossus, colossus.ts) pause while you are below: its giant stays in the
@@ -400,13 +401,18 @@ export function initDungeon(h: DungeonHooks) {
 
   // ---------------------------------------------------------------- pets with skills
   function petFrame(dt: number) {
-    const s = h.state(), id = s.gear.pet; if (!id || !DUNGEON_PETS[id] || !h.started() || h.blocked() || h.visiting()) return;
+    if (!h.started() || h.blocked() || h.visiting()) return;
     if (h.online() && !session) return; // online outside the vault the server owns combat: the pet only shoots
-    petClock -= dt; if (petClock > 0) return;
-    const pet = DUNGEON_PETS[id], from = { x: world.companion.position.x, z: world.companion.position.z };
+    // Either pet slot (pet-slots.ts): each vault pet casts on its own clock from where it stands.
+    for (let i = 0; i < 2; i++) { const id = companionId(h.state().gear, i); if (id && DUNGEON_PETS[id]) petCast(dt, i, id); }
+  }
+  function petCast(dt: number, index: number, id: string) {
+    petClocks[index] -= dt; if (petClocks[index] > 0) return;
+    const model = index ? world.companion2 : world.companion;
+    const pet = DUNGEON_PETS[id], from = { x: model.position.x, z: model.position.z };
     let target: Enemy | null = null, best = 12; for (const e of world.enemies) if (e.hp > 0 && e.mesh.visible) { const d = Math.hypot(e.x - from.x, e.z - from.z); if (d < best) { best = d; target = e; } }
-    if (!target) { petClock = .5; return; }
-    petClock = pet.skillCd; const skill = pet.skills[Math.floor(Date.now() / 1000 / pet.skillCd) % 2], { marks, mult, color } = petSkillMarks(skill, from, target, Math.random);
+    if (!target) { petClocks[index] = .5; return; }
+    petClocks[index] = pet.skillCd; const skill = pet.skills[Math.floor(Date.now() / 1000 / pet.skillCd) % 2], { marks, mult, color } = petSkillMarks(skill, from, target, Math.random);
     for (const m of marks) { world.fx?.ring({ x: m.x, z: m.z }, { color, from: .2, to: m.shape === 'line' ? 1.2 : m.r, life: .4, y: .1, thick: .3 }); world.fx?.burst({ x: m.x, z: m.z }, { n: 6, color: [color, '#ffffff'], glow: true, speed: 3, up: 3, size: .1 }); }
     if (marks[0]?.shape === 'line') world.fx?.burst({ x: (from.x + target.x) / 2, z: (from.z + target.z) / 2 }, { n: 10, color, glow: true, speed: 2, up: 1, size: .12 });
     const damage = Math.round(h.attack() * mult * pet.skillDmg * .5);

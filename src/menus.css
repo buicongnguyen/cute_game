@@ -92,6 +92,18 @@
 #dialog-body .stat-strip { flex-wrap: wrap; gap: 4px; }
 #dialog-body .stat-strip > span { flex: 1 0 auto; min-width: 0; justify-content: center; gap: 4px; padding: 3px 4px; border-radius: 9px; font-size: 12px; white-space: nowrap; }
 .equipment { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+/* Seven slots (two pets): on the three-column grid the last one (the disguise) takes its own full row. */
+.equipment > div:last-child:nth-child(3n + 1) { grid-column: 1 / -1; }
+/* Phones: two columns, so a worn item's name wraps by words (three columns left it some 25 px and broke it letter by
+   letter) and the ✕ can be a full 44 px touch target. */
+@media (max-width: 430px) {
+  .equipment { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .equipment > div:last-child:nth-child(3n + 1) { grid-column: auto; }
+  .equipment > div:last-child:nth-child(2n + 1) { grid-column: 1 / -1; }
+  .equipment > div > button:first-child small { overflow-wrap: break-word; }
+  .equipment .unequip { width: 44px; }
+  .equipment .unequip::after { font-size: 13px; }
+}
 .equipment > div { flex-direction: row; align-items: stretch; border-radius: 11px; }
 .equipment > div > button:first-child { flex: 1; min-width: 0; min-height: 40px; padding: 3px 4px 3px 5px; flex-direction: row; justify-content: flex-start; gap: 5px; text-align: left; }
 .equipment > div > button:first-child span { flex: none; width: 28px; height: 28px; display: grid; place-items: center; font-size: 20px; }
@@ -201,7 +213,8 @@
   #dialog-body .help-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #dialog-body .map-illustration { display: none; }
   .inventory-grid { max-height: none; overflow: visible; }
-  .equipment { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .equipment { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .equipment > div:last-child:nth-child(3n + 1) { grid-column: auto; }
 }
 
 /* ------------------------------------------- Touch: 44 px hit areas, not padding */

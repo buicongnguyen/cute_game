@@ -100,7 +100,8 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         const item=typeof p.item==='string'?Game.canonicalItem(p.item):'',count=p.count;
         if(!Object.hasOwn(Game.ITEMS,item)||!Number.isSafeInteger(count)||count<1||count>20)fail(400,'Choose an item and how many to give.');
         if((state.bag[item]??0)<count)fail(409,'You do not have enough of that to give.');
-        if(Object.values(state.gear).includes(item)&&(state.bag[item]??0)-count<1)fail(409,'Take it off before giving your last one away.');
+        if(Game.isPenned(item))fail(409,'Your guard dog stays with you.');
+        if(count>Game.looseQuantity(state,item))fail(409,'Take it off before giving your last one away.');
         const day=new Date(now).toISOString().slice(0,10),ledger=account.giftLedger?.day===day?account.giftLedger:{day,count:0};
         if(ledger.count+count>60)fail(429,'You have given plenty of gifts today. Try again tomorrow.');
         const target=Game.parseSave(JSON.stringify(owner.profile));if(!target)fail(409,'That friend could not be reached.');
@@ -166,7 +167,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
           delete account.fishingTicket;result={...catchResult};
         }
       }else if(data.type==='dropItem'){
-        if(!peer||peer.visit||!validId(p.id)||!Number.isSafeInteger(p.count)||p.count<1||p.count>Game.looseQuantity(state,p.id))fail(409,'That item cannot be dropped.');
+        if(!peer||peer.visit||!validId(p.id)||Game.isPenned(p.id)||!Number.isSafeInteger(p.count)||p.count<1||p.count>Game.looseQuantity(state,p.id))fail(409,'That item cannot be dropped.');
         Game.removeItem(state.bag,p.id,p.count);result=saveDrop(account,p.id,p.count,peer,now);result.thrown=true;
       }else if(data.type==='claimDrop'||data.type==='releaseDrop'){
         const owner=records.get(p.ownerId),drop=owner?.drops?.find(value=>value.id===p.id);

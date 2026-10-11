@@ -1,11 +1,12 @@
 import type * as T from 'three';
 import { PEN, ANIMAL_KINDS, type FarmState } from './farm.ts';
-import { PERCH_FEET, newPetLink, penSpots, petFollows, petMayFight, petStyle, petTrail, restY, stepPet, PET_HOVER, type PetLink, type PetStyle, type Spot } from './pet-pen.ts';
+import { PERCH_FEET, newPetLink, penSpots, petFollows, petMayFight, petStyle, petTrail, restY, stepPet, PET_HOVER, PET_SIDE, PET2_SIDE, type PetLink, type PetStyle, type Spot } from './pet-pen.ts';
+import { companionId } from './pet-slots.ts';
 
 /** What the pet needs from the world (world.ts passes itself). */
 export interface PetHost {
-  companion: T.Object3D; planet: string; position: T.Vector3; facing: number; boarded: boolean; time: number;
-  state: { gear: { pet?: string }; farm?: FarmState };
+  companion: T.Object3D; /** The second pet's model (pet-slots.ts); absent in hosts with one pet. */ companion2?: T.Object3D; planet: string; position: T.Vector3; facing: number; boarded: boolean; time: number;
+  state: { gear: { pet?: string; pet2?: string }; farm?: FarmState };
   interior?: unknown; farmView?: { isBuilt: boolean };
   /** True while the pet stays at your own pen out of this world (visiting a friend's garden); main.ts sets it. */
   petStaysHome?: () => boolean;
@@ -18,6 +19,9 @@ type Wing = { node: T.Object3D; base: number; side: number };
  */
 export class PetCompanion {
   readonly link: PetLink = newPetLink();
+  /** Which companion this poses: 0 = the first pet worn (right side), 1 = the second (left side); the dog is neither (pet-slots.ts). */
+  readonly index: 0 | 1;
+  constructor(index: 0 | 1 = 0) { this.index = index; }
   private planet = '';
   private id = '';
   private spotsKey = '';
@@ -29,28 +33,31 @@ export class PetCompanion {
   /** True while the pet may shoot (pet-pen.ts petMayFight). */
   mayFight(planet: string, pose: { x: number; z: number; y?: number }, indoors = false) { return this.shown && petMayFight(this.link.place, planet, pose, indoors); }
   update(h: PetHost, dt: number) {
-    const id = h.state.gear.pet ?? '', c = h.companion;
-    if (!id) { this.id = ''; this.shown = true; return; }
+    const id = companionId(h.state.gear, this.index) ?? '', c = this.index ? h.companion2 : h.companion;
+    if (!id || !c) { this.id = ''; this.shown = true; return; }
+    const side = this.index ? PET2_SIDE : PET_SIDE, both = !!companionId(h.state.gear, 1);
     const style = petStyle(id), feet = PERCH_FEET[id] ?? 0, away = !!h.petStaysHome?.();
     this.shown = !away;
     if (away) { this.link.place = 'pen'; this.link.hop = null; this.planet = h.planet; return; }
     const home = h.planet === 'home', farm = h.state.farm;
-    const key = home ? `${style}:${!!(h.farmView?.isBuilt ?? farm?.built)}:${JSON.stringify(farm?.speciesPens ?? {})}` : '';
+    const key = home ? `${style}:${both}:${!!(h.farmView?.isBuilt ?? farm?.built)}:${JSON.stringify(farm?.speciesPens ?? {})}` : '';
     if (key !== this.spotsKey) {
       this.spotsKey = key;
       this.spots = home ? penSpots(style, PEN, h.farmView?.isBuilt ?? farm?.built ?? false, ANIMAL_KINDS.map(k => farm?.speciesPens?.[k]).filter((p): p is { x: number; z: number } => !!p)) : [];
+      // Two pets share out the pen: every other spot each, so they never wait on the same post.
+      if (both && this.spots.length > 1) this.spots = this.spots.filter((_, i) => i % 2 === this.index);
       if (this.link.place === 'pen' && this.spots.length) this.placeAt(this.spots[Math.min(this.link.spot, this.spots.length - 1)], style, feet);
     }
     const follow = petFollows(h.planet, h.position, !!h.interior);
     // A new pet, or a new world (a landing, a flight home): a pet out with you lands beside you; one at home is at the pen.
     if (this.id !== id || this.planet !== h.planet) {
       this.link.hop = null;
-      if (follow || !this.spots.length) { const at = petTrail(h.position, h.facing); this.link.x = at.x; this.link.z = at.z; this.link.y = h.position.y + (style === 'walk' ? 0 : PET_HOVER); this.link.place = 'follow'; }
+      if (follow || !this.spots.length) { const at = petTrail(h.position, h.facing, side); this.link.x = at.x; this.link.z = at.z; this.link.y = h.position.y + (style === 'walk' ? 0 : PET_HOVER); this.link.place = 'follow'; }
       else { this.link.place = 'pen'; this.link.spot = 0; this.placeAt(this.spots[0], style, feet); }
       this.id = id; this.planet = h.planet;
     }
     const before = { x: this.link.x, z: this.link.z };
-    stepPet(this.link, dt, follow, h.position, h.facing, h.position.y, this.spots, style, feet);
+    stepPet(this.link, dt, follow, h.position, h.facing, h.position.y, this.spots, style, feet, side);
     const l = this.link, moved = Math.hypot(l.x - before.x, l.z - before.z), t = h.time, flying = style !== 'walk';
     // Flyers bob while airborne; walkers hop as they move (a smaller bounce while standing), as the companion always did.
     const bob = flying ? (l.resting && style === 'perch' ? 0 : Math.sin(t * 3) * (l.resting ? .08 : .18)) : Math.abs(Math.sin(t * 5)) * .12 * (moved > dt * .5 ? 1 : l.resting ? .15 : .3);

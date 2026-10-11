@@ -1,4 +1,4 @@
-import { canonicalItem, type Inventory } from './content.ts';
+import { ITEMS, canonicalItem, type Inventory } from './content.ts';
 import { looseQuantity } from './pantry.ts';
 
 /**
@@ -32,8 +32,10 @@ export function storageLevel(s: Pick<Holder, 'bagUp' | 'chestUp'>, kind: Storage
 }
 export const bagCapacity = (s: Pick<Holder, 'bagUp'>) => STORAGE.bag.base + storageLevel(s, 'bag') * STORAGE.bag.add;
 export const chestCapacity = (s: Pick<Holder, 'chestUp'>) => STORAGE.chest.base + storageLevel(s, 'chest') * STORAGE.chest.add;
+/** Lives at the pen (the guard dog as a pet, pet-slots.ts): listed in the bag but never takes a slot, so it can always be taken off. */
+const penned = (id: string) => Object.hasOwn(ITEMS, id) && ITEMS[id].penned === true;
 /** Bag slots in use: ids with at least one loose (unworn) copy. */
-export const bagSlotsUsed = (s: Holder) => Object.keys(s.bag).filter(id => looseQuantity(s, id) > 0).length;
+export const bagSlotsUsed = (s: Holder) => Object.keys(s.bag).filter(id => looseQuantity(s, id) > 0 && !penned(id)).length;
 export const chestSlotsUsed = (s: Pick<Holder, 'chest'>) => Object.values(s.chest).filter(n => (n ?? 0) > 0).length;
 
 /**
@@ -73,7 +75,7 @@ export function fits(s: Holder, items: Inventory) {
   if (s.settings?.tester) return true; // tester mode (tester.ts) checks every item at once: no slot limit
   const ids = [...new Set(Object.entries(items).filter(([, n]) => (n ?? 0) > 0).map(([id]) => canonicalItem(id)))];
   if (delivery) { const fresh = ids.filter(id => !((s.chest[id] ?? 0) > 0) && !delivery!.has(id)); return chestSlotsUsed(s) + delivery.size + fresh.length <= chestCapacity(s); }
-  const fresh = ids.filter(id => !(looseQuantity(s, id) > 0)); return !fresh.length || bagSlotsUsed(s) + fresh.length <= bagCapacity(s);
+  const fresh = ids.filter(id => !(looseQuantity(s, id) > 0) && !penned(id)); return !fresh.length || bagSlotsUsed(s) + fresh.length <= bagCapacity(s);
 }
 /** Records ids granted while delivering to the chest, so each later grant sees the room they will take. */
 export function noteDelivered(s: Holder, id: string) { if (delivery && !((s.chest[id] ?? 0) > 0)) delivery.add(id); }

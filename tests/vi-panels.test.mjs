@@ -5,7 +5,6 @@
 import test, {afterEach} from 'node:test';
 import {hudIcon} from '../src/hud-icons.ts';
 import {CAMERA_PITCH,cameraPitch} from '../src/camera-rig.ts';
-import {dogStaysHome} from '../src/guard-dog.ts';
 import assert from 'node:assert/strict';
 import {readFile,readdir} from 'node:fs/promises';
 import {registerHooks} from 'node:module';
@@ -92,10 +91,10 @@ function advancedState(){
   P.refreshProgress(state);
   return state;
 }
-function mainPanels(state){
+function mainPanels(state,only){
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
-  const context={hudIcon,CAMERA_PITCH,cameraPitch,dogStaysHome,...GUIDE,cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},...extraModules,M,IG,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,iconUrl:p=>'/assets/icons/'+p,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
+  const context={hudIcon,CAMERA_PITCH,cameraPitch,...GUIDE,cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},...extraModules,M,IG,planRoutes,...P,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,iconUrl:p=>'/assets/icons/'+p,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
     HELP_TOPICS,restoreRowHtml:()=>'',saveGuard:null,activeKey:()=>'cute-game-save-v1',joystickEnabled:()=>state.settings.movePad??false,neighboursOn:()=>true,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},
@@ -104,6 +103,7 @@ function mainPanels(state){
   context.spaceKey='jump';context.airCombat=true;context.airOn=()=>true;context.actionHandler??=null;
   const ctx=vm.createContext(context);vm.runInContext(compiled,ctx);
   const render=(name,...args)=>{panels=[];ctx[name](...args);return panels;};
+  if(only)return only(ctx,render);
   const all=[];
   ctx.bagMode='wardrobe';all.push(...render('inventory'));ctx.bagMode='bag';
   for(const name of ['inventory','market','storage','upgrades','cooking','decorations','planets','map','settings','help','penDialog','testerShop','helperDialog','farmHelperDialog','forgeMenu'])all.push(...render(name));
@@ -115,6 +115,28 @@ function mainPanels(state){
   vm.runInContext(shell,ctx);all.push({type:'welcome',title:'',kicker:'',html:localizeHtml(ctx.app.innerHTML)});
   return all;
 }
+
+test('the bag shows both pet slots; with both taken another pet offers to replace either, and a worn pet can be left at home',()=>{
+  const state=advancedState(),pets=Object.keys(M.ITEMS).filter(id=>M.ITEMS[id].slot==='pet'&&!M.ITEMS[id].penned&&!M.ITEMS[id].dye);
+  state.gear.pet=pets[0];state.gear.pet2=pets[1];for(const id of pets.slice(0,2))state.bag[id]=1;M.buyAnimal(state,'dog');
+  assert.deepEqual([state.gear.pet,state.gear.pet2],pets.slice(0,2),'both slots taken: the new dog waits at its pen');
+  const bag=selected=>mainPanels(state,(ctx,render)=>{ctx.bagMode='bag';ctx.selectedItem=selected;return render('inventory');})[0].html;
+  setLanguage('en');
+  const third=bag(pets[2]),slots=[...third.matchAll(/data-action="unequip" data-slot="(\w+)"/g)].map(m=>m[1]);
+  assert.ok(slots.includes('pet')&&slots.includes('pet2'),'both pet slots have their own Remove');
+  assert.match(third,/Second pet|aria-label="Unequip Second pet"/);
+  const swaps=[...third.matchAll(/data-action="equip" data-item="[^"]+" data-slot="(pet2?)">([^<]+)</g)].map(m=>[m[1],m[2]]);
+  assert.deepEqual(swaps,[['pet','Replace '+M.ITEMS[pets[0]].name],['pet2','Replace '+M.ITEMS[pets[1]].name]]);
+  const worn=bag(pets[1]);assert.match(worn,/data-action="equip" data-item="[^"]+" disabled>Equipped</);assert.match(worn,/data-action="unequip" data-slot="pet2">Leave at home</);
+  const dog=bag('pet_dog');assert.match(dog,/Replace /);assert.doesNotMatch(dog,/data-action="drop-item"/,'the dog is never dropped');assert.doesNotMatch(dog,/data-action="try-on"/);
+  // With a slot free it is the plain Equip again.
+  delete state.gear.pet2;const free=bag(pets[2]);assert.match(free,/data-action="equip" data-item="[^"]+" >Equip</);assert.doesNotMatch(free,/Replace /);
+  state.gear.pet2=pets[1];
+  setLanguage('vi');const found=[];
+  for(const id of [pets[2],pets[1],'pet_dog']){const html=bag(id);leftovers('bag '+id,html,found);}
+  const vi=bag(pets[2]);assert.match(vi,/Thay /);assert.match(bag(pets[1]),/Để ở nhà/);
+  assert.deepEqual([...new Set(found)],[]);
+});
 
 test('every main panel renders in Vietnamese without leftover English words',()=>{
   setLanguage('vi');const found=[];

@@ -20,7 +20,7 @@ export function mergesExactly(m: T.MeshToonMaterial) {
 export function mergeParts(model: T.Object3D, { exact = false } = {}) {
   const byParent = new Map<string, { parent: T.Object3D; cast: boolean; recv: boolean; list: T.Mesh[] }>(), ids = new Map<T.Object3D, number>();
   model.traverse(o => {
-    if (!(o instanceof T.Mesh) || o.userData.outline || o.userData.gear || !o.parent || Array.isArray(o.material) || o.parent.name === 'remote-pet' || o.parent.parent?.name === 'remote-pet') return;
+    if (!(o instanceof T.Mesh) || o.userData.outline || o.userData.gear || o.userData.animated /* a part that moves on its own (a pet's wing) */ || !o.parent || Array.isArray(o.material) || o.parent.name === 'remote-pet' || o.parent.parent?.name === 'remote-pet') return;
     const m = o.material as T.MeshToonMaterial;
     if (m.map || m.transparent || (m.emissive && m.emissive.getHex() !== 0) || !m.color) return;
     if (exact && (!mergesExactly(m) || !o.visible || o.layers.mask !== 1 || !o.geometry.getAttribute('normal'))) return;

@@ -217,7 +217,7 @@ export function initRescue(h: RescueHooks) {
     const st = h.state(), field = buildField(m.mission, m.wide), md = MISSIONS[m.mission];
     if (portal) { const p = portal; world.entities = world.entities.filter(e => e !== p); p.mesh.removeFromParent(); portal = null; }
     const saved: Session['saved'] = { root: world.root, entities: world.entities, enemies: world.enemies, obstacles: world.obstacles, detached: [], background: world.scene.background, fog: world.scene.fog, onZone: world.onZone, onStep: world.onStep, beforeRender: world.beforeRender, pointer: world.pointer, hp: st.hp, zoom: world.zoom };
-    for (const child of [...world.root.children]) if (child !== world.player && child !== world.companion) { saved.detached.push(child); world.root.remove(child); }
+    for (const child of [...world.root.children]) if (child !== world.player && child !== world.companion && child !== world.companion2) { saved.detached.push(child); world.root.remove(child); }
     world.entities = []; world.enemies = []; world.obstacles = fieldObstacles(field, o);
     world.onZone = () => {}; world.onStep = undefined; world.beforeRender = undefined; world.playerLift = 0;
     const w = world as unknown as Record<string, unknown>; w.applyEnemySnapshots = () => {}; w.applyAuthoritativeEnemyHealth = () => {}; w.enemySnapshots = () => [];

@@ -9,6 +9,7 @@ import {sanitizeTitanAttacks,beginTitanAttack,stepTitanAttack,titanTelegraphs,is
 import {BOSS_SKILLS,BOSS_WINDUPS,bossTelegraphs,bossPhase,hitControl,BOSS_RESISTED,RESIST_SLOW,liftHeight} from '../src/boss-patterns.ts';
 import {atHome,homeRecoveryBonus} from '../src/home-care.ts';
 import {trailSpot,dogTossFactor,DOG_TOSS_CD} from '../src/guard-dog.ts';
+import {companionId,dogWorn} from '../src/pet-slots.ts';
 import {commandHash} from './action-service.mjs';
 import {gearFactor,skillLevel,skillCooldown} from '../src/upgrades.ts';
 import {clearJourney} from './adventure-lifecycle.mjs';
@@ -268,6 +269,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     engine={peer,room:peer.room,planet:peer.planet,reconciledLife:epoch(peer.account),lastSeen:Date.now(),nextBasic:0,nextSkill:[0,0,0,0],healthEvents:[],hpAt:0,damageAt:0,lastSkill:new Map(),environment:new EnvironmentSimulation(createEnvironmentLayout(peer.planet))};
     const current=()=>engine.peer,room=()=>rooms.get(current().room);
     const targets=()=>room()?[...state(room()).enemies.values()]:[];
+    const petShooter=(p,index)=>{const id=companionId(p.account.profile.gear,index),pet=id?Game.ITEMS[id]?.pet:undefined;return pet&&!p.visit&&!atHome(p.planet,p.pose)?{...pet,dmg:pet.dmg*gearFactor(p.account.profile,id),x:p.pose.x,z:p.pose.z}:null;};
     engine.sim=new CombatSimulation({position:()=>current().pose,facing:()=>current().pose.facing,face:a=>{current().pose.facing=a;},targets,
       weapon:()=>{const weapon=Game.weaponStats(combatProfile(current()));return weapon.kind==='rod'?{kind:'fist',range:1.6,cd:.5,special:'fist'}:weapon;},
       stats:()=>Game.activeStats(combatProfile(current())),moving:()=>current().pose.moving,
@@ -276,9 +278,10 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       execute:target=>{const p=current();if(!target.boss&&target.hp/target.maxHp<.4&&dist(p.pose,target)<=3.2+target.radius)hit(p,target,{amount:target.hp,critical:true,stun:0,lift:0,knock:0,direction:{x:0,z:0}},true);},
       effect:effect=>{if(room())broadcast(room(),{type:'effect',by:current().account.id,visual:effect},current().account.id);},
       // The pet waits by the pen at home (pet-pen.ts petMayFight): it shoots only while its explorer is away from the safe village.
-      pet:()=>{const p=current(),id=p.account.profile.gear.pet,pet=Game.ITEMS[id]?.pet;return pet&&!p.visit&&!atHome(p.planet,p.pose)?{...pet,dmg:pet.dmg*gearFactor(p.account.profile,id),x:p.pose.x,z:p.pose.z}:null;},
+      // Two pet slots (pet-slots.ts): each worn companion shoots on its own cooldown; the dog pet tosses through `dog` below.
+      pet:()=>petShooter(current(),0),pet2:()=>petShooter(current(),1),
       // The guard dog throws only while the server says it follows (pose.dog is null at home and on visits); it stands at the trailing spot.
-      dog:()=>{const p=current();if(p.visit||typeof p.pose?.dog!=='number'||atHome(p.planet,p.pose))return null;const at=trailSpot(p.pose,p.pose.facing||0);return {x:at.x,z:at.z,dmg:dogTossFactor(p.account.profile.level),cd:DOG_TOSS_CD,target:p.target??null};},
+      dog:()=>{const p=current();if(p.visit||typeof p.pose?.dog!=='number'||!dogWorn(p.account.profile.gear)||atHome(p.planet,p.pose))return null;const at=trailSpot(p.pose,p.pose.facing||0);return {x:at.x,z:at.z,dmg:dogTossFactor(p.account.profile.level),cd:DOG_TOSS_CD,target:p.target??null};},
       skillLevel:index=>skillLevel(combatProfile(current()),index),
       status:(target,kind,duration)=>{if(kind==='stun'){/* a freeze or a root holds bosses too */target.stun=Math.max(target.stun||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});return;}if(target.boss&&BOSS_RESISTED.includes(kind)){kind='slow';duration*=RESIST_SLOW;}target.statuses[kind]=Math.max(target.statuses[kind]||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});},
       moveTarget:(target,x,z)=>{if(dist(target,{x,z})>12)return;target.x=x;target.z=z;if(room())broadcast(room(),{type:'moveEnemy',id:target.id,x,z});}});

@@ -74,7 +74,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'upgradeSkill': result = upgradeSkill(state, index()); break;
     case 'upgradeJump': result = upgradeJump(state); break;
     // Taking the weapon off by hand means fists, saved so a reload and the server's combat honour it; a combat weapon put on ends it.
-    case 'equip': result = Game.equip(state, id()); if (result && ['sword', 'gun', 'fist'].includes(Game.ITEMS[state.gear.weapon ?? '']?.weapon?.kind ?? '') && Game.ITEMS[id()]?.slot === 'weapon') delete state.fists; break;
+    case 'equip': if (p.slot !== undefined && typeof p.slot !== 'string') return invalid(); result = Game.equip(state, id(), p.slot as Game.GearSlot | undefined); if (result && ['sword', 'gun', 'fist'].includes(Game.ITEMS[state.gear.weapon ?? '']?.weapon?.kind ?? '') && Game.ITEMS[id()]?.slot === 'weapon') delete state.fists; break;
     case 'unequip': result = Game.unequip(state, string(p.slot) as Game.GearSlot); if (result && p.slot === 'weapon') state.fists = true; break;
     case 'eat': result = Game.eat(state, id(), now); break;
     case 'transfer': {

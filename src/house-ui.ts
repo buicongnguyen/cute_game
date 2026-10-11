@@ -50,7 +50,7 @@ const remembered = () => { try { return localStorage.getItem(indoorsKey()) === '
 export const DRESS_SLOTS: Array<[string, string, string]> = [['hat', '👒', 'Hat'], ['outfit', '🧥', 'Outfit'], ['boots', '👟', 'Boots'], ['weapon', '⚔️', 'Weapon'], ['pet', '🐾', 'Pet']];
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 /** Things in the bag a friend can wear (not disguises). */
-export function wearables(s: SaveState) { return Object.entries(s.bag).filter(([id, n]) => (n ?? 0) > 0 && ['hat', 'outfit', 'boots', 'weapon', 'pet'].includes(ITEMS[id]?.slot ?? '')).map(([id, n]) => ({ id, count: n as number })); }
+export function wearables(s: SaveState) { return Object.entries(s.bag).filter(([id, n]) => (n ?? 0) > 0 && ['hat', 'outfit', 'boots', 'weapon', 'pet'].includes(ITEMS[id]?.slot ?? '') && !ITEMS[id].penned).map(([id, n]) => ({ id, count: n as number })); }
 
 /** The Dress panel's body: portrait, what the friend wears per slot, and what you can give. */
 export function dressHtml(s: SaveState, id: FriendId, { readOnly = false, portrait = '', iconUrl = (item: string) => item }: { readOnly?: boolean; portrait?: string; iconUrl?: (id: string) => string } = {}) {

@@ -219,8 +219,8 @@ test('11. a new adventure leaves tester mode; Exit keeps the energy and closes t
 
 // ---- 12. LOW: the collection log ------------------------------------------------------------------------------------
 test('12. the log counts obtainable items only, zone bosses only, and titans in their own row', () => {
-  const items = collectibleItems(); for (const id of ['wood', 'bunny', 'guard']) assert.ok(!items.includes(id), id);
-  assert.equal(items.length, Object.keys(M.ITEMS).length - 3); assert.ok(items.includes('egg') && items.includes('pancake'), 'farm products count');
+  const items = collectibleItems(); for (const id of ['wood', 'bunny', 'guard', 'pet_dog']) assert.ok(!items.includes(id), id); // pet_dog: the guard dog as a pet comes with the pen's dog, never collected
+  assert.equal(items.length, Object.keys(M.ITEMS).length - 4); assert.ok(items.includes('egg') && items.includes('pancake'), 'farm products count');
   const s = M.newGame(); s.bosses = ['home:bear', 'home:titan_turtle', 'lava:nothing']; const rows = collectionLog(s).rows, row = (id: string) => rows.find(r => r.id === id)!;
   assert.equal(row('bosses').have, 1); assert.equal(row('titans').have, 1); assert.equal(row('titans').total, Object.keys(TITANS).length);
 });
