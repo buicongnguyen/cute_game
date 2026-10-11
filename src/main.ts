@@ -1398,6 +1398,8 @@ function stepFight(dt:number,active:boolean,combatActive:boolean){
   combat.edge.bonus=actionHandler?1:comboMeter.bonus;combat.edge.launch=actionHandler?0:AIR.launch;
 }
 combat.edge.spent=()=>{sureLeft=0;};
+// A critical from the air (a jump in progress, or a dive / sky quake that started from one) is worth more than one from the ground.
+combat.edge.crit=()=>{if(!airOn())return undefined;const from=strikeFrom??world.jump;return from.jumps>=1&&(strikeFrom!==null||from.height>0)?M.AIR_CRIT_DAMAGE:undefined;};
 /** `e`: the creature the explorer walked up to (tap, auto-attack); a press of the attack key or pad passes none. */
 function basicAttack(e?:Enemy){
   if(ctfApi?.active&&!ctfApi.canAct)return;

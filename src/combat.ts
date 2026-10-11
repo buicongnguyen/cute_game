@@ -165,7 +165,7 @@ export class CombatSimulation {
    * next own hit is a critical (a perfect dodge); `spent` tells the game it was used. `launch`: every third basic
    * melee hit lifts an ordinary creature `launch` m (0 = off).
    */
-  readonly edge:{bonus:number;sure:boolean;launch:number;spent?:()=>void;/** The share of a hit a boss lets through (a block; 1 = all of it). */scale?:(target:CombatTarget)=>number}={bonus:1,sure:false,launch:0};
+  readonly edge:{bonus:number;sure:boolean;launch:number;spent?:()=>void;/** The share of a hit a boss lets through (a block; 1 = all of it). */scale?:(target:CombatTarget)=>number;/** A critical multiplier that replaces the stat's for this hit (a hit from the air), or undefined. */crit?:()=>number|undefined}={bonus:1,sure:false,launch:0};
   /** Set while a dive strike deals its damage: a sure critical on this target, and the most it may take from a boss. */
   private forced=false;private hitCap=Infinity;private swings=0;
   /** Root Quake cast in the air: the shockwave waits for the landing (land()). */
@@ -245,7 +245,7 @@ export class CombatSimulation {
     const bonus=(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?DZ.stealth.bonus:1)*(this.marked.has(target.id)?1.5:1)*((this.statuses.rally??0)>0?1+DZ.torch.bonus:1);
     this.statuses.stealth=0;
     const share=this.edge.scale?.(target)??1;
-    const amount=Math.max(1,Math.min(this.hitCap,Math.round(stats.attack*multiplier*this.power*bonus*(own?this.edge.bonus:1)*share*(critical?(stats.critDamage??2):1)*(.9+this.random()*.2))));
+    const amount=Math.max(1,Math.min(this.hitCap,Math.round(stats.attack*multiplier*this.power*bonus*(own?this.edge.bonus:1)*share*(critical?((own?this.edge.crit?.():undefined)??stats.critDamage??2):1)*(.9+this.random()*.2))));
     if(own&&this.edge.sure){this.edge.sure=false;this.edge.spent?.();}
     const applied=this.host.hit(target,{amount,critical:critical||shown,stun,lift,knock,direction:direction(angle),...(this.helperShot?{helper:true}:{}),...(share<1?{blocked:true}:{})});
     const dealt=typeof applied==='number'?Math.max(0,Math.min(amount,applied)):amount;
