@@ -33,19 +33,34 @@ export function decorIcon(id: string): string {
  */
 export function modelIcon(key: string, build: () => T.Object3D, dispose = false): string {
   const known = cache.get(key); if (known !== undefined) return known;
-  let url = '';
+  const url = modelShot(build, undefined, dispose ? holder => holder.traverse(o => { if (o instanceof T.Mesh) o.geometry.dispose(); }) : undefined);
+  cache.set(key, url);
+  return url;
+}
+
+/** Where the picture is taken from: sets the camera for the model in `holder` (already in the scene, matrices current). */
+export type IconAim = (camera: T.PerspectiveCamera, holder: T.Group) => void;
+const itemAim: IconAim = (cam, holder) => {
+  holder.rotation.y = -.5; holder.updateMatrixWorld(true);
+  box.setFromObject(holder); box.getCenter(centre); box.getSize(size);
+  const distance = Math.max(size.x, size.y, size.z) * .62 / Math.tan(T.MathUtils.degToRad(15)), tilt = .45;
+  cam.fov = 30; cam.updateProjectionMatrix();
+  cam.position.set(centre.x, centre.y + Math.sin(tilt) * distance, centre.z + Math.cos(tilt) * distance); cam.lookAt(centre);
+};
+/**
+ * One 128 px picture of a model on this module's renderer (the only icon WebGL context: hero-portrait.ts borrows it too
+ * rather than opening another), as a PNG data URL; '' when the build, the render or the read-back fails. Nothing is
+ * cached here. `free` gets the holder afterwards to release what the caller built.
+ */
+export function modelShot(build: () => T.Object3D | null, aim: IconAim = itemAim, free?: (holder: T.Group) => void): string {
+  let url = ''; const holder = new T.Group();
   try {
     if (!renderer) setup();
-    const model = build(), holder = new T.Group();
-    holder.add(model); holder.rotation.y = -.5; scene!.add(holder); holder.updateMatrixWorld(true);
-    box.setFromObject(holder); box.getCenter(centre); box.getSize(size);
-    const distance = Math.max(size.x, size.y, size.z) * .62 / Math.tan(T.MathUtils.degToRad(15)), tilt = .45;
-    camera!.position.set(centre.x, centre.y + Math.sin(tilt) * distance, centre.z + Math.cos(tilt) * distance); camera!.lookAt(centre);
+    const model = build(); if (!model) return '';
+    holder.add(model); scene!.add(holder); holder.updateMatrixWorld(true);
+    aim(camera!, holder);
     renderer!.render(scene!, camera!);
-    url = renderer!.domElement.toDataURL('image/png');
-    scene!.remove(holder);
-    if (dispose) holder.traverse(o => { if (o instanceof T.Mesh) o.geometry.dispose(); });
-  } catch { url = ''; }
-  cache.set(key, url);
+    url = renderer!.getContext().isContextLost() ? '' : renderer!.domElement.toDataURL('image/png');
+  } catch { url = ''; } finally { holder.removeFromParent(); try { free?.(holder); } catch { /* the picture stands */ } }
   return url;
 }

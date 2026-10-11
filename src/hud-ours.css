@@ -91,6 +91,12 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
 #app #hud .hero-energy > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: inherit; }
 #app #hud .avatar > span { display: grid; place-items: center; width: 70%; height: 70%; font-size: 0; }
 #app #hud .avatar > span > svg { width: 100%; height: 100%; }
+/* The explorer's face (hero-portrait.ts): a still picture filling the tile on a soft apricot glow; the sprout icon stays
+   underneath as the stand-in until there is a picture. */
+#app #hud .avatar > .hero-pic { display: none; }
+#app #hud .avatar.has-face { padding: 0; background: radial-gradient(circle at 50% 38%, #fff6dc 0 30%, #ffd9a0 72%, #ffb98a); }
+#app #hud .avatar.has-face > span { display: none; }
+#app #hud .avatar.has-face > .hero-pic { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; pointer-events: none; -webkit-user-drag: none; }
 #app #hud .player-name { color: var(--cream); -webkit-text-stroke: 0; text-shadow: none; }
 #app #hud .meter { border-radius: 7px; border: 2px solid var(--plum); background: rgba(20, 10, 16, .55); box-shadow: 0 0 0 1px rgba(255, 246, 224, .35); }
 #app #hud .meter > div { border-radius: 4px; }
