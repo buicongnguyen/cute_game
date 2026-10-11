@@ -783,6 +783,10 @@ export class World {
   friendAvatar(color:string,gear:SaveState['gear'],look:LookId=DEFAULT_LOOK){return this.avatar(color,gear,look);}
   /** An explorer in a body style, for the mirror's portraits (look-shop.ts). */
   lookAvatar(color:string,gear:SaveState['gear'],look:LookId){return this.avatar(color,gear,look);}
+  /** An explorer's head side for a face picture (hero-portrait.ts): the look, with the hat and outfit or the disguise over them; no weapon, boots or companion. */
+  portraitAvatar(color:string,gear:SaveState['gear'],look:string){return this.avatar(color,{hat:gear.hat,outfit:gear.outfit,disguise:gear.disguise},look);}
+  /** Which of the files that picture is drawn from have arrived (body, body style, then each worn piece): its cache key, so a late file redraws it once. */
+  avatarArt(gear:SaveState['gear'],look:string){const worn=gear.disguise?[gear.disguise]:[gear.hat,gear.outfit];return `${+heroKit.ready}${+heroKitFor(toLook(look)??DEFAULT_LOOK).ready}${worn.map(id=>+(!!id&&!!this.kitFor(id))).join('')}`;}
   /** A body style shown while previewing at the mirror: local only, never saved or sent online. */
   tryOnLook?:LookId|null;
   /** The cottage interior while the explorer is inside (house-session.ts): its own scene, walkable plan, and hooks to re-home the explorer and to drop it on a rebuild. */
