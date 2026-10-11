@@ -221,7 +221,8 @@ test('the Space key: jump by default, the old attack on request (then Left Shift
   assert.equal(J.readSpaceKey(s), 'jump'); J.saveSpaceKey(s, 'attack'); assert.equal(J.readSpaceKey(s), 'attack'); store.set(J.SPACE_KEY_STORE, 'nonsense'); assert.equal(J.readSpaceKey(s), 'jump');
   assert.equal(J.readSpaceKey(null), 'jump'); assert.equal(J.readSpaceKey({ getItem() { throw new Error('blocked'); } }), 'jump');
   const jump = keysGuideHtml('wasd', false, 'jump'), old = keysGuideHtml('wasd', false, 'attack');
-  assert.match(jump, /<dt>Jump<\/dt><dd><kbd>Space<\/kbd><\/dd>.*<dt>Basic attack<\/dt><dd><kbd>F<\/kbd><\/dd>/s); assert.match(old, /<dt>Jump<\/dt><dd><kbd>Shift<\/kbd><\/dd>.*<dt>Basic attack<\/dt><dd><kbd>Space<\/kbd><kbd>F<\/kbd><\/dd>/s);
+  assert.match(jump, /<dt>Jump<\/dt><dd><kbd>Space<\/kbd><\/dd>.*<dt>Basic attack<\/dt><dd><kbd>F<\/kbd><kbd>H<\/kbd><\/dd>/s); assert.match(old, /<dt>Jump<\/dt><dd><kbd>Shift<\/kbd><\/dd>.*<dt>Basic attack<\/dt><dd><kbd>Space<\/kbd><kbd>F<\/kbd><kbd>H<\/kbd><\/dd>/s);
+  for (const guide of [jump, old]) assert.match(guide, /<dt>Eat<\/dt><dd><kbd>G<\/kbd><\/dd>/, 'H is the second attack key, so Eat is G');
 });
 
 test('another explorer\'s jump as the host reads it from the pose: only real jump heights, above the ground it stands on', () => {
@@ -306,7 +307,7 @@ test('ground telegraphs ripple and the jump has one pooled blob shadow; neither 
 });
 
 test('every new string has Vietnamese in the jump pack, and the pack serves it', () => {
-  for (const key of ['Jump', 'jump', 'Space key', 'HITS', 'FINISHER!', 'LAUNCH!', 'DODGE', 'PERFECT DODGE!', '🛡️ Blocked', 'Sky Step', 'Sky Quake', 'Single jump', 'Double jump', 'Triple jump', 'Space: jump · F: attack', 'Space: attack · Left Shift: jump · F: attack',
+  for (const key of ['Jump', 'jump', 'Space key', 'HITS', 'FINISHER!', 'LAUNCH!', 'DODGE', 'PERFECT DODGE!', '🛡️ Blocked', 'Sky Step', 'Sky Quake', 'Single jump', 'Double jump', 'Triple jump', 'Space: jump · F or H: attack · G: eat', 'Space: attack · Left Shift: jump · F or H: attack · G: eat', 'Eat · G',
     'Double jump learned! Jump again in the air.', 'Triple jump learned! Jump three times in the air.', 'Jump and air combat']) { assert.ok(VI_PACK[key] && VI_PACK[key] !== key, key); }
   for (const [key, value] of Object.entries(JUMP_VI)) { assert.equal(VI_PACK[key], value, key); assert.notEqual(value, key); }
 });
@@ -330,7 +331,7 @@ test('the touch slide: Jump, then the same finger onto a button; it fires on rel
   // Brushing a toe on the way to another fires nothing; resting on one for 60 ms does, once.
   s.begin(1); s.move(1, 'skill0', 0); assert.equal(s.move(1, 'skill0', .03), null); assert.equal(s.move(1, 'skill1', .04), null, 'brushed skill0 for 40 ms: nothing');
   assert.equal(s.move(1, 'skill1', .09), null); assert.equal(s.poll(.1001), 'skill1', 'rested 60 ms'); assert.equal(s.poll(.3), null); assert.equal(s.move(1, 'attack', .4), null, 'one move per slide'); assert.equal(s.release(1), null);
-  // Lifting on the Jump toe itself, or off every button, fires nothing.
+  // Lifting on the Jump pad itself, or off every button, fires nothing.
   s.begin(1); assert.equal(s.release(1), null); s.begin(1); s.move(1, 'attack', 0); s.move(1, null, .02); assert.equal(s.release(1), null);
   // Another finger (the joystick's) is never followed, and cannot end the slide.
   s.begin(1); assert.equal(s.owns(2), false); assert.equal(s.move(2, 'skill3', 0), null); assert.equal(s.release(2), null); assert.equal(s.active, true); s.move(1, 'attack', .5); assert.equal(s.release(1), 'attack');

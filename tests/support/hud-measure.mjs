@@ -10,7 +10,7 @@ export function measureHud() {
   const groups = {
     hero: all('#hud .player-card'), energy: all('#hud .top-actions > .energy'), dock: all('#hud .top-actions button'), map: all('#hud .minimap'), home: all('#hud .home-button'),
     slips: all('#hud .tracker-panels > *, #hud #tracker-chip'), eat: all('#hud #quick-eat, #hud .quick-eat-pick'), buffs: all('#hud #buff-bar > *'),
-    skills: all('#hud .skill'), pad: all('#hud .attack-pad'), stick: all('#movement-joystick'), boss: all('#boss-bar'), target: all('#target-frame'),
+    skills: all('#hud .skill'), pad: all('#hud .attack-pad'), jump: all('#hud .jump-pad'), stick: all('#movement-joystick'), boss: all('#boss-bar'), target: all('#target-frame'),
     colossus: all('.colossus-banner'), prompt: all('#context-prompt button'), keys: all('#keys-guide'), reel: all('#reel-button'), fishHint: all('#fish-hint'), weather: all('#environment-bar > *'),
   };
   // Touch targets: what a finger really gets at each control's centre row and column.
@@ -24,8 +24,10 @@ export function measureHud() {
   }
   return { W: innerWidth, H: innerHeight, groups, small, dockW: getComputedStyle(document.documentElement).getPropertyValue('--dock-w') };
 }
-/** Toes and the pad are round: two of them overlap when their centres are closer than their radii allow, not when their boxes meet. */
-const ROUND = new Set(['skills|skills', 'skills|pad']);
+/** Toes and the pad are round: two of them overlap when their centres are closer than their radii allow, not when their boxes meet.
+    The stick is a disc too (joystick.css, border-radius 50%): with jumping on, the attack toe sits by its lower corner, where the boxes
+    meet on a 320 px phone while the discs are over 20 px apart. */
+const ROUND = new Set(['skills|skills', 'skills|pad', 'skills|jump', 'pad|jump', 'pad|stick']);
 /** Known before this stage and left alone: the timed-task pill is a slim 25 px row on phones (its neighbours take no taps there). */
 export const KNOWN_SMALL = ['challenge-tracker'];
 export function findings(m) {

@@ -199,8 +199,9 @@ body.indoors #app #hud .skills { display: none; }
 
 /* ------------------------------------------------------------------ Jumping and air combat (Settings switch; body.air-combat) */
 /* With the switch off none of this applies and the paw above is the one from before. With it on the paw has five toes at
-   186, 138, 90, 42 and -6 degrees on a circle of 1.4 skill widths round the pad's centre (neighbours 1.14 widths apart):
-   Jump is the toe on the inner side, level with the pad; the four skills follow in key order. Left-handed play mirrors it. */
+   186, 138, 90, 42 and -6 degrees on a circle of 1.4 skill widths round the pad's centre (neighbours 1.14 widths apart).
+   The big pad in the middle is Jump (sky blue); the basic attack is the toe on the inner side, level with the pad; the
+   four skills follow in key order. Left-handed play mirrors it, so the attack toe stays on the inner side. */
 #app #hud .jump-pad { display: none; }
 @media (pointer: coarse), (max-width: 900px), (max-height: 520px) {
   body.air-combat { --dock-room: calc(var(--sk) * 2.55 + 44px); }
@@ -209,21 +210,23 @@ body.indoors #app #hud .skills { display: none; }
   body.air-combat #app #hud .skill[data-index="1"] { left: calc(50% - var(--sk) * .5); right: auto; bottom: calc(var(--sk) * 1.55); }
   body.air-combat #app #hud .skill[data-index="2"] { left: calc(50% + var(--sk) * .54); right: auto; bottom: calc(var(--sk) * 1.087); }
   body.air-combat #app #hud .skill[data-index="3"] { left: calc(50% + var(--sk) * .892); right: auto; bottom: calc(var(--sk) * .004); }
-  body.air-combat #app #hud .jump-pad { left: calc(50% - var(--sk) * 1.892); bottom: calc(var(--sk) * .004); }
+  body.air-combat #app #hud .attack-pad { left: calc(50% - var(--sk) * 1.892); bottom: calc(var(--sk) * .004); }
   body.air-combat #app #hud.joystick-right .skill[data-index="0"] { left: calc(50% - var(--sk) * 1.892); right: auto; bottom: calc(var(--sk) * .004); }
   body.air-combat #app #hud.joystick-right .skill[data-index="1"] { left: calc(50% - var(--sk) * 1.54); right: auto; bottom: calc(var(--sk) * 1.087); }
   body.air-combat #app #hud.joystick-right .skill[data-index="2"] { left: calc(50% - var(--sk) * .5); right: auto; bottom: calc(var(--sk) * 1.55); }
   body.air-combat #app #hud.joystick-right .skill[data-index="3"] { left: calc(50% + var(--sk) * .54); right: auto; bottom: calc(var(--sk) * 1.087); }
-  body.air-combat #app #hud.joystick-right .jump-pad { left: calc(50% + var(--sk) * .892); bottom: calc(var(--sk) * .004); }
-  body.air-combat #app #hud .attack-pad { bottom: calc(var(--sk) * .05); }
-  /* The Jump toe: sky blue, a full skill toe. It acts as the finger lands (main.ts); holding it performs the extra jumps. */
+  body.air-combat #app #hud.joystick-right .attack-pad { left: calc(50% + var(--sk) * .892); bottom: calc(var(--sk) * .004); }
+  /* The attack toe: the pad's own paint at a full skill toe's size. */
+  body.air-combat #app #hud .attack-pad { width: var(--sk); height: var(--sk); min-width: 0; border-radius: 46%; }
+  body.air-combat #app #hud .jump-pad { left: calc(50% - var(--sk) * .6); bottom: calc(var(--sk) * .05); }
+  /* The Jump pad: sky blue, the big heel of the paw. It acts as the finger lands (main.ts); holding it performs the extra jumps. */
   body.air-combat #app #hud .jump-pad {
-    display: grid; place-items: center; position: absolute; width: var(--sk); height: var(--sk); min-width: 0; padding: 0;
-    border-radius: 46%; border: 3px solid var(--cream); background: linear-gradient(160deg, #8fe0ff, #2f9be6); box-shadow: 0 0 0 2px var(--plum), 0 4px 0 2px rgba(58, 36, 51, .5);
+    display: grid; place-items: center; position: absolute; width: calc(var(--sk) * 1.2); height: calc(var(--sk) * 1.2); min-width: 0; padding: 0;
+    border-radius: 40%; border: 3px solid var(--cream); background: linear-gradient(160deg, #8fe0ff, #2f9be6); box-shadow: 0 0 0 2px var(--plum), 0 4px 0 2px rgba(58, 36, 51, .5);
     touch-action: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none;
   }
   body.air-combat #app #hud .jump-pad[hidden] { display: none; }
-  body.air-combat #app #hud .jump-pad > svg { width: 62%; height: 62%; pointer-events: none; }
+  body.air-combat #app #hud .jump-pad > svg { width: 60%; height: 60%; pointer-events: none; }
   body.air-combat #app #hud .jump-pad:active { translate: 0 2px; filter: brightness(.94); }
   body.air-combat #app #hud #reel-button { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 16px); }
   body.air-combat #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 132px); }
@@ -235,8 +238,9 @@ body.indoors #app #hud .skills { display: none; }
 @media (max-height: 500px) and (orientation: landscape) {
   body.air-combat.in-rescue #rescue-build, body.air-combat.in-rescue[data-rescue-orient="portrait"] #rescue-build { right: calc(var(--safe-right) + 18px + var(--sk) * 3.784 + 8px); }
 }
-/* The air window (jump-rules.ts airWindow): while a press would be an air move the pad and the toes wear a sky rim, and the
-   two skills with an air form and the pad turn sky blue; on the way down the pad shows the dive in rose. Paint only. */
+/* The air window (jump-rules.ts airWindow): while a press would be an air move the attack toe and the skill toes wear a
+   sky rim, and the two skills with an air form and the attack toe turn sky blue; on the way down the attack toe shows the
+   dive in rose. The Jump pad keeps its own look throughout. Paint only. */
 #app #hud .skills.air .skill, #app #hud .skills.air .attack-pad { border-color: #bfeeff; box-shadow: 0 0 0 2px var(--plum), 0 0 0 5px rgba(143, 224, 255, .85), 0 4px 0 2px rgba(58, 36, 51, .5); }
 #app #hud .skills.air .skill-dash, #app #hud .skills.air .skill-stomp, #app #hud .skills.air .attack-pad { background: linear-gradient(160deg, #8fe0ff, #2f9be6); }
 #app #hud .skills.air.dive .attack-pad { background: linear-gradient(160deg, #ffa3bf, #e8457a); }

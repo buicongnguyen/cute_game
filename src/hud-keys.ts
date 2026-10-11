@@ -2,7 +2,7 @@
 // Choice: open for a new player; once they have pressed 120 game keys (moves, attacks, skills, shortcuts; counted
 // across sessions on this device) it folds itself once, because by then the keys are learned. Opening or folding it by
 // hand is final: the guide never moves on its own again. Remembered per device (localStorage), never in the save.
-import { keyboardBindings } from './gameplay-controls.ts';
+import { eatKey, keyboardBindings } from './gameplay-controls.ts';
 import { t } from './i18n.ts';
 
 export const KEYS_GUIDE_KEY = 'zoo-garden-keys-guide';
@@ -16,13 +16,13 @@ export function readGuide(store: Pick<Storage, 'getItem'> | null): KeysGuideMemo
 export const guideFolded = (m: KeysGuideMemory) => m.mode === 'closed' || m.mode === 'auto' && m.uses >= KEYS_LEARNED;
 
 const key = (k: string) => `<kbd>${k === ' ' ? 'Space' : k.length === 1 ? k.toUpperCase() : k}</kbd>`;
-/** The guide's rows for a layout ('classic' arrows + QWER, or 'wasd' + JKL;). `space`: what the Space key does with jumping on (Settings); without it the guide is the one from before jumping. */
+/** The guide's rows for a layout ('classic' arrows + QWER, or 'wasd' + JKL;). `space`: what the Space key does with jumping on (Settings; then H is the right hand's basic attack and Eat is G); without it the guide is the one from before jumping. */
 export function keysGuideHtml(layout: string | undefined, folded: boolean, space?: 'jump' | 'attack') {
   const b = keyboardBindings(layout), wasd = layout !== 'classic';
   const rows: [string, string][] = [
     [t('Move'), wasd ? ['W', 'A', 'S', 'D'].map(key).join('') : ['↑', '←', '↓', '→'].map(key).join('')],
-    ...(space ? [[t('Jump'), key(space === 'jump' ? ' ' : 'Shift')], [t('Basic attack'), space === 'jump' ? key('f') : key(' ') + key('f')]] as [string, string][] : [[t('Basic attack'), key(' ')] as [string, string]]), [t('Skills'), b.skills.map(key).join('')], [t('Interact'), key('f')],
-    [t('Journal'), key(b.journal)], [t('Backpack'), key('i')], [t('Eat'), key('h')], [t('Map'), key('m')],
+    ...(space ? [[t('Jump'), key(space === 'jump' ? ' ' : 'Shift')], [t('Basic attack'), (space === 'jump' ? '' : key(' ')) + key('f') + key('h')]] as [string, string][] : [[t('Basic attack'), key(' ')] as [string, string]]), [t('Skills'), b.skills.map(key).join('')], [t('Interact'), key('f')],
+    [t('Journal'), key(b.journal)], [t('Backpack'), key('i')], [t('Eat'), key(eatKey(!!space))], [t('Map'), key('m')],
   ];
   const label = folded ? t('Show keyboard controls') : t('Hide keyboard controls');
   return `<button class="keys-toggle" data-action="keys-guide" aria-expanded="${!folded}" aria-label="${label}" title="${label}"><span aria-hidden="true">⌨️</span>${folded ? '' : `<b>${t('Keyboard')}</b><i aria-hidden="true">▾</i>`}</button>${folded ? '' : `<dl>${rows.map(([what, keys]) => `<div><dt>${what}</dt><dd>${keys}</dd></div>`).join('')}</dl>`}`;

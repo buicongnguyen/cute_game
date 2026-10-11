@@ -43,7 +43,7 @@ import { mountLongPress, cancelLongPresses } from './long-press.ts';
 import { mountTouchButtons, cancelButtonTouches } from './touch-buttons.ts';
 import { previewGear, canTryOn, autoHeld } from './try-on.ts';
 import './quick-eat.css';
-import { CombatTimers, FishingInput, MovementControls, gameplayKey, keyboardBindings, movementKey } from './gameplay-controls.ts';
+import { CombatTimers, FishingInput, MovementControls, gameplayKey, handKey, keyboardBindings, movementKey } from './gameplay-controls.ts';
 import {mountJoystick} from './joystick.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, DZ, type CombatHit, type CombatEffect, type CombatAlly } from './combat.ts';
 import { skillPip } from './skill-pip.ts';
@@ -230,7 +230,7 @@ function keyboardSettings(){
   const description=selected==='wasd'?'WASD: move · J/K/L/;: skills · P: journal':'Arrows: move · Q/W/E/R: skills · J: journal';
   const store=(()=>{try{return localStorage;}catch{return null;}})();void store;
   const master=`<div class="settings-row air-combat-settings"><div><strong>Jump and air combat</strong><small>${airCombat?(actionHandler?'On in solo play. Online play uses the classic rules for now.':'Jump, air moves, dodging and combos.'):'Off: the classic fight, with Space as the basic attack.'}</small></div><button class="toggle ${airCombat?'on':''}" role="switch" aria-checked="${airCombat}" data-action="air-combat" aria-label="Jump and air combat">${airCombat?'On':'Off'}</button></div>`;
-  const space=!airOn()?'':`<div class="settings-row keyboard-settings space-key-settings"><div><strong>Space key</strong><small>${spaceKey==='jump'?'Space: jump · F: attack':'Space: attack · Left Shift: jump · F: attack'}</small></div><div class="segmented" role="radiogroup" aria-label="Space key">${(['jump','attack'] as const).map(kind=>`<button role="radio" aria-checked="${spaceKey===kind}" class="${spaceKey===kind?'on':''}" data-action="space-key" data-kind="${kind}">${kind==='jump'?'Jump':'Basic attack'}</button>`).join('')}</div></div>`;
+  const space=!airOn()?'':`<div class="settings-row keyboard-settings space-key-settings"><div><strong>Space key</strong><small>${spaceKey==='jump'?'Space: jump · F or H: attack · G: eat':'Space: attack · Left Shift: jump · F or H: attack · G: eat'}</small></div><div class="segmented" role="radiogroup" aria-label="Space key">${(['jump','attack'] as const).map(kind=>`<button role="radio" aria-checked="${spaceKey===kind}" class="${spaceKey===kind?'on':''}" data-action="space-key" data-kind="${kind}">${kind==='jump'?'Jump':'Basic attack'}</button>`).join('')}</div></div>`;
   return master+space+`<div class="settings-row keyboard-settings"><div><strong>PC keyboard layout</strong><small>${description}</small></div><div class="segmented" role="radiogroup" aria-label="PC keyboard layout">${(['classic','wasd'] as const).map(layout=>`<button role="radio" aria-checked="${selected===layout}" class="${selected===layout?'on':''}" data-action="keyboard-layout" data-kind="${layout}">${layout==='wasd'?'WASD + JKL;':'Arrows + QWER'}</button>`).join('')}</div></div>`;
 }
 const app = $('#app');
@@ -1268,10 +1268,10 @@ async function quickEat(){
   await eatFood(view.id!);
 }
 function updateQuickEat(){
-  const view=quickEatView(state,quickEatChoice),key=`${view.id}|${view.count}|${view.idle}|${quickEatChoice}|${getLanguage()}`;if(key===quickEatShown)return;quickEatShown=key;
+  const view=quickEatView(state,quickEatChoice),eatTip=airOn()?'Eat · G':'Eat · H',key=`${view.id}|${view.count}|${view.idle}|${quickEatChoice}|${getLanguage()}|${eatTip}`;if(key===quickEatShown)return;quickEatShown=key;
   const button=$('#quick-eat'),name=view.id?t(M.ITEMS[view.id].name):'';button.classList.toggle('idle',view.idle);button.classList.toggle('picked',quickEatChoice!=='auto');
   $('#quick-eat-icon').innerHTML=view.id?art(view.id,M.ITEMS[view.id].icon):'🍽️';$('#quick-eat-count').textContent=String(view.count);
-  button.setAttribute('aria-label',view.id?`${t('Eat')} ${name} · +${M.ITEMS[view.id].heal} HP · ×${view.count}`:t('Eat'));button.title=view.id?`${t('Eat · H')} · ${name}`:t('Eat · H');
+  button.setAttribute('aria-label',view.id?`${t('Eat')} ${name} · +${M.ITEMS[view.id].heal} HP · ×${view.count}`:t('Eat'));button.title=view.id?`${t(eatTip)} · ${name}`:t(eatTip);
 }
 /** Long-press or the chevron: pick a food to always use, or Auto (smallest heal that covers the missing health). */
 function quickEatMenu(open:boolean){
@@ -1298,9 +1298,9 @@ const jumpInput=new JumpInput(),comboMeter=new ComboMeter(),jumpPointers=new Set
 let comboKind:ComboHit|null=null,sureLeft=0,dodgeShown=-1,comboShown='';
 /** The last jump came from a finger: touch play has wider timing (perfect dodge 0.4 s, combo timer 2 s) and aim help for the dive. */
 let touchFight=false;
-/** The touch slide (Jump, then the same finger onto a skill toe or the pad), a late press waiting for the landing, and the HUD's air look. */
+/** The touch slide (the Jump pad, then the same finger onto a skill toe or the attack toe), a late press waiting for the landing, and the HUD's air look. */
 const slideCombo=new SlideCombo();let pendingPress:{kind:'attack'}|{kind:'skill';index:number}|null=null,pendingLeft=0,airLook='';
-/** The fight button under a screen point: 'attack', 'skill0' to 'skill3', or null (the Jump toe itself and everything else). */
+/** The fight button under a screen point: 'attack', 'skill0' to 'skill3', or null (the Jump pad itself and everything else). */
 function fightButtonAt(x:number,y:number){const b=(document.elementFromPoint(x,y) as HTMLElement|null)?.closest<HTMLElement>('#hud .skills button');return !b?null:b.dataset.action==='attack'?'attack':b.dataset.action==='skill'?'skill'+b.dataset.index:null;}
 function fireSlide(move:string|null){if(!move)return;if(move==='attack')basicAttack();else skill(Number(move.slice(5)));}
 /** A press too late in the fall: it becomes the ground move on landing. */
@@ -1310,7 +1310,7 @@ let strikeFrom:{height:number;jumps:number}|null=null,skyQuake:{height:number;ju
 // Bosses block low hits (jump-rules.ts BLOCK; solo: online the server deals the damage): hits from the ground or a single jump keep a share, hits from double-jump height get through.
 combat.edge.scale=target=>{const e=target as Enemy;if(!airOn()||!BOSS_BLOCK_ON||!(e.boss||e.definition?.titan)||e.driver)return 1;const from=strikeFrom??world.jump;return hitShare(blockShare(e.type,M.PLANETS[world.planet]?.level??0),from.height,from.jumps);};
 /**
- * Applies the switch (and online play, where it is off): the world's ground-attack rules, the Jump toe and the combo chip
+ * Applies the switch (and online play, where it is off): the world's ground-attack rules, the Jump pad and the combo chip
  * (made on first use; the page's own markup is the one from before jumping), the page class the paw's layout hangs on,
  * and the hint under the screen. Called every step; it does its work only when the answer changes.
  */
@@ -1822,7 +1822,7 @@ document.addEventListener('keydown',event=>{
   const spaceAction=jumpKeyAction(event.code||'',spaceKey,airOn());
   if(spaceAction==='jump'){event.preventDefault();if(!event.repeat){touchFight=false;jumpInput.down();}return;}
   if(event.repeat)return;
-  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=(bindings.skills as readonly string[]).indexOf(key);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f'){if(!airOn())world.interactNearest();else if(world.jump?.airborne||!world.interactNearest())basicAttack();}else if(key==='h')void quickEat();else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();basicAttack();}
+  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=(bindings.skills as readonly string[]).indexOf(key);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f'){if(!airOn())world.interactNearest();else if(world.jump?.airborne||!world.interactNearest())basicAttack();}else if(handKey(key,airOn())==='eat')void quickEat();else if(handKey(key,airOn())==='attack')basicAttack();else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();basicAttack();}
 });
 // The keyboard guide counts game keys to learn when to fold itself (hud-keys.ts).
 window.addEventListener('keydown',event=>{if(started&&!uiBlocked()&&!event.repeat&&gameplayKey(event))keysGuide.used();});
@@ -1830,7 +1830,7 @@ document.addEventListener('keyup',e=>{const key=gameplayKey({...e,code:e.code,ke
 document.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=(e.target as HTMLElement).closest<HTMLElement>('button');if(target?.dataset.move){e.preventDefault();movement.pressPointer(e.pointerId,target.dataset.move);target.setPointerCapture(e.pointerId);}
   // The Jump button acts as the finger lands (a click would wait for the release); holding it performs the extra jumps.
   if(target?.dataset.action==='jump'&&started&&!uiBlocked()&&airOn()){e.preventDefault();jumpPointers.add(e.pointerId);touchFight=e.pointerType==='touch';jumpInput.down();
-    // The slide: this same finger may go on to the pad or a skill toe for the air move (jump-rules.ts SlideCombo).
+    // The slide: this same finger may go on to the attack toe or a skill toe for the air move (jump-rules.ts SlideCombo).
     if(e.pointerType!=='mouse'){slideCombo.begin(e.pointerId);try{target.setPointerCapture(e.pointerId);}catch{/* already captured */}}}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}});
 document.addEventListener('pointermove',e=>{if(slideCombo.owns(e.pointerId))fireSlide(slideCombo.move(e.pointerId,fightButtonAt(e.clientX,e.clientY),performance.now()/1000));});
 const releasePointer=(e:PointerEvent)=>{if(slideCombo.owns(e.pointerId)){if(e.type==='pointerup'){slideCombo.move(e.pointerId,fightButtonAt(e.clientX,e.clientY),-1);fireSlide(slideCombo.release(e.pointerId));}else if(e.type==='pointercancel')slideCombo.cancel();}gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);if(jumpPointers.delete(e.pointerId)&&!jumpPointers.size)jumpInput.up();fishGame?.input.releasePointer(e.pointerId);};

@@ -49,10 +49,10 @@ for (const [name, view] of Object.entries(VIEWS)) {
       const r = await page.evaluate(() => {
         const box = el => { const b = el.getBoundingClientRect(); return b.width && b.height && getComputedStyle(el).visibility !== 'hidden' ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
         const all = sel => [...document.querySelectorAll(sel)].filter(el => !el.closest('[hidden]')).map(box).filter(Boolean);
-        const panels = { player: all('.player-card'), buttons: all('.top-actions button'), minimap: all('.minimap'), trackers: all('.tracker-stack > :not([hidden]):not(.quick-eat)'), skills: all('.skill'), heel: all('#hud .attack-pad'), energy: all('#hud .top-actions > .energy'), toasts: all('.toast'), prompt: all('#context-prompt button'), pad: all('#touch-controls button'), joystick:all('#movement-joystick'), home: all('.home-button') };
+        const panels = { player: all('.player-card'), buttons: all('.top-actions button'), minimap: all('.minimap'), trackers: all('.tracker-stack > :not([hidden]):not(.quick-eat)'), skills: all('.skill'), heel: all(document.body.classList.contains('air-combat') ? '#hud .jump-pad' : '#hud .attack-pad'), toe: document.body.classList.contains('air-combat') ? all('#hud .attack-pad') : [], energy: all('#hud .top-actions > .energy'), toasts: all('.toast'), prompt: all('#context-prompt button'), pad: all('#touch-controls button'), joystick:all('#movement-joystick'), home: all('.home-button') };
         const W = innerWidth, H = innerHeight; let hits = 0, n = 0;
         for (let y = 4; y < H; y += 8) for (let x = 4; x < W; x += 8) { n++; const el = document.elementFromPoint(x, y); if (el && el.closest('#hud') && getComputedStyle(el).pointerEvents !== 'none') hits++; }
-        return { boss: all('#boss-bar')[0] ?? null, target: all('#target-frame')[0] ?? null, panels, tappable: hits / n, W, H };
+        return { boss: all('#boss-bar')[0] ?? null, target: all('#target-frame')[0] ?? null, panels, tappable: hits / n, W, H, air: document.body.classList.contains('air-combat') };
       });
       assert.equal(r.panels.pad.length, 0, 'the old directional buttons are replaced by the optional joystick');
       assert.equal(r.panels.joystick.length,view.hasTouch?1:0,'joystick starts enabled on touch-first devices only');
@@ -63,13 +63,28 @@ for (const [name, view] of Object.entries(VIEWS)) {
         assert.ok(home && home.t < r.H / 3, 'Home is in the upper HUD, away from the combat thumb');
         assert.ok(home.r - home.l >= 44 && home.b - home.t >= 44, 'Home has a full touch target');
         assert.equal(skills.length, 4);
-        // Stage 2: the paw. The attack pad is the heel near the bottom edge; the four skills arc over it in key order.
+        // Stage 2: the paw. The big pad is the heel near the bottom edge; the four skills arc over it in key order.
+        // With jumping and air combat on (the default) the big pad is Jump and the basic attack is the toe on the inner side.
         const pad = r.panels.heel[0], mid = b => [(b.l + b.r) / 2, (b.t + b.b) / 2];
-        assert.ok(pad && pad.b >= r.H - 30, `the attack pad sits near the bottom edge: ${JSON.stringify(pad)} of ${r.H}`);
-        assert.ok(pad.r - pad.l >= 52 && pad.b - pad.t >= 52, 'the attack pad is a large target');
+        assert.equal(r.panels.heel.length, 1); assert.equal(r.panels.toe.length, r.air ? 1 : 0);
+        assert.ok(pad && pad.b >= r.H - 30, `the big pad sits near the bottom edge: ${JSON.stringify(pad)} of ${r.H}`);
+        assert.ok(pad.r - pad.l >= 52 && pad.b - pad.t >= 52, 'the big pad is a large target');
+        const paw = [...skills.map(mid), mid(pad)];
+        for (const toe of r.panels.toe) {
+          assert.ok(toe.r - toe.l >= 44 && toe.b - toe.t >= 44, 'the attack toe is a full touch target');
+          assert.ok(Math.hypot(mid(toe)[0] - mid(pad)[0], mid(toe)[1] - mid(pad)[1]) >= (toe.r - toe.l + pad.r - pad.l) / 2, 'the attack toe does not touch the Jump pad');
+          for (const s of skills) assert.ok(Math.hypot(mid(toe)[0] - mid(s)[0], mid(toe)[1] - mid(s)[1]) >= Math.max(44, (toe.r - toe.l + s.r - s.l) / 2), 'the attack toe is a toe width clear of every skill');
+          assert.ok(paw.every(p => mid(toe)[0] < p[0]), 'the attack toe is on the inner (left) side of the paw');
+          assert.ok(toe.b >= r.H - 30 && Math.abs(mid(toe)[1] - mid(pad)[1]) < (pad.b - pad.t) / 2, 'the attack toe is level with the pad');
+          // The toe and the stick are discs: at least 8 px of grass between them (their boxes meet at the stick's empty corner on a 320 px phone).
+          for (const j of r.panels.joystick) assert.ok(Math.hypot(mid(toe)[0] - mid(j)[0], mid(toe)[1] - mid(j)[1]) - (toe.r - toe.l + j.r - j.l) / 2 >= 8, 'the attack toe stays clear of movement');
+          assert.ok(Math.abs(mid(pad)[0] - (Math.min(toe.l, ...skills.map(b => b.l)) + Math.max(...skills.map(b => b.r))) / 2) < 1.5, 'the Jump pad is the centre of the paw');
+        }
         for (const [i, b] of skills.entries()) {
           assert.ok(b.r - b.l >= 44 && b.b - b.t >= 44, 'every skill is a full touch target');
-          assert.ok(mid(b)[1] < mid(pad)[1], 'every skill sits above the middle of the pad');
+          // The old paw: four toes over the pad. With jumping on the arc is five toes wide (186 to -6 degrees), so its last toe is level with the pad on the outer side, as the attack toe is on the inner side.
+          if (!r.air || i < 3) assert.ok(mid(b)[1] < mid(pad)[1], 'every skill of the arc sits above the middle of the pad');
+          else assert.ok(Math.abs(mid(b)[1] - mid(pad)[1]) < (pad.b - pad.t) / 2 && b.l > mid(pad)[0], 'the last skill is the outer toe, level with the pad');
           assert.ok(Math.hypot(mid(b)[0] - mid(pad)[0], mid(b)[1] - mid(pad)[1]) >= (b.r - b.l + pad.r - pad.l) / 2, 'no skill touches the pad');
           if (i) assert.ok(mid(b)[0] > mid(skills[i - 1])[0], 'skills run left to right in key order');
           for (const o of skills.slice(0, i)) assert.ok(Math.hypot(mid(b)[0] - mid(o)[0], mid(b)[1] - mid(o)[1]) >= 44, 'skill centres are at least 44 px apart');
@@ -82,8 +97,19 @@ for (const [name, view] of Object.entries(VIEWS)) {
         // The alternate handedness remains usable after moving Home out of the thumb cluster.
         const swapped = await page.evaluate(() => {
           document.querySelector('#hud').classList.add('joystick-right');
-          return { skills:[...document.querySelectorAll('.skill')].map(el=>{const b=el.getBoundingClientRect();return {l:b.left,r:b.right};}), home:document.querySelector('.home-button').getBoundingClientRect().top };
+          const box=el=>{const b=el.getBoundingClientRect();return {l:b.left,r:b.right,t:b.top,b:b.bottom};},air=document.body.classList.contains('air-combat');
+          return { skills:[...document.querySelectorAll('.skill')].map(box), home:document.querySelector('.home-button').getBoundingClientRect().top, toe:air?box(document.querySelector('#hud .attack-pad')):null, pad:air?box(document.querySelector('#hud .jump-pad')):null, stick:box(document.querySelector('#movement-joystick')) };
         });
+        if (swapped.toe) {
+          const { toe, pad: jump } = swapped;
+          assert.ok(toe.r - toe.l >= 44 && toe.b - toe.t >= 44 && jump.r - jump.l >= 52, 'left-handed: full targets');
+          assert.ok(swapped.skills.every(s => mid(toe)[0] > mid(s)[0]) && mid(toe)[0] > mid(jump)[0], 'left-handed: the attack toe stays on the inner side, now the right of the paw');
+          assert.ok(Math.hypot(mid(toe)[0] - mid(jump)[0], mid(toe)[1] - mid(jump)[1]) >= (toe.r - toe.l + jump.r - jump.l) / 2, 'left-handed: the attack toe does not touch the Jump pad');
+          for (const s of swapped.skills) { assert.ok(Math.hypot(mid(toe)[0] - mid(s)[0], mid(toe)[1] - mid(s)[1]) >= Math.max(44, (toe.r - toe.l + s.r - s.l) / 2), 'left-handed: the attack toe is clear of every skill'); assert.ok(Math.hypot(mid(jump)[0] - mid(s)[0], mid(jump)[1] - mid(s)[1]) >= (jump.r - jump.l + s.r - s.l) / 2, 'left-handed: no skill touches the Jump pad'); }
+          assert.ok(Math.abs(mid(jump)[0] - (Math.min(...swapped.skills.map(b => b.l)) + toe.r) / 2) < 1.5, 'left-handed: the Jump pad is the centre of the paw');
+          for (const b of [jump, ...swapped.skills]) assert.ok(!overlap(b, swapped.stick), 'left-handed: the paw stays clear of the stick');
+          assert.ok(Math.hypot(mid(toe)[0] - mid(swapped.stick)[0], mid(toe)[1] - mid(swapped.stick)[1]) - (toe.r - toe.l + swapped.stick.r - swapped.stick.l) / 2 >= 8, 'left-handed: the attack toe stays clear of movement');
+        }
         assert.ok(Math.min(...swapped.skills.map(b=>b.l)) <= 24, 'swapped-hand fight buttons remain on the left');
         assert.equal(swapped.home, home.t, 'hand swapping does not put Home back beside the fight buttons');
       }
