@@ -2,6 +2,10 @@
  * Looks for the area / self / burst / status skills (lightweight-game-objects: shared geometry, instanced, no lights,
  * nothing allocated per frame). A look is a pure function that "paints" instances of a few shared shapes for one moment
  * of a cast; DisguiseFx (disguise-fx.ts) owns the batches, ageing and pooling. Colours are vivid and warm.
+ *
+ * Size rule (the attack-visual audit of 2026-10-11, held by tests/skill-visuals.test.ts): a look is drawn no bigger than
+ * what its cast really hits (within 15% of the radius it is cast with), an area is marked by thin rings and never by a
+ * filled floor or dome, a flash lasts a quarter second at most, and a cast that hits nothing stays near the explorer.
  */
 export type Shape = 'orb' | 'mist' | 'box' | 'cone' | 'ring' | 'heart' | 'star' | 'petal' | 'rock' | 'gorb' | 'gbox' | 'gring' | 'dome';
 export const SHAPES: readonly Shape[] = ['orb', 'mist', 'box', 'cone', 'ring', 'heart', 'star', 'petal', 'rock', 'gorb', 'gbox', 'gring', 'dome'];
@@ -54,7 +58,7 @@ const heal: Builder = (p, c) => {
 };
 const hearts: Builder = (p, c) => {
   const f = fadeOut(c, 3), cols = ['#ff6eb4', '#ff9ad0', '#ff4f9a'];
-  p.put('gring', '#ff80bd', c.x, c.y, c.z, (.6 + c.t) * c.r * 1.4, 1, (.6 + c.t) * c.r * 1.4);
+  p.put('gring', '#ff80bd', c.x, c.y, c.z, (.5 + .5 * c.t) * c.r * 1.4, 1, (.5 + .5 * c.t) * c.r * 1.4);
   for (let i = 0; i < cnt(c, 9); i++) {
     const k = (c.a * .55 + i / 9) % 1, q = i * 1.9 + S(c.a * 2 + i) * .5, rr = .5 + .35 * S(k * PI * 2 + i), s = (.22 + .22 * hash(i)) * S(Math.min(1, k * 1.5) * PI * .6 + .4) * f;
     p.put('heart', cols[i % 3], c.x + S(q) * rr, c.y + .5 + k * 2.6, c.z + C(q) * rr, s, s, s, 0, 0, S(c.a * 3 + i) * .35);
@@ -88,7 +92,8 @@ const holy: Builder = (p, c) => {
   if (strike) for (let i = 0; i < cnt(c, 8); i++) p.put('star', '#fff6c8', c.x + S(i * .79) * c.r * .7, c.y + .6, c.z + C(i * .79) * c.r * .7, .3, .3, .3, -PI / 2);
 };
 const shield: Builder = (p, c) => {
-  const k = grow(c, 8) * fadeOut(c, 6), r = c.r * k, pulse = 1 + .03 * S(c.a * 6);
+  // The bubble hugs the explorer (0.8 of the cast radius): it shields one hero, not the creatures next to it.
+  const k = grow(c, 8) * fadeOut(c, 6), r = c.r * .8 * k, pulse = 1 + .03 * S(c.a * 6);
   p.put('dome', c.color, c.x, c.y - .1, c.z, r * pulse, r * pulse * 1.05, r * pulse);
   p.put('gring', c.color, c.x, c.y, c.z, r, 1, r);
   for (let i = 0; i < cnt(c, 6); i++) { const q = i * PI / 3 + c.a * 1.6; p.put('gorb', '#ffffff', c.x + S(q) * r, c.y + .3 + (r * .8) * (.5 + .5 * S(c.a * 2 + i)), c.z + C(q) * r, .1); }
@@ -130,15 +135,15 @@ const rainbow: Builder = (p, c) => {
 const moon: Builder = (p, c) => {
   const f = fadeOut(c, 3) * grow(c, 5) * .55, h = 9, pulse = 1 + .04 * S(c.a * 3), ring = fadeOut(c, 3) * grow(c, 5);
   p.put('gring', '#e0305a', c.x, c.y, c.z, c.r * ring, 1, c.r * ring); p.put('gring', '#ff6b8a', c.x, c.y + .01, c.z, c.r * ring * (.6 + .05 * S(c.a * 2)), 1, c.r * ring * (.6 + .05 * S(c.a * 2)));
-  p.put('gorb', '#ff3d6a', c.x, c.y + h, c.z, 2.7 * f); p.put('orb', '#d62a56', c.x, c.y + h, c.z, 1.55 * f * pulse); p.put('orb', '#ff5a82', c.x - .15, c.y + h + .12, c.z + .1, 1.35 * f * pulse);
-  for (let i = 0; i < 5; i++) p.put('orb', '#9c1840', c.x + S(i * 2.1) * .65, c.y + h + C(i * 1.7) * .6, c.z + 1.05, .2 * f, .2 * f, .05);
+  p.put('gorb', '#ff3d6a', c.x, c.y + h, c.z, 1.7 * f); p.put('orb', '#d62a56', c.x, c.y + h, c.z, 1.1 * f * pulse); p.put('orb', '#ff5a82', c.x - .1, c.y + h + .08, c.z + .07, .95 * f * pulse);
+  for (let i = 0; i < 5; i++) p.put('orb', '#9c1840', c.x + S(i * 2.1) * .46, c.y + h + C(i * 1.7) * .42, c.z + .75, .14 * f, .14 * f, .04);
   for (let i = 0; i < cnt(c, 14); i++) { const k = (c.a * .5 + i / 14) % 1, q = i * 2.4 + c.a * .6, rr = c.r * (1 - k) * .9; p.put('gorb', '#ff5f86', c.x + S(q) * rr, c.y + .3 + k * (h - .3), c.z + C(q) * rr, .1 * S(k * PI) + .02); }
 };
 const bats: Builder = (p, c) => {
   const f = fadeOut(c, 5) * grow(c, 8);
   p.put('mist', '#5b3a86', c.x, c.y + 1, c.z, 1.7 * f, 1.2 * f, 1.7 * f);
   for (let i = 0; i < cnt(c, 8); i++) {
-    const q = i * TAU / 8 + c.a * 4 * (i % 2 ? 1 : -1), rr = (1.1 + (i % 3) * .5) * (1.3 - .3 * f), yy = c.y + .8 + (i % 4) * .45 + .15 * S(c.a * 6 + i), bx = c.x + S(q) * rr, bz = c.z + C(q) * rr, flap = S(c.a * 22 + i) * .7;
+    const q = i * TAU / 8 + c.a * 4 * (i % 2 ? 1 : -1), rr = (.95 + (i % 3) * .42) * (1.3 - .3 * f), yy = c.y + .8 + (i % 4) * .45 + .15 * S(c.a * 6 + i), bx = c.x + S(q) * rr, bz = c.z + C(q) * rr, flap = S(c.a * 22 + i) * .7;
     p.put('rock', '#3a2257', bx, yy, bz, .13 * f, .13 * f, .2 * f);
     for (const s of [-1, 1]) p.put('petal', '#6a3d9a', bx + C(q) * s * .17, yy + .03, bz - S(q) * s * .17, .22 * f, .03, .1 * f, 0, q + PI / 2, s * flap);
   }
@@ -146,8 +151,8 @@ const bats: Builder = (p, c) => {
 };
 const icefield: Builder = (p, c) => {
   const open = grow(c, 8), f = fadeOut(c, 6), r = c.r * open;
-  p.put('petal', '#bfeeff', c.x, c.y - .08, c.z, r, .01, r); p.put('petal', '#e8fbff', c.x, c.y - .07, c.z, r * .72, .01, r * .72, 0, c.a * .1);
-  p.put('gring', '#66d9ff', c.x, c.y, c.z, r, 1, r);
+  // No filled floor: the rink is its rim, two skating circles and the frost streaks, so the ground and its warnings show through.
+  p.put('gring', '#66d9ff', c.x, c.y, c.z, r, 1, r); p.put('gring', '#bfeeff', c.x, c.y + .01, c.z, r * .66, 1, r * .66); p.put('gring', '#e8fbff', c.x, c.y + .01, c.z, r * .33, 1, r * .33);
   for (let i = 0; i < cnt(c, 14); i++) { const q = i * TAU / 14, h = (.5 + hash(i) * .7) * open * f, rr = r * (.96 - (i % 2) * .08); p.put('cone', i % 2 ? '#dff9ff' : '#9fe6ff', c.x + S(q) * rr, c.y + h / 2, c.z + C(q) * rr, .16, h, .16, S(q) * .15, 0, C(q) * .15); }
   for (let i = 0; i < 6; i++) { const q = i * PI / 3 + c.a * .1; p.put('gbox', '#f4feff', c.x + S(q) * r * .4, c.y + .02, c.z + C(q) * r * .4, .05, .02, r * .8, 0, q); }
   for (let i = 0; i < cnt(c, 16); i++) { const k = (c.a * .4 + hash(i)) % 1, q = i * 2.4, rr = r * Math.sqrt(hash(i + 3)); p.put('gorb', '#ffffff', c.x + S(q) * rr + S(c.a + i) * .2, c.y + 2.6 - k * 2.5, c.z + C(q) * rr, .07 + .04 * hash(i)); }
@@ -155,7 +160,9 @@ const icefield: Builder = (p, c) => {
 };
 const iceage: Builder = (p, c) => {
   const w = Math.min(1, c.t * 3), f = fadeOut(c, 3), r = c.r * w;
-  p.put('gring', '#d0f7ff', c.x, c.y, c.z, r, 1, r); p.put('gring', '#7fdcff', c.x, c.y + .02, c.z, r * .9, 1, r * .9); p.put('petal', '#cfeeff', c.x, c.y - .08, c.z, r * .96, .01, r * .96);
+  // A frost wave of thin rings racing out to the hit radius with frost cracks behind it: no filled floor over the fight.
+  p.put('gring', '#d0f7ff', c.x, c.y, c.z, r, 1, r); p.put('gring', '#7fdcff', c.x, c.y + .02, c.z, r * .9, 1, r * .9); p.put('gring', '#e8fbff', c.x, c.y + .02, c.z, r * .55, 1, r * .55);
+  for (let i = 0; i < 8; i++) { const q = i * PI / 4 + .2; p.put('gbox', '#f4feff', c.x + S(q) * r * .5, c.y + .02, c.z + C(q) * r * .5, .06, .02, r * .7 * f, 0, q); }
   for (let i = 0; i < cnt(c, 16); i++) { const q = i * TAU / 16 + .1, h = (1 + hash(i) * 1.2) * w * f; p.put('cone', i % 2 ? '#ffffff' : '#9fe6ff', c.x + S(q) * r * .94, c.y + h / 2, c.z + C(q) * r * .94, .24, h, .24, S(q) * .2, 0, C(q) * .2); }
   for (let i = 0; i < cnt(c, 24); i++) { const k = (c.a * .5 + hash(i)) % 1, q = i * 2.4, rr = r * Math.sqrt(hash(i + 3)); p.put('gorb', '#ffffff', c.x + S(q) * rr + S(c.a * 1.5 + i) * .3, c.y + 5 - k * 4.9, c.z + C(q) * rr, .08 + .05 * hash(i + 6)); }
 };
@@ -177,20 +184,25 @@ const crater: Builder = (p, c) => {
 };
 const lift: Builder = (p, c) => {
   const f = fadeOut(c, 3), w = Math.min(1, c.t * 3);
-  p.put('gring', '#ffffff', c.x, c.y, c.z, c.r * (.4 + w * 1.1), 1, c.r * (.4 + w * 1.1));
-  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8, d = c.r * (.3 + w * .8), s = (.5 + hash(i) * .3) * f; p.put('mist', '#ffffff', c.x + S(q) * d, c.y + .3 + c.t, c.z + C(q) * d, s, s * .7, s); }
+  // A take-off hits nothing: the ring stops at the cast radius and the puffs stay small.
+  p.put('gring', '#ffffff', c.x, c.y, c.z, c.r * (.35 + w * .65), 1, c.r * (.35 + w * .65));
+  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8, d = c.r * (.25 + w * .6), s = (.3 + hash(i) * .16) * f; p.put('mist', '#ffffff', c.x + S(q) * d, c.y + .3 + c.t, c.z + C(q) * d, s, s * .7, s); }
   for (let i = 0; i < cnt(c, 8); i++) { const k = (c.a * 1.2 + i / 8) % 1, q = i * 2.4 + k * 3; p.put('petal', i % 2 ? '#ffffff' : '#bfe6ff', c.x + S(q) * (.4 + k * .8), c.y + .2 + k * 3, c.z + C(q) * (.4 + k * .8), .16, .02, .06, k * 3, q, 0); }
 };
+/** The fire pop of a blast: its core is this share of the hit radius (1.3 m at most) and lasts this long (s). */
+export const BLAST_CORE = .32, BLAST_POP = .25;
 const blast: Builder = (p, c) => {
-  const e = Math.min(1, c.t * 4), f = fadeOut(c, 2.5), r = Math.max(.5, c.r);
-  p.put('gorb', '#ff8a2a', c.x, c.y + .5 * r * .3, c.z, r * .8 * e * f + .05); p.put('gorb', '#ffe27a', c.x, c.y + .4, c.z, r * .45 * (1 - c.t) + .02);
-  p.put('gring', c.color, c.x, c.y, c.z, r * (.4 + e * .7), 1, r * (.4 + e * .7)); p.put('ring', '#6b6470', c.x, c.y + .05, c.z, r * (.5 + c.t * .8), 1, r * (.5 + c.t * .8));
-  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + hash(i), d = r * (.3 + c.t * .5), s = (.35 + hash(i + 2) * .3) * r * .35 * f; p.put('mist', i % 2 ? '#4d4a55' : '#7c7886', c.x + S(q) * d, c.y + .3 + c.t * r * .6 * (.6 + hash(i)), c.z + C(q) * d, s, s, s); }
-  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + .4, u = c.t * 2, d = r * .3 + u * r * .6, hy = Math.max(0, 2 * u * (1 - u / 2) * r * .5); p.put('gorb', i % 2 ? '#ffb040' : '#ff6a30', c.x + S(q) * d, c.y + hy + .2, c.z + C(q) * d, .1 * f + .01); }
+  // A quick fire pop (a third of the hit radius at most, gone in a quarter second), a thin shockwave racing out to the
+  // exact hit radius, low smoke and embers inside it: never a filled dome over the fight.
+  const e = Math.min(1, c.t * 4), f = fadeOut(c, 2.5), r = Math.max(.5, c.r), pop = Math.max(0, 1 - c.a / BLAST_POP), core = Math.min(1.3, r * BLAST_CORE), rise = Math.min(r, 2.5);
+  if (pop > 0) { p.put('gorb', '#ff8a2a', c.x, c.y + .3 + core * .5, c.z, core * (.85 + .15 * e) * pop + .03); p.put('gorb', '#ffe27a', c.x, c.y + .3 + core * .5, c.z, core * .55 * pop + .02); }
+  p.put('gring', c.color, c.x, c.y, c.z, r * (.35 + e * .65), 1, r * (.35 + e * .65)); p.put('ring', '#ff7a2a', c.x, c.y + .05, c.z, r * (.3 + e * .62), 1, r * (.3 + e * .62));
+  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + hash(i), d = r * (.3 + c.t * .45), s = (.35 + hash(i + 2) * .3) * Math.min(r * .35, .8) * f; p.put('mist', i % 2 ? '#4d4a55' : '#7c7886', c.x + S(q) * d, c.y + .3 + c.t * rise * .6 * (.6 + hash(i)), c.z + C(q) * d, s, s, s); }
+  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + .4, u = c.t * 2, d = r * (.25 + .7 * c.t), hy = Math.max(0, 2 * u * (1 - u / 2) * rise * .5); p.put('gorb', i % 2 ? '#ffb040' : '#ff6a30', c.x + S(q) * d, c.y + hy + .2, c.z + C(q) * d, .14 * f + .01); }
 };
 const cannonfall: Builder = (p, c) => {
   const h = (1 - c.t) ** 1.6 * 9, tgt = c.r * (1 - c.t * .6);
-  p.put('gring', c.color, c.x, c.y, c.z, tgt, 1, tgt); p.put('petal', '#3a2a22', c.x, c.y - .08, c.z, tgt * .9, .01, tgt * .9);
+  p.put('gring', c.color, c.x, c.y, c.z, tgt, 1, tgt); p.put('petal', '#3a2a22', c.x, c.y - .08, c.z, .3 + .3 * c.t, .01, .3 + .3 * c.t);
   p.put('rock', '#2f3038', c.x, c.y + h, c.z, .4, .4, .4); p.put('gbox', '#ffb040', c.x, c.y + h + 1, c.z, .22, 2, .22); p.put('gorb', '#ffd070', c.x, c.y + h, c.z, .6);
   p.put('mist', '#7c7886', c.x, c.y + h + 1.7, c.z, .35, .6, .35);
 };
@@ -233,16 +245,17 @@ const lotus: Builder = (p, c) => {
   }
   for (let i = 0; i < cnt(c, 12); i++) { const k = (c.a * .8 + i / 12) % 1, q = i * 2.4 + k * 4, rr = .5 + k * c.r * .8; p.put('petal', i % 2 ? '#ffd0e4' : '#ff9fc8', c.x + S(q) * rr, c.y + .3 + (1 - k) * 2.2, c.z + C(q) * rr, .14, .02, .07, k * 5, q, k * 3); }
 };
+/** Eagle strike: the wings spread to the hit radius, not past it. */
 const eagle: Builder = (p, c) => {
   const w = Math.min(1, c.t * 4), f = fadeOut(c, 2.5), r = c.r * w;
   p.put('gring', '#ffffff', c.x, c.y, c.z, r, 1, r); p.put('gring', '#ffd35e', c.x, c.y + .02, c.z, r * .7, 1, r * .7);
-  for (const s of [-1, 1]) for (let i = 0; i < 6; i++) { const a = c.f + PI / 2 * s, sp = (i + 1) * .5 * w * 1.3, lift = .6 + (6 - i) * .12 * (1 - c.t); p.put('petal', i % 2 ? '#ffffff' : '#ffe9a8', c.x + S(a) * sp * 1.6 + S(c.f) * (-.3 * i), c.y + lift, c.z + C(a) * sp * 1.6 + C(c.f) * (-.3 * i), .55 * f, .03, .13, 0, c.f, s * .35 * (1 - c.t)); }
+  for (const s of [-1, 1]) for (let i = 0; i < 6; i++) { const a = c.f + PI / 2 * s, sp = (i + 1) / 6 * c.r * .86 * w, lift = .6 + (6 - i) * .12 * (1 - c.t); p.put('petal', i % 2 ? '#ffffff' : '#ffe9a8', c.x + S(a) * sp + S(c.f) * (-.2 * i), c.y + lift, c.z + C(a) * sp + C(c.f) * (-.2 * i), .42 * f, .03, .12, 0, c.f, s * .35 * (1 - c.t)); }
   for (let i = 0; i < cnt(c, 10); i++) { const k = (c.t + i / 10) % 1, q = i * 2.4; p.put('petal', '#ffffff', c.x + S(q) * r * k, c.y + .4 + k * 1.2 * (1 - k) * 3, c.z + C(q) * r * k, .12, .02, .05, k * 6, q); }
 };
 const goldstar: Builder = (p, c) => {
   const w = Math.min(1, c.t * 3), f = fadeOut(c, 3);
-  p.put('gring', '#ffe34d', c.x, c.y, c.z, c.r * w, 1, c.r * w); p.put('gorb', '#fff0a0', c.x, c.y + .7, c.z, 1.1 * (1 - c.t));
-  for (let i = 0; i < cnt(c, 10); i++) { const q = i * TAU / 10, d = c.r * w * (.4 + .6 * (i % 2)), s = (.3 + .15 * (i % 2)) * f; p.put('star', i % 2 ? '#ffe34d' : '#fff6b0', c.x + S(q) * d, c.y + .7 + .3 * S(c.a * 5 + i), c.z + C(q) * d, s, s, s, 0, c.a * 4 + i); }
+  p.put('gring', '#ffe34d', c.x, c.y, c.z, c.r * w, 1, c.r * w); p.put('gorb', '#fff0a0', c.x, c.y + .7, c.z, .65 * (1 - c.t));
+  for (let i = 0; i < cnt(c, 10); i++) { const q = i * TAU / 10, d = c.r * w * (.36 + .54 * (i % 2)), s = (.3 + .15 * (i % 2)) * f; p.put('star', i % 2 ? '#ffe34d' : '#fff6b0', c.x + S(q) * d, c.y + .7 + .3 * S(c.a * 5 + i), c.z + C(q) * d, s, s, s, 0, c.a * 4 + i); }
   for (let i = 0; i < cnt(c, 12); i++) { const q = i * 2.4, k = (c.t * 1.5 + i / 12) % 1; p.put('gorb', '#ffd23a', c.x + S(q) * c.r * k, c.y + .5 + k * .8, c.z + C(q) * c.r * k, .08 * (1 - k) + .02); }
 };
 const bonk: Builder = (p, c) => {
@@ -264,9 +277,11 @@ const whirl: Builder = (p, c) => {
   for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 4 + c.a * 11 + (i > 3 ? .6 : 0), rr = (.55 + (i % 2) * .3) * g, yy = .35 + (i % 4) * .28; p.put('gbox', '#ffffff', c.x + S(q) * rr, c.y + yy, c.z + C(q) * rr, .04, .03, .42 * f, 0, q + PI / 2); }
 };
 const surf: Builder = (p, c) => {
-  const run = Math.min(1, c.t * 1.25), f = fadeOut(c, 4), n = cnt(c, 13), reach = c.r;
+  // Three widths by cast length: the wave ride (a 9 m dash) is one narrow crest over the corridor it hits; the weapon
+  // waves fan out with their three or five shots.
+  const ride = c.r < 9.5, run = Math.min(1, c.t * 1.25), f = fadeOut(c, 4), n = Math.max(2, cnt(c, ride ? 7 : 13)), reach = c.r;
   for (let i = 0; i < n; i++) {
-    const u = (i / (n - 1) - .5) * 1.7, a = c.f + u * (c.r > 11 ? .85 : .5), d = reach * run * (1 - Math.abs(u) * .12), cx = c.x + S(a) * d, cz = c.z + C(a) * d, h = (1.5 + .5 * S(i * 1.7 + c.a * 8)) * (1 - Math.abs(u) * .4) * f * Math.min(1, c.t * 5);
+    const u = (i / (n - 1) - .5) * 1.7, a = c.f + u * (ride ? .2 : c.r > 11 ? .85 : .5), d = reach * run * (1 - Math.abs(u) * .12), cx = c.x + S(a) * d, cz = c.z + C(a) * d, h = (1.5 + .5 * S(i * 1.7 + c.a * 8)) * (1 - Math.abs(u) * .4) * f * Math.min(1, c.t * 5);
     p.put('box', '#2f8fe8', cx, c.y + h / 2, cz, 1.3, h, .6, -.25, a); p.put('box', '#5cc4ff', cx - S(a) * .1, c.y + h * .65, cz - C(a) * .1, 1.3, h * .55, .5, -.45, a);
     p.put('mist', '#ffffff', cx + S(a) * .25, c.y + h + .05, cz + C(a) * .25, .65 * f, .38 * f, .65 * f);
     for (let k = 0; k < 2; k++) p.put('gorb', '#ffffff', cx + S(a) * (.5 + k * .3), c.y + h + .3 + k * .25 + .1 * S(c.a * 12 + i), cz + C(a) * (.5 + k * .3), .08);
@@ -287,14 +302,16 @@ const sheep: Builder = (p, c) => {
 };
 const taunt: Builder = (p, c) => {
   const f = fadeOut(c, 3);
-  for (let i = 0; i < 3; i++) { const k = Math.max(0, c.t * 1.8 - i * .2); if (k <= 0) continue; const s = Math.min(1, k) * c.r; p.put('gring', i % 2 ? '#ffb03a' : '#ff5a4a', c.x, c.y + .1, c.z, s, 1, s); }
+  // Three rings run out one after another; each is gone a moment after it reaches the edge, so only the last one marks the radius.
+  for (let i = 0; i < 3; i++) { const k = Math.max(0, c.t * 1.8 - i * .2); if (k <= 0 || (i < 2 && k > 1.1)) continue; const s = Math.min(1, k) * c.r; p.put('gring', i % 2 ? '#fff1b8' : c.color, c.x, c.y + .1, c.z, s, 1, s); }
   const h = c.y + 2.6 + c.t * .8; p.put('box', '#ff4a3a', c.x, h, c.z, .22 * f, .8 * f, .22 * f); p.put('orb', '#ff4a3a', c.x, h - .7 * f, c.z, .15 * f);
 };
 const portal: Builder = (p, c) => {
-  const s = .3 + S(c.t * PI) * Math.max(1, c.r), f = fadeOut(c, 3);
+  // A ring to step through with a small glowing heart: the explorer shows through it.
+  const s = .25 + S(c.t * PI) * .8 * Math.max(1, c.r), f = fadeOut(c, 3);
   p.put('gring', '#b88cff', c.x, c.y + 1, c.z, s, 1, s, PI / 2); p.put('gring', '#ffffff', c.x, c.y + 1, c.z, s * .7, 1, s * .7, PI / 2, c.a * 8);
   for (let i = 0; i < cnt(c, 10); i++) { const q = i * TAU / 10 + c.a * 6; p.put('gorb', '#eee0ff', c.x + C(q) * s, c.y + 1 + S(q) * s, c.z, .11 * f + .02); }
-  p.put('gorb', '#7a4fd0', c.x, c.y + 1, c.z, s * .8);
+  p.put('gorb', '#7a4fd0', c.x, c.y + 1, c.z, s * .45);
 };
 const hook: Builder = (p, c) => {
   const out = Math.min(1, c.t * 2.2), back = Math.max(0, c.t * 2 - 1), reach = c.r * out * (1 - back * .1), dx = S(c.f), dz = C(c.f), links = Math.max(2, Math.min(26, Math.ceil(reach / .45)));
@@ -309,13 +326,14 @@ const drain: Builder = (p, c) => {
   p.put('gring', '#ea7a9c', c.x + dx * r, c.y, c.z + dz * r, .5 + .5 * c.t, 1, .5 + .5 * c.t);
 };
 const charge: Builder = (p, c) => {
-  const s = .15 + c.t, dx = S(c.f), dz = C(c.f);
-  p.put('gorb', '#ff6a24', c.x + dx, c.y + 1.9, c.z + dz, s); p.put('gorb', '#ffcd55', c.x + dx, c.y + 1.9, c.z + dz, s * 1.7);
-  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + c.a * 7, rr = (1 - c.t) * 1 + .3; p.put('gorb', '#ffb45a', c.x + dx + S(q) * rr, c.y + 1.9 + C(q) * rr, c.z + dz, .07); }
+  // The gathering fire grows to the size of the fireball it becomes (radius 0.6), not past the mage.
+  const s = .12 + .38 * c.t, dx = S(c.f), dz = C(c.f);
+  p.put('gorb', '#ff6a24', c.x + dx, c.y + 1.9, c.z + dz, s); p.put('gorb', '#ffcd55', c.x + dx, c.y + 1.9, c.z + dz, s * 1.5);
+  for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + c.a * 7, rr = (1 - c.t) * .8 + .25; p.put('gorb', '#ffb45a', c.x + dx + S(q) * rr, c.y + 1.9 + C(q) * rr, c.z + dz, .07); }
 };
 const bite: Builder = (p, c) => {
   for (const side of [-1, 1]) for (let i = 0; i < 5; i++) { const q = c.f + (i - 2) * .3, rr = c.r * .65; p.put('cone', '#fff5ce', c.x + S(q) * rr, c.y + .8 + side * (.12 + .45 * (1 - c.t)), c.z + C(q) * rr, .13, .45, .13, side < 0 ? 0 : PI); }
-  p.put('gring', '#d4e79a', c.x + S(c.f) * c.r * .65, c.y, c.z + C(c.f) * c.r * .65, .5 + c.t, 1, .5 + c.t);
+  p.put('gring', '#d4e79a', c.x + S(c.f) * c.r * .65, c.y, c.z + C(c.f) * c.r * .65, .4 + .6 * c.t, 1, .4 + .6 * c.t);
 };
 const tail: Builder = (p, c) => {
   for (let i = 0; i < cnt(c, 12); i++) { const q = c.f + c.t * TAU - i * .14; p.put('gorb', '#8fe08a', c.x + S(q) * c.r * .8, c.y + .5, c.z + C(q) * c.r * .8, .34 * (1 - i / 14)); }
@@ -392,7 +410,7 @@ const parachute: Builder = (p, c) => {
 };
 /** Navy: the bosun's whistle: sharp rings ripple out and little music notes jump off. */
 const whistle: Builder = (p, c) => {
-  for (let i = 0; i < 3; i++) { const k = c.t * 1.4 - i * .18; if (k <= 0 || k > 1) continue; const s = k * c.r; p.put('gring', i % 2 ? '#9fd6ff' : '#ffffff', c.x, c.y + .8, c.z, s, 1, s); p.put('gring', '#bfe6ff', c.x, c.y + .04, c.z, s, 1, s); }
+  for (let i = 0; i < 3; i++) { const k = c.t * 1.4 - i * .18; if (k <= 0 || k > 1) continue; const s = k * c.r; if (!i) p.put('gring', '#ffffff', c.x, c.y + .8, c.z, s, 1, s); p.put('gring', i % 2 ? '#9fd6ff' : '#bfe6ff', c.x, c.y + .04, c.z, s, 1, s); }
   const f = fadeOut(c, 3);
   for (let i = 0; i < cnt(c, 8); i++) { const q = i * TAU / 8 + .4, k = Math.min(1, c.t * 1.6), d = 1 + k * c.r * .6, y = c.y + 1.3 + S(k * PI) * 1.4 + (i % 2) * .4, col = i % 2 ? '#ffffff' : '#7fc8ff';
     p.put('orb', col, c.x + S(q) * d, y, c.z + C(q) * d, .16 * f, .12 * f, .16 * f); p.put('box', col, c.x + S(q) * d + .13, y + .3, c.z + C(q) * d, .04, .55 * f, .04); p.put('box', col, c.x + S(q) * d + .22, y + .55, c.z + C(q) * d, .2 * f, .06, .04, 0, 0, -.4); }
@@ -428,7 +446,7 @@ const lantern: Builder = (p, c) => {
     p.put('gring', '#ffc35a', c.x, c.y, c.z, c.r * k * .6, 1, c.r * k * .6);
     return;
   }
-  p.put('gorb', '#ffe27a', sx, y, sz, 1.2 * (1 - pop) + .2); p.put('gring', '#ffc35a', c.x, c.y, c.z, c.r, 1, c.r);
+  p.put('gorb', '#ffe27a', sx, y, sz, .75 * (1 - pop) + .15); p.put('gring', '#ffc35a', c.x, c.y, c.z, c.r, 1, c.r);
   for (let i = 0; i < cnt(c, 10); i++) { const q = i * TAU / 10, d = pop * c.r * .8; p.put('star', i % 2 ? '#ffd84a' : '#ff8a5a', sx + S(q) * d, y - pop * 1.2 + (i % 3) * .2, sz + C(q) * d, .22, .22, .22, 0, q + c.a * 5); }
 };
 /** Ao dai gentleman: a red-and-gold kite flies over you on its string while you glide. */
@@ -443,9 +461,9 @@ const kite: Builder = (p, c) => {
 };
 /** Ao dai gentleman: a calligraphy brush paints a black ink circle around you, finished with a red seal. */
 const ink: Builder = (p, c) => {
-  const draw = Math.min(1, c.a / .35), f = fadeOut(c, 5), n = cnt(c, 40), r = c.r * .95;
+  const draw = Math.min(1, c.a / .35), f = fadeOut(c, 5), n = cnt(c, 40), r = c.r * .9;
   for (let i = 0; i < n; i++) { const u = i / n; if (u > draw) break; const q = c.f + u * TAU, w = (.28 + .22 * S(u * PI * 3) + .12 * hash(i)) * f; p.put('petal', i % 7 ? '#1d2028' : '#3a3f4a', c.x + S(q) * r, c.y - .04 + (i % 2) * .005, c.z + C(q) * r, w, .01, w * 1.4, 0, q + PI / 2); }
-  for (let i = 0; i < cnt(c, 10); i++) { const q = hash(i) * TAU, d = r * (.75 + hash(i + 4) * .45), s = (.06 + hash(i + 9) * .14) * f; if (hash(i + 2) > draw) continue; p.put('petal', '#1d2028', c.x + S(q) * d, c.y - .03, c.z + C(q) * d, s, .01, s); }
+  for (let i = 0; i < cnt(c, 10); i++) { const q = hash(i) * TAU, d = r * (.75 + hash(i + 4) * .4), s = (.06 + hash(i + 9) * .14) * f; if (hash(i + 2) > draw) continue; p.put('petal', '#1d2028', c.x + S(q) * d, c.y - .03, c.z + C(q) * d, s, .01, s); }
   if (draw >= 1) { const sx = c.x + S(c.f) * r, sz = c.z + C(c.f) * r; p.put('box', '#d23a2a', sx, c.y + .02, sz, .55 * f, .03, .55 * f, 0, c.f); p.put('box', '#ffe9d0', sx, c.y + .04, sz, .3 * f, .03, .06, 0, c.f); p.put('box', '#ffe9d0', sx, c.y + .04, sz, .06, .03, .3 * f, 0, c.f); }
   for (let i = 0; i < cnt(c, 8); i++) { const k = (c.a * .6 + i / 8) % 1, q = i * TAU / 8 + c.a * .3; p.put('mist', '#4a4f5c', c.x + S(q) * r, c.y + .2 + k * 1.4, c.z + C(q) * r, .3 * (1 - k) * f); }
 };
@@ -503,7 +521,7 @@ const firework: Builder = (p, c) => {
   const rise = .6, top = c.y + 4.5;
   if (c.a < rise) { const k = c.a / rise, y = c.y + .3 + k * 4.2; p.put('box', c.color, c.x, y, c.z, .12, .45, .12); p.put('cone', '#ffffff', c.x, y + .32, c.z, .1, .2, .1); for (let i = 1; i < 5; i++) p.put('gorb', i % 2 ? '#ffd070' : '#ff8a3c', c.x + S(i * 3) * .05, y - .2 - i * .3, c.z, .16 - i * .025); p.put('gring', c.color, c.x, c.y, c.z, c.r * .4, 1, c.r * .4); return; }
   const k = Math.min(1, (c.a - rise) / .5), f = 1 - k, n = cnt(c, 18);
-  p.put('gorb', '#ffffff', c.x, top, c.z, 1.1 * f + .1); p.put('gring', c.color, c.x, c.y, c.z, c.r * (.5 + k * .5), 1, c.r * (.5 + k * .5));
+  p.put('gorb', '#ffffff', c.x, top, c.z, .6 * f + .08); p.put('gring', c.color, c.x, c.y, c.z, c.r * (.5 + k * .5), 1, c.r * (.5 + k * .5));
   for (let i = 0; i < n; i++) { const q = i * 2.4, el = (hash(i) - .3) * 1.6, d = 2.4 * Math.sqrt(k); p.put(i % 3 ? 'gorb' : 'star', i % 2 ? c.color : '#ffffff', c.x + S(q) * C(el) * d, top + S(el) * d - k * k * 1.8, c.z + C(q) * C(el) * d, (i % 3 ? .13 : .22) * f + .02, (i % 3 ? .13 : .22) * f + .02, (i % 3 ? .13 : .22) * f + .02, 0, q); }
 };
 /** Vietnam: a bamboo pole vault, the pole swinging you over, leaves flying, and a landing ring where you come down. */
@@ -530,9 +548,9 @@ const drum: Builder = (p, c) => {
 /** Vietnam: a giant golden star falls from the sky onto the spot and glows there. */
 const bigstar: Builder = (p, c) => {
   // The five-pointed star faces the camera (tilted back like a billboard) and turns in its own plane as it falls.
-  const fall = .7, k = Math.min(1, c.a / fall), h = (1 - k) * (1 - k) * 14, s = 2.3, y = c.y + 1.6 + h;
+  const fall = .7, k = Math.min(1, c.a / fall), h = (1 - k) * (1 - k) * 14, s = 1.9, y = c.y + 1.6 + h;
   p.put('gring', '#ffe34d', c.x, c.y, c.z, c.r * (1.1 - k * .1), 1, c.r * (1.1 - k * .1)); p.put('gring', '#da251d', c.x, c.y + .01, c.z, c.r * .8 * k, 1, c.r * .8 * k);
-  p.put('gorb', '#ffd23a', c.x, y, c.z - .3, 1.1); p.put('star', '#ffd21e', c.x, y, c.z, s, s, s, -.9, 0, c.a * 2); p.put('star', '#fff6b0', c.x, y + .05, c.z + .05, s * .45, s * .45, s * .45, -.9, 0, c.a * 2);
+  p.put('gorb', '#ffd23a', c.x, y, c.z - .3, .9); p.put('star', '#ffd21e', c.x, y, c.z, s, s, s, -.9, 0, c.a * 2); p.put('star', '#fff6b0', c.x, y + .05, c.z + .05, s * .45, s * .45, s * .45, -.9, 0, c.a * 2);
   if (k < 1) for (let i = 1; i < 7; i++) p.put('gorb', i % 2 ? '#ffd23a' : '#ffe9a0', c.x, y + i * 1.1, c.z - i * .3, .55 - i * .06);
   else { const g = Math.min(1, (c.a - fall) / .5); for (let i = 0; i < cnt(c, 10); i++) { const q = i * TAU / 10; p.put('star', i % 2 ? '#ffe34d' : '#ffffff', c.x + S(q) * c.r * g, c.y + .5 + S(g * PI) * 1.2, c.z + C(q) * c.r * g, .3 * (1 - g) + .05, .3 * (1 - g) + .05, .3 * (1 - g) + .05, 0, q); } }
 };

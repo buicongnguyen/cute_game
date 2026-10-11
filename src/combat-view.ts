@@ -3,6 +3,8 @@ import {ELECTRIC_SHOTS,type CombatAlly,type CombatEffect,type Projectile} from '
 import {makeSummon,animateSummon,summonHealth} from './summon-art.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 import {makeShot,poseShot,lookOf} from './shot-art.ts';
+/** A dash leaves a ring every step: they barely swell (0.7 m to 0.84 m), so the trail is a streak the width of the explorer and not a 2.3 m tube. */
+export const TRAIL_GROW=.2;
 export class CombatView {
   private scene:T.Scene;private shots=new Map<number,T.Object3D>();private spareShots=new Map<string,T.Group[]>();private clock=0;private effects:Array<{mesh:T.Mesh;life:number;max:number;kind:string}>=[];
   private allies=new Map<number,T.Group>();private spareAllies=new Map<string,T.Group[]>();
@@ -51,7 +53,7 @@ export class CombatView {
         if(active&&this.trail&&lookOf(p.kind)!=='rock'&&(mesh.userData.trailT-=dt)<=0){mesh.userData.trailT=.07;this.trail(p.x,1.05,p.z,p.color);}}
       else{mesh.position.set(p.x,1.05,p.z);if(p.kind==='harpoon')mesh.rotation.y=Math.atan2(p.direction.x,p.direction.z);if(active&&ELECTRIC_SHOTS.has(p.kind))this.electric?.(p.x,1.05,p.z,p.direction.x,p.direction.z);}}
     if(!active)return;
-    for(let i=this.effects.length-1;i>=0;i--){const e=this.effects[i];e.life-=dt;(e.mesh.material as T.MeshBasicMaterial).opacity=.72*Math.max(0,e.life/e.max);if(e.kind!=='beam'&&e.kind!=='cast'){const scale=1+(1-e.life/e.max)*.65;e.mesh.scale.setScalar(scale);}if(e.life<=0){this.scene.remove(e.mesh);this.spare.push(e.mesh);this.effects.splice(i,1);}}
+    for(let i=this.effects.length-1;i>=0;i--){const e=this.effects[i];e.life-=dt;(e.mesh.material as T.MeshBasicMaterial).opacity=.72*Math.max(0,e.life/e.max);if(e.kind!=='beam'&&e.kind!=='cast'){const scale=1+(1-e.life/e.max)*(e.kind==='trail'?TRAIL_GROW:.65);e.mesh.scale.setScalar(scale);}if(e.life<=0){this.scene.remove(e.mesh);this.spare.push(e.mesh);this.effects.splice(i,1);}}
   }
   clear(){for(const mesh of this.shots.values())this.release(mesh);this.shots.clear();for(const effect of this.effects){this.scene.remove(effect.mesh);this.spare.push(effect.mesh);}this.effects=[];for(const model of this.allies.values())this.disposeAlly(model);this.allies.clear();}
   private disposeAlly(group:T.Group){this.scene.remove(group);const kind=group.userData.allyKind as string,list=this.spareAllies.get(kind)??[];if(list.length<12)list.push(group);this.spareAllies.set(kind,list);}
