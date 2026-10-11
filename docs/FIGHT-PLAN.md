@@ -15,6 +15,12 @@ Every fight is built from four kinds of move, on the ground or in the air, and t
 
 Jump (single, double, triple) is the fifth action. It is not an attack: it changes each of the four.
 
+**Owner's decisions (2026-10-11)**
+
+- The fight moves are designed first; boss styles come after. Each boss will then get a weakness that a certain combination of moves opens.
+- A new player has one jump. The double jump, and later the triple, are unlocked by improving a skill.
+- Bosses block low hits: hits from the ground or from a single jump are reduced (starting value: half damage, one value per boss), hits from double-jump height or higher are not. A single jump is mainly for dodging; the double jump is what opens a boss up. Bosses met before the double jump can be unlocked do not block.
+
 ## 2. Evaluation of the idea
 
 **What is strong**
