@@ -1420,6 +1420,8 @@ function basicAttack(e?:Enemy){
   }
   prepareCombatWeapon();
   if(combat.basic(e)){const stats=M.activeStats(state),weapon=M.weaponStats(state);combatTimers.attackCooldown=(weapon.cd??.4)/Math.max(.2,1+stats.haste);const volt=weapon.shot==='volt';world.playerAttack(weapon.kind,volt?'#bfefff':undefined);tone(volt?'zap':weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
+  // Nothing in reach: the hero still swings (with jumping on), so the button never looks dead.
+  else if(!e&&airOn()){const weapon=M.weaponStats(state);if(weapon.kind!=='rod'){combatTimers.attackCooldown=(weapon.cd??.4)*.6;world.playerAttack(weapon.kind);tone('swing');}}
 }
 world.onAttackEnemy=basicAttack;
 /** The tooltip and long-press tip of skill slot i, with the numbers at the current level (skill-info.ts). */
