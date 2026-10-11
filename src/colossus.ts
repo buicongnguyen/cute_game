@@ -83,7 +83,7 @@ export class ColossusEvent {
   private get attack(): ColossusAttack | null { const list = this.h.online() ? this.serverAttacks : this.attacks; for (let i = list.length - 1; i >= 0; i--) if (!list[i].done) return list[i]; return null; }
   /** A forced window for testing (?colossus=1 or __zoo.colossus.start()). */
   private forcedUntil = 0;
-  private banner: HTMLElement; private bannerKey = '';
+  private banner: HTMLElement; private bannerKey = ''; private bannerOpen = false;
   /** Explorer lift while being hurled (world.playerLift draws it). */
   lift = 0;
 
@@ -91,6 +91,8 @@ export class ColossusEvent {
     this.h = host;
     try { this.killedDay = Number(localStorage.getItem('zoo-colossus-killed') ?? -1); } catch { this.killedDay = -1; }
     this.banner = document.createElement('div'); this.banner.id = 'colossus-banner'; this.banner.hidden = true; this.banner.setAttribute('role', 'status');
+    // Phones show a small chip that opens on a tap (colossus.css); wide screens always show the whole banner.
+    this.banner.addEventListener('click', () => { this.bannerOpen = !this.bannerOpen; this.banner.classList.toggle('open', this.bannerOpen); });
     host.hud.append(this.banner);
     // The fight steps with the world (after main sets the step's movement lock) and poses just before each draw.
     host.world.onStep = dt => { this.step(dt); if (this.locked) host.world.movementLocked = true; };
@@ -462,7 +464,7 @@ export class ColossusEvent {
     }
     const key = `${mode}|${near}|${Math.ceil(left / 1000)}|${Math.round(hp * 1000)}|${roarLine}`;
     if (key === this.bannerKey) return; this.bannerKey = key;
-    this.banner.hidden = mode === 'none'; this.banner.className = 'colossus-banner ' + mode + (near ? ' near' : '');
+    this.banner.hidden = mode === 'none'; this.banner.className = 'colossus-banner ' + mode + (near ? ' near' : '') + (this.bannerOpen ? ' open' : '');
     if (mode === 'soon') this.banner.innerHTML = `<span class="cb-icon">⏳</span><span class="cb-text"><b>${t('The Cinderpeak Colossus wakes at 08:00')}</b><small>${t('in {time}', { time: clockText(left) })}</small></span>`;
     else if (mode === 'awake') this.banner.innerHTML = `<span class="cb-icon">🌋</span><span class="cb-text"><b>${t(COLOSSUS_NAME)}</b><small>${t('Redrock Canyon · until 24:00')} · ${clockText(left)}</small>${roarLine ? `<small class="cb-roar">🦖 ${roarLine}</small>` : ''}<span class="boss-meter cb-meter"><i style="width:${(hp * 100).toFixed(1)}%"></i></span></span><span class="cb-pct">${Math.ceil(hp * 100)}%</span>`;
     else if (mode === 'done') this.banner.innerHTML = `<span class="cb-icon">🏆</span><span class="cb-text"><b>${t(COLOSSUS_NAME)}</b><small>${t('Defeated today · back tomorrow at 08:00')}</small></span>`;

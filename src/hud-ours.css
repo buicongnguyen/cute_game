@@ -344,3 +344,17 @@ body.in-rescue #app #hud .top-actions > .energy { position: relative; right: aut
   #app #hud .quest-tracker:has(#quick-claim:not([hidden])) { border-radius: 16px; padding: 4px 26px 2px 5px; }
   #app #hud .minimap > small { padding: 1px 3px 2px; }
 }
+
+/* Phones: the Colossus notice is a small chip at the top that opens on a tap, so it never covers the view. */
+@media (max-width: 600px) {
+  #app .colossus-banner { pointer-events: auto; cursor: pointer; }
+  #app .colossus-banner:not(.open) { right: auto; width: auto; padding: 4px; gap: 0; border-radius: 50%; }
+  #app .colossus-banner:not(.open) .cb-text, #app .colossus-banner:not(.open) .cb-pct { display: none; }
+  #app .colossus-banner:not(.open) .cb-icon { width: 36px; height: 36px; font-size: 20px; }
+}
+/* Opened by a tap, it shows everything, even while the guide keeps the banner folded. */
+@media (max-width: 600px) {
+  body #app #colossus-banner.open { max-width: none; }
+  body #app #colossus-banner.open small, body #app #colossus-banner.open .cb-meter { display: block; }
+  body #app #colossus-banner.open .cb-pct { display: inline; }
+}
