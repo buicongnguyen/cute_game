@@ -29,8 +29,12 @@ export function leashSpot(pen: { x: number; z: number }, house?: { x: number; z:
   return house && Number.isFinite(house.x) && Number.isFinite(house.z) ? { x: house.x, z: house.z + .9 } : { x: pen.x, z: pen.z + 1.2 };
 }
 /** True while the dog should be with the explorer: away from the safe village (or on another planet). */
+/** The player's choice in Settings (this device): the dog stays at its pen, so you can fight alone. The server never sets it. */
+let dogStays = false;
+export const dogStaysHome = () => dogStays;
+export function setDogStays(on: boolean) { dogStays = !!on; }
 export function dogFollows(planet: string, pose: { x: number; z: number; y?: number }, indoors = false) {
-  return !atHome(planet, pose, indoors);
+  return !dogStays && !atHome(planet, pose, indoors);
 }
 export interface DogLink { place: DogPlace; x: number; z: number; heading: number; speed: number }
 export const newDogLink = (): DogLink => ({ place: 'pen', x: 0, z: 0, heading: 0, speed: 0 });
