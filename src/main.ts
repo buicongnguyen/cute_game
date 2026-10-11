@@ -1324,6 +1324,8 @@ function syncAirCombat(){
     $('#context-prompt').insertAdjacentHTML('beforebegin','<div id="combo-chip" hidden aria-hidden="true"><b id="combo-count"></b><span id="combo-word"></span><i id="combo-bonus"></i><em id="combo-steps"><u></u><u></u><u></u><u></u></em></div>');
   }
   const pad=document.querySelector<HTMLElement>('#hud .jump-pad');if(pad){pad.hidden=!on;pad.setAttribute('aria-label',t('Jump'));pad.title=t('Jump');}
+  // Desktop shows both as tray buttons with their key and name (hud-ours.css reads these attributes).
+  if(pad){pad.dataset.key=spaceKey==='jump'?'Space':'Shift';pad.dataset.label=t('Jump');}const hit=document.querySelector<HTMLElement>('#hud .attack-pad');if(hit){hit.dataset.key=spaceKey==='jump'?'F / N':'Space / N';hit.dataset.label=t('Basic attack');}
   const hint=document.querySelector('#hud .control-hint kbd:last-of-type')?.nextSibling;if(hint)hint.textContent=' '+t(on&&spaceKey==='jump'?'jump':'attack');
   if(!on){world.jump.cancel();jumpInput.clear();slideCombo.cancel();pendingPress=null;comboMeter.reset();sureLeft=0;combat.edge.sure=false;combat.edge.bonus=1;combat.edge.launch=0;comboShown=' ';showCombo();const cluster=$('#hud .skills');cluster.classList.remove('air','dive');airLook='';}
 }
@@ -1749,7 +1751,7 @@ app.addEventListener('click',async event=>{
     case 'reel':if(fishGame){if(event.detail===0)fishGame.input.toggle();}else if(button.classList.contains('hunt'))void throwHarpoon();else if(button.classList.contains('cast'))fish(fishPond);break;
     case 'render-res':{const res=button.dataset.kind as ResolutionSetting;graphics.setResolution(res);world.applyGraphics(graphics.profile,graphics.ratio);await perform('settings',{settings:{renderRes:res}});settings();break;}
     case 'air-combat':airCombat=!airCombat;saveAirCombat((()=>{try{return localStorage;}catch{return null;}})(),airCombat);syncAirCombat();settings();updateHud();break;
-    case 'space-key':spaceKey=button.dataset.kind==='attack'?'attack':'jump';saveSpaceKey((()=>{try{return localStorage;}catch{return null;}})(),spaceKey);jumpInput.clear();settings();updateHud();break;
+    case 'space-key':spaceKey=button.dataset.kind==='attack'?'attack':'jump';airApplied=null;saveSpaceKey((()=>{try{return localStorage;}catch{return null;}})(),spaceKey);jumpInput.clear();settings();updateHud();break;
     case 'keyboard-layout':movement.clear();await perform('settings',{settings:{keyboardLayout:button.dataset.kind}});movement.clear();settings();break;
     case 'move-pad':await perform('settings',{settings:{movePad:!joystickEnabled()}});applyMovePad();settings();break;
     case 'joystick-side':await perform('settings',{settings:{joystickSide:button.dataset.kind}});applyMovePad();settings();break;
