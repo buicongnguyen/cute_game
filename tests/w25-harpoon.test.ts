@@ -47,14 +47,16 @@ test('item power: 100 / 1.3 s = 76.9/s, between the lava sword and the moon scyt
   assert.ok(weapons.every(id => (M.ITEMS[id].stats?.atk ?? M.ITEMS[id].attack ?? 0) < 100), 'no other weapon hits as hard per throw');
 });
 
-test('a disguise fights with its own weapon: the hidden harpoon adds no attack and no forge bonus', () => {
+test('the weapon in hand fights in a disguise too: its attack and forge bonus count, and a bare disguise uses its own weapon', () => {
   const bare = M.newGame(); bare.level = 10;
   const s = M.newGame(); s.level = 10; M.addItem(s, 'harpoon'); assert.equal(M.equip(s, 'harpoon'), true);
   const harpoon = M.attack(s, 0); assert.ok(harpoon >= M.attack(bare, 0) + 100, 'the harpoon alone adds its +100');
   M.addItem(s, 'dz_dino'); assert.equal(M.equip(s, 'dz_dino'), true); assert.equal(s.gear.weapon, 'harpoon');
   M.addItem(bare, 'dz_dino'); assert.equal(M.equip(bare, 'dz_dino'), true);
-  assert.equal(M.attack(s, 0), M.attack(bare, 0), 'harpoon + dz_dino attacks exactly like dz_dino alone');
-  assert.ok(M.attack(s, 0) < harpoon);
-  s.forge = { harpoon: 50 } as typeof s.forge; assert.equal(M.attack(s, 0), M.attack(bare, 0), 'no forge bonus from the hidden weapon');
-  M.unequip(s, 'disguise'); assert.ok(M.attack(s, 0) > harpoon, 'the forge bonus is back once the disguise comes off');
+  assert.ok(M.attack(s, 0) >= M.attack(bare, 0) + 100, 'the weapon still adds its attack under the disguise');
+  assert.deepEqual(M.weaponStats(s).shot, 'harpoon', 'the normal attack uses the weapon in hand');
+  assert.deepEqual(M.weaponStats(bare), { kind: 'fist', range: 1, cd: .5, special: 'fist', ...M.DISGUISES.dz_dino.weapon }, 'with no weapon the disguise fights with its own');
+  const plain = M.attack(s, 0); s.forge = { harpoon: 50 } as typeof s.forge; assert.ok(M.attack(s, 0) > plain, 'the forge bonus counts in a disguise');
+  const rod = M.newGame(); M.addItem(rod, 'dz_dino'); M.equip(rod, 'dz_dino'); const anyRod = Object.keys(M.ITEMS).find(id => M.ITEMS[id].weapon?.kind === 'rod')!; M.addItem(rod, anyRod); M.equip(rod, anyRod);
+  assert.equal(M.weaponStats(rod).kind, M.DISGUISES.dz_dino.weapon.kind, 'a fishing rod never replaces the disguise weapon');
 });

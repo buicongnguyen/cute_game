@@ -199,17 +199,20 @@ export function xpNeeded(level: number) { return Math.round(25 * Math.pow(Math.m
 function equipped(s: SaveState) { return Object.values(s.gear).map(id => ITEMS[id]).filter(Boolean); }
 // Bench levels (upgrades.ts) scale an item's own flat stats. While a disguise is worn its own weapon fights (weaponStats),
 // so the hidden weapon in the hand adds neither its stats nor its forge bonus.
-function equipmentStat(s: SaveState, key: string) { return Object.entries(s.gear).reduce((sum, [slot, id]) => slot === 'weapon' && s.gear.disguise ? sum : sum + levelledStat(s, id, key, (ITEMS[id]?.stats as Record<string, number> | undefined)?.[key] || 0), 0); }
+function equipmentStat(s: SaveState, key: string) { return Object.entries(s.gear).reduce((sum, [, id]) => sum + levelledStat(s, id, key, (ITEMS[id]?.stats as Record<string, number> | undefined)?.[key] || 0), 0); }
 function effect(s: SaveState, key: BuffKey, now = Date.now()) { const buff = s.buffs[key]; return buff && buff.expiresAt > now ? buff.value : 0; }
 export function maxHp(s: SaveState) { return 100 + (s.level - 1) * 10 + s.healthUp * 25 + equipmentStat(s, 'hp'); }
-export function attack(s: SaveState, now = Date.now()) { return (10 + (s.level - 1) * 1.5 + s.attackUp * 3 + equipmentStat(s, 'atk')) * (1 + (s.gear.weapon && !s.gear.disguise ? forgeLevel(s, s.gear.weapon) / 100 : 0)) * (1 + effect(s, 'atk', now)); }
+export function attack(s: SaveState, now = Date.now()) { return (10 + (s.level - 1) * 1.5 + s.attackUp * 3 + equipmentStat(s, 'atk')) * (1 + (s.gear.weapon ? forgeLevel(s, s.gear.weapon) / 100 : 0)) * (1 + effect(s, 'atk', now)); }
 export function defense(s: SaveState, now = Date.now()) { return s.defenseUp * 4 + (s.level - 1) + equipmentStat(s, 'def') + effect(s, 'def', now); }
 export function activeStats(s: SaveState, now = Date.now()) {
     const gear = equipped(s), dz = s.gear.disguise ? DISGUISES[s.gear.disguise] : undefined;
     return { attack: attack(s, now), defense: defense(s, now), maxHp: maxHp(s), speed: 6 * Math.max(.2, 1 + equipmentStat(s, 'speed') + effect(s, 'speed', now)), critChance: Math.min(.85, .05 + s.critUp * .025 + equipmentStat(s, 'crit') + effect(s, 'crit', now)), critDamage: CRIT_DAMAGE, haste: effect(s, 'haste', now), regen: equipmentStat(s, 'regen') + effect(s, 'regen', now), xp: effect(s, 'xp', now) + gear.reduce((n, i) => n + (i.xp || 0), 0), magnet: effect(s, 'magnet', now) ? 3 : 1, luck: effect(s, 'luck', now) + gear.reduce((n, i) => n + (i.luck || 0), 0), light: effect(s, 'light', now) > 0 || gear.some(i => i.light) || s.planet === 'lava' && (s.bag.fcrystal || 0) > 0, fireResistance: Math.min(1, effect(s, 'fireres', now)), lifesteal: (dz?.lifesteal || 0) + effect(s, 'lifesteal', now), lavaproof: gear.some(i => i.lavaproof), antidote: gear.some(i => i.antidote), poisonImmune: gear.some(i => i.antidote), flippers: s.gear.boots === 'boots_flipper', featherFall: gear.some(i => (i as any).featherfall), flying: false, sizeScale: s.sizeEffect && s.sizeEffect.expiresAt > now ? s.sizeEffect.scale : 1 };
 }
 export function weaponStats(s: SaveState): WeaponDef {
-    const weapon = (s.gear.disguise && DISGUISES[s.gear.disguise]?.weapon) || (s.gear.weapon && ITEMS[s.gear.weapon]?.weapon);
+    // The weapon in hand comes first, in a disguise too (the owner's rule, 2026-10-12); a fishing rod is not a fighting weapon.
+    // With no weapon a disguise fights with its own, and a plain explorer with fists.
+    const held = s.gear.weapon ? ITEMS[s.gear.weapon]?.weapon : undefined, own = held && held.kind !== 'rod' ? held : undefined;
+    const weapon = own || (s.gear.disguise && DISGUISES[s.gear.disguise]?.weapon) || held;
     const stats: WeaponDef = { kind: 'fist', range: 1, cd: .5, special: 'fist', ...(weapon || {}) };
     // A uniform in the outfit slot brings its own fighting skill (uniform-skills.ts) in place of the weapon's special.
     const uniform = !s.gear.disguise && stats.kind !== 'rod' ? uniformSpecial(s.gear.outfit) : undefined;
