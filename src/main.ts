@@ -230,7 +230,7 @@ function keyboardSettings(){
   const description=selected==='wasd'?'WASD: move · J/K/L/;: skills · P: journal':'Arrows: move · Q/W/E/R: skills · J: journal';
   const store=(()=>{try{return localStorage;}catch{return null;}})();void store;
   const master=`<div class="settings-row air-combat-settings"><div><strong>Jump and air combat</strong><small>${airCombat?(actionHandler?'On in solo play. Online play uses the classic rules for now.':'Jump, air moves, dodging and combos.'):'Off: the classic fight, with Space as the basic attack.'}</small></div><button class="toggle ${airCombat?'on':''}" role="switch" aria-checked="${airCombat}" data-action="air-combat" aria-label="Jump and air combat">${airCombat?'On':'Off'}</button></div>`;
-  const space=!airOn()?'':`<div class="settings-row keyboard-settings space-key-settings"><div><strong>Space key</strong><small>${spaceKey==='jump'?'Space: jump · F or H: attack · G: eat':'Space: attack · Left Shift: jump · F or H: attack · G: eat'}</small></div><div class="segmented" role="radiogroup" aria-label="Space key">${(['jump','attack'] as const).map(kind=>`<button role="radio" aria-checked="${spaceKey===kind}" class="${spaceKey===kind?'on':''}" data-action="space-key" data-kind="${kind}">${kind==='jump'?'Jump':'Basic attack'}</button>`).join('')}</div></div>`;
+  const space=!airOn()?'':`<div class="settings-row keyboard-settings space-key-settings"><div><strong>Space key</strong><small>${spaceKey==='jump'?'Space: jump · F or N: attack · H: eat':'Space: attack · Left Shift: jump · F or N: attack · H: eat'}</small></div><div class="segmented" role="radiogroup" aria-label="Space key">${(['jump','attack'] as const).map(kind=>`<button role="radio" aria-checked="${spaceKey===kind}" class="${spaceKey===kind?'on':''}" data-action="space-key" data-kind="${kind}">${kind==='jump'?'Jump':'Basic attack'}</button>`).join('')}</div></div>`;
   return master+space+`<div class="settings-row keyboard-settings"><div><strong>PC keyboard layout</strong><small>${description}</small></div><div class="segmented" role="radiogroup" aria-label="PC keyboard layout">${(['classic','wasd'] as const).map(layout=>`<button role="radio" aria-checked="${selected===layout}" class="${selected===layout?'on':''}" data-action="keyboard-layout" data-kind="${layout}">${layout==='wasd'?'WASD + JKL;':'Arrows + QWER'}</button>`).join('')}</div></div>`;
 }
 const app = $('#app');
@@ -1268,7 +1268,7 @@ async function quickEat(){
   await eatFood(view.id!);
 }
 function updateQuickEat(){
-  const view=quickEatView(state,quickEatChoice),eatTip=airOn()?'Eat · G':'Eat · H',key=`${view.id}|${view.count}|${view.idle}|${quickEatChoice}|${getLanguage()}|${eatTip}`;if(key===quickEatShown)return;quickEatShown=key;
+  const view=quickEatView(state,quickEatChoice),eatTip='Eat · H',key=`${view.id}|${view.count}|${view.idle}|${quickEatChoice}|${getLanguage()}|${eatTip}`;if(key===quickEatShown)return;quickEatShown=key;
   const button=$('#quick-eat'),name=view.id?t(M.ITEMS[view.id].name):'';button.classList.toggle('idle',view.idle);button.classList.toggle('picked',quickEatChoice!=='auto');
   $('#quick-eat-icon').innerHTML=view.id?art(view.id,M.ITEMS[view.id].icon):'🍽️';$('#quick-eat-count').textContent=String(view.count);
   button.setAttribute('aria-label',view.id?`${t('Eat')} ${name} · +${M.ITEMS[view.id].heal} HP · ×${view.count}`:t('Eat'));button.title=view.id?`${t(eatTip)} · ${name}`:t(eatTip);

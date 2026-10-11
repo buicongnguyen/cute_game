@@ -41,20 +41,20 @@ test('off: the keys are the old ones (Space attacks, nothing jumps) whatever the
   assert.equal(eatKey(false), 'h'); assert.equal(handKey('h', false), 'eat'); assert.equal(handKey('g', false), '');
 });
 
-test('on: H is the basic attack for the right hand and Eat moves to G, a key no layout uses; off: H eats', () => {
-  assert.equal(eatKey(true), 'g'); assert.equal(handKey('h', true), 'attack'); assert.equal(handKey('g', true), 'eat'); assert.equal(handKey('f', true), ''); assert.equal(handKey('j', true), '');
+test('on: N is the basic attack for the right hand, a key no layout uses, and H still eats; off: H eats', () => {
+  assert.equal(eatKey(true), 'h'); assert.equal(handKey('n', true), 'attack'); assert.equal(handKey('h', true), 'eat'); assert.equal(handKey('n', false), ''); assert.equal(handKey('f', true), ''); assert.equal(handKey('j', true), '');
   // G (and H) are free in both layouts: not a skill, the journal, a WASD move, or one of the fixed keys of main.ts (F, I, M, R).
-  for (const layout of ['classic', 'wasd']) { const b = keyboardBindings(layout), taken = [...b.skills, b.journal, 'w', 'a', 's', 'd', 'f', 'i', 'm', 'r'] as string[]; assert.ok(!taken.includes('g') && !taken.includes('h'), layout); }
+  for (const layout of ['classic', 'wasd']) { const b = keyboardBindings(layout), taken = [...b.skills, b.journal, 'w', 'a', 's', 'd', 'f', 'i', 'm', 'r'] as string[]; assert.ok(!taken.includes('n') && !taken.includes('h'), layout); }
   assert.deepEqual([...new Set([...main.matchAll(/key==='([a-z])'/g)].map(m => m[1]))].sort(), ['f', 'i', 'm', 'r'], 'the fixed letter keys of the key handler');
   assert.match(main, /else if\(handKey\(key,airOn\(\)\)==='eat'\)void quickEat\(\);else if\(handKey\(key,airOn\(\)\)==='attack'\)basicAttack\(\);/);
   // The guide: on, H joins the basic attack and Eat shows G in both layouts and both Space choices; off, it is the old guide.
   const rows = (html: string) => Object.fromEntries([...html.matchAll(/<dt>(.*?)<\/dt><dd>(.*?)<\/dd>/g)].map(m => [m[1], m[2].replace(/<\/?kbd>/g, ' ').trim().replace(/\s+/g, ' ')]));
   for (const layout of ['classic', 'wasd']) {
-    assert.equal(rows(keysGuideHtml(layout, false, 'jump'))['Basic attack'], 'F H'); assert.equal(rows(keysGuideHtml(layout, false, 'attack'))['Basic attack'], 'Space F H');
-    for (const space of ['jump', 'attack'] as const) assert.equal(rows(keysGuideHtml(layout, false, space)).Eat, 'G');
+    assert.equal(rows(keysGuideHtml(layout, false, 'jump'))['Basic attack'], 'F N'); assert.equal(rows(keysGuideHtml(layout, false, 'attack'))['Basic attack'], 'Space F N');
+    for (const space of ['jump', 'attack'] as const) assert.equal(rows(keysGuideHtml(layout, false, space)).Eat, 'H');
     assert.equal(rows(keysGuideHtml(layout, false)).Eat, 'H'); assert.equal(rows(keysGuideHtml(layout, false))['Basic attack'], 'Space');
   }
-  assert.match(main, /eatTip=airOn\(\)\?'Eat · G':'Eat · H'/, 'the quick-eat button names the key that eats now');
+  assert.match(main, /eatTip='Eat · H'/, 'the quick-eat button names the key that eats now');
 });
 
 test('off: the page markup is the one from before; the Jump toe and the combo chip are made only when the switch is on', () => {

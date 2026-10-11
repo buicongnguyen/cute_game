@@ -16,9 +16,9 @@ export function gameplayKey(event:{code?:string;key:string;isComposing?:boolean;
   const code=event.code||'';return /^Key[A-Z]$/.test(code)?code.slice(3).toLowerCase():code==='Semicolon'?';':code==='Space'?' ':code.startsWith('Arrow')?code:code==='Escape'?'Escape':code==='Enter'?'Enter':code==='Tab'?'Tab':event.key.length===1?event.key.toLowerCase():event.key;
 }
 /** The Eat key: H, as ever; with jumping and air combat on (Settings) H is the right hand's basic attack and Eat moves to G, free in both layouts. */
-export function eatKey(air:boolean){return air?'g':'h';}
+export function eatKey(_air?:boolean){return 'h';}
 /** What H or G does: 'eat', the right hand's 'attack' (only with jumping and air combat on), or nothing. */
-export function handKey(key:string,air:boolean):'eat'|'attack'|''{return key===eatKey(air)?'eat':air&&key==='h'?'attack':'';}
+export function handKey(key:string,air:boolean):'eat'|'attack'|''{return key===eatKey(air)?'eat':air&&key==='n'?'attack':'';}
 export const JOYSTICK={radius:52,deadZone:.18} as const;
 export class JoystickInput{
   pointer:number|null=null;x=0;z=0;

@@ -117,21 +117,21 @@ test('Space jumps by default and F attacks when nothing is in reach; the old way
   const b=fixture();b.fire('keydown','Space');for(const handler of b.windowHandlers.get('blur')??[])handler();assert.equal(b.jumpInput.held,false);
 });
 
-test('with jumping on H is a second basic attack for the right hand and G eats, in both layouts; held keys do not repeat',()=>{
+test('with jumping on N is a second basic attack for the right hand and H still eats, in both layouts; held keys do not repeat',()=>{
   for(const layout of ['classic','wasd']){
-    const f=fixture(layout);f.fire('keydown','KeyH');assert.deepEqual(f.calls,[['attack']],layout+': H attacks');
-    f.fire('keydown','KeyG');assert.deepEqual(f.calls,[['attack'],['eat']],layout+': G eats');
-    f.fire('keydown','KeyH','h',{repeat:true});f.fire('keydown','KeyG','g',{repeat:true});f.fire('keydown','KeyH','h',{ctrlKey:true});assert.equal(f.calls.length,2);
+    const f=fixture(layout);f.fire('keydown','KeyN');assert.deepEqual(f.calls,[['attack']],layout+': N attacks');
+    f.fire('keydown','KeyH');assert.deepEqual(f.calls,[['attack'],['eat']],layout+': H eats');
+    f.fire('keydown','KeyN','n',{repeat:true});f.fire('keydown','KeyH','h',{repeat:true});f.fire('keydown','KeyN','n',{ctrlKey:true});assert.equal(f.calls.length,2);
     // H attacks in the air too, and never interacts; F and Space keep their jobs.
-    f.ctx.world.jump={airborne:true};f.ctx.world.interactNearest=()=>{throw new Error('H never interacts');};f.fire('keydown','KeyH');assert.deepEqual(f.calls.at(-1),['attack']);
-    f.ctx.modal='settings';f.fire('keydown','KeyH');f.fire('keydown','KeyG');assert.equal(f.calls.length,3,'not under a menu');
+    f.ctx.world.jump={airborne:true};f.ctx.world.interactNearest=()=>{throw new Error('N never interacts');};f.fire('keydown','KeyN');assert.deepEqual(f.calls.at(-1),['attack']);
+    f.ctx.modal='settings';f.fire('keydown','KeyN');f.fire('keydown','KeyH');assert.equal(f.calls.length,3,'not under a menu');
     assert.equal(f.jumpInput.held,false);assert.equal(f.keys.size,0);
   }
 });
 
 test('with jumping switched off H eats as before and G does nothing, in both layouts',()=>{
   for(const layout of ['classic','wasd']){
-    const f=fixture(layout);f.ctx.air=false;f.fire('keydown','KeyH');assert.deepEqual(f.calls,[['eat']]);f.fire('keydown','KeyG');assert.deepEqual(f.calls,[['eat']]);
+    const f=fixture(layout);f.ctx.air=false;f.fire('keydown','KeyH');assert.deepEqual(f.calls,[['eat']]);f.fire('keydown','KeyN');assert.deepEqual(f.calls,[['eat']]);
   }
 });
 

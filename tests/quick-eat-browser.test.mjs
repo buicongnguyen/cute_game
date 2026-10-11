@@ -39,7 +39,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
       await shot(page, '2-after-eat');
       // Full health: greyed out, and a tap only explains why.
       const full = await page.evaluate(() => { const s = window.__zoo.state; s.hp = 1e6; return true; });
-      await page.keyboard.press(await page.evaluate(() => document.body.classList.contains('air-combat')) ? 'g' : 'h'); await page.waitForTimeout(300); // the Eat key: G with jumping and air combat on (H is then the basic attack)
+      await page.keyboard.press('h'); await page.waitForTimeout(300); // the Eat key: G with jumping and air combat on (H is then the basic attack)
       const idle = await page.evaluate(() => ({ idle: document.querySelector('#quick-eat').classList.contains('idle'), bag: window.__zoo.state.bag.carrot + window.__zoo.state.bag.apple }));
       assert.ok(full && idle.idle && idle.bag === 4, 'nothing is eaten at full health');
       // Picker: choose the carrot explicitly.
