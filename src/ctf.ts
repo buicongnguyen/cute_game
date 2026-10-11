@@ -156,7 +156,7 @@ export function initCtf(h: CtfHooks) {
     const st = h.state();
     const saved: Session['saved'] = { root: world.root, entities: world.entities, enemies: world.enemies, obstacles: world.obstacles, detached: [], background: world.scene.background, fog: world.scene.fog, onZone: world.onZone, onStep: world.onStep, beforeRender: world.beforeRender, onRemotePlayerClick: world.onRemotePlayerClick, hp: st.hp, disguise: st.gear.disguise, zoom: world.zoom };
     try { localStorage.setItem(RESTORE_KEY, JSON.stringify({ disguise: saved.disguise ?? null, hp: saved.hp, hero: pick })); } catch { /* storage is optional */ }
-    for (const child of [...world.root.children]) if (child !== world.player && child !== world.companion) { saved.detached.push(child); world.root.remove(child); }
+    for (const child of [...world.root.children]) if (child !== world.player && child !== world.companion && child !== world.companion2) { saved.detached.push(child); world.root.remove(child); }
     const obstacles = fieldObstacles();
     world.entities = []; world.enemies = []; world.obstacles = obstacles.map(o => ({ x: o.x + C.x, z: o.z + C.z, r: o.r }));
     world.onZone = () => {}; world.onStep = undefined; world.beforeRender = undefined; world.playerLift = 0;

@@ -6,6 +6,8 @@
 export const perfFlags = {
   /** Remote players and bots draw one merged mesh per rigid part, like the friends (avatar-merge.ts). */
   mergeRemoteAvatars: true,
+  /** Your pets (up to two, pet-slots.ts) draw one merged mesh per rigid part too, only where the look is identical (mergeParts exact). */
+  mergeCompanions: true,
   /** Scatter tiles (static scenery) are skipped by the per-frame matrix pass once their matrices are settled. */
   freezeStaticTrees: true,
   /** The matrix pass trusts the position/rotation/scale cache instead of three.js's matrixWorldNeedsUpdate on objects it composes itself. */

@@ -12,7 +12,7 @@ import { BREEDS, coatOf, ANIMALS, ANIMAL_KINDS, ANIMAL_LIFESPAN_MS, productCount
  */
 /** The crop the player picked for the Feed buttons (any crop); null = the feed-crop default (farm.ts playerFeedCrop). */
 export const feedChoice: { id: string | null } = { id: null };
-const loose = (s: SaveState, id: string) => (s.bag[id] ?? 0) - (Object.values(s.gear).includes(id) ? 1 : 0) > 0;
+const loose = (s: SaveState, id: string) => (s.bag[id] ?? 0) - Object.values(s.gear).filter(worn => worn === id).length > 0;
 export function chosenFeed(s: SaveState) { return feedChoice.id && ITEMS[feedChoice.id]?.type === 'crop' && loose(s, feedChoice.id) ? feedChoice.id : playerFeedCrop(s); }
 const feedOptions = (s: SaveState) => Object.keys(s.bag).filter(id => ITEMS[id]?.type === 'crop' && loose(s, id)).sort((a, b) => ITEMS[a].sell - ITEMS[b].sell || a.localeCompare(b));
 export interface FarmUi { art(id: string, icon: string): string; esc(text: string): string; mini(id: string): string; chips(materials?: Inventory): string; effect(item: ItemDef): string }

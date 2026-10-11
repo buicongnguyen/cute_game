@@ -9,7 +9,7 @@ import { atHome } from './home-care.ts';
  * and now and then flutter to another perch; the firefly and the titan flyers hover over those spots; walkers (bunny,
  * sheep, turtle, robot, titan pets) potter between a few spots at the pen's front corner with small hops. Out in the
  * wilds, or on another planet, it flies or trots out to the explorer and follows a step behind on the right (the dog
- * keeps the left); back inside the safe circle it goes home to the pen. While visiting a friend's garden it stays at
+ * keeps the left; with two pets the second takes the left, pet-slots.ts, and at the pen the two share out the spots); back inside the safe circle it goes home to the pen. While visiting a friend's garden it stays at
  * your own pen, so it is not drawn there (like the dog).
  *
  * Fighting: a pet shoots only while it follows you away from home (petMayFight); waiting at the pen it never fights.
@@ -52,10 +52,12 @@ export const petFollows = (planet: string, pose: { x: number; z: number; y?: num
 /** True when the pet may fight: only while it follows you away from home (never from the pen). */
 export const petMayFight = (place: PetPlace, planet: string, pose: { x: number; z: number; y?: number }, indoors = false) => place === 'follow' && petFollows(planet, pose, indoors);
 /** The trailing spot for a facing (radians, +z forward at 0). */
-export function petTrail(player: { x: number; z: number }, facing: number) {
+export function petTrail(player: { x: number; z: number }, facing: number, side = PET_SIDE) {
   const s = Math.sin(facing), c = Math.cos(facing);
-  return { x: player.x - s * PET_BEHIND + c * PET_SIDE, z: player.z - c * PET_BEHIND - s * PET_SIDE };
+  return { x: player.x - s * PET_BEHIND + c * side, z: player.z - c * PET_BEHIND - s * side };
 }
+/** The second pet (pet-slots.ts companionId index 1) trails on the left: the dog's side, free because two companions fill both pet slots. */
+export const PET2_SIDE = -PET_SIDE;
 
 export interface PetLink {
   place: PetPlace; x: number; y: number; z: number; heading: number; speed: number;
@@ -76,17 +78,17 @@ export function restY(style: PetStyle, spot: Spot, feet = 0) { return style === 
  * One step. `follow` says where the pet belongs now (petFollows, false while visiting); `spots` are the pen spots
  * ([] when this world has no pen: another planet); `groundY` is the explorer's feet. Returns the new place.
  */
-export function stepPet(p: PetLink, dt: number, follow: boolean, player: { x: number; z: number }, facing: number, groundY: number, spots: readonly Spot[], style: PetStyle, feet = 0): PetPlace {
+export function stepPet(p: PetLink, dt: number, follow: boolean, player: { x: number; z: number }, facing: number, groundY: number, spots: readonly Spot[], style: PetStyle, feet = 0, side = PET_SIDE): PetPlace {
   if (!(dt > 0)) return p.place;
   const flyer = style !== 'walk';
-  if (follow && p.place === 'pen' && !spots.length) { const at = petTrail(player, facing + Math.PI * .6); p.x = at.x; p.z = at.z; p.y = groundY + (flyer ? PET_HOVER : 0); p.speed = 0; }
+  if (follow && p.place === 'pen' && !spots.length) { const at = petTrail(player, facing + Math.PI * .6, side); p.x = at.x; p.z = at.z; p.y = groundY + (flyer ? PET_HOVER : 0); p.speed = 0; }
   if (follow && p.place !== 'follow') { p.place = 'follow'; p.hop = null; }
   else if (!follow && p.place === 'follow') {
     if (spots.length) { p.place = 'return'; p.spot = nearest(spots, p); } else p.place = 'pen';
   }
   p.resting = false;
   if (p.place === 'follow') {
-    const goal = petTrail(player, facing), dx = goal.x - p.x, dz = goal.z - p.z, dist = Math.hypot(dx, dz);
+    const goal = petTrail(player, facing, side), dx = goal.x - p.x, dz = goal.z - p.z, dist = Math.hypot(dx, dz);
     if (dist > PET_FAR) { p.x = goal.x; p.z = goal.z; p.speed = 0; }
     else {
       // The companion's old follow (an ease of 4/s) when close; capped at a swoop or a run when far, so it never jumps.

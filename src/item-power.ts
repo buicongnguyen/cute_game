@@ -71,7 +71,7 @@ const n = (v: number) => (Math.round(v * 10) / 10).toString();
 /** The key number of a row, e.g. "⚔️ 11/s", "🛡️ 8 · ❤️ 25", "🐾 25", "❤️ 40 · ✨ 30", or '' for plain goods. With a save: as owned (levels applied). */
 export function powerLabel(id: string, s?: SaveState): string {
   const item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined, kind = powerKind(item);
-  if (!item || kind === 'other') return '';
+  if (!item || kind === 'other' || item.penned) return ''; // the guard dog has no number of its own: its toss follows your attack
   if (kind === 'weapon') return `⚔️ ${n(s ? ownedScore(s, id) : weaponDps(item))}/s`;
   if (kind === 'rod') return `🎣 ${Math.round((item.weapon?.quality ?? 0) * 100)}`;
   if (kind === 'food') { const buff = Math.round(buffPoints(item)); return [item.heal ? `❤️ ${item.heal >= 9999 ? '∞' : item.heal}` : '', buff ? `✨ ${buff}` : ''].filter(Boolean).join(' · '); }

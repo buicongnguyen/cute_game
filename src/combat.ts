@@ -105,6 +105,8 @@ export interface CombatHost {
   execute?(target:CombatTarget,healFraction:number):void;
   moving?():boolean;
   pet?():{x:number;z:number;dmg:number;cd:number;shot?:string}|null;
+  /** The pet in the second slot (pet-slots.ts): the same shape, its own cooldown. */
+  pet2?():{x:number;z:number;dmg:number;cd:number;shot?:string}|null;
   /** The guard dog when it may fight (following you away from home, guard-dog.ts): where it is, its toss factor and rate, and your target. */
   dog?():{x:number;z:number;dmg:number;cd:number;target?:string|null}|null;
   /** 'stun' freezes or roots a creature in place (no damage). */
@@ -154,7 +156,7 @@ export class CombatSimulation {
   readonly marked=new Map<string,number>();
   private host:CombatHost; private random:()=>number; private time=0; private serial=0; private combo=0;
   /** Damage factor of the levelled skill being cast; delayed hits keep the factor they were cast with. */
-  private power=1;private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;private dogCooldown=0;
+  private power=1;private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;private pet2Cooldown=0;private dogCooldown=0;
   private jobs:Scheduled[]=[]; private action:{kind:'dash'|'slam';until:number;started:number;direction:CombatPoint;speed:number;multiplier:number;hit:Set<string>;
     /** Knight's charge: carry creatures along instead of hitting them on the way. */ push?:boolean; then?:()=>void}|null=null;
   /** Speed bonus (fraction) while statuses.swift runs; where the sandbag wall stands; next time each creature may be rammed or swept again. */
@@ -222,7 +224,7 @@ export class CombatSimulation {
   /** The movement skill in progress and its elapsed time, for the explorer's pose. */
   get pose(){return this.action?{kind:this.action.kind,t:this.time-this.action.started}:null;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.plunge=null;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.plunge=null;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{}),...(quiet?{quiet:true}:{})});}
@@ -498,18 +500,23 @@ export class CombatSimulation {
     this.emit('toss',from,Math.hypot(target.x-from.x,target.z-from.z),'#fff1d6',Math.atan2(target.x-from.x,target.z-from.z));
     this.later(DOG_TOSS_FLIGHT,()=>{if(target.hp<=0||Math.hypot(target.x-from.x,target.z-from.z)>DOG_TOSS_RANGE+3+target.radius)return;this.helperShot=true;this.damage(target,dmg,0,0,.4);this.helperShot=false;/* the puppy's kill is not the player's for timed challenges */this.emit('impact',target,.45,'#fff1d6');});
   }
+  /** One pet's shot at the creature nearest the explorer (within 7 m); returns the cooldown it starts, or 0 when it did not shoot. */
+  private petShot(pet:{x:number;z:number;dmg:number;cd:number;shot?:string}|null|undefined,position:CombatPoint){
+    if(!pet||!Number.isFinite(pet.dmg)||!(pet.dmg>0)||!Number.isFinite(pet.cd)||!(pet.cd>0))return 0;
+    const target=this.host.targets().filter(e=>e.hp>0&&Math.hypot(e.x-position.x,e.z-position.z)<7+e.radius).sort((a,b)=>Math.hypot(a.x-position.x,a.z-position.z)-Math.hypot(b.x-position.x,b.z-position.z))[0];
+    if(!target)return 0;
+    const angle=Math.atan2(target.x-pet.x,target.z-pet.z);this.shoot(pet.shot??'fire',angle,pet.dmg,9,{x:pet.x,z:pet.z,stun:pet.shot==='ice'?.5:0,helper:true});// a pet's ice shot chills; 1.5 s at its 1.2-1.5 s rate froze a target for good
+    this.emit('cast',pet,.35,colorFor(pet.shot??'fire'),angle);return Math.max(.1,pet.cd);
+  }
   update(dt:number,active=true){
     if(!active||!Number.isFinite(dt)||dt<=0)return;this.time+=dt;
     const position=this.host.position(),moved=this.host.moving?.()??(!!this.lastStep&&Math.hypot(position.x-this.lastStep.x,position.z-this.lastStep.z)>dt);
     if(this.statuses.giant>0){this.giantStep-=dt;if(moved&&this.giantStep<=0){this.giantStep=.45;this.area(position,2.5,.7,0,0,'#c96a3a',2,'crater');}}
     this.lastStep={...position};
-    this.petCooldown=Math.max(0,this.petCooldown-dt);
-    const pet=this.host.pet?.();
-    if(pet&&Number.isFinite(pet.dmg)&&pet.dmg>0&&Number.isFinite(pet.cd)&&pet.cd>0&&this.petCooldown<=0){
-      const target=this.host.targets().filter(e=>e.hp>0&&Math.hypot(e.x-position.x,e.z-position.z)<7+e.radius).sort((a,b)=>Math.hypot(a.x-position.x,a.z-position.z)-Math.hypot(b.x-position.x,b.z-position.z))[0];
-      if(target){const angle=Math.atan2(target.x-pet.x,target.z-pet.z);this.shoot(pet.shot??'fire',angle,pet.dmg,9,{x:pet.x,z:pet.z,stun:pet.shot==='ice'?.5:0,helper:true});// a pet's ice shot chills; 1.5 s at its 1.2-1.5 s rate froze a target for good
-this.petCooldown=Math.max(.1,pet.cd);this.emit('cast',pet,.35,colorFor(pet.shot??'fire'),angle);}
-    }
+    // Each pet slot shoots on its own cooldown (pet-slots.ts): two pets are two independent shooters.
+    this.petCooldown=Math.max(0,this.petCooldown-dt);this.pet2Cooldown=Math.max(0,this.pet2Cooldown-dt);
+    if(this.petCooldown<=0){const cd=this.petShot(this.host.pet?.(),position);if(cd)this.petCooldown=cd;}
+    if(this.pet2Cooldown<=0&&this.host.pet2){const cd=this.petShot(this.host.pet2(),position);if(cd)this.pet2Cooldown=cd;}
     this.dogToss(dt);
     for(const key of Object.keys(this.statuses))this.statuses[key]=Math.max(0,this.statuses[key]-dt);
     for(const[id,time]of this.marked){if(time<=dt)this.marked.delete(id);else this.marked.set(id,time-dt);}

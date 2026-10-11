@@ -1,6 +1,7 @@
 import { ITEMS, CROPS, canonicalItem, type ItemId, type Inventory } from './content.ts';
 import { addItem, canAddAll, noteFull, delivering, gainXp, pantry, pantryIds, usePantry, type SaveState } from './model.ts';
 import { gameHours } from './farm-clock.ts';
+import { syncDogPet } from './pet-slots.ts';
 import { recordEvent } from './progression.ts';
 import { newFarmHelper, parseFarmHelper, type FarmHelperState } from './farm-helper-state.ts';
 import { animalPrice, productPace, kitchenOpen, sellPrice, PRODUCT_PACE } from './difficulty.ts';
@@ -247,7 +248,10 @@ export function buyAnimal(s: SaveState, kind: AnimalKind, now = Date.now()): Ani
   const a: Animal = { uid: farm.nextId++, kind, bornAt: now, acquiredAt: now, cycleAt: now + ANIMALS[kind].growMs, coat: coatPick(kind, farm.nextId - 1, now), timerVersion: 2, home: releasePoint(kind) };
   a.pen = nearbyPen(farm, a);
   const pace = productPace(s); if (pace !== 1 && kind !== 'dog') a.pace = pace;
-  s.energy -= priceOf(s, kind); farm.animals.push(a); return a;
+  s.energy -= priceOf(s, kind); farm.animals.push(a);
+  // The guard dog is also a pet you can bring along (pet-slots.ts): it takes the free pet slot, or waits at its pen.
+  if (kind === 'dog') syncDogPet(s);
+  return a;
 }
 /** Cheap, quick crops are animal feed (radish, carrot, pumpkin, mint); fruit trees and seed crops never are. */
 export const FEED_MAX_SELL = 30, FEED_MAX_MS = 10 * 60_000;

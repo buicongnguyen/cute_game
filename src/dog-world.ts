@@ -1,5 +1,6 @@
 import type * as T from 'three';
 import { coatOf, PEN, type SaveState } from './model.ts';
+import { dogWorn } from './pet-slots.ts';
 import { farmKit, type FarmPenView } from './farm-view.ts';
 import { DogFollowView, type DogPose } from './dog-follow.ts';
 import { DogTossView } from './dog-toss-view.ts';
@@ -41,7 +42,7 @@ export class GuardDogs {
     else {
       // A new world (a landing, a visit ending): a dog out with you lands beside you.
       if (this.planet !== h.planet && this.link.place !== 'pen') { const at = trailSpot(h.position, h.facing); this.link.x = at.x; this.link.z = at.z; this.link.speed = 0; }
-      const follow = dogFollows(h.planet, h.position, !!h.interior);
+      const follow = dogWorn(h.state.gear) && dogFollows(h.planet, h.position, !!h.interior); // only a dog worn as a pet comes along
       const leash = pen ? leashSpot(PEN, h.state.farm?.speciesPens?.dog) : null;
       const place = stepDog(this.link, dt, follow, h.position, h.facing, pen && this.link.place === 'pen' ? pen.dogSpot() : null, leash);
       // Sent home from far away (a respawn at home): it is simply back at its pen.

@@ -149,7 +149,7 @@ function sameObstacles(a:Obstacle[],b:Obstacle[]){return a.length===b.length&&a.
 
 export class World {
   scene = new T.Scene(); camera = new T.PerspectiveCamera(CAMERA.fov, 1, CAMERA.near, CAMERA.far); renderer: T.WebGLRenderer;
-  root = new T.Group(); player = new T.Group(); companion = new T.Group(); entities: Entity[] = []; enemies: Enemy[] = [];
+  root = new T.Group(); player = new T.Group(); companion = new T.Group(); /** The second pet (pet-slots.ts): an empty group until two companions are worn. */ companion2 = new T.Group(); entities: Entity[] = []; enemies: Enemy[] = [];
   position = new T.Vector3(0, 0, 1); destination: T.Vector3 | null = null; route: T.Vector3[] = [];
   selected: Entity | null = null; obstacles: Obstacle[] = []; particles: Particle[] = [];
   keys = new Set<string>(); facing = 0; moving = false; time = 0; zoom = 1; planet: PlanetId = 'home';
@@ -200,7 +200,7 @@ export class World {
   /** The guard dog at the pen or out with you, and other explorers' dogs (dog-world.ts); main sets ownDog (none while visiting). */
   guardDogs?: GuardDogs; ownDog?: () => number | null;
   /** Your pet: waits by the pen at home, follows (and fights) away from it (pet-world.ts); main sets petStaysHome (a visit). */
-  petPen?: PetCompanion; petStaysHome?: () => boolean;
+  petPen?: PetCompanion; petPen2?: PetCompanion; petStaysHome?: () => boolean;
   /** Pooled particles, rings, flashes, floating text, camera shake and hit-stop. */
   fx?: Effects;
   /** The red target ring and arrow, and the pooled danger discs. */
@@ -639,7 +639,7 @@ export class World {
     // The ground is coloured last, once it is known what stands on it (ground.ts: shade under trees, lush banks, glow, wear).
     this.root.add(buildGround({planet,layout,ponds:[],base:planet==='cloud'?-30:planet==='ocean'?-1.15:0,height:sunk,segments:planet==='lava'?20:12,detail:perfFlags.richLook?this.groundDetail(ponds):undefined}));
     for(const name of kitsFor(planet)){const kit=SCENERY_KITS[name];if(!kit.ready)void kit.load().then(()=>{if(kit.ready&&this.planet===planet)this.refreshScenery();});}
-    this.batchScenery();this.refreshScenery();this.root.add(this.player,this.companion);this.cameraTarget.copy(this.position);this.cropCards?.reset();this.syncCrops();this.syncDropped();this.applyRefinedAssets();this.syncDecorations();this.refreshEnvironmentNodes();
+    this.batchScenery();this.refreshScenery();this.root.add(this.player,this.companion,this.companion2??=new T.Group());this.cameraTarget.copy(this.position);this.cropCards?.reset();this.syncCrops();this.syncDropped();this.applyRefinedAssets();this.syncDecorations();this.refreshEnvironmentNodes();
     if(this.remoteRoot&&!this.remoteRoot.parent)this.scene.add(this.remoteRoot);
     for(const remote of this.remotePlayers?.values()??[])remote.mesh.visible=!remote.pose.planet||remote.pose.planet===planet;
     this.onBuilt?.();
@@ -703,7 +703,7 @@ export class World {
     const model=applyDye(this.kitFor(id)?.instance(baseOf(id))??this.petModel(id),id);
     model.userData.flying=FLYING_PETS.includes(baseOf(id));
     // The kit's convention: the right wing lifts with +z, the left with -z.
-    model.userData.wings=model.children.filter(c=>/_wing_[lr]/.test(c.name)).map(c=>({node:c,base:c.rotation.z,side:/_wing_l/.test(c.name)?-1:1}));
+    model.userData.wings=model.children.filter(c=>/_wing_[lr]/.test(c.name)).map(c=>{c.userData.animated=true;/* flaps on its own: never merged into the body (avatar-merge.ts) */return {node:c,base:c.rotation.z,side:/_wing_l/.test(c.name)?-1:1};});
     return model;
   }
   /**
@@ -737,7 +737,8 @@ export class World {
     }
     if(kitDisguise)this.wearKit(c,id,'body');
     if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
-    if(gear.pet){const pet=this.petFor(gear.pet);pet.name='remote-pet';pet.position.set(-1,0,-.6);c.add(pet);}
+    // Up to two pets beside them (pet-slots.ts): the first on the left as ever, the second on the right; with their dog out (drawn by dog-world.ts on the left) the one pet takes the right.
+    for(let i=0;i<2;i++){const id=M.companionId(gear,i);if(!id)break;const pet=this.petFor(id);pet.name='remote-pet';pet.position.set(i||M.dogWorn(gear)?1:-1,0,-.6);c.add(pet);}
     addOutlines(c,{merge:true});
     return c;
   }
@@ -793,10 +794,10 @@ export class World {
   tryOnGear?:SaveState['gear']|null;
   refreshPlayer() {
     const gear=this.tryOnGear??this.state.gear;
-    this.disposeTree(this.player);this.player.removeFromParent();this.player=this.avatar(this.state.color,{...gear,pet:undefined},this.tryOnLook??lookOf(this.state));this.player.rotation.order='YXZ';
+    this.disposeTree(this.player);this.player.removeFromParent();this.player=this.avatar(this.state.color,{...gear,pet:undefined,pet2:undefined},this.tryOnLook??lookOf(this.state));this.player.rotation.order='YXZ';
     // These copies are the explorer's own (flash and blink edit them), so the stealth fade below reuses them instead of copying again.
     this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;o.userData.statusMaterials=true;this.playerMaterials.push(o.material);}});this.root.add(this.player);
-    const pet=this.companion;this.disposeTree(pet);pet.removeFromParent();this.companion=gear.pet?this.petFor(gear.pet):new T.Group();this.companion.position.copy(pet.position);this.companion.rotation.copy(pet.rotation);addOutlines(this.companion,{merge:true});this.root.add(this.companion);
+    for(let i=0;i<2;i++){const pet=(i?this.companion2:this.companion)??new T.Group(),id=M.companionId(gear,i),next=id?this.petFor(id):new T.Group();this.disposeTree(pet);pet.removeFromParent();next.position.copy(pet.position);next.rotation.copy(pet.rotation);next.visible=pet.visible;if(perfFlags.mergeCompanions)mergeParts(next,{exact:true});/* same-look pieces of each rigid part drawn as one: a second pet costs about what one cost before */addOutlines(next,{merge:true});this.root.add(next);if(i)this.companion2=next;else this.companion=next;}
     this.interior?.adopt();
   }
 
@@ -1788,9 +1789,9 @@ export class World {
     this.homeRecovering=atHome(this.planet,this.position,!!this.interior)&&this.state.hp>0&&this.state.hp<stats.maxHp;if(!this.authoritativeAction&&active&&this.homeRecovering)this.state.hp=Math.min(stats.maxHp,this.state.hp+homeRecoveryBonus(stats.regen)*dt);
     this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height;this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
-    (this.petPen??=new PetCompanion()).update(this,dt);
+    (this.petPen??=new PetCompanion()).update(this,dt);(this.petPen2??=new PetCompanion(1)).update(this,dt);
     this.animatePlayer(dt);this.animateRemotes(dt);
-    this.player.visible=!this.boarded;this.companion.visible=!this.boarded&&this.petPen.shown;
+    this.player.visible=!this.boarded;this.companion.visible=!this.boarded&&this.petPen.shown;if(this.companion2)this.companion2.visible=!this.boarded&&this.petPen2.shown;
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);
     if(this.fx)this.camera.position.add(this.fx.shakeOffset(dt,this.shakeOffset));

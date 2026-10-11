@@ -1315,7 +1315,7 @@ h1 > span {
   font-variant-numeric: tabular-nums;
 }
 .stat-strip b { font-weight: 1000; }
-.equipment { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.equipment { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
 .equipment > div {
   min-width: 0;
   display: flex;

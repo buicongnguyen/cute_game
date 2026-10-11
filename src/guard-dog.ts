@@ -9,6 +9,9 @@ import { atHome } from './home-care.ts';
  * behind on the side away from any pet; it lands with the explorer on a new planet. Back inside the safe circle (or
  * landing home) it trots back to the pen, and the pen takes it over again where it arrives.
  *
+ * Coming along is a choice: the dog is a pet item worn in one of the two pet slots (pet-slots.ts); not worn it stays at
+ * the pen wherever you go.
+ *
  * Guarding: the dog's garden protection is a property of owning it (farm.ts hasGuardDog / guardBiteDamage), and is
  * unchanged by where it walks: its job is the garden, visitors always find it at the pen (a visit shows the host's
  * pen), and the server never has to track a dog. Fights: while it follows you it tosses a bone at a creature within
@@ -28,13 +31,13 @@ export const DOG_RUN = 11, DOG_FAR = 26;
 export function leashSpot(pen: { x: number; z: number }, house?: { x: number; z: number } | null) {
   return house && Number.isFinite(house.x) && Number.isFinite(house.z) ? { x: house.x, z: house.z + .9 } : { x: pen.x, z: pen.z + 1.2 };
 }
-/** True while the dog should be with the explorer: away from the safe village (or on another planet). */
-/** The player's choice in Settings (this device): the dog stays at its pen, so you can fight alone. The server never sets it. */
-let dogStays = false;
-export const dogStaysHome = () => dogStays;
-export function setDogStays(on: boolean) { dogStays = !!on; }
+/**
+ * True where a dog that came along is with the explorer: away from the safe village (or on another planet). Whether it
+ * came along at all is the player's choice in the bag: the dog is a pet item (pet-slots.ts DOG_PET, dogWorn), so every
+ * caller asks `dogWorn(gear) && dogFollows(...)`. Not worn, it stays at its pen and you fight alone.
+ */
 export function dogFollows(planet: string, pose: { x: number; z: number; y?: number }, indoors = false) {
-  return !dogStays && !atHome(planet, pose, indoors);
+  return !atHome(planet, pose, indoors);
 }
 export interface DogLink { place: DogPlace; x: number; z: number; heading: number; speed: number }
 export const newDogLink = (): DogLink => ({ place: 'pen', x: 0, z: 0, heading: 0, speed: 0 });

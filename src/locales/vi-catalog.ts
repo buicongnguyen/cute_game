@@ -3,6 +3,7 @@ import { BOSS_PET_VI } from './vi-boss-pets.ts';
 import { DUNGEON_VI } from './vi-dungeon.ts';
 import { COLOSSUS_VI } from './vi-colossus.ts';
 import { VI_DYES } from './vi-dyes.ts';
+import { PETS2_ITEMS_VI } from './vi-pets2.ts';
 import { CTF_VI } from './vi-ctf.ts';
 import { RESCUE_VI } from './vi-rescue.ts';
 /** Vietnamese catalog labels. Short reference terms matched by stable item IDs;
@@ -830,6 +831,7 @@ Object.assign(VI_CATALOG, BOSS_PET_VI);
 Object.assign(VI_CATALOG, DUNGEON_VI);
 Object.assign(VI_CATALOG, COLOSSUS_VI);
 Object.assign(VI_CATALOG, VI_DYES);
+Object.assign(VI_CATALOG, PETS2_ITEMS_VI);
 Object.assign(VI_CATALOG, CTF_VI);
 Object.assign(VI_CATALOG, RESCUE_VI);
 

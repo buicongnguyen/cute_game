@@ -136,7 +136,7 @@ export function initOnline(game:GameBridge) {
   /** Gifts: pick things from your bag to hand a friend (server: friends only, a daily limit; it lands in their chest). */
   function giftPicker(friendId:string,box:HTMLElement){
     box.replaceChildren(el('h4','',t('Give from your bag')));
-    const bag=Object.entries(game.getState().bag).filter(([id,n])=>(n??0)>0&&ITEMS[id]).sort((a,b)=>(b[1]??0)-(a[1]??0)).slice(0,16);
+    const bag=Object.entries(game.getState().bag).filter(([id,n])=>(n??0)>0&&ITEMS[id]&&!ITEMS[id].penned).sort((a,b)=>(b[1]??0)-(a[1]??0)).slice(0,16);
     if(!bag.length){box.append(el('p','social-small',t('Your bag is empty.')));return;}
     const list=el('div','social-actions');
     for(const [id,n] of bag)list.append(button(`${t(ITEMS[id].name)} ×${n}`,async()=>{try{await queueAction({type:'giftFriend',payload:{ownerId:friendId,item:id,count:1}});announce('Gift sent!');giftPicker(friendId,box);}catch(error){announce((error as Error).message);}}));

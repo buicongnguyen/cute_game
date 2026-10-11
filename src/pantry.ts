@@ -10,8 +10,8 @@ import { ITEMS, canonicalItem, type Inventory } from './content.ts';
  */
 type Stocked = { bag: Inventory; chest: Inventory; gear: Partial<Record<string, string>>; planet: string };
 
-/** The backpack stack minus the one worn copy of an equipped id. */
-export function looseQuantity(s: Stocked, raw: string) { const id = canonicalItem(raw); return Math.max(0, (s.bag[id] || 0) - (Object.values(s.gear).includes(id) ? 1 : 0)); }
+/** The backpack stack minus the worn copies of an equipped id (one; two for a pet worn in both pet slots). */
+export function looseQuantity(s: Stocked, raw: string) { const id = canonicalItem(raw); let worn = 0; for (const key in s.gear) if (s.gear[key] === id) worn++; return Math.max(0, (s.bag[id] || 0) - worn); }
 /** Loose backpack stack, plus the house chest when at home. */
 export function pantry(s: Stocked, raw: string) { const id = canonicalItem(raw); return looseQuantity(s, id) + (s.planet === 'home' ? s.chest[id] || 0 : 0); }
 /** The part of `pantry` that would come out of the chest (the backpack is used first). */

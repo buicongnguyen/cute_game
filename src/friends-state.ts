@@ -57,7 +57,7 @@ export const FRIEND_SLOTS: readonly FriendSlot[] = ['hat', 'outfit', 'boots', 'p
 /** The friend slot an item goes in (its own SaveState.gear slot); disguises and non-gear are not for friends. */
 export function friendSlot(raw: ItemId): FriendSlot | null {
   const slot = ITEMS[canonicalItem(raw)]?.slot;
-  return slot && (FRIEND_SLOTS as readonly string[]).includes(slot) ? slot as FriendSlot : null;
+  return slot && (FRIEND_SLOTS as readonly string[]).includes(slot) && !ITEMS[canonicalItem(raw)].penned ? slot as FriendSlot : null; // the guard dog stays yours (pet-slots.ts)
 }
 
 /** A defeated boss as `planet:type`; called by model.ts grantDefeat (offline and on the server alike). */

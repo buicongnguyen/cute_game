@@ -5,7 +5,8 @@ import { DUNGEON_ITEMS } from './dungeon-content.ts';
 import { COLOSSUS_ITEMS, COLOSSUS_LOOT, COLOSSUS_TYPE } from './colossus-content.ts';
 // Gameplay facts measured from the public reference client, 2026-09-30.
 // Rendering assets, descriptions and implementation code are independently authored.
-export type GearSlot = 'weapon' | 'hat' | 'outfit' | 'boots' | 'pet' | 'disguise';
+/** Keys of SaveState.gear. 'pet2' is the second pet slot: it holds an item whose own slot is 'pet' (pet-slots.ts); no item names it. */
+export type GearSlot = 'weapon' | 'hat' | 'outfit' | 'boots' | 'pet' | 'pet2' | 'disguise';
 export type PlanetId = 'home' | 'candy' | 'ice' | 'lava' | 'toy' | 'jungle' | 'ocean' | 'cloud' | 'shadow';
 export type ItemId = string;
 export type CropId = string;
@@ -31,6 +32,8 @@ export interface ItemDef {
     name: string;
     /** Kept so old saves keep their possessions, but no longer obtainable (the collection log leaves it out). */
     keepsake?: boolean;
+    /** Lives at the animal pen, not in the backpack (the guard dog, pet-slots.ts): no bag slot, never sold, dropped, stored or given. */
+    penned?: boolean;
     icon: string;
     desc: string;
     type: string;
@@ -3899,6 +3902,8 @@ for (const [id, fact] of Object.entries(ITEM_FACTS)) {
 // usable rather than deleting possessions when upgrading an existing save.
 ITEMS.wood = { name: 'Wild wood', icon: '🪵', type: 'material', sell: 5, keepsake: true, desc: 'A keepsake material from the first garden. Can still be sold.' };
 ITEMS.bunny = { name: 'Mochi bunny', icon: '🐰', type: 'pet', slot: 'pet', sell: 0, keepsake: true, stats: { atk: 3 }, attack: 3, pet: { scale: .5, dmg: .25, cd: 1.5 }, desc: 'Your original companion stays with you.' };
+// The garden guard dog as a pet (pet-slots.ts): owning the pen's dog grants it; worn, the dog comes along and tosses bones (guard-dog.ts).
+ITEMS.pet_dog = { name: 'Garden guard dog', icon: '🐕', type: 'pet', slot: 'pet', sell: 0, keepsake: true, penned: true, desc: 'Your guard dog. Bring it along and it tosses bones at creatures; left at home it rests by its pen. It guards your garden either way.' };
 export const LEGACY_ITEMS: Record<string, string> = { turnip: 'radish', fertilizer: 'spore', fish: 'fish_perch', goldenfish: 'fish_koi', sword: 'sword_wood', blaster: 'gun_bubble', hat: 'hat_straw', outfit: 'armor_leather', boots: 'boots_cloud', firesword: 'sword_lava', fireboots: 'boots_lava', dragon: 'pet_dragon', crystal: 'starshard', ember: 'magma' };
 export function canonicalItem(id: string) { return Object.hasOwn(LEGACY_ITEMS, id) ? LEGACY_ITEMS[id] : id; }
 export const SHOP_CATEGORIES = SHOP_FACTS;
@@ -4025,6 +4030,7 @@ for (const item of Object.values(ITEMS))
 const englishNames: Record<string, string> = {
     ...Object.fromEntries(Object.entries(FRUIT_FACTS).map(([id, fact]) => [id, fact.name])),
     radish: 'Radish', carrot: 'Carrot', pumpkin: 'Pumpkin', mint: 'Mint', chili: 'Chili', candy: 'Candy bloom', bean: 'Shield bean', star: 'Star fruit', berry: 'Berry', coffee: 'Coffee bean', moonflower: 'Moonflower', magnetmelon: 'Magnet melon', melon: 'Melon', clover: 'Lucky clover', glowshroom: 'Glow mushroom', iceberry: 'Ice berry', goldcorn: 'Golden corn', dragonfruit: 'Dragon fruit', rainbowrose: 'Rainbow rose',
+    pet_dog: 'Garden guard dog',
     seed_fire: 'Fire seed', seed_ice: 'Ice seed', seed_star: 'Star seed', plot_kit: 'Garden bed kit', meat: 'Meat', leather: 'Leather', bone: 'Bone', manure: 'Fertilizer', spore: 'Magic spore', tusk: 'Tusk', claw: 'Claw', sap: 'Sap', nectar: 'Nectar', spine: 'Cactus spine', cwater: 'Cactus water', bloom: 'Wild flower', honey: 'Honey', sugar: 'Sugar', icecrystal: 'Ice crystal', magma: 'Magma', starshard: 'Star shard', mcrystal: 'Magma crystal', obsidian: 'Obsidian', firecore: 'Fire core', dragonscale: 'Dragon scale', fcrystal: 'Fire crystal', gear: 'Toy gear', battery: 'Battery', vine: 'Vine', amber: 'Amber', pearl: 'Pearl', coral: 'Coral', feather: 'Feather', thunderstone: 'Thunder stone', shadow: 'Shadow essence', moonstone: 'Moonstone', dragonegg: 'Dragon egg', potion: 'Healing potion', worm: 'Worm bait', boot: 'Old boot', rod: 'Fishing rod', rod_gold: 'Golden fishing rod', rod_steady: 'Steady fishing rod', crown: 'Royal crown', trident: 'Ocean trident', toy_hammer: 'Toy hammer', wood: 'Wild wood', bunny: 'Mochi bunny',
     fish_perch: 'Perch', fish_clown: 'Clownfish', fish_puffer: 'Pufferfish', fish_carp: 'Carp', fish_shark: 'Shark', fish_rainbow: 'Rainbow fish', fish_catfish: 'Catfish', fish_koi: 'Koi', fish_eel: 'Eel', fish_swordfish: 'Swordfish', fish_jelly: 'Jellyfish', fish_icepike: 'Ice pike', fish_whale: 'Whale', fish_kraken: 'Kraken', fish_golden: 'Golden fish', fish_sunfish: 'Sunfish', fish_angler: 'Anglerfish', fish_manta: 'Manta ray',
     armor_wings: 'Dragon wings', armor_tux: 'Tuxedo', armor_kimono: 'Kimono', armor_hawaii: 'Island shirt', armor_hoodie: 'Hoodie', armor_army: 'Army uniform', armor_navy: 'Navy uniform', armor_aodai: 'Vietnamese long dress', armor_aodai_man: 'Vietnamese long gown', armor_usa: 'Stars and stripes outfit', armor_vietnam: 'Vietnam flag outfit', hat_halo: 'Halo', hat_graduate: 'Graduation cap', boots_flipper: 'Swim flippers',
