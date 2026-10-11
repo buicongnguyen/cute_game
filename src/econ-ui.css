@@ -1,11 +1,11 @@
-/* News board (news-board.ts): the 📰 menu button with its unread count, and the update cards. */
-.icon-button[data-action="news"] { background: linear-gradient(180deg, #ffe07a, #f2b415); }
-.icon-button[data-action="news"] > i.news-count {
+/* News board (news-board.ts): its unread count on the dock's Ranking button, and the update cards (shown in the
+   leaderboard dialog's News section, ranking.css). */
+.icon-button[data-action="ranking"] > i.news-count {
   width: auto; min-width: 20px; height: 20px; padding: 0 4px; right: -6px; top: -6px;
   display: grid; place-items: center; border-width: 2px; border-radius: 10px;
   font: 900 11px/1 inherit; font-style: normal; color: #fff; background: #e5484d;
 }
-.icon-button[data-action="news"] > i.news-count[hidden] { display: none; }
+.icon-button[data-action="ranking"] > i.news-count[hidden] { display: none; }
 .news-list { display: grid; gap: 10px; margin-top: 10px; }
 .news-card { display: grid; grid-template-columns: 44px 1fr; gap: 10px; padding: 12px; border: 2px solid var(--line); border-radius: 16px; background: #fff; }
 .news-card.latest { border-color: #f2b415; background: #fffbea; box-shadow: 0 3px 0 #f6d77a; }
@@ -21,7 +21,7 @@
 @media (max-width: 600px) {
   .news-card { grid-template-columns: 36px 1fr; gap: 8px; padding: 10px; }
   .news-card .news-icon { width: 36px; height: 36px; font-size: 20px; border-radius: 11px; }
-  .icon-button[data-action="news"] > i.news-count { min-width: 17px; height: 17px; font-size: 10px; right: -5px; top: -5px; }
+  .icon-button[data-action="ranking"] > i.news-count { min-width: 17px; height: 17px; font-size: 10px; right: -5px; top: -5px; }
 }
 /* Settings: the music and effects volume sliders (audio-settings.ts). */
 .volume-control { display: flex; align-items: center; gap: 8px; min-width: 150px; }

@@ -1,5 +1,5 @@
 /**
- * Publishes how wide the dock (the menu column on the right edge) is as the CSS variable --dock-w, so the energy tag, the
+ * Publishes how wide the dock (the menu column on the right edge) is as the CSS variable --dock-w, so the
  * map panel, the Home tab and the quest slips (hud-ours.css) sit just left of it however many columns its buttons
  * fold into on this screen. It also keeps --menu-bottom (where the dock's buttons end) for sheets that want it.
  * Measured when the dock's size changes, never per frame.
@@ -21,8 +21,7 @@ export function initHudLayout() {
   };
   measure();
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(measure).observe(menu);
-  // Buttons come and go (news, online, neighbours, install); the energy number changing is not a layout change, so only
-  // the dock's own child list and its two slots are watched.
+  // Buttons come and go (online, neighbours, install): only the dock's own child list and its two slots are watched.
   if (typeof MutationObserver !== 'undefined') {
     const watch = new MutationObserver(measure); watch.observe(menu, { childList: true });
     menu.querySelectorAll('#social-slot, #platform-slot').forEach(slot => watch.observe(slot, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] }));

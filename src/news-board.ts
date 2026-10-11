@@ -1,12 +1,12 @@
 import { t, getLanguage, onLanguageChange, type Language } from './i18n.ts';
-import { hudIcon } from './hud-icons.ts';
 
 /**
- * The news board (reference F-002): a 📰 button in the top-right menu with a red unread count, and a panel with two tabs,
- * "News" (update cards, newest first, the newest tagged NEW) and "Coming soon". The entries are a static file written
- * for this game (public/news.json, both languages in each entry). Read entries are remembered on this device
- * (localStorage READ_KEY). When something is unread the panel opens by itself 2.5 s after load, retrying every 2 s
- * (up to 40 times) until the game has started and no other panel is open, like the reference.
+ * The news board (reference F-002): a bulletin with two tabs, "News" (update cards, newest first, the newest tagged NEW)
+ * and "Coming soon". It lives inside the leaderboard dialog as its News section (ranking.ts), and its red unread count
+ * shows on the dock's Ranking button and on that News tab; there is no separate news button. The entries are a static
+ * file written for this game (public/news.json, both languages in each entry). Read entries are remembered on this
+ * device (localStorage READ_KEY). When something is unread the dialog opens by itself on News 2.5 s after load, retrying
+ * every 2 s (up to 40 times) until the game has started and no other panel is open, like the reference.
  */
 export const READ_KEY = 'zoo-news-read';
 export const AUTO_OPEN = { firstMs: 2500, retryMs: 2000, tries: 40 } as const;
@@ -67,39 +67,30 @@ export function newsHtml(data: NewsData, tab: NewsTab, fresh: Set<string>, lang:
   return tabs + `<div class="news-list">${card(first, 0)}${rest.length ? `<div class="section-label news-earlier">📜 ${esc(t('Earlier updates'))}</div>${rest.map((e, i) => card(e, i + 1)).join('')}` : ''}</div>`;
 }
 
+/** The board's home: the News section of the leaderboard dialog (what ranking.ts initRanking returns as `news`). */
+export interface NewsHost {
+  /** The bulletin is drawn in here. */
+  panel: HTMLElement;
+  /** Opens the dialog on its News section. */
+  open(): void;
+  /** True while the News section is in view. */
+  shown(): boolean;
+  /** The unread count for the Ranking button in the dock and the News tab. */
+  setUnread(count: number): void;
+  /** Called every time the News section comes into view (its tab was tapped, or open() was called). */
+  onShown(listener: () => void): void;
+}
 export interface NewsDeps {
-  /** main.ts openDialog: the panel shell (title, kicker, body, icon). */
-  openDialog(type: string, title: string, body: string, kicker?: string, icon?: string): void;
+  host: NewsHost;
   /** True when the game has started and no panel is open: the moment the board may open itself. */
   idle(): boolean;
-  /** The app root: the 📰 button goes into its top-right menu, and its clicks (📰, tabs) are handled here. */
-  root: HTMLElement;
   url: string;
   fetch?: typeof fetch;
 }
 export function initNewsBoard(d: NewsDeps) {
-  let data: NewsData = { news: [], upcoming: [] }, tab: NewsTab = 'news', fresh = new Set<string>(), loaded = false;
-  // The 📰 button sits after the journal, like the reference's menu (F-005); added here so main.ts's menu markup stays as it is.
-  const menu = d.root.querySelector<HTMLElement>('#hud .top-actions'), button = document.createElement('button');
-  button.type = 'button'; button.className = 'icon-button'; button.dataset.action = 'news'; button.innerHTML = hudIcon('news') + '<i class="news-count" hidden></i>';
-  const label = () => { button.title = t('News'); button.setAttribute('aria-label', t('News')); };
-  label(); onLanguageChange(label);
-  menu?.insertBefore(button, menu.querySelector('#social-slot'));
-  d.root.addEventListener('click', event => {
-    const b = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]'); if (!b || b.disabled) return;
-    if (b.dataset.action === 'news') api.open(); else if (b.dataset.action === 'news-tab') api.tab(b.dataset.kind);
-  });
-  const refreshBadge = () => {
-    const badge = button.querySelector<HTMLElement>('.news-count'); if (!badge) return;
-    const n = unread(data, readIds()).length;
-    badge.hidden = n === 0; badge.textContent = n > 9 ? '9+' : n ? String(n) : '';
-  };
-  const render = () => d.openDialog('news', 'News board', newsHtml(data, tab, fresh), 'WHAT IS NEW IN ZOO GARDEN', '📰');
-  const open = (next: NewsTab = 'news') => {
-    tab = next;
-    fresh = new Set(unread(data, readIds()).map(e => e.id));
-    render(); markRead(data.news.map(e => e.id)); refreshBadge();
-  };
+  let data: NewsData = { news: [], upcoming: [] }, tab: NewsTab = 'news', asked: NewsTab | null = null, fresh = new Set<string>(), loaded = false;
+  const refreshBadge = () => d.host.setUnread(unread(data, readIds()).length);
+  const render = () => { d.host.panel.innerHTML = newsHtml(data, tab, fresh); };
   const load = async () => {
     try {
       const response = await (d.fetch ?? fetch)(d.url, { cache: 'no-store' });
@@ -107,16 +98,29 @@ export function initNewsBoard(d: NewsDeps) {
     } catch { /* Offline: no board this time. */ }
     refreshBadge();
   };
+  // Coming into view: what was unread wears NEW this once, and from now on everything counts as read.
+  const arrive = () => {
+    tab = asked ?? 'news'; asked = null;
+    fresh = new Set(unread(data, readIds()).map(e => e.id));
+    render(); markRead(data.news.map(e => e.id)); refreshBadge();
+    if (!loaded) void load().then(() => { if (loaded && d.host.shown()) { asked = tab; arrive(); } });
+  };
+  d.host.onShown(arrive);
+  d.host.panel.addEventListener('click', event => {
+    const b = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-action="news-tab"]'); if (b && !b.disabled) api.tab(b.dataset.kind);
+  });
+  onLanguageChange(() => { if (d.host.shown()) render(); });
   // Automated browsers (tests) open it only when asked with ?news=1, so a timed panel never lands in a scripted run.
   const auto = !(globalThis.navigator?.webdriver) || /[?&]news=1(&|$)/.test(globalThis.location?.search ?? '');
   const ready = load().then(() => {
     if (!auto || !unread(data, readIds()).length) return;
     let tries = 0;
-    const attempt = () => { if (!unread(data, readIds()).length) return; if (d.idle()) { open('news'); return; } if (++tries < AUTO_OPEN.tries) setTimeout(attempt, AUTO_OPEN.retryMs); };
+    const attempt = () => { if (!unread(data, readIds()).length) return; if (d.idle()) { api.open('news'); return; } if (++tries < AUTO_OPEN.tries) setTimeout(attempt, AUTO_OPEN.retryMs); };
     setTimeout(attempt, AUTO_OPEN.firstMs);
   });
   const api = {
-    open: (next?: NewsTab) => { open(next); if (!loaded) void load().then(() => { if (loaded) open(next); }); },
+    /** Opens the leaderboard dialog on News, on the given tab of the bulletin. */
+    open: (next: NewsTab = 'news') => { asked = next; d.host.open(); },
     tab: (next: string | undefined) => { tab = next === 'soon' ? 'soon' : 'news'; render(); },
     refreshBadge, ready, data: () => data,
   };

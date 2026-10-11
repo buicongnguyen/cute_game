@@ -8,7 +8,7 @@ export function measureHud() {
   const box = el => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
   const all = sel => [...document.querySelectorAll(sel)].filter(seen).map(box);
   const groups = {
-    hero: all('#hud .player-card'), energy: all('#hud .top-actions > .energy'), dock: all('#hud .top-actions button'), map: all('#hud .minimap'), home: all('#hud .home-button'),
+    hero: all('#hud .player-card'), dock: all('#hud .top-actions button'), map: all('#hud .minimap'), home: all('#hud .home-button'),
     slips: all('#hud .tracker-panels > *, #hud #tracker-chip'), eat: all('#hud #quick-eat, #hud .quick-eat-pick'), buffs: all('#hud #buff-bar > *'),
     skills: all('#hud .skill'), pad: all('#hud .attack-pad'), jump: all('#hud .jump-pad'), stick: all('#movement-joystick'), boss: all('#boss-bar'), target: all('#target-frame'),
     colossus: all('.colossus-banner'), prompt: all('#context-prompt button'), keys: all('#keys-guide'), reel: all('#reel-button'), fishHint: all('#fish-hint'), weather: all('#environment-bar > *'),
@@ -22,7 +22,11 @@ export function measureHud() {
     const run = (dx, dy) => { let n = 1; for (const s of [1, -1]) for (let i = 1; i < 40; i++) { if (!mine(document.elementFromPoint(cx + dx * i * s, cy + dy * i * s))) break; n++; } return n; };
     const w = run(1, 0), h = run(0, 1); if (w < 44 || h < 44) small.push({ el: el.id || el.className || el.dataset.action, w, h });
   }
-  return { W: innerWidth, H: innerHeight, groups, small, dockW: getComputedStyle(document.documentElement).getPropertyValue('--dock-w') };
+  // The hero plate's own pieces (they sit inside it, so they are not a group of their own): the name, the level badge on the
+  // portrait tile, the energy count over the health bar. `cut` = the text is wider than its box; `tall` = the height of its glyphs.
+  const piece = sel => { const el = document.querySelector(sel); if (!seen(el)) return null; const cs = getComputedStyle(el); return { ...box(el), text: el.textContent.trim(), cut: el.scrollWidth > el.clientWidth + 1, font: parseFloat(cs.fontSize), ellipsis: cs.textOverflow === 'ellipsis' }; };
+  const plate = { name: piece('#hud #player-name'), level: piece('#hud .level-badge'), energy: piece('#hud .hero-energy'), energyText: piece('#hud #energy'), avatar: piece('#hud .avatar'), health: piece('#hud .meter.health'), oldTag: document.querySelectorAll('#hud .top-actions .energy, #hud .level-chip, #hud [data-action="news"]').length };
+  return { W: innerWidth, H: innerHeight, groups, plate, small, dockW: getComputedStyle(document.documentElement).getPropertyValue('--dock-w') };
 }
 /** Toes and the pad are round: two of them overlap when their centres are closer than their radii allow, not when their boxes meet.
     The stick is a disc too (joystick.css, border-radius 50%): with jumping on, the attack toe sits by its lower corner, where the boxes
@@ -40,6 +44,31 @@ export function findings(m) {
   }
   for (const [name, boxes] of Object.entries(m.groups)) for (const b of boxes) if (b.l < -.5 || b.t < -.5 || b.r > m.W + .5 || b.b > m.H + .5) out.push(`${name} leaves the screen ${JSON.stringify([b.l, b.t, b.r, b.b].map(Math.round))}`);
   for (const s of m.small) if (!KNOWN_SMALL.some(k => String(s.el).includes(k))) out.push(`touch target ${JSON.stringify(s)}`);
+  out.push(...plateFindings(m));
+  return out;
+}
+/** The hero plate: the name over the tile, the level as a number on a badge, the energy count over the health bar, all inside the
+    plate and none of them cut (a long name may end in an ellipsis: that is `name.cut` with `name.ellipsis`, and is not a finding). */
+export function plateFindings(m) {
+  const out = [], p = m.plate, hero = m.groups.hero[0]; if (!p || !hero) return ['the hero plate is missing'];
+  const within = (b, slack = .5) => b.l >= hero.l - slack && b.t >= hero.t - slack && b.r <= hero.r + slack && b.b <= hero.b + slack;
+  if (p.oldTag) out.push('the separate energy tag, the level chip or the News button is still in the HUD');
+  for (const key of ['name', 'level', 'energy', 'energyText', 'health']) if (!p[key]) out.push(`hero plate: ${key} is not shown`);
+  if (out.length) return out;
+  if (!within(p.name) || !within(p.energy) || !within(p.health)) out.push(`hero plate: a piece leaves the plate ${JSON.stringify([hero, p.name, p.energy, p.health].map(b => [b.l, b.t, b.r, b.b].map(Math.round)))}`);
+  // The badge may hang a few pixels over the tile's corner, never out of the plate's outline by more than its border.
+  if (!within(p.level, 3)) out.push(`hero plate: the level badge leaves the plate ${JSON.stringify([p.level.l, p.level.t, p.level.r, p.level.b].map(Math.round))}`);
+  if (!/^\d{1,3}$/.test(p.level.text)) out.push(`the level badge shows "${p.level.text}", not the number alone`);
+  if (p.level.cut || p.level.font < 11 || p.level.b - p.level.t < 16) out.push(`the level badge is cut or too small to read ${JSON.stringify(p.level)}`);
+  if (p.energyText.cut || p.energy.cut || p.energyText.r > p.energy.r + .5) out.push(`the energy count is cut ${JSON.stringify(p.energyText)}`);
+  if (p.energyText.font < 12) out.push(`the energy count is ${p.energyText.font}px, too small to read`);
+  if (p.energy.b > p.health.t + .5) out.push('the energy count is not above the health bar');
+  if (p.name.cut && !p.name.ellipsis) out.push('a long name is clipped without an ellipsis');
+  if (p.avatar) {
+    if (p.name.b > p.avatar.t + .5) out.push('the name is not above the portrait tile');
+    const cx = (p.level.l + p.level.r) / 2, cy = (p.level.t + p.level.b) / 2;
+    if (cx < p.avatar.l || cx > p.avatar.r + 2 || cy < p.avatar.t || cy > p.avatar.b + 2 || p.level.r < p.avatar.r - 2 || p.level.b < p.avatar.b - 2) out.push(`the level badge is not on the tile's corner ${JSON.stringify([p.avatar, p.level].map(b => [b.l, b.t, b.r, b.b].map(Math.round)))}`);
+  } else if (p.level.r > p.name.l + .5 || p.level.b <= p.name.t || p.level.t >= p.name.b || p.name.b > p.energy.t + .5) out.push('without the tile the level badge should stand before the name, over the energy count');
   return out;
 }
 /** The three states the probe measures; each returns when the HUD has settled. */

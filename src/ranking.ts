@@ -3,6 +3,9 @@
  * at the bottom. Online and signed in it reads GET api/ranking (server/ranking.mjs); in solo play (the static Pages
  * build, or not signed in) it shows the neighbourhood board, the player and the AI neighbours (ranking-logic.ts soloBoard),
  * so it is never empty. The rules live in ranking-logic.ts; this file is only the dialog.
+ *
+ * The dialog has two sections, Ranking and News. The News section is the news board's home (news-board.ts draws into
+ * `news.panel`); the unread count shows on the dock's Ranking button and on the News tab.
  */
 // ranking.css is imported by main.ts (this module is a lazy chunk: its sheet must keep its place in the cascade)
 import type { GameBridge } from './game-bridge.ts';
@@ -20,6 +23,14 @@ const CATEGORY: Record<Category, [string, string]> = {
   boss: ['👑', 'Bosses defeated'], level: ['⭐', 'Level'], big: ['🐳', 'Biggest fish'],
 };
 const BOARDS: Array<[Board, string, string]> = [['weekly', '📅', 'This week'], ['all', '🌏', 'All time']];
+export type Section = 'ranking' | 'news';
+/** Icon, kicker and title of the dialog header, and the tab label, per section. */
+export const SECTIONS: Record<Section, { icon: string; kicker: string; title: string; tab: string }> = {
+  ranking: { icon: '🏆', kicker: 'CLIMB THE RANKS', title: 'Leaderboard', tab: 'Ranking' },
+  news: { icon: '📰', kicker: 'WHAT IS NEW IN ZOO GARDEN', title: 'News board', tab: 'News' },
+};
+/** The count as the badges show it: nothing for none, "9+" past nine. */
+export const badgeText = (count: number) => count > 9 ? '9+' : count > 0 ? String(Math.floor(count)) : '';
 /** Neighbours in the solo board: as many as bots.ts walks around (its COUNT). */
 const NEIGHBOURS = 5;
 const read = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
@@ -45,7 +56,7 @@ function untilReset(now: number) {
 
 export function initRanking(game: GameBridge) {
   const staticHost = import.meta.env.VITE_STATIC_HOST === 'true';
-  let board: Board = 'weekly', cat: Category = 'exp', reply: BoardReply | null = null, status: 'loading' | 'error' | 'ready' = 'loading', solo = staticHost, request = 0;
+  let section: Section = 'ranking', unreadNews = 0, board: Board = 'weekly', cat: Category = 'exp', reply: BoardReply | null = null, status: 'loading' | 'error' | 'ready' = 'loading', solo = staticHost, request = 0;
   /** No game server behind this page (the Vite dev server, a static host): learnt from the first reply, kept for the session. */
   let noServer = staticHost;
   /** The static (Pages) build knows the owner's server address (VITE_ONLINE_URL, set as the repository variable ONLINE_URL): while that PC server is on, its real-player list is shown. */
@@ -67,10 +78,12 @@ export function initRanking(game: GameBridge) {
   // ---- The dialog ----
   const dialog = el('dialog', 'social-dialog ranking-dialog'); dialog.id = 'ranking-dialog';
   const header = el('header', 'social-header'), heading = el('h2'), close = el('button', 'social-close', '✕');
-  close.type = 'button'; close.addEventListener('click', () => dialog.close()); header.append(...headerParts('🏆', 'CLIMB THE RANKS', heading), close); dialog.addEventListener('keydown', event => { if (event.key === 'Escape' && dialog.open) { event.preventDefault(); dialog.close(); } });
+  const [tile, titleBox] = headerParts(SECTIONS.ranking.icon, SECTIONS.ranking.kicker, heading), kicker = titleBox.firstElementChild!;
+  close.type = 'button'; close.addEventListener('click', () => dialog.close()); header.append(tile, titleBox, close); dialog.addEventListener('keydown', event => { if (event.key === 'Escape' && dialog.open) { event.preventDefault(); dialog.close(); } });
+  const sections = el('nav', 'ranking-sections'), newsPanel = el('div', 'ranking-news'), newsListeners = new Set<() => void>(); newsPanel.hidden = true;
   const tabs = el('nav', 'ranking-tabs'), chips = el('nav', 'ranking-cats'), hint = el('p', 'ranking-hint'), list = el('ol', 'ranking-list'), mine = el('footer', 'ranking-mine');
   list.setAttribute('aria-live', 'polite');
-  dialog.append(header, tabs, chips, hint, list, mine); document.body.append(dialog);
+  dialog.append(header, sections, tabs, chips, hint, list, mine, newsPanel); document.body.append(dialog);
   dialog.addEventListener('click', event => { if (event.target === dialog) { const r = dialog.getBoundingClientRect(), e = event as MouseEvent; if (e.clientX && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) dialog.close(); } });
 
   const button = (label: string, action: () => void, className = '') => { const node = el('button', className, label); node.type = 'button'; node.addEventListener('click', action); return node; };
@@ -85,7 +98,17 @@ export function initRanking(game: GameBridge) {
     return item;
   }
   function render() {
-    heading.textContent = t('Leaderboard'); close.setAttribute('aria-label', t('Close the leaderboard')); dialog.setAttribute('aria-label', t('Leaderboard'));
+    const look = SECTIONS[section], onNews = section === 'news';
+    tile.textContent = look.icon; kicker.textContent = t(look.kicker); heading.textContent = t(look.title); close.setAttribute('aria-label', t('Close the leaderboard')); dialog.setAttribute('aria-label', t(look.title));
+    sections.setAttribute('aria-label', t('Ranking and news'));
+    sections.replaceChildren(...(Object.keys(SECTIONS) as Section[]).map(id => {
+      const b = button(`${SECTIONS[id].icon} ${t(SECTIONS[id].tab)}`, () => { if (section !== id) show(id); }); b.dataset.section = id; b.setAttribute('aria-pressed', String(section === id));
+      if (id === 'news' && unreadNews > 0) { const badge = el('i', 'news-count', badgeText(unreadNews)); badge.setAttribute('aria-hidden', 'true'); b.append(badge); b.setAttribute('aria-label', `${t(SECTIONS[id].tab)} · ${t('{n} unread news', { n: unreadNews })}`); }
+      return b;
+    }));
+    for (const node of [tabs, chips, list]) node.hidden = onNews;
+    newsPanel.hidden = !onNews;
+    if (onNews) { hint.hidden = true; mine.hidden = true; return; }
     tabs.replaceChildren(...BOARDS.map(([id, icon, label]) => { const b = button(`${icon} ${t(label)}`, () => { if (board === id) return; board = id; cat = categoriesOf(id)[0]; void load(); }); b.setAttribute('aria-pressed', String(board === id)); return b; }));
     chips.replaceChildren(...categoriesOf(board).map(id => { const [icon, label] = CATEGORY[id], b = button(`${icon} ${t(label)}`, () => { if (cat === id) return; cat = id; void load(); }); b.setAttribute('aria-pressed', String(cat === id)); return b; }));
     const now = Date.now();
@@ -148,11 +171,30 @@ export function initRanking(game: GameBridge) {
     } catch { if (ticket !== request) return; status = 'error'; reply = null; }
     render();
   }
-  function open() { if (!noServer) solo = false; render(); if (!dialog.open) dialog.showModal(); void load(); }
+  /** Shows a section. Ranking asks for the board again, as opening always did; News tells the news board to draw itself. */
+  function show(next: Section) {
+    section = next;
+    if (next === 'ranking' && !noServer) solo = false;
+    render(); if (!dialog.open) dialog.showModal();
+    if (next === 'ranking') void load(); else { newsPanel.scrollTop = 0; for (const listener of newsListeners) listener(); }
+  }
+  const open = () => show('ranking');
 
   const trigger = document.querySelector<HTMLButtonElement>('#hud [data-action="ranking"]');
   trigger?.addEventListener('click', open);
-  const label = () => { if (trigger) { trigger.title = t('Ranking'); trigger.setAttribute('aria-label', t('Leaderboard')); } if (dialog.open) render(); };
+  const count = trigger?.querySelector<HTMLElement>('.news-count');
+  const label = () => {
+    if (trigger) { trigger.title = t('Ranking and news'); trigger.setAttribute('aria-label', unreadNews ? `${t('Ranking and news')} · ${t('{n} unread news', { n: unreadNews })}` : t('Ranking and news')); }
+    if (dialog.open) render();
+  };
   label(); onLanguageChange(label);
-  return { open, close: () => dialog.close() };
+  /** The news board's side of the dialog (news-board.ts NewsHost). */
+  const news = {
+    panel: newsPanel as HTMLElement,
+    open: () => show('news'),
+    shown: () => dialog.open && section === 'news',
+    setUnread(n: number) { if (n === unreadNews) return; unreadNews = n; if (count) { count.hidden = n <= 0; count.textContent = badgeText(n); } label(); },
+    onShown(listener: () => void) { newsListeners.add(listener); },
+  };
+  return { open, close: () => dialog.close(), news };
 }

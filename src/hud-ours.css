@@ -2,11 +2,12 @@
  * Zoo Garden's own HUD (stage 2 of docs/QUALITY-PLAN.md). Loaded after every older HUD sheet and before tap-targets.css.
  *
  * The arrangement
- *   - Hero plate, top left: a plum plate with a square-ish portrait, the name, a honey level tag and the two bars.
+ *   - Hero plate, top left: a plum plate with the name small along its top, a square-ish portrait wearing the level as a
+ *     honey badge on its corner, and beside it the energy count over the health and EXP bars.
  *   - The dock, right edge: every menu button as a cream tile in one column. When the screen is too short for one column
  *     it folds into two or three (CSS grid, no script). hud-layout.ts publishes its width as --dock-w.
- *   - Energy tag, map panel, Home tab and (on roomy screens) the quest slips hang in one column just left of the dock.
- *     The map is a rounded panel with the place name on a strip inside it.
+ *   - Map panel, Home tab and (on roomy screens) the quest slips hang in one column just left of the dock, the map
+ *     level with the dock's first button. The map is a rounded panel with the place name on a strip inside it.
  *   - Fight cluster, bottom right. Touch screens: a paw print, the big attack pad with the four skills as toes on an arc
  *     above it, in key order left to right. Desktop: the four skills in a row on a tray.
  *   - Phones keep the quest chips under the hero plate; the boss bar and the Colossus strip sit under the map and stop
@@ -25,33 +26,72 @@
   --dock-w: var(--dock);
   /* Height kept free under the dock for the fight cluster. */
   --dock-room: 132px;
-  /* The right edge of everything that hangs left of the dock, and the row under the energy tag. */
+  /* The right edge of everything that hangs left of the dock, and the top of the map: level with the dock's first button. */
   --col: calc(var(--edge) + var(--safe-right) + var(--dock-w) + 8px);
-  --row2: calc(var(--edge) + var(--safe-top) + var(--dock) + 4px);
-  /* The hero plate's width, so the energy tag can stop before it on narrow screens. */
+  --map-top: calc(var(--edge) + var(--safe-top) + (var(--dock) - var(--b)) / 2);
+  /* The portrait tile, and the hero plate's height with it: borders 4, padding 3 + 5, the name line 14, a gap of 2. */
+  --face: calc(var(--b) + 8px);
+  --hero-h: calc(var(--face) + 28px);
+  /* The hero plate's width, for what must stop before it (the Colossus bar, the Rescue belt). */
   --hero-w: 262px;
   --tile-shadow: 0 3px 0 rgba(58, 36, 51, .55);
   --tile: linear-gradient(180deg, #fffaf0, var(--cream-deep));
 }
 @media (max-width: 900px) { :root { --hero-w: 244px; } }
-@media (orientation: portrait) and (max-width: 600px) { :root { --hero-w: calc(min(130px, 34vw) + 74px); } }
-@media (orientation: portrait) and (max-width: 360px) { :root { --sk: 44px; --mm: 84px; --hero-w: calc(30vw + 22px); --paw-edge: 12px; } }
-@media (max-height: 520px) and (orientation: landscape) { :root { --hero-w: 216px; } }
+/* Phones: a 40 px tile (its tap area stays 44 px, hud-compact.css) beside 40 px of energy and bars; the plate is 65 px tall. */
+@media (orientation: portrait) and (max-width: 600px) { :root { --face: 40px; --hero-h: 65px; --hero-w: calc(min(130px, 34vw) + 74px); } }
+/* 360 px and narrower: no portrait tile. The plate takes the room the map leaves (never under 30vw of bars), so the name
+   and the energy number are not cut; --hero-in is the width of its bars. */
+@media (orientation: portrait) and (max-width: 360px) {
+  :root {
+    --sk: 44px; --mm: 84px; --paw-edge: 12px; --hero-h: 68px;
+    --hero-in: max(30vw, min(150px, calc(100vw - var(--col) - var(--mm) - var(--edge) * 2 - var(--safe-left) - 30px)));
+    --hero-w: calc(var(--hero-in) + 22px);
+  }
+  body.in-rescue { --hero-in: 30vw; }
+}
+/* Short landscape: the name and the energy count share the plate's top line, so it is 62 px tall (see "Short landscape" below). */
+@media (max-height: 520px) and (orientation: landscape) { :root { --face: 36px; --hero-h: 62px; --hero-w: 216px; } }
 @media (pointer: coarse), (max-width: 900px), (max-height: 520px) { :root { --dock-room: calc(var(--sk) * 2.38 + 44px); } }
 
 #app { --glass: rgba(58, 36, 51, .78); --glass-line: rgba(255, 246, 224, .5); }
 svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible; }
 
 /* ------------------------------------------------------------------ Hero plate */
+/* Three pieces on a grid: the name along the top, the portrait tile under it, the energy count and the bars beside the tile. */
 #app #hud .player-card {
-  left: calc(var(--edge) + var(--safe-left)); top: calc(var(--edge) + var(--safe-top)); gap: 8px; padding: 4px 10px 4px 4px;
+  left: calc(var(--edge) + var(--safe-left)); top: calc(var(--edge) + var(--safe-top)); padding: 3px 10px 5px 5px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "name name" "face details"; align-items: center; gap: 2px 8px;
   border-radius: 16px; background: var(--glass); border: 2px solid var(--glass-line); box-shadow: 0 3px 0 rgba(58, 36, 51, .35);
 }
-#app #hud .avatar { border-radius: 30%; border: 2px solid var(--plum); background: linear-gradient(160deg, #fffaf0, #ffe08a); box-shadow: inset 0 0 0 2px #fff; }
+/* The name never widens the plate (width 0, then stretched to the plate): a long one ends in an ellipsis. */
+#app #hud .player-name {
+  grid-area: name; display: block; width: 0; min-width: 100%; box-sizing: border-box; margin: 0; padding: 0 1px 0 3px; height: 14px;
+  font-size: 12px; line-height: 14px; font-weight: 900; letter-spacing: .2px;
+}
+/* The 4 px of headroom keeps stacked Vietnamese marks on capitals (Ệ, Ẵ) inside the clip. */
+#app #hud .player-name > strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: inherit; padding-top: 4px; margin-top: -4px; }
+#app #hud .hero-face { grid-area: face; position: relative; display: grid; }
+#app #hud .player-details { grid-area: details; min-width: 0; }
+#app #hud .avatar { width: var(--face); height: var(--face); border-radius: 30%; border: 2px solid var(--plum); background: linear-gradient(160deg, #fffaf0, #ffe08a); box-shadow: inset 0 0 0 2px #fff; }
+/* The level: a honey badge on the tile's lower right corner, the number alone. Three digits fit; it takes no taps. */
+#app #hud .level-badge {
+  position: absolute; right: -5px; bottom: -4px; box-sizing: border-box; min-width: 22px; height: 18px; padding: 0 4px; display: grid; place-items: center;
+  border-radius: 9px; background: var(--honey); border: 2px solid var(--plum); box-shadow: 0 0 0 1.5px var(--cream);
+  color: var(--plum); font-size: 11.5px; line-height: 1; font-weight: 1000; font-variant-numeric: tabular-nums; pointer-events: none;
+}
+#app #hud .level-badge > b { font-weight: inherit; }
+/* Energy: the spark on a cream coin and the count, over the health bar. Only the number is ever written (main.ts updateHud). */
+#app #hud .hero-energy {
+  display: flex; align-items: center; gap: 4px; height: 17px; margin-bottom: 2px; color: var(--honey);
+  font-size: 14px; line-height: 17px; font-weight: 1000; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+#app #hud .hero-energy > span { flex: none; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--cream); }
+#app #hud .hero-energy > span > svg { width: 12px; height: 12px; }
+#app #hud .hero-energy > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: inherit; }
 #app #hud .avatar > span { display: grid; place-items: center; width: 70%; height: 70%; font-size: 0; }
 #app #hud .avatar > span > svg { width: 100%; height: 100%; }
 #app #hud .player-name { color: var(--cream); -webkit-text-stroke: 0; text-shadow: none; }
-#app #hud .player-name > .level-chip { background: var(--honey); border: 0; border-radius: 6px; color: var(--plum); padding: 0 6px; }
 #app #hud .meter { border-radius: 7px; border: 2px solid var(--plum); background: rgba(20, 10, 16, .55); box-shadow: 0 0 0 1px rgba(255, 246, 224, .35); }
 #app #hud .meter > div { border-radius: 4px; }
 #app #hud .experience { width: 100%; background: rgba(20, 10, 16, .55); }
@@ -88,23 +128,12 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
 #app #hud #platform-slot .platform-tools button:not(:first-child)::before { content: none; }
 #app #hud #social-slot .social-toggle[data-online=true] { box-shadow: 0 0 0 3px #8fe06a, var(--tile-shadow); }
 #app #hud .icon-button > i { border-color: var(--cream); }
-#app #hud .icon-button > i.news-count { font-size: 10px; }
+#app #hud .icon-button > i.news-count { font-size: 10px; font-style: normal; }
 @media (hover: hover) { #app #hud .icon-button:hover, #app #hud #social-slot .social-toggle:hover, #app #hud #platform-slot .platform-tools button:hover, #app #hud .home-button:hover { filter: brightness(1.06) saturate(1.1); } }
-
-/* Energy tag: left of the dock's first button. */
-#app #hud .top-actions > .energy {
-  position: absolute; right: calc(100% + 8px); top: calc((var(--dock) - var(--b)) / 2); height: var(--b); min-width: 0;
-  max-width: calc(100vw - var(--hero-w) - var(--dock-w) - var(--edge) * 3 - var(--safe-left) - var(--safe-right) - 8px);
-  padding: 0 10px 0 3px; gap: 3px; border-radius: 12px; border: 2px solid var(--plum); background: var(--tile); box-shadow: var(--tile-shadow);
-  color: var(--plum); white-space: nowrap; overflow: hidden;
-}
-#app #hud .top-actions > .energy > span { flex: none; width: calc(var(--b) - 12px); height: calc(var(--b) - 12px); background: none; text-shadow: none; }
-#app #hud .top-actions > .energy > span > svg { width: 100%; height: 100%; }
-#app #hud .top-actions > .energy > b { overflow: hidden; text-overflow: ellipsis; }
 
 /* ------------------------------------------------------------------ Map panel and Home tab */
 #app #hud .minimap {
-  position: absolute; left: auto; right: var(--col); top: var(--row2); width: var(--mm); height: var(--mm); padding: 0; overflow: hidden;
+  position: absolute; left: auto; right: var(--col); top: var(--map-top); width: var(--mm); height: var(--mm); padding: 0; overflow: hidden;
   border-radius: 22%; border: 3px solid var(--cream); background: #93e06a; box-shadow: 0 0 0 2px var(--plum), 0 5px 0 2px rgba(58, 36, 51, .4);
 }
 #app #hud #minimap { border-radius: 0; }
@@ -117,7 +146,7 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
   color: var(--cream); font-size: 10px; letter-spacing: .5px; text-align: center; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button {
-  position: fixed; left: auto; bottom: auto; right: calc(var(--col) + var(--mm) + 12px); top: var(--row2) !important;
+  position: fixed; left: auto; bottom: auto; right: calc(var(--col) + var(--mm) + 12px); top: var(--map-top) !important;
   height: max(40px, var(--b)); padding: 0 12px 0 8px; gap: 5px; border-radius: 13px; border: 2px solid var(--plum); background: var(--tile);
   box-shadow: var(--tile-shadow); color: var(--plum); font-size: 22px;
 }
@@ -126,11 +155,10 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
 /* ------------------------------------------------------------------ Quest slips */
 #app #hud .quest-tracker, #app #hud .bounty-tracker, #app #hud .challenge-tracker { box-shadow: 0 3px 0 rgba(58, 36, 51, .35); }
 #app #hud .tracker-chip { box-shadow: 0 2px 0 rgba(58, 36, 51, .35); }
-#app #hud .tracker-stack { left: calc(var(--edge) + var(--safe-left)); top: calc(var(--edge) + var(--safe-top) + var(--hero-h, 72px) + 8px); }
+#app #hud .tracker-stack { left: calc(var(--edge) + var(--safe-left)); top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 8px); }
 /* Roomy screens: the slips hang under the map, right-aligned with it; the left column keeps effects and quick eat. */
 @media (min-width: 601px) and (min-height: 521px) {
-  :root { --hero-h: 68px; }
-  #app #hud .tracker-panels, #app #hud #tracker-chip { position: fixed; right: var(--col); top: calc(var(--row2) + var(--mm) + 12px); }
+  #app #hud .tracker-panels, #app #hud #tracker-chip { position: fixed; right: var(--col); top: calc(var(--map-top) + var(--mm) + 12px); }
   #app #hud .tracker-panels { width: 236px; gap: 6px; }
   html[lang="vi"] #app #hud .quest-tracker .eyebrow { padding-right: 78px; } /* "Thu gọn" is wider than "Fold" */
   #app #hud .quest-tracker, #app #hud .bounty-tracker, #app #hud .challenge-tracker { border-radius: 14px; border-left: 5px solid var(--honey); }
@@ -270,31 +298,57 @@ body.indoors #app #hud .skills { display: none; }
 
 /* ------------------------------------------------------------------ Phones */
 @media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
-  :root { --hero-h: 58px; }
   #app #hud .minimap > small { display: block; padding: 1px 5px 2px; font-size: 8.5px; letter-spacing: 0; text-transform: none; }
-  #app #hud .player-card { padding: 3px 8px 3px 3px; gap: 6px; border-radius: 14px; }
-  #app #hud .tracker-stack { width: min(188px, calc(100vw - var(--dock-w) - var(--mm) - var(--edge) * 3 - var(--safe-left) - var(--safe-right) - 12px)); }
+  #app #hud .player-card { gap: 1px 7px; padding: 3px 8px 4px 4px; border-radius: 14px; }
+  #app #hud .player-name { height: 13px; line-height: 13px; font-size: 11px; }
+  #app #hud .level-badge { right: -4px; bottom: -3px; }
+  /* The tile is under 44 px here: its tap area (hud-compact.css) grows upwards over the name, not down into the quest chip's. */
+  #app #hud .avatar::after { top: auto; bottom: 0; transform: translateX(-50%); }
+  #app #hud .hero-energy { height: 14px; line-height: 14px; margin-bottom: 1px; font-size: 13px; }
+  #app #hud .hero-energy > span { width: 14px; height: 14px; }
+  #app #hud .meter { height: 13px; }
+  #app #hud .experience { height: 11px; margin-top: 1px; }
+  #app #hud .experience > span { font-size: 8.5px; }
+  #app #hud .tracker-stack { top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 6px); width: min(188px, calc(100vw - var(--dock-w) - var(--mm) - var(--edge) * 3 - var(--safe-left) - var(--safe-right) - 12px)); }
   #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button { width: 44px; height: 44px; padding: 0; justify-content: center; }
   #app #hud #reel-button { width: 56px; height: 56px; bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 58px); }
   #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 8px); max-width: min(190px, calc(100vw - var(--col) - var(--safe-left) - 154px)); }
 }
 @media (orientation: portrait) and (max-width: 600px) {
-  :root { --row3: calc(var(--row2) + var(--mm) + 8px + 44px + 8px); }
+  /* The row for the boss bar: under the map and Home, and under the left column as it stands in a fight (the folded quest
+     chip, a row of effects and quick eat take 118 px under the hero plate). */
+  :root { --row3: max(calc(var(--map-top) + var(--mm) + 8px + 44px + 8px), calc(var(--edge) + var(--safe-top) + var(--hero-h) + 132px)); }
   #app #hud .player-details { width: calc(var(--hero-w) - 74px); }
   /* Home hangs under the map. */
-  #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button { right: var(--col); top: calc(var(--row2) + var(--mm) + 8px) !important; }
+  #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button { right: var(--col); top: calc(var(--map-top) + var(--mm) + 8px) !important; }
   /* The boss bar and the Colossus strip run under the map and stop short of the dock. */
   #app #hud #boss-bar { left: calc(var(--edge) + var(--safe-left)); right: var(--col); top: var(--row3); bottom: auto; width: auto; transform: none; }
   #app.boss-on #hud #zone-banner { top: calc(var(--row3) + 58px); }
   #app .colossus-banner { left: calc(var(--edge) + var(--safe-left)); right: var(--col); top: calc(var(--row3) + 60px); }
 }
 
+/* Short landscape phones have no height to spare (the stick stands right under the left column): the name and the energy
+   count share the plate's top line, the name above the tile and the count above the health bar, and the tile stands beside
+   the two bars. The bars and the count become cells of the plate's own grid. */
+@media (max-height: 520px) and (orientation: landscape) {
+  #app #hud .player-card {
+    width: calc(var(--hero-w) - 12px); box-sizing: border-box; grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "name name energy" "face health health" "face xp xp";
+  }
+  #app #hud .player-details { display: contents; }
+  #app #hud .player-name { height: 14px; line-height: 14px; }
+  #app #hud .hero-energy { grid-area: energy; margin: 0; }
+  #app #hud .meter.health { grid-area: health; align-self: end; }
+  #app #hud .meter.experience { grid-area: xp; align-self: start; margin-top: 0; }
+  #app #hud .tracker-stack { top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 4px); }
+}
+
 /* ------------------------------------------------------------------ Middling widths and the top-centre bars */
 /* Up to 1000 px wide the top centre belongs to the target frame and the Colossus bar: Home hangs under the map and the
    slips start below it. */
 @media (min-width: 601px) and (min-height: 521px) and (max-width: 1000px) {
-  #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button { right: var(--col); top: calc(var(--row2) + var(--mm) + 10px) !important; }
-  #app #hud .tracker-panels, #app #hud #tracker-chip { top: calc(var(--row2) + var(--mm) + 10px + max(40px, var(--b)) + 10px); }
+  #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button { right: var(--col); top: calc(var(--map-top) + var(--mm) + 10px) !important; }
+  #app #hud .tracker-panels, #app #hud #tracker-chip { top: calc(var(--map-top) + var(--mm) + 10px + max(40px, var(--b)) + 10px); }
   #app .colossus-banner { width: min(400px, 36vw, calc(100vw - 2 * (var(--hero-w) + var(--edge) + 14px))); }
 }
 /* With a creature selected the target frame takes the top centre; the Colossus bar steps down under it. */
@@ -304,23 +358,25 @@ body.indoors #app #hud .skills { display: none; }
   #app #hud #reel-button { bottom: calc(132px + var(--safe-bottom)); }
   #app #hud #fish-hint { right: 144px; bottom: calc(168px + var(--safe-bottom)); }
 }
-/* 360 px and narrower: the portrait tile steps aside (the satchel is the first dock button) so the name and the energy
-   number are never cut. */
+/* 360 px and narrower: the portrait tile steps aside (the satchel is the first dock button). Its level badge moves up
+   beside the name, and the energy count and the bars take the plate's whole width. */
 @media (orientation: portrait) and (max-width: 360px) {
   #app #hud .avatar { display: none; }
-  #app #hud .player-card { padding-left: 8px; }
-  #app #hud .player-details { width: 30vw; }
+  #app #hud .player-card { grid-template-areas: "face name" "details details"; column-gap: 5px; padding-left: 8px; }
+  #app #hud .level-badge { position: static; height: 16px; min-width: 20px; box-shadow: none; }
+  #app #hud .player-name { padding-left: 0; height: 16px; line-height: 16px; }
+  #app #hud .player-details { width: var(--hero-in); }
 }
 
 /* ------------------------------------------------------------------ Modes (Rescue Call, Flag Rush, the Vault) */
 /* The map is away in every mode: Home takes the corner of its slot. */
-body.in-mode #app #hud .home-button { right: var(--col); top: var(--row2) !important; }
+body.in-mode #app #hud .home-button { right: var(--col); top: var(--map-top) !important; }
 /* Indoors too: the way out stands where the map was. */
-body.indoors #app #hud .home-button { right: var(--col); top: var(--row2) !important; }
+body.indoors #app #hud .home-button { right: var(--col); top: var(--map-top) !important; }
 
 /* ------------------------------------------------------------------ Rescue Call */
 /* Its own panels use the right edge (the build panel) and the band under the top of the screen, and the map is away:
-   the dock lies down as a belt along the top instead, energy first, wrapping to short rows on phones. */
+   the dock lies down as a belt along the top instead, wrapping to short rows on phones. */
 body.in-rescue #app #hud .top-actions {
   bottom: auto; display: flex; flex-wrap: wrap; direction: ltr; justify-content: flex-end; align-items: center; align-content: flex-start;
   gap: calc(var(--dock) - var(--b)); row-gap: calc(var(--dock) - var(--b));
@@ -328,7 +384,6 @@ body.in-rescue #app #hud .top-actions {
 }
 /* Home goes under the belt, at the screen edge. */
 body.in-rescue #app #hud .home-button { right: calc(var(--edge) + var(--safe-right)); top: calc(var(--menu-bottom, 60px) + 8px) !important; }
-body.in-rescue #app #hud .top-actions > .energy { position: relative; right: auto; top: auto; max-width: none; flex: none; }
 @media (orientation: portrait) and (max-width: 600px) {
   body.in-rescue #app #hud .top-actions { max-width: max(48vw, calc(100vw - var(--hero-w) - var(--edge) * 2 - 6px)); }
   /* Home stands under the hero plate, where the quest chips are in the village. */
