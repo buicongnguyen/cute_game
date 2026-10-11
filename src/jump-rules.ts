@@ -156,6 +156,8 @@ export const BOSS_BLOCK: Readonly<Record<string, number>> = {
   colossus: 1,
 };
 /** The share of a low hit a boss lets through. A boss without its own number blocks only where its world opens at the double jump's level or later. */
+/** Bosses blocking low hits is built but switched off for now (owner, 2026-10-11): set true to turn the BOSS_BLOCK table on (main.ts combat.edge.scale reads it). */
+export const BOSS_BLOCK_ON: boolean = false;
 export function blockShare(type: string | undefined, worldLevel = 0) { const own = type ? BOSS_BLOCK[type] : undefined; return own ?? (worldLevel >= JUMP_UNLOCKS[0].level ? BLOCK.share : 1); }
 /** What a hit keeps against a boss with block `share`: everything from double-jump height (second jump or later, BLOCK.height up), else `share`. */
 export function hitShare(share: number, height: number, jumps: number) { return jumps >= BLOCK.jumps && height >= BLOCK.height ? 1 : Math.max(0, Math.min(1, share)); }

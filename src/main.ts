@@ -34,7 +34,7 @@ import { decorIcon } from './icons.ts';
 import { CombatHud, fightNear, lootText, zoneInfo, aggro } from './hud-combat.ts';
 import { ChallengeDirector, renderChallenge } from './hud-challenge.ts';
 import { KeysGuide } from './hud-keys.ts';
-import { readAirCombat, saveAirCombat, AIR, AIR_WINDOW, BLOCK, COMBO, ComboMeter, SlideCombo, airWindow, pressKind, DIVE, DODGE, JumpInput, blockShare, hitShare, jumpsFor, canJump, diveCap, diveCritical, diveMultiplier, dodges, jumpKeyAction, perfectDodge, readSpaceKey, saveSpaceKey, type ComboHit, type Landing, type SpaceKey } from './jump-rules.ts';
+import { readAirCombat, saveAirCombat, BOSS_BLOCK_ON, AIR, AIR_WINDOW, BLOCK, COMBO, ComboMeter, SlideCombo, airWindow, pressKind, DIVE, DODGE, JumpInput, blockShare, hitShare, jumpsFor, canJump, diveCap, diveCritical, diveMultiplier, dodges, jumpKeyAction, perfectDodge, readSpaceKey, saveSpaceKey, type ComboHit, type Landing, type SpaceKey } from './jump-rules.ts';
 import * as M from './model.ts';
 import {applyGameAction,isMalformedAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
@@ -1308,7 +1308,7 @@ function bufferPress(press:NonNullable<typeof pendingPress>){pendingPress=press;
 /** The height and jumps a strike counts as coming from while it lands (a dive, a Root Quake cast in the air); null = where the explorer is now. */
 let strikeFrom:{height:number;jumps:number}|null=null,skyQuake:{height:number;jumps:number}|null=null;
 // Bosses block low hits (jump-rules.ts BLOCK; solo: online the server deals the damage): hits from the ground or a single jump keep a share, hits from double-jump height get through.
-combat.edge.scale=target=>{const e=target as Enemy;if(!airOn()||!(e.boss||e.definition?.titan)||e.driver)return 1;const from=strikeFrom??world.jump;return hitShare(blockShare(e.type,M.PLANETS[world.planet]?.level??0),from.height,from.jumps);};
+combat.edge.scale=target=>{const e=target as Enemy;if(!airOn()||!BOSS_BLOCK_ON||!(e.boss||e.definition?.titan)||e.driver)return 1;const from=strikeFrom??world.jump;return hitShare(blockShare(e.type,M.PLANETS[world.planet]?.level??0),from.height,from.jumps);};
 /**
  * Applies the switch (and online play, where it is off): the world's ground-attack rules, the Jump toe and the combo chip
  * (made on first use; the page's own markup is the one from before jumping), the page class the paw's layout hangs on,
