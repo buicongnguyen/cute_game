@@ -6,6 +6,19 @@
 .ranking-dialog > :not(.ranking-list) { flex: 0 0 auto; }
 .ranking-dialog { --tone: #ffe08a; --tone-top: #fff3c4; --tone-edge: #f2b11f; --tone-ink: #5a3a00; }
 
+/* The two sections, Ranking and News: a segmented pair under the header. The News tab carries the unread count. */
+.ranking-sections { display: flex; gap: 6px; padding: 8px 14px 6px; border-bottom: 2px solid #f0e3bf; background: #fffaf0; }
+.ranking-sections button { position: relative; flex: 1; min-height: 44px; border-radius: 14px; font-size: 14px; }
+.ranking-dialog .ranking-sections button[aria-pressed=true] { border-color: #3a2433; background: #3a2433; color: #fff6e0; box-shadow: 0 3px 0 rgba(58, 36, 51, .45); }
+.ranking-sections .news-count {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: 6px; padding: 0 5px; box-sizing: border-box; border-radius: 10px;
+  background: #e5484d; color: #fff; font-size: 11px; font-weight: 900; font-style: normal; line-height: 1; vertical-align: 1px;
+}
+.ranking-tabs[hidden], .ranking-cats[hidden], .ranking-list[hidden], .ranking-news[hidden] { display: none; }
+/* The news board's cards (news-board.ts) scroll in the room the list has in the Ranking section. */
+.ranking-dialog > .ranking-news { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 14px calc(12px + env(safe-area-inset-bottom, 0px)); --cue-bg: #fff; }
+.ranking-news .panel-tabs button { min-height: 44px; }
+
 .ranking-tabs, .ranking-cats { display: flex; gap: 6px; padding: 8px 14px 0; }
 .ranking-tabs button { flex: 1; border-radius: 999px; }
 .ranking-cats { overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
@@ -48,7 +61,7 @@
 
 @media (max-width: 620px) {
   .ranking-dialog { width: 100vw; height: min(78dvh, 640px); }
-  .ranking-tabs, .ranking-cats { padding-left: 10px; padding-right: 10px; }
+  .ranking-tabs, .ranking-cats, .ranking-sections, .ranking-dialog > .ranking-news { padding-left: 10px; padding-right: 10px; }
   .ranking-hint { margin: 4px 10px 0; }
   .ranking-list { padding: 4px 10px 10px; }
   .ranking-row { grid-template-columns: 36px minmax(0, 1fr) auto; padding-right: 10px; }

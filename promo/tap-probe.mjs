@@ -101,6 +101,8 @@ const SCENES = [
   ['pen', async p => { await dlg(p, 'shop'); await settle(p, 200); await click(p, '[data-action="shop-tab"][data-kind="Pets"]'); await settle(p, 200); await click(p, '#dialog [data-action="pen-menu"]'); }],
   ['neighbours', async p => { await dlg(p, 'settings'); }],
   ['leaderboard', p => click(p, '#hud [data-action="ranking"]')],
+  ['news', p => p.evaluate(() => __zoo.news.open())],
+  ['news-soon', p => p.evaluate(() => __zoo.news.open('soon'))],
   ['online', p => click(p, '#social-slot button')],
   ['friend', async p => { await interact(p, 'friend'); }],
   ['rescue-briefing', p => p.evaluate(() => __rescue.brief('toy'))],

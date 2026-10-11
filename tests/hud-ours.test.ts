@@ -102,10 +102,12 @@ test('safe areas: every edge-anchored piece adds the matching inset', () => {
   assert.match(css, /--safe-left: env\(safe-area-inset-left, 0px\); --safe-right: env\(safe-area-inset-right, 0px\);/);
   assert.match(css, /#app #hud \.player-card \{\s*left: calc\(var\(--edge\) \+ var\(--safe-left\)\); top: calc\(var\(--edge\) \+ var\(--safe-top\)\);/);
   assert.match(css, /--col: calc\(var\(--edge\) \+ var\(--safe-right\) \+ var\(--dock-w\) \+ 8px\);/);
-  assert.match(css, /--row2: calc\(var\(--edge\) \+ var\(--safe-top\) \+ var\(--dock\) \+ 4px\);/);
+  // The map hangs level with the dock's first button, where the energy tag used to be.
+  assert.match(css, /--map-top: calc\(var\(--edge\) \+ var\(--safe-top\) \+ \(var\(--dock\) - var\(--b\)\) \/ 2\);/);
+  assert.doesNotMatch(css, /--row2\b/);
   assert.match(css, /right: calc\(var\(--paw-edge, 18px\) \+ var\(--safe-right\)\); bottom: calc\(22px \+ var\(--safe-bottom\)\);/);
   for (const piece of ['.minimap', '.home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button']) assert.ok(css.includes(`#app #hud ${piece} {`), piece);
-  assert.match(css, /#app #hud \.minimap \{\s*position: absolute; left: auto; right: var\(--col\); top: var\(--row2\);/);
+  assert.match(css, /#app #hud \.minimap \{\s*position: absolute; left: auto; right: var\(--col\); top: var\(--map-top\);/);
 });
 
 test('no frame cost: the sheet adds no animation, transition, blur or filter on standing HUD pieces', () => {
@@ -119,7 +121,59 @@ test('modes and the cottage keep working: hidden pieces stay hidden and Rescue l
   // Our rules never set display on pieces that modes hide by display (the minimap, the tracker stack and its panels).
   for (const sel of ['.minimap', '.tracker-stack', '.tracker-panels', '#tracker-chip']) for (const rule of css.match(new RegExp(`#app #hud ${sel.replace('.', '\\.')}(?:, [^{]*)? \\{[^}]*\\}`, 'g')) ?? []) assert.doesNotMatch(rule, /display:/, rule.slice(0, 60));
   assert.match(css, /body\.in-rescue #app #hud \.top-actions \{\s*bottom: auto; display: flex; flex-wrap: wrap;/);
-  assert.match(css, /body\.in-mode #app #hud \.home-button \{ right: var\(--col\); top: var\(--row2\) !important; \}/);
+  assert.match(css, /body\.in-mode #app #hud \.home-button \{ right: var\(--col\); top: var\(--map-top\) !important; \}/);
+});
+
+// The hero plate (the owner's layout): the level is a number on a badge on the portrait tile, the name sits small above the
+// tile, and the energy count lives in the plate over the health bar. The measured side is in tests/hud-layout.test.mjs.
+test('the hero plate: name above the tile, the level as a badge number on it, energy over the health bar', () => {
+  const main = read('main.ts'), hud = main.slice(main.indexOf('<div id="hud" hidden>'), main.indexOf('<div id="space-hud" hidden>'));
+  const plate = hud.slice(hud.indexOf('<header class="player-card">'), hud.indexOf('</header>'));
+  // Order in the plate: the name, the tile with its badge, then energy, health and EXP.
+  assert.match(plate, /^<header class="player-card"><div class="player-name"><strong id="player-name"><\/strong><\/div><div class="hero-face"><button class="avatar" data-action="bag" aria-label="Open character and backpack">.*?<\/button><span class="level-badge" role="group" aria-label="Level"><b id="level-text">1<\/b><\/span><\/div><div class="player-details"><div class="hero-energy" role="group" aria-label="Energy"><span>\$\{hudIcon\('bolt'\)\}<\/span><b id="energy">0<\/b><\/div><div class="meter health">/s);
+  assert.ok(plate.indexOf('class="meter health"') < plate.indexOf('class="meter experience"'));
+  // One energy count and one level in the HUD; the separate tag by the dock and the "Lv" chip are gone.
+  assert.equal(hud.match(/id="energy"/g)?.length, 1); assert.equal(hud.match(/id="level-text"/g)?.length, 1);
+  const dock = hud.slice(hud.indexOf('<nav class="top-actions"'), hud.indexOf('</nav>', hud.indexOf('<nav class="top-actions"')));
+  assert.doesNotMatch(dock, /class="energy"|id="energy"/); assert.doesNotMatch(hud, /level-chip/); assert.doesNotMatch(plate, /Lv/);
+  // Both are written only when they change (setText compares first), from updateHud: the number alone, and the count formatted as before.
+  assert.match(main, /const setText=\(el:Element,v:string\)=>\{if\(el\.textContent!==v\)el\.textContent=v;\};/);
+  assert.match(main, /setText\(\$\('#player-name'\),state\.name\);setText\(\$\('#level-text'\),String\(state\.level\)\);setText\(\$\('#energy'\),t\(state\.energy\.toLocaleString\(\)\)\);/);
+});
+
+test('the hero plate sheet: the badge sits on the tile corner and takes no taps, a long name cannot widen the plate, narrow phones drop the tile', () => {
+  const rule = (sel: string) => { const m = css.match(new RegExp(`\n${sel.replace(/[.#]/g, '\\$&')} \\{([^}]*)\\}`)); assert.ok(m, sel); return m![1]; };
+  const badge = rule('#app #hud .level-badge');
+  assert.match(badge, /position: absolute; right: -\d+px; bottom: -\d+px;/); assert.match(badge, /pointer-events: none;/);
+  // Readable at phone size and wide enough for three digits: at least 11 px bold digits, the box grows with its text.
+  assert.match(badge, /min-width: 22px; height: 18px; padding: 0 4px;/); assert.ok(+badge.match(/font-size: ([\d.]+)px/)![1] >= 11); assert.doesNotMatch(badge, /max-width|overflow/);
+  const name = rule('#app #hud .player-name');
+  assert.match(name, /grid-area: name;/); assert.match(name, /width: 0; min-width: 100%;/); assert.ok(+name.match(/font-size: ([\d.]+)px/)![1] <= 12, 'the name is small');
+  assert.match(rule('#app #hud .player-name > strong'), /overflow: hidden; text-overflow: ellipsis; white-space: nowrap;/);
+  assert.match(rule('#app #hud .player-name > strong'), /padding-top: 4px; margin-top: -4px;/, 'headroom for stacked Vietnamese marks');
+  assert.match(rule('#app #hud .player-card'), /grid-template-areas: "name name" "face details";/);
+  const energy = rule('#app #hud .hero-energy');
+  assert.ok(+energy.match(/font-size: ([\d.]+)px/)![1] >= 12); assert.match(energy, /font-variant-numeric: tabular-nums; white-space: nowrap;/);
+  // 360 px and narrower: no tile; the badge stands before the name and the bars take what the map leaves, never under 30vw.
+  const narrow = css.slice(css.indexOf("/* 360 px and narrower: the portrait tile steps aside"));
+  assert.match(narrow, /#app #hud \.avatar \{ display: none; \}\s*#app #hud \.player-card \{ grid-template-areas: "face name" "details details";/);
+  assert.match(narrow, /#app #hud \.level-badge \{ position: static;/); assert.match(narrow, /#app #hud \.player-details \{ width: var\(--hero-in\); \}/);
+  assert.match(css, /--hero-in: max\(30vw, min\(150px, calc\(100vw - var\(--col\) - var\(--mm\) - var\(--edge\) \* 2 - var\(--safe-left\) - 30px\)\)\);/);
+  // The old energy tag's rules are gone with it.
+  assert.doesNotMatch(css, /\.top-actions > \.energy/);
+});
+
+// The news board moved into the leaderboard dialog: no News button in the dock, the unread count on the Ranking button.
+test('the dock has no News button; the Ranking button carries the unread-news count', () => {
+  const main = read('main.ts'), hud = main.slice(main.indexOf('<div id="hud" hidden>'), main.indexOf('<div id="space-hud" hidden>'));
+  assert.match(hud, /<button class="icon-button" data-action="ranking" title="Ranking and news" aria-label="Ranking and news">\$\{hudIcon\('ranking'\)\}<i id="news-count" class="news-count" hidden><\/i><\/button>/);
+  for (const file of ['main.ts', 'news-board.ts', 'ranking.ts']) assert.doesNotMatch(read(file), /data-action="news"|dataset\.action ?= ?'news'|action === 'news'/, `${file} still makes or handles a News button`);
+  assert.doesNotMatch(read('news-board.ts'), /createElement|openDialog|top-actions/, 'the board draws into the leaderboard dialog, it owns no button and no panel');
+  const econ = read('econ-ui.css');
+  assert.match(econ, /\.icon-button\[data-action="ranking"\] > i\.news-count \{/); assert.match(econ, /\.icon-button\[data-action="ranking"\] > i\.news-count\[hidden\] \{ display: none; \}/);
+  assert.doesNotMatch(econ, /data-action="news"/);
+  // main.ts hands the dialog's News section to the board.
+  assert.match(main, /const ranking=m\.initRanking\(gameBridge\);rankingApi=ranking;/); assert.match(main, /newsApi=m\.initNewsBoard\(\{host:ranking\.news,idle:\(\)=>started&&!modal&&!uiBlocked\(\),url:/);
 });
 
 test('dockMetrics reads the filled columns, not the dock box', () => {

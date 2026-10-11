@@ -32,4 +32,8 @@ export const VI_RANKING: Record<string, string> = {
   'Sign in under Play together to join the server leaderboard.': 'Đăng nhập trong mục Chơi cùng nhau để vào bảng xếp hạng chung.',
   'Server leaderboard · refreshed about every minute': 'Bảng xếp hạng chung · làm mới khoảng mỗi phút',
   'neighbour': 'hàng xóm',
+  // The hero plate's energy count, and the news board inside the leaderboard dialog (the dock's Ranking button).
+  'Energy': 'Năng lượng',
+  'Ranking and news': 'Xếp hạng và tin tức',
+  '{n} unread news': '{n} tin chưa đọc',
 };

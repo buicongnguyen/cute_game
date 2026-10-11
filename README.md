@@ -47,7 +47,7 @@ Besides the farm and the worlds, six extras are one tap or one short walk away. 
 - **Rescue Call** (squad tower defence): a friend on another planet sends an SOS every 30 to 60 minutes of play (up to 4 a day); walk through the cracked portal by the south square, or pick a mission there at any time. You lead a squad of up to five, build defences with Spark between waves, upgrade friends and hero as the fight goes, and keep ten hearts safe. Three missions so far (Toybox, Candy, the Wild Jungle). Eight winning missions a day pay in full, and up to 80 waves a day pay anything.
 - **Cinderpeak Colossus** (daily world boss): it wakes in Redrock Canyon every day from 08:00 to midnight Vietnam time, with a 10-minute warning banner, and works offline too. It has 3,000,000 health for one explorer (+80% for each extra one), pierces 75% of your defence, takes double damage on its lowered head and kneels near the end. Everyone who helps shares the loot (Cinderhorn Crown 15%); the final blow earns the Little Cinderpeak companion.
 - **Leaderboard** (🏆 in the top-right menu): weekly and all-time boards with your rank. Signed in on a game server it ranks real players (the week starts Monday 00:00 UTC); on the solo Pages edition it ranks you and your AI neighbours.
-- **News board** (📰 in the top-right menu): update notes and what is coming soon, in English and Vietnamese. It opens by itself once when there is something new.
+- **News board** (the News tab inside the 🏆 Leaderboard dialog; the unread count shows on the 🏆 button): update notes and what is coming soon, in English and Vietnamese. It opens by itself once when there is something new.
 
 ## Online play
 
