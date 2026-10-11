@@ -13,14 +13,15 @@ import { forgeCost, forgeLevel, canForge, MAX_FORGE_LEVEL, forgeChance, forgeExp
 import { MAX_GEAR_LEVEL, canUpgradeGear, canUpgradeSkill, canUpgradeJump, jumpCost, jumpLevel, gearCost, gearCostToMax, gearLevel, skillCost, skillLevel, upgradableGear } from './upgrades.ts';
 import { MAX_JUMP_LEVEL } from './jump-rules.ts';
 import { MAX_SKILL_LEVEL, SKILL_LEVEL_TEXT, levelledCooldown, skillTuning } from './skill-upgrades.ts';
-import { whirlRadius, slamRadius } from './skill-info.ts';
+import { MOVE_LEVEL_TEXT } from './moves.ts';
+import { whirlRadius, slamRadius, lobSplash, quakeRadius } from './skill-info.ts';
 import { sortByPower, powerChip, ownedScore, gearProgressHtml } from './item-power.ts';
 import { groupItems, groupedHtml, GEAR_ORDER } from './item-groups.ts';
 import './upgrade-bench.css';
 
 export type BenchTab = 'gear' | 'skills';
 export interface BenchSkill { name: string; icon: string; cd: number }
-export interface BenchUi { art(id: string, icon: string): string; chips(materials?: Inventory): string; skills: readonly BenchSkill[]; disguised?: boolean; weaponKind?: string; /** Jumping is on (Settings): the Skills tab offers the Jump skill. */ jump?: boolean }
+export interface BenchUi { art(id: string, icon: string): string; chips(materials?: Inventory): string; skills: readonly BenchSkill[]; disguised?: boolean; weaponKind?: string; /** Jumping is on (Settings): the Skills tab offers the Jump skill. */ jump?: boolean; /** The four moves are in the slots (moves.ts): their radii and level texts are shown. */ moves?: boolean }
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const fix = (v: number) => (Math.round(v * 100) / 100).toString();
 
@@ -50,16 +51,16 @@ function gearRows(s: SaveState, ui: BenchUi) {
   });
 }
 /** "Damage ×1.2 · radius 3.04 m" (the real hit radius, as the cast ring shows it) or "Damage ×1.2 · cooldown 3.6 s" for slot `index` at `level`. */
-export function skillEffect(index: number, level: number, baseCd: number, weaponKind?: string) {
+export function skillEffect(index: number, level: number, baseCd: number, weaponKind?: string, moves = false) {
   const tune = skillTuning(index, level), damage = fix(tune.damage);
-  return index === 0 || index === 2 ? t('Damage ×{damage} · radius {radius} m', { damage, radius: fix(index === 0 ? whirlRadius(weaponKind, level) : slamRadius(level)) }) : t('Damage ×{damage} · cooldown {cd} s', { damage, cd: fix(levelledCooldown(index, baseCd, level)) });
+  return index === 0 || index === 2 ? t('Damage ×{damage} · radius {radius} m', { damage, radius: fix(moves ? (index === 0 ? lobSplash(level) : quakeRadius(level)) : index === 0 ? whirlRadius(weaponKind, level) : slamRadius(level)) }) : t('Damage ×{damage} · cooldown {cd} s', { damage, cd: fix(levelledCooldown(index, baseCd, level)) });
 }
 function skillRows(s: SaveState, ui: BenchUi) {
   const note = ui.disguised ? `<p class="intro">${esc(t('Disguise skills keep their own power; these levels apply to your own four skills.'))}</p>` : '';
   return note + `<div class="shop-grid">${ui.skills.slice(0, 4).map((skill, i) => {
     const level = skillLevel(s, i), top = level >= MAX_SKILL_LEVEL, cost = skillCost(level), key = ['Q', 'W', 'E', 'R'][i];
     const pips = `<span class="bench-pips" aria-label="${esc(t('Level {level} / {max}', { level, max: MAX_SKILL_LEVEL }))}">${Array.from({ length: MAX_SKILL_LEVEL }, (_, n) => `<i class="${n < level ? 'on' : ''}"></i>`).join('')}</span>`;
-    const now = `<p>${esc(skillEffect(i, level, skill.cd, ui.weaponKind))}${top ? '' : ` → ${esc(skillEffect(i, level + 1, skill.cd, ui.weaponKind))}`}</p><p class="muted">${esc(t(SKILL_LEVEL_TEXT[i]))}</p>`;
+    const now = `<p>${esc(skillEffect(i, level, skill.cd, ui.weaponKind, ui.moves))}${top ? '' : ` → ${esc(skillEffect(i, level + 1, skill.cd, ui.weaponKind, ui.moves))}`}</p><p class="muted">${esc(t((ui.moves ? MOVE_LEVEL_TEXT : SKILL_LEVEL_TEXT)[i]))}</p>`;
     return row(`<span class="bench-skill-icon">${esc(t(skill.icon))}<kbd>${key}</kbd></span>`, `${esc(t(skill.name))} ${pips}`, now + (top ? '' : ui.chips(cost.materials)), top ? maxed() : buy(`data-bench-action="skill" data-index="${i}"`, cost.energy, canUpgradeSkill(s, i)));
   }).join('')}${ui.jump ? jumpRow(s, ui) : ''}</div>`;
 }

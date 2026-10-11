@@ -555,15 +555,53 @@ const bigstar: Builder = (p, c) => {
   else { const g = Math.min(1, (c.a - fall) / .5); for (let i = 0; i < cnt(c, 10); i++) { const q = i * TAU / 10; p.put('star', i % 2 ? '#ffe34d' : '#ffffff', c.x + S(q) * c.r * g, c.y + .5 + S(g * PI) * 1.2, c.z + C(q) * c.r * g, .3 * (1 - g) + .05, .3 * (1 - g) + .05, .3 * (1 - g) + .05, 0, q); } }
 };
 
+// ---- The four moves (moves.ts). Petal Gale is thrown now: a bunch of petals flies an arc to a marked spot and bursts there.
+/** How high a lob of `distance` m rises at the middle of its flight (m). */
+export const lobRise = (distance: number) => Math.min(3, .9 + distance * .26);
+/** The Lob in flight: `r` is the distance to the landing spot along `f`; one glowing bud with petals turning round it and a bright trail behind. */
+const lob: Builder = (p, c) => {
+  const dx = S(c.f), dz = C(c.f), rise = lobRise(c.r), cols = ['#ff5fa2', '#ffffff', '#ff8fc8'];
+  const at = (u: number) => ({ x: c.x + dx * c.r * u, y: c.y + 1.1 * (1 - u) + 4 * rise * u * (1 - u), z: c.z + dz * c.r * u });
+  const head = at(c.t); p.put('gorb', '#fff3a8', head.x, head.y, head.z, .38); p.put('orb', '#ff3d8b', head.x, head.y, head.z, .21);
+  for (let i = 0; i < 6; i++) { const q = i * TAU / 6 + c.a * 14; p.put('petal', cols[i % 3], head.x + S(q) * .36, head.y + C(q) * .14, head.z + C(q) * .36, .27, .05, .14, c.a * 9 + i, q); }
+  for (let i = 1; i <= cnt(c, 12); i++) { const u = c.t - i * .035; if (u <= 0) break; const b = at(u), s = .22 * (1 - i / 13); p.put(i % 2 ? 'gorb' : 'petal', i % 2 ? '#ffffff' : '#ff8fc8', b.x, b.y, b.z, s, i % 2 ? s : .04, i % 2 ? s : s * .6, c.a * 6 + i, i * 1.3); }
+};
+/**
+ * Where a Lob will land: the splash radius as a bright double ring for the whole wind-up and flight, a gold ring closing on
+ * the centre as the shot comes down, six white ticks turning on the rim and a small cross on the spot itself.
+ */
+const lobmark: Builder = (p, c) => {
+  const g = grow(c, 10), r = c.r * g, close = c.r * (1 - .75 * c.t) * g, beat = 1 + .03 * S(c.a * 14);
+  p.put('ring', '#ffffff', c.x, c.y + .02, c.z, r, 1, r); p.put('gring', '#ff3d8b', c.x, c.y, c.z, r * .93 * beat, 1, r * .93 * beat);
+  p.put('ring', '#ffd35e', c.x, c.y + .01, c.z, close, 1, close);
+  for (let i = 0; i < 6; i++) { const q = i * TAU / 6 + c.a * 2.2, d = r * .86; p.put('petal', '#ffffff', c.x + S(q) * d, c.y + .03, c.z + C(q) * d, .24, .02, .09, 0, q + PI / 2); }
+  for (let i = 0; i < 2; i++) p.put('gbox', '#ffd35e', c.x, c.y + .04, c.z, .5, .03, .08, 0, i * PI / 2 + PI / 4);
+};
+/** One shot of the Rain: a bright ring where it lands and a petal bud dropping straight down onto it, with a streak above. */
+const petalfall: Builder = (p, c) => {
+  const h = (1 - c.t) ** 1.3 * 3.4, close = c.r * (1 - .6 * c.t);
+  p.put('ring', '#ffffff', c.x, c.y + .02, c.z, c.r, 1, c.r); p.put('gring', '#ff3d8b', c.x, c.y, c.z, c.r * .92, 1, c.r * .92); p.put('ring', '#ffd35e', c.x, c.y + .01, c.z, close, 1, close);
+  p.put('gorb', '#fff3a8', c.x, c.y + h + .25, c.z, .3); p.put('orb', '#ff3d8b', c.x, c.y + h + .25, c.z, .17); p.put('gbox', '#ffffff', c.x, c.y + h + 1.1, c.z, .07, 1.4, .07);
+  for (let i = 0; i < 4; i++) { const q = i * PI / 2 + c.a * 12; p.put('petal', i % 2 ? '#ffffff' : '#ff8fc8', c.x + S(q) * .3, c.y + h + .3 + i * .1, c.z + C(q) * .3, .22, .04, .11, c.a * 8 + i, q); }
+};
+/** The landing: one bright ring racing out to the splash radius, a quick gold pop at the centre and petals flung up inside it. Never past the radius, gone in half a second. */
+const petalburst: Builder = (p, c) => {
+  const w = 1 - (1 - Math.min(1, c.t * 2.4)) ** 2, f = fadeOut(c, 2.5), cols = ['#ff3d8b', '#ffffff', '#ff8fc8', '#ffd35e'];
+  p.put('ring', '#ffffff', c.x, c.y + .02, c.z, c.r * w, 1, c.r * w); p.put('gring', '#ff3d8b', c.x, c.y, c.z, c.r * w * .9, 1, c.r * w * .9);
+  if (c.t < .35) p.put('gorb', '#fff3a8', c.x, c.y + .4, c.z, Math.min(.7, c.r * .32) * (1 - c.t / .35) + .02);
+  for (let i = 0; i < cnt(c, 18); i++) { const q = i * 2.4 + hash(i), u = c.t * (1 + hash(i + 2) * .6), d = c.r * (.15 + .7 * Math.min(1, u)), hy = Math.max(0, 2.6 * u * (1 - u / 1.5)); p.put('petal', cols[i % 4], c.x + S(q) * d, c.y + .1 + hy, c.z + C(q) * d, .24 * f, .04, .13 * f, u * 7 + i, q, u * 4); }
+};
+
 /** Look id -> builder. Every id in DISGUISE_LOOKS (combat.ts) must be here (tests/skill-visuals.test.ts). */
 export const LOOKS: Record<string, Builder> = {
   charge, smoke, heal, icefield, blackhole, moon, holy, meteor, cannonfall, hook, drain, hearts, roots, roar, freeze, portal, bite, tail, parrot,
   shield, rush, bolt, rainbow, bats, iceage, crater, lift, blast, magma, inferno, anchor, lotus, eagle, goldstar, bonk, whirl, surf, poof, sheep, taunt, dust,
   tank, sandbag, flare, parachute, whistle, ribbon, fan, lantern, kite, ink, dragondance, starshield, torch, firework, bamboo, drum, bigstar,
+  lob, lobmark, petalfall, petalburst,
 };
 /** Seconds a look lasts when its effect carries no duration. */
 export const LOOK_LIFE: Record<string, number> = { blast: .8, crater: .8, magma: .8, inferno: .7, anchor: .7, lotus: 1.4, eagle: .8, goldstar: .8, bonk: .7, whirl: .7, iceage: 2.2, bolt: .3, rainbow: .5, surf: .9, poof: .7, dust: .8, sheep: 1, taunt: 1, lift: .9, rush: .45, shield: 4, bats: 2.5,
-  tank: 6, sandbag: 6, flare: 1.4, parachute: 1.2, whistle: 1, ribbon: 1.2, fan: .7, lantern: 1.5, kite: 5, ink: 3, dragondance: 5, starshield: 3, torch: 6, firework: 1.1, bamboo: .7, drum: 1.45, bigstar: 1.2 };
+  tank: 6, sandbag: 6, flare: 1.4, parachute: 1.2, whistle: 1, ribbon: 1.2, fan: .7, lantern: 1.5, kite: 5, ink: 3, dragondance: 5, starshield: 3, torch: 6, firework: 1.1, bamboo: .7, drum: 1.45, bigstar: 1.2, lob: .6, lobmark: .85, petalfall: .3, petalburst: .5 };
 
 /** One soft red/gold pulse at the screen edges (roar). A single reused element; skipped for reduced motion. */
 let pulseEl: HTMLElement | null = null;

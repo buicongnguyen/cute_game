@@ -10,7 +10,9 @@ export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|
   quiet?: boolean }
 export const DISGUISE_LOOKS=['charge','smoke','heal','icefield','blackhole','moon','holy','meteor','cannonfall','hook','drain','hearts','roots','roar','freeze','portal','bite','tail','parrot','shield','rush','bolt','rainbow','bats','iceage','crater','lift','blast','magma','inferno','anchor','lotus','eagle','goldstar','bonk','whirl','surf','poof','sheep','taunt','dust',
   // The six uniform kits (DISGUISE_KITS): a toy soldier, a sailor, the ao dai lady and gentleman, the stars-and-stripes and red-flag heroes.
-  'tank','sandbag','flare','parachute','whistle','ribbon','fan','lantern','kite','ink','dragondance','starshield','torch','firework','bamboo','drum','bigstar'] as const;
+  'tank','sandbag','flare','parachute','whistle','ribbon','fan','lantern','kite','ink','dragondance','starshield','torch','firework','bamboo','drum','bigstar',
+  // The four moves (moves.ts): the Lob's arc and landing mark, the Rain's falling shots, and the petal burst where either lands.
+  'lob','lobmark','petalfall','petalburst'] as const;
 export type EffectLook='eyes'|'burn'|'shock'|'boulder'|typeof DISGUISE_LOOKS[number];
 export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder',...DISGUISE_LOOKS];
 /** Superhero throw: lock a landing point, then lob over intervening ground obstacles. */
@@ -94,6 +96,7 @@ export function decoyPoint(d:{x:number;z:number;ring?:number},from:CombatPoint):
 /** Kit skills that are the uniform weapon specials (special()). */
 const SPECIAL_SKILLS=new Set(['anchor','lotus','dragon','eagle','goldstar']);
 import { skillTuning } from './skill-upgrades.ts';
+import { MOVES, AIR_MOVES, airDashTurn, lobLanding, lobPower, lobReaches, moveAt, moveTime, quakeStuns, rainPoints, skyQuakeCap, skyQuakePower, strikeLaunches } from './moves.ts';
 import { dogTarget, DOG_TOSS_FLIGHT, DOG_TOSS_RANGE } from './guard-dog.ts';
 export interface CombatHost {
   position(): CombatPoint; facing(): number; face(angle: number): void;
@@ -157,7 +160,8 @@ export class CombatSimulation {
   private host:CombatHost; private random:()=>number; private time=0; private serial=0; private combo=0;
   /** Damage factor of the levelled skill being cast; delayed hits keep the factor they were cast with. */
   private power=1;private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;private pet2Cooldown=0;private dogCooldown=0;
-  private jobs:Scheduled[]=[]; private action:{kind:'dash'|'slam';until:number;started:number;direction:CombatPoint;speed:number;multiplier:number;hit:Set<string>;
+  private jobs:Scheduled[]=[]; private action:{kind:'dash'|'slam'|'ready'|'rest';until:number;started:number;direction:CombatPoint;speed:number;multiplier:number;hit:Set<string>;
+    /** A Quake of the moves: when its ring lands (the leap's top is timed to it). An air dash: it may still turn once. */ peak?:number; air?:boolean; turned?:boolean;
     /** Knight's charge: carry creatures along instead of hitting them on the way. */ push?:boolean; then?:()=>void}|null=null;
   /** Speed bonus (fraction) while statuses.swift runs; where the sandbag wall stands; next time each creature may be rammed or swept again. */
   private swift=0;private coverAt:CombatPoint|null=null;private rehits=new Map<string,number>();
@@ -167,11 +171,17 @@ export class CombatSimulation {
    * next own hit is a critical (a perfect dodge); `spent` tells the game it was used. `launch`: every third basic
    * melee hit lifts an ordinary creature `launch` m (0 = off).
    */
-  readonly edge:{bonus:number;sure:boolean;launch:number;spent?:()=>void;/** The share of a hit a boss lets through (a block; 1 = all of it). */scale?:(target:CombatTarget)=>number;/** A critical multiplier that replaces the stat's for this hit (a hit from the air), or undefined. */crit?:()=>number|undefined}={bonus:1,sure:false,launch:0};
+  readonly edge:{bonus:number;sure:boolean;launch:number;
+    /** The four moves of moves.ts replace the four starting skills (the solo game with the switch on). */moves?:boolean;
+    /** The creature the explorer has chosen (the Lob aims at it first), and where the stick points (rad; the air dash may turn to it). */target?:()=>CombatTarget|null|undefined;stick?:()=>number|null;
+    /** Around the hits of a move that may end a chain ('quake', 'skyquake'): `begin` returns the damage factor (the finisher bonus). */begin?:(move:string)=>number;end?:(move:string)=>void;
+    spent?:()=>void;/** The share of a hit a boss lets through (a block; 1 = all of it). */scale?:(target:CombatTarget)=>number;/** A critical multiplier that replaces the stat's for this hit (a hit from the air), or undefined. */crit?:()=>number|undefined}={bonus:1,sure:false,launch:0};
   /** Set while a dive strike deals its damage: a sure critical on this target, and the most it may take from a boss. */
   private forced=false;private hitCap=Infinity;private swings=0;
   /** Root Quake cast in the air: the shockwave waits for the landing (land()). */
-  private plunge:{radius:number;power:number}|null=null;
+  private plunge:{radius:number;power:number;height?:number}|null=null;
+  /** A Strike chain or a Lob throw keeps the hands busy until this time: no other attack starts, the feet stay free. */
+  private busyUntil=0;
   constructor(host:CombatHost,random:()=>number=Math.random){this.host=host;this.random=random;}
   get visualScale(){return this.statuses.giant>0?2:1;}
   /** Extra defence from skills: giant form, tank mode, and the sandbag wall while you stand behind it (+80 'armor' is added by the hosts). */
@@ -220,11 +230,15 @@ export class CombatSimulation {
   private haste(amount:number,time:number){this.swift=(this.statuses.swift??0)>0?Math.max(this.swift,amount):amount;this.statuses.swift=Math.max(this.statuses.swift??0,time);}
   get locksMovement(){return !!this.action;}
   /** Ground slam: a fast leap that snaps down onto the target when the shockwave lands at 0.42 s. */
-  get airborne(){if(this.action?.kind!=='slam')return 0;const t=(this.time-this.action.started)/.42;return t<1?Math.sin(t*Math.PI*.85)*2.6:0;}
+  get airborne(){if(this.action?.kind!=='slam')return 0;const t=(this.time-this.action.started)/(this.action.peak??.42);return t<1?Math.sin(t*Math.PI*.85)*2.6:0;}
   /** The movement skill in progress and its elapsed time, for the explorer's pose. */
-  get pose(){return this.action?{kind:this.action.kind,t:this.time-this.action.started}:null;}
+  get pose(){const a=this.action;return a&&(a.kind==='dash'||a.kind==='slam')?{kind:a.kind,t:this.time-a.started}:a?.kind==='ready'?{kind:'dash' as const,t:0}:null;}
+  /** A move is in progress (a chain, a throw, a wind-up or a recovery): the next attack waits. */
+  get busy(){return !!this.action||this.time<this.busyUntil;}
+  /** Rushing (the dash itself, on the ground or in the air): nothing hurts the explorer, ground marks included. */
+  get rushing(){return this.action?.kind==='dash';}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.plunge=null;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{}),...(quiet?{quiet:true}:{})});}
@@ -276,7 +290,7 @@ export class CombatSimulation {
   }
   /** `factor` scales the hit (an air swing, jump-rules.ts AIR.swing); the server never passes it. */
   basic(target?:CombatTarget,factor=1){
-    if(this.action)return false;const weapon=this.host.weapon();if(weapon.kind==='rod')return false;
+    if(this.action||this.time<this.busyUntil)return false;const weapon=this.host.weapon();if(weapon.kind==='rod')return false;
     target??=this.nearest(attackRange(weapon));if(!target)return false;
     const p=this.host.position();if(Math.hypot(target.x-p.x,target.z-p.z)>attackRange(weapon,target.radius))return false;
     const angle=this.aim(target);
@@ -302,20 +316,22 @@ export class CombatSimulation {
   /** The explorer touched down: a Root Quake cast in the air lands its (wider, stronger) shockwave now. True when it did. */
   land(){
     const p=this.plunge;if(!p)return false;this.plunge=null;const old=this.power;this.power=p.power;
+    if(p.height!==undefined){try{this.quakeRing(p.radius,skyQuakePower(p.height),AIR_MOVES.dive.lift,AIR_MOVES.dive.stun,'skyquake',skyQuakeCap);}finally{this.power=old;}return true;}
     try{this.area(this.host.position(),p.radius,2.3,.8,2.5,'#ffd091',1.2,'crater');}finally{this.power=old;}return true;
   }
   /** A Root Quake is waiting for the landing. */
   get plunging(){return !!this.plunge;}
   /** Rush forward `speed`×`duration` m, untouchable; multiplier 0 passes through without hitting, `push` carries creatures along. */
-  private dash(multiplier=1.7,speed=30,duration=.24,extra:{push?:boolean;then?:()=>void}={}){
-    const aimed=this.aim();this.action={kind:'dash',started:this.time,until:this.time+duration,direction:direction(aimed),speed,multiplier:multiplier*this.power,hit:new Set(),...extra};this.visual('rush',this.host.position(),2,duration,'#e9fbff',aimed);
+  private dash(multiplier=1.7,speed=30,duration=.24,extra:{push?:boolean;then?:()=>void;/** The moves aim at the chosen creature first. */target?:CombatTarget}={}){
+    const aimed=this.aim(extra.target);this.action={kind:'dash',started:this.time,until:this.time+duration,direction:direction(aimed),speed,multiplier:multiplier*this.power,hit:new Set(),...extra};this.visual('rush',this.host.position(),2,duration,'#e9fbff',aimed);
   }
   /**
    * `air`: cast in the air (jump-rules.ts AIR; solo only, the server never passes it). Breeze Step becomes an air dash
    * that hits harder; Root Quake skips its leap and lands a wider, stronger shockwave when the explorer touches down.
    */
-  skill(index:number,special='fist',air?:{dash:number;quakeRadius:number;quakePower:number}){
+  skill(index:number,special='fist',air?:{dash:number;quakeRadius:number;quakePower:number;/** Metres up (the moves' heavy dive is stronger from higher). */height?:number}){
     if(this.action)return false;
+    if(this.edge.moves){const move=moveAt(index,special);if(move)return this.move(move,index,air);if(this.time<this.busyUntil)return false;}
     this.aim();
     const tuning=skillTuning(index,this.host.skillLevel?.(index)??0);this.power=tuning.damage;
     try{
@@ -326,6 +342,80 @@ export class CombatSimulation {
       else return this.special(special);
       return true;
     }finally{this.power=1;}
+  }
+  /**
+   * One of the four moves (moves.ts; solo, with the switch on). `air`: its air form. The numbers are the table's, scaled
+   * by the slot's upgrade level exactly as the old skill was (damage, radius, cooldown).
+   */
+  private move(move:'strike'|'rush'|'quake'|'lob',index:number,air?:{height?:number}){
+    if(this.time<this.busyUntil)return false;
+    const tuning=skillTuning(index,this.host.skillLevel?.(index)??0);this.power=tuning.damage;
+    try{
+      if(move==='strike'){
+        if(air){this.power=1;return this.airSwing(tuning.damage);}
+        const S=MOVES.strike,last=S.hits.length-1;this.aim(this.chosen(S.reach+.6));this.busyUntil=this.time+moveTime('strike');
+        S.hits.forEach((power,i)=>this.later(S.windup+i*S.gap,()=>{const t=this.chosen(S.reach+.6);if(t)this.aim(t);this.strikeHit(power,i===last);}));
+      }else if(move==='rush'){
+        const R=MOVES.rush,time=R.length/R.speed;
+        if(air){this.dash(AIR_MOVES.dash.power,R.speed,time,{target:this.chosen(R.length+2)});if(this.action)this.action.air=true;}
+        else{
+          // A short crouch, the pass, then a pause behind whatever was passed.
+          this.aim(this.chosen(R.length+2));this.action={kind:'ready',started:this.time,until:this.time+R.windup+.05,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};
+          this.later(R.windup,()=>this.dash(R.power,R.speed,time,{target:this.chosen(R.length+2),then:()=>{this.action={kind:'rest',started:this.time,until:this.time+R.recovery,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};}}));
+        }
+      }else if(move==='quake'){
+        const Q=MOVES.quake,radius=Q.radius+tuning.radius;
+        if(air){this.plunge={radius:AIR_MOVES.dive.radius+tuning.radius,power:tuning.damage,height:Math.max(0,air.height??0)};return true;}
+        this.aim(this.chosen(radius));this.action={kind:'slam',started:this.time,until:this.time+Q.windup+Q.recovery,peak:Q.windup,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};
+        this.host.effect({...this.host.position(),kind:'cast',radius,color:'#ffd091',duration:Q.windup});
+        this.later(Q.windup,()=>this.quakeRing(radius,Q.power,Q.lift,Q.stun,'quake'));
+      }else{
+        const L=MOVES.lob,p=this.host.position(),splash=L.splash+tuning.radius;
+        if(air){
+          // Rain: three smaller shots straight down, the first under the explorer and the rest in a line ahead.
+          const R=AIR_MOVES.rain,angle=this.aim(this.chosen(R.spacing*R.shots+1));this.busyUntil=this.time+R.gap*R.shots;
+          rainPoints(p,angle).forEach((point,i)=>{const at=R.fall+i*R.gap;
+            this.host.effect({...point,kind:'cast',look:'petalfall',radius:R.radius,duration:at,color:'#ff8fc8',facing:angle});
+            this.later(at,()=>{this.emit('ring',point,R.radius,'#ffd0e4',angle,'petalburst');for(const t of this.within(point,R.radius))this.damage(t,R.power,0,0,.8);});});
+          return true;
+        }
+        // The chosen creature first, else the nearest in range, else straight ahead; the spot is marked for the whole wind-up and flight.
+        const chosen=this.edge.target?.(),pick=chosen&&chosen.hp>0&&lobReaches(p,chosen)?chosen:this.nearest(L.max),landing=lobLanding(p,this.host.facing(),pick),spot={x:landing.x,z:landing.z};
+        this.host.face(landing.facing);this.busyUntil=this.time+L.windup+L.recovery;
+        this.host.effect({...spot,kind:'cast',look:'lobmark',radius:splash,duration:L.windup+L.flight,color:'#ff8fc8',facing:landing.facing});
+        this.later(L.windup,()=>{const from=this.host.position(),dx=spot.x-from.x,dz=spot.z-from.z;this.host.effect({x:from.x,z:from.z,kind:'cast',look:'lob',radius:Math.max(.5,Math.hypot(dx,dz)),facing:Math.atan2(dx,dz),duration:L.flight,color:'#ff8fc8'});});
+        this.later(L.windup+L.flight,()=>{this.emit('ring',spot,splash,'#ffd0e4',landing.facing,'petalburst');
+          for(const t of this.within(spot,splash)){const power=lobPower(Math.hypot(t.x-spot.x,t.z-spot.z)-t.radius,splash);if(power>0)this.damage(t,power,0,0,1.2);}});
+      }
+      return true;
+    }finally{this.power=1;}
+  }
+  /** The creature a move goes for: the chosen one while it is within `range` (edge to edge), else the nearest within it. */
+  private chosen(range:number){const p=this.host.position(),t=this.edge.target?.();return t&&t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius?t:this.nearest(range);}
+  /** One hit of the Strike chain: the front arc out to `reach`; the last one knocks harder and launches small creatures. */
+  private strikeHit(power:number,last:boolean){
+    const S=MOVES.strike,p=this.host.position(),d=direction(this.host.facing()),half=Math.acos(S.cone);
+    this.host.effect({...p,kind:'arc',radius:S.reach,color:this.host.weapon().fx??'#fff4c8',facing:this.host.facing(),arc:2*Math.acos(S.cone)});
+    for(const enemy of this.host.targets()){
+      const x=enemy.x-p.x,z=enemy.z-p.z,length=Math.hypot(x,z);
+      // In the arc when any part of its body is: the angle to its centre, less the half angle its body covers.
+      if(enemy.hp>0&&length<=S.reach+enemy.radius&&(length<=enemy.radius||Math.acos(Math.max(-1,Math.min(1,(x*d.x+z*d.z)/length)))<=half+Math.asin(enemy.radius/length)))this.damage(enemy,power,.15,last&&strikeLaunches(enemy)?S.launch:0,last?2.2:.8);
+    }
+  }
+  /** The Quake's ring where the explorer stands: everything in it is hit and launched, the large ones stunned. `cap`: the most one target may take. */
+  private quakeRing(radius:number,power:number,lift:number,stun:number,move:string,cap?:(target:CombatTarget)=>number){
+    const at=this.host.position(),factor=this.edge.begin?.(move)??1;this.emit('ring',at,radius,'#ffd091',this.host.facing(),'crater');
+    try{for(const target of this.within(at,radius)){if(cap)this.hitCap=cap(target);this.damage(target,power*factor,quakeStuns(target)?stun:0,lift,1.2);}}finally{this.hitCap=Infinity;this.edge.end?.(move);}
+  }
+  /**
+   * The air swing (moves.ts AIR_MOVES.swing): one spin that hits everything round the explorer. The Strike's air form and,
+   * with the moves on, what the attack button does while rising with paws or a blade. `damage`: the Strike slot's level factor.
+   */
+  airSwing(damage=1){
+    if(this.action||this.time<this.busyUntil)return false;const A=AIR_MOVES.swing,p=this.host.position(),old=this.power;
+    this.host.effect({...p,kind:'cast',look:'whirl',radius:A.radius,color:'#e5f6ff',duration:.3});this.power=damage;
+    try{for(const target of this.within(p,A.radius))this.damage(target,A.power,.15,0,.8);}finally{this.power=old;}
+    return true;
   }
   special(id:string){
     const p={...this.host.position()},angle=this.aim(),d=direction(angle);
@@ -522,7 +612,9 @@ export class CombatSimulation {
     for(const[id,time]of this.marked){if(time<=dt)this.marked.delete(id);else this.marked.set(id,time-dt);}
     const due=this.jobs.filter(job=>job.at<=this.time);this.jobs=this.jobs.filter(job=>job.at>this.time);for(const job of due)job.run();
     if(this.action){const a=this.action;if(a.kind==='dash'){
-      const from={...this.host.position()},remaining=Math.max(0,Math.min(dt,a.until-(this.time-dt)));this.host.move(a.direction.x*a.speed*remaining,a.direction.z*a.speed*remaining);
+      if(a.air&&!a.turned){const turn=airDashTurn((this.time-dt-a.started)/Math.max(.01,a.until-a.started),Math.atan2(a.direction.x,a.direction.z),this.edge.stick?.()??null,false);if(turn!==null){a.direction=direction(turn);a.turned=true;this.host.face(turn);}}
+      // A dash that a wind-up started on this very step (the Rush) begins moving on the next one, so it covers its length exactly.
+      const from={...this.host.position()},remaining=a.started>=this.time?0:Math.max(0,Math.min(dt,a.until-(this.time-dt)));this.host.move(a.direction.x*a.speed*remaining,a.direction.z*a.speed*remaining);
       const to=this.host.position();this.emit('trail',to,.7,'#e9fbff');
       if(a.push){for(const t of this.within(to,DZ.knightcharge.grab)){a.hit.add(t.id);if(!t.boss)this.host.moveTarget?.(t,to.x+a.direction.x*1.6,to.z+a.direction.z*1.6);}}
       else if(a.multiplier>0)for(const t of this.host.targets())if(t.hp>0&&!a.hit.has(t.id)&&distanceToSegment(t,from,to)<1.2+t.radius){a.hit.add(t.id);this.damage(t,a.multiplier,.3,0,3);}

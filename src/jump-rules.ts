@@ -74,6 +74,8 @@ export class JumpState {
   }
   /** Holds the height for `seconds` (the air dash). */
   hold(seconds: number) { if (this.airborne && !this.diving) { this.hover = Math.max(this.hover, seconds); this.velocity = 0; } }
+  /** Hangs in the air for `seconds` and then goes on as it was, still rising or falling (the air swing): more airtime, the same top. */
+  stall(seconds: number) { if (this.airborne && !this.diving) this.hover = Math.max(this.hover, seconds); }
   /** One step of the arc. Returns the landing on the step the explorer touches down. */
   step(dt: number): Landing | null {
     if (!(dt > 0)) return null;
@@ -199,6 +201,25 @@ export const ATTACK_CLASS: Readonly<Record<string, AttackClass>> = {
   lava: 'ground',
 };
 export const attackClass = (kind: string | undefined): AttackClass => (kind && ATTACK_CLASS[kind]) || 'body';
+/**
+ * Every attack warns before it lands (docs/FIGHT-PLAN.md section 6): a mark on the ground or a clear pose, never shorter
+ * than WARNING.min seconds on Normal. world.ts lengthens a quicker wind-up to it while jumping is on.
+ */
+export const WARNING = { min: .35 } as const;
+export const warningTime = (windup: number) => Math.max(WARNING.min, windup);
+/**
+ * The shape each attack warns with, the same five the explorer's own moves have: a 'swing' in front (an arc), a 'line'
+ * (a lane), a 'ring' around the attacker, a 'falling' strike on a marked spot, a mark that is 'chasing' the explorer;
+ * and a 'shot', which is its own warning (a pose, then a ball that flies slowly enough to step aside).
+ */
+export type AttackShape = 'swing' | 'line' | 'ring' | 'falling' | 'chasing' | 'shot';
+export const ATTACK_SHAPE: Readonly<Record<string, AttackShape>> = {
+  slam: 'ring', quake: 'ring', charge: 'line', barrage: 'shot', rain: 'falling', spin: 'chasing', eclipse: 'ring',
+  leap: 'falling', donut: 'ring', stomp4: 'falling', pools: 'falling', sweep: 'swing', pull: 'ring', lines: 'line', bombard: 'falling', orbs: 'shot', summon: 'ring',
+  stomp: 'ring', slap: 'swing', bite: 'swing', breath: 'line', grab: 'swing', spit: 'falling', meteor: 'falling', roar: 'ring',
+  melee: 'swing', shot: 'shot', rush: 'line', burst: 'ring',
+  lava: 'ring',
+};
 /** A ground attack misses an explorer this high; a body attack never misses. */
 export function dodges(cls: AttackClass, height: number) { return cls === 'ground' && height >= DODGE.height; }
 /** A dodge is perfect when the explorer left the ground at most DODGE.perfect s before the attack landed. */

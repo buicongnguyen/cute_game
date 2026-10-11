@@ -51,6 +51,11 @@ const BODIES = {
   quake: `<path d="M6.500 12.500 8 6.800l5-2.300 4.300 2.700 1.200 5.300z" fill="#fff6e0"/><path d="M10.500 7.500 13 9l-1 3" stroke-width="1.200"/><path d="M2.500 13h19l-2.200 4.200-3.300.6-1.700 3-3.800-1.900-3.300 1.600-1.200-3.200-3.300-.8z" fill="#ffe08a"/><path d="M12 13v2.800l-2 1.500M15.500 13l1 2.500" stroke-width="1.300"/><path d="M3 9.300 4.500 8M21 9.300 19.500 8M2.500 5.500l1 .5M21.500 5.500l-1 .5" stroke="#fff6e0" stroke-width="1.700"/>`,
   /** Paw Storm: a paw print with speed strokes. */
   paw: `<g fill="#fff6e0"><ellipse cx="6.300" cy="10.300" rx="1.900" ry="2.500" transform="rotate(-22 6.300 10.300)"/><ellipse cx="10.300" cy="6.400" rx="1.900" ry="2.600" transform="rotate(-8 10.300 6.400)"/><ellipse cx="15" cy="6.600" rx="1.900" ry="2.600" transform="rotate(10 15 6.600)"/><ellipse cx="18.600" cy="10.900" rx="1.900" ry="2.500" transform="rotate(24 18.600 10.900)"/><path d="M12.500 11.300c2.800 0 5 2.600 5 5.200 0 2.300-1.700 3.300-3 3.300-.9 0-1.400-.4-2-.4s-1.200.4-2.100.4c-1.400 0-2.900-1.100-2.900-3.200 0-2.700 2.200-5.300 5-5.300z"/></g>`,
+  // ---- The four moves (moves.ts), drawn over the same two buttons while jumping is on
+  /** The Lob: a petal bud at the top of a dotted arc, and the ringed spot where it lands. */
+  lob: `<path d="M3 17.500C5.500 7.500 12.500 4 17.800 12.500" stroke="#fff6e0" stroke-width="2" stroke-dasharray=".2 3.400"/><ellipse cx="17.600" cy="18" rx="4.600" ry="2.300" fill="#ffe08a"/><ellipse cx="17.600" cy="18" rx="1.500" ry=".700" fill="#ff5d8c" stroke-width="1.100"/><g fill="#fff6e0" stroke-width="1.400"><ellipse cx="11.300" cy="3.900" rx="1.700" ry="2.200"/><ellipse cx="8.600" cy="6.500" rx="2.200" ry="1.700"/><ellipse cx="14" cy="6.500" rx="2.200" ry="1.700"/><ellipse cx="11.300" cy="9.100" rx="1.700" ry="2.200"/></g><circle cx="11.300" cy="6.500" r="1.500" fill="#ffc93a" stroke-width="1.200"/>`,
+  /** The Strike: a paw with three hit strokes in front of it, each longer than the last. */
+  strike: `<g fill="#fff6e0" transform="translate(-2.600 3.400) scale(.8)"><ellipse cx="6.300" cy="10.300" rx="1.900" ry="2.500" transform="rotate(-22 6.300 10.300)"/><ellipse cx="10.300" cy="6.400" rx="1.900" ry="2.600" transform="rotate(-8 10.300 6.400)"/><ellipse cx="15" cy="6.600" rx="1.900" ry="2.600" transform="rotate(10 15 6.600)"/><ellipse cx="18.600" cy="10.900" rx="1.900" ry="2.500" transform="rotate(24 18.600 10.900)"/><path d="M12.500 11.300c2.800 0 5 2.600 5 5.200 0 2.300-1.700 3.300-3 3.300-.900 0-1.400-.4-2-.4s-1.200.4-2.100.4c-1.400 0-2.900-1.100-2.900-3.200 0-2.700 2.200-5.300 5-5.300z"/></g><path d="M14.500 3.500c1.300.5 2.200 1.400 2.700 2.700M16.800 2.200c2.300.9 3.900 2.500 4.800 4.800M18.200 9.500c1.900 1.500 2.900 3.700 2.900 6.500" stroke="#fff6e0" stroke-width="1.900"/>`,
 } as const;
 export type HudIconName = keyof typeof BODIES;
 
@@ -59,8 +64,10 @@ export const hudIcon = (name: HudIconName) => wrap(BODIES[name]);
 
 /** Drawings for skills by their catalog name; a skill without one keeps its emoji (weapon specials, disguise kits). */
 const SKILL_ART: Record<string, HudIconName> = { 'Petal Gale': 'gale', 'Breeze Step': 'breeze', 'Root Quake': 'quake', 'Paw Storm': 'paw' };
-/** The skill button's picture: our drawing for the four starting skills, otherwise null (the caller shows the emoji). */
-export const skillArt = (name: string): string | null => { const key = SKILL_ART[name]; return key ? hudIcon(key) : null; };
+/** While the four moves are on, Petal Gale is thrown and Paw Storm is the three-hit chain: their buttons show that. */
+const MOVE_ART: Record<string, HudIconName> = { 'Petal Gale': 'lob', 'Paw Storm': 'strike' };
+/** The skill button's picture: our drawing for the four starting skills (`moves`: as the four moves), otherwise null (the caller shows the emoji). */
+export const skillArt = (name: string, moves = false): string | null => { const key = (moves ? MOVE_ART[name] : undefined) ?? SKILL_ART[name]; return key ? hudIcon(key) : null; };
 
 /** A drawing as a CSS url() value, for buttons painted from the stylesheet. */
 export const hudIconUrl = (name: HudIconName) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" ${ATTRS}>${BODIES[name]}</svg>`)}")`;

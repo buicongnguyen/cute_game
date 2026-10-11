@@ -1,6 +1,6 @@
 # Fight plan: four ground moves, the jump, and their combinations
 
-Written 2026-10-11. Status: plan. The jump itself is being built on branch `dev-jump`; this plan says how the moves are balanced once it lands. The speed rule of `docs/QUALITY-PLAN.md` applies: no move may add drawing work beyond the pooled effects the game already has.
+Written 2026-10-11. Status: steps 1 to 3 built (branch `dev-moves`); steps 4 and 5 still plan. The jump itself is being built on branch `dev-jump`; this plan says how the moves are balanced once it lands. The speed rule of `docs/QUALITY-PLAN.md` applies: no move may add drawing work beyond the pooled effects the game already has.
 
 ## 1. The idea
 
@@ -39,31 +39,39 @@ Jump (single, double, triple) is the fifth action. It is not an attack: it chang
 5. **Balance work is real.** Existing fights were tuned for four skills with cooldowns and no dodge. The numbers below are starting points to tune, not final values.
 6. **Online.** The server decides creature damage. Move timings must be the same on both sides, or a hit that looked dodged will still land. Solo first.
 
-## 3. Ground moves (starting numbers)
+## 3. Ground moves (what shipped)
 
-Damage is given against the basic attack (100%). Wind-up is the time before the hit; recovery is the time after it when the hero cannot act.
+One table in `src/moves.ts` (`MOVES`, `AIR_MOVES`), shared by the hero and, later, creatures. The moves replace the four starting skills only while the 'Jump and air combat' switch is on, in solo play. Switch off, or online, the old Petal Gale spin, Breeze Step, Root Quake and Paw Storm play exactly as before. Disguises and uniforms keep their own four skills unchanged in this step; a weapon with a special of its own keeps it in the fourth slot (`STRIKE_OVER_WEAPON_SPECIAL = false`, see section 9). Names stay: Petal Gale is the Lob (petals thrown in an arc), Breeze Step the Rush, Root Quake the Quake, Paw Storm the Strike. Upgrade levels scale them as before (damage; the Lob's splash +0.12 m and the Quake's ring +0.3 m per level; Rush cooldown -0.2 s per level).
 
-| Move | Damage | Reach / shape | Wind-up | Recovery | Cooldown | Extra |
+| Move (slot, keys) | Damage | Reach / shape | Wind-up | Recovery | Cooldown | Extra |
 |---|---|---|---|---|---|---|
-| Strike | 3-hit chain: 100%, 110%, 140% | 2 m in front | 0.10 s | 0.15 s | none | Third hit launches small enemies |
-| Rush | 160% | 6 m line, 1.2 m wide | 0.12 s | 0.30 s | 4 s | Passes through enemies; ground marks do not hurt while rushing |
-| Quake | 220% | ring, 3.5 m | 0.35 s | 0.35 s | 7 s | Launches enemies it hits; 0.6 s stun on large ones |
-| Lob | 260% centre, 130% edge | lands 4 to 9 m away, 2 m splash | 0.25 s + 0.6 s flight | 0.20 s | 6 s | Hits flying enemies; marks the landing spot |
+| Strike (Paw Storm; R / ;) | 3 hits: 80%, 88%, 112% | 2 m arc ahead, 120 degrees (a body counts when any part is in it) | 0.10 s, hits 0.16 s apart | 0.15 s | 5 s | Third hit launches creatures under 1.2 m wide, never a boss |
+| Rush (Breeze Step; W / K) | 160% | 6 m line, 1.2 m wide | 0.12 s | 0.30 s | 4 s | Untouchable while dashing: no ground mark or blow hurts |
+| Quake (Root Quake; E / L) | 240% | 3.5 m ring | 0.35 s | 0.35 s | 7 s | Launches; 0.6 s stun on bosses and creatures 1.2 m wide or more (a boss turns it into a slow) |
+| Lob (Petal Gale; Q / J) | 260% within 0.8 m of the spot, 130% to 2 m | lands 4 to 9 m away | 0.25 s + 0.6 s flight | 0.20 s | 6 s | Aimed at the chosen target, else the nearest enemy within 9 m, else 6.5 m ahead; the spot is marked for the whole wind-up and flight; hits flyers |
 
-Rule of thumb: over ten seconds of perfect use, each move should give about the same damage. The fast ones win in a duel, the slow ones win against groups.
+Changes from the starting numbers, from the simulation (section 7): the Strike chain went from 100/110/140% (350% a cast) to 80/88/112% (280%) and got a 5 s cooldown, because without one it outdamaged everything; the Quake went from 220% to 240% so its ten seconds match the others.
 
-## 4. Air moves (jump + one of the four)
+## 4. Air moves (jump + one of the four), and the final input mapping
 
-| Jump + | Becomes | Change from the ground version |
+| Jump + | Becomes | Numbers |
 |---|---|---|
-| Strike | **Air swing**, a spin that hits all round (the old Petal Gale look) | 80% per hit, hits flying enemies, keeps the hero in the air a little longer |
-| Rush | **Air dash** | Same damage, crosses the ground marks below, can change direction once |
-| Quake | **Dive**, a drop onto the ground | Damage by height: 250% from a single jump, 320% double, 400% triple; a critical on a boss from a double or triple |
-| Lob | **Rain**, three smaller shots straight down in a line | 3 x 90%, short range, good for a boss under the hero |
+| Strike | **Sky Spin**: one spin hitting all round (the old Petal Gale look) | 80%, 2.2 m round, holds the height 0.12 s; 0.32 s between spins. It is also what the attack button does while rising with paws or a blade, so there is one air swing, not two |
+| Rush | **Sky Step** (air dash) | 160%, same 6 m, holds the height 0.24 s, turns once toward the stick after half the way; own air cooldown 4 s |
+| Quake | **Sky Quake** (heavy dive) | A 4.5 m ring for 2.5x from a single jump's top, 3.2x double, 4x triple, plus the plain dive strike on top; capped at 15% of a boss per ring; own air cooldown 7 s. While cooling down, the Quake key in the air does the plain dive |
+| Lob | **Petal Rain** | 3 shots of 90% straight down, 1.3 m apart in a line from under the hero, 1.3 m splash each; own air cooldown 6 s |
 
-Higher jumps give more damage but leave the hero in the air longer, where projectiles still hit. That risk pays for the reward.
+The attack button keeps: in the air, rising = Sky Spin (with a gun: the old air shot), falling from 0.9 m up = the plain dive (`jump-rules.ts DIVE`, no cooldown). Air forms have their own cooldowns, so a Rush can be followed by Sky Step and a Quake by Sky Quake; in the air each skill button shows its air form's cooldown and turns sky blue.
 
-## 5. Sequences (the fighting-game part)
+| | PC | Phone |
+|---|---|---|
+| Jump | Space (or Left Shift with Space on attack) | centre Jump pad |
+| Attack | F / N | inner toe |
+| Lob / Rush / Quake / Strike | J K L ; (WASD layout) or Q W E R | the four skill toes |
+| Air forms | Jump, then the skill key while in the air | press Jump and slide the same finger to the toe (or tap Jump, then the toe) |
+
+## 5. Sequences
+(the fighting-game part)
 
 A hit within 1.5 s of the last one continues the combo: +4% damage per hit, up to +40%. Being hit resets it.
 
@@ -75,6 +83,8 @@ Three routes to teach, from easy to hard:
 
 Finishers (Quake, Dive) end the combo with a bonus equal to half the ramp, so stopping at the right moment is a choice.
 
+As built: the existing combo meter (+4% a hit, 1.5 s window, 2 s on touch). A Quake or a dive (plain or Sky Quake) landing on a chain of three or more is a finisher: x1.25 and 'FINISHER!'. A Quake that opens a chain counts as its launcher. In the ground route a hero with a weapon special does Strike x3 as three basic hits (every third basic hit launches, as before). All three routes are scripted in `promo/fight-sim.mts` and win (section 7).
+
 ## 6. Avoiding hits
 
 | Enemy attack | How it warns | How to avoid it |
@@ -84,6 +94,20 @@ Finishers (Quake, Dive) end the combo with a bonus equal to half the ramp, so st
 | Ground ring or quake | A growing ring, 0.8 s | Walk out if it is small; jump if it is wide |
 | Falling shot | A circle where it lands, 0.9 s | Walk out of the circle |
 | Chasing mark (bosses) | A mark that follows the hero, then locks | Keep moving, then Rush out when it locks |
+
+**Warnings audit (step 2, as built; no new meshes: the pooled telegraph decals).** Shapes are named in `jump-rules.ts ATTACK_SHAPE`.
+
+| Attack | Before | Now (switch on) |
+|---|---|---|
+| Ordinary melee bites and swings | red arc, wind-ups 0.30 to 0.45 s (bee, owl, minislime 0.3 s) | wind-up never under 0.35 s (`WARNING.min`); the blow lands only inside the drawn arc |
+| Chargers (boar, seal, lizards, snake, wisp ...) | pose only (firebat, lavaworm, magmaturtle had discs) | amber lane of discs toward the target during the wind-up, kept down for the run |
+| Boss plain bite or swipe | pose only | red arc of its real reach; the blow lands only inside it |
+| Boss spin (2.4 s of hits) | no mark after the wind-up | a 3.4 m ring follows the boss, pulsing with each hit |
+| Boss slam, quake, rain, charge, eclipse; titans; the Colossus; dungeon skills | discs, 0.7 to 2.4 s | unchanged (all over 0.35 s) |
+| Shots (shooters, barrage) | a pose, then a slow ball | unchanged: the ball is its own warning |
+| Hazards (lava, fire rain) | own marks, 1.1 s | unchanged |
+
+Not changed in this step: online (the server keeps its timings); no new boss attacks; chasing marks are still to come (step 4).
 
 Rules that keep it fair:
 
@@ -99,16 +123,43 @@ Rules that keep it fair:
 3. A check that no move is always best: each of the four must be the top choice in at least one test fight.
 4. Play checks on a phone, because timing windows feel shorter on touch.
 
+**Results (as shipped, `node --experimental-strip-types promo/fight-sim.mts`, 6 seeds, no food eaten).**
+
+Ten seconds of one move used perfectly on one creature: Lob 520%, Rush 480%, Quake 480%, Strike 560% (within 17%).
+
+| Test fight (10 s, one move) | Lob | Rush | Quake | Strike | Best |
+|---|---|---|---|---|---|
+| one large creature in reach | 520% | 480% | 480% | 560% | Strike |
+| five in a row ahead | 1820% | 2400% | 1440% | 560% | Rush |
+| six all round | 260% | 480% | 2880% | 1680% | Quake |
+| three 8 m away | 1560% | 960% | 0 | 0 | Lob |
+
+Boss fights (time to win; damage taken in full healths; boss block off as shipped): King Bear lvl 13 / Yeti lvl 16 / Shadow Lord lvl 24.
+
+| Script | King Bear | Yeti | Shadow Lord |
+|---|---|---|---|
+| switch off (old skills) | 64 s, 5.0 | 60 s, 5.1 | 90 s, 11.2 |
+| careless (moves, no jump, no stepping out) | 72 s, 7.4 | 67 s, 7.9 | 93 s, 11.2 |
+| single jump, dodging | 56 s, 1.4 | 52 s, 0.5 | 102 s, 3.3 |
+| double jump, all moves | 51 s, 1.4 | 44 s, 0.5 | 84 s, 1.8 |
+| ground route | 67 s, 1.7 | 58 s, 0.1 | 120 s, 3.5 |
+| launch route | 59 s, 1.8 | 53 s, 0.2 | 113 s, 3.3 |
+| chase route | 65 s, 2.3 | 54 s, 0.4 | 119 s, 3.7 |
+
+Biggest single hit 7.8% of a boss (target under 15%). Careless play takes 7 to 11 healths (loses without food); careful play 0.1 to 3.7. The Shadow Lord routes run 113 to 120 s (target 45 to 90) because it is met two levels up and grows 24%: that is step 4.
+
 ## 8. Order of work
 
-1. Jump with dodging and the Dive (in progress, `dev-jump`).
-2. Reshape the four skills into Strike, Rush, Quake and Lob with the table in section 3; warnings on every creature attack.
-3. Air versions (section 4) and the combo routes.
-4. Bosses re-tuned with the simulated fights; chasing marks for the big ones.
-5. Online timings on the server.
+1. [x] Jump with dodging and the Dive.
+2. [x] Reshape the four skills into Strike, Rush, Quake and Lob with the table in section 3; warnings on every creature attack.
+3. [x] Air versions (section 4) and the combo routes.
+4. [ ] Bosses re-tuned with the simulated fights; chasing marks for the big ones.
+5. [ ] Online timings on the server.
 
 ## 9. Decisions for the owner
 
-1. Should Petal Gale become the Lob (with its spin moving to the air), or stay, with the Lob as a fifth move?
+1. Decided for now: Petal Gale became the Lob and its spin is the air Strike (Sky Spin).
 2. Keep cooldowns on the moves, or use one stamina bar shared by all four (more like a fighting game, harder to balance)?
 3. Is the perfect-dodge critical wanted, or should dodging give safety only?
+4. Should the Strike replace weapon specials in the fourth slot (`STRIKE_OVER_WEAPON_SPECIAL`, built, off)? Today a sword keeps its special and the Strike exists only for paws and weapons without one.
+5. The Shadow Lord is long with the moves (113 to 120 s on the routes): re-tune it in step 4, or raise move damage.

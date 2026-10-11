@@ -15,7 +15,7 @@ import { fightNear } from '../src/hud-combat.ts';
 // are intercepted so assertions can inspect which gear reaches each action.
 const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-const names = ['applyContextWeapon', 'prepareCombatWeapon', 'updateContextWeapon', 'fish', 'pondView', 'endFishing', 'updateFishing', 'finishFishingCatch', 'basicAttack', 'skillList', 'skill', 'mysteryGotAway'];
+const names = ['applyContextWeapon', 'prepareCombatWeapon', 'updateContextWeapon', 'fish', 'pondView', 'endFishing', 'updateFishing', 'finishFishingCatch', 'basicAttack', 'skillList', 'skill', 'mysteryGotAway', 'movesOn', 'ownSkills'];
 const declarations = names.map(name => {
   const node = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
   assert.ok(node, `main.ts must provide the actual ${name} controller`);
@@ -43,6 +43,8 @@ function fixture(...items) {
     document: { hidden: false }, now: 1000, performance: { now: () => ctx.now },
     fishGame: null, fishPond: null, fishingWater: 'home', lastCast: null, recastUntil: 0,fishingEpoch:0,
     cooldowns: combatTimers.skills, combatTimers, skillDurations: [7, 4, 9, 6],
+    // Jumping is off in this harness: the four starting skills, as before the moves (moves.ts).
+    airOn: () => false, airCooldowns: [0, 0, 0, 0], airDurations: [6, 4, 7, 5], moveAt: () => null,
     uiBlocked: () => ctx.blocked,
     world: {
       entities: [pond], enemies: [], position: { x: 5, z: 0 }, selected: null,

@@ -277,6 +277,7 @@ body.indoors #app #hud .skills { display: none; }
    dive in rose. The Jump pad keeps its own look throughout. Paint only. */
 #app #hud .skills.air .skill, #app #hud .skills.air .attack-pad { border-color: #bfeeff; box-shadow: 0 0 0 2px var(--plum), 0 0 0 5px rgba(143, 224, 255, .85), 0 4px 0 2px rgba(58, 36, 51, .5); }
 #app #hud .skills.air .skill-dash, #app #hud .skills.air .skill-stomp, #app #hud .skills.air .attack-pad { background: linear-gradient(160deg, #8fe0ff, #2f9be6); }
+#app #hud .skills.air .skill.air-form { background: linear-gradient(160deg, #8fe0ff, #2f9be6); }
 #app #hud .skills.air.dive .attack-pad { background: linear-gradient(160deg, #ffa3bf, #e8457a); }
 #app #hud .skills.air.dive .attack-pad > svg { rotate: 180deg; }
 /* The combo chip (jump-rules.ts ComboMeter): the count, the damage bonus and four pips (ground, launch, air, finisher).

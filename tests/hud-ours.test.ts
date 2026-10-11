@@ -51,7 +51,7 @@ test('the HUD markup uses the icon set and the new names, and offers the attack 
 
 test('the skill picture is written only when it changes, like the rest of the HUD', () => {
   const main = read('main.ts');
-  assert.match(main, /const art=skillArt\(skill\.name\);if\(art\)setHtml\(parts\.icon as HTMLElement,art\);else setText\(parts\.icon,t\(skill\.icon\)\);/);
+  assert.match(main, /const art=skillArt\(skill\.name,movesOn\(\)\);if\(art\)setHtml\(parts\.icon as HTMLElement,art\);else setText\(parts\.icon,t\(skill\.icon\)\);/);
   assert.match(main, /const setHtml=\(el:Element,v:string\)=>\{if\(lastHtml\.get\(el\)===v\)return false;/);
 });
 

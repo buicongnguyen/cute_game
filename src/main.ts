@@ -46,6 +46,8 @@ import './quick-eat.css';
 import { CombatTimers, FishingInput, MovementControls, gameplayKey, handKey, keyboardBindings, movementKey } from './gameplay-controls.ts';
 import {mountJoystick} from './joystick.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, DZ, type CombatHit, type CombatEffect, type CombatAlly } from './combat.ts';
+import { AIR_MOVES, AIR_NAMES, MOVE_SKILLS, moveAt } from './moves.ts';
+import { skillTuning } from './skill-upgrades.ts';
 import { skillPip } from './skill-pip.ts';
 import { skillTip, BUFF_CHIPS } from './skill-info.ts';
 import { skillSound } from './skill-sounds.ts';
@@ -176,6 +178,8 @@ const combatTimers = new CombatTimers();
 const contextGear = new ContextGearSelection();
 let gearState=state,gearPlanet=state.planet,gearWater=false,combatGearUntil=0;
 const cooldowns = combatTimers.skills, skillDurations = [7,4,9,6];
+/** The air forms of the four moves (moves.ts) cool down on their own, so a Rush may be followed by an air dash and a Quake by its dive. */
+const airCooldowns = [0,0,0,0], airDurations = [6,4,7,5];
 let audio: AudioContext | null = null;
 type FishPick={id:string;power:number;size:number;huge:boolean;mystery?:boolean;supergiant?:boolean};
 type FishingRound={input:FishingInput;simulation:FishingSimulation<FishPick>;lastPhase:string;seen:{missed:number;bait:number;early:number;strains?:number};strainWarned?:boolean;tooEarlyUntil:number;ticket?:string;pending?:boolean;ready?:FishPick;proof?:FishingProof;approach:number;pondId:string;mysteryOut?:boolean};
@@ -339,6 +343,7 @@ function showEffect(effect:CombatEffect){
   if(effect.look==='burn'){skillFx.burn(effect);return;}
   // Electric bursts keep the faint disc and rim at the exact blast radius, then crackle instead of the plain ring.
   if(effect.look==='shock'&&(effect.kind==='ring'||effect.kind==='impact')){if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.42,y:.1,thick:1,opacity:.18});fx.ring(at,{color:'#d8f4ff',from:effect.radius,to:effect.radius*1.02,life:.42,y:.12,thick:.06,opacity:.9});}skillFx.shock(effect);return;}
+  if(effect.kind==='arc'&&combat.edge.moves&&combat.busy&&Math.hypot(effect.x-world.position.x,effect.z-world.position.z)<.5)world.playerAttack(M.weaponStats(state).kind==='sword'?'sword':'fist'); // each hit of the Strike chain swings
   if(fx&&effect.kind==='arc'){const fist=effect.radius<=1.85;fx.slash(at,effect.facing??world.facing,effect.radius+.25,effect.color,fist?{arc:1.4,life:.15,thick:.4}:{arc:Math.min(6.2,effect.arc??2.2)});return;}
   // An area hit also leaves a faint filled disc and a rim at its exact radius (skill-info.ts), so the player sees what the blast covered.
   if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.3,y:.1,thick:1,opacity:.08});fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius*1.02,life:.3,y:.12,thick:.04,opacity:.6});}
@@ -467,7 +472,7 @@ function updateHud() {
   const skills=skillList(),bindings=keyboardBindings(state.settings.keyboardLayout);
   setText($('#movement-hint'),t(bindings.movement));
   {const journalTitle=t('Journal · {key}',{key:bindings.journal.toUpperCase()}),journalNode=$('.top-actions [data-action="quests"]');if(journalNode.getAttribute('title')!==journalTitle)journalNode.setAttribute('title',journalTitle);}
-  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i],key=bindings.skills[i].toUpperCase();const parts=skillParts(button);setText(parts.kbd,key);{const art=skillArt(skill.name);if(art)setHtml(parts.icon as HTMLElement,art);else setText(parts.icon,t(skill.icon));}setText(parts.name,t(skill.name));const aria=t(`${key} ${t(skill.name)}`);if(button.getAttribute('aria-label')!==aria)button.setAttribute('aria-label',aria);const tip=currentSkillTip(i);if(button.title!==tip)button.title=tip;if(readyWas[i]>0&&cooldowns[i]<=0){button.classList.remove('ready-pop');void button.offsetWidth;button.classList.add('ready-pop');tone('ready');}readyWas[i]=cooldowns[i];button.classList.toggle('on-cooldown',cooldowns[i]>0);setText(parts.cooldown,t(cooldowns[i]>0?Math.ceil(cooldowns[i]).toString():''));skillPip(button,state.gear.disguise?0:M.skillLevel(state,i));const cd=`${cooldowns[i]/skillDurations[i]*100}%`;if(button.style.getPropertyValue('--cooldown')!==cd)button.style.setProperty('--cooldown',cd);});
+  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i],key=bindings.skills[i].toUpperCase();const parts=skillParts(button);setText(parts.kbd,key);{const art=skillArt(skill.name,movesOn());if(art)setHtml(parts.icon as HTMLElement,art);else setText(parts.icon,t(skill.icon));}setText(parts.name,t(skill.name));const aria=t(`${key} ${t(skill.name)}`);if(button.getAttribute('aria-label')!==aria)button.setAttribute('aria-label',aria);const tip=currentSkillTip(i);if(button.title!==tip)button.title=tip;/* in the air a move's button shows its air form's cooldown */const airForm=!!airLook&&movesOn()&&!!moveAt(i,M.weaponStats(state).special??'fist'),left=airForm?(i===3?0:airCooldowns[i]):cooldowns[i],whole=airForm?airDurations[i]:skillDurations[i];button.classList.toggle('air-form',airForm);if(readyAir[i]===airForm&&readyWas[i]>0&&left<=0){button.classList.remove('ready-pop');void button.offsetWidth;button.classList.add('ready-pop');tone('ready');}readyWas[i]=left;readyAir[i]=airForm;button.classList.toggle('on-cooldown',left>0);setText(parts.cooldown,t(left>0?Math.ceil(left).toString():''));skillPip(button,state.gear.disguise?0:M.skillLevel(state,i));const cd=`${left/whole*100}%`;if(button.style.getPropertyValue('--cooldown')!==cd)button.style.setProperty('--cooldown',cd);});
   setHtml($('#buff-bar'),localizeHtml(M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,left])=>{const chip=BUFF_CHIPS[name];return `<span class="skill-buff">${chip?.icon??'✨'} ${esc(t(chip?.name??name))} <b>${Math.ceil(left)}s</b></span>`;}).join('')+homeChip(world.homeRecovering&&!visiting,t('Home: fast recovery'))));
   setHtml($('#environment-bar'),localizeHtml(world.environmentStatus().map(e=>`<span>${e.icon??''} ${esc(e.label)} <b>${esc(String(e.value))}</b></span>`).join('')));
   const dark=$('#darkness');dark.hidden=!world.darknessActive()||!started;
@@ -903,7 +908,7 @@ async function testerApply(){testerOpen=true;if(testerOnline()){toast(t('Tester 
   testerDo(Tester.unlockTester);toast(t('Tester mode on: {count} energy',{count:Tester.TESTER_ENERGY.toLocaleString()}),'🧪');settings();}
 function restoreBackupRow(){return restoreRowHtml(saveGuard,activeKey());}
 function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Full screen</strong><small>Fill the whole screen; press again to leave.</small></div><button class="toggle ${document.fullscreenElement?'on':''}" role="switch" aria-checked="${!!document.fullscreenElement}" aria-label="Full screen" data-action="fullscreen"></button></div>${installRowHtml(t)}${restoreBackupRow()}${audioRowsHtml(state.settings)}<div class="settings-row"><div><strong>AI neighbours</strong><small>Friendly explorers who fight in the wild, make friends and give gifts. Always off while you play online.</small></div><button class="toggle ${neighboursOn()?'on':''}" role="switch" aria-checked="${neighboursOn()}" aria-label="AI neighbours" data-action="neighbours"></button></div><div class="settings-row"><div><strong>Show joystick</strong><small>Drag the stick to walk in any direction. Skill buttons move to the opposite side.</small></div><button class="toggle ${joystickEnabled()?'on':''}" role="switch" aria-checked="${joystickEnabled()}" aria-label="Show joystick" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Joystick side</strong><small>Choose the hand you use to move</small></div><div class="segmented" role="radiogroup" aria-label="Joystick side">${(['left','right'] as const).map(side=>`<button role="radio" aria-checked="${(state.settings.joystickSide??'left')===side}" data-action="joystick-side" data-kind="${side}">${side==='left'?'Left':'Right'}</button>`).join('')}</div></div>${keyboardSettings()}<div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Camera angle</strong><small>${cameraPitch()>=CAMERA_PITCH.max?'Looking down from above':'A lower view shows more of the world and may run a little slower'}</small></div><div class="camera-angle"><div class="volume-control"><input type="range" min="${CAMERA_PITCH.min}" max="52" step="1" value="${Math.round(cameraPitch())}" data-camera-pitch aria-label="Camera angle"><output data-camera-pitch-out>${Math.round(cameraPitch())}°</output></div><div class="segmented" role="group" aria-label="Camera angle presets">${(Object.keys(CAMERA_PITCH.presets) as CameraPreset[]).map(v=>`<button aria-pressed="${cameraPitch()===CAMERA_PITCH.presets[v]}" class="${cameraPitch()===CAMERA_PITCH.presets[v]?'on':''}" data-action="camera-view" data-kind="${v}">${({classic:'Classic',tilted:'Tilted',low:'Low',lower:'Lower',lowest:'Lowest'})[v]}</button>`).join('')}</div></div></div><div class="settings-row" id="render-res-row"><div><strong>Render resolution</strong><small>${graphics.resolution==='auto'?(graphics.mobile?'Light on phones, like the original':'Follows the Graphics setting'):({sharp:'Crisp, but phones work harder',balanced:'Smoother play and a cooler phone',saver:'Fewest pixels for the longest battery'} as Record<string,string>)[graphics.resolution]}${typeof innerWidth==='number'?` · ${innerWidth*graphics.ratio|0}×${innerHeight*graphics.ratio|0} px`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Render resolution">${RESOLUTION_SETTINGS.map(r=>`<button role="radio" aria-checked="${graphics.resolution===r}" class="${graphics.resolution===r?'on':''}" data-action="render-res" data-kind="${r}">${r==='auto'?'Auto':RESOLUTION[r].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Difficulty</strong><small>${M.DIFFICULTY_NOTE[M.difficultyOf(state)]}${world.roomDifficulty&&world.roomDifficulty!==M.difficultyOf(state)?` <span class="host-difficulty">${esc(t('Host difficulty: {level}',{level:t(M.DIFFICULTY_LABEL[world.roomDifficulty])}))}</span>`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Difficulty">${M.DIFFICULTIES.map(d=>`<button role="radio" aria-checked="${M.difficultyOf(state)===d}" class="${M.difficultyOf(state)===d?'on':''}" data-action="difficulty" data-kind="${d}">${M.DIFFICULTY_LABEL[d]}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div>${testerMore()}<div class="settings-row"><div><strong>${t('Keep backpack on defeat')}</strong><small>${t('Keep carried items when defeated. Existing dropped bags stay recoverable.')}</small></div><button class="toggle ${M.keepsBag(state)?'on':''}" role="switch" aria-checked="${M.keepsBag(state)}" aria-label="${t('Keep backpack on defeat')}" data-action="keep-bag"></button></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
-function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.filter(([,title])=>airOn()||title!=='Jump and air combat').map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div><div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
+function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.filter(([,title])=>title!=='Four moves'&&(airOn()||title!=='Jump and air combat')).map(row=>airOn()&&row[1]==='Four skills'?HELP_TOPICS.find(r=>r[1]==='Four moves')??row:row).map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div><div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
 
 // Fishing happens in the world: no panel, just the pond, the line and a big Reel button.
 let fishPond:Entity|null=null,recastUntil=0;
@@ -1177,7 +1182,7 @@ const dyes=initDyeUi({state:()=>state,perform:(type,payload)=>perform(type,paylo
 const lookShop=initLookShop({world,perform:(type,payload)=>perform(type,payload),openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),endGearTryOn:()=>{if(tryingOn){tryingOn=null;world.tryOnGear=null;}}});
 frameListeners.add(dt=>house.frame(dt));frameListeners.add(dt=>challenges.tick(dt));
 // The craft room's upgrade bench (upgrade-bench.ts): gear levels and skill levels, both run through actions.ts.
-const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:[...BASE_SKILLS,SPECIALS[M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist']??SPECIALS.fist],jump:airOn(),disguised:!!state.gear.disguise,weaponKind:M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).kind})});
+const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:ownSkills(M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist'),moves:airOn(),jump:airOn(),disguised:!!state.gear.disguise,weaponKind:M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).kind})});
 world.onInteract=async(e)=>{
   if(!started||uiBlocked())return;tone();if(house.interact(e))return;if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='well')wellDialog();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
@@ -1342,7 +1347,7 @@ combat.edge.scale=target=>{const e=target as Enemy;if(!airOn()||!BOSS_BLOCK_ON||
 let airApplied:boolean|null=null,airLanguage='';
 function syncAirCombat(){
   const on=airOn(),language=getLanguage();if(on===airApplied&&language===airLanguage)return;airApplied=on;airLanguage=language;
-  world.jumpRules=on;document.body.classList.toggle('air-combat',on);
+  world.jumpRules=on;combat.edge.moves=on;skillTips.clear();document.body.classList.toggle('air-combat',on);
   if(on&&!document.querySelector('#hud .jump-pad')){
     $('#hud .skills').insertAdjacentHTML('beforeend',`<button class="jump-pad" data-action="jump">${hudIcon('jump')}</button>`);
     $('#context-prompt').insertAdjacentHTML('beforebegin','<div id="combo-chip" hidden aria-hidden="true"><b id="combo-count"></b><span id="combo-word"></span><i id="combo-bonus"></i><em id="combo-steps"><u></u><u></u><u></u><u></u></em></div>');
@@ -1374,6 +1379,12 @@ function startDive(){if(!world.jump.dive())return false;
 world.onLanded=(landing:Landing)=>{
   queueMicrotask(()=>{const p=pendingPress;if(!p||pendingLeft<=0)return;pendingPress=null;if(p.kind==='attack')basicAttack();else skill(p.index);}); // a late press: its ground move, now
   world.landFeedback(landing);tone(landing.dive?'boom':'land');if(landing.dive)vibrate(40);
+  if(combat.plunging&&combat.edge.moves){
+    // The heavy dive (Quake in the air): the Quake's ring where the explorer lands, then the dive strike on top of it. Together they may end a chain.
+    prepareCombatWeapon();const finisher=comboMeter.finisherReady;skyFactor=finisher?COMBO.finisher:1;strikeFrom=skyQuake??{height:landing.from,jumps:landing.jumps};let hits=0;
+    try{comboKind='launcher';combat.land();comboKind='dive';if(landing.from>=DIVE.minHeight)hits=combat.dive(diveMultiplier(landing.from)*skyFactor,DIVE.radius,DIVE.stun,DIVE.knock,target=>diveCritical(landing.jumps,landing.from,target),diveCap).length;}finally{comboKind=null;strikeFrom=null;skyQuake=null;skyFactor=1;}
+    slamImpact();world.fx?.shake(.16+.05*landing.jumps);if(hits&&finisher){world.fx?.text({x:world.position.x,y:1.2,z:world.position.z},t('FINISHER!'),'crit big');tone('crit');}return;
+  }
   if(combat.plunging){strikeFrom=skyQuake;try{combat.land();}finally{strikeFrom=null;skyQuake=null;}slamImpact();return;}
   if(!landing.dive||!started||visiting||state.hp<=0)return;
   prepareCombatWeapon();
@@ -1420,11 +1431,34 @@ function stepFight(dt:number,active:boolean,combatActive:boolean){
   {const j=world.jump,look=!airWindow(j)?'':j.falling&&j.height>=DIVE.minHeight?'air dive':'air';if(look!==airLook){airLook=look;const cluster=$('#hud .skills');cluster.classList.toggle('air',!!look);cluster.classList.toggle('dive',look==='air dive');}}
   if(active&&jumpInput.wants(world.jump,dt))tryJump();
   if(!combatActive)return;
+  for(let i=0;i<4;i++)airCooldowns[i]=Math.max(0,airCooldowns[i]-dt);
   comboMeter.step(dt);if(comboShown)showCombo();
   if(sureLeft>0){sureLeft-=dt;if(sureLeft<=0)combat.edge.sure=false;}
   combat.edge.bonus=actionHandler?1:comboMeter.bonus;combat.edge.launch=actionHandler?0:AIR.launch;
 }
 combat.edge.spent=()=>{sureLeft=0;};
+// The four moves (moves.ts): the Lob aims at the creature the red ring is on, the air dash turns to the stick, and a Quake that
+// lands on a chain of three hits or more ends it as a finisher (a Quake that opens a chain is its launcher).
+combat.edge.target=()=>world.currentTarget();combat.edge.stick=()=>world.stickAngle();
+let quakeFinisher=false,skyFactor=1;
+combat.edge.begin=move=>{if(!airOn())return 1;if(move==='skyquake')return skyFactor;if(move!=='quake')return 1;quakeFinisher=comboMeter.finisherReady;comboKind=quakeFinisher?'dive':'launcher';return quakeFinisher?COMBO.finisher:1;};
+combat.edge.end=move=>{if(move!=='quake')return;comboKind=null;if(quakeFinisher&&comboMeter.finished){world.fx?.text({x:world.position.x,y:1.2,z:world.position.z},t('FINISHER!'),'crit big');tone('crit');}quakeFinisher=false;};
+/** The four moves are in the skill slots: jumping is on and no disguise is worn (a disguise keeps its own kit). */
+function movesOn(){return airOn()&&!state.gear.disguise;}
+/** The explorer's own four skills for a weapon with `special`: the four moves while jumping is on, else the four starting skills. */
+function ownSkills(special:string){const fourth=SPECIALS[special]??SPECIALS.fist;return airOn()?[MOVE_SKILLS[0],MOVE_SKILLS[1],MOVE_SKILLS[2],moveAt(3,special)?MOVE_SKILLS[3]:fourth]:[...BASE_SKILLS,fourth];}
+/**
+ * The air swing (moves.ts): one spin that hits all round and hangs in the air a moment. The Strike's air form, and what the
+ * attack button does while rising with paws or a blade: one move on two buttons, with one short cooldown.
+ */
+function airSwing(){
+  if(combatTimers.attackCooldown>0||!started||uiBlocked()||visiting)return false;prepareCombatWeapon();
+  const weapon=M.weaponStats(state),level=moveAt(3,weapon.special??'fist')?skillTuning(3,M.skillLevel(state,3)).damage:1;
+  if(!combat.airSwing(level))return false;
+  combatTimers.attackCooldown=AIR_MOVES.swing.cooldown/Math.max(.2,1+M.activeStats(state).haste);world.jump.stall(AIR_MOVES.swing.hover);world.spinT=.3;world.fx?.slash(world.position,world.facing,AIR_MOVES.swing.radius,'#e5f6ff',{arc:6.2,y:world.jump.height+.9,life:.2,thick:.3}); // the whole circle it hits, at the explorer's height
+  world.playerAttack(weapon.kind==='sword'?'sword':'fist');tone('swing');emitAction({kind:'basic'});
+  return true;
+}
 // A critical from the air (a jump in progress, or a dive / sky quake that started from one) is worth more than one from the ground.
 combat.edge.crit=()=>{if(!airOn())return undefined;const from=strikeFrom??world.jump;return from.jumps>=1&&(strikeFrom!==null||from.height>0)?M.AIR_CRIT_DAMAGE:undefined;};
 /** `e`: the creature the explorer walked up to (tap, auto-attack); a press of the attack key or pad passes none. */
@@ -1441,6 +1475,8 @@ function basicAttack(e?:Enemy){
     if(pressKind(jump)!=='air'){if(!e)bufferPress({kind:'attack'});return;}
     if(!e&&jump.falling&&jump.height>=DIVE.minHeight&&startDive())return;
     prepareCombatWeapon();const weapon=M.weaponStats(state),cd=(weapon.cd??.4)/Math.max(.2,1+M.activeStats(state).haste)*AIR.swing;
+    // With paws or a blade the swing in the air is the spin of the moves (a gun keeps shooting).
+    if(combat.edge.moves&&weapon.kind!=='gun'&&weapon.kind!=='rod'){airSwing();return;}
     if(combat.basic(e,actionHandler?1:AIR.swing)){combatTimers.attackCooldown=cd;world.playerAttack(weapon.kind);tone(weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
     else if(!e&&weapon.kind!=='rod'){combatTimers.attackCooldown=cd*.6;world.playerAttack(weapon.kind);tone('swing');}
     return;
@@ -1454,27 +1490,32 @@ world.onAttackEnemy=basicAttack;
 /** The tooltip and long-press tip of skill slot i, with the numbers at the current level (skill-info.ts). */
 const skillTips=new Map<string,string>();
 /** Memoised by everything the text depends on (skill, level, weapon, disguise, language): the tooltip is rebuilt only when one of them changes, not eight times a second. */
-function currentSkillTip(i:number){const disguise=state.gear.disguise,weapon=M.weaponStats(state),skill=skillList()[i],level=disguise?0:M.skillLevel(state,i),special=weapon.special??'fist',key=`${i}|${skill.name}|${level}|${special}|${weapon.kind}|${disguise??''}|${getLanguage()}`;let tip=skillTips.get(key);if(tip===undefined){if(skillTips.size>200)skillTips.clear();tip=skillTip(skill,i,{special,weaponKind:weapon.kind,level,disguise});skillTips.set(key,tip);}return tip;}
-const readyWas=[0,0,0,0];
+function currentSkillTip(i:number){const disguise=state.gear.disguise,weapon=M.weaponStats(state),skill=skillList()[i],level=disguise?0:M.skillLevel(state,i),special=weapon.special??'fist',key=`${i}|${skill.name}|${level}|${special}|${weapon.kind}|${disguise??''}|${getLanguage()}|${+airOn()}`;let tip=skillTips.get(key);if(tip===undefined){if(skillTips.size>200)skillTips.clear();tip=skillTip(skill,i,{special,weaponKind:weapon.kind,level,disguise,moves:airOn()});skillTips.set(key,tip);}return tip;}
+const readyWas=[0,0,0,0],readyAir=[false,false,false,false];
 // Long-press a skill button (phones have no hover): its tip shows for a few seconds and the press does not cast.
 {let hide=0;const tipEl=document.createElement('div');tipEl.id='skill-tip';tipEl.hidden=true;tipEl.setAttribute('role','status');document.body.append(tipEl);
   document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{
     mountLongPress(button,()=>{tipEl.textContent=currentSkillTip(i);tipEl.hidden=false;clearTimeout(hide);hide=window.setTimeout(()=>{tipEl.hidden=true;},3500);},()=>started&&!document.hidden&&!uiBlocked());});}
-function skillList(){const disguise=state.gear.disguise?M.DISGUISES[state.gear.disguise]:null;return disguise?.skills??[...BASE_SKILLS,SPECIALS[M.weaponStats(state).special??'fist']??SPECIALS.fist];}
+function skillList(){const disguise=state.gear.disguise?M.DISGUISES[state.gear.disguise]:null;return disguise?.skills??ownSkills(M.weaponStats(state).special??'fist');}
 function skill(index:number){
   if(ctfApi?.active&&!ctfApi.canAct)return;
-  if(!started||uiBlocked()||visiting||cooldowns[index]>0||index<0||index>3)return;
+  if(!started||uiBlocked()||visiting||index<0||index>3)return;
+  // A move's air form has its own cooldown. Two of them share their move with the attack button and never wait: the Strike
+  // is the spin, and a Quake whose air form is still cooling down is the plain dive (ready, it is the heavy one below).
+  const airForm=movesOn()&&!actionHandler&&world.jump?.airborne&&pressKind(world.jump)==='air'?moveAt(index,M.weaponStats(state).special??'fist'):null;
+  if(airForm==='strike'){airSwing();return;}if(airForm==='quake'&&airCooldowns[index]>0){startDive();return;}
+  if((airForm?airCooldowns:cooldowns)[index]>0)return;
   prepareCombatWeapon();
-  const disguise=state.gear.disguise,weapon=M.weaponStats(state),skills=skillList();
+  const disguise=state.gear.disguise,weapon=M.weaponStats(state),skills=skillList(),own=movesOn()?moveAt(index,weapon.special??'fist'):null;
   // Two of the starting skills have an air form (solo): Breeze Step dashes at its height, Root Quake plunges for a wider shockwave.
   const jump=world.jump,press=jump?.airborne?pressKind(jump):'ground';if(press==='buffer'){bufferPress({kind:'skill',index});return;}
-  const air=!actionHandler&&!disguise&&(index===1||index===2)&&press==='air'?AIR:undefined;
+  const air=!actionHandler&&!disguise&&press==='air'?(own?{...AIR,height:jump.height}:index===1||index===2?AIR:undefined):undefined;
   if(!(disguise?combat.disguise(disguise,index):combat.skill(index,weapon.special??'fist',air)))return;
-  if(air&&index===1)jump.hold(.24);if(air&&index===2){skyQuake={height:jump.height,jumps:jump.jumps};if(!jump.dive()){jump.diving=true;jump.diveFrom=jump.height;jump.velocity=-34;}}
-  skillDurations[index]=M.skillCooldown(state,index,skills[index].cd,!!disguise)/Math.max(.2,1+M.activeStats(state).haste);cooldowns[index]=skillDurations[index];
+  if(air&&index===1)jump.hold(own?AIR_MOVES.dash.hover:.24);if(air&&index===0)jump.stall(AIR_MOVES.rain.gap*AIR_MOVES.rain.shots);if(air&&index===2){skyQuake={height:jump.height,jumps:jump.jumps};if(!jump.dive()){jump.diving=true;jump.diveFrom=jump.height;jump.velocity=-34;}}
+  {const time=M.skillCooldown(state,index,skills[index].cd,!!disguise)/Math.max(.2,1+M.activeStats(state).haste);if(air&&own){airDurations[index]=time;airCooldowns[index]=time;}else{skillDurations[index]=time;cooldowns[index]=time;}}
   // The skill's name pops over the explorer in its slot's colour (feel-rules.ts), like the reference's cast callout.
-  world.fx?.text({x:world.position.x,y:SKILL_NAME_RISE+(world.jump?.height??0),z:world.position.z},t(air?(index===1?'Sky Step':'Sky Quake'):skills[index].name),`skillname s${index}`);
-  if(!actionHandler)change(()=>recordEvent(state,'skill'));if(!disguise&&index===0)world.spinT=2.2;else if(disguise?(disguise==='dz_knight'&&index===1)||(disguise==='dz_vietnam'&&index===1):index===1)world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});tone(skillSound(index,disguise,weapon.special));emitAction({kind:'skill',index,special:disguise??weapon.special});
+  world.fx?.text({x:world.position.x,y:SKILL_NAME_RISE+(world.jump?.height??0),z:world.position.z},t(air?(own?AIR_NAMES[index]:index===1?'Sky Step':'Sky Quake'):skills[index].name),`skillname s${index}`);
+  if(!actionHandler)change(()=>recordEvent(state,'skill'));if(!disguise&&index===0){if(!own)world.spinT=2.2;else world.playerAttack(weapon.kind==='sword'?'sword':'fist');}else if(disguise?(disguise==='dz_knight'&&index===1)||(disguise==='dz_vietnam'&&index===1):index===1)world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});tone(skillSound(index,disguise,weapon.special));emitAction({kind:'skill',index,special:disguise??weapon.special});
 }
 let dying=false;
 function checkDefeat(){if(!started||state.hp>0||dying)return false;if(dungeonApi?.active){dungeonApi.knockedOut();return true;}if(ctfApi?.active||rescueApi?.active){state.hp=1;return true;}/* Flag Rush respawns by its own rules: a match never drops a death bag */if(actionHandler){dying=true;void perform<{dropped?:boolean}>('die',{x:world.position.x,z:world.position.z}).then(r=>{dying=false;endFishing();resetCombat();rebuildHomePresentation('home');world.refreshPlayer();if(r)deathDialog(!!r.dropped);else toast('You are safe at home.','🏡');});return true;}endFishing();resetCombat();const bag=change(()=>M.die(state,world.position.x,world.position.z));rebuildHomePresentation('home');world.refreshPlayer();deathDialog(!!bag);return true;}
@@ -1518,7 +1559,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){airCooldowns.fill(0);world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1976,4 +2017,4 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,fight:{get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

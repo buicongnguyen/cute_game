@@ -63,8 +63,8 @@ import {DEFAULT_PIVOTS,fitOf,lookOf,toLook,DEFAULT_LOOK,type Fit,type LookId} fr
 import {part} from './part-cache.ts';
 import {mergeParts} from './avatar-merge.ts';
 import {perfFlags} from './perf-flags.ts';
-import {enemyFlash,HIT_FLASH,HURT_TINT,meleeArc,MELEE_ARC} from './feel-rules.ts';
-import {AFTERSHOCK,BLOCK,JumpState,JUMP,MAX_AIR_SECONDS,MAX_HEIGHT,attackClass,dodges,poseAir,type AttackClass,type Landing} from './jump-rules.ts';
+import {enemyFlash,HIT_FLASH,HURT_TINT,meleeArc,inMeleeArc,MELEE_ARC} from './feel-rules.ts';
+import {AFTERSHOCK,BLOCK,JumpState,JUMP,MAX_AIR_SECONDS,MAX_HEIGHT,attackClass,dodges,poseAir,warningTime,type AttackClass,type Landing} from './jump-rules.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
@@ -1490,6 +1490,12 @@ export class World {
     if(skill==='eclipse'){this.areaDamage(e,e.x,e.z,7,.9);this.environment.eclipseUntil=this.environment.time+6;}
     this.burst(e.x,e.z,e.definition?.accent??'#ffc17b',25);e.telegraphs=[];
   }
+  /** A charger's lane from where it is to where its run ends: a row of amber discs as wide as its blow (the look of a boss's charge lane). */
+  private drawLane(e:Enemy,to:{x:number;z:number},progress:number){
+    const decals=this.decals;if(!decals)return;const r=(e.definition?.reach??1.5)+.4,dx=to.x-e.x,dz=to.z-e.z,length=Math.hypot(dx,dz);if(length<.3)return;
+    const n=Math.max(1,Math.min(4,Math.ceil(length/(r*1.7))));
+    for(let i=0;i<n;i++){const k=(i+.5)/n,p={x:e.x+dx*k,z:e.z+dz*k};decals.draw(p.x,Math.max(.04,terrainHeight(this.environment.layout,p)+.04),p.z,r,progress,BOSS_TELEGRAPH_COLORS.charge);}
+  }
   /** Wind-up progress 0–1 for an enemy's telegraph; it is 1 exactly on the step the blow lands. */
   windupProgress(e:Enemy){return telegraphProgress(e.phaseTime??0,e.windupTotal??(e.skill?BOSS_WINDUPS[e.skill]:e.mesh.userData.slam?1.1:e.definition?.windup??.45));}
   /**
@@ -1501,17 +1507,30 @@ export class World {
     const decals=this.decals;if(!decals||e.hp<=0)return;
     // With jumping on, the rings still to come (a slam's aftershock, a quake's later waves) show as they close in.
     if(this.jumpRules&&e.skillEffects?.length)for(const p of e.skillEffects)if(p.remaining<AFTERSHOCK.delay+.05)decals.draw(p.x,Math.max(.04,terrainHeight(this.environment.layout,p)+.04),p.z,p.r,1-p.remaining/AFTERSHOCK.delay,BOSS_TELEGRAPH_COLORS.slam,true);
+    const ground=(p:{x:number;z:number})=>Math.max(.04,terrainHeight(this.environment.layout,p)+.04);
+    // With jumping on, every blow keeps its mark while it can still land (docs/FIGHT-PLAN.md section 6): a spinning boss carries its ring
+    // along (it pulses with each hit), and a charger's lane stays down until its run ends.
+    if(this.jumpRules&&e.phase==='bspin'){decals.draw(e.x,ground(e),e.z,3.4,1-Math.max(0,e.spinTick??0)/.35,BOSS_TELEGRAPH_COLORS.spin);return;}
+    if(this.jumpRules&&e.phase==='charge'&&!e.boss&&e.definition?.behavior==='charger'){this.drawLane(e,{x:e.targetX??e.x,z:e.targetZ??e.z},1);return;}
     if(e.phase!=='windup')return;
-    const progress=this.windupProgress(e),ground=(p:{x:number;z:number})=>Math.max(.04,terrainHeight(this.environment.layout,p)+.04);
+    const progress=this.windupProgress(e);
     // Ground-class attacks (jump-rules.ts) ripple: rings run out from the centre, so one look says 'jump over this'.
     if(e.skill){const low=!!this.jumpRules&&attackClass(e.skill)==='ground';for(const mark of e.telegraphs??[]){const safe='safe' in mark&&!!mark.safe;decals.draw(mark.x,ground(mark),mark.z,mark.r,progress,safe?'#5aff9a':BOSS_TELEGRAPH_COLORS[e.skill],low&&!safe);}return;}
     if(e.boss&&e.mesh.userData.slam){decals.draw(e.x,ground(e),e.z,4.8,progress,BOSS_TELEGRAPH_COLORS.slam,!!this.jumpRules);return;}
     const look=CREATURE_TELEGRAPHS[e.type??''];
     // Every other ordinary melee creature lays a red arc of its real reach in front of itself (feel-rules.ts MELEE_ARC).
-    if(!look){const def=e.definition;if(!e.boss&&def&&def.behavior!=='shooter'&&def.behavior!=='charger'&&!def.titan){const arc=meleeArc(def.reach);decals.cone(e.x,ground(e),e.z,arc.r,e.mesh.rotation.y,arc.half,progress,MELEE_ARC.color);}return;}
+    if(!look){const def=e.definition;if(!e.boss&&def&&def.behavior!=='shooter'&&def.behavior!=='charger'&&!def.titan){const arc=meleeArc(def.reach);decals.cone(e.x,ground(e),e.z,arc.r,e.mesh.rotation.y,arc.half,progress,MELEE_ARC.color);}
+      // With jumping on: a boss's plain bite or swipe shows its arc too (the blow lands only inside it), and a charger lays its lane towards whoever it is about to run at.
+      else if(this.jumpRules&&def&&e.boss){const arc=meleeArc(def.reach+BOSS_REACH.strike-.4);decals.cone(e.x,ground(e),e.z,arc.r,e.mesh.rotation.y,arc.half,progress,MELEE_ARC.color);}
+      else if(this.jumpRules&&def?.behavior==='charger'){const target=this.enemyTarget(e)??{x:e.targetX??e.x,z:e.targetZ??e.z},d=Math.hypot(target.x-e.x,target.z-e.z)||1,run=13*.75;this.drawLane(e,{x:e.x+(target.x-e.x)/d*run,z:e.z+(target.z-e.z)/d*run},progress);}
+      return;}
     const facing=e.mesh.rotation.y,at=look.at==='target'?{x:e.targetX??e.x,z:e.targetZ??e.z}:look.at==='front'?{x:e.x+Math.sin(facing)*1.2,z:e.z+Math.cos(facing)*1.2}:{x:e.x,z:e.z};
     decals.draw(at.x,ground(at),at.z,look.r,progress,look.color,!!this.jumpRules&&look.at==='self');
   }
+  /** The creature the red ring is on: the selected one, else the last one hit within TARGET_HOLD seconds (the Lob aims at it). */
+  currentTarget():Enemy|null{const live=(e:Entity|null|undefined):e is Enemy=>!!e&&e.kind==='enemy'&&(e as Enemy).hp>0&&this.entities.includes(e);const recent=this.lastHit&&this.time-this.lastHit.t<TARGET_HOLD?this.lastHit.e:null;return live(this.selected)?this.selected:live(recent)?recent:null;}
+  /** Where the keys or the stick point (rad, +z is 0), or null with no direction held (the air dash may turn to it). */
+  stickAngle():number|null{let dx=Number(this.keys.has('ArrowRight'))-Number(this.keys.has('ArrowLeft')),dz=Number(this.keys.has('ArrowDown'))-Number(this.keys.has('ArrowUp'));if(!dx&&!dz&&this.joystickInput){dx=this.joystickInput.x;dz=this.joystickInput.z;}return Math.hypot(dx,dz)>.2?Math.atan2(dx,dz):null;}
   /** The red ring and arrow follow the selected creature, or the last one hit for TARGET_HOLD seconds. */
   private updateTarget(dt:number){
     const marker=this.target;if(!marker)return;
@@ -1560,7 +1579,7 @@ export class World {
         else{
           if(target&&!noAttack){const reach=e.mesh.userData.slam?5.5:def.reach+(e.boss?BOSS_REACH.strike-.4:0);
             if(def.behavior==='shooter')this.shootEnemy(e,target);
-            else if(distance<reach+.4&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1),'melee',e.id,attackClass(e.mesh.userData.slam?'slam':'melee'));
+            else if(distance<reach+.4&&(!this.jumpRules||e.mesh.userData.slam||inMeleeArc(e.x,e.z,e.mesh.rotation.y,reach,target.x,target.z))&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1),'melee',e.id,attackClass(e.mesh.userData.slam?'slam':'melee'));
           }
           e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);
         }
@@ -1586,7 +1605,7 @@ export class World {
     if((statuses.fear??0)>0&&target)goal={x:e.x+(e.x-target.x),z:e.z+(e.z-target.z)};
     const canWindup=!!def.titan&&distance<24||distance<(e.type==='lavaworm'?1.2:def.reach+(e.boss?BOSS_REACH.windup:0))||(e.type==='boar'||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''))&&distance<8;
     if(chasing&&canWindup&&!e.cooldown&&!noAttack){
-      e.phase='windup';e.phaseTime=def.windup;e.targetX=target!.x;e.targetZ=target!.z;e.mesh.userData.attackCount=(e.mesh.userData.attackCount??0)+1;e.mesh.userData.slam=e.boss&&!BOSS_SKILLS[e.type??'']&&e.mesh.userData.attackCount%3===0;
+      e.phase='windup';e.phaseTime=this.jumpRules?warningTime(def.windup):def.windup;e.targetX=target!.x;e.targetZ=target!.z;e.mesh.userData.attackCount=(e.mesh.userData.attackCount??0)+1;e.mesh.userData.slam=e.boss&&!BOSS_SKILLS[e.type??'']&&e.mesh.userData.attackCount%3===0;
       if(e.boss)this.beginBossSkill(e,target!);else e.skill=undefined;
       if(e.mesh.userData.slam&&!e.skill)e.phaseTime=1.1;e.windupTotal=e.phaseTime;e.mesh.rotation.y=Math.atan2(target!.x-e.x,target!.z-e.z);return;
     }
