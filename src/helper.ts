@@ -104,14 +104,14 @@ export function nextTask(s: M.SaveState, from: { x: number; z: number }, now = D
 
 /** Harvest bed `i` as the player would (bag, XP, quests); remembers the crop for "same as before". */
 export function helperHarvest(s: M.SaveState, i: number, now = Date.now()) {
-  if (!s.helper?.owned || robotResting(s, now)) return null;
+  if (!s.helper?.owned || s.helper.paused || robotResting(s, now)) return null;
   if (!s.plots[i] || !harvestable(s.plots[i], now)) return null;
   const crop = s.plots[i].crop; if (crop) remember(s.helper, bedKey(s, i), crop);
   return asHelper(() => M.harvest(s, i, now)); // the robot's harvests never win the player's timed challenge
 }
 /** Plant bed `i` with the helper's choice; false when it is not empty or there is nothing to plant. */
 export function helperPlant(s: M.SaveState, i: number, now = Date.now()) {
-  if (!s.helper?.owned || robotResting(s, now) || s.plots[i]?.crop) return null;
+  if (!s.helper?.owned || s.helper.paused || robotResting(s, now) || s.plots[i]?.crop) return null;
   const crop = seedFor(s, i); if (!crop || !M.plant(s, i, crop, now)) return null;
   remember(s.helper, bedKey(s, i), crop); return crop;
 }

@@ -330,7 +330,7 @@ export class CombatSimulation {
    * that hits harder; Root Quake skips its leap and lands a wider, stronger shockwave when the explorer touches down.
    */
   skill(index:number,special='fist',air?:{dash:number;quakeRadius:number;quakePower:number;/** Metres up (the moves' heavy dive is stronger from higher). */height?:number}){
-    if(this.action)return false;
+    if(this.busy)return false;
     if(this.edge.moves){const move=moveAt(index,special);if(move)return this.move(move,index,air);if(this.time<this.busyUntil)return false;}
     this.aim();
     const tuning=skillTuning(index,this.host.skillLevel?.(index)??0);this.power=tuning.damage;
@@ -445,7 +445,7 @@ export class CombatSimulation {
     }return true;
   }
   disguise(id:string,index:number){
-    if(this.action)return false;
+    if(this.busy)return false;
     const effect=DISGUISE_KITS[id]?.[index];if(!effect)return false;
     if(SPECIAL_SKILLS.has(effect))return this.special(effect);
     const p={...this.host.position()},angle=this.aim(),d=direction(angle),K=DZ;

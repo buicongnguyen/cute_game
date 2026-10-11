@@ -297,3 +297,18 @@ test('Flag Rush input lock prevents attacks, skills and cooldown spending until 
  f.ctx.basicAttack();f.ctx.skill(3);assert.equal(f.calls.attacks.length,0);assert.equal(f.calls.skills.length,0);assert.equal(f.ctx.cooldowns[3],0);assert.equal(f.state.counters.skills,0);
  f.ctx.ctfApi.canAct=true;f.ctx.basicAttack();f.ctx.skill(3);assert.equal(f.calls.attacks.length,1);assert.equal(f.calls.skills.length,1);
 });
+
+
+test('air skill classification uses the combat weapon instead of the contextual fishing rod', () => {
+  const f = fixture('gun_pea', 'rod'); M.equip(f.state, 'gun_pea'); f.shore(2);
+  assert.equal(f.state.gear.weapon, 'rod');
+  let checked = false;
+  f.ctx.airOn = () => true;
+  f.ctx.world.jump.airborne = true;
+  f.ctx.pressKind = () => 'air';
+  f.ctx.moveAt = () => { checked = true; assert.equal(f.state.gear.weapon, 'gun_pea'); return null; };
+  f.ctx.cooldowns[3] = 1;
+  f.ctx.skill(3);
+  assert.equal(checked, true);
+  assert.equal(f.calls.skills.length, 0);
+});
