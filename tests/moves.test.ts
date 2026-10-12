@@ -73,3 +73,14 @@ test('looks, Vietnamese and descriptions', () => {
   for (const [k, v] of Object.entries(MOVES_VI)) { assert.equal(VI_PACK[k], v); assert.deepEqual(v.match(/\{\w+\}/g), k.match(/\{\w+\}/g)); }
   for (let i = 0; i < 4; i++) assert.ok(moveDescription(i).length > 40);
 });
+
+
+test('an unfinished strike cannot be bypassed by changing outfit or turning moves off', () => {
+  const a = arena([{ x: 0, z: 1 }]);
+  assert.equal(a.sim.skill(3), true);
+  assert.equal(a.sim.disguise('dz_knight', 0), false);
+  a.sim.edge.moves = false;
+  assert.equal(a.sim.skill(0), false);
+  a.run(1);
+  assert.equal(a.sim.skill(0), true);
+});

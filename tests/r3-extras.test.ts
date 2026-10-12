@@ -69,9 +69,9 @@ test('the chest refuses a new kind when full; workers delivering to the chest ar
   assert.throws(() => act(s, 'transfer', { id: 'carrot', toChest: true }), (e: Error) => e.message === M.CHEST_FULL);
   s.chest[FILLER[0]] = 1; s.bag[FILLER[0]] = 1; assert.equal(M.transfer(s, FILLER[0], true), true, 'a kind the chest holds still stacks');
   // The robot harvests while the explorer is away: the crop goes to the chest even with a full backpack.
-  const away = filled(B); away.helper = { owned: true, paused: false, seed: 'same', last: {} }; ripe(away, 0);
+  const away = filled(B); away.helper = { owned: true, paused: false, seed: 'same', last: {}, callUntil: Date.now() + 60_000 }; ripe(away, 0);
   act(away, 'helperHarvest', { index: 0, away: true }); assert.equal(away.chest.carrot, 1); assert.equal(away.bag.carrot, undefined);
-  const both = filled(B); both.helper = { owned: true, paused: false, seed: 'same', last: {} }; ripe(both, 0); for (const id of FILLER.slice(0, C)) both.chest[id] = 1;
+  const both = filled(B); both.helper = { owned: true, paused: false, seed: 'same', last: {}, callUntil: Date.now() + 60_000 }; ripe(both, 0); for (const id of FILLER.slice(0, C)) both.chest[id] = 1;
   assert.throws(() => act(both, 'helperHarvest', { index: 0, away: true }), (e: Error) => e.message === M.CHEST_FULL);
   assert.equal(both.plots[0].crop, 'carrot');
   // Taking from the chest stops at the bag's slots; the rest stays in the chest.

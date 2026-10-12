@@ -1570,13 +1570,13 @@ const readyWas=[0,0,0,0],readyAir=[false,false,false,false];
 function skillList(){const disguise=state.gear.disguise?M.DISGUISES[state.gear.disguise]:null;return disguise?.skills??ownSkills(M.weaponStats(state).special??'fist');}
 function skill(index:number){
   if(ctfApi?.active&&!ctfApi.canAct)return;
-  if(!started||uiBlocked()||visiting||index<0||index>3)return;
+  if(!started||uiBlocked()||visiting||!Number.isInteger(index)||index<0||index>3)return;
+  prepareCombatWeapon();
   // A move's air form has its own cooldown. Two of them share their move with the attack button and never wait: the Strike
   // is the spin, and a Quake whose air form is still cooling down is the plain dive (ready, it is the heavy one below).
   const airForm=movesOn()&&!actionHandler&&world.jump?.airborne&&pressKind(world.jump)==='air'?moveAt(index,M.weaponStats(state).special??'fist'):null;
   if(airForm==='strike'){airSwing();return;}if(airForm==='quake'&&airCooldowns[index]>0){startDive();return;}
   if((airForm?airCooldowns:cooldowns)[index]>0)return;
-  prepareCombatWeapon();
   const disguise=state.gear.disguise,weapon=M.weaponStats(state),skills=skillList(),own=movesOn()?moveAt(index,weapon.special??'fist'):null;
   // Two of the starting skills have an air form (solo): Breeze Step dashes at its height, Root Quake plunges for a wider shockwave.
   const jump=world.jump,press=jump?.airborne?pressKind(jump):'ground';if(press==='buffer'){bufferPress({kind:'skill',index});return;}

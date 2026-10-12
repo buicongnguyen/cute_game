@@ -122,3 +122,12 @@ test('daily rests: Bolt rests the last 3 UTC hours, the cook the last hour of ev
   const cook = { id: 'pepper', role: 'cook', home: true } as never;
   assert.equal(F.resting(cook, day + 3.5 * H1), true); assert.equal(F.resting(cook, day + 2 * H1), false);
 });
+
+test('paused Bolt cannot harvest or plant through direct helper actions', () => {
+  const s = owned(); s.helper!.paused = true; s.helper!.callUntil = T0 + 60_000;
+  ripe(s, 0, 'carrot'); s.plots[1].crop = null;
+  const before = JSON.stringify(s);
+  assert.equal(H.helperHarvest(s, 0, T0), null);
+  assert.equal(H.helperPlant(s, 1, T0), null);
+  assert.equal(JSON.stringify(s), before);
+});
