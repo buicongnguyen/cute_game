@@ -34,7 +34,7 @@ import { decorIcon } from './icons.ts';
 import { CombatHud, fightNear, lootText, zoneInfo, aggro } from './hud-combat.ts';
 import { ChallengeDirector, renderChallenge } from './hud-challenge.ts';
 import { KeysGuide } from './hud-keys.ts';
-import { readAirCombat, saveAirCombat, BOSS_BLOCK_ON, AIR, AIR_WINDOW, BLOCK, COMBO, ComboMeter, SlideCombo, airWindow, pressKind, DIVE, DODGE, JumpInput, blockShare, hitShare, jumpsFor, canJump, diveCap, diveCritical, diveMultiplier, dodges, jumpKeyAction, perfectDodge, readSpaceKey, saveSpaceKey, type ComboHit, type Landing, type SpaceKey } from './jump-rules.ts';
+import { readAirCombat, saveAirCombat, BOSS_BLOCK_ON, AIR, AIR_WINDOW, BLOCK, COMBO, JUMP, ComboMeter, SlideCombo, airWindow, pressKind, DIVE, DODGE, JumpInput, blockShare, hitShare, jumpsFor, canJump, diveCap, diveCritical, diveMultiplier, dodges, jumpKeyAction, perfectDodge, readSpaceKey, saveSpaceKey, type ComboHit, type Landing, type SpaceKey } from './jump-rules.ts';
 import * as M from './model.ts';
 import {applyGameAction,isMalformedAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
@@ -45,7 +45,8 @@ import { previewGear, canTryOn, autoHeld } from './try-on.ts';
 import './quick-eat.css';
 import { CombatTimers, FishingInput, MovementControls, gameplayKey, handKey, keyboardBindings, movementKey } from './gameplay-controls.ts';
 import {mountJoystick} from './joystick.ts';
-import { CombatSimulation, BASE_SKILLS, SPECIALS, DZ, type CombatHit, type CombatEffect, type CombatAlly } from './combat.ts';
+import { CombatSimulation, BASE_SKILLS, SPECIALS, DZ, DISGUISE_KITS, shotColor, type CombatHit, type CombatEffect, type CombatAlly, type DisguiseAir } from './combat.ts';
+import { AIR_CASTING, AIR_WEAPON, airCastBonus, airCastPlan, airSwingFor, diveStrikeFor, flightCarry, type AirCastRule } from './air-cast.ts';
 import { AIR_MOVES, AIR_NAMES, MOVE_SKILLS, moveAt } from './moves.ts';
 import { skillTuning } from './skill-upgrades.ts';
 import { skillPip } from './skill-pip.ts';
@@ -315,6 +316,8 @@ world.onElectricShot=(x,y,z,dx,dz)=>skillFx.crackle(x,y,z,dx,dz);world.onElectri
 const combat=new CombatSimulation({
   position:()=>world.position,facing:()=>world.facing,face:angle=>world.facing=angle,
   moving:()=>world.moving,skillLevel:i=>M.skillLevel(state,i),
+  // In a jump (solo, with jumping on) what the explorer casts or fires begins at its height (combat.ts up, shoot).
+  height:()=>airOn()?world.jump?.height??0:0,
   // The pet shoots only while it follows you away from home (pet-pen.ts); waiting by the pen it never fights.
   pet:()=>petShooter(0),pet2:()=>petShooter(1),
   // The guard dog tosses bones only while it follows you away from home (guard-dog.ts); your target first.
@@ -333,7 +336,7 @@ combatHud.isMarked=id=>combat.marked.has(id);
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 // Swings become additive slash trails and area skills become expanding rings with sparks.
 function showEffect(effect:CombatEffect){
-  const fx=world.fx,at={x:effect.x,z:effect.z};
+  const fx=world.fx,at={x:effect.x,z:effect.z},up=Math.max(0,Math.min(8,effect.y??0)); // `up`: the height a cast from the air began at (air-cast.ts)
   if(effect.quiet)return; // a repeat tick of a cast already drawn (the whirlwind's hits)
   if(skillFx.disguises.play(effect))return;
   if(effect.kind==='toss'){world.guardDogs?.toss(effect);return;}
@@ -344,10 +347,10 @@ function showEffect(effect:CombatEffect){
   // Electric bursts keep the faint disc and rim at the exact blast radius, then crackle instead of the plain ring.
   if(effect.look==='shock'&&(effect.kind==='ring'||effect.kind==='impact')){if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.42,y:.1,thick:1,opacity:.18});fx.ring(at,{color:'#d8f4ff',from:effect.radius,to:effect.radius*1.02,life:.42,y:.12,thick:.06,opacity:.9});}skillFx.shock(effect);return;}
   if(effect.kind==='arc'&&combat.edge.moves&&combat.busy&&Math.hypot(effect.x-world.position.x,effect.z-world.position.z)<.5)world.playerAttack(M.weaponStats(state).kind==='sword'?'sword':'fist'); // each hit of the Strike chain swings
-  if(fx&&effect.kind==='arc'){const fist=effect.radius<=1.85;fx.slash(at,effect.facing??world.facing,effect.radius+.25,effect.color,fist?{arc:1.4,life:.15,thick:.4}:{arc:Math.min(6.2,effect.arc??2.2)});return;}
+  if(fx&&effect.kind==='arc'){const fist=effect.radius<=1.85;fx.slash(at,effect.facing??world.facing,effect.radius+.25,effect.color,fist?{arc:1.4,life:.15,thick:.4,y:.9+up}:{arc:Math.min(6.2,effect.arc??2.2),y:.9+up});return;}
   // An area hit also leaves a faint filled disc and a rim at its exact radius (skill-info.ts), so the player sees what the blast covered.
-  if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.3,y:.1,thick:1,opacity:.08});fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius*1.02,life:.3,y:.12,thick:.04,opacity:.6});}
-  if(fx&&(effect.kind==='ring'||effect.kind==='impact')){fx.ring(at,{color:effect.color,from:.3,to:Math.max(.8,effect.radius),life:.3,y:.15,thick:.1,opacity:.75});fx.burst(at,{n:4,color:effect.color,glow:true,size:.1,speed:Math.min(6,effect.radius*1.4),up:2,y:.3,life:.35});return;}
+  if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.3,y:.1+up,thick:1,opacity:.08});fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius*1.02,life:.3,y:.12+up,thick:.04,opacity:.6});}
+  if(fx&&(effect.kind==='ring'||effect.kind==='impact')){fx.ring(at,{color:effect.color,from:.3,to:Math.max(.8,effect.radius),life:.3,y:.15+up,thick:.1,opacity:.75});fx.burst(at,{n:4,color:effect.color,glow:true,size:.1,speed:Math.min(6,effect.radius*1.4),up:2,y:.3+up,life:.35});return;}
   combatView.effect(effect);
 }
 function emitAction(action:Omit<GameAction,'x'|'z'|'facing'>){const value={...action,x:world.position.x,z:world.position.z,facing:world.facing};for(const listener of actionListeners)listener(value);}
@@ -1335,6 +1338,8 @@ function fightButtonAt(x:number,y:number){const b=(document.elementFromPoint(x,y
 function fireSlide(move:string|null){if(!move)return;if(move==='attack')basicAttack();else skill(Number(move.slice(5)));}
 /** A press too late in the fall: it becomes the ground move on landing. */
 function bufferPress(press:NonNullable<typeof pendingPress>){pendingPress=press;pendingLeft=AIR_WINDOW.buffer;}
+/** The kept press, once the explorer stands and its hands are free: a plunge that lands as a charge is let finish first, so the press is not lost in it. */
+function firePending(){const p=pendingPress;if(!p||pendingLeft<=0||world.jump.airborne||combat.locksMovement)return;pendingPress=null;if(p.kind==='attack')basicAttack();else skill(p.index);}
 /** The height and jumps a strike counts as coming from while it lands (a dive, a Root Quake cast in the air); null = where the explorer is now. */
 let strikeFrom:{height:number;jumps:number}|null=null,skyQuake:{height:number;jumps:number}|null=null;
 // Bosses block low hits (jump-rules.ts BLOCK; solo: online the server deals the damage): hits from the ground or a single jump keep a share, hits from double-jump height get through.
@@ -1356,7 +1361,7 @@ function syncAirCombat(){
   // Desktop shows both as tray buttons with their key and name (hud-ours.css reads these attributes).
   if(pad){pad.dataset.key=spaceKey==='jump'?'Space':'Shift';pad.dataset.label=t('Jump');}const hit=document.querySelector<HTMLElement>('#hud .attack-pad');if(hit){hit.dataset.key=spaceKey==='jump'?'F / N':'Space / N';hit.dataset.label=t('Basic attack');}
   const hint=document.querySelector('#hud .control-hint kbd:last-of-type')?.nextSibling;if(hint)hint.textContent=' '+t(on&&spaceKey==='jump'?'jump':'attack');
-  if(!on){world.jump.cancel();jumpInput.clear();slideCombo.cancel();pendingPress=null;comboMeter.reset();sureLeft=0;combat.edge.sure=false;combat.edge.bonus=1;combat.edge.launch=0;comboShown=' ';showCombo();const cluster=$('#hud .skills');cluster.classList.remove('air','dive');airLook='';}
+  if(!on){world.jump.cancel();jumpInput.clear();slideCombo.cancel();pendingPress=null;plungeCast=null;world.airCarry=0;world.castAirT=0;comboMeter.reset();sureLeft=0;combat.edge.sure=false;combat.edge.bonus=1;combat.edge.launch=0;comboShown=' ';showCombo();const cluster=$('#hud .skills');cluster.classList.remove('air','dive');airLook='';}
 }
 function jumpBlock(){
   if(!airOn())return 'idle' as const;
@@ -1375,14 +1380,74 @@ function tryJump(){
 function startDive(){if(!world.jump.dive())return false;
   // Touch aim help: drift toward the nearest creature in reach (through world.move, so obstacles block as ever).
   if(touchFight){const t=combat.nearest(AIR.homingRange),p=world.position;if(t){const d=Math.hypot(t.x-p.x,t.z-p.z),go=Math.min(AIR.homing,Math.max(0,d-t.radius-.6));if(go>0&&d>0){const n=Math.ceil(go/.2);for(let i=0;i<n;i++)world.move((t.x-p.x)/d*go/n,(t.z-p.z)/d*go/n);}world.facing=Math.atan2(t.x-p.x,t.z-p.z);}}combatTimers.attackCooldown=Math.max(combatTimers.attackCooldown,.15);world.diveFeedback();tone('swing');return true;}
+/**
+ * The dive's strike with the weapon in hand (air-cast.ts diveStrikeFor): a blade chops down and reaches as far as it does
+ * on the ground, a gun lands as a point-blank blast in its shot's colour, paws pound. The damage rules are the dive's own.
+ */
+function diveStrike(multiplier:number,landing:Landing){
+  const weapon=M.weaponStats(state),strike=diveStrikeFor(weapon,weapon.kind==='gun'?(weapon.shot==='volt'?'#bfefff':shotColor(weapon.shot??'pea')):undefined);
+  const hits=combat.dive(multiplier,strike.radius,DIVE.stun,DIVE.knock,target=>diveCritical(landing.jumps,landing.from,target),diveCap,strike.color).length;
+  world.playerAttack(strike.swing,strike.swing==='gun'?strike.color:undefined);
+  if(strike.swing==='sword')world.fx?.slash(world.position,world.facing,strike.radius,strike.color,{arc:4.4,y:.45,life:.24,thick:.55});
+  else if(strike.swing==='gun')world.fx?.flash({x:world.position.x,y:world.position.y+.5,z:world.position.z},strike.color,1.6,.1);
+  return hits;
+}
+/**
+ * A ground skill of a disguise pressed in the air (air-cast.ts 'plunge'): the drop is under way, the skill is cast where
+ * the explorer lands. `drift`: the meteor dive still leaps ahead while it falls (m/s, seconds left).
+ */
+let plungeCast:{disguise:string;index:number;height:number;jumps:number;drift?:{x:number;z:number;left:number}}|null=null;
+const moveExplorer=(x:number,z:number)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);};
+/** One disguise skill is cast: its cooldown, its name over the explorer, its sound. `air`: how a cast from a jump differs (combat.ts DisguiseAir). */
+function castDisguise(disguise:string,index:number,air?:DisguiseAir){
+  if(!combat.disguise(disguise,index,air))return false;
+  const skills=skillList(),time=M.skillCooldown(state,index,skills[index].cd,true)/Math.max(.2,1+M.activeStats(state).haste);skillDurations[index]=time;cooldowns[index]=time;
+  world.fx?.text({x:world.position.x,y:SKILL_NAME_RISE+(world.jump?.height??0),z:world.position.z},t(skills[index].name),`skillname s${index}`);
+  if(!actionHandler)change(()=>recordEvent(state,'skill'));
+  if((disguise==='dz_knight'&&index===1)||(disguise==='dz_vietnam'&&index===1))world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});
+  tone(skillSound(index,disguise,M.weaponStats(state).special));emitAction({kind:'skill',index,special:disguise});
+  return true;
+}
+/** A disguise skill pressed in the air window, by its class (air-cast.ts AIR_CAST). */
+function airDisguise(disguise:string,index:number,rule:AirCastRule){
+  const jump=world.jump,h=jump.height;
+  if(rule.cls==='plunge'){
+    // The drop first (the dive's own speed); world.onLanded casts the skill on the ground, stronger from higher.
+    plungeCast={disguise,index,height:h,jumps:jump.jumps};
+    if(rule.how==='leap'){const a=combat.aim(),time=Math.max(.05,h/JUMP.diveSpeed);plungeCast.drift={x:Math.sin(a)*DZ.dive.ahead/time,z:Math.cos(a)*DZ.dive.ahead/time,left:time};}
+    if(!jump.dive()){jump.diving=true;jump.diveFrom=h;jump.velocity=-JUMP.diveSpeed;}
+    world.diveFeedback();tone('swing');return true;
+  }
+  if(rule.cls==='move'){
+    // A flight ends the jump and carries its height into the flight, so the explorer neither pops up nor drops.
+    if(rule.how==='flight'){if(!castDisguise(disguise,index,{}))return false;if((combat.statuses.flight??0)>0){world.airCarry=flightCarry(h);jump.cancel();}return true;}
+    // A blink that lands: the jump ends where the explorer arrives, behind its target, with a little dust.
+    if(rule.how==='land')return castDisguise(disguise,index,{arrive:()=>{jump.cancel();world.landT=.2;world.landFeedback({dive:false,from:0,jumps:1,peak:0});}});
+    if(!castDisguise(disguise,index,{}))return false;
+    // A blink arrives at the same height and hangs a moment; a glide holds its height for the dash, then falls.
+    if(rule.how==='blink'){jump.hold(AIR_CASTING.blinkHang);world.castAirT=AIR_CASTING.pose;}else jump.hold(combat.dashLeft+AIR_CASTING.glideAfter);
+    return true;
+  }
+  // Cast where the explorer is: a short hang in a casting pose, and a small ring at the height it began at.
+  if(!castDisguise(disguise,index,{grounded:rule.at!=='body'}))return false;
+  jump.stall(AIR_CASTING.hang);world.castAirT=AIR_CASTING.pose;
+  world.fx?.ring(world.position,{color:'#ffffff',from:.25,to:1,life:.24,y:world.position.y+h+.9,thick:.14,opacity:.85});
+  return true;
+}
 /** The landing: dust and a thud; a dive strikes (solo: the dive rules; online: a plain basic hit, the server's), and a Root Quake cast in the air lands its shockwave. */
 world.onLanded=(landing:Landing)=>{
-  queueMicrotask(()=>{const p=pendingPress;if(!p||pendingLeft<=0)return;pendingPress=null;if(p.kind==='attack')basicAttack();else skill(p.index);}); // a late press: its ground move, now
+  queueMicrotask(firePending); // a late press: its ground move, now
   world.landFeedback(landing);tone(landing.dive?'boom':'land');if(landing.dive)vibrate(40);
+  if(plungeCast){
+    // A disguise's ground skill pressed in the air: cast here, on the ground, with the height bonus (air-cast.ts). No dive strike on top; each hit obeys the dive's cap.
+    const cast=plungeCast;plungeCast=null;if(cast.drift&&cast.drift.left>0)moveExplorer(cast.drift.x*cast.drift.left,cast.drift.z*cast.drift.left);
+    if(started&&!visiting&&state.hp>0&&airOn()&&state.gear.disguise===cast.disguise&&cooldowns[cast.index]<=0){prepareCombatWeapon();if(castDisguise(cast.disguise,cast.index,{power:airCastBonus(cast.height),cap:diveCap,landed:true})){world.fx?.shake(.12+.04*landing.jumps);if(pendingPress)pendingLeft=Math.max(pendingLeft,combat.dashLeft+.25);}}
+    return;
+  }
   if(combat.plunging&&combat.edge.moves){
     // The heavy dive (Quake in the air): the Quake's ring where the explorer lands, then the dive strike on top of it. Together they may end a chain.
     prepareCombatWeapon();const finisher=comboMeter.finisherReady;skyFactor=finisher?COMBO.finisher:1;strikeFrom=skyQuake??{height:landing.from,jumps:landing.jumps};let hits=0;
-    try{comboKind='launcher';combat.land();comboKind='dive';if(landing.from>=DIVE.minHeight)hits=combat.dive(diveMultiplier(landing.from)*skyFactor,DIVE.radius,DIVE.stun,DIVE.knock,target=>diveCritical(landing.jumps,landing.from,target),diveCap).length;}finally{comboKind=null;strikeFrom=null;skyQuake=null;skyFactor=1;}
+    try{comboKind='launcher';combat.land();comboKind='dive';if(landing.from>=DIVE.minHeight)hits=diveStrike(diveMultiplier(landing.from)*skyFactor,landing);}finally{comboKind=null;strikeFrom=null;skyQuake=null;skyFactor=1;}
     slamImpact();world.fx?.shake(.16+.05*landing.jumps);if(hits&&finisher){world.fx?.text({x:world.position.x,y:1.2,z:world.position.z},t('FINISHER!'),'crit big');tone('crit');}return;
   }
   if(combat.plunging){strikeFrom=skyQuake;try{combat.land();}finally{strikeFrom=null;skyQuake=null;}slamImpact();return;}
@@ -1390,7 +1455,7 @@ world.onLanded=(landing:Landing)=>{
   prepareCombatWeapon();
   if(actionHandler&&!dungeonApi?.active){if(combat.basic()){emitAction({kind:'basic'});world.playerAttack(M.weaponStats(state).kind);}return;}
   const finisher=comboMeter.finisherReady;comboKind='dive';strikeFrom={height:landing.from,jumps:landing.jumps};
-  let hits=0;try{hits=combat.dive(diveMultiplier(landing.from)*(finisher?COMBO.finisher:1),DIVE.radius,DIVE.stun,DIVE.knock,target=>diveCritical(landing.jumps,landing.from,target),diveCap).length;}finally{comboKind=null;strikeFrom=null;}
+  let hits=0;try{hits=diveStrike(diveMultiplier(landing.from)*(finisher?COMBO.finisher:1),landing);}finally{comboKind=null;strikeFrom=null;}
   combatTimers.attackCooldown=Math.max(combatTimers.attackCooldown,.25);world.fx?.shake(.16+.05*landing.jumps);
   if(hits&&finisher){world.fx?.text({x:world.position.x,y:1.2,z:world.position.z},t('FINISHER!'),'crit big');tone('crit');}
 };
@@ -1425,7 +1490,9 @@ function dodged(perfect:boolean){
 function stepFight(dt:number,active:boolean,combatActive:boolean){
   syncAirCombat();if(!airOn())return;
   world.jump.max=jumpsFor(M.jumpLevel(state),Tester.isTester(state));comboMeter.window=touchFight?COMBO.windowTouch:COMBO.window;
-  if(pendingLeft>0&&(pendingLeft-=dt)<=0)pendingPress=null;
+  if(pendingLeft>0&&(pendingLeft-=dt)<=0)pendingPress=null;else if(pendingPress)firePending();
+  if(plungeCast&&!world.jump.diving)plungeCast=null; // the jump was cut short (a cut-scene, a throw): nothing is cast
+  if(plungeCast?.drift&&active){const d=plungeCast.drift,step=Math.min(dt,d.left);if(step>0){moveExplorer(d.x*step,d.z*step);d.left-=step;}}
   if(slideCombo.active)fireSlide(slideCombo.poll(performance.now()/1000));
   // The air look of the fight buttons: on while a press would be an air move, with the pad showing the dive on the way down. One class write per change.
   {const j=world.jump,look=!airWindow(j)?'':j.falling&&j.height>=DIVE.minHeight?'air dive':'air';if(look!==airLook){airLook=look;const cluster=$('#hud .skills');cluster.classList.toggle('air',!!look);cluster.classList.toggle('dive',look==='air dive');}}
@@ -1454,8 +1521,12 @@ function ownSkills(special:string){const fourth=SPECIALS[special]??SPECIALS.fist
 function airSwing(){
   if(combatTimers.attackCooldown>0||!started||uiBlocked()||visiting)return false;prepareCombatWeapon();
   const weapon=M.weaponStats(state),level=moveAt(3,weapon.special??'fist')?skillTuning(3,M.skillLevel(state,3)).damage:1;
-  if(!combat.airSwing(level))return false;
-  combatTimers.attackCooldown=AIR_MOVES.swing.cooldown/Math.max(.2,1+M.activeStats(state).haste);world.jump.stall(AIR_MOVES.swing.hover);world.spinT=.3;world.fx?.slash(world.position,world.facing,AIR_MOVES.swing.radius,'#e5f6ff',{arc:6.2,y:world.jump.height+.9,life:.2,thick:.3}); // the whole circle it hits, at the explorer's height
+  // Paws spin; a blade's spin is a slash as long as the blade, in its colour (air-cast.ts airSwingFor).
+  const shape=airSwingFor(weapon,AIR_MOVES.swing.radius);if(shape.shape!=='spin'&&shape.shape!=='slash')return false;
+  if(!combat.airSwing(level,shape.radius,shape.color))return false;
+  const blade=shape.shape==='slash',h=world.jump.height;
+  combatTimers.attackCooldown=AIR_MOVES.swing.cooldown/Math.max(.2,1+M.activeStats(state).haste);world.jump.stall(AIR_MOVES.swing.hover);world.spinT=.3;world.fx?.slash(world.position,world.facing,shape.radius,shape.color,{arc:6.2,y:h+.9,life:blade?.26:.2,thick:blade?.6:.3}); // the whole circle it hits, at the explorer's height
+  if(blade)world.fx?.slash(world.position,world.facing+Math.PI,shape.radius*.72,'#ffffff',{arc:3.4,y:h+1,life:.16,thick:.16}); // the blade's bright edge
   world.playerAttack(weapon.kind==='sword'?'sword':'fist');tone('swing');emitAction({kind:'basic'});
   return true;
 }
@@ -1477,7 +1548,7 @@ function basicAttack(e?:Enemy){
     prepareCombatWeapon();const weapon=M.weaponStats(state),cd=(weapon.cd??.4)/Math.max(.2,1+M.activeStats(state).haste)*AIR.swing;
     // With paws or a blade the swing in the air is the spin of the moves (a gun keeps shooting).
     if(combat.edge.moves&&weapon.kind!=='gun'&&weapon.kind!=='rod'){airSwing();return;}
-    if(combat.basic(e,actionHandler?1:AIR.swing)){combatTimers.attackCooldown=cd;world.playerAttack(weapon.kind);tone(weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
+    if(combat.basic(e,actionHandler?1:AIR.swing)){combatTimers.attackCooldown=cd;const volt=weapon.shot==='volt';world.playerAttack(weapon.kind,volt?'#bfefff':undefined);if(weapon.kind==='gun'&&!actionHandler)jump.stall(AIR_WEAPON.recoil);tone(volt?'zap':weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
     else if(!e&&weapon.kind!=='rod'){combatTimers.attackCooldown=cd*.6;world.playerAttack(weapon.kind);tone('swing');}
     return;
   }
@@ -1509,6 +1580,8 @@ function skill(index:number){
   const disguise=state.gear.disguise,weapon=M.weaponStats(state),skills=skillList(),own=movesOn()?moveAt(index,weapon.special??'fist'):null;
   // Two of the starting skills have an air form (solo): Breeze Step dashes at its height, Root Quake plunges for a wider shockwave.
   const jump=world.jump,press=jump?.airborne?pressKind(jump):'ground';if(press==='buffer'){bufferPress({kind:'skill',index});return;}
+  // A disguise skill pressed in the air follows its class (air-cast.ts): cast up there, a plunge onto the ground, or a movement that takes the jump over.
+  if(disguise){const plan=!actionHandler&&airOn()?airCastPlan(DISGUISE_KITS[disguise]?.[index],press):'ground';if(plan==='ground')castDisguise(disguise,index);else if(plan!=='buffer')airDisguise(disguise,index,plan);return;}
   const air=!actionHandler&&!disguise&&press==='air'?(own?{...AIR,height:jump.height}:index===1||index===2?AIR:undefined):undefined;
   if(!(disguise?combat.disguise(disguise,index):combat.skill(index,weapon.special??'fist',air)))return;
   if(air&&index===1)jump.hold(own?AIR_MOVES.dash.hover:.24);if(air&&index===0)jump.stall(AIR_MOVES.rain.gap*AIR_MOVES.rain.shots);if(air&&index===2){skyQuake={height:jump.height,jumps:jump.jumps};if(!jump.dive()){jump.diving=true;jump.diveFrom=jump.height;jump.velocity=-34;}}
@@ -1559,7 +1632,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){airCooldowns.fill(0);world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1933,7 +2006,7 @@ function frame(now:number){
   // Landing from the ground slam squashes the explorer and jolts the camera.
   const airborne=combat.airborne>0;if(wasAirborne&&!airborne){world.landT=.25;slamImpact();}wasAirborne=airborne;
   // The explorer's pose follows the weapon, skills, fishing line and hit invulnerability.
-  const weaponKind=M.weaponStats(state).kind;world.weaponKind=state.gear.weapon&&M.ITEMS[state.gear.weapon]?.weapon?.kind==='rod'?'rod':state.gear.disguise?'fist':weaponKind;world.pose=combat.pose;world.invulnerable=combatTimers.invulnerable>0;world.fishTension=fishGame?.simulation.tension??0;
+  const weaponKind=M.weaponStats(state).kind;world.weaponKind=state.gear.weapon&&M.ITEMS[state.gear.weapon]?.weapon?.kind==='rod'?'rod':weaponKind;world.pose=combat.pose;world.invulnerable=combatTimers.invulnerable>0;world.fishTension=fishGame?.simulation.tension??0;
   autoAttack(weaponKind);
   updateHunting(dt);updateGuardian(dt);
   fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);

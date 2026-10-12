@@ -5,6 +5,8 @@ import {createHarpoonProjectile} from './harpoon-art.ts';
 import {makeShot,poseShot,lookOf} from './shot-art.ts';
 /** A dash leaves a ring every step: they barely swell (0.7 m to 0.84 m), so the trail is a streak the width of the explorer and not a 2.3 m tube. */
 export const TRAIL_GROW=.2;
+/** How high a shot fired from the air still is (combat.ts Projectile y, reach): it comes down in a straight line over its range. */
+export const shotLift=(p:{y?:number;reach?:number;remaining:number})=>p.y&&p.reach?p.y*Math.max(0,Math.min(1,p.remaining/p.reach)):0;
 export class CombatView {
   private scene:T.Scene;private shots=new Map<number,T.Object3D>();private spareShots=new Map<string,T.Group[]>();private clock=0;private effects:Array<{mesh:T.Mesh;life:number;max:number;kind:string}>=[];
   private allies=new Map<number,T.Group>();private spareAllies=new Map<string,T.Group[]>();
@@ -21,7 +23,7 @@ export class CombatView {
   effect(e:CombatEffect){
     const mesh=this.spare.pop()??new T.Mesh(undefined,new T.MeshBasicMaterial({transparent:true,opacity:.72,side:T.DoubleSide,depthWrite:false}));
     mesh.geometry=this.shape(e);(mesh.material as T.MeshBasicMaterial).color.set(e.color);(mesh.material as T.MeshBasicMaterial).opacity=.72;
-    mesh.rotation.set(-Math.PI/2,0,0);mesh.scale.setScalar(1);mesh.position.set(e.x,e.kind==='cast'?.15:.6,e.z);
+    mesh.rotation.set(-Math.PI/2,0,0);mesh.scale.setScalar(1);mesh.position.set(e.x,(e.kind==='cast'?.15:.6)+Math.max(0,Math.min(8,e.y||0)),e.z);
     // The plane's long side lies along (sin f, cos f) only with +f (−f mirrored every diagonal beam across the z axis).
     if(e.kind==='beam'){mesh.rotation.z=e.facing??0;mesh.position.x+=Math.sin(e.facing??0)*e.radius/2;mesh.position.z+=Math.cos(e.facing??0)*e.radius/2;}
     if(e.kind==='arc')mesh.rotation.z=-(e.facing??0)+Math.PI/2;
@@ -43,15 +45,15 @@ export class CombatView {
     for(const ally of allies){let model=this.allies.get(ally.id);if(!model){model=this.spareAllies.get(ally.kind)?.pop()??makeSummon(ally.kind);model.userData.allyKind=ally.kind;this.allies.set(ally.id,model);this.scene.add(model);}model.position.set(ally.x,ally.kind==='bat'?.7:ally.kind==='parrot'?1.7:0,ally.z);model.rotation.y=ally.facing??0;animateSummon(model,ally.kind,this.clock);if(ally.maxHp)summonHealth(model,ally.kind,(ally.hp??0)/ally.maxHp,ally.hurt??0);}
     const ids=new Set(projectiles.map(p=>p.id));for(const[id,mesh]of this.shots)if(!ids.has(id)){this.release(mesh);this.shots.delete(id);}
     if(active)this.clock+=dt;
-    for(const p of projectiles){let mesh=this.shots.get(p.id);
+    for(const p of projectiles){let mesh=this.shots.get(p.id);const up=shotLift(p);
       if(!mesh){
         if(p.kind==='harpoon')mesh=createHarpoonProjectile();
         else if(ELECTRIC_SHOTS.has(p.kind))mesh=new T.Mesh(new T.IcosahedronGeometry(.13,1),new T.MeshBasicMaterial({color:'#f2fdff'}));
         else{const key=p.kind+':'+(p.initialRadius??p.radius).toFixed(2)+':'+p.color;mesh=this.spareShots.get(key)?.pop()??makeShot(p.kind,p.initialRadius??p.radius,p.color);mesh.userData.key=key;mesh.userData.trailT=0;}
         this.shots.set(p.id,mesh);this.scene.add(mesh);}
-      if(mesh.userData.look){poseShot(mesh as T.Group,p.x,p.kind==='wave'?.55:p.kind==='snowball'?p.radius:1.05,p.z,p.direction.x,p.direction.z,this.clock);if(p.kind==='snowball'){mesh.scale.setScalar(p.radius/(p.initialRadius??p.radius));mesh.rotation.set(this.clock*p.direction.z*7,0,-this.clock*p.direction.x*7);}
-        if(active&&this.trail&&lookOf(p.kind)!=='rock'&&(mesh.userData.trailT-=dt)<=0){mesh.userData.trailT=.07;this.trail(p.x,1.05,p.z,p.color);}}
-      else{mesh.position.set(p.x,1.05,p.z);if(p.kind==='harpoon')mesh.rotation.y=Math.atan2(p.direction.x,p.direction.z);if(active&&ELECTRIC_SHOTS.has(p.kind))this.electric?.(p.x,1.05,p.z,p.direction.x,p.direction.z);}}
+      if(mesh.userData.look){poseShot(mesh as T.Group,p.x,(p.kind==='wave'?.55:p.kind==='snowball'?p.radius:1.05)+up,p.z,p.direction.x,p.direction.z,this.clock);if(p.kind==='snowball'){mesh.scale.setScalar(p.radius/(p.initialRadius??p.radius));mesh.rotation.set(this.clock*p.direction.z*7,0,-this.clock*p.direction.x*7);}
+        if(active&&this.trail&&lookOf(p.kind)!=='rock'&&(mesh.userData.trailT-=dt)<=0){mesh.userData.trailT=.07;this.trail(p.x,1.05+up,p.z,p.color);}}
+      else{mesh.position.set(p.x,1.05+up,p.z);if(p.kind==='harpoon')mesh.rotation.y=Math.atan2(p.direction.x,p.direction.z);if(active&&ELECTRIC_SHOTS.has(p.kind))this.electric?.(p.x,1.05+up,p.z,p.direction.x,p.direction.z);}}
     if(!active)return;
     for(let i=this.effects.length-1;i>=0;i--){const e=this.effects[i];e.life-=dt;(e.mesh.material as T.MeshBasicMaterial).opacity=.72*Math.max(0,e.life/e.max);if(e.kind!=='beam'&&e.kind!=='cast'){const scale=1+(1-e.life/e.max)*(e.kind==='trail'?TRAIL_GROW:.65);e.mesh.scale.setScalar(scale);}if(e.life<=0){this.scene.remove(e.mesh);this.spare.push(e.mesh);this.effects.splice(i,1);}}
   }

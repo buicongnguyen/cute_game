@@ -6,6 +6,8 @@ interface Host { ground(x:number,z:number):number; explorerAt(x:number,z:number)
 interface Cast { effect:CombatEffect; age:number; life:number; model:T.Object3D|null }
 const FOLLOW=new Set(['tank','charge','parrot','shield','bats','rush','whirl','ribbon','kite','dragondance','starshield','torch']);
 const BATCH=900,MAX_CASTS=48;
+/** Looks that run from the explorer to a target on the ground: cast from the air they slant down (skill-visuals.ts LookContext.lift) instead of floating level. */
+const SLANT=new Set(['hook','drain']);
 /** Soft hex-cell dome: a fresnel rim plus a faint honeycomb, patched into a plain basic material (no lights, no textures). */
 function domeMaterial(){
   const m=new T.MeshBasicMaterial({color:'#ffffff',transparent:true,opacity:.3,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending});
@@ -26,7 +28,7 @@ export class DisguiseFx implements Painter {
   /** Parsed colours by hex string: put() runs hundreds of times a frame and parsing is not free. */
   private colors=new Map<string,T.Color>();
   private dummy=new T.Object3D();private color=new T.Color();private origin=new T.Vector3();
-  private host:Host;private painted=0;private ctx:LookContext={x:0,y:0,z:0,r:1,t:0,a:0,f:0,color:'#fff',n:1,life:1};
+  private host:Host;private painted=0;private ctx:LookContext={x:0,y:0,z:0,r:1,t:0,a:0,f:0,color:'#fff',n:1,life:1,lift:0};
   /** Instances painted for the busiest cast of the last draw (tests). */
   maxPainted=0;
   constructor(host:Host){
@@ -68,7 +70,9 @@ export class DisguiseFx implements Painter {
     const n=Math.max(.25,Math.min(1,this.host.density?.()??1)),c=this.ctx;this.maxPainted=0;
     for(const cast of this.casts){const e=cast.effect;let x=e.x,z=e.z,y=this.host.ground(x,z)+.12;
       let facing=e.facing??0;if(cast.model?.parent){cast.model.getWorldPosition(this.origin);x=this.origin.x;z=this.origin.z;y=this.origin.y+.12;/* turn with the explorer it follows */if(Number.isFinite(cast.model.rotation.y))facing=cast.model.rotation.y;}
-      c.x=x;c.y=y;c.z=z;c.r=e.radius;c.t=Math.min(1,cast.age/cast.life);c.a=cast.age;c.f=facing;c.color=e.color;c.n=n;c.life=cast.life;
+      // A cast from the air (effect.y, air-cast.ts) is painted at the height it began at; one that follows the explorer is there already.
+      const high=cast.model?.parent?0:Math.max(0,Math.min(8,e.y??0)),slant=high>0&&SLANT.has(e.look!);
+      c.x=x;c.y=slant?y:y+high;c.lift=slant?high:0;c.z=z;c.r=e.radius;c.t=Math.min(1,cast.age/cast.life);c.a=cast.age;c.f=facing;c.color=e.color;c.n=n;c.life=cast.life;
       this.painted=0;LOOKS[e.look!]?.(this,c);this.maxPainted=Math.max(this.maxPainted,this.painted);
     }
     for(const b of this.batchList){b.instanceMatrix.needsUpdate=true;if(b.instanceColor)b.instanceColor.needsUpdate=true;b.visible=b.count>0;}

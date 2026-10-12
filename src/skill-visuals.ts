@@ -19,6 +19,8 @@ export interface LookContext {
   t: number; a: number; f: number; color: string; n: number;
   /** Beam-like casts: end point. */
   life: number;
+  /** Metres the cast's origin is above `y` (a hook or a drain cast from the air): the line slants from there down to its target. */
+  lift?: number;
 }
 export type Builder = (p: Painter, c: LookContext) => void;
 const S = Math.sin, C = Math.cos, PI = Math.PI, TAU = PI * 2;
@@ -314,15 +316,17 @@ const portal: Builder = (p, c) => {
   p.put('gorb', '#7a4fd0', c.x, c.y + 1, c.z, s * .45);
 };
 const hook: Builder = (p, c) => {
-  const out = Math.min(1, c.t * 2.2), back = Math.max(0, c.t * 2 - 1), reach = c.r * out * (1 - back * .1), dx = S(c.f), dz = C(c.f), links = Math.max(2, Math.min(26, Math.ceil(reach / .45)));
-  for (let i = 0; i < links; i++) { const k = (i + .5) / links * reach; p.put('box', i % 2 ? '#c9c2ae' : '#8d8676', c.x + dx * k, c.y + 1 + .05 * S(i * 1.5), c.z + dz * k, i % 2 ? .12 : .06, i % 2 ? .06 : .12, .4, 0, c.f); }
-  p.put('cone', '#d9d2c0', c.x + dx * (reach + .1), c.y + 1, c.z + dz * (reach + .1), .2, .55, .2, PI / 2, c.f); for (const s of [-1, 1]) p.put('cone', '#aaa38f', c.x + dx * reach - dz * .16 * s, c.y + 1, c.z + dz * reach + dx * .16 * s, .09, .3, .09, PI / 2, c.f, s * .8);
+  const out = Math.min(1, c.t * 2.2), back = Math.max(0, c.t * 2 - 1), reach = c.r * out * (1 - back * .1), dx = S(c.f), dz = C(c.f), links = Math.max(2, Math.min(26, Math.ceil(reach / .45))), up = c.lift ?? 0, r = Math.max(.01, c.r);
+  for (let i = 0; i < links; i++) { const k = (i + .5) / links * reach; p.put('box', i % 2 ? '#c9c2ae' : '#8d8676', c.x + dx * k, c.y + 1 + up * (1 - k / r) + .05 * S(i * 1.5), c.z + dz * k, i % 2 ? .12 : .06, i % 2 ? .06 : .12, .4, 0, c.f); }
+  const tip = c.y + 1 + up * (1 - reach / r);
+  p.put('cone', '#d9d2c0', c.x + dx * (reach + .1), tip, c.z + dz * (reach + .1), .2, .55, .2, PI / 2, c.f); for (const s of [-1, 1]) p.put('cone', '#aaa38f', c.x + dx * reach - dz * .16 * s, tip, c.z + dz * reach + dx * .16 * s, .09, .3, .09, PI / 2, c.f, s * .8);
   if (c.t > .35) { const k = Math.min(1, (c.t - .35) * 4); p.put('gring', '#ffffff', c.x + dx * c.r, c.y, c.z + dz * c.r, k * 1.1, 1, k * 1.1); p.put('mist', '#ece5cb', c.x + dx * c.r, c.y + .5, c.z + dz * c.r, .45 * (1 - k * .5)); }
 };
 const drain: Builder = (p, c) => {
-  const dx = S(c.f), dz = C(c.f), r = c.r;
-  p.put('gbox', '#e24474', c.x + dx * r / 2, c.y + 1, c.z + dz * r / 2, .09, .09, Math.max(.01, r), 0, c.f);
-  for (let i = 0; i < cnt(c, 6); i++) { const k = (1 - ((c.t * 1.4 + i / 6) % 1)) * r; p.put('gorb', i % 2 ? '#ff7d94' : '#ffd0da', c.x + dx * k, c.y + 1 + .2 * S(i * 3 + c.a * 9), c.z + dz * k, .14); }
+  const dx = S(c.f), dz = C(c.f), r = c.r, up = c.lift ?? 0, len = Math.hypot(r, up);
+  // Cast from the air the thread slants from the explorer's height down to the creature it drains.
+  p.put('gbox', '#e24474', c.x + dx * r / 2, c.y + 1 + up / 2, c.z + dz * r / 2, .09, .09, Math.max(.01, len), Math.atan2(up, Math.max(.01, r)), c.f);
+  for (let i = 0; i < cnt(c, 6); i++) { const k = (1 - ((c.t * 1.4 + i / 6) % 1)) * r; p.put('gorb', i % 2 ? '#ff7d94' : '#ffd0da', c.x + dx * k, c.y + 1 + up * (1 - k / Math.max(.01, r)) + .2 * S(i * 3 + c.a * 9), c.z + dz * k, .14); }
   p.put('gring', '#ea7a9c', c.x + dx * r, c.y, c.z + dz * r, .5 + .5 * c.t, 1, .5 + .5 * c.t);
 };
 const charge: Builder = (p, c) => {

@@ -4,6 +4,8 @@ export interface CombatTarget extends CombatPoint { id: string; hp: number; maxH
 export interface CombatStats { attack: number; maxHp?:number; critChance: number; critDamage?: number; haste?: number; lifesteal?: number }
 export interface CombatHit { amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint; /** Dealt by the pet, not the explorer (timed challenges ignore it). */ helper?: boolean; /** A boss blocked part of it (jump-rules.ts BLOCK): the hit came from the ground or a single jump's height. */ blocked?: boolean }
 export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'|'toss'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number;
+  /** Metres above the ground at its origin: a cast from the air (air-cast.ts; solo, the server never sets it). */
+  y?: number;
   /** How the view dresses it (skill-fx.ts): 'eyes' twin eye lasers, 'burn' a laser scorch, 'shock' an electric burst. Same hit either way. */
   look?: EffectLook;
   /** A repeat tick of a cast whose look is already drawn (the whirlwind's 10 hits): hits as usual, draws nothing more. */
@@ -98,6 +100,8 @@ const SPECIAL_SKILLS=new Set(['anchor','lotus','dragon','eagle','goldstar']);
 import { skillTuning } from './skill-upgrades.ts';
 import { MOVES, AIR_MOVES, airDashTurn, lobLanding, lobPower, lobReaches, moveAt, moveTime, quakeStuns, rainPoints, skyQuakeCap, skyQuakePower, strikeLaunches } from './moves.ts';
 import { dogTarget, DOG_TOSS_FLIGHT, DOG_TOSS_RANGE } from './guard-dog.ts';
+/** A disguise skill cast from a jump (air-cast.ts). */
+export interface DisguiseAir { power?:number; cap?:(target:CombatTarget)=>number; grounded?:boolean; landed?:boolean; arrive?:()=>void }
 export interface CombatHost {
   position(): CombatPoint; facing(): number; face(angle: number): void;
   targets(): CombatTarget[]; weapon(): WeaponProfile; stats(): CombatStats;
@@ -117,10 +121,14 @@ export interface CombatHost {
   moveTarget?(target:CombatTarget,x:number,z:number):void;
   /** Upgrade level of base skill slot 0-3 (skill-upgrades.ts); missing = 0. */
   skillLevel?(index:number):number;
+  /** Metres the explorer is above the ground in a jump (the solo game with jumping on); missing = 0. */
+  height?():number;
 }
 export interface Projectile extends CombatPoint { id: number; direction: CombatPoint; speed: number; remaining: number; radius: number; color: string; kind: string; multiplier: number; hit: Set<string>; pierce: boolean; stun: number; lift: number; explosion: number; homing?:string; initialRadius?:number; helper?: boolean; /** Fired by a summon (turret, cannon): it never heals the explorer. */ summoned?: boolean;
   /** Bursts in an area of this radius where it lands (first creature, or the end of its flight) instead of a direct hit. */
   burst?:number; burstLift?:number;
+  /** Fired from the air (solo): the height it left from and the range it had then; it is drawn flying down to its target. */
+  y?:number; reach?:number;
   /** Seconds a creature it touches is slowed. */
   slow?:number }
 export interface CombatAlly extends CombatPoint {id:number;kind:'clone'|'turret'|'cannon'|'bat'|'snowman'|'parrot'|'tree'|'lighthouse'|'sandbag';life:number;cooldown:number;orbit:number;facing?:number;
@@ -149,6 +157,8 @@ export function distanceToSegment(point:CombatPoint,from:CombatPoint,to:CombatPo
 }
 const direction=(angle:number)=>({x:Math.sin(angle),z:Math.cos(angle)});
 const colorFor=(kind:string)=>ELECTRIC_SHOTS.has(kind)?ELECTRIC_COLOR:kind.includes('ice')?'#a9eeff':kind.includes('fire')||kind==='rocket'?'#ff985f':kind.includes('bubble')?'#b6eaff':kind.includes('spike')?'#cae482':kind.includes('star')?'#ffe689':kind==='cork'?'#e8c08a':'#c4ec9f';
+/** The colour of a shot of `kind` (the dive of a gun lands in it, air-cast.ts). */
+export const shotColor=(kind:string)=>colorFor(kind);
 type Scheduled={at:number;run:()=>void};
 
 /** Independently authored fixed-step combat; every delayed effect follows game pause. */
@@ -182,6 +192,16 @@ export class CombatSimulation {
   private plunge:{radius:number;power:number;height?:number}|null=null;
   /** A Strike chain or a Lob throw keeps the hands busy until this time: no other attack starts, the feet stay free. */
   private busyUntil=0;
+  /**
+   * A cast from the air (air-cast.ts). `grounded`: this cast begins on the ground under the explorer, so nothing of it is
+   * lifted to the explorer's height. `castCap`: the most each hit of a plunge may take (the dive's cap on a boss).
+   * Delayed hits keep both, like the damage factor.
+   */
+  private grounded=false;private castCap:((target:CombatTarget)=>number)|null=null;
+  /** The explorer's height in a jump; 0 on the ground, online and on the server. */
+  private get lift(){const h=this.host.height?.()??0;return Number.isFinite(h)&&h>0?h:0;}
+  /** `{y}` for an effect that begins at the explorer while it is in the air, else nothing. */
+  private up(point:CombatPoint){if(this.grounded)return {};const h=this.lift;if(!h)return {};const p=this.host.position();return Math.hypot(point.x-p.x,point.z-p.z)<.7?{y:h}:{};}
   constructor(host:CombatHost,random:()=>number=Math.random){this.host=host;this.random=random;}
   get visualScale(){return this.statuses.giant>0?2:1;}
   /** Extra defence from skills: giant form, tank mode, and the sandbag wall while you stand behind it (+80 'armor' is added by the hosts). */
@@ -237,13 +257,15 @@ export class CombatSimulation {
   get busy(){return !!this.action||this.time<this.busyUntil;}
   /** Rushing (the dash itself, on the ground or in the air): nothing hurts the explorer, ground marks included. */
   get rushing(){return this.action?.kind==='dash';}
+  /** Seconds the dash in progress still runs (0 when there is none). */
+  get dashLeft(){return this.action?.kind==='dash'?Math.max(0,this.action.until-this.time):0;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
-  private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{}),...(quiet?{quiet:true}:{})});}
-  private visual(look:EffectLook,point:CombatPoint,radius:number,duration:number,color='#cfb5f5',facing=this.host.facing()){this.host.effect({...point,kind:'cast',look,radius,duration,color,facing});}
-  private later(delay:number,run:()=>void){const power=this.power;this.jobs.push({at:this.time+delay,run:power===1?run:()=>{const old=this.power;this.power=power;try{run();}finally{this.power=old;}}});}
+  private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{}),...(quiet?{quiet:true}:{}),...this.up(point)});}
+  private visual(look:EffectLook,point:CombatPoint,radius:number,duration:number,color='#cfb5f5',facing=this.host.facing()){this.host.effect({x:point.x,z:point.z,kind:'cast',look,radius,duration,color,facing,...this.up(point)});}
+  private later(delay:number,run:()=>void){const power=this.power,grounded=this.grounded,cap=this.castCap;this.jobs.push({at:this.time+delay,run:power===1&&!grounded&&!cap?run:()=>{const old=this.power,oldGrounded=this.grounded,oldCap=this.castCap;this.power=power;this.grounded=grounded;this.castCap=cap;try{run();}finally{this.power=old;this.grounded=oldGrounded;this.castCap=oldCap;}}});}
   /** Set while a pet projectile deals its damage. */
   private helperShot=false;
   /** Set while a summon (clone, bat, parrot, tree, lighthouse, turret, cannon) deals damage: pets and summons never heal their owner. */
@@ -261,7 +283,7 @@ export class CombatSimulation {
     const bonus=(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?DZ.stealth.bonus:1)*(this.marked.has(target.id)?1.5:1)*((this.statuses.rally??0)>0?1+DZ.torch.bonus:1);
     this.statuses.stealth=0;
     const share=this.edge.scale?.(target)??1;
-    const amount=Math.max(1,Math.min(this.hitCap,Math.round(stats.attack*multiplier*this.power*bonus*(own?this.edge.bonus:1)*share*(critical?((own?this.edge.crit?.():undefined)??stats.critDamage??2):1)*(.9+this.random()*.2))));
+    const amount=Math.max(1,Math.min(this.hitCap,own&&this.castCap?this.castCap(target):Infinity,Math.round(stats.attack*multiplier*this.power*bonus*(own?this.edge.bonus:1)*share*(critical?((own?this.edge.crit?.():undefined)??stats.critDamage??2):1)*(.9+this.random()*.2))));
     if(own&&this.edge.sure){this.edge.sure=false;this.edge.spent?.();}
     const applied=this.host.hit(target,{amount,critical:critical||shown,stun,lift,knock,direction:direction(angle),...(this.helperShot?{helper:true}:{}),...(share<1?{blocked:true}:{})});
     const dealt=typeof applied==='number'?Math.max(0,Math.min(amount,applied)):amount;
@@ -278,7 +300,7 @@ export class CombatSimulation {
   private spot(range:number,fallback:number,d:CombatPoint){const t=this.nearest(range),p=this.host.position();return t?{x:t.x,z:t.z}:{x:p.x+d.x*fallback,z:p.z+d.z*fallback};}
   private burst(shot:Projectile,point:CombatPoint){this.emit('impact',point,.7,shot.color,this.host.facing(),ELECTRIC_SHOTS.has(shot.kind)?'shock':'blast');this.area(point,shot.burst!,shot.multiplier,shot.stun,shot.burstLift??0,shot.color,1.5,ELECTRIC_SHOTS.has(shot.kind)?'shock':'blast');}
   private arc(radius:number,multiplier:number,threshold:number,target?:CombatTarget,knock=1.2,lift=0){
-    const p=this.host.position(),d=direction(this.host.facing());this.host.effect({...p,kind:'arc',radius,color:this.host.weapon().fx??'#fff4c8',facing:this.host.facing(),arc:2*Math.acos(Math.max(-1,Math.min(1,threshold)))});
+    const p=this.host.position(),d=direction(this.host.facing());this.host.effect({x:p.x,z:p.z,kind:'arc',radius,color:this.host.weapon().fx??'#fff4c8',facing:this.host.facing(),arc:2*Math.acos(Math.max(-1,Math.min(1,threshold))),...this.up(p)});
     for(const enemy of this.host.targets()){
       const x=enemy.x-p.x,z=enemy.z-p.z,length=Math.hypot(x,z);
       if(enemy.hp>0&&length<=radius+enemy.radius&&(enemy===target||length===0||(x*d.x+z*d.z)/length>=threshold))this.damage(enemy,multiplier,.15,enemy.boss?0:lift,knock);
@@ -286,7 +308,9 @@ export class CombatSimulation {
   }
   shoot(kind:string,angle:number,multiplier=1,range=11,extras:Partial<Projectile>={}){
     const p=this.host.position(),d=direction(angle);
-    this.projectiles.push({id:++this.serial,x:p.x+d.x*.6,z:p.z+d.z*.6,direction:d,speed:kind==='wave'||kind==='dragon'?13:kind==='bigbubble'?7:19,remaining:range,radius:kind==='bigbubble'?.8:.22,color:colorFor(kind),kind,multiplier:multiplier*this.power,hit:new Set(),pierce:kind==='wave'||kind==='dragon',stun:kind==='ice'?1.5:0,lift:kind==='bigbubble'?3:0,explosion:kind==='fireball'?2:0,...extras});
+    // From the air (solo) the explorer's own shot leaves at its height and flies down; a summon's or a pet's starts where that stands.
+    const h=extras.helper||extras.summoned||this.grounded?0:this.lift,high=h>0&&Math.hypot((extras.x??p.x)-p.x,(extras.z??p.z)-p.z)<.7?{y:h,reach:Math.max(.5,range)}:{};
+    this.projectiles.push({...high,id:++this.serial,x:p.x+d.x*.6,z:p.z+d.z*.6,direction:d,speed:kind==='wave'||kind==='dragon'?13:kind==='bigbubble'?7:19,remaining:range,radius:kind==='bigbubble'?.8:.22,color:colorFor(kind),kind,multiplier:multiplier*this.power,hit:new Set(),pierce:kind==='wave'||kind==='dragon',stun:kind==='ice'?1.5:0,lift:kind==='bigbubble'?3:0,explosion:kind==='fireball'?2:0,...extras});
   }
   /** `factor` scales the hit (an air swing, jump-rules.ts AIR.swing); the server never passes it. */
   basic(target?:CombatTarget,factor=1){
@@ -308,8 +332,8 @@ export class CombatSimulation {
    * The dive strike of a jump (jump-rules.ts DIVE): an area hit where the explorer lands. `sure(target)` makes it a
    * critical on that target, `cap(target)` is the most it may take. Returns the creatures hit. Solo only.
    */
-  dive(multiplier:number,radius:number,stun:number,knock:number,sure:(target:CombatTarget)=>boolean,cap:(target:CombatTarget)=>number){
-    const at=this.host.position(),hit=this.within(at,radius);this.emit('ring',at,radius,'#ffe9a8',this.host.facing(),'crater');
+  dive(multiplier:number,radius:number,stun:number,knock:number,sure:(target:CombatTarget)=>boolean,cap:(target:CombatTarget)=>number,color='#ffe9a8'){
+    const at=this.host.position(),hit=this.within(at,radius);this.emit('ring',at,radius,color,this.host.facing(),'crater');
     try{for(const target of hit){this.forced=sure(target);this.hitCap=cap(target);this.damage(target,multiplier,stun,0,knock);}}finally{this.forced=false;this.hitCap=Infinity;}
     return hit;
   }
@@ -411,10 +435,10 @@ export class CombatSimulation {
    * The air swing (moves.ts AIR_MOVES.swing): one spin that hits everything round the explorer. The Strike's air form and,
    * with the moves on, what the attack button does while rising with paws or a blade. `damage`: the Strike slot's level factor.
    */
-  airSwing(damage=1){
+  airSwing(damage=1,radius:number=AIR_MOVES.swing.radius,color='#e5f6ff'){
     if(this.action||this.time<this.busyUntil)return false;const A=AIR_MOVES.swing,p=this.host.position(),old=this.power;
-    this.host.effect({...p,kind:'cast',look:'whirl',radius:A.radius,color:'#e5f6ff',duration:.3});this.power=damage;
-    try{for(const target of this.within(p,A.radius))this.damage(target,A.power,.15,0,.8);}finally{this.power=old;}
+    this.host.effect({x:p.x,z:p.z,kind:'cast',look:'whirl',radius,color,duration:.3,...this.up(p)});this.power=damage;
+    try{for(const target of this.within(p,radius))this.damage(target,A.power,.15,0,.8);}finally{this.power=old;}
     return true;
   }
   special(id:string){
@@ -444,15 +468,26 @@ export class CombatSimulation {
       default:return false;
     }return true;
   }
-  disguise(id:string,index:number){
+  /**
+   * `air`: cast from a jump (air-cast.ts; solo only, the server never passes it). `power`: the plunge's height bonus, a
+   * factor on every hit of the cast; `cap`: the most one hit may take; `grounded`: the cast begins on the ground under
+   * the explorer; `landed`: a plunge that has just touched down (the meteor dive already leapt); `arrive`: called when a
+   * blink has moved the explorer.
+   */
+  disguise(id:string,index:number,air?:DisguiseAir){
     if(this.action)return false;
     const effect=DISGUISE_KITS[id]?.[index];if(!effect)return false;
+    if(!air)return this.cast(effect);
+    const power=this.power,grounded=this.grounded,cap=this.castCap;this.power=air.power??1;this.grounded=!!air.grounded;this.castCap=air.cap??null;
+    try{return this.cast(effect,air);}finally{this.power=power;this.grounded=grounded;this.castCap=cap;}
+  }
+  private cast(effect:string,air?:DisguiseAir){
     if(SPECIAL_SKILLS.has(effect))return this.special(effect);
     const p={...this.host.position()},angle=this.aim(),d=direction(angle),K=DZ;
     switch(effect){
       // ---- Superhero
       case 'flight':if(this.statuses.flight>0){this.statuses.flight=0;this.statuses.swift=0;}else{this.statuses.flight=K.flight.time;this.haste(K.flight.speed,K.flight.time);}this.visual('lift',p,2.5,.9,'#ffffff');break;
-      case 'dive':{const mult=this.statuses.flight>0?K.dive.flying:K.dive.power;this.statuses.flight=0;this.statuses.invuln=Math.max(this.statuses.invuln??0,K.dive.guard);this.host.move(d.x*K.dive.ahead,d.z*K.dive.ahead);this.later(K.dive.delay,()=>this.area(this.host.position(),K.dive.radius,mult,0,K.dive.lift,'#b5cbff',1.5,'crater'));break;}
+      case 'dive':{const mult=this.statuses.flight>0?K.dive.flying:K.dive.power;this.statuses.flight=0;this.statuses.invuln=Math.max(this.statuses.invuln??0,K.dive.guard);if(!air?.landed)this.host.move(d.x*K.dive.ahead,d.z*K.dive.ahead);this.later(air?.landed?0:K.dive.delay,()=>this.area(this.host.position(),K.dive.radius,mult,0,K.dive.lift,'#b5cbff',1.5,'crater'));break;}
       case 'sweep':{
         // Laser gaze: twin eye beams sweep the front. Each step the line drawn (look 'eyes', skill-fx.ts) and the line hit
         // are the same: from the explorer along `beamAngle`, GAZE.length long and GAZE.width wide; a hit leaves a scorch ('burn').
@@ -481,13 +516,13 @@ export class CombatSimulation {
         for(let i=0;i<K.clones.count;i++){const a=angle+Math.PI/4+i*Math.PI*2/K.clones.count,x=p.x+Math.sin(a)*K.clones.ring,z=p.z+Math.cos(a)*K.clones.ring;this.summon({kind:'clone',x,z,life:K.clones.life,cooldown:i*.1,orbit:a,facing:angle});this.visual('poof',{x:x-Math.sin(a)*.35,z:z-Math.cos(a)*.35},.45,.3,'#b9a6e8');}
         break;}
       case 'stealth':this.statuses.stealth=K.stealth.time;this.haste(K.stealth.speed,K.stealth.time);this.visual('poof',p,2,.7,'#c0ace8');break;
-      case 'backstab':{const t=this.nearest(K.backstab.range);if(!t)return false;const behind=direction(t.facing??angle),gap=t.radius+.8;this.visual('portal',p,1,.35);this.host.move(t.x-p.x-behind.x*gap,t.z-p.z-behind.z*gap);this.aim(t);this.visual('portal',this.host.position(),1,.35);this.damage(t,K.backstab.power,0,0,1,true);this.emit('arc',t,2.5,'#c9c9ff');break;}
+      case 'backstab':{const t=this.nearest(K.backstab.range);if(!t)return false;const behind=direction(t.facing??angle),gap=t.radius+.8;this.visual('portal',p,1,.35);this.host.move(t.x-p.x-behind.x*gap,t.z-p.z-behind.z*gap);air?.arrive?.();this.aim(t);this.visual('portal',this.host.position(),1,.35);this.damage(t,K.backstab.power,0,0,1,true);this.emit('arc',t,2.5,'#c9c9ff');break;}
       case 'smoke':this.visual('smoke',p,K.smoke.radius,K.smoke.time);for(let i=0;i<K.smoke.time/K.smoke.tick;i++)this.later(i*K.smoke.tick,()=>{for(const t of this.within(p,K.smoke.radius))this.host.status?.(t,'blind',K.smoke.blind);const at=this.host.position();if(Math.hypot(at.x-p.x,at.z-p.z)<K.smoke.radius)this.statuses.stealth=Math.max(this.statuses.stealth??0,.6);});break;
       // ---- Archmage
       case 'fireball':this.visual('charge',p,1,K.fireball.charge,'#ffad6b');this.later(K.fireball.charge,()=>{
         const from=this.host.position(),t=this.nearest(K.fireball.range),to=t?{x:t.x,z:t.z}:{x:from.x+d.x*K.fireball.fallback,z:from.z+d.z*K.fireball.fallback},gap=Math.max(.5,Math.hypot(to.x-from.x,to.z-from.z));
         this.shoot('fireball',Math.atan2(to.x-from.x,to.z-from.z),K.fireball.power,gap,{x:from.x,z:from.z,radius:.6,speed:Math.max(12,gap/K.fireball.flight),burst:K.fireball.radius,burstLift:K.fireball.lift,...(t?{homing:t.id}:{})});});break;
-      case 'teleport':this.visual('portal',p,1,.45);this.host.move(d.x*K.teleport.distance,d.z*K.teleport.distance);this.statuses.invuln=Math.max(this.statuses.invuln??0,K.teleport.guard);this.visual('portal',this.host.position(),1,.45);break;
+      case 'teleport':this.visual('portal',p,1,.45);this.host.move(d.x*K.teleport.distance,d.z*K.teleport.distance);air?.arrive?.();this.statuses.invuln=Math.max(this.statuses.invuln??0,K.teleport.guard);this.visual('portal',this.host.position(),1,.45);break;
       case 'sheep':{const t=this.nearest(K.sheep.range);if(!t)return false;const others=this.within(t,K.sheep.around).filter(e=>e!==t).sort((a,b)=>Math.hypot(a.x-t.x,a.z-t.z)-Math.hypot(b.x-t.x,b.z-t.z)).slice(0,K.sheep.count-1);
         for(const e of [t,...others])this.host.status?.(e,'sheep',K.sheep.time);this.visual('sheep',t,K.sheep.around,1,'#ccbae8');break;}
       case 'blackhole':{const c=this.spot(K.blackhole.range,K.blackhole.fallback,d);this.visual('blackhole',c,K.blackhole.pull,K.blackhole.time,'#9c8ee5');
@@ -601,7 +636,7 @@ export class CombatSimulation {
   update(dt:number,active=true){
     if(!active||!Number.isFinite(dt)||dt<=0)return;this.time+=dt;
     const position=this.host.position(),moved=this.host.moving?.()??(!!this.lastStep&&Math.hypot(position.x-this.lastStep.x,position.z-this.lastStep.z)>dt);
-    if(this.statuses.giant>0){this.giantStep-=dt;if(moved&&this.giantStep<=0){this.giantStep=.45;this.area(position,2.5,.7,0,0,'#c96a3a',2,'crater');}}
+    if(this.statuses.giant>0){this.giantStep-=dt;if(moved&&this.giantStep<=0&&!this.lift){this.giantStep=.45;this.area(position,2.5,.7,0,0,'#c96a3a',2,'crater');}}
     this.lastStep={...position};
     // Each pet slot shoots on its own cooldown (pet-slots.ts): two pets are two independent shooters.
     this.petCooldown=Math.max(0,this.petCooldown-dt);this.pet2Cooldown=Math.max(0,this.pet2Cooldown-dt);

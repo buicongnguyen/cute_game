@@ -1,6 +1,6 @@
 # Fight plan: four ground moves, the jump, and their combinations
 
-Written 2026-10-11. Status: steps 1 to 3 built (branch `dev-moves`); steps 4 and 5 still plan. The jump itself is being built on branch `dev-jump`; this plan says how the moves are balanced once it lands. The speed rule of `docs/QUALITY-PLAN.md` applies: no move may add drawing work beyond the pooled effects the game already has.
+Written 2026-10-11. Status: steps 1 to 3 built (branch `dev-moves`), disguise skills and the weapon in the air built (section 4b, branch `dev-airdz`); steps 4 and 5 still plan. The jump itself is being built on branch `dev-jump`; this plan says how the moves are balanced once it lands. The speed rule of `docs/QUALITY-PLAN.md` applies: no move may add drawing work beyond the pooled effects the game already has.
 
 ## 1. The idea
 
@@ -69,6 +69,22 @@ The attack button keeps: in the air, rising = Sky Spin (with a gun: the old air 
 | Attack | F / N | inner toe |
 | Lob / Rush / Quake / Strike | J K L ; (WASD layout) or Q W E R | the four skill toes |
 | Air forms | Jump, then the skill key while in the air | press Jump and slide the same finger to the toe (or tap Jump, then the toe) |
+
+### 4b. Jump + a disguise skill, and the weapon in the air (built 2026-10-12)
+
+One table, `src/air-cast.ts` (`AIR_CAST`), gives every disguise skill (16 disguises x 4) one class for a press in the air window. A test fails when a skill is added without a class. Switch off or online, none of it is reached.
+
+| Class | What happens | Skills |
+|---|---|---|
+| **Air, from the body** | Cast where the hero is: it hangs 0.2 s in a casting pose, and the cast begins at its height (shots fly down to the target, a hook or a drain slants down, puffs and shields are up there) | Laser gaze, Boulder throw, Vanish, Great fireball, Shield block, Homing missiles, Energy shield, Grappling hook, Scout parrot, Life drain, Bat form, Bat swarm, Cork popgun, Lotus petals, Paper fan breeze, Dragon fan, Star shield, Liberty torch, Golden star burst |
+| **Air, set on the ground** | The same hang; what is made appears on the ground under the hero (a summon, a shout's ring, a flower ring) | Shadow clones, Challenge, Tesla turret, Terrifying roar, Healing flower ring, Binding tree, Deck cannon, Rolling snowball, Snow decoy, Bosun's whistle, Lighthouse beam, Lantern festival |
+| **Air, called down far away** | The same hang; the strike lands on the enemy's spot as ever | Sheep spell, Black hole, Sky sword, Fairy charm, Ship broadside, Signal flare, Supply drop, Fireworks finale, Great golden star |
+| **Plunge** | A ground skill: the hero drops at once at the dive's speed and the skill is cast where it lands, stronger from higher (+10% from a single jump's top, +20% double, +30% triple, `AIR_CASTING.bonus`). No dive strike on top; each hit obeys the dive's cap on a boss (20% of its health); the cooldown starts on landing, so a plunge that finds no target costs nothing | Meteor dive (still leaps 4 m ahead while it falls), Smoke bomb, Knight's charge, Tank mode, Devour, Tail sweep, Giant form, Blood moon, Ice rink, Ice age, Sandbag wall, Anchor swing, Wave ride, Ink circle, Dragon dance, Bamboo vault, Bronze drum |
+| **Movement** | It takes the jump over, so the hero is never moved twice. Flight: the jump ends and its height blends into the flight (no pop up, no drop). Glide: the height holds for the dash, then the hero falls. Blink: arrives at the same height and hangs 0.12 s; Shadow strike arrives on the ground behind its target | Take flight, Butterfly float, Kite glide (flight); Silk ribbon glide, Eagle strike (glide); Blink, Shadow strike (blink) |
+
+A press too late in the fall or during a dive is kept and cast on landing; it now also waits out a plunge that landed as a charge, so two quick presses cast both skills. Criticals from the air are worth 8x only where they already were (a hit landed while the hero is in the air); a plunge's hits land from the ground and use the ordinary 4x.
+
+**The weapon in the air.** The attack button uses the weapon that fights (the one in hand, else the disguise's own): paws spin as before (2.2 m); a blade's spin reaches as far as the blade does on the ground (2.3 to 3.4 m) in the blade's colour; a gun shoots, the shot leaving from the hero's height and flying down. The dive strikes with it: a blade chops down with its own reach, a gun lands as a blast in its shot's colour. Damage, cooldowns, the dive's cap and its sure critical are unchanged. In a disguise the hero now swings, chops or aims with the weapon it holds (it used to punch whatever it held).
 
 ## 5. Sequences
 (the fighting-game part)

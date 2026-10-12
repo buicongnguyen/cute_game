@@ -65,6 +65,7 @@ import {mergeParts} from './avatar-merge.ts';
 import {perfFlags} from './perf-flags.ts';
 import {enemyFlash,HIT_FLASH,HURT_TINT,meleeArc,inMeleeArc,MELEE_ARC} from './feel-rules.ts';
 import {AFTERSHOCK,BLOCK,JumpState,JUMP,MAX_AIR_SECONDS,MAX_HEIGHT,attackClass,dodges,poseAir,warningTime,type AttackClass,type Landing} from './jump-rules.ts';
+import {AIR_CASTING,carryStep} from './air-cast.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
@@ -208,7 +209,7 @@ export class World {
   /** The creature last hit and when: it stays marked for TARGET_HOLD seconds. */
   lastHit?: {e:Enemy;t:number}|null;
   // Player animation timers set by combat and fishing.
-  punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; /** The last tap on a pond's water, for the cast point. */ pondTap:{id:string;x:number;z:number}|null=null; fishing:'idle'|'cast'|'wait'|'fight'='idle';
+  punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; /** Seconds left of the casting pose of a skill cast from a jump (air-cast.ts). */ castAirT=0; /** A flight that took a jump over: metres the explorer still is from the flight's height (air-cast.ts flightCarry). */ airCarry=0; /** The last tap on a pond's water, for the cast point. */ pondTap:{id:string;x:number;z:number}|null=null; fishing:'idle'|'cast'|'wait'|'fight'='idle';
   walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
   private shakeOffset=new T.Vector3();/** Ground distance the view reaches from the camera target (resize). */ viewReach?:number; private playerMaterials:LitMaterial[]=[];private hemi?:T.HemisphereLight;
   canvas: HTMLCanvasElement; state: SaveState;
@@ -1275,7 +1276,7 @@ export class World {
   }
   /** Swing arcs and animation for the player's own attacks. */
   playerAttack(kind:'fist'|'sword'|'gun'|'rod',muzzle='#fff8c8'){
-    const fx=this.fx,at={x:this.position.x,y:this.position.y,z:this.position.z};
+    const fx=this.fx,at={x:this.position.x,y:this.position.y+(this.jump?.height??0),z:this.position.z};
     if(kind==='gun'){this.aimT=.7;this.punchT=.12;fx?.flash({x:at.x+Math.sin(this.facing)*.9,y:at.y+1,z:at.z+Math.cos(this.facing)*.9},muzzle,.9,.08);return;}
     // The slash arc itself arrives through the shared combat effects, so remote players see it too.
     this.punchT=.25;if(kind!=='sword')this.punchArm^=1;
@@ -1810,7 +1811,8 @@ export class World {
     if(zone!==this.lastZone&&!this.interior){this.lastZone=zone;this.onZone(zone);} // indoors x/z are the cottage's: no village zone banner
     // Home heals 4x faster (home-care.ts); this line had slipped into the comment above, so offline the village never healed.
     this.homeRecovering=atHome(this.planet,this.position,!!this.interior)&&this.state.hp>0&&this.state.hp<stats.maxHp;if(!this.authoritativeAction&&active&&this.homeRecovering)this.state.hp=Math.min(stats.maxHp,this.state.hp+homeRecoveryBonus(stats.regen)*dt);
-    this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height;this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
+    if(this.airCarry)this.airCarry=this.playerFlying?carryStep(this.airCarry,dt):0;
+    this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height+(this.airCarry||0);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
     (this.petPen??=new PetCompanion()).update(this,dt);(this.petPen2??=new PetCompanion(1)).update(this,dt);
     this.animatePlayer(dt);this.animateRemotes(dt);
@@ -1903,7 +1905,7 @@ export class World {
    * casting and reeling; and a swell with a red flash when hurt.
    */
   private animatePlayer(dt:number){
-    for(const key of ['punchT','swingT','aimT','hurtT','spinT','landT','castT'] as const)this[key]=Math.max(0,(this[key]||0)-dt);
+    for(const key of ['punchT','swingT','aimT','hurtT','spinT','landT','castT','castAirT'] as const)this[key]=Math.max(0,(this[key]||0)-dt);
     this.walkClock=(this.walkClock||0)+dt*(this.moving?11:3);
     const o=this.walkClock,c=Math.sin(o),p=this.player;
     const flying=this.playerFlying&&FLIGHT_POSE_DISGUISES.includes(this.state.gear.disguise??'');
@@ -1924,6 +1926,10 @@ export class World {
       if(air.diving){lean=.85;armL?.rotation.set(-2.9,0,-.15);armR?.rotation.set(-2.9,0,.15);legL?.rotation.set(.5,0,0);legR?.rotation.set(.7,0,0);sy*=1.1;}
       // The flourish of a double or triple jump: one quick turn, two for the triple.
       if(air.spin>0)twist+=(1-air.spin/JUMP.flourish)*Math.PI*2*(air.jumps>=3?2:1);
+      // A shot from the air: both hands on the gun, aimed a little down at the target.
+      if(!air.diving&&kind==='gun'&&this.aimT>0){armR?.rotation.set(-1.2,0,.05);armL?.rotation.set(-1,0,.45);twist+=.12;lean=.16;}
+      // A skill cast from the air (air-cast.ts): the hands thrust out, the knees tuck, and the body leans back and turns a little while it hangs.
+      if(!air.diving&&this.castAirT>0){const e=Math.sin(Math.min(1,this.castAirT/AIR_CASTING.pose)*Math.PI);armL?.rotation.set(-1.7*e-.3,0,-.55*e-.2);armR?.rotation.set(-1.7*e-.3,0,.55*e+.2);legL?.rotation.set(.75*e,0,0);legR?.rotation.set(.35*e,0,0);lean=-.2*e;twist+=.5*e;sy*=1+.05*e;}
     }
     // Weapon stance.
     if(armR&&!air){
