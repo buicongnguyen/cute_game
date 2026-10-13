@@ -4,6 +4,7 @@ import { stowItem, gainXp, xpNeeded, MAX_PLOTS, type SaveState } from './model.t
 import { ENEMY_TYPES } from './enemy-types.ts';
 import { kitchenLevel } from './difficulty.ts';
 import { catchUpStory } from './story-catchup.ts';
+import { noteHistory } from './insight-history.ts';
 export { STORY_STEPS } from './content.ts';
 export type ProgressKind = 'story' | 'daily' | 'weekly' | 'achievements' | 'pass' | 'bounties' | 'collection' | 'challenges';
 export interface ProgressEntry {
@@ -103,7 +104,7 @@ const ENDLESS: [
     string
 ][] = [['kill', 120, 'Defeat creatures', '⚔️'], ['boss', 4, 'Defeat bosses', '👑'], ['harvest', 60, 'Harvest crops', '🌾'], ['fish', 25, 'Catch fish', '🎣'], ['bounty', 3, 'Complete bounties', '🎯'], ['chal', 8, 'Win quick challenges', '⏱️']];
 export const PASS_REWARDS: Reward[] = [{ items: { potion: 3 } }, { energy: 100 }, { items: { worm: 10 } }, { items: { spore: 2 } }, { items: { plot_kit: 1 } }, { energy: 200 }, { items: { seed_fire: 2 } }, { items: { honey: 3 } }, { items: { seed_ice: 2 } }, { items: { pet_parrot: 1 } }, { energy: 300 }, { items: { spore: 3 } }, { items: { starshard: 1 } }, { items: { seed_star: 1 } }, { items: { hat_wizard: 1 } }, { energy: 400 }, { items: { claw: 3 } }, { items: { nectar: 3 } }, { items: { plot_kit: 2 } }, { items: { boots_cloud: 1 } }, { energy: 500 }, { items: { starshard: 2 } }, { items: { seed_star: 2 } }, { items: { spore: 5 } }, { items: { pet_firefly: 1 } }, { energy: 600 }, { items: { moonstone: 1 } }, { items: { thunderstone: 2 } }, { items: { starshard: 3 } }, { items: { dz_superhero: 1 } }];
-const ACHIEVEMENTS: [
+export const ACHIEVEMENTS: [
     string,
     string,
     number[],
@@ -148,6 +149,7 @@ export function refreshProgress(s: SaveState, now = Date.now()) {
     if (p.pass.season > nextWeek.slice(0, 7)) p.pass.season = '';
     if (p.login.day > soon) p.login = { day: today, streak: 1 };
     const spentDay = !(p.daily.key >= today) && (futureDay || rolled.daily.includes(today)), spentWeek = !(p.weekly.key >= monday) && (futureWeek || rolled.weekly.includes(monday));
+    if (!(p.daily.key >= today)) noteHistory(s, 'day', now); // the Almanac's daily snapshot, before the new day's work
     if (!(p.daily.key >= today))
         p.daily = { key: today, tasks: tasks(s, DAILY, 3, hash(today + s.name), Math.floor(s.level / 7), s.level), chest: false, rerolled: false };
     if (!(p.weekly.key >= monday))
