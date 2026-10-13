@@ -351,7 +351,7 @@ function showEffect(effect:CombatEffect){
   // The explorer's own swing: the blade's trail or the fist's wind shows the blow (weapon-trail.ts), so its arc is drawn
   // thin and low, as the mark of the area the hit covers. Other players' arcs stay the bold swoosh.
   const own=effect.kind==='arc'&&Math.hypot(effect.x-world.position.x,effect.z-world.position.z)<.5;
-  if(own&&combat.edge.moves&&combat.busy){const n=world.time-chainAt<.3?chainHit+1:0;chainHit=n;chainAt=world.time;world.playerAttack(M.weaponStats(state).kind==='sword'?'sword':'fist',undefined,(n%3) as 0|1|2,n%3===2);} // each hit of the Strike chain swings: first, second and third cut, the last one big
+  if(own&&combat.edge.moves&&combat.busy){const n=world.time-chainAt<.3?chainHit+1:0;chainHit=n;chainAt=world.time;world.playerAttack(M.weaponStats(state).kind==='sword'?'sword':'fist',undefined,(n%3) as 0|1|2,n%3===2,{more:n%3<2});} // each hit of the Strike chain swings: first, second and third cut (fists: two jabs and an uppercut), the last one big
   if(fx&&own){fx.slash({...at,y:world.position.y},effect.facing??world.facing,effect.radius,effect.color,{...HIT_AREA_ARC,arc:effect.radius<=1.85?1.4:Math.min(6.2,effect.arc??2.2),y:HIT_AREA_ARC.y+up});return;}
   if(fx&&effect.kind==='arc'){const fist=effect.radius<=1.85;fx.slash(at,effect.facing??world.facing,effect.radius+.25,effect.color,fist?{arc:1.4,life:.15,thick:.4,y:.9+up}:{arc:Math.min(6.2,effect.arc??2.2),y:.9+up});return;}
   // An area hit also leaves a faint filled disc and a rim at its exact radius (skill-info.ts), so the player sees what the blast covered.
@@ -457,7 +457,7 @@ function profilePicker(){
 function welcomeDialog(){
   openDialog('welcome',t('Welcome to the game!'),`<p class="intro">${t('Hi boss! I am Pepper, your cook. Welcome to the game!')}</p><p>${t('Guess what? You are lucky today! I played the lottery and won 1,000,000 energy. Do you want it?')}</p><div class="button-row"><button class="primary" data-action="welcome-take">${t('Yes, take it!')}</button><button class="soft-button" data-action="welcome-pass">${t('No, thanks')}</button></div>`,t('YOUR COOK'),'🍳');
 }
-async function start() {settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();void compileAsyncSafe(world.renderer,world.scene,world.camera); // warm the village's shaders off the first walk
+async function start() {settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();world.readyTrail(()=>void compileAsyncSafe(world.renderer,world.scene,world.camera)); // warm the village's shaders off the first walk, and the weapon trail's off the first swing
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
@@ -1255,7 +1255,7 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
   if(!vault&&!ctfApi?.owns(e)&&!rescueApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
-  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0); // a hard knock or a launch (the last hit of a chain) is a big hitif(!hazard||impact)tone(impact?.critical?'crit':'hit');
+  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0);if(!hazard||impact)tone(impact?.critical?'crit':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');
@@ -1393,7 +1393,7 @@ function startDive(){if(!world.jump.dive())return false;
 function diveStrike(multiplier:number,landing:Landing){
   const weapon=M.weaponStats(state),strike=diveStrikeFor(weapon,weapon.kind==='gun'?(weapon.shot==='volt'?'#bfefff':shotColor(weapon.shot??'pea')):undefined);
   const hits=combat.dive(multiplier,strike.radius,DIVE.stun,DIVE.knock,target=>diveCritical(landing.jumps,landing.from,target),diveCap,strike.color).length;
-  world.playerAttack(strike.swing,strike.swing==='gun'?strike.color:undefined,2,true); // a blade chops down (the third cut); paws pound with the big wind
+  world.playerAttack(strike.swing,strike.swing==='gun'?strike.color:undefined,2,true,{pound:strike.swing==='fist'}); // a blade chops down (the third cut); paws pound with both fists and the biggest wind
   if(strike.swing==='sword')world.fx?.slash(world.position,world.facing,strike.radius,strike.color,{...HIT_AREA_ARC,arc:4.4});
   else if(strike.swing==='gun')world.fx?.flash({x:world.position.x,y:world.position.y+.5,z:world.position.z},strike.color,1.6,.1);
   return hits;
@@ -1531,7 +1531,7 @@ function airSwing(){
   const shape=airSwingFor(weapon,AIR_MOVES.swing.radius);if(shape.shape!=='spin'&&shape.shape!=='slash')return false;
   if(!combat.airSwing(level,shape.radius,shape.color))return false;
   const blade=shape.shape==='slash',h=world.jump.height;
-  combatTimers.attackCooldown=AIR_MOVES.swing.cooldown/Math.max(.2,1+M.activeStats(state).haste);world.jump.stall(AIR_MOVES.swing.hover);world.spinT=.3;
+  combatTimers.attackCooldown=AIR_MOVES.swing.cooldown/Math.max(.2,1+M.activeStats(state).haste);world.jump.stall(AIR_MOVES.swing.hover);world.airSpin(.3);
   // The whole circle it hits, at the explorer's height: a thin mark under a blade (its trail is the swoosh), the swoosh itself for paws.
   if(blade)world.fx?.slash(world.position,world.facing,shape.radius,shape.color,{...HIT_AREA_ARC,arc:6.2,y:h+.5});else world.fx?.slash(world.position,world.facing,shape.radius,shape.color,{arc:6.2,y:h+.9,life:.2,thick:.3});
   world.playerAttack(weapon.kind==='sword'?'sword':'fist');tone('swing');emitAction({kind:'basic'});

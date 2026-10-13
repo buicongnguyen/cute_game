@@ -339,6 +339,7 @@ export function initRescue(h: RescueHooks) {
     // Billboards face the camera in the field root's own space (the root turns for portrait).
     s.parts.root.getWorldQuaternion(rootQ); camQ.copy(rootQ.invert()).multiply(world.camera.quaternion);
     s.raiders.update(m, s.time, camQ); s.defs.update(m.defences, dt, s.time, camQ); s.shots.update(dt);
+    if (!s.raiders.reactOf) { s.raiders.reactOf = id => s.proxies.get(id)?.react; s.raiders.portrait = s.o === 'portrait'; } // the raiders recoil from the explorer's hits (hit-react.ts)
     proxiesFrame(s); squadFrame(s, dt); padMarker(s); renderHud(false); renderPanel(false); tagsFrame(s); downFrame(s);
   });
   function inputFrame(s: Session, dt: number) {

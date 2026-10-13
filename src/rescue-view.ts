@@ -18,6 +18,7 @@ import { toonMaterial } from './toon.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import { RESCUE, MISSIONS, DEFENCES, FIELDS, type MissionId, type DefenceKind, type Point } from './rescue-content.ts';
 import { pointAt, type Field, type RsRun, type RsEnemy, type RsDefence } from './rescue-rules.ts';
+import { REACT, reactCurve, type Reaction } from './hit-react.ts';
 
 export const rescueKit = new KitLibrary([modelUrl('rescue.glb')]); rescueKit.warmOnLoad = true;
 const mats = new Map<string, T.Material>();
@@ -220,8 +221,15 @@ export class EnemyViews {
     });
     return { parts, height: Number.isFinite(box.max.y) ? box.max.y : 1.4 };
   }
+  /**
+   * The recoil of a raider the explorer hit (hit-react.ts): rescue.ts points this at the stand-in bodies' reactions.
+   * The raiders are instances, so the knock and the tip go into each one's matrix. `portrait`: the field is turned.
+   */
+  reactOf: ((id: number) => Reaction | undefined) | null = null; portrait = false;
+  private last = 0; private axis = new T.Vector3();
   update(run: RsRun, time: number, faceCamera: T.Quaternion) {
     const counts = new Map<string, number>(); let blobs = 0; const propCounts = this.props.map(() => 0);
+    const dt = Math.max(0, Math.min(.1, time - this.last)); this.last = time;
     for (const e of run.enemies) {
       if (e.hp <= 0) continue;
       const draw = this.kinds.get(e.kind); if (!draw) continue;
@@ -231,7 +239,14 @@ export class EnemyViews {
       const lean = moving ? Math.sin(time * 9 + phase) * .08 : e.target && e.target !== 'queue' ? Math.sin(time * 14 + phase) * .12 : 0;
       const squash = e.hit > 0 ? 1 - e.hit * .9 : 1, k = e.role === 'mini' ? .6 : 1;
       this.q.setFromAxisAngle(this.up, e.facing); this.q.multiply(this.roll.setFromAxisAngle(this.z, lean));
-      this.m.compose(this.v.set(e.x, bob, e.z), this.q, this.s.set(k / Math.sqrt(squash), k * squash, k / Math.sqrt(squash)));
+      // Knocked back along the blow and tipped away from it, on top of its own squash.
+      let px = 0, pz = 0; const react = this.reactOf?.(e.id);
+      if (react && react.left > 0) {
+        react.left = Math.max(0, react.left - dt);
+        const far = reactCurve(1 - react.left / REACT.time) * react.strength, dx = this.portrait ? -react.z : react.x, dz = this.portrait ? react.x : react.z;
+        if (far > 0) { if (!react.still) { px = dx * REACT.push * far; pz = dz * REACT.push * far; } this.q.premultiply(this.roll.setFromAxisAngle(this.axis.set(dz, 0, -dx), (react.still ? REACT.stagger : REACT.tilt) * far)); }
+      }
+      this.m.compose(this.v.set(e.x + px, bob, e.z + pz), this.q, this.s.set(k / Math.sqrt(squash), k * squash, k / Math.sqrt(squash)));
       // Colour: the raider tint, a white flash when hit, icy blue when frozen or slowed.
       this.c.copy(this.tint); if (e.freeze > 0) this.c.set('#9fe6ff'); else if (e.slowT > 0) this.c.lerp(this.icy, .45); if (e.hit > 0) this.c.setRGB(2.2, 2.2, 2.2);
       for (const p of draw.parts) { this.m2.multiplyMatrices(this.m, p.local); p.mesh.setMatrixAt(n, this.m2); p.mesh.setColorAt(n, this.c); }

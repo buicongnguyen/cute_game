@@ -8,31 +8,42 @@ import { WIND, WindBursts, buildWind, WIND_SECTIONS } from './punch-wind.ts';
  * the time. Every swinger shares one material, so a second swinger costs one more draw call and no new shader.
  */
 
-/** Sections one swinger can show at once: a full blade ribbon, the wind of a punch, and the joins between them. */
-const SECTIONS = maxSections() + WIND_SECTIONS + 4;
+/** Sections one swinger can show at once: a full ring of blade ribbons (a chain leaves up to three), the wind of a punch, and the joins between them. */
+const SECTIONS = maxSections() + WIND_SECTIONS + 10;
 
 let shared: T.ShaderMaterial | null = null;
 /**
- * The ribbon's look: a soft body that fades towards the inner edge, a bright line along the tip edge, all of it fading
- * with age. It is drawn mostly as added light, with a little cover so it still reads on snow and candy ground, and
- * never hides what is behind it.
+ * The look of both. A blade's ribbon (look 0): a soft body in the weapon's colour that fades towards the inner edge, a
+ * bright line along the tip's path and a thin deep rim outside it. The wind (look 1): a white core inside a rim of
+ * its colour, soft at both edges. Both are paint more than light (they cover what is behind them a little), and the
+ * deep rims are there for bright ground: on snow or candy a white line alone would vanish, on night ground the white
+ * core carries it. Everything fades with age and nothing writes depth.
  */
 export function trailMaterial() {
   return shared ??= new T.ShaderMaterial({
     name: 'weapon-trail', transparent: true, depthWrite: false, side: T.DoubleSide, fog: false, toneMapped: false,
     blending: T.CustomBlending, blendEquation: T.AddEquation, blendSrc: T.OneFactor, blendDst: T.OneMinusSrcAlphaFactor, blendSrcAlpha: T.OneFactor, blendDstAlpha: T.OneMinusSrcAlphaFactor,
     vertexShader: /* glsl */`
-      attribute vec2 trail; attribute vec3 tint; varying vec2 vTrail; varying vec3 vTint;
+      attribute vec2 trail; attribute vec4 tint; varying vec2 vTrail; varying vec4 vTint;
       void main() { vTrail = trail; vTint = tint; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */`
-      varying vec2 vTrail; varying vec3 vTint;
+      varying vec2 vTrail; varying vec4 vTint;
       void main() {
-        float across = vTrail.x, left = 1.0 - vTrail.y;
-        float fade = left * left;
-        float body = (smoothstep(0.0, 0.75, across) * 0.5 + smoothstep(0.3, 0.42, across) * (1.0 - smoothstep(0.42, 0.56, across)) * 0.12) * fade;
-        float core = smoothstep(0.78, 0.9, across) * fade;
-        // The body is see-through paint in the weapon's colour (so the colour holds on bright ground); the tip's line is light.
-        gl_FragColor = vec4(vTint * body * (1.0 - core) + vec3(core), body * 0.85 * (1.0 - core) + core * 0.55);
+        float across = vTrail.x, left = 1.0 - vTrail.y, fade = left * left;
+        vec3 paint = vTint.rgb; vec4 blade, wind;
+        {
+          float body = (smoothstep(0.0, 0.75, across) * 0.55 + smoothstep(0.3, 0.42, across) * (1.0 - smoothstep(0.42, 0.56, across)) * 0.12) * fade;
+          float rim = smoothstep(0.93, 0.975, across) * fade;
+          float core = smoothstep(0.74, 0.84, across) * fade * (1.0 - rim);
+          // The body is see-through paint in the weapon's colour (so the colour holds on bright ground); the tip's line is light; the rim is the colour, deep.
+          blade = vec4(paint * body * (1.0 - core) * (1.0 - rim) + vec3(core) + paint * 0.3 * rim * 0.8, max(body * 0.85 * (1.0 - core), max(core * 0.6, rim * 0.8)));
+        }
+        {
+          float c = 1.0 - abs(across * 2.0 - 1.0);
+          float cover = smoothstep(0.0, 0.16, c) * fade, core = smoothstep(0.3, 0.62, c);
+          wind = vec4(mix(paint, vec3(1.0), core) * cover * 0.94, cover * 0.94);
+        }
+        gl_FragColor = mix(blade, wind, step(0.5, vTint.a));
         #include <colorspace_fragment>
       }`,
   });
@@ -77,7 +88,7 @@ export class WeaponTrail {
     const g = new T.BufferGeometry(), dynamic = (a: T.BufferAttribute) => { a.setUsage(T.DynamicDrawUsage); return a; };
     g.setAttribute('position', this.position = dynamic(new T.BufferAttribute(new Float32Array(SECTIONS * 6), 3)));
     g.setAttribute('trail', this.trail = dynamic(new T.BufferAttribute(new Float32Array(SECTIONS * 4), 2)));
-    g.setAttribute('tint', this.tint = dynamic(new T.BufferAttribute(new Float32Array(SECTIONS * 6).fill(1), 3)));
+    g.setAttribute('tint', this.tint = dynamic(new T.BufferAttribute(new Float32Array(SECTIONS * 8).fill(1), 4))); // r, g, b and the look (0 a blade's ribbon, 1 wind)
     const index = new Uint16Array((SECTIONS - 1) * 6);
     for (let i = 0; i < SECTIONS - 1; i++) index.set([i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2], i * 6);
     g.setIndex(new T.BufferAttribute(index, 1)); g.setDrawRange(0, 0);
@@ -90,30 +101,31 @@ export class WeaponTrail {
   get active() { return this.samples.count > 0 || this.wind.count > 0; }
 
   /**
-   * Adds where the blade is now: `hand.matrixWorld` must be this frame's. `fresh` starts a new ribbon (the first frame
-   * of a cut): what is left of the last one goes, and the new one's first edge is born part faded so it has no hard end.
+   * Adds where the blade is now: `hand.matrixWorld` must be this frame's. `fresh` starts a new ribbon (a new cut; what
+   * is left of the last one fades on by itself); `fade` is the age the sample is born with (trail-ribbon.ts), for a
+   * ribbon whose far end should be soft.
    */
-  sample(hand: T.Object3D, blade: Blade, now: number, fresh = false) {
+  sample(hand: T.Object3D, blade: Blade, now: number, fresh = false, fade = 0) {
     const e = hand.matrixWorld.elements, i = blade.inner, t = blade.tip;
-    if (fresh) { this.samples.clear(); now -= TRAIL.life * TRAIL.soft; }
     this.samples.push(e[0] * i[0] + e[4] * i[1] + e[8] * i[2] + e[12], e[1] * i[0] + e[5] * i[1] + e[9] * i[2] + e[13], e[2] * i[0] + e[6] * i[1] + e[10] * i[2] + e[14],
-      e[0] * t[0] + e[4] * t[1] + e[8] * t[2] + e[12], e[1] * t[0] + e[5] * t[1] + e[9] * t[2] + e[13], e[2] * t[0] + e[6] * t[1] + e[10] * t[2] + e[14], now);
+      e[0] * t[0] + e[4] * t[1] + e[8] * t[2] + e[12], e[1] * t[0] + e[5] * t[1] + e[9] * t[2] + e[13], e[2] * t[0] + e[6] * t[1] + e[10] * t[2] + e[14], now, fresh, fade);
   }
 
   /**
    * Rebuilds the mesh for time `now`. `detail` 0-1 is the graphics setting's particle density (fx.density): a low one
-   * shortens the ribbon and uses fewer sections. Returns false once nothing is left, with the mesh hidden.
+   * shortens the ribbon and uses fewer sections. (r, g, b) is the blade's colour; `view` is where the camera is (the
+   * wind turns to face it). Returns false once nothing is left, with the mesh hidden.
    */
-  draw(now: number, detail: number, r: number, g: number, b: number) {
+  draw(now: number, detail: number, r: number, g: number, b: number, view?: { x: number; y: number; z: number }) {
     const low = detail <= .5, life = low ? TRAIL.lifeLow : TRAIL.life;
     this.samples.prune(now, life); this.wind.prune(now);
-    const position = this.position.array as Float32Array, trail = this.trail.array as Float32Array;
+    const position = this.position.array as Float32Array, trail = this.trail.array as Float32Array, tint = this.tint.array as Float32Array;
     const blade = buildRibbon(this.samples, now, life, low ? TRAIL.subdivLow : TRAIL.subdiv, position, trail, 0);
-    const sections = this.wind.count ? buildWind(this.wind, now, position, trail, this.tint.array as Float32Array, blade, low ? WIND.streaksLow : WIND.streaks) : blade;
+    const sections = this.wind.count ? view ? buildWind(this.wind, now, position, trail, tint, blade, low ? WIND.linesLow : WIND.lines, view.x, view.y, view.z) : buildWind(this.wind, now, position, trail, tint, blade, low ? WIND.linesLow : WIND.lines) : blade;
     this.sections = sections;
     if (sections < 2) { this.mesh.visible = false; this.mesh.geometry.setDrawRange(0, 0); return false; }
-    if (blade) { const tint = this.tint.array as Float32Array; for (let i = 0, n = blade * 6; i < n; i += 3) { tint[i] = r; tint[i + 1] = g; tint[i + 2] = b; } }
-    this.tint.clearUpdateRanges(); this.tint.addUpdateRange(0, sections * 6); this.tint.needsUpdate = true;
+    for (let i = 0, n = blade * 8; i < n; i += 4) { tint[i] = r; tint[i + 1] = g; tint[i + 2] = b; tint[i + 3] = 0; }
+    this.tint.clearUpdateRanges(); this.tint.addUpdateRange(0, sections * 8); this.tint.needsUpdate = true;
     this.position.clearUpdateRanges(); this.position.addUpdateRange(0, sections * 6); this.position.needsUpdate = true;
     this.trail.clearUpdateRanges(); this.trail.addUpdateRange(0, sections * 4); this.trail.needsUpdate = true;
     this.mesh.geometry.setDrawRange(0, (sections - 1) * 6); this.mesh.visible = true;
