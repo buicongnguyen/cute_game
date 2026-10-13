@@ -771,7 +771,9 @@ export class World {
       if(gear.outfit&&!this.wearKit(c,gear.outfit,'body'))this.simpleOutfit(c,gear.outfit);
       if(gear.boots&&!this.wearKit(c,gear.boots,'body'))for(const x of [-.18,.18])c.add(box(gear.boots.includes('flipper')?'#66a9d6':'#b88c73',.27,.23,gear.boots.includes('flipper')?.6:.34,x,.17,.1));
     }
-    if(kitDisguise)this.wearKit(c,id,'body');
+    if(kitDisguise){this.wearKit(c,id,'body');
+      // A costume's own hand prop (the dawn star dancer's wand) gives way to a weapon that is equipped.
+      if(gear.weapon)for(const own of [...(c.getObjectByName('hand-right')?.children??[])])own.removeFromParent();}
     // A weapon in the hand; a disguise worn without one shows its own blade when the weapon kit has a fitting model (skill-wind.ts HAND_BLADE).
     const own=handBlade(gear.disguise,gear.weapon);
     if(gear.weapon){if(!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);}else if(own)this.wearKit(c,own,'hand-right');

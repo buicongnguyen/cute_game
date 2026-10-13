@@ -1,6 +1,6 @@
 /**
  * The disguise strength pictures (disguise-profile.ts) as HTML: the small card for the outfitters and the backpack,
- * the Almanac's Disguises chapter (all sixteen, sortable) and the detail page with the numbers behind each axis and
+ * the Almanac's Disguises chapter (all seventeen, sortable) and the detail page with the numbers behind each axis and
  * the two-profile comparison. Pure string building: insight.ts mounts it and handles the taps.
  */
 import { ITEMS, DISGUISES } from './content.ts';
@@ -29,13 +29,13 @@ export function disguiseSlotHtml(ui: PageUi, id: string): string {
     + `<div class="dz-slot-body">${radarSvg({ labels: labels(ui), series: [{ values: values(p), name: name(ui, id) }], compact: true, title: ui.esc(ui.t('Strength of {name}', { name: ui.t(ITEMS[id].name) })) })}<ul class="dz-mini">${rows}</ul></div></div>`;
 }
 
-/** The chapter: sixteen cards side by side, strongest first on the chosen axis; owned ones are marked. */
+/** The chapter: seventeen cards side by side, strongest first on the chosen axis; owned ones are marked. */
 export function disguiseChapterHtml(ui: PageUi, sort: DzSort): string {
   const all = allProfiles(), score = (p: DisguiseProfile) => sort === 'total' ? p.total : p.scores[sort];
   const sorted = [...all].sort((a, b) => score(b) - score(a) || DISGUISE_IDS.indexOf(a.id) - DISGUISE_IDS.indexOf(b.id));
   const sortButton = (key: DzSort, label: string, icon = '') => `<button class="${sort === key ? 'active' : ''}" aria-pressed="${sort === key}" data-insight="dz-sort" data-axis="${key}">${icon ? icon + ' ' : ''}${ui.esc(ui.t(label))}</button>`;
   const owned = all.filter(p => owns(ui.state, p.id)).length;
-  return `<p class="ins-lead">${ui.esc(ui.t('Sixteen disguises, sixteen ways to fight. Each picture is worked out from the real skill numbers, so you can choose with open eyes.'))}</p>`
+  return `<p class="ins-lead">${ui.esc(ui.t('Seventeen disguises, seventeen ways to fight. Each picture is worked out from the real skill numbers, so you can choose with open eyes.'))}</p>`
     + `<p class="ins-note">${ui.esc(ui.t('You own {count} of {total}. A score of 100 is the best disguise at that strength.', { count: owned, total: all.length }))}</p>`
     + `<div class="ins-sort" role="group" aria-label="${ui.esc(ui.t('Sort by'))}"><span>${ui.esc(ui.t('Sort by'))}</span>${sortButton('total', 'All round')}${AXES.map(axis => sortButton(axis, AXIS_LABEL[axis], AXIS_ICON[axis])).join('')}</div>`
     + `<div class="dz-grid">${sorted.map((p, i) => { const mine = owns(ui.state, p.id), worn = ui.state.gear.disguise === p.id, item = ITEMS[p.id];

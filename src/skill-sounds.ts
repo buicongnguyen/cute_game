@@ -10,7 +10,7 @@ const DISGUISE: Record<string, readonly Sound[]> = {
   dz_superhero: ['magic', 'boom', 'zap', 'boom'], dz_ninja: ['poof', 'poof', 'swing', 'poof'], dz_mage: ['cast', 'magic', 'magic', 'magic'],
   dz_knight: ['hit', 'swing', 'alert', 'magic'], dz_mecha: ['shock', 'zap', 'zap', 'magic'], dz_dino: ['crit', 'swing', 'alert', 'boom'],
   dz_fairy: ['magic', 'magic', 'magic', 'harvest'], dz_pirate: ['boom', 'snap', 'alert', 'boom'], dz_vampire: ['magic', 'poof', 'poof', 'magic'],
-  dz_snowman: ['freeze', 'poof', 'freeze', 'freeze'],
+  dz_snowman: ['freeze', 'poof', 'freeze', 'freeze'], dz_dawnstar: ['swing', 'magic', 'swing', 'success'],
   // The uniforms: a cork pop, a sandbag thud, a flare whoosh, crates landing; anchor, splash, whistle, lighthouse chime; ...
   dz_army: ['pop', 'hit', 'shoot', 'boom'], dz_navy: ['swing', 'splash', 'alert', 'level'], dz_aodai: ['magic', 'swing', 'swing', 'success'],
   dz_aodai_man: ['swing', 'cast', 'poof', 'level'], dz_usa: ['swing', 'hit', 'magic', 'boom'], dz_vietnam: ['magic', 'swing', 'boom', 'crit'],

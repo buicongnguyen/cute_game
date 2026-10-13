@@ -1,4 +1,4 @@
-// The wind of a disguise's moves (src/skill-wind.ts): every one of the 80 moves has a class, a wind is never drawn past
+// The wind of a disguise's moves (src/skill-wind.ts): every one of the 85 moves has a class, a wind is never drawn past
 // what its move hits, the shapes are bounded and free while idle, the blade a bare disguise shows is a model the weapon
 // kit has, and nothing of it is read by the fight.
 import test from 'node:test';
@@ -16,13 +16,13 @@ const read = (file: string) => readFileSync(new URL(`../${file}`, import.meta.ur
 const moves = Object.keys(DISGUISES).flatMap(id => [0, 1, 2, 3, 4].map(slot => ({ id, slot, effect: slot ? DISGUISE_KITS[id]?.[slot - 1] : undefined })));
 const buffers = (sections = GUST_SECTIONS + 4) => ({ position: new Float32Array(sections * 6), trail: new Float32Array(sections * 4), tint: new Float32Array(sections * 8) });
 
-test('every one of the 80 moves has a wind class: 16 disguises x (the basic attack + 4 skills), no skill without a row and no row without a skill', () => {
-  assert.equal(Object.keys(DISGUISES).length, 16); assert.equal(moves.length, 80);
+test('every one of the 85 moves has a wind class: 17 disguises x (the basic attack + 4 skills), no skill without a row and no row without a skill', () => {
+  assert.equal(Object.keys(DISGUISES).length, 17); assert.equal(moves.length, 85);
   for (const { id, slot, effect } of moves) {
     const cls = windClass(id, slot, DISGUISES[id].weapon.kind);
     assert.ok(cls && WIND_CLASSES.includes(cls), `${id} ${slot ? `skill ${slot} (${effect})` : 'basic attack'} has no wind class: add it to skill-wind.ts SKILL_WIND (a spell or a shot is 'none')`);
   }
-  const used = new Set(moves.filter(m => m.slot).map(m => m.effect!)); assert.equal(used.size, 64);
+  const used = new Set(moves.filter(m => m.slot).map(m => m.effect!)); assert.equal(used.size, 68);
   assert.deepEqual(Object.keys(SKILL_WIND).filter(effect => !used.has(effect)), [], 'a row for a skill no disguise has');
   assert.deepEqual(Object.keys(SKILL_WIND).sort(), Object.keys(AIR_CAST).sort(), 'the same skills as the air classes');
   // A skill added to a kit without a row is caught: the lookup has no answer for it.
@@ -39,10 +39,10 @@ test('the audit: which moves swing, thrust, sweep, spin, slam or dash, and which
     dz_fairy: ['none', 'none', 'none', 'none', 'none'], dz_army: ['none', 'none', 'none', 'none', 'none'], dz_navy: ['swing', 'spin', 'dash', 'none', 'none'],
     dz_aodai: ['none', 'none', 'dash', 'sweep', 'none'], dz_aodai_man: ['swing', 'swing', 'none', 'spin', 'none'], dz_usa: ['none', 'dash', 'none', 'none', 'none'],
     dz_vietnam: ['none', 'none', 'dash', 'slam', 'none'], dz_pirate: ['none', 'none', 'thrust', 'none', 'none'], dz_vampire: ['swing', 'none', 'none', 'none', 'none'],
-    dz_snowman: ['none', 'none', 'none', 'none', 'none'],
+    dz_snowman: ['none', 'none', 'none', 'none', 'none'], dz_dawnstar: ['none', 'sweep', 'none', 'dash', 'none'],
   });
   const windy = moves.filter(m => windClass(m.id, m.slot, DISGUISES[m.id].weapon.kind) !== 'none');
-  assert.equal(windy.length, 23, '7 basic attacks and 16 skills'); assert.equal(windy.filter(m => m.slot).length, 16);
+  assert.equal(windy.length, 25, '7 basic attacks and 18 skills'); assert.equal(windy.filter(m => m.slot).length, 18);
 });
 
 test('the size rule: no wind is drawn past what its move hits (within 15%), and each lines up with its skill\'s own numbers', () => {
@@ -65,7 +65,9 @@ test('the size rule: no wind is drawn past what its move hits (within 15%), and 
   assert.equal(R.ink.hit, DZ.ink.radius); assert.equal(R.eagle.hit, 9); assert.equal(R.bamboo.hit, DZ.bamboo.speed * DZ.bamboo.time); assert.equal(R.drum.hit, DZ.drum.radius);
   const fan = SKILL_WIND.fan as WindRule & { span: number }; assert.ok(fan.span <= 2 * Math.acos(DZ.fan.cone), 'the fan\'s gust stays inside the cone it hits');
   const drum = SKILL_WIND.drum as WindRule & { beats: number[] }; assert.deepEqual(drum.beats.map(b => +b.toFixed(2)), [0, .35, .7], 'one pound for each beat of the drum');
-  const dashes = Object.entries(SKILL_WIND).filter(([, r]) => r.cls === 'dash').map(([e]) => e).sort(); assert.deepEqual(dashes, ['bamboo', 'eagle', 'knightcharge', 'ribbon', 'surfride']);
+  const dashes = Object.entries(SKILL_WIND).filter(([, r]) => r.cls === 'dash').map(([e]) => e).sort(); assert.deepEqual(dashes, ['bamboo', 'eagle', 'knightcharge', 'ribbon', 'sparklestep', 'surfride']);
+  assert.equal(R.lasso.hit, DZ.lasso.radius); assert.equal(R.sparklestep.hit, DZ.sparklestep.speed * DZ.sparklestep.time);
+  const lasso = SKILL_WIND.lasso as WindRule & { span: number }; assert.ok(lasso.span <= 2 * Math.acos(DZ.lasso.cone), 'the ribbon stays inside the cone it catches');
   // A burst thrown by a stab or a bite: the punch's own wind, never further from the explorer than the rule says.
   for (const [effect, rule] of Object.entries(SKILL_WIND)) if (rule.cls === 'thrust' && rule.burst) assert.ok(AHEAD + BURST * rule.burst <= rule.reach + 1e-9, effect);
 });

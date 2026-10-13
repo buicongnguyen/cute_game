@@ -15,7 +15,9 @@ export const DISGUISE_LOOKS=['charge','smoke','heal','icefield','blackhole','moo
   // The six uniform kits (DISGUISE_KITS): a toy soldier, a sailor, the ao dai lady and gentleman, the stars-and-stripes and red-flag heroes.
   'tank','sandbag','flare','parachute','whistle','ribbon','fan','lantern','kite','ink','dragondance','starshield','torch','firework','bamboo','drum','bigstar',
   // The four moves (moves.ts): the Lob's arc and landing mark, the Rain's falling shots, and the petal burst where either lands.
-  'lob','lobmark','petalfall','petalburst'] as const;
+  'lob','lobmark','petalfall','petalburst',
+  // The dawn star dancer: the ribbon's loop, the sparkles a step leaves, one small star coming down.
+  'lasso','sparkle','starlet'] as const;
 export type EffectLook='eyes'|'burn'|'shock'|'boulder'|typeof DISGUISE_LOOKS[number];
 export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder',...DISGUISE_LOOKS];
 /** Superhero throw: lock a landing point, then lob over intervening ground obstacles. */
@@ -39,6 +41,8 @@ export const DISGUISE_KITS:Readonly<Record<string,readonly string[]>>={
   dz_snowman:['snowball','decoy','icefloor','iceage'],
   dz_army:['popgun','sandbag','flare','airdrop'],dz_navy:['anchor','surfride','whistle','lighthouse'],dz_aodai:['lotus','ribbon','fan','lanterns'],
   dz_aodai_man:['dragon','kite','ink','dragondance'],dz_usa:['eagle','starshield','torch','fireworks'],dz_vietnam:['goldstar','bamboo','drum','bigstar'],
+  // Our own magical-girl kit (original: no borrowed names, phrases or attacks): slot 1 control, 2 support, 3 mobility, 4 the big one.
+  dz_dawnstar:['lasso','dawnglow','sparklestep','starshower'],
 };
 /** Disguise skill numbers: metres, seconds, damage factors (× attack). skill-info.ts builds the tooltips from this same table. */
 export const DZ={
@@ -63,6 +67,10 @@ export const DZ={
   kite:{time:5,speed:.3},ink:{radius:5,stun:3,power:.8},dragondance:{time:5,tick:.5,radius:4.2,power:.7},
   starshield:{time:3,radius:3,power:1,knock:4},torch:{time:6,bonus:.3,heal:.1,radius:6,blind:2},fireworks:{count:10,range:14,fallback:7,spacing:.15,rise:.6,radius:2.2,power:1.5},
   bamboo:{speed:16,time:.5,radius:3,power:1.4,knock:2},drum:{beats:3,gap:.35,radius:7,power:.6,knock:2.5,stun:1.5},bigstar:{range:14,fallback:6,delay:.7,radius:5,power:4,lift:1.25,slow:3},
+  // The dawn star dancer: a ribbon that gathers and ties, a glow that guards, heals and cheers the pets on, a step that leaves a slowing trail, a ring of stars and a last burst.
+  lasso:{radius:6,cone:.5,power:1.2,pull:2.5,gap:1.4,bind:1.5},dawnglow:{time:3,heal:.15,cheer:.5,cheerTime:6},
+  sparklestep:{speed:24,time:.35,trail:5,width:1.6,tick:.5,slow:1,power:.2},
+  starshower:{count:8,ring:3.2,fall:.5,spacing:.12,radius:2.2,power:1.1,finale:.3,finalRadius:6,finalPower:2.4,stun:1.5},
 } as const;
 /**
  * Summons creatures can fight: hit points as a fraction of the explorer's max health, body radius (m), and whether it
@@ -628,6 +636,20 @@ export class CombatSimulation {
       case 'bamboo':this.visual('bamboo',p,K.bamboo.speed*K.bamboo.time,K.bamboo.time+.2,'#8fd45a',angle);this.dash(0,K.bamboo.speed,K.bamboo.time,{then:()=>this.area(this.host.position(),K.bamboo.radius,K.bamboo.power,0,.4,'#8fd45a',K.bamboo.knock,'dust')});break;
       case 'drum':this.visual('drum',p,K.drum.radius,K.drum.gap*K.drum.beats+.4,'#e0a040');for(let b=0;b<K.drum.beats;b++)this.later(b*K.drum.gap,()=>this.area(p,K.drum.radius,K.drum.power,b===K.drum.beats-1?K.drum.stun:0,0,'#f2c14e',K.drum.knock));break;
       case 'bigstar':{const c=this.spot(K.bigstar.range,K.bigstar.fallback,d);this.visual('bigstar',c,K.bigstar.radius,K.bigstar.delay+.5,'#ffe34d');this.later(K.bigstar.delay,()=>{this.area(c,K.bigstar.radius,K.bigstar.power,0,K.bigstar.lift,'#ffe34d',1.5,'goldstar');for(const t of this.within(c,K.bigstar.radius))this.host.status?.(t,'slow',K.bigstar.slow);});break;}
+      // ---- Dawn star dancer (a ribbon lasso, the morning glow, a sparkle step, the star shower)
+      case 'lasso':{this.visual('lasso',p,K.lasso.radius,.6,'#19c9b8',angle);
+        for(const t of this.within(p,K.lasso.radius)){const x=t.x-p.x,z=t.z-p.z,l=Math.hypot(x,z);if(l!==0&&(x*d.x+z*d.z)/l<K.lasso.cone)continue;
+          this.damage(t,K.lasso.power,0,0,0);const to=Math.max(Math.min(l,K.lasso.gap+t.radius),l-K.lasso.pull);if(l>0)this.host.moveTarget?.(t,p.x+x/l*to,p.z+z/l*to);this.host.status?.(t,'stun',K.lasso.bind);}
+        break;}
+      case 'dawnglow':this.statuses.shield=K.dawnglow.time;this.statuses.cheer=K.dawnglow.cheerTime;this.host.heal?.(K.dawnglow.heal);this.visual('shield',p,2.3,K.dawnglow.time,'#ff9d6e');break;
+      case 'sparklestep':{const from={...p};this.dash(0,K.sparklestep.speed,K.sparklestep.time,{then:()=>{
+        // The sparkles stay where the step went: creatures on that line are slowed and stung until they fade.
+        const to={...this.host.position()},length=Math.hypot(to.x-from.x,to.z-from.z);if(length<.5)return;
+        this.host.effect({x:(from.x+to.x)/2,z:(from.z+to.z)/2,kind:'cast',look:'sparkle',radius:length/2,duration:K.sparklestep.trail,color:'#ffd84a',facing:Math.atan2(to.x-from.x,to.z-from.z)});
+        for(let i=0;i<K.sparklestep.trail/K.sparklestep.tick;i++)this.later(i*K.sparklestep.tick,()=>{for(const t of this.host.targets())if(t.hp>0&&distanceToSegment(t,from,to)<=K.sparklestep.width+t.radius){this.damage(t,K.sparklestep.power,0,0,0);this.host.status?.(t,'slow',K.sparklestep.slow);}});}});break;}
+      case 'starshower':{const c={...p};for(let i=0;i<K.starshower.count;i++){const a=angle+i/K.starshower.count*Math.PI*2,point={x:c.x+Math.sin(a)*K.starshower.ring,z:c.z+Math.cos(a)*K.starshower.ring},at=i*K.starshower.spacing;
+          this.later(at,()=>this.visual('starlet',point,K.starshower.radius,K.starshower.fall,i%2?'#ff8a7a':'#ffd84a'));this.later(at+K.starshower.fall,()=>this.area(point,K.starshower.radius,K.starshower.power,0,0,'#ffd84a',1));}
+        this.later(K.starshower.fall+K.starshower.count*K.starshower.spacing+K.starshower.finale,()=>this.area(c,K.starshower.finalRadius,K.starshower.finalPower,K.starshower.stun,0,'#ffd84a',1.2,'goldstar'));break;}
       default:return false;
     }
     return true;
@@ -658,10 +680,12 @@ export class CombatSimulation {
     if(this.statuses.giant>0){this.giantStep-=dt;if(moved&&this.giantStep<=0&&!this.lift){this.giantStep=.45;this.area(position,2.5,.7,0,0,'#c96a3a',2,'crater');}}
     this.lastStep={...position};
     // Each pet slot shoots on its own cooldown (pet-slots.ts): two pets are two independent shooters.
-    this.petCooldown=Math.max(0,this.petCooldown-dt);this.pet2Cooldown=Math.max(0,this.pet2Cooldown-dt);
+    // The morning glow (dz_dawnstar) cheers the pets on: their cooldowns run faster while it lasts.
+    const petDt=dt*((this.statuses.cheer??0)>0?1+DZ.dawnglow.cheer:1);
+    this.petCooldown=Math.max(0,this.petCooldown-petDt);this.pet2Cooldown=Math.max(0,this.pet2Cooldown-petDt);
     if(this.petCooldown<=0){const cd=this.petShot(this.host.pet?.(),position);if(cd)this.petCooldown=cd;}
     if(this.pet2Cooldown<=0&&this.host.pet2){const cd=this.petShot(this.host.pet2(),position);if(cd)this.pet2Cooldown=cd;}
-    this.dogToss(dt);
+    this.dogToss(petDt);
     for(const key of Object.keys(this.statuses))this.statuses[key]=Math.max(0,this.statuses[key]-dt);
     for(const[id,time]of this.marked){if(time<=dt)this.marked.delete(id);else this.marked.set(id,time-dt);}
     const due=this.jobs.filter(job=>job.at<=this.time);this.jobs=this.jobs.filter(job=>job.at>this.time);for(const job of due)job.run();

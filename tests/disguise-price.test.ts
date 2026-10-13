@@ -5,7 +5,7 @@ import { allProfiles } from '../src/disguise-profile.ts';
 
 test('a disguise costs what it is worth: ten energy per point of its all-round strength, and sells for about 55% of that', () => {
   const profiles = allProfiles();
-  assert.equal(profiles.length, 16);
+  assert.equal(profiles.length, 17);
   for (const p of profiles) {
     const price = Math.round(p.total / 6) * 10, item = ITEMS[p.id];
     assert.equal(item.price, price, `${p.id}: priced by its strength (${p.total} over six scores)`);

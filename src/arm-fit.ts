@@ -13,10 +13,14 @@ import * as T from 'three';
 export const HAND_DROP = .36, GLOVE = .13;
 /**
  * Where a point at height `y` (0 at the shoulder, negative down the arm) ends up when the arm is `stretch` times longer:
- * everything from the cuff down rides with the hand unchanged in size, the sleeve above it stretches to meet it.
+ * everything from the cuff down rides with the hand unchanged in size, the sleeve above it stretches to meet it. What
+ * sits above the shoulder (the round cap of a sleeve, a puff) stretches only as the body's own shoulder does
+ * (build_hero_styles.py arm_rel_z: x `stretch`), so it covers that shoulder and no more: with the sleeve's steeper factor
+ * it stood up beside the head like a horn on the Tall and Grown heights.
  */
 export function sleeveY(y: number, stretch: number, drop = HAND_DROP, glove = GLOVE): number {
   if (!(stretch > 1)) return y * (stretch > 0 ? stretch : 1);
+  if (y >= 0) return y * stretch;
   const cuff = -(drop - glove), shift = -(stretch - 1) * drop;
   return y >= cuff ? y * (cuff + shift) / cuff : y + shift;
 }

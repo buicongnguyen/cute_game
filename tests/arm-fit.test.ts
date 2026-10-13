@@ -6,6 +6,7 @@ import { HAND_DROP, GLOVE, sleeveY, fitArmPiece } from '../src/arm-fit.ts';
 test('a longer arm stretches the sleeve; the glove rides with the hand and keeps its size', () => {
   const stretch = 3;
   assert.equal(sleeveY(0, stretch), 0, 'the shoulder stays');
+  assert.ok(Math.abs(sleeveY(.148, stretch) - .148 * stretch) < 1e-9, 'the cap of a sleeve above the shoulder stretches as the body’s own shoulder does, not with the sleeve (no horn beside the head)'); assert.ok(sleeveY(.01, stretch) > sleeveY(-.01, stretch));
   assert.ok(Math.abs(sleeveY(-HAND_DROP, stretch) + HAND_DROP * stretch) < 1e-9, 'the hand centre lands on the hand of the longer arm');
   const cuff = -(HAND_DROP - GLOVE), tip = -(HAND_DROP + .1);
   assert.ok(Math.abs((sleeveY(cuff, stretch) - sleeveY(tip, stretch)) - (cuff - tip)) < 1e-9, 'from the cuff to the fingertips nothing is stretched');

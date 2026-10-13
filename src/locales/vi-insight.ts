@@ -47,7 +47,7 @@ export const INSIGHT_VI: Record<string, string> = {
   'Compare with mine': 'So với bộ đang mặc',
   'Strengths': 'Điểm mạnh',
   'Strength of {name}': 'Sức mạnh của {name}',
-  'Sixteen disguises, sixteen ways to fight. Each picture is worked out from the real skill numbers, so you can choose with open eyes.': 'Mười sáu bộ hóa trang, mười sáu cách chiến đấu. Mỗi biểu đồ được tính từ chính chỉ số kỹ năng thật, để bạn chọn thật sáng suốt.',
+  'Seventeen disguises, seventeen ways to fight. Each picture is worked out from the real skill numbers, so you can choose with open eyes.': 'Mười bảy bộ hóa trang, mười bảy cách chiến đấu. Mỗi biểu đồ được tính từ chính chỉ số kỹ năng thật, để bạn chọn thật sáng suốt.',
   'You own {count} of {total}. A score of 100 is the best disguise at that strength.': 'Bạn có {count} trên {total} bộ. Điểm 100 là bộ giỏi nhất ở điểm mạnh đó.',
   'Sort by': 'Sắp xếp theo',
   'All round': 'Toàn diện',

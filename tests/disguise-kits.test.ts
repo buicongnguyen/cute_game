@@ -1,5 +1,6 @@
-// The sixteen disguise kits: the ten the reference (Zoo Pet) also has keep its four skills (concept, order, cooldown, range,
-// damage factor, duration, effect); the six uniforms have kits that fit the outfit. Every effect runs and has a look that
+// The seventeen disguise kits: the ten the reference (Zoo Pet) also has keep its four skills (concept, order, cooldown, range,
+// damage factor, duration, effect); the six uniforms have kits that fit the outfit, and the dawn star dancer is our own
+// (tests/dawnstar.test.ts). Every effect runs and has a look that
 // DisguiseFx draws, and the tooltips state the numbers the simulation uses.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -37,8 +38,8 @@ function arena(extra: Partial<CombatTarget>[] = []) {
   return { sim, p, effects, hits, statuses, targets, run, healed: () => healed };
 }
 
-test('all 16 disguises have exactly four skills, a kit entry, a description, a sound and an icon each', () => {
-  assert.equal(Object.keys(DISGUISES).length, 16);
+test('all 17 disguises have exactly four skills, a kit entry, a description, a sound and an icon each', () => {
+  assert.equal(Object.keys(DISGUISES).length, 17);
   for (const [id, d] of Object.entries(DISGUISES)) {
     assert.equal(d.skills.length, 4, id); assert.equal(DISGUISE_KITS[id]?.length, 4, id); assert.equal(DISGUISE_INFO[id]?.length, 4, id);
     d.skills.forEach((s, i) => { assert.ok(s.name && s.icon && s.cd > 0, `${id} ${i}`); assert.ok(skillDescription(i, { disguise: id }).length > 10); assert.ok(skillSound(i, id)); });

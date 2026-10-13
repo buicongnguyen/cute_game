@@ -559,6 +559,37 @@ const bigstar: Builder = (p, c) => {
   else { const g = Math.min(1, (c.a - fall) / .5); for (let i = 0; i < cnt(c, 10); i++) { const q = i * TAU / 10; p.put('star', i % 2 ? '#ffe34d' : '#ffffff', c.x + S(q) * c.r * g, c.y + .5 + S(g * PI) * 1.2, c.z + C(q) * c.r * g, .3 * (1 - g) + .05, .3 * (1 - g) + .05, .3 * (1 - g) + .05, 0, q); } }
 };
 
+// ---- The dawn star dancer (dz_dawnstar): teal ribbon, gold and coral stars. Thin pieces only, nothing past what the cast hits.
+/** A ribbon flicked out through the cone it catches: a waving teal band that runs out to the hit radius and is drawn back in, a star on each end. */
+const lasso: Builder = (p, c) => {
+  const out = 1 - (1 - Math.min(1, c.t * 2.4)) ** 2, back = c.t > .55 ? (c.t - .55) / .45 : 0, f = fadeOut(c, 5), half = Math.acos(.5), R = c.r * (.2 + .72 * out) * (1 - .4 * back), n = 18, seg = R * 2 * half / n * 1.5;
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1), a = c.f + (u - .5) * 2 * half, d = R * (.84 + .16 * S(u * PI)), y = c.y + .95 + S(u * PI * 3 + c.a * 16) * .2;
+    p.put('box', i % 2 ? '#19c9b8' : '#5fe6d6', c.x + S(a) * d, y, c.z + C(a) * d, seg, .28 * f + .03, .05, 0, a, C(u * PI * 3 + c.a * 16) * .32);
+    if (i === 0 || i === n - 1 || i === 9) p.put('star', i === 9 ? '#ff8a7a' : '#ffd84a', c.x + S(a) * (d + .15), y + .35, c.z + C(a) * (d + .15), .3 * f + .04, .3 * f + .04, .3 * f + .04, 0, c.a * 7 + i);
+  }
+  for (const s of [-1, 1]) { const a = c.f + s * half, d = R * .84; p.put('gbox', '#c9fff6', c.x + S(a) * d * .5, c.y + .95, c.z + C(a) * d * .5, .035, .035, Math.min(d, c.r * .45), 0, a); }
+  for (let i = 0; i < cnt(c, 8); i++) { const a = c.f + (hash(i) - .5) * 2 * half, d = R * (.35 + .5 * hash(i + 4)); p.put('gorb', i % 2 ? '#ffe9a0' : '#c9fff6', c.x + S(a) * d, c.y + .5 + hash(i + 9) * 1.1, c.z + C(a) * d, .07 * f + .01); }
+};
+/** The sparkles a step leaves: twinkling stars over the line it ran (the cast sits at its middle, `r` is half its length), with short glints along both edges. */
+const sparkle: Builder = (p, c) => {
+  const f = grow(c, 12) * fadeOut(c, 6), dx = S(c.f), dz = C(c.f), sx = dz, sz = -dx, len = c.r * .9, wide = Math.min(1.3, c.r * .4), cols = ['#ffd84a', '#ff8a7a', '#8af2e4', '#ffffff'];
+  for (let i = 0; i < cnt(c, 34); i++) {
+    const u = (hash(i) * 2 - 1) * len, w = (hash(i + 7) * 2 - 1) * wide, k = (c.a * (.5 + hash(i + 3) * .4) + hash(i + 11)) % 1, s = (.22 + .2 * hash(i + 5)) * S(k * PI) * f;
+    p.put('star', cols[i % 4], c.x + dx * u + sx * w, c.y + .25 + k * .9, c.z + dz * u + sz * w, s, s, s, -.6, c.a * 2 + i);
+  }
+  const glints = cnt(c, 20), per = Math.max(2, Math.ceil(glints / 2));
+  for (let i = 0; i < glints; i++) { const side = i % 2 ? 1 : -1, u = ((i >> 1) / (per - 1) - .5) * 2 * len * .78 + S(c.a * 1.5 + i) * .15; p.put('gbox', i % 4 < 2 ? '#ffd84a' : '#5fe6d6', c.x + dx * u + sx * side * wide, c.y + .05, c.z + dz * u + sz * side * wide, .09, .04, Math.min(1.1, len * .3) * f, 0, c.f); }
+  for (let i = 0; i < cnt(c, 8); i++) { const u = (hash(i + 20) * 2 - 1) * len, w = (hash(i + 27) * 2 - 1) * wide; p.put('gorb', '#fff6c8', c.x + dx * u + sx * w, c.y + .15 + .2 * S(c.a * 4 + i), c.z + dz * u + sz * w, .05 * f + .005); }
+};
+/** One small star of the shower: it drops straight onto a closing ring, a short bright tail above it. */
+const starlet: Builder = (p, c) => {
+  const h = (1 - c.t) ** 1.4 * 8, close = c.r * (1 - .55 * c.t);
+  p.put('gring', c.color, c.x, c.y, c.z, c.r, 1, c.r); p.put('ring', '#ffffff', c.x, c.y + .01, c.z, close, 1, close);
+  p.put('gorb', '#fff4b0', c.x, c.y + h + .5, c.z, .3); p.put('star', c.color, c.x, c.y + h + .5, c.z, .62, .62, .62, -.7, 0, c.a * 9); p.put('star', '#ffffff', c.x, c.y + h + .52, c.z + .03, .26, .26, .26, -.7, 0, c.a * 9);
+  for (let i = 1; i < 5; i++) p.put('gorb', i % 2 ? '#ffe9a0' : c.color, c.x, c.y + h + .6 + i * .6, c.z, .2 - i * .035);
+};
+
 // ---- The four moves (moves.ts). Petal Gale is thrown now: a bunch of petals flies an arc to a marked spot and bursts there.
 /** How high a lob of `distance` m rises at the middle of its flight (m). */
 export const lobRise = (distance: number) => Math.min(3, .9 + distance * .26);
@@ -602,10 +633,11 @@ export const LOOKS: Record<string, Builder> = {
   shield, rush, bolt, rainbow, bats, iceage, crater, lift, blast, magma, inferno, anchor, lotus, eagle, goldstar, bonk, whirl, surf, poof, sheep, taunt, dust,
   tank, sandbag, flare, parachute, whistle, ribbon, fan, lantern, kite, ink, dragondance, starshield, torch, firework, bamboo, drum, bigstar,
   lob, lobmark, petalfall, petalburst,
+  lasso, sparkle, starlet,
 };
 /** Seconds a look lasts when its effect carries no duration. */
 export const LOOK_LIFE: Record<string, number> = { blast: .8, crater: .8, magma: .8, inferno: .7, anchor: .7, lotus: 1.4, eagle: .8, goldstar: .8, bonk: .7, whirl: .7, iceage: 2.2, bolt: .3, rainbow: .5, surf: .9, poof: .7, dust: .8, sheep: 1, taunt: 1, lift: .9, rush: .45, shield: 4, bats: 2.5,
-  tank: 6, sandbag: 6, flare: 1.4, parachute: 1.2, whistle: 1, ribbon: 1.2, fan: .7, lantern: 1.5, kite: 5, ink: 3, dragondance: 5, starshield: 3, torch: 6, firework: 1.1, bamboo: .7, drum: 1.45, bigstar: 1.2, lob: .6, lobmark: .85, petalfall: .3, petalburst: .5 };
+  tank: 6, sandbag: 6, flare: 1.4, parachute: 1.2, whistle: 1, ribbon: 1.2, fan: .7, lantern: 1.5, kite: 5, ink: 3, dragondance: 5, starshield: 3, torch: 6, firework: 1.1, bamboo: .7, drum: 1.45, bigstar: 1.2, lob: .6, lobmark: .85, petalfall: .3, petalburst: .5, lasso: .6, sparkle: 5, starlet: .5 };
 
 /** One soft red/gold pulse at the screen edges (roar). A single reused element; skipped for reduced motion. */
 let pulseEl: HTMLElement | null = null;

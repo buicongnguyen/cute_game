@@ -12,14 +12,14 @@ import { radarSvg, barsHtml, sparkSvg } from '../src/insight-charts.ts';
 import { VI_PACK } from '../src/locales/vi-pack.ts';
 import { INSIGHT_VI } from '../src/locales/vi-insight.ts';
 
-test('all sixteen disguises have a profile, every score is a whole number from 0 to 100, and each axis has a best', () => {
-  assert.equal(DISGUISE_IDS.length, 16);
+test('all seventeen disguises have a profile, every score is a whole number from 0 to 100, and each axis has a best', () => {
+  assert.equal(DISGUISE_IDS.length, 17);
   assert.deepEqual([...DISGUISE_IDS].sort(), Object.keys(DISGUISES).sort());
   const all = allProfiles();
   for (const p of all) for (const axis of AXES) { const v = p.scores[axis]; assert.ok(Number.isInteger(v) && v >= 0 && v <= 100, `${p.id} ${axis} ${v}`); assert.ok(Number.isFinite(p.raw[axis]) && p.raw[axis] >= 0); }
   for (const axis of AXES) { assert.ok(axisBest()[axis] > 0, axis); assert.equal(Math.max(...all.map(p => p.scores[axis])), 100, `${axis} has a 100`); }
   // The picture must tell them apart: no two disguises share all six scores.
-  assert.equal(new Set(all.map(p => AXES.map(a => p.scores[a]).join())).size, 16);
+  assert.equal(new Set(all.map(p => AXES.map(a => p.scores[a]).join())).size, 17);
 });
 
 test('every kit skill is described and adds to at least one axis; every fact is a finite, non-negative number', () => {

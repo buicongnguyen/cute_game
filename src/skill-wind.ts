@@ -1,5 +1,5 @@
 /**
- * The wind of a disguise's moves: which of the 80 moves (16 disguises x the basic attack and four skills) is a body, a
+ * The wind of a disguise's moves: which of the 85 moves (17 disguises x the basic attack and four skills) is a body, a
  * limb or a weapon going through the air, and the wind such a move leaves. No three.js and no page in here
  * (tests/skill-wind.test.ts): world.ts poses the explorer and feeds the shapes, weapon-trail.ts draws them in the weapon
  * trail's own mesh, so a skill's wind adds no mesh, no material and no draw call.
@@ -50,7 +50,7 @@ export type WindRule =
 
 const none = (why: (WindRule & { cls: 'none' })['why']): WindRule => ({ cls: 'none', why });
 const spell = none('spell'), shot = none('shot'), summon = none('summon'), buff = none('buff'), shout = none('shout'), form = none('form');
-const FAN = Math.acos(DZ.fan.cone), TAU = Math.PI * 2;
+const FAN = Math.acos(DZ.fan.cone), LASSO = Math.acos(DZ.lasso.cone), TAU = Math.PI * 2;
 /** The pound's wind (punch-wind.ts): how far its ring and its gust reach. */
 /** A burst of size 1 (punch-wind.ts): how far its gust and bow run from where it leaves, and the most the hand or the jaws are ahead of the explorer's place when it does. */
 export const BURST = WIND.reach + .16, AHEAD = 1.05;
@@ -100,6 +100,9 @@ export const SKILL_WIND: Readonly<Record<string, WindRule>> = {
   // Vietnam red flag: the vault is the body and lands on both fists; the bronze drum is beaten three times
   goldstar: shot, bamboo: { cls: 'dash', time: DZ.bamboo.time, width: .32, tail: 3, end: 'pound', endHit: DZ.bamboo.radius, color: '#8fd45a', hit: DZ.bamboo.speed * DZ.bamboo.time, reach: DZ.bamboo.speed * DZ.bamboo.time, at: DZ.bamboo.time, arm: 'fists' },
   drum: { cls: 'slam', pose: 'pound', beats: Array.from({ length: DZ.drum.beats }, (_, i) => i * DZ.drum.gap), color: '#f2c14e', hit: DZ.drum.radius, reach: POUND, at: 0, arm: 'fists' }, bigstar: shot,
+  // Dawn star dancer: the ribbon is flicked out through the cone it hits; the sparkle step is the body
+  lasso: { cls: 'sweep', pose: 'cut', span: 2 * LASSO * .95, turn: .3, height: 1, width: .7, keep: .45, wave: 1.6, color: '#19c9b8', hit: DZ.lasso.radius, reach: DZ.lasso.radius * .92, at: 0, arm: 'blade' }, dawnglow: buff,
+  sparklestep: { cls: 'dash', time: DZ.sparklestep.time, width: .3, tail: 3, color: '#ffd84a', hit: DZ.sparklestep.speed * DZ.sparklestep.time, reach: DZ.sparklestep.speed * DZ.sparklestep.time, at: 0, arm: 'blade' }, starshower: spell,
 };
 
 /** The class of a basic attack, by the kind of weapon that makes it: a blade cuts (the weapon trail), fists jab (the punch wind), a blaster shoots. */

@@ -47,7 +47,7 @@ export const SPECIAL_INFO: Record<string, { damage: number; text: string; radius
  * BOULDER), so a tooltip cannot drift from the hit; locales/vi-skills.ts holds the same sentences in Vietnamese.
  */
 const pct = (n: number) => fix(n * 100);
-const fanAngle = Math.round(2 * Math.acos(DZ.fan.cone) * 180 / Math.PI);
+const fanAngle = Math.round(2 * Math.acos(DZ.fan.cone) * 180 / Math.PI), lassoAngle = Math.round(2 * Math.acos(DZ.lasso.cone) * 180 / Math.PI);
 const snowMax = Math.min(2.6, .5 + DZ.snowball.grow * DZ.snowball.time);
 /** A summon's hit points as a share of yours (combat.ts SUMMON_HP). */
 const hp = (kind: string) => pct(SUMMON_HP[kind].hp);
@@ -117,6 +117,11 @@ export const DISGUISE_INFO: Record<string, readonly string[]> = {
     `Pole-vault ${fix(DZ.bamboo.speed * DZ.bamboo.time)} m forward on a bamboo pole, untouchable, landing for ×${DZ.bamboo.power} damage within ${DZ.bamboo.radius} m.`,
     `Beat the bronze drum ${DZ.drum.beats} times: each beat deals ×${DZ.drum.power} damage within ${DZ.drum.radius} m and pushes enemies back; the last stuns them ${DZ.drum.stun} s.`,
     `A great golden star falls on the nearest enemy within ${DZ.bigstar.range} m after ${DZ.bigstar.delay} s: ×${DZ.bigstar.power} damage within ${DZ.bigstar.radius} m, and enemies there are slowed ${DZ.bigstar.slow} s.`],
+  // The dawn star dancer
+  dz_dawnstar: [`Flick a ribbon through a ${lassoAngle}° cone ${DZ.lasso.radius} m ahead: ×${DZ.lasso.power} damage, and every enemy it catches is pulled ${DZ.lasso.pull} m toward you and tied up for ${DZ.lasso.bind} s.`,
+    `Morning glow: no damage for ${DZ.dawnglow.time} s and ${pct(DZ.dawnglow.heal)}% health back, and your pets attack ${pct(DZ.dawnglow.cheer)}% faster for ${DZ.dawnglow.cheerTime} s.`,
+    `Step ${fix(DZ.sparklestep.speed * DZ.sparklestep.time)} m forward on sparkles, untouchable. The trail glitters for ${DZ.sparklestep.trail} s: enemies on it are slowed and take ×${DZ.sparklestep.power} damage every ${DZ.sparklestep.tick} s.`,
+    `${DZ.starshower.count} stars fall in a ring ${DZ.starshower.ring} m around you, ×${DZ.starshower.power} damage within ${DZ.starshower.radius} m each; then a great dawn star bursts: ×${DZ.starshower.finalPower} damage within ${DZ.starshower.finalRadius} m, and enemies there are stunned ${DZ.starshower.stun} s.`],
 };
 
 export interface SkillView { name: string; icon: string; cd: number }
@@ -163,7 +168,7 @@ export const BUFF_CHIPS: Record<string, { icon: string; name: string }> = {
   flight: { icon: '🕊️', name: 'Flying' }, shield: { icon: '🛡️', name: 'Shielded' }, stealth: { icon: '👻', name: 'Hidden' },
   giant: { icon: '🦖', name: 'Giant' }, tank: { icon: '🤖', name: 'Tank mode' }, armor: { icon: '🪖', name: 'Armoured' },
   lifesteal: { icon: '🩸', name: 'Blood drain' }, bats: { icon: '🦇', name: 'Bat form' },
-  swift: { icon: '💨', name: 'Swift' }, block: { icon: '🛡️', name: 'Blocking' }, cover: { icon: '🧱', name: 'Sandbag cover' }, rally: { icon: '🔥', name: 'Inspired' }, invuln: { icon: '✨', name: 'Untouchable' },
+  swift: { icon: '💨', name: 'Swift' }, block: { icon: '🛡️', name: 'Blocking' }, cover: { icon: '🧱', name: 'Sandbag cover' }, rally: { icon: '🔥', name: 'Inspired' }, invuln: { icon: '✨', name: 'Untouchable' }, cheer: { icon: '🌟', name: 'Pets cheered on' },
 };
 /** Enemy status marks over their HP bar, in priority order (the first two that apply are shown). */
 export const STATUS_MARKS: readonly [key: string, icon: string][] = [['stun', '💫'], ['shock', '⚡'], ['sheep', '🐑'], ['charm', '💗'], ['fear', '😱'], ['blind', '🌫️'], ['taunt', '💢'], ['slow', '🐌'], ['mark', '🎯']];

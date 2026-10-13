@@ -27,11 +27,11 @@ function arena(spots: Array<{ x: number; z: number; radius?: number; boss?: bool
 const kitOf = (effect: string) => { for (const [id, kit] of Object.entries(DISGUISE_KITS)) { const i = kit.indexOf(effect); if (i >= 0) return [id, i] as const; } throw new Error('no kit has ' + effect); };
 const all = Object.entries(DISGUISE_KITS).flatMap(([id, kit]) => kit.map((effect, index) => ({ id, index, effect })));
 
-test('every disguise skill has an air class: 16 disguises x 4, no skill without a row and no row without a skill', () => {
-  assert.equal(Object.keys(DISGUISE_KITS).length, 16); assert.equal(all.length, 64);
+test('every disguise skill has an air class: 17 disguises x 4, no skill without a row and no row without a skill', () => {
+  assert.equal(Object.keys(DISGUISE_KITS).length, 17); assert.equal(all.length, 68);
   assert.deepEqual(Object.keys(DISGUISE_KITS).sort(), Object.keys(DISGUISES).sort(), 'the kits are the disguises of content.ts');
   for (const { id, index, effect } of all) assert.ok(AIR_CAST[effect], `${id} skill ${index + 1} (${effect}) has no air class: add it to air-cast.ts AIR_CAST`);
-  const used = new Set(all.map(s => s.effect)); assert.equal(used.size, 64, 'no effect is in two kits');
+  const used = new Set(all.map(s => s.effect)); assert.equal(used.size, 68, 'no effect is in two kits');
   assert.deepEqual(Object.keys(AIR_CAST).filter(effect => !used.has(effect)), [], 'a row for a skill no disguise has');
   for (const [effect, rule] of Object.entries(AIR_CAST)) {
     assert.ok(['air', 'plunge', 'move'].includes(rule.cls), effect);
@@ -40,7 +40,7 @@ test('every disguise skill has an air class: 16 disguises x 4, no skill without 
     if (rule.cls === 'plunge') { assert.equal(rule.at, undefined); assert.ok(rule.how === undefined || rule.how === 'leap'); }
   }
   const count = (cls: string) => Object.values(AIR_CAST).filter(r => r.cls === cls).length;
-  assert.deepEqual([count('air'), count('plunge'), count('move')], [40, 17, 7]);
+  assert.deepEqual([count('air'), count('plunge'), count('move')], [43, 17, 8]);
   // The classes the owner named: flights, a ground charge, a ground ring, a shot, a shield.
   assert.deepEqual(['flight', 'hover', 'kite'].map(e => AIR_CAST[e].how), ['flight', 'flight', 'flight']);
   for (const e of ['knightcharge', 'surfride', 'giant', 'tank', 'iceage', 'icefloor', 'sandbag', 'smoke', 'drum', 'ink', 'tail', 'anchor']) assert.equal(AIR_CAST[e].cls, 'plunge', e);
@@ -178,7 +178,7 @@ test('the weapon in the air: paws spin, a blade slashes as far as it reaches in 
   const dive = arena([{ x: 0, z: 3 }], { height: 0 }); dive.sim.dive(1, 3.3, 0, 0, () => false, () => Infinity, '#123'); assert.equal(dive.hits.length, 1); assert.equal(dive.effects[0].color, '#123');
 });
 
-test('switch off or online: nobody is in the air, so every one of the 64 casts and every attack is exactly what it was', () => {
+test('switch off or online: nobody is in the air, so every one of the 68 casts and every attack is exactly what it was', () => {
   // A host without `height` is the server and the game before jumping; a host at height 0 is the game with the switch off.
   for (const { id, index, effect } of all) {
     const old = arena([{ x: 0, z: 2.5 }, { x: 2, z: 4 }]), off = arena([{ x: 0, z: 2.5 }, { x: 2, z: 4 }], { height: 0 });

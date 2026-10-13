@@ -1375,6 +1375,17 @@ const ITEM_FACTS: Record<string, any> = {
             "hp": 60
         }
     },
+    "dz_dawnstar": {
+        "name": "Dawn star dancer",
+        "type": "disguise",
+        "sell": 230,
+        "rare": true,
+        "stats": {
+            "hp": 40,
+            "regen": 3,
+            "speed": 0.1
+        }
+    },
     "hat_cowboy": {
         "name": "Cowboy hat",
         "type": "hat",
@@ -2618,6 +2629,15 @@ const SHOP_FACTS: {
                 }
             },
             {
+                "id": "dz_dawnstar",
+                "cost": 410,
+                "mats": {
+                    "starshard": 2,
+                    "feather": 6,
+                    "sugar": 6
+                }
+            },
+            {
                 "id": "dz_fairy",
                 "cost": 480,
                 "mats": {
@@ -3552,6 +3572,40 @@ const DISGUISE_FACTS: Record<string, any> = {
                 "cd": 16
             }
         ]
+    },
+    // An original magical-girl disguise (art/blender/kit/build_hero.py dz_dawnstar says what was deliberately avoided).
+    "dz_dawnstar": {
+        "name": "Dawn star dancer",
+        "emoji": "🌟",
+        "color": "#ff6a5c",
+        "weapon": {
+            "kind": "gun",
+            "range": 9,
+            "cd": 0.45,
+            "shot": "star"
+        },
+        "skills": [
+            {
+                "name": "Ribbon lasso",
+                "icon": "🎀",
+                "cd": 6
+            },
+            {
+                "name": "Morning glow",
+                "icon": "🌅",
+                "cd": 12
+            },
+            {
+                "name": "Sparkle step",
+                "icon": "✨",
+                "cd": 7
+            },
+            {
+                "name": "Star shower",
+                "icon": "🌠",
+                "cd": 15
+            }
+        ]
     }
 };
 const FISH_WEIGHTS_RAW: Record<string, [
@@ -4034,7 +4088,7 @@ const englishNames: Record<string, string> = {
     seed_fire: 'Fire seed', seed_ice: 'Ice seed', seed_star: 'Star seed', plot_kit: 'Garden bed kit', meat: 'Meat', leather: 'Leather', bone: 'Bone', manure: 'Fertilizer', spore: 'Magic spore', tusk: 'Tusk', claw: 'Claw', sap: 'Sap', nectar: 'Nectar', spine: 'Cactus spine', cwater: 'Cactus water', bloom: 'Wild flower', honey: 'Honey', sugar: 'Sugar', icecrystal: 'Ice crystal', magma: 'Magma', starshard: 'Star shard', mcrystal: 'Magma crystal', obsidian: 'Obsidian', firecore: 'Fire core', dragonscale: 'Dragon scale', fcrystal: 'Fire crystal', gear: 'Toy gear', battery: 'Battery', vine: 'Vine', amber: 'Amber', pearl: 'Pearl', coral: 'Coral', feather: 'Feather', thunderstone: 'Thunder stone', shadow: 'Shadow essence', moonstone: 'Moonstone', dragonegg: 'Dragon egg', potion: 'Healing potion', worm: 'Worm bait', boot: 'Old boot', rod: 'Fishing rod', rod_gold: 'Golden fishing rod', rod_steady: 'Steady fishing rod', crown: 'Royal crown', trident: 'Ocean trident', toy_hammer: 'Toy hammer', wood: 'Wild wood', bunny: 'Mochi bunny',
     fish_perch: 'Perch', fish_clown: 'Clownfish', fish_puffer: 'Pufferfish', fish_carp: 'Carp', fish_shark: 'Shark', fish_rainbow: 'Rainbow fish', fish_catfish: 'Catfish', fish_koi: 'Koi', fish_eel: 'Eel', fish_swordfish: 'Swordfish', fish_jelly: 'Jellyfish', fish_icepike: 'Ice pike', fish_whale: 'Whale', fish_kraken: 'Kraken', fish_golden: 'Golden fish', fish_sunfish: 'Sunfish', fish_angler: 'Anglerfish', fish_manta: 'Manta ray',
     armor_wings: 'Dragon wings', armor_tux: 'Tuxedo', armor_kimono: 'Kimono', armor_hawaii: 'Island shirt', armor_hoodie: 'Hoodie', armor_army: 'Army uniform', armor_navy: 'Navy uniform', armor_aodai: 'Vietnamese long dress', armor_aodai_man: 'Vietnamese long gown', armor_usa: 'Stars and stripes outfit', armor_vietnam: 'Vietnam flag outfit', hat_halo: 'Halo', hat_graduate: 'Graduation cap', boots_flipper: 'Swim flippers',
-    dz_ninja: 'Shadow ninja', dz_mage: 'Archmage', dz_knight: 'Sun knight', dz_mecha: 'Battle robot', dz_dino: 'Tyrannosaur', dz_fairy: 'Flower fairy', dz_pirate: 'Pirate captain', dz_army: 'Army soldier', dz_navy: 'Navy sailor', dz_aodai: 'Ao dai lady', dz_aodai_man: 'Ao dai gentleman', dz_usa: 'Stars and stripes', dz_vietnam: 'Vietnam flag', dz_superhero: 'Superhero', dz_vampire: 'Vampire count', dz_snowman: 'Snowman',
+    dz_ninja: 'Shadow ninja', dz_mage: 'Archmage', dz_knight: 'Sun knight', dz_mecha: 'Battle robot', dz_dino: 'Tyrannosaur', dz_fairy: 'Flower fairy', dz_pirate: 'Pirate captain', dz_army: 'Army soldier', dz_navy: 'Navy sailor', dz_aodai: 'Ao dai lady', dz_aodai_man: 'Ao dai gentleman', dz_usa: 'Stars and stripes', dz_vietnam: 'Vietnam flag', dz_superhero: 'Superhero', dz_vampire: 'Vampire count', dz_snowman: 'Snowman', dz_dawnstar: 'Dawn star dancer',
     deco_volcano: 'Little volcano', deco_lamp: 'Lava lamp', deco_table: 'Obsidian table', deco_statue: 'Golem statue', deco_nest: 'Dragon nest', deco_trophy: 'Dragon trophy', deco_teddy: 'Giant teddy', deco_musicbox: 'Music box', deco_traincar: 'Toy train', deco_totem: 'Forest totem', deco_rafflesia: 'Giant forest flower', deco_fruittree: 'Fruit tree', deco_aquarium: 'Coral aquarium', deco_shell: 'Giant seashell', deco_piratechest: 'Pirate treasure', deco_cloudsofa: 'Cloud sofa', deco_windchime: 'Crystal wind chime', deco_rainbow: 'Rainbow arch', deco_ghostlantern: 'Ghost lantern', deco_nightcrystal: 'Night crystal', deco_owlstatue: 'Owl statue',
 };
 function itemLabel(id: string) {
@@ -4065,7 +4119,7 @@ for (const [id, planet] of Object.entries(PLANETS)) {
     planet.name = planetLabels[id as PlanetId];
     planet.description = `${planet.name} · Landing from level ${planet.level}.`;
 }
-const skillLabels: Record<string, string[]> = { dz_army: ['Cork popgun', 'Sandbag wall', 'Signal flare', 'Supply drop'], dz_navy: ['Anchor swing', 'Wave ride', "Bosun's whistle", 'Lighthouse beam'], dz_aodai: ['Lotus petals', 'Silk ribbon glide', 'Paper fan breeze', 'Lantern festival'], dz_aodai_man: ['Dragon fan', 'Kite glide', 'Ink circle', 'Dragon dance'], dz_usa: ['Eagle strike', 'Star shield', 'Liberty torch', 'Fireworks finale'], dz_vietnam: ['Golden star burst', 'Bamboo vault', 'Bronze drum', 'Great golden star'], dz_ninja: ['Shadow clones', 'Vanish', 'Shadow strike', 'Smoke bomb'], dz_mage: ['Great fireball', 'Blink', 'Sheep spell', 'Black hole'], dz_knight: ['Shield block', "Knight's charge", 'Challenge', 'Sky sword'], dz_mecha: ['Tank mode', 'Tesla turret', 'Homing missiles', 'Energy shield'], dz_dino: ['Devour', 'Tail sweep', 'Terrifying roar', 'Giant form'], dz_fairy: ['Healing flower ring', 'Butterfly float', 'Fairy charm', 'Binding tree'], dz_pirate: ['Deck cannon', 'Grappling hook', 'Scout parrot', 'Ship broadside'], dz_superhero: ['Take flight', 'Meteor dive', 'Laser gaze', 'Boulder throw'], dz_vampire: ['Life drain', 'Bat form', 'Bat swarm', 'Blood moon'], dz_snowman: ['Rolling snowball', 'Snow decoy', 'Ice rink', 'Ice age'] };
+const skillLabels: Record<string, string[]> = { dz_army: ['Cork popgun', 'Sandbag wall', 'Signal flare', 'Supply drop'], dz_navy: ['Anchor swing', 'Wave ride', "Bosun's whistle", 'Lighthouse beam'], dz_aodai: ['Lotus petals', 'Silk ribbon glide', 'Paper fan breeze', 'Lantern festival'], dz_aodai_man: ['Dragon fan', 'Kite glide', 'Ink circle', 'Dragon dance'], dz_usa: ['Eagle strike', 'Star shield', 'Liberty torch', 'Fireworks finale'], dz_vietnam: ['Golden star burst', 'Bamboo vault', 'Bronze drum', 'Great golden star'], dz_ninja: ['Shadow clones', 'Vanish', 'Shadow strike', 'Smoke bomb'], dz_mage: ['Great fireball', 'Blink', 'Sheep spell', 'Black hole'], dz_knight: ['Shield block', "Knight's charge", 'Challenge', 'Sky sword'], dz_mecha: ['Tank mode', 'Tesla turret', 'Homing missiles', 'Energy shield'], dz_dino: ['Devour', 'Tail sweep', 'Terrifying roar', 'Giant form'], dz_fairy: ['Healing flower ring', 'Butterfly float', 'Fairy charm', 'Binding tree'], dz_pirate: ['Deck cannon', 'Grappling hook', 'Scout parrot', 'Ship broadside'], dz_superhero: ['Take flight', 'Meteor dive', 'Laser gaze', 'Boulder throw'], dz_vampire: ['Life drain', 'Bat form', 'Bat swarm', 'Blood moon'], dz_snowman: ['Rolling snowball', 'Snow decoy', 'Ice rink', 'Ice age'], dz_dawnstar: ['Ribbon lasso', 'Morning glow', 'Sparkle step', 'Star shower'] };
 for (const [id, disguise] of Object.entries(DISGUISES)) {
     disguise.name = ITEMS[id].name;
     disguise.skills.forEach((skill, i) => skill.name = skillLabels[id][i]);
