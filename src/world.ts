@@ -63,7 +63,9 @@ import {DEFAULT_PIVOTS,fitOf,lookOf,lookTrim,toLook,DEFAULT_LOOK,type Fit,type L
 import {part} from './part-cache.ts';
 import {WeaponTrail,measureBlade,type HeldBlade} from './weapon-trail.ts';
 import {CUTS,SPIN,SWING,TRAIL,spinLead,spinTurn,swingPose,nextCut,type Blade,type CutIndex,type SwingPose} from './trail-ribbon.ts';
-import {WIND,punchPose,type PunchKind,type PunchPose} from './punch-wind.ts';
+import {PUNCH,WIND,punchPose,type PunchKind,type PunchPose} from './punch-wind.ts';
+import {SKILL_WIND,THRUST,TURN,sweepTurn,handBlade} from './skill-wind.ts';
+import type {CombatEffect} from './combat.ts';
 import {applyReaction,newReaction,newReactionPose,reactionPose,reactStop,reactStrength,startReaction,REACT,type Reaction} from './hit-react.ts';
 import {mergeParts} from './avatar-merge.ts';
 import {perfFlags} from './perf-flags.ts';
@@ -224,11 +226,20 @@ export class World {
   bladeTrail?:WeaponTrail; /** The weapon measured in the hand it hangs from (once per avatar build). */ private held:{hand:T.Object3D;info:HeldBlade;weapon?:string}|null=null;
   /** Game seconds as the swing sees them (hit-stop slows them with the blade). */ private trailClock=0; private trailEmit=false; private trailWas=false; private trailTint:[number,number,number]=[1,1,1];
   /** Which of the three cuts the blade is making (trail-ribbon.ts CUTS), when it began, the arm's pose it began from, and what is still owed at the moment of contact. */
-  swingCut:CutIndex=0; private swingAt=-9; /** The cut is followed by another (a chain): it settles into the next cut's wound-up pose. */ private swingMore=false; /** A new cut began: its ribbon is not joined to the last one's. */ private trailBreak=false; private swingContact:null|{kind:'fist'|'sword';big:boolean;since:number}=null; private windHold=0;
+  swingCut:CutIndex=0; private swingAt=-9; /** The cut is followed by another (a chain): it settles into the next cut's wound-up pose. */ private swingMore=false; /** A new cut began: its ribbon is not joined to the last one's. */ private trailBreak=false; private swingContact:null|{kind:'fist'|'sword';big:boolean;since:number;quiet?:boolean}=null; private windHold=0;
   /** Which punch the fists throw (punch-wind.ts punchPose), whether an arm is stretched by one, and the turn that puts the blade on the target in the first frame of an air spin. */
   punchKind:PunchKind=0; private armsStretched=false; spinLead=0;
   /** A swing (or an air spin of this many seconds) began since the last frame: that frame shows it exactly at its contact, however long the frame was and whether or not a critical froze time. */
   private swingFresh=false; private spinFresh=0;
+  /**
+   * A disguise skill's move (skill-wind.ts): the kind the arm swings as when that is not the weapon's own (both fists down in a
+   * blaster's disguise), the colour of its ribbon and its wind while they show, the blows and winds still to come, the pose of a
+   * stab, a lunge, a turn or a wind-up, the streak held on a dashing body, and the sparks owed where a blow lands.
+   */
+  private swingAs:'fist'|'sword'|null=null; private skillTint:[number,number,number]|null=null; private skillSteps:{at:number;pose:boolean;run:()=>void}[]=[]; private gustDue=false;
+  private skillPose:null|{kind:'stab'|'lunge'|'spin'|'tail'|'raise';at:number;time:number;span:number;turn:number;blade:boolean}=null;
+  private dashWind:null|{slot:number;x:number;y:number;z:number;dx:number;dz:number;seen:boolean;until:number;end?:()=>void}=null;
+  private sparkWatch:null|{since:number;until:number;last:Enemy|null;lastT:number;color:string}=null;
   /** The explorer's recoil when hurt (hit-react.ts). */ private hurtReact?:Reaction;
   walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
   private shakeOffset=new T.Vector3();/** Ground distance the view reaches from the camera target (resize). */ viewReach?:number; private playerMaterials:LitMaterial[]=[];private hemi?:T.HemisphereLight;
@@ -758,7 +769,9 @@ export class World {
       if(gear.boots&&!this.wearKit(c,gear.boots,'body'))for(const x of [-.18,.18])c.add(box(gear.boots.includes('flipper')?'#66a9d6':'#b88c73',.27,.23,gear.boots.includes('flipper')?.6:.34,x,.17,.1));
     }
     if(kitDisguise)this.wearKit(c,id,'body');
-    if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
+    // A weapon in the hand; a disguise worn without one shows its own blade when the weapon kit has a fitting model (skill-wind.ts HAND_BLADE).
+    const own=handBlade(gear.disguise,gear.weapon);
+    if(gear.weapon){if(!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);}else if(own)this.wearKit(c,own,'hand-right');
     // Up to two pets beside them (pet-slots.ts): the first on the left as ever, the second on the right; with their dog out (drawn by dog-world.ts on the left) the one pet takes the right.
     for(let i=0;i<2;i++){const id=M.companionId(gear,i);if(!id)break;const pet=this.petFor(id);pet.name='remote-pet';pet.position.set(i||M.dogWorn(gear)?1:-1,0,-.6);c.add(pet);}
     addOutlines(c,{merge:true});
@@ -1316,18 +1329,125 @@ export class World {
    * The animation of the player's own attacks: a blade's swing leaves its trail, a punch its wind (weapon-trail.ts).
    * The hit has already landed when this is called, so the blade or the fist is on its target in the very next frame.
    * `cut` picks the blade's cut (else the next of the pattern); `big` is the last hit of a chain (fists: an uppercut);
-   * `how.more`: another hit of the chain follows; `how.pound`: the two-fisted pound that ends a dive.
+   * `how.more`: another hit of the chain follows; `how.pound`: the two-fisted pound that ends a dive. `how.as`: the blow of a
+   * disguise's skill (skillWind): the arm swings as `kind` whatever the weapon is, in the skill's colour; `how.quiet`: a fist's
+   * blow that throws no wind of its own (a throw).
    */
-  playerAttack(kind:'fist'|'sword'|'gun'|'rod',muzzle='#fff8c8',cut?:CutIndex,big=false,how:{more?:boolean;pound?:boolean}={}){
+  playerAttack(kind:'fist'|'sword'|'gun'|'rod',muzzle='#fff8c8',cut?:CutIndex,big=false,how:{more?:boolean;pound?:boolean;as?:boolean;quiet?:boolean}={}){
     const fx=this.fx,at={x:this.position.x,y:this.position.y+(this.jump?.height??0),z:this.position.z};
     if(kind==='gun'){this.aimT=.7;this.punchT=.12;fx?.flash({x:at.x+Math.sin(this.facing)*.9,y:at.y+1,z:at.z+Math.cos(this.facing)*.9},muzzle,.9,.08);return;}
     // The ground arc of a hit arrives through the shared combat effects, so remote players see it too.
     const now=this.trailClock||0,blade=kind==='sword';
+    this.swingAs=how.as?(blade?'sword':'fist'):null;if(!how.as)this.skillTint=null;
     if(blade){this.swingCut=cut??nextCut(this.swingCut,now-this.swingAt);this.swingMore=!!how.more;this.trailBreak=true;}
     else{this.punchArm^=1;this.punchKind=how.pound?2:big?1:0;}
     this.swingAt=now;this.punchT=SWING.time;this.swingFresh=true;
     // What the blow owes in the frame it shows: sparks off the blade where it met a creature, or the wind off the fist.
-    this.swingContact={kind:blade?'sword':'fist',big,since:this.time??0};
+    this.swingContact={kind:blade?'sword':'fist',big,since:this.time??0,quiet:how.quiet};
+  }
+  /**
+   * A disguise skill was cast (main.ts castDisguise): the body's move and the wind it leaves, by the skill's class
+   * (skill-wind.ts SKILL_WIND). Looks only: nothing here is read by the fight. `from`: where the explorer stood before
+   * the cast moved it; `effects`: what the cast drew at once (a hook's chain and a sky sword say where they go);
+   * `landed`: the cast of a plunge that has just touched down.
+   */
+  skillWind(effect:string,from:{x:number;z:number},effects:readonly CombatEffect[]=[],landed=false){
+    const rule=SKILL_WIND[effect];if(!rule||rule.cls==='none'||!this.player.visible||this.boarded)return;
+    const id=(this.tryOnGear??this.state.gear).weapon,held=id?M.ITEMS[id]?.weapon?.kind:undefined;
+    // A held sword cuts and a held blaster cannot: only bare hands (or a fishing rod) take the disguise's own way.
+    const blade=held==='sword'||(held!=='gun'&&rule.arm==='blade');
+    const now=this.trailClock||0,c=TRAIL_COLOR.set(rule.color),tint:[number,number,number]=[c.r,c.g,c.b],f=this.facing,sin=Math.sin(f),cos=Math.cos(f),px=this.position.x,pz=this.position.z;
+    const steps=this.skillSteps??=[];
+    const pose=(delay:number,run:()=>void)=>{steps.push({at:now+delay,pose:true,run:()=>{this.skillTint=tint;run();}});};
+    const wind=(delay:number,run:(trail:WeaponTrail,t:number,p:T.Object3D)=>void)=>{steps.push({at:now+delay,pose:false,run:()=>{if(this.bladeTrail&&this.player.visible&&!this.boarded)run(this.bladeTrail,this.trailClock,this.player);}});};
+    /** A blow of the arm: one of the three cuts with a blade (a chop is the third, big), a jab or both fists down without one. */
+    const blow=(kind:'pound'|'chop'|'cut'|'jab',cut:CutIndex=2,quiet=false)=>{
+      const fists=kind==='pound'||kind==='jab'||!blade;
+      this.playerAttack(fists?'fist':'sword',undefined,cut,kind==='chop'||kind==='pound',{pound:kind==='pound'||(kind==='chop'&&fists),as:true,quiet});
+      if(this.swingContact)this.swingContact.since-=.05; // the damage of this frame was dealt before the blow was posed
+    };
+    const up=effects.find(e=>e.look===effect)?.y??0,ground=this.position.y,since=(this.time??0)-.01;
+    this.sparkWatch={since,until:(this.time??0)+rule.at+.6,last:null,lastT:-1,color:rule.color};
+    switch(rule.cls){
+      case 'swing':pose(0,()=>blow('cut',rule.cut));break;
+      case 'thrust':{
+        if(rule.pose==='lunge')pose(0,()=>{this.skillPose={kind:'lunge',at:this.trailClock,time:THRUST.time,span:0,turn:0,blade:false};});
+        else if(rule.pose==='stab'&&blade)pose(0,()=>{this.skillPose={kind:'stab',at:this.trailClock,time:THRUST.time,span:0,turn:0,blade:true};});
+        else pose(0,()=>blow('jab',0,true));
+        const chain=rule.toTarget?effects.find(e=>e.look===effect):undefined;
+        wind(0,(trail,t,p)=>{
+          // From the hand that is out (or the jaws), along the blow; a hook's streak runs with its chain, down to the creature when it is thrown from the air.
+          const a=chain?.facing??this.facing,dx=Math.sin(a),dz=Math.cos(a),o=part(p,rule.from==='head'?'head':blade||this.punchArm?'hand-right':'hand-left')??p,e=o.matrixWorld.elements;
+          const lead=rule.from==='head'?.45:.1,ox=e[12]+dx*lead,oy=rule.from==='head'?p.position.y+.95:e[13],oz=e[14]+dz*lead,ahead=Math.max(0,(ox-p.position.x)*dx+(oz-p.position.z)*dz);
+          if(rule.burst){
+            // A stab or a bite throws the punch's own burst, in the skill's colour; its ring opens on the creature it took (its near side).
+            const k=rule.burst,h=this.lastHit&&this.lastHit.t>=since?this.lastHit.e:null,ring=h?Math.max(.2,Math.min(1.5*k,(h.x-ox)*dx+(h.z-oz)*dz-h.radius*.8)):WIND.contact*k;
+            trail.wind.add(ox,oy,oz,dx,0,dz,t,k,tint[0],tint[1],tint[2],ring);return;
+          }
+          if(rule.back){trail.gusts.streak(ox-dx*rule.back,oy,oz-dz*rule.back,dx,0,dz,t-rule.travel,{length:rule.back+.9,width:rule.width,travel:rule.travel,fade:.22},tint[0],tint[1],tint[2]);return;}
+          const flat=Math.max(.3,(chain?chain.radius:rule.reach)-ahead),drop=chain?Math.min(0,ground+1-oy):0;
+          trail.gusts.streak(ox,oy,oz,dx*flat,drop,dz*flat,t,{length:Math.hypot(flat,drop),width:rule.width,travel:rule.travel,tail:rule.tail},tint[0],tint[1],tint[2]);
+        });
+        break;}
+      case 'sweep':case 'spin':{
+        if(rule.pose==='cut')pose(0,()=>blow('cut',0,true));
+        else pose(0,()=>{this.skillPose={kind:rule.pose==='tail'?'tail':'spin',at:this.trailClock,time:rule.turn+TURN.settle,span:rule.span,turn:rule.turn,blade};});
+        // Round the spot the skill was cast on, at the height it was cast at: from the facing all the way round, or a gust pushed out through the cone ahead.
+        wind(0,(trail,t)=>{trail.gusts.arc(px,ground+up+rule.height,pz,rule.wave!==undefined?f-rule.span/2:f,rule.span,t,{radius:rule.reach,width:rule.width,turn:rule.turn,keep:rule.keep,wave:rule.wave},tint[0],tint[1],tint[2]);});
+        break;}
+      case 'slam':{
+        const spot=rule.far?effects.find(e=>e.look===effect):undefined;
+        if(rule.fall==='leap')wind(0,(trail,t,p)=>{
+          // Down the leap: from where the explorer stood (from above it when the dive came out of a jump) to where it lands.
+          const tx=p.position.x,ty=p.position.y+.45,tz=p.position.z,far=Math.hypot(tx-from.x,tz-from.z)>.5&&!landed,sx=far?from.x:tx-sin*1.3,sy=p.position.y+(far?1.9:3),sz=far?from.z:tz-cos*1.3;
+          trail.gusts.streak(sx,sy,sz,tx-sx,ty-sy,tz-sz,t,{length:Math.hypot(tx-sx,ty-sy,tz-sz),width:.32,travel:.1,fade:.22},tint[0],tint[1],tint[2]);
+        });
+        if(spot)wind(0,(trail,t)=>{
+          // Down the fall of what is called onto the spot: the streak's head is on the ground when the damage lands.
+          const y=this.interior?0:Math.max(0,terrainHeight(this.environment.layout,spot));
+          trail.gusts.streak(spot.x,y+7.2,spot.z,0,-1,0,t,{length:6.8,width:.26,travel:Math.max(.1,rule.at),tail:2.6,even:true,fade:.16},tint[0],tint[1],tint[2]);
+        });
+        // The arm winds up while the blow is on its way and comes down on the frame the damage lands; a landed plunge strikes at once.
+        const first=landed?0:rule.beats[0];
+        if(first>.12)pose(0,()=>{this.skillPose={kind:'raise',at:this.trailClock,time:first,span:0,turn:0,blade};});
+        rule.beats.forEach((beat,i)=>pose(i?beat-rule.beats[0]+first:first,()=>blow(rule.pose)));
+        break;}
+      case 'dash':{
+        // The streak starts where the body is and ends where it is: held on the explorer while the dash lasts (stepSkill), let go when it ends.
+        const dash={slot:-1,x:px,y:0,z:pz,dx:sin,dz:cos,seen:false,until:now+rule.time+.2,end:rule.end?()=>{this.skillTint=tint;blow(rule.end!);}:undefined};this.dashWind=dash;
+        wind(0,(trail,t,p)=>{
+          if(this.dashWind!==dash)return;
+          dash.x=p.position.x-sin*.2;dash.y=p.position.y+.95;dash.z=p.position.z-cos*.2;
+          dash.slot=trail.gusts.streak(dash.x,dash.y,dash.z,sin,0,cos,t,{length:rule.reach,width:rule.width,travel:rule.time,tail:rule.tail,even:true,fade:.22},tint[0],tint[1],tint[2]);
+          trail.gusts.head(dash.slot,0);
+        });
+        break;}
+    }
+  }
+  /** Stops what is left of a skill's move (a reset of the fight). */
+  clearSkillWind(){if(this.skillSteps)this.skillSteps.length=0;this.skillPose=null;this.dashWind=null;this.sparkWatch=null;this.gustDue=false;this.swingAs=null;this.skillTint=null;this.bladeTrail?.gusts.clear();}
+  /** What a skill's move still owes, once a frame before the explorer is posed: the blows whose moment has come, and the end of a dash. */
+  private stepSkill(){
+    const now=this.trailClock||0,steps=this.skillSteps??=[];
+    const dash=this.dashWind;
+    if(dash){
+      if(this.pose?.kind==='dash')dash.seen=true;
+      else if(dash.seen||now>dash.until){this.dashWind=null;this.bladeTrail?.gusts.release(dash.slot,now);dash.end?.();}
+    }
+    if(!steps.length)return;
+    let kept=0;
+    for(const step of steps){
+      if(step.at>now+1||step.at<now-2)continue; // the clock started over: dropped
+      if(step.at>now){steps[kept++]=step;continue;}
+      if(step.pose)step.run();else{this.gustDue=true;steps[kept++]=step;}
+    }
+    steps.length=kept;
+  }
+  /** The winds whose moment has come, after the matrices are fresh (updateTrail): they start from the hand, the head or the body as it is drawn now. */
+  private startGusts(){
+    const now=this.trailClock||0,steps=this.skillSteps??=[];let kept=0;this.gustDue=false;
+    for(const step of steps){if(!step.pose&&step.at<=now)step.run();else steps[kept++]=step;}
+    steps.length=kept;
   }
   /** The spin of an air swing: `seconds` of it, turned so the blade (or the leading paw) is on the line of the explorer's facing in the first frame drawn. */
   airSpin(seconds:number){this.spinT=seconds;this.spinFresh=seconds;this.spinLead=spinLead(seconds,0);}
@@ -1996,7 +2116,7 @@ export class World {
    */
   private updateTrail(scene:T.Scene){
     const contact=this.swingContact;
-    if(!this.trailEmit&&!contact&&!this.bladeTrail?.active)return;
+    if(!this.trailEmit&&!contact&&!this.bladeTrail?.active&&!this.gustDue&&!this.dashWind)return;
     const trail=this.bladeTrail??=new WeaponTrail(),now=this.trailClock,p=this.player;
     if(trail.mesh.parent!==scene)scene.add(trail.mesh);
     if(scene!==this.scene)p.updateMatrixWorld(true); // indoors three.js updates matrices only inside its own render
@@ -2004,33 +2124,48 @@ export class World {
     if(emit){
       // A new ribbon for a new cut (never joined to the last one, which fades on by itself), born soft at its far end.
       const blade=this.heldBlade(hand!).blade,fresh=!this.trailWas||this.trailBreak;
-      if(fresh&&this.punchT>0&&this.weaponKind==='sword'&&!(this.spinT>0)&&!this.jump?.diving)this.fillCut(trail,hand!,blade,now);
+      if(fresh&&this.punchT>0&&(this.swingAs??this.weaponKind)==='sword'&&!(this.spinT>0)&&!this.jump?.diving)this.fillCut(trail,hand!,blade,now);
       else trail.sample(hand!,blade,now,fresh,fresh?TRAIL.soft:0);
     }
     this.trailWas=emit;this.trailBreak=false;
+    // A skill's wind starts now (the hand, the head and the body are where they are drawn), and a dash's streak ends on the body.
+    if(this.gustDue)this.startGusts();
+    const dash=this.dashWind;if(dash&&dash.slot>=0)trail.gusts.head(dash.slot,(p.position.x-dash.x)*dash.dx+(p.position.z-dash.z)*dash.dz-.25);
+    const tone=this.skillTint??this.trailTint;
     if(contact){
       this.swingContact=null;const f=this.facing,fx=this.fx,sin=Math.sin(f),cos=Math.cos(f);
       const hit=this.lastHit&&this.lastHit.t>=contact.since?this.lastHit.e:null;
       if(contact.kind==='fist'){
         // The wind leaves the fist that is out, along the punch (up and ahead off an uppercut; along the ground, with a ring on it, under a pound).
         const fist=part(p,this.punchArm?'hand-right':'hand-left');
-        if(fist&&shown){
-          const e=fist.matrixWorld.elements,pound=this.punchKind===2,upper=this.punchKind===1,k=pound?WIND.pound:contact.big?WIND.big:WIND.size;
+        if(fist&&shown&&!contact.quiet){
+          const e=fist.matrixWorld.elements,pound=this.punchKind===2,upper=this.punchKind===1,k=pound?WIND.pound:contact.big?WIND.big:WIND.size,rim=this.skillTint??WIND_TINT;
           const x=pound?p.position.x+sin*.25:e[12],y=pound?p.position.y+.22:e[13],z=pound?p.position.z+cos*.25:e[14];
           // An uppercut's wind goes up the screen (the camera's own up, so it is never seen end-on) and a little ahead.
           const c=this.camera.matrixWorld.elements,lift=upper?1:0,ahead=upper?.45:1;
           // The ring of pressure opens on the creature the punch met (its near side), else a punch's length ahead.
           const ring=pound?0:upper?.5*k:hit?Math.max(.2,Math.min(1.5*k,(hit.x-x)*sin+(hit.z-z)*cos-hit.radius*.8)):WIND.contact*k;
-          trail.wind.add(x,y,z,sin*ahead+c[4]*lift,c[5]*lift,cos*ahead+c[6]*lift,now,k,WIND_TINT[0],WIND_TINT[1],WIND_TINT[2],ring,pound);this.windHold=pound?0:now+WIND.hold;
+          trail.wind.add(x,y,z,sin*ahead+c[4]*lift,c[5]*lift,cos*ahead+c[6]*lift,now,k,rim[0],rim[1],rim[2],ring,pound);this.windHold=pound?0:now+WIND.hold;
         }
       }else if(fx&&hand&&shown&&hit){
         // Sparks where the blade met the creature it hit (its near side, at the blade's height).
-        const tip=V_AXIS.set(...this.heldBlade(hand).blade.tip).applyMatrix4(hand.matrixWorld),dx=this.position.x-hit.x,dz=this.position.z-hit.z,d=Math.hypot(dx,dz)||1,r=Math.min(hit.radius*.8,d*.5),[cr,cg,cb]=this.trailTint;
+        const tip=V_AXIS.set(...this.heldBlade(hand).blade.tip).applyMatrix4(hand.matrixWorld),dx=this.position.x-hit.x,dz=this.position.z-hit.z,d=Math.hypot(dx,dz)||1,r=Math.min(hit.radius*.8,d*.5),[cr,cg,cb]=tone;
+        if(this.sparkWatch&&this.lastHit){this.sparkWatch.last=hit;this.sparkWatch.lastT=this.lastHit.t;}
         fx.burst({x:hit.x+dx/d*r,y:Math.max(.3,tip.y),z:hit.z+dz/d*r},{n:contact.big?8:5,color:['#ffffff','#'+TRAIL_COLOR.setRGB(cr,cg,cb).getHexString()],glow:true,size:.09,speed:3.5,up:1.6,y:0,life:.24,gravity:5});
       }
     }
     if(now<this.windHold){const fist=part(p,this.punchArm?'hand-right':'hand-left');if(fist){const e=fist.matrixWorld.elements;trail.wind.anchor(e[12],e[13],e[14]);}}
-    const [r,g,b]=this.trailTint??[1,1,1];trail.draw(now,this.fx?.density??1,r,g,b,this.camera.position);
+    // Sparks where a skill's blow landed, on the frame it did (a blade's own cut has thrown its sparks above).
+    const watch=this.sparkWatch;
+    if(watch){
+      const h=this.lastHit;
+      if((this.time??0)>watch.until)this.sparkWatch=null;
+      else if(h&&h.t>=watch.since&&(h.e!==watch.last||h.t!==watch.lastT)){
+        watch.last=h.e;watch.lastT=h.t;
+        if(this.fx&&shown){const dx=this.position.x-h.e.x,dz=this.position.z-h.e.z,d=Math.hypot(dx,dz)||1,r=Math.min(h.e.radius*.8,d*.5);this.fx.burst({x:h.e.x+dx/d*r,y:this.position.y+.75,z:h.e.z+dz/d*r},{n:5,color:['#ffffff',watch.color],glow:true,size:.09,speed:3.5,up:1.6,y:0,life:.24,gravity:5});}
+      }
+    }
+    if(!trail.draw(now,this.fx?.density??1,tone[0],tone[1],tone[2],this.camera.position)&&!this.skillSteps?.length&&!this.dashWind)this.skillTint=null;
   }
   /**
    * The explorer's poses, after the reference: a leaning, bouncing walk; breathing
@@ -2040,10 +2175,12 @@ export class World {
    * casting and reeling; and a swell with a red flash when hurt.
    */
   private animatePlayer(dt:number){
+    if(this.skillSteps?.length||this.dashWind)this.stepSkill();
     for(const key of ['punchT','swingT','aimT','hurtT','spinT','landT','castT','castAirT'] as const)this[key]=Math.max(0,(this[key]||0)-dt);
     // The first frame of a swing is its contact frame (the hit landed on the press): not a frame's worth past it, and not short of it when a critical's hit-stop has slowed time.
     if(this.swingFresh){this.swingFresh=false;if(this.punchT>0)this.punchT=SWING.time*(1-SWING.contact);}
     if(this.spinFresh){this.spinT=this.spinFresh;this.spinFresh=0;}
+    if(this.swingAs&&!(this.punchT>0))this.swingAs=null;
     this.trailClock=(this.trailClock||0)+dt;this.trailEmit=false;
     // The trail keeps its times in single precision: its clock starts over now and then, while nothing swings.
     if(this.trailClock>300&&!(this.punchT>0)&&!(this.spinT>0)&&!this.bladeTrail?.active){this.trailClock=0;this.swingAt=-9;this.windHold=0;}
@@ -2052,8 +2189,8 @@ export class World {
     const flying=this.playerFlying&&FLIGHT_POSE_DISGUISES.includes(this.state.gear.disguise??'');
     if(!flying)clearSuperheroFlightPose(p);
     const armL=part(p,'arm-left'),armR=part(p,'arm-right'),legL=part(p,'leg-left'),legR=part(p,'leg-right'),head=part(p,'head');
-    const kind=this.weaponKind??'fist',pose=this.pose;
-    let twist=0,lean=0,lift=0,step=0,sx=1,sy=1,sz=1;
+    const kind=this.swingAs??this.weaponKind??'fist',pose=this.pose;
+    let twist=0,lean=0,lift=0,step=0,sx=1,sy=1,sz=1,turn=0;
     // An arm a punch stretched is its own length again once the punch is over.
     if(this.armsStretched&&!(this.punchT>0)){armL?.scale.set(1,1,1);armR?.scale.set(1,1,1);this.armsStretched=false;}
     // Base: walk cycle or idle breathing.
@@ -2116,6 +2253,29 @@ export class World {
       if(pose.t<.42){const e=pose.t/.42;lean=-e*.4;const up=-2.9*Math.min(1,e*2);armL?.rotation.set(up,0,-.2);armR?.rotation.set(up,0,.2);legL?.rotation.set(-.5,0,0);legR?.rotation.set(-.5,0,0);}
       else{const e=Math.min(1,(pose.t-.42)/.38);sx=sz=1+.25*(1-e);sy=1-.3*(1-e);armL?.rotation.set(-.9*(1-e),0,-.3);armR?.rotation.set(-.9*(1-e),0,.3);lean=.5*(1-e);}
     }
+    // A disguise skill's own pose (skill-wind.ts): a stab, a bite's lunge, the turn of a spin or of a tail sweep, the wind-up of a slam.
+    const sp=this.skillPose;
+    if(sp){
+      const age=this.trailClock-sp.at;
+      if(!(age>=0&&age<sp.time))this.skillPose=null;
+      else if(sp.kind==='stab'||sp.kind==='lunge'){
+        // Out at once, held and back, on the punch's clock: the blade straight ahead, or the head and the body thrown forward.
+        const reach=(punchPose(0,age/sp.time,PUNCH_POSE).fist-1)/(PUNCH.fist-1);
+        if(sp.kind==='stab'){if(armR)this.poseBlade(armR,hand,SPIN_AXIS,0,reach,null);armL?.rotation.set(.6*reach,0,-.3-.2*reach);lean=Math.max(lean,THRUST.lean*reach);step=THRUST.step*reach;twist=-.4*reach;}
+        else{armL?.rotation.set(1*reach,0,-.3-.3*reach);armR?.rotation.set(1*reach,0,.3+.3*reach);legL?.rotation.set(.5*reach,0,0);legR?.rotation.set(-.35*reach,0,0);if(head)head.rotation.set(-.4*reach,0,0);lean=Math.max(lean,THRUST.lunge*reach);step=THRUST.lungeStep*reach;sz*=1+.12*reach;}
+      }
+      else if(sp.kind==='raise'){
+        const k=Math.min(1,age/Math.min(.22,sp.time));
+        if(sp.blade&&armR)this.poseBlade(armR,hand,CUTS[2].axis,CUTS[2].from,k*(2-k),null);else{armL?.rotation.set(-2.7*k,0,-.2);armR?.rotation.set(-2.7*k,0,.2);}
+        lean=-.18*k;
+      }
+      else{
+        // Once round with the ribbon: the blade arm (or the tail) points where the ribbon's head is, then the body eases back to its facing.
+        const tail=sp.kind==='tail',k=age<sp.turn?1:1-Math.min(1,(age-sp.turn)/TURN.settle);turn=sweepTurn(age,sp.span,sp.turn,tail?Math.PI:SPIN.hold);
+        if(tail){armL?.rotation.set(-.7*k,0,-.3);armR?.rotation.set(-.7*k,0,.3);lean=Math.max(lean,.3*k);}
+        else{armL?.rotation.set(0,0,-.3-(SPIN.hold-.3)*k);if(armR){if(sp.blade)this.poseBlade(armR,hand,SPIN_AXIS,SPIN.hold,k,null);else armR.rotation.set(0,0,.3+(SPIN.hold-.3)*k);}if(head)head.rotation.x=.15*k;}
+      }
+    }
     // Laser gaze (skill-fx.ts): the head turns with the sweep, so the beams leave the eyes along the line they hit.
     const gaze=this.gazeAngle;if(head&&gaze!=null){const turn=Math.atan2(Math.sin(gaze-this.facing),Math.cos(gaze-this.facing));head.rotation.set(-.06,Math.max(-1.2,Math.min(1.2,turn)),0);}
     // Fishing: the cast swings the rod overhead and forward; reeling leans back against the line.
@@ -2127,7 +2287,7 @@ export class World {
     if(this.hurtT>0){const k=1+this.hurtT*.4;sx*=k;sy*=k;sz*=k;}
     if(this.landT>0){const k=Math.sin(this.landT/.25*Math.PI);sx*=1+k*.18;sy*=1-k*.22;sz*=1+k*.18;}
     if(!(this.spinT>0))this.spinLead=0;
-    p.rotation.y=this.spinT>0?this.facing+spinTurn(this.spinT,this.spinLead):this.facing+twist;
+    p.rotation.y=this.spinT>0?this.facing+spinTurn(this.spinT,this.spinLead):this.facing+twist+turn;
     p.rotation.x=lean;p.position.y+=lift;if(step){p.position.x+=Math.sin(this.facing)*step;p.position.z+=Math.cos(this.facing)*step;} // a punch steps in (the drawn body only)
     p.scale.x*=sx;p.scale.y*=sy;p.scale.z*=sz;
     if(this.hurtReact&&this.hurtReact.left>0){p.rotation.z=0;applyReaction(p,this.hurtReact,dt);}

@@ -331,7 +331,7 @@ const combat=new CombatSimulation({
   move:(x,z)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);},
   hit:(target,impact)=>hit(target as Enemy,impact.amount,impact.stun,impact),
   clearShot:(from,to)=>clearSegment(from,to,world.obstacles,{bounds:WORLD_BOUNDS,clearance:.05}),
-  effect:effect=>{showEffect(effect);emitAction({kind:'effect',effect});},
+  effect:effect=>{castEffects?.push(effect);showEffect(effect);emitAction({kind:'effect',effect});},
   heal:fraction=>{if(!actionHandler)state.hp=Math.min(M.maxHp(state),state.hp+M.maxHp(state)*fraction);},
   execute:(target,fraction)=>executeEnemy(target as Enemy,fraction),
   status:(target,kind,duration)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){world.statusEnemy(target as Enemy,kind,duration);return;}if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
@@ -340,7 +340,7 @@ const combat=new CombatSimulation({
 combatHud.isMarked=id=>combat.marked.has(id);
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 /** The Strike chain's hits so far (which cut the next one makes), and the thin ground arc that marks the area of the explorer's own hit. */
-let chainHit=-1,chainAt=-9;const HIT_AREA_ARC={y:.14,life:.3,thick:.09,opacity:.5,from:1,to:1} as const;
+let chainHit=-1,chainAt=-9;/** What a disguise skill draws at the moment it is cast, kept for its wind (castDisguise). */let castEffects:CombatEffect[]|null=null;const HIT_AREA_ARC={y:.14,life:.3,thick:.09,opacity:.5,from:1,to:1} as const;
 // Swings become additive slash trails and area skills become expanding rings with sparks.
 function showEffect(effect:CombatEffect){
   const fx=world.fx,at={x:effect.x,z:effect.z},up=Math.max(0,Math.min(8,effect.y??0)); // `up`: the height a cast from the air began at (air-cast.ts)
@@ -1416,7 +1416,11 @@ let plungeCast:{disguise:string;index:number;height:number;jumps:number;drift?:{
 const moveExplorer=(x:number,z:number)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);};
 /** One disguise skill is cast: its cooldown, its name over the explorer, its sound. `air`: how a cast from a jump differs (combat.ts DisguiseAir). */
 function castDisguise(disguise:string,index:number,air?:DisguiseAir){
-  if(!combat.disguise(disguise,index,air))return false;
+  const from={x:world.position.x,z:world.position.z},drawn:CombatEffect[]=[];let cast=false;
+  castEffects=drawn;try{cast=combat.disguise(disguise,index,air);}finally{castEffects=null;}
+  if(!cast)return false;
+  // The body's move and the wind of a skill that swings, stabs, sweeps, spins, slams or dashes (skill-wind.ts): looks only.
+  world.skillWind(DISGUISE_KITS[disguise][index],from,drawn,!!air?.landed);
   const skills=skillList(),time=M.skillCooldown(state,index,skills[index].cd,true)/Math.max(.2,1+M.activeStats(state).haste);skillDurations[index]=time;cooldowns[index]=time;
   world.fx?.text({x:world.position.x,y:SKILL_NAME_RISE+(world.jump?.height??0),z:world.position.z},t(skills[index].name),`skillname s${index}`);
   if(!actionHandler)change(()=>recordEvent(state,'skill'));
@@ -1649,7 +1653,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){world.clearSkillWind();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
