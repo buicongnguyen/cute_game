@@ -1992,3 +1992,13 @@ h1 > span {
 /* Settings: the camera angle slider with its presets under it. */
 .camera-angle { display: grid; gap: 6px; justify-items: end; min-width: 0; }
 .camera-angle .segmented { flex-wrap: wrap; justify-content: flex-end; }
+
+/* Help: the disguises-by-strength table. */
+.help-table { margin-top: 14px; }
+.help-table h3 { margin: 0 0 4px; }
+.help-table p { margin: 0 0 8px; opacity: .85; }
+.help-table table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+.help-table th, .help-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(58, 36, 51, .14); }
+.help-table th:nth-child(n+3), .help-table td:nth-child(n+3) { text-align: right; font-variant-numeric: tabular-nums; }
+.help-table td img, .help-table td svg { width: 22px; height: 22px; vertical-align: middle; }
+.help-table tr.worn { background: rgba(255, 214, 102, .28); font-weight: 800; }

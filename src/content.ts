@@ -1230,7 +1230,7 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_ninja": {
         "name": "Shadow ninja",
         "type": "disguise",
-        "sell": 200,
+        "sell": 300,
         "rare": true,
         "stats": {
             "atk": 8,
@@ -1241,7 +1241,7 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_mage": {
         "name": "Archmage",
         "type": "disguise",
-        "sell": 220,
+        "sell": 230,
         "rare": true,
         "stats": {
             "atk": 12,
@@ -1251,7 +1251,7 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_knight": {
         "name": "Sun knight",
         "type": "disguise",
-        "sell": 220,
+        "sell": 260,
         "rare": true,
         "stats": {
             "def": 25,
@@ -1262,7 +1262,7 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_mecha": {
         "name": "Battle robot",
         "type": "disguise",
-        "sell": 260,
+        "sell": 290,
         "rare": true,
         "stats": {
             "atk": 6,
@@ -1273,7 +1273,7 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_dino": {
         "name": "Tyrannosaur",
         "type": "disguise",
-        "sell": 240,
+        "sell": 170,
         "rare": true,
         "stats": {
             "atk": 14,
@@ -1283,7 +1283,7 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_fairy": {
         "name": "Flower fairy",
         "type": "disguise",
-        "sell": 200,
+        "sell": 260,
         "rare": true,
         "stats": {
             "hp": 40,
@@ -1294,7 +1294,7 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_pirate": {
         "name": "Pirate captain",
         "type": "disguise",
-        "sell": 230,
+        "sell": 170,
         "rare": true,
         "stats": {
             "atk": 10,
@@ -1305,14 +1305,14 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_army": {
         "name": "Army soldier",
         "type": "disguise",
-        "sell": 230,
+        "sell": 210,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
     "dz_navy": {
         "name": "Navy sailor",
         "type": "disguise",
-        "sell": 230,
+        "sell": 220,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
@@ -1326,28 +1326,28 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_aodai_man": {
         "name": "Ao dai gentleman",
         "type": "disguise",
-        "sell": 230,
+        "sell": 170,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
     "dz_usa": {
         "name": "Stars and stripes",
         "type": "disguise",
-        "sell": 230,
+        "sell": 280,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
     "dz_vietnam": {
         "name": "Vietnam flag",
         "type": "disguise",
-        "sell": 230,
+        "sell": 180,
         "rare": true,
         "stats": {"atk": 10, "crit": 0.08}
     },
     "dz_superhero": {
         "name": "Superhero",
         "type": "disguise",
-        "sell": 300,
+        "sell": 330,
         "rare": true,
         "stats": {
             "atk": 16,
@@ -1358,7 +1358,7 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_vampire": {
         "name": "Vampire count",
         "type": "disguise",
-        "sell": 280,
+        "sell": 240,
         "rare": true,
         "stats": {
             "atk": 12,
@@ -1368,7 +1368,7 @@ const ITEM_FACTS: Record<string, any> = {
     "dz_snowman": {
         "name": "Snowman",
         "type": "disguise",
-        "sell": 180,
+        "sell": 290,
         "rare": true,
         "stats": {
             "def": 10,
@@ -2611,7 +2611,7 @@ const SHOP_FACTS: {
         "items": [
             {
                 "id": "dz_snowman",
-                "cost": 300,
+                "cost": 530,
                 "mats": {
                     "icecrystal": 10,
                     "leather": 4
@@ -2619,7 +2619,7 @@ const SHOP_FACTS: {
             },
             {
                 "id": "dz_fairy",
-                "cost": 320,
+                "cost": 480,
                 "mats": {
                     "nectar": 3,
                     "sugar": 8,
@@ -2628,7 +2628,7 @@ const SHOP_FACTS: {
             },
             {
                 "id": "dz_ninja",
-                "cost": 360,
+                "cost": 550,
                 "mats": {
                     "leather": 8,
                     "shadow": 4,
@@ -2642,32 +2642,32 @@ const SHOP_FACTS: {
             },
             {
                 "id": "dz_navy",
-                "cost": 380,
+                "cost": 400,
                 "mats": {"pearl": 2, "coral": 8, "leather": 6}
             },
             {
                 "id": "dz_aodai",
-                "cost": 380,
+                "cost": 420,
                 "mats": {"pearl": 2, "coral": 8, "leather": 6}
             },
             {
                 "id": "dz_aodai_man",
-                "cost": 380,
+                "cost": 310,
                 "mats": {"pearl": 2, "coral": 8, "leather": 6}
             },
             {
                 "id": "dz_usa",
-                "cost": 380,
+                "cost": 510,
                 "mats": {"pearl": 2, "coral": 8, "leather": 6}
             },
             {
                 "id": "dz_vietnam",
-                "cost": 380,
+                "cost": 320,
                 "mats": {"pearl": 2, "coral": 8, "leather": 6}
             },
             {
                 "id": "dz_pirate",
-                "cost": 380,
+                "cost": 300,
                 "mats": {
                     "pearl": 2,
                     "coral": 8,
@@ -2676,7 +2676,7 @@ const SHOP_FACTS: {
             },
             {
                 "id": "dz_mage",
-                "cost": 400,
+                "cost": 410,
                 "mats": {
                     "starshard": 2,
                     "sap": 6,
@@ -2685,7 +2685,7 @@ const SHOP_FACTS: {
             },
             {
                 "id": "dz_knight",
-                "cost": 420,
+                "cost": 480,
                 "mats": {
                     "bone": 12,
                     "obsidian": 6
@@ -2693,7 +2693,7 @@ const SHOP_FACTS: {
             },
             {
                 "id": "dz_dino",
-                "cost": 420,
+                "cost": 300,
                 "mats": {
                     "amber": 3,
                     "vine": 10,
@@ -2702,7 +2702,7 @@ const SHOP_FACTS: {
             },
             {
                 "id": "dz_mecha",
-                "cost": 480,
+                "cost": 530,
                 "mats": {
                     "gear": 14,
                     "battery": 3
@@ -2710,7 +2710,7 @@ const SHOP_FACTS: {
             },
             {
                 "id": "dz_vampire",
-                "cost": 500,
+                "cost": 440,
                 "mats": {
                     "shadow": 10,
                     "moonstone": 1,
