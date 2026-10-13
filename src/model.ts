@@ -22,6 +22,7 @@ import { specialPrice } from './special-offers.ts';
 import { levelAllows } from './level-gates.ts';
 import { AUDIO_DEFAULTS, parseAudio } from './audio-settings.ts';
 import { isTreeCrop } from './tree-crops.ts';
+import { noteHistory, parseHistory, type Snapshot } from './insight-history.ts';
 import { fits, noteFull, noteDelivered, clearFullNote, delivering, chestFits, nextExpansion, hasExpansionMaterials, isStorageKind, type StorageKind } from './storage-slots.ts';
 import { pruneBags, bagId, parseDeathBags, MAX_DEATH_BAGS, type DeathBag } from './death-bags.ts';
 export * from './storage-slots.ts';
@@ -189,6 +190,8 @@ export interface SaveState {
     looks?: Looks;
     /** Cottage activities (house-activities.ts): when each was last used, paintings made. */
     house?: HouseState;
+    /** How the village grew (insight-history.ts): a snapshot per level-up and per day played, the latest 30; missing in older saves = none yet. */
+    history?: Snapshot[];
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
@@ -289,7 +292,7 @@ export function gainXp(s: SaveState, amount: number, now = Date.now(), bonus = r
     s.xp -= xpNeeded(s.level);
     s.level++;
     s.hp = maxHp(s); grantMilestone(s);
-} return s.level - before; }
+} if (s.level > before) noteHistory(s, 'level', now); return s.level - before; }
 export function plant(s: SaveState, index: number, raw: CropId, now = Date.now()) { const crop = canonicalItem(raw), p = s.plots[index], def = Object.hasOwn(CROPS, crop) ? CROPS[crop] : undefined; if (!p || p.crop || !def || cropLevel(s, crop) > s.level || !Number.isFinite(now) || now < 0)
     return false; if (def.seed && !removeItem(s.bag, def.seed))
     return false; p.crop = crop; p.plantedAt = now; p.growDuration = bedGrowTime(p, cropGrowTime(s, crop)); p.difficulty = difficultyOf(s); s.nextPlantId = (s.nextPlantId || 0) + 1; p.generation = `${now}-${s.nextPlantId}`; return true; }
@@ -986,6 +989,7 @@ export function parseSave(raw: string | null): SaveState | null {
         const dungeon = parseDungeon(v.dungeon); if (dungeon) s.dungeon = dungeon;
         const ctf = parseCtf(v.ctf); if (ctf) s.ctf = ctf;
         const rescue = parseRescue(v.rescue); if (rescue) s.rescue = rescue;
+        { const history = parseHistory(v.history); if (history.length) s.history = history; }
         const looks = parseLooks(v.looks); if (looks) s.looks = looks; else delete s.looks; // older saves keep the look they had: the default hero
         dropUnownedFriendLooks(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));

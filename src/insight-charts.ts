@@ -39,8 +39,8 @@ export function barsHtml(rows: readonly BarRow[], title: string): string {
 }
 /** A small line of values over time with its first and last value written out; `label` is its spoken summary. */
 export function sparkSvg(values: readonly number[], label: string, color = '#1c6fb8'): string {
-  const w = 160, h = 44, pad = 5, lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
+  const w = 320, h = 64, pad = 7, lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
   const pts = values.map((v, i) => [r1(pad + (values.length < 2 ? .5 : i / (values.length - 1)) * (w - 2 * pad)), r1(h - pad - (v - lo) / span * (h - 2 * pad))] as const);
   const last = pts[pts.length - 1];
-  return `<svg class="ins-spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="${label}" preserveAspectRatio="none"><polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>${last ? `<circle cx="${last[0]}" cy="${last[1]}" r="3.5" fill="${color}"/>` : ''}</svg>`;
+  return `<svg class="ins-spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="${label}" ><polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>${last ? `<circle cx="${last[0]}" cy="${last[1]}" r="5" fill="${color}"/>` : ''}</svg>`;
 }

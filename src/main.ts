@@ -203,7 +203,8 @@ let rescueApi:RescueApi|null=null;
 let colossus:ColossusEvent|null=null;
 /** The Village Almanac (insight.ts): the big-picture book and the disguise strength cards, one lazy chunk fetched when first needed. */
 let insight:import('./insight.ts').InsightApi|null=null,insightLoading:Promise<void>|null=null;
-function loadInsight():Promise<void>{return insightLoading??=import('./insight.ts').then(m=>{insight=m.initInsight({state:()=>state,openDialog,closeDialog,modal:()=>modal,art,esc,toast,panel:type=>{if(type==='shop')shop();else if(type==='bag')inventory();else if(type==='quests')quests();}});},error=>{insightLoading=null;throw error;});}
+function loadInsight():Promise<void>{return insightLoading??=import('./insight.ts').then(m=>{insight=m.initInsight({state:()=>state,openDialog,closeDialog,modal:()=>modal,art,esc,toast,panel:type=>{if(type==='shop')shop();else if(type==='bag')inventory();else if(type==='quests')quests();},go,journal:tab=>{journalTab=tab as ProgressKind;quests();},saveKey:activeKey,
+  calm:()=>started&&!modal&&!uiBlocked()&&!placement&&!visiting&&!fishGame&&state.hp>0&&!world.interior&&!fightNear(world.enemies,world.position.x,world.position.z,16)&&!dungeonApi?.active&&!ctfApi?.active&&!rescueApi?.active});},error=>{insightLoading=null;throw error;});}
 function openInsight(...args:Parameters<import('./insight.ts').InsightApi['open']>){void loadInsight().then(()=>insight?.open(...args)).catch(()=>toast('The Almanac could not be opened. Check your connection and try again.','📒'));}
 let modes:typeof import('./modes.ts')|null=null,modesLoading:Promise<void>|null=null,rankingApi:{open():void}|null=null,newsApi:{open(tab?:'news'|'soon'):void}|null=null,rankingTapOff:(()=>void)|null=null;
 /**
@@ -426,7 +427,7 @@ const DIALOG_LOOK:Record<string,[string,string]>={
 function floating(text:string,x=world.position.x,z=world.position.z,style='item',rise=0) {world.fx?.text({x,y:rise,z},t(text),style);}
 /** Home clears bad effects (home-care.ts): a short sparkle and a toast. */
 function cleansedFx(){world.fx?.burst({x:world.position.x,z:world.position.z},{n:18,color:['#ffffff','#bff7ff','#ffe9a8'],glow:true,size:.1,speed:3,up:4,y:1});toast('Cleansed! Bad effects wash away at home.','✨');}
-function levelCheck(before:number) {if(state.level>before){toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');for(const l of M.milestonesBetween(before,state.level))toast(t('Milestone: level {level}! +{energy} energy and a moonstone. Onward, legend!',{level:l,energy:M.milestoneReward(l).energy.toLocaleString()}),'🏅');tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);}}
+function levelCheck(before:number) {if(state.level>before){const after=state.level;void loadInsight().then(()=>insight?.levelUp(before,after)).catch(()=>{});toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');for(const l of M.milestonesBetween(before,state.level))toast(t('Milestone: level {level}! +{energy} energy and a moonstone. Onward, legend!',{level:l,energy:M.milestoneReward(l).energy.toLocaleString()}),'🏅');tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);}}
 function change<T>(action:()=>T):T {const before=state.level;const result=action();levelCheck(before);save();updateHud();return result;}
 function uiBlocked(){return !!modal||!!document.querySelector('dialog[open]')||shipSequence?.busy||!!flight||arriving;}
 function botActive(){return started&&!actionHandler&&!document.hidden&&!uiBlocked()&&!placement&&!world.interior&&world.planet==='home'&&state.hp>0;}
@@ -461,7 +462,7 @@ function profilePicker(){
 function welcomeDialog(){
   openDialog('welcome',t('Welcome to the game!'),`<p class="intro">${t('Hi boss! I am Pepper, your cook. Welcome to the game!')}</p><p>${t('Guess what? You are lucky today! I played the lottery and won 1,000,000 energy. Do you want it?')}</p><div class="button-row"><button class="primary" data-action="welcome-take">${t('Yes, take it!')}</button><button class="soft-button" data-action="welcome-pass">${t('No, thanks')}</button></div>`,t('YOUR COOK'),'🍳');
 }
-async function start() {settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();void compileAsyncSafe(world.renderer,world.scene,world.camera); // warm the village's shaders off the first walk
+async function start() {setTimeout(()=>void loadInsight().catch(()=>{}),5000);/* the Almanac's chunk, once play is under way: its scores join the save's snapshots and a waiting report card is offered */settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();void compileAsyncSafe(world.renderer,world.scene,world.camera); // warm the village's shaders off the first walk
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
