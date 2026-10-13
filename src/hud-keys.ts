@@ -3,6 +3,7 @@
 // across sessions on this device) it folds itself once, because by then the keys are learned. Opening or folding it by
 // hand is final: the guide never moves on its own again. Remembered per device (localStorage), never in the save.
 import { eatKey, keyboardBindings } from './gameplay-controls.ts';
+import { POWER } from './power-rules.ts';
 import { t } from './i18n.ts';
 
 export const KEYS_GUIDE_KEY = 'zoo-garden-keys-guide';
@@ -21,7 +22,7 @@ export function keysGuideHtml(layout: string | undefined, folded: boolean, space
   const b = keyboardBindings(layout), wasd = layout !== 'classic';
   const rows: [string, string][] = [
     [t('Move'), wasd ? ['W', 'A', 'S', 'D'].map(key).join('') : ['↑', '←', '↓', '→'].map(key).join('')],
-    ...(space ? [[t('Jump'), key(space === 'jump' ? ' ' : 'Shift')], [t('Basic attack'), (space === 'jump' ? '' : key(' ')) + key('f') + key('n')]] as [string, string][] : [[t('Basic attack'), key(' ')] as [string, string]]), [t('Skills'), b.skills.map(key).join('')], [t('Interact'), key('f')],
+    ...(space ? [[t('Jump'), key(space === 'jump' ? ' ' : 'Shift')], [t('Basic attack'), (space === 'jump' ? '' : key(' ')) + key('f') + key('n')]] as [string, string][] : [[t('Basic attack'), key(' ')] as [string, string]]), [t('Skills'), b.skills.map(key).join('')], ...(space ? [[t('Power strike'), key(POWER.key)] as [string, string]] : []), [t('Interact'), key('f')],
     [t('Journal'), key(b.journal)], [t('Backpack'), key('i')], [t('Eat'), key(eatKey(!!space))], [t('Map'), key('m')],
   ];
   const label = folded ? t('Show keyboard controls') : t('Hide keyboard controls');

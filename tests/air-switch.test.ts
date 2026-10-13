@@ -59,7 +59,7 @@ test('on: N is the basic attack for the right hand, a key no layout uses, and H 
 
 test('off: the page markup is the one from before; the Jump toe and the combo chip are made only when the switch is on', () => {
   const hud = main.slice(main.indexOf('<div id="hud" hidden>'), main.indexOf('<div id="space-hud" hidden>'));
-  assert.doesNotMatch(hud, /jump-pad|combo-chip|data-action="jump"/); assert.match(hud, /<kbd>Space<\/kbd> attack<\/div>/);
+  assert.doesNotMatch(hud, /jump-pad|combo-chip|combo-counter|power-pad|data-action="jump"|data-action="power"/); assert.match(hud, /<kbd>Space<\/kbd> attack<\/div>/);
   assert.match(hud, /<button class="attack-pad" data-action="attack" aria-label="Basic attack" title="Basic attack">\$\{hudIcon\('attack'\)\}<\/button><\/div><div id="keys-guide"/, 'the fight cluster ends with the pad');
   const sync = main.slice(main.indexOf('function syncAirCombat(){'), main.indexOf('function jumpBlock(){'));
   assert.match(sync, /if\(on&&!document\.querySelector\('#hud \.jump-pad'\)\)\{/); assert.match(sync, /document\.body\.classList\.toggle\('air-combat',on\)/); assert.match(sync, /world\.jumpRules=on/);
@@ -166,4 +166,21 @@ test('scripted fights: with the block at 0.6 a hero without the double jump stil
     assert.ok(Math.max(single.biggest, double.biggest) / single.bossHp < .15, 'no single hit takes 15% of a boss');
   }
   const bear = FIGHTS[0], r = fight(bear.boss, bear.planet, bear.at, bear.level, bear.gear, 'single', 2); assert.equal(r.blocked, 0, 'the King Bear is met before the double jump: it does not block'); assert.ok(r.dodged > 0);
+});
+
+test('off or online: no hit counter, no power strike, no charge (the counter, the button and the key all ask airOn first)', () => {
+  const block = main.slice(main.indexOf('function noteComboHit('), main.indexOf('/** A ground attack passed under the explorer.'));
+  for (const fn of ['noteComboHit(e:Enemy,impact:CombatHit){\n  if(!airOn())return;', 'function powerStrike(){\n  if(!airOn()||']) assert.ok(block.includes(fn), fn);
+  assert.match(block, /if\(airOn\(\)&&v\.live&&v\.count>=COUNTER\.from\)/); assert.match(block, /const shown=airOn\(\)&&started&&/);
+  // Its step runs only inside stepFight, after the switch's own gate.
+  const step = main.slice(main.indexOf('function stepFight('), main.indexOf('combat.edge.spent='));
+  assert.ok(step.indexOf('syncAirCombat();if(!airOn())return;') >= 0 && step.indexOf('syncAirCombat();if(!airOn())return;') < step.indexOf('stepCounter(dt)'));
+  assert.equal(main.split('stepCounter(dt)').length, 2, 'called from one place');
+  const sync = main.slice(main.indexOf('function syncAirCombat(){'), main.indexOf('function jumpBlock(){'));
+  assert.match(sync, /if\(on&&!document\.querySelector\('#hud \.jump-pad'\)\)\{\n[^\n]*\n[^\n]*POWER_PAD_HTML[^\n]*COUNTER_HTML/, 'both are made only when the switch is first on');
+  // The simulation with the switch off never charges or strikes, with or without the option.
+  const f = FIGHTS[0], off = fight(f.boss, f.planet, f.at, f.level, f.gear, 'classic', 1, 1, { power: true }), plain = fight(f.boss, f.planet, f.at, f.level, f.gear, 'classic', 1, 1);
+  assert.equal(off.powers, 0); assert.equal(off.seconds, plain.seconds); assert.equal(off.damage, plain.damage);
+  // The basic attack itself is untouched by this feature.
+  assert.match(main, /if\(combat\.basic\(e\)\)\{const stats=M\.activeStats\(state\),weapon=M\.weaponStats\(state\);combatTimers\.attackCooldown=\(weapon\.cd\?\?\.4\)\/Math\.max\(\.2,1\+stats\.haste\);/);
 });

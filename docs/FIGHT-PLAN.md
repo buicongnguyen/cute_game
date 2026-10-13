@@ -179,3 +179,48 @@ Biggest single hit 7.8% of a boss (target under 15%). Careless play takes 7 to 1
 3. Is the perfect-dodge critical wanted, or should dodging give safety only?
 4. Should the Strike replace weapon specials in the fourth slot (`STRIKE_OVER_WEAPON_SPECIAL`, built, off)? Today a sword keeps its special and the Strike exists only for paws and weapons without one.
 5. The Shadow Lord is long with the moves (113 to 120 s on the routes): re-tune it in step 4, or raise move damage.
+
+## 10. The hit counter and the power strike (built 2026-10-13, branch `dev-combo`)
+
+Only while the 'Jump and air combat' switch is on, in solo play. Off or online nothing of it exists: no counter, no button, no key, no charge (`tests/air-switch.test.ts`). The basic attack itself is unchanged.
+
+**The hit counter** (`src/combo-counter.ts`, `src/combo-counter.css`) replaces the combo chip on the screen's left edge. A number in a thin ring with 'HITS' and the damage bonus beside it, tilted, placed beside the explorer on the side away from the creature being fought. It pops on every hit, warms in colour and grows a little at 5, 10, 20 and 30 hits, names the big moments under the number for a moment ('LAUNCH!', 'FINISHER!', 'POWER!'), and when the chain ends shows its sum for 1.8 s ('12 hits · 3,480'), with 'New best!' when it beats the best chain. The best chain (hits and damage) is kept in the save's progression totals (`comboBest`, `comboBestDamage`: an open table of numbers, so no new save field). The page is written only when the count or the state changes; all motion is CSS and stops under 'reduced motion'. Where it may sit is a rule (`placeCounter`): never on the explorer or on a HUD piece, and off the target while any place clear of it is free; with no free place at all it is not shown.
+
+**The power strike** (`src/power-rules.ts`, one table of numbers; `combat.ts powerStrike`; `src/power-fx.ts`; `src/power-hud.ts`).
+
+| | |
+|---|---|
+| Charge | Every hit of the explorer's own on a creature (basic attacks, skills, air hits) adds one; pets, the dog and summons do not, and neither does the strike itself. The thin ring round the hit counter shows it filling |
+| Ready | At 20 hits a glowing button appears with a pop and a chime: on touch a round button just above the paw on its inner side (the outer side on phones 360 px wide or less and on tablets; mirrored left-handed), on a desktop the first button of the tray with its key, **G** |
+| Waiting | The button stays 12 s and blinks through the last 3; unused, the charge falls to half (10 hits). Being hit does not empty it; being knocked out does; using it starts again from nothing |
+| Overcharge | Hits while the button shows go on counting: at 40 the button shows x2 and the 12 s start again |
+| Damage | 5 basic hits (x2: 8.5), all of it on one creature, shared out among several, never less than 1.25 (x2: 2) each. The combo ramp does not raise it, a critical happens by the ordinary chance and the ordinary 4x, and one strike never takes more than 15% of a boss |
+| Timing | 0.22 s wind-up (light gathers on the explorer), 0.09 s hit-stop (half for the wave), 0.3 s recovery |
+
+| Weapon in hand (or the disguise's own) | Form | Area at level 1 (x2: 1.25 times) |
+|---|---|---|
+| Blade | A crescent wave that travels ahead at 26 m/s; each creature is hit when it arrives | 7 m long, 3.2 m wide |
+| Fists | A gust of wind in a cone | 4.6 m, about 100 degrees |
+| Gun | A beam | 11 m long, 1.5 m wide |
+| Any, in the air | The explorer dives and it lands as a ring (the bigger dive version, in place of the dive strike) | 4 m round |
+
+What is drawn is what hits, and it is made only of the pooled effects of `fx.ts` and the pooled beam of `combat-view.ts`: no mesh, material or shader of its own.
+
+**Balance** (`node --experimental-strip-types promo/fight-sim.mts`, 6 seeds; damage per second without and with the strike, the script pressing the button as soon as it is charged and the boss stands in its area):
+
+| Script | King Bear | Yeti | Shadow Lord |
+|---|---|---|---|
+| careless | 152 to 177 (+16.2%) | 172 to 200 (+16.7%) | 353 to 389 (+10.1%) |
+| single jump | 194 to 211 (+8.5%) | 210 to 235 (+12.0%) | 321 to 350 (+8.9%) |
+| double jump | 209 to 237 (+13.6%) | 278 to 309 (+11.2%) | 415 to 433 (+4.5%) |
+| ground route | 160 to 180 (+12.0%) | 193 to 217 (+12.8%) | 272 to 300 (+10.3%) |
+| launch route | 182 to 206 (+12.9%) | 220 to 243 (+10.4%) | 308 to 329 (+6.8%) |
+| chase route | 175 to 188 (+7.7%) | 198 to 227 (+14.5%) | 293 to 324 (+10.8%) |
+
+Mean +11.1%, highest +16.7%; biggest single hit 8.5% of a boss. The owner's starting numbers (10 hits, about 6 basic hits) gave +17 to +25% at 16 hits already, so the charge needs 20 hits and deals 5: the bound of about 12 to 15% came first. The overcharge is worth less than two strikes (8.5 against 10), so waiting never beats pressing.
+
+**Decisions for the owner**
+
+1. 20 hits and 5 basic hits, or the snappier 10 hits with a strike of about 2.5? Both keep the bound; a strike every 10 hits at 6 does not.
+2. The automatic five-step chain on the attack button (spin, finisher) and hold-to-repeat were set aside for the power strike; the basic attack is as it was.
+3. The air version uses the ordinary 4x critical, not the 8x of hits from the air, to keep the strike bounded.

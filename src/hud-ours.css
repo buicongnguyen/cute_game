@@ -280,26 +280,7 @@ body.indoors #app #hud .skills { display: none; }
 #app #hud .skills.air .skill.air-form { background: linear-gradient(160deg, #8fe0ff, #2f9be6); }
 #app #hud .skills.air.dive .attack-pad { background: linear-gradient(160deg, #ffa3bf, #e8457a); }
 #app #hud .skills.air.dive .attack-pad > svg { rotate: 180deg; }
-/* The combo chip (jump-rules.ts ComboMeter): the count, the damage bonus and four pips (ground, launch, air, finisher).
-   Left edge, clear of the hero plate and the joystick. Written only when the chain changes. */
-#app #hud #combo-chip {
-  position: fixed; left: calc(var(--edge) + var(--safe-left)); top: 38%; display: grid; grid-template-columns: auto auto; align-items: baseline; column-gap: 6px;
-  padding: 4px 12px 6px 10px; border-radius: 14px; background: var(--glass); border: 2px solid var(--honey); color: var(--cream); pointer-events: none; rotate: -4deg; transform-origin: left center;
-}
-#app #hud #combo-chip[hidden] { display: none; }
-#app #hud #combo-chip > b { font: 900 30px/1 Nunito, sans-serif; color: var(--honey); -webkit-text-stroke: 1px var(--plum); }
-#app #hud #combo-chip > span { font: 900 13px/1 Nunito, sans-serif; letter-spacing: .04em; }
-#app #hud #combo-chip > i { grid-column: 1 / -1; font: 800 12px/1.2 Nunito, sans-serif; font-style: normal; color: #b9f5a0; min-height: 14px; }
-#app #hud #combo-chip > em { grid-column: 1 / -1; display: flex; gap: 4px; margin-top: 2px; }
-#app #hud #combo-chip > em > u { width: 14px; height: 5px; border-radius: 3px; background: rgba(255, 246, 224, .28); text-decoration: none; }
-#app #hud #combo-chip > em > u.on { background: var(--honey); }
-#app #hud #combo-chip > em > u.on:nth-child(3) { background: #8fe0ff; }
-#app #hud #combo-chip > em > u.on:nth-child(4) { background: #ff5d8c; }
-#app #hud #combo-chip.done { opacity: .6; }
-@media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
-  #app #hud #combo-chip { top: 44%; padding: 3px 9px 5px 8px; }
-  #app #hud #combo-chip > b { font-size: 24px; }
-}
+/* The hit counter and the power strike's button have their own sheet (combo-counter.css). */
 /* 'Blocked' over a boss that turned a low hit (world.ts blockFeedback). */
 #floating-text .float.block { color: #bfe6ff; }
 
