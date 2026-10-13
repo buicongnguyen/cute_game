@@ -91,7 +91,7 @@ export function initInsight(d: InsightDeps): InsightApi {
     if (!pending) { stop(); return; }
     const due = reportOffer({ level: d.state().level, seen: readSeen(), calm: d.calm() });
     if (due && !chip) showChip(t('Your level {level} report card is ready', { level: due }), due);
-    else if (!due && chip && !d.calm() && d.modal() !== BOOK.type) hideChip(); // a fight began: it waits again
+    else if (!due && chip && !d.calm()) hideChip(); // a fight began or a panel opened: it waits again
     if (reportLevelAt(d.state().level) <= readSeen()) { pending = 0; stop(); }
   }
   function queue(level: number) { if (level <= readSeen()) return; pending = level; if (!timer) timer = setInterval(poll, POLL_MS); poll(); }

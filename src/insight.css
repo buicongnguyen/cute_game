@@ -209,3 +209,5 @@ button.ins-node { cursor: pointer; }
 .almanac-chip-open span:first-child { font-size: 22px; }
 .almanac-chip-close { width: 44px; font-size: 20px; border-radius: 0 999px 999px 0; }
 @media (max-height: 520px) { .almanac-chip { top: calc(52px + var(--safe-top, 0px)); } }
+/* Portrait phones: a band over the world, clear of the HUD's left cards and right button column. */
+@media (max-width: 600px) { .almanac-chip { left: 10px; right: 72px; transform: none; max-width: none; top: calc(256px + var(--safe-top, 0px)); } .almanac-chip-open { flex: 1; font-size: var(--t-sm); } }
