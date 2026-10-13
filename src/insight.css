@@ -1,0 +1,95 @@
+/* The Village Almanac (insight.ts) and the disguise strength cards. Loaded with the lazy chunk, after every other sheet. */
+.insight-book { display: flex; flex-direction: column; gap: 12px; color: var(--ink); min-width: 0; }
+.insight-book h3 { margin: 0; font-size: var(--t-lg); font-weight: 900; }
+.insight-book h4 { margin: 8px 0 0; font-size: var(--t-md); font-weight: 900; color: var(--ink); }
+.insight-book p { margin: 0; }
+.ins-lead { font-size: var(--t-md); font-weight: 800; color: var(--ink); line-height: 1.4; }
+.ins-note { font-size: var(--t-sm); color: var(--ink-soft); line-height: 1.4; }
+.ins-tabs button { min-height: 44px; }
+.ins-back { display: flex; flex-wrap: wrap; gap: 8px; }
+.ins-back button, .ins-sort button, .dz-compare select, .dz-compare button, .dz-more { min-height: 44px; }
+
+/* Charts */
+.ins-radar { display: block; width: 100%; max-width: 340px; height: auto; margin: 0 auto; font-family: var(--font); }
+.ins-radar.compact { width: 92px; max-width: 92px; flex: none; }
+.ins-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; font-size: var(--t-sm); font-weight: 800; color: var(--ink); }
+.ins-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ins-bars { display: flex; flex-direction: column; gap: 8px; }
+.ins-bar { padding: 8px 10px; border-radius: 14px; background: #fff; border: 2px solid var(--line); }
+.ins-bar.strong { border-color: #7fb8e6; background: #f2f9ff; }
+.ins-bar.weak { border-color: #f0c08a; background: #fff7ec; }
+.ins-bar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--t-md); font-weight: 900; }
+.ins-bar-head i { font-style: normal; }
+.ins-bar-head em { font-style: normal; font-size: var(--t-xs); font-weight: 900; padding: 1px 8px; border-radius: 999px; background: #dcecfb; color: #0f4c81; white-space: nowrap; }
+.ins-bar.weak .ins-bar-head em { background: #ffe6c7; color: #7a3d00; }
+.ins-bar-head b { font-size: var(--t-lg); color: #0f4c81; white-space: nowrap; }
+.ins-bar-head b small { color: #a04306; font-size: var(--t-md); }
+.ins-bar-track { position: relative; height: 12px; margin-top: 4px; border-radius: 999px; background: #efe7d2; overflow: visible; }
+.ins-bar-track > i { display: block; height: 100%; border-radius: 999px; background: #1c6fb8; min-width: 2px; }
+.ins-bar-track > u { position: absolute; top: -3px; width: 4px; height: 18px; margin-left: -2px; border-radius: 2px; background: #c2540a; box-shadow: 0 0 0 2px #fff; }
+.ins-bar p { margin-top: 5px; font-size: var(--t-sm); color: var(--ink-soft); line-height: 1.35; }
+.ins-spark { display: block; width: 100%; height: 44px; }
+
+/* Sorting */
+.ins-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ins-sort > span { font-size: var(--t-sm); font-weight: 900; color: var(--ink-soft); margin-right: 2px; }
+.ins-sort button { padding: 6px 12px; border-radius: 999px; border: 2px solid var(--line); background: #fff; color: var(--ink-soft); font-size: var(--t-sm); font-weight: 900; box-shadow: 0 2px 0 var(--line); }
+.ins-sort button.active { border-color: #1c6fb8; background: #e3f1fd; color: #0f4c81; box-shadow: 0 2px 0 #1c6fb8; }
+
+/* The sixteen disguises */
+.dz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+.dz-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 44px; padding: 10px 6px 8px; border-radius: 16px; border: 2px solid var(--line); background: #fff; color: var(--ink); text-align: center; box-shadow: 0 3px 0 var(--line); font: inherit; cursor: pointer; }
+.dz-card.owned { border-color: #6fc257; background: #f6fff0; box-shadow: 0 3px 0 #6fc257; }
+.dz-card.worn { border-color: var(--sun-deep); background: #fff8dd; box-shadow: 0 3px 0 var(--sun-deep); }
+.dz-card strong { font-size: var(--t-sm); font-weight: 900; line-height: 1.2; }
+.dz-card small { font-size: var(--t-xs); color: var(--ink-soft); font-weight: 800; line-height: 1.2; min-height: 2.4em; }
+.dz-rank { position: absolute; top: 6px; left: 8px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: #efe7d2; color: var(--ink-soft); font-size: var(--t-xs); font-weight: 900; line-height: 22px; }
+.dz-score { position: absolute; top: 6px; right: 8px; font-size: var(--t-sm); font-weight: 900; color: #0f4c81; }
+.dz-face { display: grid; place-items: center; width: 46px; height: 46px; font-size: 30px; }
+.dz-face img, .dz-face .art-icon { width: 46px; height: 46px; object-fit: contain; }
+.dz-face.big { width: 64px; height: 64px; font-size: 42px; flex: none; }
+.dz-face.big img { width: 64px; height: 64px; }
+.dz-card .chip { margin-top: 2px; }
+.dz-role { background: #e3f1fd; color: #0f4c81; }
+
+/* One disguise */
+.dz-detail { display: flex; flex-direction: column; gap: 10px; }
+.dz-hero { display: flex; align-items: center; gap: 12px; }
+.dz-hero .chips { margin-top: 4px; }
+.dz-compare { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dz-compare label { font-size: var(--t-sm); font-weight: 900; color: var(--ink-soft); }
+.dz-compare select { flex: 1 1 150px; min-width: 0; padding: 6px 10px; border-radius: 12px; border: 2px solid var(--line-strong); background: #fff; color: var(--ink); font: inherit; font-weight: 800; }
+.dz-compare button[aria-pressed="true"] { outline: 3px solid #c2540a; }
+.dz-chart { padding: 6px 4px 10px; border-radius: 18px; background: #fff; border: 2px solid var(--line); }
+.dz-hint { padding: 8px 12px; border-radius: 14px; font-size: var(--t-md); font-weight: 800; line-height: 1.35; }
+.dz-hint.good { background: #e9f8df; color: #245c16; }
+.dz-hint.care { background: #fff3d6; color: #6b4700; }
+.dz-skill { display: flex; gap: 10px; padding: 10px; border-radius: 14px; background: #fff; border: 2px solid var(--line); }
+.dz-skill.basic { background: var(--well); }
+.dz-skill-icon { flex: none; width: 36px; height: 36px; display: grid; place-items: center; font-size: 24px; border-radius: 12px; background: var(--well); }
+.dz-skill strong { font-size: var(--t-md); font-weight: 900; }
+.dz-skill strong small { font-weight: 800; color: var(--ink-soft); font-size: var(--t-xs); }
+.dz-skill p { font-size: var(--t-sm); color: var(--ink-soft); line-height: 1.4; margin-top: 2px; }
+.dz-skill p.dz-facts { color: var(--ink); font-weight: 800; }
+.dz-skill .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.dz-add { background: #e3f1fd; color: #0f4c81; }
+
+/* The card on a shop row and in the backpack */
+[data-dz] { min-width: 0; }
+.dz-slot-card { min-width: 0; max-width: 100%; overflow: hidden; margin-top: 6px; padding: 8px; border-radius: 14px; background: var(--well); border: 2px solid var(--line); }
+.dz-slot-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.dz-slot-head .dz-more { padding: 6px 12px; font-size: var(--t-sm); white-space: normal; text-align: left; }
+.dz-slot-body { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.dz-mini { flex: 1; min-width: 0; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 3px; }
+.dz-mini li { display: grid; grid-template-columns: minmax(0, 7.2em) 1fr 2.2em; align-items: center; gap: 6px; font-size: var(--t-xs); font-weight: 800; color: var(--ink); }
+.dz-mini li > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dz-mini li > i { height: 8px; border-radius: 999px; background: #efe7d2; overflow: hidden; }
+.dz-mini li > i > b { display: block; height: 100%; border-radius: 999px; background: #1c6fb8; }
+.dz-mini li > strong { text-align: right; color: #0f4c81; font-weight: 900; }
+[data-dz]:empty { min-height: 0; }
+/* Narrow phones: the numbers and bars carry the picture; the little radar would only crowd the row. */
+@media (max-width: 430px) { .dz-slot-body .ins-radar.compact { display: none; } .dz-mini { grid-template-columns: 1fr 1fr; gap: 4px 12px; } .dz-mini li { grid-template-columns: minmax(0, 1fr) auto; font-size: var(--t-sm); } .dz-mini li > i { display: none; } .dz-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 340px) { .dz-card .ins-radar.compact { width: 80px; } }
+
+/* The way in from the journal */
+.almanac-open { align-self: flex-start; min-height: 44px; }

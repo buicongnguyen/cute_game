@@ -1,5 +1,6 @@
 import { VI_CATALOG } from './vi-catalog.ts';
 import { ROAR_VI } from './vi-roar.ts';
+import { INSIGHT_VI } from './vi-insight.ts';
 import { MOVES_VI } from './vi-moves.ts';
 import { PETS2_VI } from './vi-pets2.ts';
 import { JUMP_VI } from './vi-jump.ts';
@@ -37,5 +38,6 @@ Object.assign(VI_PACK, MOVES_VI);
 Object.assign(VI_PACK, PETS2_VI);
 Object.assign(VI_PACK, JUMP_VI);
 Object.assign(VI_PACK, CAMERA_VI);
+Object.assign(VI_PACK, INSIGHT_VI);
 /** The time words a counter may carry in a template slot (i18n.ts compileTemplates): h/m/s/p/g plus the spelled-out units. */
 export const VI_TIME_UNITS = 'h|m|s|p|g|giờ|phút|giây';
