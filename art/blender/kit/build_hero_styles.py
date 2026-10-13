@@ -60,8 +60,10 @@ HEIGHTS = {
     'chibi': None,
     'teen': dict(E=0.2, TW=0.9, TH=1.08, AW=0.94, AL=1.22, HEAD=0.9, NECK=0.03, LEG_X=0.17),
     'tall': dict(E=0.46, TW=0.8, TH=1.2, AW=0.86, AL=1.55, HEAD=0.76, NECK=0.07, LEG_X=0.155),
-    # grown: the most human shape, about five heads tall: long legs (half the height), arms to the hips.
-    'grown': dict(E=1.1, TW=0.74, TH=1.5, AW=0.8, AL=3.0, HEAD=0.52, NECK=0.12, LEG_X=0.15),
+    # grown: the most human shape, about five heads tall: legs 45% of the height, arms to the hips. Its legs are
+    # modelled ring by ring (leg_rings): shorts to just above the knee (HEM) and a short shin. E was 1.1 until
+    # 2026-10-14: the figure was too leggy, and the 0.26 it lost all came off the bare shin (0.75 -> 0.50 long).
+    'grown': dict(E=0.84, HEM=0.74, TW=0.74, TH=1.5, AW=0.8, AL=3.0, HEAD=0.52, NECK=0.12, LEG_X=0.15),
 }
 # Builds are applied at run time to the boy (sturdy) or girl (slim) file, no new files; src/looks.ts BUILD mirrors
 # this (torso x/depth, limb thickness, shoulder and hip spread). Used here only for the render sheets.
@@ -96,6 +98,26 @@ def arm_rel_z(rz, p):
     return rz * p['AL'] if rz >= knee else knee * p['AL'] + (rz - knee)
 
 
+def leg_rings(p):
+    """The grown leg, ring by ring: {default ring z (build_hero.leg_geo): (new z, radius factor)}.
+
+    The plain stretch (below, in deform) is fine for a short shin, but at grown length it pulled the skin's closing
+    cone out to a long spike that met the shorts as a thin stem, and flared the hem (its rings sit under z 0.43, so
+    they took the skin's widening): the lower leg looked detached from the upper. Here the leg is one tapering shape:
+    the thigh (shorts) narrows to the hem at HEM, the shin enters the hem at nearly the hem's own radius (0.105 in
+    0.119) and tapers to the ankle; the skin's top ring and closing point are hidden inside the shorts. The shoe and
+    the ankle ring (z < 0.26) keep their place, and no vertex is added.
+    """
+    hem, top = p['HEM'], 0.565 + p['E']
+    return {
+        # shorts: closing point, hem ring, lower thigh, upper thigh, hip ring, closing point (default radii 0.108, 0.117, 0.117, 0.095)
+        0.418: (hem - 0.004, 1.0), 0.422: (hem, 0.119 / 0.108), 0.45: (hem + 0.07, 0.126 / 0.117),
+        0.53: (top - 0.13, 0.136 / 0.117), 0.558: (top - 0.025, 0.11 / 0.095), 0.565: (top, 1.0),
+        # skin: the knee ring (default radius 0.08) and the closing point, both inside the shorts
+        0.38: (hem + 0.05, 0.108 / 0.08), 0.43: (hem + 0.12, 1.0),
+    }
+
+
 def deform(P, p):
     pv, E = layout(p), p['E']
     for v in P['body'].verts:
@@ -107,9 +129,18 @@ def deform(P, p):
         for v in P[name].verts:
             r = v - old
             v.x, v.y, v.z = pv[name].x + r.x * p['AW'], pv[name].y + r.y * p['AW'], pv[name].z + arm_rel_z(r.z, p)
+    rings = leg_rings(p) if p.get('HEM') else None
     for name, s in (('leg-left', -1), ('leg-right', 1)):
         for v in P[name].verts:
             dx = v.x - 0.18 * s
+            if rings:               # a modelled leg (grown): every ring of the cuff and the skin gets its own height and radius
+                ring = rings.get(round(v.z, 3))
+                if ring:
+                    v.z, k = ring[0], ring[1]
+                    dx *= k
+                    v.y *= k
+                v.x = p['LEG_X'] * s + dx
+                continue
             if v.z < 0.26:          # shoe: same size, lowered with the longer shin
                 v.z -= E
             else:                   # shorts and shin stretch together; the shin fills out a little, not a stick

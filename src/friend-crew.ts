@@ -6,7 +6,7 @@ import { CAGES, FRIENDS, FRIEND_IDS, canChangeOutfit, cageState, friendsOf, inVi
 import type { World, Entity } from './world.ts';
 import { dropTree } from './dispose-tree.ts';
 import { lineFor, type LineScenario } from './friend-lines.ts';
-import { HIP, gaitSwing, newGait, stepGait, type Gait } from './walk-cycle.ts';
+import { gaitSwing, hipOf, newGait, stepGait, type Gait } from './walk-cycle.ts';
 import { RESCUE_REACH, cageCandidates } from './cage-spots.ts';
 import { idleAfter, idleChoice, lookFor, strollRoute, type Stop } from './friend-idle.ts';
 
@@ -226,7 +226,7 @@ export class FriendCrew {
     // A margin, not d > stand: the stand point moves with the walker, so stepping exactly d - stand would approach it forever.
     if (d > stand + .02) {
       const step = Math.min(d - stand, Math.max(speed * .5, Math.min(speed, d * 2.5)) * dt); a.x += dx / d * step; a.z += dz / d * step;
-      const leg = HIP * a.root.scale.x; stepGait(a.gait, step, dt, leg); a.swing = gaitSwing(step / Math.max(dt, 1e-4), leg); a.walked = true;
+      const leg = hipOf(a.root.userData.model as T.Object3D | undefined) * a.root.scale.x; stepGait(a.gait, step, dt, leg); a.swing = gaitSwing(step / Math.max(dt, 1e-4), leg); a.walked = true;
       this.turn(a, Math.atan2(dx, dz), dt); this.place(a, 'walk'); return false;
     }
     return true;

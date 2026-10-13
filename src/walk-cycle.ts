@@ -33,6 +33,24 @@ export function limbsOf(model: T.Object3D): Limbs {
   model.userData.limbs = limbs; return limbs;
 }
 /**
+ * The hip height (model units) of a model built from the hero's parts: its leg pivot, so a longer-legged body style
+ * (the Tall and Grown heights) is known without a table. A stand-in without real hips counts as the default explorer.
+ */
+export function hipOf(model: T.Object3D | null | undefined): number {
+  if (!model) return HIP;
+  const y = limbsOf(model).legL?.position.y ?? 0; return y > .2 ? y : HIP;
+}
+/**
+ * The explorer's own clock-driven walk fitted to its legs: `rate` slows the step clock and `swing` (radians) narrows
+ * the leg swing as the hips rise. Speed is the same at every height, so the cadence times the stride must stay what it
+ * is for the default explorer: a leg k squared times longer takes steps k times longer, k times less often. Before, a
+ * Grown explorer swung its long legs 0.7 rad at the chibi's cadence: feet two metres apart, both off the ground.
+ */
+export function strideOf(hip: number): { rate: number; swing: number } {
+  if (!(hip > HIP + .01)) return { rate: 1, swing: .7 };
+  const k = Math.sqrt(hip / HIP); return { rate: 1 / k, swing: Math.asin(Math.min(1, Math.sin(.7) * k * HIP / hip)) };
+}
+/**
  * Blends the walk swing over whatever pose the limbs already hold (x rotations only; an arm's splay on z is kept).
  * Returns the body bob (model units) to add to the walker's height. Pass arms = false to leave the arms to a pose.
  */

@@ -52,12 +52,14 @@ export const DEFAULT_LOOK: LookId = 'boy-chibi-none-bare';
  * Standing height of each height's body file over the chibi's (tests/w26-people.test.ts measures the GLBs). A friend
  * (friend-view.ts) divides it out: for a friend the height option sets the proportions and growth sets the height.
  */
-export const HEIGHT_RATIO: Record<Height, number> = { tiny: .979, chibi: 1, teen: 1.066, tall: 1.152, grown: 1.398 };
+export const HEIGHT_RATIO: Record<Height, number> = { tiny: .979, chibi: 1, teen: 1.066, tall: 1.152, grown: 1.287 };
 /**
- * A trim on the drawn size of a height, on top of its body file (the owner found Grown a little too tall, 2026-10-13):
- * the whole dressed explorer shrinks together, so hats and gear still fit. Friends are not affected (they divide the height out).
+ * A trim on the drawn size of a height, on top of its body file: the whole dressed explorer shrinks together, so hats
+ * and gear still fit. Friends are not affected (they divide the height out). None is in use: Grown was drawn at 0.92
+ * for a day (2026-10-13, the owner found it a little too tall), then its body file was rebuilt 8% shorter with the cut
+ * taken from the shins (build_hero_styles.py, 2026-10-14), so its head, hats and gear are full size again.
  */
-export const HEIGHT_TRIM: Partial<Record<Height, number>> = { grown: .92 };
+export const HEIGHT_TRIM: Partial<Record<Height, number>> = {};
 /** The trim of the look an avatar was built with (its userData.look); 1 for anything else. */
 export function lookTrim(look: unknown): number { const l = typeof look === 'string' ? toLook(look) : null; return l ? HEIGHT_TRIM[splitLook(l).height] ?? 1 : 1; }
 export const LOOK_IDS: readonly LookId[] = ROWS.body.flatMap(b => ROWS.height.flatMap(h => ROWS.ears.flatMap(e => ROWS.deco.map(d => [b, h, e, d].join('-') as LookId))));
@@ -97,7 +99,7 @@ const fit = (head: number, tw: number, th: number, aw: number, al: number, e: nu
   'leg-right': { scale: [1, 1, 1], offset: [0, -e, 0] },
   'hand-right': { scale: [1, 1, 1], offset: [0, 0, 0] },
 });
-export const FIT: Record<Height, Partial<Record<string, Fit>>> = { tiny: fit(1.1, 1.04, .88, 1, .9, -.1), chibi: {}, teen: fit(.9, .9, 1.08, .94, 1.22, .2), tall: fit(.76, .8, 1.2, .86, 1.55, .46), grown: fit(.52, .74, 1.5, .8, 3, 1.1) };
+export const FIT: Record<Height, Partial<Record<string, Fit>>> = { tiny: fit(1.1, 1.04, .88, 1, .9, -.1), chibi: {}, teen: fit(.9, .9, 1.08, .94, 1.22, .2), tall: fit(.76, .8, 1.2, .86, 1.55, .46), grown: fit(.52, .74, 1.5, .8, 3, .84) };
 /**
  * Builds (mirrors build_hero_styles.py BUILDS), applied at load to the base body's parts (assets.ts applyBuild):
  * torso [x, z] scale, limb thickness (x, z of arms and legs), shoulder and hip spread (the parts' x positions).

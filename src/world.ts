@@ -58,7 +58,7 @@ import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
-import {HIP,applyGait,gaitSwing,limbsOf,newGait,stepGait,type Gait} from './walk-cycle.ts';
+import {applyGait,gaitSwing,hipOf,limbsOf,newGait,stepGait,strideOf,type Gait} from './walk-cycle.ts';
 import {DEFAULT_PIVOTS,fitOf,lookOf,lookTrim,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {part} from './part-cache.ts';
 import {WeaponTrail,measureBlade,type HeldBlade} from './weapon-trail.ts';
@@ -1043,7 +1043,7 @@ export class World {
       if(tg){const k=1-Math.exp(-dt*12);p.x+=(tg.x-p.x)*k;p.y+=(tg.y-p.y)*k;p.z+=(tg.z-p.z)*k;m.rotation.y+=Math.atan2(Math.sin(tg.f-m.rotation.y),Math.cos(tg.f-m.rotation.y))*k;}
       let dist=last?Math.hypot(p.x-last.x,p.z-last.z):0;if(dist>3)dist=0;if(last)last.copy(p);else u.lastPos=p.clone(); // a teleport is not a step
       u.speed=(u.speed??0)+((dt>0?dist/dt:0)-(u.speed??0))*(1-Math.exp(-dt*6));
-      const moving=remote.pose.moving??u.speed>.3,leg=HIP*m.scale.x,l=limbsOf(m);
+      const moving=remote.pose.moving??u.speed>.3,leg=hipOf(m)*m.scale.x,l=limbsOf(m);
       const flying=FLIGHT_POSE_DISGUISES.includes(remote.pose.gear?.disguise??'')&&(remote.pose.visual?.flight??0)>0;
       if(!flying)clearSuperheroFlightPose(m);
       stepGait(g,moving?Math.max(u.speed,1.5)*dt:0,dt,leg);
@@ -2184,7 +2184,9 @@ export class World {
     this.trailClock=(this.trailClock||0)+dt;this.trailEmit=false;
     // The trail keeps its times in single precision: its clock starts over now and then, while nothing swings.
     if(this.trailClock>300&&!(this.punchT>0)&&!(this.spinT>0)&&!this.bladeTrail?.active){this.trailClock=0;this.swingAt=-9;this.windHold=0;}
-    this.walkClock=(this.walkClock||0)+dt*(this.moving?11:3);
+    // The walk is fitted to the body style's legs (walk-cycle.ts strideOf): longer legs step slower and swing less.
+    const stride=(this.player.userData.stride??=strideOf(hipOf(this.player))) as {rate:number;swing:number};
+    this.walkClock=(this.walkClock||0)+dt*(this.moving?11*stride.rate:3);
     const o=this.walkClock,c=Math.sin(o),p=this.player;
     const flying=this.playerFlying&&FLIGHT_POSE_DISGUISES.includes(this.state.gear.disguise??'');
     if(!flying)clearSuperheroFlightPose(p);
@@ -2194,7 +2196,7 @@ export class World {
     // An arm a punch stretched is its own length again once the punch is over.
     if(this.armsStretched&&!(this.punchT>0)){armL?.scale.set(1,1,1);armR?.scale.set(1,1,1);this.armsStretched=false;}
     // Base: walk cycle or idle breathing.
-    if(this.moving){armL?.rotation.set(-c*.8,0,-.3);armR?.rotation.set(c*.8,0,.3);legL?.rotation.set(c*.7,0,0);legR?.rotation.set(-c*.7,0,0);lift=Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
+    if(this.moving){armL?.rotation.set(-c*.8,0,-.3);armR?.rotation.set(c*.8,0,.3);legL?.rotation.set(c*stride.swing,0,0);legR?.rotation.set(-c*stride.swing,0,0);lift=Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
     else{armL?.rotation.set(0,0,-.3-Math.sin(o)*.05);armR?.rotation.set(0,0,.3+Math.sin(o)*.05);legL?.rotation.set(0,0,0);legR?.rotation.set(0,0,0);sy=1+Math.sin(o*1.2)*.025;if(head)head.rotation.set(0,Math.sin(o*.4)*.15,0);}
     // In the air (jump-rules.ts): a squash as the feet leave, a stretch going up, a tuck at the top, a head-first dive.
     const jump=this.jump,air=jump?.airborne?jump:null;

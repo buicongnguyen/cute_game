@@ -15,7 +15,7 @@ import { dropTree } from './dispose-tree.ts';
 import { friendStage } from './growth.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends.ts';
 import { part } from './part-cache.ts';
-import { HIP, applyGait, gaitSwing, limbsOf, newGait, stepGait, type Gait } from './walk-cycle.ts';
+import { HIP, applyGait, gaitSwing, hipOf, limbsOf, newGait, stepGait, type Gait } from './walk-cycle.ts';
 import { HANGOUTS, SCHEDULE_SECONDS, assignHangouts, type DecorPlacement, type Hangout } from './house-activities.ts';
 
 export const HOUSE_FILE = modelUrl('house.glb');
@@ -257,7 +257,7 @@ export class HouseView {
       const arm = body && part(body, 'arm-right'), legL = body && part(body, 'leg-left'), legR = body && part(body, 'leg-right'), armL = body && part(body, 'arm-left');
       // Walk to the next hangout on its legs (walk-cycle.ts: cadence from the ground covered, arms counter-swinging, a
       // small bob), out of the seated or raised-arm pose it left; the last steps fade into the next pose.
-      const gait = v.gait ??= newGait(), leg = HIP * g.scale.x;
+      const gait = v.gait ??= newGait(), hip = hipOf(body), leg = hip * g.scale.x;
       if (far > .05) {
         const step = Math.min(far, dt * 1.6); g.position.x += dx / far * step; g.position.z += dz / far * step; g.position.y = 0; g.rotation.y = Math.atan2(dx, dz);
         stepGait(gait, step, dt, leg);
@@ -273,7 +273,7 @@ export class HouseView {
       if (!body) continue;
       if (v.spot.pose !== 'sit') { if (legL) legL.rotation.x = 0; if (legR) legR.rotation.x = 0; body.rotation.z = 0; }
       body.rotation.x = v.spot.pose === 'read' ? .12 : 0;
-      if (v.spot.pose === 'sit') { if (legL) legL.rotation.x = -1.35; if (legR) legR.rotation.x = -1.35; body.position.y = -.55 + Math.sin(t * 2) * .02; body.rotation.z = Math.sin(t * .7) * .04; }
+      if (v.spot.pose === 'sit') { if (legL) legL.rotation.x = -1.35; if (legR) legR.rotation.x = -1.35; body.position.y = -(Math.abs(hip - HIP) < .01 ? .55 : hip + .03) + Math.sin(t * 2) * .02; /* the hips come down to the seat, whatever the leg length */ body.rotation.z = Math.sin(t * .7) * .04; }
       else body.position.y = Math.abs(Math.sin(t * 2.2)) * .05;
       if (arm) armPose(arm, v.spot.pose, t);
       if (armL) armL.rotation.x = 0;

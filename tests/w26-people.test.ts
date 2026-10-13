@@ -82,6 +82,22 @@ test('every friend stands at the same share of the explorer\'s height indoors an
   assert.equal(report.length, 9, report.join('\n'));
 });
 
+test('a seated friend rests its hips on the seat at every height option (a Grown one hung a leg length above it)', async () => {
+  await kits();
+  const s = classic(M.newGame('Ann')), w = homeWorld(s); void w;
+  const looks = ['boy-grown-none-bare', 'girl-tall-none-bare', 'boy-chibi-none-bare'] as LookId[];
+  for (const l of looks) await heroKitFor(l).load();
+  s.friends = homeFriends(2).map((f, i) => ({ ...f, look: looks[i] }));
+  const view = new HouseView(); view.syncFriends(s.friends);
+  const seat = { x: -2.4, z: -1.32, facing: 0, pose: 'sit' as const, y: .5 }, at = new T.Vector3(), report: string[] = [];
+  for (const v of view.friends.values()) { v.spot = seat as typeof v.spot; v.group.position.set(seat.x, 0, seat.z); }
+  view.update(1 / 60, 0);
+  for (const v of view.friends.values()) {
+    const leg = v.group.getObjectByName('leg-left')!; v.group.updateMatrixWorld(true); leg.getWorldPosition(at); report.push(`${v.id} ${(at.y - seat.y).toFixed(3)}`);
+    assert.equal(leg.rotation.x, -1.35); assert.ok(Math.abs(at.y - seat.y) < .06, `hips on the seat: ${report.join(', ')}`);
+  }
+});
+
 test('a styled friend: the height option sets proportions and growth sets the height (body files measured)', async () => {
   await kits();
   const s = classic(M.newGame('Ann')), w = homeWorld(s), hero = standingHeight(w.lookAvatar(s.color, {}, DEFAULT_LOOK));

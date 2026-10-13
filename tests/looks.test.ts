@@ -163,9 +163,9 @@ test('ten body files keep the hero\'s parts and hand empties; their pivots agree
   }
   const top = (h: Height) => { const g = glb(bodyFile('boy', h)); return g.box(g.index('head')).max.y; };
   const tops = ROWS.height.map(h => top(h as Height)); for (let i = 1; i < tops.length; i++) assert.ok(tops[i] > tops[i - 1], `${ROWS.height[i]} is taller (${tops.map(t => t.toFixed(2))})`);
-  // Grown is the human-like one: about five heads tall (chibi about two).
+  // Grown is the human-like one: a little under five heads tall (chibi about two; 5.1 before its shins were shortened).
   const heads = (h: Height) => { const g = glb(bodyFile('boy', h)), b = g.box(g.index('head')); return b.max.y / (b.max.y - b.min.y); };
-  assert.ok(heads('chibi') < 2.2 && heads('grown') > 4.8, `heads tall: chibi ${heads('chibi').toFixed(2)}, grown ${heads('grown').toFixed(2)}`);
+  assert.ok(heads('chibi') < 2.2 && heads('grown') > 4.5 && heads('grown') < 4.9, `heads tall: chibi ${heads('chibi').toFixed(2)}, grown ${heads('grown').toFixed(2)}`);
 });
 
 test('every wearable (hats, outfits, boots, weapons, disguises) attaches to every body, build and height and lands on its part', () => {
@@ -315,10 +315,22 @@ test('indoors, a friend crossing the house swings its legs, and they rest at 0 o
   assert.ok(Math.hypot(group.position.x, group.position.z - 1) < .06, 'arrived'); assert.equal(legL.rotation.x, 0); assert.equal(legR.rotation.x, 0);
 });
 
-test('the Grown height is drawn a little smaller than its body file; the other heights are untouched', async () => {
-  const L = await import('../src/looks.ts');
-  assert.equal(L.lookTrim('boy-grown-none-bare'), .92); assert.equal(L.lookTrim('girl-grown-cat-fox'), .92);
-  for (const h of ['tiny', 'chibi', 'teen', 'tall']) assert.equal(L.lookTrim(`boy-${h}-none-bare`), 1, h);
-  assert.equal(L.lookTrim(undefined), 1); assert.equal(L.lookTrim('nonsense'), 1);
-  assert.ok(L.HEIGHT_RATIO.grown * L.HEIGHT_TRIM.grown! > L.HEIGHT_RATIO.tall, 'Grown stays the tallest height');
+test('no height is drawn smaller than its body file: the Grown body itself is 8% shorter (shorter shins), and still the tallest', async () => {
+  const L = await import('../src/looks.ts'), W = await import('../src/walk-cycle.ts');
+  for (const h of ['tiny', 'chibi', 'teen', 'tall', 'grown']) assert.equal(L.lookTrim(`boy-${h}-none-bare`), 1, h);
+  assert.equal(L.lookTrim('girl-grown-cat-fox'), 1); assert.equal(L.lookTrim(undefined), 1); assert.equal(L.lookTrim('nonsense'), 1);
+  // On screen Grown is what the 0.92 trim of the old file (1.398 of the chibi) showed: 1.286.
+  assert.ok(Math.abs(L.HEIGHT_RATIO.grown - 1.398 * .92) < .01, `grown ${L.HEIGHT_RATIO.grown}`);
+  assert.ok(L.HEIGHT_RATIO.grown > L.HEIGHT_RATIO.tall * 1.1, 'Grown stays clearly the tallest height');
+  // Boots stay on the feet: the leg fit drops gear by exactly the hips' rise (hero_spec hips at 0.52, grown 1.36).
+  assert.equal(L.FIT.grown['leg-left']!.offset[1], -.84);
+  // The explorer's own walk is fitted to the legs: the default is untouched, longer legs step slower and swing less,
+  // and cadence x stride (the ground a step cycle covers) is the same at every height.
+  assert.deepEqual(W.strideOf(W.HIP), { rate: 1, swing: .7 }); assert.deepEqual(W.strideOf(.42), { rate: 1, swing: .7 });
+  const base = W.HIP * Math.sin(.7);
+  for (const hip of [.72, .98, 1.36]) { const s = W.strideOf(hip); assert.ok(s.rate < 1 && s.swing < .7, `hips ${hip}`); assert.ok(Math.abs(s.rate * hip * Math.sin(s.swing) - base) < 1e-9, `hips ${hip}: same ground per second`); }
+  assert.ok(Math.abs(W.strideOf(1.36).swing - .41) < .01 && Math.abs(W.strideOf(1.36).rate - .618) < .01);
+  // The hips are read off the model's own leg pivot; a stand-in without real hips walks as the default explorer.
+  const T = await import('three'), legged = (y: number) => { const g = new T.Group(), leg = new T.Group(); leg.name = 'leg-left'; leg.position.y = y; g.add(leg); return g; };
+  assert.equal(W.hipOf(legged(1.36)), 1.36); assert.equal(W.hipOf(legged(0)), W.HIP); assert.equal(W.hipOf(new T.Group()), W.HIP); assert.equal(W.hipOf(undefined), W.HIP);
 });
