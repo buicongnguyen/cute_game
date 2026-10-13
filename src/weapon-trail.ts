@@ -1,15 +1,17 @@
 import * as T from 'three';
 import { TRAIL, TrailSamples, buildRibbon, bladeAxis, bladeTint, plainBlade, maxSections, type Blade } from './trail-ribbon.ts';
 import { WIND, WindBursts, buildWind, WIND_SECTIONS } from './punch-wind.ts';
+import { SkillGusts, buildGusts, GUST_SECTIONS } from './skill-wind.ts';
 
 /**
- * Draws the weapon trail and the wind off a punch (trail-ribbon.ts, punch-wind.ts): one mesh per swinger, made once,
+ * Draws the weapon trail, the wind off a punch and the wind of a disguise's skill (trail-ribbon.ts, punch-wind.ts,
+ * skill-wind.ts): one mesh per swinger, made once,
  * with vertex buffers that are rewritten in place while a swing shows and hidden (no draw call, no work) the rest of
  * the time. Every swinger shares one material, so a second swinger costs one more draw call and no new shader.
  */
 
-/** Sections one swinger can show at once: a full ring of blade ribbons (a chain leaves up to three), the wind of a punch, and the joins between them. */
-const SECTIONS = maxSections() + WIND_SECTIONS + 10;
+/** Sections one swinger can show at once: a full ring of blade ribbons (a chain leaves up to three), the wind of a punch, the wind of a skill, and the joins between them. */
+const SECTIONS = maxSections() + WIND_SECTIONS + GUST_SECTIONS + 10;
 
 let shared: T.ShaderMaterial | null = null;
 /**
@@ -80,6 +82,8 @@ export class WeaponTrail {
   readonly mesh: T.Mesh;
   readonly samples = new TrailSamples();
   readonly wind = new WindBursts();
+  /** The wind of a disguise's skill (skill-wind.ts): streaks and arcs, in the same buffers. */
+  readonly gusts = new SkillGusts();
   /** Sections drawn by the last `draw` (tests, the perf probe). */
   sections = 0;
   private position: T.BufferAttribute; private trail: T.BufferAttribute; private tint: T.BufferAttribute;
@@ -98,7 +102,7 @@ export class WeaponTrail {
   }
 
   /** True while anything is left to draw. */
-  get active() { return this.samples.count > 0 || this.wind.count > 0; }
+  get active() { return this.samples.count > 0 || this.wind.count > 0 || this.gusts.count > 0; }
 
   /**
    * Adds where the blade is now: `hand.matrixWorld` must be this frame's. `fresh` starts a new ribbon (a new cut; what
@@ -118,10 +122,11 @@ export class WeaponTrail {
    */
   draw(now: number, detail: number, r: number, g: number, b: number, view?: { x: number; y: number; z: number }) {
     const low = detail <= .5, life = low ? TRAIL.lifeLow : TRAIL.life;
-    this.samples.prune(now, life); this.wind.prune(now);
+    this.samples.prune(now, life); this.wind.prune(now); if (this.gusts.count) this.gusts.prune(now);
     const position = this.position.array as Float32Array, trail = this.trail.array as Float32Array, tint = this.tint.array as Float32Array;
     const blade = buildRibbon(this.samples, now, life, low ? TRAIL.subdivLow : TRAIL.subdiv, position, trail, 0);
-    const sections = this.wind.count ? view ? buildWind(this.wind, now, position, trail, tint, blade, low ? WIND.linesLow : WIND.lines, view.x, view.y, view.z) : buildWind(this.wind, now, position, trail, tint, blade, low ? WIND.linesLow : WIND.lines) : blade;
+    const wind = this.wind.count ? view ? buildWind(this.wind, now, position, trail, tint, blade, low ? WIND.linesLow : WIND.lines, view.x, view.y, view.z) : buildWind(this.wind, now, position, trail, tint, blade, low ? WIND.linesLow : WIND.lines) : blade;
+    const sections = this.gusts.count ? view ? buildGusts(this.gusts, now, position, trail, tint, wind, !low, view.x, view.y, view.z) : buildGusts(this.gusts, now, position, trail, tint, wind, !low) : wind;
     this.sections = sections;
     if (sections < 2) { this.mesh.visible = false; this.mesh.geometry.setDrawRange(0, 0); return false; }
     for (let i = 0, n = blade * 8; i < n; i += 4) { tint[i] = r; tint[i + 1] = g; tint[i + 2] = b; tint[i + 3] = 0; }
@@ -132,7 +137,7 @@ export class WeaponTrail {
     return true;
   }
 
-  clear() { this.samples.clear(); this.wind.clear(); this.sections = 0; this.mesh.visible = false; this.mesh.geometry.setDrawRange(0, 0); }
+  clear() { this.samples.clear(); this.wind.clear(); this.gusts.clear(); this.sections = 0; this.mesh.visible = false; this.mesh.geometry.setDrawRange(0, 0); }
 }
 
 /**
