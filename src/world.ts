@@ -60,6 +60,7 @@ import {createHarpoonProjectile} from './harpoon-art.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
 import {applyGait,gaitSwing,hipOf,limbsOf,newGait,stepGait,strideOf,type Gait} from './walk-cycle.ts';
 import {DEFAULT_PIVOTS,fitOf,lookOf,lookTrim,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
+import {fitArmPiece} from './arm-fit.ts';
 import {part} from './part-cache.ts';
 import {WeaponTrail,measureBlade,type HeldBlade} from './weapon-trail.ts';
 import {CUTS,SPIN,SWING,TRAIL,spinLead,spinTurn,swingPose,nextCut,type Blade,type CutIndex,type SwingPose} from './trail-ribbon.ts';
@@ -241,7 +242,7 @@ export class World {
   private dashWind:null|{slot:number;x:number;y:number;z:number;dx:number;dz:number;seen:boolean;until:number;end?:()=>void}=null;
   private sparkWatch:null|{since:number;until:number;last:Enemy|null;lastT:number;color:string}=null;
   /** The explorer's recoil when hurt (hit-react.ts). */ private hurtReact?:Reaction;
-  walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
+  walkClock=0; private walkFrom:{x:number;z:number;v:number}|null=null; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
   private shakeOffset=new T.Vector3();/** Ground distance the view reaches from the camera target (resize). */ viewReach?:number; private playerMaterials:LitMaterial[]=[];private hemi?:T.HemisphereLight;
   canvas: HTMLCanvasElement; state: SaveState;
   constructor(canvas: HTMLCanvasElement, state: SaveState, options: { antialias?: boolean } = {}) {
@@ -724,6 +725,8 @@ export class World {
       const tag=piece.userData.tag??fallback,part=hero.getObjectByName(tag)??hero,fit=part!==hero?fits?.[tag]:undefined;
       // Pieces are modelled in explorer space; re-express them in the part's own space. A body style that moves its
       // pivots (looks.ts FIT) places the piece relative to the default pivot, then scales and shifts it to the new part.
+      // A longer arm stretches the sleeve only: the glove at its end keeps its size (arm-fit.ts).
+      if(fit&&tag.startsWith('arm-')&&fit.scale[1]>1.2){piece.applyMatrix4(new T.Matrix4().makeTranslation(-DEFAULT_PIVOTS[tag][0],-DEFAULT_PIVOTS[tag][1],-DEFAULT_PIVOTS[tag][2]));part.add(piece);fitArmPiece(piece,fit.scale[0],fit.scale[1]);continue;}
       if(fit){piece.applyMatrix4(new T.Matrix4().makeTranslation(-DEFAULT_PIVOTS[tag][0],-DEFAULT_PIVOTS[tag][1],-DEFAULT_PIVOTS[tag][2]));piece.applyMatrix4(new T.Matrix4().makeScale(...fit.scale).premultiply(new T.Matrix4().makeTranslation(...fit.offset)));}
       else piece.applyMatrix4(toHero.clone().multiply(part.matrixWorld).invert());
       if(kit===weaponKit&&fallback==='hand-right')piece.userData.blade=true; // the weapon trail measures these (weapon-trail.ts measureBlade)
@@ -2185,7 +2188,9 @@ export class World {
     // The trail keeps its times in single precision: its clock starts over now and then, while nothing swings.
     if(this.trailClock>300&&!(this.punchT>0)&&!(this.spinT>0)&&!this.bladeTrail?.active){this.trailClock=0;this.swingAt=-9;this.windHold=0;}
     // The walk is fitted to the body style's legs (walk-cycle.ts strideOf): longer legs step slower and swing less.
-    const stride=(this.player.userData.stride??=strideOf(hipOf(this.player))) as {rate:number;swing:number};
+    // Long legs walk true to the ground: the step clock follows the speed the explorer really moves at (smoothed).
+    const at=this.position??{x:0,z:0},was=this.walkFrom??(this.walkFrom={x:at.x,z:at.z,v:0});if(dt>0){const v=Math.min(30,Math.hypot(at.x-was.x,at.z-was.z)/dt);was.v+=(v-was.v)*Math.min(1,dt*10);}was.x=at.x;was.z=at.z;
+    const stride=strideOf(hipOf(this.player),was.v,this.player.scale?.y||HERO_SCALE);
     this.walkClock=(this.walkClock||0)+dt*(this.moving?11*stride.rate:3);
     const o=this.walkClock,c=Math.sin(o),p=this.player;
     const flying=this.playerFlying&&FLIGHT_POSE_DISGUISES.includes(this.state.gear.disguise??'');
@@ -2196,7 +2201,7 @@ export class World {
     // An arm a punch stretched is its own length again once the punch is over.
     if(this.armsStretched&&!(this.punchT>0)){armL?.scale.set(1,1,1);armR?.scale.set(1,1,1);this.armsStretched=false;}
     // Base: walk cycle or idle breathing.
-    if(this.moving){armL?.rotation.set(-c*.8,0,-.3);armR?.rotation.set(c*.8,0,.3);legL?.rotation.set(c*stride.swing,0,0);legR?.rotation.set(-c*stride.swing,0,0);lift=Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
+    if(this.moving){armL?.rotation.set(-c*.8,0,-.3);armR?.rotation.set(c*.8,0,.3);legL?.rotation.set(c*stride.swing,0,0);legR?.rotation.set(-c*stride.swing,0,0);lift=stride.drop?-stride.drop*(1-Math.cos(c*stride.swing))/(1-Math.cos(stride.swing))*(this.player.scale?.y||HERO_SCALE):Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
     else{armL?.rotation.set(0,0,-.3-Math.sin(o)*.05);armR?.rotation.set(0,0,.3+Math.sin(o)*.05);legL?.rotation.set(0,0,0);legR?.rotation.set(0,0,0);sy=1+Math.sin(o*1.2)*.025;if(head)head.rotation.set(0,Math.sin(o*.4)*.15,0);}
     // In the air (jump-rules.ts): a squash as the feet leave, a stretch going up, a tuck at the top, a head-first dive.
     const jump=this.jump,air=jump?.airborne?jump:null;

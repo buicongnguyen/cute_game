@@ -40,15 +40,24 @@ export function hipOf(model: T.Object3D | null | undefined): number {
   if (!model) return HIP;
   const y = limbsOf(model).legL?.position.y ?? 0; return y > .2 ? y : HIP;
 }
+/** The explorer's own walk clock runs at this many radians a second on the default legs (world.ts animatePlayer). */
+export const WALK_RATE = 11;
+/** The swing (radians) of the longest legs; shorter styles sit between this and the default 0.7. */
+const LONG_SWING = .55, LONG_HIP = 1.36;
 /**
- * The explorer's own clock-driven walk fitted to its legs: `rate` slows the step clock and `swing` (radians) narrows
- * the leg swing as the hips rise. Speed is the same at every height, so the cadence times the stride must stay what it
- * is for the default explorer: a leg k squared times longer takes steps k times longer, k times less often. Before, a
- * Grown explorer swung its long legs 0.7 rad at the chibi's cadence: feet two metres apart, both off the ground.
+ * The explorer's own walk fitted to its legs. The default explorer (and anything shorter) keeps its cartoon patter:
+ * `rate` 1, `swing` 0.7; its legs are short under a big head and nobody reads the feet. Longer legs are read, so they
+ * walk TRUE to the ground: the swing narrows a little as the hips rise, and the step clock is set from the speed the
+ * explorer really moves at, so that one step covers one stride (a stride is 2 x hip x scale x sin(swing) metres and a
+ * cycle is two of them). Before this the Grown explorer's body covered about three times the ground its steps did.
+ * The clock never runs past MAX_RATE (legs would blur), so a very fast explorer on middle-length legs still glides a
+ * little. `drop` is how far (model units) the hips sink at full swing, so the standing foot stays on the ground.
  */
-export function strideOf(hip: number): { rate: number; swing: number } {
-  if (!(hip > HIP + .01)) return { rate: 1, swing: .7 };
-  const k = Math.sqrt(hip / HIP); return { rate: 1 / k, swing: Math.asin(Math.min(1, Math.sin(.7) * k * HIP / hip)) };
+export function strideOf(hip: number, speed = 6, scale = .84): { rate: number; swing: number; drop: number } {
+  if (!(hip > HIP + .01)) return { rate: 1, swing: .7, drop: 0 };
+  const swing = .7 - (.7 - LONG_SWING) * Math.min(1, (hip - HIP) / (LONG_HIP - HIP)), stride = 2 * hip * scale * Math.sin(swing);
+  const rate = Math.min(MAX_RATE, Math.max(4, Math.PI * Math.max(0, speed) / stride)) / WALK_RATE;
+  return { rate, swing, drop: hip * (1 - Math.cos(swing)) };
 }
 /**
  * Blends the walk swing over whatever pose the limbs already hold (x rotations only; an arm's splay on z is kept).

@@ -324,12 +324,13 @@ test('no height is drawn smaller than its body file: the Grown body itself is 8%
   assert.ok(L.HEIGHT_RATIO.grown > L.HEIGHT_RATIO.tall * 1.1, 'Grown stays clearly the tallest height');
   // Boots stay on the feet: the leg fit drops gear by exactly the hips' rise (hero_spec hips at 0.52, grown 1.36).
   assert.equal(L.FIT.grown['leg-left']!.offset[1], -.84);
-  // The explorer's own walk is fitted to the legs: the default is untouched, longer legs step slower and swing less,
-  // and cadence x stride (the ground a step cycle covers) is the same at every height.
-  assert.deepEqual(W.strideOf(W.HIP), { rate: 1, swing: .7 }); assert.deepEqual(W.strideOf(.42), { rate: 1, swing: .7 });
-  const base = W.HIP * Math.sin(.7);
-  for (const hip of [.72, .98, 1.36]) { const s = W.strideOf(hip); assert.ok(s.rate < 1 && s.swing < .7, `hips ${hip}`); assert.ok(Math.abs(s.rate * hip * Math.sin(s.swing) - base) < 1e-9, `hips ${hip}: same ground per second`); }
-  assert.ok(Math.abs(W.strideOf(1.36).swing - .41) < .01 && Math.abs(W.strideOf(1.36).rate - .618) < .01);
+  // The explorer's own walk: the default legs keep their patter; longer legs walk true to the ground (one step covers
+  // one stride at the speed really moved), swing a little less, and the hips sink so the standing foot stays down.
+  assert.deepEqual(W.strideOf(W.HIP), { rate: 1, swing: .7, drop: 0 }); assert.deepEqual(W.strideOf(.42, 9), { rate: 1, swing: .7, drop: 0 });
+  for (const speed of [4, 6, 6.8]) { const s = W.strideOf(1.36, speed, .84), stride = 2 * 1.36 * .84 * Math.sin(s.swing), perSecond = s.rate * W.WALK_RATE / Math.PI * stride; assert.ok(Math.abs(perSecond - speed) < 1e-9, `grown at ${speed} m/s covers ${perSecond.toFixed(2)} m/s with its steps`); }
+  assert.ok(Math.abs(W.strideOf(1.36).swing - .55) < 1e-9); assert.ok(W.strideOf(.98).swing > .55 && W.strideOf(.98).swing < .7);
+  assert.ok(W.strideOf(.72, 20).rate * W.WALK_RATE <= 18 + 1e-9, 'legs never blur'); assert.ok(W.strideOf(1.36, 0).rate > 0, 'a standing start still steps');
+  assert.ok(Math.abs(W.strideOf(1.36).drop - 1.36 * (1 - Math.cos(.55))) < 1e-9);
   // The hips are read off the model's own leg pivot; a stand-in without real hips walks as the default explorer.
   const T = await import('three'), legged = (y: number) => { const g = new T.Group(), leg = new T.Group(); leg.name = 'leg-left'; leg.position.y = y; g.add(leg); return g; };
   assert.equal(W.hipOf(legged(1.36)), 1.36); assert.equal(W.hipOf(legged(0)), W.HIP); assert.equal(W.hipOf(new T.Group()), W.HIP); assert.equal(W.hipOf(undefined), W.HIP);
