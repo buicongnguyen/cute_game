@@ -314,3 +314,11 @@ test('indoors, a friend crossing the house swings its legs, and they rest at 0 o
   for (let i = 30; i < 200; i++) view.update(1 / 60, i / 60);
   assert.ok(Math.hypot(group.position.x, group.position.z - 1) < .06, 'arrived'); assert.equal(legL.rotation.x, 0); assert.equal(legR.rotation.x, 0);
 });
+
+test('the Grown height is drawn a little smaller than its body file; the other heights are untouched', async () => {
+  const L = await import('../src/looks.ts');
+  assert.equal(L.lookTrim('boy-grown-none-bare'), .92); assert.equal(L.lookTrim('girl-grown-cat-fox'), .92);
+  for (const h of ['tiny', 'chibi', 'teen', 'tall']) assert.equal(L.lookTrim(`boy-${h}-none-bare`), 1, h);
+  assert.equal(L.lookTrim(undefined), 1); assert.equal(L.lookTrim('nonsense'), 1);
+  assert.ok(L.HEIGHT_RATIO.grown * L.HEIGHT_TRIM.grown! > L.HEIGHT_RATIO.tall, 'Grown stays the tallest height');
+});

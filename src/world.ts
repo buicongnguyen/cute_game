@@ -59,7 +59,7 @@ import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
 import {HIP,applyGait,gaitSwing,limbsOf,newGait,stepGait,type Gait} from './walk-cycle.ts';
-import {DEFAULT_PIVOTS,fitOf,lookOf,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
+import {DEFAULT_PIVOTS,fitOf,lookOf,lookTrim,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {part} from './part-cache.ts';
 import {WeaponTrail,measureBlade,type HeldBlade} from './weapon-trail.ts';
 import {CUTS,SPIN,SWING,TRAIL,spinLead,spinTurn,swingPose,nextCut,type Blade,type CutIndex,type SwingPose} from './trail-ribbon.ts';
@@ -1054,7 +1054,7 @@ export class World {
       // Its jump height, for ground attacks (remoteDodges): read from the pose, and only for as long as a real jump can last.
       {const air=indoor||!this.environment?0:poseAir(ty,terrainHeight(this.environment.layout,current),current.visual?.flight?1.7:0),now=this.time??0;if(air>0){u.airSince??=now;u.air=now-u.airSince<=MAX_AIR_SECONDS?air:0;}else{u.airSince=undefined;u.air=0;}}
       if(!u.placed||Math.hypot(p.x-current.x,p.z-current.z)>8||Math.abs(p.y-ty)>3){p.set(current.x,ty,current.z);remote.mesh.rotation.y=u.target.f;u.placed=true;}}
-    this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
+    this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1))*lookTrim(remote.mesh.userData.look));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
   visualSnapshot():AvatarVisual{return {size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
     // Nothing to change until stealth first fades the explorer: a new avatar starts fully opaque, so it is never copied for opacity 1
@@ -1868,7 +1868,7 @@ export class World {
     // Home heals 4x faster (home-care.ts); this line had slipped into the comment above, so offline the village never healed.
     this.homeRecovering=atHome(this.planet,this.position,!!this.interior)&&this.state.hp>0&&this.state.hp<stats.maxHp;if(!this.authoritativeAction&&active&&this.homeRecovering)this.state.hp=Math.min(stats.maxHp,this.state.hp+homeRecoveryBonus(stats.regen)*dt);
     if(this.airCarry)this.airCarry=this.playerFlying?carryStep(this.airCarry,dt):0;
-    this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height+(this.airCarry||0);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
+    this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height+(this.airCarry||0);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE*lookTrim(this.player.userData.look));this.applyAvatarVisual(this.player,this.visualSnapshot());
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
     (this.petPen??=new PetCompanion()).update(this,dt);(this.petPen2??=new PetCompanion(1)).update(this,dt);
     this.animatePlayer(dt);this.animateRemotes(dt);

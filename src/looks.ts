@@ -53,6 +53,13 @@ export const DEFAULT_LOOK: LookId = 'boy-chibi-none-bare';
  * (friend-view.ts) divides it out: for a friend the height option sets the proportions and growth sets the height.
  */
 export const HEIGHT_RATIO: Record<Height, number> = { tiny: .979, chibi: 1, teen: 1.066, tall: 1.152, grown: 1.398 };
+/**
+ * A trim on the drawn size of a height, on top of its body file (the owner found Grown a little too tall, 2026-10-13):
+ * the whole dressed explorer shrinks together, so hats and gear still fit. Friends are not affected (they divide the height out).
+ */
+export const HEIGHT_TRIM: Partial<Record<Height, number>> = { grown: .92 };
+/** The trim of the look an avatar was built with (its userData.look); 1 for anything else. */
+export function lookTrim(look: unknown): number { const l = typeof look === 'string' ? toLook(look) : null; return l ? HEIGHT_TRIM[splitLook(l).height] ?? 1 : 1; }
 export const LOOK_IDS: readonly LookId[] = ROWS.body.flatMap(b => ROWS.height.flatMap(h => ROWS.ears.flatMap(e => ROWS.deco.map(d => [b, h, e, d].join('-') as LookId))));
 const LOOK_SET = new Set<string>(LOOK_IDS);
 /** The old single-choice looks (saves and presence from before the builder). */
