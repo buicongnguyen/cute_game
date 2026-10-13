@@ -100,6 +100,8 @@ export const INSIGHT_VI: Record<string, string> = {
   'Energy at work': 'Năng lượng sinh lời',
   'Daily habits': 'Thói quen mỗi ngày',
   'opens later': 'mở sau',
+  'furthest along': 'đi xa nhất',
+  '{area} is where you are furthest along so far.': '{area} là nơi bạn đã đi xa nhất cho đến giờ.',
   'next adventure': 'chuyến phiêu lưu kế tiếp',
   'What to do next': 'Nên làm gì tiếp theo',
   'The three steps that would earn the most right now, with the numbers behind them.': 'Ba việc đem lại nhiều nhất ngay lúc này, kèm con số cụ thể.',

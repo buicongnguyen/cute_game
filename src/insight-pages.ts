@@ -8,7 +8,7 @@ import * as M from './model.ts';
 import type { PageUi } from './disguise-ui.ts';
 import { barsHtml, sparkSvg } from './insight-charts.ts';
 import { CHAPTERS, productGraph, isItemNode, type Cell, type ChapterId, type Group, type Row } from './insight-graph.ts';
-import { ADVENTURE, SCORE_ICON, SCORE_LABEL, STRENGTH, itemView, lockOf, nextSteps, praise, report, scores, standouts, trend, type Msg, type Step } from './insight-rules.ts';
+import { ADVENTURE, SCORE_ICON, SCORE_LABEL, STRENGTH, itemView, lockOf, nextSteps, praise, report, scores, standouts, trend, type Msg, type ScoreId, type Step } from './insight-rules.ts';
 import { HISTORY_CAP } from './insight-history.ts';
 
 export interface BookUi extends PageUi { now: number; lang: string }
@@ -31,13 +31,15 @@ const stepButton = (ui: BookUi, step: Step) => { const tg = step.target, label =
 const gainChip = (ui: BookUi, step: Step) => step.per === 'none' ? '' : `<span class="chip chip-energy">ϟ +${fmt(ui, step.gain)}${step.per === 'hour' ? ' ' + ui.esc(ui.t('an hour')) : ''}</span>`;
 const stepHtml = (ui: BookUi, step: Step, rank?: number) => `<div class="ins-step">${rank ? `<span class="ins-rank" aria-hidden="true">${rank}</span>` : ''}<div><p>${ui.esc(say(ui, step.text))}</p><div class="ins-step-foot">${gainChip(ui, step)}${stepButton(ui, step)}</div></div></div>`;
 
+/** Praise for a strong area only when it has earned it (50 or more); below that it is simply where the explorer is furthest along. */
+const strengthLine = (ui: BookUi, id: ScoreId, score: number) => score >= 50 ? ui.t(STRENGTH[id]) : ui.t('{area} is where you are furthest along so far.', { area: ui.t(SCORE_LABEL[id]) });
 // ---- The analysis
 export function analysisHtml(ui: BookUi): string {
   const s = ui.state, list = scores(s, ui.now), marks = standouts(list), steps = nextSteps(s, ui.now), top = steps.slice(0, 3), rest = steps.slice(3);
   const rows = list.map(x => ({ label: ui.esc(ui.t(SCORE_LABEL[x.id])), icon: SCORE_ICON[x.id], value: x.score, note: ui.esc(say(ui, x.reason)),
     tone: !x.open ? '' as const : marks.strong.includes(x.id) ? 'strong' as const : marks.weak.includes(x.id) ? 'weak' as const : '' as const,
-    tag: !x.open ? ui.esc(ui.t('opens later')) : marks.strong.includes(x.id) ? ui.esc(ui.t('strong')) : marks.weak.includes(x.id) ? ui.esc(ui.t('next adventure')) : '' }));
-  const strong = marks.strong.map(id => `<li>${SCORE_ICON[id]} ${ui.esc(ui.t(STRENGTH[id]))}</li>`).join(''), weak = marks.weak.map(id => `<li>${SCORE_ICON[id]} ${ui.esc(ui.t(ADVENTURE[id]))}</li>`).join('');
+    tag: !x.open ? ui.esc(ui.t('opens later')) : marks.strong.includes(x.id) ? ui.esc(ui.t(x.score >= 50 ? 'strong' : 'furthest along')) : marks.weak.includes(x.id) ? ui.esc(ui.t('next adventure')) : '' }));
+  const strong = marks.strong.map(id => `<li>${SCORE_ICON[id]} ${ui.esc(strengthLine(ui, id, list.find(x => x.id === id)!.score))}</li>`).join(''), weak = marks.weak.map(id => `<li>${SCORE_ICON[id]} ${ui.esc(ui.t(ADVENTURE[id]))}</li>`).join('');
   return praiseHtml(ui, praise(s, 'home', marks.strong[0]))
     + `<h3>${ui.esc(ui.t('What to do next'))}</h3>${top.length ? `<p class="ins-note">${ui.esc(ui.t('The three steps that would earn the most right now, with the numbers behind them.'))}</p>${top.map((step, i) => stepHtml(ui, step, i + 1)).join('')}` : `<p class="ins-note">${ui.esc(ui.t('Everything is humming along. Enjoy the valley: you have earned it.'))}</p>`}`
     + (rest.length ? `<details class="ins-more"><summary>${ui.esc(ui.t('{count} more ideas', { count: rest.length }))}</summary>${rest.map(step => stepHtml(ui, step)).join('')}</details>` : '')
@@ -119,7 +121,7 @@ export function reportHtml(ui: BookUi): string {
     + praiseHtml(ui, r.praise)
     + (grew ? `<ul class="ins-grew">${grew}</ul>` : `<p class="ins-note">${ui.esc(ui.t('A calm stretch: nothing to count yet, and that is fine.'))}</p>`)
     + `<p class="ins-village">🏡 ${ui.esc(say(ui, r.village))}</p>`
-    + (r.strong ? `<div class="ins-list good"><h4>${ui.esc(ui.t('Your strongest side'))}</h4><p>${SCORE_ICON[r.strong.id]} ${ui.esc(ui.t(STRENGTH[r.strong.id]))} <b>${r.strong.score}/100</b></p></div>` : '')
+    + (r.strong ? `<div class="ins-list good"><h4>${ui.esc(ui.t('Your strongest side'))}</h4><p>${SCORE_ICON[r.strong.id]} ${ui.esc(strengthLine(ui, r.strong.id, r.strong.score))} <b>${r.strong.score}/100</b></p></div>` : '')
     + (r.weak ? `<div class="ins-list care"><h4>${ui.esc(ui.t('Your next adventure'))}</h4><p>${SCORE_ICON[r.weak.id]} ${ui.esc(ui.t(ADVENTURE[r.weak.id]))}</p>${r.tip ? stepHtml(ui, r.tip) : ''}</div>` : '')
     + `<p class="ins-note">${ui.esc(ui.t('The next report card comes at level {level}.', { level: r.level < 5 ? 5 : r.level + 5 }))}</p></div>`;
 }

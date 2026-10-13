@@ -299,7 +299,7 @@ test('the pages render on every fixture save: charts carry text, nodes are butto
   for (const s of [fresh(), midGame(), promo()]) {
     const u = ui(s), home = analysisHtml(u);
     assert.match(home, /class="ins-praise"/); assert.match(home, /role="list"/); assert.equal((home.match(/class="ins-bar /g) ?? []).length, 9);
-    assert.equal((home.match(/<em>strong<\/em>/g) ?? []).length, 2); assert.equal((home.match(/<em>next adventure<\/em>/g) ?? []).length, 2);
+    assert.equal((home.match(/<em>(strong|furthest along)<\/em>/g) ?? []).length, 2); assert.equal((home.match(/<em>next adventure<\/em>/g) ?? []).length, 2);
     assert.ok((home.match(/class="ins-rank"/g) ?? []).length <= 3);
     for (const [id] of CHAPTERS) { const html = mapHtml(u, id, null, new Set(productGraph().chapters.find(c => c.id === id)!.groups.map(g => g.id)));
       assert.ok(!html.includes('undefined') && !html.includes('NaN'), id); assert.match(html, /data-insight="node"/); assert.match(html, /aria-label="[^"]+, (\d+ in store|met before|not met yet)/); }
@@ -313,6 +313,13 @@ test('the pages render on every fixture save: charts carry text, nodes are butto
   assert.match(trendHtml(ui(withNotes)), /role="img" aria-label="Energy earned at the market: from 700 to 5,200"/);
   assert.match(reportHtml(ui(withNotes)), /Level 10 report card/); assert.match(reportHtml(ui(fresh())), /first report card comes at level 3/);
   assert.match(analysisHtml(m), /data-insight="step" data-go="plot"/);
+});
+
+test('a strong point is praised as one only from 50 up; below that it is where the explorer is furthest along', () => {
+  const home = analysisHtml(ui(fresh()));
+  assert.match(home, /Exploring is where you are furthest along so far\./); assert.doesNotMatch(home, /the explorer the village tells stories about/);
+  assert.match(home, /Every bit of your energy is building something\./); // 100: earned
+  assert.match(analysisHtml(ui(promo())), /Your helpers make a wonderful team\./);
 });
 
 test('Vietnamese: every phrase the Almanac can show has a translation with the same placeholders', async () => {
