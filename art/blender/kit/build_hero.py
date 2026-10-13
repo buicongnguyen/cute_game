@@ -55,7 +55,7 @@ DISGUISES = [('dz_ninja', 'Shadow ninja'), ('dz_mage', 'Archmage'), ('dz_knight'
              ('dz_pirate', 'Pirate captain'), ('dz_superhero', 'Superhero'), ('dz_vampire', 'Vampire count'),
              ('dz_snowman', 'Snowman'), ('dz_army', 'Army soldier'), ('dz_navy', 'Navy sailor'),
              ('dz_aodai', 'Ao dai lady'), ('dz_aodai_man', 'Ao dai gentleman'), ('dz_usa', 'Stars and stripes'),
-             ('dz_vietnam', 'Vietnam flag')]
+             ('dz_vietnam', 'Vietnam flag'), ('dz_dawnstar', 'Dawn star dancer')]
 DISGUISE_IDS = [d for d, _ in DISGUISES]
 HERO_MATERIALS = ['Hero skin', 'Hero hair', 'Hero shirt', 'Hero shirt shade', 'Hero pants', 'Hero shoe', 'Hero eye',
                   'Hero blush', 'Hero bag', 'Hero leaf']
@@ -1837,10 +1837,126 @@ def dz_vietnam():
     return k
 
 
+# ------------------------------------------------------------- dawn star dancer
+# An original magical-girl costume of our own. Deliberately NOT used, so it cannot be taken for any existing character:
+# no sailor collar, no chest or back bow with a brooch, no tiara, no crescent moon, no twin buns or twin tails of its
+# own, no white leotard with a blue skirt and red boots. Ours: a brown bob with ONE side ponytail under a big teal bow,
+# a coral dress over cream, teal boots and sash, and a four-point gold "dawn star" as the emblem and on the wand.
+DAWN_STYLE = [(-180, 132), (-150, 131), (-125, 128), (-105, 124), (-88, 121), (-72, 118), (-58, 111), (-48, 100),
+              (-40, 89), (-32, 79), (-24, 76), (-14, 76), (-5, 73), (4, 76), (13, 73), (22, 75), (30, 78), (38, 87),
+              (46, 98), (56, 110), (70, 118), (88, 121), (105, 124), (125, 128), (150, 131)]
+
+
+def dawn_hair():
+    """A bob that covers every lock of the hero's hair and swings out a little at the sides and the nape."""
+    edge = [(p, max(t, max(hair_edge_at(p + d) for d in range(-4, 5)) + 3.5), i % 2) for i, (p, t) in enumerate(DAWN_STYLE)]
+    rows = 6
+    psis = [RAD(p) for p, _, _ in edge]
+    ends = [RAD(t) for _, t, _ in edge]
+
+    def radius(i, j, d):
+        s = j / rows
+        side = smoothstep(RAD(40), RAD(85), abs(psis[i]))
+        return 0.646 + ((0.66 if edge[i][2] else 0.642) - 0.646) * smoothstep(0.0, 0.55, s) + 0.06 * side * smoothstep(0.5, 1.0, s)
+    g = pole_grid(UP, Vector((0, -1, 0)), Vector((1, 0, 0)), psis, lambda i, j: ends[i] * j / rows, radius, rows)
+
+    def ring(p, r, dtheta):
+        d = (p - C).normalized()
+        theta = math.acos(max(-1.0, min(1.0, d.z))) + RAD(dtheta)
+        return C + (Vector((d.x, d.y, 0)).normalized() * math.sin(theta) + UP * math.cos(theta)) * r
+    g.lip(lambda p: ring(p, (p - C).length - 0.014, 1.2))
+    g.lip(lambda p: ring(p, 0.6, -3.0))
+    return g
+
+
+def dawn_star(m, r=0.1, thick=0.03, waist=0.36):
+    """The emblem: a four-point star, tall like a compass needle."""
+    g = star_solid(4, r, r * waist, thick, thick * 0.4)
+    g.verts = [Vector((v.x * 0.78, v.y, v.z)) for v in g.verts]
+    return g.transformed(m)
+
+
+def dz_dawnstar():
+    k = Costume('dz_dawnstar', 'dawnstar')
+    hair = k.m('hair', '#7C4527', 0.36)
+    coral = k.m('coral', '#FF6A5C', 0.45)
+    coral_dark = k.m('coral dark', '#E0483F', 0.45)
+    cream = k.m('cream', '#FFF5DF', 0.5)
+    teal = k.m('teal', '#10B7A8', 0.42)
+    teal_dark = k.m('teal dark', '#0A8F86', 0.42)
+    gold = k.m('gold', '#FFC93A', 0.3, 0.2)
+    # Hair: the bob, one side ponytail tied with a gold band and a star, and a big ribbon bow on the crown.
+    k.add('hair', 'head', dawn_hair(), hair)
+    d = Vector((0.80, 0.14, 0.58)).normalized()
+    B = C + d * 0.66
+    tail = [B - d * 0.06, B + Vector((0.13, 0.02, 0.05)), B + Vector((0.26, 0.04, -0.06)), B + Vector((0.31, 0.06, -0.26)),
+            B + Vector((0.29, 0.07, -0.45)), B + Vector((0.22, 0.06, -0.6))]
+    k.add('hair', 'head', tube(tail, [0.07, 0.115, 0.14, 0.125, 0.085, 0.0], sides=7, cap_start=True), hair)
+    k.add('bow', 'head', torus(B + d * 0.035, d, 0.1, 0.034, 10, 4), gold)
+    sd = (d + Vector((0, -0.9, 0.35))).normalized()
+    k.add('bow', 'head', dawn_star(facing(B + Vector((0.05, -0.115, 0.03)), sd), 0.085, 0.03).retag(gold))
+    K = C + Vector((0, 0.16, 1)).normalized() * 0.69
+    for s in (-1, 1):
+        m = frame_m(K + Vector((0.03 * s, 0, 0)), (s, 0.0, 0.34), (0, -0.5, 1))
+        k.add('bow', 'head', leaf_solid(0.46, 0.4, 0.11, rows=4, cup=0.3, bend=0.1, shape=0.5, taper=0.0, inner=0.55,
+                                        tags=(teal, teal_dark)).transformed(m))
+        m = frame_m(K + Vector((0.02 * s, 0.05, -0.02)), (0.5 * s, 0.75, -0.5), (0, -0.4, 1))
+        k.add('bow', 'head', leaf_solid(0.26, 0.13, 0.03, rows=3, cup=0.2, bend=-0.2, shape=0.6, taper=0.0).transformed(m), teal_dark)
+    k.add('bow', 'head', ellipsoid(K + Vector((0, -0.01, 0.02)), (0.075, 0.08, 0.08), segs=7, rings=4), teal)
+    # Dress: a cream bodice with a coral yoke and a teal sash, the star on the chest, and a short flared skirt with a cream frill.
+    k.add('dress', 'body', shell_torso(0.034, bottom=0.62, rows=5, segs=20, lip_tag=coral,
+                                       tag=lambda phi, z: coral if z > 1.0 else (teal if z < 0.69 else None)), cream)
+    chest = facing((0, -(env_r(0.9) + 0.04), 0.9), (0, -1, 0.15))
+    k.add('dress', 'body', dawn_star(chest, 0.125, 0.034).retag(gold))
+    k.add('dress', 'body', ellipsoid(None, (0.036, 0.036, 0.02), segs=6, rings=3, m=chest @ xf((0, 0, 0.024))), teal)
+    segs, zs = 18, [0.42, 0.46, 0.56, 0.68]
+    phis = [TAU * i / segs for i in range(segs)]
+
+    def skirt_r(phi, z, i, j):
+        t = (0.68 - z) / 0.26
+        return env_r(0.68) + 0.045 + 0.2 * t ** 0.8 + (0.03 if i % 2 else -0.012) * t
+    sk = axis_grid(phis, zs, skirt_r, tag=lambda i, j: cream if j == 0 else None)
+    k.add('skirt', 'body', sk.solidify(0.02, inner_tag=coral_dark), coral)
+    # A star satchel over the backpack, with two ribbon tails.
+    k.add('pack', 'body', pack_cover(radius=0.1), teal)
+    bp = back_point(0.9)
+    k.add('pack', 'body', dawn_star(facing(bp + Vector((0, 0.004, 0)), (0, 1, 0.05)), 0.15, 0.03).retag(gold))
+    for s in (-1, 1):
+        path = [bp + Vector((0.07 * s, -0.06, -0.2)), bp + Vector((0.14 * s, 0.03, -0.36)), bp + Vector((0.2 * s, 0.08, -0.52))]
+        k.add('pack', 'body', tube(path, [0.075, 0.07, 0.085], sides=4, flatten=0.25, cap_start=True, cap_end=True,
+                                   up=(0, 1, 0)), teal_dark)
+    # Puff sleeves over long cream gloves with a teal cuff.
+    for side, part in ((-1, 'arm-left'), (1, 'arm-right')):
+        k.add('sleeve', part, shell_arm(side, 0.028, rows=5, flare=lambda z: 0.05 * smoothstep(0.93, 1.02, z),
+                                        tag=lambda z: coral if z > 0.92 else (teal if z < 0.855 else None), lip_tag=teal), cream)
+        k.add('sleeve', part, glove(side, 0.022, segs=8, rings=5), cream)
+    # Cream tights and teal ankle boots.
+    for side, part in ((-1, 'leg-left'), (1, 'leg-right')):
+        k.add('leg', part, shell_leg(side, 0.022, bottom=0.3, rows=3), cream)
+        k.add('leg', part, boot(side, 0.024, shaft=0.34, shaft_r=0.125, segs=8), teal)
+    # The star wand, held in the right hand (the game leaves it out when a weapon is equipped).
+    H = Vector(HS.HANDS['hand-right'])
+    a = Vector((0.46, -0.42, 0.78)).normalized()   # it leans out and forward, so the star clears the big head
+    look = Vector((0, -1, 0.1))
+    k.add('wand', 'hand-right', tube([H - a * 0.15, H + a * 0.4], 0.03, sides=6, cap_start=True, cap_end=True), cream)
+    k.add('wand', 'hand-right', ellipsoid(H - a * 0.16, (0.048, 0.048, 0.048), segs=6, rings=3), gold)
+    head = H + a * 0.58
+    wm = frame_m(head, a, look)
+    g = star_solid(4, 0.22, 0.085, 0.05, 0.025)   # two crossed stars: it reads as a star from every side
+    k.add('wand', 'hand-right', join(g, Geo(g.verts, g.faces).transformed(Matrix.Rotation(math.pi / 2, 4, 'Y'))).transformed(wm), gold)
+    k.add('wand', 'hand-right', ellipsoid(None, (0.06, 0.06, 0.07), segs=6, rings=4, m=wm), coral)
+    for s in (-1, 1):
+        side_dir = a.cross(look).normalized() * s
+        m = frame_m(H + a * 0.36, side_dir + a * 0.25, look)
+        k.add('wand', 'hand-right', leaf_solid(0.12, 0.1, 0.03, rows=3, cup=0.2, bend=0.0, shape=0.55, taper=0.0).transformed(m), teal)
+    return k
+
+
 BUILDERS = {'dz_ninja': dz_ninja, 'dz_mage': dz_mage, 'dz_knight': dz_knight, 'dz_mecha': dz_mecha,
             'dz_dino': dz_dino, 'dz_fairy': dz_fairy, 'dz_pirate': dz_pirate, 'dz_superhero': dz_superhero,
             'dz_vampire': dz_vampire, 'dz_snowman': dz_snowman, 'dz_army': dz_army, 'dz_navy': dz_navy,
-            'dz_aodai': dz_aodai, 'dz_aodai_man': dz_aodai_man, 'dz_usa': dz_usa, 'dz_vietnam': dz_vietnam}
+            'dz_aodai': dz_aodai, 'dz_aodai_man': dz_aodai_man, 'dz_usa': dz_usa, 'dz_vietnam': dz_vietnam,
+            'dz_dawnstar': dz_dawnstar}
 
 
 def build_costume(did, prefix=''):

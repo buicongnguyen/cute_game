@@ -197,7 +197,7 @@ triangles and 200 KB. Stay inside the envelope so gear fits.
 | `gear-wear.glb` | `build_wear.py` | 19 hats, 17 outfits, 5 boots | hats `head`, outfits `body` | hat 700, outfit 1,400, boots pair 600 |
 | `gear-weapons.glb` | `build_weapons.py` | 19 weapons | `hand-right` | 900 |
 | `pets.glb` | `build_weapons.py` | 7 pets | none (follows the explorer) | 1,500 |
-| `disguises.glb` | `build_hero.py` | 10 disguises | per piece | 2,500 |
+| `disguises.glb` | `build_hero.py` | 17 disguises | per piece | 2,500 |
 
 Each item is one top-level node named exactly the item id, at the origin with
 no transform. Inside it, every mesh object is modelled **in explorer space** at
@@ -343,7 +343,10 @@ hump or the snowball. Hide `head-leaf` while a disguise is worn (the hood, hat
 or snowball would be pierced), **except** `dz_fairy` (petal crown ring) and
 `dz_superhero` (mask only). The manifest has this as `hides_leaf`. Materials are
 named `Disguise <look> <part>`. Emissive: mecha glow 1.6, flame 1.2, bulb 0.8;
-fairy wing 0.35, wing rim 0.3; vampire gem 0.4. Clearances used: hoods and
+fairy wing 0.35, wing rim 0.3; vampire gem 0.4. `dz_dawnstar` (our own
+magical-girl costume) has no emissive material, and is the one disguise with a
+`@hand-right` piece, its star wand: the game leaves that piece out while a
+weapon is equipped. Clearances used: hoods and
 helmets ≥ 0.636 from `HEAD_CENTRE`; torso layers at envelope + 0.03–0.045;
 sleeves at arm + 0.024–0.035; trousers at 0.117 + 0.02–0.03; boots at shoe +
 0.022–0.03. Per-piece triangles, bounds and materials are in

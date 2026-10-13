@@ -42,7 +42,7 @@ test("content.ts keeps no reference source strings as the disguises' internal na
   const { DISGUISES } = await import('../src/content.ts');
   const source = await readFile(new URL('../src/content.ts', import.meta.url), 'utf8'), start = source.indexOf('const DISGUISE_FACTS'), block = source.slice(start, source.indexOf('\n};', start));
   const names = [...block.matchAll(/"name": "([^"]*)"/g)].map(m => m[1]);
-  assert.equal(names.length, 16 * 5);
+  assert.equal(names.length, 17 * 5);
   for (const name of names) assert.doesNotMatch(name, /[À-ỹ]/u, name);
   for (const d of Object.values(DISGUISES)) for (const s of d.skills) assert.ok(names.includes(s.name), s.name);
 });

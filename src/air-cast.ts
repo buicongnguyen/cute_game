@@ -2,7 +2,7 @@
  * Jumping, then a disguise skill or the weapon in hand: one table of pure rules (tests/air-cast.test.ts). No three.js, no
  * page: main.ts turns a press into the cast, combat.ts deals it, world.ts poses the explorer.
  *
- * Every disguise skill (combat.ts DISGUISE_KITS, 16 disguises x 4) has exactly one class for a press in the air window
+ * Every disguise skill (combat.ts DISGUISE_KITS, 17 disguises x 4) has exactly one class for a press in the air window
  * (jump-rules.ts pressKind 'air'):
  *
  *   'air'     It is cast where the explorer is. The explorer hangs AIR_CASTING.hang s in a casting pose and goes on with
@@ -62,6 +62,8 @@ export const AIR_CAST: Readonly<Record<string, AirCastRule>> = {
   eagle: move('glide'), starshield: body, torch: body, fireworks: far,
   // Vietnam red flag
   goldstar: body, bamboo: plunge, drum: plunge, bigstar: far,
+  // Dawn star dancer: the ribbon and the glow start up there, the sparkle step holds its height, the stars fall round the spot under her
+  lasso: body, dawnglow: body, sparklestep: move('glide'), starshower: ground,
 };
 export const airCastRule = (effect: string | undefined): AirCastRule | undefined => effect ? AIR_CAST[effect] : undefined;
 

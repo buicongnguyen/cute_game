@@ -72,7 +72,7 @@ The attack button keeps: in the air, rising = Sky Spin (with a gun: the old air 
 
 ### 4b. Jump + a disguise skill, and the weapon in the air (built 2026-10-12)
 
-One table, `src/air-cast.ts` (`AIR_CAST`), gives every disguise skill (16 disguises x 4) one class for a press in the air window. A test fails when a skill is added without a class. Switch off or online, none of it is reached.
+One table, `src/air-cast.ts` (`AIR_CAST`), gives every disguise skill (17 disguises x 4) one class for a press in the air window. A test fails when a skill is added without a class. Switch off or online, none of it is reached.
 
 | Class | What happens | Skills |
 |---|---|---|

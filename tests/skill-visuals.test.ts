@@ -81,7 +81,7 @@ function drawnSize(look: string, radius: number, life: number, from = 0, to = 1)
   for (let i = 0; i <= 120; i++) { c.t = from + (to - from) * i / 120; c.a = c.t * life; LOOKS[look](painter, c); }
   return { all, fill };
 }
-/** Every look effect the sixteen kits emit in nine seconds of fighting three creatures, once per look and radius. */
+/** Every look effect the seventeen kits emit in nine seconds of fighting three creatures, once per look and radius. */
 function kitLooks() {
   const out: Array<{ id: string; skill: string; look: string; radius: number; life: number }> = [];
   for (const [id, kit] of Object.entries(DISGUISE_KITS)) kit.forEach((skill, slot) => {

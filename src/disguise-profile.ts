@@ -20,7 +20,7 @@
  *  - mobility : metres of dashes and blinks plus the extra metres a speed boost gives (6 m/s base speed), per 10 s.
  *
  * A score is the raw value as a percent of the best disguise on that axis (the best = 100), so the picture compares
- * the sixteen with each other. `profile(id, weapon)` gives the same kit with another weapon in hand ("yours": the
+ * the seventeen with each other. `profile(id, weapon)` gives the same kit with another weapon in hand ("yours": the
  * weapon in hand fights in a disguise): only the basic attack changes. Disguise skills are never levelled
  * (skill-upgrades.ts levelledCooldown), so there is nothing else of the player's to apply.
  *
@@ -188,6 +188,13 @@ export function skillFacts(effect: string): SkillFacts {
     case 'bamboo': { const length = K.bamboo.speed * K.bamboo.time; return { damage: K.bamboo.power, move: length, safe: K.bamboo.time, area: circle(K.bamboo.radius), reach: length + K.bamboo.radius }; }
     case 'drum': return { damage: K.drum.beats * K.drum.power, hard: K.drum.stun, area: circle(K.drum.radius), reach: K.drum.radius };
     case 'bigstar': return { damage: K.bigstar.power, soft: K.bigstar.slow, area: circle(K.bigstar.radius), reach: K.bigstar.range + K.bigstar.radius };
+    // Dawn star dancer
+    case 'lasso': return { damage: K.lasso.power, hard: K.lasso.bind, area: Math.acos(K.lasso.cone) * K.lasso.radius ** 2, reach: K.lasso.radius };
+    case 'dawnglow': return { safe: K.dawnglow.time, heal: K.dawnglow.heal }; // the pets' cheer is their damage, not the wearer's: on no axis
+    case 'sparklestep': { const length = K.sparklestep.speed * K.sparklestep.time; // the trail only works on a creature that stays on it
+      return { damage: strikes(K.sparklestep.trail, K.sparklestep.tick) * K.sparklestep.power * CONTACT, burst: strikes(BURST_WINDOW, K.sparklestep.tick) * K.sparklestep.power * CONTACT, soft: K.sparklestep.trail * CONTACT, move: length, safe: K.sparklestep.time, area: length * 2 * K.sparklestep.width, reach: length }; }
+    case 'starshower': { const near = ring(K.starshower.count).filter(a => 2 * K.starshower.ring * Math.abs(Math.sin(a / 2)) <= K.starshower.radius + REF_RADIUS).length; // a creature standing on the ring of stars
+      return { damage: near * K.starshower.power + K.starshower.finalPower, hard: K.starshower.stun, area: circle(Math.max(K.starshower.finalRadius, K.starshower.ring + K.starshower.radius)), reach: Math.max(K.starshower.finalRadius, K.starshower.ring + K.starshower.radius) }; }
     default: return {};
   }
 }
@@ -236,7 +243,7 @@ export function rawProfile(id: string, weapon?: Pick<WeaponDef, 'kind' | 'cd' | 
 
 export const DISGUISE_IDS: readonly string[] = Object.keys(DISGUISE_KITS).filter(id => Object.hasOwn(DISGUISES, id));
 let bestCache: Record<Axis, number> | null = null;
-/** The best raw value of each axis over the sixteen disguises with their own weapons: the 100 of the scale. */
+/** The best raw value of each axis over the seventeen disguises with their own weapons: the 100 of the scale. */
 export function axisBest(): Record<Axis, number> {
   if (bestCache) return bestCache; const best = zero();
   for (const id of DISGUISE_IDS) { const r = rawProfile(id).raw; for (const axis of AXES) best[axis] = Math.max(best[axis], r[axis]); }
