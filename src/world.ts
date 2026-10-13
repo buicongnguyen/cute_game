@@ -58,13 +58,13 @@ import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
-import {applyGait,gaitSwing,hipOf,limbsOf,newGait,stepGait,strideOf,type Gait} from './walk-cycle.ts';
+import {applyGait,armOf,armSwing,gaitSwing,hipOf,limbsOf,newGait,stepGait,strideOf,type Gait} from './walk-cycle.ts';
 import {DEFAULT_PIVOTS,fitOf,lookOf,lookTrim,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {fitArmPiece} from './arm-fit.ts';
 import {part} from './part-cache.ts';
 import {WeaponTrail,measureBlade,type HeldBlade} from './weapon-trail.ts';
 import {CUTS,SPIN,SWING,TRAIL,spinLead,spinTurn,swingPose,nextCut,type Blade,type CutIndex,type SwingPose} from './trail-ribbon.ts';
-import {PUNCH,WIND,punchPose,type PunchKind,type PunchPose} from './punch-wind.ts';
+import {PUNCH,WIND,punchPose,stretchFor,type PunchKind,type PunchPose} from './punch-wind.ts';
 import {SKILL_WIND,THRUST,TURN,sweepTurn,handBlade} from './skill-wind.ts';
 import type {CombatEffect} from './combat.ts';
 import {applyReaction,newReaction,newReactionPose,reactionPose,reactStop,reactStrength,startReaction,REACT,type Reaction} from './hit-react.ts';
@@ -2190,7 +2190,7 @@ export class World {
     // The walk is fitted to the body style's legs (walk-cycle.ts strideOf): longer legs step slower and swing less.
     // Long legs walk true to the ground: the step clock follows the speed the explorer really moves at (smoothed).
     const at=this.position??{x:0,z:0},was=this.walkFrom??(this.walkFrom={x:at.x,z:at.z,v:0});if(dt>0){const v=Math.min(30,Math.hypot(at.x-was.x,at.z-was.z)/dt);was.v+=(v-was.v)*Math.min(1,dt*10);}was.x=at.x;was.z=at.z;
-    const stride=strideOf(hipOf(this.player),was.v,this.player.scale?.y||HERO_SCALE);
+    const stride=strideOf(hipOf(this.player),was.v,this.player.scale?.y||HERO_SCALE),arm=armSwing(armOf(this.player));/* longer arms swing less and hang closer (walk-cycle.ts armSwing) */
     this.walkClock=(this.walkClock||0)+dt*(this.moving?11*stride.rate:3);
     const o=this.walkClock,c=Math.sin(o),p=this.player;
     const flying=this.playerFlying&&FLIGHT_POSE_DISGUISES.includes(this.state.gear.disguise??'');
@@ -2201,8 +2201,8 @@ export class World {
     // An arm a punch stretched is its own length again once the punch is over.
     if(this.armsStretched&&!(this.punchT>0)){armL?.scale.set(1,1,1);armR?.scale.set(1,1,1);this.armsStretched=false;}
     // Base: walk cycle or idle breathing.
-    if(this.moving){armL?.rotation.set(-c*.8,0,-.3);armR?.rotation.set(c*.8,0,.3);legL?.rotation.set(c*stride.swing,0,0);legR?.rotation.set(-c*stride.swing,0,0);lift=stride.drop?-stride.drop*(1-Math.cos(c*stride.swing))/(1-Math.cos(stride.swing))*(this.player.scale?.y||HERO_SCALE):Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
-    else{armL?.rotation.set(0,0,-.3-Math.sin(o)*.05);armR?.rotation.set(0,0,.3+Math.sin(o)*.05);legL?.rotation.set(0,0,0);legR?.rotation.set(0,0,0);sy=1+Math.sin(o*1.2)*.025;if(head)head.rotation.set(0,Math.sin(o*.4)*.15,0);}
+    if(this.moving){armL?.rotation.set(-c*arm.swing-arm.ease,0,-arm.splay);armR?.rotation.set(c*arm.swing-arm.ease,0,arm.splay);legL?.rotation.set(c*stride.swing,0,0);legR?.rotation.set(-c*stride.swing,0,0);lift=stride.drop?-stride.drop*(1-Math.cos(c*stride.swing))/(1-Math.cos(stride.swing))*(this.player.scale?.y||HERO_SCALE):Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
+    else{armL?.rotation.set(0,0,-arm.splay-Math.sin(o)*.05);armR?.rotation.set(0,0,arm.splay+Math.sin(o)*.05);legL?.rotation.set(0,0,0);legR?.rotation.set(0,0,0);sy=1+Math.sin(o*1.2)*.025;if(head)head.rotation.set(0,Math.sin(o*.4)*.15,0);}
     // In the air (jump-rules.ts): a squash as the feet leave, a stretch going up, a tuck at the top, a head-first dive.
     const jump=this.jump,air=jump?.airborne?jump:null;
     if(air){
@@ -2241,10 +2241,10 @@ export class World {
       else if(kind==='gun')armR.rotation.x=-1.5+e*.25;
       else{
         // A jab with one arm and then the other, an uppercut for the last hit of a chain, both fists down for a dive's pound: the arm stretches and the fist grows, so it shows past the head.
-        const right=!!this.punchArm,pound=this.punchKind===2,s=punchPose(this.punchKind,t,PUNCH_POSE),wide=1+(s.fist-1)*.7;
+        const right=!!this.punchArm,pound=this.punchKind===2,s=punchPose(this.punchKind,t,PUNCH_POSE),wide=1+(s.fist-1)*.7,long=stretchFor(s.stretch,armOf(p));/* a long arm reaches as far as the default one, no further */
         for(const arm of [armL,armR]){
           if(!arm)continue;
-          if(pound||arm===(right?armR:armL)){arm.rotation.set(s.raise,0,pound?(arm===armR?.25:-.25):0);arm.scale.set(wide,s.stretch,wide);}else arm.scale.set(1,1,1);
+          if(pound||arm===(right?armR:armL)){arm.rotation.set(s.raise,0,pound?(arm===armR?.25:-.25):0);arm.scale.set(wide,long,wide);}else arm.scale.set(1,1,1);
         }
         this.armsStretched=true;twist=(right?1:-1)*s.twist;lean=Math.max(lean,s.lean);step=s.step;
       }

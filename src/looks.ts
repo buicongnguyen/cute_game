@@ -1,12 +1,16 @@
 /**
  * The explorer's character builder ("looks"), at the bedroom mirror: four independent choices that combine.
- *   body   boy | girl | sturdy | slim          (free: who you are is never paywalled)
+ *   body   boy | girl | man | woman | sturdy | slim   (free: who you are is never paywalled)
  *   height tiny | chibi | teen | tall | grown  (tiny 80, teen 80, tall 120, grown 160 energy)
  *   ears   none | cat | bunny                  (cat 150, bunny 150; each comes with its tail)
  *   deco   bare | twelve animal hoods          (110-140 energy)
  * Builds: sturdy is the boy file made broader at load, slim the girl file made slender (BUILD), so a build reads from the
  * high game camera under every hat and hood (hair styles would hide under them) and costs no new files. Grown is the most
- * human height (about five heads tall). A head decoration rides where the ears do (head-leaf): it brings its own ears,
+ * human height (about five heads tall). From Teen up the boy and the girl are shaped apart (broader shoulders and a
+ * straighter torso; narrower shoulders, a waist, a flared skirt and longer hair), more with every height, and Man and
+ * Woman are the adults of the same family: that shaping a step stronger, he in long trousers and a little taller, she
+ * in a longer dress with long hair (their own body files, same parts and pivots; SHAPE below is their gear fit). Tall
+ * and Grown have a neck: the head rides higher on a skin column that belongs to the head part. A head decoration rides where the ears do (head-leaf): it brings its own ears,
  * so the Ears row's ears are left off while it is worn (the tail stays), and a hat covers it (one thing on the head).
  * Owning an option unlocks it for both bodies and every combination, and switching between owned options is free.
  * Prices: the old Tall look cost 120 and stays 120; teen is a smaller step. Ears were sold with a whole body at 180
@@ -19,7 +23,9 @@
  * FIT is the per-part transform World.wearKit applies to a gear piece (and the parts file to ears and tails) after
  * placing it relative to the DEFAULT pivot, so every hat, outfit, boot and weapon fits every height without new art.
  */
-export type Body = 'boy' | 'girl' | 'sturdy' | 'slim';
+export type Body = 'boy' | 'girl' | 'man' | 'woman' | 'sturdy' | 'slim';
+/** The bodies that have their own Blender files (sturdy and slim are builds of the boy's and the girl's). */
+export type FileBody = 'boy' | 'girl' | 'man' | 'woman';
 export type Height = 'tiny' | 'chibi' | 'teen' | 'tall' | 'grown';
 export type Ears = 'none' | 'cat' | 'bunny';
 export type Deco = 'bare' | 'bear' | 'panda' | 'fox' | 'kitty' | 'frog' | 'piggy' | 'chick' | 'koala' | 'tiger' | 'penguin' | 'monkey' | 'owl';
@@ -31,14 +37,14 @@ export interface Looks { owned: LookOption[]; style: LookId }
 export interface Fit { scale: [number, number, number]; offset: [number, number, number] }
 
 export const DECOS = ['bear', 'panda', 'fox', 'kitty', 'frog', 'piggy', 'chick', 'koala', 'tiger', 'penguin', 'monkey', 'owl'] as const;
-export const ROWS: Record<LookRow, readonly LookOption[]> = { body: ['boy', 'girl', 'sturdy', 'slim'], height: ['tiny', 'chibi', 'teen', 'tall', 'grown'], ears: ['none', 'cat', 'bunny'], deco: ['bare', ...DECOS] };
+export const ROWS: Record<LookRow, readonly LookOption[]> = { body: ['boy', 'girl', 'man', 'woman', 'sturdy', 'slim'], height: ['tiny', 'chibi', 'teen', 'tall', 'grown'], ears: ['none', 'cat', 'bunny'], deco: ['bare', ...DECOS] };
 export const ROW_NAMES: Record<LookRow, string> = { body: 'Body', height: 'Height', ears: 'Ears', deco: 'Hood' }; // every head decoration is an animal hood: the short name fits beside a phone's tiles
 /**
  * Every option has a Blender portrait at assets/icons/looks/<id>.webp (build_hero_styles.py render_option_icons: the
  * default explorer with only that option changed); `icon` is its alt text and the stand-in if the picture fails.
  */
 export const OPTIONS: Record<LookOption, { name: string; price: number; icon: string }> = {
-  boy: { name: 'Boy', price: 0, icon: '👦' }, girl: { name: 'Girl', price: 0, icon: '👧' }, sturdy: { name: 'Sturdy', price: 0, icon: '💪' }, slim: { name: 'Slim', price: 0, icon: '🌿' },
+  boy: { name: 'Boy', price: 0, icon: '👦' }, girl: { name: 'Girl', price: 0, icon: '👧' }, man: { name: 'Man', price: 0, icon: '👨' }, woman: { name: 'Woman', price: 0, icon: '👩' }, sturdy: { name: 'Sturdy', price: 0, icon: '💪' }, slim: { name: 'Slim', price: 0, icon: '🌿' },
   tiny: { name: 'Tiny', price: 80, icon: '👶' }, chibi: { name: 'Chibi', price: 0, icon: '🧒' }, teen: { name: 'Teen', price: 80, icon: '🧑' }, tall: { name: 'Tall', price: 120, icon: '🧍' }, grown: { name: 'Grown-up', price: 160, icon: '🚶' },
   none: { name: 'No ears', price: 0, icon: '🙂' }, cat: { name: 'Cat ears', price: 150, icon: '🐱' }, bunny: { name: 'Bunny ears', price: 150, icon: '🐰' },
   bare: { name: 'No hood', price: 0, icon: '✨' },
@@ -49,8 +55,10 @@ export const OPTIONS: Record<LookOption, { name: string; price: number; icon: st
 };
 export const DEFAULT_LOOK: LookId = 'boy-chibi-none-bare';
 /**
- * Standing height of each height's body file over the chibi's (tests/w26-people.test.ts measures the GLBs). A friend
+ * Standing height of each height's body file over the chibi's (tests/w26-people.test.ts measures the boy's GLBs). A friend
  * (friend-view.ts) divides it out: for a friend the height option sets the proportions and growth sets the height.
+ * The man stands up to 3% taller than this and girls and women up to 1.5% shorter (SHAPE taller), on purpose: it is
+ * part of how the two read apart, for friends too.
  */
 export const HEIGHT_RATIO: Record<Height, number> = { tiny: .979, chibi: 1, teen: 1.066, tall: 1.152, grown: 1.287 };
 /**
@@ -83,9 +91,9 @@ export const lookOptions = (id: LookId): LookOption[] => { const l = splitLook(i
 /** Which row an option belongs to. */
 export const rowOf = (o: LookOption) => (Object.keys(ROWS) as LookRow[]).find(r => ROWS[r].includes(o))!;
 /** The Blender body a build starts from: sturdy is the boy made broader, slim the girl made slender. */
-export const baseBody = (body: Body): 'boy' | 'girl' => body === 'sturdy' ? 'boy' : body === 'slim' ? 'girl' : body;
+export const baseBody = (body: Body): FileBody => body === 'sturdy' ? 'boy' : body === 'slim' ? 'girl' : body;
 /** The body x height file (build_hero_styles.py body_file); the boy chibi is the default hero.glb. */
-export const bodyFile = (body: Body, height: Height) => { const b = baseBody(body); return b === 'boy' && height === 'chibi' ? 'hero.glb' : `hero-${[...(b === 'girl' ? ['girl'] : []), ...(height === 'chibi' ? [] : [height])].join('-')}.glb`; };
+export const bodyFile = (body: Body, height: Height) => { const b = baseBody(body); return b === 'boy' && height === 'chibi' ? 'hero.glb' : `hero-${[...(b === 'boy' ? [] : [b]), ...(height === 'chibi' ? [] : [height])].join('-')}.glb`; };
 
 /** hero_spec.PIVOTS (and HANDS) in three.js space: where gear (and ears, tails) is modelled, before a height's FIT moves it. */
 export const DEFAULT_PIVOTS: Record<string, [number, number, number]> = { body: [0, .85, 0], head: [0, 1.12, 0], 'arm-left': [-.37, 1.08, -.02], 'arm-right': [.37, 1.08, -.02], 'leg-left': [-.18, .52, 0], 'leg-right': [.18, .52, 0], 'hand-left': [-.37, .72, .05], 'hand-right': [.37, .72, .05] };
@@ -99,7 +107,37 @@ const fit = (head: number, tw: number, th: number, aw: number, al: number, e: nu
   'leg-right': { scale: [1, 1, 1], offset: [0, -e, 0] },
   'hand-right': { scale: [1, 1, 1], offset: [0, 0, 0] },
 });
-export const FIT: Record<Height, Partial<Record<string, Fit>>> = { tiny: fit(1.1, 1.04, .88, 1, .9, -.1), chibi: {}, teen: fit(.9, .9, 1.08, .94, 1.22, .2), tall: fit(.76, .8, 1.2, .86, 1.55, .46), grown: fit(.52, .74, 1.5, .8, 3, .84) };
+/**
+ * Tall and Grown have a neck since 2026-10-14: their heads are a little smaller (0.76 -> 0.66, 0.52 -> 0.49) and ride
+ * higher, their torsos and sleeves a little shorter (1.2 -> 1.109 and 1.5 -> 1.37; 1.55 -> 1.35 and 3 -> 2.75), and they
+ * stand exactly as tall as before. Hats, hoods, ears and hair follow the head pivot, so they needed nothing else.
+ */
+export const FIT: Record<Height, Partial<Record<string, Fit>>> = { tiny: fit(1.1, 1.04, .88, 1, .9, -.1), chibi: {}, teen: fit(.9, .9, 1.08, .94, 1.22, .2), tall: fit(.66, .8, 1.109, .86, 1.35, .46), grown: fit(.49, .74, 1.37, .8, 2.75, .84) };
+/**
+ * How each Blender body is shaped apart from the default at each height (mirrors build_hero_styles.py STYLE, STRENGTH,
+ * TALLER and shape_of): `strength` of the masculine or feminine shaping, and `taller` [extra hip height, torso height
+ * factor]. Gear follows: his torso gear grows with his chest (x 1 + 0.1 s wide, 1 + 0.03 s deep) and his arm gear with
+ * his arms (1 + 0.1 s); her arm gear slims with her arms (1 - 0.1 s) and her torso gear keeps its size (her hips do).
+ */
+const GROWING = { teen: .35, tall: .7, grown: 1 }, ADULT = { teen: .5, tall: .9, grown: 1.2 }, SHORTER: Partial<Record<Height, [number, number]>> = { tall: [-.02, 1], grown: [-.04, 1] };
+export const SHAPE: Record<FileBody, { sex: 'm' | 'f'; strength: Partial<Record<Height, number>>; taller?: Partial<Record<Height, [number, number]>> }> = {
+  boy: { sex: 'm', strength: GROWING }, girl: { sex: 'f', strength: GROWING, taller: SHORTER },
+  man: { sex: 'm', strength: ADULT, taller: { teen: [.02, 1.01], tall: [.04, 1.02], grown: [.06, 1.03] } }, woman: { sex: 'f', strength: ADULT, taller: SHORTER },
+};
+/** The gear fit of a Blender body at a height: the height's FIT with that body's shaping (build_hero_styles.py fit_table). */
+export function shapeFit(body: FileBody, height: Height): Partial<Record<string, Fit>> {
+  const base = FIT[height], sh = SHAPE[body], s = sh.strength[height] ?? 0, tall = sh.taller?.[height];
+  if (!s && !tall) return base;
+  const one: Fit = { scale: [1, 1, 1], offset: [0, 0, 0] }, out: Partial<Record<string, Fit>> = { ...base };
+  const scaled = (part: string, x: number, y: number, z: number, dy = 0) => { const f = base[part] ?? one; out[part] = { scale: [f.scale[0] * x, f.scale[1] * y, f.scale[2] * z], offset: [f.offset[0], f.offset[1] - dy, f.offset[2]] }; };
+  const m = sh.sex === 'm', arm = m ? 1 + .1 * s : 1 - .1 * s, [e, th] = tall ?? [0, 1];
+  scaled('body', m ? 1 + .1 * s : 1, th, m ? 1 + .03 * s : 1);
+  for (const p of ['arm-left', 'arm-right']) scaled(p, arm, 1, arm);
+  for (const p of ['leg-left', 'leg-right']) scaled(p, 1, 1, 1, e);
+  // Her skirt flares wider than the chibi girl's: a tail (assets.ts dressEars) sits that much further back, on the skirt.
+  if (!m && s) out.tail = { scale: out.body!.scale, offset: [0, 0, -.05 * s] };
+  return out;
+}
 /**
  * Builds (mirrors build_hero_styles.py BUILDS), applied at load to the base body's parts (assets.ts applyBuild):
  * torso [x, z] scale, limb thickness (x, z of arms and legs), shoulder and hip spread (the parts' x positions).
@@ -107,12 +145,12 @@ export const FIT: Record<Height, Partial<Record<string, Fit>>> = { tiny: fit(1.1
 export const BUILD: Partial<Record<Body, { torso: [number, number]; limb: number; spread: number; hips: number }>> = {
   sturdy: { torso: [1.2, 1.15], limb: 1.18, spread: 1.17, hips: 1.12 }, slim: { torso: [.86, .9], limb: .86, spread: .87, hips: .9 },
 };
-/** The gear fit of a whole combination: the height's FIT, then the build's widths (scale and offset both widen). */
+/** The gear fit of a whole combination: the height's FIT with the body's shaping, then the build's widths (scale and offset both widen). */
 export function fitOf(id: LookId): Partial<Record<string, Fit>> {
-  const l = splitLook(id), base = FIT[l.height], b = BUILD[l.body]; if (!b) return base;
+  const l = splitLook(id), base = shapeFit(baseBody(l.body), l.height), b = BUILD[l.body]; if (!b) return base;
   const out: Partial<Record<string, Fit>> = { ...base }, one: Fit = { scale: [1, 1, 1], offset: [0, 0, 0] };
   const widen = (part: string, x: number, z: number) => { const f = base[part] ?? one; out[part] = { scale: [f.scale[0] * x, f.scale[1], f.scale[2] * z], offset: [f.offset[0] * x, f.offset[1], f.offset[2] * z] }; };
-  widen('body', ...b.torso); for (const p of ['arm-left', 'arm-right', 'leg-left', 'leg-right']) widen(p, b.limb, b.limb);
+  widen('body', ...b.torso); if (base.tail) widen('tail', ...b.torso); for (const p of ['arm-left', 'arm-right', 'leg-left', 'leg-right']) widen(p, b.limb, b.limb);
   return out;
 }
 

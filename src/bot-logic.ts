@@ -4,11 +4,14 @@
  * the tests can drive it. The cast comes from one saved seed, so the same neighbours turn up every visit.
  */
 import type { AnimalKind } from './farm.ts';
+import type { LookId } from './looks.ts';
 
 export type Tier = 'rich' | 'average' | 'new';
 export interface BotGear { hat?: string; outfit?: string; boots?: string; disguise?: string }
 export interface BotDef {
   id: string; name: string; level: number; tier: Tier; color: string; gear: BotGear;
+  /** Its body from the mirror's builder (looks.ts): grown-ups for the rich, teens and tall ones in the middle, little ones for newcomers. */
+  look: LookId;
   /** Can fly (a superhero, an angel, a fairy or rocket boots): it crosses the sky now and then and swoops down to say hello. */
   flies: boolean;
   /** What its house holds (bots.ts builds the garden from this). */
@@ -63,6 +66,13 @@ function pickPets(seed: number, index: number) {
   const r = seeded((seed ^ 0x9e3779b9) + index * 7919), pool = [...PET_POOL], first = pool.splice(Math.floor(r() * pool.length), 1)[0];
   return [first, pool[Math.floor(r() * pool.length)]];
 }
+/** Bodies by tier, from their own random so the rest of the cast stays what it was: men and women among the rich. */
+const LOOKS_BY_TIER: Record<Tier, readonly LookId[]> = {
+  rich: ['man-grown-none-bare', 'woman-grown-none-bare', 'man-tall-none-bare', 'woman-tall-none-bare', 'sturdy-grown-none-bare', 'slim-grown-none-bare'],
+  average: ['boy-teen-none-bare', 'girl-teen-none-bare', 'boy-tall-none-bare', 'girl-tall-none-bare', 'man-teen-none-bare', 'woman-teen-none-bare'],
+  new: ['boy-chibi-none-bare', 'girl-chibi-none-bare', 'sturdy-chibi-none-bare', 'slim-chibi-none-bare'],
+};
+const pickLook = (seed: number, index: number, tier: Tier): LookId => { const list = LOOKS_BY_TIER[tier]; return list[Math.floor(seeded((seed ^ 0x51f15e) + index * 104729)() * list.length)]; };
 /** `count` neighbours from a seed: at least one rich one, the rest random (richer ones are rarer). */
 export function makeCast(seed: number, count = 5): BotDef[] {
   const r = seeded(seed), names = [...NAMES];
@@ -74,7 +84,7 @@ export function makeCast(seed: number, count = 5): BotDef[] {
     const level = tier === 'rich' ? 24 + Math.floor(r() * 18) : tier === 'average' ? 9 + Math.floor(r() * 12) : 2 + Math.floor(r() * 6);
     const plots = tier === 'rich' ? 18 + Math.floor(r() * 6) : tier === 'average' ? 12 : 9;
     bots.push({
-      id: `${BOT_ID_PREFIX}${i}`, name: names[i], level, tier, color: pick(COLORS, r), gear: look.gear, flies: look.flies,
+      id: `${BOT_ID_PREFIX}${i}`, name: names[i], level, tier, color: pick(COLORS, r), gear: look.gear, flies: look.flies, look: pickLook(seed, i, tier),
       house: { plots, animals: pick(ANIMALS_BY_TIER[tier], r), crops: [...CROPS_BY_TIER[tier]], decor: DECOR_BY_TIER[tier].slice(0, tier === 'rich' ? 5 : tier === 'average' ? 3 : 1) },
       gifts: [...GIFTS[tier]], pets: tier === 'rich' ? pickPets(seed, i) : [],
     });

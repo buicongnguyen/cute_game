@@ -2,6 +2,7 @@ import * as T from 'three';
 import { modelShot } from './icons.ts';
 import { restPose } from './mirror-preview.ts';
 import { dropTree } from './dispose-tree.ts';
+import type { Fit } from './looks.ts';
 
 /**
  * The face on the hero plate (top-left HUD card): the explorer as they look now, head and shoulders, with the hat they
@@ -50,8 +51,9 @@ const part = new T.Box3(), mid = new T.Vector3(), half = new T.Vector3(), right 
  * head, hoods and hats are round, and a box's corners would frame them a third too loosely. Upward it leans most of the way to
  * the box, because ears and horns do sit in its top corners.
  */
-function reach(mesh: T.Mesh, axis: T.Vector3, span: Span) {
+function reach(mesh: T.Mesh, axis: T.Vector3, span: Span, floor = -Infinity) {
   mesh.geometry.boundingBox ?? mesh.geometry.computeBoundingBox(); part.copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld);
+  if (part.min.y < floor) part.min.y = Math.min(floor, part.max.y); // the neck under the chin is not the face
   part.getCenter(mid); part.getSize(half).multiplyScalar(.5);
   const at = mid.dot(axis), round = Math.hypot(half.x * axis.x, half.y * axis.y, half.z * axis.z), square = Math.abs(half.x * axis.x) + Math.abs(half.y * axis.y) + Math.abs(half.z * axis.z);
   span.lo = Math.min(span.lo, at - round); span.hi = Math.max(span.hi, at + (axis.y > .5 ? round * .35 + square * .65 : round));
@@ -71,10 +73,15 @@ export function aimPortrait(camera: T.PerspectiveCamera, holder: T.Object3D): vo
   const head = holder.getObjectByName('head'), root = head ?? holder;
   const faceU: Span = { lo: Infinity, hi: -Infinity }, faceR: Span = { lo: Infinity, hi: -Infinity }, allU: Span = { lo: Infinity, hi: -Infinity }, allR: Span = { lo: Infinity, hi: -Infinity };
   const face = new T.Box3();
+  // The Tall and Grown heads carry their neck (a column down into the torso, build_hero_styles.py neck_geo): the frame
+  // is measured from the chin, which sits 0.12 head scales under the head's pivot (hero_spec: neck 1.12, chin 1.0).
+  let chin = -Infinity;
+  if (head) { let o: T.Object3D | null = head, scale = 1; for (; o; o = o.parent) { const f = (o.userData.fit as Partial<Record<string, Fit>> | undefined)?.head; if (f) { scale = f.scale[1]; break; } } head.getWorldPosition(mid); chin = mid.y - .13 * scale * head.getWorldScale(half).y; }
   root.traverseVisible(o => {
     const m = o as T.Mesh; if (!m.isMesh || m.name === 'outline') return;
-    reach(m, up, allU); reach(m, right, allR);
-    if (!isWorn(m)) { reach(m, up, faceU); reach(m, right, faceR); face.union(part); }
+    const own = !isWorn(m), floor = own ? chin : -Infinity;
+    reach(m, up, allU, floor); reach(m, right, allR, floor);
+    if (own) { reach(m, up, faceU, floor); reach(m, right, faceR, floor); face.union(part); }
   });
   if (face.isEmpty()) { face.setFromCenterAndSize(mid.set(0, 1.6, 0), half.set(1.2, 1.2, 1.2)); faceU.lo = allU.lo = 1.6 * up.y - .6; faceU.hi = allU.hi = 1.6 * up.y + .6; faceR.lo = allR.lo = -.6; faceR.hi = allR.hi = .6; }
   if (!head) { faceU.lo = allU.lo = (faceU.lo + faceU.hi) / 2; }

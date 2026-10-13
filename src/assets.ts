@@ -497,7 +497,7 @@ export function mergeIntoPart(part: T.Object3D, extra: T.BufferGeometry) {
 function dressEars(hero: T.Object3D, parts: T.Object3D, ears: string, deco: string, fit: Partial<Record<string, Fit>>) {
   const head = hero.getObjectByName('head'), body = hero.getObjectByName('body'); if (!head || !body) return;
   const earPiece = parts.getObjectByName(deco !== 'bare' ? 'deco-' + deco : 'ears-' + ears), tailPiece = parts.getObjectByName('tail-' + ears);
-  const earGeo = earPiece && bakePart(earPiece, DEFAULT_PIVOTS.head, fit.head), tailGeo = tailPiece && bakePart(tailPiece, DEFAULT_PIVOTS.body, fit.body);
+  const earGeo = earPiece && bakePart(earPiece, DEFAULT_PIVOTS.head, fit.head), tailGeo = tailPiece && bakePart(tailPiece, DEFAULT_PIVOTS.body, fit.tail ?? fit.body);
   if (tailGeo) { mergeIntoPart(body, tailGeo); tailGeo.dispose(); }
   const like = head.children.find((o): o is T.Mesh => o instanceof T.Mesh && !!(o.material as Plain).vertexColors);
   if (!earGeo || !like) return;

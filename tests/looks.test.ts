@@ -63,9 +63,9 @@ test('a grown friend is drawn at its stage, and the friend panel shows the stage
 // ----------------------------------------------------------------- looks
 test('looks: body, height, ears and head decoration combine; options are bought once, for every body, and switching is free', () => {
   const s = classic(M.newGame()); s.energy = 1000;
-  assert.equal(LOOK_IDS.length, 4 * 5 * 3 * 13); assert.equal(new Set(LOOK_IDS).size, LOOK_IDS.length);
+  assert.equal(LOOK_IDS.length, 6 * 5 * 3 * 13); assert.equal(new Set(LOOK_IDS).size, LOOK_IDS.length);
   assert.equal(lookOf(s), DEFAULT_LOOK); assert.equal(DEFAULT_LOOK, 'boy-chibi-none-bare');
-  assert.deepEqual(ROWS.body, ['boy', 'girl', 'sturdy', 'slim']); assert.deepEqual(ROWS.height, ['tiny', 'chibi', 'teen', 'tall', 'grown']);
+  assert.deepEqual(ROWS.body, ['boy', 'girl', 'man', 'woman', 'sturdy', 'slim']); assert.deepEqual(ROWS.height, ['tiny', 'chibi', 'teen', 'tall', 'grown']);
   assert.equal(DECOS.length, 12); assert.deepEqual(ROWS.deco, ['bare', ...DECOS]);
   for (const id of LOOK_IDS) assert.equal(joinLook(splitLook(id)), id);
   for (const row of Object.values(ROWS)) for (const o of row) assert.equal(ROWS[rowOf(o)], row, `${o} belongs to one row`);
@@ -147,12 +147,12 @@ const place = (b: T.Box3, tag: string, f: Fit | undefined, at: T.Vector3) => {
   return new T.Box3().setFromPoints([out.min, out.max]).translate(at);
 };
 
-test('ten body files keep the hero\'s parts and hand empties; their pivots agree with FIT; tiny < chibi < teen < tall < grown', () => {
+test('twenty body files (boy, girl, man, woman x five heights) keep the hero\'s parts and hand empties; their pivots agree with each body\'s fit; tiny < chibi < teen < tall < grown', () => {
   const base = glb('hero.glb');
-  assert.equal(new Set(BODIES.map(b => b.file)).size, 10, 'builds add no files');
+  assert.equal(new Set(BODIES.map(b => b.file)).size, 20, 'builds add no files');
   for (const [name, p] of Object.entries(DEFAULT_PIVOTS)) assert.ok(base.at(base.index(name)).distanceTo(new T.Vector3(...p)) < .002, name);
-  for (const { file, height } of BODIES) {
-    const g = glb(file), fit = FIT[height];
+  for (const { file, height, id } of BODIES) {
+    const g = glb(file), fit = fitOf(id);
     for (const name of [...PARTS, 'hand-left', 'hand-right', 'head-leaf']) assert.ok(g.index(name) >= 0, `${file} has ${name}`);
     for (const n of g.nodes) assert.ok(!n.rotation && !n.scale, `${file}: ${n.name} is unrotated and unscaled, as gear placement assumes`);
     assert.equal(g.nodes[g.parent.get(g.index('head-leaf'))!].name, 'head', `${file}: the sprout rides the head and hides under hats`);
@@ -163,9 +163,10 @@ test('ten body files keep the hero\'s parts and hand empties; their pivots agree
   }
   const top = (h: Height) => { const g = glb(bodyFile('boy', h)); return g.box(g.index('head')).max.y; };
   const tops = ROWS.height.map(h => top(h as Height)); for (let i = 1; i < tops.length; i++) assert.ok(tops[i] > tops[i - 1], `${ROWS.height[i]} is taller (${tops.map(t => t.toFixed(2))})`);
-  // Grown is the human-like one: a little under five heads tall (chibi about two; 5.1 before its shins were shortened).
-  const heads = (h: Height) => { const g = glb(bodyFile('boy', h)), b = g.box(g.index('head')); return b.max.y / (b.max.y - b.min.y); };
-  assert.ok(heads('chibi') < 2.2 && heads('grown') > 4.5 && heads('grown') < 4.9, `heads tall: chibi ${heads('chibi').toFixed(2)}, grown ${heads('grown').toFixed(2)}`);
+  // Grown is the human-like one: about five heads tall (chibi about two). The head is measured from the chin (0.12 head
+  // scales under its pivot): since Tall and Grown have a neck, the head part reaches further down than the face.
+  const heads = (h: Height) => { const g = glb(bodyFile('boy', h)), b = g.box(g.index('head')), chin = g.at(g.index('head')).y - .12 * (FIT[h].head?.scale[0] ?? 1); return b.max.y / (b.max.y - chin); };
+  assert.ok(heads('chibi') < 2.2 && heads('grown') > 4.9 && heads('grown') < 5.5, `heads tall: chibi ${heads('chibi').toFixed(2)}, grown ${heads('grown').toFixed(2)}`);
 });
 
 test('every wearable (hats, outfits, boots, weapons, disguises) attaches to every body, build and height and lands on its part', () => {
@@ -199,7 +200,7 @@ test('ears and hoods sit on the head and tails on the back at every height and b
   for (const { file, body, id } of BODIES) {
     const hero = built(file, body), fit = fitOf(id), headBox = hero.box('head'), bodyBox = hero.box('body');
     for (const ears of ['cat', 'bunny']) {
-      const e = place(partBox('ears-' + ears), 'head', fit.head, hero.at('head')), t = place(partBox('tail-' + ears), 'body', fit.body, hero.at('body'));
+      const e = place(partBox('ears-' + ears), 'head', fit.head, hero.at('head')), t = place(partBox('tail-' + ears), 'body', fit.tail ?? fit.body, hero.at('body'));
       assert.ok(e.intersectsBox(headBox) && e.max.y > headBox.max.y, `${id}: ${ears} ears rise from the head`);
       assert.ok(t.intersectsBox(bodyBox.clone().expandByScalar(.05)) && t.min.z < bodyBox.min.z - .02, `${id}: ${ears} tail pokes out at the back`);
     }
@@ -211,7 +212,7 @@ test('ears and hoods sit on the head and tails on the back at every height and b
       // The hood replaces the sprout and the ears; the tail can come with it.
       worst = Math.max(worst, hero.g.tris - 128 + partTris(parts, 'deco-' + deco) + partTris(parts, 'tail-cat'));
     }
-    assert.ok(worst <= base.tris * 1.25, `${file} + a hood and a tail: ${worst} triangles (hero ${base.tris})`);
+    assert.ok(worst <= base.tris * 1.26, `${file} + a hood and a tail (the Tall and Grown girls carry a 32-triangle neck too): ${worst} triangles (hero ${base.tris})`);
     report.push(`${file} ${worst}`);
     assert.equal(hero.g.doc.meshes.length, 7, `${file}: one mesh per part plus head-leaf (the game bakes each into one draw plus the shirt)`);
   }

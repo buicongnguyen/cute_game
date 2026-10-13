@@ -1,4 +1,4 @@
-"""Zoo Garden character builder: body (boy/girl) x height (chibi/teen/tall) x ears (none/cat/bunny).
+"""Zoo Garden character builder: body (boy/girl/man/woman) x height (tiny..grown) x ears (none/cat/bunny).
 
 Combinations must not multiply files, so the art is modular:
 
@@ -22,7 +22,20 @@ shade (so it takes the player's colour). The boy keeps the default short hair ca
 Heights (tall is the "human-like" shape: slimmer, longer legs, smaller head):
   chibi  the default proportions, head about half the height
   teen   shins +0.2, torso x1.08 tall, arms x1.22, head x0.9
-  tall   shins +0.46, torso x1.2 tall and x0.8 wide, arms x1.55, head x0.76 (about a third of the height)
+  tall   shins +0.46, torso x1.11 tall and x0.8 wide, arms x1.35, head x0.66, a short neck
+  grown  shins +0.84 (modelled leg), torso x1.37 tall and x0.74 wide, head x0.49, a neck
+
+Boy or girl, man or woman (2026-10-14). From teen up the two sexes are SHAPED apart (shape_of), a little at teen,
+clearly at tall, most at grown: he gets broader shoulders, a straighter torso narrowing to the hips, thicker arms set
+wider; she gets narrower shoulders, a waist, a flared skirt, slimmer arms, longer hair. `man` and `woman` are the
+adults of the same family: the same shaping a step stronger, he in long trousers and a little taller, she in a longer
+dress with bare legs under it and long hair. Tiny and chibi boys and girls are untouched (small children read the
+same). Every body keeps the part names, pivots' meaning, materials and vertex counts of the default hero, so gear fits
+by a per-body FIT (fit_table: the torso's gear grows with his chest, the arm gear with the arms).
+
+The neck (tall and grown): the head rides higher (NECK) on a skin column that belongs to the HEAD part and reaches
+down into the torso, so a nod or turn of the head never opens a crack; hats, hoods, ears and hair follow the head
+pivot as before. The total height is unchanged: the neck's length came out of the head size and the torso.
 
 Ears replace the sprout in `head-leaf`, so they follow its rule: hidden under any hat and most
 disguises (nineteen hats are modelled tight over the hair cap; ears poking through would clash).
@@ -50,7 +63,23 @@ import build_hero as BH  # noqa: E402
 import hero_spec as HS  # noqa: E402
 from style import export_glb, reset_scene  # noqa: E402
 
-BODIES = ('boy', 'girl')
+BODIES = ('boy', 'girl', 'man', 'woman')
+# What each body is made from: the boy's or the girl's pieces, and its dress.
+STYLE = {
+    'boy': dict(base='boy', sex='m'), 'girl': dict(base='girl', sex='f'),
+    'man': dict(base='boy', sex='m', trousers=True, adult=True), 'woman': dict(base='girl', sex='f', dress=True, adult=True),
+}
+# How strongly a body is shaped masculine or feminine at each height (0: as the default hero).
+STRENGTH = {
+    'boy': dict(teen=0.35, tall=0.7, grown=1.0), 'girl': dict(teen=0.35, tall=0.7, grown=1.0),
+    'man': dict(teen=0.5, tall=0.9, grown=1.2), 'woman': dict(teen=0.5, tall=0.9, grown=1.2),
+}
+# The man stands a little taller (longer shins, a touch more torso); girls and women a little shorter from tall up.
+TALLER = {'man': dict(teen=(0.02, 1.01), tall=(0.04, 1.02), grown=(0.06, 1.03)),
+          'girl': dict(tall=(-0.02, 1.0), grown=(-0.04, 1.0)), 'woman': dict(tall=(-0.02, 1.0), grown=(-0.04, 1.0))}
+# Skirt length below the hips (final units) and hair length (0: the chibi girl's) per height.
+SKIRT = {'girl': dict(teen=0.08, tall=0.11, grown=0.16), 'woman': dict(tiny=0.1, chibi=0.12, teen=0.17, tall=0.24, grown=0.34)}
+HAIR = {'girl': dict(teen=0.15, tall=0.35, grown=0.6), 'woman': dict(teen=0.3, tall=0.6, grown=1.0)}
 EARS = ('none', 'cat', 'bunny')
 # Height shapes: E extra shin length (the whole body rises by it), torso width/height, arm width/length,
 # head scale, a hint of neck, hip half-spacing.
@@ -58,13 +87,20 @@ HEIGHTS = {
     # tiny: an extra-chibi toddler, shorter shins and torso, a bigger head.
     'tiny': dict(E=-0.1, TW=1.04, TH=0.88, AW=1.0, AL=0.9, HEAD=1.1, NECK=0.0, LEG_X=0.18),
     'chibi': None,
-    'teen': dict(E=0.2, TW=0.9, TH=1.08, AW=0.94, AL=1.22, HEAD=0.9, NECK=0.03, LEG_X=0.17),
-    'tall': dict(E=0.46, TW=0.8, TH=1.2, AW=0.86, AL=1.55, HEAD=0.76, NECK=0.07, LEG_X=0.155),
+    # teen and tall legs are modelled ring by ring like the grown one (HEM, 2026-10-14): the stretched chibi leg showed a
+    # thin shin under a flared hem, a break at the knee.
+    'teen': dict(E=0.2, HEM=0.47, TW=0.9, TH=1.08, AW=0.94, AL=1.22, HEAD=0.9, NECK=0.03, LEG_X=0.17, CAP=True),
+    # tall and grown have a NECK (2026-10-14): the head rides higher on a skin column of radius NECK_R; its length was
+    # taken from the head (tall 0.76 -> 0.66, grown 0.52 -> 0.49) and the torso (1.2 -> 1.109, 1.5 -> 1.37), so both
+    # stand exactly as tall as before; the arms were shortened with the torso so the hands stay at the hips.
+    'tall': dict(E=0.46, HEM=0.58, TW=0.8, TH=1.109, AW=0.86, AL=1.35, HEAD=0.66, NECK=0.2485, NECK_R=0.08, LEG_X=0.155, CAP=True),
     # grown: the most human shape, about five heads tall: legs 45% of the height, arms to the hips. Its legs are
     # modelled ring by ring (leg_rings): shorts to just above the knee (HEM) and a short shin. E was 1.1 until
     # 2026-10-14: the figure was too leggy, and the 0.26 it lost all came off the bare shin (0.75 -> 0.50 long).
-    'grown': dict(E=0.84, HEM=0.74, TW=0.74, TH=1.5, AW=0.8, AL=3.0, HEAD=0.52, NECK=0.12, LEG_X=0.15),
+    'grown': dict(E=0.84, HEM=0.74, TW=0.74, TH=1.37, AW=0.8, AL=2.75, HEAD=0.49, NECK=0.238, NECK_R=0.075, LEG_X=0.15, CAP=True),
 }
+# The default proportions as a height preset, for a chibi body that still needs a deform (the man's trousers).
+PLAIN = dict(E=0.0, TW=1.0, TH=1.0, AW=1.0, AL=1.0, HEAD=1.0, NECK=0.0, LEG_X=0.18, PAD=0.0)
 # Builds are applied at run time to the boy (sturdy) or girl (slim) file, no new files; src/looks.ts BUILD mirrors
 # this (torso x/depth, limb thickness, shoulder and hip spread). Used here only for the render sheets.
 BUILDS = {
@@ -77,7 +113,59 @@ TRI_LIMIT = 4200    # the default hero is 3,304; the girl adds hair, lashes and 
 def body_file(body, height):
     if body == 'boy' and height == 'chibi':
         return 'hero.glb'
-    return 'hero-' + '-'.join(([body] if body == 'girl' else []) + ([] if height == 'chibi' else [height])) + '.glb'
+    return 'hero-' + '-'.join(([] if body == 'boy' else [body]) + ([] if height == 'chibi' else [height])) + '.glb'
+
+
+def knots(table, z):
+    """Piecewise-linear table [(z, value), ...] at z (clamped at both ends)."""
+    if z <= table[0][0]:
+        return table[0][1]
+    for (z0, a), (z1, b) in zip(table, table[1:]):
+        if z <= z1:
+            return a + (b - a) * (z - z0) / (z1 - z0)
+    return table[-1][1]
+
+
+def shape_of(body, height):
+    """The masculine or feminine shaping of a body at a height, or None (strength 0).
+
+    fx / fy: torso width and depth factors by DEFAULT torso height (hips 0.51-0.6, shirt hem 0.62-0.68, waist 0.8,
+    chest 0.96, shoulders 1.1-1.16). spread: how far out the shoulders (arm pivots) sit; aw: arm thickness; gear:
+    the width and depth the torso's gear is scaled by so it still covers him (his chest is the widest part now; her
+    hips keep their width, so her gear keeps its size); neck: the neck's thickness.
+    """
+    s = STRENGTH[body].get(height, 0.0)
+    if not s:
+        return None
+    if STYLE[body]['sex'] == 'm':
+        return dict(s=s, sex='m', spread=1 + 0.16 * s, aw=1 + 0.1 * s, gear=(1 + 0.1 * s, 1 + 0.03 * s), neck=1.15, flare=1.0,
+                    fx=[(0.508, 1 - 0.1 * s), (0.6, 1 - 0.1 * s), (0.68, 1 - 0.08 * s), (0.8, 1 - 0.02 * s), (0.96, 1 + 0.1 * s),
+                        (1.1, 1 + 0.2 * s), (1.16, 1 + 0.22 * s), (1.196, 1.0)],
+                    fy=[(0.508, 1 - 0.1 * s), (0.68, 1 - 0.08 * s), (0.8, 1 - 0.03 * s), (0.96, 1 + 0.04 * s), (1.16, 1 + 0.04 * s)])
+    return dict(s=s, sex='f', spread=1 - 0.08 * s, aw=1 - 0.1 * s, gear=(1.0, 1.0), neck=0.88, flare=1 + 0.06 * s,
+                fx=[(0.508, 1 + 0.02 * s), (0.6, 1 + 0.02 * s), (0.68, 1.0), (0.8, 1 - 0.18 * s), (0.96, 1 - 0.07 * s),
+                    (1.1, 1 - 0.1 * s), (1.16, 1 - 0.1 * s), (1.196, 1.0)],
+                fy=[(0.6, 1.0), (0.8, 1 - 0.14 * s), (0.96, 1 - 0.03 * s), (1.16, 1 - 0.04 * s)])
+
+
+def params(body, height):
+    """The deform preset of a body at a height (None: the default hero's own proportions, no deform)."""
+    st, p = STYLE[body], HEIGHTS[height]
+    S, tall = shape_of(body, height), TALLER.get(body, {}).get(height)
+    skirt = SKIRT.get(body, {}).get(height)
+    if p is None and not (st.get('trousers') or skirt):
+        return None
+    p = dict(p or PLAIN)
+    if tall:
+        p['E'], p['TH'] = round(p['E'] + tall[0], 4), round(p['TH'] * tall[1], 4)
+    p['S'] = S
+    if st.get('trousers'):
+        p['TROUSERS'] = True
+    if skirt:
+        p['SKIRT'] = skirt
+        if st.get('dress') and p.get('HEM'):      # her shorts end under the dress: bare legs below it
+            p['HEM'] = round(0.52 + p['E'] - skirt + 0.03, 4)
+    return p
 
 
 def torso_z(z, p):
@@ -86,15 +174,20 @@ def torso_z(z, p):
 
 
 def layout(p):
-    sh = {s: Vector((0.37 * s * p['TW'] + 0.02 * s, 0.02, torso_z(1.08, p))) for s in (-1, 1)}
+    spread = p['S']['spread'] if p.get('S') else 1.0
+    sh = {s: Vector(((0.37 * p['TW'] + p.get('PAD', 0.02)) * spread * s, 0.02, torso_z(1.08, p))) for s in (-1, 1)}
     neck = Vector((0, 0, torso_z(1.12, p) + p['NECK']))
     return {'body': Vector((0, 0, torso_z(0.85, p))), 'head': neck, 'arm-left': sh[-1], 'arm-right': sh[1],
             'leg-left': Vector((-p['LEG_X'], 0, 0.52 + p['E'])), 'leg-right': Vector((p['LEG_X'], 0, 0.52 + p['E']))}
 
 
 def arm_rel_z(rz, p):
-    """Arm length map relative to the shoulder: the sleeve stretches, the hand keeps its size."""
+    """Arm length map relative to the shoulder: the sleeve stretches, the hand keeps its size. From teen up (CAP) the
+    shoulder cap above the pivot keeps its size too: stretched with the sleeve it stood above the shoulder line like a
+    horn, which the old neckless head used to hide (src/arm-fit.ts sleeveY does the same to arm gear)."""
     knee = 0.86 - 1.08
+    if rz > 0 and p.get('CAP'):
+        return rz
     return rz * p['AL'] if rz >= knee else knee * p['AL'] + (rz - knee)
 
 
@@ -109,27 +202,72 @@ def leg_rings(p):
     the ankle ring (z < 0.26) keep their place, and no vertex is added.
     """
     hem, top = p['HEM'], 0.565 + p['E']
+    span = top - hem      # the shorts' length: the rings keep their order on the short teen thigh and under a woman's dress
+    # the thigh fills out with the leg's length (the grown radii at E 0.84, between them and the default's for teen and tall)
+    k = min(1.0, max(0.0, p['E']) / 0.84)
+    r = lambda grown, default: (default + (grown - default) * (0.5 + 0.5 * k)) / default
     return {
         # shorts: closing point, hem ring, lower thigh, upper thigh, hip ring, closing point (default radii 0.108, 0.117, 0.117, 0.095)
-        0.418: (hem - 0.004, 1.0), 0.422: (hem, 0.119 / 0.108), 0.45: (hem + 0.07, 0.126 / 0.117),
-        0.53: (top - 0.13, 0.136 / 0.117), 0.558: (top - 0.025, 0.11 / 0.095), 0.565: (top, 1.0),
+        0.418: (hem - 0.004, 1.0), 0.422: (hem, r(0.119, 0.108)), 0.45: (hem + min(0.07, 0.3 * span), r(0.126, 0.117)),
+        0.53: (top - min(0.13, 0.45 * span), r(0.136, 0.117)), 0.558: (top - 0.025, r(0.11, 0.095)), 0.565: (top, 1.0),
         # skin: the knee ring (default radius 0.08) and the closing point, both inside the shorts
-        0.38: (hem + 0.05, 0.108 / 0.08), 0.43: (hem + 0.12, 1.0),
+        0.38: (hem + min(0.05, 0.2 * span), r(0.108, 0.08)), 0.43: (hem + min(0.12, 0.5 * span), 1.0),
     }
 
 
+def trouser_rings(p):
+    """Long trousers (the man): the shorts' cuff runs down to the shoe as one straight leg, the skin hidden inside."""
+    top, hem, k = 0.565 + p['E'], 0.275, 1 + 0.16 * min(1.0, max(0.0, p['E']) / 0.84)
+    length = top - hem
+    return {
+        0.418: (hem - 0.004, 0.9), 0.422: (hem, 0.114 / 0.108), 0.45: (hem + 0.3 * length, 1.03),
+        0.53: (top - min(0.13, 0.45 * length), k), 0.558: (top - 0.025, 0.11 / 0.095 if k > 1.1 else 1.0), 0.565: (top, 1.0),
+        0.38: (hem + 0.05, 0.9), 0.43: (hem + 0.12, 1.0),
+    }
+
+
+def neck_geo(p, pv, M):
+    """The neck: a skin column in the HEAD part, from inside the head down into the torso (so no pose opens a crack)."""
+    r = p['NECK_R'] * (p['S']['neck'] if p.get('S') else 1.0)
+    top, chin = torso_z(1.196, p), pv['head'].z + (BH.C.z - BH.HR - 1.12) * p['HEAD']
+    # an open tube (32 triangles): both ends are buried, the lower in the torso and the upper in the head
+    return BH.lathe([(r * 1.3, top - 0.07), (r, top + 0.03), (r * 0.98, chin + 0.05)], 8).retag(M['skin'])
+
+
+def skirt_geo(p, M):
+    """The girl's skirt in final space: from under the shirt's hem band down to SKIRT below the hips, flared."""
+    S = p['S'] or dict(fx=[(0, 1.0)], fy=[(0, 1.0)], flare=1.0)
+    tw, hem = p['TW'], 0.52 + p['E'] - p['SKIRT']
+    fx, fy = knots(S['fx'], 0.62), knots(S['fy'], 0.62)
+    top = torso_z(0.64, p)
+    r_hem = 0.49 * tw * S['flare'] + 0.12 * max(0.0, torso_z(0.47, p) - hem)
+    g = BH.lathe([(0.0, hem), (r_hem - 0.02 * tw, hem), (r_hem, hem + 0.02), (0.43 * tw, top - 0.04 * p['TH']), (0.41 * tw, top),
+                  (0.0, top)], 18, tag=lambda j: M['shade'])
+    for v in g.verts:
+        v.x *= fx
+        v.y *= fy
+    return g
+
+
 def deform(P, p):
-    pv, E = layout(p), p['E']
-    for v in P['body'].verts:
+    pv, E, S = layout(p), p['E'], p.get('S')
+    zone = getattr(P['body'], 'zone', None)
+    for i, v in enumerate(P['body'].verts):
+        if S and zone:
+            # the torso and its straps follow the shaping ring by ring; the backpack keeps its own shape and rides the back
+            wx, wy = (knots(S['fx'], v.z), knots(S['fy'], v.z)) if i < zone[0] else (1.0, knots(S['fy'], 0.9))
+            v.x *= wx
+            v.y *= wy
         v.x *= p['TW']
         v.y *= p['TW']
         v.z = torso_z(v.z, p)
+    aw = p['AW'] * (S['aw'] if S else 1.0)
     for name in ('arm-left', 'arm-right'):
         old = Vector(HS.PIVOTS[name])
         for v in P[name].verts:
             r = v - old
-            v.x, v.y, v.z = pv[name].x + r.x * p['AW'], pv[name].y + r.y * p['AW'], pv[name].z + arm_rel_z(r.z, p)
-    rings = leg_rings(p) if p.get('HEM') else None
+            v.x, v.y, v.z = pv[name].x + r.x * aw, pv[name].y + r.y * aw, pv[name].z + arm_rel_z(r.z, p)
+    rings = trouser_rings(p) if p.get('TROUSERS') else leg_rings(p) if p.get('HEM') else None
     for name, s in (('leg-left', -1), ('leg-right', 1)):
         for v in P[name].verts:
             dx = v.x - 0.18 * s
@@ -160,7 +298,7 @@ def deform(P, p):
     hands = {}
     for hand, arm in (('hand-left', 'arm-left'), ('hand-right', 'arm-right')):
         r = Vector(HS.HANDS[hand]) - Vector(HS.PIVOTS[arm])
-        hands[hand] = pv[arm] + Vector((r.x * p['AW'], r.y * p['AW'], arm_rel_z(r.z, p)))
+        hands[hand] = pv[arm] + Vector((r.x * aw, r.y * aw, arm_rel_z(r.z, p)))
     leaf = new + (BH.LEAF_ORIGIN - old) * p['HEAD']
     return pv, hands, leaf
 
@@ -391,10 +529,22 @@ def deco_geo(name, M):
     return BH.join(*g)
 
 
-def girl_hair(M):
-    geos = [BH.ellipsoid((0, 0.2, 1.47), (0.52, 0.42, 0.4), segs=12, rings=6).retag(M['hair'])]  # a bob behind and below the cap
+def girl_hair(M, k=0.0):
+    """Twin tails with ribbons and a bob. k > 0 (older girls, women): the tails grow longer and fuller and hang forward
+    over the shoulders, and the bob reaches down the nape, so the hair still reads when the head is small."""
+    if k:
+        geos = [BH.ellipsoid((0, 0.2 + 0.02 * k, 1.47 - 0.1 * k), (0.52, 0.42, 0.4 + 0.14 * k), segs=12, rings=6).retag(M['hair'])]
+    else:
+        geos = [BH.ellipsoid((0, 0.2, 1.47), (0.52, 0.42, 0.4), segs=12, rings=6).retag(M['hair'])]  # a bob behind and below the cap
     for s in (-1, 1):
         top = Vector((0.52 * s, 0.12, 1.66))
+        if k:
+            pts = BH.bez([top, top + Vector((0.14 * s, 0.03, -0.2)), top + Vector((0.11 * s, 0.02 - 0.22 * k, -0.5 - 0.2 * k)),
+                          top + Vector(((0.02 - 0.1 * k) * s, -0.02 - 0.42 * k, -0.62 - 0.42 * k))], 6)
+            geos.append(BH.tube(pts, [0.1, 0.13 + 0.02 * k, 0.12 + 0.03 * k, 0.1 + 0.04 * k, 0.07 + 0.04 * k, 0.04 + 0.03 * k, 0.0],
+                                sides=6, cap_start=True).retag(M['hair']))
+            geos.append(BH.ellipsoid(top + Vector((0.02 * s, -0.02, 0.03)), (0.07, 0.05, 0.05), segs=6, rings=4).retag(M['blush']))
+            continue
         pts = BH.bez([top, top + Vector((0.12 * s, 0.05, -0.2)), top + Vector((0.1 * s, 0.08, -0.5)),
                       top + Vector((0.04 * s, 0.05, -0.62))], 6)
         geos.append(BH.tube(pts, [0.1, 0.13, 0.12, 0.1, 0.07, 0.04, 0.0], sides=6, cap_start=True).retag(M['hair']))
@@ -423,10 +573,14 @@ def build_pieces(body, height, M, ears='none', deco=None):
     """The pieces of one combination. The game files never carry ears (they come from hero-parts.glb);
     `ears` is only for the render sheet, added before the height deform exactly as FIT places them."""
     P = BH.hero_pieces(M)
-    if body == 'girl':
-        P['head'].add(girl_hair(M))
+    p, base = params(body, height), STYLE[body]['base']
+    # body zones: [0, torso and straps) are shaped ring by ring; the backpack (and anything added after) is not
+    P['body'].zone = (len(BH.lathe([(r, z) for r, z, _ in BH.TORSO_PROFILE], 18).verts) + 2 * len(BH.strap_geo(1, M).verts),)
+    if base == 'girl':
+        P['head'].add(girl_hair(M, HAIR.get(body, {}).get(height, 0.0)))
         P['head'].add(lashes(M))
-        P['body'].add(skirt(M))
+        if not (p and p.get('SKIRT')):
+            P['body'].add(skirt(M))
     if ears != 'none':
         P['head-leaf'] = BH.Piece('head-leaf').add(cat_ears(M) if ears == 'cat' else bunny_ears(M))
         P['body'].add(cat_tail(M) if ears == 'cat' else bunny_tail(M))
@@ -435,14 +589,19 @@ def build_pieces(body, height, M, ears='none', deco=None):
     pivots = {k: Vector(v) for k, v in HS.PIVOTS.items()}
     hands = {k: Vector(v) for k, v in HS.HANDS.items()}
     leaf = Vector(BH.LEAF_ORIGIN)
-    if HEIGHTS[height]:
-        pivots, hands, leaf = deform(P, HEIGHTS[height])
+    if p:
+        pivots, hands, leaf = deform(P, p)
+        if p.get('SKIRT'):
+            P['body'].add(skirt_geo(p, M))
+        if p.get('NECK_R'):
+            P['head'].add(neck_geo(p, pivots, M))
     return P, pivots, hands, leaf
 
 
 def make_combo(body, height, M, prefix='', ears='none', deco=None):
     build = BUILDS.get(body)
     P, pivots, hands, leaf = build_pieces(build['base'] if build else body, height, M, ears, deco)
+    make_combo.last = P
     scene = bpy.context.scene
     root = bpy.data.objects.new(prefix + 'hero', None)
     scene.collection.objects.link(root)
@@ -504,16 +663,19 @@ def s3(v):
     return [round(v[0], 4), round(v[2], 4), round(v[1], 4)]
 
 
-def fit_table(height):
+def fit_table(height, body='boy'):
     """Gear (and ears/tail) transform per part, in three.js part space (scale, then offset), relative to the default pivot."""
-    p = HEIGHTS[height]
+    p = params(body, height)
     if not p:
         return {}
+    S = p.get('S')
+    gx, gy = S['gear'] if S else (1.0, 1.0)
+    aw = p['AW'] * (S['aw'] if S else 1.0)
     return {
         'head': dict(scale=[p['HEAD']] * 3, offset=[0, 0, 0]),
-        'body': dict(scale=s3((p['TW'], p['TW'], p['TH'])), offset=[0, 0, 0]),
-        'arm-left': dict(scale=s3((p['AW'], p['AW'], p['AL'])), offset=[0, 0, 0]),
-        'arm-right': dict(scale=s3((p['AW'], p['AW'], p['AL'])), offset=[0, 0, 0]),
+        'body': dict(scale=s3((p['TW'] * gx, p['TW'] * gy, p['TH'])), offset=[0, 0, 0]),
+        'arm-left': dict(scale=s3((aw, aw, p['AL'])), offset=[0, 0, 0]),
+        'arm-right': dict(scale=s3((aw, aw, p['AL'])), offset=[0, 0, 0]),
         'leg-left': dict(scale=[1, 1, 1], offset=[0, round(-p['E'], 4), 0]),
         'leg-right': dict(scale=[1, 1, 1], offset=[0, round(-p['E'], 4), 0]),
         'hand-right': dict(scale=[1, 1, 1], offset=[0, 0, 0]),
@@ -528,6 +690,28 @@ def stats(objs):
     # heads tall: total height over the head's own height (chibi about 2, grown about 5)
     return dict(triangles=sum(tris.values()), parts=tris, materials=mats, height=round(top, 3),
                 heads=round(top / (max(hz) - min(hz)), 2))
+
+
+def measure(body, height, P, pivots):
+    """Widths (metres, model units) of a built combination, for the report: shoulders across the arms, chest, waist, hips."""
+    p = params(body, height) or dict(PLAIN, TH=1.0, E=0.0)
+    n = P['body'].zone[0]
+    torso = P['body'].verts[:n]
+
+    def width(z0, tol=0.02):
+        z = torso_z(z0, p)
+        xs = [abs(v.x) for v in torso if abs(v.z - z) < tol * p['TH'] + 1e-6]
+        return round(2 * max(xs), 3) if xs else None
+    arms = [abs(v.x) for v in P['arm-left'].verts if v.z > pivots['arm-left'].z - 0.05]
+    head = [v.z for v in P['head'].verts]
+    out = dict(shoulders=round(2 * max(arms), 3), chest=width(1.1), waist=width(0.8), hips=width(0.58), hem=width(0.622),
+               head_scale=p['HEAD'], hip_height=round(0.52 + p['E'], 3))
+    if p.get('NECK_R'):
+        r = p['NECK_R'] * (p['S']['neck'] if p.get('S') else 1.0)
+        chin = pivots['head'].z + (BH.C.z - BH.HR - 1.12) * p['HEAD']
+        collar = torso_z(1.196, p) - (r / (0.285 * p['TW'])) * 0.036 * p['TH']
+        out.update(neck_width=round(2 * r, 3), neck_length=round(chin - collar, 3))
+    return out
 
 
 def import_gear():
@@ -608,6 +792,28 @@ def _shot(objs, path, W, H, target, ortho, elev=12, yaw=-25, ground='#8FE06A', t
     return out
 
 
+def render_study(bodies, heights=('teen', 'tall', 'grown')):
+    """Front, three-quarter, side and back of every body x height on one scale (review only)."""
+    tmp = os.path.join(BH.GEN, '_tmp')
+    os.makedirs(tmp, exist_ok=True)
+    paths, lay, W, H = [], [], 170, 400
+    cols = [(b, h) for h in heights for b in bodies]
+    views = (0, -35, -90, 180)
+    for r, yaw in enumerate(views):
+        for c, (body, height) in enumerate(cols):
+            colour = BH.PLAYER_COLORS[bodies.index(body) % len(BH.PLAYER_COLORS)]
+            objs, _, _ = make_combo(body, height, BH.hero_materials(colour, ' ' + colour), prefix=f's{r}{c} ')
+            BH.pose(objs, yaw=math.radians(yaw))
+            BH.stage((W, H), ground='#8FE06A')
+            cam = BH.camera(8, 0, target=(0, 0, 1.6))
+            cam.data.ortho_scale = 3.5
+            paths.append(BH.render_png(os.path.join(tmp, f's_{r}_{c}.png')))
+            bpy.data.objects.remove(cam, do_unlink=True)
+            lay.append((c * W, (len(views) - 1 - r) * H))
+            BH.remove_tree(objs['hero'])
+    BH.composite(paths, lay, (len(cols) * W, len(views) * H), os.path.join(BH.GEN, '_study.webp'))
+
+
 def render_decos():
     """Rows: boy chibi, girl chibi, girl teen. Columns: the twelve decorations."""
     tmp = os.path.join(BH.GEN, '_tmp')
@@ -629,7 +835,7 @@ def render_heights():
     tmp = os.path.join(BH.GEN, '_tmp')
     os.makedirs(tmp, exist_ok=True)
     paths, lay, W, H = [], [], 180, 420
-    bodies = ('boy', 'girl', 'sturdy', 'slim')
+    bodies = ('boy', 'girl', 'man', 'woman', 'sturdy', 'slim')
     for r, body in enumerate(bodies):
         for c, height in enumerate(HEIGHTS):
             colour = BH.PLAYER_COLORS[(r * 2 + c) % len(BH.PLAYER_COLORS)]
@@ -646,12 +852,13 @@ def render_heights():
 # the row reads as a ladder from Tiny to Grown-up. Framing per row: (elevation, yaw, camera target z, ortho scale).
 ICON_FRAMES = {
     'body': (12, -22, 1.18, 2.55),
+    'adult': (10, -22, 1.42, 3.05),     # the man and the woman are shown as grown-ups (the Tall height), a little smaller
     'height': (8, -20, 1.72, 3.55),
     'ears': (20, -32, 1.9, 2.25),
     'deco': (26, -18, 1.72, 1.95),
 }
 OPTION_ROWS = {
-    'body': ('boy', 'girl', 'sturdy', 'slim'),
+    'body': ('boy', 'girl', 'man', 'woman', 'sturdy', 'slim'),
     'height': tuple(HEIGHTS),
     'ears': EARS,
     'deco': ('bare',) + DECOS,
@@ -662,7 +869,7 @@ def option_combo(row, option, prefix):
     """The default explorer with one option changed (sturdy and slim are builds on the boy and girl files)."""
     M = BH.hero_materials()
     if row == 'body':
-        return make_combo(option, 'chibi', M, prefix=prefix)
+        return make_combo(option, 'tall' if STYLE.get(option, {}).get('adult') else 'chibi', M, prefix=prefix)
     if row == 'height':
         return make_combo('boy', option, M, prefix=prefix)
     if row == 'ears':
@@ -677,8 +884,8 @@ def render_option_icons(install):
     os.makedirs(out_dir, exist_ok=True)
     written = {}
     for row, options in OPTION_ROWS.items():
-        elev, yaw, z, ortho = ICON_FRAMES[row]
         for option in options:
+            elev, yaw, z, ortho = ICON_FRAMES['adult' if STYLE.get(option, {}).get('adult') else row]
             objs, _, _ = option_combo(row, option, f'i{option} ')
             BH.pose(objs, yaw=math.radians(yaw))
             BH.stage((128, 128), transparent=True, world=0.6, exposure=-0.15)
@@ -719,7 +926,11 @@ def main():
         render_icon_sheet()
         print('Look icons OK')
         return
-    out, failures = {'fit': {h: fit_table(h) for h in HEIGHTS}, 'bodies': {}}, []
+    if '--study' in argv:      # a quick look at the shapes: -- --study [bodies] (art/generated/kit/_study.webp), no export
+        reset_scene()
+        render_study(argv[argv.index('--study') + 1].split(',') if len(argv) > argv.index('--study') + 1 else BODIES)
+        return
+    out, failures = {'fit': {f'{b}-{h}': fit_table(h, b) for b in BODIES for h in HEIGHTS}, 'bodies': {}}, []
     for body in BODIES:
         for height in HEIGHTS:
             reset_scene()
@@ -728,7 +939,7 @@ def main():
             if set(st['materials']) - set(BH.HERO_MATERIALS):
                 failures.append(f'{body}-{height}: extra materials {st["materials"]}')
             name = body_file(body, height)
-            entry = dict(st, file=name, pivots={k: g3(v) for k, v in pivots.items()},
+            entry = dict(st, file=name, shape=measure(body, height, make_combo.last, pivots), pivots={k: g3(v) for k, v in pivots.items()},
                          hands={k: g3(v - pivots['arm-left' if k == 'hand-left' else 'arm-right']) for k, v in hands.items()})
             if name != 'hero.glb':     # the boy chibi is build_hero.py's own file
                 path = os.path.join(BH.MODELS, name)

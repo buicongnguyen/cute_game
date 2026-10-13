@@ -5,21 +5,27 @@ import * as T from 'three';
  * glove (or a mitten, a cuff, a claw) at its end. On a longer-armed body style the fit used to scale the whole piece
  * along the arm (x3 on the Grown height), which turned every glove into a long carrot. Here the piece keeps its own
  * size around the hand (it rides down with the hand, unscaled along the arm) and only the sleeve above the cuff is stretched to reach.
+ * The map is the body's own (build_hero_styles.py arm_rel_z): the shoulder cap above the pivot keeps its size, the sleeve
+ * down to SLEEVE_END stretches, everything below rides with the hand. (Until 2026-10-14 the glove was dropped by the
+ * whole arm's stretch, which hung it below the real hand on the Tall and Grown arms.)
  *
  * The baked geometry is cached per source geometry and stretch, flagged shared (never disposed with an avatar), so a
  * refresh of the explorer makes nothing new.
  */
 /** The default explorer's hand sits this far below its shoulder (looks.ts DEFAULT_PIVOTS: arm 1.08, hand 0.72), and a glove reaches about this far above the hand's centre. */
 export const HAND_DROP = .36, GLOVE = .13;
+/** Where the default sleeve ends and the hand begins, below the shoulder (build_hero_styles.py arm_rel_z: 0.86 - 1.08). */
+export const SLEEVE_END = -.22;
 /**
  * Where a point at height `y` (0 at the shoulder, negative down the arm) ends up when the arm is `stretch` times longer:
  * everything from the cuff down rides with the hand unchanged in size, the sleeve above it stretches to meet it.
  */
-export function sleeveY(y: number, stretch: number, drop = HAND_DROP, glove = GLOVE): number {
+export function sleeveY(y: number, stretch: number): number {
   if (!(stretch > 1)) return y * (stretch > 0 ? stretch : 1);
-  const cuff = -(drop - glove), shift = -(stretch - 1) * drop;
-  return y >= cuff ? y * (cuff + shift) / cuff : y + shift;
+  return y >= 0 ? y : y >= SLEEVE_END ? y * stretch : SLEEVE_END * stretch + (y - SLEEVE_END);
 }
+/** How far below the shoulder the hand of an arm `stretch` times longer closes (the body files' hand empties). */
+export const handDrop = (stretch: number) => -sleeveY(-HAND_DROP, stretch);
 const cache = new Map<string, T.BufferGeometry>();
 /**
  * Fits an arm piece (already moved to the part's pivot, unscaled) to an arm `width` times wider and `stretch` times

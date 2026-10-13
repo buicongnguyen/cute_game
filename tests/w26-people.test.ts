@@ -191,7 +191,7 @@ function webpSize(bytes: Buffer) {
 }
 test('every body, height, ears and hood option has a small 128 px Blender portrait, used by the mirror and the friend tab', () => {
   const options = Object.values(ROWS).flat() as LookOption[];
-  assert.equal(options.length, 25); assert.deepEqual(new Set(options), new Set(Object.keys(OPTIONS)));
+  assert.equal(options.length, 27); assert.deepEqual(new Set(options), new Set(Object.keys(OPTIONS)));
   for (const o of options) {
     const url = new URL(`../public/assets/icons/looks/${o}.webp`, import.meta.url), bytes = readFileSync(url);
     assert.deepEqual(webpSize(bytes), [128, 128], o); assert.ok(statSync(url).size < 8 * 1024, `${o}: ${statSync(url).size} bytes`);

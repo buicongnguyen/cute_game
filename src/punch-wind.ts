@@ -149,6 +149,17 @@ export const PUNCH = {
   /** The arm's angle: straight ahead for a jab; an uppercut meets its target at `upper` and carries on up to `upperEnd`. */
   jab: -1.5, upper: -1.2, upperEnd: -2.55,
 } as const;
+/**
+ * The punch's stretch on an arm whose hand hangs `arm` model units under the shoulder (walk-cycle.ts armOf). The stretch
+ * was made for the default stub of an arm (0.36): 2.4 x puts the fist 0.86 out. On the Grown arm (0.745) the same factor
+ * threw a plank 1.8 long; a longer arm stretches only as far as the same reach (at least a little, so the punch still
+ * snaps), so the fist, the punch wind and the hit stay where they are for every body.
+ */
+export function stretchFor(stretch: number, arm: number, base = .36): number {
+  if (!(arm > base + .01)) return stretch;
+  const full = Math.max(1.12, base * PUNCH.stretch / arm);
+  return 1 + (stretch - 1) * (full - 1) / (PUNCH.stretch - 1);
+}
 /** 0: a jab; 1: an uppercut (the last hit of a chain); 2: the pound that ends a dive (both fists down). */
 export type PunchKind = 0 | 1 | 2;
 export interface PunchPose { /** The arm's angle forward and up (rotation.x). */ raise: number; /** How long the arm is, and how big the fist. */ stretch: number; fist: number; /** The body: its turn (for the right arm; the left mirrors it), lean and step forward. */ twist: number; lean: number; step: number }

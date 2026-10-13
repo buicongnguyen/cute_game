@@ -25,11 +25,30 @@ export function stepGait(g: Gait, dist: number, dt: number, leg: number) {
 }
 /** The swing amplitude (radians) at a speed: 0.45 at a stroll up to 0.8 at a run. */
 export const gaitSwing = (speed: number, leg: number) => Math.min(.8, .45 + speed / leg * .02);
-export interface Limbs { legL: T.Object3D | null; legR: T.Object3D | null; armL: T.Object3D | null; armR: T.Object3D | null }
+export interface Limbs { legL: T.Object3D | null; legR: T.Object3D | null; armL: T.Object3D | null; armR: T.Object3D | null; /** How far under the shoulder the hand closes (model units); missing = the default arm. */ arm?: number }
+/** The default arm: its hand closes this far under the shoulder (hero_spec: shoulder 1.08, hand 0.72). */
+export const ARM = .36;
+/** The swing (radians) and the outward splay of the longest arm (the Grown height, hand 0.745 under the shoulder). */
+const LONG_ARM = .745, LONG_ARM_SWING = .42, LONG_ARM_SPLAY = .2;
+/**
+ * The arms fitted to their length, as the legs are to theirs. The default explorer keeps its cartoon swing (0.8 rad,
+ * splayed 0.3): its arm is a stub and the hand travels a hand's width. The same angle on the Grown arm, twice as long,
+ * threw the hand from in front of the face to behind the back; a longer arm swings through a smaller angle (so the
+ * hand covers about the same ground as before), hangs closer to the body, and rests a little forward of the hip while
+ * walking (`ease`, radians: no elbow, so the whole arm leans). `drop` is the hand's distance under the shoulder.
+ */
+export function armSwing(drop = ARM): { swing: number; splay: number; ease: number } {
+  if (!(drop > ARM + .01)) return { swing: .8, splay: .3, ease: 0 };
+  const k = Math.min(1, (drop - ARM) / (LONG_ARM - ARM));
+  return { swing: .8 - (.8 - LONG_ARM_SWING) * k, splay: .3 - (.3 - LONG_ARM_SPLAY) * k, ease: .1 * k };
+}
+/** The arm length of a model built from the hero's parts: its hand marker under the shoulder pivot (the default without one). */
+export function armOf(model: T.Object3D | null | undefined): number { return model ? limbsOf(model).arm ?? ARM : ARM; }
 /** The model's leg and arm pivots (the hero's named parts), found once. */
 export function limbsOf(model: T.Object3D): Limbs {
   const cached = model.userData.limbs as Limbs | undefined; if (cached) return cached;
-  const limbs = { legL: model.getObjectByName('leg-left') ?? null, legR: model.getObjectByName('leg-right') ?? null, armL: model.getObjectByName('arm-left') ?? null, armR: model.getObjectByName('arm-right') ?? null };
+  const limbs: Limbs = { legL: model.getObjectByName('leg-left') ?? null, legR: model.getObjectByName('leg-right') ?? null, armL: model.getObjectByName('arm-left') ?? null, armR: model.getObjectByName('arm-right') ?? null };
+  const hand = limbs.armR?.getObjectByName('hand-right') ?? limbs.armL?.getObjectByName('hand-left'); if (hand && hand.position.y < -.2) limbs.arm = -hand.position.y;
   model.userData.limbs = limbs; return limbs;
 }
 /**
@@ -68,7 +87,9 @@ export function applyGait(l: Limbs, g: Gait, swing: number, arms = true) {
   const s = Math.sin(g.phase) * swing, b = g.blend, k = 1 - b;
   if (l.legL) l.legL.rotation.x = l.legL.rotation.x * k + s * b;
   if (l.legR) l.legR.rotation.x = l.legR.rotation.x * k - s * b;
-  if (arms && l.armL) l.armL.rotation.x = l.armL.rotation.x * k - s * 1.1 * b;
-  if (arms && l.armR) l.armR.rotation.x = l.armR.rotation.x * k + s * 1.1 * b;
+  // The arms counter-swing 1.1 x the legs on the default arm; a longer arm swings less and leans a little forward (armSwing).
+  const a = arms && l.arm ? armSwing(l.arm) : null, arm = a ? s * 1.1 * a.swing / .8 : s * 1.1, ease = a ? a.ease : 0;
+  if (arms && l.armL) l.armL.rotation.x = l.armL.rotation.x * k + (-arm - ease) * b;
+  if (arms && l.armR) l.armR.rotation.x = l.armR.rotation.x * k + (arm - ease) * b;
   return Math.abs(Math.cos(g.phase)) * .06 * b;
 }

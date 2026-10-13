@@ -43,7 +43,7 @@ const versioned = url => {
 // when that planet is first visited and the farm pen kit only when the pen is first shown,
 // so the worker keeps each one the first time it is fetched instead of fetching them all
 // at install.
-const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|hero-[a-z]+|disguises|pets|worlds-[a-z]+|farm|creatures|helper|cage|house|titans)\.glb$/.test(url);
+const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|hero-[a-z-]+|disguises|pets|worlds-[a-z]+|farm|creatures|helper|cage|house|titans)\.glb$/.test(url);
 const index = base + 'index.html';
 // The page and its hashed scripts must install together, or the worker is not worth activating.
 const core = urls.filter(url => url === index || (isHashedBuildFile(url) && /\.(js|css)$/.test(url)));
