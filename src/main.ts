@@ -334,6 +334,8 @@ const combat=new CombatSimulation({
 });
 combatHud.isMarked=id=>combat.marked.has(id);
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
+/** The Strike chain's hits so far (which cut the next one makes), and the thin ground arc that marks the area of the explorer's own hit. */
+let chainHit=-1,chainAt=-9;const HIT_AREA_ARC={y:.14,life:.3,thick:.09,opacity:.5,from:1,to:1} as const;
 // Swings become additive slash trails and area skills become expanding rings with sparks.
 function showEffect(effect:CombatEffect){
   const fx=world.fx,at={x:effect.x,z:effect.z},up=Math.max(0,Math.min(8,effect.y??0)); // `up`: the height a cast from the air began at (air-cast.ts)
@@ -346,7 +348,11 @@ function showEffect(effect:CombatEffect){
   if(effect.look==='burn'){skillFx.burn(effect);return;}
   // Electric bursts keep the faint disc and rim at the exact blast radius, then crackle instead of the plain ring.
   if(effect.look==='shock'&&(effect.kind==='ring'||effect.kind==='impact')){if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.42,y:.1,thick:1,opacity:.18});fx.ring(at,{color:'#d8f4ff',from:effect.radius,to:effect.radius*1.02,life:.42,y:.12,thick:.06,opacity:.9});}skillFx.shock(effect);return;}
-  if(effect.kind==='arc'&&combat.edge.moves&&combat.busy&&Math.hypot(effect.x-world.position.x,effect.z-world.position.z)<.5)world.playerAttack(M.weaponStats(state).kind==='sword'?'sword':'fist'); // each hit of the Strike chain swings
+  // The explorer's own swing: the blade's trail or the fist's wind shows the blow (weapon-trail.ts), so its arc is drawn
+  // thin and low, as the mark of the area the hit covers. Other players' arcs stay the bold swoosh.
+  const own=effect.kind==='arc'&&Math.hypot(effect.x-world.position.x,effect.z-world.position.z)<.5;
+  if(own&&combat.edge.moves&&combat.busy){const n=world.time-chainAt<.3?chainHit+1:0;chainHit=n;chainAt=world.time;world.playerAttack(M.weaponStats(state).kind==='sword'?'sword':'fist',undefined,(n%3) as 0|1|2,n%3===2);} // each hit of the Strike chain swings: first, second and third cut, the last one big
+  if(fx&&own){fx.slash({...at,y:world.position.y},effect.facing??world.facing,effect.radius,effect.color,{...HIT_AREA_ARC,arc:effect.radius<=1.85?1.4:Math.min(6.2,effect.arc??2.2),y:HIT_AREA_ARC.y+up});return;}
   if(fx&&effect.kind==='arc'){const fist=effect.radius<=1.85;fx.slash(at,effect.facing??world.facing,effect.radius+.25,effect.color,fist?{arc:1.4,life:.15,thick:.4,y:.9+up}:{arc:Math.min(6.2,effect.arc??2.2),y:.9+up});return;}
   // An area hit also leaves a faint filled disc and a rim at its exact radius (skill-info.ts), so the player sees what the blast covered.
   if(fx&&effect.kind==='ring'&&effect.radius>=1.5){fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius,life:.3,y:.1+up,thick:1,opacity:.08});fx.ring(at,{color:effect.color,from:effect.radius,to:effect.radius*1.02,life:.3,y:.12+up,thick:.04,opacity:.6});}
@@ -1249,7 +1255,7 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
   if(!vault&&!ctfApi?.owns(e)&&!rescueApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
-  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
+  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0); // a hard knock or a launch (the last hit of a chain) is a big hitif(!hazard||impact)tone(impact?.critical?'crit':'hit');
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');
@@ -1387,8 +1393,8 @@ function startDive(){if(!world.jump.dive())return false;
 function diveStrike(multiplier:number,landing:Landing){
   const weapon=M.weaponStats(state),strike=diveStrikeFor(weapon,weapon.kind==='gun'?(weapon.shot==='volt'?'#bfefff':shotColor(weapon.shot??'pea')):undefined);
   const hits=combat.dive(multiplier,strike.radius,DIVE.stun,DIVE.knock,target=>diveCritical(landing.jumps,landing.from,target),diveCap,strike.color).length;
-  world.playerAttack(strike.swing,strike.swing==='gun'?strike.color:undefined);
-  if(strike.swing==='sword')world.fx?.slash(world.position,world.facing,strike.radius,strike.color,{arc:4.4,y:.45,life:.24,thick:.55});
+  world.playerAttack(strike.swing,strike.swing==='gun'?strike.color:undefined,2,true); // a blade chops down (the third cut); paws pound with the big wind
+  if(strike.swing==='sword')world.fx?.slash(world.position,world.facing,strike.radius,strike.color,{...HIT_AREA_ARC,arc:4.4});
   else if(strike.swing==='gun')world.fx?.flash({x:world.position.x,y:world.position.y+.5,z:world.position.z},strike.color,1.6,.1);
   return hits;
 }
@@ -1525,8 +1531,9 @@ function airSwing(){
   const shape=airSwingFor(weapon,AIR_MOVES.swing.radius);if(shape.shape!=='spin'&&shape.shape!=='slash')return false;
   if(!combat.airSwing(level,shape.radius,shape.color))return false;
   const blade=shape.shape==='slash',h=world.jump.height;
-  combatTimers.attackCooldown=AIR_MOVES.swing.cooldown/Math.max(.2,1+M.activeStats(state).haste);world.jump.stall(AIR_MOVES.swing.hover);world.spinT=.3;world.fx?.slash(world.position,world.facing,shape.radius,shape.color,{arc:6.2,y:h+.9,life:blade?.26:.2,thick:blade?.6:.3}); // the whole circle it hits, at the explorer's height
-  if(blade)world.fx?.slash(world.position,world.facing+Math.PI,shape.radius*.72,'#ffffff',{arc:3.4,y:h+1,life:.16,thick:.16}); // the blade's bright edge
+  combatTimers.attackCooldown=AIR_MOVES.swing.cooldown/Math.max(.2,1+M.activeStats(state).haste);world.jump.stall(AIR_MOVES.swing.hover);world.spinT=.3;
+  // The whole circle it hits, at the explorer's height: a thin mark under a blade (its trail is the swoosh), the swoosh itself for paws.
+  if(blade)world.fx?.slash(world.position,world.facing,shape.radius,shape.color,{...HIT_AREA_ARC,arc:6.2,y:h+.5});else world.fx?.slash(world.position,world.facing,shape.radius,shape.color,{arc:6.2,y:h+.9,life:.2,thick:.3});
   world.playerAttack(weapon.kind==='sword'?'sword':'fist');tone('swing');emitAction({kind:'basic'});
   return true;
 }
@@ -1606,7 +1613,7 @@ world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   {const from=enemyId?world.enemies.find(e=>e.id===enemyId):undefined;if(from&&combat.blocks(from)){world.fx?.burst(world.position,{n:6,color:['#fff3c4','#ffffff'],glow:true,size:.12,speed:3,up:2,y:1});if(source==='shot'){combat.reflect(from,Math.hypot(from.x-world.position.x,from.z-world.position.z)/DZ.block.speed);tone('hit');}return;}}
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
-  state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();world.hurtFeedback(damage);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
+  state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
   checkDefeat();
   updateHud();
 };

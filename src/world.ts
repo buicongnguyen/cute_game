@@ -25,7 +25,7 @@ import { hardScale, creatureLevelScale, type Difficulty } from './difficulty.ts'
 import { bakeModel, gatherPart, refinedAssets, sceneryKit, cropKit, heroKit, heroKitFor, tuckEars, wearKit, weaponKit, weaponModelName, disguiseKit, petKit, bossPetKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, isShared, type RefinedAsset, type RefinedAssetLibrary } from './assets.ts';
 import { Effects } from './fx.ts';
 import { applyDye } from './dye-render.ts';
-import { baseOf } from './dye-skins.ts';
+import { baseOf, isDye } from './dye-skins.ts';
 import { deathBagModel, deathBagEntityId } from './death-bags-view.ts';
 import { CAMERA, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
@@ -61,6 +61,10 @@ import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,
 import {HIP,applyGait,gaitSwing,limbsOf,newGait,stepGait,type Gait} from './walk-cycle.ts';
 import {DEFAULT_PIVOTS,fitOf,lookOf,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {part} from './part-cache.ts';
+import {WeaponTrail,measureBlade,type HeldBlade} from './weapon-trail.ts';
+import {CUTS,SWING,swingPose,nextCut,type CutIndex,type SwingPose} from './trail-ribbon.ts';
+import {WIND} from './punch-wind.ts';
+import {applyReaction,newReaction,reactStop,reactStrength,startReaction,REACT,type Reaction} from './hit-react.ts';
 import {mergeParts} from './avatar-merge.ts';
 import {perfFlags} from './perf-flags.ts';
 import {enemyFlash,HIT_FLASH,HURT_TINT,meleeArc,inMeleeArc,MELEE_ARC} from './feel-rules.ts';
@@ -70,6 +74,9 @@ import {AIR_CASTING,carryStep} from './air-cast.ts';
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
   pond?:{rx:number;rz:number;surface:number} }
+/** Scratch values of the blade's swing (animatePlayer, updateTrail). `BLADE_BEND`: how far short of straight the blade runs on from the arm. */
+const SWING_POSE:SwingPose={angle:0,blend:0,settling:false,emit:false,twist:0,lean:0},BLADE_BEND=.45,SPIN_AXIS=[0,1,0] as const;
+const Q_SWING=new T.Quaternion(),Q_STANCE=new T.Quaternion(),Q_PITCH=new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),BLADE_BEND-Math.PI/2),V_AXIS=new T.Vector3(),TRAIL_COLOR=new T.Color();
 export interface Enemy extends Entity { hp: number; maxHp: number; damage: number; xp: number; homeX: number; homeZ: number; cooldown: number; respawn: number; boss: boolean; stun: number;/** Seconds of the ⚡ mark after an electric hit (skill-fx.ts; looks only). */shock?:number;type?:string;definition?:EnemyDefinition;phase?:string;phaseTime?:number;route?:Point[];routeTime?:number;lift?:number;liftVelocity?:number;statuses?:Record<string,number>;targetX?:number;targetZ?:number;bossStage?:number;attackCount?:number;skillCount?:number;skill?:BossSkill;telegraphs?:Array<{x:number;z:number;r:number;delay:number}>;skillEffects?:Array<{x:number;z:number;r:number;inner:number;remaining:number;multiplier:number}>;spinTick?:number;scaled?:boolean;baseMaxHp?:number;baseDamage?:number;level?:number;flash?:number;flashLit?:boolean;knockVX?:number;knockVZ?:number;dying?:number }
 interface Obstacle { x: number; z: number; r: number;tag?:string }
 /**
@@ -78,7 +85,7 @@ interface Obstacle { x: number; z: number; r: number;tag?:string }
  */
 export interface Enemy { /** A peer's drawn position, gliding to the host's latest snapshot (world.ts stepCreatureMotion). */smooth?:{x:number;z:number};resting?:boolean;lod?:{wait:number;age:number;x:number;z:number;slot:number} }
 /** windupTotal: the length of the current wind-up, so its telegraph fills exactly when the blow lands; enraged: below 30% HP (one toast). */
-export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;resistAt?:number;blockAt?:number }
+export interface Enemy { /** Its recoil from the last blow (hit-react.ts): looks only. */react?:Reaction;windupTotal?:number;enraged?:boolean;lastHitAt?:number;resistAt?:number;blockAt?:number }
 /** A boss attacks faster as it weakens, like the reference (bundle @837714): ×0.7 below half health, ×0.6 once enraged.
  * Applies to its skills and its basic attacks and charges alike. */
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
@@ -210,6 +217,12 @@ export class World {
   lastHit?: {e:Enemy;t:number}|null;
   // Player animation timers set by combat and fishing.
   punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; /** Seconds left of the casting pose of a skill cast from a jump (air-cast.ts). */ castAirT=0; /** A flight that took a jump over: metres the explorer still is from the flight's height (air-cast.ts flightCarry). */ airCarry=0; /** The last tap on a pond's water, for the cast point. */ pondTap:{id:string;x:number;z:number}|null=null; fishing:'idle'|'cast'|'wait'|'fight'='idle';
+  /** The explorer's weapon trail and punch wind (weapon-trail.ts): made on the first swing, hidden and free while nothing swings. */
+  bladeTrail?:WeaponTrail; /** The weapon measured in the hand it hangs from (once per avatar build). */ private held:{hand:T.Object3D;info:HeldBlade;weapon?:string}|null=null;
+  /** Game seconds as the swing sees them (hit-stop slows them with the blade). */ private trailClock=0; private trailEmit=false; private trailWas=false; private trailTint:[number,number,number]=[1,1,1];
+  /** Which of the three cuts the blade is making (trail-ribbon.ts CUTS), when it began, the arm's pose it began from, and what is still owed at the moment of contact. */
+  swingCut:CutIndex=0; private swingAt=-9; private swingFrom=new T.Quaternion(); private swingContact:null|{kind:'fist'|'sword';big:boolean;since:number}=null; private windHold=0;
+  /** The explorer's recoil when hurt (hit-react.ts). */ private hurtReact?:Reaction;
   walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
   private shakeOffset=new T.Vector3();/** Ground distance the view reaches from the camera target (resize). */ viewReach?:number; private playerMaterials:LitMaterial[]=[];private hemi?:T.HemisphereLight;
   canvas: HTMLCanvasElement; state: SaveState;
@@ -695,6 +708,7 @@ export class World {
       // pivots (looks.ts FIT) places the piece relative to the default pivot, then scales and shifts it to the new part.
       if(fit){piece.applyMatrix4(new T.Matrix4().makeTranslation(-DEFAULT_PIVOTS[tag][0],-DEFAULT_PIVOTS[tag][1],-DEFAULT_PIVOTS[tag][2]));piece.applyMatrix4(new T.Matrix4().makeScale(...fit.scale).premultiply(new T.Matrix4().makeTranslation(...fit.offset)));}
       else piece.applyMatrix4(toHero.clone().multiply(part.matrixWorld).invert());
+      if(kit===weaponKit&&fallback==='hand-right')piece.userData.blade=true; // the weapon trail measures these (weapon-trail.ts measureBlade)
       part.add(piece);
     }
     return true;
@@ -1226,17 +1240,23 @@ export class World {
    * height, chips in the creature's colours and the number. Crits are bigger and yellow, with a short
    * hit-stop but no camera shake: shake stays the signal for "you got hit" and big slams.
    */
-  hitFeedback(e:Enemy,amount:number,critical:boolean){
-    e.flash=HIT_FLASH.enemy;this.lastHit={e,t:this.time??0};const fx=this.fx;if(!fx)return;
+  hitFeedback(e:Enemy,amount:number,critical:boolean,big=false){
+    e.flash=HIT_FLASH.enemy;this.lastHit={e,t:this.time??0};
+    // The recoil (hit-react.ts): knocked back along the blow, squashed and tipped away; harder for a critical and for the
+    // last hit of a chain (`big`), lighter on a boss. It moves the drawn model only.
+    const dx=this.position.x-e.x,dz=this.position.z-e.z,d=Math.hypot(dx,dz)||1;
+    startReaction(e.react??=newReaction(),-dx,-dz,reactStrength({critical,big,boss:e.boss}));
+    const fx=this.fx;if(!fx)return;
     const at={x:e.x,y:e.mesh.position.y,z:e.z},colors=[e.definition?.color??'#fff0bb',e.definition?.accent??'#ffffff'],chest=at.y+.8*(e.boss?1.85:1);
-    // The contact point: the creature's surface on the explorer's side, at chest height.
-    const dx=this.position.x-e.x,dz=this.position.z-e.z,d=Math.hypot(dx,dz)||1,reach=Math.min(e.radius*.8,d*.5);
-    fx.spark({x:e.x+dx/d*reach,y:chest,z:e.z+dz/d*reach},critical?1.6:1.25,critical?.13:.1,critical?'#ffe14d':'#ffffff');
-    fx.burst(at,{n:critical?14:8,color:colors,size:.12,speed:5,up:4,y:chest-at.y});
-    fx.burst(at,{n:critical?12:5,color:['#ffffff','#fff7a8'],glow:true,size:critical?.16:.1,speed:critical?8:5,up:3,y:chest-at.y,life:.35});
-    fx.ring({x:e.x,z:e.z},{color:critical?'#ffe14d':'#ffffff',from:.2,to:critical?1.6:1,life:.2,thick:.35,y:chest});
+    // The contact point: the creature's surface on the explorer's side, at chest height. The star, the chips and the sparks all leave from there.
+    const reach=Math.min(e.radius*.8,d*.5),hit={x:e.x+dx/d*reach,y:chest,z:e.z+dz/d*reach},heavy=critical||big;
+    fx.spark(hit,critical?1.6:big?1.45:1.25,critical?.13:.1,critical?'#ffe14d':'#ffffff');
+    fx.burst(hit,{n:critical?14:big?11:8,color:colors,size:.12,speed:5,up:4,y:0});
+    fx.burst(hit,{n:critical?12:big?8:5,color:['#ffffff','#fff7a8'],glow:true,size:heavy?.16:.1,speed:heavy?8:5,up:3,y:0,life:.35});
+    fx.ring({x:e.x,z:e.z},{color:critical?'#ffe14d':'#ffffff',from:.2,to:critical?1.6:big?1.35:1,life:.2,thick:.35,y:chest});
     fx.text(at,critical?amount+'!':String(amount),critical?'crit big':'dmg',e.id);
-    if(critical)fx.freeze(.06);
+    // A heartbeat of stillness for a critical or a big hit: never on Battery saver, and the longer one wins (fx.freeze does not add them up).
+    const stop=reactStop({critical,big},fx.density<=.5);if(stop)fx.freeze(stop);
   }
   /** A defeated creature bursts into a puff: a 2.5 m ring, about 25 particles in its colours and a short freeze. */
   defeatFeedback(e:Enemy){
@@ -1247,8 +1267,11 @@ export class World {
     fx.freeze(.05);if(e.boss)fx.shake(.45);
   }
   /** The player flinches and briefly glows pink (feel-rules.ts HURT_TINT). */
-  hurtFeedback(amount:number){
-    this.hurtT=HIT_FLASH.hero;const fx=this.fx;if(!fx)return;
+  hurtFeedback(amount:number,from?:{x:number;z:number}|null){
+    this.hurtT=HIT_FLASH.hero;
+    // Knocked back from what hit (hit-react.ts; with no attacker to point from, a squash on the spot): the drawn model only.
+    startReaction(this.hurtReact??=newReaction(),from?this.position.x-from.x:0,from?this.position.z-from.z:0,REACT.hero);
+    const fx=this.fx;if(!fx)return;
     fx.text(this.position,'-'+amount,'hurt');fx.shake(Math.min(.35,.12+amount/60));
     fx.burst(this.position,{n:6,color:['#ff7b6b','#ffffff'],size:.1,speed:4,up:3,y:.9});
   }
@@ -1274,13 +1297,19 @@ export class World {
     fx.burst(p,{n:big?12:6,color:['#eadfc6','#cdbb98','#ffffff'],size:big?.16:.12,speed:big?5:3,up:big?2.4:1,y:.08,life:big?.6:.38,gravity:5});
     if(landing.dive)fx.ring(p,{color:'#fff1c2',from:.3,to:DIVE_RING,life:.3,y:p.y+.1,thick:.14,opacity:.8});
   }
-  /** Swing arcs and animation for the player's own attacks. */
-  playerAttack(kind:'fist'|'sword'|'gun'|'rod',muzzle='#fff8c8'){
+  /**
+   * The animation of the player's own attacks: a blade's swing leaves its trail, a punch its wind (weapon-trail.ts).
+   * `cut` picks the blade's cut (else the next of the pattern); `big` is the last hit of a chain.
+   */
+  playerAttack(kind:'fist'|'sword'|'gun'|'rod',muzzle='#fff8c8',cut?:CutIndex,big=false){
     const fx=this.fx,at={x:this.position.x,y:this.position.y+(this.jump?.height??0),z:this.position.z};
     if(kind==='gun'){this.aimT=.7;this.punchT=.12;fx?.flash({x:at.x+Math.sin(this.facing)*.9,y:at.y+1,z:at.z+Math.cos(this.facing)*.9},muzzle,.9,.08);return;}
-    // The slash arc itself arrives through the shared combat effects, so remote players see it too.
-    this.punchT=.25;if(kind!=='sword')this.punchArm^=1;
-    fx?.burst({x:at.x+Math.sin(this.facing)*1.3,y:at.y,z:at.z+Math.cos(this.facing)*1.3},{n:5,color:'#ffffff',glow:true,size:.1,speed:3,up:2,y:.8,life:.3});
+    // The ground arc of a hit arrives through the shared combat effects, so remote players see it too.
+    const now=this.trailClock||0,blade=kind==='sword';
+    if(blade){this.swingCut=cut??nextCut(this.swingCut,now-this.swingAt);const arm=part(this.player,'arm-right');if(arm)(this.swingFrom??=new T.Quaternion()).copy(arm.quaternion);}
+    this.swingAt=now;this.punchT=SWING.time;if(!blade)this.punchArm^=1;
+    // What the blow owes at the moment it lands: sparks off the blade where it met a creature, or the wind off the fist.
+    this.swingContact={kind:blade?'sword':'fist',big,since:this.time??0};
   }
   damageEnemy(e:Enemy,amount:number,stun=0,hazard=false) {
     if(e.hp<=0)return;
@@ -1714,6 +1743,7 @@ export class World {
     if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);const k=e.flash!/.14;e.mesh.scale.x*=1+k*.15;e.mesh.scale.z*=1+k*.15;e.mesh.scale.y*=1+k*.06;}
     const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of lit?flashMaterialsOf(e.mesh):flashMaterialsSoFar(e.mesh)){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.setRGB(1,1,1);m.emissiveIntensity=enemyFlash(e.flash??0,!!e.definition?.titan);}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}
     this.animateEnemy(e,dt);
+    if(e.react&&e.react.left>0)applyReaction(e.mesh,e.react,dt);
     const shell=part(e.mesh,'shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
   }
   /** Runs at the start of every world step, after main has set this step's movement lock (colossus.ts: the daily boss). */
@@ -1897,6 +1927,56 @@ export class World {
     const a=p.dot(x),b=p.dot(y);p.addScaledVector(x,Math.round(a/tx)*tx-a).addScaledVector(y,Math.round(b/ty)*ty-b);
     this.sun.position.copy(p).add(this.sunOffset);
   }
+  /** The weapon in the explorer's hand, measured once per avatar build (weapon-trail.ts measureBlade), and its trail colour. */
+  private heldBlade(hand:T.Object3D){
+    const id=(this.tryOnGear??this.state.gear).weapon;
+    if(this.held?.hand!==hand||this.held.weapon!==id){
+      const info=measureBlade(hand),own=M.weaponStats(this.state).fx,c=TRAIL_COLOR;
+      // The weapon's effect colour; a dyed weapon, or one without an effect colour, takes the colour of its own paint.
+      if(own&&!(id&&isDye(id)&&info.tint))c.set(own);else if(info.tint)c.setRGB(...info.tint);else c.set('#fff4c8');
+      this.trailTint=[c.r,c.g,c.b];this.held={hand,info,weapon:id};
+    }
+    return this.held.info;
+  }
+  /** How far the wrist turns so the blade runs on from the arm (a little short of straight: BLADE_BEND). */
+  private bladeWrist(hand:T.Object3D){const b=this.heldBlade(hand).blade;return Math.PI-BLADE_BEND-Math.atan2(b.tip[2]-b.grip[2],b.tip[1]-b.grip[1]);}
+  /**
+   * Holds the blade `angle` round `axis` from straight ahead (the explorer's own space), `blend` of the way from the
+   * pose `from` (or from the stance the arm is in when null) to it.
+   */
+  private poseBlade(arm:T.Object3D,hand:T.Object3D|undefined|null,axis:readonly [number,number,number],angle:number,blend:number,from:T.Quaternion|null){
+    Q_SWING.setFromAxisAngle(V_AXIS.set(axis[0],axis[1],axis[2]),angle).multiply(Q_PITCH);
+    Q_STANCE.copy(from??arm.quaternion);arm.quaternion.copy(Q_STANCE).slerp(Q_SWING,blend);
+    if(hand)hand.rotation.x=this.bladeWrist(hand)*blend;
+  }
+  /**
+   * The trail and the wind, once a frame after the matrices are fresh (render): the blade's place goes into its trail,
+   * a blow that just landed throws its sparks or its wind, and the mesh is rebuilt. Idle, it returns at the first line.
+   */
+  private updateTrail(scene:T.Scene){
+    const contact=this.swingContact;
+    if(!this.trailEmit&&!contact&&!this.bladeTrail?.active)return;
+    const trail=this.bladeTrail??=new WeaponTrail(),now=this.trailClock,p=this.player;
+    if(trail.mesh.parent!==scene)scene.add(trail.mesh);
+    if(scene!==this.scene)p.updateMatrixWorld(true); // indoors three.js updates matrices only inside its own render
+    const hand=part(p,'hand-right'),shown=p.visible&&!this.boarded;
+    if(this.trailEmit&&hand&&shown)trail.sample(hand,this.heldBlade(hand).blade,now,!this.trailWas);this.trailWas=this.trailEmit&&!!hand&&shown;
+    if(contact&&(this.punchT<=0||1-this.punchT/SWING.time>=(contact.kind==='sword'?SWING.contact:WIND.at))){
+      this.swingContact=null;const f=this.facing,fx=this.fx;
+      if(contact.kind==='fist'){
+        // The wind leaves the fist that is out, along the punch.
+        const fist=part(p,this.punchArm?'hand-right':'hand-left');
+        if(fist&&shown){const e=fist.matrixWorld.elements,k=contact.big?WIND.big:WIND.size;trail.wind.add(e[12],e[13],e[14],Math.sin(f),0,Math.cos(f),now,k,1,1,1);this.windHold=now+WIND.hold;}
+      }else if(fx&&hand&&shown){
+        // Sparks where the blade met the creature it hit (its near side, at the blade's height).
+        const hit=this.lastHit&&this.lastHit.t>=contact.since?this.lastHit.e:null;
+        if(hit){const tip=V_AXIS.set(...this.heldBlade(hand).blade.tip).applyMatrix4(hand.matrixWorld),dx=this.position.x-hit.x,dz=this.position.z-hit.z,d=Math.hypot(dx,dz)||1,r=Math.min(hit.radius*.8,d*.5),[cr,cg,cb]=this.trailTint;
+          fx.burst({x:hit.x+dx/d*r,y:Math.max(.3,tip.y),z:hit.z+dz/d*r},{n:contact.big?8:5,color:['#ffffff','#'+TRAIL_COLOR.setRGB(cr,cg,cb).getHexString()],glow:true,size:.09,speed:3.5,up:1.6,y:0,life:.24,gravity:5});}
+      }
+    }
+    if(now<this.windHold){const fist=part(p,this.punchArm?'hand-right':'hand-left');if(fist){const e=fist.matrixWorld.elements;trail.wind.anchor(e[12],e[13],e[14]);}}
+    const [r,g,b]=this.trailTint??[1,1,1];trail.draw(now,this.fx?.density??1,r,g,b);
+  }
   /**
    * The explorer's poses, after the reference: a leaning, bouncing walk; breathing
    * and a look-around at rest; a raised sword, a lowered blaster or a two-handed aim;
@@ -1906,6 +1986,7 @@ export class World {
    */
   private animatePlayer(dt:number){
     for(const key of ['punchT','swingT','aimT','hurtT','spinT','landT','castT','castAirT'] as const)this[key]=Math.max(0,(this[key]||0)-dt);
+    this.trailClock=(this.trailClock||0)+dt;this.trailEmit=false;
     this.walkClock=(this.walkClock||0)+dt*(this.moving?11:3);
     const o=this.walkClock,c=Math.sin(o),p=this.player;
     const flying=this.playerFlying&&FLIGHT_POSE_DISGUISES.includes(this.state.gear.disguise??'');
@@ -1938,15 +2019,25 @@ export class World {
       else if(kind==='rod')armR.rotation.x=this.moving?-.2+c*.2:-.3;
     }
     const hand=part(p,'hand-right');if(hand)hand.rotation.x=kind==='gun'&&this.aimT>0?1.45:0;
-    // Attacks: an overhead chop with the sword, recoil with a blaster, alternating punches otherwise.
+    // A dive with a blade: it leads the way down, and leaves its trail.
+    if(air?.diving&&kind==='sword'&&hand){hand.rotation.x=this.bladeWrist(hand);this.trailEmit=true;}
+    // Attacks: one of three cuts with a blade (trail-ribbon.ts CUTS: a pull-back, the cut, a follow-through, the settle), recoil with a blaster, alternating punches otherwise.
     if(this.punchT>0&&armR){
-      const t=1-this.punchT/.25,e=Math.sin(t*Math.PI);
-      if(kind==='sword'){armR.rotation.set(-2.6+t*2.5,0,.1);twist=.5-t*.9;lean=.2*e;}
+      const t=1-this.punchT/SWING.time,e=Math.sin(t*Math.PI);
+      if(kind==='sword'){
+        const cut=CUTS[this.swingCut],s=swingPose(cut,t,SWING_POSE);
+        this.poseBlade(armR,hand,cut.axis,s.angle,s.blend,s.settling?null:this.swingFrom);
+        armL?.rotation.set(.45*s.blend,0,-.3-.25*s.blend);twist=s.twist;lean=Math.max(lean,s.lean);this.trailEmit=s.emit;
+      }
       else if(kind==='gun')armR.rotation.x=-1.5+e*.25;
       else{const arm=this.punchArm?armR:armL;arm?.rotation.set(-1.6*e,0,0);twist=(this.punchArm?-.4:.4)*e;lean=.15*e;}
     }
     // Skills.
-    if(this.spinT>0){armL?.rotation.set(0,0,-1.45);armR?.rotation.set(kind==='sword'?-1.4:0,0,1.45);if(head)head.rotation.x=.15;}
+    if(this.spinT>0){
+      armL?.rotation.set(0,0,-1.45);armR?.rotation.set(0,0,1.45);if(head)head.rotation.x=.15;
+      // A blade is held straight out to the side, level, so the spin sweeps the widest ring and its trail is that ring.
+      if(kind==='sword'&&armR){this.poseBlade(armR,hand,SPIN_AXIS,1.45,1,null);this.trailEmit=true;}
+    }
     else if(pose?.kind==='dash'){lean=.55;armL?.rotation.set(1.2,0,-.3);armR?.rotation.set(kind==='sword'?-1.3:1.2,0,.3);legL?.rotation.set(.8,0,0);legR?.rotation.set(-.4,0,0);lift=.15;}
     else if(pose?.kind==='slam'){
       if(pose.t<.42){const e=pose.t/.42;lean=-e*.4;const up=-2.9*Math.min(1,e*2);armL?.rotation.set(up,0,-.2);armR?.rotation.set(up,0,.2);legL?.rotation.set(-.5,0,0);legR?.rotation.set(-.5,0,0);}
@@ -1964,6 +2055,7 @@ export class World {
     if(this.landT>0){const k=Math.sin(this.landT/.25*Math.PI);sx*=1+k*.18;sy*=1-k*.22;sz*=1+k*.18;}
     p.rotation.y=this.spinT>0?this.facing+(2.2-this.spinT)*22:this.facing+twist;
     p.rotation.x=lean;p.position.y+=lift;p.scale.x*=sx;p.scale.y*=sy;p.scale.z*=sz;
+    if(this.hurtReact&&this.hurtReact.left>0){p.rotation.z=0;applyReaction(p,this.hurtReact,dt);}
     if(flying){p.position.y-=lift;p.scale.y/=sy;superheroFlightPose(p,this.moving&&this.state.gear.disguise==='dz_superhero');if(head&&gaze!=null){const turn=Math.atan2(Math.sin(gaze-this.facing),Math.cos(gaze-this.facing));head.rotation.y=Math.max(-1.2,Math.min(1.2,turn));}}
     if(this.spinT>0&&this.fx&&Math.random()<dt*12)this.fx.burst(this.position,{n:1,color:['#ffffff','#d4f1ff'],glow:true,size:.08,speed:4,up:1,life:.3,y:.6,gravity:0});
     if(pose?.kind==='dash'&&this.fx)this.fx.burst(this.position,{n:2,color:['#ffffff','#bfe9ff'],size:.13,speed:1,up:1,life:.4,y:.3});
@@ -1974,5 +2066,5 @@ export class World {
   }
 
 
-  render(){this.beforeRender?.();const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);}this.renderer.render(scene,this.camera);this.renderSerial++;}
+  render(){this.beforeRender?.();const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);}this.updateTrail(scene);this.renderer.render(scene,this.camera);this.renderSerial++;}
 }

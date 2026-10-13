@@ -246,8 +246,11 @@ export class Effects {
     Object.assign(fx, { life, from: size * .7, to: size, opacity: 1 });
   }
 
-  /** The swoosh of a swing: a partial ring in front of the attacker. */
-  slash(at: Point3, facing: number, radius = 2.2, color = '#ffffff', { arc = 2.2, y = .9, life = .22, thick = .55 } = {}) {
+  /**
+   * The swoosh of a swing: a partial ring in front of the attacker. `opacity`, `from` and `to` (its size at the start
+   * and the end, as parts of `radius`) turn it into the thin, still mark of a hit's area.
+   */
+  slash(at: Point3, facing: number, radius = 2.2, color = '#ffffff', { arc = 2.2, y = .9, life = .22, thick = .55, opacity = .9, from = .75, to = 1.08 } = {}) {
     const key = `${radius.toFixed(2)}:${arc.toFixed(2)}:${thick.toFixed(2)}`;
     let geometry = this.arcGeometries.get(key);
     if (!geometry) {
@@ -257,9 +260,9 @@ export class Effects {
     const shape = geometry;
     const fx = this.take('arc', () => { const mesh = new T.Mesh(shape, new T.MeshBasicMaterial({ transparent: true, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide })); mesh.renderOrder = 3; return mesh; });
     const mesh = fx.object as T.Mesh; mesh.geometry = shape;
-    (fx.material as T.MeshBasicMaterial).color.set(color); fx.material.opacity = .9;
-    mesh.position.set(at.x, (at.y ?? 0) + y, at.z); mesh.rotation.y = facing - Math.PI / 2;
-    Object.assign(fx, { life, from: .75, to: 1.08, opacity: .9 });
+    (fx.material as T.MeshBasicMaterial).color.set(color); fx.material.opacity = opacity;
+    mesh.position.set(at.x, (at.y ?? 0) + y, at.z); mesh.rotation.y = facing - Math.PI / 2; mesh.scale.setScalar(from);
+    Object.assign(fx, { life, from, to, opacity });
   }
 
   /**
