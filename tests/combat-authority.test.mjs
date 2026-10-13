@@ -45,7 +45,7 @@ test('boss crowd control resists charm and hard stun, while launch still interru
  boss.phase='windup';engine.sim.skill(2);engine.sim.update(.43);assert.ok(boss.liftVelocity>0);assert.equal(boss.phase,'chase');assert.ok(boss.stun>=.8);assert.ok(boss.statuses.slow>=.48);
 });
 test('magma turtle shell and recovery modifiers apply on the authoritative damage path',async t=>{
- const f=await fixture(t,{planet:'lava'}),enemy=f.spawn('magmaturtle');const engine=f.authority.engineFor(f.peer),before=enemy.hp;
+ const f=await fixture(t,{planet:'lava'}),enemy=f.spawn('magmaturtle');const engine=f.authority.engineFor(f.peer),before=enemy.hp;engine.sim.random=()=>.5; // no lucky critical: the armour and the recovery factor are what is measured
  f.authority.basic(f.peer,enemy.id);const armored=before-enemy.hp;assert.ok(armored>0&&armored<4);engine.nextBasic=0;enemy.phase='recover';const hp=enemy.hp;f.authority.basic(f.peer,enemy.id);assert.ok(hp-enemy.hp>armored*5);
 });
 test('pets deal real server damage without client hit packets and pause with inactive combat',async t=>{
