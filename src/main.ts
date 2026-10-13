@@ -35,6 +35,11 @@ import { CombatHud, fightNear, lootText, zoneInfo, aggro } from './hud-combat.ts
 import { ChallengeDirector, renderChallenge } from './hud-challenge.ts';
 import { KeysGuide } from './hud-keys.ts';
 import { readAirCombat, saveAirCombat, BOSS_BLOCK_ON, AIR, AIR_WINDOW, BLOCK, COMBO, JUMP, ComboMeter, SlideCombo, airWindow, pressKind, DIVE, DODGE, JumpInput, blockShare, hitShare, jumpsFor, canJump, diveCap, diveCritical, diveMultiplier, dodges, jumpKeyAction, perfectDodge, readSpaceKey, saveSpaceKey, type ComboHit, type Landing, type SpaceKey } from './jump-rules.ts';
+import './combo-counter.css';
+import { COUNTER, COUNTER_HTML, ComboCounterView, placeCounter, readHudBoxes, recordBest, summaryText, type Box, type CounterState, type Placement } from './combo-counter.ts';
+import { POWER, PowerCharge, powerArea, powerCap, powerShape } from './power-rules.ts';
+import { PowerFx, brighter, powerWindup } from './power-fx.ts';
+import { POWER_PAD_HTML, PowerPad, hintSeen, markHint } from './power-hud.ts';
 import * as M from './model.ts';
 import {applyGameAction,isMalformedAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
@@ -922,7 +927,7 @@ async function testerApply(){testerOpen=true;if(testerOnline()){toast(t('Tester 
   testerDo(Tester.unlockTester);toast(t('Tester mode on: {count} energy',{count:Tester.TESTER_ENERGY.toLocaleString()}),'🧪');settings();}
 function restoreBackupRow(){return restoreRowHtml(saveGuard,activeKey());}
 function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Full screen</strong><small>Fill the whole screen; press again to leave.</small></div><button class="toggle ${document.fullscreenElement?'on':''}" role="switch" aria-checked="${!!document.fullscreenElement}" aria-label="Full screen" data-action="fullscreen"></button></div>${installRowHtml(t)}${restoreBackupRow()}${audioRowsHtml(state.settings)}<div class="settings-row"><div><strong>AI neighbours</strong><small>Friendly explorers who fight in the wild, make friends and give gifts. Always off while you play online.</small></div><button class="toggle ${neighboursOn()?'on':''}" role="switch" aria-checked="${neighboursOn()}" aria-label="AI neighbours" data-action="neighbours"></button></div><div class="settings-row"><div><strong>Show joystick</strong><small>Drag the stick to walk in any direction. Skill buttons move to the opposite side.</small></div><button class="toggle ${joystickEnabled()?'on':''}" role="switch" aria-checked="${joystickEnabled()}" aria-label="Show joystick" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Joystick side</strong><small>Choose the hand you use to move</small></div><div class="segmented" role="radiogroup" aria-label="Joystick side">${(['left','right'] as const).map(side=>`<button role="radio" aria-checked="${(state.settings.joystickSide??'left')===side}" data-action="joystick-side" data-kind="${side}">${side==='left'?'Left':'Right'}</button>`).join('')}</div></div>${keyboardSettings()}<div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Camera angle</strong><small>${cameraPitch()>=CAMERA_PITCH.max?'Looking down from above':'A lower view shows more of the world and may run a little slower'}</small></div><div class="camera-angle"><div class="volume-control"><input type="range" min="${CAMERA_PITCH.min}" max="52" step="1" value="${Math.round(cameraPitch())}" data-camera-pitch aria-label="Camera angle"><output data-camera-pitch-out>${Math.round(cameraPitch())}°</output></div><div class="segmented" role="group" aria-label="Camera angle presets">${(Object.keys(CAMERA_PITCH.presets) as CameraPreset[]).map(v=>`<button aria-pressed="${cameraPitch()===CAMERA_PITCH.presets[v]}" class="${cameraPitch()===CAMERA_PITCH.presets[v]?'on':''}" data-action="camera-view" data-kind="${v}">${({classic:'Classic',tilted:'Tilted',low:'Low',lower:'Lower',lowest:'Lowest'})[v]}</button>`).join('')}</div></div></div><div class="settings-row" id="render-res-row"><div><strong>Render resolution</strong><small>${graphics.resolution==='auto'?(graphics.mobile?'Light on phones, like the original':'Follows the Graphics setting'):({sharp:'Crisp, but phones work harder',balanced:'Smoother play and a cooler phone',saver:'Fewest pixels for the longest battery'} as Record<string,string>)[graphics.resolution]}${typeof innerWidth==='number'?` · ${innerWidth*graphics.ratio|0}×${innerHeight*graphics.ratio|0} px`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Render resolution">${RESOLUTION_SETTINGS.map(r=>`<button role="radio" aria-checked="${graphics.resolution===r}" class="${graphics.resolution===r?'on':''}" data-action="render-res" data-kind="${r}">${r==='auto'?'Auto':RESOLUTION[r].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Difficulty</strong><small>${M.DIFFICULTY_NOTE[M.difficultyOf(state)]}${world.roomDifficulty&&world.roomDifficulty!==M.difficultyOf(state)?` <span class="host-difficulty">${esc(t('Host difficulty: {level}',{level:t(M.DIFFICULTY_LABEL[world.roomDifficulty])}))}</span>`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Difficulty">${M.DIFFICULTIES.map(d=>`<button role="radio" aria-checked="${M.difficultyOf(state)===d}" class="${M.difficultyOf(state)===d?'on':''}" data-action="difficulty" data-kind="${d}">${M.DIFFICULTY_LABEL[d]}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div>${testerMore()}<div class="settings-row"><div><strong>${t('Keep backpack on defeat')}</strong><small>${t('Keep carried items when defeated. Existing dropped bags stay recoverable.')}</small></div><button class="toggle ${M.keepsBag(state)?'on':''}" role="switch" aria-checked="${M.keepsBag(state)}" aria-label="${t('Keep backpack on defeat')}" data-action="keep-bag"></button></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
-function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.filter(([,title])=>title!=='Four moves'&&(airOn()||title!=='Jump and air combat')).map(row=>airOn()&&row[1]==='Four skills'?HELP_TOPICS.find(r=>r[1]==='Four moves')??row:row).map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div>${disguiseTableHtml()}<div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
+function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.filter(([,title])=>title!=='Four moves'&&(airOn()||title!=='Jump and air combat'&&title!=='Power strike')).map(row=>airOn()&&row[1]==='Four skills'?HELP_TOPICS.find(r=>r[1]==='Four moves')??row:row).map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div>${disguiseTableHtml()}<div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
 /** Help: every disguise from strongest to weakest. A disguise costs ten energy per point of its all-round strength (tests/disguise-price.test.ts), so the price is the power. */
 function disguiseTableHtml(){
   const rows=Object.keys(M.DISGUISES).map(id=>({id,price:M.ITEMS[id]?.price??0})).filter(r=>r.price>0).sort((a,b)=>b.price-a.price||a.id.localeCompare(b.id));
@@ -1344,7 +1349,7 @@ function endTryOn(){if(!tryingOn&&!world.tryOnGear&&!world.tryOnLook)return;tryi
 // damage stays the server's, so the air bonuses, the combo ramp and the sure criticals are solo rules.
 const jumpInput=new JumpInput(),comboMeter=new ComboMeter(),jumpPointers=new Set<number>();
 /** Which step of the chain the hit being dealt belongs to (the dive strike sets 'dive'); seconds the perfect dodge's sure critical lasts; when the last dodge was shown. */
-let comboKind:ComboHit|null=null,sureLeft=0,dodgeShown=-1,comboShown='';
+let comboKind:ComboHit|null=null,sureLeft=0,dodgeShown=-1;
 /** The last jump came from a finger: touch play has wider timing (perfect dodge 0.4 s, combo timer 2 s) and aim help for the dive. */
 let touchFight=false;
 /** The touch slide (the Jump pad, then the same finger onto a skill toe or the attack toe), a late press waiting for the landing, and the HUD's air look. */
@@ -1371,13 +1376,14 @@ function syncAirCombat(){
   world.jumpRules=on;combat.edge.moves=on;skillTips.clear();document.body.classList.toggle('air-combat',on);
   if(on&&!document.querySelector('#hud .jump-pad')){
     $('#hud .skills').insertAdjacentHTML('beforeend',`<button class="jump-pad" data-action="jump">${hudIcon('jump')}</button>`);
-    $('#context-prompt').insertAdjacentHTML('beforebegin','<div id="combo-chip" hidden aria-hidden="true"><b id="combo-count"></b><span id="combo-word"></span><i id="combo-bonus"></i><em id="combo-steps"><u></u><u></u><u></u><u></u></em></div>');
+    $('#hud .skills').insertAdjacentHTML('beforeend',POWER_PAD_HTML);$('#context-prompt').insertAdjacentHTML('beforebegin',COUNTER_HTML);
+    counterView=new ComboCounterView($('#combo-counter'));powerPad=new PowerPad($('#power-pad'));
   }
   const pad=document.querySelector<HTMLElement>('#hud .jump-pad');if(pad){pad.hidden=!on;pad.setAttribute('aria-label',t('Jump'));pad.title=t('Jump');}
   // Desktop shows both as tray buttons with their key and name (hud-ours.css reads these attributes).
   if(pad){pad.dataset.key=spaceKey==='jump'?'Space':'Shift';pad.dataset.label=t('Jump');}const hit=document.querySelector<HTMLElement>('#hud .attack-pad');if(hit){hit.dataset.key=spaceKey==='jump'?'F / N':'Space / N';hit.dataset.label=t('Basic attack');}
   const hint=document.querySelector('#hud .control-hint kbd:last-of-type')?.nextSibling;if(hint)hint.textContent=' '+t(on&&spaceKey==='jump'?'jump':'attack');
-  if(!on){world.jump.cancel();jumpInput.clear();slideCombo.cancel();pendingPress=null;plungeCast=null;world.airCarry=0;world.castAirT=0;comboMeter.reset();sureLeft=0;combat.edge.sure=false;combat.edge.bonus=1;combat.edge.launch=0;comboShown=' ';showCombo();const cluster=$('#hud .skills');cluster.classList.remove('air','dive');airLook='';}
+  if(!on){world.jump.cancel();jumpInput.clear();slideCombo.cancel();pendingPress=null;plungeCast=null;world.airCarry=0;world.castAirT=0;comboMeter.reset();sureLeft=0;combat.edge.sure=false;combat.edge.bonus=1;combat.edge.launch=0;clearPower();showCombo();syncPower();const cluster=$('#hud .skills');cluster.classList.remove('air','dive');airLook='';}
 }
 function jumpBlock(){
   if(!airOn())return 'idle' as const;
@@ -1458,6 +1464,7 @@ function airDisguise(disguise:string,index:number,rule:AirCastRule){
 world.onLanded=(landing:Landing)=>{
   queueMicrotask(firePending); // a late press: its ground move, now
   world.landFeedback(landing);tone(landing.dive?'boom':'land');if(landing.dive)vibrate(40);
+  if(powerDive){const level=powerDive;powerDive=0;if(started&&!visiting&&state.hp>0&&airOn())releasePower(level,true);return;} // the power strike pressed in the air: its dive version lands here, in place of the dive strike
   if(plungeCast){
     // A disguise's ground skill pressed in the air: cast here, on the ground, with the height bonus (air-cast.ts). No dive strike on top; each hit obeys the dive's cap.
     const cast=plungeCast;plungeCast=null;if(cast.drift&&cast.drift.left>0)moveExplorer(cast.drift.x*cast.drift.left,cast.drift.z*cast.drift.left);
@@ -1479,23 +1486,99 @@ world.onLanded=(landing:Landing)=>{
   combatTimers.attackCooldown=Math.max(combatTimers.attackCooldown,.25);world.fx?.shake(.16+.05*landing.jumps);
   if(hits&&finisher){world.fx?.text({x:world.position.x,y:1.2,z:world.position.z},t('FINISHER!'),'crit big');tone('crit');}
 };
-/** A hit of the explorer's own landed: the chain grows, the chip follows, and an air hit keeps a launched creature up. */
+/** A hit of the explorer's own landed: the chain grows, the counter follows, the power strike charges, and an air hit keeps a launched creature up. */
 function noteComboHit(e:Enemy,impact:CombatHit){
   if(!airOn())return;
+  // The power strike's charge (power-rules.ts): every own hit on a creature fills it, except the strike's own.
+  if(!combat.striking){const level=powerCharge.hit();if(level){tone('ready');vibrate(25);world.fx?.text({x:world.position.x,y:world.position.y+world.jump.height+1.5,z:world.position.z},t(level>1?'POWER ×2!':'POWER READY!'),'xp');}}
   const kind:ComboHit=comboKind??(world.jump.airborne?'air':impact.lift>0?'launcher':'ground'),first=kind==='launcher'&&!comboMeter.launched;
   if(kind==='air'&&!actionHandler&&!e.boss&&(e.lift??0)>.05&&e.hp>0)world.knockUpEnemy(e,AIR.juggle,.5);
+  if(!comboMeter.live)chainDamage=0;chainDamage+=Math.max(0,impact.amount);
   if(!comboMeter.hit(kind))return;
-  if(first&&comboMeter.count>1)world.fx?.text({x:e.x,y:e.mesh.position.y+.6,z:e.z},t('LAUNCH!'),'xp');
+  chainCount=comboMeter.count;
+  if(first&&comboMeter.count>1){world.fx?.text({x:e.x,y:e.mesh.position.y+.6,z:e.z},t('LAUNCH!'),'xp');noteChain(t('LAUNCH!'));}
+  if(comboMeter.finished)noteChain(t('FINISHER!'));
   showCombo();
 }
-/** The combo chip: the count, the damage bonus and four pips (ground, launch, air, finisher). Written only when it changes. */
+// ---- The hit counter (combo-counter.ts) and the power strike (power-rules.ts, power-fx.ts, power-hud.ts).
+const powerCharge=new PowerCharge(),powerFx=new PowerFx();let counterView:ComboCounterView|null=null,powerPad:PowerPad|null=null;
+/** The chain's damage and count so far (the meter forgets its count the moment the chain lapses); the big moment named under the number; the ended chain's sum while it shows; whether a chain was running last step. */
+let chainDamage=0,chainCount=0,chainNote='',chainNoteLeft=0,chainSum:{text:string;best:boolean;count:number;left:number}|null=null,chainLive=false;
+/** The power strike between the press and the blow; the level of one pressed in the air, waiting for the landing. */
+let powerWind:{left:number;level:number}|null=null,powerDive=0,reelButton:HTMLElement|null=null,counterBoxes:Box[]|null=null,counterBoxesAt=0;
+function noteChain(text:string){chainNote=text;chainNoteLeft=COUNTER.note;}
+/** Where the counter goes (combo-counter.ts placeCounter): beside the explorer, away from the creature being fought, clear of every HUD piece. Called when a chain starts and when its count changes; the HUD's boxes are read then, at most twice a second, never per frame. */
+function counterPlace(keep:Placement|null):Placement{
+  const W=viewWidth(),H=viewHeight(),p=world.position,now=performance.now();if(!counterBoxes||now-counterBoxesAt>500){counterBoxes=readHudBoxes(document);counterBoxesAt=now;}const blocked=counterBoxes;
+  const feet=world.screen(p.x,p.y+world.jump.height,p.z),head=world.screen(p.x,p.y+world.jump.height+1.9,p.z),tall=Math.max(40,Math.abs(feet.y-head.y)),hero={l:feet.x-tall*.38,r:feet.x+tall*.38,t:Math.min(head.y,feet.y),b:Math.max(head.y,feet.y)};
+  const e=world.currentTarget();let target:Box|null=null;
+  if(e){const ppm=tall/1.9,c=world.screen(e.x,e.mesh.position.y,e.z),half=Math.max(.5,e.radius)*ppm,up=Math.max(1.6,e.radius*2.4)*ppm;target={l:c.x-half,r:c.x+half,t:c.y-up,b:c.y+half*.3};}
+  return placeCounter({W,H},hero,target,blocked,keep);
+}
+/** The counter: the count, the bonus, the charge ring and a big moment's name while the chain runs; its sum for a moment when it ends. Written only when it changes. */
 function showCombo(){
-  const chip=document.querySelector<HTMLElement>('#combo-chip');if(!chip)return;
-  const v=comboMeter.view(),sig=v.count<2?'':`${v.count}|${actionHandler?0:v.bonus}|${+v.launched}${+v.aired}${+v.finished}|${+v.live}|${getLanguage()}`;if(sig===comboShown)return;comboShown=sig;
-  chip.hidden=!sig;if(!sig)return;
-  setText($('#combo-count'),String(v.count));setText($('#combo-word'),t(v.finished?'FINISHER!':'HITS'));setText($('#combo-bonus'),!actionHandler&&v.bonus>0?`+${v.bonus}%`:'');
-  chip.classList.toggle('done',!v.live);
-  const pips=$('#combo-steps').children;[true,v.launched,v.aired,v.finished].forEach((on,i)=>pips[i]?.classList.toggle('on',on));
+  const view=counterView;if(!view)return;
+  const v=comboMeter.view(),p=powerCharge.view();let s:CounterState|null=null;
+  if(airOn()&&v.live&&v.count>=COUNTER.from)s={count:v.count,bonus:actionHandler?0:v.bonus,live:true,charge:p.progress,level:p.level,note:chainNoteLeft>0?chainNote:'',summary:'',best:false};
+  else if(airOn()&&chainSum)s={count:chainSum.count,bonus:0,live:false,charge:p.progress,level:p.level,note:'',summary:chainSum.text,best:chainSum.best};
+  view.show(s,t('HITS'),counterPlace);
+}
+/** Every step of a fight: the chain's end is summed up (and may be a new best, kept in the save's progression totals), the note and the sum time out, the charge waits and lapses. */
+function stepCounter(dt:number){
+  const live=comboMeter.live;
+  if(live&&!chainLive)chainSum=null;
+  if(!live&&chainLive){
+    const count=chainCount;chainCount=0;chainNoteLeft=0;
+    if(count>=COUNTER.summaryFrom){const best=recordBest(state.progression.totals,count,chainDamage),sum=summaryText(t('{count} hits · {damage}'),count,chainDamage);chainSum={text:best?t('New best!')+'\n'+sum:sum,best,count,left:COUNTER.summary};if(best){tone('success');save();}}
+  }
+  chainLive=live;
+  if(chainNoteLeft>0)chainNoteLeft-=dt;
+  if(chainSum&&(chainSum.left-=dt)<=0)chainSum=null;
+  if(state.hp<=0&&(powerCharge.hits||powerWind||powerDive))clearPower(); // knocked out: the charge is lost
+  powerCharge.step(dt);
+  if(powerWind&&(powerWind.left-=dt)<=0){const level=powerWind.level;powerWind=null;if(state.hp>0)releasePower(level,false);}
+  if(powerDive&&!world.jump.airborne){const level=powerDive;powerDive=0;releasePower(level,false);} // the jump ended without a landing (a cut-scene, a throw)
+  if(powerFx.busy&&world.fx)powerFx.update(world.fx,dt);
+  if(counterView&&(counterView.visible||live||chainSum))showCombo();
+  syncPower();
+}
+function clearPower(){powerCharge.clear();powerWind=null;powerDive=0;powerFx.clear();chainSum=null;chainNoteLeft=0;chainLive=false;chainDamage=0;chainCount=0;}
+/** The button shows while a charge is ready and the explorer can fight. The first time it appears, one line says what it is. */
+function syncPower(){
+  if(!powerPad)return;
+  const shown=airOn()&&started&&!uiBlocked()&&!visiting&&state.hp>0&&!fishGame&&world.fishing==='idle'&&!world.interior&&(reelButton??=document.querySelector<HTMLElement>('#reel-button'))?.hidden!==false; // not by a pond: the Reel button and its hint have that place
+  if(!powerPad.sync(powerCharge.view(),shown,t('Power strike')))return;
+  const store=(()=>{try{return localStorage;}catch{return null;}})();
+  if(!hintSeen(store)){markHint(store);toast(matchMedia('(pointer: coarse)').matches?'Power strike ready! Tap the glowing button above the paw.':'Power strike ready! Press G or click the glowing button.','💥');}
+}
+/** The colour of the strike: the weapon's own (a gun's shot colour), else warm gold. */
+function powerColor(weapon:ReturnType<typeof M.weaponStats>){return weapon.kind==='gun'?(weapon.shot==='volt'?'#bfefff':shotColor(weapon.shot??'pea')):weapon.fx??'#ffd45a';}
+/**
+ * The power strike's button or key (G): spends the charge. On the ground the explorer turns to the creature being fought,
+ * gathers light for POWER.windup seconds and lets go; in the air it dives and the strike lands as a ring (the bigger dive version).
+ */
+function powerStrike(){
+  if(!airOn()||!started||uiBlocked()||visiting||state.hp<=0||powerWind||powerDive)return;
+  if(ctfApi?.active&&!ctfApi.canAct)return;
+  if(!powerCharge.level||combat.locksMovement||combat.busy||fishGame||world.fishing!=='idle')return;
+  prepareCombatWeapon();const weapon=M.weaponStats(state);if(weapon.kind==='rod')return;
+  const level=powerCharge.use(),color=powerColor(weapon),p=world.position,fx=world.fx;tone('cast');
+  if(world.jump.airborne){powerDive=level;if(!world.jump.diving)startDive();if(fx)powerWindup(fx,{x:p.x,y:p.y+world.jump.height,z:p.z},color,level);syncPower();return;}
+  const shape=powerShape(weapon.kind),area=powerArea(shape,level),target=world.currentTarget()??combat.nearest(Math.max(area.length,area.radius));
+  if(target&&target.hp>0)world.facing=Math.atan2(target.x-p.x,target.z-p.z);
+  powerWind={left:POWER.windup,level};combatTimers.attackCooldown=Math.max(combatTimers.attackCooldown,POWER.windup+POWER.recovery);
+  if(fx)powerWindup(fx,p,color,level);syncPower();
+}
+/** The blow itself: the damage (combat.ts powerStrike), the swing, the look (power-fx.ts), the hit-stop, the shake and the sound. */
+function releasePower(level:number,air:boolean){
+  const weapon=M.weaponStats(state),kind=weapon.kind==='sword'?'sword':weapon.kind==='gun'?'gun':'fist',shape=powerShape(weapon.kind,air),area=powerArea(shape,level),color=powerColor(weapon),p=world.position,fx=world.fx;
+  combat.powerStrike(shape,level,powerCap);
+  world.playerAttack(kind,kind==='gun'?color:undefined,2,true,{pound:air&&kind==='fist'});
+  // A blade's own trail burns brighter for the swing (the trail's colour is the world's; put back unless the weapon changed meanwhile).
+  if(kind==='sword'){const w=world as unknown as {trailTint:[number,number,number]},was=w.trailTint,hot:[number,number,number]=[Math.min(1,was[0]*.4+.75),Math.min(1,was[1]*.4+.75),Math.min(1,was[2]*.4+.75)];w.trailTint=hot;setTimeout(()=>{if(w.trailTint===hot)w.trailTint=was;},450);}
+  if(shape==='beam')combatView.effect({x:p.x,z:p.z,kind:'beam',radius:area.length,width:area.half*2,color:brighter(color),facing:world.facing,duration:.3});
+  if(fx){powerFx.play(fx,shape,level,{x:p.x,y:p.y,z:p.z},world.facing,color);fx.freeze(shape==='wave'?POWER.stop*.5:POWER.stop);fx.shake(level>1?.42:.32);fx.text({x:p.x,y:p.y+1.4,z:p.z},t(level>1?'POWER STRIKE ×2!':'POWER STRIKE!'),'crit big');}
+  tone('boom');tone('zap');vibrate(60);noteChain(t('POWER!'));emitAction({kind:'basic'});
 }
 /** A ground attack passed under the explorer. A perfect one (solo) slows the moment and makes the next hit a sure critical. */
 function dodged(perfect:boolean){
@@ -1519,7 +1602,7 @@ function stepFight(dt:number,active:boolean,combatActive:boolean){
   if(active&&jumpInput.wants(world.jump,dt))tryJump();
   if(!combatActive)return;
   for(let i=0;i<4;i++)airCooldowns[i]=Math.max(0,airCooldowns[i]-dt);
-  comboMeter.step(dt);if(comboShown)showCombo();
+  comboMeter.step(dt);stepCounter(dt);
   if(sureLeft>0){sureLeft-=dt;if(sureLeft<=0)combat.edge.sure=false;}
   combat.edge.bonus=actionHandler?1:comboMeter.bonus;combat.edge.launch=actionHandler?0:AIR.launch;
 }
@@ -1653,7 +1736,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){world.clearSkillWind();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){world.clearSkillWind();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;chainSum=null;chainNoteLeft=0;chainLive=false;powerWind=null;powerDive=0;powerFx.clear();showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1906,7 +1989,7 @@ app.addEventListener('click',async event=>{
     case 'shop-rod':shopTab=rodShopTab;shopFocus='rod';if(IG.isFolded('shop','tool'))IG.toggleFold('shop','tool');go('shop');break;
     case 'wild':{closeDialog();const destinations:Record<string,[number,number]>={forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]};const kind=button.dataset.kind??'forest',destination=destinations[kind]??[0,-30],armed=wildArmed?.kind===kind&&Date.now()<wildArmed.until,route=wildRoute(destination,armed);world.walkTo(route.x,route.z);if(route.inside){wildArmed=null;toast('Follow the path beyond the garden gate.','🍄');}else{wildArmed={kind,until:Date.now()+45000};toast(wildDanger(state.level)?'Wild creatures ahead, and they come in packs! Get ready at the village edge, then choose this place on the map again to walk in.':'You are at the edge of the wild. Choose this place on the map again to walk in.','⚠️');}break;}
     case 'return-home':if(state.planet!=='home')flyHome();else{endFishing();huntingPending=null;movement.clear();closeDialog();world.position.set(0,0,0);world.destination=null;world.route=[];world.selected=null;world.pondTap=null;updateHunting(0);toast('Home, sweet home.','🏡');}break;
-    case 'interact':world.interactNearest();break;case 'attack':basicAttack();break;case 'jump':if(airOn()&&(event as MouseEvent).detail===0){jumpInput.down();jumpInput.up();}break;/* a pointer already jumped on the way down (below): this is the keyboard's press of the button */case 'skill':skill(index);break;
+    case 'interact':world.interactNearest();break;case 'attack':basicAttack();break;case 'power':powerStrike();break;case 'jump':if(airOn()&&(event as MouseEvent).detail===0){jumpInput.down();jumpInput.up();}break;/* a pointer already jumped on the way down (below): this is the keyboard's press of the button */case 'skill':skill(index);break;
     case 'fish-again':fish(fishPond);break;
     case 'reel':if(fishGame){if(event.detail===0)fishGame.input.toggle();}else if(button.classList.contains('hunt'))void throwHarpoon();else if(button.classList.contains('cast'))fish(fishPond);break;
     case 'render-res':{const res=button.dataset.kind as ResolutionSetting;graphics.setResolution(res);world.applyGraphics(graphics.profile,graphics.ratio);await perform('settings',{settings:{renderRes:res}});settings();break;}
@@ -1987,7 +2070,7 @@ document.addEventListener('keydown',event=>{
   const spaceAction=jumpKeyAction(event.code||'',spaceKey,airOn());
   if(spaceAction==='jump'){event.preventDefault();if(!event.repeat){touchFight=false;jumpInput.down();}return;}
   if(event.repeat)return;
-  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=(bindings.skills as readonly string[]).indexOf(key);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f'){if(!airOn())world.interactNearest();else if(world.jump?.airborne||!world.interactNearest())basicAttack();}else if(handKey(key,airOn())==='eat')void quickEat();else if(handKey(key,airOn())==='attack')basicAttack();else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();basicAttack();}
+  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=(bindings.skills as readonly string[]).indexOf(key);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f'){if(!airOn())world.interactNearest();else if(world.jump?.airborne||!world.interactNearest())basicAttack();}else if(handKey(key,airOn())==='eat')void quickEat();else if(handKey(key,airOn())==='attack')basicAttack();else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();basicAttack();}else if(key===POWER.key&&airOn())powerStrike();
 });
 // The keyboard guide counts game keys to learn when to fold itself (hud-keys.ts).
 window.addEventListener('keydown',event=>{if(started&&!uiBlocked()&&!event.repeat&&gameplayKey(event))keysGuide.used();});
@@ -2112,4 +2195,4 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

@@ -3,6 +3,7 @@
 import { HELP_TOPICS } from '../help-topics.ts';
 import { JUMP_HELP_VI } from './vi-jump.ts';
 import { MOVES_HELP_VI } from './vi-moves.ts';
+import { POWER_HELP_VI } from './vi-chain.ts';
 /** [English title, Vietnamese title, Vietnamese text]; the English text of each topic comes from HELP_TOPICS. */
 const ROWS: ReadonlyArray<readonly [string, string, string]> = [
   ['Wander', 'Di chuyển', 'Nhấn mặt đất để đi; giữ để điều khiển hướng. Dấu chỉ đánh dấu mục tiêu. Bạn cũng có thể dùng phím mũi tên. Vào Cài đặt → Bố trí phím trên máy tính để bật di chuyển bằng WASD. Cài đặt cũng cho phép bật cần điều khiển.'],
@@ -33,6 +34,7 @@ const ROWS: ReadonlyArray<readonly [string, string, string]> = [
   ['Handy shortcuts', 'Phím tắt tiện dụng', 'I túi đồ · J nhật ký (P khi dùng WASD) · M bản đồ · F tương tác · Q/W/E/R kỹ năng (J/K/L/; khi dùng WASD) · Enter chat · Esc đóng. Phím tắt tạm dừng khi đang nhập chữ, kể cả tiếng Việt.'],
   ['Jump and air combat', JUMP_HELP_VI[0], JUMP_HELP_VI[1]],
   ['Four moves', MOVES_HELP_VI[0], MOVES_HELP_VI[1]],
+  ['Power strike', POWER_HELP_VI[0], POWER_HELP_VI[1]],
 ];
 const VI_BY_TITLE = new Map(ROWS.map(([title, viTitle, viBody]) => [title, [viTitle, viBody] as const]));
 export const HELP_TOPICS_VI: Record<string, string> = Object.fromEntries(HELP_TOPICS.flatMap(([, title, body]) => [[title, VI_BY_TITLE.get(title)![0]], [body, VI_BY_TITLE.get(title)![1]]]));

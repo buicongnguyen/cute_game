@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import * as Controls from '../src/gameplay-controls.ts';
 import {JumpInput,jumpKeyAction} from '../src/jump-rules.ts';
+import {POWER} from '../src/power-rules.ts';
 
 // Execute the actual production DOM routing, not a second implementation of its bindings.
 const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
@@ -26,7 +27,7 @@ function fixture(layout='classic'){
     previous:0,performance:{now:()=>12345},graphics:{sample:(...args)=>calls.push(['graphicsSample',...args])},
     $:()=>({querySelectorAll:()=>[]}),uiBlocked:()=>!!ctx.modal||ctx.nativeDialog,
     tryLanding:()=>calls.push(['land']),cancelPlacement:()=>{calls.push(['cancelPlacement']);ctx.placement=null;},confirmPlacement:()=>calls.push(['place']),rotatePlacement:()=>calls.push(['rotate']),
-    closeDialog:()=>{calls.push(['close']);ctx.modal='';movement.clear();},start:()=>calls.push(['start']),inventory:()=>calls.push(['bag']),quests:()=>calls.push(['journal']),map:()=>calls.push(['map']),quickEat:()=>calls.push(['eat']),skill:index=>calls.push(['skill',index]),basicAttack:()=>calls.push(['attack']),
+    closeDialog:()=>{calls.push(['close']);ctx.modal='';movement.clear();},start:()=>calls.push(['start']),inventory:()=>calls.push(['bag']),quests:()=>calls.push(['journal']),map:()=>calls.push(['map']),quickEat:()=>calls.push(['eat']),skill:index=>calls.push(['skill',index]),basicAttack:()=>calls.push(['attack']),POWER,powerStrike:()=>calls.push(['power']),
     gestures:{clear:()=>calls.push(['gesturesClear'])},save:()=>calls.push(['save']),
   });
   vm.runInContext(compiled,ctx);
@@ -140,4 +141,12 @@ test('with jumping switched off the keys are the ones from before: Space attacks
   assert.equal(f.fire('keydown','Space').defaultPrevented,true);assert.deepEqual(f.calls,[['attack']]);assert.equal(f.jumpInput.held,false);
   f.ctx.world.interactNearest=()=>{f.calls.push(['interact']);return false;};f.fire('keydown','KeyF');assert.deepEqual(f.calls,[['attack'],['interact']],'F never attacks');
   f.fire('keydown','ShiftLeft','Shift');assert.equal(f.jumpInput.held,false);f.ctx.spaceKey='attack';f.fire('keydown','ShiftLeft','Shift');assert.equal(f.jumpInput.held,false,'not even with the old-way choice saved');
+});
+
+test('G is the power strike with jumping on, in both layouts, and nothing with it off; a held key does not repeat it',()=>{
+  for(const layout of ['classic','wasd']){
+    const f=fixture(layout);assert.equal(POWER.key,'g');f.fire('keydown','KeyG');assert.deepEqual(f.calls,[['power']]);f.fire('keydown','KeyG','g',{repeat:true});assert.equal(f.calls.length,1);
+    f.ctx.modal='bag';f.fire('keydown','KeyG');assert.equal(f.calls.length,1,'not while a menu is open');
+    const off=fixture(layout);off.ctx.air=false;off.fire('keydown','KeyG');assert.deepEqual(off.calls,[]);
+  }
 });

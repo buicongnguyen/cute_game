@@ -11,7 +11,7 @@ export function measureHud() {
     hero: all('#hud .player-card'), dock: all('#hud .top-actions button'), map: all('#hud .minimap'), home: all('#hud .home-button'),
     slips: all('#hud .tracker-panels > *, #hud #tracker-chip'), eat: all('#hud #quick-eat, #hud .quick-eat-pick'), buffs: all('#hud #buff-bar > *'),
     skills: all('#hud .skill'), pad: all('#hud .attack-pad'), jump: all('#hud .jump-pad'), stick: all('#movement-joystick'), boss: all('#boss-bar'), target: all('#target-frame'),
-    colossus: all('.colossus-banner'), prompt: all('#context-prompt button'), keys: all('#keys-guide'), reel: all('#reel-button'), fishHint: all('#fish-hint'), weather: all('#environment-bar > *'),
+    colossus: all('.colossus-banner'), prompt: all('#context-prompt button'), power: all('#hud .power-pad'), counter: all('#combo-counter'), keys: all('#keys-guide'), reel: all('#reel-button'), fishHint: all('#fish-hint'), weather: all('#environment-bar > *'),
   };
   // Touch targets: what a finger really gets at each control's centre row and column.
   const coarse = matchMedia('(pointer: coarse)').matches, small = [];
@@ -31,7 +31,7 @@ export function measureHud() {
 /** Toes and the pad are round: two of them overlap when their centres are closer than their radii allow, not when their boxes meet.
     The stick is a disc too (joystick.css, border-radius 50%): with jumping on, the attack toe sits by its lower corner, where the boxes
     meet on a 320 px phone while the discs are over 20 px apart. */
-const ROUND = new Set(['skills|skills', 'skills|pad', 'skills|jump', 'pad|jump', 'pad|stick']);
+const ROUND = new Set(['skills|skills', 'skills|pad', 'skills|jump', 'pad|jump', 'pad|stick', 'skills|power', 'pad|power', 'jump|power']);
 /** Known before this stage and left alone: the timed-task pill is a slim 25 px row on phones (its neighbours take no taps there). */
 export const KNOWN_SMALL = ['challenge-tracker'];
 export function findings(m) {
@@ -85,8 +85,13 @@ export const STATES = {
     });
     await page.waitForTimeout(2500);
   },
+  // A chain of hits with the power strike charged (after 'fight'): the hit counter beside the explorer and the glowing button over the paw.
+  charged: async page => {
+    await page.evaluate(() => { const f = window.__zoo.fight; f.on = true; f.powerCharge.hits = 20; f.powerCharge.left = 12; window.__probeChain = setInterval(() => { f.comboMeter.step(.1); f.comboMeter.hit('ground'); }, 250); });
+    await page.waitForFunction(() => !document.querySelector('#combo-counter')?.hidden && !document.querySelector('#power-pad')?.hidden, null, { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(400);
+  },
   fishing: async page => {
-    await page.evaluate(() => { clearInterval(window.__probeFight); const w = __zoo.world, s = __zoo.state; s.bag.harpoon = 1; s.gear.weapon = 'harpoon'; delete s.gear.disguise; w.selected = null; w.position.set(-7.5, 0, 15); w.cameraTarget.copy(w.position); w.destination = null; w.route = []; });
+    await page.evaluate(() => { clearInterval(window.__probeFight); clearInterval(window.__probeChain); __zoo.resetCombat?.(); const w = __zoo.world, s = __zoo.state; s.bag.harpoon = 1; s.gear.weapon = 'harpoon'; delete s.gear.disguise; w.selected = null; w.position.set(-7.5, 0, 15); w.cameraTarget.copy(w.position); w.destination = null; w.route = []; });
     await page.waitForSelector('#reel-button:not([hidden])', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500);
   },
 };

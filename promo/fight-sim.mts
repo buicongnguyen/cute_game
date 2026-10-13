@@ -23,6 +23,7 @@ import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatTarget } from '../s
 import { MOVES, AIR_MOVES, MOVE_SKILLS, MOVE_SLOTS, moveAt, windowDamage, type MoveId } from '../src/moves.ts';
 import { skillTuning } from '../src/skill-upgrades.ts';
 import * as J from '../src/jump-rules.ts';
+import { POWER, PowerCharge, powerShape, powerReach, powerCap } from '../src/power-rules.ts';
 
 type Route = 'ground' | 'launch' | 'chase';
 export type Script = 'classic' | 'careless' | 'single' | 'double' | Route | `only-${MoveId}`;
@@ -37,8 +38,8 @@ export const ROUTES: Record<Route | 'double', readonly Step[]> = {
 const quiet = { text() {}, burst() {}, ring() {}, spark() {}, shake() {}, flash() {}, freeze() {}, update() {}, slash() {}, shakeOffset: () => new T.Vector3() };
 function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 15, 1 | seed); seed ^= seed + Math.imul(seed ^ seed >>> 7, 61 | seed); return ((seed ^ seed >>> 14) >>> 0) / 4294967296; }; }
 
-export interface FightResult { won: boolean; seconds: number; taken: number; hits: number; dodged: number; perfect: number; biggest: number; bossHp: number; blocked: number; /** Times the script's route ran to its end, and the longest chain. */ routes: number; combo: number; finishers: number }
-export function fight(boss: string, planet: M.PlanetId, zone: [number, number], level: number, gear: Partial<M.SaveState['gear']>, script: Script, seed = 1, blockOverride?: number): FightResult {
+export interface FightResult { won: boolean; seconds: number; taken: number; hits: number; dodged: number; perfect: number; biggest: number; bossHp: number; blocked: number; /** Times the script's route ran to its end, and the longest chain. */ routes: number; combo: number; finishers: number; /** Power strikes used (power-rules.ts), and the damage dealt in all. */ powers: number; damage: number }
+export function fight(boss: string, planet: M.PlanetId, zone: [number, number], level: number, gear: Partial<M.SaveState['gear']>, script: Script, seed = 1, blockOverride?: number, /** `power`: the hero uses the power strike whenever it is charged and the boss is in its area. */ opts: { power?: boolean } = {}): FightResult {
   const random = seeded(seed * 7919), realRandom = Math.random; Math.random = random;
   try {
     const state = M.newGame(); state.level = level; state.planet = planet; Object.assign(state.gear, gear); for (const id of Object.values(gear)) if (id) state.bag[id] = 1; state.hp = M.maxHp(state);
@@ -54,7 +55,8 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
     w.jumpRules = on; w.jump.max = Math.max(1, jumps);
     const weapon = () => strikeSlot ? { ...M.weaponStats(state), special: 'fist' } : M.weaponStats(state), special = () => weapon().special ?? 'fist';
     const e = w.spawnSpecies(boss, zone[0], zone[1], 0)! as Enemy; w.position.set(zone[0] + e.radius + 1.3, 0, zone[1]);
-    const stats = () => M.activeStats(state), out: FightResult = { won: false, seconds: 0, taken: 0, hits: 0, dodged: 0, perfect: 0, biggest: 0, bossHp: 0, blocked: 0, routes: 0, combo: 0, finishers: 0 };
+    const stats = () => M.activeStats(state), out: FightResult = { won: false, seconds: 0, taken: 0, hits: 0, dodged: 0, perfect: 0, biggest: 0, bossHp: 0, blocked: 0, routes: 0, combo: 0, finishers: 0, powers: 0, damage: 0 };
+    const charge = new PowerCharge();
     const combo = new J.ComboMeter(); let invulnerable = 0, attackCd = 0, sure = 0, kind: J.ComboHit | null = null, strike: { height: number; jumps: number } | null = null, skyQuake: { height: number; jumps: number } | null = null, skyFactor = 1, quakeFinisher = false;
     const cds = [0, 0, 0, 0], airCds = [0, 0, 0, 0];
     const sim = new CombatSimulation({
@@ -62,7 +64,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       move: (x, z) => { const n = Math.max(1, Math.ceil(Math.hypot(x, z) / .2)); for (let i = 0; i < n; i++) w.move(x / n, z / n); },
       skillLevel: () => 0, effect: () => {},
       hit: (target, impact) => {
-        const en = target as Enemy, before = en.hp; w.damageEnemy(en, impact.amount, impact.stun); out.biggest = Math.max(out.biggest, before - en.hp); if (impact.blocked) out.blocked++;
+        const en = target as Enemy, before = en.hp; w.damageEnemy(en, impact.amount, impact.stun); out.biggest = Math.max(out.biggest, before - en.hp); out.damage += before - en.hp; if (impact.blocked) out.blocked++; if (on) charge.hit();
         if (impact.lift && en.hp > 0) w.knockUpEnemy(en, impact.lift, .75);
         if (on) { combo.hit(kind ?? (w.jump.airborne ? 'air' : impact.lift > 0 ? 'launcher' : 'ground')); out.combo = Math.max(out.combo, combo.count); }
       },
@@ -132,6 +134,12 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       const ground = e.phase === 'windup' && J.attackClass(e.skill ?? (e.mesh.userData.slam ? 'slam' : 'melee')) === 'ground';
       if (jumps > 0 && ground && (e.phaseTime ?? 9) <= .2 && j.ready && grounded && !sim.locksMovement) j.jump();
       if (jumps > 0 && (e.skillEffects?.length ?? 0) > 0 && j.ready && grounded && !sim.locksMovement && e.skillEffects!.some(p => p.remaining <= .16)) j.jump();
+      // The power strike (main.ts powerStrike): pressed as soon as it is charged and the boss stands in its area; the wind-up and the recovery cost attack time.
+      if (on && opts.power && charge.level && !sim.locksMovement && !sim.busy && attackCd <= POWER.windup) {
+        const shape = powerShape(weapon().kind, !grounded && j.height >= J.DIVE.minHeight);
+        if (shape !== 'ring' && grounded && powerReach(shape, charge.level, w.position, w.facing, e) >= 0) { const level = charge.use(); sim.powerStrike(shape, level, powerCap); out.powers++; attackCd = Math.max(attackCd, POWER.windup + POWER.recovery); }
+      }
+      charge.step(dt);
       const basic = () => { if (attackCd <= 0 && grounded && reach && free && sim.basic(e)) { void fled; attackCd = (weapon().cd ?? .4) / Math.max(.2, 1 + stats().haste); swings++; } };
       const swing = () => { if (attackCd > 0 || !J.airWindow(j) || !free) return false; const sword = weapon().kind !== 'gun'; if (!(sword ? sim.airSwing(moveAt(3, special()) ? skillTuning(3, 0).damage : 1) : sim.basic(e, J.AIR.swing))) return false; attackCd = AIR_MOVES.swing.cooldown / Math.max(.2, 1 + stats().haste); j.stall(AIR_MOVES.swing.hover); return true; };
       if (!on) {
@@ -212,6 +220,17 @@ export function testFights() {
   return Object.entries(TEST_FIGHTS).map(([name, f]) => { const damage = Object.fromEntries(MOVE_SLOTS.map(m => [m, moveDamage(m, f.spots)])) as Record<MoveId, number>; return { name, note: f.note, damage, best: MOVE_SLOTS.reduce((a, b) => damage[b] > damage[a] ? b : a) }; });
 }
 
+/** Damage per second of each careful and careless script on the three bosses, without and with the power strike. */
+export function powerReport(scripts: readonly Script[] = ['careless', 'single', 'double', 'ground', 'launch', 'chase'], seeds: readonly number[] = [1, 2, 3, 4, 5, 6]) {
+  const rows: { boss: string; script: Script; before: number; after: number; gain: number; powers: number; biggest: number }[] = [];
+  for (const f of FIGHTS) for (const script of scripts) {
+    const dps = (power: boolean) => { const runs = seeds.map(seed => fight(f.boss, f.planet, f.at, f.level, f.gear, script, seed, undefined, { power })); return { dps: runs.reduce((a, r) => a + r.damage, 0) / runs.reduce((a, r) => a + r.seconds, 0), powers: runs.reduce((a, r) => a + r.powers, 0) / runs.length, biggest: Math.max(...runs.map(r => r.biggest / r.bossHp)) }; };
+    const before = dps(false), after = dps(true);
+    rows.push({ boss: f.boss, script, before: before.dps, after: after.dps, gain: after.dps / before.dps - 1, powers: after.powers, biggest: after.biggest });
+  }
+  return rows;
+}
+
 if (process.argv[1]?.endsWith('fight-sim.mts')) {
   const override = process.env.BLOCK ? Number(process.env.BLOCK) : undefined, seeds = [1, 2, 3, 4, 5, 6], pct = (n: number) => (n * 100).toFixed(0) + '%';
   console.log('Ten seconds of one move used perfectly on one creature (damage in basic hits; the table of moves.ts)');
@@ -219,6 +238,12 @@ if (process.argv[1]?.endsWith('fight-sim.mts')) {
   console.log('  air: ' + [`Sky Spin ${pct(AIR_MOVES.swing.power)} a spin`, `Sky Step ${pct(moveDamage('rush', [PERFECT.rush], 10, { height: 2 }))}`, `Sky Quake ${pct(moveDamage('quake', [PERFECT.quake], 10, { height: 2 }))} from a single jump (ring only)`, `Petal Rain ${pct(moveDamage('lob', [{ x: 0, z: 1.2, radius: 1.2 }], 10, { height: 2 }))} on a large creature below`].join(' · '));
   console.log('\nTest fights: ten seconds of each move alone (damage in basic hits, all creatures together)');
   for (const f of testFights()) console.log(`  ${f.name.padEnd(6)} ${f.note.padEnd(40)} ${MOVE_SLOTS.map(m => `${m} ${pct(f.damage[m])}`).join('  ')}  -> best: ${f.best}`);
+  if (process.env.POWER !== '0') {
+    // Sustained damage per second with and without the power strike (the bound of docs/FIGHT-PLAN.md section 10: no more than about +15%).
+    console.log(`
+Power strike: ${POWER.need} hits a level, ${POWER.power.join(' / ')} basic hits, boss cap ${POWER.bossCap * 100}% (damage per second, 6 seeds; before -> after)`);
+    for (const row of powerReport()) console.log(`  ${row.boss.padEnd(11)} ${row.script.padEnd(9)} ${row.before.toFixed(0).padStart(5)} -> ${row.after.toFixed(0).padStart(5)}  ${(row.gain * 100 >= 0 ? '+' : '') + (row.gain * 100).toFixed(1)}%  (${row.powers.toFixed(1)} strikes a fight, biggest hit ${(row.biggest * 100).toFixed(1)}% of the boss)`);
+  }
   const scripts: Script[] = ['classic', 'careless', 'single', 'double', 'ground', 'launch', 'chase', 'only-strike', 'only-rush', 'only-quake', 'only-lob'];
   for (const f of FIGHTS) {
     console.log(`\n${f.note} — hero level ${f.level}, block ${J.BOSS_BLOCK_ON ? override ?? J.blockShare(f.boss, M.PLANETS[f.planet].level) : 'off'}`);

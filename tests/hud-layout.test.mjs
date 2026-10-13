@@ -359,6 +359,40 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
 
 // The news board lives inside the leaderboard dialog: Ranking | News tabs, the unread count on the dock's Ranking button and on
 // the News tab, no News button in the dock. Everything the board did still works there (cards, NEW tags, read marks, Coming soon).
+// The power strike's button and the hit counter (power-hud.ts, combo-counter.ts): on phones, for both hands, the button is a
+// full target clear of the paw, the Jump pad, the attack toe, the stick, quick-eat and the context prompt, and the counter
+// covers none of them.
+for (const size of ['390x844', '320x568', '844x390']) for (const hand of ['right', 'left']) {
+  test(`power strike button and hit counter stay clear of everything at ${size}, ${hand}-handed`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 180000 }, async () => {
+    const [width, height] = SIZES[size];
+    const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+    try {
+      const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+      await context.addInitScript(([s]) => { try { localStorage.setItem('cute-game-save-v1', s); localStorage.setItem('cute-game-slot', '0'); localStorage.setItem('cute-game-language', 'en'); localStorage.setItem('cute-game-tutorial', 'done'); localStorage.setItem('zoo-power-hint', '1'); } catch { /* storage blocked */ } }, [fullSave]);
+      const page = await context.newPage();
+      await page.routeWebSocket(socketUrl => new URL(socketUrl).searchParams.has('token'), () => {});
+      await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await page.waitForSelector('[data-action="start"]', { timeout: 60000 });
+      await page.evaluate(() => document.querySelector('[data-action="start"]').click());
+      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(6000);
+      await page.evaluate(() => { document.querySelector('.tutorial,.welcome')?.remove(); document.querySelectorAll('dialog[open]').forEach(d => d.close()); (document.querySelector('#dialog-layer [data-action="close"]') || document.querySelector('#dialog-close'))?.click(); });
+      if (hand === 'left') await page.evaluate(() => document.querySelector('#hud').classList.add('joystick-right'));
+      await STATES.fight(page); await STATES.charged(page);
+      const m = await page.evaluate(measureHud), g = m.groups;
+      assert.deepEqual(findings(m), [], `charged at ${size}, ${hand}-handed`);
+      assert.equal(g.power.length, 1, 'the button shows'); assert.equal(g.counter.length, 1, 'the counter shows');
+      const pad = g.power[0], mid = b => [(b.l + b.r) / 2, (b.t + b.b) / 2], paw = [...g.skills, ...g.pad, ...g.jump];
+      assert.ok(pad.r - pad.l >= 56 && pad.b - pad.t >= 56, `at least 56 px (${Math.round(pad.r - pad.l)})`);
+      assert.ok(pad.b <= Math.max(...paw.map(b => b.b)) && Math.min(...paw.map(b => Math.hypot(mid(b)[0] - mid(pad)[0], mid(b)[1] - mid(pad)[1]))) < (pad.r - pad.l) * 1.6, 'it sits on the paw, by the thumb');
+      const stick = g.stick[0]; if (stick) assert.ok(Math.hypot(mid(stick)[0] - mid(pad)[0], mid(stick)[1] - mid(pad)[1]) - (stick.r - stick.l + pad.r - pad.l) / 2 >= 8, 'never under the stick');
+      assert.equal(await page.evaluate(() => { const b = document.querySelector('#power-pad').getBoundingClientRect(), el = document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2); return !!el?.closest('#power-pad'); }), true, 'a tap on it reaches it');
+      // Pressing it spends the charge and the button goes.
+      await page.evaluate(() => { clearInterval(window.__probeChain); document.querySelector('#power-pad').click(); }); await page.waitForTimeout(500);
+      assert.equal(await page.evaluate(() => document.querySelector('#power-pad').hidden && window.__zoo.fight.powerCharge.level === 0), true, 'pressed: the charge is spent');
+    } finally { await browser.close(); }
+  });
+}
+
 for (const [size, lang] of [['1280x720', 'en'], ['390x844', 'vi'], ['320x568', 'en'], ['844x390', 'vi']]) {
   test(`news lives inside the leaderboard dialog, with its unread count on the Ranking button, at ${size} in ${lang}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 180000 }, async () => {
     const [width, height, touch] = SIZES[size];

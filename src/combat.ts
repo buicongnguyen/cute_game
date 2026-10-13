@@ -1,3 +1,4 @@
+import { POWER, powerCap, powerDelay, powerReach, powerShare, type PowerShape } from './power-rules.ts';
 export interface CombatPoint { x: number; z: number }
 export interface WeaponProfile { kind: 'fist'|'sword'|'gun'|'rod'; range?: number; cd?: number; arc?: number; special?: string; shot?: string; spread?: number; quality?: number; fx?: string }
 export interface CombatTarget extends CombatPoint { id: string; hp: number; maxHp?:number; boss?:boolean; radius: number; stun?: number; facing?:number }
@@ -336,6 +337,24 @@ export class CombatSimulation {
     const at=this.host.position(),hit=this.within(at,radius);this.emit('ring',at,radius,color,this.host.facing(),'crater');
     try{for(const target of hit){this.forced=sure(target);this.hitCap=cap(target);this.damage(target,multiplier,stun,0,knock);}}finally{this.forced=false;this.hitCap=Infinity;}
     return hit;
+  }
+  /**
+   * The power strike (power-rules.ts): one big hit in the area of `shape` ahead of (or round) the explorer. Its damage is
+   * shared out among the creatures in the area, the combo ramp does not raise it, `cap(target)` is the most it may take,
+   * and it is a critical only by the ordinary chance. A wave reaches each creature after the distance to it. Solo only.
+   */
+  /** True while a power strike deals its damage: its own hits do not fill the next charge. */
+  striking=false;
+  powerStrike(shape:PowerShape,level:number,cap:(target:CombatTarget)=>number=powerCap){
+    const at={...this.host.position()},facing=this.host.facing(),found:{target:CombatTarget;along:number}[]=[];
+    for(const target of this.host.targets()){if(target.hp<=0)continue;const along=powerReach(shape,level,at,facing,target);if(along>=0)found.push({target,along});}
+    const share=powerShare(level,found.length),strike=(target:CombatTarget)=>{
+      if(target.hp<=0)return;const bonus=this.edge.bonus,old=this.power;this.edge.bonus=1;this.power=1;this.hitCap=cap(target);this.striking=true;
+      try{this.damage(target,share,POWER.stun,target.boss?0:POWER.lift,POWER.knock);}finally{this.edge.bonus=bonus;this.power=old;this.hitCap=Infinity;this.striking=false;}
+    };
+    for(const {target,along} of found){const wait=powerDelay(shape,along);if(wait>0)this.later(wait,()=>strike(target));else strike(target);}
+    this.busyUntil=Math.max(this.busyUntil,this.time+POWER.recovery);
+    return found.length;
   }
   /** The explorer touched down: a Root Quake cast in the air lands its (wider, stronger) shockwave now. True when it did. */
   land(){
