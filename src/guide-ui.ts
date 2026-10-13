@@ -7,7 +7,7 @@ import * as T from 'three';
 import { t } from './i18n.ts';
 import type { World } from './world.ts';
 import type { SaveState } from './model.ts';
-import { nearestEmptyBed, needsGardenGuide, edgeArrow, homeButtonUrgent, isTouch } from './guide.ts';
+import { GARDEN_GUIDE, nearestEmptyBed, needsGardenGuide, edgeArrow, homeButtonUrgent, isTouch } from './guide.ts';
 import './guide.css';
 
 interface GardenGuideHost { world: World; hud: HTMLElement; state: () => SaveState; bedAt: (i: number) => { x: number; z: number }; active: () => boolean }
@@ -27,7 +27,8 @@ export function mountGardenGuide(host: GardenGuideHost) {
     frame(dt: number) {
       time += dt;
       const s = host.state(), on = host.active() && needsGardenGuide(s);
-      const bed = on ? nearestEmptyBed(s.plots, host.bedAt, host.world.position) : null;
+      const near = on ? nearestEmptyBed(s.plots, host.bedAt, host.world.position) : null, at = host.world.position;
+      const bed = near && Math.hypot(near.x - at.x, near.z - at.z) <= GARDEN_GUIDE.reach ? near : null; // out in the wilds it would only point off screen
       group.visible = !!bed; pointer.hidden = !bed;
       if (!bed) return;
       const pulse = 1 + Math.sin(time * 4.2) * .12;

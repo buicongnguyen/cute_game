@@ -143,3 +143,11 @@ test('story catch-up never lowers progress, ignores other steps and keepsake pet
   assert.equal(catchUpStory(s, { event: 'craft', target: 3 }), true);
   assert.equal(s.progression.story.progress, 3);
 });
+
+test('the garden pointer is for beginners only: not past level 4, and only within reach of the bed', () => {
+  const s = M.newGame(); s.planet = 'home'; s.plots.forEach(p => { p.crop = null as never; });
+  assert.equal(G.needsGardenGuide(s), true);
+  s.level = G.GARDEN_GUIDE.maxLevel + 1;
+  assert.equal(G.needsGardenGuide(s), false, 'an explorer past the first levels is not told to plant a first crop');
+  assert.ok(G.GARDEN_GUIDE.reach >= 20 && G.GARDEN_GUIDE.reach <= 60, 'the village is within reach, the wilds are not');
+});

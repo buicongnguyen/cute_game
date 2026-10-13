@@ -31,9 +31,11 @@ export function refuelForHome(fuel: number, energy: number, launchCost: number):
 }
 
 // ---- The garden pointer ----
+/** The pointer is for a beginner standing in the village: past this level, or this far from the bed, it stays away. */
+export const GARDEN_GUIDE = { maxLevel: 4, reach: 40 } as const;
 /** True until the first crop is planted or harvested: the pointer stays on the nearest empty bed. */
-export function needsGardenGuide(s: Pick<SaveState, 'plots' | 'counters' | 'planet'>) {
-  return s.planet === 'home' && s.counters.harvests === 0 && s.plots.length > 0 && s.plots.every(p => !p.crop);
+export function needsGardenGuide(s: Pick<SaveState, 'plots' | 'counters' | 'planet'> & { level?: number }) {
+  return s.planet === 'home' && (s.level ?? 1) <= GARDEN_GUIDE.maxLevel && s.counters.harvests === 0 && s.plots.length > 0 && s.plots.every(p => !p.crop);
 }
 export interface Spot { x: number; z: number }
 /** The empty bed nearest to `from` (its index and position), or null. */

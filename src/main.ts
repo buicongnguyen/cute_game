@@ -1637,7 +1637,7 @@ world.onDecoyDamage=(owner,id,amount,source,enemyId)=>{
   if(owner===null)combat.hurtAlly(id,amount);
 };
 watchTabScroll($('#dialog-body'));
-const gardenGuide=mountGardenGuide({world,hud:$('#hud'),state:()=>state,bedAt:i=>M.bedPosition(state,i),active:()=>started&&!uiBlocked()&&!visiting&&!world.interior&&state.hp>0&&world.state===state&&world.planet==='home'});frameListeners.add(dt=>gardenGuide.frame(dt));
+const gardenGuide=mountGardenGuide({world,hud:$('#hud'),state:()=>state,bedAt:i=>M.bedPosition(state,i),active:()=>started&&!uiBlocked()&&!visiting&&!world.interior&&state.hp>0&&world.state===state&&world.planet==='home'&&!world.enemies.some(e=>e.hp>0&&aggro(e))});frameListeners.add(dt=>gardenGuide.frame(dt)); // never during a fight
 world.onEnvironmentEvent=event=>{if(event.message)toast(event.message,'🌍');save();updateHud();};
 /**
  * Other explorers' summons that creatures can fight (their pose's decoys, world.remoteDecoys), drawn with ours: each
