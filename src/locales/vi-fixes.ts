@@ -33,4 +33,8 @@ export const VI_FIXES: Record<string, string> = {
   '{name} wants to meet you': '{name} muốn gặp bạn',
   '{name} would like to be your friend and will wait until your fight is over.': '{name} muốn kết bạn với bạn và sẽ chờ đến khi trận đấu kết thúc.',
   'Open Play together to answer it.': 'Mở Chơi cùng nhau để trả lời.',
+  // Duplicate gear in the shop (FIX-PLAN 3.4).
+  'Owned': 'Đã có',
+  'Buy another? ϟ {price}': 'Mua thêm? ϟ {price}',
+  'You already own this. A spare can go to a helper.': 'Bạn đã có món này. Món dư có thể đưa cho người giúp việc.',
 };
