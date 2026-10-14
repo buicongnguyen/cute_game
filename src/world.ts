@@ -63,6 +63,7 @@ import {DEFAULT_PIVOTS,fitOf,lookOf,lookTrim,toLook,DEFAULT_LOOK,type Fit,type L
 import {fitArmPiece} from './arm-fit.ts';
 import {part} from './part-cache.ts';
 import {WeaponTrail,measureBlade,type HeldBlade} from './weapon-trail.ts';
+import {growBlade,grownTint,heldWindLook} from './weapon-growth.ts';
 import {CUTS,SPIN,SWING,TRAIL,spinLead,spinTurn,swingPose,nextCut,type Blade,type CutIndex,type SwingPose} from './trail-ribbon.ts';
 import {PUNCH,WIND,punchPose,stretchFor,type PunchKind,type PunchPose} from './punch-wind.ts';
 import {SKILL_WIND,THRUST,TURN,sweepTurn,handBlade} from './skill-wind.ts';
@@ -2095,12 +2096,14 @@ export class World {
   }
   /** The weapon in the explorer's hand, measured once per avatar build (weapon-trail.ts measureBlade), and its trail colour. */
   private heldBlade(hand:T.Object3D){
-    const id=(this.tryOnGear??this.state.gear).weapon;
-    if(this.held?.hand!==hand||this.held.weapon!==id){
-      const info=measureBlade(hand),own=M.weaponStats(this.state).fx,c=TRAIL_COLOR;
+    const id=(this.tryOnGear??this.state.gear).weapon,forge=id?M.forgeLevel(this.state,id):0,key=id&&`${id}+${forge}`;
+    if(this.held?.hand!==hand||this.held.weapon!==key){
+      const measured=measureBlade(hand),own=M.weaponStats(this.state).fx,c=TRAIL_COLOR,look=heldWindLook(forge,id);
       // The weapon's effect colour; a dyed weapon, or one without an effect colour, takes the colour of its own paint.
-      if(own&&!(id&&isDye(id)&&info.tint))c.set(own);else if(info.tint)c.setRGB(...info.tint);else c.set('#fff4c8');
-      this.trailTint=[c.r,c.g,c.b];this.held={hand,info,weapon:id};
+      if(own&&!(id&&isDye(id)&&measured.tint))c.set(own);else if(measured.tint)c.setRGB(...measured.tint);else c.set('#fff4c8');
+      // A forged or premium blade's slash reaches farther and burns brighter (weapon-growth.ts).
+      const info={...measured,blade:growBlade(measured.blade,look.length)};
+      this.trailTint=grownTint([c.r,c.g,c.b],look);this.held={hand,info,weapon:key};
     }
     return this.held.info;
   }

@@ -59,7 +59,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
   /** No skills at all: basic attacks only (and the Lob with the 'only-lob' script). */ basicOnly?: boolean } = {}): FightResult {
   const random = seeded(seed * 7919), realRandom = Math.random; Math.random = random;
   try {
-    const state = M.newGame(); state.level = level; state.planet = planet; Object.assign(state.gear, gear); for (const id of Object.values(gear)) if (id) state.bag[id] = 1; state.hp = M.maxHp(state);
+    const state = M.newGame(); state.level = level; state.planet = planet; Object.assign(state.gear, gear); for (const id of Object.values(gear)) if (id) state.bag[id] = 1; if (process.env.FORGE && gear.weapon) state.forge = { [gear.weapon]: Number(process.env.FORGE) }; // FORGE=15: the hero's weapon forged that far (weapon-growth.ts reach) state.hp = M.maxHp(state);
     const w = Object.assign(Object.create(World.prototype), {
       state, scene: new T.Scene(), camera: new T.OrthographicCamera(-3, 3, 3, -3, .1, 20), root: new T.Group(), player: new T.Group(), companion: new T.Group(), position: new T.Vector3(),
       destination: null, route: [], selected: null, obstacles: [], entities: [], enemies: [], plotMeshes: [], cropSignatures: [], particles: [], keys: new Set<string>(), facing: 0, time: 0, planet, hazardTimer: 0,
