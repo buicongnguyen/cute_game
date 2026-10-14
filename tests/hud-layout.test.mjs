@@ -40,6 +40,8 @@ for (const [name, view] of Object.entries(VIEWS)) {
         const w = window.__zoo.world, s = window.__zoo.state;
         // This is a layout fixture; new Titans must not kill its level-one explorer before measuring.
         w.onDamage = () => {};
+        // The calm level-1 HUD (first-run.ts) shows quick eat once there is food in the bag: give the new explorer an apple.
+        s.bag.apple = (s.bag.apple ?? 0) + 3;
         const boss = w.enemies.filter(e => e.boss && e.hp > 0).sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0];
         w.position.set(boss.x, 0, boss.z + 7); w.cameraTarget.copy(w.position); boss.hp = boss.maxHp * .8;
         const other = w.enemies.filter(e => !e.boss && e.hp > 0).sort((a, b) => Math.hypot(a.x - boss.x, a.z - boss.z) - Math.hypot(b.x - boss.x, b.z - boss.z))[0];
@@ -383,7 +385,7 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
   });
 }
 
-// The news board lives inside the leaderboard dialog: Ranking | News tabs, the unread count on the dock's Ranking button and on
+// The news board lives inside the leaderboard dialog: Ranking | News tabs, updates announced by one News inbox entry (no count in the dock), the unread count on
 // the News tab, no News button in the dock. Everything the board did still works there (cards, NEW tags, read marks, Coming soon).
 // The power strike on the Attack pad and the hit counter (power-hud.ts, combo-counter.ts): on phones, for both hands, no button
 // of its own appears; the pad glows when the strike is ready, a tap is a plain attack, a hold of HOLD.time unleashes it, and the
@@ -429,7 +431,7 @@ for (const size of ['390x844', '320x568', '844x390']) for (const hand of ['right
 }
 
 for (const [size, lang] of [['1280x720', 'en'], ['390x844', 'vi'], ['320x568', 'en'], ['844x390', 'vi']]) {
-  test(`news lives inside the leaderboard dialog, with its unread count on the Ranking button, at ${size} in ${lang}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 180000 }, async () => {
+  test(`news lives inside the leaderboard dialog, and updates arrive as a News inbox entry, at ${size} in ${lang}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 180000 }, async () => {
     const [width, height, touch] = SIZES[size];
     const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
     try {
@@ -463,10 +465,12 @@ for (const [size, lang] of [['1280x720', 'en'], ['390x844', 'vi'], ['320x568', '
       // Closed: Ranking waits in the More menu, and the More button wears its unread count; News in the dock is the inbox.
       const closed = await look();
       assert.equal(closed.open, false); assert.equal(closed.dock.news, 1, 'the dock has one News button: the inbox (news-inbox-ui.ts), not the update board');
-      assert.equal(closed.dock.badge, expected, 'the unread count shows on the More button (Ranking is in its menu)');
-      assert.ok(closed.dock.badgeBox.w >= 16 && closed.dock.badgeBox.h >= 16 && closed.dock.badgeBox.r <= closed.W && closed.dock.badgeBox.t >= 0, `the count is readable and on screen: ${JSON.stringify(closed.dock.badgeBox)}`);
-      assert.ok(closed.dock.badgeBox.l >= closed.dock.button.l && closed.dock.badgeBox.b <= closed.dock.button.b, 'it sits on the button\'s upper right corner');
-      assert.equal(closed.dock.title, words.both); assert.equal(closed.dock.label, `${words.both} · ${words.unread}`);
+      // Since FIX-PLAN 4.4 the dock entry is plain "Ranking" with no count (not on More either): unread updates arrive as one
+      // "New game updates" entry in the News inbox, which opens the board's News section.
+      assert.equal(closed.dock.badge, null, 'no unread count on the More button');
+      assert.equal(closed.dock.title, words.ranking); assert.equal(closed.dock.label, words.ranking);
+      const entry = await page.evaluate(() => { const e = (window.__zoo.state.inbox ?? []).find(x => x.title === 'New game updates'); return e ? { id: e.id, read: !!e.read, open: e.open } : null; });
+      assert.ok(entry && !entry.read && entry.open === 'ranking', `the News inbox holds an unread "New game updates" entry: ${JSON.stringify(entry)}`);
       // The Ranking button opens the dialog on Ranking; the News tab carries the same count.
       await page.evaluate(() => document.querySelector('#hud [data-action="ranking"]').click());
       await page.waitForSelector('#ranking-dialog .ranking-row, #ranking-dialog .ranking-empty', { timeout: 20000 }); await page.waitForTimeout(400);
@@ -478,7 +482,7 @@ for (const [size, lang] of [['1280x720', 'en'], ['390x844', 'vi'], ['320x568', '
       for (const s of ranking.sections) assert.ok(s.h >= 44 && s.w >= 44 && s.tappable && s.l >= ranking.box.l && s.r <= ranking.box.r, `section tabs are full touch targets inside the dialog: ${JSON.stringify(s)}`);
       assert.ok(ranking.sections[0].r <= ranking.sections[1].l + .5, 'the two tabs stand side by side');
       assert.ok(ranking.box.l >= -.5 && ranking.box.r <= ranking.W + .5 && ranking.box.t >= -.5 && ranking.box.b <= ranking.H + .5, 'the dialog is on screen');
-      assert.equal(ranking.read, 0, 'looking at the ranking does not mark the news read'); assert.equal(ranking.dock.badge, expected);
+      assert.equal(ranking.read, 0, 'looking at the ranking does not mark the news read'); assert.equal(ranking.dock.badge, null, 'the dock still shows no count');
       if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/ranking-${size}-${lang}.png` });
       // News: the cards, newest first with NEW tags, in the dialog; the count clears everywhere and the entries are read.
       await page.evaluate(() => document.querySelector('#ranking-dialog .ranking-sections button[data-section="news"]').click()); await page.waitForTimeout(400);
@@ -487,7 +491,7 @@ for (const [size, lang] of [['1280x720', 'en'], ['390x844', 'vi'], ['320x568', '
       assert.equal(news.title, words.board); assert.deepEqual(news.sections.map(s => s.pressed), [false, true]);
       assert.equal(news.cards, total); assert.equal(news.fresh, total, 'every unread entry wears the NEW tag'); assert.ok(news.firstTitle.startsWith(words.tag), news.firstTitle);
       assert.ok(news.scrolls && news.panel.b <= news.box.b + .5 && news.panel.l >= news.box.l - .5 && news.panel.r <= news.box.r + .5, 'the bulletin scrolls inside the dialog');
-      assert.equal(news.sections[1].count, null); assert.equal(news.dock.badge, null, 'the count clears on the Ranking button too'); assert.equal(news.dock.label, words.both); assert.equal(news.read, total);
+      assert.equal(news.sections[1].count, null); assert.equal(news.dock.badge, null); assert.equal(news.dock.label, words.ranking); assert.equal(news.read, total);
       assert.deepEqual(news.inner.map(t => [t.section, t.pressed]), [['news', true], ['soon', false]]); assert.ok(news.inner[1].text.includes(words.soon));
       for (const t of news.inner) assert.ok(t.h >= 44 && t.w >= 44 && t.tappable, `the bulletin's tabs are full touch targets: ${JSON.stringify(t)}`);
       if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/ranking-news-${size}-${lang}.png` });
@@ -505,6 +509,11 @@ for (const [size, lang] of [['1280x720', 'en'], ['390x844', 'vi'], ['320x568', '
       // Reopening from the dock is the ranking again, with nothing unread.
       await page.evaluate(() => document.querySelector('#hud [data-action="ranking"]').click()); await page.waitForTimeout(500);
       const again = await look(); assert.ok(again.open && again.ranking && !again.news); assert.equal(again.sections[1].count, null);
+      await page.evaluate(() => document.querySelector('#ranking-dialog .social-close').click()); await page.waitForTimeout(200);
+      // The inbox's "New game updates" entry is the way in to the updates: News in the dock, then the entry, lands on the News section.
+      await page.evaluate(() => document.querySelector('#hud [data-action="news"]').click()); await page.waitForSelector(`[data-inbox="${entry.id}"]`, { timeout: 10000 });
+      await page.evaluate(id => document.querySelector(`[data-inbox="${id}"]`).click(), entry.id); await page.waitForTimeout(500);
+      const viaInbox = await look(); assert.ok(viaInbox.open && viaInbox.news && !viaInbox.ranking, 'the inbox entry opens the board on its News section'); assert.equal(viaInbox.oldPanel, false, 'and the inbox panel closes');
     } finally { await browser.close(); }
   });
 }
