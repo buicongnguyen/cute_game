@@ -54,9 +54,9 @@ Status key: **todo**, **doing**, **done**, **owner** (waits for an owner decisio
 | # | Item | Proposal | Status |
 |---|---|---|---|
 | 5.1 | Sound | Real sounds for hit, critical hit, harvest, coins, level-up and a catch; music per region later. No frame-rate cost. (QUALITY-PLAN stage 3.) | todo |
-| 5.2 | Daily welcome-back | One cheerful card on the first visit of the day: check-in streak, today's Colossus, rescue calls and Vault runs. | todo |
-| 5.3 | Quest walk vs auto-fight | While the explorer walks a quest route, auto-fight does not pull them away; show an arrow or line to the target. | todo |
-| 5.4 | Rewards that grow with level | Achievements, dailies and quests pay in line with the player's level; claimable Collect buttons are gold, the rest dimmed. | todo |
+| 5.2 | Daily welcome-back | One cheerful card on the first visit of the day: check-in streak, today's Colossus, rescue calls and Vault runs. | done (dev-loop): src/welcome-back.ts; check-in via the Journal claim, Colossus/rescue/Vault lines, friends and Bolt news merged in; once per local day, not on a new save, waits out fights |
+| 5.3 | Quest walk vs auto-fight | While the explorer walks a quest route, auto-fight does not pull them away; show an arrow or line to the target. | done (dev-loop): src/quest-walk.ts; auto-fight held unless a creature attacks (aggro within 4.5 m), walk resumes after; instanced dot trail (1 draw call, 5 Hz), cleared on arrival or steering |
+| 5.4 | Rewards that grow with level | Achievements, dailies and quests pay in line with the player's level; claimable Collect buttons are gold, the rest dimmed. | done (dev-loop): model.ts levelRewardBonus (1 + (level-1)/10, cap 6) on achievements and check-in; daily task XP at least 5% of a level; story/bounty/weekly/chests already scaled; src/loop.css gold vs dimmed Collect |
 | 5.5 | Long-term goals on screen | Planets discovered x/9, collection %, "next unlock in N levels". | todo |
 | 5.6 | Story | More than a checklist: a few scenes per chapter with the village characters. (QUALITY-PLAN stage 6.) | todo |
 | 5.7 | Collection book | Silhouettes of fish, creatures and items still to find, one tap from the main screen. | todo |

@@ -1,6 +1,6 @@
 import { t } from './i18n.ts';
 import { ITEMS, PLANETS, COLLECTIONS, STORY_STEPS, type Inventory } from './content.ts';
-import { stowItem, gainXp, xpNeeded, MAX_PLOTS, type SaveState } from './model.ts';
+import { stowItem, gainXp, xpNeeded, levelRewardBonus, MAX_PLOTS, type SaveState } from './model.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import { kitchenLevel } from './difficulty.ts';
 import { catchUpStory } from './story-catchup.ts';
@@ -287,15 +287,15 @@ function storyReward(s: SaveState): Reward { const index = s.progression.story.i
 function taskReward(s: SaveState, t: Task, weekly = false): Reward { if (weekly) {
     const bonus = ['seed_star', 'spore', 'seed_fire', 'seed_ice'][hash(t.type) % 4];
     return { energy: 150 + s.level * 20, xp: Math.round(xpNeeded(s.level) * .35), items: { starshard: 1, [bonus]: 2 }, stars: 30 };
-} return { energy: Math.round(20 + s.level * 6 + t.target * (t.type === 'sell' ? .2 : 1.5)), xp: 15 + s.level * 8, items: { [t.bonus]: 1 }, stars: 10 }; }
+} return { energy: Math.round(20 + s.level * 6 + t.target * (t.type === 'sell' ? .2 : 1.5)), xp: Math.max(15 + s.level * 8, Math.round(xpNeeded(s.level) * .05)), items: { [t.bonus]: 1 }, stars: 10 }; }
 /** Chest sums: daily 200 + 25 per level energy; weekly 3,000 + 100 per level energy and 2 firecore. */
 export const DAILY_CHEST_BASE = 200, DAILY_CHEST_PER_LEVEL = 25, WEEKLY_CHEST_BASE = 3000, WEEKLY_CHEST_PER_LEVEL = 100;
 export const dailyChestEnergy = (level: number) => DAILY_CHEST_BASE + level * DAILY_CHEST_PER_LEVEL, weeklyChestEnergy = (level: number) => WEEKLY_CHEST_BASE + level * WEEKLY_CHEST_PER_LEVEL;
 function dailyChest(s: SaveState, now: number): Reward { const ids = ['seed_star', 'starshard', 'honey', 'fish_golden', 'seed_fire', 'seed_ice']; return { energy: DAILY_CHEST_BASE + s.level * DAILY_CHEST_PER_LEVEL, xp: 40 + s.level * 12, items: { [ids[hash(day(now) + 'x') % ids.length]]: 1, spore: 2 }, stars: 20 }; }
 function weeklyChest(s: SaveState): Reward { return { energy: WEEKLY_CHEST_BASE + s.level * WEEKLY_CHEST_PER_LEVEL, xp: Math.round(xpNeeded(s.level) * .8), items: { seed_star: 2, spore: 4, starshard: 2, moonstone: 1, firecore: 2 }, stars: 60 }; }
-function loginReward(s: SaveState, now: number): Reward { const streak = s.progression.login.day === day(now - 86400000) ? s.progression.login.streak + 1 : 1; return { energy: 25 + Math.min(streak, 30) * 5 + (streak % 7 === 0 ? 150 : 0), xp: 10 + s.level * 3, items: streak % 7 === 0 ? { seed_star: 1, spore: 2 } : { potion: 1 }, stars: 5 }; }
+function loginReward(s: SaveState, now: number): Reward { const streak = s.progression.login.day === day(now - 86400000) ? s.progression.login.streak + 1 : 1; return { energy: Math.round((25 + Math.min(streak, 30) * 5 + (streak % 7 === 0 ? 150 : 0)) * levelRewardBonus(s.level)), xp: 10 + s.level * 3, items: streak % 7 === 0 ? { seed_star: 1, spore: 2 } : { potion: 1 }, stars: 5 }; }
 function bountyReward(s: SaveState): Reward { return { energy: 40 + s.level * 8, xp: Math.round(xpNeeded(s.level) * .15), items: { [BONUS[hash(s.progression.bounty?.key || '') % BONUS.length]]: 1 }, stars: 15 }; }
-function achievementReward(tier: number, target: number): Reward { return { energy: 40 * (tier + 1) + Math.min(300, Math.round(target / 10)), xp: 30 * (tier + 1), stars: 10 }; }
+function achievementReward(tier: number, target: number, level: number): Reward { const k = levelRewardBonus(level); return { energy: Math.round((40 * (tier + 1) + Math.min(300, Math.round(target / 10))) * k), xp: Math.round(30 * (tier + 1) * k), stars: 10 }; }
 /** Player-facing name of a challenge type (the daily task titles), never the internal id. */
 export function challengeTitle(type: string): string { return t(DAILY[type]?.title ?? type); }
 function entry(id: string, title: string, progress: number, target: number, claimed: boolean, reward: Reward = {}, icon = '📜', description = ''): ProgressEntry { return { id, title: t(title), description: t(description), progress: Math.min(progress, target), target, complete: progress >= target, claimed, rewardLabel: rewardLabel(reward), icon }; }
@@ -315,7 +315,7 @@ export function progressEntries(s: SaveState, kind: ProgressKind, now = Date.now
         return result;
     }
     if (kind === 'achievements')
-        return ACHIEVEMENTS.map(([id, key, targets, title, icon]) => { const tier = p.achievements[id] || 0, target = targets[Math.min(tier, targets.length - 1)], done = tier >= targets.length; return entry(`${id}:${tier}`, `${t(title)} · ${Math.min(tier + 1, targets.length)}/${targets.length}`, condition(s, key), target, done, done ? {} : achievementReward(tier, target), icon); });
+        return ACHIEVEMENTS.map(([id, key, targets, title, icon]) => { const tier = p.achievements[id] || 0, target = targets[Math.min(tier, targets.length - 1)], done = tier >= targets.length; return entry(`${id}:${tier}`, `${t(title)} · ${Math.min(tier + 1, targets.length)}/${targets.length}`, condition(s, key), target, done, done ? {} : achievementReward(tier, target, s.level), icon); });
     if (kind === 'pass')
         return PASS_REWARDS.map((reward, i) => entry(`${p.pass.season}:${i}`, t('Star pass · Tier {tier}', { tier: i + 1 }), p.pass.stars, (i + 1) * 50, p.pass.claimed.includes(i), fitReward(s, reward), '⭐', t('Season {season}', { season: p.pass.season })));
     if (kind === 'bounties') {
@@ -368,7 +368,7 @@ export function claimProgress(s: SaveState, kind: ProgressKind, id: string, now 
     else if (kind === 'achievements') {
         const [key, tierText] = id.split(':'), tier = Number(tierText), spec = ACHIEVEMENTS.find(a => a[0] === key)!;
         p.achievements[key] = tier + 1;
-        reward = achievementReward(tier, spec[2][tier]);
+        reward = achievementReward(tier, spec[2][tier], s.level);
     }
     else if (kind === 'bounties') {
         p.bounty!.claimed = true;
