@@ -27,6 +27,7 @@ import { ShipSequence } from './ship-sequence.ts';
 import { kitsFor } from './biomes.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import { FishingView, type PondView } from './fishing-view.ts';
+import { PondSplash } from './pond-splash.ts';
 import { FishHuntingView } from './fish-hunting-view.ts';
 import { FISH_HUNT_COOLDOWN_MS, fishHuntTargets, huntingPondAt, type FishHuntResult } from './fish-hunting.ts';
 import { LakeGuardianView, guardianLake } from './lake-guardian-view.ts';
@@ -345,7 +346,7 @@ const combat=new CombatSimulation({
   move:(x,z)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);},
   hit:(target,impact)=>hit(target as Enemy,impact.amount,impact.stun,impact),
   clearShot:(from,to)=>clearSegment(from,to,world.obstacles,{bounds:WORLD_BOUNDS,clearance:.05}),
-  effect:effect=>{castEffects?.push(effect);showEffect(effect);emitAction({kind:'effect',effect});},
+  effect:effect=>{castEffects?.push(effect);showEffect(effect);pondSplash.effect(effect);emitAction({kind:'effect',effect});},
   heal:fraction=>{if(!actionHandler)state.hp=Math.min(M.maxHp(state),state.hp+M.maxHp(state)*fraction);},
   execute:(target,fraction)=>executeEnemy(target as Enemy,fraction),
   status:(target,kind,duration)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){world.statusEnemy(target as Enemy,kind,duration);return;}if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
@@ -961,6 +962,10 @@ const fishingView=new FishingView(world.scene,world.fx!,fishKit,sound=>tone(soun
 let mysteryCaller=newMysteryCaller();
 /** A mystery that came and was not landed: one try used; after the last one the shadow sinks away. */
 function mysteryGotAway(f:FishingRound){if(!f.mysteryOut)return;f.mysteryOut=false;if(mysteryMissed(mysteryCaller))fishingView.dropMystery(f.pondId);}
+// Ponds burst and fish leap when a big move lands on the water (pond-splash.ts): looks only, nothing is saved or sent.
+const pondSplash=new PondSplash({root:()=>world.interior?null:world.scene,fx:()=>world.fx??null,now:()=>world.time,reduced:()=>!!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+  ponds:()=>world.interior?[]:world.outdoorEntities.filter(e=>e.kind==='fish'&&e.pond).map(e=>({id:e.id,x:e.x,z:e.z,r:e.pond!.rx,surface:e.pond!.surface,waterId:e.waterId??state.planet})),
+  fish:species=>fishKit.ready?fishingView.makeFish(species):null,species:waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id]?.rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';}});
 const huntingView=new FishHuntingView(world.scene,fishingView);
 const guardianView=new LakeGuardianView(world.scene,fishingView);
 let huntingPending:{owner:M.SaveState;scene:typeof world.root}|null=null;
@@ -1026,7 +1031,7 @@ const rodTip=new Vector3();
 const FAR_AWAY=new Vector3(1e4,0,1e4);
 function tipPosition(){const tip=world.player.getObjectByName('rod-tip');if(tip){world.player.updateWorldMatrix(true,true);tip.getWorldPosition(rodTip);}else rodTip.set(world.position.x,1.4,world.position.z);return rodTip;}
 function pondView(e:Entity):PondView{return {id:e.id,x:e.x,z:e.z,rx:e.pond!.rx,rz:e.pond!.rz,surface:e.pond!.surface,waterId:e.waterId??state.planet};}
-function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world.outdoorEntities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
+function stockPonds(){pondSplash.clear();fishingView.attach(world.scene);fishingView.populate(world.outdoorEntities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
 // Rod fish follow the harpoon slots' species so picking up hunting gear by the shore keeps the pond's look.
 function pondStock(pond:PondView){const hunt=huntingPondAt(state.planet,pond.x,pond.z);return hunt?fishHuntTargets(hunt,0,state.hunting).map(t=>t.id):null;}
 const formatSize=(cm:number)=>cm>=100?`${(cm/100).toFixed(2).replace(/\.?0+$/,'')} m`:`${cm} cm`;
@@ -1629,6 +1634,7 @@ function releasePower(level:number,air:boolean){
   if(kind==='sword'){const w=world as unknown as {trailTint:[number,number,number]},was=w.trailTint,hot:[number,number,number]=[Math.min(1,was[0]*.4+.75),Math.min(1,was[1]*.4+.75),Math.min(1,was[2]*.4+.75)];w.trailTint=hot;setTimeout(()=>{if(w.trailTint===hot)w.trailTint=was;},450);}
   if(shape==='beam')combatView.effect({x:p.x,z:p.z,kind:'beam',radius:area.length,width:area.half*2,color:brighter(color),facing:world.facing,duration:.3});
   if(fx){powerFx.play(fx,shape,level,{x:p.x,y:p.y,z:p.z},world.facing,color);fx.freeze(shape==='wave'?POWER.stop*.5:POWER.stop);fx.shake(level>1?.42:.32);fx.text({x:p.x,y:p.y+1.4,z:p.z},t(level>1?'POWER STRIKE ×2!':'POWER STRIKE!'),'crit big');}
+  pondSplash.power(shape,level,p,world.facing); // a pond in the strike's area bursts (pond-splash.ts)
   tone('boom');tone('zap');vibrate(60);noteChain(t('POWER!'));emitAction({kind:'basic'});
 }
 /** A ground attack passed under the explorer. A perfect one (solo) slows the moment and makes the next hit a sure critical. */
@@ -2176,7 +2182,7 @@ function frame(now:number){
   const weaponKind=M.weaponStats(state).kind;world.weaponKind=state.gear.weapon&&M.ITEMS[state.gear.weapon]?.weapon?.kind==='rod'?'rod':weaponKind;world.pose=combat.pose;world.invulnerable=combatTimers.invulnerable>0;world.fishTension=fishGame?.simulation.tension??0;
   autoAttack(weaponKind);
   updateHunting(dt);updateGuardian(dt);
-  fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);
+  pondSplash.update(dt);fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);
   skillFx.update(dt);world.gazeAngle=skillFx.gazeAngle(world.player);
   if(!fishGame&&!$('#reel-button').hidden&&!$('#reel-button').classList.contains('hunt')&&(performance.now()>recastUntil||world.moving))showReel(false);
   // Resizing the WebGL canvas clears its drawing buffer. Apply automatic quality changes
@@ -2257,4 +2263,4 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
