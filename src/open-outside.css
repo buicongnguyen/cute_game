@@ -1,0 +1,14 @@
+/* The "open in the real browser" banner (open-outside.ts): top centre, below the notch, never blocking play. */
+.open-outside {
+  position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 12px; right: 12px; margin: 0 auto; width: fit-content; z-index: 60;
+  display: flex; align-items: center; gap: 8px; max-width: 560px; box-sizing: border-box;
+  padding: 6px 6px 6px 14px; border: 3px solid #fff; border-radius: 999px;
+  background: linear-gradient(180deg, #ffe27a, #ffb53b); color: #4a2c00; box-shadow: 0 4px 0 rgba(44, 58, 38, .2);
+  font: 800 13px/1.2 'Nunito Variable', sans-serif;
+}
+.open-outside span { flex: 1 1 auto; min-width: 0; }
+.open-outside button {
+  flex: none; min-height: 34px; padding: 6px 12px; border: 2px solid #fff; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(180deg, #8fe06a, #4cc93a); color: #fff; font: 900 13px 'Nunito Variable', sans-serif;
+}
+.open-outside .open-outside-close { min-width: 34px; padding: 0; background: rgba(74, 44, 0, .18); border-color: transparent; color: #4a2c00; }

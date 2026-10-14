@@ -1,6 +1,8 @@
 import './platform.css';
+import './open-outside.css';
 import { t, onLanguageChange } from './i18n.ts';
 import { registerWorker } from './art-status.ts';
+import { initOpenOutside } from './open-outside.ts';
 interface InstallPrompt extends Event {prompt():Promise<void>;userChoice:Promise<{outcome:string}>}
 type FullDoc=Document&{webkitFullscreenElement?:Element|null;webkitExitFullscreen?:()=>Promise<void>|void};
 type FullEl=HTMLElement&{webkitRequestFullscreen?:(options?:FullscreenOptions)=>Promise<void>|void};
@@ -44,7 +46,7 @@ function autoFullscreen(notice:(message:string)=>void){
 export function initPlatform(notice:(message:string)=>void){
   const dock=document.createElement('div');dock.className='platform-tools';
   const fullscreen=document.createElement('button');fullscreen.type='button';fullscreen.textContent='⛶';fullscreen.title=t('Fullscreen');fullscreen.setAttribute('aria-label',t('Toggle fullscreen'));
-  fullscreen.addEventListener('click',()=>void toggleFullscreen(notice));dock.append(fullscreen);autoFullscreen(notice);
+  fullscreen.addEventListener('click',()=>void toggleFullscreen(notice));dock.append(fullscreen);autoFullscreen(notice);initOpenOutside();
   const install=document.createElement('button');install.type='button';install.textContent=t('Install game');install.hidden=true;let prompt:InstallPrompt|null=null;
   window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();prompt=event as InstallPrompt;install.hidden=false;});
   install.addEventListener('click',async()=>{
