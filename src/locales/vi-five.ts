@@ -1,5 +1,6 @@
 // Vietnamese for the five-button fight (five-rules.ts, power-hud.ts, hud-keys.ts, upgrade-bench.ts, skill-info.ts, main.ts).
 export const FIVE_VI: Record<string, string> = {
+  'The map opens after the fight (or tap the minimap).': 'Bản đồ mở sau trận đấu (hoặc chạm vào bản đồ nhỏ).',
   'Attack chain': 'Chuỗi đòn đánh',
   'hold': 'giữ',
   'UNTOUCHED ×{n}!': 'CHƯA TRÚNG ĐÒN ×{n}!',
