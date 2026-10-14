@@ -6,7 +6,7 @@ import { TRAIL, SWING, CUTS, SPIN, TrailSamples, buildRibbon, bridgeStrip, blade
 import { WIND, WIND_SECTIONS, PUNCH, WindBursts, buildWind, gustHead, punchPose, type PunchKind, type PunchPose } from '../src/punch-wind.ts';
 import { WeaponTrail, TrailPool, measureBlade, trailMaterial } from '../src/weapon-trail.ts';
 import { REACT, reactCurve, reactStrength, reactStop, newReaction, startReaction, applyReaction, reactionPose, newReactionPose } from '../src/hit-react.ts';
-import { MOVES } from '../src/moves.ts';
+import { CHAIN } from '../src/five-rules.ts';
 
 const finite = (a: ArrayLike<number>, n: number) => { for (let i = 0; i < n; i++) if (!Number.isFinite(a[i])) return false; return true; };
 /** A blade 1 m long swept round the y axis: its inner end at radius .4, its tip at 1.4. */
@@ -208,7 +208,8 @@ test('the air swing: the blade is on the line of the facing in the damage frame'
 });
 
 test('gameplay timing is untouched by the new swing', () => {
-  assert.deepEqual({ ...MOVES.strike, hits: [...MOVES.strike.hits] }, { hits: [.8, .88, 1.12], reach: 2, cone: .5, windup: .1, gap: .16, recovery: .15, cooldown: 5, launch: 1.7, small: 1.2 });
+  // The Strike these numbers belonged to is the attack chain now (five-rules.ts): what it launches and how high is as it was.
+  assert.deepEqual([CHAIN.launch, CHAIN.small, CHAIN.reset, [...CHAIN.knock]], [1.7, 1.2, 1.2, [.8, .8, 2.2]]);
   const world = readFileSync(new URL('../src/world.ts', import.meta.url), 'utf8');
   assert.match(world, /this\.punchT=SWING\.time/, 'a swing sets the same timer as before');
   assert.match(world, /this\.aimT=\.7;this\.punchT=\.12/, 'the gun\'s recoil is as it was');

@@ -37,9 +37,10 @@ import { KeysGuide } from './hud-keys.ts';
 import { readAirCombat, saveAirCombat, BOSS_BLOCK_ON, AIR, AIR_WINDOW, BLOCK, COMBO, JUMP, ComboMeter, SlideCombo, airWindow, pressKind, DIVE, DODGE, JumpInput, blockShare, hitShare, jumpsFor, canJump, diveCap, diveCritical, diveMultiplier, dodges, jumpKeyAction, perfectDodge, readSpaceKey, saveSpaceKey, type ComboHit, type Landing, type SpaceKey } from './jump-rules.ts';
 import './combo-counter.css';
 import { COUNTER, COUNTER_HTML, ComboCounterView, placeCounter, readHudBoxes, recordBest, summaryText, type Box, type CounterState, type Placement } from './combo-counter.ts';
-import { POWER, PowerCharge, powerArea, powerCap, powerShape } from './power-rules.ts';
+import { POWER, PowerCharge, powerArea, powerCap, powerReach, powerShape } from './power-rules.ts';
 import { PowerFx, brighter, powerWindup } from './power-fx.ts';
-import { POWER_PAD_HTML, PowerPad, hintSeen, markHint } from './power-hud.ts';
+import { ATTACK_CHARGE_HTML, AttackCharge, hintSeen, markHint } from './power-hud.ts';
+import { AttackHold, HOLD, UntouchedStreak } from './five-rules.ts';
 import * as M from './model.ts';
 import {applyGameAction,isMalformedAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
@@ -48,11 +49,11 @@ import { mountLongPress, cancelLongPresses } from './long-press.ts';
 import { mountTouchButtons, cancelButtonTouches } from './touch-buttons.ts';
 import { previewGear, canTryOn, autoHeld } from './try-on.ts';
 import './quick-eat.css';
-import { CombatTimers, FishingInput, MovementControls, gameplayKey, handKey, keyboardBindings, movementKey } from './gameplay-controls.ts';
+import { CombatTimers, FishingInput, MovementControls, gameplayKey, handKey, keyboardBindings, movementKey, skillKeyIndex } from './gameplay-controls.ts';
 import {mountJoystick} from './joystick.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, DZ, DISGUISE_KITS, shotColor, type CombatHit, type CombatEffect, type CombatAlly, type DisguiseAir } from './combat.ts';
 import { AIR_CASTING, AIR_WEAPON, airCastBonus, airCastPlan, airSwingFor, diveStrikeFor, flightCarry, type AirCastRule } from './air-cast.ts';
-import { AIR_MOVES, AIR_NAMES, MOVE_SKILLS, moveAt } from './moves.ts';
+import { AIR_MOVES, AIR_NAMES, CHAIN_SKILL, MOVE_SKILLS, moveAt } from './moves.ts';
 import { skillTuning } from './skill-upgrades.ts';
 import { skillPip } from './skill-pip.ts';
 import { skillTip, BUFF_CHIPS } from './skill-info.ts';
@@ -247,7 +248,7 @@ function keyboardSettings(){
   const description=selected==='wasd'?'WASD: move · J/K/L/;: skills · P: journal':'Arrows: move · Q/W/E/R: skills · J: journal';
   const store=(()=>{try{return localStorage;}catch{return null;}})();void store;
   const master=`<div class="settings-row air-combat-settings"><div><strong>Jump and air combat</strong><small>${airCombat?(actionHandler?'On in solo play. Online play uses the classic rules for now.':'Jump, air moves, dodging and combos.'):'Off: the classic fight, with Space as the basic attack.'}</small></div><button class="toggle ${airCombat?'on':''}" role="switch" aria-checked="${airCombat}" data-action="air-combat" aria-label="Jump and air combat">${airCombat?'On':'Off'}</button></div>`;
-  const space=!airOn()?'':`<div class="settings-row keyboard-settings space-key-settings"><div><strong>Space key</strong><small>${spaceKey==='jump'?'Space: jump · F or N: attack · H: eat':'Space: attack · Left Shift: jump · F or N: attack · H: eat'}</small></div><div class="segmented" role="radiogroup" aria-label="Space key">${(['jump','attack'] as const).map(kind=>`<button role="radio" aria-checked="${spaceKey===kind}" class="${spaceKey===kind?'on':''}" data-action="space-key" data-kind="${kind}">${kind==='jump'?'Jump':'Basic attack'}</button>`).join('')}</div></div>`;
+  const space=!airOn()?'':`<div class="settings-row keyboard-settings space-key-settings"><div><strong>Space key</strong><small>${spaceKey==='jump'?'Space: jump · F or N: attack (hold: power strike) · H: eat':'Space: attack · Left Shift: jump · F or N: attack (hold: power strike) · H: eat'}</small></div><div class="segmented" role="radiogroup" aria-label="Space key">${(['jump','attack'] as const).map(kind=>`<button role="radio" aria-checked="${spaceKey===kind}" class="${spaceKey===kind?'on':''}" data-action="space-key" data-kind="${kind}">${kind==='jump'?'Jump':'Basic attack'}</button>`).join('')}</div></div>`;
   return master+space+`<div class="settings-row keyboard-settings"><div><strong>PC keyboard layout</strong><small>${description}</small></div><div class="segmented" role="radiogroup" aria-label="PC keyboard layout">${(['classic','wasd'] as const).map(layout=>`<button role="radio" aria-checked="${selected===layout}" class="${selected===layout?'on':''}" data-action="keyboard-layout" data-kind="${layout}">${layout==='wasd'?'WASD + JKL;':'Arrows + QWER'}</button>`).join('')}</div></div>`;
 }
 const app = $('#app');
@@ -491,7 +492,7 @@ function updateHud() {
   const skills=skillList(),bindings=keyboardBindings(state.settings.keyboardLayout);
   setText($('#movement-hint'),t(bindings.movement));
   {const journalTitle=t('Journal · {key}',{key:bindings.journal.toUpperCase()}),journalNode=$('.top-actions [data-action="quests"]');if(journalNode.getAttribute('title')!==journalTitle)journalNode.setAttribute('title',journalTitle);}
-  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i],key=bindings.skills[i].toUpperCase();const parts=skillParts(button);setText(parts.kbd,key);{const art=skillArt(skill.name,movesOn());if(art)setHtml(parts.icon as HTMLElement,art);else setText(parts.icon,t(skill.icon));}setText(parts.name,t(skill.name));const aria=t(`${key} ${t(skill.name)}`);if(button.getAttribute('aria-label')!==aria)button.setAttribute('aria-label',aria);const tip=currentSkillTip(i);if(button.title!==tip)button.title=tip;/* in the air a move's button shows its air form's cooldown */const airForm=!!airLook&&movesOn()&&!!moveAt(i,M.weaponStats(state).special??'fist'),left=airForm?(i===3?0:airCooldowns[i]):cooldowns[i],whole=airForm?airDurations[i]:skillDurations[i];button.classList.toggle('air-form',airForm);if(readyAir[i]===airForm&&readyWas[i]>0&&left<=0){button.classList.remove('ready-pop');void button.offsetWidth;button.classList.add('ready-pop');tone('ready');}readyWas[i]=left;readyAir[i]=airForm;button.classList.toggle('on-cooldown',left>0);setText(parts.cooldown,t(left>0?Math.ceil(left).toString():''));skillPip(button,state.gear.disguise?0:M.skillLevel(state,i));const cd=`${left/whole*100}%`;if(button.style.getPropertyValue('--cooldown')!==cd)button.style.setProperty('--cooldown',cd);});
+  document.querySelectorAll<HTMLButtonElement>('.skill').forEach((button,i)=>{const skill=skills[i];if(i===3){const cluster=button.parentElement!,four=!!skill&&airOn();if(cluster.classList.contains('toes-4')!==four)cluster.classList.toggle('toes-4',four);}if(button.hidden===!!skill)button.hidden=!skill;if(!skill)return;const key=bindings.skills[i].toUpperCase();const parts=skillParts(button);setText(parts.kbd,key);{const art=skillArt(skill.name,movesOn());if(art)setHtml(parts.icon as HTMLElement,art);else setText(parts.icon,t(skill.icon));}setText(parts.name,t(skill.name));const aria=t(`${key} ${t(skill.name)}`);if(button.getAttribute('aria-label')!==aria)button.setAttribute('aria-label',aria);const tip=currentSkillTip(i);if(button.title!==tip)button.title=tip;/* in the air a move's button shows its air form's cooldown */const airForm=!!airLook&&movesOn()&&!!moveAt(i),left=airForm?airCooldowns[i]:cooldowns[i],whole=airForm?airDurations[i]:skillDurations[i];button.classList.toggle('air-form',airForm);if(readyAir[i]===airForm&&readyWas[i]>0&&left<=0){button.classList.remove('ready-pop');void button.offsetWidth;button.classList.add('ready-pop');tone('ready');}readyWas[i]=left;readyAir[i]=airForm;button.classList.toggle('on-cooldown',left>0);setText(parts.cooldown,t(left>0?Math.ceil(left).toString():''));skillPip(button,state.gear.disguise?0:M.skillLevel(state,i));const cd=`${left/whole*100}%`;if(button.style.getPropertyValue('--cooldown')!==cd)button.style.setProperty('--cooldown',cd);});
   setHtml($('#buff-bar'),localizeHtml(M.activeBuffs(state).map(b=>`<span title="${esc(b.description)}">${b.icon} ${esc(b.name)} <b>${Math.ceil(b.remaining)}s</b></span>`).join('')+Object.entries(combat.statuses).filter(([,t])=>t>0).map(([name,left])=>{const chip=BUFF_CHIPS[name];return `<span class="skill-buff">${chip?.icon??'✨'} ${esc(t(chip?.name??name))} <b>${Math.ceil(left)}s</b></span>`;}).join('')+homeChip(world.homeRecovering&&!visiting,t('Home: fast recovery'))));
   setHtml($('#environment-bar'),localizeHtml(world.environmentStatus().map(e=>`<span>${e.icon??''} ${esc(e.label)} <b>${esc(String(e.value))}</b></span>`).join('')));
   const dark=$('#darkness');dark.hidden=!world.darknessActive()||!started;
@@ -927,7 +928,7 @@ async function testerApply(){testerOpen=true;if(testerOnline()){toast(t('Tester 
   testerDo(Tester.unlockTester);toast(t('Tester mode on: {count} energy',{count:Tester.TESTER_ENERGY.toLocaleString()}),'🧪');settings();}
 function restoreBackupRow(){return restoreRowHtml(saveGuard,activeKey());}
 function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Full screen</strong><small>Fill the whole screen; press again to leave.</small></div><button class="toggle ${document.fullscreenElement?'on':''}" role="switch" aria-checked="${!!document.fullscreenElement}" aria-label="Full screen" data-action="fullscreen"></button></div>${installRowHtml(t)}${restoreBackupRow()}${audioRowsHtml(state.settings)}<div class="settings-row"><div><strong>AI neighbours</strong><small>Friendly explorers who fight in the wild, make friends and give gifts. Always off while you play online.</small></div><button class="toggle ${neighboursOn()?'on':''}" role="switch" aria-checked="${neighboursOn()}" aria-label="AI neighbours" data-action="neighbours"></button></div><div class="settings-row"><div><strong>Show joystick</strong><small>Drag the stick to walk in any direction. Skill buttons move to the opposite side.</small></div><button class="toggle ${joystickEnabled()?'on':''}" role="switch" aria-checked="${joystickEnabled()}" aria-label="Show joystick" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Joystick side</strong><small>Choose the hand you use to move</small></div><div class="segmented" role="radiogroup" aria-label="Joystick side">${(['left','right'] as const).map(side=>`<button role="radio" aria-checked="${(state.settings.joystickSide??'left')===side}" data-action="joystick-side" data-kind="${side}">${side==='left'?'Left':'Right'}</button>`).join('')}</div></div>${keyboardSettings()}<div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Camera angle</strong><small>${cameraPitch()>=CAMERA_PITCH.max?'Looking down from above':'A lower view shows more of the world and may run a little slower'}</small></div><div class="camera-angle"><div class="volume-control"><input type="range" min="${CAMERA_PITCH.min}" max="52" step="1" value="${Math.round(cameraPitch())}" data-camera-pitch aria-label="Camera angle"><output data-camera-pitch-out>${Math.round(cameraPitch())}°</output></div><div class="segmented" role="group" aria-label="Camera angle presets">${(Object.keys(CAMERA_PITCH.presets) as CameraPreset[]).map(v=>`<button aria-pressed="${cameraPitch()===CAMERA_PITCH.presets[v]}" class="${cameraPitch()===CAMERA_PITCH.presets[v]?'on':''}" data-action="camera-view" data-kind="${v}">${({classic:'Classic',tilted:'Tilted',low:'Low',lower:'Lower',lowest:'Lowest'})[v]}</button>`).join('')}</div></div></div><div class="settings-row" id="render-res-row"><div><strong>Render resolution</strong><small>${graphics.resolution==='auto'?(graphics.mobile?'Light on phones, like the original':'Follows the Graphics setting'):({sharp:'Crisp, but phones work harder',balanced:'Smoother play and a cooler phone',saver:'Fewest pixels for the longest battery'} as Record<string,string>)[graphics.resolution]}${typeof innerWidth==='number'?` · ${innerWidth*graphics.ratio|0}×${innerHeight*graphics.ratio|0} px`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Render resolution">${RESOLUTION_SETTINGS.map(r=>`<button role="radio" aria-checked="${graphics.resolution===r}" class="${graphics.resolution===r?'on':''}" data-action="render-res" data-kind="${r}">${r==='auto'?'Auto':RESOLUTION[r].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Difficulty</strong><small>${M.DIFFICULTY_NOTE[M.difficultyOf(state)]}${world.roomDifficulty&&world.roomDifficulty!==M.difficultyOf(state)?` <span class="host-difficulty">${esc(t('Host difficulty: {level}',{level:t(M.DIFFICULTY_LABEL[world.roomDifficulty])}))}</span>`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Difficulty">${M.DIFFICULTIES.map(d=>`<button role="radio" aria-checked="${M.difficultyOf(state)===d}" class="${M.difficultyOf(state)===d?'on':''}" data-action="difficulty" data-kind="${d}">${M.DIFFICULTY_LABEL[d]}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div>${testerMore()}<div class="settings-row"><div><strong>${t('Keep backpack on defeat')}</strong><small>${t('Keep carried items when defeated. Existing dropped bags stay recoverable.')}</small></div><button class="toggle ${M.keepsBag(state)?'on':''}" role="switch" aria-checked="${M.keepsBag(state)}" aria-label="${t('Keep backpack on defeat')}" data-action="keep-bag"></button></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
-function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.filter(([,title])=>title!=='Four moves'&&(airOn()||title!=='Jump and air combat'&&title!=='Power strike')).map(row=>airOn()&&row[1]==='Four skills'?HELP_TOPICS.find(r=>r[1]==='Four moves')??row:row).map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div>${disguiseTableHtml()}<div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
+function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.filter(([,title])=>title!=='Attack and three specials'&&(airOn()||title!=='Jump and air combat'&&title!=='Power strike'&&title!=='Untouched streak')).map(row=>airOn()&&row[1]==='Four skills'?HELP_TOPICS.find(r=>r[1]==='Attack and three specials')??row:row).map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div>${disguiseTableHtml()}<div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
 /** Help: every disguise from strongest to weakest. A disguise costs ten energy per point of its all-round strength (tests/disguise-price.test.ts), so the price is the power. */
 function disguiseTableHtml(){
   const rows=Object.keys(M.DISGUISES).map(id=>({id,price:M.ITEMS[id]?.price??0})).filter(r=>r.price>0).sort((a,b)=>b.price-a.price||a.id.localeCompare(b.id));
@@ -1206,7 +1207,7 @@ const dyes=initDyeUi({state:()=>state,perform:(type,payload)=>perform(type,paylo
 const lookShop=initLookShop({world,perform:(type,payload)=>perform(type,payload),openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),endGearTryOn:()=>{if(tryingOn){tryingOn=null;world.tryOnGear=null;}}});
 frameListeners.add(dt=>house.frame(dt));frameListeners.add(dt=>challenges.tick(dt));
 // The craft room's upgrade bench (upgrade-bench.ts): gear levels and skill levels, both run through actions.ts.
-const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:ownSkills(M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist'),moves:airOn(),jump:airOn(),disguised:!!state.gear.disguise,weaponKind:M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).kind})});
+const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:[...ownSkills(M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist'),...(airOn()?[CHAIN_SKILL]:[])],moves:airOn(),jump:airOn(),disguised:!!state.gear.disguise,weaponKind:M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).kind})});
 world.onInteract=async(e)=>{
   if(!started||uiBlocked())return;tone();if(house.interact(e))return;if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='well')wellDialog();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
@@ -1373,17 +1374,17 @@ combat.edge.scale=target=>{const e=target as Enemy;if(!airOn()||!BOSS_BLOCK_ON||
 let airApplied:boolean|null=null,airLanguage='';
 function syncAirCombat(){
   const on=airOn(),language=getLanguage();if(on===airApplied&&language===airLanguage)return;airApplied=on;airLanguage=language;
-  world.jumpRules=on;combat.edge.moves=on;skillTips.clear();document.body.classList.toggle('air-combat',on);
+  world.jumpRules=on;combat.edge.moves=on;combat.edge.chain=on;skillTips.clear();document.body.classList.toggle('air-combat',on);
   if(on&&!document.querySelector('#hud .jump-pad')){
     $('#hud .skills').insertAdjacentHTML('beforeend',`<button class="jump-pad" data-action="jump">${hudIcon('jump')}</button>`);
-    $('#hud .skills').insertAdjacentHTML('beforeend',POWER_PAD_HTML);$('#context-prompt').insertAdjacentHTML('beforebegin',COUNTER_HTML);
-    counterView=new ComboCounterView($('#combo-counter'));powerPad=new PowerPad($('#power-pad'));
+    $('#hud .attack-pad').insertAdjacentHTML('beforeend',ATTACK_CHARGE_HTML);$('#context-prompt').insertAdjacentHTML('beforebegin',COUNTER_HTML);
+    counterView=new ComboCounterView($('#combo-counter'));attackCharge=new AttackCharge($('#hud .attack-pad'));
   }
   const pad=document.querySelector<HTMLElement>('#hud .jump-pad');if(pad){pad.hidden=!on;pad.setAttribute('aria-label',t('Jump'));pad.title=t('Jump');}
   // Desktop shows both as tray buttons with their key and name (hud-ours.css reads these attributes).
-  if(pad){pad.dataset.key=spaceKey==='jump'?'Space':'Shift';pad.dataset.label=t('Jump');}const hit=document.querySelector<HTMLElement>('#hud .attack-pad');if(hit){hit.dataset.key=spaceKey==='jump'?'F / N':'Space / N';hit.dataset.label=t('Basic attack');}
+  if(pad){pad.dataset.key=spaceKey==='jump'?'Space':'Shift';pad.dataset.label=t('Jump');}const hit=document.querySelector<HTMLElement>('#hud .attack-pad');if(hit){hit.dataset.key=spaceKey==='jump'?'F / N':'Space / N';hit.dataset.label=t('Attack');}
   const hint=document.querySelector('#hud .control-hint kbd:last-of-type')?.nextSibling;if(hint)hint.textContent=' '+t(on&&spaceKey==='jump'?'jump':'attack');
-  if(!on){world.jump.cancel();jumpInput.clear();slideCombo.cancel();pendingPress=null;plungeCast=null;world.airCarry=0;world.castAirT=0;comboMeter.reset();sureLeft=0;combat.edge.sure=false;combat.edge.bonus=1;combat.edge.launch=0;clearPower();showCombo();syncPower();const cluster=$('#hud .skills');cluster.classList.remove('air','dive');airLook='';}
+  if(!on){world.jump.cancel();jumpInput.clear();slideCombo.cancel();pendingPress=null;plungeCast=null;world.airCarry=0;world.castAirT=0;comboMeter.reset();sureLeft=0;combat.edge.sure=false;combat.edge.bonus=1;combat.edge.launch=0;clearPower();attackHold.clear();attackPointers.clear();worldHold=null;showCombo();syncPower();const cluster=$('#hud .skills');cluster.classList.remove('air','dive','toes-4');airLook='';}
 }
 function jumpBlock(){
   if(!airOn())return 'idle' as const;
@@ -1496,16 +1497,20 @@ function noteComboHit(e:Enemy,impact:CombatHit){
   if(!comboMeter.live)chainDamage=0;chainDamage+=Math.max(0,impact.amount);
   if(!comboMeter.hit(kind))return;
   chainCount=comboMeter.count;
+  // The untouched streak (five-rules.ts): every counted hit of the explorer's own since it was last hurt; its milestones are called out.
+  {const mile=streak.hit();if(mile){const text=t('UNTOUCHED ×{n}!',{n:mile});world.fx?.text({x:world.position.x,y:world.position.y+world.jump.height+1.7,z:world.position.z},text,'xp');noteChain(text);tone('ready');}}
   if(first&&comboMeter.count>1){world.fx?.text({x:e.x,y:e.mesh.position.y+.6,z:e.z},t('LAUNCH!'),'xp');noteChain(t('LAUNCH!'));}
   if(comboMeter.finished)noteChain(t('FINISHER!'));
   showCombo();
 }
 // ---- The hit counter (combo-counter.ts) and the power strike (power-rules.ts, power-fx.ts, power-hud.ts).
-const powerCharge=new PowerCharge(),powerFx=new PowerFx();let counterView:ComboCounterView|null=null,powerPad:PowerPad|null=null;
+const powerCharge=new PowerCharge(),powerFx=new PowerFx(),streak=new UntouchedStreak(),attackHold=new AttackHold(),attackPointers=new Set<number>();let counterView:ComboCounterView|null=null,attackCharge:AttackCharge|null=null;
+/** The mouse pointer held on a creature (a hold there may unleash the power strike), or null. */
+let worldHold:number|null=null,holdGather=false;
 /** The chain's damage and count so far (the meter forgets its count the moment the chain lapses); the big moment named under the number; the ended chain's sum while it shows; whether a chain was running last step. */
 let chainDamage=0,chainCount=0,chainNote='',chainNoteLeft=0,chainSum:{text:string;best:boolean;count:number;left:number}|null=null,chainLive=false;
 /** The power strike between the press and the blow; the level of one pressed in the air, waiting for the landing. */
-let powerWind:{left:number;level:number}|null=null,powerDive=0,reelButton:HTMLElement|null=null,counterBoxes:Box[]|null=null,counterBoxesAt=0;
+let powerWind:{left:number;level:number}|null=null,powerDive=0,counterBoxes:Box[]|null=null,counterBoxesAt=0;
 function noteChain(text:string){chainNote=text;chainNoteLeft=COUNTER.note;}
 /** Where the counter goes (combo-counter.ts placeCounter): beside the explorer, away from the creature being fought, clear of every HUD piece. Called when a chain starts and when its count changes; the HUD's boxes are read then, at most twice a second, never per frame. */
 function counterPlace(keep:Placement|null):Placement{
@@ -1515,11 +1520,11 @@ function counterPlace(keep:Placement|null):Placement{
   if(e){const ppm=tall/1.9,c=world.screen(e.x,e.mesh.position.y,e.z),half=Math.max(.5,e.radius)*ppm,up=Math.max(1.6,e.radius*2.4)*ppm;target={l:c.x-half,r:c.x+half,t:c.y-up,b:c.y+half*.3};}
   return placeCounter({W,H},hero,target,blocked,keep);
 }
-/** The counter: the count, the bonus, the charge ring and a big moment's name while the chain runs; its sum for a moment when it ends. Written only when it changes. */
+/** The counter: the untouched streak, the bonus it gives, the charge ring and a big moment's name while a chain runs; the chain's sum for a moment when it ends. Written only when it changes. */
 function showCombo(){
   const view=counterView;if(!view)return;
   const v=comboMeter.view(),p=powerCharge.view();let s:CounterState|null=null;
-  if(airOn()&&v.live&&v.count>=COUNTER.from)s={count:v.count,bonus:actionHandler?0:v.bonus,live:true,charge:p.progress,level:p.level,note:chainNoteLeft>0?chainNote:'',summary:'',best:false};
+  if(airOn()&&v.live&&v.count>=COUNTER.from)s={count:Math.max(v.count,streak.count),bonus:actionHandler?0:streak.percent,live:true,charge:p.progress,level:p.level,note:chainNoteLeft>0?chainNote:'',summary:'',best:false};
   else if(airOn()&&chainSum)s={count:chainSum.count,bonus:0,live:false,charge:p.progress,level:p.level,note:'',summary:chainSum.text,best:chainSum.best};
   view.show(s,t('HITS'),counterPlace);
 }
@@ -1534,45 +1539,72 @@ function stepCounter(dt:number){
   chainLive=live;
   if(chainNoteLeft>0)chainNoteLeft-=dt;
   if(chainSum&&(chainSum.left-=dt)<=0)chainSum=null;
-  if(state.hp<=0&&(powerCharge.hits||powerWind||powerDive))clearPower(); // knocked out: the charge is lost
-  powerCharge.step(dt);
+  if(state.hp<=0&&(powerCharge.hits||powerWind||powerDive||streak.count))clearPower(); // knocked out: the charge and the streak are lost
+  powerCharge.step(dt);streak.step(dt);
   if(powerWind&&(powerWind.left-=dt)<=0){const level=powerWind.level;powerWind=null;if(state.hp>0)releasePower(level,false);}
   if(powerDive&&!world.jump.airborne){const level=powerDive;powerDive=0;releasePower(level,false);} // the jump ended without a landing (a cut-scene, a throw)
   if(powerFx.busy&&world.fx)powerFx.update(world.fx,dt);
   if(counterView&&(counterView.visible||live||chainSum))showCombo();
   syncPower();
 }
-function clearPower(){powerCharge.clear();powerWind=null;powerDive=0;powerFx.clear();chainSum=null;chainNoteLeft=0;chainLive=false;chainDamage=0;chainCount=0;}
-/** The button shows while a charge is ready and the explorer can fight. The first time it appears, one line says what it is. */
+function clearPower(){powerCharge.clear();streak.clear();powerWind=null;powerDive=0;powerFx.clear();chainSum=null;chainNoteLeft=0;chainLive=false;chainDamage=0;chainCount=0;}
+/** The Attack pad wears the charge (power-hud.ts): a ring that fills, a glow when the strike is ready, a quick fill while it is held. The first time a charge is ready, one line says what to do. */
 function syncPower(){
-  if(!powerPad)return;
-  const shown=airOn()&&started&&!uiBlocked()&&!visiting&&state.hp>0&&!fishGame&&world.fishing==='idle'&&!world.interior&&(reelButton??=document.querySelector<HTMLElement>('#reel-button'))?.hidden!==false; // not by a pond: the Reel button and its hint have that place
-  if(!powerPad.sync(powerCharge.view(),shown,t('Power strike')))return;
+  if(!attackCharge)return;
+  const shown=airOn()&&started&&!visiting&&state.hp>0;
+  if(!attackCharge.sync(powerCharge.view(),shown,attackHold.held&&powerReady(),t('Attack: hold to unleash the power strike'),t('Basic attack')))return;
   const store=(()=>{try{return localStorage;}catch{return null;}})();
-  if(!hintSeen(store)){markHint(store);toast(matchMedia('(pointer: coarse)').matches?'Power strike ready! Tap the glowing button above the paw.':'Power strike ready! Press G or click the glowing button.','💥');}
+  if(!hintSeen(store)){markHint(store);toast('Power strike ready! Hold Attack to unleash it.','💥');}
+}
+/** A power strike is charged and none is under way. */
+function powerReady(){return airOn()&&powerCharge.level>0&&!powerWind&&!powerDive;}
+/** The creature being fought stands in the area the strike would cover (a mouse held on it waits for that). */
+function powerInReach(){
+  const e=world.currentTarget();if(!e||e.hp<=0)return false;
+  const p=world.position,shape=powerShape(M.weaponStats(state).kind,world.jump.airborne);
+  return powerReach(shape,powerCharge.level,p,Math.atan2(e.x-p.x,e.z-p.z),e)>=0;
+}
+/** The Attack button, key or pad went down: it attacks at once, and with jumping on the hold begins (five-rules.ts AttackHold). */
+function attackDown(source:string){if(airOn())attackHold.down(source);basicAttack();}
+/**
+ * A held Attack (button, key, or the mouse on a creature): it keeps attacking at the weapon's pace, and with a strike
+ * charged it fills for HOLD.time seconds and then unleashes it. Releasing, or sliding off the button, ends it.
+ */
+function stepHold(dt:number,active:boolean){
+  if(!attackHold.held)return;
+  if(!active||state.hp<=0||visiting){attackHold.clear();attackPointers.clear();worldHold=null;return;}
+  const mouse=attackHold.only('world'),does=attackHold.step(dt,powerReady()&&(!mouse||powerInReach()));
+  // The hold is the strike's wind-up: light gathers on the explorer for as long as the pad fills.
+  if(does!=='fill')holdGather=false;else if(!holdGather){holdGather=true;const p=world.position;if(world.fx)powerWindup(world.fx,{x:p.x,y:p.y+world.jump.height,z:p.z},powerColor(M.weaponStats(state)),powerCharge.level,HOLD.time);}
+  if(does==='power'){if(powerStrike())attackHold.spent();}
+  else if(does==='repeat'&&!mouse&&combatTimers.attackCooldown<=0)basicAttack(); // the mouse on a creature already attacks it over and over (world.onAttackEnemy)
 }
 /** The colour of the strike: the weapon's own (a gun's shot colour), else warm gold. */
 function powerColor(weapon:ReturnType<typeof M.weaponStats>){return weapon.kind==='gun'?(weapon.shot==='volt'?'#bfefff':shotColor(weapon.shot??'pea')):weapon.fx??'#ffd45a';}
 /**
- * The power strike's button or key (G): spends the charge. On the ground the explorer turns to the creature being fought,
+ * The power strike, unleashed by holding Attack (stepHold): spends the charge and returns true when it went off. On the ground the explorer turns to the creature being fought,
  * gathers light for POWER.windup seconds and lets go; in the air it dives and the strike lands as a ring (the bigger dive version).
  */
 function powerStrike(){
-  if(!airOn()||!started||uiBlocked()||visiting||state.hp<=0||powerWind||powerDive)return;
-  if(ctfApi?.active&&!ctfApi.canAct)return;
-  if(!powerCharge.level||combat.locksMovement||combat.busy||fishGame||world.fishing!=='idle')return;
-  prepareCombatWeapon();const weapon=M.weaponStats(state);if(weapon.kind==='rod')return;
+  if(!airOn()||!started||uiBlocked()||visiting||state.hp<=0||powerWind||powerDive)return false;
+  if(ctfApi?.active&&!ctfApi.canAct)return false;
+  if(!powerCharge.level||combat.locksMovement||combat.busy||fishGame||world.fishing!=='idle')return false;
+  prepareCombatWeapon();const weapon=M.weaponStats(state);if(weapon.kind==='rod')return false;
   const level=powerCharge.use(),color=powerColor(weapon),p=world.position,fx=world.fx;tone('cast');
-  if(world.jump.airborne){powerDive=level;if(!world.jump.diving)startDive();if(fx)powerWindup(fx,{x:p.x,y:p.y+world.jump.height,z:p.z},color,level);syncPower();return;}
+  if(world.jump.airborne){powerDive=level;if(!world.jump.diving)startDive();if(fx)powerWindup(fx,{x:p.x,y:p.y+world.jump.height,z:p.z},color,level);syncPower();return true;}
   const shape=powerShape(weapon.kind),area=powerArea(shape,level),target=world.currentTarget()??combat.nearest(Math.max(area.length,area.radius));
   if(target&&target.hp>0)world.facing=Math.atan2(target.x-p.x,target.z-p.z);
   powerWind={left:POWER.windup,level};combatTimers.attackCooldown=Math.max(combatTimers.attackCooldown,POWER.windup+POWER.recovery);
   if(fx)powerWindup(fx,p,color,level);syncPower();
+  return true;
 }
 /** The blow itself: the damage (combat.ts powerStrike), the swing, the look (power-fx.ts), the hit-stop, the shake and the sound. */
 function releasePower(level:number,air:boolean){
   const weapon=M.weaponStats(state),kind=weapon.kind==='sword'?'sword':weapon.kind==='gun'?'gun':'fist',shape=powerShape(weapon.kind,air),area=powerArea(shape,level),color=powerColor(weapon),p=world.position,fx=world.fx;
   combat.powerStrike(shape,level,powerCap);
+  // The weapon's or the uniform's own special goes off with the strike (it had the fourth button before the five-button
+  // fight), with its own look and numbers. A disguise keeps its four skills on the paw instead.
+  {const own=state.gear.disguise?undefined:weapon.special;if(own&&own!=='fist'&&combat.weaponSpecial(own)){fx?.text({x:p.x,y:SKILL_NAME_RISE+world.jump.height,z:p.z},t((SPECIALS[own]??SPECIALS.fist).name),'skillname s3');tone(skillSound(3,undefined,own));}}
   world.playerAttack(kind,kind==='gun'?color:undefined,2,true,{pound:air&&kind==='fist'});
   // A blade's own trail burns brighter for the swing (the trail's colour is the world's; put back unless the weapon changed meanwhile).
   if(kind==='sword'){const w=world as unknown as {trailTint:[number,number,number]},was=w.trailTint,hot:[number,number,number]=[Math.min(1,was[0]*.4+.75),Math.min(1,was[1]*.4+.75),Math.min(1,was[2]*.4+.75)];w.trailTint=hot;setTimeout(()=>{if(w.trailTint===hot)w.trailTint=was;},450);}
@@ -1589,7 +1621,7 @@ function dodged(perfect:boolean){
   }
   if(now-dodgeShown<.4)return;dodgeShown=now;world.fx?.text(at,t('DODGE'),'xp');
 }
-/** Every step: the jump key, the chain's clock, the combo ramp and the perfect dodge's sure critical (solo). */
+/** Every step: the jump key, a held Attack, the chain's clock, the untouched streak's bonus and the perfect dodge's sure critical (solo). */
 function stepFight(dt:number,active:boolean,combatActive:boolean){
   syncAirCombat();if(!airOn())return;
   world.jump.max=jumpsFor(M.jumpLevel(state),Tester.isTester(state));comboMeter.window=touchFight?COMBO.windowTouch:COMBO.window;
@@ -1600,30 +1632,31 @@ function stepFight(dt:number,active:boolean,combatActive:boolean){
   // The air look of the fight buttons: on while a press would be an air move, with the pad showing the dive on the way down. One class write per change.
   {const j=world.jump,look=!airWindow(j)?'':j.falling&&j.height>=DIVE.minHeight?'air dive':'air';if(look!==airLook){airLook=look;const cluster=$('#hud .skills');cluster.classList.toggle('air',!!look);cluster.classList.toggle('dive',look==='air dive');}}
   if(active&&jumpInput.wants(world.jump,dt))tryJump();
+  stepHold(dt,active);
   if(!combatActive)return;
   for(let i=0;i<4;i++)airCooldowns[i]=Math.max(0,airCooldowns[i]-dt);
   comboMeter.step(dt);stepCounter(dt);
   if(sureLeft>0){sureLeft-=dt;if(sureLeft<=0)combat.edge.sure=false;}
-  combat.edge.bonus=actionHandler?1:comboMeter.bonus;combat.edge.launch=actionHandler?0:AIR.launch;
+  combat.edge.bonus=actionHandler?1:streak.bonus;combat.edge.launch=actionHandler?0:AIR.launch;
 }
 combat.edge.spent=()=>{sureLeft=0;};
-// The four moves (moves.ts): the Lob aims at the creature the red ring is on, the air dash turns to the stick, and a Quake that
+// The three moves (moves.ts): the Lob aims at the creature the red ring is on, the air dash turns to the stick, and a Quake that
 // lands on a chain of three hits or more ends it as a finisher (a Quake that opens a chain is its launcher).
 combat.edge.target=()=>world.currentTarget();combat.edge.stick=()=>world.stickAngle();
 let quakeFinisher=false,skyFactor=1;
 combat.edge.begin=move=>{if(!airOn())return 1;if(move==='skyquake')return skyFactor;if(move!=='quake')return 1;quakeFinisher=comboMeter.finisherReady;comboKind=quakeFinisher?'dive':'launcher';return quakeFinisher?COMBO.finisher:1;};
 combat.edge.end=move=>{if(move!=='quake')return;comboKind=null;if(quakeFinisher&&comboMeter.finished){world.fx?.text({x:world.position.x,y:1.2,z:world.position.z},t('FINISHER!'),'crit big');tone('crit');}quakeFinisher=false;};
-/** The four moves are in the skill slots: jumping is on and no disguise is worn (a disguise keeps its own kit). */
+/** The three moves are in the skill slots: jumping is on and no disguise is worn (a disguise keeps its own four). */
 function movesOn(){return airOn()&&!state.gear.disguise;}
-/** The explorer's own four skills for a weapon with `special`: the four moves while jumping is on, else the four starting skills. */
-function ownSkills(special:string){const fourth=SPECIALS[special]??SPECIALS.fist;return airOn()?[MOVE_SKILLS[0],MOVE_SKILLS[1],MOVE_SKILLS[2],moveAt(3,special)?MOVE_SKILLS[3]:fourth]:[...BASE_SKILLS,fourth];}
+/** The explorer's own skills for a weapon with `special`: the three moves while jumping is on (the weapon's special goes off with the power strike), else the four starting skills. */
+function ownSkills(special:string):readonly {name:string;icon:string;cd:number}[]{return airOn()?MOVE_SKILLS:[...BASE_SKILLS,SPECIALS[special]??SPECIALS.fist];}
 /**
- * The air swing (moves.ts): one spin that hits all round and hangs in the air a moment. The Strike's air form, and what the
- * attack button does while rising with paws or a blade: one move on two buttons, with one short cooldown.
+ * The air swing (moves.ts, 'Sky Spin'): one spin that hits all round and hangs in the air a moment. It is what the attack
+ * button does while rising with paws or a blade; the fourth skill's level ('Attack chain' at the bench) raises it.
  */
 function airSwing(){
   if(combatTimers.attackCooldown>0||!started||uiBlocked()||visiting)return false;prepareCombatWeapon();
-  const weapon=M.weaponStats(state),level=moveAt(3,weapon.special??'fist')?skillTuning(3,M.skillLevel(state,3)).damage:1;
+  const weapon=M.weaponStats(state),level=skillTuning(3,M.skillLevel(state,3)).damage;
   // Paws spin; a blade's spin is a slash as long as the blade, in its colour (air-cast.ts airSwingFor).
   const shape=airSwingFor(weapon,AIR_MOVES.swing.radius);if(shape.shape!=='spin'&&shape.shape!=='slash')return false;
   if(!combat.airSwing(level,shape.radius,shape.color))return false;
@@ -1657,7 +1690,10 @@ function basicAttack(e?:Enemy){
     return;
   }
   prepareCombatWeapon();
-  if(combat.basic(e)){const stats=M.activeStats(state),weapon=M.weaponStats(state);combatTimers.attackCooldown=(weapon.cd??.4)/Math.max(.2,1+stats.haste);const volt=weapon.shot==='volt';world.playerAttack(weapon.kind,volt?'#bfefff':undefined);tone(volt?'zap':weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
+  if(combat.basic(e)){const stats=M.activeStats(state),weapon=M.weaponStats(state);combatTimers.attackCooldown=(weapon.cd??.4)/Math.max(.2,1+stats.haste);const volt=weapon.shot==='volt',step=combat.edge.chain?combat.chainLast:-1;
+    // The chain's three presses (five-rules.ts): cut, back-cut, overhead with a blade; jab, jab, hook with paws; the third lands heavier, and a gun's is a double shot.
+    if(step<0)world.playerAttack(weapon.kind,volt?'#bfefff':undefined);else{world.playerAttack(weapon.kind,volt?'#bfefff':undefined,step as 0|1|2,step===2);if(step===2){world.fx?.shake(.07);if(weapon.kind==='gun')setTimeout(()=>tone(volt?'zap':'shoot'),90);}}
+    tone(volt?'zap':weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
   // Nothing in reach: the hero still swings (with jumping on), so the button never looks dead.
   else if(!e&&airOn()){const weapon=M.weaponStats(state);if(weapon.kind!=='rod'){combatTimers.attackCooldown=(weapon.cd??.4)*.6;world.playerAttack(weapon.kind);tone('swing');}}
 }
@@ -1674,14 +1710,13 @@ const readyWas=[0,0,0,0],readyAir=[false,false,false,false];
 function skillList(){const disguise=state.gear.disguise?M.DISGUISES[state.gear.disguise]:null;return disguise?.skills??ownSkills(M.weaponStats(state).special??'fist');}
 function skill(index:number){
   if(ctfApi?.active&&!ctfApi.canAct)return;
-  if(!started||uiBlocked()||visiting||!Number.isInteger(index)||index<0||index>3)return;
+  if(!started||uiBlocked()||visiting||!Number.isInteger(index)||index<0||index>3||!skillList()[index])return; // with the moves on the fourth slot is empty
   prepareCombatWeapon();
-  // A move's air form has its own cooldown. Two of them share their move with the attack button and never wait: the Strike
-  // is the spin, and a Quake whose air form is still cooling down is the plain dive (ready, it is the heavy one below).
-  const airForm=movesOn()&&!actionHandler&&world.jump?.airborne&&pressKind(world.jump)==='air'?moveAt(index,M.weaponStats(state).special??'fist'):null;
-  if(airForm==='strike'){airSwing();return;}if(airForm==='quake'&&airCooldowns[index]>0){startDive();return;}
+  // A move's air form has its own cooldown. A Quake whose air form is still cooling down is the plain dive (ready, it is the heavy one below).
+  const airForm=movesOn()&&!actionHandler&&world.jump?.airborne&&pressKind(world.jump)==='air'?moveAt(index):null;
+  if(airForm==='quake'&&airCooldowns[index]>0){startDive();return;}
   if((airForm?airCooldowns:cooldowns)[index]>0)return;
-  const disguise=state.gear.disguise,weapon=M.weaponStats(state),skills=skillList(),own=movesOn()?moveAt(index,weapon.special??'fist'):null;
+  const disguise=state.gear.disguise,weapon=M.weaponStats(state),skills=skillList(),own=movesOn()?moveAt(index):null;
   // Two of the starting skills have an air form (solo): Breeze Step dashes at its height, Root Quake plunges for a wider shockwave.
   const jump=world.jump,press=jump?.airborne?pressKind(jump):'ground';if(press==='buffer'){bufferPress({kind:'skill',index});return;}
   // A disguise skill pressed in the air follows its class (air-cast.ts): cast up there, a plunge onto the ground, or a movement that takes the jump over.
@@ -1710,7 +1745,7 @@ world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   {const from=enemyId?world.enemies.find(e=>e.id===enemyId):undefined;if(from&&combat.blocks(from)){world.fx?.burst(world.position,{n:6,color:['#fff3c4','#ffffff'],glow:true,size:.12,speed:3,up:2,y:1});if(source==='shot'){combat.reflect(from,Math.hypot(from.x-world.position.x,from.z-world.position.z)/DZ.block.speed);tone('hit');}return;}}
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
-  state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
+  state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();if(airOn())streak.hurt(damage);world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
   checkDefeat();
   updateHud();
 };
@@ -1736,7 +1771,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){world.clearSkillWind();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;chainSum=null;chainNoteLeft=0;chainLive=false;powerWind=null;powerDive=0;powerFx.clear();showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){world.clearSkillWind();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();streak.clear();attackHold.clear();sureLeft=0;chainSum=null;chainNoteLeft=0;chainLive=false;powerWind=null;powerDive=0;powerFx.clear();showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1989,7 +2024,7 @@ app.addEventListener('click',async event=>{
     case 'shop-rod':shopTab=rodShopTab;shopFocus='rod';if(IG.isFolded('shop','tool'))IG.toggleFold('shop','tool');go('shop');break;
     case 'wild':{closeDialog();const destinations:Record<string,[number,number]>={forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]};const kind=button.dataset.kind??'forest',destination=destinations[kind]??[0,-30],armed=wildArmed?.kind===kind&&Date.now()<wildArmed.until,route=wildRoute(destination,armed);world.walkTo(route.x,route.z);if(route.inside){wildArmed=null;toast('Follow the path beyond the garden gate.','🍄');}else{wildArmed={kind,until:Date.now()+45000};toast(wildDanger(state.level)?'Wild creatures ahead, and they come in packs! Get ready at the village edge, then choose this place on the map again to walk in.':'You are at the edge of the wild. Choose this place on the map again to walk in.','⚠️');}break;}
     case 'return-home':if(state.planet!=='home')flyHome();else{endFishing();huntingPending=null;movement.clear();closeDialog();world.position.set(0,0,0);world.destination=null;world.route=[];world.selected=null;world.pondTap=null;updateHunting(0);toast('Home, sweet home.','🏡');}break;
-    case 'interact':world.interactNearest();break;case 'attack':basicAttack();break;case 'power':powerStrike();break;case 'jump':if(airOn()&&(event as MouseEvent).detail===0){jumpInput.down();jumpInput.up();}break;/* a pointer already jumped on the way down (below): this is the keyboard's press of the button */case 'skill':skill(index);break;
+    case 'interact':world.interactNearest();break;case 'attack':if(!airOn()||(event as MouseEvent).detail===0)basicAttack();break;/* with jumping on a pointer attacked as it went down (below), so that it can be held: this is the keyboard's press of the button */case 'jump':if(airOn()&&(event as MouseEvent).detail===0){jumpInput.down();jumpInput.up();}break;/* a pointer already jumped on the way down (below): this is the keyboard's press of the button */case 'skill':skill(index);break;
     case 'fish-again':fish(fishPond);break;
     case 'reel':if(fishGame){if(event.detail===0)fishGame.input.toggle();}else if(button.classList.contains('hunt'))void throwHarpoon();else if(button.classList.contains('cast'))fish(fishPond);break;
     case 'render-res':{const res=button.dataset.kind as ResolutionSetting;graphics.setResolution(res);world.applyGraphics(graphics.profile,graphics.ratio);await perform('settings',{settings:{renderRes:res}});settings();break;}
@@ -2049,7 +2084,10 @@ app.addEventListener('click',async event=>{
   }
 });
 $('#dialog-layer').addEventListener('click',e=>{if(e.target===$('#dialog-layer'))closeDialog();});
-$('#world').addEventListener('pointerdown',event=>{if(started&&!uiBlocked()){const e=event as PointerEvent;e.preventDefault();gestures.down(e.pointerId,e.clientX,e.clientY);$('#world').setPointerCapture(e.pointerId);}});
+$('#world').addEventListener('pointerdown',event=>{if(started&&!uiBlocked()){const e=event as PointerEvent;e.preventDefault();
+  // A mouse button held on a creature (jumping on): the creature is chosen at once, and holding on unleashes a charged power strike once it stands in the strike's area.
+  if(e.pointerType==='mouse'&&e.button===0&&airOn()&&!placement&&world.pickEntity(e.clientX,e.clientY)?.kind==='enemy'){world.pointer(e.clientX,e.clientY);worldHold=e.pointerId;attackHold.down('world');$('#world').setPointerCapture(e.pointerId);return;}
+  gestures.down(e.pointerId,e.clientX,e.clientY);$('#world').setPointerCapture(e.pointerId);}});
 $('#world').addEventListener('pointermove',event=>{const e=event as PointerEvent;gestures.move(e.pointerId,e.clientX,e.clientY);});
 $('#world').addEventListener('wheel',event=>{if(uiBlocked())return;const e=event as WheelEvent;e.preventDefault();world.zoom=clampZoom(world.zoom+e.deltaY*ZOOM.wheelStep,'wheel');world.resize();},{passive:false});
 
@@ -2070,20 +2108,22 @@ document.addEventListener('keydown',event=>{
   const spaceAction=jumpKeyAction(event.code||'',spaceKey,airOn());
   if(spaceAction==='jump'){event.preventDefault();if(!event.repeat){touchFight=false;jumpInput.down();}return;}
   if(event.repeat)return;
-  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=(bindings.skills as readonly string[]).indexOf(key);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f'){if(!airOn())world.interactNearest();else if(world.jump?.airborne||!world.interactNearest())basicAttack();}else if(handKey(key,airOn())==='eat')void quickEat();else if(handKey(key,airOn())==='attack')basicAttack();else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();basicAttack();}else if(key===POWER.key&&airOn())powerStrike();
+  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=skillKeyIndex(key,state.settings.keyboardLayout,skillList().length);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f'){if(!airOn())world.interactNearest();else if(world.jump?.airborne||!world.interactNearest())attackDown('key:'+event.code);}else if(handKey(key,airOn())==='eat')void quickEat();else if(handKey(key,airOn())==='attack')attackDown('key:'+event.code);else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();attackDown('key:'+event.code);}
 });
 // The keyboard guide counts game keys to learn when to fold itself (hud-keys.ts).
 window.addEventListener('keydown',event=>{if(started&&!uiBlocked()&&!event.repeat&&gameplayKey(event))keysGuide.used();});
-document.addEventListener('keyup',e=>{const key=gameplayKey({...e,code:e.code,key:e.key});spaceKeys.delete(key.toLowerCase());movement.releaseKey(e.code||e.key);if(e.code==='Space'||e.code==='ShiftLeft')jumpInput.up();if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
+document.addEventListener('keyup',e=>{const key=gameplayKey({...e,code:e.code,key:e.key});spaceKeys.delete(key.toLowerCase());movement.releaseKey(e.code||e.key);attackHold.up('key:'+e.code);if(e.code==='Space'||e.code==='ShiftLeft')jumpInput.up();if(fishGame&&e.code==='Space')fishGame.input.releaseSpace();});
 document.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=(e.target as HTMLElement).closest<HTMLElement>('button');if(target?.dataset.move){e.preventDefault();movement.pressPointer(e.pointerId,target.dataset.move);target.setPointerCapture(e.pointerId);}
   // The Jump button acts as the finger lands (a click would wait for the release); holding it performs the extra jumps.
   if(target?.dataset.action==='jump'&&started&&!uiBlocked()&&airOn()){e.preventDefault();jumpPointers.add(e.pointerId);touchFight=e.pointerType==='touch';jumpInput.down();
     // The slide: this same finger may go on to the attack toe or a skill toe for the air move (jump-rules.ts SlideCombo).
-    if(e.pointerType!=='mouse'){slideCombo.begin(e.pointerId);try{target.setPointerCapture(e.pointerId);}catch{/* already captured */}}}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}});
-document.addEventListener('pointermove',e=>{if(slideCombo.owns(e.pointerId))fireSlide(slideCombo.move(e.pointerId,fightButtonAt(e.clientX,e.clientY),performance.now()/1000));});
-const releasePointer=(e:PointerEvent)=>{if(slideCombo.owns(e.pointerId)){if(e.type==='pointerup'){slideCombo.move(e.pointerId,fightButtonAt(e.clientX,e.clientY),-1);fireSlide(slideCombo.release(e.pointerId));}else if(e.type==='pointercancel')slideCombo.cancel();}gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);if(jumpPointers.delete(e.pointerId)&&!jumpPointers.size)jumpInput.up();fishGame?.input.releasePointer(e.pointerId);};
+    if(e.pointerType!=='mouse'){slideCombo.begin(e.pointerId);try{target.setPointerCapture(e.pointerId);}catch{/* already captured */}}}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}
+  // The Attack button acts as the finger (or the mouse) lands, and may be held: it keeps attacking, and a charged power strike goes off after HOLD.time (stepHold). A finger that slides off ends the hold.
+  if(target?.dataset.action==='attack'&&started&&!uiBlocked()&&airOn()){e.preventDefault();attackPointers.add(e.pointerId);attackDown('pointer:'+e.pointerId);try{target.setPointerCapture(e.pointerId);}catch{/* already captured */}}});
+document.addEventListener('pointermove',e=>{if(attackPointers.has(e.pointerId)&&fightButtonAt(e.clientX,e.clientY)!=='attack'){attackPointers.delete(e.pointerId);attackHold.up('pointer:'+e.pointerId);}if(slideCombo.owns(e.pointerId))fireSlide(slideCombo.move(e.pointerId,fightButtonAt(e.clientX,e.clientY),performance.now()/1000));});
+const releasePointer=(e:PointerEvent)=>{if(slideCombo.owns(e.pointerId)){if(e.type==='pointerup'){slideCombo.move(e.pointerId,fightButtonAt(e.clientX,e.clientY),-1);fireSlide(slideCombo.release(e.pointerId));}else if(e.type==='pointercancel')slideCombo.cancel();}if(attackPointers.delete(e.pointerId))attackHold.up('pointer:'+e.pointerId);if(worldHold===e.pointerId){worldHold=null;attackHold.up('world');}gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);if(jumpPointers.delete(e.pointerId)&&!jumpPointers.size)jumpInput.up();fishGame?.input.releasePointer(e.pointerId);};
 document.addEventListener('pointerup',releasePointer);document.addEventListener('pointercancel',releasePointer);document.addEventListener('lostpointercapture',releasePointer);
-function clearHeldInput(){cancelLongPresses();cancelButtonTouches();jumpInput.clear();jumpPointers.clear();slideCombo.cancel();movement.clear();joystick.clear();fishGame?.input.clear();gestures.clear();spaceKeys.clear();spacePointer=null;boostPointers.clear();boostHeld=false;}
+function clearHeldInput(){cancelLongPresses();cancelButtonTouches();jumpInput.clear();jumpPointers.clear();attackHold.clear();attackPointers.clear();worldHold=null;slideCombo.cancel();movement.clear();joystick.clear();fishGame?.input.clear();gestures.clear();spaceKeys.clear();spacePointer=null;boostPointers.clear();boostHeld=false;}
 window.addEventListener('blur',()=>{clearHeldInput();save();});
 window.addEventListener('pagehide', ()=>{clearHeldInput();save();});
 window.addEventListener('mobile-game-interruption', ()=>{clearHeldInput();save();});window.addEventListener('beforeunload',save);document.addEventListener('visibilitychange',()=>{clearHeldInput();save();});
@@ -2195,4 +2235,4 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

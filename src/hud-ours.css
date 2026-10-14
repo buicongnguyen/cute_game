@@ -232,45 +232,67 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
 body.indoors #app #hud .skills { display: none; }
 
 /* ------------------------------------------------------------------ Jumping and air combat (Settings switch; body.air-combat) */
-/* With the switch off none of this applies and the paw above is the one from before. With it on the paw has five toes at
-   186, 138, 90, 42 and -6 degrees on a circle of 1.4 skill widths round the pad's centre (neighbours 1.14 widths apart).
-   The big pad in the middle is Jump (sky blue); the basic attack is the toe on the inner side, level with the pad; the
-   four skills follow in key order. Left-handed play mirrors it, so the attack toe stays on the inner side. */
+/* With the switch off none of this applies and the paw above is the one from before. With it on the paw is five buttons
+   (five-rules.ts PAW holds the same numbers; tests/five-rules.test.ts compares the two): the big pad in the corner is the
+   Attack, Jump stands beside it on the inner side, and the three specials sit on an arc above them, out from under a
+   thumb that rests on either. A disguise brings its fourth skill: a crown over the arc. Each button's place
+   is two numbers, --x and --y: its centre from the Attack pad's centre in skill widths (x towards the screen's middle, y
+   up). Left-handed play mirrors it, and the skills still read left to right in key order. */
 #app #hud .jump-pad { display: none; }
+body:not(.air-combat) #app #hud .attack-pad > :not(svg) { display: none; }
+body.air-combat #app #hud .skill[hidden] { display: none; }
 @media (pointer: coarse), (max-width: 900px), (max-height: 520px) {
-  body.air-combat { --dock-room: calc(var(--sk) * 2.55 + 44px); }
-  body.air-combat #app #hud .skills, body.air-combat #app #hud.joystick-on .skills { width: calc(var(--sk) * 3.784); height: calc(var(--sk) * 2.55); }
-  body.air-combat #app #hud .skill[data-index="0"] { left: calc(50% - var(--sk) * 1.54); right: auto; bottom: calc(var(--sk) * 1.087); }
-  body.air-combat #app #hud .skill[data-index="1"] { left: calc(50% - var(--sk) * .5); right: auto; bottom: calc(var(--sk) * 1.55); }
-  body.air-combat #app #hud .skill[data-index="2"] { left: calc(50% + var(--sk) * .54); right: auto; bottom: calc(var(--sk) * 1.087); }
-  body.air-combat #app #hud .skill[data-index="3"] { left: calc(50% + var(--sk) * .892); right: auto; bottom: calc(var(--sk) * .004); }
-  body.air-combat #app #hud .attack-pad { left: calc(50% - var(--sk) * 1.892); bottom: calc(var(--sk) * .004); }
-  body.air-combat #app #hud.joystick-right .skill[data-index="0"] { left: calc(50% - var(--sk) * 1.892); right: auto; bottom: calc(var(--sk) * .004); }
-  body.air-combat #app #hud.joystick-right .skill[data-index="1"] { left: calc(50% - var(--sk) * 1.54); right: auto; bottom: calc(var(--sk) * 1.087); }
-  body.air-combat #app #hud.joystick-right .skill[data-index="2"] { left: calc(50% - var(--sk) * .5); right: auto; bottom: calc(var(--sk) * 1.55); }
-  body.air-combat #app #hud.joystick-right .skill[data-index="3"] { left: calc(50% + var(--sk) * .54); right: auto; bottom: calc(var(--sk) * 1.087); }
-  body.air-combat #app #hud.joystick-right .attack-pad { left: calc(50% + var(--sk) * .892); bottom: calc(var(--sk) * .004); }
-  /* The attack toe: the pad's own paint at a full skill toe's size. */
-  body.air-combat #app #hud .attack-pad { width: var(--sk); height: var(--sk); min-width: 0; border-radius: 46%; }
-  body.air-combat #app #hud .jump-pad { left: calc(50% - var(--sk) * .6); bottom: calc(var(--sk) * .05); }
-  /* The Jump pad: sky blue, the big heel of the paw. It acts as the finger lands (main.ts); holding it performs the extra jumps. */
+  body.air-combat { --dock-room: calc(var(--sk) * 3.36 + 44px); }
+  body.air-combat #app #hud .skills, body.air-combat #app #hud.joystick-on .skills {
+    width: calc(var(--sk) * 3.36); height: calc(var(--sk) * 3.36);
+    --pad: max(60px, calc(var(--sk) * 1.3)); --jp: max(52px, calc(var(--sk) * 1.08)); --toe: max(48px, calc(var(--sk) * 1.08));
+  }
+  body.air-combat #app #hud .skill, body.air-combat #app #hud.joystick-on .skill, body.air-combat #app #hud .jump-pad {
+    --s: var(--toe); width: var(--s); height: var(--s); left: auto; right: calc(var(--pad) / 2 + var(--sk) * var(--x) - var(--s) / 2); bottom: calc(var(--pad) / 2 + var(--sk) * var(--y) - var(--s) / 2);
+  }
+  body.air-combat #app #hud.joystick-right .skill, body.air-combat #app #hud.joystick-on.joystick-right .skill, body.air-combat #app #hud.joystick-right .jump-pad { right: auto; left: calc(var(--pad) / 2 + var(--sk) * var(--x) - var(--s) / 2); }
+  body.air-combat #app #hud .skills .skill[data-index="0"] { --x: 2.134; --y: 1.511; }
+  body.air-combat #app #hud .skills .skill[data-index="1"] { --x: 1.019; --y: 2.124; }
+  body.air-combat #app #hud .skills .skill[data-index="2"] { --x: -.236; --y: 1.908; }
+  body.air-combat #app #hud.joystick-right .skills .skill[data-index="0"] { --x: -.236; --y: 1.908; }
+  body.air-combat #app #hud.joystick-right .skills .skill[data-index="1"] { --x: 1.019; --y: 2.124; }
+  body.air-combat #app #hud.joystick-right .skills .skill[data-index="2"] { --x: 2.134; --y: 1.511; }
+  /* A disguise's fourth skill: a crown over the two inner toes, so the three keep their places. */
+  body.air-combat #app #hud .skills .skill[data-index="3"], body.air-combat #app #hud.joystick-right .skills .skill[data-index="3"] { --x: 2.089; --y: 2.75; }
+  /* The Attack pad: the big round heel in the corner, the pad's own paint. The charge ring stands round it (combo-counter.css). */
+  body.air-combat #app #hud .attack-pad { left: auto; right: 0; bottom: 0; width: var(--pad); height: var(--pad); min-width: 0; border-radius: 50%; touch-action: none; }
+  body.air-combat #app #hud.joystick-right .attack-pad { right: auto; left: 0; }
+  /* The Jump pad: sky blue, beside the Attack on the inner side. It acts as the finger lands (main.ts); holding it performs the extra jumps. */
   body.air-combat #app #hud .jump-pad {
-    display: grid; place-items: center; position: absolute; width: calc(var(--sk) * 1.2); height: calc(var(--sk) * 1.2); min-width: 0; padding: 0;
-    border-radius: 40%; border: 3px solid var(--cream); background: linear-gradient(160deg, #8fe0ff, #2f9be6); box-shadow: 0 0 0 2px var(--plum), 0 4px 0 2px rgba(58, 36, 51, .5);
+    --s: var(--jp); --x: 1.5; --y: -.11; display: grid; place-items: center; position: absolute; min-width: 0; padding: 0;
+    border-radius: 46%; border: 3px solid var(--cream); background: linear-gradient(160deg, #8fe0ff, #2f9be6); box-shadow: 0 0 0 2px var(--plum), 0 4px 0 2px rgba(58, 36, 51, .5);
     touch-action: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none;
   }
   body.air-combat #app #hud .jump-pad[hidden] { display: none; }
   body.air-combat #app #hud .jump-pad > svg { width: 60%; height: 60%; pointer-events: none; }
   body.air-combat #app #hud .jump-pad:active { translate: 0 2px; filter: brightness(.94); }
-  body.air-combat #app #hud #reel-button { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 16px); }
-  body.air-combat #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 132px); }
+  body.air-combat #app #hud #reel-button { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 3.36 + 16px); }
+  body.air-combat #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 3.36 + 132px); }
 }
-@media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
-  body.air-combat #app #hud #reel-button { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 58px); }
-  body.air-combat #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 8px); }
+@media (orientation: portrait) and (max-width: 600px) {
+  body.air-combat #app #hud #reel-button { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 3.36 + 58px); }
+  body.air-combat #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 3.36 + 8px); }
+}
+/* Short landscape: there is no room above the taller paw (the map on one side, the left column on the other): the cast /
+   reel button stands beside the paw on its inner side, with its hint above it. */
+@media (max-height: 520px) and (orientation: landscape) {
+  body.air-combat #app #hud #reel-button { right: calc(var(--paw-edge, 18px) + var(--safe-right) + var(--sk) * 3.36 + 14px); bottom: calc(26px + var(--safe-bottom)); }
+  body.air-combat #app #hud #reel-button + #fish-hint { right: calc(var(--paw-edge, 18px) + var(--safe-right) + var(--sk) * 3.36 + 14px); bottom: calc(26px + var(--safe-bottom) + 64px); }
+  body.air-combat #app #hud.joystick-right #reel-button, body.air-combat #app #hud.joystick-right #reel-button + #fish-hint { right: auto; left: calc(var(--paw-edge, 18px) + var(--safe-left) + var(--sk) * 3.36 + 14px); }
+}
+/* 360 px and narrower: the hint would reach up to the target frame, so with a creature chosen (a fight) it steps aside;
+   left-handed, the button stands right of the Colossus chip. */
+@media (orientation: portrait) and (max-width: 360px) {
+  body.air-combat #app.target-on #hud #fish-hint { display: none; }
+  body.air-combat #app #hud.joystick-right #reel-button, body.air-combat #app #hud.joystick-right #reel-button + #fish-hint { left: calc(64px + var(--safe-left)); }
 }
 @media (max-height: 500px) and (orientation: landscape) {
-  body.air-combat.in-rescue #rescue-build, body.air-combat.in-rescue[data-rescue-orient="portrait"] #rescue-build { right: calc(var(--safe-right) + 18px + var(--sk) * 3.784 + 8px); }
+  body.air-combat.in-rescue #rescue-build, body.air-combat.in-rescue[data-rescue-orient="portrait"] #rescue-build { right: calc(var(--safe-right) + 18px + var(--sk) * 3.36 + 8px); }
 }
 /* The air window (jump-rules.ts airWindow): while a press would be an air move the attack toe and the skill toes wear a
    sky rim, and the two skills with an air form and the attack toe turn sky blue; on the way down the attack toe shows the
@@ -280,7 +302,7 @@ body.indoors #app #hud .skills { display: none; }
 #app #hud .skills.air .skill.air-form { background: linear-gradient(160deg, #8fe0ff, #2f9be6); }
 #app #hud .skills.air.dive .attack-pad { background: linear-gradient(160deg, #ffa3bf, #e8457a); }
 #app #hud .skills.air.dive .attack-pad > svg { rotate: 180deg; }
-/* The hit counter and the power strike's button have their own sheet (combo-counter.css). */
+/* The hit counter and the Attack pad's charge ring have their own sheet (combo-counter.css). */
 /* 'Blocked' over a boss that turned a low hit (world.ts blockFeedback). */
 #floating-text .float.block { color: #bfe6ff; }
 

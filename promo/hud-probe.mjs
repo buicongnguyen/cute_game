@@ -5,6 +5,7 @@
 //   npx vite --port 5312 --host 127.0.0.1 --strictPort        (in another shell; PROBE_URL overrides)
 //   node promo/hud-probe.mjs                                   (all sizes, both languages)
 //   SIZES=390x844,320x568 LANGS=vi SHOTS=out/dir node promo/hud-probe.mjs
+//   HAND=left measures left-handed play (the stick on the right, the paw mirrored to the left).
 // Exit code 1 when anything is found.
 import { createRequire } from 'node:module';
 import { readFileSync, mkdirSync } from 'node:fs';
@@ -37,11 +38,12 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '
   for (const size of sizes) for (const lang of langs) {
     const { ctx, page } = await openGame(browser, size, lang);
     page.on('pageerror', e => console.log('  pageerror', e.message.slice(0, 140)));
+    if (process.env.HAND === 'left') { await page.evaluate(() => { __zoo.state.settings.joystickSide = 'right'; document.querySelector('#hud').classList.add('joystick-right'); }); await page.waitForTimeout(300); }
     for (const [state, enter] of Object.entries(STATES)) {
       await enter(page);
       const m = await page.evaluate(measureHud), list = findings(m); bad += list.length;
       console.log(`${size} ${lang} ${state}: ${list.length ? '' : 'clean'} (dock ${m.dockW.trim()}, ${m.groups.dock.length} buttons)`); for (const line of list) console.log('   ' + line);
-      if (shots) await page.screenshot({ path: `${shots}/${state}-${size}-${lang}.png` });
+      if (shots) await page.screenshot({ path: `${shots}/${state}-${size}-${lang}${process.env.HAND === 'left' ? '-left' : ''}.png` });
     }
     await ctx.close();
   }

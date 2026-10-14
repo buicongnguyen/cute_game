@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import { BEST_DAMAGE, BEST_HITS, COUNTER, COUNTER_HTML, COUNTER_TIERS, ComboCounterView, counterClasses, counterMilestone, counterSize, counterTier, placeCounter, recordBest, summaryText, type Box, type CounterState, type Placement } from '../src/combo-counter.ts';
 import { createProgression, normalizeProgression } from '../src/progression.ts';
 import * as M from '../src/model.ts';
-import { CHAIN_VI, POWER_HELP_VI } from '../src/locales/vi-chain.ts';
+import { CHAIN_VI } from '../src/locales/vi-chain.ts';
+import { FIVE_VI, FIVE_HELP_VI } from '../src/locales/vi-five.ts';
 import { VI_PACK } from '../src/locales/vi-pack.ts';
 import { HELP_TOPICS } from '../src/help-topics.ts';
 
@@ -78,7 +79,7 @@ test('it keeps its place while that place is free, moves when the target walks o
 function fakeRoot() {
   let writes = 0; const style: Record<string, string> = {};
   const el = () => { let text = ''; return { get textContent() { return text; }, set textContent(v: string) { writes++; text = v; } }; };
-  const parts: Record<string, ReturnType<typeof el>> = { '.cc-n': el(), '.cc-w': el(), '.cc-bonus': el(), '.cc-note': el() };
+  const parts: Record<string, ReturnType<typeof el>> = { '.cc-n': el(), '.cc-word': el(), '.cc-bonus': el(), '.cc-note': el() };
   let hidden = true, cls = '';
   const root = { querySelector: (s: string) => parts[s], style: new Proxy(style, { set(t, k: string, v: string) { writes++; t[k] = v; return true; }, get: (t, k: string) => k === 'setProperty' ? (name: string, v: string) => { writes++; t[name] = v; } : t[k] }),
     get hidden() { return hidden; }, set hidden(v: boolean) { writes++; hidden = v; }, get className() { return cls; }, set className(v: string) { writes++; cls = v; } };
@@ -101,10 +102,10 @@ test('the view writes only when what it shows changes, asks for its place only w
 
 test('motion is CSS only, stops under reduced motion, and the old chip is gone', () => {
   const css = readFileSync(new URL('../src/combo-counter.css', import.meta.url), 'utf8'), main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8'), ours = readFileSync(new URL('../src/hud-ours.css', import.meta.url), 'utf8');
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*#combo-counter \.cc-n[^}]*animation: none !important;/s); assert.match(css, /prefers-reduced-motion: reduce[\s\S]*\.power-pad:not\(\[hidden\]\)[^}]*\{ animation: none; \}/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*#combo-counter \.cc-n[^}]*animation: none !important;/s); assert.match(css, /prefers-reduced-motion: reduce[\s\S]*\.attack-pad\.ready > \.ap-ring[^}]*\{ animation: none; \}/); assert.match(css, /prefers-reduced-motion: reduce[\s\S]*\.attack-pad\.holding > \.ap-hold \{ animation: none; scale: 1;/, 'the hold still shows, without motion');
   assert.match(css, /#app #hud #combo-counter \{[^}]*pointer-events: none;/s, 'it never takes a tap');
-  assert.match(css, /\.power-pad:not\(\[hidden\]\) \{ position: absolute; width: max\(56px,/, 'the touch button is at least 56 px');
-  assert.match(css, /#hud\.joystick-right \.skills \.power-pad:not\(\[hidden\]\) \{ left: auto; right:/, 'left-handed play mirrors it');
+  assert.doesNotMatch(css, /power-pad/, 'the power strike has no button of its own');
+  assert.match(css, /#combo-counter \.cc-shield \{/, 'the small shield of the untouched streak');
   assert.doesNotMatch(main, /combo-chip|combo-steps/); assert.doesNotMatch(ours, /#combo-chip/);
   assert.match(main, /comboMeter\.step\(dt\);stepCounter\(dt\);/); assert.doesNotMatch(main.slice(main.indexOf('function stepCounter'), main.indexOf('function clearPower')), /textContent|innerHTML|classList|\.style\./, 'the step itself never touches the page');
   assert.match(main, /recordBest\(state\.progression\.totals,count,chainDamage\)/);
@@ -113,8 +114,9 @@ test('motion is CSS only, stops under reduced motion, and the old chip is gone',
 test('every new line reads in Vietnamese, with its placeholders and numbers kept', () => {
   const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
   for (const [en, vi] of Object.entries(CHAIN_VI)) { assert.equal(VI_PACK[en], vi, en); assert.notEqual(vi, en); assert.deepEqual((vi.match(/\{\w+\}/g) ?? []).sort(), (en.match(/\{\w+\}/g) ?? []).sort(), en); assert.deepEqual(vi.match(/×?\d+/g) ?? [], en.match(/×?\d+/g) ?? [], en); }
-  for (const line of ['{count} hits · {damage}', 'New best!', 'Power strike', 'POWER READY!', 'POWER ×2!', 'POWER STRIKE!', 'POWER STRIKE ×2!', 'POWER!', 'Power strike ready! Tap the glowing button above the paw.', 'Power strike ready! Press G or click the glowing button.', 'HITS', 'LAUNCH!', 'FINISHER!']) { assert.ok(VI_PACK[line], 'missing: ' + line); assert.ok(main.includes(`'${line}'`), 'main.ts uses: ' + line); }
-  const topic = HELP_TOPICS.find(([, title]) => title === 'Power strike')!; assert.equal(VI_PACK[topic[1]], POWER_HELP_VI[0]); assert.equal(VI_PACK[topic[2]], POWER_HELP_VI[1]);
-  assert.deepEqual(POWER_HELP_VI[1].match(/\d+/g), topic[2].match(/\d+/g), 'the same numbers in both languages');
-  assert.equal(HELP_TOPICS[HELP_TOPICS.length - 1][1], 'Power strike', 'added at the end, so the older topics keep their order');
+  for (const line of ['{count} hits · {damage}', 'New best!', 'Power strike', 'POWER READY!', 'POWER ×2!', 'POWER STRIKE!', 'POWER STRIKE ×2!', 'POWER!', 'Power strike ready! Hold Attack to unleash it.', 'UNTOUCHED ×{n}!', 'Attack: hold to unleash the power strike', 'HITS', 'LAUNCH!', 'FINISHER!']) { assert.ok(VI_PACK[line], 'missing: ' + line); assert.ok(main.includes(`'${line}'`), 'main.ts uses: ' + line); }
+  for (const [en, vi] of Object.entries(FIVE_VI)) { assert.equal(VI_PACK[en], vi, en); assert.notEqual(vi, en); assert.deepEqual((vi.match(/\{\w+\}/g) ?? []).sort(), (en.match(/\{\w+\}/g) ?? []).sort(), en); assert.deepEqual(vi.match(/×?\d+/g) ?? [], en.match(/×?\d+/g) ?? [], en); }
+  // The four help topics of the fight: each has its Vietnamese, with the same numbers (1.5 is written 1,5).
+  for (const [title, viTitle, viBody] of FIVE_HELP_VI) { const topic = HELP_TOPICS.find(row => row[1] === title)!; assert.ok(topic, title); assert.equal(VI_PACK[topic[1]], viTitle); assert.equal(VI_PACK[topic[2]], viBody); assert.deepEqual(viBody.replace(/(\d),(\d)/g, '$1.$2').match(/\d+(\.\d+)?/g), topic[2].match(/\d+(\.\d+)?/g), title + ': the same numbers in both languages'); }
+  assert.deepEqual(HELP_TOPICS.slice(-4).map(row => row[1]), ['Jump and air combat', 'Attack and three specials', 'Power strike', 'Untouched streak'], 'at the end, so the older topics keep their order');
 });

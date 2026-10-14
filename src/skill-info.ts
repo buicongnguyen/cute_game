@@ -9,6 +9,7 @@ import { skillTuning, levelledCooldown } from './skill-upgrades.ts';
 import { DZ, GAZE, BOULDER, SUMMON_HP, DECOY, LIFESTEAL_CAP_PER_SECOND } from './combat.ts';
 import { MOVES, AIR_MOVES, moveAt, skyQuakePower } from './moves.ts';
 import { JUMP, MAX_HEIGHT } from './jump-rules.ts';
+import { chainKind, chainPower } from './five-rules.ts';
 
 const fix = (n: number) => String(Math.round(n * 100) / 100);
 /** Base whirlwind radius (sword users spin wider), the slam shockwave and the dash length, as combat.ts casts them. */
@@ -129,18 +130,19 @@ export interface SkillView { name: string; icon: string; cd: number }
 export const lobSplash = (level: number) => MOVES.lob.splash + skillTuning(0, level).radius;
 export const quakeRadius = (level: number) => MOVES.quake.radius + skillTuning(2, level).radius;
 /**
- * What each of the four moves does on the ground and in the air, with the table's numbers at the player's level
- * (moves.ts; locales/vi-moves.ts holds the same sentences in Vietnamese). `slot`: 0 the Lob, 1 the Rush, 2 the Quake, 3 the Strike.
+ * What each of the three moves does on the ground and in the air, with the table's numbers at the player's level
+ * (moves.ts; locales/vi-moves.ts holds the same sentences in Vietnamese). `slot`: 0 the Lob, 1 the Rush, 2 the Quake; 3 is
+ * the attack chain (five-rules.ts), which the fourth skill's level raises: its numbers are those of a weapon of `weaponKind`.
  */
-export function moveDescription(slot: number, level = 0): string {
-  const k = skillTuning(slot, level).damage, dmg = (base: number) => fix(base * k), L = MOVES.lob, R = MOVES.rush, Q = MOVES.quake, S = MOVES.strike, A = AIR_MOVES;
+export function moveDescription(slot: number, level = 0, weaponKind?: string): string {
+  const k = skillTuning(slot, level).damage, dmg = (base: number) => fix(base * k), L = MOVES.lob, R = MOVES.rush, Q = MOVES.quake, A = AIR_MOVES, kind = chainKind(weaponKind ?? 'fist');
   if (slot === 0) return t('Throw petals in an arc onto a marked spot {min} to {max} m away (your target, else the nearest enemy): they land after {time} s for ×{dmg} damage at the centre and ×{edge} within {r} m.', { min: fix(L.min), max: fix(L.max), time: fix(L.windup + L.flight), dmg: dmg(L.centre), edge: dmg(L.edge), r: fix(lobSplash(level)) })
     + ' ' + t('In the air: Petal Rain, {n} shots straight down in a line, ×{dmg} damage each.', { n: A.rain.shots, dmg: dmg(A.rain.power) });
   if (slot === 1) return t('Rush {d} m in a line, untouchable: each enemy within {w} m of your path takes ×{dmg} damage once, and ground marks cannot hurt you on the way.', { d: fix(R.length), w: fix(R.width), dmg: dmg(R.power) })
     + ' ' + t('In the air: Sky Step, the same dash at your height; steer and it turns once.');
   if (slot === 2) return t('Slam a {r} m ring around you: ×{dmg} damage, enemies thrown up, large ones stunned {stun} s.', { r: fix(quakeRadius(level)), dmg: dmg(Q.power), stun: fix(Q.stun) })
     + ' ' + t('In the air: Sky Quake, a dive with a {r} m ring for ×{low} to ×{high} damage, more from higher.', { r: fix(A.dive.radius + skillTuning(2, level).radius), low: dmg(skyQuakePower(JUMP.rise[0])), high: dmg(skyQuakePower(MAX_HEIGHT)) });
-  return t('Three quick hits in a {r} m arc ahead: ×{a}, ×{b} and ×{c} damage; the third launches small enemies.', { r: fix(S.reach), a: dmg(S.hits[0]), b: dmg(S.hits[1]), c: dmg(S.hits[2]) })
+  return t(kind === 'gun' ? 'Your attack is a chain of three presses: ×{a}, ×{b} and a double shot for ×{c} damage.' : 'Your attack is a chain of three presses: ×{a}, ×{b} and ×{c} damage; the third launches small enemies.', { a: fix(chainPower(kind, 0)), b: fix(chainPower(kind, 1)), c: fix(chainPower(kind, 2, level)) })
     + ' ' + t('In the air: Sky Spin, one spin for ×{dmg} damage on every enemy within {r} m.', { dmg: dmg(A.swing.power), r: fix(A.swing.radius) });
 }
 /**
@@ -149,7 +151,7 @@ export function moveDescription(slot: number, level = 0): string {
  */
 export function skillDescription(index: number, { special = 'fist', weaponKind, level = 0, disguise, moves }: { special?: string; weaponKind?: string; level?: number; disguise?: string; /** The four moves are on (moves.ts): slots that hold a move are described as it. */ moves?: boolean }): string {
   if (disguise) { const text = DISGUISE_INFO[disguise]?.[index], sp = Object.values(SPECIAL_INFO).find(i => i.text === text); return text ? t(text, sp ? { dmg: fix(sp.damage) } : {}) : ''; }
-  if (moves && moveAt(index, special)) return moveDescription(index, level);
+  if (moves && (moveAt(index) || index === 3)) return moveDescription(index, level, weaponKind);
   const dmg = (base: number) => fix(base * skillTuning(index, level).damage);
   if (index === 0) return t('Spin for 2.2 s: 10 hits of ×{dmg} damage on every enemy within {r} m.', { dmg: dmg(.55), r: fix(whirlRadius(weaponKind, level)) });
   if (index === 1) return t('Rush {d} m forward, untouchable, striking each enemy on the way once for ×{dmg} damage.', { d: fix(DASH_LENGTH), dmg: dmg(1.7) });

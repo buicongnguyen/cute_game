@@ -11,7 +11,7 @@ export function measureHud() {
     hero: all('#hud .player-card'), dock: all('#hud .top-actions button'), map: all('#hud .minimap'), home: all('#hud .home-button'),
     slips: all('#hud .tracker-panels > *, #hud #tracker-chip'), eat: all('#hud #quick-eat, #hud .quick-eat-pick'), buffs: all('#hud #buff-bar > *'),
     skills: all('#hud .skill'), pad: all('#hud .attack-pad'), jump: all('#hud .jump-pad'), stick: all('#movement-joystick'), boss: all('#boss-bar'), target: all('#target-frame'),
-    colossus: all('.colossus-banner'), prompt: all('#context-prompt button'), power: all('#hud .power-pad'), counter: all('#combo-counter'), keys: all('#keys-guide'), reel: all('#reel-button'), fishHint: all('#fish-hint'), weather: all('#environment-bar > *'),
+    colossus: all('.colossus-banner'), prompt: all('#context-prompt button'), counter: all('#combo-counter'), keys: all('#keys-guide'), reel: all('#reel-button'), fishHint: all('#fish-hint'), weather: all('#environment-bar > *'),
   };
   // Touch targets: what a finger really gets at each control's centre row and column.
   const coarse = matchMedia('(pointer: coarse)').matches, small = [];
@@ -26,12 +26,38 @@ export function measureHud() {
   // portrait tile, the energy count over the health bar. `cut` = the text is wider than its box; `tall` = the height of its glyphs.
   const piece = sel => { const el = document.querySelector(sel); if (!seen(el)) return null; const cs = getComputedStyle(el); return { ...box(el), text: el.textContent.trim(), cut: el.scrollWidth > el.clientWidth + 1, font: parseFloat(cs.fontSize), ellipsis: cs.textOverflow === 'ellipsis' }; };
   const plate = { name: piece('#hud #player-name'), level: piece('#hud .level-badge'), energy: piece('#hud .hero-energy'), energyText: piece('#hud #energy'), avatar: piece('#hud .avatar'), health: piece('#hud .meter.health'), oldTag: document.querySelectorAll('#hud .top-actions .energy, #hud .level-chip, #hud [data-action="news"]').length };
-  return { W: innerWidth, H: innerHeight, groups, plate, small, dockW: getComputedStyle(document.documentElement).getPropertyValue('--dock-w') };
+  return { W: innerWidth, H: innerHeight, coarse, air: document.body.classList.contains('air-combat'), leftHanded: !!document.querySelector('#hud.joystick-right'), groups, plate, small, dockW: getComputedStyle(document.documentElement).getPropertyValue('--dock-w') };
 }
 /** Toes and the pad are round: two of them overlap when their centres are closer than their radii allow, not when their boxes meet.
     The stick is a disc too (joystick.css, border-radius 50%): with jumping on, the attack toe sits by its lower corner, where the boxes
     meet on a 320 px phone while the discs are over 20 px apart. */
-const ROUND = new Set(['skills|skills', 'skills|pad', 'skills|jump', 'pad|jump', 'pad|stick', 'skills|power', 'pad|power', 'jump|power']);
+const ROUND = new Set(['skills|skills', 'skills|pad', 'skills|jump', 'pad|jump', 'pad|stick', 'jump|stick', 'skills|stick']);
+/**
+ * The five-button paw (jumping on, a touch screen): the rules of docs/FIGHT-PLAN.md section 11.
+ *   - the Attack pad is at least 60 px, each special at least 48 px, Jump at least 52 px;
+ *   - a thumb resting on Attack or on Jump covers no special: the thumb is a capsule 100 px wide (22 mm) from the
+ *     screen's bottom corner on the paw's side to the middle of the button it rests on, and every special's disc (its
+ *     cooldown ring is the disc's rim) stays clear of it;
+ *   - Jump stands beside Attack on the inner side, and the specials are all above both.
+ */
+export const THUMB = 100;
+export function pawFindings(m) {
+  const out = []; if (!m.coarse || !m.air || !m.groups.pad.length || !m.groups.jump.length) return out;
+  const pad = m.groups.pad[0], jump = m.groups.jump[0], mid = b => ({ x: (b.l + b.r) / 2, y: (b.t + b.b) / 2 }), size = b => Math.min(b.r - b.l, b.b - b.t);
+  const right = mid(pad).x > m.W / 2, corner = { x: right ? m.W : 0, y: m.H };
+  if (size(pad) < 60 - .5) out.push(`the Attack pad is ${size(pad).toFixed(0)} px, under 60`);
+  if (size(jump) < 52 - .5) out.push(`the Jump pad is ${size(jump).toFixed(0)} px, under 52`);
+  if (m.groups.skills.length !== 3 && m.groups.skills.length !== 4) out.push(`${m.groups.skills.length} specials on the paw (three, or four in a disguise)`);
+  const inner = right ? mid(jump).x < mid(pad).x : mid(jump).x > mid(pad).x;
+  if (!inner || Math.abs(mid(jump).y - mid(pad).y) > size(pad) / 2) out.push('Jump is not beside the Attack pad on the inner side');
+  const seg = (p, a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy, f = l ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)) : 0; return Math.hypot(p.x - a.x - dx * f, p.y - a.y - dy * f); };
+  for (const [i, s] of m.groups.skills.entries()) {
+    if (size(s) < 48 - .5) out.push(`special ${i} is ${size(s).toFixed(0)} px, under 48`);
+    if (s.b > Math.min(pad.t, jump.t) + size(s) * .75) out.push(`special ${i} is not above the Attack and Jump pads`);
+    for (const [name, on] of [['Attack', pad], ['Jump', jump]]) { const clear = seg(mid(s), corner, mid(on)) - THUMB / 2 - size(s) / 2; if (clear < 0) out.push(`a thumb on ${name} covers special ${i} by ${(-clear).toFixed(1)} px`); }
+  }
+  return out;
+}
 /** Known before this stage and left alone: the timed-task pill is a slim 25 px row on phones (its neighbours take no taps there). */
 export const KNOWN_SMALL = ['challenge-tracker'];
 export function findings(m) {
@@ -44,7 +70,7 @@ export function findings(m) {
   }
   for (const [name, boxes] of Object.entries(m.groups)) for (const b of boxes) if (b.l < -.5 || b.t < -.5 || b.r > m.W + .5 || b.b > m.H + .5) out.push(`${name} leaves the screen ${JSON.stringify([b.l, b.t, b.r, b.b].map(Math.round))}`);
   for (const s of m.small) if (!KNOWN_SMALL.some(k => String(s.el).includes(k))) out.push(`touch target ${JSON.stringify(s)}`);
-  out.push(...plateFindings(m));
+  out.push(...plateFindings(m), ...pawFindings(m));
   return out;
 }
 /** The hero plate: the name over the tile, the level as a number on a badge, the energy count over the health bar, all inside the
@@ -85,13 +111,18 @@ export const STATES = {
     });
     await page.waitForTimeout(2500);
   },
-  // A chain of hits with the power strike charged (after 'fight'): the hit counter beside the explorer and the glowing button over the paw.
+  // A chain of hits with the power strike charged (after 'fight'): the hit counter beside the explorer and the Attack pad glowing.
   charged: async page => {
-    await page.evaluate(() => { const f = window.__zoo.fight; f.on = true; f.powerCharge.hits = 20; f.powerCharge.left = 12; window.__probeChain = setInterval(() => { f.comboMeter.step(.1); f.comboMeter.hit('ground'); }, 250); });
-    await page.waitForFunction(() => !document.querySelector('#combo-counter')?.hidden && !document.querySelector('#power-pad')?.hidden, null, { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(400);
+    await page.evaluate(() => { const f = window.__zoo.fight; f.on = true; f.powerCharge.hits = 20; f.powerCharge.left = 12; f.streak.count = 11; window.__probeChain = setInterval(() => { f.powerCharge.left = 12; f.comboMeter.step(.1); f.comboMeter.hit('ground'); f.streak.hit(); }, 250); });
+    await page.waitForFunction(() => !document.querySelector('#combo-counter')?.hidden && !!document.querySelector('#hud .attack-pad.ready'), null, { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(400);
+  },
+  // The same fight in a disguise: its four skills are four toes on the arc.
+  disguise: async page => {
+    await page.evaluate(() => { const s = window.__zoo.state; s.bag.dz_ninja = 1; s.gear.disguise = 'dz_ninja'; window.__zoo.world.refreshPlayer?.(); });
+    await page.waitForFunction(() => !!document.querySelector('#hud .skills.toes-4') || !document.body.classList.contains('air-combat'), null, { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500);
   },
   fishing: async page => {
-    await page.evaluate(() => { clearInterval(window.__probeFight); clearInterval(window.__probeChain); __zoo.resetCombat?.(); const w = __zoo.world, s = __zoo.state; s.bag.harpoon = 1; s.gear.weapon = 'harpoon'; delete s.gear.disguise; w.selected = null; w.position.set(-7.5, 0, 15); w.cameraTarget.copy(w.position); w.destination = null; w.route = []; });
+    await page.evaluate(() => { clearInterval(window.__probeFight); clearInterval(window.__probeChain); __zoo.fight.powerCharge.clear(); __zoo.resetCombat?.(); const w = __zoo.world, s = __zoo.state; s.bag.harpoon = 1; s.gear.weapon = 'harpoon'; delete s.gear.disguise; w.selected = null; w.position.set(-7.5, 0, 15); w.cameraTarget.copy(w.position); w.destination = null; w.route = []; });
     await page.waitForSelector('#reel-button:not([hidden])', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500);
   },
 };

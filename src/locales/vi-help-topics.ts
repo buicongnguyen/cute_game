@@ -1,9 +1,7 @@
 // Vietnamese for the help dialog (help-topics.ts).
 // Loaded only for Vietnamese players (locales/vi-pack.ts); the English text lives in the shared content module.
 import { HELP_TOPICS } from '../help-topics.ts';
-import { JUMP_HELP_VI } from './vi-jump.ts';
-import { MOVES_HELP_VI } from './vi-moves.ts';
-import { POWER_HELP_VI } from './vi-chain.ts';
+import { FIVE_HELP_VI } from './vi-five.ts';
 /** [English title, Vietnamese title, Vietnamese text]; the English text of each topic comes from HELP_TOPICS. */
 const ROWS: ReadonlyArray<readonly [string, string, string]> = [
   ['Wander', 'Di chuyển', 'Nhấn mặt đất để đi; giữ để điều khiển hướng. Dấu chỉ đánh dấu mục tiêu. Bạn cũng có thể dùng phím mũi tên. Vào Cài đặt → Bố trí phím trên máy tính để bật di chuyển bằng WASD. Cài đặt cũng cho phép bật cần điều khiển.'],
@@ -32,9 +30,7 @@ const ROWS: ReadonlyArray<readonly [string, string, string]> = [
   ['Weapon forging', 'Cường hóa vũ khí', 'Cường hóa vũ khí đang sở hữu đến +15. Mỗi cấp tăng 1% tấn công. Mỗi lần thử đến +5 có 50% thành công, sau đó 30%, và tiêu hao vật liệu cùng năng lượng đã ghi. Thất bại không làm giảm cấp.'],
   ['Visiting a garden', 'Ghé thăm vườn', 'Bạn có thể thử lấy cây chín ở vườn bạn bè. Chó canh sẽ chặn và cắn. Nếu không có chó, cây được lấy khỏi luống; máy chủ giới hạn mỗi khách sáu cây mỗi vườn mỗi ngày.'],
   ['Handy shortcuts', 'Phím tắt tiện dụng', 'I túi đồ · J nhật ký (P khi dùng WASD) · M bản đồ · F tương tác · Q/W/E/R kỹ năng (J/K/L/; khi dùng WASD) · Enter chat · Esc đóng. Phím tắt tạm dừng khi đang nhập chữ, kể cả tiếng Việt.'],
-  ['Jump and air combat', JUMP_HELP_VI[0], JUMP_HELP_VI[1]],
-  ['Four moves', MOVES_HELP_VI[0], MOVES_HELP_VI[1]],
-  ['Power strike', POWER_HELP_VI[0], POWER_HELP_VI[1]],
+  ...FIVE_HELP_VI,
 ];
 const VI_BY_TITLE = new Map(ROWS.map(([title, viTitle, viBody]) => [title, [viTitle, viBody] as const]));
 export const HELP_TOPICS_VI: Record<string, string> = Object.fromEntries(HELP_TOPICS.flatMap(([, title, body]) => [[title, VI_BY_TITLE.get(title)![0]], [body, VI_BY_TITLE.get(title)![1]]]));

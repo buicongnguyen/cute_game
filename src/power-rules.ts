@@ -1,6 +1,6 @@
 /**
- * The power strike: landing hits fills a charge, a full charge shows a special button, and pressing it unleashes one big
- * move that suits the weapon in hand. Pure numbers and rules (tests/power-rules.test.ts); combat.ts deals the damage,
+ * The power strike: landing hits fills a charge, a full charge makes the Attack button glow, and holding it (five-rules.ts
+ * HOLD) unleashes one big move that suits the weapon in hand. Pure numbers and rules (tests/power-rules.test.ts); combat.ts deals the damage,
  * main.ts counts the hits and shows the button, power-fx.ts draws it, promo/fight-sim.mts checks the balance.
  *
  * Only while the 'Jump and air combat' switch is on and only in solo play: the server's copy of the fight never
@@ -22,12 +22,10 @@ export const POWER = {
   floor: [1.25, 2] as readonly number[],
   /** One strike never takes more than this share of a boss's full health (the boss single-hit cap of docs/FIGHT-PLAN.md). */
   bossCap: .15,
-  /** The wind-up before it lands, the hit-stop when it does, and how long the hands stay busy after. */
-  windup: .22, stop: .09, recovery: .3,
+  /** The wind-up before it lands (short: holding Attack for HOLD.time is the real wind-up), the hit-stop when it does, and how long the hands stay busy after. */
+  windup: .1, stop: .09, recovery: .3,
   /** What it does to the creatures it hits: a short stun, a hard knock, a small lift for ordinary creatures. */
   stun: .3, knock: 4.5, lift: 1.2,
-  /** The key on a keyboard (free in both layouts: H eats, F and N attack, Space jumps). */
-  key: 'g',
 } as const;
 
 /** The four forms: a blade's travelling crescent, the fists' gust in a cone, a gun's beam, and the ring of the dive version. */

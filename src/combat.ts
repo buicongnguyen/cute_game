@@ -107,7 +107,8 @@ export function decoyPoint(d:{x:number;z:number;ring?:number},from:CombatPoint):
 /** Kit skills that are the uniform weapon specials (special()). */
 const SPECIAL_SKILLS=new Set(['anchor','lotus','dragon','eagle','goldstar']);
 import { skillTuning } from './skill-upgrades.ts';
-import { MOVES, AIR_MOVES, airDashTurn, lobLanding, lobPower, lobReaches, moveAt, moveTime, quakeStuns, rainPoints, skyQuakeCap, skyQuakePower, strikeLaunches } from './moves.ts';
+import { MOVES, AIR_MOVES, airDashTurn, lobLanding, lobPower, lobReaches, moveAt, quakeStuns, rainPoints, skyQuakeCap, skyQuakePower } from './moves.ts';
+import { CHAIN, chainKind, chainLaunches, chainNext, chainPower } from './five-rules.ts';
 import { dogTarget, DOG_TOSS_FLIGHT, DOG_TOSS_RANGE } from './guard-dog.ts';
 /** A disguise skill cast from a jump (air-cast.ts). */
 export interface DisguiseAir { power?:number; cap?:(target:CombatTarget)=>number; grounded?:boolean; landed?:boolean; arrive?:()=>void }
@@ -187,19 +188,24 @@ export class CombatSimulation {
   /**
    * Jump combat (jump-rules.ts), set by the solo game only. The server's copy of this simulation never touches it, so
    * online damage is exactly what it was. `bonus`: the combo ramp, a factor on the explorer's own hits. `sure`: the
-   * next own hit is a critical (a perfect dodge); `spent` tells the game it was used. `launch`: every third basic
-   * melee hit lifts an ordinary creature `launch` m (0 = off).
+   * next own hit is a critical (a perfect dodge); `spent` tells the game it was used. `launch`: the third hit of the
+   * attack chain lifts a small creature `launch` m (0 = off; without the chain, every third basic melee hit lifts an ordinary one).
    */
   readonly edge:{bonus:number;sure:boolean;launch:number;
+    /** The basic attack is the three-hit chain of five-rules.ts (the solo game with the switch on). */chain?:boolean;
     /** The four moves of moves.ts replace the four starting skills (the solo game with the switch on). */moves?:boolean;
     /** The creature the explorer has chosen (the Lob aims at it first), and where the stick points (rad; the air dash may turn to it). */target?:()=>CombatTarget|null|undefined;stick?:()=>number|null;
     /** Around the hits of a move that may end a chain ('quake', 'skyquake'): `begin` returns the damage factor (the finisher bonus). */begin?:(move:string)=>number;end?:(move:string)=>void;
     spent?:()=>void;/** The share of a hit a boss lets through (a block; 1 = all of it). */scale?:(target:CombatTarget)=>number;/** A critical multiplier that replaces the stat's for this hit (a hit from the air), or undefined. */crit?:()=>number|undefined}={bonus:1,sure:false,launch:0};
   /** Set while a dive strike deals its damage: a sure critical on this target, and the most it may take from a boss. */
   private forced=false;private hitCap=Infinity;private swings=0;
+  /** The attack chain (five-rules.ts): the step of the last press (-1 = none) and when it was. */
+  private chainStep=-1;private chainAt=-Infinity;
+  /** Which of the chain's three presses the last basic attack was (0 to 2); 0 without the chain. */
+  get chainLast(){return Math.max(0,this.chainStep);}
   /** Root Quake cast in the air: the shockwave waits for the landing (land()). */
   private plunge:{radius:number;power:number;height?:number}|null=null;
-  /** A Strike chain or a Lob throw keeps the hands busy until this time: no other attack starts, the feet stay free. */
+  /** A Lob throw or a power strike keeps the hands busy until this time: no other attack starts, the feet stay free. */
   private busyUntil=0;
   /**
    * A cast from the air (air-cast.ts). `grounded`: this cast begins on the ground under the explorer, so nothing of it is
@@ -269,7 +275,7 @@ export class CombatSimulation {
   /** Seconds the dash in progress still runs (0 when there is none). */
   get dashLeft(){return this.action?.kind==='dash'?Math.max(0,this.action.until-this.time):0;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.chainStep=-1;this.chainAt=-Infinity;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{}),...(quiet?{quiet:true}:{}),...this.up(point)});}
@@ -308,11 +314,11 @@ export class CombatSimulation {
   /** The nearest creature's spot within `range`, else `fallback` m straight ahead. */
   private spot(range:number,fallback:number,d:CombatPoint){const t=this.nearest(range),p=this.host.position();return t?{x:t.x,z:t.z}:{x:p.x+d.x*fallback,z:p.z+d.z*fallback};}
   private burst(shot:Projectile,point:CombatPoint){this.emit('impact',point,.7,shot.color,this.host.facing(),ELECTRIC_SHOTS.has(shot.kind)?'shock':'blast');this.area(point,shot.burst!,shot.multiplier,shot.stun,shot.burstLift??0,shot.color,1.5,ELECTRIC_SHOTS.has(shot.kind)?'shock':'blast');}
-  private arc(radius:number,multiplier:number,threshold:number,target?:CombatTarget,knock=1.2,lift=0){
+  private arc(radius:number,multiplier:number,threshold:number,target?:CombatTarget,knock=1.2,lift=0,/** Which creatures `lift` raises (default: every ordinary one). */lifts?:(enemy:CombatTarget)=>boolean){
     const p=this.host.position(),d=direction(this.host.facing());this.host.effect({x:p.x,z:p.z,kind:'arc',radius,color:this.host.weapon().fx??'#fff4c8',facing:this.host.facing(),arc:2*Math.acos(Math.max(-1,Math.min(1,threshold))),...this.up(p)});
     for(const enemy of this.host.targets()){
       const x=enemy.x-p.x,z=enemy.z-p.z,length=Math.hypot(x,z);
-      if(enemy.hp>0&&length<=radius+enemy.radius&&(enemy===target||length===0||(x*d.x+z*d.z)/length>=threshold))this.damage(enemy,multiplier,.15,enemy.boss?0:lift,knock);
+      if(enemy.hp>0&&length<=radius+enemy.radius&&(enemy===target||length===0||(x*d.x+z*d.z)/length>=threshold))this.damage(enemy,multiplier,.15,enemy.boss||(lifts&&!lifts(enemy))?0:lift,knock);
     }
   }
   shoot(kind:string,angle:number,multiplier=1,range=11,extras:Partial<Projectile>={}){
@@ -327,6 +333,7 @@ export class CombatSimulation {
     target??=this.nearest(attackRange(weapon));if(!target)return false;
     const p=this.host.position();if(Math.hypot(target.x-p.x,target.z-p.z)>attackRange(weapon,target.radius))return false;
     const angle=this.aim(target);
+    if(this.edge.chain&&!this.lift)return this.chainHit(weapon,target,angle);
     // The launcher: with edge.launch set, every third melee hit pops ordinary creatures into the air.
     const launch=weapon.kind!=='gun'&&this.edge.launch>0&&(this.swings=(this.swings+1)%3)===0?this.edge.launch:0;
     this.power=factor;try{
@@ -336,6 +343,30 @@ export class CombatSimulation {
     else{this.combo=(this.combo+1)%3;this.arc(1.6,this.combo===0?1.5:1,.5,target,this.combo===0?2.2:.8,launch);}// the reference's punch knock: 0.8, 2.2 on the third
     }finally{this.power=1;}
     return true;
+  }
+  /**
+   * One press of the attack chain (five-rules.ts CHAIN; solo, with the switch on, on the ground): cut, back-cut and an
+   * overhead blow with a blade; jab, jab and a hook with paws; shot, shot and a double shot with a gun. The third press
+   * hits hardest and, with paws or a blade, pops small creatures into the air. The reach is the weapon's own.
+   */
+  private chainHit(weapon:WeaponProfile,target:CombatTarget,angle:number){
+    const kind=chainKind(weapon.kind),step=this.chainStep=chainNext(this.chainStep,this.time-this.chainAt);this.chainAt=this.time;
+    const power=chainPower(kind,step,this.host.skillLevel?.(3)??0),last=step===CHAIN.hits[kind].length-1,launch=last&&kind!=='gun'?this.edge.launch||CHAIN.launch:0,lifts=(enemy:CombatTarget)=>chainLaunches(kind,step,enemy);
+    if(kind==='gun'){
+      const shots=last?CHAIN.shots:1,count=Math.max(1,weapon.spread??1),volley=()=>{for(let i=0;i<count;i++)this.shoot(weapon.shot??'pea',angle+(count===1?0:(i/(count-1)-.5)*.6),(count>1?.45:1)*power/shots,(weapon.range??8)+1);};
+      volley();for(let s=1;s<shots;s++)this.later(s*CHAIN.shotGap,volley);
+    }else if(kind==='sword')this.arc(weapon.range??2,power,weapon.arc??.2,target,last?CHAIN.knock[step]:1.2,launch,lifts);
+    else this.arc(1.6,power,.5,target,CHAIN.knock[step],launch,lifts);
+    return true;
+  }
+  /**
+   * The weapon's or the uniform's own special (the old fourth skill), cast with the power strike while the moves are on
+   * (main.ts releasePower): its own look and numbers, raised by the fourth skill's level as ever. False for bare paws.
+   */
+  weaponSpecial(special:string|undefined){
+    if(!special||special==='fist')return false;
+    const old=this.power;this.power=skillTuning(3,this.host.skillLevel?.(3)??0).damage;
+    try{return this.special(special);}finally{this.power=old;}
   }
   /**
    * The dive strike of a jump (jump-rules.ts DIVE): an area hit where the explorer lands. `sure(target)` makes it a
@@ -382,7 +413,8 @@ export class CombatSimulation {
    */
   skill(index:number,special='fist',air?:{dash:number;quakeRadius:number;quakePower:number;/** Metres up (the moves' heavy dive is stronger from higher). */height?:number}){
     if(this.busy)return false;
-    if(this.edge.moves){const move=moveAt(index,special);if(move)return this.move(move,index,air);if(this.time<this.busyUntil)return false;}
+    // The moves are in the first three slots; the fourth is empty (the attack chain and the power strike took its place).
+    if(this.edge.moves){const move=moveAt(index);return move?this.move(move,index,air):false;}
     this.aim();
     const tuning=skillTuning(index,this.host.skillLevel?.(index)??0);this.power=tuning.damage;
     try{
@@ -395,18 +427,14 @@ export class CombatSimulation {
     }finally{this.power=1;}
   }
   /**
-   * One of the four moves (moves.ts; solo, with the switch on). `air`: its air form. The numbers are the table's, scaled
+   * One of the three moves (moves.ts; solo, with the switch on). `air`: its air form. The numbers are the table's, scaled
    * by the slot's upgrade level exactly as the old skill was (damage, radius, cooldown).
    */
-  private move(move:'strike'|'rush'|'quake'|'lob',index:number,air?:{height?:number}){
+  private move(move:'rush'|'quake'|'lob',index:number,air?:{height?:number}){
     if(this.time<this.busyUntil)return false;
     const tuning=skillTuning(index,this.host.skillLevel?.(index)??0);this.power=tuning.damage;
     try{
-      if(move==='strike'){
-        if(air){this.power=1;return this.airSwing(tuning.damage);}
-        const S=MOVES.strike,last=S.hits.length-1;this.aim(this.chosen(S.reach+.6));this.busyUntil=this.time+moveTime('strike');
-        S.hits.forEach((power,i)=>this.later(S.windup+i*S.gap,()=>{const t=this.chosen(S.reach+.6);if(t)this.aim(t);this.strikeHit(power,i===last);}));
-      }else if(move==='rush'){
+      if(move==='rush'){
         const R=MOVES.rush,time=R.length/R.speed;
         if(air){this.dash(AIR_MOVES.dash.power,R.speed,time,{target:this.chosen(R.length+2)});if(this.action)this.action.air=true;}
         else{
@@ -443,24 +471,14 @@ export class CombatSimulation {
   }
   /** The creature a move goes for: the chosen one while it is within `range` (edge to edge), else the nearest within it. */
   private chosen(range:number){const p=this.host.position(),t=this.edge.target?.();return t&&t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius?t:this.nearest(range);}
-  /** One hit of the Strike chain: the front arc out to `reach`; the last one knocks harder and launches small creatures. */
-  private strikeHit(power:number,last:boolean){
-    const S=MOVES.strike,p=this.host.position(),d=direction(this.host.facing()),half=Math.acos(S.cone);
-    this.host.effect({...p,kind:'arc',radius:S.reach,color:this.host.weapon().fx??'#fff4c8',facing:this.host.facing(),arc:2*Math.acos(S.cone)});
-    for(const enemy of this.host.targets()){
-      const x=enemy.x-p.x,z=enemy.z-p.z,length=Math.hypot(x,z);
-      // In the arc when any part of its body is: the angle to its centre, less the half angle its body covers.
-      if(enemy.hp>0&&length<=S.reach+enemy.radius&&(length<=enemy.radius||Math.acos(Math.max(-1,Math.min(1,(x*d.x+z*d.z)/length)))<=half+Math.asin(enemy.radius/length)))this.damage(enemy,power,.15,last&&strikeLaunches(enemy)?S.launch:0,last?2.2:.8);
-    }
-  }
   /** The Quake's ring where the explorer stands: everything in it is hit and launched, the large ones stunned. `cap`: the most one target may take. */
   private quakeRing(radius:number,power:number,lift:number,stun:number,move:string,cap?:(target:CombatTarget)=>number){
     const at=this.host.position(),factor=this.edge.begin?.(move)??1;this.emit('ring',at,radius,'#ffd091',this.host.facing(),'crater');
     try{for(const target of this.within(at,radius)){if(cap)this.hitCap=cap(target);this.damage(target,power*factor,quakeStuns(target)?stun:0,lift,1.2);}}finally{this.hitCap=Infinity;this.edge.end?.(move);}
   }
   /**
-   * The air swing (moves.ts AIR_MOVES.swing): one spin that hits everything round the explorer. The Strike's air form and,
-   * with the moves on, what the attack button does while rising with paws or a blade. `damage`: the Strike slot's level factor.
+   * The air swing (moves.ts AIR_MOVES.swing, 'Sky Spin'): one spin that hits everything round the explorer. With the moves
+   * on it is what the attack button does while rising with paws or a blade. `damage`: the fourth skill's level factor.
    */
   airSwing(damage=1,radius:number=AIR_MOVES.swing.radius,color='#e5f6ff'){
     if(this.action||this.time<this.busyUntil)return false;const A=AIR_MOVES.swing,p=this.host.position(),old=this.power;

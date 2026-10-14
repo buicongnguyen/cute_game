@@ -6,6 +6,11 @@ const KEYBOARD_BINDINGS = {
   wasd: { skills: ['j', 'k', 'l', ';'], journal: 'p', movement: 'WASD to move' },
 } as const;
 export function keyboardBindings(layout?: string) { return layout === 'classic' ? KEYBOARD_BINDINGS.classic : KEYBOARD_BINDINGS.wasd; }
+/**
+ * The skill slot a key casts, or -1. `slots`: how many skill buttons there are now (three with the moves on, four in a
+ * disguise or with the switch off), so the fourth key (R, or ; with WASD) is free while there is no fourth skill.
+ */
+export function skillKeyIndex(key: string, layout?: string, slots = 4) { const i = (keyboardBindings(layout).skills as readonly string[]).indexOf(key); return i >= 0 && i < slots ? i : -1; }
 export function movementKey(pressed: string, layout?: string): MovementKey | null {
   if (movementKeys.has(pressed)) return pressed as MovementKey;
   return layout === 'classic' ? null : wasdMovement.get(pressed) ?? null;
@@ -15,7 +20,7 @@ export function gameplayKey(event:{code?:string;key:string;isComposing?:boolean;
   if(event.isComposing||event.keyCode===229||event.ctrlKey||event.metaKey||event.altKey)return '';
   const code=event.code||'';return /^Key[A-Z]$/.test(code)?code.slice(3).toLowerCase():code==='Semicolon'?';':code==='Space'?' ':code.startsWith('Arrow')?code:code==='Escape'?'Escape':code==='Enter'?'Enter':code==='Tab'?'Tab':event.key.length===1?event.key.toLowerCase():event.key;
 }
-/** The Eat key: H, as ever; with jumping and air combat on (Settings) H is the right hand's basic attack and Eat moves to G, free in both layouts. */
+/** The Eat key: H, as ever, with jumping and air combat on or off. (G is free: the power strike that had it is unleashed by holding Attack.) */
 export function eatKey(_air?:boolean){return 'h';}
 /** What H or G does: 'eat', the right hand's 'attack' (only with jumping and air combat on), or nothing. */
 export function handKey(key:string,air:boolean):'eat'|'attack'|''{return key===eatKey(air)?'eat':air&&key==='n'?'attack':'';}

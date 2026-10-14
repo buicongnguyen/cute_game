@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import * as Controls from '../src/gameplay-controls.ts';
 import {JumpInput,jumpKeyAction} from '../src/jump-rules.ts';
-import {POWER} from '../src/power-rules.ts';
+import {AttackHold,HOLD} from '../src/five-rules.ts';
 
 // Execute the actual production DOM routing, not a second implementation of its bindings.
 const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
@@ -21,13 +21,15 @@ function fixture(layout='classic'){
   const calls=[],keys=new Set(),documentHandlers=new Map(),windowHandlers=new Map(),body=target();
   const register=(handlers,name,fn)=>{const list=handlers.get(name)??[];list.push(fn);handlers.set(name,list);};
   const state={settings:{keyboardLayout:layout}},movement=new Controls.MovementControls(keys);
-  const jumpInput=new JumpInput();
-  const ctx=vm.createContext({...Controls,jumpKeyAction,jumpInput,jumpPointers:new Set(),slideCombo:{cancel(){}},air:true,airOn:()=>ctx.air,spaceKey:'jump',state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
+  const jumpInput=new JumpInput(),attackHold=new AttackHold();
+  const ctx=vm.createContext({...Controls,jumpKeyAction,jumpInput,attackHold,attackPointers:new Set(),worldHold:null,skills:4,skillList:()=>Array.from({length:ctx.skills},()=>({})),jumpPointers:new Set(),slideCombo:{cancel(){}},air:true,airOn:()=>ctx.air,spaceKey:'jump',state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
     world:{keys,interactNearest:()=>calls.push(['interact'])},document:{hidden:false,activeElement:body,addEventListener:(name,fn)=>register(documentHandlers,name,fn),querySelector:selector=>selector==='dialog[open]'&&ctx.nativeDialog?{}:null},window:{addEventListener:(name,fn)=>register(windowHandlers,name,fn)},
     previous:0,performance:{now:()=>12345},graphics:{sample:(...args)=>calls.push(['graphicsSample',...args])},
     $:()=>({querySelectorAll:()=>[]}),uiBlocked:()=>!!ctx.modal||ctx.nativeDialog,
     tryLanding:()=>calls.push(['land']),cancelPlacement:()=>{calls.push(['cancelPlacement']);ctx.placement=null;},confirmPlacement:()=>calls.push(['place']),rotatePlacement:()=>calls.push(['rotate']),
-    closeDialog:()=>{calls.push(['close']);ctx.modal='';movement.clear();},start:()=>calls.push(['start']),inventory:()=>calls.push(['bag']),quests:()=>calls.push(['journal']),map:()=>calls.push(['map']),quickEat:()=>calls.push(['eat']),skill:index=>calls.push(['skill',index]),basicAttack:()=>calls.push(['attack']),POWER,powerStrike:()=>calls.push(['power']),
+    closeDialog:()=>{calls.push(['close']);ctx.modal='';movement.clear();},start:()=>calls.push(['start']),inventory:()=>calls.push(['bag']),quests:()=>calls.push(['journal']),map:()=>calls.push(['map']),quickEat:()=>calls.push(['eat']),skill:index=>calls.push(['skill',index]),basicAttack:()=>calls.push(['attack']),
+    // main.ts attackDown: the press attacks at once, and with jumping on the hold begins (stepHold, not part of the routing, does the rest).
+    attackDown:source=>{if(ctx.air)attackHold.down(source);calls.push(['attack']);},
     gestures:{clear:()=>calls.push(['gesturesClear'])},save:()=>calls.push(['save']),
   });
   vm.runInContext(compiled,ctx);
@@ -37,7 +39,7 @@ function fixture(layout='classic'){
     for(const field of ['code','key','shiftKey','ctrlKey','metaKey','altKey','isComposing','keyCode'])if(field in event)Object.defineProperty(event,field,{value:event[field],enumerable:false});
     for(const handler of documentHandlers.get(type)??[])handler(event);return event;
   }
-  return {ctx,calls,keys,state,movement,body,fire,documentHandlers,windowHandlers,jumpInput};
+  return {ctx,calls,keys,state,movement,body,fire,documentHandlers,windowHandlers,jumpInput,attackHold};
 }
 
 test('classic bindings keep QWER skills, J journal and arrow movement',()=>{
@@ -143,10 +145,30 @@ test('with jumping switched off the keys are the ones from before: Space attacks
   f.fire('keydown','ShiftLeft','Shift');assert.equal(f.jumpInput.held,false);f.ctx.spaceKey='attack';f.fire('keydown','ShiftLeft','Shift');assert.equal(f.jumpInput.held,false,'not even with the old-way choice saved');
 });
 
-test('G is the power strike with jumping on, in both layouts, and nothing with it off; a held key does not repeat it',()=>{
+test('G is free, and so is the fourth skill key while there are three specials; in a disguise the fourth key casts again',()=>{
   for(const layout of ['classic','wasd']){
-    const f=fixture(layout);assert.equal(POWER.key,'g');f.fire('keydown','KeyG');assert.deepEqual(f.calls,[['power']]);f.fire('keydown','KeyG','g',{repeat:true});assert.equal(f.calls.length,1);
-    f.ctx.modal='bag';f.fire('keydown','KeyG');assert.equal(f.calls.length,1,'not while a menu is open');
-    const off=fixture(layout);off.ctx.air=false;off.fire('keydown','KeyG');assert.deepEqual(off.calls,[]);
+    const fourth=layout==='classic'?['KeyR','r']:['Semicolon',';'],third=layout==='classic'?'KeyE':'KeyL';
+    const f=fixture(layout);f.fire('keydown','KeyG');assert.deepEqual(f.calls,[],layout+': G does nothing');
+    f.ctx.skills=3;f.fire('keydown',...fourth);assert.deepEqual(f.calls,[],layout+': the fourth key is free');f.fire('keydown',third);assert.deepEqual(f.calls,[['skill',2]]);
+    f.ctx.skills=4;f.fire('keydown',...fourth);assert.deepEqual(f.calls.at(-1),['skill',3],layout+': four skills in a disguise');
+    const off=fixture(layout);off.ctx.air=false;off.fire('keydown','KeyG');assert.deepEqual(off.calls,[]);off.fire('keydown',...fourth);assert.deepEqual(off.calls,[['skill',3]],layout+': switched off, the fourth skill is where it was');
+    assert.equal(Controls.skillKeyIndex(fourth[1],layout,3),-1);assert.equal(Controls.skillKeyIndex(fourth[1],layout,4),3);assert.equal(Controls.skillKeyIndex(fourth[1],layout),3);assert.equal(Controls.skillKeyIndex('g',layout),-1);
   }
+  assert.doesNotMatch(source,/POWER.key|key==='g'/,'no key of its own for the power strike');
+});
+
+test('holding an attack key holds the attack (F, N, or Space when it attacks); the release, a blur or a menu ends it; switched off nothing is held',()=>{
+  for(const [code,setup] of [['KeyN',()=>{}],['KeyF',()=>{}],['Space',f=>{f.ctx.spaceKey='attack';}]]){
+    const f=fixture('wasd');f.ctx.world.interactNearest=()=>false;setup(f);
+    f.fire('keydown',code);assert.deepEqual(f.calls,[['attack']],code+' attacks as it goes down');assert.equal(f.attackHold.held,true,code+' is held');
+    f.fire('keydown',code,undefined,{repeat:true});assert.equal(f.calls.length,1,'the repeat of the key itself does nothing: the hold repeats (main.ts stepHold)');
+    assert.equal(f.attackHold.step(HOLD.time/2,true),'fill');f.fire('keyup',code);assert.equal(f.attackHold.held,false);assert.equal(f.attackHold.step(1,true),null,'released early: no strike');
+    f.fire('keydown',code);assert.equal(f.attackHold.held,true);for(const handler of f.windowHandlers.get('blur'))handler();assert.equal(f.attackHold.held,false,'a blur lets go');
+  }
+  // Two keys at once: the hold lasts until both are up.
+  const two=fixture('wasd');two.ctx.world.interactNearest=()=>false;two.fire('keydown','KeyF');two.fire('keydown','KeyN');two.fire('keyup','KeyF');assert.equal(two.attackHold.held,true);two.fire('keyup','KeyN');assert.equal(two.attackHold.held,false);
+  // F with something to interact with interacts and holds nothing.
+  const near=fixture('wasd');near.ctx.world.interactNearest=()=>true;near.fire('keydown','KeyF');assert.deepEqual(near.calls,[]);assert.equal(near.attackHold.held,false);
+  // Switched off: Space attacks once, as before, and nothing is held.
+  const off=fixture('wasd');off.ctx.air=false;off.fire('keydown','Space');assert.deepEqual(off.calls,[['attack']]);assert.equal(off.attackHold.held,false);
 });

@@ -1,4 +1,4 @@
-/* The hit counter (combo-counter.ts) and the power strike's button (power-hud.ts). Both are written only when their
+/* The hit counter (combo-counter.ts) and the power strike's charge on the Attack button (power-hud.ts). Both are written only when their
    state changes; everything that moves here is a CSS animation, and none of it runs under 'reduced motion'. */
 
 /* ---- The hit counter: a number in a thin ring (the power strike's charge), 'HITS' and the bonus beside it, and one
@@ -21,7 +21,9 @@
 #app #hud #combo-counter.over .cc-ring::before { background: #ff5d8c; filter: drop-shadow(0 0 5px #ff5d8c); }
 #app #hud #combo-counter .cc-n { font: italic 900 var(--cc-size)/1 Nunito, var(--font), sans-serif; color: var(--cc); -webkit-text-stroke: 4px var(--plum); paint-order: stroke fill; letter-spacing: -.02em; }
 #app #hud #combo-counter .cc-side { display: grid; justify-items: start; row-gap: 2px; }
-#app #hud #combo-counter .cc-w { font: italic 900 14px/1 Nunito, var(--font), sans-serif; letter-spacing: .06em; color: var(--cc); -webkit-text-stroke: 3px var(--plum); paint-order: stroke fill; }
+/* The small shield before 'HITS': the number is the untouched streak. */
+#app #hud #combo-counter .cc-shield { flex: none; width: 13px; height: 13px; color: #9fe8ff; }
+#app #hud #combo-counter .cc-w { display: flex; align-items: center; gap: 3px; font: italic 900 14px/1 Nunito, var(--font), sans-serif; letter-spacing: .06em; color: var(--cc); -webkit-text-stroke: 3px var(--plum); paint-order: stroke fill; }
 #app #hud #combo-counter .cc-bonus { font: 900 12px/1 Nunito, var(--font), sans-serif; font-style: normal; color: #b9f5a0; -webkit-text-stroke: 3px var(--plum); paint-order: stroke fill; min-height: 12px; }
 #app #hud #combo-counter .cc-note {
   grid-column: 1 / -1; justify-self: start; margin-top: 3px; padding: 1px 8px 2px; border-radius: 9px; background: var(--plum); border: 1.5px solid var(--cc);
@@ -63,53 +65,46 @@
   #app #hud #combo-counter.t1 { --cc-size: 22px; } #app #hud #combo-counter.t2 { --cc-size: 23px; } #app #hud #combo-counter.t3 { --cc-size: 24px; } #app #hud #combo-counter.t4 { --cc-size: 25px; }
 }
 
-/* ---- The power strike's button. Hidden until the charge is full. */
-#app #hud .power-pad { display: none; }
-#app #hud .power-pad > .power-x { display: none; }
-body.air-combat #app #hud .skills .power-pad:not([hidden]) {
-  display: grid; place-items: center; padding: 0; min-width: 0; border-radius: 50%; border: 3px solid var(--cream); cursor: pointer;
-  background: radial-gradient(circle at 35% 30%, #fff3a8, #ffb52e 55%, #ff6a2a); box-shadow: 0 0 0 2px var(--plum), 0 0 14px 4px rgba(255, 212, 90, .85), 0 4px 0 2px rgba(58, 36, 51, .5);
-  animation: power-in .32s cubic-bezier(.2, 1.7, .4, 1), power-pulse 1.1s ease-in-out .32s infinite alternate;
-  touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none;
+/* ---- The power strike on the Attack button (power-hud.ts). No button of its own: the pad wears the charge as a ring
+   that fills with every hit (--charge, 0 to 100 in twenty steps), glows and pulses when the strike is ready, shows ×2
+   when it is overcharged, blinks through its last seconds, and fills from its middle while it is held to unleash it
+   (--hold-time, the one value of five-rules.ts HOLD). The same on the paw and on the desktop tray. */
+body.air-combat #app #hud .attack-pad { --charge: 0; }
+body.air-combat #app #hud .attack-pad > svg { position: relative; z-index: 1; pointer-events: none; }
+body.air-combat #app #hud .attack-pad > .ap-ring {
+  display: block; position: absolute; inset: -7px; padding: 5px; border-radius: inherit; pointer-events: none;
+  background: conic-gradient(#8fe0ff calc(var(--charge) * 1%), rgba(58, 36, 51, .5) 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
-body.air-combat #app #hud .skills .power-pad > svg { width: 66%; height: 66%; pointer-events: none; }
-body.air-combat #app #hud .skills .power-pad.over { background: radial-gradient(circle at 35% 30%, #fff3a8, #ff7ab0 50%, #e8306e); box-shadow: 0 0 0 2px var(--plum), 0 0 16px 6px rgba(255, 93, 140, .9), 0 4px 0 2px rgba(58, 36, 51, .5); }
-body.air-combat #app #hud .skills .power-pad.over > .power-x {
-  display: block; position: absolute; right: -6px; bottom: -4px; padding: 0 5px; border-radius: 9px; background: var(--plum); border: 1.5px solid var(--cream); color: #ffe07a; font: 900 12px/17px Nunito, var(--font), sans-serif; pointer-events: none;
+body.air-combat #app #hud .attack-pad > .ap-hold { display: none; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(closest-side, rgba(255, 255, 255, .95), rgba(255, 246, 200, .75)); scale: 0; }
+body.air-combat #app #hud .attack-pad > .ap-x {
+  display: none; position: absolute; z-index: 2; right: -8px; top: -8px; padding: 0 5px; border-radius: 9px; background: var(--plum); border: 1.5px solid var(--cream); color: #ffe07a;
+  font: 900 12px/17px Nunito, var(--font), sans-serif; pointer-events: none;
 }
-body.air-combat #app #hud .skills .power-pad:active { translate: 0 2px; filter: brightness(.94); }
-/* Its last seconds: it blinks (the pulse goes on under it). */
-body.air-combat #app #hud .skills .power-pad.blink:not([hidden]) { animation: power-pulse 1.1s ease-in-out infinite alternate, power-blink .5s steps(2, jump-none) infinite; }
-@keyframes power-in { from { scale: .2; opacity: 0; } to { scale: 1; opacity: 1; } }
-@keyframes power-pulse { from { filter: brightness(1); scale: 1; } to { filter: brightness(1.14); scale: 1.06; } }
-@keyframes power-blink { from { opacity: 1; } to { opacity: .45; } }
-/* Touch: a large round button just above the paw, on its inner side (the attack toe's side), so the thumb finds it and
-   the stick is a screen away. It is the paw's child: left-handed play mirrors it with the paw. */
-@media (pointer: coarse), (max-width: 900px), (max-height: 520px) {
-  body.air-combat #app #hud .skills .power-pad:not([hidden]) { position: absolute; width: max(56px, calc(var(--sk) * 1.08)); height: max(56px, calc(var(--sk) * 1.08)); left: calc(50% - var(--sk) * 1.892); bottom: calc(var(--sk) * 2.42); }
-  body.air-combat #app #hud.joystick-right .skills .power-pad:not([hidden]) { left: auto; right: calc(50% - var(--sk) * 1.892); }
-  /* A very narrow phone (the stick reaches under the paw's inner side) and a tablet (the boss bar lies along the bottom there): the button sits over the paw's outer side. */
-  @media (max-width: 360px), (min-width: 601px) and (orientation: portrait) {
-    body.air-combat #app #hud .skills .power-pad:not([hidden]) { left: auto; right: calc(50% - var(--sk) * 1.892); }
-    body.air-combat #app #hud.joystick-right .skills .power-pad:not([hidden]) { right: auto; left: calc(50% - var(--sk) * 1.892); }
-  }
-}
-/* Desktop: the first button of the tray, with its key and its name like the others. */
+/* Ready: the pad turns to hot gold in a halo, and its ring pulses. */
+body.air-combat #app #hud .attack-pad.ready { background: radial-gradient(circle at 35% 30%, #fff3a8, #ffb52e 55%, #ff6a2a); box-shadow: 0 0 0 2px var(--plum), 0 0 14px 5px rgba(255, 212, 90, .9), 0 4px 0 2px rgba(58, 36, 51, .5); }
+body.air-combat #app #hud .attack-pad.ready > .ap-ring { background: #ffd45a; animation: ap-pulse .55s ease-in-out infinite alternate; }
+body.air-combat #app #hud .attack-pad.ready > svg { animation: ap-beat .55s ease-in-out infinite alternate; }
+body.air-combat #app #hud .attack-pad.over { background: radial-gradient(circle at 35% 30%, #fff3a8, #ff7ab0 50%, #e8306e); box-shadow: 0 0 0 2px var(--plum), 0 0 16px 6px rgba(255, 93, 140, .9), 0 4px 0 2px rgba(58, 36, 51, .5); }
+body.air-combat #app #hud .attack-pad.over > .ap-ring { background: #ff5d8c; }
+body.air-combat #app #hud .attack-pad.over > .ap-x { display: block; }
+/* Its last seconds: the ring blinks. */
+body.air-combat #app #hud .attack-pad.blink > .ap-ring { animation: ap-blink .5s steps(2, jump-none) infinite; }
+/* Held: a disc of light grows from the middle to the rim in the hold's time; at the rim the strike goes off. */
+body.air-combat #app #hud .attack-pad.holding > .ap-hold { display: block; animation: ap-hold var(--hold-time, .35s) linear forwards; }
+@keyframes ap-pulse { from { opacity: .7; scale: 1; } to { opacity: 1; scale: 1.08; } }
+@keyframes ap-beat { from { scale: 1; } to { scale: 1.12; } }
+@keyframes ap-blink { from { opacity: 1; } to { opacity: .3; } }
+@keyframes ap-hold { from { scale: 0; opacity: .5; } to { scale: 1; opacity: .9; } }
+/* Desktop: the mark sits clear of the key badge. */
 @media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
-  body.air-combat #app #hud .skills .power-pad:not([hidden]) { position: relative; flex: none; order: -3; width: var(--sk); height: var(--sk); border-radius: 36%; }
-  body.air-combat #app #hud .skills .power-pad::before {
-    content: attr(data-key); position: absolute; top: -9px; right: -9px; min-width: 18px; padding: 0 4px; border-radius: 7px; background: var(--plum); border: 1.5px solid var(--cream);
-    color: var(--cream); font: 900 10px/16px var(--font); text-align: center;
-  }
-  body.air-combat #app #hud .skills .power-pad::after {
-    content: attr(data-label); position: absolute; left: 50%; top: calc(100% + 5px); translate: -50% 0; padding: 0 5px; border-radius: 7px; background: var(--cream); color: var(--plum);
-    box-shadow: 0 2px 0 rgba(58, 36, 51, .4); font: 900 10px/1.3 var(--font); white-space: nowrap;
-  }
+  body.air-combat #app #hud .skills .attack-pad > .ap-x { right: auto; left: -8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   #app #hud #combo-counter .cc-n, #app #hud #combo-counter .cc-note, #app #hud #combo-counter .cc-ring::after { animation: none !important; }
   #app #hud #combo-counter.done { animation: cc-out-still 1.8s steps(1, end) forwards; }
-  body.air-combat #app #hud .skills .power-pad:not([hidden]), body.air-combat #app #hud .skills .power-pad.blink:not([hidden]) { animation: none; }
-  body.air-combat #app #hud .skills .power-pad.blink:not([hidden]) { opacity: .7; }
+  body.air-combat #app #hud .attack-pad.ready > .ap-ring, body.air-combat #app #hud .attack-pad.ready > svg, body.air-combat #app #hud .attack-pad.blink > .ap-ring { animation: none; }
+  body.air-combat #app #hud .attack-pad.blink > .ap-ring { opacity: .6; }
+  body.air-combat #app #hud .attack-pad.holding > .ap-hold { animation: none; scale: 1; opacity: .45; }
 }
 @keyframes cc-out-still { from { opacity: 1; } to { opacity: 0; } }

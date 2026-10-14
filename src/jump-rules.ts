@@ -3,7 +3,7 @@
  * main.ts turns key presses into jumps, swings and dives, combat.ts deals the damage.
  *
  * The fight these rules make:
- *   ground hits -> a launcher (every third basic hit, or a knock-up skill) -> air swings while rising -> a dive on the
+ *   ground hits -> a launcher (the third hit of the attack chain, or a knock-up skill) -> air swings while rising -> a dive on the
  *   way down. Each hit of the chain adds a little damage, the dive that ends it adds a finisher bonus, and a dive from
  *   above a single jump's height is a sure critical on a boss or a large creature.
  *   Attacks come in two classes: 'ground' ones (shockwaves, slam rings, quakes, floor hazards, low charges) pass under
@@ -287,7 +287,7 @@ export const AIR = {
   quakeRadius: 1, quakePower: 1.3,
   /** Touch play: a dive drifts up to `homing` m toward the nearest creature within `homingRange` m (never through an obstacle). */
   homing: 1.4, homingRange: 3.6,
-  /** The launcher (every third basic hit) lifts an ordinary creature this high (m); an air hit on a lifted creature pops it up again. */
+  /** The launcher (the third hit of the attack chain) lifts a small creature this high (m); an air hit on a lifted creature pops it up again. */
   launch: 1.7, juggle: 1.1,
 } as const;
 export const DIVE = {
@@ -315,8 +315,6 @@ export function diveCap(target: { boss?: boolean; maxHp?: number }) { return tar
 export const COMBO = {
   /** Hits chain while less than this many seconds pass between them: keys, and the wider timer of touch play. */
   window: 1.5, windowTouch: 2,
-  /** Each hit of the chain adds this much damage to the next, up to `max`. */
-  step: .04, max: .4,
   /** A dive that ends a chain of at least `finisherHits` hits deals this much more. */
   finisher: 1.25, finisherHits: 3,
   /** Hits closer together than this (one swing through a crowd, one tick of a whirl) count once. */
@@ -325,8 +323,12 @@ export const COMBO = {
   linger: 1.2,
 } as const;
 export type ComboHit = 'ground' | 'launcher' | 'air' | 'dive';
-/** Steps of the fight the chain has shown so far, for the HUD chip's four pips. */
-export interface ComboView { count: number; bonus: number; launched: boolean; aired: boolean; finished: boolean; live: boolean }
+/**
+ * The timed chain: hits that follow one another within the window. It decides the finisher and is summed up when it ends.
+ * It gives no damage of its own any more: the bonus for fighting well is the untouched streak (five-rules.ts), so the two
+ * never stack.
+ */
+export interface ComboView { count: number; launched: boolean; aired: boolean; finished: boolean; live: boolean }
 export class ComboMeter {
   count = 0; launched = false; aired = false; finished = false;
   /** Seconds a chain survives without a hit (COMBO.window, or COMBO.windowTouch on touch screens). */
@@ -334,12 +336,10 @@ export class ComboMeter {
   private since = Infinity; private shown = 0;
   /** True while a chain is running. */
   get live() { return this.count > 0 && this.since < this.window && !this.finished; }
-  /** Damage factor for the next hit: +COMBO.step per hit already in the chain, up to +COMBO.max. */
-  get bonus() { return this.live ? 1 + Math.min(COMBO.max, COMBO.step * this.count) : 1; }
   /** A dive now would be a finisher. */
   get finisherReady() { return this.live && this.count >= COMBO.finisherHits; }
-  /** The damage factor a dive gets: the ramp, times the finisher bonus when it ends a long enough chain. */
-  diveBonus() { return this.bonus * (this.finisherReady ? COMBO.finisher : 1); }
+  /** The damage factor a dive gets: the finisher bonus when it ends a long enough chain. */
+  diveBonus() { return this.finisherReady ? COMBO.finisher : 1; }
   /** A hit landed. Returns true when it added to the count (hits within COMBO.gap of the last count once). */
   hit(kind: ComboHit): boolean {
     if (!this.live) { this.count = 0; this.launched = this.aired = this.finished = false; this.since = Infinity; }
@@ -354,7 +354,7 @@ export class ComboMeter {
   break() { if (this.count > 0 && !this.finished) this.shown = Math.min(this.shown, .35); this.since = Infinity; }
   step(dt: number) { if (!(dt > 0)) return; this.since += dt; this.shown = Math.max(0, this.shown - dt); if (!this.live && this.shown <= 0 && this.count) { this.count = 0; this.launched = this.aired = this.finished = false; } }
   /** What the chip shows: the count lingers briefly after the chain ends. */
-  view(): ComboView { return { count: this.count, bonus: Math.round((this.bonus - 1) * 100), launched: this.launched, aired: this.aired, finished: this.finished, live: this.live }; }
+  view(): ComboView { return { count: this.count, launched: this.launched, aired: this.aired, finished: this.finished, live: this.live }; }
   reset() { this.count = 0; this.launched = this.aired = this.finished = false; this.since = Infinity; this.shown = 0; }
 }
 

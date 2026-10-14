@@ -1,4 +1,4 @@
-// Vietnamese for the four moves (moves.ts, skill-info.ts moveDescription, upgrade-bench.ts, main.ts).
+// Vietnamese for the three moves (moves.ts, skill-info.ts moveDescription, upgrade-bench.ts, main.ts).
 export const MOVES_VI: Record<string, string> = {
   'Petal Rain': 'Mưa Cánh Hoa',
   'Sky Spin': 'Lốc Xoáy Trên Không',
@@ -14,12 +14,8 @@ export const MOVES_VI: Record<string, string> = {
     'Nện một vòng chấn động {r} m quanh bạn: ×{dmg} sát thương, kẻ địch bị hất tung, kẻ to xác bị choáng {stun} giây.',
   'In the air: Sky Quake, a dive with a {r} m ring for ×{low} to ×{high} damage, more from higher.':
     'Trên không: Địa Chấn Từ Trời, cú lao xuống kèm vòng chấn động {r} m gây ×{low} đến ×{high} sát thương, càng cao càng mạnh.',
-  'Three quick hits in a {r} m arc ahead: ×{a}, ×{b} and ×{c} damage; the third launches small enemies.':
-    'Ba cú đánh nhanh theo hình quạt {r} m phía trước: ×{a}, ×{b} và ×{c} sát thương; cú thứ ba hất tung kẻ địch nhỏ.',
   'In the air: Sky Spin, one spin for ×{dmg} damage on every enemy within {r} m.':
     'Trên không: Lốc Xoáy Trên Không, một vòng xoay gây ×{dmg} sát thương lên mọi kẻ địch trong vòng {r} m.',
   'Each level: +10% damage and +0.12 m splash radius.': 'Mỗi cấp: +10% sát thương và +0,12 m bán kính nổ.',
   'Each level: +8% damage and +0.3 m ring radius.': 'Mỗi cấp: +8% sát thương và +0,3 m bán kính vòng chấn động.',
 };
-/** The help topic 'Four moves' (help-topics.ts): its Vietnamese title and text. */
-export const MOVES_HELP_VI = ['Bốn chiêu thức', 'Q ném cánh hoa theo đường vòng cung xuống một điểm đã đánh dấu, W lướt xuyên qua kẻ địch, E nện một vòng chấn động hất tung chúng, còn R đánh liền ba cú (vũ khí có tuyệt kỹ riêng thì giữ tuyệt kỹ đó ở R). Bố trí WASD dùng J/K/L/; theo cùng thứ tự. Nhảy lên trước thì mỗi chiêu đổi khác: Q thả ba phát rơi thẳng xuống, W lướt ở độ cao của bạn, E lao xuống với vòng chấn động rộng hơn, còn R xoay một vòng đánh trúng mọi phía. Trên điện thoại, nhấn Nhảy rồi trượt cùng ngón tay sang kỹ năng. Đánh trúng liên tiếp sẽ tạo chuỗi đòn: cú Mưa Đấm thứ ba hất tung kẻ địch nhỏ, và một cú Địa Chấn hoặc cú lao xuống sau ba đòn trúng là đòn kết liễu. Cải trang thay đổi cả bốn kỹ năng.'] as const;

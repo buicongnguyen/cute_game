@@ -1,7 +1,8 @@
 /**
- * The hit counter: a small number beside the fight that pops with every hit, warms in colour as the chain grows, shows
- * the damage bonus under it and the power strike's charge as a thin ring round it (power-rules.ts), names the chain's
- * big moments, and sums the chain up when it ends ('12 hits · 3,480', 'New best!').
+ * The hit counter: a small number beside the fight that pops with every hit. The number is the untouched streak
+ * (five-rules.ts: own hits landed since the explorer was last hurt, marked with a small shield), with the damage bonus it
+ * gives under it and the power strike's charge as a thin ring round it (power-rules.ts). It warms in colour as the streak
+ * grows, names the fight's big moments, and sums the timed chain up when that ends ('12 hits · 3,480', 'New best!').
  *
  * The rules are pure (tests/combo-counter.test.ts). The view writes to the page only when what it shows changes: never
  * once a frame. Motion is CSS only (combo-counter.css) and stops under 'reduced motion'.
@@ -87,7 +88,7 @@ export function placeCounter(view: { W: number; H: number }, hero: Box, target: 
 }
 
 /** Every piece of the HUD the counter must keep off: the pieces themselves, not their containers (a container may span the screen). */
-export const HUD_PIECES = '#hud .player-card,#hud .top-actions button,#hud .minimap,#hud .home-button,#hud .tracker-panels > *,#hud #tracker-chip,#hud #quick-eat,#hud .quick-eat-pick,#hud #buff-bar > *,#hud .skill,#hud .attack-pad,#hud .jump-pad,#hud .power-pad,#movement-joystick,#boss-bar,#target-frame,.colossus-banner,#context-prompt button,#keys-guide,#environment-bar > *,#toasts .toast,#reel-button,#fish-hint,#discovery-progress,.almanac-chip';
+export const HUD_PIECES = '#hud .player-card,#hud .top-actions button,#hud .minimap,#hud .home-button,#hud .tracker-panels > *,#hud #tracker-chip,#hud #quick-eat,#hud .quick-eat-pick,#hud #buff-bar > *,#hud .skill,#hud .attack-pad,#hud .jump-pad,#movement-joystick,#boss-bar,#target-frame,.colossus-banner,#context-prompt button,#keys-guide,#environment-bar > *,#toasts .toast,#reel-button,#fish-hint,#discovery-progress,.almanac-chip';
 /** The boxes of the HUD's visible pieces. A layout read: main.ts asks when a chain starts and at most twice a second while it runs, never per frame. */
 export function readHudBoxes(doc: Pick<Document, 'querySelectorAll'>, selector: string = HUD_PIECES): Box[] {
   const out: Box[] = [];
@@ -98,7 +99,7 @@ export function readHudBoxes(doc: Pick<Document, 'querySelectorAll'>, selector: 
 // ---------------------------------------------------------------- What it shows
 
 export interface CounterState {
-  count: number; /** The damage bonus in percent (0 = none shown). */ bonus: number; live: boolean;
+  /** The number shown: the untouched streak while a chain runs, the chain's own count in its sum. */ count: number; /** The damage bonus in percent (0 = none shown). */ bonus: number; live: boolean;
   /** The power strike's charge: 0 to 1 towards the next level, and the level reached (0 none, 1 ready, 2 overcharged). */ charge: number; level: number;
   /** A big moment to name under the number ('' = none). */ note: string;
   /** The chain's sum when it has ended ('' while it runs), and whether it is a new best. */ summary: string; best: boolean;
@@ -111,7 +112,7 @@ const group = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))
 /** '12 hits · 3,480': `phrase` is the translated pattern with {count} and {damage}. */
 export function summaryText(phrase: string, count: number, damage: number) { return phrase.replace('{count}', String(count)).replace('{damage}', group(damage)); }
 
-export const COUNTER_HTML = '<div id="combo-counter" hidden aria-hidden="true"><div class="cc-ring"><b class="cc-n"></b></div><div class="cc-side"><span class="cc-w"></span><i class="cc-bonus"></i></div><em class="cc-note"></em></div>';
+export const COUNTER_HTML = '<div id="combo-counter" hidden aria-hidden="true"><div class="cc-ring"><b class="cc-n"></b></div><div class="cc-side"><span class="cc-w"><svg class="cc-shield" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.2l5.6 1.9v4.3c0 3.4-2.3 6-5.6 7.4-3.3-1.4-5.6-4-5.6-7.4V3.1z" fill="currentColor" stroke="#3a2433" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="cc-word"></span></span><i class="cc-bonus"></i></div><em class="cc-note"></em></div>';
 
 /** The counter on the page. `show` is cheap to call often: it writes only when its signature changes. */
 export class ComboCounterView {
@@ -119,7 +120,7 @@ export class ComboCounterView {
   private shown = ''; private flip = false; private wasLive = false; private lastCount = 0; private placed: Placement | null = null;
   constructor(root: HTMLElement) {
     this.root = root; const q = (s: string) => root.querySelector<HTMLElement>(s)!;
-    this.n = q('.cc-n'); this.w = q('.cc-w'); this.bonus = q('.cc-bonus'); this.note = q('.cc-note');
+    this.n = q('.cc-n'); this.w = q('.cc-word'); this.bonus = q('.cc-bonus'); this.note = q('.cc-note');
   }
   get visible() { return !!this.shown; }
   /**

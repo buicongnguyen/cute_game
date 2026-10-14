@@ -46,7 +46,8 @@ test('on: N is the basic attack for the right hand, a key no layout uses, and H 
   // G (and H) are free in both layouts: not a skill, the journal, a WASD move, or one of the fixed keys of main.ts (F, I, M, R).
   for (const layout of ['classic', 'wasd']) { const b = keyboardBindings(layout), taken = [...b.skills, b.journal, 'w', 'a', 's', 'd', 'f', 'i', 'm', 'r'] as string[]; assert.ok(!taken.includes('n') && !taken.includes('h'), layout); }
   assert.deepEqual([...new Set([...main.matchAll(/key==='([a-z])'/g)].map(m => m[1]))].sort(), ['f', 'i', 'm', 'r'], 'the fixed letter keys of the key handler');
-  assert.match(main, /else if\(handKey\(key,airOn\(\)\)==='eat'\)void quickEat\(\);else if\(handKey\(key,airOn\(\)\)==='attack'\)basicAttack\(\);/);
+  assert.match(main, /else if\(handKey\(key,airOn\(\)\)==='eat'\)void quickEat\(\);else if\(handKey\(key,airOn\(\)\)==='attack'\)attackDown\('key:'\+event\.code\);/);
+  assert.match(main, /function attackDown\(source:string\)\{if\(airOn\(\)\)attackHold\.down\(source\);basicAttack\(\);\}/, 'switched off a press is one attack and nothing is held');
   // The guide: on, H joins the basic attack and Eat shows G in both layouts and both Space choices; off, it is the old guide.
   const rows = (html: string) => Object.fromEntries([...html.matchAll(/<dt>(.*?)<\/dt><dd>(.*?)<\/dd>/g)].map(m => [m[1], m[2].replace(/<\/?kbd>/g, ' ').trim().replace(/\s+/g, ' ')]));
   for (const layout of ['classic', 'wasd']) {
@@ -115,44 +116,34 @@ test('a boss slam with the switch off and on: the old disc, callout and single r
   assert.equal(on.blows[1], Math.round(on.blows[0] * J.AFTERSHOCK.power)); assert.equal(off.blows[0], on.blows[0], 'the slam itself is unchanged');
 });
 
-test('off: the bench has no Jump row and the old paw sheet is untouched; on: Jump is the big pad in the middle, five toes on the arc with the attack on the inner side, mirrored left-handed', () => {
+test('off: the bench has no Jump row and the old paw sheet is untouched; on: the Attack is the big pad in the corner, Jump beside it on the inner side, three specials on an arc above, mirrored left-handed', () => {
   assert.match(read('upgrade-bench.ts'), /\$\{ui\.jump \? jumpRow\(s, ui\) : ''\}/); assert.match(main, /jump:airOn\(\),disguised:/, 'the bench offers Jump only with the switch on');
   // The sheet from before is still there word for word (tests/hud-ours.test.ts pins the rest).
   for (const old of ['width: calc(var(--sk) * 3.66); height: calc(var(--sk) * 2.38); max-width: none;', '#app #hud .skill[data-index="0"] { left: 0; bottom: calc(var(--sk) * .533); }', '--dock-room: calc(var(--sk) * 2.38 + 44px);', '#app #hud .attack-pad { display: none; }', 'display: grid; place-items: center; position: absolute; left: calc(50% - var(--sk) * .6); bottom: 0; width: calc(var(--sk) * 1.2); height: calc(var(--sk) * 1.2); padding: 0;', '#app #hud .attack-pad > svg { width: 60%; height: 60%; }']) assert.ok(css.includes(old), old);
   // Every rule that moves or resizes the attack pad for the new roles is under the switch (its air look hangs on .skills.air, a class only the switched-on game sets).
   const base = css.slice(0, css.indexOf('Jumping and air combat (Settings switch; body.air-combat)')); assert.ok(base.length > 1000 && !base.includes('air-combat'));
-  for (const line of css.slice(base.length).split('\n').filter(line => line.includes('.attack-pad') && !line.trim().startsWith('/*') && !line.includes('.skills.air'))) assert.ok(line.includes('body.air-combat'), 'only under the switch: ' + line.trim().slice(0, 80));
-  assert.ok(css.includes('#app #hud .jump-pad { display: none; }'), 'no Jump toe without the switch (and none on desktop)');
-  const scoped = css.split('\n').filter(line => /jump-pad|3\.784|2\.55/.test(line) && !line.trim().startsWith('/*') && !line.includes('#app #hud .jump-pad { display: none; }') && !/^\s*(border-radius|display: grid)/.test(line.trim()));
-  for (const line of scoped) assert.ok(line.includes('body.air-combat'), 'only under the switch: ' + line.trim().slice(0, 80));
-  // Offsets in skill widths: x from the cluster's centre line to the toe's centre, y from the cluster's bottom to it.
-  const at = (selector: string, hand = '') => { const m = css.match(new RegExp(`body\\.air-combat #app #hud${hand} ${selector.replace(/[.[\]"=]/g, '\\$&')} \\{ left: calc\\(50% ([+-]) var\\(--sk\\) \\* ([\\d.]+)\\);(?: right: auto;)? bottom: calc\\(var\\(--sk\\) \\* ([\\d.]+)\\); \\}`)); assert.ok(m, selector + hand); return [(m![1] === '-' ? -1 : 1) * +m![2] + .5, +m![3] + .5]; };
-  const size = css.match(/body\.air-combat #app #hud \.skills, body\.air-combat #app #hud\.joystick-on \.skills \{ width: calc\(var\(--sk\) \* ([\d.]+)\); height: calc\(var\(--sk\) \* ([\d.]+)\); \}/)!; assert.ok(size); const width = +size[1], height = +size[2];
-  // The big pad is Jump: 1.2 skill widths, centred, sky blue. The attack is a full toe.
-  const big = css.match(/body\.air-combat #app #hud \.jump-pad \{\s*display: grid; place-items: center; position: absolute; width: calc\(var\(--sk\) \* ([\d.]+)\); height: calc\(var\(--sk\) \* ([\d.]+)\);[^}]*border-radius: 40%;[^}]*background: linear-gradient\(160deg, #8fe0ff, #2f9be6\);/)!; assert.ok(big, 'the Jump pad');
-  const padSize = +big[1]; assert.equal(padSize, 1.2, 'as big as the attack pad was'); assert.equal(+big[2], padSize);
-  const padAt = at('.jump-pad'), pad = [padAt[0] - .5 + padSize / 2, padAt[1] - .5 + padSize / 2]; assert.ok(Math.abs(pad[0]) < .001, 'Jump is centred in the paw');
-  assert.doesNotMatch(css, /body\.air-combat #app #hud\.joystick-right \.jump-pad/, 'the centre pad is the same for both hands');
-  assert.match(css, /body\.air-combat #app #hud \.attack-pad \{ width: var\(--sk\); height: var\(--sk\); min-width: 0; border-radius: 46%; \}/, 'the attack toe is a full skill toe');
-  const skills = (hand = '') => [0, 1, 2, 3].map(i => at(`.skill[data-index="${i}"]`, hand));
-  for (const [hand, toes] of [['', [at('.attack-pad'), ...skills()]], ['.joystick-right', [...skills('.joystick-right'), at('.attack-pad', '.joystick-right')]]] as const) {
-    for (let i = 0; i < 5; i++) {
-      assert.ok(toes[i][1] + .5 <= height + .001 && toes[i][1] - .5 >= -.001 && Math.abs(toes[i][0]) + .5 <= width / 2 + .001, `toe ${i} stays inside the cluster ${hand}`);
-      assert.ok(Math.hypot(toes[i][0] - pad[0], toes[i][1] - pad[1]) >= .5 + padSize / 2 + .05, `toe ${i} is clear of the pad ${hand}`);
-      if (i) { assert.ok(toes[i][0] > toes[i - 1][0], 'left to right, the skills in key order'); assert.ok(Math.hypot(toes[i][0] - toes[i - 1][0], toes[i][1] - toes[i - 1][1]) >= 1.05, `toes ${i - 1} and ${i} are more than a toe width apart ${hand}`); }
-    }
-    for (let i = 0; i < 2; i++) assert.ok(Math.abs(toes[i][0] + toes[4 - i][0]) < .02 && Math.abs(toes[i][1] - toes[4 - i][1]) < .02, 'the paw is symmetric');
-  }
-  assert.ok(pad[1] + padSize / 2 <= height + .001 && pad[1] - padSize / 2 >= -.001, 'the pad stays inside the cluster');
-  assert.ok(at('.attack-pad')[0] < -1 && at('.attack-pad', '.joystick-right')[0] > 1 && at('.attack-pad')[1] < 1, 'the attack is the inner toe (left of the pad; right of it left-handed), level with the pad');
-  // The four skill toes are where they were before the roles swapped.
-  assert.deepEqual([skills(), skills('.joystick-right')].map(s => s.map(([x, y]) => [+(x - .5).toFixed(3), +(y - .5).toFixed(3)])), [[[-1.54, 1.087], [-.5, 1.55], [.54, 1.087], [.892, .004]], [[-1.892, .004], [-1.54, 1.087], [-.5, 1.55], [.54, 1.087]]]);
+  for (const line of css.slice(base.length).split('\n').filter(line => line.includes('.attack-pad') && !line.trim().startsWith('/*') && !line.includes('.skills.air'))) assert.ok(/body(\.air-combat|:not\(\.air-combat\))/.test(line), 'only under the switch: ' + line.trim().slice(0, 80));
+  assert.ok(css.includes('#app #hud .jump-pad { display: none; }'), 'no Jump pad without the switch');
+  assert.ok(css.includes('body:not(.air-combat) #app #hud .attack-pad > :not(svg) { display: none; }'), 'switched off again, the pad is bare: no charge ring on it');
+  const scoped = css.split('\n').filter(line => /jump-pad|3\.36|--pad|--toe|--jp|--x:|--y:|toes-4/.test(line) && line.includes('{') && !line.trim().startsWith('/*') && !line.includes('#app #hud .jump-pad { display: none; }') && !/^\s*(border-radius|display: grid|--s:|--pad:|touch-action)/.test(line.trim()));
+  assert.ok(scoped.length > 12); for (const line of scoped) assert.ok(line.includes('body.air-combat'), 'only under the switch: ' + line.trim().slice(0, 80));
+  // The Attack is the big pad in the paw's corner (60 px at least), round; Jump is beside it on the inner side; left-handed it is mirrored.
+  assert.match(css, /body\.air-combat #app #hud \.skills, body\.air-combat #app #hud\.joystick-on \.skills \{\s*width: calc\(var\(--sk\) \* 3\.36\); height: calc\(var\(--sk\) \* 3\.36\);\s*--pad: max\(60px, calc\(var\(--sk\) \* 1\.3\)\); --jp: max\(52px, calc\(var\(--sk\) \* 1\.08\)\); --toe: max\(48px, calc\(var\(--sk\) \* 1\.08\)\);/);
+  assert.match(css, /body\.air-combat #app #hud \.attack-pad \{ left: auto; right: 0; bottom: 0; width: var\(--pad\); height: var\(--pad\); min-width: 0; border-radius: 50%; touch-action: none; \}/);
+  assert.match(css, /body\.air-combat #app #hud\.joystick-right \.attack-pad \{ right: auto; left: 0; \}/);
+  assert.match(css, /body\.air-combat #app #hud \.jump-pad \{\s*--s: var\(--jp\); --x: 1\.5; --y: -\.11; display: grid;[^}]*background: linear-gradient\(160deg, #8fe0ff, #2f9be6\);/, 'Jump: sky blue, one and a half skill widths to the inner side, level with the pad');
+  // Every toe and Jump is placed from the Attack pad's centre by its --x and --y; left-handed the same numbers run from the left.
+  assert.match(css, /right: calc\(var\(--pad\) \/ 2 \+ var\(--sk\) \* var\(--x\) - var\(--s\) \/ 2\); bottom: calc\(var\(--pad\) \/ 2 \+ var\(--sk\) \* var\(--y\) - var\(--s\) \/ 2\);/);
+  assert.match(css, /body\.air-combat #app #hud\.joystick-right \.skill, [^{]*\{ right: auto; left: calc\(var\(--pad\) \/ 2 \+ var\(--sk\) \* var\(--x\) - var\(--s\) \/ 2\); \}/);
+  // The specials read left to right in key order for both hands (tests/five-rules.test.ts checks the places themselves).
+  const xs = (hand: string) => [0, 1, 2].map(i => +css.match(new RegExp(`body\\.air-combat #app #hud${hand} \\.skills \\.skill\\[data-index="${i}"\\] \\{ --x: (-?[\\d.]+);`))![1]);
+  const right = xs(''), left = xs('\\.joystick-right'); assert.ok(right[0] > right[1] && right[1] > right[2], 'right-handed: the first skill is the inner (left) toe'); assert.ok(left[0] < left[1] && left[1] < left[2], 'left-handed: the first skill is the outer (left) toe'); assert.deepEqual(right, [...left].reverse());
   // The air look follows the attack (toe) and the skills; the dive look is the attack's. Jump keeps its sky blue.
   assert.match(css, /#app #hud \.skills\.air \.skill, #app #hud \.skills\.air \.attack-pad \{ border-color: #bfeeff;/); assert.match(css, /#app #hud \.skills\.air\.dive \.attack-pad \{ background:/); assert.doesNotMatch(css, /\.skills\.air[^{]*\.jump-pad/);
   // The gestures read the buttons by their action, not their place: the slide starts on Jump and lands on 'attack' or a skill.
   assert.match(main, /function fightButtonAt\(x:number,y:number\)\{const b=\(document\.elementFromPoint\(x,y\) as HTMLElement\|null\)\?\.closest<HTMLElement>\('#hud \.skills button'\);return !b\?null:b\.dataset\.action==='attack'\?'attack':b\.dataset\.action==='skill'\?'skill'\+b\.dataset\.index:null;\}/);
   assert.match(main, /if\(target\?\.dataset\.action==='jump'&&started&&!uiBlocked\(\)&&airOn\(\)\)\{e\.preventDefault\(\);jumpPointers\.add\(e\.pointerId\);touchFight=e\.pointerType==='touch';jumpInput\.down\(\);/, 'the pad jumps as the finger lands; holding it keeps jumpInput held for the extra jumps');
-  assert.match(css, /body\.air-combat \{ --dock-room: calc\(var\(--sk\) \* 2\.55 \+ 44px\); \}/, 'the dock leaves room for the taller paw');
+  assert.match(css, /body\.air-combat \{ --dock-room: calc\(var\(--sk\) \* 3\.36 \+ 44px\); \}/, 'the dock leaves room for the taller paw');
   assert.doesNotMatch(css, /animation\s*:|transition\s*:|backdrop-filter|@keyframes/);
 });
 
@@ -160,7 +151,8 @@ test('scripted fights: with the block at 0.6 a hero without the double jump stil
   // The Shadow Lord is met two levels up and sizes itself to the hero (+24% health): blocked, it is a two to three minute fight
   // on the ground, which is why the block stays switched off (BOSS_BLOCK_ON) until its share is tuned again.
   for (const f of FIGHTS.slice(1)) {
-    const single = fight(f.boss, f.planet, f.at, f.level, f.gear, 'single', 2), double = fight(f.boss, f.planet, f.at, f.level, f.gear, 'double', 2);
+    // The hero holds Attack when a strike is charged: that is where the sword's own special is now.
+    const single = fight(f.boss, f.planet, f.at, f.level, f.gear, 'single', 2, undefined, { power: true }), double = fight(f.boss, f.planet, f.at, f.level, f.gear, 'double', 2, undefined, { power: true });
     assert.ok(single.won && single.seconds < (f.boss === 'yeti' ? 100 : 200), `${f.boss} on the ground: ${single.seconds.toFixed(0)} s`); assert.ok(single.blocked > 0, 'ground hits were blocked');
     assert.ok(double.won && double.seconds < single.seconds, `${f.boss} with the double jump: ${double.seconds.toFixed(0)} s`);
     assert.ok(Math.max(single.biggest, double.biggest) / single.bossHp < .15, 'no single hit takes 15% of a boss');
@@ -168,7 +160,7 @@ test('scripted fights: with the block at 0.6 a hero without the double jump stil
   const bear = FIGHTS[0], r = fight(bear.boss, bear.planet, bear.at, bear.level, bear.gear, 'single', 2); assert.equal(r.blocked, 0, 'the King Bear is met before the double jump: it does not block'); assert.ok(r.dodged > 0);
 });
 
-test('off or online: no hit counter, no power strike, no charge (the counter, the button and the key all ask airOn first)', () => {
+test('off or online: no hit counter, no power strike, no charge, no streak, no chain, no hold (each asks airOn first)', () => {
   const block = main.slice(main.indexOf('function noteComboHit('), main.indexOf('/** A ground attack passed under the explorer.'));
   for (const fn of ['noteComboHit(e:Enemy,impact:CombatHit){\n  if(!airOn())return;', 'function powerStrike(){\n  if(!airOn()||']) assert.ok(block.includes(fn), fn);
   assert.match(block, /if\(airOn\(\)&&v\.live&&v\.count>=COUNTER\.from\)/); assert.match(block, /const shown=airOn\(\)&&started&&/);
@@ -177,7 +169,13 @@ test('off or online: no hit counter, no power strike, no charge (the counter, th
   assert.ok(step.indexOf('syncAirCombat();if(!airOn())return;') >= 0 && step.indexOf('syncAirCombat();if(!airOn())return;') < step.indexOf('stepCounter(dt)'));
   assert.equal(main.split('stepCounter(dt)').length, 2, 'called from one place');
   const sync = main.slice(main.indexOf('function syncAirCombat(){'), main.indexOf('function jumpBlock(){'));
-  assert.match(sync, /if\(on&&!document\.querySelector\('#hud \.jump-pad'\)\)\{\n[^\n]*\n[^\n]*POWER_PAD_HTML[^\n]*COUNTER_HTML/, 'both are made only when the switch is first on');
+  assert.match(sync, /if\(on&&!document\.querySelector\('#hud \.jump-pad'\)\)\{\n[^\n]*\n[^\n]*ATTACK_CHARGE_HTML[^\n]*COUNTER_HTML/, 'the pad\'s ring and the counter are made only when the switch is first on');
+  assert.match(sync, /combat\.edge\.moves=on;combat\.edge\.chain=on;/, 'the chain is the basic attack only with the switch on');
+  assert.match(main, /if\(airOn\(\)\)streak\.hurt\(damage\);/); assert.match(main, /combat\.edge\.bonus=actionHandler\?1:streak\.bonus;/);
+  // The hold: its step is inside stepFight after the gate, and a pointer on the pad only holds with the switch on.
+  assert.ok(step.indexOf('stepHold(dt,active)') > step.indexOf('syncAirCombat();if(!airOn())return;')); assert.match(main, /if\(target\?\.dataset\.action==='attack'&&started&&!uiBlocked\(\)&&airOn\(\)\)\{/);
+  // The basic attack with the switch off is the old one, hit for hit (the chain needs edge.chain).
+  { const a = arena(), t = { id: 't', x: 0, z: 1.2, hp: 1e6, maxHp: 1e6, radius: .5 }; a.targets.push(t); for (let i = 0; i < 6; i++) a.sim.basic(t); assert.deepEqual(a.hits.map(h => [h.amount, h.lift]), [[100, 0], [100, 0], [150, 0], [100, 0], [100, 0], [150, 0]]); }
   // The simulation with the switch off never charges or strikes, with or without the option.
   const f = FIGHTS[0], off = fight(f.boss, f.planet, f.at, f.level, f.gear, 'classic', 1, 1, { power: true }), plain = fight(f.boss, f.planet, f.at, f.level, f.gear, 'classic', 1, 1);
   assert.equal(off.powers, 0); assert.equal(off.seconds, plain.seconds); assert.equal(off.damage, plain.damage);

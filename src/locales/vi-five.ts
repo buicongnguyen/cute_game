@@ -1,0 +1,21 @@
+// Vietnamese for the five-button fight (five-rules.ts, power-hud.ts, hud-keys.ts, upgrade-bench.ts, skill-info.ts, main.ts).
+export const FIVE_VI: Record<string, string> = {
+  'Attack chain': 'Chuỗi đòn đánh',
+  'hold': 'giữ',
+  'UNTOUCHED ×{n}!': 'CHƯA TRÚNG ĐÒN ×{n}!',
+  'Attack: hold to unleash the power strike': 'Tấn công: giữ để tung đòn uy lực',
+  'Power strike ready! Hold Attack to unleash it.': 'Đòn uy lực đã sẵn sàng! Giữ nút Tấn công để tung đòn.',
+  'Space: jump · F or N: attack (hold: power strike) · H: eat': 'Space: nhảy · F hoặc N: tấn công (giữ: đòn uy lực) · H: ăn',
+  'Space: attack · Left Shift: jump · F or N: attack (hold: power strike) · H: eat': 'Space: tấn công · Shift trái: nhảy · F hoặc N: tấn công (giữ: đòn uy lực) · H: ăn',
+  'Third hit ×{damage}': 'Đòn thứ ba ×{damage}',
+  'Each level: +8% damage for the third hit of your attack, for Sky Spin and for your weapon special.': 'Mỗi cấp: +8% sát thương cho đòn thứ ba của chuỗi đòn đánh, cho Lốc Xoáy Trên Không và cho tuyệt kỹ vũ khí.',
+  'Your attack is a chain of three presses: ×{a}, ×{b} and ×{c} damage; the third launches small enemies.': 'Đòn đánh của bạn là chuỗi ba lần nhấn: ×{a}, ×{b} và ×{c} sát thương; đòn thứ ba hất tung kẻ địch nhỏ.',
+  'Your attack is a chain of three presses: ×{a}, ×{b} and a double shot for ×{c} damage.': 'Đòn đánh của bạn là chuỗi ba lần nhấn: ×{a}, ×{b} và một phát bắn đôi gây ×{c} sát thương.',
+};
+/** The help topics of the five-button fight (help-topics.ts): [English title, Vietnamese title, Vietnamese text]; vi-help-topics.ts pairs them with the English. */
+export const FIVE_HELP_VI: ReadonlyArray<readonly [string, string, string]> = [
+  ['Jump and air combat', 'Nhảy và đánh trên không', 'Space để nhảy, F hoặc N để tấn công; H vẫn là ăn. Trên điện thoại, nút lớn ở góc bàn chân là Tấn công, nút Nhảy nằm ngay bên cạnh; chạm Nhảy rồi chạm Tấn công, hoặc nhấn Nhảy và trượt cùng ngón tay sang nút Tấn công hay một kỹ năng. Những vòng gợn sóng trên mặt đất kèm mũi tên trong lời cảnh báo là đòn mặt đất: hãy nhảy lên và chúng sẽ lướt qua bên dưới. Nhảy vào phút chót để né hoàn hảo và chắc chắn có đòn chí mạng. Trên không, tấn công khi đang bay lên để xoay một vòng đánh trúng mọi phía (Lốc Xoáy Trên Không), khi đang rơi để bổ nhào. Nâng cấp Nhảy ở bàn nâng cấp trong nhà: nhảy đôi ở cấp 10, nhảy ba ở cấp 25. Trùm ở các thế giới sau chặn đòn đánh từ mặt đất và từ độ cao nhảy đơn; hãy đánh chúng từ độ cao nhảy đôi.'],
+  ['Attack and three specials', 'Tấn công và ba chiêu thức', 'Đòn đánh của bạn là chuỗi ba lần nhấn: đòn thứ ba mạnh nhất và hất tung kẻ địch nhỏ (súng thì bắn một phát đôi). Giữ nút thì bạn đánh liên tục. Q ném cánh hoa theo đường vòng cung xuống một điểm đã đánh dấu, W lướt xuyên qua kẻ địch, còn E nện một vòng chấn động hất tung chúng. Bố trí WASD dùng J/K/L theo cùng thứ tự. Nhảy lên trước thì mỗi chiêu đổi khác: Q thả ba phát rơi thẳng xuống, W lướt ở độ cao của bạn, E lao xuống với vòng chấn động rộng hơn. Trên điện thoại, nhấn Nhảy rồi trượt cùng ngón tay sang kỹ năng. Một cú Địa Chấn hoặc cú lao xuống sau ba đòn trúng liên tiếp là đòn kết liễu. Cải trang mang theo bốn kỹ năng riêng.'],
+  ['Power strike', 'Đòn uy lực', 'Mỗi đòn đánh trúng sẽ nạp năng lượng: vòng quanh nút Tấn công (và vòng mảnh quanh bộ đếm đòn). Sau 20 đòn, nút Tấn công phát sáng. Giữ nút một lát (hoặc giữ F hay N, hoặc giữ chuột trên kẻ địch) để tung một đòn lớn hợp với vũ khí của bạn: kiếm phóng một lưỡi sóng hình trăng khuyết về phía trước, nắm đấm thổi một luồng gió mạnh, súng bắn một tia sáng, còn trên không bạn lao xuống và đánh ra xung quanh. Vũ khí hay đồng phục có tuyệt kỹ riêng sẽ tung luôn tuyệt kỹ đó cùng lúc. Chạm nhanh thì luôn là đòn đánh thường. Sát thương được chia cho những sinh vật trúng đòn. Ánh sáng chờ 12 giây và nhấp nháy trước khi tắt; cứ đánh tiếp khi nút còn sáng và nó sẽ lên ×2 ở 40 đòn. Thú cưng không nạp năng lượng, và bị đánh trúng không làm mất năng lượng.'],
+  ['Untouched streak', 'Chuỗi chưa trúng đòn', 'Con số bên cạnh trận đánh đếm những đòn bạn đánh trúng kể từ lần cuối bạn bị thương. Mỗi đòn cộng 1,5% sát thương cho các đòn sau, tối đa +30% ở 20 đòn. Né và đỡ đòn không làm mất chuỗi; mất máu thì chuỗi về không, và chuỗi tan sau 20 giây không đánh trúng. Đòn của thú cưng không được tính.'],
+];

@@ -5,29 +5,31 @@
 // Scripts (no food is eaten: "taken" is the damage taken in units of the hero's full health, so above 1.0 the hero needs
 // to eat or dodge better):
 //   'classic'  the switch off: the game before jumping, with the four old skills
-//   'careless' the four moves on the ground: never jumping and never stepping out of a mark
-//   'single'   the four moves and one jump, used only to dodge ground attacks
+//   'careless' the attack chain and the three moves on the ground: never jumping and never stepping out of a mark
+//   'single'   the same and one jump, used only to dodge ground attacks
 // Every script but 'classic' and 'careless' is careful: it leaves the place a hit will land (a body mark, a bite's arc, a
 // spinning boss) when it can get out in time, and comes back.
 //   'double'   the double jump: the moves, the air swings, the dives
 //   'ground', 'launch', 'chase'  one route of the plan each, with basic attacks while its moves cool down
-//   'only-strike', 'only-rush', 'only-quake', 'only-lob'  one move and basic attacks
-// The one-move scripts fight with the Strike in the fourth slot (a weapon without a special of its own) and use nothing else.
-// The others carry the gear of the level: the sword's own special is in the fourth slot and is used whenever it is ready,
-// and the routes' 'Strike x3' is three basic hits (the third launches), which is what that hero has.
+//   'only-attack', 'only-rush', 'only-quake', 'only-lob'  basic attacks alone, or one move and basic attacks
+// The basic attack is the three-hit chain (five-rules.ts), so the routes' 'Strike x3' is three presses of it. With the
+// `power` option the hero holds Attack as soon as a strike is charged and the boss stands in its area: no attack for the
+// hold's time, then the strike, and with it the sword's own special (the one-move scripts fight without that special).
+// The damage bonus is the untouched streak: hits landed since the hero was last hurt.
 import * as T from 'three';
 import { World, type Enemy } from '../src/world.ts';
 import * as M from '../src/model.ts';
 import { EnvironmentSimulation, createEnvironmentLayout } from '../src/environments.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatTarget } from '../src/combat.ts';
 import { MOVES, AIR_MOVES, MOVE_SKILLS, MOVE_SLOTS, moveAt, windowDamage, type MoveId } from '../src/moves.ts';
+import { CHAIN, HOLD, STREAK, UntouchedStreak, chainGain, chainKind } from '../src/five-rules.ts';
 import { skillTuning } from '../src/skill-upgrades.ts';
 import * as J from '../src/jump-rules.ts';
 import { POWER, PowerCharge, powerShape, powerReach, powerCap } from '../src/power-rules.ts';
 
 type Route = 'ground' | 'launch' | 'chase';
-export type Script = 'classic' | 'careless' | 'single' | 'double' | Route | `only-${MoveId}`;
-type Step = MoveId | 'jump' | 'jump2' | 'swing' | 'airdash' | 'dive' | 'skyquake' | 'rain';
+export type Script = 'classic' | 'careless' | 'single' | 'double' | Route | `only-${MoveId}` | 'only-attack';
+type Step = MoveId | 'strike' | 'jump' | 'jump2' | 'swing' | 'airdash' | 'dive' | 'skyquake' | 'rain';
 /** The plan's three routes (section 5), and the all-round loop of the 'double' script. */
 export const ROUTES: Record<Route | 'double', readonly Step[]> = {
   ground: ['strike', 'quake'],
@@ -38,8 +40,8 @@ export const ROUTES: Record<Route | 'double', readonly Step[]> = {
 const quiet = { text() {}, burst() {}, ring() {}, spark() {}, shake() {}, flash() {}, freeze() {}, update() {}, slash() {}, shakeOffset: () => new T.Vector3() };
 function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 15, 1 | seed); seed ^= seed + Math.imul(seed ^ seed >>> 7, 61 | seed); return ((seed ^ seed >>> 14) >>> 0) / 4294967296; }; }
 
-export interface FightResult { won: boolean; seconds: number; taken: number; hits: number; dodged: number; perfect: number; biggest: number; bossHp: number; blocked: number; /** Times the script's route ran to its end, and the longest chain. */ routes: number; combo: number; finishers: number; /** Power strikes used (power-rules.ts), and the damage dealt in all. */ powers: number; damage: number }
-export function fight(boss: string, planet: M.PlanetId, zone: [number, number], level: number, gear: Partial<M.SaveState['gear']>, script: Script, seed = 1, blockOverride?: number, /** `power`: the hero uses the power strike whenever it is charged and the boss is in its area. */ opts: { power?: boolean } = {}): FightResult {
+export interface FightResult { won: boolean; seconds: number; taken: number; hits: number; dodged: number; perfect: number; biggest: number; bossHp: number; blocked: number; /** Times the script's route ran to its end, and the longest chain. */ routes: number; combo: number; finishers: number; /** Power strikes used (power-rules.ts), and the damage dealt in all. */ powers: number; damage: number; /** The longest untouched streak, and the average damage bonus it gave over the fight (0.12 = +12%). */ streak: number; bonus: number }
+export function fight(boss: string, planet: M.PlanetId, zone: [number, number], level: number, gear: Partial<M.SaveState['gear']>, script: Script, seed = 1, blockOverride?: number, /** `power`: the hero holds Attack for the power strike whenever it is charged and the boss is in its area. */ opts: { power?: boolean } = {}): FightResult {
   const random = seeded(seed * 7919), realRandom = Math.random; Math.random = random;
   try {
     const state = M.newGame(); state.level = level; state.planet = planet; Object.assign(state.gear, gear); for (const id of Object.values(gear)) if (id) state.bag[id] = 1; state.hp = M.maxHp(state);
@@ -50,13 +52,13 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       onInteract() {}, onAttackEnemy() {}, onZone() {},
     }) as World;
     w.environment = new EnvironmentSimulation(createEnvironmentLayout(planet));
-    const on = script !== 'classic', only = script.startsWith('only-') ? script.slice(5) as MoveId : null, route = script in ROUTES ? ROUTES[script as Route | 'double'] : null;
+    const on = script !== 'classic', only = script.startsWith('only-') ? script.slice(5) as MoveId | 'attack' : null, route = script in ROUTES ? ROUTES[script as Route | 'double'] : null;
     const jumps = script === 'careless' ? 0 : script === 'single' || only || script === 'ground' ? 1 : 2, strikeSlot = !!only, careful = on && script !== 'careless';
     w.jumpRules = on; w.jump.max = Math.max(1, jumps);
     const weapon = () => strikeSlot ? { ...M.weaponStats(state), special: 'fist' } : M.weaponStats(state), special = () => weapon().special ?? 'fist';
     const e = w.spawnSpecies(boss, zone[0], zone[1], 0)! as Enemy; w.position.set(zone[0] + e.radius + 1.3, 0, zone[1]);
-    const stats = () => M.activeStats(state), out: FightResult = { won: false, seconds: 0, taken: 0, hits: 0, dodged: 0, perfect: 0, biggest: 0, bossHp: 0, blocked: 0, routes: 0, combo: 0, finishers: 0, powers: 0, damage: 0 };
-    const charge = new PowerCharge();
+    const stats = () => M.activeStats(state), out: FightResult = { won: false, seconds: 0, taken: 0, hits: 0, dodged: 0, perfect: 0, biggest: 0, bossHp: 0, blocked: 0, routes: 0, combo: 0, finishers: 0, powers: 0, damage: 0, streak: 0, bonus: 0 };
+    const charge = new PowerCharge(), streak = new UntouchedStreak(); let held = 0, bonusTime = 0;
     const combo = new J.ComboMeter(); let invulnerable = 0, attackCd = 0, sure = 0, kind: J.ComboHit | null = null, strike: { height: number; jumps: number } | null = null, skyQuake: { height: number; jumps: number } | null = null, skyFactor = 1, quakeFinisher = false;
     const cds = [0, 0, 0, 0], airCds = [0, 0, 0, 0];
     const sim = new CombatSimulation({
@@ -66,12 +68,12 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       hit: (target, impact) => {
         const en = target as Enemy, before = en.hp; w.damageEnemy(en, impact.amount, impact.stun); out.biggest = Math.max(out.biggest, before - en.hp); out.damage += before - en.hp; if (impact.blocked) out.blocked++; if (on) charge.hit();
         if (impact.lift && en.hp > 0) w.knockUpEnemy(en, impact.lift, .75);
-        if (on) { combo.hit(kind ?? (w.jump.airborne ? 'air' : impact.lift > 0 ? 'launcher' : 'ground')); out.combo = Math.max(out.combo, combo.count); }
+        if (on && combo.hit(kind ?? (w.jump.airborne ? 'air' : impact.lift > 0 ? 'launcher' : 'ground'))) { out.combo = Math.max(out.combo, combo.count); streak.hit(); out.streak = Math.max(out.streak, streak.count); }
       },
     }, random);
     const share = blockOverride ?? J.blockShare(boss, M.PLANETS[planet].level);
     if (on) {
-      sim.edge.moves = true; sim.edge.launch = J.AIR.launch; sim.edge.target = () => e as CombatTarget; sim.edge.spent = () => { sure = 0; };
+      sim.edge.moves = true; sim.edge.chain = true; sim.edge.launch = J.AIR.launch; sim.edge.target = () => e as CombatTarget; sim.edge.spent = () => { sure = 0; };
       sim.edge.scale = t => (t as Enemy).boss ? J.hitShare(share, (strike ?? w.jump).height, (strike ?? w.jump).jumps) : 1;
       // The same finisher rules as main.ts: a Quake on a chain of three hits ends it with the finisher bonus.
       sim.edge.begin = move => { if (move === 'skyquake') return skyFactor; if (move !== 'quake') return 1; quakeFinisher = combo.finisherReady; kind = quakeFinisher ? 'dive' : 'launcher'; return quakeFinisher ? J.COMBO.finisher : 1; };
@@ -80,7 +82,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
     w.onDamage = (amount, source = 'melee', _id, cls = 'body') => {
       if (on && J.dodges(cls, w.jump.height)) { out.dodged++; if (J.perfectDodge(cls, w.jump.height, w.jump.airTime)) { out.perfect++; sure = J.DODGE.sure; sim.edge.sure = true; } return; }
       if (!(amount > 0) || invulnerable > 0 || sim.invulnerable) return;
-      const damage = Math.max(1, Math.round(amount * 60 / (stats().defense + sim.defenseBonus + 60))); out.taken += damage / stats().maxHp; out.hits++; invulnerable = .55; combo.break(); void source;
+      const damage = Math.max(1, Math.round(amount * 60 / (stats().defense + sim.defenseBonus + 60))); out.taken += damage / stats().maxHp; out.hits++; invulnerable = .55; combo.break(); streak.hurt(damage); void source;
     };
     w.onLanded = landing => {
       const finisher = combo.finisherReady, dive = () => sim.dive(J.diveMultiplier(landing.from) * (finisher ? J.COMBO.finisher : 1), J.DIVE.radius, J.DIVE.stun, J.DIVE.knock, t => J.diveCritical(landing.jumps, landing.from, t), J.diveCap).length;
@@ -94,7 +96,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       try { if (dive() && finisher) out.finishers++; } finally { kind = null; strike = null; }
       attackCd = Math.max(attackCd, .25);
     };
-    const dt = .025, old = [...BASE_SKILLS, SPECIALS[special()] ?? SPECIALS.fist], cooldown = (i: number) => M.skillCooldown(state, i, on && moveAt(i, special()) ? MOVE_SKILLS[i].cd : old[i].cd, false);
+    const dt = .025, old = [...BASE_SKILLS, SPECIALS[special()] ?? SPECIALS.fist], cooldown = (i: number) => M.skillCooldown(state, i, on && moveAt(i) ? MOVE_SKILLS[i].cd : old[i].cd, false);
     /** Casts skill slot `i` (its air form when `air`) if its cooldown and the rules allow. */
     const cast = (i: number, air = false) => {
       const j = w.jump, form = air ? airCds : cds; if (form[i] > 0 || sim.locksMovement) return false;
@@ -123,7 +125,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
     };
     for (let t = 0; t < 600; t += dt) {
       invulnerable = Math.max(0, invulnerable - dt); attackCd = Math.max(0, attackCd - dt); for (let i = 0; i < 4; i++) { cds[i] = Math.max(0, cds[i] - dt); airCds[i] = Math.max(0, airCds[i] - dt); }
-      if (on) { combo.step(dt); sim.edge.bonus = combo.bonus; if (sure > 0 && (sure -= dt) <= 0) sim.edge.sure = false; }
+      if (on) { combo.step(dt); streak.step(dt); sim.edge.bonus = streak.bonus; bonusTime += (streak.bonus - 1) * dt; if (sure > 0 && (sure -= dt) <= 0) sim.edge.sure = false; }
       // The hero keeps beside the boss, at walking speed.
       { const dx = e.x - w.position.x, dz = e.z - w.position.z, d = Math.hypot(dx, dz), want = e.radius + 1.2, flee = careful && !sim.locksMovement ? danger() : null;
         if (flee) { w.move(flee.x * stats().speed * dt, flee.z * stats().speed * dt); fled += dt; }
@@ -134,23 +136,24 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       const ground = e.phase === 'windup' && J.attackClass(e.skill ?? (e.mesh.userData.slam ? 'slam' : 'melee')) === 'ground';
       if (jumps > 0 && ground && (e.phaseTime ?? 9) <= .2 && j.ready && grounded && !sim.locksMovement) j.jump();
       if (jumps > 0 && (e.skillEffects?.length ?? 0) > 0 && j.ready && grounded && !sim.locksMovement && e.skillEffects!.some(p => p.remaining <= .16)) j.jump();
-      // The power strike (main.ts powerStrike): pressed as soon as it is charged and the boss stands in its area; the wind-up and the recovery cost attack time.
-      if (on && opts.power && charge.level && !sim.locksMovement && !sim.busy && attackCd <= POWER.windup) {
-        const shape = powerShape(weapon().kind, !grounded && j.height >= J.DIVE.minHeight);
-        if (shape !== 'ring' && grounded && powerReach(shape, charge.level, w.position, w.facing, e) >= 0) { const level = charge.use(); sim.powerStrike(shape, level, powerCap); out.powers++; attackCd = Math.max(attackCd, POWER.windup + POWER.recovery); }
+      // The power strike (main.ts stepHold, powerStrike): Attack is held as soon as a strike is charged and the boss stands in its area. Nothing is
+      // swung for the hold's time; then the strike goes off, and the weapon's own special with it. The wind-up and the recovery cost attack time too.
+      const aiming = on && !!opts.power && charge.level > 0 && grounded && !sim.locksMovement && !sim.busy && powerReach(powerShape(weapon().kind), charge.level, w.position, w.facing, e) >= 0;
+      held = aiming ? held + dt : 0;
+      if (aiming && held >= HOLD.time) {
+        const level = charge.use(); sim.powerStrike(powerShape(weapon().kind), level, powerCap); sim.weaponSpecial(special()); out.powers++; held = 0; attackCd = Math.max(attackCd, POWER.windup + POWER.recovery);
       }
       charge.step(dt);
-      const basic = () => { if (attackCd <= 0 && grounded && reach && free && sim.basic(e)) { void fled; attackCd = (weapon().cd ?? .4) / Math.max(.2, 1 + stats().haste); swings++; } };
-      const swing = () => { if (attackCd > 0 || !J.airWindow(j) || !free) return false; const sword = weapon().kind !== 'gun'; if (!(sword ? sim.airSwing(moveAt(3, special()) ? skillTuning(3, 0).damage : 1) : sim.basic(e, J.AIR.swing))) return false; attackCd = AIR_MOVES.swing.cooldown / Math.max(.2, 1 + stats().haste); j.stall(AIR_MOVES.swing.hover); return true; };
+      const basic = () => { if (held > dt + 1e-9) return; /* the press that begins the hold still attacks; nothing more until the strike */ if (attackCd <= 0 && grounded && reach && free && sim.basic(e)) { void fled; attackCd = (weapon().cd ?? .4) / Math.max(.2, 1 + stats().haste); swings++; } };
+      const swing = () => { if (attackCd > 0 || !J.airWindow(j) || !free) return false; const sword = weapon().kind !== 'gun'; if (!(sword ? sim.airSwing(skillTuning(3, 0).damage) : sim.basic(e, J.AIR.swing))) return false; attackCd = AIR_MOVES.swing.cooldown / Math.max(.2, 1 + stats().haste); j.stall(AIR_MOVES.swing.hover); return true; };
       if (!on) {
         // The switch off: the four old skills on cooldown, basic attacks between them.
         if (reach && !sim.locksMovement) { basic(); for (const i of [2, 0, 3, 1]) if (cast(i)) break; }
       } else if (route) {
         // A route: its steps in order; basic attacks while its opener cools down. A step that cannot happen any more starts the route again.
-        const step = route[at], opener = at === 0, done = () => { at++; stuck = 0; swings = 0; if (at >= route.length) { at = 0; out.routes++; } }, own = !!moveAt(3, special());
-        if (!own && opener && reach && grounded && free) cast(3); // the sword's own special, whenever it is ready
+        const step = route[at], opener = at === 0, done = () => { at++; stuck = 0; swings = 0; if (at >= route.length) { at = 0; out.routes++; } };
         stuck += dt; if (stuck > 2.5 && !opener) { at = 0; stuck = 0; }
-        if (step === 'jump') { if (!grounded) done(); else if (free && j.ready && (script !== 'double' || (swings >= 3 && reach && !ground)) && j.jump()) done(); else if (script === 'double') { basic(); if (reach && grounded && free) for (const i of [0, 2, 1, 3]) if (cast(i)) break; } }
+        if (step === 'jump') { if (!grounded) done(); else if (free && j.ready && (script !== 'double' || (swings >= 3 && reach && !ground)) && j.jump()) done(); else if (script === 'double') { basic(); if (reach && grounded && free) for (const i of [0, 2, 1]) if (cast(i)) break; } }
         else if (step === 'jump2') { if (grounded) { at = 0; stuck = 0; } else if (j.max < 2 || j.jumps >= 2) done(); else if (j.velocity <= 0 && j.ready && j.jump()) done(); }
         else if (step === 'swing') { if (grounded) { at = 0; stuck = 0; } else if (swing()) done(); }
         else if (step === 'airdash') { if (grounded) { at = 0; stuck = 0; } else if (J.airWindow(j) && cast(1, true)) done(); else if (airCds[1] > 0) done(); }
@@ -160,17 +163,17 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
         }
         else if (step === 'rain') { if (grounded) { at = 0; stuck = 0; } else if (J.airWindow(j) && cast(0, true)) done(); }
         else {
-          const i = MOVE_SLOTS.indexOf(step), near = step === 'lob' ? gap < MOVES.lob.max : step === 'quake' ? gap < MOVES.quake.radius - .3 : reach;
+          const i = MOVE_SLOTS.indexOf(step as MoveId), near = step === 'lob' ? gap < MOVES.lob.max : step === 'quake' ? gap < MOVES.quake.radius - .3 : reach;
           // The opener waits until every move of the route is ready, so the route always runs whole.
           const ready = !opener || route.every(s => s === 'airdash' ? airCds[1] <= 0 : s === 'skyquake' || s === 'rain' || !MOVE_SLOTS.includes(s as MoveId) ? true : cds[MOVE_SLOTS.indexOf(s as MoveId)] <= 0);
-          if (step === 'strike' && !own) { if (swings >= 3) done(); else basic(); } // three basic hits: the third launches
+          if (step === 'strike') { if (swings >= 3) done(); else basic(); } // the attack chain: three presses, the third launches
           else if (ready && grounded && free && near && cast(i)) done(); else basic();
         }
       } else if (only) {
-        const i = MOVE_SLOTS.indexOf(only); if (grounded && free && (only === 'lob' ? gap < MOVES.lob.max : reach)) cast(i); basic();
+        const i = only === 'attack' ? -1 : MOVE_SLOTS.indexOf(only); if (i >= 0 && grounded && free && (only === 'lob' ? gap < MOVES.lob.max : reach)) cast(i); basic();
       } else {
-        // 'careless' and 'single': the four moves on cooldown and basic attacks, all on the ground.
-        if (reach && grounded && free) for (const i of [2, 0, 3, 1]) if (cast(i)) break;
+        // 'careless' and 'single': the three moves on cooldown and the attack chain, all on the ground.
+        if (reach && grounded && free) for (const i of [2, 0, 1]) if (cast(i)) break;
         basic();
       }
       sim.update(dt, true); w.movementLocked = sim.locksMovement; w.update(dt, true, false);
@@ -178,6 +181,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       if (e.hp <= 0) { out.won = true; out.seconds = t; break; }
       out.seconds = t;
     }
+    out.bonus = out.seconds > 0 ? bonusTime / out.seconds : 0;
     return out;
   } finally { Math.random = realRandom; }
 }
@@ -203,11 +207,11 @@ export function arena(spots: ReadonlyArray<{ x: number; z: number; radius?: numb
 /** Damage (in basic hits) that `move` alone deals in `seconds`, cast whenever its cooldown allows, on the creatures at `spots`. */
 export function moveDamage(move: MoveId, spots: Parameters<typeof arena>[0], seconds = 10, air?: { height: number }) {
   const a = arena(spots), slot = MOVE_SLOTS.indexOf(move), dt = .025; let cd = 0;
-  for (let t = 0; t < seconds - 1e-9; t += dt) { cd = Math.max(0, cd - dt); if (cd <= 0 && a.sim.skill(slot, 'fist', air ? { ...J.AIR, height: air.height } : undefined)) { cd = air && move === 'strike' ? AIR_MOVES.swing.cooldown : MOVES[move].cooldown; if (air && move === 'quake') a.sim.land(); } a.sim.update(dt, true); }
+  for (let t = 0; t < seconds - 1e-9; t += dt) { cd = Math.max(0, cd - dt); if (cd <= 0 && a.sim.skill(slot, 'fist', air ? { ...J.AIR, height: air.height } : undefined)) { cd = MOVES[move].cooldown; if (air && move === 'quake') a.sim.land(); } a.sim.update(dt, true); }
   return a.total();
 }
 /** Where one creature stands for each move to be 'used perfectly': in the arc, on the line, in the ring, on the marked spot. */
-export const PERFECT: Record<MoveId, { x: number; z: number }> = { strike: { x: 0, z: 1.8 }, rush: { x: 0, z: 2.5 }, quake: { x: 0, z: 2 }, lob: { x: 0, z: 6 } };
+export const PERFECT: Record<MoveId, { x: number; z: number }> = { rush: { x: 0, z: 2.5 }, quake: { x: 0, z: 2 }, lob: { x: 0, z: 6 } };
 /** The test fights of section 7: each shape of fight has the move that answers it. Creatures are 1 m wide unless a radius is given. */
 export const TEST_FIGHTS: Record<string, { note: string; spots: Parameters<typeof arena>[0] }> = {
   duel: { note: 'one large creature in reach', spots: [{ x: 0, z: 2.6, radius: 1.2, boss: true }] },
@@ -229,6 +233,48 @@ export function powerReport(scripts: readonly Script[] = ['careless', 'single', 
     rows.push({ boss: f.boss, script, before: before.dps, after: after.dps, gain: after.dps / before.dps - 1, powers: after.powers, biggest: after.biggest });
   }
   return rows;
+}
+
+/**
+ * The fight before the five buttons (four skills with the Strike or the weapon's special in the fourth slot, the timed +4%
+ * ramp, the power strike on its own button), measured with this file on 2026-10-14 just before the change: damage per
+ * second and damage taken (in full healths) with the power strike in use, 6 seeds. fiveReport compares the fight of today with it.
+ */
+export const BEFORE_FIVE: Record<string, readonly [dps: number, taken: number]> = {
+  'bear:careless': [173.3, 6.32],
+  'bear:single': [210.9, 1.38],
+  'bear:double': [236.9, 1.15],
+  'bear:ground': [179.7, 1.61],
+  'bear:launch': [205.9, 1.87],
+  'bear:chase': [188.3, 1.73],
+  'yeti:careless': [199.3, 10.33],
+  'yeti:single': [235.4, 0.89],
+  'yeti:double': [309, 0.61],
+  'yeti:ground': [217.5, 0.28],
+  'yeti:launch': [243.2, 0.43],
+  'yeti:chase': [226.8, 1.43],
+  'shadowlord:careless': [390.1, 16.1],
+  'shadowlord:single': [349.9, 6.36],
+  'shadowlord:double': [433.2, 3.97],
+  'shadowlord:ground': [300.2, 4.6],
+  'shadowlord:launch': [329.4, 4.71],
+  'shadowlord:chase': [324.2, 4.76],
+};
+/** Each script on each boss, with the power strike held as soon as it is charged: damage per second and damage taken now, against BEFORE_FIVE. */
+export function fiveReport(scripts: readonly Script[] = ['careless', 'single', 'double', 'ground', 'launch', 'chase'], seeds: readonly number[] = [1, 2, 3, 4, 5, 6]) {
+  const rows: { boss: string; script: Script; before: number; after: number; change: number; takenBefore: number; taken: number; powers: number; biggest: number; streak: number; bonus: number }[] = [];
+  for (const f of FIGHTS) for (const script of scripts) {
+    const runs = seeds.map(seed => fight(f.boss, f.planet, f.at, f.level, f.gear, script, seed, undefined, { power: true })), time = runs.reduce((a, r) => a + r.seconds, 0), was = BEFORE_FIVE[f.boss + ':' + script];
+    const after = runs.reduce((a, r) => a + r.damage, 0) / time;
+    rows.push({ boss: f.boss, script, before: was[0], after, change: after / was[0] - 1, takenBefore: was[1], taken: runs.reduce((a, r) => a + r.taken, 0) / runs.length, powers: runs.reduce((a, r) => a + r.powers, 0) / runs.length, biggest: Math.max(...runs.map(r => r.biggest / r.bossHp)), streak: Math.max(...runs.map(r => r.streak)), bonus: runs.reduce((a, r) => a + r.bonus * r.seconds, 0) / time });
+  }
+  return rows;
+}
+/** Damage (in basic hits) of the attack chain alone in `seconds`, pressed at the weapon's pace (`cd` seconds a press), on the creatures at `spots`. */
+export function chainDamage(spots: Parameters<typeof arena>[0], seconds = 10, cd = .4) {
+  const a = arena(spots); a.sim.edge.chain = true; let wait = 0;
+  for (let t = 0; t < seconds - 1e-9; t += .025) { wait = Math.max(0, wait - .025); if (wait <= 0 && a.sim.basic()) wait = cd; a.sim.update(.025, true); }
+  return a.total();
 }
 
 if (process.argv[1]?.endsWith('fight-sim.mts')) {

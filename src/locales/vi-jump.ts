@@ -7,8 +7,6 @@ export const JUMP_VI: Record<string, string> = {
   'Off: the classic fight, with Space as the basic attack.': 'Tắt: lối đánh cũ, Space là đòn đánh thường.',
   'On in solo play. Online play uses the classic rules for now.': 'Bật khi chơi một mình. Chơi trực tuyến tạm thời dùng luật cũ.',
   'Space key': 'Phím Space',
-  'Space: jump · F or N: attack · H: eat': 'Space: nhảy · F hoặc N: tấn công · H: ăn',
-  'Space: attack · Left Shift: jump · F or N: attack · H: eat': 'Space: tấn công · Shift trái: nhảy · F hoặc N: tấn công · H: ăn',
   'Eat · H': 'Ăn · H',
   'HITS': 'ĐÒN',
   'FINISHER!': 'KẾT LIỄU!',
@@ -26,5 +24,3 @@ export const JUMP_VI: Record<string, string> = {
   'Triple jump learned! Jump three times in the air.': 'Đã học nhảy ba! Hãy nhảy ba lần liên tiếp trên không.',
   'You need a higher level or more energy and materials to improve your jump, or it is at its best.': 'Bạn cần cấp cao hơn hoặc thêm năng lượng và nguyên liệu để nâng cấp cú nhảy, hoặc nó đã đạt mức cao nhất.',
 };
-/** The help dialog's topic (help-topics.ts 'Jump and air combat'): its Vietnamese title and text, joined to the help table in vi-help-topics.ts. */
-export const JUMP_HELP_VI = ['Nhảy và đánh trên không', 'Space để nhảy (trên điện thoại là nút Nhảy lớn ở giữa bàn chân, nút tấn công nằm ngay bên cạnh), F hoặc H để tấn công; khi bật nhảy, G để ăn. Trên điện thoại, chạm Nhảy rồi chạm Tấn công, hoặc nhấn Nhảy và trượt cùng ngón tay sang nút Tấn công hay một kỹ năng. Những vòng gợn sóng trên mặt đất kèm mũi tên trong lời cảnh báo là đòn mặt đất: hãy nhảy lên và chúng sẽ lướt qua bên dưới. Nhảy vào phút chót để né hoàn hảo và chắc chắn có đòn chí mạng. Trên không, tấn công khi đang bay lên để vung đòn nhanh, khi đang rơi để bổ nhào. Nâng cấp Nhảy ở bàn nâng cấp trong nhà: nhảy đôi ở cấp 10, nhảy ba ở cấp 25. Trùm ở các thế giới sau chặn đòn đánh từ mặt đất và từ độ cao nhảy đơn; hãy đánh chúng từ độ cao nhảy đôi.'] as const;

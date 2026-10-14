@@ -1,4 +1,5 @@
-// The four moves (src/moves.ts) as dealt by combat.ts, their air forms, the three routes and the switch-off guard.
+// The three moves (src/moves.ts) as dealt by combat.ts, their air forms, the three routes and the switch-off guard.
+// The fourth slot is empty: the Strike became the attack chain (tests/five-rules.test.ts).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CombatSimulation, BASE_SKILLS, type CombatEffect, type CombatHit, type CombatTarget } from '../src/combat.ts';
@@ -20,11 +21,12 @@ function arena(spots: Array<{ x: number; z: number; radius?: number; boss?: bool
   return { sim, hits, effects, targets, p, run };
 }
 
-test('strike: three hits 80/88/112% in a 2 m front arc; the third launches a small creature, never a boss', () => {
-  const a = arena([{ x: 0, z: 1.8 }, { x: 0, z: -1.8 }]); a.sim.skill(3); a.run(1);
-  assert.deepEqual(a.hits.map(h => [h.id, h.h.amount]), [['t0', 80], ['t0', 88], ['t0', 112]], 'nothing behind is hit');
-  assert.ok(a.hits[2].h.lift > 0 && a.hits[0].h.lift === 0);
-  const b = arena([{ x: 0, z: 2, radius: 1.4, boss: true }]); b.sim.skill(3); b.run(1); assert.equal(b.hits.at(-1)!.h.lift, 0);
+test('the fourth slot is empty with the moves on (no Strike, no weapon special there); switched off it is the special, as before', () => {
+  assert.deepEqual(Mv.MOVE_SLOTS, ['lob', 'rush', 'quake']); assert.equal(Mv.moveAt(3), null); assert.equal(Mv.moveAt(2), 'quake'); assert.equal(Mv.MOVE_SKILLS.length, 3); assert.deepEqual(Mv.AIR_NAMES, ['Petal Rain', 'Sky Step', 'Sky Quake']);
+  assert.ok(!('strike' in Mv.MOVES) && !('STRIKE_OVER_WEAPON_SPECIAL' in Mv) && !('strikeSlot' in Mv));
+  for (const special of ['fist', 'crescent', 'thunder', 'lotus']) { const a = arena([{ x: 0, z: 1.8 }]); assert.equal(a.sim.skill(3, special), false, special); a.run(1.5); assert.equal(a.hits.length, 0); }
+  const off = arena([{ x: 0, z: 1.8 }], false); assert.equal(off.sim.skill(3, 'fist'), true); off.run(1.5); assert.equal(off.hits.length, 6, 'Paw Storm: six punches'); assert.ok(off.hits.every(h => h.h.amount === 80));
+  const cut = arena([{ x: 0, z: 1.8 }], false); assert.equal(cut.sim.skill(3, 'crescent'), true); assert.equal(cut.hits[0].h.amount, 240);
 });
 test('rush: 6 m line, 160% once each, untouchable on the way (ground marks cannot hurt)', () => {
   const a = arena([{ x: 0, z: 2 }, { x: .5, z: 5 }, { x: 3, z: 3 }]); assert.equal(a.sim.skill(1), true);
@@ -47,7 +49,7 @@ test('lob: aims at the chosen target, else the nearest in range, else 6.5 m ahea
   assert.ok(Mv.lobReaches({ x: 0, z: 0 }, { x: 9.4, z: 0, radius: .5 }) && !Mv.lobReaches({ x: 0, z: 0 }, { x: 10, z: 0, radius: .5 }));
 });
 test('air: spin 80% all round; dash 160% at height and turns once to the stick; sky quake by height with a cap; rain 3 x 90% in a line', () => {
-  const s = arena([{ x: 0, z: 1.5 }, { x: 0, z: -1.5 }]); assert.equal(s.sim.skill(3, 'fist', { ...J.AIR, height: 1 }), true); assert.deepEqual(s.hits.map(h => h.h.amount), [80, 80]);
+  const s = arena([{ x: 0, z: 1.5 }, { x: 0, z: -1.5 }]); assert.equal(s.sim.airSwing(), true); assert.deepEqual(s.hits.map(h => h.h.amount), [80, 80]); assert.equal(s.sim.skill(3, 'fist', { ...J.AIR, height: 1 }), false, 'the spin is the attack button now, not a skill');
   const d = arena([{ x: 0, z: 2 }]); d.sim.edge.stick = () => Math.PI / 2; d.sim.skill(1, 'fist', { ...J.AIR, height: 1 }); d.run(.4);
   assert.equal(d.hits[0].h.amount, 160); assert.ok(d.p.x > 1, 'it turned towards the stick once');
   assert.ok(Mv.skyQuakePower(0) < Mv.skyQuakePower(2) && Mv.skyQuakePower(2) === 2.5 && Mv.skyQuakePower(J.MAX_HEIGHT) === 4);
@@ -56,9 +58,9 @@ test('air: spin 80% all round; dash 160% at height and turns once to the stick; 
   const r = arena([{ x: 0, z: 0, radius: .4 }, { x: 0, z: 1.3, radius: .4 }, { x: 0, z: 2.6, radius: .4 }]); r.sim.skill(0, 'fist', { ...J.AIR, height: 1 }); r.run(1);
   assert.ok(r.hits.length >= 3 && r.hits.every(h => h.h.amount === 90)); assert.equal(new Set(r.hits.map(h => h.id)).size, 3); assert.deepEqual(Mv.rainPoints({ x: 0, z: 0 }, 0).map(p => p.z), [0, 1.3, 2.6]);
 });
-test('ten seconds of each move used perfectly are roughly equal, and each of the four is best in one test fight', () => {
-  const ten = Mv.MOVE_SLOTS.map(m => moveDamage(m, [PERFECT[m]])); assert.ok(Math.max(...ten) / Math.min(...ten) < 1.25, ten.join(' '));
-  assert.deepEqual(new Set(testFights().map(f => f.best)), new Set(Mv.MOVE_SLOTS)); void simArena;
+test('ten seconds of each move used perfectly are roughly equal, and each of the three is best in its own test fight', () => {
+  const ten = Mv.MOVE_SLOTS.map(m => moveDamage(m, [PERFECT[m]])); assert.deepEqual(ten.map(Math.round), [5.2, 4.8, 4.8].map(Math.round)); assert.ok(Math.max(...ten) / Math.min(...ten) < 1.1, ten.join(' '));
+  const best = Object.fromEntries(testFights().map(f => [f.name, f.best])); assert.deepEqual([best.line, best.crowd, best.far], ['rush', 'quake', 'lob'], JSON.stringify(best)); void simArena;
 });
 test('the three routes win on King Bear with the combo and finishers', () => {
   const f = FIGHTS[0]; for (const route of ['ground', 'launch', 'chase'] as const) { const r = fight(f.boss, f.planet, f.at, f.level, f.gear, route, 1); assert.ok(r.won && r.routes > 3 && r.finishers > 0, route); }
@@ -72,15 +74,16 @@ test('looks, Vietnamese and descriptions', () => {
   for (const look of ['lob', 'lobmark', 'petalfall', 'petalburst']) assert.equal(typeof LOOKS[look], 'function');
   for (const [k, v] of Object.entries(MOVES_VI)) { assert.equal(VI_PACK[k], v); assert.deepEqual(v.match(/\{\w+\}/g), k.match(/\{\w+\}/g)); }
   for (let i = 0; i < 4; i++) assert.ok(moveDescription(i).length > 40);
+  assert.match(moveDescription(3, 0, 'sword'), /chain of three presses: ×0.99, ×1.1 and ×1.38 damage; the third launches small enemies./); assert.match(moveDescription(3, 5, 'gun'), /×0.9, ×1 and a double shot for ×1.75 damage./);
 });
 
 
-test('an unfinished strike cannot be bypassed by changing outfit or turning moves off', () => {
-  const a = arena([{ x: 0, z: 1 }]);
-  assert.equal(a.sim.skill(3), true);
+test('an unfinished throw cannot be bypassed by changing outfit or turning moves off', () => {
+  const a = arena([{ x: 0, z: 6 }]);
+  assert.equal(a.sim.skill(0), true);
   assert.equal(a.sim.disguise('dz_knight', 0), false);
   a.sim.edge.moves = false;
-  assert.equal(a.sim.skill(0), false);
+  assert.equal(a.sim.skill(1), false);
   a.run(1);
-  assert.equal(a.sim.skill(0), true);
+  assert.equal(a.sim.skill(1), true);
 });

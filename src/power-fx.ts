@@ -24,10 +24,10 @@ export function brighter(hex: string, amount = .55) {
 export const WAVE_STEP = 1.15;
 
 /** The wind-up: light gathers on the explorer for POWER.windup seconds. */
-export function powerWindup(fx: PowerFxHost, at: Point3, color: string, level: number) {
+export function powerWindup(fx: PowerFxHost, at: Point3, color: string, level: number, /** Seconds the light gathers: the hold that unleashes the strike (five-rules.ts HOLD), or the short wind-up after it. */ life: number = POWER.windup) {
   const y = (at.y ?? 0);
-  fx.ring(at, { color: brighter(color), from: level > 1 ? 3 : 2.3, to: .35, life: POWER.windup, y: y + .12, thick: .16, opacity: .9 });
-  fx.flash({ x: at.x, y: y + 1, z: at.z }, brighter(color, .8), level > 1 ? 1.9 : 1.4, POWER.windup);
+  fx.ring(at, { color: brighter(color), from: level > 1 ? 3 : 2.3, to: .35, life, y: y + .12, thick: .16, opacity: .9 });
+  fx.flash({ x: at.x, y: y + 1, z: at.z }, brighter(color, .8), level > 1 ? 1.9 : 1.4, life);
 }
 
 /** One wave on its way: where it started, where it points and how far it has come. */

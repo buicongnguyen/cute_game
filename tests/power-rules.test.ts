@@ -5,9 +5,9 @@ import { readFileSync } from 'node:fs';
 import { POWER, POWER_AREAS, POWER_GROW, PowerCharge, powerArea, powerCap, powerDelay, powerReach, powerShape, powerShare } from '../src/power-rules.ts';
 import { CombatSimulation, type CombatTarget, type CombatHit } from '../src/combat.ts';
 import { PowerFx, brighter, WAVE_STEP } from '../src/power-fx.ts';
-import { PowerPad, padState, hintSeen, markHint, POWER_PAD_HTML } from '../src/power-hud.ts';
+import { AttackCharge, ATTACK_CHARGE_HTML, chargeSteps, padState, hintSeen, markHint } from '../src/power-hud.ts';
+import { HOLD } from '../src/five-rules.ts';
 import { keysGuideHtml } from '../src/hud-keys.ts';
-import { keyboardBindings, eatKey } from '../src/gameplay-controls.ts';
 import { HELP_TOPICS } from '../src/help-topics.ts';
 import { powerReport } from '../promo/fight-sim.mts';
 
@@ -101,11 +101,15 @@ test('a boss never loses more than the boss cap to one strike, critical or not; 
   const crit = arena([{ x: 0, z: 3 }], 'fist', true); crit.sim.powerStrike('cone', 1); assert.equal(crit.targets[0].taken, POWER.power[0] * 100 * 4); assert.equal(crit.hits[0].hit.critical, true);
 });
 
-test('fight simulation: the power strike raises sustained damage by no more than about 15% on the three bosses', () => {
+// Since the five-button fight the hold carries the weapon's own special too (it had the fourth button before), so what
+// holding Attack adds is the strike (about +11%, as measured when it was built) plus that special: more with a strong
+// one (the lava sword's five pillars on the Shadow Lord). The fight as a whole against the one before it is bounded in
+// tests/five-rules.test.ts (fiveReport).
+test('fight simulation: holding Attack (the strike and the weapon special with it) is used, never passes the boss cap, and adds a bounded share', () => {
   const rows = powerReport(['careless', 'double'], [1, 2, 3]); assert.equal(rows.length, 6);
   const mean = rows.reduce((a, r) => a + r.gain, 0) / rows.length;
-  for (const r of rows) { assert.ok(r.powers >= 1, `${r.boss} ${r.script}: the strike is used`); assert.ok(r.gain > -.03 && r.gain < .22, `${r.boss} ${r.script}: ${(r.gain * 100).toFixed(1)}%`); assert.ok(r.biggest <= POWER.bossCap + 1e-9, `${r.boss}: biggest hit ${(r.biggest * 100).toFixed(1)}%`); }
-  assert.ok(mean > .02 && mean <= .15, `mean gain ${(mean * 100).toFixed(1)}%`);
+  for (const r of rows) { assert.ok(r.powers >= 1, `${r.boss} ${r.script}: the strike is used`); assert.ok(r.gain > .05 && r.gain < .5, `${r.boss} ${r.script}: ${(r.gain * 100).toFixed(1)}%`); assert.ok(r.biggest <= POWER.bossCap + 1e-9, `${r.boss}: biggest hit ${(r.biggest * 100).toFixed(1)}%`); }
+  assert.ok(mean > .1 && mean <= .3, `mean gain ${(mean * 100).toFixed(1)}%`);
 });
 
 test('the look uses only what it is given: the wave lays a crescent every step of its way and then ends', () => {
@@ -119,35 +123,53 @@ test('the look uses only what it is given: the wave lays a crescent every step o
   assert.equal(brighter('#000000', .5), '#808080'); assert.equal(brighter('nope'), '#ffffff');
 });
 
-test('the button: hidden until ready, x2 when overcharged, blinking at the end; written only when its state changes', () => {
-  assert.equal(padState({ level: 0, progress: .5, hits: 10, blinking: false, left: 0 }, true), ''); assert.equal(padState({ level: 1, progress: 0, hits: 20, blinking: false, left: 12 }, true), '1');
-  assert.equal(padState({ level: 2, progress: 1, hits: 40, blinking: true, left: 2 }, true), '2b'); assert.equal(padState({ level: 1, progress: 0, hits: 20, blinking: false, left: 12 }, false), '', 'a menu or fishing hides it');
-  let writes = 0; const classes = new Set<string>(), el = { hidden: true, title: '', dataset: {} as Record<string, string>, setAttribute() { writes++; }, classList: { toggle(name: string, on: boolean) { writes++; if (on) classes.add(name); else classes.delete(name); } } };
-  const pad = new PowerPad(el as unknown as HTMLElement), c = new PowerCharge();
-  assert.equal(pad.sync(c.view(), true, 'Power strike'), false); assert.equal(el.hidden, true); const idle = writes; for (let i = 0; i < 50; i++) pad.sync(c.view(), true, 'Power strike'); assert.equal(writes, idle, 'no writes while nothing changes');
-  fill(c, POWER.need); assert.equal(pad.sync(c.view(), true, 'Power strike'), true, 'it has just appeared'); assert.equal(el.hidden, false); assert.equal(el.dataset.key, 'G'); assert.equal(el.dataset.label, 'Power strike');
-  assert.equal(pad.sync(c.view(), true, 'Power strike'), false); fill(c, POWER.need); pad.sync(c.view(), true, 'Power strike'); assert.ok(classes.has('over'));
-  c.step(POWER.keep - 1); pad.sync(c.view(), true, 'Power strike'); assert.ok(classes.has('blink')); c.use(); pad.sync(c.view(), true, 'Power strike'); assert.equal(el.hidden, true);
-  assert.match(POWER_PAD_HTML, /^<button id="power-pad" class="power-pad" data-action="power" hidden>/);
+test('no button of its own: the Attack pad wears the charge (a ring in twenty steps, a glow when ready, x2 when overcharged, a blink at the end, a fill while held); written only when its state changes', () => {
+  const view = (level: number, progress: number, blinking = false) => ({ level, progress, hits: 0, blinking, left: blinking ? 2 : 12 });
+  assert.equal(padState(view(0, 0), true), '0'); assert.equal(padState(view(0, .5), true), '50'); assert.equal(padState(view(0, .5), false), '', 'a menu or the switch off clears it');
+  assert.equal(padState(view(1, 0), true), '100r'); assert.equal(padState(view(1, .5), true), '100r', 'ready: the ring stays closed while the overcharge fills');
+  assert.equal(padState(view(2, 1, true), true), '100rxb'); assert.equal(padState(view(1, 0), true, true), '100rh'); assert.equal(padState(view(0, .5), true, true), '50', 'holding without a charge shows no fill');
+  assert.deepEqual([0, 1, 7, 19, 20].map(hits => chargeSteps(view(0, hits / POWER.need))), [0, 5, 35, 95, 100], 'one step a hit');
+  let writes = 0; const classes = new Set<string>(), vars = new Map<string, string>(), attrs = new Map<string, string>();
+  const el = { title: '', setAttribute(k: string, v: string) { writes++; attrs.set(k, v); }, classList: { toggle(name: string, on: boolean) { if (classes.has(name) !== on) writes++; if (on) classes.add(name); else classes.delete(name); } }, style: { getPropertyValue: (k: string) => vars.get(k) ?? '', setProperty(k: string, v: string) { writes++; vars.set(k, v); } } };
+  const pad = new AttackCharge(el as unknown as HTMLElement), c = new PowerCharge(), sync = (holding = false) => pad.sync(c.view(), true, holding, 'Attack: hold', 'Basic attack');
+  assert.equal(vars.get('--hold-time'), HOLD.time + 's', 'the fill takes exactly the hold time');
+  assert.equal(sync(), false); const idle = writes; for (let i = 0; i < 50; i++) sync(); assert.equal(writes, idle, 'no writes while nothing changes');
+  c.hit(); sync(); assert.equal(vars.get('--charge'), '5'); assert.ok(classes.has('charging') && !classes.has('ready')); const one = writes; sync(); assert.equal(writes, one);
+  fill(c, POWER.need - 1); assert.equal(sync(), true, 'it has just become ready'); assert.equal(vars.get('--charge'), '100'); assert.ok(classes.has('ready') && !classes.has('charging')); assert.equal(attrs.get('aria-label'), 'Attack: hold');
+  assert.equal(sync(), false); assert.equal(sync(true), false); assert.ok(classes.has('holding'), 'held: the fill plays'); sync(false); assert.ok(!classes.has('holding'), 'let go: it stops');
+  fill(c, POWER.need); sync(); assert.ok(classes.has('over')); c.step(POWER.keep - 1); sync(); assert.ok(classes.has('blink'));
+  c.use(); sync(true); assert.ok(!classes.has('ready') && !classes.has('over') && !classes.has('blink') && !classes.has('holding')); assert.equal(vars.get('--charge'), '0'); assert.equal(attrs.get('aria-label'), 'Basic attack');
+  c.hit(); assert.equal(pad.sync(c.view(), false, false, 'Attack: hold', 'Basic attack'), false); assert.equal(vars.get('--charge'), '0', 'hidden: nothing shows');
+  assert.match(ATTACK_CHARGE_HTML, /^<i class="ap-ring" aria-hidden="true"><\/i><i class="ap-hold" aria-hidden="true"><\/i><b class="ap-x" aria-hidden="true">×2<\/b>$/);
   const store = new Map<string, string>(), ls = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); } };
   assert.equal(hintSeen(ls), false); markHint(ls); assert.equal(hintSeen(ls), true); assert.equal(hintSeen(null), false);
+  const css = readFileSync(new URL('../src/combo-counter.css', import.meta.url), 'utf8'), ours = readFileSync(new URL('../src/hud-ours.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css + ours, /power-pad/, 'the separate button is gone from both sheets');
+  assert.match(css, /\.attack-pad > \.ap-ring \{[^}]*conic-gradient\(#8fe0ff calc\(var\(--charge\) \* 1%\)/, 'the ring fills with the charge');
+  assert.match(css, /\.attack-pad\.holding > \.ap-hold \{ display: block; animation: ap-hold var\(--hold-time, \.35s\) linear forwards; \}/);
+  assert.match(css, /\.attack-pad\.over > \.ap-x \{ display: block; \}/); assert.match(css, /\.attack-pad\.blink > \.ap-ring \{ animation: ap-blink/);
+  assert.match(ours, /body:not\(\.air-combat\) #app #hud \.attack-pad > :not\(svg\) \{ display: none; \}/, 'switched off, the pad is bare again');
 });
 
-test('G is free in both keyboard layouts, the guide and the help name it, and only with jumping on', () => {
-  for (const layout of ['classic', 'wasd']) { const b = keyboardBindings(layout); assert.ok(!(b.skills as readonly string[]).includes(POWER.key)); assert.notEqual(b.journal, POWER.key); }
-  assert.notEqual(eatKey(true), POWER.key); assert.ok(!['f', 'n', 'i', 'm', 'h', 'w', 'a', 's', 'd'].includes(POWER.key));
-  for (const layout of ['classic', 'wasd']) { assert.match(keysGuideHtml(layout, false, 'jump'), /<dt>Power strike<\/dt><dd><kbd>G<\/kbd><\/dd>/); assert.doesNotMatch(keysGuideHtml(layout, false), /Power strike/); }
+test('there is no power key: G is free, the guide says to hold the attack key, the help says to hold the button, and only with jumping on', () => {
+  assert.ok(!('key' in POWER));
+  for (const layout of ['classic', 'wasd']) { assert.match(keysGuideHtml(layout, false, 'jump'), /<dt>Power strike<\/dt><dd><i>hold<\/i><kbd>F<\/kbd><kbd>N<\/kbd><\/dd>/); assert.doesNotMatch(keysGuideHtml(layout, false), /Power strike|hold/); assert.doesNotMatch(keysGuideHtml(layout, false, 'jump'), /<kbd>G<\/kbd>/); }
+  assert.match(keysGuideHtml('wasd', false, 'jump'), /<dt>Skills<\/dt><dd><kbd>J<\/kbd><kbd>K<\/kbd><kbd>L<\/kbd><\/dd>/, 'three skill keys'); assert.match(keysGuideHtml('classic', false, 'attack'), /<dt>Skills<\/dt><dd><kbd>Q<\/kbd><kbd>W<\/kbd><kbd>E<\/kbd><\/dd>/);
+  assert.match(keysGuideHtml('wasd', false), /<dt>Skills<\/dt><dd><kbd>J<\/kbd><kbd>K<\/kbd><kbd>L<\/kbd><kbd>;<\/kbd><\/dd>/, 'switched off: four, as before');
   const topic = HELP_TOPICS.find(([, title]) => title === 'Power strike'); assert.ok(topic); assert.ok(topic[2].includes(`After ${POWER.need} hits`) && topic[2].includes(`${POWER.keep} seconds`) && topic[2].includes(`×2 at ${POWER.need * 2} hits`), 'the help quotes the numbers of the table');
+  assert.match(topic[2], /Hold it for a moment/); assert.match(topic[2], /A quick tap is always a normal attack/); assert.doesNotMatch(topic[2], /\bG\b|button appears/);
 });
 
 test('main.ts wiring: own hits charge it (never the strike itself or a helper), the switch gates it, knock-out clears it', () => {
   const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
   assert.match(main, /if\(impact&&!remote&&!hazard&&!impact\.helper\)noteComboHit\(e,impact\);/, 'pets, the dog and summons never reach the counter');
   assert.match(main, /function noteComboHit\(e:Enemy,impact:CombatHit\)\{\r?\n  if\(!airOn\(\)\)return;\r?\n[^\n]*\r?\n  if\(!combat\.striking\)\{const level=powerCharge\.hit\(\);/);
-  assert.match(main, /function powerStrike\(\)\{\r?\n  if\(!airOn\(\)\|\|!started\|\|uiBlocked\(\)\|\|visiting\|\|state\.hp<=0\|\|powerWind\|\|powerDive\)return;/);
-  assert.match(main, /if\(state\.hp<=0&&\(powerCharge\.hits\|\|powerWind\|\|powerDive\)\)clearPower\(\);/);
-  assert.match(main, /combat\.powerStrike\(shape,level,powerCap\);/); assert.match(main, /case 'power':powerStrike\(\);break;/);
-  assert.match(main, /else if\(key===POWER\.key&&airOn\(\)\)powerStrike\(\);/);
-  assert.match(main, /if\(!on\)\{[^\n]*clearPower\(\);showCombo\(\);syncPower\(\);/, 'switching it off clears the charge and hides both');
+  assert.match(main, /function powerStrike\(\)\{\r?\n  if\(!airOn\(\)\|\|!started\|\|uiBlocked\(\)\|\|visiting\|\|state\.hp<=0\|\|powerWind\|\|powerDive\)return false;/);
+  assert.match(main, /if\(state\.hp<=0&&\(powerCharge\.hits\|\|powerWind\|\|powerDive\|\|streak\.count\)\)clearPower\(\);/);
+  assert.match(main, /combat\.powerStrike\(shape,level,powerCap\);/); assert.doesNotMatch(main, /case 'power'|data-action="power"|POWER\.key|power-pad/, 'no button and no key of its own');
+  // The one way in: a held Attack (button, key, mouse on a creature) that has filled for HOLD.time.
+  assert.equal(main.split('powerStrike()').length, 3, 'declared, and called from the hold alone'); assert.match(main, /if\(does==='power'\)\{if\(powerStrike\(\)\)attackHold\.spent\(\);\}/);
+  assert.match(main, /else if\(does==='repeat'&&!mouse&&combatTimers\.attackCooldown<=0\)basicAttack\(\);/, 'no charge: the hold keeps attacking at the weapon\'s pace');
+  assert.match(main, /if\(!on\)\{[^\n]*clearPower\(\);attackHold\.clear\(\);[^\n]*showCombo\(\);syncPower\(\);/, 'switching it off clears the charge, the hold and the pad');
   assert.doesNotMatch(main, /comboMeter\.break\(\);[^\n]{0,40}powerCharge/, 'being hit does not empty the charge');
 });

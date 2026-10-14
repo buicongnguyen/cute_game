@@ -181,17 +181,17 @@ test('combat: Breeze Step and Root Quake have an air form; the quake waits for t
   void ge; void ae; void near; void rim;
 });
 
-test('the combo: hits within 1.5 s chain, +4% each up to +40%, a dive after three hits is a finisher, being hit or waiting ends it', () => {
-  const c = new J.ComboMeter(); assert.equal(c.bonus, 1); assert.equal(c.live, false);
+test('the combo: hits within 1.5 s chain, a dive after three hits is a finisher, being hit or waiting ends it; the chain gives no damage of its own (the untouched streak does)', () => {
+  const c = new J.ComboMeter(); assert.ok(!('bonus' in c) && !('step' in J.COMBO) && !('max' in J.COMBO), 'the timed +4% ramp is gone'); assert.equal(c.live, false);
   const hit = (kind: J.ComboHit, wait = .3) => { c.step(wait); return c.hit(kind); };
-  hit('ground'); assert.equal(c.count, 1); assert.ok(Math.abs(c.bonus - 1.04) < 1e-9);
-  hit('ground'); hit('launcher'); assert.equal(c.count, 3); assert.equal(c.launched, true); assert.ok(Math.abs(c.bonus - 1.12) < 1e-9);
+  hit('ground'); assert.equal(c.count, 1); assert.equal(c.diveBonus(), 1);
+  hit('ground'); hit('launcher'); assert.equal(c.count, 3); assert.equal(c.launched, true);
   assert.equal(c.hit('ground'), false, 'one swing through a crowd counts once'); assert.equal(c.count, 3);
-  hit('air'); assert.equal(c.aired, true); assert.equal(c.finisherReady, true); assert.ok(Math.abs(c.diveBonus() - 1.16 * J.COMBO.finisher) < 1e-9);
-  hit('dive'); assert.deepEqual([c.count, c.finished, c.live, c.bonus], [5, true, false, 1], 'the finisher ends the chain');
-  assert.deepEqual(c.view(), { count: 5, bonus: 0, launched: true, aired: true, finished: true, live: false }); c.step(J.COMBO.linger + .1); assert.equal(c.view().count, 0, 'the chip clears after a moment');
-  for (let i = 0; i < 14; i++) hit('ground'); assert.ok(Math.abs(c.bonus - 1.4) < 1e-9, 'capped at +40%'); assert.equal(c.view().bonus, 40);
-  c.break(); assert.equal(c.live, false); assert.equal(c.bonus, 1); hit('ground'); assert.equal(c.count, 1, 'being hit starts over');
+  hit('air'); assert.equal(c.aired, true); assert.equal(c.finisherReady, true); assert.equal(c.diveBonus(), J.COMBO.finisher);
+  hit('dive'); assert.deepEqual([c.count, c.finished, c.live, c.diveBonus()], [5, true, false, 1], 'the finisher ends the chain');
+  assert.deepEqual(c.view(), { count: 5, launched: true, aired: true, finished: true, live: false }); c.step(J.COMBO.linger + .1); assert.equal(c.view().count, 0, 'the chip clears after a moment');
+  for (let i = 0; i < 14; i++) hit('ground'); assert.equal(c.count, 14);
+  c.break(); assert.equal(c.live, false); hit('ground'); assert.equal(c.count, 1, 'being hit starts over');
   c.step(1.49); assert.equal(c.live, true); c.step(.02); assert.equal(c.live, false, 'the window is 1.5 s'); hit('dive'); assert.equal(c.finished, false, 'a lone dive is no finisher');
   c.reset(); assert.equal(c.count, 0);
 });
@@ -307,7 +307,7 @@ test('ground telegraphs ripple and the jump has one pooled blob shadow; neither 
 });
 
 test('every new string has Vietnamese in the jump pack, and the pack serves it', () => {
-  for (const key of ['Jump', 'jump', 'Space key', 'HITS', 'FINISHER!', 'LAUNCH!', 'DODGE', 'PERFECT DODGE!', '🛡️ Blocked', 'Sky Step', 'Sky Quake', 'Single jump', 'Double jump', 'Triple jump', 'Space: jump · F or N: attack · H: eat', 'Space: attack · Left Shift: jump · F or N: attack · H: eat', 'Eat · H',
+  for (const key of ['Jump', 'jump', 'Space key', 'HITS', 'FINISHER!', 'LAUNCH!', 'DODGE', 'PERFECT DODGE!', '🛡️ Blocked', 'Sky Step', 'Sky Quake', 'Single jump', 'Double jump', 'Triple jump', 'Space: jump · F or N: attack (hold: power strike) · H: eat', 'Space: attack · Left Shift: jump · F or N: attack (hold: power strike) · H: eat', 'Eat · H',
     'Double jump learned! Jump again in the air.', 'Triple jump learned! Jump three times in the air.', 'Jump and air combat']) { assert.ok(VI_PACK[key] && VI_PACK[key] !== key, key); }
   for (const [key, value] of Object.entries(JUMP_VI)) { assert.equal(VI_PACK[key], value, key); assert.notEqual(value, key); }
 });

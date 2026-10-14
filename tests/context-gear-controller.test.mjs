@@ -8,6 +8,7 @@ import { ContextGearSelection } from '../src/context-gear.ts';
 import { FishingSimulation, planCast, selectCatch, catchWeight, newMysteryCaller, attractMystery, mysteryMissed, mysteryLanded } from '../src/fishing.ts';
 import { FishingInput, CombatTimers, MovementControls } from '../src/gameplay-controls.ts';
 import { BASE_SKILLS, SPECIALS } from '../src/combat.ts';
+import { MOVE_SKILLS } from '../src/moves.ts';
 import { fightNear } from '../src/hud-combat.ts';
 
 // Run the actual main.ts controllers with real inventory, contextual selection,
@@ -37,7 +38,7 @@ function fixture(...items) {
   const combatTimers = new CombatTimers();
   const ctx = vm.createContext({
     M, ContextGearSelection, FishingSimulation, FishingInput, planCast, selectCatch, catchWeight, attractMystery, mysteryMissed, mysteryLanded, mysteryCaller: newMysteryCaller(),
-    BASE_SKILLS, SPECIALS, fightNear, recordEvent: M.recordEvent, esc: v => String(v),
+    BASE_SKILLS, SPECIALS, MOVE_SKILLS, fightNear, recordEvent: M.recordEvent, esc: v => String(v),
     state, gearState: state, gearPlanet: state.planet, gearWater: false, combatGearUntil: 0,actionHandler:null,ctfApi:null,
     contextGear: new ContextGearSelection(), started: true, visiting: null, blocked: false,
     document: { hidden: false }, now: 1000, performance: { now: () => ctx.now },
@@ -59,6 +60,7 @@ function fixture(...items) {
       land: (_target, callback) => calls.landings.push(callback),
     },
     combat: {
+      edge: {}, chainLast: 0,
       basic: target => { calls.attacks.push({ target, kind: M.weaponStats(ctx.state).kind, item: ctx.state.gear.weapon }); return true; },
       skill: (index, special) => { calls.skills.push({ index, special, kind: M.weaponStats(ctx.state).kind, item: ctx.state.gear.weapon }); return true; },
       disguise: (id, index) => { calls.skills.push({ id, index, item: ctx.state.gear.weapon }); return true; },
@@ -307,8 +309,10 @@ test('air skill classification uses the combat weapon instead of the contextual 
   f.ctx.world.jump.airborne = true;
   f.ctx.pressKind = () => 'air';
   f.ctx.moveAt = () => { checked = true; assert.equal(f.state.gear.weapon, 'gun_pea'); return null; };
-  f.ctx.cooldowns[3] = 1;
-  f.ctx.skill(3);
+  // With the moves on there are three skills (the fourth slot is empty): the third is classified.
+  f.ctx.cooldowns[2] = 1;
+  f.ctx.skill(2);
   assert.equal(checked, true);
+  f.ctx.cooldowns[3] = 0; f.ctx.skill(3); assert.equal(f.calls.skills.length, 0, 'the empty fourth slot casts nothing');
   assert.equal(f.calls.skills.length, 0);
 });
