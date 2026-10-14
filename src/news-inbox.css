@@ -1,5 +1,5 @@
 /* The News inbox button, its panel and the ⋯ More menu (news-inbox-ui.ts). */
-#app #hud .icon-button > i.inbox-count, #app #hud .icon-button > i.more-count {
+#app #hud .icon-button > i.inbox-count, #app #hud .icon-button > i.more-count, #app #hud .icon-button > i#quest-dot.journal-count {
   position: absolute; right: -6px; top: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; box-sizing: border-box;
   display: grid; place-items: center; background: #ff4f6d; color: #fff; border: 2px solid var(--cream, #fff8ec);
   font: 900 10px/1 system-ui, sans-serif; font-style: normal; pointer-events: none;
@@ -39,3 +39,10 @@
 .inbox-entry time { font-size: 11px; opacity: .6; white-space: nowrap; }
 .inbox-entry > i { font-style: normal; font-weight: 900; opacity: .5; }
 .inbox-empty { text-align: center; opacity: .7; padding: 24px 8px; }
+/* Journal "to claim" badges (journal-badges.ts): the count on the dock's Journal button uses the rule above; the tabs
+   wear the same red pill, tucked into the tab's top-right corner. */
+#dialog-body .panel-tabs.journal-groups button, #dialog-body .panel-tabs.journal-sections button { position: relative; overflow: visible; }
+#dialog-body .panel-tabs.journal-groups, #dialog-body .panel-tabs.journal-sections { padding-top: 9px; }
+#dialog-body .panel-tabs .tab-badge { position: absolute; right: -6px; top: -7px; min-width: 17px; height: 17px; padding: 0 4px; box-sizing: border-box; border-radius: 9px;
+  display: grid; place-items: center; background: #ff4f6d; color: #fff; border: 2px solid var(--cream, #fff8ec); font: 900 10px/1 system-ui, sans-serif; font-style: normal; pointer-events: none; z-index: 1; }
+#dialog #dialog-body .panel-tabs.journal-sections { position: static; margin: 0 -12px; }
