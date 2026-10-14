@@ -121,5 +121,5 @@ test('every new line reads in Vietnamese, with its placeholders and numbers kept
   // Later topics (Elite creatures, Weapon pair) come after these four, which keep their order together.
   const titles = HELP_TOPICS.map(row => row[1]), jump = titles.indexOf('Jump and air combat');
   assert.ok(jump >= 0 && titles.indexOf('Elite creatures') > jump);
-  assert.deepEqual(titles.slice(jump, jump + 4), ['Jump and air combat', 'Attack and three specials', 'Power strike', 'Untouched streak'], 'at the end, so the older topics keep their order');
+  assert.deepEqual(titles.slice(jump, jump + 4), ['Jump and air combat', 'Attack and four specials', 'Power strike', 'Untouched streak'], 'at the end, so the older topics keep their order');
 });

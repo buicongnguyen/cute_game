@@ -105,11 +105,11 @@ test('a boss never loses more than the boss cap to one strike, critical or not; 
 // holding Attack adds is the strike (about +11%, as measured when it was built) plus that special: more with a strong
 // one (the lava sword's five pillars on the Shadow Lord). The fight as a whole against the one before it is bounded in
 // tests/five-rules.test.ts (fiveReport).
-test('fight simulation: holding Attack (the strike and the weapon special with it) is used, never passes the boss cap, and adds a bounded share', () => {
+test('fight simulation: holding Attack (the strike, its own blow again) is used, never passes the boss cap, and adds a bounded share', () => {
   const rows = powerReport(['careless', 'double'], [1, 2, 3]); assert.equal(rows.length, 6);
   const mean = rows.reduce((a, r) => a + r.gain, 0) / rows.length;
-  for (const r of rows) { assert.ok(r.powers >= 1, `${r.boss} ${r.script}: the strike is used`); assert.ok(r.gain > .05 && r.gain < .5, `${r.boss} ${r.script}: ${(r.gain * 100).toFixed(1)}%`); assert.ok(r.biggest <= POWER.bossCap + 1e-9, `${r.boss}: biggest hit ${(r.biggest * 100).toFixed(1)}%`); }
-  assert.ok(mean > .1 && mean <= .3, `mean gain ${(mean * 100).toFixed(1)}%`);
+  for (const r of rows) { assert.ok(r.powers >= 1, `${r.boss} ${r.script}: the strike is used`); assert.ok(r.gain > -.03 && r.gain < .3, `${r.boss} ${r.script}: ${(r.gain * 100).toFixed(1)}%`); assert.ok(r.biggest <= POWER.bossCap + 1e-9, `${r.boss}: biggest hit ${(r.biggest * 100).toFixed(1)}%`); }
+  assert.ok(mean > .02 && mean <= .2, `mean gain ${(mean * 100).toFixed(1)}%`);
 });
 
 test('the look uses only what it is given: the wave lays a crescent every step of its way and then ends', () => {
@@ -154,7 +154,7 @@ test('no button of its own: the Attack pad wears the charge (a ring in twenty st
 test('there is no power key: G is free, the guide says to hold the attack key, the help says to hold the button, and only with jumping on', () => {
   assert.ok(!('key' in POWER));
   for (const layout of ['classic', 'wasd']) { assert.match(keysGuideHtml(layout, false, 'jump'), /<dt>Power strike<\/dt><dd><i>hold<\/i><kbd>F<\/kbd><kbd>N<\/kbd><\/dd>/); assert.doesNotMatch(keysGuideHtml(layout, false), /Power strike|hold/); assert.doesNotMatch(keysGuideHtml(layout, false, 'jump'), /<kbd>G<\/kbd>/); }
-  assert.match(keysGuideHtml('wasd', false, 'jump'), /<dt>Skills<\/dt><dd><kbd>J<\/kbd><kbd>K<\/kbd><kbd>L<\/kbd><\/dd>/, 'three skill keys'); assert.match(keysGuideHtml('classic', false, 'attack'), /<dt>Skills<\/dt><dd><kbd>Q<\/kbd><kbd>W<\/kbd><kbd>E<\/kbd><\/dd>/);
+  assert.match(keysGuideHtml('wasd', false, 'jump'), /<dt>Skills<\/dt><dd><kbd>J<\/kbd><kbd>K<\/kbd><kbd>L<\/kbd><kbd>;<\/kbd><\/dd>/, 'four skill keys'); assert.match(keysGuideHtml('classic', false, 'attack'), /<dt>Skills<\/dt><dd><kbd>Q<\/kbd><kbd>W<\/kbd><kbd>E<\/kbd><kbd>R<\/kbd><\/dd>/);
   assert.match(keysGuideHtml('wasd', false), /<dt>Skills<\/dt><dd><kbd>J<\/kbd><kbd>K<\/kbd><kbd>L<\/kbd><kbd>;<\/kbd><\/dd>/, 'switched off: four, as before');
   const topic = HELP_TOPICS.find(([, title]) => title === 'Power strike'); assert.ok(topic); assert.ok(topic[2].includes(`After ${POWER.need} hits`) && topic[2].includes(`${POWER.keep} seconds`) && topic[2].includes(`×2 at ${POWER.need * 2} hits`), 'the help quotes the numbers of the table');
   assert.match(topic[2], /Hold it for a moment/); assert.match(topic[2], /A quick tap is always a normal attack/); assert.doesNotMatch(topic[2], /\bG\b|button appears/);

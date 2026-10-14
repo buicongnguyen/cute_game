@@ -21,10 +21,11 @@ function arena(spots: Array<{ x: number; z: number; radius?: number; boss?: bool
   return { sim, hits, effects, targets, p, run };
 }
 
-test('the fourth slot is empty with the moves on (no Strike, no weapon special there); switched off it is the special, as before', () => {
+test('the fourth slot (the crown) is the weapon special with the moves on, as with them off; no Strike', () => {
   assert.deepEqual(Mv.MOVE_SLOTS, ['lob', 'rush', 'quake']); assert.equal(Mv.moveAt(3), null); assert.equal(Mv.moveAt(2), 'quake'); assert.equal(Mv.MOVE_SKILLS.length, 3); assert.deepEqual(Mv.AIR_NAMES, ['Petal Rain', 'Sky Step', 'Sky Quake']);
   assert.ok(!('strike' in Mv.MOVES) && !('STRIKE_OVER_WEAPON_SPECIAL' in Mv) && !('strikeSlot' in Mv));
-  for (const special of ['fist', 'crescent', 'thunder', 'lotus']) { const a = arena([{ x: 0, z: 1.8 }]); assert.equal(a.sim.skill(3, special), false, special); a.run(1.5); assert.equal(a.hits.length, 0); }
+  for (const special of ['fist', 'crescent', 'thunder', 'lotus']) { const a = arena([{ x: 0, z: 1.8 }]); assert.equal(a.sim.skill(3, special), true, special); a.run(1.5); assert.ok(a.hits.length > 0, special); }
+  const on = arena([{ x: 0, z: 1.8 }]); on.sim.skill(3, 'fist'); on.run(1.5); assert.equal(on.hits.length, 6, 'Paw Storm with the moves on too'); const onCut = arena([{ x: 0, z: 1.8 }]); onCut.sim.skill(3, 'crescent'); assert.equal(onCut.hits[0].h.amount, 240);
   const off = arena([{ x: 0, z: 1.8 }], false); assert.equal(off.sim.skill(3, 'fist'), true); off.run(1.5); assert.equal(off.hits.length, 6, 'Paw Storm: six punches'); assert.ok(off.hits.every(h => h.h.amount === 80));
   const cut = arena([{ x: 0, z: 1.8 }], false); assert.equal(cut.sim.skill(3, 'crescent'), true); assert.equal(cut.hits[0].h.amount, 240);
 });
@@ -49,7 +50,7 @@ test('lob: aims at the chosen target, else the nearest in range, else 6.5 m ahea
   assert.ok(Mv.lobReaches({ x: 0, z: 0 }, { x: 9.4, z: 0, radius: .5 }) && !Mv.lobReaches({ x: 0, z: 0 }, { x: 10, z: 0, radius: .5 }));
 });
 test('air: spin 80% all round; dash 160% at height and turns once to the stick; sky quake by height with a cap; rain 3 x 90% in a line', () => {
-  const s = arena([{ x: 0, z: 1.5 }, { x: 0, z: -1.5 }]); assert.equal(s.sim.airSwing(), true); assert.deepEqual(s.hits.map(h => h.h.amount), [80, 80]); assert.equal(s.sim.skill(3, 'fist', { ...J.AIR, height: 1 }), false, 'the spin is the attack button now, not a skill');
+  const s = arena([{ x: 0, z: 1.5 }, { x: 0, z: -1.5 }]); assert.equal(s.sim.airSwing(), true); assert.deepEqual(s.hits.map(h => h.h.amount), [80, 80]); const sp = arena([{ x: 0, z: 1.5 }]); assert.equal(sp.sim.skill(3, 'fist', { ...J.AIR, height: 1 }), true, 'the crown in the air: the special cast as on the ground'); sp.run(1.5); assert.equal(sp.hits.length, 6);
   const d = arena([{ x: 0, z: 2 }]); d.sim.edge.stick = () => Math.PI / 2; d.sim.skill(1, 'fist', { ...J.AIR, height: 1 }); d.run(.4);
   assert.equal(d.hits[0].h.amount, 160); assert.ok(d.p.x > 1, 'it turned towards the stick once');
   assert.ok(Mv.skyQuakePower(0) < Mv.skyQuakePower(2) && Mv.skyQuakePower(2) === 2.5 && Mv.skyQuakePower(J.MAX_HEIGHT) === 4);

@@ -192,26 +192,24 @@ test('the fourth skill level stays in the save and now raises the attack chain\'
   assert.match(main, /skills:\[\.\.\.ownSkills\([^\]]*\),\.\.\.\(airOn\(\)\?\[CHAIN_SKILL\]:\[\]\)\],moves:airOn\(\)/);
 });
 
-test('nothing owned is lost: every weapon special and every uniform skill goes off with the power strike, at the fourth level\'s damage; in a disguise the four skills stay on the paw instead', () => {
+test('nothing owned is lost: every weapon special and every uniform skill has the fourth button (the crown) with the moves on, at the fourth level\'s damage; the power strike is its own blow; a disguise brings its four', () => {
   const ids = new Set<string>([...Object.values(M.ITEMS).map(item => (item as { weapon?: { special?: string } }).weapon?.special).filter((v): v is string => !!v), ...Object.values(UNIFORM_SPECIAL)]);
   assert.ok(ids.size >= 20, `${ids.size} specials`); ids.delete('fist');
   for (const id of ids) {
     assert.ok(SPECIALS[id], id + ' is a named special');
-    const a = arena({ kind: 'sword', range: 2, special: id }, [{ x: 0, z: 2.2 }, { x: 1.5, z: 1.5 }, { x: -1.5, z: 2 }]); const effects: unknown[] = [];
-    (a.sim as unknown as { host: { effect(e: unknown): void } }).host.effect = e => effects.push(e);
-    assert.equal(a.sim.weaponSpecial(id), true, id); a.run(3); assert.ok(a.hits.length > 0 || effects.length > 0, id + ' does something');
-    // The slot it used to stand in is empty while the moves are on, so this is the one way to it.
-    const b = arena({ kind: 'sword', range: 2, special: id }, [{ x: 0, z: 2.2 }]); b.sim.edge.moves = true; assert.equal(b.sim.skill(3, id), false);
+    const b = arena({ kind: 'sword', range: 2, special: id }, [{ x: 0, z: 2.2 }, { x: 1.5, z: 1.5 }, { x: -1.5, z: 2 }]); b.sim.edge.moves = true; const effects: unknown[] = [];
+    (b.sim as unknown as { host: { effect(e: unknown): void } }).host.effect = e => effects.push(e);
+    assert.equal(b.sim.skill(3, id), true, id); b.run(3); assert.ok(b.hits.length > 0 || effects.length > 0, id + ' does something');
   }
-  assert.equal(arena(FIST, []).sim.weaponSpecial('fist'), false); assert.equal(arena(FIST, []).sim.weaponSpecial(undefined), false, 'bare paws have none: their old fourth skill is the chain itself');
+  { const paws = arena(FIST, [{ x: 0, z: 1.2 }]); paws.sim.edge.moves = true; assert.equal(paws.sim.skill(3, 'fist'), true, 'bare paws: Paw Storm on the crown'); paws.run(1.5); assert.ok(paws.hits.length > 0); }
   // The level raises it as it did in the fourth slot: Crescent slash x2.4, +8% a level.
-  const plain = arena({ kind: 'sword', special: 'crescent' }, [{ x: 0, z: 2 }]); plain.sim.weaponSpecial('crescent'); assert.equal(plain.hits[0].h.amount, 240);
-  const levelled = arena({ kind: 'sword', special: 'crescent' }, [{ x: 0, z: 2 }], { level: 5 }); levelled.sim.weaponSpecial('crescent'); assert.equal(levelled.hits[0].h.amount, 336);
-  const after = arena({ kind: 'sword', range: 2, special: 'crescent' }, [{ x: 0, z: 1.5 }], { level: 5, chain: true }); after.sim.weaponSpecial('crescent'); assert.equal(after.sim.basic(after.targets[0]), true); assert.equal(after.hits.at(-1)!.h.amount, 99, 'the factor does not leak into the next attack');
-  // main.ts: with the strike, on the ground and after the dive version; not in a disguise (its own four skills are on the paw).
+  const plain = arena({ kind: 'sword', special: 'crescent' }, [{ x: 0, z: 2 }]); plain.sim.edge.moves = true; plain.sim.skill(3, 'crescent'); assert.equal(plain.hits[0].h.amount, 240);
+  const levelled = arena({ kind: 'sword', special: 'crescent' }, [{ x: 0, z: 2 }], { level: 5 }); levelled.sim.edge.moves = true; levelled.sim.skill(3, 'crescent'); assert.equal(levelled.hits[0].h.amount, 336);
+  const after = arena({ kind: 'sword', range: 2, special: 'crescent' }, [{ x: 0, z: 1.5 }], { level: 5, chain: true }); after.sim.skill(3, 'crescent'); after.run(1); assert.equal(after.sim.basic(after.targets[0]), true); assert.equal(after.hits.at(-1)!.h.amount, 99, 'the factor does not leak into the next attack');
+  assert.ok(!('weaponSpecial' in after.sim), 'nothing rides on the power strike any more');
   const release = main.slice(main.indexOf('function releasePower('), main.indexOf('/** A ground attack passed under the explorer.'));
-  assert.match(release, /combat\.powerStrike\(shape,level,powerCap\);\n[^\n]*\n[^\n]*\n  \{const own=state\.gear\.disguise\?undefined:weapon\.special;if\(own&&own!=='fist'&&combat\.weaponSpecial\(own\)\)\{/);
-  assert.match(main, /function ownSkills\(special:string\):readonly \{name:string;icon:string;cd:number\}\[\]\{return airOn\(\)\?MOVE_SKILLS:\[\.\.\.BASE_SKILLS,SPECIALS\[special\]\?\?SPECIALS\.fist\];\}/, 'three with the switch on, the old four with it off');
+  assert.doesNotMatch(release, /weapon\.special|SPECIALS/, 'the power strike is its own blow');
+  assert.match(main, /function ownSkills\(special:string\):readonly \{name:string;icon:string;cd:number\}\[\]\{const own=SPECIALS\[special\]\?\?SPECIALS\.fist;return airOn\(\)\?\[\.\.\.MOVE_SKILLS\.slice\(0,3\),own\]:\[\.\.\.BASE_SKILLS,own\];\}/, 'three moves and the special with the switch on, the old four with it off');
   assert.match(main, /function skillList\(\)\{const disguise=state\.gear\.disguise\?M\.DISGUISES\[state\.gear\.disguise\]:null;return disguise\?\.skills\?\?ownSkills\(/, 'a disguise brings its four');
   for (const d of Object.values(M.DISGUISES)) assert.equal(d.skills.length, 4);
   // The fourth button is put away with three skills and comes back with four.
@@ -268,7 +266,7 @@ test('fight simulation: against the four-skill fight before it, damage per secon
   assert.ok(Math.abs(mean) <= .08, `mean change ${(mean * 100).toFixed(1)}%`);
   for (const boss of ['bear', 'yeti', 'shadowlord']) { const mine = rows.filter(r => r.boss === boss), m = mine.reduce((a, r) => a + r.change, 0) / mine.length; assert.ok(Math.abs(m) <= .08, `${boss}: ${(m * 100).toFixed(1)}%`); }
   for (const r of rows) {
-    assert.ok(r.change > -.16 && r.change < .1, `${r.boss} ${r.script}: ${(r.change * 100).toFixed(1)}%`);
+    assert.ok(r.change > -.16 && r.change < .15, `${r.boss} ${r.script}: ${(r.change * 100).toFixed(1)}%`);
     assert.ok(r.biggest <= POWER.bossCap + 1e-9, `${r.boss} ${r.script}: biggest hit ${(r.biggest * 100).toFixed(1)}% of the boss`);
     assert.ok(r.powers >= 1, `${r.boss} ${r.script}: the hold is used`); assert.ok(r.bonus > .02 && r.bonus <= STREAK.max, `${r.boss} ${r.script}: streak bonus ${(r.bonus * 100).toFixed(1)}%`);
   }

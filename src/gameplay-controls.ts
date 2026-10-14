@@ -8,7 +8,7 @@ const KEYBOARD_BINDINGS = {
 export function keyboardBindings(layout?: string) { return layout === 'classic' ? KEYBOARD_BINDINGS.classic : KEYBOARD_BINDINGS.wasd; }
 /**
  * The skill slot a key casts, or -1. `slots`: how many skill buttons there are now (three with the moves on, four in a
- * disguise or with the switch off), so the fourth key (R, or ; with WASD) is free while there is no fourth skill.
+ * disguise or with the switch off), so the fourth key (R, or ; with WASD) is free while there is no fourth skill. With the moves on the fourth is the weapon's special (the crown).
  */
 export function skillKeyIndex(key: string, layout?: string, slots = 4) { const i = (keyboardBindings(layout).skills as readonly string[]).indexOf(key); return i >= 0 && i < slots ? i : -1; }
 export function movementKey(pressed: string, layout?: string): MovementKey | null {

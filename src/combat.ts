@@ -379,15 +379,6 @@ export class CombatSimulation {
     return true;
   }
   /**
-   * The weapon's or the uniform's own special (the old fourth skill), cast with the power strike while the moves are on
-   * (main.ts releasePower): its own look and numbers, raised by the fourth skill's level as ever. False for bare paws.
-   */
-  weaponSpecial(special:string|undefined){
-    if(!special||special==='fist')return false;
-    const old=this.power;this.power=skillTuning(3,this.host.skillLevel?.(3)??0).damage;
-    try{return this.special(special);}finally{this.power=old;}
-  }
-  /**
    * The dive strike of a jump (jump-rules.ts DIVE): an area hit where the explorer lands. `sure(target)` makes it a
    * critical on that target, `cap(target)` is the most it may take. Returns the creatures hit. Solo only.
    */
@@ -432,8 +423,9 @@ export class CombatSimulation {
    */
   skill(index:number,special='fist',air?:{dash:number;quakeRadius:number;quakePower:number;/** Metres up (the moves' heavy dive is stronger from higher). */height?:number}){
     if(this.busy)return false;
-    // The moves are in the first three slots; the fourth is empty (the attack chain and the power strike took its place).
-    if(this.edge.moves){const move=moveAt(index);return move?this.move(move,index,air):false;}
+    // The moves are in the first three slots; the fourth (the crown) is the weapon's or uniform's own special, cast as ever (no air form).
+    if(this.edge.moves&&index!==3){const move=moveAt(index);return move?this.move(move,index,air):false;}
+    if(index===3)air=undefined;
     this.aim();
     const tuning=skillTuning(index,this.host.skillLevel?.(index)??0);this.power=tuning.damage;
     try{

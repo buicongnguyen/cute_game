@@ -59,7 +59,8 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
   /** The hero keeps this far from the creature's edge (m) and attacks from there (a gun kept at range); default: beside it. */ range?: number;
   /** Weapon pair (weapon-pair.ts): this gun in the side slot, swapped in and out by the auto rule (far: gun, close: blade or fists). */ side?: string;
   /** The hero starts this far from the creature's edge (m) and walks in; default: in reach. */ start?: number;
-  /** No skills at all: basic attacks only (and the Lob with the 'only-lob' script). */ basicOnly?: boolean } = {}): FightResult {
+  /** No skills at all: basic attacks only (and the Lob with the 'only-lob' script). */ basicOnly?: boolean;
+  /** False: the crown (the weapon's own special, slot 3) is left alone. */ crown?: boolean } = {}): FightResult {
   const random = seeded(seed * 7919), realRandom = Math.random; Math.random = random;
   try {
     const state = M.newGame(); state.level = level; state.planet = planet; Object.assign(state.gear, gear); for (const id of Object.values(gear)) if (id) state.bag[id] = 1; if (process.env.FORGE && gear.weapon) state.forge = { [gear.weapon]: Number(process.env.FORGE) }; // FORGE=15: the hero's weapon forged that far (weapon-growth.ts reach) state.hp = M.maxHp(state);
@@ -181,15 +182,17 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       if (jumps > 0 && ground && (e.phaseTime ?? 9) <= .2 && j.ready && grounded && !sim.locksMovement) j.jump();
       if (jumps > 0 && (e.skillEffects?.length ?? 0) > 0 && j.ready && grounded && !sim.locksMovement && e.skillEffects!.some(p => p.remaining <= .16)) j.jump();
       // The power strike (main.ts stepHold, powerStrike): Attack is held as soon as a strike is charged and the boss stands in its area. Nothing is
-      // swung for the hold's time; then the strike goes off, and the weapon's own special with it. The wind-up and the recovery cost attack time too.
+      // swung for the hold's time; then the strike goes off (its own blow; the special has the crown). The wind-up and the recovery cost attack time too.
       const aiming = on && !!opts.power && charge.level > 0 && grounded && !sim.locksMovement && !sim.busy && powerReach(powerShape(weapon().kind), charge.level, w.position, w.facing, e) >= 0;
       held = aiming ? held + dt : 0;
       if (aiming && held >= HOLD.time) {
-        const level = charge.use(); sim.powerStrike(powerShape(weapon().kind), level, powerCap); sim.weaponSpecial(special()); out.powers++; held = 0; attackCd = Math.max(attackCd, POWER.windup + POWER.recovery);
+        const level = charge.use(); sim.powerStrike(powerShape(weapon().kind), level, powerCap); out.powers++; held = 0; attackCd = Math.max(attackCd, POWER.windup + POWER.recovery);
       }
       charge.step(dt);
       const basic = () => { if (held > dt + 1e-9) return; /* the press that begins the hold still attacks; nothing more until the strike */ if (attackCd <= 0 && grounded && reach && free && sim.basic(e)) { void fled; attackCd = (weapon().cd ?? .4) / Math.max(.2, 1 + stats().haste); swings++; } };
       const swing = () => { if (attackCd > 0 || !J.airWindow(j) || !free) return false; const sword = weapon().kind !== 'gun'; if (!(sword ? sim.airSwing(skillTuning(3, 0).damage) : sim.basic(e, J.AIR.swing))) return false; attackCd = AIR_MOVES.swing.cooldown / Math.max(.2, 1 + stats().haste); j.stall(AIR_MOVES.swing.hover); return true; };
+      // The crown (skill slot 3): the weapon's or the uniform's own special, cast on the ground whenever it is ready and the creature in reach.
+      if (on && !only && !opts.basicOnly && opts.crown !== false && reach && grounded && free) cast(3);
       if (!on) {
         // The switch off: the four old skills on cooldown, basic attacks between them.
         if (reach && !sim.locksMovement) { basic(); for (const i of [2, 0, 3, 1]) if (cast(i)) break; }
@@ -367,7 +370,7 @@ export const PAIR_FIGHTS: Array<{ name: string; boss: string; planet: M.PlanetId
 ];
 export function pairReport(seeds: readonly number[] = [1, 2, 3, 4, 5, 6]) {
   return PAIR_FIGHTS.map(f => {
-    const run = (gear: Partial<M.SaveState['gear']>, side?: string) => { const runs = seeds.map(seed => fight(f.boss, f.planet, f.at, f.level, gear, f.script, seed, f.elite ? 1 : undefined, { elite: f.elite, side, start: 9 })); const time = runs.reduce((a, r) => a + r.seconds, 0);
+    const run = (gear: Partial<M.SaveState['gear']>, side?: string) => { const runs = seeds.map(seed => fight(f.boss, f.planet, f.at, f.level, gear, f.script, seed, f.elite ? 1 : undefined, { elite: f.elite, side, start: 9, crown: !f.elite /* the shell crab measures the swap, not a special that ends a 4 s fight on its own */ })); const time = runs.reduce((a, r) => a + r.seconds, 0);
       return { dps: runs.reduce((a, r) => a + r.damage, 0) / time, seconds: time / runs.length, taken: runs.reduce((a, r) => a + r.taken, 0) / runs.length, swaps: runs.reduce((a, r) => a + (r.swaps ?? 0), 0) / runs.length, won: runs.filter(r => r.won).length }; };
     const single = run(f.gear), pair = run(f.gear, f.side), gun = f.guns ? run(f.guns) : null;
     return { name: f.name, single, pair, gun, change: pair.dps / single.dps - 1 };

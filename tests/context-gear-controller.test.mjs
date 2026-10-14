@@ -309,10 +309,9 @@ test('air skill classification uses the combat weapon instead of the contextual 
   f.ctx.world.jump.airborne = true;
   f.ctx.pressKind = () => 'air';
   f.ctx.moveAt = () => { checked = true; assert.equal(f.state.gear.weapon, 'gun_pea'); return null; };
-  // With the moves on there are three skills (the fourth slot is empty): the third is classified.
+  // With the moves on the third is classified; the fourth (the crown) is the weapon special, with the combat weapon.
   f.ctx.cooldowns[2] = 1;
   f.ctx.skill(2);
   assert.equal(checked, true);
-  f.ctx.cooldowns[3] = 0; f.ctx.skill(3); assert.equal(f.calls.skills.length, 0, 'the empty fourth slot casts nothing');
   assert.equal(f.calls.skills.length, 0);
 });

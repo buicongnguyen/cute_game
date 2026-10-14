@@ -76,14 +76,14 @@ for (const [name, view] of Object.entries(VIEWS)) {
             for (const [i, p] of [attack, jump, ...specials].entries()) for (const q of [attack, jump, ...specials].slice(0, i)) assert.ok(apart(p, q) >= 4, where + ': no two buttons touch');
           };
           assert.ok(home && home.t < r.H / 3 && home.r - home.l >= 44 && home.b - home.t >= 44, 'Home is in the upper HUD, a full touch target');
-          check(await page.evaluate(measureHud), 'right', 3);
-          // A disguise brings a fourth special: a crown over the arc; the three keep their places.
+          check(await page.evaluate(measureHud), 'right', 4);
+          // The weapon's special is the crown over the arc; a disguise's four take the same four places.
           const before = (await page.evaluate(measureHud)).groups.skills; await STATES.disguise(page); const dressed = await page.evaluate(measureHud); check(dressed, 'right', 4);
           for (const [i, b] of before.entries()) assert.ok(Math.abs(b.l - dressed.groups.skills[i].l) < .5 && Math.abs(b.t - dressed.groups.skills[i].t) < .5, 'the first three specials do not move');
           // Left-handed: the same paw mirrored, the specials still in key order from the left.
           await page.evaluate(() => document.querySelector('#hud').classList.add('joystick-right')); await page.waitForTimeout(300); check(await page.evaluate(measureHud), 'left', 4);
-          await page.evaluate(() => { delete window.__zoo.state.gear.disguise; window.__zoo.world.refreshPlayer(); }); await page.waitForFunction(() => !document.querySelector('#hud .skills.toes-4'), null, { timeout: 8000 }); await page.waitForTimeout(300);
-          const mirrored = await page.evaluate(measureHud); check(mirrored, 'left', 3);
+          await page.evaluate(() => { delete window.__zoo.state.gear.disguise; window.__zoo.world.refreshPlayer(); }); await page.waitForTimeout(800);
+          const mirrored = await page.evaluate(measureHud); check(mirrored, 'left', 4);
           assert.equal(mirrored.groups.home[0].t, home.t, 'hand swapping does not put Home back beside the fight buttons');
           await page.evaluate(() => document.querySelector('#hud').classList.remove('joystick-right')); await page.waitForTimeout(300);
         } else {
@@ -245,11 +245,11 @@ for (const [name, view] of Object.entries(DESKTOP)) {
           others: { player: all('.player-card'), menu: all('.top-actions'), minimap: all('.minimap'), home: all('.home-button'), eat: all('.quick-eat'), trackers: all('.tracker-stack > :not([hidden]):not(.quick-eat)'), social: all('#social-slot'), prompt: all('#context-prompt button'), buffs: all('#buff-bar') },
           levels: eval(levelTexts), badge: box(document.querySelector('#hud .hero-face .level-badge')), tile: box(document.querySelector('#hud .avatar')) };
       }, [BOX, levelTexts]);
-      assert.equal(r.skills.length, 3, 'three special buttons (jumping is on: the fourth is put away)');
+      assert.equal(r.skills.length, 4, 'four special buttons (jumping is on: the fourth is the weapon special)');
       for (const s of r.skills) assert.ok(s.l > r.W * .6 && s.b > r.H - 170 && s.r <= r.W, `skills sit in the bottom-right corner: ${JSON.stringify(s)}`);
       assert.ok(Math.max(...r.skills.map(s => s.t)) - Math.min(...r.skills.map(s => s.t)) < 2, 'in one tidy row');
       assert.ok(r.guide && r.guide.l < 40 && r.guide.b > r.H - 40, `the keyboard guide is bottom left: ${JSON.stringify(r.guide)}`);
-      assert.match(r.guideText, /WASD/); assert.match(r.guideText, /SkillsJKLPower/, 'three skill keys: ; is free'); assert.match(r.guideText, /PowerstrikeholdFN/, 'the power strike is the attack key held'); assert.match(r.guideText, /Space/);
+      assert.match(r.guideText, /WASD/); assert.match(r.guideText, /SkillsJKL;Power/, 'four skill keys: ; casts the weapon special'); assert.match(r.guideText, /PowerstrikeholdFN/, 'the power strike is the attack key held'); assert.match(r.guideText, /Space/);
       assert.ok(r.chal && r.quest && r.chal.t >= r.quest.b - .5 && (!r.bounty || r.chal.b <= r.bounty.t + .5), 'the bonus line sits right under ADVENTURE, above the bounty');
       assert.match(r.chalText, /Quick challenge · \d+s/); assert.match(r.chalText, /Harvest crops · 0\/4/);
       assert.deepEqual(r.levels, ['30'], 'the level shows once, as the number alone');
@@ -265,7 +265,7 @@ for (const [name, view] of Object.entries(DESKTOP)) {
       if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/desktop-${view.viewport.width}x${view.viewport.height}.png` });
       // Switching from the default WASD layout to classic updates the guide; folding is remembered on this device.
       await page.evaluate(() => { window.__zoo.state.settings.keyboardLayout = 'classic'; });
-      await page.waitForFunction(() => /↑←↓→/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')) && /SkillsQWEPower/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')));
+      await page.waitForFunction(() => /↑←↓→/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')) && /SkillsQWERPower/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')));
       await page.click('#keys-guide .keys-toggle'); await page.waitForTimeout(300);
       const folded = await page.evaluate(BOX => ({ box: (0, eval)(BOX)(document.querySelector('#keys-guide')), list: !!document.querySelector('#keys-guide dl'), saved: localStorage.getItem('zoo-garden-keys-guide') }), BOX);
       assert.equal(folded.list, false); assert.ok(folded.box.r - folded.box.l <= 48, 'folded to a small ⌨️ chip'); assert.match(folded.saved, /"closed"/);

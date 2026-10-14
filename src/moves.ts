@@ -7,7 +7,7 @@
  * (combat.ts edge.moves; the server's copy of the simulation never sets it). Slot order is the old one, so every key and
  * toe keeps its place: Q/J Petal Gale is the Lob, W/K Breeze Step the Rush, E/L Root Quake the Quake. The fourth slot is
  * empty: the Strike that stood there became the basic attack's three-hit chain (five-rules.ts CHAIN), and a weapon's or a
- * uniform's own special goes off with the power strike (main.ts releasePower). Disguises keep their four skills.
+ * uniform's own special has the fourth button (the crown). Disguises keep their four skills.
  *
  * Damage is a factor on the explorer's attack (1 = one basic hit). Times are seconds, lengths metres.
  */
