@@ -54,6 +54,8 @@ export class JumpState {
   diving = false; diveFrom = 0;
   /** Seconds before the next jump is allowed, and seconds left of an air dash (the height holds). */
   lag = 0; hover = 0;
+  /** Fall speed cap (m/s) while gliding over water (swim.ts sets it each step; 0 = no glide). */
+  glide = 0;
   get airborne() { return this.jumps > 0; }
   get rising() { return this.jumps > 0 && this.velocity > 0 && !this.diving; }
   get falling() { return this.jumps > 0 && this.velocity <= 0; }
@@ -83,7 +85,7 @@ export class JumpState {
     if (!this.airborne) { this.lag = Math.max(0, this.lag - dt); return null; }
     this.airTime += dt;
     if (this.hover > 0) { this.hover = Math.max(0, this.hover - dt); return null; }
-    if (!this.diving) this.velocity = Math.max(-JUMP.fallMax, this.velocity - JUMP.gravity * dt);
+    if (!this.diving) this.velocity = Math.max(this.glide > 0 && this.velocity <= 0 ? -this.glide : -JUMP.fallMax, this.velocity - JUMP.gravity * dt);
     this.height += this.velocity * dt; if (this.height > this.peak) this.peak = this.height;
     if (this.height > 0) return null;
     const landing: Landing = { dive: this.diving, from: this.diving ? this.diveFrom : 0, jumps: this.jumps, peak: this.peak };
@@ -91,7 +93,7 @@ export class JumpState {
   }
   /** Back on the ground at once (a cut-scene, a throw, a new world). */
   cancel() { this.reset(); this.lag = 0; }
-  private reset() { this.height = 0; this.velocity = 0; this.jumps = 0; this.diving = false; this.diveFrom = 0; this.hover = 0; this.spin = 0; }
+  private reset() { this.glide = 0; this.height = 0; this.velocity = 0; this.jumps = 0; this.diving = false; this.diveFrom = 0; this.hover = 0; this.spin = 0; }
 }
 
 /**

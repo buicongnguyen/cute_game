@@ -10,6 +10,8 @@ import { dogFollows, leashSpot, newDogLink, stepDog, trailSpot, DOG_FAR, type Do
 export interface DogHost {
   scene: T.Scene; planet: string; position: T.Vector3; facing: number; boarded: boolean; time: number; state: SaveState;
   interior?: unknown; farmView?: FarmPenView;
+  /** How far a dog at this spot sinks (paddling in a pond, swim.ts); 0 on land. */
+  dogSink?: (x: number, z: number) => number;
   remotePlayers?: Map<string, { mesh: T.Object3D; pose: { facing?: number; dog?: number | null; planet?: string } }>;
   /** The explorer's own dog coat, or null (no dog, or visiting someone else's garden); defaults to the world's save. */
   ownDog?: () => number | null;
@@ -48,7 +50,7 @@ export class GuardDogs {
       // Sent home from far away (a respawn at home): it is simply back at its pen.
       if (place === 'return' && leash && Math.hypot(this.link.x - leash.x, this.link.z - leash.z) > DOG_FAR * 1.6) { this.link.place = 'pen'; this.link.x = leash.x; this.link.z = leash.z; }
       pen?.setDogAway(this.link.place !== 'pen', this.link);
-      if (this.link.place !== 'pen' && !h.boarded) poses.push({ key: 'me', x: this.link.x, z: this.link.z, heading: this.link.heading, coat });
+      if (this.link.place !== 'pen' && !h.boarded) poses.push({ key: 'me', x: this.link.x, z: this.link.z, y: -(h.dogSink?.(this.link.x, this.link.z) ?? 0), heading: this.link.heading, coat });
     }
     this.planet = h.planet;
     for (const [id, r] of h.remotePlayers ?? []) {
@@ -57,7 +59,7 @@ export class GuardDogs {
       let l = this.remote.get(id); if (!l) { l = newDogLink(); this.remote.set(id, l); }
       const facing = r.pose.facing ?? 0, at = r.mesh.position;
       stepDog(l, dt, true, at, facing, null, null);
-      poses.push({ key: id, x: l.x, z: l.z, heading: l.heading, coat: Math.max(0, Math.min(2, dog | 0)) });
+      poses.push({ key: id, x: l.x, z: l.z, y: -(h.dogSink?.(l.x, l.z) ?? 0), heading: l.heading, coat: Math.max(0, Math.min(2, dog | 0)) });
     }
     for (const id of this.remote.keys()) if (!h.remotePlayers?.has(id)) this.remote.delete(id);
     this.view.update(dt, h.time, poses);

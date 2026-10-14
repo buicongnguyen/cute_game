@@ -1,0 +1,12 @@
+/* Crossing water (swim.ts): the stamina ring over the head and the fight buttons dimmed while swimming. */
+#swim-ring { position: fixed; left: 0; top: 0; width: 42px; height: 42px; z-index: 6; pointer-events: none; will-change: transform; }
+#swim-ring[hidden] { display: none; }
+#swim-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); filter: drop-shadow(0 1px 2px rgba(0, 30, 60, .45)); }
+#swim-ring circle { fill: none; stroke-width: 5; }
+#swim-ring .track { stroke: rgba(10, 40, 70, .45); }
+#swim-ring .fill { stroke: #5fd4ff; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 0; transition: stroke-dashoffset .12s linear, stroke .2s; }
+#swim-ring[data-kind="push"] .fill { stroke: #ffe27a; }
+#swim-ring.low .fill { stroke: #ff7a6b; }
+#swim-ring span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; line-height: 1; }
+body.swimming #hud .skills .skill, body.swimming #hud .jump-pad, body.swimming #hud .attack-pad,
+body.swimming #touch-controls [data-action="attack"] { opacity: .38; filter: grayscale(.75); }

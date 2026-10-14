@@ -104,7 +104,7 @@ export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):
 /** Elite roles (elite-roles.ts, elite-world.ts): the role, its drawn size, the barrier, a split child's parent and depth. */
 export interface Enemy {elite?:EliteTag;eliteSize?:number;barrier?:Barrier;parentId?:string;depth?:number;born?:number}
 export type EliteEvent=BarrierEvent|'split'|'regrow';
-export interface RemotePose {/** More pets that follow this explorer besides gear.pet (the AI neighbours' second pet). */pets?:string[];/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;/** The knight's shield is up (server-set): shots from in front bounce back. */block?:boolean;/** Hittable summons (server-checked, combat.ts shareableDecoys). */decoys?:DecoyPose[];id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
+export interface RemotePose {/** In the water (swim.ts; server-cleaned): wading or swimming. */swim?:'land'|'wade'|'swim';/** More pets that follow this explorer besides gear.pet (the AI neighbours' second pet). */pets?:string[];/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;/** The knight's shield is up (server-set): shots from in front bounce back. */block?:boolean;/** Hittable summons (server-checked, combat.ts shareableDecoys). */decoys?:DecoyPose[];id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
 export interface EnemySnapshot {elite?:EliteTag;parentId?:string;depth?:number;barrier?:Barrier;homeX?:number;homeZ?:number;titanAttacks?:TitanAttack[];titanLift?:number;chaseGrace?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
 export interface EnvironmentSnapshot {time:number;lamps:Array<[number,number]>;eclipseUntil?:number;weather?:LavaWeatherSnapshot;nestLevel?:number;fireRain?:EnvironmentSimulation['fireRain'];lightning?:LightningState}
@@ -696,7 +696,7 @@ export class World {
     pond.traverse(o=>{o.castShadow=false;});
     const entity=this.addEntity('fish',this.planet==='home'?'Fishing pond':'Planetary fishing pool','🎣',pond,x,z,radius);entity.waterId=id;entity.pond={rx:r,rz:r,surface};
     // Solid up to the sandy lip: the explorer fishes from the shore, 0.6 m outside the water line.
-    this.obstacle(x,z,r+.15);
+    this.obstacles.push({x,z,r:r+.15,water:true} as Obstacle); // tagged: swimmers cross it, shots fly over it (swim-rules.ts)
   }
   chibi(color: string) {
     const c=group();
@@ -1170,7 +1170,7 @@ export class World {
   }
   /** Hold-to-steer, throttled to every 0.2 s by GroundGestures: a new path only when the target really moves. */
   steer(clientX:number,clientY:number) {
-    const point=this.groundPoint(clientX,clientY);if(!point)return;
+    const point=this.groundPoint(clientX,clientY);if(!point)return;this.steerPoint={x:point.x,z:point.z,at:this.time}; // a press held on water steps in (swim.ts)
     // A finger resting on the explorer stops it (a chase too), unless it is just arriving under the finger.
     if(holdsHero(point,this.position)){if(!this.selected&&ignoreRetarget(point,this.destination,this.position,false))return;this.selected=null;this.ring.visible=false;this.destination=null;this.route=[];this.marker.visible=false;return;}
     if(!ignoreRetarget(point,this.selected?null:this.destination,this.position,true))this.walkTo(point.x,point.z);
@@ -1225,10 +1225,29 @@ export class World {
   private interactionRange(e:Entity) { return e.kind==='enemy'?attackRange(M.weaponStats(this.state),e.radius):e.radius+1.45; }
   select(e:Entity) {
     if(!this.validTarget(e))return;
+    if(e.pond&&this.waterPass){const tap=this.pondTap;this.pondTap=null;if(tap)this.walkTo(tap.x,tap.z);return;} // swimming: a tap on the water is where to swim, not a cast
     this.selected=e;this.ring.visible=e.kind!=='enemy'&&!e.pond;this.ring.scale.setScalar(e.radius);this.ring.position.set(e.x,.12,e.z);
     if(this.position.distanceTo(new T.Vector3(e.x,0,e.z))<=this.interactionRange(e)){this.destination=null;this.route=[];this.marker.visible=false;if(e.kind==='enemy')this.onAttackEnemy(e as Enemy);else {this.selected=null;this.ring.visible=false;this.onInteract(e);}return;}
     const point=approach(this.position,e,e.radius,this.collisionObstacles(),e.kind==='enemy'?this.interactionRange(e)-.15:e.radius+1.1,this.navigationOptions());if(point)this.walkTo(point.x,point.z,true);
   }
+  /** Crossing water (swim.ts): pond colliders let the explorer through while this is on (in the water, or over it on a double jump). */
+  waterPass=false;
+  /** Speed factor in the water (swim-rules.ts swimSpeed). */
+  swimSpeed=1;
+  /** The ground point under the last held press (steer), for stepping into water by holding on it. */
+  steerPoint:{x:number;z:number;at:number}|null=null;
+  /** Runs after the explorer, pets and other players are posed each frame (swim.ts: the swim pose and ripples). */
+  afterAnimate?:(dt:number)=>void;
+  /** How far a guard dog at this spot sinks into a pond (swim.ts; dog-world.ts DogHost). */
+  dogSink?:(x:number,z:number)=>number;
+  private dryCache:{from:Obstacle[];list:Obstacle[]}|null=null;
+  /** A list without the ponds' water colliders (cached by the list it filters). */
+  private withoutWater(list:Obstacle[]){const c=this.dryCache;if(c&&c.from===list)return c.list;const dry=list.some(o=>(o as {water?:boolean}).water)?list.filter(o=>!(o as {water?:boolean}).water):list;this.dryCache={from:list,list:dry};return dry;}
+  /** What stops the explorer: everything, minus the water while it may cross it. */
+  private moverObstacles(){const list=this.collisionObstacles();return this.waterPass?this.withoutWater(list):list;}
+  private shotCache:{from:Obstacle[];length:number;list:Obstacle[]}|null=null;
+  /** What stops a shot or a strike: scenery, not water (a swimmer is never out of a shooter's reach). */
+  private shotObstacles(){const c=this.shotCache,from=this.obstacles;if(c&&c.from===from&&c.length===from.length)return c.list;const list=from.some(o=>(o as {water?:boolean}).water)?from.filter(o=>!(o as {water?:boolean}).water):from;this.shotCache={from,length:from.length,list};return list;}
   private combinedObstacles:{list:Obstacle[];base:Obstacle[];length:number;dynamic:Obstacle[]}|null=null;
   /** Static and moving obstacles together; the same list is reused until either changes, so its grid index is too. */
   private collisionObstacles(){
@@ -1256,12 +1275,12 @@ export class World {
   blocked(x:number,z:number) {return blocked({x,z},this.collisionObstacles(),this.navigationOptions());}
   walkTo(x:number,z:number,keepSelected=false) {
     const distance=Math.hypot(x,z);if(distance>WORLD_BOUNDS-1){x*=((WORLD_BOUNDS-1)/distance);z*=((WORLD_BOUNDS-1)/distance);}if(!keepSelected)this.selected=null;
-    if(this.blocked(x,z)){const obstacle=this.collisionObstacles().find(o=>Math.hypot(x-o.x,z-o.z)<o.r+.36);if(obstacle){const d=this.position.clone().sub(new T.Vector3(obstacle.x,0,obstacle.z)).normalize();x=obstacle.x+d.x*(obstacle.r+.6);z=obstacle.z+d.z*(obstacle.r+.6);}}
+    if(blocked({x,z},this.moverObstacles(),this.navigationOptions())){const obstacle=this.moverObstacles().find(o=>Math.hypot(x-o.x,z-o.z)<o.r+.36);if(obstacle){const d=this.position.clone().sub(new T.Vector3(obstacle.x,0,obstacle.z)).normalize();x=obstacle.x+d.x*(obstacle.r+.6);z=obstacle.z+d.z*(obstacle.r+.6);}}
     this.destination=new T.Vector3(x,0,z);this.route=this.findPath(this.destination);this.marker.position.set(x,.08,z);this.marker.visible=true;
     (this.marker.material as T.MeshBasicMaterial).color?.set(keepSelected&&this.selected?.kind==='enemy'?TAP_RED:'#ffffff');
   }
   findPath(target:T.Vector3) {
-    return findRoute(this.position,target,this.collisionObstacles(),this.navigationOptions()).map(p=>new T.Vector3(p.x,0,p.z));
+    return findRoute(this.position,target,this.moverObstacles(),this.navigationOptions()).map(p=>new T.Vector3(p.x,0,p.z));
   }
   /** The thing the context button acts on: the current target while it is still in reach (so the prompt and the target frame agree and a press never swaps creatures mid-fight), else the nearest valid entity in reach. */
   nearest() {const s=this.selected;if(s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2)return s;/* The cottage door wins over a helper standing in front of it (a friend coming out used to take the Interact button, so the house seemed locked). */const gap=(e:Entity)=>Math.hypot(e.x-this.position.x,e.z-this.position.z)-e.radius-(e.kind==='home'?1.6:0);return this.entities.filter(e=>this.validTarget(e)).sort((a,b)=>gap(a)-gap(b)).find(e=>Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.radius+2);}
@@ -1487,7 +1506,7 @@ export class World {
       if(this.selected===e){this.selected=null;this.destination=null;this.route=[];this.ring.visible=false;}}
   }
   move(dx:number,dz:number,allowVoid=false) {
-    const obstacles=this.collisionObstacles(),options=this.navigationOptions(.36,allowVoid);
+    const obstacles=this.moverObstacles(),options=this.navigationOptions(.36,allowVoid);
     const next={x:this.position.x+dx,z:this.position.z+dz};
     if(clearSegment(this.position,next,obstacles,options)){this.position.x=next.x;this.position.z=next.z;return;}
     if(clearSegment(this.position,{x:next.x,z:this.position.z},obstacles,options))this.position.x=next.x;
@@ -1774,7 +1793,7 @@ export class World {
         else{
           if(target&&!noAttack){const reach=e.mesh.userData.slam?5.5:def.reach+(e.boss?BOSS_REACH.strike-.4:0);
             if(def.behavior==='shooter')this.shootEnemy(e,target);
-            else if(distance<reach+.4&&(!this.jumpRules||e.mesh.userData.slam||inMeleeArc(e.x,e.z,e.mesh.rotation.y,reach,target.x,target.z))&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1),'melee',e.id,attackClass(e.mesh.userData.slam?'slam':'melee'));
+            else if(distance<reach+.4&&(!this.jumpRules||e.mesh.userData.slam||inMeleeArc(e.x,e.z,e.mesh.rotation.y,reach,target.x,target.z))&&clearSegment(e,target,this.shotObstacles(),{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1),'melee',e.id,attackClass(e.mesh.userData.slam?'slam':'melee'));
           }
           e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);
         }
@@ -1942,7 +1961,7 @@ export class World {
     if(active||simulateWorld){
       const environmentAtStart=this.environment;
       this.environment.authoritative=!this.authoritativeAction&&this.networkRole!=='peer';const dragon=this.enemies.find(e=>e.type==='dragon'&&e.hp>0);this.environment.dragonPhase=dragon?bossPhase(dragon.hp,dragon.maxHp):0;this.environment.nearbyPlayers=1+[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&Math.hypot(r.pose.x-this.position.x,r.pose.z-this.position.z)<40).length;this.environment.weatherBlocked=(x,z,r)=>this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+r);
-      const step=this.environment.step(dt,this.position,input,{speed:stats.speed*(1+Math.max(0,this.playerSpeedBonus||0)),maxHp:stats.maxHp,fireResistance:stats.lavaproof?1:stats.fireResistance,poisonImmune:stats.poisonImmune,flippers:stats.flippers,featherFall:stats.featherFall,flying:this.playerFlying||stats.flying,hop:!!this.jumpRules&&dodges('ground',this.jump.height)},this.networkRole==='peer'?[]:this.enemies.map(e=>({id:e.id,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,boss:e.boss,flying:e.definition?.flying||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''),lavaImmune:e.type==='lavaworm'})));
+      const step=this.environment.step(dt,this.position,input,{speed:stats.speed*(1+Math.max(0,this.playerSpeedBonus||0))*(this.swimSpeed||1),maxHp:stats.maxHp,fireResistance:stats.lavaproof?1:stats.fireResistance,poisonImmune:stats.poisonImmune,flippers:stats.flippers,featherFall:stats.featherFall,flying:this.playerFlying||stats.flying,hop:!!this.jumpRules&&dodges('ground',this.jump.height)},this.networkRole==='peer'?[]:this.enemies.map(e=>({id:e.id,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,boss:e.boss,flying:e.definition?.flying||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''),lavaImmune:e.type==='lavaworm'})));
       this.dynamicObstacles=this.environment.dynamicObstacles();const signature=this.dynamicObstacles.map(o=>o.x+','+o.z).join(';');
       if(signature!==this.environmentSignature){this.environmentSignature=signature;this.resolveOverlap(this.position,this.collisionObstacles(),.36);if(this.destination)this.route=this.findPath(this.destination);}
       if(step.relocate){this.position.set(step.relocate.x,step.relocate.y??0,step.relocate.z);this.destination=null;this.route=[];this.selected=null;}
@@ -1989,7 +2008,7 @@ export class World {
       if(!shot.targetEnemyId&&Math.hypot(shot.mesh.position.x,shot.mesh.position.z)<(this.planet==='home'?18:11)-.3)shot.life=0; // shots aimed at players die at the safe zone's edge
       if(this.onPlayerShot&&!shot.targetEnemyId&&!shot.reflected&&!shot.guarded&&shot.life>0)this.onPlayerShot(shot);
       if(this.networkRole!=='peer'){
-      if(!clearSegment(from,shot.mesh.position,this.obstacles,{bounds:WORLD_BOUNDS,clearance:.1}))shot.life=0;
+      if(!clearSegment(from,shot.mesh.position,this.shotObstacles(),{bounds:WORLD_BOUNDS,clearance:.1}))shot.life=0;
       if(shot.targetEnemyId){const enemy=this.enemies.find(e=>e.id===shot.targetEnemyId);if(enemy&&enemy.hp>0&&shot.life>0&&Math.hypot(shot.mesh.position.x-enemy.x,shot.mesh.position.z-enemy.z)<enemy.radius+.2){if(shot.reflected)this.burst(enemy.x,enemy.z,'#fff3c4',10);else (this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(enemy,shot.damage);shot.life=0;}}
       else{
         // A summon in the way takes the shot (decoys, clones, the wall, combat.ts SUMMON_HP).
@@ -2011,7 +2030,7 @@ export class World {
     this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height+(this.airCarry||0);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE*lookTrim(this.player.userData.look));this.applyAvatarVisual(this.player,this.visualSnapshot());
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
     (this.petPen??=new PetCompanion()).update(this,dt);(this.petPen2??=new PetCompanion(1)).update(this,dt);
-    this.animatePlayer(dt);this.animateRemotes(dt);
+    this.animatePlayer(dt);this.animateRemotes(dt);this.afterAnimate?.(dt);
     this.player.visible=!this.boarded;this.companion.visible=!this.boarded&&this.petPen.shown;if(this.companion2)this.companion2.visible=!this.boarded&&this.petPen2.shown;
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);
