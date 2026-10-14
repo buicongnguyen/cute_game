@@ -12,6 +12,7 @@ import { dropUnownedFriendLooks } from './friend-looks.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
 import { sideGun, isGun, SIDE_ATK_SHARE, type Hand } from './weapon-pair.ts';
+import { reachBonus, weaponTier } from './weapon-growth.ts';
 import { levelledStat, parseGearLevels, parseJumpLevel, parseSkillLevels } from './upgrades.ts';
 import { LEGACY_CROP_IDS } from './content.ts';
 import { cropLevel, cropXp, cropGrowTime, sellPrice, kitchenOpen, isDifficulty, difficultyOf, rewardScale, bedUpgradeScale, type Difficulty } from './difficulty.ts';
@@ -229,6 +230,8 @@ export function weaponStats(s: SaveState): WeaponDef {
     const inHand = heldWeaponId(s), held = inHand ? ITEMS[inHand]?.weapon : undefined, own = held && held.kind !== 'rod' ? held : undefined;
     const weapon = own || (s.gear.disguise && DISGUISES[s.gear.disguise]?.weapon) || held;
     const stats: WeaponDef = { kind: 'fist', range: 1, cd: .5, special: 'fist', ...(weapon || {}) };
+    // A held blade reaches a little farther with its forge level and tier (weapon-growth.ts; the server fights with this same function).
+    if (own?.kind === 'sword' && weapon === own) stats.range = Math.round((stats.range + reachBonus(forgeLevel(s, inHand!), weaponTier(inHand))) * 1000) / 1000;
     // A uniform in the outfit slot brings its own fighting skill (uniform-skills.ts) in place of the weapon's special.
     const uniform = !s.gear.disguise && stats.kind !== 'rod' ? uniformSpecial(s.gear.outfit) : undefined;
     return uniform ? { ...stats, special: uniform } : stats;
