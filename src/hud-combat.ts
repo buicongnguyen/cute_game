@@ -17,8 +17,13 @@ import { eliteBadge } from './elite-roles.ts';
 export const BAR = { w: 80, h: 17 };
 /** A creature is engaged once it chases, winds up or attacks; walking home or idling is calm. */
 export const aggro = (e: Pick<Enemy, 'phase'>) => !!e.phase && e.phase !== 'idle' && e.phase !== 'return';
-/** Over-head bars show while hurt, aggro or selected, never for bosses (they use the boss bar). */
-export const engaged = (e: Enemy, selected: unknown) => e.hp > 0 && !e.boss && (e.hp < e.maxHp || aggro(e) || e === selected || statusMarks(e) !== '');
+/**
+ * Over-head bars show for the target (selected), creatures already hurt or carrying a status mark, and elites; never for
+ * bosses (they use the boss bar). A pack that merely chases at full health shows no bars (FIX-PLAN 3.6: 13+ bars in a
+ * Vault room covered each other), and at most MAX_BARS show at once, the target first, then nearest.
+ */
+export const engaged = (e: Enemy, selected: unknown) => e.hp > 0 && !e.boss && (e === selected || e.hp < e.maxHp || (!!e.elite && e.elite !== 'mini') || statusMarks(e) !== '');
+export const MAX_BARS = 8;
 
 export interface BarSpot { id: string; x: number; y: number }
 /**
@@ -134,16 +139,18 @@ export class CombatHud {
   /** Every frame: bars follow their creatures. Cheap: only creatures within 18 m are projected. */
   frame(enemies: readonly Enemy[], selected: Entity | null, px: number, pz: number, hidden: boolean) {
     const items: (BarSpot & { e: Enemy; d: number })[] = [];
+    const target = targetOf(selected, this.lastHit, performance.now());
     if (!hidden) for (const e of enemies) {
-      if (!e.mesh.visible || !engaged(e, selected)) continue;
+      if (!e.mesh.visible || !(engaged(e, selected) || e === target)) continue;
       const d = Math.hypot(e.x - px, e.z - pz); if (d > 18) continue;
       // The target's bobbing arrow (target-marker.ts) rises to model height + 0.7 m: its bar sits above the arrow, not on it.
-      const p = this.screen(e.x, barHeight(e) + (targetOf(selected, this.lastHit, performance.now()) === e ? .95 : 0), e.z);
+      const p = this.screen(e.x, barHeight(e) + (target === e ? .95 : 0), e.z);
       if (!p.front || p.x < -40 || p.x > viewWidth() + 40 || p.y < -60 || p.y > viewHeight() + 20) continue;
       items.push({ id: e.id, x: p.x, y: p.y, e, d });
     }
     // The selected creature first, then nearest: they keep their natural spot, others make room.
-    items.sort((a, b) => (b.e === selected ? 1 : 0) - (a.e === selected ? 1 : 0) || a.d - b.d);
+    items.sort((a, b) => (b.e === selected || b.e === target ? 1 : 0) - (a.e === selected || a.e === target ? 1 : 0) || a.d - b.d);
+    if (items.length > MAX_BARS) items.length = MAX_BARS;
     const spots = placeBars(items, { width: viewWidth(), height: viewHeight() }), live = new Set<string>();
     spots.forEach((s, i) => {
       const e = items[i].e; live.add(s.id);

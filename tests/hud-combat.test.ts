@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BAR, placeBars, engaged, targetOf, bossFor, fightNear, lootText, zoneInfo } from '../src/hud-combat.ts';
+import { BAR, MAX_BARS, placeBars, engaged, targetOf, bossFor, fightNear, lootText, zoneInfo } from '../src/hud-combat.ts';
 import type { Enemy } from '../src/world.ts';
 
 const enemy = (over: Partial<Enemy> = {}) => ({ id: 'e' + Math.random(), kind: 'enemy', name: 'Grumpy Mushroom', hp: 10, maxHp: 10, x: 0, z: 0, boss: false, phase: 'idle', level: 1, ...over }) as Enemy;
@@ -19,12 +19,14 @@ test('over-head bars are never dropped: clamped into the screen and nudged a row
   assert.ok(b.y < a.y, 'the next bar moves up first');
 });
 
-test('bars show while hurt, aggro or selected, never for bosses', () => {
+test('bars show for the target, the hurt and elites; a full-health pack in aggro shows none; never bosses (FIX-PLAN 3.6)', () => {
   const calm = enemy(), hurt = enemy({ hp: 5 }), chasing = enemy({ phase: 'chase' }), home = enemy({ phase: 'return' }), boss = enemy({ boss: true, hp: 3, phase: 'chase' });
   assert.equal(engaged(calm, null), false);
   assert.equal(engaged(calm, calm), true, 'the selected creature shows its bar even at full health');
   assert.equal(engaged(hurt, null), true);
-  assert.equal(engaged(chasing, null), true, 'aggro at full health still shows');
+  assert.equal(engaged(chasing, null), false, 'aggro at full health no longer shows: a pack would bury the screen in bars');
+  assert.equal(engaged(enemy({ phase: 'chase', elite: 'tank' } as never), null), true, 'elites always show');
+  assert.equal(MAX_BARS <= 8, true);
   assert.equal(engaged(home, null), false, 'walking home is calm');
   assert.equal(engaged(boss, boss), false, 'bosses use the boss bar');
   assert.equal(engaged(enemy({ hp: 0, maxHp: 10 }), null), false);
