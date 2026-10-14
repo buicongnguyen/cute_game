@@ -30,6 +30,8 @@ const BODIES = {
   help: `<path d="M4 6.500A2.500 2.500 0 0 1 6.500 4h11A2.500 2.500 0 0 1 20 6.500v8a2.500 2.500 0 0 1-2.500 2.500H12l-4 3.500V17H6.500A2.500 2.500 0 0 1 4 14.500z" fill="#7fd1ff"/><path d="M9.800 8.700a2.300 2.300 0 1 1 3.400 2c-.8.500-1.200.9-1.200 1.700"/><circle cx="12" cy="14.400" r=".5" fill="${INK}"/>`,
   /** A cog. */
   settings: `<g transform="translate(12 12) scale(.9) translate(-12 -12.900)"><path d="M10.300 3h3.400l.5 2.300 1.600.7 2-1.300 2.400 2.400-1.300 2 .7 1.600 2.300.5v3.400l-2.300.5-.7 1.600 1.300 2-2.400 2.400-2-1.300-1.600.7-.5 2.300h-3.400l-.5-2.300-1.600-.7-2 1.300-2.400-2.400 1.300-2-.7-1.600-2.300-.5v-3.400l2.300-.5.7-1.600-1.300-2 2.400-2.400 2 1.300 1.600-.7z" fill="#c9b6ff"/><circle cx="12" cy="12.900" r="3.100" fill="#fff6e0"/></g>`,
+  /** Three dots (the More menu, news-inbox-ui.ts). */
+  more: `<circle cx="5.200" cy="12" r="2.300" fill="#ffc93a"/><circle cx="12" cy="12" r="2.300" fill="#ff8a2a"/><circle cx="18.800" cy="12" r="2.300" fill="#ff5d8c"/>`,
   /** Four corner brackets. */
   fullscreen: `<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" stroke-width="2.300"/>`,
   /** A phone with a down arrow. */

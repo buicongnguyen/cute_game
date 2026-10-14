@@ -163,17 +163,19 @@ test('the hero plate sheet: the badge sits on the tile corner and takes no taps,
   assert.doesNotMatch(css, /\.top-actions > \.energy/);
 });
 
-// The news board moved into the leaderboard dialog: no News button in the dock, the unread count on the Ranking button.
-test('the dock has no News button; the Ranking button carries the unread-news count', () => {
+// The game-updates board lives in the leaderboard dialog; the dock's 📰 News button is the player's own inbox (news-inbox-ui.ts),
+// and the Ranking button (in the More menu since the dock was trimmed) still carries the unread-updates count.
+test('the update board stays in the leaderboard; the News button in the dock is the inbox; Ranking keeps the unread-updates count', () => {
   const main = read('main.ts'), hud = main.slice(main.indexOf('<div id="hud" hidden>'), main.indexOf('<div id="space-hud" hidden>'));
   assert.match(hud, /<button class="icon-button" data-action="ranking" title="Ranking and news" aria-label="Ranking and news">\$\{hudIcon\('ranking'\)\}<i id="news-count" class="news-count" hidden><\/i><\/button>/);
-  for (const file of ['main.ts', 'news-board.ts', 'ranking.ts']) assert.doesNotMatch(read(file), /data-action="news"|dataset\.action ?= ?'news'|action === 'news'/, `${file} still makes or handles a News button`);
+  assert.match(hud, /data-action="news" title="News"[^>]*>\$\{hudIcon\('news'\)\}<i class="inbox-count" hidden><\/i>/);
+  for (const file of ['news-board.ts', 'ranking.ts']) assert.doesNotMatch(read(file), /data-action="news"|dataset\.action ?= ?'news'|action === 'news'/, `${file} still makes or handles a News button`);
   assert.doesNotMatch(read('news-board.ts'), /createElement|openDialog|top-actions/, 'the board draws into the leaderboard dialog, it owns no button and no panel');
   const econ = read('econ-ui.css');
   assert.match(econ, /\.icon-button\[data-action="ranking"\] > i\.news-count \{/); assert.match(econ, /\.icon-button\[data-action="ranking"\] > i\.news-count\[hidden\] \{ display: none; \}/);
   assert.doesNotMatch(econ, /data-action="news"/);
   // main.ts hands the dialog's News section to the board.
-  assert.match(main, /const ranking=m\.initRanking\(gameBridge\);rankingApi=ranking;/); assert.match(main, /newsApi=m\.initNewsBoard\(\{host:ranking\.news,idle:\(\)=>started&&!modal&&!uiBlocked\(\),url:/);
+  assert.match(main, /const ranking=m\.initRanking\(gameBridge\);rankingApi=ranking;/); assert.match(main, /newsApi=m\.initNewsBoard\(\{host:ranking\.news,autoOpen:\(\)=>inbox\.popups,onUnread:[\s\S]*?,idle:\(\)=>started&&!modal&&!uiBlocked\(\),url:/);
 });
 
 test('dockMetrics reads the filled columns, not the dock box', () => {

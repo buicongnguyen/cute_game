@@ -1,0 +1,20 @@
+/** The News inbox and the More menu (news-inbox-ui.ts) in Vietnamese. */
+export const NEWS_VI: Record<string, string> = {
+  '{n} unread': '{n} chưa đọc',
+  'YOUR INBOX': 'HỘP THƯ CỦA BẠN',
+  'Nothing new yet. Level-ups, unlocks and rewards will gather here.': 'Chưa có gì mới. Lên cấp, mở khóa và phần thưởng sẽ được gom về đây.',
+  'just now': 'vừa xong',
+  '{n} min ago': '{n} phút trước',
+  '{n} h ago': '{n} giờ trước',
+  '{n} d ago': '{n} ngày trước',
+  'Show announcements as pop-ups': 'Hiện thông báo dạng bật lên',
+  'Off: level-ups, unlocks and rewards wait quietly in News': 'Tắt: lên cấp, mở khóa và phần thưởng nằm yên trong Tin tức',
+  'Level {level}!': 'Cấp {level}!',
+  'A little stronger, a little braver.': 'Mạnh hơn một chút, dũng cảm hơn một chút.',
+  'Milestone: level {level}': 'Cột mốc: cấp {level}',
+  '+{energy} energy and a moonstone. Onward, legend!': '+{energy} năng lượng và một viên đá mặt trăng. Tiến lên nào, huyền thoại!',
+  'Side slot unlocked!': 'Đã mở ô vũ khí phụ!',
+  'Put a gun in it from the bag or the shop: far targets get the gun, close ones the blade.': 'Gắn một khẩu súng từ ba lô hoặc cửa hàng: mục tiêu xa dùng súng, mục tiêu gần dùng kiếm.',
+  'New game updates': 'Có cập nhật trò chơi mới',
+  'See what is new in Zoo Garden.': 'Xem có gì mới trong Zoo Garden.',
+};

@@ -135,7 +135,7 @@ class EventTargetStub {
 }
 
 async function platform({production=true,basePath='/',supportFullscreen=true,register=async()=>({}),language='en'}={}) {
-  const source=(await readFile(path.join(root,'src/platform.ts'),'utf8')).replace(/import '\.\/platform\.css';/,'').replaceAll('import.meta.env.PROD',String(production)).replaceAll('import.meta.env.BASE_URL',JSON.stringify(basePath));
+  const source=(await readFile(path.join(root,'src/platform.ts'),'utf8')).replace(/import '\.\/platform\.css';/,'').replace(/import '\.\/open-outside\.css';/,'').replaceAll('import.meta.env.PROD',String(production)).replaceAll('import.meta.env.BASE_URL',JSON.stringify(basePath));
   const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const window=new EventTargetStub(),slot=new EventTargetStub(),document={createElement:()=>new EventTargetStub(),querySelector:()=>slot,body:new EventTargetStub(),documentElement:{},fullscreenElement:null};
   let entered=0,exited=0;const registered=[],notices=[];
@@ -144,7 +144,7 @@ async function platform({production=true,basePath='/',supportFullscreen=true,reg
   const languageListeners=[],i18n={t:source=>language==='vi'?VI_ONLINE[source]||source:source,onLanguageChange:handler=>{languageListeners.push(handler);return()=>{};}};
   // Registration lives in art-status.ts (update prompt); stand in for it with a plain register call.
   const serviceWorker={register:async url=>{registered.push(url);return register(url);}},artStatus={registerWorker:url=>{void serviceWorker.register(url).catch(()=>{});}};
-  const exports={};vm.runInNewContext(js,{exports,window,document,require:name=>{if(name==='./art-status.ts')return artStatus;assert.equal(name,'./i18n.ts');return i18n;},navigator:{serviceWorker}});
+  const exports={};vm.runInNewContext(js,{exports,window,document,require:name=>{if(name==='./art-status.ts')return artStatus;if(name==='./open-outside.ts')return {initOpenOutside(){}};assert.equal(name,'./i18n.ts');return i18n;},navigator:{serviceWorker}});
   exports.initPlatform(message=>notices.push(message));
   return {window,document,registered,notices,fullscreen:slot.children[0].children[0],install:slot.children[0].children[1],get entered(){return entered;},get exited(){return exited;},setLanguage:value=>{language=value;for(const handler of languageListeners)handler();}};
 }

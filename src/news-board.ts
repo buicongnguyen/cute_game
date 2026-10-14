@@ -84,6 +84,10 @@ export interface NewsDeps {
   host: NewsHost;
   /** True when the game has started and no panel is open: the moment the board may open itself. */
   idle(): boolean;
+  /** Whether a timed auto-open is allowed (Settings "Show announcements as pop-ups", news-inbox.ts); absent = allowed. */
+  autoOpen?(): boolean;
+  /** Called once per load when updates are unread and the board does not open by itself (the News inbox notes it). */
+  onUnread?(count: number, newest: string): void;
   url: string;
   fetch?: typeof fetch;
 }
@@ -114,6 +118,7 @@ export function initNewsBoard(d: NewsDeps) {
   const auto = !(globalThis.navigator?.webdriver) || /[?&]news=1(&|$)/.test(globalThis.location?.search ?? '');
   const ready = load().then(() => {
     if (!auto || !unread(data, readIds()).length) return;
+    if (d.autoOpen && !d.autoOpen()) { const waiting = unread(data, readIds()); d.onUnread?.(waiting.length, waiting[0]?.id ?? ''); return; }
     let tries = 0;
     const attempt = () => { if (!unread(data, readIds()).length) return; if (d.idle()) { api.open('news'); return; } if (++tries < AUTO_OPEN.tries) setTimeout(attempt, AUTO_OPEN.retryMs); };
     setTimeout(attempt, AUTO_OPEN.firstMs);

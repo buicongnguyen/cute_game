@@ -319,10 +319,10 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
         assert.deepEqual(findings(m), [], `${state} at ${size} in ${lang}`);
         if (state !== 'calm') continue;
         const g = m.groups, dock = g.dock, map = g.map[0], hero = g.hero[0], plate = m.plate;
-        // The dock: every menu button, in whole columns at the right edge, each cell at least 44 px. News is no longer one of
-        // them (it is a tab of the leaderboard), and 360 px and narrower keeps How to play in Settings.
-        assert.ok(dock.length >= (width <= 360 ? 7 : 8), `the level-41 dock shows every menu button (${dock.length})`);
-        assert.equal(await page.evaluate(() => document.querySelectorAll('#hud [data-action="news"]').length), 0, 'the dock has no News button');
+        // The dock: bag, journal, News (the inbox) and More, in whole columns at the right edge, each cell at least 44 px;
+        // ranking, play together, help, settings and the platform tools wait in the More menu (news-inbox-ui.ts).
+        assert.ok(dock.length >= 4, `the level-41 dock shows the play buttons (${dock.length})`);
+        assert.equal(await page.evaluate(() => document.querySelectorAll('#hud .top-actions > [data-action="news"]').length), 1, 'the dock has the News inbox button');
         const columns = [...new Set(dock.map(b => Math.round(b.l)))].sort((a, b) => a - b);
         assert.ok(columns.length <= 3 && Math.max(...dock.map(b => b.r)) >= m.W - 24, `the dock hugs the right edge in at most three columns: ${columns}`);
         for (const x of columns) { const ys = dock.filter(b => Math.round(b.l) === x).map(b => b.t).sort((a, b) => a - b); for (let i = 1; i < ys.length; i++) assert.ok(ys[i] - ys[i - 1] >= 44 - .5, 'dock buttons are at least 44 px apart'); }
@@ -449,10 +449,10 @@ for (const [size, lang] of [['1280x720', 'en'], ['390x844', 'vi'], ['320x568', '
       const look = () => page.evaluate(() => {
         const rect = el => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
         const shown = el => !!el && !el.hidden && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 1;
-        const d = document.querySelector('#ranking-dialog'), trigger = document.querySelector('#hud [data-action="ranking"]'), badge = trigger.querySelector('.news-count'), panel = d.querySelector('.ranking-news');
+        const d = document.querySelector('#ranking-dialog'), trigger = document.querySelector('#hud [data-action="ranking"]'), more = document.querySelector('#hud [data-action="more"]'), badge = more.querySelector('.more-count'), panel = d.querySelector('.ranking-news');
         const tab = b => ({ section: b.dataset.section ?? b.dataset.kind, text: b.textContent, label: b.getAttribute('aria-label'), pressed: b.getAttribute('aria-pressed') === 'true', count: b.querySelector('.news-count')?.textContent ?? null, ...rect(b), tappable: (() => { const c = b.getBoundingClientRect(); const hit = document.elementFromPoint((c.left + c.right) / 2, (c.top + c.bottom) / 2); return !!hit && (hit === b || b.contains(hit)); })() });
         return { open: d.open, W: innerWidth, H: innerHeight, box: rect(d), title: d.querySelector('h2').textContent, kicker: d.querySelector('.social-kicker').textContent,
-          dock: { badge: shown(badge) ? badge.textContent : null, badgeBox: shown(badge) ? rect(badge) : null, button: rect(trigger), label: trigger.getAttribute('aria-label'), title: trigger.title, news: document.querySelectorAll('#hud [data-action="news"], #hud .top-actions .energy').length },
+          dock: { badge: shown(badge) ? badge.textContent : null, badgeBox: shown(badge) ? rect(badge) : null, button: rect(more), label: trigger.getAttribute('aria-label'), title: trigger.title, news: document.querySelectorAll('#hud [data-action="news"], #hud .top-actions .energy').length },
           sections: [...d.querySelectorAll('.ranking-sections button')].map(tab), inner: [...panel.querySelectorAll('.panel-tabs button')].map(tab),
           ranking: shown(d.querySelector('.ranking-list')), rows: d.querySelectorAll('.ranking-row').length, boards: shown(d.querySelector('.ranking-tabs')), news: shown(panel), panel: rect(panel),
           cards: panel.querySelectorAll('.news-card').length, upcoming: panel.querySelectorAll('.news-card.upcoming').length, fresh: panel.querySelectorAll('.news-new').length, firstTitle: panel.querySelector('.news-card h3')?.textContent ?? '',
@@ -460,10 +460,10 @@ for (const [size, lang] of [['1280x720', 'en'], ['390x844', 'vi'], ['320x568', '
       });
       const words = lang === 'vi' ? { ranking: 'Xếp hạng', news: 'Tin tức', board: 'Bảng tin', leaderboard: 'Bảng xếp hạng', soon: 'Sắp ra mắt', both: 'Xếp hạng và tin tức', unread: `${total} tin chưa đọc`, tag: 'MỚI' }
         : { ranking: 'Ranking', news: 'News', board: 'News board', leaderboard: 'Leaderboard', soon: 'Coming soon', both: 'Ranking and news', unread: `${total} unread news`, tag: 'NEW' };
-      // Closed: the Ranking button wears the unread count; there is no News button.
+      // Closed: Ranking waits in the More menu, and the More button wears its unread count; News in the dock is the inbox.
       const closed = await look();
-      assert.equal(closed.open, false); assert.equal(closed.dock.news, 0, 'no News button (and no energy tag) in the dock');
-      assert.equal(closed.dock.badge, expected, 'the unread count shows on the Ranking button');
+      assert.equal(closed.open, false); assert.equal(closed.dock.news, 1, 'the dock has one News button: the inbox (news-inbox-ui.ts), not the update board');
+      assert.equal(closed.dock.badge, expected, 'the unread count shows on the More button (Ranking is in its menu)');
       assert.ok(closed.dock.badgeBox.w >= 16 && closed.dock.badgeBox.h >= 16 && closed.dock.badgeBox.r <= closed.W && closed.dock.badgeBox.t >= 0, `the count is readable and on screen: ${JSON.stringify(closed.dock.badgeBox)}`);
       assert.ok(closed.dock.badgeBox.l >= closed.dock.button.l && closed.dock.badgeBox.b <= closed.dock.button.b, 'it sits on the button\'s upper right corner');
       assert.equal(closed.dock.title, words.both); assert.equal(closed.dock.label, `${words.both} · ${words.unread}`);
