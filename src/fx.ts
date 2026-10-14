@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { toonMaterial } from './toon.ts';
-import { nextStackSlot, stackLift, STACK } from './feel-rules.ts';
+import { nextStackSlot, stackLift, STACK, POWER_LANE_LIFT } from './feel-rules.ts';
 
 /**
  * Pooled visual feedback: particles, glow sparks, rings, flashes, slash arcs and
@@ -127,7 +127,7 @@ export class ParticlePool {
 
 type TransientKind = 'ring' | 'flash' | 'arc' | 'spark';
 interface Transient { kind: TransientKind; object: T.Mesh | T.Sprite; material: T.Material & { opacity: number }; t: number; life: number; from: number; to: number; opacity: number }
-interface Floater { el: HTMLElement; pos: T.Vector3; t: number; life: number; vx: number }
+interface Floater { el: HTMLElement; pos: T.Vector3; t: number; life: number; vx: number; lane?: boolean }
 
 let sparkTexture: T.Texture | null = null;
 /**
@@ -285,6 +285,12 @@ export class Effects {
       if (this.floaters.length > 40) { const old = this.floaters.shift()!; old.el.remove(); }
       return;
     }
+    // The lane (the hero's power-ready call): one at a time, still and centred, above every damage number.
+    if (style.includes('lane')) {
+      for (let i = this.floaters.length - 1; i >= 0; i--) if (this.floaters[i].lane) { this.floaters[i].el.remove(); this.floaters.splice(i, 1); }
+      this.floaters.push({ el, pos: new T.Vector3(at.x, (at.y ?? 0) + POWER_LANE_LIFT, at.z), t: 0, life: 1.2, vx: 0, lane: true });
+      return;
+    }
     const side = this.side = -this.side, centred = style.includes('callout') || style.includes('alert') || style.includes('skillname');
     this.floaters.push({ el, pos: new T.Vector3(at.x + (centred ? 0 : side * between(.25, .5)), (at.y ?? 0) + 1.8, at.z + (centred ? 0 : between(-.3, .3))), t: 0, life: style.includes('callout') ? 1.6 : style.includes('big') ? 1.3 : 1, vx: centred ? 0 : side * .6 });
     if (this.floaters.length > 40) { const old = this.floaters.shift()!; old.el.remove(); }
@@ -321,7 +327,7 @@ export class Effects {
   updateText(dt: number, width: number, height: number) {
     this.textClock += dt;
     for (let i = this.floaters.length - 1; i >= 0; i--) {
-      const f = this.floaters[i]; f.t += dt; f.pos.y += dt * 1.4; f.pos.x += dt * f.vx;
+      const f = this.floaters[i]; f.t += dt; if (!f.lane) f.pos.y += dt * 1.4; f.pos.x += dt * f.vx;
       const r = f.t / f.life;
       if (r >= 1) { f.el.remove(); this.floaters.splice(i, 1); continue; }
       this.project.copy(f.pos).project(this.camera);

@@ -1568,7 +1568,7 @@ world.onLanded=(landing:Landing)=>{
 function noteComboHit(e:Enemy,impact:CombatHit){
   if(!airOn())return;
   // The power strike's charge (power-rules.ts): every own hit on a creature fills it, except the strike's own.
-  if(!combat.striking){const level=powerCharge.hit();if(level){tone('ready');vibrate(25);world.fx?.text({x:world.position.x,y:world.position.y+world.jump.height+1.5,z:world.position.z},t(level>1?'POWER ×2!':'POWER READY!'),'xp');}}
+  if(!combat.striking){const level=powerCharge.hit();if(level){tone('ready');vibrate(25);world.fx?.text({x:world.position.x,y:world.position.y+world.jump.height,z:world.position.z},t(level>1?'POWER ×2!':'POWER READY!'),'xp lane');}}
   const kind:ComboHit=comboKind??(world.jump.airborne?'air':impact.lift>0?'launcher':'ground'),first=kind==='launcher'&&!comboMeter.launched;
   if(kind==='air'&&!actionHandler&&!e.boss&&(e.lift??0)>.05&&e.hp>0)world.knockUpEnemy(e,AIR.juggle,.5);
   if(!comboMeter.live)chainDamage=0;chainDamage+=Math.max(0,impact.amount);
