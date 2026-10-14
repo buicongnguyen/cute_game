@@ -12,6 +12,7 @@ import { ContextGearSelection, type GearContext } from '../src/context-gear.ts';
 import { previewGear, canTryOn, autoHeld } from '../src/try-on.ts';
 import { sideOpen } from '../src/weapon-pair.ts';
 import { sideButtonHtml, pairSettingHtml } from '../src/pair-ui.ts';
+import * as BagTile from '../src/bag-tile.ts';
 import { dressHtml } from '../src/house-ui.ts';
 
 // Equip / unequip review (w14): each test pins a bug that was reachable in play.
@@ -100,7 +101,7 @@ const compiled = ts.transpileModule(`${fn('inventory')}\n${fn('tryOnButton')}\na
 function fixture(...items: string[]) {
   const state = owning(...items), gear = new ContextGearSelection(), html: string[] = [], calls: string[] = [];
   const ctx = vm.createContext({
-    M, IG, state, contextGear: gear, sideOpen, sideButtonHtml, pairSettingHtml, canTryOn, autoHeld, slotMeterHtml, expandCardHtml, mini: (id: string) => id, selectedItem: null, tryingOn: null, modal: 'bag', bagMode: 'bag', wardrobeItem: (item?: { slot?: string }) => !!item?.slot,
+    ...BagTile, placeBagCard() {}, $: () => null, M, IG, state, contextGear: gear, sideOpen, sideButtonHtml, pairSettingHtml, canTryOn, autoHeld, slotMeterHtml, expandCardHtml, mini: (id: string) => id, selectedItem: null, tryingOn: null, modal: 'bag', bagMode: 'bag', wardrobeItem: (item?: { slot?: string }) => !!item?.slot,
     // As main.ts perform: a refused action is a toast and resolves undefined.
     perform: async (type: string, payload: Record<string, unknown>) => { calls.push(type); try { return applyGameAction(state, { type, payload }); } catch { return undefined; } },
     world: { refreshPlayer() {}, position: { x: 0, z: 0 } }, save() {}, shop() { calls.push('shop'); }, equipFeedback(id: string) { calls.push(`feedback:${id}`); },
@@ -135,4 +136,56 @@ test('the bag shows a rod as automatic, not as an Equip button that would be und
 
 test('save() writes the persisted gear, not the rod the water put in hand', () => {
   assert.match(fn('save'), /contextGear\.persisted\(state\)/);
+});
+
+// ---- bag tile actions (bag-tile.ts): E and ? on the selected tile, details card beside it ----
+const cell = (html: string, id: string) => html.split(`<div class="item-cell sel"><button class="item-tile selected" data-action="inspect" data-item="${id}"`)[1]?.split('</div>')[0] ?? '';
+test('only the selected tile carries the green E (its primary action) and the ? details button', () => {
+  BagTile.bagUi.card = false;
+  const f = fixture('sword_wood', 'radish'); f.ctx.selectedItem = 'sword_wood'; f.ctx.inventory();
+  const html = f.html.at(-1)!;
+  assert.equal(html.match(/tile-act tile-e/g)?.length, 1, 'one E in the whole bag');
+  assert.match(cell(html, 'sword_wood'), /class="tile-act tile-e" data-action="equip" data-item="sword_wood" +aria-label="\{action\}: \{name\}"/);
+  assert.match(cell(html, 'sword_wood'), /class="tile-act tile-q" data-action="bag-card"[^>]*aria-expanded="false"/);
+  assert.match(html, /id="bag-card"[^>]*hidden>/, 'the details card waits for ?');
+  f.ctx.selectedItem = 'radish'; f.ctx.inventory();
+  assert.match(cell(f.html.at(-1)!, 'radish'), /data-action="eat" data-item="radish"/, 'food: E uses it');
+});
+
+test('a worn item keeps a disabled E; an automatic rod has only ?; the open card keeps every old action', () => {
+  const f = fixture('rod', 'sword_wood'); hold(f.state, 'sword_wood');
+  f.ctx.selectedItem = 'sword_wood'; f.ctx.inventory();
+  assert.match(cell(f.html.at(-1)!, 'sword_wood'), /tile-e" data-action="equip" data-item="sword_wood" disabled/);
+  f.ctx.selectedItem = 'rod'; f.ctx.inventory();
+  assert.doesNotMatch(cell(f.html.at(-1)!, 'rod'), /tile-e/); assert.match(cell(f.html.at(-1)!, 'rod'), /tile-q/);
+  BagTile.bagUi.card = true;
+  f.ctx.selectedItem = 'sword_wood'; f.ctx.inventory();
+  const card = f.html.at(-1)!.split('id="bag-card"')[1];
+  assert.doesNotMatch(card.split('>')[0], /hidden/); assert.match(card, /data-action="bag-card-close"/); assert.match(card, /data-action="forge-menu"/);
+  BagTile.bagUi.card = false;
+});
+
+test('the details card compares with what is worn in the same slot', () => {
+  BagTile.bagUi.card = true;
+  const f = fixture('hat_straw', 'sword_wood'); const other = Object.keys(M.ITEMS).find(id => id !== 'sword_wood' && M.ITEMS[id].slot === 'weapon' && M.ITEMS[id].weapon?.kind !== 'rod')!;
+  assert.ok(M.addItem(f.state, other)); hold(f.state, 'sword_wood'); f.ctx.selectedItem = other; f.ctx.inventory();
+  assert.match(f.html.at(-1)!.split('id="bag-card"')[1], /card-compare">Wearing now: <b>/);
+  BagTile.bagUi.card = false;
+});
+
+test('double tap: a second tap on the selected tile within 400 ms, never a first tap', () => {
+  BagTile.bagUi.tapId = '';
+  assert.equal(BagTile.isDoubleTap('a', false, 1000), false);
+  assert.equal(BagTile.isDoubleTap('a', true, 1300), true);
+  assert.equal(BagTile.isDoubleTap('a', true, 1350), false, 'a third tap starts again');
+  assert.equal(BagTile.isDoubleTap('a', true, 1900), false, 'too slow');
+  assert.equal(BagTile.isDoubleTap('b', true, 1950), false, 'another tile');
+});
+
+test('main.ts wires E, Esc and the card actions, and every new bag string has Vietnamese', async () => {
+  assert.match(source, /modal==='bag'&&bagUi\.card\)\{bagUi\.card=false;inventory\(\)/, 'Esc closes the card before the bag');
+  assert.match(source, /pressed\.toLowerCase\(\)==='e'&&selectedItem/, 'E acts on the selected item');
+  assert.match(source, /case 'bag-card':/); assert.match(source, /case 'bag-card-close':/);
+  const { VI_PACK } = await import('../src/locales/vi-pack.ts');
+  for (const key of ['Details: {name}', 'Close details', 'Wearing now']) assert.ok(VI_PACK[key], key);
 });
