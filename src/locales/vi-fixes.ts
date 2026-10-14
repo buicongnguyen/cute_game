@@ -26,4 +26,7 @@ export const VI_FIXES: Record<string, string> = {
   'Walk up to it first.': 'Hãy lại gần trước đã.',
   // Difficulty.
   'A slower economy: kitchen at level 14, fruit trees later and twice as slow with less XP, dearer livestock.': 'Kinh tế chậm hơn: bếp mở ở cấp 14, cây ăn quả mở muộn hơn, lớn chậm gấp đôi và cho ít XP hơn, vật nuôi đắt hơn.',
+  // Welcome gift (FIX-PLAN 3.5/4.1): 10,000 energy.
+  'Guess what? You are lucky today! I played the lottery and won 10,000 energy. Do you want it?': 'Sếp đoán xem? Hôm nay sếp may lắm! Em đi xổ số trúng 10.000 năng lượng. Sếp có muốn nhận không?',
+  'Pepper joined you, and you start with 10,000 energy!': 'Pepper đã gia nhập, và sếp bắt đầu với 10.000 năng lượng!',
 };
