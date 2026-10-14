@@ -2,3 +2,6 @@
 .special-tag { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 999px; background: linear-gradient(135deg, #b77bff, #ff8fc8); color: #fff; font-size: .74em; font-weight: 900; line-height: 1.5; vertical-align: .1em; white-space: nowrap; box-shadow: 0 1px 0 #8a4fd6; }
 .shop-item.special-offer { border-color: #e6c8ff; background: linear-gradient(180deg, #fffaff, #fff); }
 #dialog-body .special-note { margin: 2px 0 0; color: #7a55b0; font-size: 11.5px; font-weight: 700; line-height: 1.3; }
+/* Gear you already own (shop-owned.ts, FIX-PLAN 3.4): a green "Owned" tag, and an amber buy button asking once more. */
+.owned-tag { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 999px; background: #3fae6a; color: #fff; font-size: .74em; font-weight: 900; line-height: 1.5; vertical-align: .1em; white-space: nowrap; }
+.shop-item button.confirm-dup { background: linear-gradient(180deg, #ffbf47, #f08a1c); color: #3b2200; }

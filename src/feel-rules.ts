@@ -64,6 +64,13 @@ export const STACK = { gap: .6, step: .34, max: 5 } as const;
 /** The slot of the next number on a creature whose last number was `slot` at `last` (s), now `now`. */
 export function nextStackSlot(slot: number, last: number, now: number) { return now - last <= STACK.gap ? (slot + 1) % STACK.max : 0; }
 export function stackLift(slot: number) { return slot * STACK.step; }
+/** Damage numbers start 1.6 m over their point, stack up to STACK.max high and rise 1.4 m/s for at most 0.85 s. */
+export const DAMAGE_REACH = 1.6 + stackLift(STACK.max - 1) + 1.4 * .85;
+/**
+ * The hero's "POWER READY!" sits in its own lane (FIX-PLAN 3.2): held still, centred, half a metre above the highest
+ * a damage number can climb, so "28 POWER READY 31!" can no longer happen.
+ */
+export const POWER_LANE_LIFT = DAMAGE_REACH + .5;
 
 /** The skill-name callout over the explorer when a skill is cast, in its slot's colour (style.css .float.skillname.s0-s3). */
 /** Metres above the floating-text anchor (the explorer's head is at about 1.8 m). */

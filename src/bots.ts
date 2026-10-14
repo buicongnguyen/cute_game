@@ -9,9 +9,10 @@ import { iconPath } from './item-icons.ts';
 import { replyTo } from './bot-chat.ts';
 import { neighboursKey } from './profiles.ts';
 import type { GameBridge } from './game-bridge.ts';
+import { socialHold } from './social-hold.ts';
 import type { RemotePose } from './world.ts';
 import {
-  FightWatch, bubbleCovers, fightPass, fightTarget, type FightSense,
+  FightWatch, bubbleCovers, fightTarget, type FightSense,
   BOT_ID_PREFIX, MEET_PAUSE_MS, SAFE_RADIUS, ZONE_RADIUS, attackDamage, BOSS_SHY, bossDare, huntFor, restFor, visitStay, befriend, canMeet, choosePresent, gateRoute, givesPresent, inSafeZone, isBotId, isFriend, makeCast, newStore, nextVisitIn, parseStore, pickFoe, pickGoal, rallySpot, seeded, settleGift, walk, zoneOf,
   type BotDef, type BotStore, type GiftNote, type WalkCtx, type Walker, type Zone,
 } from './bot-logic.ts';
@@ -35,7 +36,7 @@ type Mode = 'wander' | 'approach' | 'talk' | 'ask' | 'fly' | 'commute' | 'rest';
 type Place = 'zone' | 'garden';
 interface Run {
   def: BotDef; w: Walker; y: number; mode: Mode; modeT: number; flyY: number; say: { text: string; until: number } | null;
-  moving: boolean; nextPlan: number; chase: number; askUntil: number;
+  moving: boolean; nextPlan: number; chase: number; askUntil: number; /** A News note already says this meeting waits for a fight. */ noted?: boolean;
   huntUntil: number; restUntil: number; hidden: boolean;
   place: Place; zone: Zone; /** Clock time of the next trip into the safe zone (friends) and when the visit ends. */ visitAt: number; stayUntil: number;
   foe: { id: string; x: number; z: number; hp: number } | null; bossUntil: number; bossShy: number; retreat: number; foeT: number; swing: number; route: Array<{ x: number; z: number }>; commuteTo: Place;
@@ -144,7 +145,12 @@ export function initBots(game: GameBridge) {
     giftTimer = 0; giftNow = true; // the promised gift follows at once (deliverGifts)
     world.friendIds.add(r.def.id);
   }
-  function leave(r: Run) { r.fightOk = false; r.mode = 'wander'; r.modeT = 0; r.w.speed = 2.1; r.flyY = 0; busy = busy === r.def.id ? null : busy; pickGoal(r.w, ctxOf(r)); r.nextPlan = 5 + rand() * 8; }
+  /** A meeting held by a fight leaves one quiet News note instead of a card over the controls. */
+  function holdNote(r: Run) {
+    if (r.noted || isFriend(store, r.def.id)) return; r.noted = true;
+    game.newsNote?.({ icon: '👋', title: '{name} wants to meet you', text: '{name} would like to be your friend and will wait until your fight is over.', params: { name: botName(r.def) } });
+  }
+  function leave(r: Run) { r.noted = false; r.fightOk = false; r.mode = 'wander'; r.modeT = 0; r.w.speed = 2.1; r.flyY = 0; busy = busy === r.def.id ? null : busy; pickGoal(r.w, ctxOf(r)); r.nextPlan = 5 + rand() * 8; }
 
   // ---- Gifts ----
   function showGift(def: BotDef, g: GiftNote) {
@@ -185,7 +191,7 @@ export function initBots(game: GameBridge) {
     const list = [...runs.values()].filter(meetable).filter(r => canMeet(store, r.def.id, now)).sort((a, b) => Math.hypot(a.w.x - p.x, a.w.z - p.z) - Math.hypot(b.w.x - p.x, b.w.z - p.z));
     // friends say hello more rarely than strangers ask, and every meeting is worth waiting a little for
     const r = list[0]; if (!r || rand() > .55) return;
-    if (fighting && !fightPass(rand)) return; // three times in four a fight keeps them away
+    if (fighting) return; // a fight keeps them away (FIX-PLAN 3.3: no friend card over the joystick mid-fight)
     r.fightOk = fighting; r.mode = 'approach'; r.chase = 0; busy = r.def.id; r.w.speed = r.def.flies ? 6.2 : 3.3;
   }
   function approach(r: Run, dt: number) {
@@ -455,7 +461,9 @@ export function initBots(game: GameBridge) {
     }
     clock += Math.min(.1, dt);
     const wasFighting = fighting; fightSense = sense(); fighting = fight.update(clock, fightSense);
-    if (fighting && !wasFighting && busy) { const r = runs.get(busy); if (r && !r.fightOk) r.fightOk = fightPass(rand); } // a meeting under way rolls once
+    // Any creature still chasing the explorer (hud-combat aggro) counts as a fight too, so the card waits for the very end of it.
+    if (!fighting && socialHold(world.enemies)) fighting = true;
+    if (fighting && busy) { const r = runs.get(busy); if (r && held(r)) holdNote(r); }
     if (cardFor) { const r = runs.get(cardFor); card.hidden = !!r && held(r); card.classList.toggle('aside', fighting); }
     for (const d of cast) {
       if (visitingBot && d.id !== visitingBot) continue;

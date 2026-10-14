@@ -1,5 +1,6 @@
 import {disguiseForm} from './disguise-form.ts';
 import { t } from './i18n.ts';
+import {interactGap} from './interact-pick.ts';
 import {TITANS,TITAN_BY_PLANET,type TitanId} from './titan-content.ts';
 import {titanKit,titanArt,titanFallback} from './titan-art.ts';
 import {beginTitanAttack,stepTitanAttack,titanTelegraphs,isTitanSkill,sanitizeTitanAttacks,type TitanAttack,type TitanTarget,type TitanMark} from './titan-patterns.ts';
@@ -178,6 +179,8 @@ export class World {
   aim = new T.Vector3(); cameraTarget = new T.Vector3(); distanceToInteract = 2;
   /** While set, the camera follows this point (the starship) instead of the explorer. */
   cameraFocus: T.Vector3 | null = null;
+  /** The speed tool's spot (promo/perf-budget.mjs via __zoo.pinHero): main.ts keeps the hero on it, unpushable and unhurt (FIX-PLAN 3.8). */
+  perfPin: { x: number; z: number } | null = null;
   /** Camera position relative to cameraTarget for the current screen and zoom (set by resize). */
   viewOffset = cameraOffset(16 / 9);
   /** The explorer is inside the starship: hidden, with the companion. */
@@ -1300,7 +1303,7 @@ export class World {
     return findRoute(this.position,target,this.moverObstacles(),this.navigationOptions()).map(p=>new T.Vector3(p.x,0,p.z));
   }
   /** The thing the context button acts on: the current target while it is still in reach (so the prompt and the target frame agree and a press never swaps creatures mid-fight), else the nearest valid entity in reach. */
-  nearest() {const s=this.selected;if(s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2)return s;/* The cottage door wins over a helper standing in front of it (a friend coming out used to take the Interact button, so the house seemed locked). */const gap=(e:Entity)=>Math.hypot(e.x-this.position.x,e.z-this.position.z)-e.radius-(e.kind==='home'?1.6:0);return this.entities.filter(e=>this.validTarget(e)).sort((a,b)=>gap(a)-gap(b)).find(e=>Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.radius+2);}
+  nearest() {const s=this.selected,kept=s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2?s:null;/* The cottage door wins over a helper standing in front of it (a friend coming out used to take the Interact button, so the house seemed locked). */const gap=(e:Entity)=>interactGap(e,this.position.x,this.position.z,this.facing);const best=this.entities.filter(e=>this.validTarget(e)).sort((a,b)=>gap(a)-gap(b)).find(e=>Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.radius+2);/* A pond the explorer stands at or faces (interact-pick.ts) also beats a bed selected earlier. */if(kept&&!(best&&best!==kept&&best.kind==='fish'&&gap(best)<gap(kept)))return kept;return best;}
   /** True when something was in reach to act on. */
   interactNearest() {const e=this.nearest();if(e)this.select(e);return !!e;}
   burst(x:number,z:number,color:string,count=14) {

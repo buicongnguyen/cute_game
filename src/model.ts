@@ -97,7 +97,7 @@ export interface SaveState {
     xp: number;
     hp: number;
     energy: number;
-    /** A new game starts with the welcome (a cook helper and the 1M-energy offer); anything saved without it has had it. */
+    /** A new game starts with the welcome (a cook helper and the 10,000-energy offer); anything saved without it has had it. */
     welcome?: 'pending' | 'done';
     bag: Inventory;
     chest: Inventory;

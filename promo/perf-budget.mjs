@@ -3,13 +3,14 @@
 //   node promo/perf-budget.mjs                 the camera as it is
 //   PITCH=40,30,22 node promo/perf-budget.mjs  also tilt the camera to these pitches (degrees above the ground), same distance
 //   FAR=85 shortens the view distance for the tilted rows.  PORT picks the server.  SHOTS=<dir> saves a picture of each row.
+//   SAVE_FILE=./save-late.json measures with the mid/late-game save instead of promo/save.json.
 //   PETS=pet_robot,pet_turtle wears these pets for the measure (they follow and fight away from the village).  ONLY=canyon measures one place.
 // Counts are one whole frame (shadow pass included). Creatures keep moving, so numbers wander by a few percent: compare
 // rows of one run, and use promo/frozen-ab.mjs when a change needs an exact before/after.
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 const { chromium } = createRequire('C:/Users/n/source/repos/3D_claudeopus55/package.json')('playwright');
-const save = readFileSync(new URL('./save.json', import.meta.url), 'utf8'), base = `http://127.0.0.1:${process.env.PORT || 5298}`;
+const save = readFileSync(new URL(process.env.SAVE_FILE || './save.json', import.meta.url), 'utf8'), base = `http://127.0.0.1:${process.env.PORT || 5298}`;
 const SCENES = { village: [0, 3.6], wild: [-13, -57], canyon: [105, -40] }, NOW = 51.5, DISTANCE = 21.7;
 const rows = [['now', NOW, 300], ...(process.env.PITCH || '').split(',').filter(Boolean).map(d => [`${d}°`, Number(d), Number(process.env.FAR || 300)])];
 const browser = await chromium.launch({ args: ['--use-angle=default', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'] });
@@ -27,7 +28,8 @@ const fps = ms => page.evaluate(ms => new Promise(done => { const d = []; let la
 // put back before every row, and a row is marked invalid if the hero is not where it should be or a dialog is open.
 await page.evaluate(() => { const s = __zoo.state, full = s.hp; setInterval(() => { if (__zoo.state.hp < full) __zoo.state.hp = full; }, 50); });
 if (process.env.PETS) await page.evaluate(pets => { const s = __zoo.state; for (const id of pets) s.bag[id] = (s.bag[id] ?? 0) + 1; delete s.gear.pet2; s.gear.pet = pets[0]; if (pets[1]) s.gear.pet2 = pets[1]; __zoo.world.refreshPlayer(); }, process.env.PETS.split(','));
-const stand = ([x, z]) => page.evaluate(([x, z]) => { const w = __zoo.world; w.position.set(x, 0, z); w.facing = 0; w.zoom = 1; w.resize(); }, [x, z]);
+// The hero is pinned to the spot for the whole row (__zoo.pinHero): unpushable and unhurt, so creatures cannot shove it off (FIX-PLAN 3.8).
+const stand = ([x, z]) => page.evaluate(([x, z]) => { const w = __zoo.world; w.position.set(x, 0, z); w.facing = 0; w.zoom = 1; w.resize(); __zoo.pinHero?.({ x, z }); }, [x, z]);
 const astray = ([x, z]) => page.evaluate(([x, z]) => { const p = __zoo.world.position, d = document.querySelector('#dialog-layer'); return Math.hypot(p.x - x, p.z - z) > 8 ? 'the hero left the spot' : __zoo.state.planet !== 'home' ? 'not on the home map' : d && !d.hidden ? 'a dialog is open' : null; }, [x, z]);
 for (const [scene, spot] of Object.entries(SCENES)) {
   if (process.env.ONLY && process.env.ONLY !== scene) continue;

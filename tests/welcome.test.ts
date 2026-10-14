@@ -5,16 +5,16 @@ import * as F from '../src/friends.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { slotKey, PROFILE_SLOTS } from '../src/profiles.ts';
 
-test('a new game offers the welcome: Pepper joins, and the 1M energy only if taken', () => {
+test('a new game offers the welcome: Pepper joins, and the 10,000 energy only if taken', () => {
   const a = M.newGame(), b = M.newGame();
   assert.equal(a.welcome, 'pending');
   assert.equal(applyGameAction(a, { type: 'welcomeStart', payload: { take: true } }), true);
-  assert.equal(a.energy, 1_000_000); assert.equal(a.welcome, 'done');
+  assert.equal(a.energy, 10_000); assert.equal(a.welcome, 'done');
   const pepper = F.friendOf(a, 'pepper')!; assert.ok(pepper.home && pepper.role === 'cook');
   assert.equal(applyGameAction(b, { type: 'welcomeStart', payload: { take: false } }), true);
   assert.equal(b.energy, 0); assert.ok(F.friendOf(b, 'pepper'));
   assert.throws(() => applyGameAction(a, { type: 'welcomeStart', payload: { take: true } }), 'only once');
-  assert.equal(a.energy, 1_000_000);
+  assert.equal(a.energy, 10_000);
 });
 
 test('saves from before the welcome never see it; the offer survives a save round trip while pending', () => {
@@ -47,4 +47,13 @@ test('a uniform in the outfit slot brings its own fighting skill in place of the
   }
   assert.equal(Object.keys(UNIFORM_SPECIAL).length, 6);
   delete s.gear.outfit; assert.equal(M.weaponStats(s).special, 'fist');
+});
+
+test('closing the welcome gift with × or Escape takes the 10,000 energy instead of leaving it pending unseen', async () => {
+  const { readFileSync } = await import('node:fs');
+  const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  assert.match(main, /case 'close':if\(modal==='welcome'&&state\.welcome==='pending'\)\{await settleWelcome\(true\);break;\}/);
+  assert.match(main, /else if\(modal==='welcome'&&state\.welcome==='pending'\)void settleWelcome\(true\);else closeDialog\(\)/);
+  assert.equal(F.WELCOME_ENERGY, 10_000);
+  const { TESTER_ENERGY } = await import('../src/tester.ts'); assert.equal(TESTER_ENERGY, 1_000_000, 'the tester gift is untouched');
 });
