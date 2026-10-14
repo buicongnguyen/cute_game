@@ -82,6 +82,8 @@ export function initOnline(game:GameBridge) {
   let noticeSource='',noticeParams:Record<string,string|number>={},saveStatusSource='';
   function setNotice(message:string,params:Record<string,string|number>={}){noticeSource=message;noticeParams=params;notice.textContent=t(message,params);}
   function announce(message:string,params:Record<string,string|number>={}){setNotice(message,params);game.showNotice(t(message,params));}
+  /** Social news nobody asked for (a friend request, a guest): mid-fight it goes quietly to News instead of popping up over the controls (FIX-PLAN 3.3). */
+  function socialAnnounce(message:string,icon:string,text=''){if(game.inFight?.()&&game.newsNote){setNotice(message,{});game.newsNote({icon,title:message,text:text||message});}else announce(message);}
   function setSaveStatus(message:string){saveStatusSource=message;const label=document.querySelector('#save-status');if(label)label.textContent=t(message);}
   async function api<T>(path:string,data?:unknown,method=data?'POST':'GET'):Promise<T>{
     // A fetch that never reaches the server (offline, DNS, server down) rejects with the browser's own English text ("Failed to fetch",
@@ -274,9 +276,9 @@ export function initOnline(game:GameBridge) {
       else if(typeof message.type==='string'&&message.type.startsWith('dg'))game.dungeonMessage?.(message);
       else if(message.type==='chatAck')acknowledgeChat(message.requestId,connection);
       else if(message.type==='chat'&&!restoring&&chatRoom){chat.push({name:String(message.name),message:String(message.message)});if(chat.length>60)chat.shift();if(dialog.open&&tab==='world')renderChat();else game.showNotice(`${message.name}: ${message.message}`);}
-      else if(message.type==='friends'){const before=requests.length;friends=message.friends||[];requests=message.requests||[];sent=message.sent||[];visitLog=message.visitLog||visitLog;if(requests.length>before)announce('You have a new friend request!');refreshButton();if(dialog.open&&tab==='friends')render();}
+      else if(message.type==='friends'){const before=requests.length;friends=message.friends||[];requests=message.requests||[];sent=message.sent||[];visitLog=message.visitLog||visitLog;if(requests.length>before)socialAnnounce('You have a new friend request!','👥','Open Play together to answer it.');refreshButton();if(dialog.open&&tab==='friends')render();}
       else if(message.type==='dmSent'&&message.ok===false)announce('That message could not be delivered. Try again.');
-      else if(message.type==='guestNotice'&&message.entry){const e=message.entry as GuestEntry;visitLog=[e,...visitLog].slice(0,30);unreadLog++;refreshButton();announce(guestLine(e));if(dialog.open&&tab==='diary'){unreadLog=0;render();}}
+      else if(message.type==='guestNotice'&&message.entry){const e=message.entry as GuestEntry;visitLog=[e,...visitLog].slice(0,30);unreadLog++;refreshButton();socialAnnounce(guestLine(e),'🏡');if(dialog.open&&tab==='diary'){unreadLog=0;render();}}
       else if(message.type==='visit'){
         chatReady=true;refreshChatControls();visiting=message.home?.id||null;
         if(message.home){const home=message.home as Home;const state={...newGame(home.name,home.color),discovered:home.discovered??['home'],plots:home.plots,gear:home.gear,...(home.farm?{farm:home.farm}:{}),...(home.placed?{placed:home.placed}:{}),...(home.decorations?{decorations:home.decorations}:{}),...(home.helper?{helper:home.helper}:{}),...(home.friends?{friends:home.friends}:{})};game.setVisiting(home.name,state as SaveState);}

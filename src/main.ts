@@ -178,6 +178,7 @@ import type { CtfApi } from './ctf.ts';
 import type { RescueApi } from './rescue.ts';
 import { initInbox, initMoreMenu } from './news-inbox-ui.ts';
 import { reportLevelFor } from './news-inbox.ts';
+import { socialHold } from './social-hold.ts';
 
 // The HUD asks for the same ~40 elements several times a second: remember them while they stay in the page.
 const $found=new Map<string,HTMLElement>();
@@ -1902,6 +1903,7 @@ export const gameBridge:GameBridge={
     world.refreshPlayer();$('#visit-banner').hidden=!owner;$('#visit-banner').textContent=t(owner?t('Visiting {owner} · look around their garden',{owner}):'');updateLabels();
   },
   showNotice:message=>toast(message),
+  newsNote:note=>{inbox.announce({kind:'other',...note});},inFight:()=>socialHold(world.enemies),
   colossusRally:()=>colossus?.rally()??null,colossusStrike:(id,damage)=>colossus?.botStrike(id,damage),
   botHit:(id,damage)=>{const e=world.enemies.find(x=>x.id===id);if(!botActive()||visiting||!e||e.hp<=0||!Number.isFinite(damage)||damage<=0)return;world.damageEnemy(e,damage,0,false);},
   ownsItem:id=>(state.bag[id]||0)>0||(state.chest[id]||0)>0||Object.values(state.gear).includes(id),

@@ -12,6 +12,7 @@ import {BOT_LINES} from '../src/bot-lines.ts';
 import {replyTo} from '../src/bot-chat.ts';
 import * as logic from '../src/bot-logic.ts';
 import {neighboursKey} from '../src/profiles.ts';
+import {socialHold} from '../src/social-hold.ts';
 
 // Run the real neighbour controller and main's eligibility/damage callbacks against a small DOM/world harness.
 const source=await readFile(new URL('../src/bots.ts',import.meta.url),'utf8');
@@ -37,22 +38,22 @@ class Element{
   close(){this.open=false;}
 }
 function fixture({slot=0,storage=new Map()}={}){
-  const body=new Element('body'),elements=[],callbacks=[],timers=[],damage=[],gifts=[],visits=[];
+  const body=new Element('body'),elements=[],callbacks=[],timers=[],damage=[],gifts=[],visits=[],news=[];
   const document={body,hidden:false,createElement(tag){const e=new Element(tag);elements.push(e);return e;},createTextNode:text=>({textContent:text}),getElementById:id=>elements.find(e=>e.id===id)??null,querySelector:q=>q==='dialog[open]'?elements.find(e=>e.tag==='dialog'&&e.open):null};
   const world={planet:'home',interior:null,networkRole:null,position:{x:0,z:0},camera:new T.PerspectiveCamera(),remotePlayers:new Map(),friendIds:new Set(),enemies:[],blocked:()=>false,burst(){},
     removeRemotePlayer(id){this.remotePlayers.delete(id);},addRemotePlayer(id,pose){this.remotePlayers.set(id,{pose,mesh:{visible:pose.planet===this.planet,position:{x:pose.x,y:pose.y,z:pose.z},scale:{x:1}}});},updateRemotePlayer(id,pose){this.addRemotePlayer(id,pose);},damageEnemy(e,n){e.hp=Math.max(0,e.hp-n);damage.push(n);}};
   const state=M.newGame('Explorer');
-  const ctx=vm.createContext({exports:{},...logic,T,M,F,CROPS,ITEMS,TalkBag,BOT_LINES,replyTo,neighboursKey:()=>neighboursKey(slot),iconPath:()=>null,t:(s,v={})=>s.replace(/\{(\w+)\}/g,(_,k)=>String(v[k]??k)),
+  const ctx=vm.createContext({exports:{},...logic,socialHold,T,M,F,CROPS,ITEMS,TalkBag,BOT_LINES,replyTo,neighboursKey:()=>neighboursKey(slot),iconPath:()=>null,t:(s,v={})=>s.replace(/\{(\w+)\}/g,(_,k)=>String(v[k]??k)),
     localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)},document,window:{setTimeout:fn=>timers.push(fn)},setTimeout:fn=>timers.push(fn),innerWidth:800,innerHeight:600,
     started:true,actionHandler:null,placement:null,shipSequence:null,flight:null,arriving:false,visiting:null,fishGame:null,modal:'',world,state});
   vm.runInContext(mainCompiled,ctx);
   const game={getWorld:()=>world,getState:()=>state,ownsItem:id=>!!state.bag[id],botContext:()=>ctx.hooks.botContext(),botHit:(...a)=>ctx.hooks.botHit(...a),
     grantGift(g){if(g.item&&!M.addItem(state,g.item,g.count))return false;state.energy+=g.energy;gifts.push(g);return true;},
-    setVisiting(name){ctx.visiting=name;world.planet='home';world.position={x:0,z:0};visits.push(name);},showNotice(){},onFrame:fn=>callbacks.push(fn)};
+    setVisiting(name){ctx.visiting=name;world.planet='home';world.position={x:0,z:0};visits.push(name);},showNotice(){},newsNote:n=>news.push(n),onFrame:fn=>callbacks.push(fn)};
   vm.runInContext('{const real=Math.random;globalThis.fixedRandom=null;Math.random=()=>globalThis.fixedRandom??real();}',ctx); // tests may pin the neighbours’ dice
   vm.runInContext(compiled,ctx);const api=ctx.exports.initBots(game);
   const frame=(dt=.1)=>callbacks.forEach(fn=>fn(dt));
-  return {ctx,world,state,api,frame,storage,damage,gifts,visits,elements,timers,game};
+  return {ctx,world,state,api,frame,storage,damage,gifts,visits,elements,timers,game,news};
 }
 function fight(f){
   f.frame();const r=[...f.api.runs.values()][0];
@@ -125,7 +126,7 @@ test('actual Start fresh routing resets neighbours only after a successful offli
   }
 });
 
-// Quiet during fights: three meetings in four wait while the player fights (bot-logic FightWatch / FIGHT_PASS_CHANCE).
+// Quiet during fights: every meeting waits while the player fights (bot-logic FightWatch, plus any creature still in aggro; FIX-PLAN 3.3).
 function meetingSetup(){
   const f=fixture();f.frame();const runs=[...f.api.runs.values()],r=runs[0];
   for(const o of runs)if(o!==r)Object.assign(o,{hidden:true,mode:'rest',restUntil:1e9});
@@ -137,22 +138,23 @@ function meetingSetup(){
   const run=s=>{for(let i=0;i<s*10;i++)f.frame(.1);};
   return {f,r,card,roll,foe,run};
 }
-test('no neighbour walks up during a fight when the 1-in-4 roll fails, and one does once the fight is 8 s over',()=>{
-  const {f,r,card,roll,foe,run}=meetingSetup();roll(.4); // passes the usual .55 meeting chance, fails the .25 fight roll
+test('no neighbour walks up during a fight, and one does once the fight is 8 s over',()=>{
+  const {f,r,card,roll,foe,run}=meetingSetup();roll(.4); // passes the usual .55 meeting chance
   f.world.enemies=[foe];run(10);
   assert.equal(f.api.fighting(),true);assert.equal(r.mode,'wander');assert.equal(card.hidden,true);
   foe.phase='idle';foe.x+=40;run(5);assert.equal(f.api.fighting(),true,'the fight is remembered for 8 s');assert.equal(r.mode,'wander');
   run(7);assert.equal(f.api.fighting(),false);assert.notEqual(r.mode,'wander','after the fight the neighbour comes over');
 });
-test('a meeting that passes its fight roll goes on, with the request card set aside at the bottom left',()=>{
+test('even a lucky roll brings no friend card over the joystick mid-fight (FIX-PLAN 3.3)',()=>{
   const {f,r,card,roll,foe,run}=meetingSetup();roll(.1);f.world.enemies=[foe];run(12);
-  assert.equal(r.fightOk,true);assert.equal(r.mode,'ask');assert.equal(card.hidden,false);assert.equal(card.classList.contains('aside'),true);
+  assert.equal(r.fightOk,false);assert.notEqual(r.mode,'ask');assert.equal(card.hidden,true);
 });
 test('a request card already open waits for the end of a fight that fails its roll, then comes back',()=>{
   const {f,r,card,roll,foe,run}=meetingSetup();roll(.4);run(12);assert.equal(r.mode,'ask');assert.equal(card.hidden,false);assert.equal(card.classList.contains('aside'),false);
   roll(.9);f.world.enemies=[foe];run(25);assert.equal(f.api.fighting(),true);assert.equal(r.fightOk,false);assert.equal(card.hidden,true,'hidden during the fight');
   assert.equal(r.mode,'ask','the request is kept');assert.equal(f.ctx.document.body.children.filter(b=>b.className==='bot-bubble'&&b.style.display!=='none').length,0,'no bubble near the fight');
   f.world.enemies=[];run(10);assert.equal(f.api.fighting(),false);assert.equal(r.mode,'ask','25 s of fighting did not use up the request');assert.equal(card.hidden,false);
+  assert.equal(f.news.length,1,'one quiet News note said the neighbour waits');assert.match(f.news[0].title,/wants to meet you/);
 });
 test('gifts wait for the end of a fight',()=>{
   const {f,r,roll,foe,run}=meetingSetup();roll(.9);f.api.store().pending[r.def.id]={item:undefined,count:0,energy:50};

@@ -29,4 +29,8 @@ export const VI_FIXES: Record<string, string> = {
   // Welcome gift (FIX-PLAN 3.5/4.1): 10,000 energy.
   'Guess what? You are lucky today! I played the lottery and won 10,000 energy. Do you want it?': 'Sếp đoán xem? Hôm nay sếp may lắm! Em đi xổ số trúng 10.000 năng lượng. Sếp có muốn nhận không?',
   'Pepper joined you, and you start with 10,000 energy!': 'Pepper đã gia nhập, và sếp bắt đầu với 10.000 năng lượng!',
+  // Social news held during a fight (FIX-PLAN 3.3).
+  '{name} wants to meet you': '{name} muốn gặp bạn',
+  '{name} would like to be your friend and will wait until your fight is over.': '{name} muốn kết bạn với bạn và sẽ chờ đến khi trận đấu kết thúc.',
+  'Open Play together to answer it.': 'Mở Chơi cùng nhau để trả lời.',
 };

@@ -38,6 +38,10 @@ export interface GameBridge {
   applyRemoteEffect(effect:CombatEffect):void;
   setVisiting(owner:string|null,homeState?:Partial<SaveState>):void;
   showNotice(text:string):void;
+  /** A quiet note in News (news-inbox.ts) for social news that arrives mid-fight instead of a pop-up over the controls. */
+  newsNote?(note:{icon:string;title:string;text:string;params?:Record<string,string|number>}):void;
+  /** True while a living creature is chasing the explorer (hud-combat.ts aggro): social pop-ups wait for the end of it. */
+  inFight?():boolean;
   /** AI neighbours (bots.ts): does the player already have this item; hand over a gift (items and/or energy; false when it cannot be given now); may a neighbour walk up and talk now. */
   /** A neighbour's blow on an enemy (bots.ts): the enemy takes the damage and falls, but a kill pays the player nothing, wherever it happens, and it never touches the player's target ring, hit-stop or HUD. */
   botHit(enemyId:string,damage:number):void;
