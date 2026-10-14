@@ -479,3 +479,5 @@ body.in-rescue #app #hud .home-button { right: calc(var(--edge) + var(--safe-rig
   body.air-combat #app #hud #reel-button + #fish-hint { right: calc(var(--col) + 64px); bottom: calc(22px + var(--safe-bottom) + var(--sk) * 4 + 1px); max-width: calc(100vw - var(--col) - var(--safe-left) - 76px); }
   body.air-combat #app #hud.joystick-right #reel-button + #fish-hint { left: calc(64px + var(--safe-left) + 64px); right: auto; }
 }
+/* Portrait phones: the context button stands clear above the crown (a long Vietnamese label reaches over it). */
+@media (orientation: portrait) and (max-width: 600px) { body.air-combat #app:not(.target-on) #hud.joystick-on #context-prompt { bottom: max(calc(218px + var(--safe-bottom)), calc(22px + var(--safe-bottom) + var(--sk) * 4 + 6px)); } }
