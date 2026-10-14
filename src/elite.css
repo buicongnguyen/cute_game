@@ -1,0 +1,8 @@
+/* Elite roles (elite-view.ts, hud-combat.ts): the badge on an elite's over-head label and the hint in the target frame. */
+.enemy-label .elite-tag{display:block;margin:0 auto 2px;padding:0 6px;width:max-content;max-width:180px;border-radius:9px;font:700 10px/15px inherit;color:#fff;background:var(--elite,#ff6fc4);box-shadow:0 1px 0 rgba(0,0,0,.25);white-space:nowrap;text-decoration:none;text-shadow:0 1px 0 rgba(0,0,0,.3)}
+.enemy-label .elite-tag small{display:none;font-weight:600;font-size:9.5px;line-height:12px;opacity:.95;white-space:normal}
+.enemy-label.sel .elite-tag{max-width:170px;white-space:normal;text-align:center;border-radius:8px;padding:1px 7px 2px}
+.enemy-label.sel .elite-tag small{display:block}
+.enemy-label.elite i{box-shadow:0 0 0 1.5px var(--elite,#ff6fc4)}
+#target-frame .target-elite{display:block;margin-top:2px;font-size:11px;line-height:1.25;font-weight:700;color:var(--elite,#ff6fc4)}
+#target-frame .target-elite[hidden]{display:none}

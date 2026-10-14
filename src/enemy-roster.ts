@@ -2,8 +2,9 @@ import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT}
 import {TITAN_BY_PLANET} from './titan-content.ts';
 import {ZONE_DIFFICULTY} from './boss-patterns.ts';
 import type {PlanetId} from './content.ts';
+import {dressElite,eliteAssignments,miniSlots,splitterSpecies,type EliteTag} from './elite-roles.ts';
 
-export interface EnemyRosterEntry {id:string;index:number;type:string;zone:string;baseMaxHp:number;baseDamage:number;xp:number;level:number;radius:number;boss:boolean;titan:boolean;dormant:boolean;respawn:number}
+export interface EnemyRosterEntry {id:string;index:number;type:string;zone:string;baseMaxHp:number;baseDamage:number;xp:number;level:number;radius:number;boss:boolean;titan:boolean;dormant:boolean;respawn:number;/** An elite role (elite-roles.ts), or 'mini' for a splitter's dormant child slot. */elite?:EliteTag}
 /** Shared ID ordering and initial combat facts. Placement is cosmetic; reward identity never comes from host input. */
 export function enemyRoster(planet:PlanetId):EnemyRosterEntry[]{
   const entries:EnemyRosterEntry[]=[];
@@ -13,5 +14,8 @@ export function enemyRoster(planet:PlanetId):EnemyRosterEntry[]{
   const titan=TITAN_BY_PLANET[planet];if(titan)add(titan,planet==='home'?'canyon':planet);
   if(planet==='lava')for(let i=0;i<18;i++)add('minislime');
   if(planet==='home')for(let i=0;i<FOREST_RAPTOR_COUNT;i++)add('forest_raptor','forest');
+  // Elite roles (elite-roles.ts): chosen from this order alone, then the splitter's dormant child slots, appended last.
+  for(const [index,role] of eliteAssignments(planet,entries)){const e=entries[index];e.elite=role;dressElite(e,role);}
+  const kid=splitterSpecies(planet);if(kid)for(let i=0;i<miniSlots(planet);i++){add(kid);const e=entries.at(-1)!;e.dormant=true;e.respawn=999999;e.elite='mini';dressElite(e,'mini');}
   return entries;
 }

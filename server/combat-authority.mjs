@@ -8,6 +8,8 @@ import {zoneAt,createEnvironmentLayout,EnvironmentSimulation} from '../src/envir
 import {sanitizeTitanAttacks,beginTitanAttack,stepTitanAttack,titanTelegraphs,isTitanSkill} from '../src/titan-patterns.ts';
 import {BOSS_SKILLS,BOSS_WINDUPS,bossTelegraphs,bossPhase,hitControl,BOSS_RESISTED,RESIST_SLOW,liftHeight} from '../src/boss-patterns.ts';
 import {atHome,homeRecoveryBonus} from '../src/home-care.ts';
+import {SPLIT,barrierHit,childSpot,newBarrier,splitChildren,stepBarrier} from '../src/elite-roles.ts';
+import {eliteDefeat} from '../src/elite-rewards.ts';
 import {trailSpot,dogTossFactor,DOG_TOSS_CD} from '../src/guard-dog.ts';
 import {companionId,dogWorn} from '../src/pet-slots.ts';
 import {DOG_GUARD,petFighter} from '../src/pet-guard.ts';
@@ -194,7 +196,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       // The Hard bonus follows the room's creatures (the host's scale), not each contributor's own setting.
       let loot=[];const bonus=Game.scaleReward(state(room).scale);
       for(const id of contributors){const account=records.get(id);if(!account||(account.adventureEpoch||0)!==contributorEpochs.get(id))continue;const before=account.profile,profile=Game.parseSave(JSON.stringify(account.profile));if(!profile)continue;
-        const rolled=enemy.type===COLOSSUS_TYPE?grantColossusReward(profile,id===killer.account.id,Math.random,false,bonus):Game.grantDefeat(profile,enemy.type,enemy.roster.xp,enemy.boss,Math.random,false,bonus);if(id===killer.account.id)loot=rolled;
+        const rolled=enemy.type===COLOSSUS_TYPE?grantColossusReward(profile,id===killer.account.id,Math.random,false,bonus):enemy.elite?eliteDefeat(profile,enemy.type,enemy.roster.xp,enemy.elite,Math.random,false,bonus):Game.grantDefeat(profile,enemy.type,enemy.roster.xp,enemy.boss,Math.random,false,bonus);if(id===killer.account.id)loot=rolled;
         if(execute&&id===killer.account.id&&(account.lifeEpoch||0)===killerEpoch.life)profile.hp=Math.min(Game.maxHp(profile),profile.hp+Game.maxHp(profile)*.25);
         account.profile=profile;noteProgress(account,before,profile,now); // weekly leaderboard counters (ranking.mjs)
       }
@@ -207,11 +209,15 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       for(const drop of committed.reply.result.drops)broadcast(room,{type:'dropSpawn',drop});
       if(execute&&committed.reply.result.execute)send((peers.get(killer.account.id)||killer).socket,{type:'executeResult',id:enemy.id,requestId,ok:true,profile:committed.reply.profile,revision:committed.reply.revision});
       if(enemy.type==='magmaslime')for(const [i,minion] of [...state(room).enemies.values()].filter(e=>e.type==='minislime'&&e.hp<=0&&!e.pending).slice(0,3).entries()){minion.x=enemy.x+Math.cos(i*Math.PI*2/3)*.9;minion.z=enemy.z+Math.sin(i*Math.PI*2/3)*.9;minion.hp=minion.maxHp;minion.deadUntil=0;minion.respawn=0;minion.generation++;health(room,minion);}
+      // An elite splitter (elite-roles.ts): the server wakes its children, as for the magma slime; none at the live cap.
+      if(enemy.elite){const kids=splitChildren(enemy,[...state(room).enemies.values()]),depth=(enemy.elite==='mini'?enemy.depth??1:0)+1;kids.forEach((m,i)=>{const at=childSpot(enemy.x,enemy.z,i,kids.length);m.x=at.x;m.z=at.z;m.parentId=enemy.elite==='mini'?enemy.parentId:enemy.id;m.depth=depth;m.maxHp=Math.max(1,Math.round(m.baseMaxHp*(depth>=2?SPLIT.tiny.hp:1)));m.hp=m.maxHp;m.deadUntil=0;m.respawn=0;m.generation++;m.contributors.clear();health(room,m);});}
     }).catch(()=>{enemy.pending=false;enemy.hp=Math.max(1,enemy.hp);health(room,enemy);send(killer.socket,{type:'error',message:'The reward could not be saved. Please try again.'});});
   }
   function hit(peer,enemy,impact,execute=false,hazard=false){
     const room=rooms.get(peer.room);if(!room||peer.visit||enemy.hp<=0||enemy.pending)return 0;
     if(!enemy.scaled&&enemy.boss){const players=[...room.members].map(id=>peers.get(id)).filter(p=>p&&!p.visit&&dist(p.pose,enemy)<28),level=Math.max(...players.map(p=>p.account.profile.level),1),difference=Math.max(0,level-enemy.roster.level);enemy.maxHp=Math.round(enemy.baseMaxHp*(1+.6*Math.max(0,players.length-1))*(enemy.type==='dragon'?1:1+difference*.12));enemy.hp=enemy.maxHp;enemy.damage=enemy.baseDamage*(enemy.type==='dragon'?1:(1+difference*.07)*(1+.1*Math.max(0,players.length-1)));enemy.scaled=true;}
+    // An elite's crystal barrier (elite-roles.ts SHIELD): shots are deflected, close hits crack it, a heavy hit breaks it (and stuns).
+    if(!hazard&&!execute&&enemy.elite==='shielded'){const r=barrierHit(enemy.barrier??=newBarrier(),impact.amount,impact.source);impact={...impact,amount:r.event==='deflect'?Math.max(1,Math.round(r.amount)):r.amount,stun:Math.max(impact.stun||0,r.stun),barrier:r.event};}
     const control=hitControl(enemy.boss,impact.stun||0);
     if(!hazard&&!execute&&enemy.type==='magmaturtle')impact={...impact,amount:impact.amount*(enemy.phase==='recover'?2:.12)};
     if(enemy.type===COLOSSUS_TYPE&&!hazard)impact={...impact,amount:colossus.incoming(room,enemy,peer,impact.amount)};
@@ -337,8 +343,8 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       for(const enemy of s.enemies.values()){
         if(enemy.hp>0&&!enemy.pending&&enemy.phase==='return'&&now-(enemy.lastHitAt||0)>4000){enemy.hp=Math.min(enemy.maxHp,enemy.hp+enemy.maxHp*.3*dt);if(enemy.hp===enemy.maxHp)enemy.scaled=false;}
         updateCast(room,enemy,dt,now);
-        enemy.stun=Math.max(0,(enemy.stun||0)-dt);for(const key of STATUS)enemy.statuses[key]=Math.max(0,(enemy.statuses[key]||0)-dt);
-        if(enemy.hp<=0&&!enemy.pending&&Number.isFinite(enemy.deadUntil)){enemy.respawn=Math.max(0,(enemy.deadUntil-now)/1000);if(enemy.respawn===0&&active.every(p=>dist(p.pose,enemy.home)>22)){enemy.x=enemy.home.x;enemy.z=enemy.home.z;enemy.hp=enemy.maxHp=enemy.baseMaxHp;enemy.damage=enemy.baseDamage;enemy.scaled=false;enemy.contributors.clear();enemy.generation++;room.killed.delete(enemy.id);health(room,enemy);}}
+        if(enemy.barrier)stepBarrier(enemy.barrier,dt);enemy.stun=Math.max(0,(enemy.stun||0)-dt);for(const key of STATUS)enemy.statuses[key]=Math.max(0,(enemy.statuses[key]||0)-dt);
+        if(enemy.hp<=0&&!enemy.pending&&Number.isFinite(enemy.deadUntil)){enemy.respawn=Math.max(0,(enemy.deadUntil-now)/1000);if(enemy.respawn===0&&active.every(p=>dist(p.pose,enemy.home)>22)){enemy.x=enemy.home.x;enemy.z=enemy.home.z;enemy.hp=enemy.maxHp=enemy.baseMaxHp;enemy.damage=enemy.baseDamage;enemy.scaled=false;enemy.contributors.clear();enemy.generation++;room.killed.delete(enemy.id);if(enemy.barrier)enemy.barrier=newBarrier();if(enemy.elite==='splitter')for(const m of s.enemies.values())if(m.elite==='mini'&&m.parentId===enemy.id&&m.hp>0&&!m.pending){m.hp=0;m.deadUntil=Infinity;m.respawn=999999;health(room,m);}health(room,enemy);}}
       }
       room.environment=environmentSnapshot(s.environment);
       if(now-s.lastBroadcast>250){s.lastBroadcast=now;publish(room);broadcast(room,{type:'enemies',enemies:room.enemies});broadcast(room,{type:'environment',snapshot:room.environment});}

@@ -42,6 +42,9 @@ import { PowerFx, brighter, powerWindup } from './power-fx.ts';
 import { ATTACK_CHARGE_HTML, AttackCharge, hintSeen, markHint } from './power-hud.ts';
 import { AttackHold, HOLD, UntouchedStreak } from './five-rules.ts';
 import * as M from './model.ts';
+import {eliteDefeat} from './elite-rewards.ts';
+import {EliteView} from './elite-view.ts';
+import type {EliteTag} from './elite-roles.ts';
 import {applyGameAction,isMalformedAction,type GameIntent,type ActionReply} from './actions.ts';
 import { ContextGearSelection } from './context-gear.ts';
 import { quickEatView, healingFoods, type FoodChoice } from './quick-eat.ts';
@@ -355,6 +358,7 @@ const petGuardView=new PetGuardView({fx:()=>world.fx,petModel:slot=>slot===0?wor
   // A Vault pet's guard carries the name of its own skill (dungeon-content.ts): the Bellows' Spark Shower, the Owl's Little Chime.
   label:slot=>{const skill=DUNGEON_PETS[petRoleId(M.companionId(state.gear,slot))??'']?.guard;return skill?t(PET_SKILLS[skill].name):undefined;}});
 world.onPlayerShot=shot=>petGuardView.shotNear(shot);frameListeners.add(dt=>petGuardView.update(dt));
+{const eliteView=new EliteView(world,(message,icon)=>toast(message,icon));world.eliteFrame=()=>eliteView.frame();} // elite roles on the normal planets (elite-view.ts)
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 /** The Strike chain's hits so far (which cut the next one makes), and the thin ground arc that marks the area of the explorer's own hit. */
 let chainHit=-1,chainAt=-9;/** What a disguise skill draws at the moment it is cast, kept for its wind (castDisguise). */let castEffects:CombatEffect[]|null=null;const HIT_AREA_ARC={y:.14,life:.3,thick:.09,opacity:.5,from:1,to:1} as const;
@@ -1264,11 +1268,11 @@ frameListeners.add(dt=>{for(const [uid,meta]of networkDrops){const d=drops.sim.d
 {let warmed=false;frameListeners.add(()=>{if(warmed||!started||state.gear.disguise!=='dz_ninja')return;warmed=true;combatView.prewarm('clone',4,group=>{group.position.copy(world.position);world.scene.add(group);try{world.renderer.compile(world.scene,world.camera);}finally{world.scene.remove(group);}});});}
 frameListeners.add(dt=>helperView.update(dt,{state:!flight&&world.planet==='home'?world.state:null,act:started&&!visiting&&world.state===state&&!document.hidden,now:Date.now(),harvest:helperHarvest,plant:helperPlant,held:heldBed()}));
 frameListeners.add(dt=>{farmHelperController.sync();farmHelperView.update(dt,{state:!flight&&world.planet==='home'?world.state:null,context:world.root,act:!!farmHelperContext(),pending:farmHelperController.pending,now:Date.now(),position:uid=>world.farmView?.positionOf(uid)??undefined,work:task=>farmHelperController.work(task)});});
-function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string;x?:number;z?:number;helper?:boolean}){
+function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:string;x?:number;z?:number;helper?:boolean;elite?:EliteTag}){
   if(actionHandler)return;
   // In the safe zone nothing that falls far outside it pays you: no EXP, no orbs, no loot (safe-zone.ts).
   if(!defeatPaysPlayer(world.position,{x:e.x??world.position.x,z:e.z??world.position.z},world.planet,!!world.networkRole))return;
-  const defeat=()=>M.grantDefeat(state,e.type??'slime',e.xp,e.boss,Math.random,false),loot=change(()=>e.helper?asHelper(defeat):defeat());// a helper's kill still counts for the timed challenge (progression.ts recordEvent)
+  const defeat=()=>e.elite?eliteDefeat(state,e.type??'slime',e.xp,e.elite,Math.random):M.grantDefeat(state,e.type??'slime',e.xp,e.boss,Math.random,false),loot=change(()=>e.helper?asHelper(defeat):defeat()); // an elite's extra loot roll, a split child's EXP only (elite-rewards.ts)// a helper's kill still counts for the timed challenge (progression.ts recordEvent)
   // Experience flies in as cyan orbs; the loot is tossed onto the ground where the creature fell.
   const x=e.x??world.position.x,z=e.z??world.position.z;
   world.fx?.orbs({x,z},Math.min(8,3+Math.floor(e.xp/20)),'#7ff0ff',()=>world.position,()=>tone('coin'));
@@ -1286,7 +1290,7 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
   if(!vault&&!ctfApi?.owns(e)&&!rescueApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
-  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0);if(!hazard||impact)tone(impact?.critical?'crit':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
+  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard,impact?.source);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0);if(!hazard||impact)tone(impact?.critical?'crit':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');

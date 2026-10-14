@@ -6,6 +6,7 @@ import { ENEMY_TYPES, HOME_SPAWNS, PLANET_SPAWNS, PLANET_BOSSES } from './enemy-
 import { PLANETS, type PlanetId } from './model.ts';
 import { modelIcon } from './icons.ts';
 import { statusMarks } from './skill-info.ts';
+import { eliteBadge } from './elite-roles.ts';
 
 /**
  * The combat HUD: over-head HP bars, the target frame, the boss-bar rule, tracker folding and the
@@ -104,9 +105,23 @@ type Screen = (x: number, y: number, z: number) => { x: number; y: number; visib
 /** The portrait, or null while the creature flashes from a hit (the icon would bake the flash in); the caller retries. */
 const portrait = (e: Enemy) => { if ((e.flash ?? 0) > 0) return null; const url = enemyIcon(e); return url ? `<img src="${url}" alt="" draggable="false">` : '⚔️'; };
 
+/** An elite's badge on its over-head label: icon, role and (on the selected one, elite.css) the hint. */
+function eliteLabel(el: HTMLElement, e: Enemy) {
+  const badge = eliteBadge(e.elite); let tag = el.querySelector('.elite-tag') as HTMLElement | null;
+  el.classList.toggle('elite', !!badge); if (!badge) { tag?.remove(); return; }
+  if (!tag) { tag = document.createElement('u'); tag.className = 'elite-tag'; el.prepend(tag); }
+  el.style.setProperty('--elite', badge.color); tag.textContent = `${badge.icon} ${t(badge.tag)} `; const hint = document.createElement('small'); hint.textContent = t(badge.hint); tag.append(hint);
+}
+/** The target frame's line for an elite: its role and hint. */
+function eliteHint(frame: HTMLElement, e: Enemy) {
+  const badge = eliteBadge(e.elite); let line = frame.querySelector('.target-elite') as HTMLElement | null;
+  if (!badge) { if (line) line.hidden = true; return; }
+  if (!line) { line = document.createElement('span'); line.className = 'target-elite'; (frame.querySelector('.target-meter')?.parentElement ?? frame).append(line); }
+  const text = `${badge.icon} ${t(badge.tag)}: ${t(badge.hint)}`; if (line.textContent !== text) line.textContent = text; line.hidden = false; frame.style.setProperty('--elite', badge.color);
+}
 /** DOM side: owns the over-head bars in the label layer and fills the target frame and boss bar. */
 export class CombatHud {
-  private bars = new Map<string, { el: HTMLDivElement; fill: HTMLElement; lv: HTMLElement; mark: HTMLElement; marks: string; pct: number; level: number; sel: boolean; tf?: string }>();
+  private bars = new Map<string, { el: HTMLDivElement; fill: HTMLElement; lv: HTMLElement; mark: HTMLElement; marks: string; pct: number; level: number; sel: boolean; tf?: string; elite?: string }>();
   /** Parrot marks live in the combat simulation, not on the creature (main.ts sets this). */
   isMarked: (id: string) => boolean = () => false;
   private lastHit: { e: Enemy; at: number } | null = null;
@@ -144,6 +159,7 @@ export class CombatHud {
       const marks = statusMarks(e, this.isMarked(e.id));
       if (marks !== bar.marks) { bar.mark.textContent = marks; bar.mark.hidden = !marks; bar.marks = marks; }
       if (sel !== bar.sel) { bar.el.classList.toggle('sel', sel); bar.sel = sel; }
+      if ((e.elite ?? '') !== (bar.elite ?? '')) { bar.elite = e.elite ?? ''; eliteLabel(bar.el, e); } // an elite's badge (elite-roles.ts): written when it changes
       const tf = `translate(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px) translate(-50%,-100%)`; // written only when it changed: a still bar costs no style work
       if (tf !== bar.tf) { bar.tf = tf; bar.el.style.transform = tf; }
     });
@@ -163,6 +179,7 @@ export class CombatHud {
       this.put(frame.querySelector('.target-level')!, t('Lv {level}', { level: target.level ?? 1 }));
       const meter = frame.querySelector('.target-meter i') as HTMLElement, width = `${target.hp / target.maxHp * 100}%`; if (meter.style.width !== width) meter.style.width = width;
       this.put(frame.querySelector('.target-hp')!, `${Math.ceil(target.hp)} / ${target.maxHp}`);
+      eliteHint(frame, target);
     } else this.targetId = '';
     const boss = on ? bossFor(enemies, px, pz) : null, bar = document.getElementById('boss-bar')!;
     bar.hidden = !boss;

@@ -920,3 +920,12 @@ Run with `-- --icons` for 160×160 transparent WebP icons in `public/assets/icon
 `cannon`, `wall`, `frost` from their level-2 look, `portal`, `farmhouse`, `camp`). The file is about 400 KB;
 `art/previews/kit/rescue.webp` shows every piece. Raiders are the planets' own creatures (creatures.glb or the
 procedural shapes) at their normal size, drawn instanced per kind with a light raider tint.
+
+## Elite roles (`build_elite.py` → `public/assets/models/elite.glb`)
+
+Small parts an elite creature wears on the normal planets (`src/elite-view.ts`, docs/ELITE-ROLES.md), in a unit space
+that fits a creature of hit radius 1 on the ground (the runtime scales them to the creature's model): `elite_barrier`
+(12 hexagonal crystal plates, 240 triangles), `elite_crack_1`/`_2`/`_3` (zigzag cracks per cracking hit, 108/144/144),
+`elite_cores` (the two cores inside a splitter, 240). Each is drawn as one instanced mesh for every elite on screen; the
+runtime uses its own materials (glass, crack, core), so only the geometry matters. Over 300 triangles per part fails the
+build. About 42 KB, loaded only on a planet with elites.

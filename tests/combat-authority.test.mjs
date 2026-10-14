@@ -268,3 +268,47 @@ test("online knight: a shot reported against the raised shield hits the shooter 
  engine.sim.update(.5);assert.ok(enemy.hp<hp,'the shooter is hit by its own shot');
  f.peer.pose.facing=Math.PI;const after=enemy.hp;engine.damageAt=0;f.authority.damage(f.peer,enemy.id,'shot');engine.sim.update(.5);assert.equal(enemy.hp,after,'from behind nothing bounces');assert.ok(engine.healthEvents.some(e=>e.amount<0));
 });
+
+// Elite roles (src/elite-roles.ts): the server decides the barrier and the split exactly as the browser does.
+const eliteEntry=(planet,role)=>enemyRoster(planet).find(e=>e.elite===role);
+const spawnEntry=(f,entry,x=31.5,z=1)=>{f.authority.acceptSnapshots(f.room,[{id:entry.id,type:entry.type,x,z,hp:1}]);return f.authority.state(f.room).enemies.get(entry.id);};
+test('elite shield online: a gun shot is deflected to 15%, sword hits crack it, the third breaks it with a stun, and the barrier is published',async t=>{
+ const gun=await fixture(t,{planet:'ocean',profile:p=>{p.level=12;p.bag.gun_spike=1;p.gear.weapon='gun_spike';}}),crab=spawnEntry(gun,eliteEntry('ocean','shielded'),32,1),engine=gun.authority.engineFor(gun.peer);engine.sim.random=()=>.5;
+ assert.equal(crab.elite,'shielded');const before=crab.hp;gun.authority.basic(gun.peer,crab.id);for(let i=0;i<10;i++)engine.sim.update(.05);
+ const shot=before-crab.hp;assert.ok(shot>0,'a shot lands');assert.equal(crab.barrier.cracks,0);
+ const impact=gun.messages.findLast(m=>m.type==='enemyHealth'&&m.id===crab.id&&m.impact);assert.equal(impact.impact.barrier,'deflect');assert.equal(impact.impact.source,'shot');
+ const sword=await fixture(t,{planet:'ocean',profile:p=>{p.level=12;p.bag.sword_crystal=1;p.gear.weapon='sword_crystal';}}),elite=spawnEntry(sword,eliteEntry('ocean','shielded'),31.2,1),e2=sword.authority.engineFor(sword.peer);e2.sim.random=()=>.5;
+ const hits=[];for(let i=0;i<3;i++){const hp=elite.hp;e2.nextBasic=0;sword.authority.basic(sword.peer,elite.id);hits.push(hp-elite.hp);if(i<2)assert.equal(elite.barrier.cracks,i+1);}
+ assert.ok(hits.every(h=>h>0)&&Math.min(...hits)>Math.max(...hits)*.8,'every sword hit lands in full (none is cut)');
+ assert.ok(elite.barrier.open>5.9&&elite.stun>=.99,'broken for 6 s, stunned');
+ const published=sword.authority.state(sword.room).enemies.get(elite.id);sword.authority.acceptSnapshots(sword.room,[]);assert.ok(sword.room.enemies.find(s=>s.id===elite.id).barrier.open>5.9,'the snapshot carries the barrier');void published;
+ // While it is broken a shot hurts in full.
+ const g2=await fixture(t,{planet:'ocean',profile:p=>{p.level=12;p.bag.gun_spike=1;p.gear.weapon='gun_spike';}}),c2=spawnEntry(g2,eliteEntry('ocean','shielded'),32,1),e3=g2.authority.engineFor(g2.peer);e3.sim.random=()=>.5;c2.barrier={cracks:0,open:6,idle:0};
+ const hp2=c2.hp;g2.authority.basic(g2.peer,c2.id);for(let i=0;i<10;i++)e3.sim.update(.05);const full=hp2-c2.hp;assert.ok(Math.abs(shot/full-.15)<.04,`open: full damage; standing, the same shot did ${shot} of ${full} (15%)`);
+});
+test('elite split online: the server wakes two children where the splitter fell, children do not split again, and pay EXP without counting as kills',async t=>{
+ const f=await fixture(t,{planet:'candy',profile:p=>{p.level=30;p.bag.sword_crystal=1;p.gear.weapon='sword_crystal';}}),engine=f.authority.engineFor(f.peer);engine.sim.random=()=>.5;
+ const kids=enemyRoster('candy').filter(e=>e.elite==='mini');f.authority.acceptSnapshots(f.room,kids.map(k=>({id:k.id,type:k.type,x:30,z:30,hp:1})));
+ for(const k of kids)assert.equal(f.authority.state(f.room).enemies.get(k.id).hp,0,'dormant until a split');
+ const elite=spawnEntry(f,eliteEntry('candy','splitter'),31.2,1);elite.hp=1;f.authority.basic(f.peer,elite.id);
+ await f.next(m=>m.type==='defeat'&&m.id===elite.id);
+ const woken=kids.map(k=>f.authority.state(f.room).enemies.get(k.id)).filter(k=>k.hp>0);
+ assert.equal(woken.length,2);for(const k of woken){assert.equal(k.parentId,elite.id);assert.equal(k.depth,1);assert.ok(Math.hypot(k.x-elite.x,k.z-elite.z)<1);}
+ const killsBefore=(await f.store.get('actor')).profile.counters?.kills??0,xpBefore=(await f.store.get('actor')).profile.xp;
+ const kid=woken[0];kid.x=31.2;kid.z=1;kid.hp=1;engine.nextBasic=0;f.authority.basic(f.peer,kid.id);await f.next(m=>m.type==='defeat'&&m.id===kid.id);
+ assert.equal(kids.map(k=>f.authority.state(f.room).enemies.get(k.id)).filter(k=>k.hp>0).length,1,'a child does not split');
+ const after=(await f.store.get('actor')).profile;assert.equal(after.counters?.kills??0,killsBefore,'a child is not a kill');assert.ok(after.xp>xpBefore||after.level>30,'but pays EXP');
+});
+test('elite split online: at the live-children cap the splitter dies without splitting, and children leave with their parent\'s respawn',async t=>{
+ const f=await fixture(t,{planet:'candy',profile:p=>{p.level=30;p.bag.sword_crystal=1;p.gear.weapon='sword_crystal';}}),engine=f.authority.engineFor(f.peer);engine.sim.random=()=>.5;
+ const kids=enemyRoster('candy').filter(e=>e.elite==='mini');f.authority.acceptSnapshots(f.room,kids.map(k=>({id:k.id,type:k.type,x:30,z:30,hp:1})));
+ const live=kids.map(k=>f.authority.state(f.room).enemies.get(k.id));live.slice(0,7).forEach(k=>{k.hp=k.maxHp;k.deadUntil=0;});
+ const elite=spawnEntry(f,eliteEntry('candy','splitter'),31.2,1);elite.hp=1;f.authority.basic(f.peer,elite.id);await f.next(m=>m.type==='defeat'&&m.id===elite.id);
+ assert.equal(live.filter(k=>k.hp>0).length,7,'one free slot is not enough for two: no split');
+ // Children of a splitter vanish when it comes back.
+ live.slice(0,7).forEach(k=>{k.hp=0;k.deadUntil=Infinity;});const other=spawnEntry(f,enemyRoster('candy').filter(e=>e.elite==='splitter')[1],33,3);other.hp=1;engine.nextBasic=0;other.x=31.2;other.z=1;f.authority.basic(f.peer,other.id);await f.next(m=>m.type==='defeat'&&m.id===other.id);
+ assert.equal(live.filter(k=>k.hp>0&&k.parentId===other.id).length,2);
+ other.deadUntil=Date.now()-1;f.peer.pose={x:-60,z:-60,facing:0,moving:false};other.home={x:other.x+40,z:other.z+40};
+ await new Promise(r=>setTimeout(r,400));
+ assert.ok(other.hp>0,'the splitter is back');assert.equal(live.filter(k=>k.hp>0&&k.parentId===other.id).length,0,'and its children are gone');
+});
