@@ -31,6 +31,8 @@ export interface GameBridge {
   applyRemoteMove(enemyId:string,x:number,z:number):void;
   applySharedKill(enemyId:string,xp:number,boss:boolean,type?:string):void;
   applyRemoteDamage(amount:number,source?:string):void;
+  /** The server's word that one of this explorer's pets guarded it (pet-guard.ts): drawn, never decided, here. */
+  applyGuard?(event:import('./pet-guard.ts').GuardEvent):void;
   /** The server's health count of one of this explorer's summons (0: it popped). */
   applyDecoyHp(id:number,hp:number,kind:string,x:number,z:number):void;
   applyRemoteEffect(effect:CombatEffect):void;

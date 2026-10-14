@@ -268,6 +268,7 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='dropClaimed')game.removeNetworkDrop(message.id);
       else if(message.type==='dropReleased')game.releaseNetworkDrop(message.id);
       else if(message.type==='healthResult')game.applyAuthorityHealth(message.delta||0,!!message.died);
+      else if(message.type==='guard'&&message.event&&typeof message.event.kind==='string'&&[message.event.slot,message.event.power,message.event.left,message.event.x,message.event.z].every(Number.isFinite))game.applyGuard?.(message.event);
       else if(message.type==='decoyHp'&&Number.isFinite(message.id)&&Number.isFinite(message.hp))game.applyDecoyHp(message.id,message.hp,String(message.kind),Number(message.x)||0,Number(message.z)||0);
       else if(typeof message.type==='string'&&message.type.startsWith('dg'))game.dungeonMessage?.(message);
       else if(message.type==='chatAck')acknowledgeChat(message.requestId,connection);

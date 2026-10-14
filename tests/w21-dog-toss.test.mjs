@@ -25,7 +25,7 @@ async function fixture(t,{planet='home',profile:configure=()=>{}}={}){
 // ---- w21: the guard dog's toy toss (guard-dog.ts, combat.ts dogToss, server/combat-authority.mjs) ----------------------
 const G=await import('../src/guard-dog.ts');
 const {CombatSimulation}=await import('../src/combat.ts');
-const foe=(id,x,z,hp=100,radius=.5)=>({id,x,z,hp,maxHp:hp,radius});
+const foe=(id,x,z,hp=100,radius=.5)=>({id,x,z,hp,maxHp:hp,radius,phase:'chase'});// after the explorer: the dog only throws at what fights (pet-guard.ts)
 function sim({dog,targets,attack=20}){
   const hits=[],effects=[];
   const s=new CombatSimulation({position:()=>({x:0,z:0}),facing:()=>0,face:()=>{},targets:()=>targets,weapon:()=>({kind:'fist'}),stats:()=>({attack,critChance:0}),move:()=>{},
@@ -68,7 +68,7 @@ test('out of range: no throw',()=>{
 });
 test('online: the server\'s simulation throws for a following dog and lands real damage; none at home or on a visit',async t=>{
   // The dog is a pet now (pet-slots.ts): it comes along only while its item is worn in a pet slot.
-  const f=await fixture(t,{profile:p=>{p.bag.pet_dog=1;p.gear.pet2='pet_dog';}}),enemy=f.spawn('mushroom',-30,4);enemy.hp=enemy.maxHp=500;
+  const f=await fixture(t,{profile:p=>{p.bag.pet_dog=1;p.gear.pet2='pet_dog';}}),enemy=f.spawn('mushroom',-30,4);enemy.hp=enemy.maxHp=500;enemy.phase='chase';
   f.peer.pose.dog=0;// the wilds of home (x -30): the server set dog because it follows
   const engine=f.authority.engineFor(f.peer);for(let i=0;i<14;i++)engine.sim.update(.05);
   assert.ok(enemy.hp<500,'the bone landed on the server');

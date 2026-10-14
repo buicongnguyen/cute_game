@@ -26,6 +26,16 @@ import { CHAIN, HOLD, STREAK, UntouchedStreak, chainGain, chainKind } from '../s
 import { skillTuning } from '../src/skill-upgrades.ts';
 import * as J from '../src/jump-rules.ts';
 import { POWER, PowerCharge, powerShape, powerReach, powerCap } from '../src/power-rules.ts';
+import { PET_BEFORE, petFighter, petRoleId, shotThreatens, type PetFighter } from '../src/pet-guard.ts';
+import { petTrail, PET_SIDE, PET2_SIDE } from '../src/pet-pen.ts';
+import { ENEMY_TYPES } from '../src/enemy-types.ts';
+
+/**
+ * Pets in a scripted fight (promo/pet-sim.mts): the pets worn (one or two ids), their bench level, a pack of ordinary
+ * creatures fought with (or instead of) the one the fight names, and `before`: the numbers and the target choice from
+ * before the 2026-10-14 rebalance (the nearest creature within 7 m, peaceful or not, and no guard).
+ */
+export interface PetOptions { ids: readonly string[]; level?: number; before?: boolean; /** Worn for their stats only: no shot, no guard (the fair 'no pet' to compare with). */ mute?: boolean }
 
 type Route = 'ground' | 'launch' | 'chase';
 export type Script = 'classic' | 'careless' | 'single' | 'double' | Route | `only-${MoveId}` | 'only-attack';
@@ -40,8 +50,8 @@ export const ROUTES: Record<Route | 'double', readonly Step[]> = {
 const quiet = { text() {}, burst() {}, ring() {}, spark() {}, shake() {}, flash() {}, freeze() {}, update() {}, slash() {}, shakeOffset: () => new T.Vector3() };
 function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 15, 1 | seed); seed ^= seed + Math.imul(seed ^ seed >>> 7, 61 | seed); return ((seed ^ seed >>> 14) >>> 0) / 4294967296; }; }
 
-export interface FightResult { won: boolean; seconds: number; taken: number; hits: number; dodged: number; perfect: number; biggest: number; bossHp: number; blocked: number; /** Times the script's route ran to its end, and the longest chain. */ routes: number; combo: number; finishers: number; /** Power strikes used (power-rules.ts), and the damage dealt in all. */ powers: number; damage: number; /** The longest untouched streak, and the average damage bonus it gave over the fight (0.12 = +12%). */ streak: number; bonus: number }
-export function fight(boss: string, planet: M.PlanetId, zone: [number, number], level: number, gear: Partial<M.SaveState['gear']>, script: Script, seed = 1, blockOverride?: number, /** `power`: the hero holds Attack for the power strike whenever it is charged and the boss is in its area. */ opts: { power?: boolean } = {}): FightResult {
+export interface FightResult { won: boolean; seconds: number; taken: number; hits: number; dodged: number; perfect: number; biggest: number; bossHp: number; blocked: number; /** Times the script's route ran to its end, and the longest chain. */ routes: number; combo: number; finishers: number; /** Power strikes used (power-rules.ts), and the damage dealt in all. */ powers: number; damage: number; /** Pets (pet-guard.ts): damage they dealt, damage their guards took off (in full healths, like `taken`), guards fired by kind, health mended. */ petDamage: number; saved: number; guards: Record<string, number>; mended: number; /** The longest untouched streak, and the average damage bonus it gave over the fight (0.12 = +12%). */ streak: number; bonus: number }
+export function fight(boss: string, planet: M.PlanetId, zone: [number, number], level: number, gear: Partial<M.SaveState['gear']>, script: Script, seed = 1, blockOverride?: number, /** `power`: the hero holds Attack for the power strike whenever it is charged and the boss is in its area. */ opts: { power?: boolean; pets?: PetOptions; /** More creatures of these kinds round the first: the fight is won when all are down. */ pack?: readonly string[] } = {}): FightResult {
   const random = seeded(seed * 7919), realRandom = Math.random; Math.random = random;
   try {
     const state = M.newGame(); state.level = level; state.planet = planet; Object.assign(state.gear, gear); for (const id of Object.values(gear)) if (id) state.bag[id] = 1; state.hp = M.maxHp(state);
@@ -56,8 +66,17 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
     const jumps = script === 'careless' ? 0 : script === 'single' || only || script === 'ground' ? 1 : 2, strikeSlot = !!only, careful = on && script !== 'careless';
     w.jumpRules = on; w.jump.max = Math.max(1, jumps);
     const weapon = () => strikeSlot ? { ...M.weaponStats(state), special: 'fist' } : M.weaponStats(state), special = () => weapon().special ?? 'fist';
-    const e = w.spawnSpecies(boss, zone[0], zone[1], 0)! as Enemy; w.position.set(zone[0] + e.radius + 1.3, 0, zone[1]);
-    const stats = () => M.activeStats(state), out: FightResult = { won: false, seconds: 0, taken: 0, hits: 0, dodged: 0, perfect: 0, biggest: 0, bossHp: 0, blocked: 0, routes: 0, combo: 0, finishers: 0, powers: 0, damage: 0, streak: 0, bonus: 0 };
+    let e = w.spawnSpecies(boss, zone[0], zone[1], 0)! as Enemy; w.position.set(zone[0] + e.radius + 1.3, 0, zone[1]);
+    const pack = (opts.pack ?? []).map((kind, i) => { const a = (i + 1) / ((opts.pack!.length + 1)) * Math.PI * 2, far = ENEMY_TYPES[kind]?.behavior === 'shooter' ? 8 : 4; return w.spawnSpecies(kind, zone[0] + Math.cos(a) * far, zone[1] + Math.sin(a) * far, i + 1)! as Enemy; });
+    const foes = [e, ...pack], pets = opts.pets, petIds = pets?.ids ?? [];
+    if (pets?.level) { (state as M.SaveState & { gearLevels?: Record<string, number> }).gearLevels = Object.fromEntries(petIds.map(id => [id, pets.level!])); }
+    for (const id of petIds) state.bag[id] = (state.bag[id] ?? 0) + 1; if (petIds[0]) state.gear.pet = petIds[0]; if (petIds[1]) state.gear.pet2 = petIds[1];
+    let hp = 1; // the hero's health as a share of full: at 0 the script 'eats' back to full (the fights count damage, they do not end on it)
+    const petAt = (i: number): PetFighter | null => { const id = petIds[i]; if (!id || pets!.mute) return null; const at = petTrail(w.position, w.facing, i ? PET2_SIDE : PET_SIDE), factor = M.gearFactor(state, id), shot = M.ITEMS[id]?.pet?.shot;
+      if (pets!.before) { const old = PET_BEFORE[petRoleId(id) ?? '']; return old ? { x: at.x, z: at.z, dmg: old[0] * factor, cd: old[1], ...(shot ? { shot } : {}) } : null; }
+      const f = petFighter(id, factor, shot); return f ? { ...f, x: at.x, z: at.z } : null; };
+    const nearest = (range: number) => { let best: Enemy | null = null, bestD = Infinity; for (const f of foes) { const d = Math.hypot(f.x - w.position.x, f.z - w.position.z) - f.radius; if (f.hp > 0 && d < range && d < bestD) { bestD = d; best = f; } } return best; };
+    const stats = () => M.activeStats(state), out: FightResult = { won: false, seconds: 0, taken: 0, hits: 0, dodged: 0, perfect: 0, biggest: 0, bossHp: 0, blocked: 0, routes: 0, combo: 0, finishers: 0, powers: 0, damage: 0, petDamage: 0, saved: 0, guards: {}, mended: 0, streak: 0, bonus: 0 };
     const charge = new PowerCharge(), streak = new UntouchedStreak(); let held = 0, bonusTime = 0;
     const combo = new J.ComboMeter(); let invulnerable = 0, attackCd = 0, sure = 0, kind: J.ComboHit | null = null, strike: { height: number; jumps: number } | null = null, skyQuake: { height: number; jumps: number } | null = null, skyFactor = 1, quakeFinisher = false;
     const cds = [0, 0, 0, 0], airCds = [0, 0, 0, 0];
@@ -65,8 +84,13 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       position: () => w.position, facing: () => w.facing, face: a => { w.facing = a; }, targets: () => w.enemies, weapon, stats,
       move: (x, z) => { const n = Math.max(1, Math.ceil(Math.hypot(x, z) / .2)); for (let i = 0; i < n; i++) w.move(x / n, z / n); },
       skillLevel: () => 0, effect: () => {},
+      // Pets (only when the fight has any): their shots, the creature the hero fights, the hero's health, and what a guard did.
+      ...(pets ? { pet: () => petAt(0), pet2: () => petAt(1), focus: () => pets.before ? nearest(7)?.id ?? null : e.id, health: () => hp,
+        heal: (fraction: number) => { const got = Math.min(1 - hp, fraction); hp += got; out.taken -= got; out.mended += got; },
+        status: (target: CombatTarget, kind: Parameters<World['statusEnemy']>[1], duration: number) => w.statusEnemy(target as Enemy, kind, duration),
+        guarded: (event: { kind: string }) => { out.guards[event.kind] = (out.guards[event.kind] ?? 0) + 1; } } : {}),
       hit: (target, impact) => {
-        const en = target as Enemy, before = en.hp; w.damageEnemy(en, impact.amount, impact.stun); out.biggest = Math.max(out.biggest, before - en.hp); out.damage += before - en.hp; if (impact.blocked) out.blocked++; if (on) charge.hit();
+        const en = target as Enemy, before = en.hp; w.damageEnemy(en, impact.amount, impact.stun); out.biggest = Math.max(out.biggest, before - en.hp); out.damage += before - en.hp; if (impact.blocked) out.blocked++; if (impact.helper) { out.petDamage += before - en.hp; return; } if (on) charge.hit();
         if (impact.lift && en.hp > 0) w.knockUpEnemy(en, impact.lift, .75);
         if (on && combo.hit(kind ?? (w.jump.airborne ? 'air' : impact.lift > 0 ? 'launcher' : 'ground'))) { out.combo = Math.max(out.combo, combo.count); streak.hit(); out.streak = Math.max(out.streak, streak.count); }
       },
@@ -82,7 +106,9 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
     w.onDamage = (amount, source = 'melee', _id, cls = 'body') => {
       if (on && J.dodges(cls, w.jump.height)) { out.dodged++; if (J.perfectDodge(cls, w.jump.height, w.jump.airTime)) { out.perfect++; sure = J.DODGE.sure; sim.edge.sure = true; } return; }
       if (!(amount > 0) || invulnerable > 0 || sim.invulnerable) return;
-      const damage = Math.max(1, Math.round(amount * 60 / (stats().defense + sim.defenseBonus + 60))); out.taken += damage / stats().maxHp; out.hits++; invulnerable = .55; combo.break(); streak.hurt(damage); void source;
+      const scale = 60 / (stats().defense + sim.defenseBonus + 60);
+      if (pets && !pets.before && _id) { const left = sim.guardIncoming(amount, source, foes.find(f => f.id === _id)); out.saved += (amount - left) * scale / stats().maxHp; amount = left; if (!(amount > 0)) return; }
+      const damage = Math.max(1, Math.round(amount * scale)); if (pets) { hp -= damage / stats().maxHp; if (hp <= 0) hp = 1; } out.taken += damage / stats().maxHp; out.hits++; invulnerable = .55; combo.break(); streak.hurt(damage); void source;
     };
     w.onLanded = landing => {
       const finisher = combo.finisherReady, dive = () => sim.dive(J.diveMultiplier(landing.from) * (finisher ? J.COMBO.finisher : 1), J.DIVE.radius, J.DIVE.stun, J.DIVE.knock, t => J.diveCritical(landing.jumps, landing.from, t), J.diveCap).length;
@@ -106,6 +132,9 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       if (air && i === 2) { skyQuake = { height: j.height, jumps: j.jumps }; if (!j.dive()) { j.diving = true; j.diveFrom = j.height; j.velocity = -34; } }
       return true;
     };
+    // A creature's shot in the air (world.ts onPlayerShot): a counter pet in reach shoots it down or weakens it, as pet-guard-view.ts does in the game.
+    if (pets && !pets.before) w.onPlayerShot = shot => { const p = shot.mesh.position; if (!shotThreatens({ x: p.x, z: p.z, vx: shot.vx, vz: shot.vz }, w.position)) return; const owner = foes.find(f => f.id === shot.ownerId), left = sim.counterShot({ x: p.x, z: p.z, damage: shot.damage, boss: !!owner?.boss, owner: shot.ownerId }); if (left === undefined) return;
+      out.saved += (shot.damage - left) * 60 / (stats().defense + sim.defenseBonus + 60) / stats().maxHp; shot.guarded = true; shot.damage = left; if (left <= 0) shot.life = 0; };
     let swings = 0, at = 0, stuck = 0, fled = 0;
     // The boss sees the hero before the first blow (it sizes itself to the hero's level then, as in the game).
     w.update(dt, true, false);
@@ -124,6 +153,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       return null;
     };
     for (let t = 0; t < 600; t += dt) {
+      if (pack.length && e.hp <= 0) { const next = nearest(Infinity); if (next) e = next; } // a pack: on to the nearest creature still standing
       invulnerable = Math.max(0, invulnerable - dt); attackCd = Math.max(0, attackCd - dt); for (let i = 0; i < 4; i++) { cds[i] = Math.max(0, cds[i] - dt); airCds[i] = Math.max(0, airCds[i] - dt); }
       if (on) { combo.step(dt); streak.step(dt); sim.edge.bonus = streak.bonus; bonusTime += (streak.bonus - 1) * dt; if (sure > 0 && (sure -= dt) <= 0) sim.edge.sure = false; }
       // The hero keeps beside the boss, at walking speed.
@@ -178,7 +208,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       }
       sim.update(dt, true); w.movementLocked = sim.locksMovement; w.update(dt, true, false);
       out.bossHp = e.maxHp;
-      if (e.hp <= 0) { out.won = true; out.seconds = t; break; }
+      if (e.hp <= 0 && pack.every(f => f.hp <= 0)) { out.won = true; out.seconds = t; break; }
       out.seconds = t;
     }
     out.bonus = out.seconds > 0 ? bonusTime / out.seconds : 0;

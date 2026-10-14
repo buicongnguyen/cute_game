@@ -15,6 +15,11 @@
 /* Gear ceilings (gear-ceiling.ts): "Lv 7/10 · at max: …" over a gold bar to +10 with a tick per level; the energy still to pay. */
 .gear-max { margin: 2px 0 3px; }
 .gear-max p { margin: 0 0 3px; }
+/* What a pet does in a fight (pet-card.ts): two short lines under its description, in the backpack, the shop and the Almanac. */
+.pet-card { margin: 2px 0 4px; padding: 5px 8px; border-radius: 10px; background: rgba(120, 190, 255, .14); text-align: left; }
+.pet-card p { margin: 0 0 2px; font-size: 12px; line-height: 1.3; }
+.pet-card p:last-child { margin-bottom: 0; }
+.pet-card .muted { opacity: .75; }
 .gear-max .muted, .bench-to-max { opacity: .75; }
 .gear-max span.muted { font-size: .92em; }
 /* The row's lines stay at the panel's 12px (.bench-row .muted would otherwise size a muted <p> from the row, not the line). */

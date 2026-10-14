@@ -4,7 +4,7 @@ import {CombatSimulation,type CombatTarget,type CombatHost,type CombatHit} from 
 function arena(){
  const p={x:0,z:0},targets:CombatTarget[]=[],hits:CombatHit[]=[];let heals=0,moving=false;
  const host:CombatHost={position:()=>p,facing:()=>0,face(){},targets:()=>targets,weapon:()=>({kind:'fist'}),stats:()=>({attack:10,critChance:0}),move:(x,z)=>{p.x+=x;p.z+=z;},effect(){},moving:()=>moving,hit:(t,h)=>{hits.push(h);t.hp-=h.amount;},heal:n=>{heals+=n;}};
- const sim=new CombatSimulation(host,()=>.5),add=(hp=100,maxHp=100,boss=false)=>{const t={id:String(targets.length),x:0,z:2,hp,maxHp,boss,radius:.5};targets.push(t);return t;};
+ const sim=new CombatSimulation(host,()=>.5),add=(hp=100,maxHp=100,boss=false)=>{const t={id:String(targets.length),x:0,z:2,hp,maxHp,boss,radius:.5,phase:'chase'/* fighting the explorer: its pets may shoot it (pet-guard.ts) */};targets.push(t);return t;};
  return {p,host,sim,hits,add,targets,heals:()=>heals,move:()=>{moving=true;},run:(time:number,active=true)=>{for(let t=0;t<time-.0001;t+=.025)sim.update(Math.min(.025,time-t),active);}};
 }
 test('devour executes only strictly below 40% HP, never a boss, and heals after confirmed death',()=>{

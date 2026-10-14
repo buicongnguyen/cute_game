@@ -1,6 +1,7 @@
 import { registerDyes } from './dye-skins.ts';
 import { TITAN_ITEMS, TITAN_LOOT } from './titan-content.ts';
 import { BOSS_PET_ITEMS, BOSS_PET_LOOT } from './boss-pet-content.ts';
+import { PET_ROLES } from './pet-guard.ts';
 import { DUNGEON_ITEMS } from './dungeon-content.ts';
 import { COLOSSUS_ITEMS, COLOSSUS_LOOT, COLOSSUS_TYPE } from './colossus-content.ts';
 // Gameplay facts measured from the public reference client, 2026-09-30.
@@ -4161,5 +4162,8 @@ RECIPES.push({result:'harpoon',energy:1000,materials:{},category:'Weapons',stati
 ITEMS.fish_guardian={name:'Lake Guardian',icon:'🎏',desc:'A glowing koi that guards the big meadow lake. It surfaces now and then, only a harpoon can catch it, and it comes back for you once every 6 hours.',type:'fish',sell:450,heal:250,buff:{luck:.4,regen:6,time:240},rare:true,legend:true,power:.98,size:[180,260]};
 FISH.fish_guardian={id:'fish_guardian',name:ITEMS.fish_guardian.name,icon:ITEMS.fish_guardian.icon,rarity:'legendary',speed:.98,power:.98,stamina:.98,sell:450,xp:Math.round((4+.98*25)*4),size:[180,260],planet:['home']};
 LOOT_TABLES.forest_raptor=[['feather',1,1,2],['meat',.7,1,2]];
+// A pet's shot (damage x your attack, seconds between shots) is read from the one table of pet-guard.ts, with its guard.
+// Every pet item exists by now (the Titan, boss, Vault and Colossus keepsakes join above), and the dyed pets below copy it.
+for (const [id, role] of Object.entries(PET_ROLES)) { const item = ITEMS[id]; if (item?.pet) item.pet = { ...item.pet, dmg: role.dmg, cd: role.cd }; }
 // Dyes (dye-skins.ts): energy-priced recolours of existing gear, generated last so every base item exists.
 registerDyes(ITEMS);

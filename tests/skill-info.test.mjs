@@ -58,9 +58,9 @@ test('statuses reach living creatures only; ice age freezes (3 s stun) instead o
   assert.ok(ice.statuses.filter(s => s.k === 'stun' && s.d === 3).length === 2, 'both living creatures frozen');
 });
 
-test("a pet's ice shot chills briefly instead of freezing for good", () => {
-  const r = rig(); r.sim.host.pet = () => ({ x: 0, z: 0, dmg: .3, cd: 1.5, shot: 'ice' }); r.sim.update(1 / 60);
-  assert.equal(r.sim.projectiles[0].stun, .5);
+test("a pet's ice shot chills (slows) instead of freezing", () => {
+  const r = rig(); for (const t of r.sim.host.targets()) t.phase = 'chase'; r.sim.host.pet = () => ({ x: 0, z: 0, dmg: .3, cd: 1.5, shot: 'ice' }); r.sim.update(1 / 60);
+  assert.equal(r.sim.projectiles[0].stun, 0); assert.equal(r.sim.projectiles[0].slow, 1.2);
 });
 
 test('status marks show on the bar: stun first, at most two', () => {
