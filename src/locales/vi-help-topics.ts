@@ -5,6 +5,7 @@ import { PAIR_HELP_VI } from './vi-pair.ts';
 import { HELP_TOPICS } from '../help-topics.ts';
 import { FIVE_HELP_VI } from './vi-five.ts';
 import { SWIM_HELP_VI } from './vi-swim.ts';
+import { BREAK_HELP_VI } from './vi-break.ts';
 /** [English title, Vietnamese title, Vietnamese text]; the English text of each topic comes from HELP_TOPICS. */
 const ROWS: ReadonlyArray<readonly [string, string, string]> = [
   ['Wander', 'Di chuyển', 'Nhấn mặt đất để đi; giữ để điều khiển hướng. Dấu chỉ đánh dấu mục tiêu. Bạn cũng có thể dùng phím mũi tên. Vào Cài đặt → Bố trí phím trên máy tính để bật di chuyển bằng WASD. Cài đặt cũng cho phép bật cần điều khiển.'],
@@ -37,6 +38,7 @@ const ROWS: ReadonlyArray<readonly [string, string, string]> = [
   ['Elite creatures', ELITE_HELP_VI[0], ELITE_HELP_VI[1]],
   ['Weapon pair', PAIR_HELP_VI[0], PAIR_HELP_VI[1]],
   ['Crossing water', SWIM_HELP_VI[0], SWIM_HELP_VI[1]],
+  ['Breakable trees and stones', BREAK_HELP_VI[0], BREAK_HELP_VI[1]],
 ];
 const VI_BY_TITLE = new Map(ROWS.map(([title, viTitle, viBody]) => [title, [viTitle, viBody] as const]));
 export const HELP_TOPICS_VI: Record<string, string> = Object.fromEntries(HELP_TOPICS.flatMap(([, title, body]) => [[title, VI_BY_TITLE.get(title)![0]], [body, VI_BY_TITLE.get(title)![1]]]));

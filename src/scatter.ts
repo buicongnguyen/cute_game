@@ -73,7 +73,7 @@ export function buildScatter(placements: readonly DecorPlacement[], parts: PartS
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
       // Ground cover and low pieces never cast; taller ones cast only near the camera target (updateScatterShadows).
-      mesh.castShadow = false; mesh.receiveShadow = true; mesh.userData.scatter = type;
+      mesh.castShadow = false; mesh.receiveShadow = true; mesh.userData.scatter = type; mesh.userData.pieces = list; mesh.userData.extent = extent; // breakables-view.ts finds a piece's instance slots by these
       if (!DECOR[type]?.cover && extent.height >= LOW_DECOR) casters.push(mesh);
       group.add(mesh);
       return mesh;

@@ -253,6 +253,7 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='enemies')world().applyEnemySnapshots(message.enemies);
       else if(message.type==='profile'&&message.authorityVersion===1&&message.profile&&message.revision>=revision){revision=message.revision;game.applyAuthoritativeState(message.profile);}
       else if(message.type==='enemyHealth')world().applyAuthoritativeEnemyHealth(message);
+      else if(typeof message.type==='string'&&message.type.startsWith('scenery'))dispatchEvent(new CustomEvent('zoo-scenery',{detail:message}));// breakables-game.ts
       else if(message.type==='colossus'||message.type==='colossusHit')dispatchEvent(new CustomEvent('zoo-colossus',{detail:message}));// colossus.ts
       else if(message.type==='environment')world().applyEnvironmentSnapshot(message.snapshot);
       else if(message.type==='gardenEvent'){
@@ -367,7 +368,7 @@ export function initOnline(game:GameBridge) {
     // damage and rewards with canonical combat values before relaying the snapshot.
     if(host===account.id&&enemyClock>=.15){enemyClock=0;send({type:'enemies',enemies:world().enemySnapshots()});}
   });
-  game.onAction(action=>{if(!account)return;if(action.kind==='swap'){send({type:'swap',hand:action.hand});return;}if(action.kind==='basic')send({type:'basic',targetId:action.targetId,requestId:crypto.randomUUID()});else if(action.kind==='skill')send({type:'skill',index:action.index,requestId:crypto.randomUUID()});if(account)send({type:'effect',effect:action.special||action.kind,visual:action.effect,x:action.x,z:action.z,color:action.kind==='skill'?'#d1a6ff':'#fff2a0'});});
+  game.onAction(action=>{if(!account)return;if(action.kind==='swap'){send({type:'swap',hand:action.hand});return;}if(action.kind==='scenery'){if(action.scenery)send({type:'scenery',id:action.scenery.id,source:action.scenery.source});return;}if(action.kind==='basic')send({type:'basic',targetId:action.targetId,requestId:crypto.randomUUID()});else if(action.kind==='skill')send({type:'skill',index:action.index,requestId:crypto.randomUUID()});if(account)send({type:'effect',effect:action.special||action.kind,visual:action.effect,x:action.x,z:action.z,color:action.kind==='skill'?'#d1a6ff':'#fff2a0'});});
   document.addEventListener('visibilitychange',()=>{send({type:'active',active:!document.hidden});if(document.hidden)void flushSave();});
   window.addEventListener('pagehide',rememberActions);
   onLanguageChange(()=>{

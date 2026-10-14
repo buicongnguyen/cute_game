@@ -23,6 +23,7 @@ import {createColossusAuthority} from './colossus-authority.mjs';
 import {COLOSSUS_STATS,COLOSSUS_TYPE} from '../src/colossus-content.ts';
 import {colossusDamage} from '../src/colossus-patterns.ts';
 import {grantColossusReward} from '../src/colossus-rewards.ts';
+import {BREAK_PLANET,BreakLedger,breakClass,parsePieceId,inReach,bossHolds,fighting,grantBreakDrop,hitWorth} from '../src/breakables.ts';
 
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const finite=(value,fallback=0,min=-160,max=160)=>Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;
@@ -30,7 +31,7 @@ const snapshot=enemy=>{const {roster,home,changedAt,deadUntil,generation,pending
 const STATUS=['fear','charm','slow','blind','sheep','taunt'];
 
 /** The browser host animates navigation; the server owns HP, skill timing, stats, kills and rewards. */
-export function createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath=()=>{},onError=()=>{},colossusClock}){
+export function createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath=()=>{},onError=()=>{},colossusClock,sceneryRandom=Math.random}){
   const engines=new Map(),queues=new Map();let stopped=false;
   // The daily world boss in home rooms (colossus-authority.mjs); its hits, kill and rewards go through the paths below.
   const colossus=createColossusAuthority({send,broadcast,peers,...(colossusClock?{clock:colossusClock}:{})});colossus.setMaxHp(peer=>Game.maxHp(peer.account.profile));
@@ -349,6 +350,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
         if(enemy.barrier)stepBarrier(enemy.barrier,dt);enemy.stun=Math.max(0,(enemy.stun||0)-dt);for(const key of STATUS)enemy.statuses[key]=Math.max(0,(enemy.statuses[key]||0)-dt);
         if(enemy.hp<=0&&!enemy.pending&&Number.isFinite(enemy.deadUntil)){enemy.respawn=Math.max(0,(enemy.deadUntil-now)/1000);if(enemy.respawn===0&&active.every(p=>dist(p.pose,enemy.home)>22)){enemy.x=enemy.home.x;enemy.z=enemy.home.z;enemy.hp=enemy.maxHp=enemy.baseMaxHp;enemy.damage=enemy.baseDamage;enemy.scaled=false;enemy.contributors.clear();enemy.generation++;room.killed.delete(enemy.id);if(enemy.barrier)enemy.barrier=newBarrier();if(enemy.elite==='splitter')for(const m of s.enemies.values())if(m.elite==='mini'&&m.parentId===enemy.id&&m.hp>0&&!m.pending){m.hp=0;m.deadUntil=Infinity;m.respawn=999999;health(room,m);}health(room,enemy);}}
       }
+      sceneryTick(room,now);
       room.environment=environmentSnapshot(s.environment);
       if(now-s.lastBroadcast>250){s.lastBroadcast=now;publish(room);broadcast(room,{type:'enemies',enemies:room.enemies});broadcast(room,{type:'environment',snapshot:room.environment});}
       for(const peer of active){const e=engineFor(peer);e.sim.update(dt,true);e.environment.authoritative=false;e.environment.time=s.environment.time-dt;e.environment.weather.restore(weatherBefore);e.environment.fireRain=structuredClone(rainBefore);e.environment.lightning=structuredClone(lightningBefore);e.environment.lamps=new Map(s.environment.lamps);e.environment.eclipseUntil=s.environment.eclipseUntil;e.environment.dragonPhase=s.environment.dragonPhase;e.environment.nestLevel=before.nestLevel;
@@ -360,7 +362,31 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     }
     for(const[id,engine]of engines){if((engine.pendingHealth||engine.healthEvents.length)&&now-engine.hpAt>500)flushHealth(engine);if(!peers.has(id)&&!engine.pendingHealth&&!engine.healthEvents.length&&now-engine.lastSeen>600000)engines.delete(id);}
   }
+  /**
+   * Breakable scenery (breakables.ts): the server holds each room's ledger and decides every hit, break and regrowth.
+   * A client asks with the piece's id (its type and spot) and the hit's source; the server checks the planet, the reach
+   * from the explorer's pose and the pace, applies the boss rule from its own creatures, and tells the whole room.
+   */
+  const SCENERY_PIECE_R={tree:.6,stone:1},HEAVY_GAP=700;
+  function sceneryLedger(room){return room.scenery??=new BreakLedger(sceneryRandom);}
+  function scenery(peer,id,source){
+    const room=rooms.get(peer.room);if(!room||peer.visit||!peer.active||peer.account.profile.hp<=0)return null;
+    if(room.id.split(':').at(-1)!==BREAK_PLANET||peer.planet!==BREAK_PLANET)return null;
+    const spot=parsePieceId(id);if(!spot||!(hitWorth(spot.type,source)>0))return null;
+    const piece={id,type:spot.type,x:spot.x,z:spot.z,r:SCENERY_PIECE_R[breakClass(spot.type)]};if(!inReach(piece,peer.pose,source))return null;
+    const e=engineFor(peer),now=Date.now();if(source==='dive'||source==='quake'||source==='power'){const since=now-(e.heavySceneryAt||0);if(since>=HEAVY_GAP)e.heavySceneryAt=now;else if(since>250)return null;} // one heavy blow (all it reaches within 250 ms) per HEAVY_GAP ms
+    const bosses=[...state(room).enemies.values()].filter(m=>m.boss&&m.hp>0).map(m=>({x:m.x,z:m.z,hp:m.hp,aggro:fighting(m.phase)}));
+    const result=sceneryLedger(room).hit(piece,source,now/1000,bossHolds(piece.x,piece.z,bosses));if(result.outcome==='none')return result;
+    broadcast(room,{type:'scenery',id,outcome:result.outcome,hp:result.hp,by:peer.account.id});
+    if(result.outcome==='break'&&breakClass(spot.type)==='tree'){const actorId=peer.account.id;internal(actorId,'sceneryDrop',[],records=>{const s=records.get(actorId).profile;const n=grantBreakDrop(s,spot.type,now,(item,k)=>Game.addItem(s,item,k));return {wood:n,count:Object.entries(s.worldRewards.resourceReadyAt).find(([k])=>k.startsWith('break-wood:'))?.[1]||0};}).then(r=>{const got=r?.reply?.result;const live=peers.get(actorId);if(got?.wood>0&&live)send(live.socket,{type:'sceneryWood',wood:got.wood,count:got.count});}).catch(()=>{});}
+    return result;
+  }
+  function sceneryTick(room,now){const ledger=room.scenery;if(!ledger||!ledger.entries.size)return;
+    if(now-(room.sceneryRegrowAt||0)>=1000){room.sceneryRegrowAt=now;const players=[...room.members].map(id=>peers.get(id)).filter(p=>p&&p.active&&!p.visit).map(p=>p.pose);
+      for(const id of ledger.regrow(now/1000,()=>undefined,(x,z,r)=>players.some(p=>Math.hypot(p.x-x,p.z-z)<r)))broadcast(room,{type:'scenery',id,outcome:'regrow',hp:0});}
+    if(ledger.entries.size&&now-(room.scenerySentAt||0)>=3000){room.scenerySentAt=now;broadcast(room,{type:'sceneryState',list:ledger.snapshot(now/1000)});}
+  }
   const timer=setInterval(()=>{if(!stopped)try{tick(.05);}catch(error){onError(error);}},50);timer.unref();
   function bomb(peer,radius,multiplier){const room=rooms.get(peer.room);if(!room||peer.visit)return;for(const enemy of state(room).enemies.values())if(enemy.hp>0&&dist(peer.pose,enemy)<=radius+enemy.radius)hit(peer,enemy,{amount:Math.round(Game.attack(combatProfile(peer))*multiplier),critical:false,stun:.5,lift:0,knock:2,direction:{x:0,z:0}});}
-  return {acceptSnapshots,basic,swap,skill,damage,decoys,bomb,engineFor,state,internal,resetPeer,flushPeerHealth,colossus,async close(){stopped=true;clearInterval(timer);for(const engine of engines.values())flushHealth(engine);await Promise.allSettled([...queues.values()]);}};
+  return {acceptSnapshots,basic,swap,skill,damage,scenery,decoys,bomb,engineFor,state,internal,resetPeer,flushPeerHealth,colossus,async close(){stopped=true;clearInterval(timer);for(const engine of engines.values())flushHealth(engine);await Promise.allSettled([...queues.values()]);}};
 }

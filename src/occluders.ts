@@ -66,7 +66,7 @@ export class OccluderFade {
       this.clock = FADE.every; const start = performance.now();
       for (const f of this.faded.values()) f.hit = false;
       for (const piece of tallPiecesNear(this.group, around.x, around.z, FADE.reach, this.near))
-        if (points.some(p => blocks(piece, eye, p))) { const f = this.faded.get(piece) ?? this.start(piece); if (f) f.hit = true; }
+        if (!this.skip?.(piece) && points.some(p => blocks(piece, eye, p))) { const f = this.faded.get(piece) ?? this.start(piece); if (f) f.hit = true; }
       this.stats.ms = this.stats.checks ? this.stats.ms * .9 + (performance.now() - start) * .1 : performance.now() - start; this.stats.checks++;
     }
     const step = force ? 1 : dt * (1 - FADE.alpha) / FADE.time;
@@ -122,6 +122,10 @@ export class OccluderFade {
     }
     return overlay;
   }
+  /** Pieces never to fade (breakables-view.ts: a piece that is shaking, falling, broken or regrowing). */
+  skip?: (piece: TallPiece) => boolean;
+  /** Puts back at once every faded piece drawn by slot `index` of `mesh` (breakables-view.ts takes the slot over). */
+  release(mesh: T.InstancedMesh, index: number) { if (!this.faded.size) return; for (const f of this.faded.values()) if (f.piece.index === index && f.piece.meshes.includes(mesh)) { this.stop(f); return; } }
   /** Pieces currently fading or faded, for tests and probes. */
   fadedPieces() { return [...this.faded.keys()]; }
   fadeOf(piece: TallPiece) { return this.faded.get(piece)?.fade ?? 1; }

@@ -6,7 +6,7 @@ export interface CombatTarget extends CombatPoint { id: string; hp: number; maxH
 export interface CombatStats { attack: number; maxHp?:number; critChance: number; critDamage?: number; haste?: number; lifesteal?: number }
 export interface CombatHit { amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint; /** Dealt by the pet, not the explorer (timed challenges ignore it). */ helper?: boolean; /** A boss blocked part of it (jump-rules.ts BLOCK): the hit came from the ground or a single jump's height. */ blocked?: boolean;
   /** Where the hit came from (elite-roles.ts HitSource): set here, by the shared simulation, so the server sees the same. */ source?: HitSource }
-export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'|'toss'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number;
+export interface CombatEffect extends CombatPoint { /** Where it came from (elite-roles.ts HitSource), like CombatHit.source: breakable scenery reads it (breakables.ts). */ source?: HitSource; kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'|'toss'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number;
   /** Metres above the ground at its origin: a cast from the air (air-cast.ts; solo, the server never sets it). */
   y?: number;
   /** How the view dresses it (skill-fx.ts): 'eyes' twin eye lasers, 'burn' a laser scorch, 'shock' an electric burst. Same hit either way. */
@@ -261,7 +261,7 @@ export class CombatSimulation {
   /** A creature's blow, shot or area reached summon `id`: it loses `amount` hit points and pops at 0. True when it was hit. */
   hurtAlly(id:number,amount:number){
     const ally=this.allies.find(a=>a.id===id);if(!ally||!((ally.hp??0)>0)||!Number.isFinite(amount)||amount<=0)return false;
-    ally.hp=Math.max(0,ally.hp!-amount);ally.hurt=.25;this.emit('impact',{x:ally.x,z:ally.z},.5,'#ffffff');if(ally.hp<=0)this.pop(ally);return true;
+    ally.hp=Math.max(0,ally.hp!-amount);ally.hurt=.25;this.tagged('summon',()=>this.emit('impact',{x:ally.x,z:ally.z},.5,'#ffffff'));if(ally.hp<=0)this.pop(ally);return true;
   }
   /** Online the server owns summon health: its count arrives here (0 pops it). */
   setAllyHp(id:number,hp:number){const ally=this.allies.find(a=>a.id===id);if(!ally||ally.hp===undefined||!Number.isFinite(hp))return;if(hp<ally.hp)ally.hurt=.25;ally.hp=Math.max(0,Math.min(ally.maxHp??hp,hp));if(ally.hp<=0)this.pop(ally);}
@@ -290,13 +290,15 @@ export class CombatSimulation {
   reset(){this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.chainStep=-1;this.chainAt=-Infinity;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.crew.reset();this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
-  private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{}),...(quiet?{quiet:true}:{}),...this.up(point)});}
+  private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,source:this.hitSource(),...(look?{look}:{}),...(quiet?{quiet:true}:{}),...this.up(point)});}
   private visual(look:EffectLook,point:CombatPoint,radius:number,duration:number,color='#cfb5f5',facing=this.host.facing()){this.host.effect({x:point.x,z:point.z,kind:'cast',look,radius,duration,color,facing,...this.up(point)});}
   private later(delay:number,run:()=>void){const power=this.power,grounded=this.grounded,cap=this.castCap;this.jobs.push({at:this.time+delay,run:power===1&&!grounded&&!cap?run:()=>{const old=this.power,oldGrounded=this.grounded,oldCap=this.castCap;this.power=power;this.grounded=grounded;this.castCap=cap;try{run();}finally{this.power=old;this.grounded=oldGrounded;this.castCap=oldCap;}}});}
   /** Set while a pet projectile deals its damage. */
   private helperShot=false;
   /** The hit source (elite-roles.ts): set round a dive, a Quake ring and the projectile loop; `basicCall` while basic() runs. */
   private tag:HitSource|undefined;private basicCall=false;
+  /** The source of a hit or effect made now (see `tag`). */
+  private hitSource():HitSource{return this.striking?'power':this.tag??(this.helperShot?'pet':this.summonHit?'summon':this.basicCall?'melee':'skill');}
   private tagged<R>(tag:HitSource,run:()=>R):R{const old=this.tag;this.tag=tag;try{return run();}finally{this.tag=old;}}
   /** Set while a summon (clone, bat, parrot, tree, lighthouse, turret, cannon) deals damage: pets and summons never heal their owner. */
   private summonHit=false;
@@ -315,7 +317,7 @@ export class CombatSimulation {
     const share=this.edge.scale?.(target)??1;
     const amount=Math.max(1,Math.min(this.hitCap,own&&this.castCap?this.castCap(target):Infinity,Math.round(stats.attack*multiplier*this.power*bonus*(own?this.edge.bonus:1)*share*(critical?((own?this.edge.crit?.():undefined)??stats.critDamage??2):1)*(.9+this.random()*.2))));
     if(own&&this.edge.sure){this.edge.sure=false;this.edge.spent?.();}
-    const source:HitSource=this.striking?'power':this.tag??(this.helperShot?'pet':this.summonHit?'summon':this.basicCall?'melee':'skill');
+    const source=this.hitSource();
     const applied=this.host.hit(target,{amount,critical:critical||shown,stun,lift,knock,direction:direction(angle),source,...(this.helperShot?{helper:true}:{}),...(share<1?{blocked:true}:{})});
     const dealt=typeof applied==='number'?Math.max(0,Math.min(amount,applied)):amount;
     if(own)this.crew.noteStruck(target.id,this.time); // the explorer's own blow: its pets may join in (pet-guard.ts)
@@ -332,7 +334,7 @@ export class CombatSimulation {
   private spot(range:number,fallback:number,d:CombatPoint){const t=this.nearest(range),p=this.host.position();return t?{x:t.x,z:t.z}:{x:p.x+d.x*fallback,z:p.z+d.z*fallback};}
   private burst(shot:Projectile,point:CombatPoint){this.emit('impact',point,.7,shot.color,this.host.facing(),ELECTRIC_SHOTS.has(shot.kind)?'shock':'blast');this.area(point,shot.burst!,shot.multiplier,shot.stun,shot.burstLift??0,shot.color,1.5,ELECTRIC_SHOTS.has(shot.kind)?'shock':'blast');}
   private arc(radius:number,multiplier:number,threshold:number,target?:CombatTarget,knock=1.2,lift=0,/** Which creatures `lift` raises (default: every ordinary one). */lifts?:(enemy:CombatTarget)=>boolean){
-    const p=this.host.position(),d=direction(this.host.facing());this.host.effect({x:p.x,z:p.z,kind:'arc',radius,color:this.host.weapon().fx??'#fff4c8',facing:this.host.facing(),arc:2*Math.acos(Math.max(-1,Math.min(1,threshold))),...this.up(p)});
+    const p=this.host.position(),d=direction(this.host.facing());this.host.effect({x:p.x,z:p.z,kind:'arc',source:this.hitSource(),radius,color:this.host.weapon().fx??'#fff4c8',facing:this.host.facing(),arc:2*Math.acos(Math.max(-1,Math.min(1,threshold))),...this.up(p)});
     for(const enemy of this.host.targets()){
       const x=enemy.x-p.x,z=enemy.z-p.z,length=Math.hypot(x,z);
       if(enemy.hp>0&&length<=radius+enemy.radius&&(enemy===target||length===0||(x*d.x+z*d.z)/length>=threshold))this.damage(enemy,multiplier,.15,enemy.boss||(lifts&&!lifts(enemy))?0:lift,knock);
@@ -416,7 +418,7 @@ export class CombatSimulation {
   land(){
     const p=this.plunge;if(!p)return false;this.plunge=null;const old=this.power;this.power=p.power;
     if(p.height!==undefined){try{this.quakeRing(p.radius,skyQuakePower(p.height),AIR_MOVES.dive.lift,AIR_MOVES.dive.stun,'skyquake',skyQuakeCap);}finally{this.power=old;}return true;}
-    try{this.area(this.host.position(),p.radius,2.3,.8,2.5,'#ffd091',1.2,'crater');}finally{this.power=old;}return true;
+    try{this.tagged('quake',()=>this.area(this.host.position(),p.radius,2.3,.8,2.5,'#ffd091',1.2,'crater'));}finally{this.power=old;}return true;
   }
   /** A Root Quake is waiting for the landing. */
   get plunging(){return !!this.plunge;}
@@ -700,7 +702,7 @@ export class CombatSimulation {
     const target=this.crew.target(dog,position,this.host.targets(),dog.target??this.host.focus?.(),this.time);if(!target||Math.hypot(target.x-dog.x,target.z-dog.z)-target.radius>DOG_TOSS_RANGE+2)return;
     const from={x:dog.x,z:dog.z},dmg=dog.dmg;this.dogCooldown=dog.cd;
     this.emit('toss',from,Math.hypot(target.x-from.x,target.z-from.z),'#fff1d6',Math.atan2(target.x-from.x,target.z-from.z));
-    this.later(DOG_TOSS_FLIGHT,()=>{if(target.hp<=0||Math.hypot(target.x-from.x,target.z-from.z)>DOG_TOSS_RANGE+3+target.radius)return;this.helperShot=true;this.damage(target,dmg,0,0,.4);this.helperShot=false;/* the puppy's kill is not the player's for timed challenges */this.emit('impact',target,.45,'#fff1d6');});
+    this.later(DOG_TOSS_FLIGHT,()=>{if(target.hp<=0||Math.hypot(target.x-from.x,target.z-from.z)>DOG_TOSS_RANGE+3+target.radius)return;this.helperShot=true;this.damage(target,dmg,0,0,.4);/* the puppy's kill is not the player's for timed challenges */this.emit('impact',target,.45,'#fff1d6');this.helperShot=false;});
   }
   /** The pets' fight memory and guard cooldowns (pet-guard.ts): who is fighting the explorer, and when each guard is ready. */
   readonly crew=new PetCrew();
@@ -793,7 +795,7 @@ export class CombatSimulation {
         for(const t of this.host.targets()){const x=t.x-ally.x,z=t.z-ally.z,l=Math.hypot(x,z);if(t.hp<=0||l>L.reach+t.radius||l<.01)continue;
           const off=Math.abs(Math.atan2(x*beam.z-z*beam.x,x*beam.x+z*beam.z)),key=ally.id+':'+t.id;
           if(off>L.width+Math.atan2(t.radius,l)||(this.rehits.get(key)??-1)>this.time)continue;
-          this.rehits.set(key,this.time+L.rehit);this.summonHit=true;this.damage(t,L.power);this.summonHit=false;this.host.status?.(t,'blind',L.blind);this.emit('impact',t,.9,'#fff4b0');}
+          this.rehits.set(key,this.time+L.rehit);this.summonHit=true;this.damage(t,L.power);this.emit('impact',t,.9,'#fff4b0');this.summonHit=false;this.host.status?.(t,'blind',L.blind);}
         continue;
       }
       const home=this.host.position(),targets=this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-ally.x,t.z-ally.z)<13&&(ally.kind!=='clone'||Math.hypot(t.x-home.x,t.z-home.z)<DECOY.range+DZ.clones.reach+t.radius)).sort((a,b)=>Math.hypot(a.x-ally.x,a.z-ally.z)-Math.hypot(b.x-ally.x,b.z-ally.z)),target=targets[0];
@@ -807,13 +809,13 @@ export class CombatSimulation {
       if(ally.cooldown>0)continue;
       if(ally.kind==='turret'||ally.kind==='cannon'){const T=ally.kind==='turret'?DZ.turret:DZ.cannon;if(distance>T.range+target.radius)continue;this.shoot(ally.kind==='turret'?'volt':'cannonball',angle,T.power,T.range+1,{x:ally.x,z:ally.z,explosion:ally.kind==='cannon'?2:0,summoned:true});ally.cooldown=T.cd;this.emit('cast',ally,.6,ally.kind==='turret'?ELECTRIC_COLOR:'#d2b9ff');}
       else if(distance<target.radius+reach){
-        if(ally.kind==='tree'){this.summonHit=true;this.damage(target,DZ.tree.power,0,0,.5);this.summonHit=false;ally.cooldown=DZ.tree.cd;this.emit('ring',ally,DZ.tree.radius,'#8dff8a');continue;}
+        if(ally.kind==='tree'){this.summonHit=true;this.damage(target,DZ.tree.power,0,0,.5);this.emit('ring',ally,DZ.tree.radius,'#8dff8a');this.summonHit=false;ally.cooldown=DZ.tree.cd;continue;}
         const power=ally.kind==='bat'?DZ.batcircle.power:ally.kind==='parrot'?DZ.parrot.power:DZ.clones.power;
-        this.summonHit=true;this.damage(target,power,.1);this.summonHit=false;ally.cooldown=ally.kind==='parrot'?DZ.parrot.cd:ally.kind==='clone'?DZ.clones.cd:.7;this.emit('arc',ally,1,ally.kind==='parrot'?'#ff5a4a':'#c6b2ee',angle);
+        this.summonHit=true;this.damage(target,power,.1);this.summonHit=false;ally.cooldown=ally.kind==='parrot'?DZ.parrot.cd:ally.kind==='clone'?DZ.clones.cd:.7;this.tagged('summon',()=>this.emit('arc',ally,1,ally.kind==='parrot'?'#ff5a4a':'#c6b2ee',angle));
         if(ally.kind==='bat')this.leech(DZ.batcircle.heal*(this.host.stats().maxHp??100));if(ally.kind==='parrot'&&target.hp>0)this.marked.set(target.id,DZ.parrot.mark);}
     }
     for(let i=this.projectiles.length-1;i>=0;i--){const shot=this.projectiles[i];if(shot.kind==='snowball')shot.radius=Math.min(2.6,shot.radius+DZ.snowball.grow*dt);if(shot.homing){const target=this.host.targets().find(t=>t.id===shot.homing&&t.hp>0);if(target){const a=Math.atan2(target.x-shot.x,target.z-shot.z),old=Math.atan2(shot.direction.x,shot.direction.z),turn=Math.atan2(Math.sin(a-old),Math.cos(a-old));shot.direction=direction(old+Math.max(-dt*5,Math.min(dt*5,turn)));}}const from={x:shot.x,z:shot.z},step=Math.min(shot.speed*dt,shot.remaining),to={x:shot.x+shot.direction.x*step,z:shot.z+shot.direction.z*step};
-      if(this.host.clearShot&&!this.host.clearShot(from,to)){if(shot.burst)this.burst(shot,from);else this.emit('impact',from,.4,shot.color);this.projectiles.splice(i,1);continue;}
+      if(this.host.clearShot&&!this.host.clearShot(from,to)){this.tagged(shot.helper?'pet':shot.summoned?'summon':shot.basic?'shot':'skill',()=>{if(shot.burst)this.burst(shot,from);else this.emit('impact',from,.4,shot.color);});this.projectiles.splice(i,1);continue;}
       shot.x=to.x;shot.z=to.z;shot.remaining-=step;let consumed=false;
       const focus=shot.helper?this.host.focus?.():undefined,targets=this.host.targets().filter(t=>t.hp>0&&!shot.hit.has(t.id)&&distanceToSegment(t,from,to)<=t.radius+shot.radius&&(!shot.helper||this.crew.engaged(t,focus,this.time))/* a pet's shot passes a peaceful creature by */).sort((a,b)=>Math.hypot(a.x-from.x,a.z-from.z)-Math.hypot(b.x-from.x,b.z-from.z));
       this.helperShot=!!shot.helper;this.summonHit=!!shot.summoned;const oldTag=this.tag;this.tag=shot.helper?'pet':shot.summoned?'summon':shot.basic?'shot':'skill';for(const target of targets){shot.hit.add(target.id);

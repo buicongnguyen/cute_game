@@ -28,6 +28,7 @@ import { kitsFor } from './biomes.ts';
 import { ENEMY_TYPES } from './enemy-types.ts';
 import { FishingView, type PondView } from './fishing-view.ts';
 import { PondSplash } from './pond-splash.ts';
+import { mountBreakables } from './breakables-game.ts';
 import { FishHuntingView } from './fish-hunting-view.ts';
 import { FISH_HUNT_COOLDOWN_MS, fishHuntTargets, huntingPondAt, type FishHuntResult } from './fish-hunting.ts';
 import { LakeGuardianView, guardianLake } from './lake-guardian-view.ts';
@@ -352,7 +353,7 @@ const combat=new CombatSimulation({
   // The first own hit after a weapon swap does +20% (weapon-pair.ts); a pet's shot leaves the bonus waiting.
   hit:(target,impact)=>{const m=impact.helper?1:pair.takeBonus();if(m!==1)impact={...impact,amount:impact.amount*m};hit(target as Enemy,impact.amount,impact.stun,impact);},
   clearShot:(from,to)=>clearSegment(from,to,world.obstacles,{bounds:WORLD_BOUNDS,clearance:.05}),
-  effect:effect=>{castEffects?.push(effect);showEffect(effect);pondSplash.effect(effect);emitAction({kind:'effect',effect});},
+  effect:effect=>{castEffects?.push(effect);showEffect(effect);pondSplash.effect(effect);breakables.effect(effect);emitAction({kind:'effect',effect});},
   heal:fraction=>{if(!actionHandler)state.hp=Math.min(M.maxHp(state),state.hp+M.maxHp(state)*fraction);},
   execute:(target,fraction)=>executeEnemy(target as Enemy,fraction),
   status:(target,kind,duration)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){world.statusEnemy(target as Enemy,kind,duration);return;}if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
@@ -986,6 +987,12 @@ function mysteryGotAway(f:FishingRound){if(!f.mysteryOut)return;f.mysteryOut=fal
 const pondSplash=new PondSplash({root:()=>world.interior?null:world.scene,fx:()=>world.fx??null,now:()=>world.time,reduced:()=>!!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
   ponds:()=>world.interior?[]:world.outdoorEntities.filter(e=>e.kind==='fish'&&e.pond).map(e=>({id:e.id,x:e.x,z:e.z,r:e.pond!.rx,surface:e.pond!.surface,waterId:e.waterId??state.planet})),
   fish:species=>fishKit.ready?fishingView.makeFish(species):null,species:waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id]?.rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';}});
+// Breakable trees and stones on the Ice planet (breakables.ts): solo the ledger here decides, online the server does.
+const breakables=mountBreakables({world,state:()=>state,online:()=>!!actionHandler,send:(id,source)=>emitAction({kind:'scenery',scenery:{id,source}}),addItem:(id,n)=>M.addItem(state,id as M.ItemId,n),changed:()=>{save();updateHud();},toast,tone,t:(k,v)=>t(k,v)});
+/** Attack with no creature in reach: the nearest breakable piece in front within the weapon's reach is struck (a swing, or a shot from a gun). */
+function chopScenery(){const weapon=M.weaponStats(state);if(weapon.kind==='rod')return false;const gun=weapon.kind==='gun',piece=breakables.chopTarget(world.position,world.facing,gun?Math.min(10,(weapon.range??8)+1):Math.max(1.6,weapon.range??1)+.6);if(!piece)return false;
+  world.facing=Math.atan2(piece.x-world.position.x,piece.z-world.position.z);combatTimers.attackCooldown=(weapon.cd??.4)/Math.max(.2,1+M.activeStats(state).haste);world.playerAttack(weapon.kind);tone(gun?'shoot':weapon.kind==='sword'?'swing':'punch');
+  if(gun)world.fx?.spark({x:piece.x,y:1.1,z:piece.z},1,.1);breakables.strike(piece.id,gun?'shot':'melee');return true;}
 const huntingView=new FishHuntingView(world.scene,fishingView);
 const guardianView=new LakeGuardianView(world.scene,fishingView);
 let huntingPending:{owner:M.SaveState;scene:typeof world.root}|null=null;
@@ -1657,6 +1664,7 @@ function releasePower(level:number,air:boolean){
   if(shape==='beam')combatView.effect({x:p.x,z:p.z,kind:'beam',radius:area.length,width:area.half*2,color:brighter(color),facing:world.facing,duration:.3});
   if(fx){powerFx.play(fx,shape,level,{x:p.x,y:p.y,z:p.z},world.facing,color);fx.freeze(shape==='wave'?POWER.stop*.5:POWER.stop);fx.shake(level>1?.42:.32);fx.text({x:p.x,y:p.y+1.4,z:p.z},t(level>1?'POWER STRIKE ×2!':'POWER STRIKE!'),'crit big');}
   pondSplash.power(shape,level,p,world.facing); // a pond in the strike's area bursts (pond-splash.ts)
+  breakables.power(target=>powerReach(shape,level,p,world.facing,target)>=0,p,Math.max(area.length,area.radius)); // and breakable scenery takes the blow (breakables.ts)
   tone('boom');tone('zap');vibrate(60);noteChain(t('POWER!'));emitAction({kind:'basic'});
 }
 /** A ground attack passed under the explorer. A perfect one (solo) slows the moment and makes the next hit a sure critical. */
@@ -1742,6 +1750,8 @@ function basicAttack(e?:Enemy){
     // The chain's three presses (five-rules.ts): cut, back-cut, overhead with a blade; jab, jab, hook with paws; the third lands heavier, and a gun's is a double shot.
     if(step<0)world.playerAttack(weapon.kind,volt?'#bfefff':undefined);else{world.playerAttack(weapon.kind,volt?'#bfefff':undefined,step as 0|1|2,step===2);if(step===2){world.fx?.shake(.07);if(weapon.kind==='gun')setTimeout(()=>tone(volt?'zap':'shoot'),90);}}
     tone(volt?'zap':weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
+  // Nothing in reach but a breakable tree or stone (breakables.ts): face it and strike it.
+  else if(!e&&chopScenery()){/* struck */}
   // Nothing in reach: the hero still swings (with jumping on), so the button never looks dead.
   else if(!e&&airOn()){const weapon=M.weaponStats(state);if(weapon.kind!=='rod'){combatTimers.attackCooldown=(weapon.cd??.4)*.6;world.playerAttack(weapon.kind);tone('swing');}}
 }
@@ -2210,7 +2220,7 @@ function frame(now:number){
   const weaponKind=M.weaponStats(state).kind;world.weaponKind=state.gear.weapon&&M.ITEMS[state.gear.weapon]?.weapon?.kind==='rod'?'rod':weaponKind;world.pose=combat.pose;world.invulnerable=combatTimers.invulnerable>0;world.fishTension=fishGame?.simulation.tension??0;
   autoAttack(weaponKind);
   updateHunting(dt);updateGuardian(dt);
-  pondSplash.update(dt);fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);
+  pondSplash.update(dt);breakables.update(dt);fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);
   skillFx.update(dt);world.gazeAngle=skillFx.gazeAngle(world.player);
   if(!fishGame&&!$('#reel-button').hidden&&!$('#reel-button').classList.contains('hunt')&&(performance.now()>recastUntil||world.moving))showReel(false);
   // Resizing the WebGL canvas clears its drawing buffer. Apply automatic quality changes
@@ -2291,4 +2301,4 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

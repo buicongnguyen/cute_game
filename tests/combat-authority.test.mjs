@@ -12,13 +12,13 @@ import {enemyRoster} from '../src/enemy-roster.ts';
 import {ENEMY_TYPES} from '../src/enemy-types.ts';
 import {createEnvironmentLayout,terrainHeight} from '../src/environments.ts';
 
-async function fixture(t,{planet='home',profile:configure=()=>{}}={}){
+async function fixture(t,{planet='home',profile:configure=()=>{},options={}}={}){
  const dataDir=await mkdtemp(path.join(tmpdir(),'cute-combat-authority-')),store=await createAccountStore({dataDir,databaseUrl:''}),profile=Game.newGame();profile.planet=planet;configure(profile);
  const account=await store.create({id:'actor',username:'actor',hash:'fixture-hash',salt:'fixture-salt',profile,friends:[],requests:[],profileRevision:0});
  const peer={account,active:true,visit:null,planet,room:'public:'+planet,pose:{x:planet==='home'?-30:30,z:1,facing:0,moving:false},socket:{}},peers=new Map([['actor',peer]]),room={id:peer.room,members:new Set(['actor']),host:'actor',enemies:[],killed:new Set()},rooms=new Map([[room.id,room]]);
  const messages=[],waiters=[];const emit=value=>{messages.push(structuredClone(value));for(const waiter of [...waiters])if(waiter.predicate(value)){clearTimeout(waiter.timer);waiters.splice(waiters.indexOf(waiter),1);waiter.resolve(structuredClone(value));}};
  const remember=value=>{Object.assign(account,value);const live=peers.get(value.id);if(live)live.account=account;return account;};
- let deaths=0;const authority=createCombatAuthority({store,peers,rooms,remember,onError:error=>t.diagnostic(error.stack),send:(_,value)=>emit(value),broadcast:(_,value)=>emit(value),onDeath:p=>{deaths++;p.planet='home';p.room='public:home';p.pose={x:0,z:0,facing:0,moving:false};}});
+ let deaths=0;const authority=createCombatAuthority({store,peers,rooms,remember,onError:error=>t.diagnostic(error.stack),send:(_,value)=>emit(value),broadcast:(_,value)=>emit(value),onDeath:p=>{deaths++;p.planet='home';p.room='public:home';p.pose={x:0,z:0,facing:0,moving:false};},...options});
  t.after(async()=>{await authority.close();await store.close();});
  const next=(predicate,from=messages.length)=>{const found=messages.slice(from).find(predicate);if(found)return Promise.resolve(found);return new Promise((resolve,reject)=>{const waiter={predicate,resolve,timer:setTimeout(()=>reject(new Error('Missing authority event')),3000)};waiters.push(waiter);});};
  function spawn(type,x=planet==='home'?-30:30,z=0,extra={}){const definition=enemyRoster(planet).find(e=>e.type===type);assert.ok(definition,type);authority.acceptSnapshots(room,[{id:definition.id,type,x,z,hp:1,...extra}]);return authority.state(room).enemies.get(definition.id);}
@@ -331,4 +331,27 @@ test('weapon pair online: the server holds the weapon in hand from swap packets,
  assert.ok(after<bonus,'the bonus is spent');
  // No side gun any more: the server falls back to the main hand and refuses the side.
  delete f.account.profile.gear.side;t.mock.timers.tick(1000);assert.equal(f.authority.swap(f.peer,'side'),false);assert.equal(engine.pair.hand,'main');
+});
+test('breakable scenery: the server wears, breaks and regrows a piece for the room, holds it near a fighting boss, and caps the wood',async t=>{
+ const f=await fixture(t,{planet:'ice',options:{sceneryRandom:()=>0}}),tree='snow_pine@305:10',stone='snow_rock@310:-20',now=()=>Date.now()/1000;
+ const hits=id=>f.messages.filter(m=>m.type==='scenery'&&m.id===id);
+ // Pets never wear scenery; a piece out of reach or of another type is refused; so is any hit off the Ice planet.
+ assert.equal(f.authority.scenery(f.peer,tree,'pet'),null);assert.equal(f.authority.scenery(f.peer,'snow_pine@900:10','melee'),null);assert.equal(f.authority.scenery(f.peer,'ice_spire@305:10','melee'),null);
+ // Nine basic hits fell a tree (one counted per rehit gap: the ledger's clock is pinned by waiting it out).
+ const ledger=f.room.scenery??(f.authority.scenery(f.peer,tree,'melee'),f.room.scenery);assert.ok(ledger);
+ for(let i=0;i<20&&!ledger.broken(tree);i++){ledger['last'].clear();f.authority.scenery(f.peer,tree,'melee');}
+ const wear=hits(tree);assert.equal(wear.filter(m=>m.outcome==='wear').length,8);assert.equal(wear.at(-1).outcome,'break');assert.equal(wear.at(-1).hp,0);
+ // Pinned random 0: it regrows after exactly 180 s, and not while someone stands on the spot.
+ assert.ok(Math.abs(ledger.get(tree).regrowAt-(now()+180))<2);
+ const wood=await f.next(m=>m.type==='sceneryWood',0);assert.equal(wood.wood,1);const saved=await f.store.get('actor');assert.equal(saved.profile.bag.wood,1);
+ ledger.get(tree).regrowAt=now()-1;f.peer.pose.x=30.5;f.peer.pose.z=1;f.authority.engineFor(f.peer);
+ await new Promise(r=>setTimeout(r,1150));assert.ok(ledger.broken(tree),'the explorer stands on the spot: no regrowth');
+ f.peer.pose.x=34;await new Promise(r=>setTimeout(r,1150));assert.ok(!ledger.broken(tree));assert.equal(hits(tree).at(-1).outcome,'regrow');
+ // A boss fighting within 28 m holds the stone: the hit shows ('held') but no damage counts, and it counts again after the fight.
+ const boss=f.spawn('yeti',40,-2,{phase:'chase',hp:18720});assert.ok(boss.boss);f.peer.pose.x=31;f.peer.pose.z=-2;
+ ledger['last'].clear();assert.equal(f.authority.scenery(f.peer,stone,'quake').outcome,'held');assert.equal(ledger.get(stone),undefined);
+ boss.phase='idle';ledger['last'].clear();await new Promise(r=>setTimeout(r,760));const worn=f.authority.scenery(f.peer,stone,'quake');assert.equal(worn.outcome,'wear');assert.equal(worn.hp,14-3.5);
+ // A stone takes several heavy blows: four Quakes crack it apart (one heavy blow per 0.7 s).
+ for(let i=0;i<3;i++){ledger['last'].clear();await new Promise(r=>setTimeout(r,720));f.authority.scenery(f.peer,stone,'quake');}assert.ok(ledger.broken(stone));
+ assert.equal(f.messages.filter(m=>m.type==='sceneryWood').length,1,'a stone drops nothing');
 });

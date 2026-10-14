@@ -4,7 +4,7 @@ import type { CombatHit, CombatEffect } from './combat.ts';
 import type {GameIntent,ActionReply} from './actions.ts';
 export type EnemyStatus='fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun';
 export interface GamePresence { y:number;x:number;z:number;facing:number;planet:string;name:string;color:string;level:number;hp:number;maxHp:number;gear:SaveState['gear'];moving:boolean;visible:boolean;visual?:{size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean} }
-export interface GameAction { kind:'basic'|'skill'|'effect'|'swap';/** 'swap': the hand now out (weapon-pair.ts). */hand?:'main'|'side';targetId?:string;index?:number;special?:string;x:number;z:number;facing:number;effect?:unknown }
+export interface GameAction { kind:'basic'|'skill'|'effect'|'swap'|'scenery';/** 'scenery': a hit on breakable scenery (breakables.ts), for the server to decide. */scenery?:{id:string;source:string};/** 'swap': the hand now out (weapon-pair.ts). */hand?:'main'|'side';targetId?:string;index?:number;special?:string;x:number;z:number;facing:number;effect?:unknown }
 export interface NetworkHooks {
   role:'host'|'peer'|null;
   visitCrop?:(index:number)=>void;
