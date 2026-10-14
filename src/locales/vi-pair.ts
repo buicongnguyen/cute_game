@@ -1,6 +1,7 @@
 // Vietnamese for the weapon pair (weapon-pair.ts, pair-ui.ts, main.ts, help-topics.ts).
 export const PAIR_VI: Record<string, string> = {
   'Side gun': 'Súng phụ',
+  'Side gun · level {level}': 'Súng phụ · cấp {level}',
   'Side slot': 'Ô phụ',
   'Side slot at level {level}': 'Ô phụ mở ở cấp {level}',
   'Weapon swap': 'Đổi vũ khí',
