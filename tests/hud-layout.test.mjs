@@ -265,7 +265,7 @@ for (const [name, view] of Object.entries(DESKTOP)) {
       if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/desktop-${view.viewport.width}x${view.viewport.height}.png` });
       // Switching from the default WASD layout to classic updates the guide; folding is remembered on this device.
       await page.evaluate(() => { window.__zoo.state.settings.keyboardLayout = 'classic'; });
-      await page.waitForFunction(() => /↑←↓→/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')) && /QWER/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')));
+      await page.waitForFunction(() => /↑←↓→/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')) && /SkillsQWEPower/.test(document.querySelector('#keys-guide').textContent.replace(/\s/g, '')));
       await page.click('#keys-guide .keys-toggle'); await page.waitForTimeout(300);
       const folded = await page.evaluate(BOX => ({ box: (0, eval)(BOX)(document.querySelector('#keys-guide')), list: !!document.querySelector('#keys-guide dl'), saved: localStorage.getItem('zoo-garden-keys-guide') }), BOX);
       assert.equal(folded.list, false); assert.ok(folded.box.r - folded.box.l <= 48, 'folded to a small ⌨️ chip'); assert.match(folded.saved, /"closed"/);
