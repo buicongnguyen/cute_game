@@ -1,5 +1,6 @@
 // Vietnamese for the help dialog (help-topics.ts).
 // Loaded only for Vietnamese players (locales/vi-pack.ts); the English text lives in the shared content module.
+import { ELITE_HELP_VI } from './vi-elite.ts';
 import { HELP_TOPICS } from '../help-topics.ts';
 import { JUMP_HELP_VI } from './vi-jump.ts';
 import { MOVES_HELP_VI } from './vi-moves.ts';
@@ -35,6 +36,7 @@ const ROWS: ReadonlyArray<readonly [string, string, string]> = [
   ['Jump and air combat', JUMP_HELP_VI[0], JUMP_HELP_VI[1]],
   ['Four moves', MOVES_HELP_VI[0], MOVES_HELP_VI[1]],
   ['Power strike', POWER_HELP_VI[0], POWER_HELP_VI[1]],
+  ['Elite creatures', ELITE_HELP_VI[0], ELITE_HELP_VI[1]],
 ];
 const VI_BY_TITLE = new Map(ROWS.map(([title, viTitle, viBody]) => [title, [viTitle, viBody] as const]));
 export const HELP_TOPICS_VI: Record<string, string> = Object.fromEntries(HELP_TOPICS.flatMap(([, title, body]) => [[title, VI_BY_TITLE.get(title)![0]], [body, VI_BY_TITLE.get(title)![1]]]));

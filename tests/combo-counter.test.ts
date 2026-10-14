@@ -116,5 +116,6 @@ test('every new line reads in Vietnamese, with its placeholders and numbers kept
   for (const line of ['{count} hits · {damage}', 'New best!', 'Power strike', 'POWER READY!', 'POWER ×2!', 'POWER STRIKE!', 'POWER STRIKE ×2!', 'POWER!', 'Power strike ready! Tap the glowing button above the paw.', 'Power strike ready! Press G or click the glowing button.', 'HITS', 'LAUNCH!', 'FINISHER!']) { assert.ok(VI_PACK[line], 'missing: ' + line); assert.ok(main.includes(`'${line}'`), 'main.ts uses: ' + line); }
   const topic = HELP_TOPICS.find(([, title]) => title === 'Power strike')!; assert.equal(VI_PACK[topic[1]], POWER_HELP_VI[0]); assert.equal(VI_PACK[topic[2]], POWER_HELP_VI[1]);
   assert.deepEqual(POWER_HELP_VI[1].match(/\d+/g), topic[2].match(/\d+/g), 'the same numbers in both languages');
-  assert.equal(HELP_TOPICS[HELP_TOPICS.length - 1][1], 'Power strike', 'added at the end, so the older topics keep their order');
+  const at = (title: string) => HELP_TOPICS.findIndex(([, t]) => t === title); // later topics (the elite creatures) may follow it
+  assert.ok(at('Power strike') === at('Four moves') + 1, 'added after the older topics, so they keep their order');
 });

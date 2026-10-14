@@ -1,9 +1,11 @@
+import type { HitSource } from './elite-roles.ts';
 import { POWER, powerCap, powerDelay, powerReach, powerShare, type PowerShape } from './power-rules.ts';
 export interface CombatPoint { x: number; z: number }
 export interface WeaponProfile { kind: 'fist'|'sword'|'gun'|'rod'; range?: number; cd?: number; arc?: number; special?: string; shot?: string; spread?: number; quality?: number; fx?: string }
 export interface CombatTarget extends CombatPoint { id: string; hp: number; maxHp?:number; boss?:boolean; radius: number; stun?: number; facing?:number; /** Its AI phase (world.ts, the server's copy): a pet only shoots a creature that is after someone (pet-guard.ts hostilePhase). */ phase?:string }
 export interface CombatStats { attack: number; maxHp?:number; critChance: number; critDamage?: number; haste?: number; lifesteal?: number }
-export interface CombatHit { amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint; /** Dealt by the pet, not the explorer (timed challenges ignore it). */ helper?: boolean; /** A boss blocked part of it (jump-rules.ts BLOCK): the hit came from the ground or a single jump's height. */ blocked?: boolean }
+export interface CombatHit { amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint; /** Dealt by the pet, not the explorer (timed challenges ignore it). */ helper?: boolean; /** A boss blocked part of it (jump-rules.ts BLOCK): the hit came from the ground or a single jump's height. */ blocked?: boolean;
+  /** Where the hit came from (elite-roles.ts HitSource): set here, by the shared simulation, so the server sees the same. */ source?: HitSource }
 export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'|'toss'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number;
   /** Metres above the ground at its origin: a cast from the air (air-cast.ts; solo, the server never sets it). */
   y?: number;
@@ -141,7 +143,7 @@ export interface CombatHost {
   /** Metres the explorer is above the ground in a jump (the solo game with jumping on); missing = 0. */
   height?():number;
 }
-export interface Projectile extends CombatPoint { id: number; direction: CombatPoint; speed: number; remaining: number; radius: number; color: string; kind: string; multiplier: number; hit: Set<string>; pierce: boolean; stun: number; lift: number; explosion: number; homing?:string; initialRadius?:number; helper?: boolean; /** Fired by a summon (turret, cannon): it never heals the explorer. */ summoned?: boolean;
+export interface Projectile extends CombatPoint { id: number; direction: CombatPoint; speed: number; remaining: number; radius: number; color: string; kind: string; multiplier: number; hit: Set<string>; pierce: boolean; stun: number; lift: number; explosion: number; homing?:string; initialRadius?:number; helper?: boolean; /** A basic attack's shot (a gun): elite-roles.ts 'shot'. */ basic?: boolean; /** Fired by a summon (turret, cannon): it never heals the explorer. */ summoned?: boolean;
   /** Bursts in an area of this radius where it lands (first creature, or the end of its flight) instead of a direct hit. */
   burst?:number; burstLift?:number;
   /** Fired from the air (solo): the height it left from and the range it had then; it is drawn flying down to its target. */
@@ -285,6 +287,9 @@ export class CombatSimulation {
   private later(delay:number,run:()=>void){const power=this.power,grounded=this.grounded,cap=this.castCap;this.jobs.push({at:this.time+delay,run:power===1&&!grounded&&!cap?run:()=>{const old=this.power,oldGrounded=this.grounded,oldCap=this.castCap;this.power=power;this.grounded=grounded;this.castCap=cap;try{run();}finally{this.power=old;this.grounded=oldGrounded;this.castCap=oldCap;}}});}
   /** Set while a pet projectile deals its damage. */
   private helperShot=false;
+  /** The hit source (elite-roles.ts): set round a dive, a Quake ring and the projectile loop; `basicCall` while basic() runs. */
+  private tag:HitSource|undefined;private basicCall=false;
+  private tagged<R>(tag:HitSource,run:()=>R):R{const old=this.tag;this.tag=tag;try{return run();}finally{this.tag=old;}}
   /** Set while a summon (clone, bat, parrot, tree, lighthouse, turret, cannon) deals damage: pets and summons never heal their owner. */
   private summonHit=false;
   /** Life stolen in the current one-second window (HP); see LIFESTEAL_CAP_PER_SECOND. */
@@ -302,7 +307,8 @@ export class CombatSimulation {
     const share=this.edge.scale?.(target)??1;
     const amount=Math.max(1,Math.min(this.hitCap,own&&this.castCap?this.castCap(target):Infinity,Math.round(stats.attack*multiplier*this.power*bonus*(own?this.edge.bonus:1)*share*(critical?((own?this.edge.crit?.():undefined)??stats.critDamage??2):1)*(.9+this.random()*.2))));
     if(own&&this.edge.sure){this.edge.sure=false;this.edge.spent?.();}
-    const applied=this.host.hit(target,{amount,critical:critical||shown,stun,lift,knock,direction:direction(angle),...(this.helperShot?{helper:true}:{}),...(share<1?{blocked:true}:{})});
+    const source:HitSource=this.striking?'power':this.tag??(this.helperShot?'pet':this.summonHit?'summon':this.basicCall?'melee':'skill');
+    const applied=this.host.hit(target,{amount,critical:critical||shown,stun,lift,knock,direction:direction(angle),source,...(this.helperShot?{helper:true}:{}),...(share<1?{blocked:true}:{})});
     const dealt=typeof applied==='number'?Math.max(0,Math.min(amount,applied)):amount;
     if(own)this.crew.noteStruck(target.id,this.time); // the explorer's own blow: its pets may join in (pet-guard.ts)
     const lifesteal=(stats.lifesteal??0)+(this.statuses.lifesteal>0?DZ.bloodnova.lifesteal:0);
@@ -328,7 +334,7 @@ export class CombatSimulation {
     const p=this.host.position(),d=direction(angle);
     // From the air (solo) the explorer's own shot leaves at its height and flies down; a summon's or a pet's starts where that stands.
     const h=extras.helper||extras.summoned||this.grounded?0:this.lift,high=h>0&&Math.hypot((extras.x??p.x)-p.x,(extras.z??p.z)-p.z)<.7?{y:h,reach:Math.max(.5,range)}:{};
-    this.projectiles.push({...high,id:++this.serial,x:p.x+d.x*.6,z:p.z+d.z*.6,direction:d,speed:kind==='wave'||kind==='dragon'?13:kind==='bigbubble'?7:19,remaining:range,radius:kind==='bigbubble'?.8:.22,color:colorFor(kind),kind,multiplier:multiplier*this.power,hit:new Set(),pierce:kind==='wave'||kind==='dragon',stun:kind==='ice'?1.5:0,lift:kind==='bigbubble'?3:0,explosion:kind==='fireball'?2:0,...extras});
+    this.projectiles.push({...high,id:++this.serial,x:p.x+d.x*.6,z:p.z+d.z*.6,direction:d,speed:kind==='wave'||kind==='dragon'?13:kind==='bigbubble'?7:19,remaining:range,radius:kind==='bigbubble'?.8:.22,color:colorFor(kind),kind,multiplier:multiplier*this.power,hit:new Set(),pierce:kind==='wave'||kind==='dragon',stun:kind==='ice'?1.5:0,lift:kind==='bigbubble'?3:0,explosion:kind==='fireball'?2:0,...(this.basicCall?{basic:true}:{}),...extras});
   }
   /** `factor` scales the hit (an air swing, jump-rules.ts AIR.swing); the server never passes it. */
   basic(target?:CombatTarget,factor=1){
@@ -338,12 +344,12 @@ export class CombatSimulation {
     const angle=this.aim(target);
     // The launcher: with edge.launch set, every third melee hit pops ordinary creatures into the air.
     const launch=weapon.kind!=='gun'&&this.edge.launch>0&&(this.swings=(this.swings+1)%3)===0?this.edge.launch:0;
-    this.power=factor;try{
+    this.power=factor;this.basicCall=true;try{
     if(weapon.kind==='gun'){
       const count=Math.max(1,weapon.spread??1);for(let i=0;i<count;i++)this.shoot(weapon.shot??'pea',angle+(count===1?0:(i/(count-1)-.5)*.6),count>1?.45:1,(weapon.range??8)+1);
     }else if(weapon.kind==='sword')this.arc(weapon.range??2,1.1,weapon.arc??.2,target,1.2,launch);
     else{this.combo=(this.combo+1)%3;this.arc(1.6,this.combo===0?1.5:1,.5,target,this.combo===0?2.2:.8,launch);}// the reference's punch knock: 0.8, 2.2 on the third
-    }finally{this.power=1;}
+    }finally{this.power=1;this.basicCall=false;}
     return true;
   }
   /**
@@ -352,7 +358,7 @@ export class CombatSimulation {
    */
   dive(multiplier:number,radius:number,stun:number,knock:number,sure:(target:CombatTarget)=>boolean,cap:(target:CombatTarget)=>number,color='#ffe9a8'){
     const at=this.host.position(),hit=this.within(at,radius);this.emit('ring',at,radius,color,this.host.facing(),'crater');
-    try{for(const target of hit){this.forced=sure(target);this.hitCap=cap(target);this.damage(target,multiplier,stun,0,knock);}}finally{this.forced=false;this.hitCap=Infinity;}
+    this.tagged('dive',()=>{try{for(const target of hit){this.forced=sure(target);this.hitCap=cap(target);this.damage(target,multiplier,stun,0,knock);}}finally{this.forced=false;this.hitCap=Infinity;}});
     return hit;
   }
   /**
@@ -398,7 +404,7 @@ export class CombatSimulation {
       if(index===0){const radius=(this.host.weapon().kind==='sword'?3.4:2.8)+tuning.radius;this.host.effect({...this.host.position(),kind:'cast',look:'whirl',radius,color:'#e5f6ff',duration:2.2});for(let i=0;i<10;i++)this.later(i*.22,()=>this.area(this.host.position(),radius,.55,0,0,'#e5f6ff',1.2,undefined,true));}
       else if(index===1)this.dash(1.7*(air?.dash??1));
       else if(index===2&&air){this.plunge={radius:4.4+tuning.radius+air.quakeRadius,power:tuning.damage*air.quakePower};}
-      else if(index===2){this.action={kind:'slam',started:this.time,until:this.time+.8,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};this.host.effect({...this.host.position(),kind:'cast',radius:4.4+tuning.radius,color:'#ffd091',duration:.45});this.later(.42,()=>this.area(this.host.position(),4.4+tuning.radius,2.3,.8,2.5,'#ffd091',1.2,'crater'));}
+      else if(index===2){this.action={kind:'slam',started:this.time,until:this.time+.8,direction:direction(this.host.facing()),speed:0,multiplier:0,hit:new Set()};this.host.effect({...this.host.position(),kind:'cast',radius:4.4+tuning.radius,color:'#ffd091',duration:.45});this.later(.42,()=>this.tagged('quake',()=>this.area(this.host.position(),4.4+tuning.radius,2.3,.8,2.5,'#ffd091',1.2,'crater')));}
       else return this.special(special);
       return true;
     }finally{this.power=1;}
@@ -465,7 +471,7 @@ export class CombatSimulation {
   /** The Quake's ring where the explorer stands: everything in it is hit and launched, the large ones stunned. `cap`: the most one target may take. */
   private quakeRing(radius:number,power:number,lift:number,stun:number,move:string,cap?:(target:CombatTarget)=>number){
     const at=this.host.position(),factor=this.edge.begin?.(move)??1;this.emit('ring',at,radius,'#ffd091',this.host.facing(),'crater');
-    try{for(const target of this.within(at,radius)){if(cap)this.hitCap=cap(target);this.damage(target,power*factor,quakeStuns(target)?stun:0,lift,1.2);}}finally{this.hitCap=Infinity;this.edge.end?.(move);}
+    this.tagged('quake',()=>{try{for(const target of this.within(at,radius)){if(cap)this.hitCap=cap(target);this.damage(target,power*factor,quakeStuns(target)?stun:0,lift,1.2);}}finally{this.hitCap=Infinity;this.edge.end?.(move);}});
   }
   /**
    * The air swing (moves.ts AIR_MOVES.swing): one spin that hits everything round the explorer. The Strike's air form and,
@@ -790,12 +796,12 @@ export class CombatSimulation {
       if(this.host.clearShot&&!this.host.clearShot(from,to)){if(shot.burst)this.burst(shot,from);else this.emit('impact',from,.4,shot.color);this.projectiles.splice(i,1);continue;}
       shot.x=to.x;shot.z=to.z;shot.remaining-=step;let consumed=false;
       const focus=shot.helper?this.host.focus?.():undefined,targets=this.host.targets().filter(t=>t.hp>0&&!shot.hit.has(t.id)&&distanceToSegment(t,from,to)<=t.radius+shot.radius&&(!shot.helper||this.crew.engaged(t,focus,this.time))/* a pet's shot passes a peaceful creature by */).sort((a,b)=>Math.hypot(a.x-from.x,a.z-from.z)-Math.hypot(b.x-from.x,b.z-from.z));
-      this.helperShot=!!shot.helper;this.summonHit=!!shot.summoned;for(const target of targets){shot.hit.add(target.id);
+      this.helperShot=!!shot.helper;this.summonHit=!!shot.summoned;const oldTag=this.tag;this.tag=shot.helper?'pet':shot.summoned?'summon':shot.basic?'shot':'skill';for(const target of targets){shot.hit.add(target.id);
         if(shot.burst){this.burst(shot,{x:target.x,z:target.z});consumed=true;break;}
         // The rolling snowball hits harder as it grows: ×(1 + its radius), and knocks creatures aside.
         this.damage(target,shot.kind==='snowball'?shot.multiplier*(1+shot.radius):shot.multiplier,shot.stun,shot.lift,shot.kind==='snowball'?3:1);if(shot.slow)this.host.status?.(target,'slow',shot.slow);
         const look=ELECTRIC_SHOTS.has(shot.kind)?'shock' as const:shot.explosion?'blast' as const:undefined;this.emit('impact',target,shot.radius+.3,shot.color,this.host.facing(),look);if(shot.explosion)this.area(target,shot.explosion,shot.multiplier*.6,shot.stun,0,shot.color,1.2,look);if(!shot.pierce){consumed=true;break;}}
-      if(!consumed&&shot.remaining<=0&&shot.burst)this.burst(shot,to);this.helperShot=false;this.summonHit=false;if(consumed||shot.remaining<=0)this.projectiles.splice(i,1);
+      if(!consumed&&shot.remaining<=0&&shot.burst)this.burst(shot,to);this.helperShot=false;this.summonHit=false;this.tag=oldTag;if(consumed||shot.remaining<=0)this.projectiles.splice(i,1);
     }
   }
 }
