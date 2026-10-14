@@ -425,7 +425,7 @@ body.in-rescue #app #hud .home-button { right: calc(var(--edge) + var(--safe-rig
    A tap opens it there, growing to the left; near the giant the boss bar shows its health, so the chip steps away. */
 @media (max-height: 520px) and (orientation: landscape) {
   #app .colossus-banner { pointer-events: auto; cursor: pointer; left: auto; right: var(--col); top: calc(var(--map-top) + var(--mm) + 8px); transform: none; }
-  #app .colossus-banner:not(.open) { width: auto; padding: 4px; gap: 0; border-radius: 50%; animation: none; }
+  #app .colossus-banner:not(.open) { width: auto; padding: 4px; gap: 0; border-radius: 50%; }
   #app .colossus-banner:not(.open) .cb-text, #app .colossus-banner:not(.open) .cb-pct { display: none; }
   #app .colossus-banner:not(.open) .cb-icon { width: 32px; height: 32px; font-size: 18px; }
   #app .colossus-banner.open { width: min(300px, 40vw); max-width: none; }
