@@ -312,6 +312,9 @@ if (process.argv[1]?.endsWith('fight-sim.mts')) {
   console.log('Ten seconds of one move used perfectly on one creature (damage in basic hits; the table of moves.ts)');
   for (const m of MOVE_SLOTS) console.log(`  ${m.padEnd(7)} ${pct(moveDamage(m, [PERFECT[m]]))}  (${pct(windowDamage(m))} by the table, cooldown ${MOVES[m].cooldown} s)`);
   console.log('  air: ' + [`Sky Spin ${pct(AIR_MOVES.swing.power)} a spin`, `Sky Step ${pct(moveDamage('rush', [PERFECT.rush], 10, { height: 2 }))}`, `Sky Quake ${pct(moveDamage('quake', [PERFECT.quake], 10, { height: 2 }))} from a single jump (ring only)`, `Petal Rain ${pct(moveDamage('lob', [{ x: 0, z: 1.2, radius: 1.2 }], 10, { height: 2 }))} on a large creature below`].join(' · '));
+  console.log('\nThe attack chain (five-rules.ts): three presses as a share of one press before it, and the sustained change');
+  for (const kind of ['sword', 'fist', 'gun'] as const) console.log(`  ${kind.padEnd(6)} ${CHAIN.hits[kind].map(h => pct(h / CHAIN.before[kind])).join(' / ')} of ${CHAIN.before[kind].toFixed(2)}  ->  ${((chainGain(kind) - 1) * 100).toFixed(1)}% sustained`);
+  console.log(`  untouched streak: +${STREAK.step * 100}% a hit up to +${STREAK.max * 100}%, dropped after ${STREAK.idle} s without a hit; hold to unleash: ${HOLD.time} s`);
   console.log('\nTest fights: ten seconds of each move alone (damage in basic hits, all creatures together)');
   for (const f of testFights()) console.log(`  ${f.name.padEnd(6)} ${f.note.padEnd(40)} ${MOVE_SLOTS.map(m => `${m} ${pct(f.damage[m])}`).join('  ')}  -> best: ${f.best}`);
   if (process.env.POWER !== '0') {
@@ -320,7 +323,9 @@ if (process.argv[1]?.endsWith('fight-sim.mts')) {
 Power strike: ${POWER.need} hits a level, ${POWER.power.join(' / ')} basic hits, boss cap ${POWER.bossCap * 100}% (damage per second, 6 seeds; before -> after)`);
     for (const row of powerReport()) console.log(`  ${row.boss.padEnd(11)} ${row.script.padEnd(9)} ${row.before.toFixed(0).padStart(5)} -> ${row.after.toFixed(0).padStart(5)}  ${(row.gain * 100 >= 0 ? '+' : '') + (row.gain * 100).toFixed(1)}%  (${row.powers.toFixed(1)} strikes a fight, biggest hit ${(row.biggest * 100).toFixed(1)}% of the boss)`);
   }
-  const scripts: Script[] = ['classic', 'careless', 'single', 'double', 'ground', 'launch', 'chase', 'only-strike', 'only-rush', 'only-quake', 'only-lob'];
+  console.log(`\nThe five-button fight against the fight before it (both with the power strike in use; damage per second and damage taken in full healths, 6 seeds)`);
+  { let sum = 0; const rows = fiveReport(); for (const r of rows) { sum += r.change; console.log(`  ${r.boss.padEnd(11)} ${r.script.padEnd(9)} ${r.before.toFixed(0).padStart(4)} -> ${r.after.toFixed(0).padStart(4)}  ${(r.change >= 0 ? '+' : '') + (r.change * 100).toFixed(1)}%   taken ${r.takenBefore.toFixed(2)} -> ${r.taken.toFixed(2)}   ${r.powers.toFixed(1)} strikes, biggest hit ${(r.biggest * 100).toFixed(1)}%, streak up to ${r.streak} (+${(r.bonus * 100).toFixed(1)}% on average)`); } console.log(`  mean ${(sum / rows.length * 100).toFixed(1)}%`); }
+  const scripts: Script[] = ['classic', 'careless', 'single', 'double', 'ground', 'launch', 'chase', 'only-attack', 'only-rush', 'only-quake', 'only-lob'];
   for (const f of FIGHTS) {
     console.log(`\n${f.note} — hero level ${f.level}, block ${J.BOSS_BLOCK_ON ? override ?? J.blockShare(f.boss, M.PLANETS[f.planet].level) : 'off'}`);
     for (const script of scripts) {

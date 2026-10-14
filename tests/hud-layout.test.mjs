@@ -62,6 +62,31 @@ for (const [name, view] of Object.entries(VIEWS)) {
         const home = r.panels.home[0], skills = r.panels.skills;
         assert.ok(home && home.t < r.H / 3, 'Home is in the upper HUD, away from the combat thumb');
         assert.ok(home.r - home.l >= 44 && home.b - home.t >= 44, 'Home has a full touch target');
+        if (r.air) {
+          // The five-button paw (docs/FIGHT-PLAN.md section 11): Attack is the big pad in the corner, Jump beside it on the inner side, three
+          // specials on an arc above them. The rules (sizes, a thumb on Attack or Jump covers no special) are pawFindings of support/hud-measure.mjs.
+          const centre = b => [(b.l + b.r) / 2, (b.t + b.b) / 2], apart = (p, q) => Math.hypot(centre(p)[0] - centre(q)[0], centre(p)[1] - centre(q)[1]) - (p.r - p.l + q.r - q.l) / 4;
+          const check = (m, hand, toes) => {
+            const attack = m.groups.pad[0], jump = m.groups.jump[0], specials = m.groups.skills, where = `${name} ${hand} ${toes} toes`;
+            assert.deepEqual(pawFindings(m), [], where); assert.equal(specials.length, toes, where);
+            assert.ok(attack.b >= m.H - 30, where + ': the Attack pad sits near the bottom edge'); assert.ok(hand === 'right' ? attack.r >= m.W - 24 : attack.l <= 24, where + ': and by the screen edge');
+            assert.ok(attack.r - attack.l >= 60 && specials.every(b => b.r - b.l >= 48 && b.b - b.t >= 48), where + ': 60 px pad, 48 px specials');
+            for (const [i, b] of specials.slice(0, 3).entries()) if (i) assert.ok(centre(b)[0] > centre(specials[i - 1])[0], where + ': the three specials read left to right in key order');
+            for (const b of [attack, jump, ...specials]) { for (const stick of m.groups.stick) assert.ok(apart(b, stick) >= 6, where + ': clear of the stick'); for (const o of [...m.groups.eat, ...m.groups.prompt, ...m.groups.boss, ...m.groups.target, ...m.groups.colossus, ...m.groups.counter, ...m.groups.home, ...m.groups.dock]) assert.ok(!overlap(b, o), where + ': clear of the rest of the HUD'); }
+            for (const [i, p] of [attack, jump, ...specials].entries()) for (const q of [attack, jump, ...specials].slice(0, i)) assert.ok(apart(p, q) >= 4, where + ': no two buttons touch');
+          };
+          assert.ok(home && home.t < r.H / 3 && home.r - home.l >= 44 && home.b - home.t >= 44, 'Home is in the upper HUD, a full touch target');
+          check(await page.evaluate(measureHud), 'right', 3);
+          // A disguise brings a fourth special: a crown over the arc; the three keep their places.
+          const before = (await page.evaluate(measureHud)).groups.skills; await STATES.disguise(page); const dressed = await page.evaluate(measureHud); check(dressed, 'right', 4);
+          for (const [i, b] of before.entries()) assert.ok(Math.abs(b.l - dressed.groups.skills[i].l) < .5 && Math.abs(b.t - dressed.groups.skills[i].t) < .5, 'the first three specials do not move');
+          // Left-handed: the same paw mirrored, the specials still in key order from the left.
+          await page.evaluate(() => document.querySelector('#hud').classList.add('joystick-right')); await page.waitForTimeout(300); check(await page.evaluate(measureHud), 'left', 4);
+          await page.evaluate(() => { delete window.__zoo.state.gear.disguise; window.__zoo.world.refreshPlayer(); }); await page.waitForFunction(() => !document.querySelector('#hud .skills.toes-4'), null, { timeout: 8000 }); await page.waitForTimeout(300);
+          const mirrored = await page.evaluate(measureHud); check(mirrored, 'left', 3);
+          assert.equal(mirrored.groups.home[0].t, home.t, 'hand swapping does not put Home back beside the fight buttons');
+          await page.evaluate(() => document.querySelector('#hud').classList.remove('joystick-right')); await page.waitForTimeout(300);
+        } else {
         assert.equal(skills.length, 4);
         // Stage 2: the paw. The big pad is the heel near the bottom edge; the four skills arc over it in key order.
         // With jumping and air combat on (the default) the big pad is Jump and the basic attack is the toe on the inner side.
@@ -112,6 +137,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
         }
         assert.ok(Math.min(...swapped.skills.map(b=>b.l)) <= 24, 'swapped-hand fight buttons remain on the left');
         assert.equal(swapped.home, home.t, 'hand swapping does not put Home back beside the fight buttons');
+        }
       }
       for (const [what, frame] of [['boss bar', r.boss], ['target frame', r.target]]) {
         assert.ok(frame.l >= 0 && frame.r <= r.W && frame.t >= 0 && frame.b <= r.H, `${what} is on screen`);
@@ -141,7 +167,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
           const h=await page.evaluate(({swapped,mode})=>{
             const hud=document.querySelector('#hud');hud.classList.toggle('joystick-right',swapped);hud.classList.toggle('fishing',mode==='reel');
             const rect=el=>{const b=el.getBoundingClientRect();return {l:b.left,r:b.right,t:b.top,b:b.bottom};};
-            const hunt=document.querySelector('#reel-button'),hint=document.querySelector('#fish-hint'),skills=[...document.querySelectorAll('.skill')];
+            const hunt=document.querySelector('#reel-button'),hint=document.querySelector('#fish-hint'),skills=[...document.querySelectorAll('.skill')].filter(el=>!el.hidden);/* with jumping on the fourth special is put away */
             hunt.className='reel-hud'+(mode==='reel'?'':' '+mode);hunt.hidden=false;hunt.style.animation='none';hint.hidden=mode==='cast';
             const receiver=el=>{const b=el.getBoundingClientRect();return document.elementFromPoint((b.left+b.right)/2,(b.top+b.bottom)/2)?.closest('button');};
             return {hunt:rect(hunt),hint:rect(hint),skills:skills.map(rect),joystick:rect(document.querySelector('#movement-joystick')),huntTappable:receiver(hunt)===hunt,skillsTappable:skills.every(el=>receiver(el)===el),receivers:[hunt,...skills].map(el=>receiver(el)?.outerHTML.slice(0,160)),prompt:getComputedStyle(document.querySelector('#context-prompt')).display};
@@ -219,11 +245,11 @@ for (const [name, view] of Object.entries(DESKTOP)) {
           others: { player: all('.player-card'), menu: all('.top-actions'), minimap: all('.minimap'), home: all('.home-button'), eat: all('.quick-eat'), trackers: all('.tracker-stack > :not([hidden]):not(.quick-eat)'), social: all('#social-slot'), prompt: all('#context-prompt button'), buffs: all('#buff-bar') },
           levels: eval(levelTexts), badge: box(document.querySelector('#hud .hero-face .level-badge')), tile: box(document.querySelector('#hud .avatar')) };
       }, [BOX, levelTexts]);
-      assert.equal(r.skills.length, 4, 'four skill buttons');
+      assert.equal(r.skills.length, 3, 'three special buttons (jumping is on: the fourth is put away)');
       for (const s of r.skills) assert.ok(s.l > r.W * .6 && s.b > r.H - 170 && s.r <= r.W, `skills sit in the bottom-right corner: ${JSON.stringify(s)}`);
       assert.ok(Math.max(...r.skills.map(s => s.t)) - Math.min(...r.skills.map(s => s.t)) < 2, 'in one tidy row');
       assert.ok(r.guide && r.guide.l < 40 && r.guide.b > r.H - 40, `the keyboard guide is bottom left: ${JSON.stringify(r.guide)}`);
-      assert.match(r.guideText, /WASD/); assert.match(r.guideText, /JKL;/); assert.match(r.guideText, /Space/);
+      assert.match(r.guideText, /WASD/); assert.match(r.guideText, /SkillsJKLPower/, 'three skill keys: ; is free'); assert.match(r.guideText, /PowerstrikeholdFN/, 'the power strike is the attack key held'); assert.match(r.guideText, /Space/);
       assert.ok(r.chal && r.quest && r.chal.t >= r.quest.b - .5 && (!r.bounty || r.chal.b <= r.bounty.t + .5), 'the bonus line sits right under ADVENTURE, above the bounty');
       assert.match(r.chalText, /Quick challenge · \d+s/); assert.match(r.chalText, /Harvest crops · 0\/4/);
       assert.deepEqual(r.levels, ['30'], 'the level shows once, as the number alone');
@@ -256,7 +282,7 @@ for (const name of ['phone 390x844', 'landscape 844x390']) {
     try {
       await page.evaluate(async () => { const z = window.__zoo; z.state.level = 30; await z.startChallenge('kill'); });
       await page.waitForTimeout(800);
-      const r = await page.evaluate(([BOX, levelTexts]) => { const box = (0, eval)(BOX); return { guide: box(document.querySelector('#keys-guide')), chal: box(document.querySelector('#challenge-tracker')), skills: [...document.querySelectorAll('.skill')].map(box), joystick: box(document.querySelector('#movement-joystick')), eat: box(document.querySelector('#quick-eat')), levels: eval(levelTexts) }; }, [BOX, levelTexts]);
+      const r = await page.evaluate(([BOX, levelTexts]) => { const box = (0, eval)(BOX); return { guide: box(document.querySelector('#keys-guide')), chal: box(document.querySelector('#challenge-tracker')), skills: [...document.querySelectorAll('.skill')].filter(el => !el.hidden).map(box), joystick: box(document.querySelector('#movement-joystick')), eat: box(document.querySelector('#quick-eat')), levels: eval(levelTexts) }; }, [BOX, levelTexts]);
       assert.equal(r.guide, null, 'no keyboard guide on touch screens');
       assert.ok(r.chal && r.chal.b - r.chal.t <= 26, `the bonus line is a slim pill: ${JSON.stringify(r.chal)}`);
       assert.deepEqual(r.levels, ['30'], 'the level shows once, as the number on the tile');
@@ -271,7 +297,7 @@ for (const name of ['phone 390x844', 'landscape 844x390']) {
 // leaves the screen and every touch control is a full target, at every supported size, in English and Vietnamese, while
 // calm, in a boss fight with a target and a timed task, and by the pond with the harpoon out.
 import { readFileSync } from 'node:fs';
-import { SIZES, STATES, measureHud, findings, plateFindings } from './support/hud-measure.mjs';
+import { SIZES, STATES, measureHud, findings, plateFindings, pawFindings } from './support/hud-measure.mjs';
 const fullSave = readFileSync(new URL('../promo/save.json', import.meta.url), 'utf8');
 for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
   test(`our HUD: nothing overlaps or leaves the screen at ${size} in ${lang}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 180000 }, async () => {
@@ -359,16 +385,16 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
 
 // The news board lives inside the leaderboard dialog: Ranking | News tabs, the unread count on the dock's Ranking button and on
 // the News tab, no News button in the dock. Everything the board did still works there (cards, NEW tags, read marks, Coming soon).
-// The power strike's button and the hit counter (power-hud.ts, combo-counter.ts): on phones, for both hands, the button is a
-// full target clear of the paw, the Jump pad, the attack toe, the stick, quick-eat and the context prompt, and the counter
-// covers none of them.
+// The power strike on the Attack pad and the hit counter (power-hud.ts, combo-counter.ts): on phones, for both hands, no button
+// of its own appears; the pad glows when the strike is ready, a tap is a plain attack, a hold of HOLD.time unleashes it, and the
+// counter (the untouched streak) covers nothing.
 for (const size of ['390x844', '320x568', '844x390']) for (const hand of ['right', 'left']) {
-  test(`power strike button and hit counter stay clear of everything at ${size}, ${hand}-handed`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 180000 }, async () => {
+  test(`the power strike is the Attack pad held, and the hit counter stays clear of everything, at ${size}, ${hand}-handed`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 180000 }, async () => {
     const [width, height] = SIZES[size];
     const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
     try {
       const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
-      await context.addInitScript(([s]) => { try { localStorage.setItem('cute-game-save-v1', s); localStorage.setItem('cute-game-slot', '0'); localStorage.setItem('cute-game-language', 'en'); localStorage.setItem('cute-game-tutorial', 'done'); localStorage.setItem('zoo-power-hint', '1'); } catch { /* storage blocked */ } }, [fullSave]);
+      await context.addInitScript(([s]) => { try { localStorage.setItem('cute-game-save-v1', s); localStorage.setItem('cute-game-slot', '0'); localStorage.setItem('cute-game-language', 'en'); localStorage.setItem('cute-game-tutorial', 'done'); localStorage.setItem('zoo-power-hold-hint', '1'); } catch { /* storage blocked */ } }, [fullSave]);
       const page = await context.newPage();
       await page.routeWebSocket(socketUrl => new URL(socketUrl).searchParams.has('token'), () => {});
       await page.goto(url, { waitUntil: 'load', timeout: 60000 });
@@ -380,15 +406,24 @@ for (const size of ['390x844', '320x568', '844x390']) for (const hand of ['right
       await STATES.fight(page); await STATES.charged(page);
       const m = await page.evaluate(measureHud), g = m.groups;
       assert.deepEqual(findings(m), [], `charged at ${size}, ${hand}-handed`);
-      assert.equal(g.power.length, 1, 'the button shows'); assert.equal(g.counter.length, 1, 'the counter shows');
-      const pad = g.power[0], mid = b => [(b.l + b.r) / 2, (b.t + b.b) / 2], paw = [...g.skills, ...g.pad, ...g.jump];
-      assert.ok(pad.r - pad.l >= 56 && pad.b - pad.t >= 56, `at least 56 px (${Math.round(pad.r - pad.l)})`);
-      assert.ok(pad.b <= Math.max(...paw.map(b => b.b)) && Math.min(...paw.map(b => Math.hypot(mid(b)[0] - mid(pad)[0], mid(b)[1] - mid(pad)[1]))) < (pad.r - pad.l) * 1.6, 'it sits on the paw, by the thumb');
-      const stick = g.stick[0]; if (stick) assert.ok(Math.hypot(mid(stick)[0] - mid(pad)[0], mid(stick)[1] - mid(pad)[1]) - (stick.r - stick.l + pad.r - pad.l) / 2 >= 8, 'never under the stick');
-      assert.equal(await page.evaluate(() => { const b = document.querySelector('#power-pad').getBoundingClientRect(), el = document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2); return !!el?.closest('#power-pad'); }), true, 'a tap on it reaches it');
-      // Pressing it spends the charge and the button goes.
-      await page.evaluate(() => { clearInterval(window.__probeChain); document.querySelector('#power-pad').click(); }); await page.waitForTimeout(500);
-      assert.equal(await page.evaluate(() => document.querySelector('#power-pad').hidden && window.__zoo.fight.powerCharge.level === 0), true, 'pressed: the charge is spent');
+      assert.equal(await page.evaluate(() => document.querySelectorAll('#power-pad, .power-pad, [data-action="power"]').length), 0, 'no button of its own'); assert.equal(g.counter.length, 1, 'the counter shows');
+      assert.equal(await page.evaluate(() => { const c = document.querySelector('#combo-counter'); return !!c.querySelector('.cc-shield') && Number(c.querySelector('.cc-n').textContent) === window.__zoo.fight.streak.count; }), true, 'the counter shows the untouched streak, with its shield');
+      const look = () => page.evaluate(() => { const p = document.querySelector('#hud .attack-pad'), ring = p.querySelector('.ap-ring').getBoundingClientRect(), f = window.__zoo.fight; return { cls: p.className, ring: [ring.left, ring.top, ring.right, ring.bottom], level: f.powerCharge.level, held: f.attackHold.held }; });
+      const ready = await look(); assert.match(ready.cls, /\bready\b/, 'the pad glows when the strike is charged');
+      // The ring round the pad touches neither Jump nor a special.
+      const ringBox = { l: ready.ring[0], t: ready.ring[1], r: ready.ring[2], b: ready.ring[3] }, mid = b => [(b.l + b.r) / 2, (b.t + b.b) / 2];
+      for (const b of [...g.skills, ...g.jump]) assert.ok(Math.hypot(mid(b)[0] - mid(ringBox)[0], mid(b)[1] - mid(ringBox)[1]) >= (b.r - b.l + ringBox.r - ringBox.l) / 2, 'the charge ring is clear of the other buttons');
+      // Real touches on the pad: taps never unleash it, a hold does once, and a finger that slides off cancels.
+      await page.evaluate(() => { clearInterval(window.__probeChain); const c = window.__zoo.fight.powerCharge; window.__keepCharge = setInterval(() => { if (c.level) c.left = 12; }, 100); });
+      const cdp = await context.newCDPSession(page), pad = g.pad[0], x = (pad.l + pad.r) / 2, y = (pad.t + pad.b) / 2, touch = (type, tx = x, ty = y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: tx, y: ty, id: 1 }] });
+      for (let i = 0; i < 10; i++) { await touch('touchStart'); await page.waitForTimeout(60 + i * 20); await touch('touchEnd'); await page.waitForTimeout(40); }
+      assert.ok((await look()).level >= 1, 'ten quick taps: the strike is still charged');
+      await touch('touchStart'); await page.waitForTimeout(150); const mid2 = await look(); assert.equal(mid2.held, true); assert.match(mid2.cls, /\bholding\b/, 'held: the pad fills'); await touch('touchMove', x + (hand === 'right' ? -140 : 140), y - 180); await page.waitForTimeout(600);
+      const slid = await look(); assert.equal(slid.held, false, 'slid off: the hold is over'); assert.ok(slid.level >= 1, 'and nothing was unleashed'); await touch('touchEnd'); await page.waitForTimeout(100);
+      await touch('touchStart'); await page.waitForTimeout(250); await touch('touchEnd'); await page.waitForTimeout(400); assert.ok((await look()).level >= 1, 'released early: nothing');
+      await page.evaluate(() => { window.__zoo.fight.powerCharge.hits = 20; }); await page.waitForTimeout(150);
+      await touch('touchStart'); await page.waitForTimeout(900); const fired = await look(); await touch('touchEnd');
+      assert.equal(fired.level, 0, 'held: the charge is spent'); assert.doesNotMatch(fired.cls, /\bready\b|\bholding\b/, 'and the glow is gone');
     } finally { await browser.close(); }
   });
 }

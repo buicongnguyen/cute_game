@@ -1,6 +1,6 @@
 # Fight plan: four ground moves, the jump, and their combinations
 
-Written 2026-10-11. Status: steps 1 to 3 built (branch `dev-moves`), disguise skills and the weapon in the air built (section 4b, branch `dev-airdz`); steps 4 and 5 still plan. The jump itself is being built on branch `dev-jump`; this plan says how the moves are balanced once it lands. The speed rule of `docs/QUALITY-PLAN.md` applies: no move may add drawing work beyond the pooled effects the game already has.
+Written 2026-10-11. Since 2026-10-14 the fight has five buttons (section 11): the Strike became the basic attack's chain and the power strike is Attack held. Status: steps 1 to 3 built (branch `dev-moves`), disguise skills and the weapon in the air built (section 4b, branch `dev-airdz`); steps 4 and 5 still plan. The jump itself is being built on branch `dev-jump`; this plan says how the moves are balanced once it lands. The speed rule of `docs/QUALITY-PLAN.md` applies: no move may add drawing work beyond the pooled effects the game already has.
 
 ## 1. The idea
 
@@ -45,7 +45,7 @@ One table in `src/moves.ts` (`MOVES`, `AIR_MOVES`), shared by the hero and, late
 
 | Move (slot, keys) | Damage | Reach / shape | Wind-up | Recovery | Cooldown | Extra |
 |---|---|---|---|---|---|---|
-| Strike (Paw Storm; R / ;) | 3 hits: 80%, 88%, 112% | 2 m arc ahead, 120 degrees (a body counts when any part is in it) | 0.10 s, hits 0.16 s apart | 0.15 s | 5 s | Third hit launches creatures under 1.2 m wide, never a boss |
+| ~~Strike~~ (Paw Storm; R / ;; gone since section 11: it is the attack chain) | 3 hits: 80%, 88%, 112% | 2 m arc ahead, 120 degrees (a body counts when any part is in it) | 0.10 s, hits 0.16 s apart | 0.15 s | 5 s | Third hit launches creatures under 1.2 m wide, never a boss |
 | Rush (Breeze Step; W / K) | 160% | 6 m line, 1.2 m wide | 0.12 s | 0.30 s | 4 s | Untouchable while dashing: no ground mark or blow hurts |
 | Quake (Root Quake; E / L) | 240% | 3.5 m ring | 0.35 s | 0.35 s | 7 s | Launches; 0.6 s stun on bosses and creatures 1.2 m wide or more (a boss turns it into a slow) |
 | Lob (Petal Gale; Q / J) | 260% within 0.8 m of the spot, 130% to 2 m | lands 4 to 9 m away | 0.25 s + 0.6 s flight | 0.20 s | 6 s | Aimed at the chosen target, else the nearest enemy within 9 m, else 6.5 m ahead; the spot is marked for the whole wind-up and flight; hits flyers |
@@ -56,7 +56,7 @@ Changes from the starting numbers, from the simulation (section 7): the Strike c
 
 | Jump + | Becomes | Numbers |
 |---|---|---|
-| Strike | **Sky Spin**: one spin hitting all round (the old Petal Gale look) | 80%, 2.2 m round, holds the height 0.12 s; 0.32 s between spins. It is also what the attack button does while rising with paws or a blade, so there is one air swing, not two |
+| Attack (was Strike) | **Sky Spin**: one spin hitting all round (the old Petal Gale look) | 80%, 2.2 m round, holds the height 0.12 s; 0.32 s between spins. It is also what the attack button does while rising with paws or a blade, so there is one air swing, not two |
 | Rush | **Sky Step** (air dash) | 160%, same 6 m, holds the height 0.24 s, turns once toward the stick after half the way; own air cooldown 4 s |
 | Quake | **Sky Quake** (heavy dive) | A 4.5 m ring for 2.5x from a single jump's top, 3.2x double, 4x triple, plus the plain dive strike on top; capped at 15% of a boss per ring; own air cooldown 7 s. While cooling down, the Quake key in the air does the plain dive |
 | Lob | **Petal Rain** | 3 shots of 90% straight down, 1.3 m apart in a line from under the hero, 1.3 m splash each; own air cooldown 6 s |
@@ -65,9 +65,9 @@ The attack button keeps: in the air, rising = Sky Spin (with a gun: the old air 
 
 | | PC | Phone |
 |---|---|---|
-| Jump | Space (or Left Shift with Space on attack) | centre Jump pad |
-| Attack | F / N | inner toe |
-| Lob / Rush / Quake / Strike | J K L ; (WASD layout) or Q W E R | the four skill toes |
+| Jump | Space (or Left Shift with Space on attack) | beside the Attack pad, inner side |
+| Attack | F / N (hold: power strike) | the big pad in the corner (section 11) |
+| Lob / Rush / Quake | J K L (WASD layout) or Q W E | the three toes above it (four in a disguise) |
 | Air forms | Jump, then the skill key while in the air | press Jump and slide the same finger to the toe (or tap Jump, then the toe) |
 
 ### 4b. Jump + a disguise skill, and the weapon in the air (built 2026-10-12)
@@ -89,7 +89,7 @@ A press too late in the fall or during a dive is kept and cast on landing; it no
 ## 5. Sequences
 (the fighting-game part)
 
-A hit within 1.5 s of the last one continues the combo: +4% damage per hit, up to +40%. Being hit resets it.
+A hit within 1.5 s of the last one continues the combo. Being hit resets it. (Its +4% a hit, up to +40%, gave way to the untouched streak of section 11.)
 
 Three routes to teach, from easy to hard:
 
@@ -180,7 +180,7 @@ Biggest single hit 7.8% of a boss (target under 15%). Careless play takes 7 to 1
 4. Should the Strike replace weapon specials in the fourth slot (`STRIKE_OVER_WEAPON_SPECIAL`, built, off)? Today a sword keeps its special and the Strike exists only for paws and weapons without one.
 5. The Shadow Lord is long with the moves (113 to 120 s on the routes): re-tune it in step 4, or raise move damage.
 
-## 10. The hit counter and the power strike (built 2026-10-13, branch `dev-combo`)
+## 10. The hit counter and the power strike (built 2026-10-13, branch `dev-combo`; since section 11 the strike has no button or key: hold Attack)
 
 Only while the 'Jump and air combat' switch is on, in solo play. Off or online nothing of it exists: no counter, no button, no key, no charge (`tests/air-switch.test.ts`). The basic attack itself is unchanged.
 
@@ -224,3 +224,97 @@ Mean +11.1%, highest +16.7%; biggest single hit 8.5% of a boss. The owner's star
 1. 20 hits and 5 basic hits, or the snappier 10 hits with a strike of about 2.5? Both keep the bound; a strike every 10 hits at 6 does not.
 2. The automatic five-step chain on the attack button (spin, finisher) and hold-to-repeat were set aside for the power strike; the basic attack is as it was.
 3. The air version uses the ordinary 4x critical, not the 8x of hits from the air, to keep the strike bounded.
+
+## 11. The five-button fight (built 2026-10-14, branch `dev-five`)
+
+Only while the 'Jump and air combat' switch is on, in solo play; off or online the four old skills, the old basic attack, the
+old paw and the old keys are exactly as they were (`tests/air-switch.test.ts`). The owner's decisions, built as asked:
+five buttons (Attack, Jump, three specials); Attack in the centre of the paw; the specials higher so the thumb does not
+cover them; the power strike merged into Attack (hold it); the Strike removed and turned into the basic attack's chain; an
+untouched streak in place of the timed ramp; a disguise keeps its four skills. Rules and numbers: `src/five-rules.ts`.
+
+**The attack chain** (`CHAIN`). The basic attack is three presses: cut, back-cut, overhead with a blade; jab, jab, hook with
+paws; shot, shot, double shot with a gun. Each row is 90 / 100 / 125% of what one press of that weapon dealt before (the
+Strike's shape, 80 / 88 / 112%), so sustained damage is +5.0% (blade, gun) and +4.9% (paws):
+
+| Weapon | Press 1 | Press 2 | Press 3 | Before (one press, average) |
+|---|---|---|---|---|
+| Blade | 0.99 | 1.10 | 1.375, knock 2.2 | 1.1 |
+| Paws | 1.05 | 1.16 | 1.46, knock 2.2 | 1, 1, 1.5 (1.167) |
+| Gun | 0.90 | 1.00 | 2 shots of 0.625, 0.09 s apart | 1 |
+
+The third press of paws or a blade launches creatures narrower than 1.2 m (1.7 m up), never a boss; a gun launches nothing.
+A press more than 1.2 s after the last starts the chain again. The weapon's own reach and arc are kept. In the air the
+attack stays Sky Spin while rising and the dive while falling (a gun keeps its lighter air shot).
+
+**Hold to unleash** (`HOLD.time` = 0.35 s). A press attacks at once, as the finger, key or mouse button goes down. Held:
+with no charge it keeps attacking at the weapon's pace; with a strike charged the pad fills from its middle for 0.35 s
+(the light gathers on the explorer meanwhile) and then the power strike goes off, by the rules of section 10 (damage,
+boss cap, 12 s wait, half-drop, x2, air ring). Releasing early, or sliding the finger off the pad, cancels; taps of any
+speed never unleash it. Sources: the pad (touch or mouse), F and N (and Space when it attacks), the mouse held on a
+creature (it waits until the creature is in the strike's area). The strike's own wind-up went from 0.22 to 0.1 s:
+the hold is the wind-up. G is free, and so is ; / R while there are three specials.
+
+**The charge on the Attack pad.** No button of its own: a ring round the pad fills one twentieth a hit, glows and pulses
+gold when ready, turns rose with '×2' when overcharged, blinks through its last 3 s; the first time, a toast says 'Hold
+Attack to unleash it'. The thin ring round the hit counter stays too.
+
+**The untouched streak** (`STREAK`): own hits landed since the explorer last took damage (counted like the chain: one swing
+through a crowd is one). +1.5% damage a hit, up to +30% at 20 hits; it replaces the timed +4% / +40% ramp, so the two never
+stack (the timed chain still decides the finisher and is summed up when it ends). Damage taken sets it to 0 at once;
+a dodge, a block, a shield or a blow of no damage does not; knock-out drops it, and so do 20 s without a hit. Pets', the
+dog's and summons' projectile hits do not count. It is the counter's big number, with a small shield; 'UNTOUCHED ×10!',
+×20 and ×30 are called out. The power strike's charge is its own count (20 own hits), as before.
+
+**The paw** (`PAW`, drawn by hud-ours.css with the same numbers). Attack: the big round pad in the corner (1.3 skill widths,
+at least 60 px). Jump: beside it on the inner side (at least 52 px). The three specials (1.08 skill widths, at least 48 px)
+on an arc above them; a disguise's fourth skill is a crown over the two inner toes, so the three never move. Left-handed
+play mirrors it all; the specials read left to right in key order with either hand. A thumb (a capsule 100 px wide from the
+bottom corner to the button it rests on) on Attack or on Jump covers no special and no cooldown ring:
+
+| Screen | Attack / Jump / special | Pad centre from the corner | Paw height / width | Thumb clearance, least (on Attack, on Jump) |
+|---|---|---|---|---|
+| 390x844 | 65 / 54 / 54 px | 51, 55 px | 188 / 184 px (4: 219 high) | 19 px, 10 px |
+| 320x568 | 60 / 52 / 48 px | 42, 52 px | 169 / 160 px (4: 197) | 11 px, 3 px |
+| 844x390 | 60 / 52 / 50 px | 48, 52 px | 175 / 171 px (4: 203) | 14 px, 5 px |
+| 768x1024 | 70 / 58 / 58 px | 53, 57 px | 201 / 197 px (4: 235) | 25 px, 15 px |
+
+The paw is taller than before (3.36 skill widths, was 2.55), so the dock keeps that room; the fishing button stands
+beside the paw in short landscape, and on 360 px phones its hint steps aside while a creature is chosen.
+
+**Desktop tray**: Attack (F / N), Jump (Space), the three specials (J K L, or Q W E), with the ring on Attack; in a
+disguise four specials. The keyboard guide says 'Power strike: hold F N'.
+
+**What happened to the fourth slot.** The Strike is the chain. A weapon's or a uniform's own special (crescent, thunder,
+lotus ...; 15 weapon specials and 6 uniform skills) goes off together with the power strike, with its own look and
+numbers: nothing owned is lost, and it comes about as often as before (a strike every 8 to 10 s of fighting, its cooldown
+was 6 to 10 s). In a disguise the paw shows the disguise's four skills and the special is not added. Saves keep the four
+stored skill levels; the fourth level now raises the chain's third hit (+8% a level), Sky Spin and the weapon special, and
+the bench shows it as 'Attack chain' (key F), still buyable.
+
+**Balance** (`fiveReport` in promo/fight-sim.mts, against the fight before it measured the same morning; both with the
+power strike in use, 6 seeds, block as the game has it):
+
+| Script | King Bear | Yeti | Shadow Lord |
+|---|---|---|---|
+| careless | 173 to 175 (+1.0%) | 199 to 181 (-9.3%) | 390 to 363 (-7.0%) |
+| single | 211 to 218 (+3.1%) | 235 to 234 (-0.8%) | 350 to 317 (-9.3%) |
+| double | 237 to 244 (+3.1%) | 309 to 302 (-2.2%) | 433 to 416 (-4.0%) |
+| ground | 180 to 176 (-1.9%) | 218 to 220 (+1.3%) | 300 to 291 (-3.0%) |
+| launch | 206 to 210 (+2.1%) | 243 to 241 (-0.8%) | 329 to 312 (-5.2%) |
+| chase | 188 to 192 (+1.9%) | 227 to 202 (-10.9%) | 324 to 284 (-12.3%) |
+
+Mean -3.0% (bear +1.6%, yeti -3.8%, Shadow Lord -6.8%); biggest single hit 8.5% of a boss. Damage taken: careful scripts
+mostly less than before (bear single 1.38 to 0.72 healths), careless a little more (yeti 10.3 to 11.4). The streak pays
+careful play: +13 to +27% on average for the careful scripts, +5% for careless ones. The chase route loses most (it used
+the sword special on cooldown; now that special waits for a strike). The three specials keep their table and each is
+still the best in its own test fight (line: Rush, crowd: Quake, far: Lob).
+
+**Decisions for the owner**
+
+1. Holding Attack while a charge becomes ready unleashes it 0.35 s later (no need to let go and press again): good for
+   casual play, but it takes away waiting for x2 while holding. Keep, or ask for a fresh press?
+2. The chase route and the Shadow Lord lose 9 to 12%. A +10% on the three specials (Lob 2.86, Rush 1.76, Quake 2.64) was
+   tried: mean -0.6%, but the spread grew to -11% .. +12%. Not applied.
+3. The weapon special rides on the strike. The alternative (the special replaces the third hit) was not built.
+4. The 'Attack chain' bench row keeps the fourth level buyable. Remove it instead (levels kept, nothing more to buy)?
