@@ -21,3 +21,6 @@
 #dialog-body .goal-row .soft-button { margin-top: 8px; }
 /* Too narrow for a third thing beside the quest chips (the hit counter takes this spot in a fight): the goals wait in the Journal. */
 @media (max-width: 360px) { #app #hud #goals-chip { display: none; } }
+/* The chip gives way first: the eat button and its picker keep their full size on the shared row. */
+#app #hud .quick-eat > #quick-eat, #app #hud .quick-eat > .quick-eat-pick { flex-shrink: 0; }
+#app #hud #goals-chip { flex: 0 0 auto; min-width: 0; }
