@@ -25,6 +25,7 @@ import { levelAllows } from './level-gates.ts';
 import { AUDIO_DEFAULTS, parseAudio } from './audio-settings.ts';
 import { isTreeCrop } from './tree-crops.ts';
 import { noteHistory, parseHistory, type Snapshot } from './insight-history.ts';
+import { parseInbox, type InboxItem } from './news-inbox.ts';
 import { fits, noteFull, noteDelivered, clearFullNote, delivering, chestFits, nextExpansion, hasExpansionMaterials, isStorageKind, type StorageKind } from './storage-slots.ts';
 import { pruneBags, bagId, parseDeathBags, MAX_DEATH_BAGS, type DeathBag } from './death-bags.ts';
 export * from './storage-slots.ts';
@@ -199,6 +200,8 @@ export interface SaveState {
     house?: HouseState;
     /** How the village grew (insight-history.ts): a snapshot per level-up and per day played, the latest 30; missing in older saves = none yet. */
     history?: Snapshot[];
+    /** The News inbox (news-inbox.ts): announcements, newest first, at most 50; missing in older saves = empty. */
+    inbox?: InboxItem[];
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
@@ -1006,6 +1009,7 @@ export function parseSave(raw: string | null): SaveState | null {
         const ctf = parseCtf(v.ctf); if (ctf) s.ctf = ctf;
         const rescue = parseRescue(v.rescue); if (rescue) s.rescue = rescue;
         { const history = parseHistory(v.history); if (history.length) s.history = history; }
+        { const inbox = parseInbox(v.inbox); if (inbox.length) s.inbox = inbox; }
         const looks = parseLooks(v.looks); if (looks) s.looks = looks; else delete s.looks; // older saves keep the look they had: the default hero
         dropUnownedFriendLooks(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));

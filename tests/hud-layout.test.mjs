@@ -319,10 +319,10 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
         assert.deepEqual(findings(m), [], `${state} at ${size} in ${lang}`);
         if (state !== 'calm') continue;
         const g = m.groups, dock = g.dock, map = g.map[0], hero = g.hero[0], plate = m.plate;
-        // The dock: every menu button, in whole columns at the right edge, each cell at least 44 px. News is no longer one of
-        // them (it is a tab of the leaderboard), and 360 px and narrower keeps How to play in Settings.
-        assert.ok(dock.length >= (width <= 360 ? 7 : 8), `the level-41 dock shows every menu button (${dock.length})`);
-        assert.equal(await page.evaluate(() => document.querySelectorAll('#hud [data-action="news"]').length), 0, 'the dock has no News button');
+        // The dock: bag, journal, News (the inbox) and More, in whole columns at the right edge, each cell at least 44 px;
+        // ranking, play together, help, settings and the platform tools wait in the More menu (news-inbox-ui.ts).
+        assert.ok(dock.length >= 4, `the level-41 dock shows the play buttons (${dock.length})`);
+        assert.equal(await page.evaluate(() => document.querySelectorAll('#hud .top-actions > [data-action="news"]').length), 1, 'the dock has the News inbox button');
         const columns = [...new Set(dock.map(b => Math.round(b.l)))].sort((a, b) => a - b);
         assert.ok(columns.length <= 3 && Math.max(...dock.map(b => b.r)) >= m.W - 24, `the dock hugs the right edge in at most three columns: ${columns}`);
         for (const x of columns) { const ys = dock.filter(b => Math.round(b.l) === x).map(b => b.t).sort((a, b) => a - b); for (let i = 1; i < ys.length; i++) assert.ok(ys[i] - ys[i - 1] >= 44 - .5, 'dock buttons are at least 44 px apart'); }
