@@ -1,0 +1,41 @@
+/* The News inbox button, its panel and the ⋯ More menu (news-inbox-ui.ts). */
+#app #hud .icon-button > i.inbox-count, #app #hud .icon-button > i.more-count {
+  position: absolute; right: -6px; top: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; box-sizing: border-box;
+  display: grid; place-items: center; background: #ff4f6d; color: #fff; border: 2px solid var(--cream, #fff8ec);
+  font: 900 10px/1 system-ui, sans-serif; font-style: normal; pointer-events: none;
+}
+#app #hud .icon-button > i.inbox-count[hidden], #app #hud .icon-button > i.more-count[hidden] { display: none; }
+#app #hud .inbox-button.inbox-pulse { animation: inbox-pulse .9s ease-out 1; }
+@keyframes inbox-pulse { 0% { transform: scale(1); } 25% { transform: scale(1.18); box-shadow: 0 0 0 6px rgba(255, 79, 109, .35); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { #app #hud .inbox-button.inbox-pulse { animation: none; } }
+
+#app #hud #more-stash, #app #hud #more-stash[hidden] { display: none !important; }
+#app #hud #more-menu {
+  position: absolute; direction: ltr; z-index: 30; top: 0; right: calc(100% + 8px); min-width: 196px; max-width: min(260px, 70vw);
+  max-height: calc(100vh - 24px); overflow: auto; padding: 6px; border-radius: 16px;
+  background: var(--cream, #fff8ec); border: 2px solid var(--plum, #3a2433); box-shadow: 0 4px 0 rgba(58, 36, 51, .45), 0 10px 24px rgba(30, 20, 30, .25);
+  display: flex; flex-direction: column; gap: 4px;
+}
+#app #hud #more-menu[hidden] { display: none; }
+#app #hud #more-menu .more-item {
+  position: relative; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--plum, #3a2433); font: 800 14px/1.2 inherit; text-align: left; cursor: pointer;
+}
+#app #hud #more-menu .more-item > span:first-child { font-size: 20px; width: 26px; text-align: center; }
+#app #hud #more-menu .more-item:hover, #app #hud #more-menu .more-item:focus-visible { background: rgba(255, 196, 92, .35); }
+#app #hud #more-menu .more-item > i.more-count { margin-left: auto; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #ff4f6d; color: #fff; font: 900 11px/20px system-ui, sans-serif; text-align: center; font-style: normal; }
+
+.inbox-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.inbox-entry {
+  width: 100%; display: grid; grid-template-columns: 34px 1fr auto auto; align-items: center; gap: 10px; padding: 8px 10px; min-height: 52px;
+  border: 2px solid rgba(58, 36, 51, .12); border-radius: 14px; background: #fffdf6; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.inbox-entry[data-inbox-static] { cursor: default; }
+.inbox-entry.unread { border-color: #ffb13d; background: #fff4d6; }
+.inbox-icon { font-size: 24px; text-align: center; }
+.inbox-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inbox-text strong { font-size: 15px; }
+.inbox-text small { font-size: 12.5px; opacity: .78; }
+.inbox-entry time { font-size: 11px; opacity: .6; white-space: nowrap; }
+.inbox-entry > i { font-style: normal; font-weight: 900; opacity: .5; }
+.inbox-empty { text-align: center; opacity: .7; padding: 24px 8px; }
