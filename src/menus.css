@@ -289,3 +289,22 @@
 
 /* Sliders (music, effects) are 44 px tall touch targets; the visible track stays slim. */
 @media (pointer: coarse) { #dialog-body input[type="range"] { min-height: 44px; margin-block: 0; } }
+
+/* Bag tile actions (bag-tile.ts): the selected tile wears a green E (primary action) and a ? (details card beside it). */
+.item-cell { position: relative; display: grid; min-width: 0; }
+.item-cell > .item-tile { width: 100%; height: 100%; }
+.item-cell.sel { z-index: 2; }
+#dialog-body .item-cell > .tile-act { position: absolute; bottom: -7px; width: 34px; height: 34px; min-height: 0; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 2px solid #3a2433; font: 1000 16px/1 inherit; box-shadow: 0 2px 0 #3a2433; cursor: pointer; }
+#dialog-body .item-cell > .tile-e { left: -7px; background: #3ecf5a; color: #fff; text-shadow: 0 1px 0 #1f7a33; }
+#dialog-body .item-cell > .tile-e:disabled { background: #b9e8c3; color: #ffffffcc; box-shadow: none; text-shadow: none; }
+#dialog-body .item-cell > .tile-q { right: -7px; background: #ffc93a; color: #3a2433; }
+#dialog-body .item-cell > .tile-q[aria-expanded="true"] { background: #ff8a2a; color: #fff; }
+#dialog-body .item-cell > .tile-act:focus-visible { outline: 3px solid #7a5cff; outline-offset: 2px; }
+#dialog-body:has(#bag-card) { position: relative; }
+#dialog-body .item-card { position: absolute; z-index: 5; margin: 0; align-items: flex-start; padding: 10px 12px; box-shadow: 0 8px 24px #3a243340, 0 2px 0 #d9cfff; }
+#dialog-body .item-card[hidden] { display: none; }
+#dialog-body .item-card .item-hero { width: 48px; height: 48px; font-size: 30px; }
+#dialog-body .item-card .button-row { flex-wrap: wrap; gap: 6px; }
+#dialog-body .item-card .card-close { position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; background: #fff; border: 2px solid #d9cfff; font: 900 18px/1 inherit; color: #3a2433; }
+#dialog-body .item-card h3 { padding-right: 30px; }
+#dialog-body .item-card .card-compare { margin: 4px 0; font-size: 12px; color: var(--ink-soft); }

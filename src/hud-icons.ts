@@ -12,8 +12,8 @@ const ATTRS = `viewBox="0 0 24 24" fill="none" stroke="${INK}" stroke-width="1.7
 const wrap = (body: string) => `<svg class="hi" ${ATTRS} aria-hidden="true" focusable="false">${body}</svg>`;
 
 const BODIES = {
-  /** A satchel with a flap and a brass clasp. */
-  bag: `<path d="M8 8.6V7a4 4 0 0 1 8 0v1.6"/><path d="M4.8 8.6h14.4l1 9.6a2 2 0 0 1-2 2.3H5.8a2 2 0 0 1-2-2.3z" fill="#ff8a2a"/><path d="M4.4 12.4c2.4 1.7 5 2.4 7.6 2.4s5.200-.7 7.600-2.400" fill="none"/><rect x="10.200" y="12.600" width="3.600" height="4" rx="1" fill="#ffe08a"/>`,
+  /** A round little backpack: top loop, side pockets, a sunny front pocket with a pink flap and a cream buckle. */
+  bag: `<path d="M9.800 5V4.200a2.200 2.200 0 0 1 4.400 0V5"/><path d="M5.800 12H4.600a1.100 1.100 0 0 0-1.100 1.100v4.300a1.300 1.300 0 0 0 1.300 1.300h1M18.200 12h1.200a1.100 1.100 0 0 1 1.100 1.100v4.300a1.300 1.300 0 0 1-1.300 1.300h-1" fill="#ff5d8c"/><path d="M5.800 10.400a6.200 6.200 0 0 1 12.400 0v8.900a1.900 1.900 0 0 1-1.900 1.900H7.700a1.900 1.900 0 0 1-1.900-1.900z" fill="#ff8a2a"/><path d="M8 13.200h8v4.700a1.400 1.400 0 0 1-1.400 1.400H9.400A1.400 1.400 0 0 1 8 17.900z" fill="#ffc93a" stroke-width="1.400"/><path d="M8 13.200h8v1.300a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z" fill="#ff5d8c" stroke-width="1.400"/><rect x="11" y="15.600" width="2" height="2.100" rx=".600" fill="#fff6e0" stroke-width="1.100"/><path d="M8.400 9.200a3.800 3.800 0 0 1 2.400-2.600" stroke="#fff6e0" stroke-width="1.500"/>`,
   /** An open journal with a ribbon. */
   journal: `<path d="M12 6.600C10 5.100 6.500 4.700 3.500 5.600v12.600c3-.9 6.500-.5 8.500 1 2-1.500 5.500-1.900 8.500-1V5.600c-3-.9-6.500-.5-8.500 1z" fill="#fff6e0"/><path d="M12 6.600v12.600"/><path d="M6 9.600c1.300-.3 2.600-.2 3.800.2M6 12.900c1.300-.3 2.600-.2 3.800.2" stroke-width="1.200"/><path d="M15.300 5.300v6.400l1.600-1.400 1.600 1.400V5.100" fill="#ff5d8c"/>`,
   /** A prize rosette. */
