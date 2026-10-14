@@ -30,20 +30,20 @@ Status key: **todo**, **doing**, **done**, **owner** (waits for an owner decisio
 
 | # | Bug | Fix | Status |
 |---|---|---|---|
-| 3.1 | Pressing F at a pond opens the garden seed menu instead of fishing (the nearer garden wins). | Prefer the pond when the explorer faces or stands at it. | todo |
-| 3.2 | The "power ready" label overlaps damage numbers ("28 WEP READ 31!"). | Give the label its own lane above the hero, apart from the damage numbers. | todo |
-| 3.3 | A friend-request pop-up lands mid-fight over the joystick. | Hold social pop-ups until the fight ends; send them to News. | todo |
-| 3.4 | The shop lets you buy the same sword many times without a warning. | Warn or block a second copy of gear you already own (stackables still buy freely). | todo |
-| 3.5 | Closing the welcome gift with × leaves 0 energy and the gift pending, with no sign of it. | × takes the gift (or says where it waits). | todo |
-| 3.6 | In packs, more than 13 health bars cover each other (the Vault). | Show bars only for the target and creatures already hurt. | todo |
-| 3.7 | The level-40 test save (`promo/save.json`) is still on Chapter 1 step 1 with 1 of 9 planets. | Make a real mid/late-game test save. | todo |
-| 3.8 | The speed tool's canyon row is invalid: creatures push the hero off the spot. | Keep the hero pinned while measuring. | todo |
+| 3.1 | Pressing F at a pond opens the garden seed menu instead of fishing (the nearer garden wins). | Prefer the pond when the explorer faces or stands at it. | done (dev-bugs: interact-pick.ts) |
+| 3.2 | The "power ready" label overlaps damage numbers ("28 WEP READ 31!"). | Give the label its own lane above the hero, apart from the damage numbers. | done (dev-bugs: POWER_LANE_LIFT) |
+| 3.3 | A friend-request pop-up lands mid-fight over the joystick. | Hold social pop-ups until the fight ends; send them to News. | done (dev-bugs: social-hold.ts + News note) |
+| 3.4 | The shop lets you buy the same sword many times without a warning. | Warn or block a second copy of gear you already own (stackables still buy freely). | done (dev-bugs: "Owned" + confirm; pets free up to 2) |
+| 3.5 | Closing the welcome gift with × leaves 0 energy and the gift pending, with no sign of it. | × takes the gift (or says where it waits). | done (dev-bugs: × and Escape take it) |
+| 3.6 | In packs, more than 13 health bars cover each other (the Vault). | Show bars only for the target and creatures already hurt. | done (dev-bugs: target, hurt, elites; max 8) |
+| 3.7 | The level-40 test save (`promo/save.json`) is still on Chapter 1 step 1 with 1 of 9 planets. | Make a real mid/late-game test save. | done (dev-bugs: promo/save-late.json; save.json kept for tests and baselines) |
+| 3.8 | The speed tool's canyon row is invalid: creatures push the hero off the spot. | Keep the hero pinned while measuring. | done (dev-bugs: __zoo.pinHero) |
 
 ## Phase 4. First minutes (needs owner decisions)
 
 | # | Item | What was found | Proposal | Status |
 |---|---|---|---|---|
-| 4.1 | 1,000,000-energy welcome gift | Quest rewards of 36 to 76 energy and most prices mean nothing; energy-only items are bought at once. | A small starter pack instead: about 500 energy plus a free hat or pet. Keep a separate tester gift if it is needed for testing. | owner |
+| 4.1 | 1,000,000-energy welcome gift | Quest rewards of 36 to 76 energy and most prices mean nothing; energy-only items are bought at once. | A small starter pack instead: about 500 energy plus a free hat or pet. Keep a separate tester gift if it is needed for testing. | done: owner chose 10,000 energy (dev-bugs); tester gift unchanged |
 | 4.2 | Slow first reward | The first crop takes 150 s, so the first reward comes at about 2 min 45 s; then the hero stood idle in an empty forest for about 2.5 min. | A "tutorial radish" that grows in about 20 s, and an easy creature beside the garden for the first fight. Aim: first fun under 60 s. | owner |
 | 4.3 | Too much on screen at level 1 | Four skills, Attack and Jump show before any enemy; a quick-eat slot shows 0. | Reveal skills as they unlock and quick-eat once there is food. | owner |
 | 4.4 | Too many red badges, two "news" places | A new save shows More 8 from the first second; after 6 minutes Journal 6, News 4, More 8. The News inbox and "Ranking and news" are separate. | Badges only for things you can collect; no unread count on a new save; merge or rename the two news places. | owner |
