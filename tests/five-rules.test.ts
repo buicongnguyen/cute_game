@@ -165,7 +165,7 @@ test('main.ts: the streak counts the explorer\'s own counted hits (never a pet\'
   assert.match(hurt, /state\.hp=Math\.max\(0,state\.hp-damage\);[^\n]*comboMeter\.break\(\);if\(airOn\(\)\)streak\.hurt\(damage\);/, 'the timed chain ends too, and is summed up');
   // Knock-out, a reset fight and the switch going off drop it; the counter shows it with the bonus it gives.
   assert.match(main, /function clearPower\(\)\{powerCharge\.clear\(\);streak\.clear\(\);/); assert.match(main, /comboMeter\.reset\(\);streak\.clear\(\);attackHold\.clear\(\);/); assert.match(main, /powerCharge\.step\(dt\);streak\.step\(dt\);/);
-  assert.match(main, /s=\{count:Math\.max\(v\.count,streak\.count\),bonus:actionHandler\?0:streak\.percent,live:true,/);
+  assert.match(main, /s=\{count:streak\.count\|\|v\.count,bonus:actionHandler\?0:streak\.percent,live:true,/);
   // The power strike's charge is its own count: 20 own hits, untouched by the streak's rules.
   assert.equal(POWER.need, 20); assert.doesNotMatch(hurt, /powerCharge/);
 });

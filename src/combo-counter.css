@@ -99,6 +99,8 @@ body.air-combat #app #hud .attack-pad.holding > .ap-hold { display: block; anima
 /* Desktop: the mark sits clear of the key badge. */
 @media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
   body.air-combat #app #hud .skills .attack-pad > .ap-x { right: auto; left: -8px; }
+  /* The key and the name stay on top of the ring. */
+  body.air-combat #app #hud .skills .attack-pad::before, body.air-combat #app #hud .skills .attack-pad::after { z-index: 3; }
 }
 @media (prefers-reduced-motion: reduce) {
   #app #hud #combo-counter .cc-n, #app #hud #combo-counter .cc-note, #app #hud #combo-counter .cc-ring::after { animation: none !important; }

@@ -1524,7 +1524,7 @@ function counterPlace(keep:Placement|null):Placement{
 function showCombo(){
   const view=counterView;if(!view)return;
   const v=comboMeter.view(),p=powerCharge.view();let s:CounterState|null=null;
-  if(airOn()&&v.live&&v.count>=COUNTER.from)s={count:Math.max(v.count,streak.count),bonus:actionHandler?0:streak.percent,live:true,charge:p.progress,level:p.level,note:chainNoteLeft>0?chainNote:'',summary:'',best:false};
+  if(airOn()&&v.live&&v.count>=COUNTER.from)s={count:streak.count||v.count,bonus:actionHandler?0:streak.percent,live:true,charge:p.progress,level:p.level,note:chainNoteLeft>0?chainNote:'',summary:'',best:false};
   else if(airOn()&&chainSum)s={count:chainSum.count,bonus:0,live:false,charge:p.progress,level:p.level,note:'',summary:chainSum.text,best:chainSum.best};
   view.show(s,t('HITS'),counterPlace);
 }
@@ -2108,7 +2108,7 @@ document.addEventListener('keydown',event=>{
   const spaceAction=jumpKeyAction(event.code||'',spaceKey,airOn());
   if(spaceAction==='jump'){event.preventDefault();if(!event.repeat){touchFight=false;jumpInput.down();}return;}
   if(event.repeat)return;
-  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=skillKeyIndex(key,state.settings.keyboardLayout,skillList().length);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f'){if(!airOn())world.interactNearest();else if(world.jump?.airborne||!world.interactNearest())attackDown('key:'+event.code);}else if(handKey(key,airOn())==='eat')void quickEat();else if(handKey(key,airOn())==='attack')attackDown('key:'+event.code);else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();attackDown('key:'+event.code);}
+  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=skillKeyIndex(key,state.settings.keyboardLayout,skillList().length);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m')map();else if(key==='f'){if(!airOn())world.interactNearest();else if(world.jump?.airborne||!world.interactNearest())attackDown('key:'+event.code);else if(world.selected?.kind==='enemy')attackHold.down('key:'+event.code);/* F chose a creature (the explorer attacks it): holding F on is the hold too */}else if(handKey(key,airOn())==='eat')void quickEat();else if(handKey(key,airOn())==='attack')attackDown('key:'+event.code);else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();attackDown('key:'+event.code);}
 });
 // The keyboard guide counts game keys to learn when to fold itself (hud-keys.ts).
 window.addEventListener('keydown',event=>{if(started&&!uiBlocked()&&!event.repeat&&gameplayKey(event))keysGuide.used();});
