@@ -31,6 +31,8 @@ export interface InsightDeps {
   calm(): boolean;
   /** Which save this is (the profile's storage key), for remembering the report cards already offered on this device. */
   saveKey(): string;
+  /** "Show announcements as pop-ups" (news-inbox.ts): without it the report card waits in News, no chip. */
+  popups?(): boolean;
 }
 export type InsightTab = 'home' | 'map' | 'trend' | 'report' | 'disguises';
 export interface InsightApi {
@@ -142,6 +144,6 @@ export function initInsight(d: InsightDeps): InsightApi {
     openGroups.set(chapter, new Set(all.filter(g => g.open).map(g => g.dataset.group!)));
   }, true);
   // A report card earned earlier and never shown (the game closed first, or this is the book's first day) is offered once.
-  { const level = reportLevelAt(d.state().level); if (level) queue(level); }
+  { const level = reportLevelAt(d.state().level); if (level && (d.popups?.() ?? true)) queue(level); }
   return api;
 }

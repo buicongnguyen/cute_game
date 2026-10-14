@@ -7,6 +7,7 @@ import './joystick.css';
 import { FishingProof } from './fishing-proof.ts';
 import '@fontsource-variable/nunito';
 import './style.css';
+import './level-flash.css';
 import './skills.css';
 import { viewWidth, viewHeight } from './viewport.ts';
 import { t, localizeHtml, getLanguage, switchLanguage, onLanguageChange, bindLanguage } from './i18n.ts';
@@ -224,7 +225,7 @@ let rescueApi:RescueApi|null=null;
 let colossus:ColossusEvent|null=null;
 /** The Village Almanac (insight.ts): the big-picture book and the disguise strength cards, one lazy chunk fetched when first needed. */
 let insight:import('./insight.ts').InsightApi|null=null,insightLoading:Promise<void>|null=null;
-function loadInsight():Promise<void>{return insightLoading??=import('./insight.ts').then(m=>{insight=m.initInsight({state:()=>state,openDialog,closeDialog,modal:()=>modal,art,esc,toast,panel:type=>{if(type==='shop')shop();else if(type==='bag')inventory();else if(type==='quests')quests();},go,journal:tab=>{journalTab=tab as ProgressKind;quests();},saveKey:activeKey,
+function loadInsight():Promise<void>{return insightLoading??=import('./insight.ts').then(m=>{insight=m.initInsight({state:()=>state,openDialog,closeDialog,modal:()=>modal,art,esc,toast,panel:type=>{if(type==='shop')shop();else if(type==='bag')inventory();else if(type==='quests')quests();},go,journal:tab=>{journalTab=tab as ProgressKind;quests();},saveKey:activeKey,popups:()=>inbox.popups,
   calm:()=>started&&!modal&&!uiBlocked()&&!placement&&!visiting&&!fishGame&&state.hp>0&&!world.interior&&!fightNear(world.enemies,world.position.x,world.position.z,16)&&!dungeonApi?.active&&!ctfApi?.active&&!rescueApi?.active});},error=>{insightLoading=null;throw error;});}
 function openInsight(...args:Parameters<import('./insight.ts').InsightApi['open']>){void loadInsight().then(()=>insight?.open(...args)).catch(()=>toast('The Almanac could not be opened. Check your connection and try again.','📒'));}
 let modes:typeof import('./modes.ts')|null=null,modesLoading:Promise<void>|null=null,rankingApi:{open():void}|null=null,newsApi:{open(tab?:'news'|'soon'):void}|null=null,rankingTapOff:(()=>void)|null=null;
@@ -480,7 +481,9 @@ function levelCheck(before:number) {if(state.level>before){const after=state.lev
   // Level-ups and milestones go to News (news-inbox-ui.ts); the old toasts and the Almanac chip only with "Show announcements as pop-ups" on.
   const report=reportLevelFor(before,after);const popups=inbox.announce(report?{kind:'report',icon:'📒',title:'Level {level}!',text:'Your level {level} report card is ready',params:{level:after},open:'insight'}:{kind:'level',icon:'🌟',title:'Level {level}!',text:'A little stronger, a little braver.',params:{level:after},open:'insight'});
   for(const l of M.milestonesBetween(before,after))inbox.announce({kind:'milestone',icon:'🏅',title:'Milestone: level {level}',text:'+{energy} energy and a moonstone. Onward, legend!',params:{level:l,energy:M.milestoneReward(l).energy.toLocaleString()},open:'bag'});
-  if(popups){void loadInsight().then(()=>insight?.levelUp(before,after)).catch(()=>{});toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');for(const l of M.milestonesBetween(before,state.level))toast(t('Milestone: level {level}! +{energy} energy and a moonstone. Onward, legend!',{level:l,energy:M.milestoneReward(l).energy.toLocaleString()}),'🏅');}tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);}}
+  if(popups){void loadInsight().then(()=>insight?.levelUp(before,after)).catch(()=>{});toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');for(const l of M.milestonesBetween(before,state.level))toast(t('Milestone: level {level}! +{energy} energy and a moonstone. Onward, legend!',{level:l,energy:M.milestoneReward(l).energy.toLocaleString()}),'🏅');}tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);levelFlash();}}
+/** A level-up shows itself once, quietly: the EXP bar and the level badge flash gold (hud-ours.css), no pop-up. */
+function levelFlash(){for(const el of [$('#xp-fill').parentElement,document.querySelector('#hud .level-badge')]){if(!el)continue;el.classList.remove('level-flash');void (el as HTMLElement).offsetWidth;el.classList.add('level-flash');el.addEventListener('animationend',()=>el.classList.remove('level-flash'),{once:true});}}
 function change<T>(action:()=>T):T {const before=state.level;const result=action();levelCheck(before);save();updateHud();return result;}
 function uiBlocked(){return !!modal||!!document.querySelector('dialog[open]')||shipSequence?.busy||!!flight||arriving;}
 function botActive(){return started&&!actionHandler&&!document.hidden&&!uiBlocked()&&!placement&&!world.interior&&world.planet==='home'&&state.hp>0;}

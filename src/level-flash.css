@@ -1,0 +1,9 @@
+/* Level-up: one gold flash on the EXP bar and the level badge (main.ts levelFlash), in place of a pop-up. Runs only
+   for the 1.1 s after a level-up; kept out of hud-ours.css, whose standing pieces carry no animation. */
+#app #hud .level-flash { animation: level-flash 1.1s ease-out 1; }
+@keyframes level-flash {
+  0% { filter: none; box-shadow: none; }
+  25% { filter: brightness(1.45) saturate(1.3); box-shadow: 0 0 0 3px #ffd84a, 0 0 18px 4px rgba(255, 210, 60, .85); }
+  100% { filter: none; box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) { #app #hud .level-flash { animation-duration: .01s; } }
