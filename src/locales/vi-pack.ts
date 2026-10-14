@@ -36,6 +36,7 @@ import { VI_MOBILE } from './vi-mobile.ts';
 import { DAWNSTAR_VI } from './vi-dawnstar.ts';
 import { FIVE_VI } from './vi-five.ts';
 import { PETGUARD_VI } from './vi-petguard.ts';
+import { SWIM_VI } from './vi-swim.ts';
 
 /** Every Vietnamese phrase in one table. Only this module imports the catalog files, so a build ships them as one lazy chunk (i18n.ts loadVietnamese). */
 export const VI_PACK: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS, VI_HOUSE, VI_HOUSE_TALK, VI_FRIEND_LINES, VI_LOOKS, VI_UPGRADES, VI_TESTER, VI_SKILLS, VI_GROUPS, VI_DOG_TOSS, VI_SHOP, VI_LAKE, VI_GARDEN, VI_REFUSALS, VI_RANKING, VI_FIXES, VI_BOTS, VI_ECON, VI_EXTRAS, VI_SAVE);
@@ -43,6 +44,7 @@ Object.assign(VI_PACK, VI_GUIDE, VI_MOBILE);
 Object.assign(VI_PACK, ROAR_VI);
 Object.assign(VI_PACK, ELITE_VI);
 Object.assign(VI_PACK, PAIR_VI);
+Object.assign(VI_PACK, SWIM_VI);
 Object.assign(VI_PACK, SHAPES_VI);
 Object.assign(VI_PACK, CHAIN_VI);
 Object.assign(VI_PACK, MOVES_VI);

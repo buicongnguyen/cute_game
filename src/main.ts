@@ -68,6 +68,7 @@ import { initUpgradeBench as mountUpgradeBench } from './upgrade-bench.ts';
 import { CombatView } from './combat-view.ts';
 import { SkillFx } from './skill-fx.ts';
 import { terrainHeight, inWater } from './environments.ts';
+import { mountSwim } from './swim.ts';
 import { FishingSimulation, selectCatch, planCast, catchWeight, resolveMysteryCatch, newMysteryCaller, attractMystery, mysteryMissed, mysteryLanded } from './fishing.ts';
 import { GroundGestures } from './gestures.ts';
 import { ZOOM, clampZoom } from './camera-rig.ts';
@@ -305,6 +306,7 @@ const graphics=loadGraphics(state.settings.lowGraphics);graphics.setResolution(s
 let world: World;
 try { world = new World($('#world'), state, { antialias: !(graphics.mobile && devicePixelRatio >= 2) }); }
 catch (error) { app.innerHTML = localizeHtml('<div class="fatal"><h1>Your garden needs WebGL</h1><p>Enable hardware acceleration in your browser, then reload this page.</p><p>Your saved adventure is safe.</p></div>'); throw error; }
+const swim=mountSwim({world,active:()=>started,toast:(message,icon)=>toast(message,icon)}); // crossing water: wade, swim, glide (swim.ts)
 frameListeners.add(titleOrbit(world,()=>started)); // the title card floats over the village, the camera swaying slowly (title-card.ts)
 onInstallChange(()=>syncInstallButtons());
 initDockFraming(world.camera); // desktop menus dock right; slide the picture so the hero stays clear (dialog-dock.ts)
@@ -1128,6 +1130,7 @@ async function throwHarpoon(aim?:{x:number;z:number}){
 function fish(pond?:Entity|null){
   pond??=world.entities.filter(e=>e.kind==='fish'&&e.pond).sort((a,b)=>Math.hypot(a.x-world.position.x,a.z-world.position.z)-a.radius-(Math.hypot(b.x-world.position.x,b.z-world.position.z)-b.radius))[0]??null;
   if(!pond?.pond||Math.hypot(pond.x-world.position.x,pond.z-world.position.z)>pond.radius+3){toast('Walk up to a pond to cast your line.','🎣');return;}
+  if(swim.mode()!=='land'){toast('Step out onto the shore to fish.','🎣');return;}
   if(state.gear.weapon==='harpoon'&&!state.gear.disguise){const tap=world.pondTap?.id===pond.id?world.pondTap:undefined;world.pondTap=null;void throwHarpoon(tap);return;}
   const rodId=contextGear.forFishing(state);
   if(!rodId){openDialog('fish-help','A quiet moment by the water',`<div class="grow-illustration">🎣</div><p class="center">Keep a fishing rod in your backpack to cast your line. Your best rod is held automatically near water, and your combat weapon returns when you leave or fight.</p><p class="center">${esc(t('A bamboo rod costs ϟ {price} in the outfitters, under Supplies › Rods & tools.',{price:M.shopPrice(state,'rod')??20}))}</p><button class="primary wide" data-action="shop-rod">${esc(t('Visit the outfitters'))}</button>`,'FISHING');return;}
@@ -1432,7 +1435,7 @@ function jumpBlock(){
   if(!airOn())return 'idle' as const;
   const layout=world.environment?.layout,flying=world.playerFlying||!!M.activeStats(state).flying;
   return canJump({playing:started&&!document.hidden,down:state.hp<=0,menu:uiBlocked(),cutscene:!!shipSequence?.busy||arriving,starship:!!flight||world.boarded,indoors:!!world.interior,fishing:!!fishGame||world.fishing!=='idle',placing:!!placement,
-    stunned:!!colossus?.locked||(!!ctfApi?.active&&!ctfApi.canAct),thrown:(world.playerLift??0)>0,swimming:!!layout&&inWater(layout,world.position)&&!flying,flying:world.playerFlying,riding:!!world.environment?.airborne||!!world.environment?.riding,casting:combat.locksMovement});
+    stunned:!!colossus?.locked||(!!ctfApi?.active&&!ctfApi.canAct),thrown:(world.playerLift??0)>0,swimming:!!layout&&inWater(layout,world.position)&&!flying||swim.blocksActions(),flying:world.playerFlying,riding:!!world.environment?.airborne||!!world.environment?.riding,casting:combat.locksMovement});
 }
 /** One jump, if the explorer may: from the ground, or the next of the three in the air. */
 function tryJump(){
@@ -1642,6 +1645,7 @@ function powerStrike(){
 }
 /** The blow itself: the damage (combat.ts powerStrike), the swing, the look (power-fx.ts), the hit-stop, the shake and the sound. */
 function releasePower(level:number,air:boolean){
+  if(swim.blocksActions())return; // no power strike while swimming
   const weapon=M.weaponStats(state),kind=weapon.kind==='sword'?'sword':weapon.kind==='gun'?'gun':'fist',shape=powerShape(weapon.kind,air),area=powerArea(shape,level),color=powerColor(weapon),p=world.position,fx=world.fx;
   combat.powerStrike(shape,level,powerCap);
   // The weapon's or the uniform's own special goes off with the strike (it had the fourth button before the five-button
@@ -1715,6 +1719,7 @@ combat.edge.crit=()=>{if(!airOn())return undefined;const from=strikeFrom??world.
 /** `e`: the creature the explorer walked up to (tap, auto-attack); a press of the attack key or pad passes none. */
 function basicAttack(e?:Enemy){
   if(ctfApi?.active&&!ctfApi.canAct)return;
+  if(swim.blocksActions())return; // no attacks while swimming (swim-rules.ts)
   if(!started||uiBlocked()||visiting)return;
   // The dive is its own move: a press while falling from height starts it even while the last swing's cooldown still runs.
   if(!e&&world.jump?.airborne&&!world.jump.diving&&world.jump.falling&&world.jump.height>=DIVE.minHeight&&pressKind(world.jump)==='air'&&startDive())return;
@@ -1753,6 +1758,7 @@ const readyWas=[0,0,0,0],readyAir=[false,false,false,false];
 function skillList(){const disguise=state.gear.disguise?M.DISGUISES[state.gear.disguise]:null;return disguise?.skills??ownSkills(M.weaponStats(state).special??'fist');}
 function skill(index:number){
   if(ctfApi?.active&&!ctfApi.canAct)return;
+  if(swim.blocksActions())return; // no skills while swimming
   if(!started||uiBlocked()||visiting||!Number.isInteger(index)||index<0||index>3||!skillList()[index])return; // with the moves on the fourth slot is empty
   prepareCombatWeapon();
   // A move's air form has its own cooldown. A Quake whose air form is still cooling down is the plain dive (ready, it is the heavy one below).
@@ -1825,7 +1831,7 @@ function rebuildHomePresentation(planet:M.PlanetId){
 const sharedKills=new Set<string>();
 export const gameBridge:GameBridge={
   getState:()=>state,getWorld:()=>world,
-  getPresence:()=>({y:house.poseY(world.position.y+world.jump.height),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot(),dog:(()=>{const dog=world.ownDog?.();return dog!==null&&dog!==undefined&&M.dogWorn(state.gear)&&dogFollows(world.planet,world.position,!!world.interior)?dog:null;})()}),
+  getPresence:()=>({y:house.poseY(world.position.y+world.jump.height),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,swim:swim.mode(),visible:!document.hidden,visual:world.visualSnapshot(),dog:(()=>{const dog=world.ownDog?.();return dog!==null&&dog!==undefined&&M.dogWorn(state.gear)&&dogFollows(world.planet,world.position,!!world.interior)?dog:null;})()}),
   getOfflineState:()=>{try{return M.parseSave(localStorage.getItem(activeKey()));}catch{return null;}},
   applyState(next){fishingEpoch++;mysteryCaller=newMysteryCaller();fishingView.dropMystery();if(flight)exitSpace();shipSequence?.reset();arriving=false;autopilotTarget=null;homeQueued=false;state=next;applyMovePad();graphics.setResolution(state.settings.renderRes??'auto');world.applyGraphics(graphics.profile,graphics.ratio);const nameInput=document.querySelector<HTMLInputElement>('#name-input');if(nameInput)nameInput.value=state.name;visiting=null;visitHome=null;world.state=state;resetCombat();world.build(state.planet);world.refreshPlayer();if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal)closeDialog();updateHud();updateLabels();},
   setPersistence(handler){persistence=handler;},
