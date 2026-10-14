@@ -7,7 +7,7 @@ import { COLOSSUS_ITEMS, COLOSSUS_LOOT, COLOSSUS_TYPE } from './colossus-content
 // Gameplay facts measured from the public reference client, 2026-09-30.
 // Rendering assets, descriptions and implementation code are independently authored.
 /** Keys of SaveState.gear. 'pet2' is the second pet slot: it holds an item whose own slot is 'pet' (pet-slots.ts); no item names it. */
-export type GearSlot = 'weapon' | 'hat' | 'outfit' | 'boots' | 'pet' | 'pet2' | 'disguise';
+export type GearSlot = 'weapon' | 'side' | 'hat' | 'outfit' | 'boots' | 'pet' | 'pet2' | 'disguise';
 export type PlanetId = 'home' | 'candy' | 'ice' | 'lava' | 'toy' | 'jungle' | 'ocean' | 'cloud' | 'shadow';
 export type ItemId = string;
 export type CropId = string;

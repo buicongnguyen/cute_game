@@ -1,4 +1,5 @@
 import * as Game from './model.ts';
+import * as Pair from './weapon-pair.ts';
 import * as Helper from './helper.ts';
 import * as AutoPlant from './auto-plant.ts';
 import * as FarmHelper from './farm-helper.ts';
@@ -76,6 +77,9 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     // Taking the weapon off by hand means fists, saved so a reload and the server's combat honour it; a combat weapon put on ends it.
     case 'equip': if (p.slot !== undefined && typeof p.slot !== 'string') return invalid(); result = Game.equip(state, id(), p.slot as Game.GearSlot | undefined); if (result && ['sword', 'gun', 'fist'].includes(Game.ITEMS[state.gear.weapon ?? '']?.weapon?.kind ?? '') && Game.ITEMS[id()]?.slot === 'weapon') delete state.fists; break;
     case 'unequip': result = Game.unequip(state, string(p.slot) as Game.GearSlot); if (result && p.slot === 'weapon') state.fists = true; break;
+    // Weapon pair (weapon-pair.ts): a gun into the side slot, or the side slot emptied.
+    case 'equipSide': result = Pair.equipSide(state, id()); break;
+    case 'unequipSide': result = Pair.unequipSide(state); break;
     case 'eat': result = Game.eat(state, id(), now); break;
     case 'transfer': {
       const item = id(), toChest = p.toChest === true, available = toChest ? Game.looseQuantity(state, item) : state.chest[item] || 0;
@@ -192,7 +196,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'reset': { const fresh=Game.newGame(state.name,state.color); fresh.settings={...state.settings}; delete fresh.settings.tester; /* a new adventure starts outside tester mode */ for(const key of Object.keys(state))delete (state as unknown as Record<string,unknown>)[key]; Object.assign(state,fresh); result=true; break; }
     case 'settings': {
       const settings = p.settings;
-      if (settings && typeof settings === 'object' && !Array.isArray(settings)) { applyAudio(state.settings, settings as Record<string, unknown>); for (const key of ['lowGraphics', 'movePad', 'placeBeds', 'keepBagOnDeath'] as const) if (typeof (settings as Record<string, unknown>)[key] === 'boolean') state.settings[key] = (settings as Record<string, boolean>)[key]; }
+      if (settings && typeof settings === 'object' && !Array.isArray(settings)) { applyAudio(state.settings, settings as Record<string, unknown>); for (const key of ['lowGraphics', 'movePad', 'placeBeds', 'keepBagOnDeath', 'pairManual'] as const) if (typeof (settings as Record<string, unknown>)[key] === 'boolean') state.settings[key] = (settings as Record<string, boolean>)[key]; }
       const level = settings && typeof settings === 'object' ? (settings as Record<string, unknown>).difficulty : undefined;
       // Raising is free; lowering works once an hour (difficulty.ts), so the Normal rules cannot be dodged per action.
       if (Game.isDifficulty(level) && level !== Game.difficultyOf(state)) {

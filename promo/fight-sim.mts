@@ -31,6 +31,7 @@ import { petTrail, PET_SIDE, PET2_SIDE } from '../src/pet-pen.ts';
 import { ENEMY_TYPES } from '../src/enemy-types.ts';
 import { ELITE_ROLES, SPLIT, type EliteRoleId } from '../src/elite-roles.ts';
 import { makeChildren, makeElite } from '../src/elite-world.ts';
+import { WeaponPair, DRAW_TIME } from '../src/weapon-pair.ts';
 
 /**
  * Pets in a scripted fight (promo/pet-sim.mts): the pets worn (one or two ids), their bench level, a pack of ordinary
@@ -52,10 +53,12 @@ export const ROUTES: Record<Route | 'double', readonly Step[]> = {
 const quiet = { text() {}, burst() {}, ring() {}, spark() {}, shake() {}, flash() {}, freeze() {}, update() {}, slash() {}, shakeOffset: () => new T.Vector3() };
 function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 15, 1 | seed); seed ^= seed + Math.imul(seed ^ seed >>> 7, 61 | seed); return ((seed ^ seed >>> 14) >>> 0) / 4294967296; }; }
 
-export interface FightResult { won: boolean; seconds: number; taken: number; hits: number; dodged: number; perfect: number; biggest: number; bossHp: number; blocked: number; /** Times the script's route ran to its end, and the longest chain. */ routes: number; combo: number; finishers: number; /** Power strikes used (power-rules.ts), and the damage dealt in all. */ powers: number; damage: number; /** Pets (pet-guard.ts): damage they dealt, damage their guards took off (in full healths, like `taken`), guards fired by kind, health mended. */ petDamage: number; /** EXP of every creature beaten (an elite's children too), and the barrier's deflects and breaks (elite-roles.ts). */ xp: number; deflected: number; breaks: number; saved: number; guards: Record<string, number>; mended: number; /** The longest untouched streak, and the average damage bonus it gave over the fight (0.12 = +12%). */ streak: number; bonus: number }
+export interface FightResult { /** Weapon pair: hand changes made by the auto swap. */ swaps?: number; won: boolean; seconds: number; taken: number; hits: number; dodged: number; perfect: number; biggest: number; bossHp: number; blocked: number; /** Times the script's route ran to its end, and the longest chain. */ routes: number; combo: number; finishers: number; /** Power strikes used (power-rules.ts), and the damage dealt in all. */ powers: number; damage: number; /** Pets (pet-guard.ts): damage they dealt, damage their guards took off (in full healths, like `taken`), guards fired by kind, health mended. */ petDamage: number; /** EXP of every creature beaten (an elite's children too), and the barrier's deflects and breaks (elite-roles.ts). */ xp: number; deflected: number; breaks: number; saved: number; guards: Record<string, number>; mended: number; /** The longest untouched streak, and the average damage bonus it gave over the fight (0.12 = +12%). */ streak: number; bonus: number }
 export function fight(boss: string, planet: M.PlanetId, zone: [number, number], level: number, gear: Partial<M.SaveState['gear']>, script: Script, seed = 1, blockOverride?: number, /** `power`: the hero holds Attack for the power strike whenever it is charged and the boss is in its area. */ opts: { power?: boolean; pets?: PetOptions; /** More creatures of these kinds round the first: the fight is won when all are down. */ pack?: readonly string[];
   /** The creature carries this elite role (elite-roles.ts); a splitter's children must be beaten too. */ elite?: EliteRoleId;
   /** The hero keeps this far from the creature's edge (m) and attacks from there (a gun kept at range); default: beside it. */ range?: number;
+  /** Weapon pair (weapon-pair.ts): this gun in the side slot, swapped in and out by the auto rule (far: gun, close: blade or fists). */ side?: string;
+  /** The hero starts this far from the creature's edge (m) and walks in; default: in reach. */ start?: number;
   /** No skills at all: basic attacks only (and the Lob with the 'only-lob' script). */ basicOnly?: boolean } = {}): FightResult {
   const random = seeded(seed * 7919), realRandom = Math.random; Math.random = random;
   try {
@@ -73,7 +76,8 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
     const weapon = () => strikeSlot ? { ...M.weaponStats(state), special: 'fist' } : M.weaponStats(state), special = () => weapon().special ?? 'fist';
     let e = w.spawnSpecies(boss, zone[0], zone[1], 0)! as Enemy;
     if (opts.elite) { makeElite(e, opts.elite); if (opts.elite === 'splitter') makeChildren(boss, SPLIT.cap, (type, index) => w.spawnSpecies(type, zone[0], zone[1] + 40, index) as Enemy | null, 1); }
-    w.position.set(zone[0] + e.radius + 1.3 + (opts.range ?? 0), 0, zone[1]);
+    w.position.set(zone[0] + e.radius + (opts.start ?? 1.3 + (opts.range ?? 0)), 0, zone[1]);
+    const pairs = opts.side ? new WeaponPair() : null; if (opts.side) { state.bag[opts.side] = 1; state.gear.side = opts.side; }
     const pack = (opts.pack ?? []).map((kind, i) => { const a = (i + 1) / ((opts.pack!.length + 1)) * Math.PI * 2, far = ENEMY_TYPES[kind]?.behavior === 'shooter' ? 8 : 4; return w.spawnSpecies(kind, zone[0] + Math.cos(a) * far, zone[1] + Math.sin(a) * far, i + 1)! as Enemy; });
     const foes = opts.elite ? w.enemies : [e, ...pack], pets = opts.pets, petIds = pets?.ids ?? [];
     if (pets?.level) { (state as M.SaveState & { gearLevels?: Record<string, number> }).gearLevels = Object.fromEntries(petIds.map(id => [id, pets.level!])); }
@@ -83,7 +87,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       if (pets!.before) { const old = PET_BEFORE[petRoleId(id) ?? '']; return old ? { x: at.x, z: at.z, dmg: old[0] * factor, cd: old[1], ...(shot ? { shot } : {}) } : null; }
       const f = petFighter(id, factor, shot); return f ? { ...f, x: at.x, z: at.z } : null; };
     const nearest = (range: number) => { let best: Enemy | null = null, bestD = Infinity; for (const f of foes) { const d = Math.hypot(f.x - w.position.x, f.z - w.position.z) - f.radius; if (f.hp > 0 && d < range && d < bestD) { bestD = d; best = f; } } return best; };
-    const stats = () => M.activeStats(state), out: FightResult = { won: false, seconds: 0, taken: 0, hits: 0, dodged: 0, perfect: 0, biggest: 0, bossHp: 0, blocked: 0, routes: 0, combo: 0, finishers: 0, powers: 0, damage: 0, petDamage: 0, xp: 0, deflected: 0, breaks: 0, saved: 0, guards: {}, mended: 0, streak: 0, bonus: 0 };
+    const stats = () => M.activeStats(state), out: FightResult = { swaps: 0, won: false, seconds: 0, taken: 0, hits: 0, dodged: 0, perfect: 0, biggest: 0, bossHp: 0, blocked: 0, routes: 0, combo: 0, finishers: 0, powers: 0, damage: 0, petDamage: 0, xp: 0, deflected: 0, breaks: 0, saved: 0, guards: {}, mended: 0, streak: 0, bonus: 0 };
     const charge = new PowerCharge(), streak = new UntouchedStreak(); let held = 0, bonusTime = 0;
     const combo = new J.ComboMeter(); let invulnerable = 0, attackCd = 0, sure = 0, kind: J.ComboHit | null = null, strike: { height: number; jumps: number } | null = null, skyQuake: { height: number; jumps: number } | null = null, skyFactor = 1, quakeFinisher = false;
     const cds = [0, 0, 0, 0], airCds = [0, 0, 0, 0];
@@ -97,6 +101,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
         status: (target: CombatTarget, kind: Parameters<World['statusEnemy']>[1], duration: number) => w.statusEnemy(target as Enemy, kind, duration),
         guarded: (event: { kind: string }) => { out.guards[event.kind] = (out.guards[event.kind] ?? 0) + 1; } } : {}),
       hit: (target, impact) => {
+        if (pairs && !impact.helper) { const m = pairs.takeBonus(); if (m !== 1) impact = { ...impact, amount: impact.amount * m }; } // the first hit after a swap: +20%
         const en = target as Enemy, before = en.hp, wasOpen = (en.barrier?.open ?? 0) > 0; w.damageEnemy(en, impact.amount, impact.stun, false, impact.source); if (before > 0 && en.hp <= 0) out.xp += en.xp; if (en.barrier && !wasOpen) { if (en.barrier.open > 0) out.breaks++; else if (impact.source === 'shot' || impact.source === 'pet' || impact.source === 'summon') out.deflected++; } out.biggest = Math.max(out.biggest, before - en.hp); out.damage += before - en.hp; if (impact.blocked) out.blocked++; if (impact.helper) { out.petDamage += before - en.hp; return; } if (on) charge.hit();
         if (impact.lift && en.hp > 0) w.knockUpEnemy(en, impact.lift, .75);
         if (on && combo.hit(kind ?? (w.jump.airborne ? 'air' : impact.lift > 0 ? 'launcher' : 'ground'))) { out.combo = Math.max(out.combo, combo.count); streak.hit(); out.streak = Math.max(out.streak, streak.count); }
@@ -168,7 +173,9 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
         if (flee) { w.move(flee.x * stats().speed * dt, flee.z * stats().speed * dt); fled += dt; }
         else if (d > want + .1 && !sim.locksMovement) { const go = Math.min(d - want, stats().speed * dt); w.move(dx / d * go, dz / d * go); }
         if (!sim.locksMovement) w.facing = Math.atan2(dx, dz); }
-      const j = w.jump, gap = Math.hypot(e.x - w.position.x, e.z - w.position.z) - e.radius, reach = gap < (opts.range !== undefined ? opts.range + .6 : 2.2), grounded = !j.airborne, free = !sim.locksMovement && !sim.busy;
+      // Weapon pair: the auto swap by the creature's edge distance, as main.ts does every frame (the draw holds the next attack).
+      if (pairs && e.hp > 0 && pairs.auto(Math.hypot(e.x - w.position.x, e.z - w.position.z) - e.radius, t)) { if (pairs.hand === 'side') state.hand = 'side'; else delete state.hand; sim.swapped(); attackCd = Math.max(attackCd, DRAW_TIME); out.swaps!++; }
+      const j = w.jump, gap = Math.hypot(e.x - w.position.x, e.z - w.position.z) - e.radius, reach = gap < (state.hand === 'side' ? weapon().range - .3 : opts.range !== undefined ? opts.range + .6 : 2.2), grounded = !j.airborne, free = !sim.locksMovement && !sim.busy;
       // Dodging: jump just before a ground attack lands.
       const ground = e.phase === 'windup' && J.attackClass(e.skill ?? (e.mesh.userData.slam ? 'slam' : 'melee')) === 'ground';
       if (jumps > 0 && ground && (e.phaseTime ?? 9) <= .2 && j.ready && grounded && !sim.locksMovement) j.jump();
@@ -346,7 +353,31 @@ export function eliteReport(seeds: readonly number[] = [1, 2, 3, 4, 5, 6]) {
   return rows;
 }
 
-if (process.argv[1]?.endsWith('fight-sim.mts') && process.env.ELITE) {
+/**
+ * Weapon pair (weapon-pair.ts): one weapon used well against the same weapon with a side gun on the auto swap. Every fight
+ * starts 9 m from the creature's edge and walks in, so the gun's opening shots and the draw both count. Target: the pair's
+ * damage per second within +-5% of the single weapon on the bosses (no stat stacking), and a clear gain on the elite
+ * crystal-shell crab, where shots are deflected and the swap to the blade cracks the shell.
+ */
+export const PAIR_FIGHTS: Array<{ name: string; boss: string; planet: M.PlanetId; at: [number, number]; level: number; gear: Partial<M.SaveState['gear']>; side: string; script: Script; elite?: EliteRoleId; guns?: Partial<M.SaveState['gear']> }> = [
+  { name: 'Yeti', boss: 'yeti', planet: 'ice', at: [60, 0], level: 16, gear: FIGHTS[1].gear, side: 'gun_ice', script: 'single' },
+  { name: 'Shadow Lord', boss: 'shadowlord', planet: 'shadow', at: [60, 0], level: 24, gear: FIGHTS[2].gear, side: 'staff_fire', script: 'single' },
+  { name: 'Yeti (ground)', boss: 'yeti', planet: 'ice', at: [60, 0], level: 16, gear: FIGHTS[1].gear, side: 'gun_ice', script: 'ground' },
+  { name: 'shell crab (elite)', boss: ELITE_ROLES.shielded.species, planet: 'ocean', at: [60, 0], level: 15, gear: { weapon: 'sword_crystal' }, side: 'gun_spike', script: 'single', elite: 'shielded', guns: { weapon: 'gun_spike' } },
+];
+export function pairReport(seeds: readonly number[] = [1, 2, 3, 4, 5, 6]) {
+  return PAIR_FIGHTS.map(f => {
+    const run = (gear: Partial<M.SaveState['gear']>, side?: string) => { const runs = seeds.map(seed => fight(f.boss, f.planet, f.at, f.level, gear, f.script, seed, f.elite ? 1 : undefined, { elite: f.elite, side, start: 9 })); const time = runs.reduce((a, r) => a + r.seconds, 0);
+      return { dps: runs.reduce((a, r) => a + r.damage, 0) / time, seconds: time / runs.length, taken: runs.reduce((a, r) => a + r.taken, 0) / runs.length, swaps: runs.reduce((a, r) => a + (r.swaps ?? 0), 0) / runs.length, won: runs.filter(r => r.won).length }; };
+    const single = run(f.gear), pair = run(f.gear, f.side), gun = f.guns ? run(f.guns) : null;
+    return { name: f.name, single, pair, gun, change: pair.dps / single.dps - 1 };
+  });
+}
+
+if (process.argv[1]?.endsWith('fight-sim.mts') && process.env.PAIR) {
+  console.log('Weapon pair (weapon-pair.ts): one weapon vs the same weapon + a side gun on the auto swap, from 9 m, 6 seeds (damage per second, time to win, damage taken in full healths)');
+  for (const r of pairReport()) console.log(`  ${r.name.padEnd(19)} single ${r.single.dps.toFixed(0).padStart(4)}/s ${r.single.seconds.toFixed(1).padStart(5)} s  pair ${r.pair.dps.toFixed(0).padStart(4)}/s ${r.pair.seconds.toFixed(1).padStart(5)} s  ${(r.change >= 0 ? '+' : '') + (r.change * 100).toFixed(1)}%  swaps ${r.pair.swaps.toFixed(1)}  taken ${r.single.taken.toFixed(2)} -> ${r.pair.taken.toFixed(2)}${r.gun ? `  (gun alone ${r.gun.dps.toFixed(0)}/s ${r.gun.seconds.toFixed(1)} s)` : ''}`);
+} else if (process.argv[1]?.endsWith('fight-sim.mts') && process.env.ELITE) {
   console.log('Elite roles (elite-roles.ts): ordinary creature vs its elite at the planet level, 6 seeds (time, damage taken in full healths, EXP a minute incl. the extra loot roll)');
   for (const r of eliteReport()) console.log(`  ${r.role.padEnd(9)} ${r.way.padEnd(24)} ${r.plain.toFixed(1).padStart(5)} s -> ${r.elite.toFixed(1).padStart(5)} s  x${r.ratio.toFixed(2)}${r.right ? '' : ' (wrong answer)'}  taken ${r.takenPlain.toFixed(2)} -> ${r.takenElite.toFixed(2)}  EXP/min ${r.xpMinPlain.toFixed(0)} -> ${r.xpMinElite.toFixed(0)}  deflected ${r.deflected.toFixed(1)} breaks ${r.breaks.toFixed(1)}  won ${r.won}`);
 } else if (process.argv[1]?.endsWith('fight-sim.mts')) {

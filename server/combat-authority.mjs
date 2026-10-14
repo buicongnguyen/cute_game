@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import * as Game from '../src/model.ts';
 import {ContextGearSelection} from '../src/context-gear.ts';
+import {WeaponPair,sideGun,withHand} from '../src/weapon-pair.ts';
 import {CombatSimulation,BASE_SKILLS,SPECIALS,DZ,shareableDecoys,decoyPoint} from '../src/combat.ts';
 import {ENEMY_TYPES} from '../src/enemy-types.ts';
 import {enemyRoster} from '../src/enemy-roster.ts';
@@ -268,7 +269,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   }
   function combatProfile(peer){
     const engine=engineFor(peer),profile=peer.account.profile;engine.gear??=new ContextGearSelection();
-    const weapon=engine.gear.forCombat(profile);return {...profile,gear:{...profile.gear,...(weapon?{weapon}:{weapon:undefined})}};
+    const weapon=engine.gear.forCombat(profile);return withHand({...profile,gear:{...profile.gear,...(weapon?{weapon}:{weapon:undefined})}},engine.pair.hand);
   }
   function engineFor(peer){
     let engine=engines.get(peer.account.id);
@@ -278,7 +279,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       if(engine.planet!==peer.planet){engine.planet=peer.planet;engine.environment=new EnvironmentSimulation(createEnvironmentLayout(peer.planet));}
       return engine;
     }
-    engine={peer,room:peer.room,planet:peer.planet,reconciledLife:epoch(peer.account),lastSeen:Date.now(),nextBasic:0,nextSkill:[0,0,0,0],healthEvents:[],hpAt:0,damageAt:0,lastSkill:new Map(),environment:new EnvironmentSimulation(createEnvironmentLayout(peer.planet))};
+    engine={peer,room:peer.room,planet:peer.planet,reconciledLife:epoch(peer.account),lastSeen:Date.now(),nextBasic:0,nextSkill:[0,0,0,0],healthEvents:[],hpAt:0,damageAt:0,lastSkill:new Map(),pair:new WeaponPair(),environment:new EnvironmentSimulation(createEnvironmentLayout(peer.planet))};
     const current=()=>engine.peer,room=()=>rooms.get(current().room);
     const targets=()=>room()?[...state(room()).enemies.values()]:[];
     // A pet's shot and its guard come from the one table (pet-guard.ts), scaled by its level; it stands with its explorer.
@@ -286,7 +287,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     engine.sim=new CombatSimulation({position:()=>current().pose,facing:()=>current().pose.facing,face:a=>{current().pose.facing=a;},targets,
       weapon:()=>{const weapon=Game.weaponStats(combatProfile(current()));return weapon.kind==='rod'?{kind:'fist',range:1.6,cd:.5,special:'fist'}:weapon;},
       stats:()=>Game.activeStats(combatProfile(current())),moving:()=>current().pose.moving,
-      move:(x,z)=>{current().pose.x+=x;current().pose.z+=z;},hit:(target,impact)=>hit(current(),target,impact),
+      move:(x,z)=>{current().pose.x+=x;current().pose.z+=z;},hit:(target,impact)=>{/* the first own hit after a swap does +20% (weapon-pair.ts) */const m=impact.helper?1:engine.pair.takeBonus();return hit(current(),target,m===1?impact:{...impact,amount:impact.amount*m});},
       heal:fraction=>hp(current(),Game.maxHp(current().account.profile)*fraction,'heal'),
       execute:target=>{const p=current();if(!target.boss&&target.hp/target.maxHp<.4&&dist(p.pose,target)<=3.2+target.radius)hit(p,target,{amount:target.hp,critical:true,stun:0,lift:0,knock:0,direction:{x:0,z:0}},true);},
       effect:effect=>{if(room())broadcast(room(),{type:'effect',by:current().account.id,visual:effect},current().account.id);},
@@ -311,7 +312,9 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     if(newLife){engine.reconciledLife=epoch(peer.account);engine.environment=new EnvironmentSimulation(createEnvironmentLayout(peer.planet));engine.damageAt=0;}
     if(reason==='reset'){engine.nextBasic=0;engine.nextSkill=[0,0,0,0];}
   }
-  function basic(peer,targetId){if(peer.visit||!peer.active||peer.account.profile.hp<=0)return;if(typeof targetId==='string')peer.target=targetId;const e=engineFor(peer),now=Date.now();if(now<e.nextBasic)return;const target=state(rooms.get(peer.room)).enemies.get(targetId);if(e.sim.basic(target)){const weapon=Game.weaponStats(combatProfile(peer));e.nextBasic=now+Math.max(.12,(weapon.cd||.5)/Math.max(.2,1+Game.activeStats(peer.account.profile).haste))*1000;}}
+  function basic(peer,targetId){if(peer.visit||!peer.active||peer.account.profile.hp<=0)return;if(typeof targetId==='string')peer.target=targetId;const e=engineFor(peer),now=Date.now();if(now<e.nextBasic||!e.pair.ready(now/1000))return;const target=state(rooms.get(peer.room)).enemies.get(targetId);if(e.sim.basic(target)){const weapon=Game.weaponStats(combatProfile(peer));e.nextBasic=now+Math.max(.12,(weapon.cd||.5)/Math.max(.2,1+Game.activeStats(peer.account.profile).haste))*1000;}}
+  /** Weapon pair: the explorer changed hands (Tab, the swap button or the auto swap). The server keeps the gap and the draw itself. */
+  function swap(peer,hand){if(peer.visit||!peer.active||(hand!=='main'&&hand!=='side'))return false;const e=engineFor(peer),profile=peer.account.profile;e.pair.settle(!!sideGun(profile));if(!e.pair.swap(hand,Date.now()/1000,!!sideGun(profile)))return false;e.sim.swapped();return true;}
   function skill(peer,index){if(peer.visit||!peer.active||peer.account.profile.hp<=0||!Number.isInteger(index)||index<0||index>3)return;const e=engineFor(peer),now=Date.now();if(now<e.nextSkill[index])return;const profile=combatProfile(peer),dz=profile.gear.disguise,weapon=Game.weaponStats(profile),list=Game.DISGUISES[dz]?.skills||[...BASE_SKILLS,SPECIALS[weapon.special||'fist']||SPECIALS.fist];if(dz?e.sim.disguise(dz,index):e.sim.skill(index,weapon.special||'fist')){e.nextSkill[index]=now+skillCooldown(profile,index,list[index].cd,!!dz)/Math.max(.2,1+Game.activeStats(profile).haste)*1000;internal(peer.account.id,'skill',[],records=>{const s=records.get(peer.account.id).profile;Game.recordEvent(s,'skill');return {index};}).catch(()=>{});}}
   function damage(peer,enemyId,source='melee',decoyId){
     if(peer.visit)return;const room=rooms.get(peer.room),enemy=room&&state(room).enemies.get(enemyId),e=engineFor(peer),now=Date.now();
@@ -359,5 +362,5 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   }
   const timer=setInterval(()=>{if(!stopped)try{tick(.05);}catch(error){onError(error);}},50);timer.unref();
   function bomb(peer,radius,multiplier){const room=rooms.get(peer.room);if(!room||peer.visit)return;for(const enemy of state(room).enemies.values())if(enemy.hp>0&&dist(peer.pose,enemy)<=radius+enemy.radius)hit(peer,enemy,{amount:Math.round(Game.attack(combatProfile(peer))*multiplier),critical:false,stun:.5,lift:0,knock:2,direction:{x:0,z:0}});}
-  return {acceptSnapshots,basic,skill,damage,decoys,bomb,engineFor,state,internal,resetPeer,flushPeerHealth,colossus,async close(){stopped=true;clearInterval(timer);for(const engine of engines.values())flushHealth(engine);await Promise.allSettled([...queues.values()]);}};
+  return {acceptSnapshots,basic,swap,skill,damage,decoys,bomb,engineFor,state,internal,resetPeer,flushPeerHealth,colossus,async close(){stopped=true;clearInterval(timer);for(const engine of engines.values())flushHealth(engine);await Promise.allSettled([...queues.values()]);}};
 }

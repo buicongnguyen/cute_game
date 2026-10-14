@@ -44,6 +44,7 @@ import { approach, blocked, clearSegment, findRoute, nearbyObstacles, someObstac
 import { attackRange, decoyPoint, DECOY, DZ, type DecoyPose } from './combat.ts';
 import { type SaveState, type PlanetId, PLANETS, cropProgress, giftAvailable, maxHp } from './model.ts';
 import * as M from './model.ts';
+import { isGun } from './weapon-pair.ts';
 import {EnvironmentSimulation,createEnvironmentLayout,environmentWalkable,inWater,terrainHeight,zoneAt,type EnvironmentStatus,type EnvironmentEvent,type LightningState} from './environments.ts';
 import {EnvironmentView} from './environment-art.ts';
 import {buildDecoration} from './decorations-art.ts';
@@ -785,6 +786,8 @@ export class World {
     // A weapon in the hand; a disguise worn without one shows its own blade when the weapon kit has a fitting model (skill-wind.ts HAND_BLADE).
     const own=handBlade(gear.disguise,gear.weapon);
     if(gear.weapon){if(!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);}else if(own)this.wearKit(c,own,'hand-right');
+    // Weapon pair (weapon-pair.ts): a side gun rides the same hand, hidden; the swap only flips which group shows (no rebuild, no download).
+    if(gear.side&&isGun(gear.side))this.pairHand(c,gear.side);
     // Up to two pets beside them (pet-slots.ts): the first on the left as ever, the second on the right; with their dog out (drawn by dog-world.ts on the left) the one pet takes the right.
     for(let i=0;i<2;i++){const id=M.companionId(gear,i);if(!id)break;const pet=this.petFor(id);pet.name='remote-pet';pet.position.set(i||M.dogWorn(gear)?1:-1,0,-.6);c.add(pet);}
     addOutlines(c,{merge:true});
@@ -816,6 +819,18 @@ export class World {
     if(id==='dz_dino'){c.add(cyl('#65a47d',0,.3,.9,0,.52,-.62));for(let i=0;i<4;i++)c.add(cyl('#e3c77d',0,.13,.22,0,.65+i*.33,-.48));}
     if(id==='dz_snowman')c.add(cyl('#efa75d',0,.1,.3,0,1.57,.66));
   }
+  /** Splits the hand into 'pair-main' (what was built so far) and a hidden 'pair-side' holding the side gun; each gets its own outline. */
+  private pairHand(c:T.Object3D,side:string){
+    const hand=c.getObjectByName('hand-right');if(!hand)return;
+    const main=new T.Group(),gun=new T.Group();main.name='pair-main';gun.name='pair-side';
+    for(const piece of [...hand.children])main.add(piece);hand.add(main);
+    const before=new Set(hand.children);if(!this.wearKit(c,side,'hand-right'))this.simpleWeapon(c,side);
+    for(const piece of [...hand.children])if(!before.has(piece))gun.add(piece);
+    gun.visible=false;hand.add(gun);
+  }
+  /** Weapon pair: which weapon the explorer holds out ('main' blade or fists, 'side' gun). Flips visibility only. */
+  pairShown:'main'|'side'='main';
+  showHand(hand:'main'|'side'){this.pairShown=hand;const m=this.player.getObjectByName('pair-main'),g=this.player.getObjectByName('pair-side');if(m)m.visible=hand==='main'||!g;if(g)g.visible=hand==='side';this.held=null;}
   private simpleWeapon(c:T.Object3D,id:string){
     const weapon=M.ITEMS[id]?.weapon,hand=c.getObjectByName('hand-right')??c;
     if(id==='harpoon'){const fork=createHarpoonProjectile();fork.name='weapon';fork.position.set(0,.06,.42);hand.add(fork);}
@@ -851,6 +866,7 @@ export class World {
     this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;o.userData.statusMaterials=true;this.playerMaterials.push(o.material);}});this.root.add(this.player);
     for(let i=0;i<2;i++){const pet=(i?this.companion2:this.companion)??new T.Group(),id=M.companionId(gear,i),next=id?this.petFor(id):new T.Group();this.disposeTree(pet);pet.removeFromParent();next.position.copy(pet.position);next.rotation.copy(pet.rotation);next.visible=pet.visible;if(perfFlags.mergeCompanions)mergeParts(next,{exact:true});/* same-look pieces of each rigid part drawn as one: a second pet costs about what one cost before */addOutlines(next,{merge:true});this.root.add(next);if(i)this.companion2=next;else this.companion=next;}
     this.interior?.adopt();
+    this.showHand(this.pairShown);
   }
 
   spawnEnemy(x:number,z:number,index:number,name:string,strong=false,boss=false) {
@@ -1367,7 +1383,7 @@ export class World {
    */
   skillWind(effect:string,from:{x:number;z:number},effects:readonly CombatEffect[]=[],landed=false){
     const rule=SKILL_WIND[effect];if(!rule||rule.cls==='none'||!this.player.visible||this.boarded)return;
-    const id=(this.tryOnGear??this.state.gear).weapon,held=id?M.ITEMS[id]?.weapon?.kind:undefined;
+    const id=this.tryOnGear?this.tryOnGear.weapon:M.heldWeaponId(this.state),held=id?M.ITEMS[id]?.weapon?.kind:undefined;
     // A held sword cuts and a held blaster cannot: only bare hands (or a fishing rod) take the disguise's own way.
     const blade=held==='sword'||(held!=='gun'&&rule.arm==='blade');
     const now=this.trailClock||0,c=TRAIL_COLOR.set(rule.color),tint:[number,number,number]=[c.r,c.g,c.b],f=this.facing,sin=Math.sin(f),cos=Math.cos(f),px=this.position.x,pz=this.position.z;
@@ -2095,9 +2111,9 @@ export class World {
   }
   /** The weapon in the explorer's hand, measured once per avatar build (weapon-trail.ts measureBlade), and its trail colour. */
   private heldBlade(hand:T.Object3D){
-    const id=(this.tryOnGear??this.state.gear).weapon;
+    const id=this.tryOnGear?this.tryOnGear.weapon:M.heldWeaponId(this.state);
     if(this.held?.hand!==hand||this.held.weapon!==id){
-      const info=measureBlade(hand),own=M.weaponStats(this.state).fx,c=TRAIL_COLOR;
+      const shown=hand.getObjectByName(this.pairShown==='side'?'pair-side':'pair-main'),info=measureBlade(shown??hand),own=M.weaponStats(this.state).fx,c=TRAIL_COLOR;
       // The weapon's effect colour; a dyed weapon, or one without an effect colour, takes the colour of its own paint.
       if(own&&!(id&&isDye(id)&&info.tint))c.set(own);else if(info.tint)c.setRGB(...info.tint);else c.set('#fff4c8');
       this.trailTint=[c.r,c.g,c.b];this.held={hand,info,weapon:id};

@@ -11,6 +11,7 @@ import { uniformSpecial } from './uniform-skills.ts';
 import { dropUnownedFriendLooks } from './friend-looks.ts';
 import { clearOfPen, inYard, emptyFarm, parseFarm, type FarmState } from './farm.ts';
 import { forgeLevel, parseForge } from './weapon-forge.ts';
+import { sideGun, isGun, SIDE_ATK_SHARE, type Hand } from './weapon-pair.ts';
 import { levelledStat, parseGearLevels, parseJumpLevel, parseSkillLevels } from './upgrades.ts';
 import { LEGACY_CROP_IDS } from './content.ts';
 import { cropLevel, cropXp, cropGrowTime, sellPrice, kitchenOpen, isDifficulty, difficultyOf, rewardScale, bedUpgradeScale, type Difficulty } from './difficulty.ts';
@@ -127,6 +128,8 @@ export interface SaveState {
         /** "Place new beds myself": a bought bed opens the see-through placement instead of going down automatically. */
         placeBeds?: boolean;
         keepBagOnDeath?: boolean;
+        /** Weapon pair: Manual means only Tab or the swap button changes weapons; absent (Auto) swaps by distance. */
+        pairManual?: boolean;
         /** Easy (default; every old save), Normal or Hard: difficulty.ts reads prices and rules through it. */
         difficulty?: Difficulty;
         /** When the difficulty was last lowered (difficulty.ts LOWER_COOLDOWN_MS: once an hour). */
@@ -175,6 +178,8 @@ export interface SaveState {
     gardenTrim?: TrimNote;
     /** The player took the weapon off by hand ('unequip'): fight with fists, after a reload and on the server too (context-gear.ts). */
     fists?: true;
+    /** Weapon pair (weapon-pair.ts): 'side' while the side gun is out. Transient: never read back from a save. */
+    hand?: Hand;
     /** Harpoon cooldowns and individual pond restock deadlines survive reloads. */
     hunting?: HuntingState;
     /** Rescued friends (friends.ts); missing in older saves = nobody rescued. */
@@ -202,13 +207,17 @@ export const CRIT_DAMAGE = 4;
 export const AIR_CRIT_DAMAGE = 8;
 export function newGame(name = 'Clover', color = COLORS[0]): SaveState { return { version: 1, contentVersion: 3, forge: {}, nextPlantId: 0, name: name.slice(0, 20) || 'Clover', color, level: 1, xp: 0, hp: 100, energy: 0, bag: {}, chest: {}, gear: {}, plots: Array.from({ length: STARTING_PLOTS }, (_, i) => ({ crop: null, plantedAt: 0, ...defaultBed(i) })), gardenLayout: GARDEN_LAYOUT, farm: emptyFarm(), counters: { harvests: 0, sold: 0, bought: 0, equipped: 0, kills: 0, upgrades: 0, fish: 0, skills: 0 }, quest: 0, healthUp: 0, attackUp: 0, defenseUp: 0, critUp: 0, planet: 'home', visited: ['home'], discovered: ['home'], settings: { sound: true, musicVolume: AUDIO_DEFAULTS.musicVolume, sfxVolume: AUDIO_DEFAULTS.sfxVolume, vibrate: AUDIO_DEFAULTS.vibrate, lowGraphics: false, difficulty: 'easy' }, worldRewards: { mineReadyAt: {}, collectedGifts: {}, giftReadyAt: {}, resourceReadyAt: {}, lava: { gateOpen: false, braziers: [] } }, buffs: {}, sizeEffect: null, decorations: [], nextDecorationId: 1, collection: {}, fishRecords: {}, progression: createProgression(), savedAt: Date.now(), welcome: 'pending', looks: { owned: ['tall'], style: 'girl-tall-none-bare' } }; }
 export function xpNeeded(level: number) { return Math.round(25 * Math.pow(Math.max(1, level), 1.55)); }
-function equipped(s: SaveState) { return Object.values(s.gear).map(id => ITEMS[id]).filter(Boolean); }
+/** Weapon pair (weapon-pair.ts): with the side gun out (s.hand) it is the weapon in hand; otherwise the side slot counts for nothing. */
+const sideHeld = (s: SaveState) => s.hand === 'side' && !!sideGun(s);
+export const heldWeaponId = (s: SaveState) => sideHeld(s) ? s.gear.side : s.gear.weapon;
+const counted = (s: SaveState) => Object.entries(s.gear).filter(([slot]) => slot !== (sideHeld(s) ? 'weapon' : 'side'));
+function equipped(s: SaveState) { return counted(s).map(([, id]) => ITEMS[id!]).filter(Boolean); }
 // Bench levels (upgrades.ts) scale an item's own flat stats. While a disguise is worn its own weapon fights (weaponStats),
 // so the hidden weapon in the hand adds neither its stats nor its forge bonus.
-function equipmentStat(s: SaveState, key: string) { return Object.entries(s.gear).reduce((sum, [, id]) => sum + levelledStat(s, id, key, (ITEMS[id]?.stats as Record<string, number> | undefined)?.[key] || 0), 0); }
+function equipmentStat(s: SaveState, key: string) { return counted(s).reduce((sum, [slot, id]) => sum + levelledStat(s, id!, key, (ITEMS[id!]?.stats as Record<string, number> | undefined)?.[key] || 0) * (slot === 'side' && key === 'atk' ? SIDE_ATK_SHARE : 1), 0); } // the side gun's attack counts at half
 function effect(s: SaveState, key: BuffKey, now = Date.now()) { const buff = s.buffs[key]; return buff && buff.expiresAt > now ? buff.value : 0; }
 export function maxHp(s: SaveState) { return 100 + (s.level - 1) * 10 + s.healthUp * 25 + equipmentStat(s, 'hp'); }
-export function attack(s: SaveState, now = Date.now()) { return (10 + (s.level - 1) * 1.5 + s.attackUp * 3 + equipmentStat(s, 'atk')) * (1 + (s.gear.weapon ? forgeLevel(s, s.gear.weapon) / 100 : 0)) * (1 + effect(s, 'atk', now)); }
+export function attack(s: SaveState, now = Date.now()) { return (10 + (s.level - 1) * 1.5 + s.attackUp * 3 + equipmentStat(s, 'atk')) * (1 + (heldWeaponId(s) ? forgeLevel(s, heldWeaponId(s)!) / 100 : 0)) * (1 + effect(s, 'atk', now)); }
 export function defense(s: SaveState, now = Date.now()) { return s.defenseUp * 4 + (s.level - 1) + equipmentStat(s, 'def') + effect(s, 'def', now); }
 export function activeStats(s: SaveState, now = Date.now()) {
     const gear = equipped(s), dz = s.gear.disguise ? DISGUISES[s.gear.disguise] : undefined;
@@ -217,7 +226,7 @@ export function activeStats(s: SaveState, now = Date.now()) {
 export function weaponStats(s: SaveState): WeaponDef {
     // The weapon in hand comes first, in a disguise too (the owner's rule, 2026-10-12); a fishing rod is not a fighting weapon.
     // With no weapon a disguise fights with its own, and a plain explorer with fists.
-    const held = s.gear.weapon ? ITEMS[s.gear.weapon]?.weapon : undefined, own = held && held.kind !== 'rod' ? held : undefined;
+    const inHand = heldWeaponId(s), held = inHand ? ITEMS[inHand]?.weapon : undefined, own = held && held.kind !== 'rod' ? held : undefined;
     const weapon = own || (s.gear.disguise && DISGUISES[s.gear.disguise]?.weapon) || held;
     const stats: WeaponDef = { kind: 'fist', range: 1, cd: .5, special: 'fist', ...(weapon || {}) };
     // A uniform in the outfit slot brings its own fighting skill (uniform-skills.ts) in place of the weapon's special.
@@ -593,6 +602,8 @@ export function equip(s: SaveState, raw: ItemId, to?: GearSlot) { const id = can
     // Level gates (level-gates.ts): late gear waits for its world's level; a piece already worn (an old save) stays on.
     if (s.gear[item.slot] !== id && !levelAllows(s.level, id))
     return false; s.gear[item.slot] = id;
+    // Weapon pair: one gun at most, so a gun taken into the main hand frees the side slot.
+    if (item.slot === 'weapon' && isGun(id)) delete s.gear.side;
     // A disguise covers clothes (World.avatar draws none under it): putting clothes on takes it off, as the try-on
     // preview shows (try-on.ts previewGear). Otherwise the equipped hat stayed invisible under the costume.
     if (WEARABLE_SLOTS.includes(item.slot)) delete s.gear.disguise;
@@ -878,7 +889,7 @@ export function parseSave(raw: string | null): SaveState | null {
                 if (typeof rawId !== 'string')
                     continue;
                 const id = canonicalItem(rawId), slot = rawSlot === 'armor' ? 'outfit' : rawSlot === 'feet' ? 'boots' : rawSlot;
-                if (Object.hasOwn(ITEMS, id) && s.bag[id] && ITEMS[id].slot === slotKind(slot))
+                if (slot === 'side' ? isGun(id) && !!s.bag[id] : Object.hasOwn(ITEMS, id) && s.bag[id] && ITEMS[id].slot === slotKind(slot))
                     s.gear[slot as GearSlot] = id;
             }
         // Two pet slots (pet-slots.ts): the same pet in both needs two in the bag.
@@ -891,6 +902,7 @@ export function parseSave(raw: string | null): SaveState | null {
         if(settings.keyboardLayout==='classic'||settings.keyboardLayout==='wasd')s.settings.keyboardLayout=settings.keyboardLayout;
         if (settings.renderRes === 'sharp' || settings.renderRes === 'balanced' || settings.renderRes === 'saver') s.settings.renderRes = settings.renderRes;
         if (settings.placeBeds === true) s.settings.placeBeds = true;
+        if (settings.pairManual === true) s.settings.pairManual = true;
         if (typeof settings.keepBagOnDeath === 'boolean') s.settings.keepBagOnDeath = settings.keepBagOnDeath; // false is a real choice; absent means the default (on)
         if (settings.tester === true) s.settings.tester = true;
         s.settings.difficulty = isDifficulty(settings.difficulty) ? settings.difficulty : 'easy'; // saves from before the setting play on Easy

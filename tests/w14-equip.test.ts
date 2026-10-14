@@ -10,6 +10,8 @@ import * as F from '../src/friends.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { ContextGearSelection, type GearContext } from '../src/context-gear.ts';
 import { previewGear, canTryOn, autoHeld } from '../src/try-on.ts';
+import { sideOpen } from '../src/weapon-pair.ts';
+import { sideButtonHtml, pairSettingHtml } from '../src/pair-ui.ts';
 import { dressHtml } from '../src/house-ui.ts';
 
 // Equip / unequip review (w14): each test pins a bug that was reachable in play.
@@ -98,7 +100,7 @@ const compiled = ts.transpileModule(`${fn('inventory')}\n${fn('tryOnButton')}\na
 function fixture(...items: string[]) {
   const state = owning(...items), gear = new ContextGearSelection(), html: string[] = [], calls: string[] = [];
   const ctx = vm.createContext({
-    M, IG, state, contextGear: gear, canTryOn, autoHeld, slotMeterHtml, expandCardHtml, mini: (id: string) => id, selectedItem: null, tryingOn: null, modal: 'bag', bagMode: 'bag', wardrobeItem: (item?: { slot?: string }) => !!item?.slot,
+    M, IG, state, contextGear: gear, sideOpen, sideButtonHtml, pairSettingHtml, canTryOn, autoHeld, slotMeterHtml, expandCardHtml, mini: (id: string) => id, selectedItem: null, tryingOn: null, modal: 'bag', bagMode: 'bag', wardrobeItem: (item?: { slot?: string }) => !!item?.slot,
     // As main.ts perform: a refused action is a toast and resolves undefined.
     perform: async (type: string, payload: Record<string, unknown>) => { calls.push(type); try { return applyGameAction(state, { type, payload }); } catch { return undefined; } },
     world: { refreshPlayer() {}, position: { x: 0, z: 0 } }, save() {}, shop() { calls.push('shop'); }, equipFeedback(id: string) { calls.push(`feedback:${id}`); },

@@ -118,5 +118,8 @@ test('every new line reads in Vietnamese, with its placeholders and numbers kept
   for (const [en, vi] of Object.entries(FIVE_VI)) { assert.equal(VI_PACK[en], vi, en); assert.notEqual(vi, en); assert.deepEqual((vi.match(/\{\w+\}/g) ?? []).sort(), (en.match(/\{\w+\}/g) ?? []).sort(), en); assert.deepEqual(vi.match(/×?\d+/g) ?? [], en.match(/×?\d+/g) ?? [], en); }
   // The four help topics of the fight: each has its Vietnamese, with the same numbers (1.5 is written 1,5).
   for (const [title, viTitle, viBody] of FIVE_HELP_VI) { const topic = HELP_TOPICS.find(row => row[1] === title)!; assert.ok(topic, title); assert.equal(VI_PACK[topic[1]], viTitle); assert.equal(VI_PACK[topic[2]], viBody); assert.deepEqual(viBody.replace(/(\d),(\d)/g, '$1.$2').match(/\d+(\.\d+)?/g), topic[2].match(/\d+(\.\d+)?/g), title + ': the same numbers in both languages'); }
-  assert.deepEqual(HELP_TOPICS.slice(-5, -1).map(row => row[1]), ['Jump and air combat', 'Attack and three specials', 'Power strike', 'Untouched streak'], 'at the end, so the older topics keep their order');
+  // Later topics (Elite creatures, Weapon pair) come after these four, which keep their order together.
+  const titles = HELP_TOPICS.map(row => row[1]), jump = titles.indexOf('Jump and air combat');
+  assert.ok(jump >= 0 && titles.indexOf('Elite creatures') > jump);
+  assert.deepEqual(titles.slice(jump, jump + 4), ['Jump and air combat', 'Attack and three specials', 'Power strike', 'Untouched streak'], 'at the end, so the older topics keep their order');
 });

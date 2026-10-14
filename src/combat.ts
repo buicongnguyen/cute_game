@@ -213,6 +213,8 @@ export class CombatSimulation {
   private chainStep=-1;private chainAt=-Infinity;
   /** Which of the chain's three presses the last basic attack was (0 to 2); 0 without the chain. */
   get chainLast(){return Math.max(0,this.chainStep);}
+  /** Weapon pair (weapon-pair.ts): a swap starts the new weapon's own chain from its first press. */
+  swapped(){this.chainStep=-1;this.chainAt=-Infinity;}
   /** Root Quake cast in the air: the shockwave waits for the landing (land()). */
   private plunge:{radius:number;power:number;height?:number}|null=null;
   /** A Lob throw or a power strike keeps the hands busy until this time: no other attack starts, the feet stay free. */

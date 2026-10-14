@@ -1,0 +1,19 @@
+/* Weapon pair (weapon-pair.ts): the small swap button. It stands just above the paw on touch screens and above the skill
+   tray on a desk, outside the five-button paw (five-rules.ts PAW), and only while a side gun is worn. */
+#app #hud .pair-swap {
+  position: fixed; z-index: 6; right: calc(22px + var(--safe-right, 0px)); bottom: 132px; width: 48px; height: 48px; padding: 0;
+  display: grid; place-items: center; border-radius: 40%; border: 3px solid var(--cream, #fff6e0);
+  background: linear-gradient(160deg, #9fe3ff, #4f9ee8); box-shadow: 0 0 0 2px var(--plum, #3a2433), 0 4px 0 2px rgba(58, 36, 51, .5);
+  touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; cursor: pointer;
+}
+#app #hud .pair-swap[hidden] { display: none; }
+#app #hud .pair-swap > span { width: 70%; height: 70%; display: grid; place-items: center; font-size: 22px; line-height: 1; }
+#app #hud .pair-swap > span img, #app #hud .pair-swap > span svg { width: 100%; height: 100%; object-fit: contain; }
+#app #hud .pair-swap::after { content: '⇄'; position: absolute; right: -6px; top: -8px; font-size: 13px; font-weight: 900; color: var(--plum, #3a2433); background: var(--cream, #fff6e0); border-radius: 9px; padding: 0 4px; }
+#app #hud .pair-swap.manual { background: linear-gradient(160deg, #ffe08a, #f2a640); }
+#app #hud .pair-swap:active { translate: 0 2px; filter: brightness(.94); }
+@media (pointer: coarse), (max-width: 900px), (max-height: 520px) {
+  #app #hud .pair-swap { width: 44px; height: 44px; right: calc(var(--paw-edge, 18px) + var(--safe-right, 0px) + var(--sk) * .1); bottom: calc(22px + var(--safe-bottom, 0px) + var(--sk) * 2.38 + 12px); }
+  #app #hud.joystick-right .pair-swap { right: auto; left: calc(var(--paw-edge, 18px) + var(--safe-left, 0px) + var(--sk) * .1); }
+}
+body.indoors #app #hud .pair-swap { display: none; }

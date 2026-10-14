@@ -1,4 +1,5 @@
 import * as M from './model.ts';
+import { SIDE_LEVEL, isGun } from './weapon-pair.ts';
 import { HELPER_COST } from './helper-state.ts';
 import { robotResting } from './helper.ts';
 import { autoPlanting } from './auto-plant.ts';
@@ -169,6 +170,9 @@ export const REFUSALS: Record<string, Reason> = {
   upgradeJump: 'You need a higher level or more energy and materials to improve your jump, or it is at its best.',
   equip: (s, p) => (s.bag[id(p)] ?? 0) > 0 && M.gearLevel(id(p)) > s.level ? fmt('Needs level {level} to wear.', { level: M.gearLevel(id(p)) }) : 'You do not have that in your backpack.',
   unequip: 'Nothing is worn there.',
+  // Weapon pair (weapon-pair.ts): the side slot opens at SIDE_LEVEL and holds one gun.
+  equipSide: (s, p) => s.level < SIDE_LEVEL ? fmt('The side slot opens at level {level}.', { level: SIDE_LEVEL }) : !isGun(id(p)) ? 'Only a gun fits the side slot.' : 'You do not have that in your backpack.',
+  unequipSide: 'Nothing is worn there.',
   eat: eatReason,
   transfer: (s, p) => s.planet !== 'home' ? 'The chest stands at home. Return home to use it.' : p.toChest === true && (s.bag[id(p)] ?? 0) > 0 ? 'Take it off before storing it.' : 'There is none of that left to move.',
   plant: plantReason,

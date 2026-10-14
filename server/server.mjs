@@ -450,6 +450,8 @@ export async function createGameServer(options = {}) {
           broadcast(room,{type:'enemies',enemies:room.enemies});
         } else if(message.type==='basic'&&room&&!peer.visit){
           rate('basic:'+account.id,12,1000);combatAuthority.basic(peer,text(message.targetId,100));
+        } else if(message.type==='swap'&&room&&!peer.visit){
+          rate('swap:'+account.id,6,1000);combatAuthority.swap(peer,message.hand);
         } else if(message.type==='skill'&&room&&!peer.visit){
           rate('skill:'+account.id,12,1000);combatAuthority.skill(peer,message.index);
         } else if(message.type==='environmentAction'&&room&&!peer.visit){

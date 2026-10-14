@@ -61,6 +61,8 @@ export const VI_REFUSALS: Record<string, string> = {
   'You need more energy to upgrade that skill, or it is at its best.': 'Bạn cần thêm năng lượng để nâng kỹ năng này, hoặc nó đã ở mức cao nhất.',
   'You do not have that in your backpack.': 'Ba lô của bạn không có món này.',
   'Nothing is worn there.': 'Chỗ đó không mặc gì cả.',
+  'The side slot opens at level {level}.': 'Ô phụ mở ở cấp {level}.',
+  'Only a gun fits the side slot.': 'Ô phụ chỉ vừa một khẩu súng.',
   'The chest stands at home. Return home to use it.': 'Rương để ở nhà. Hãy về nhà để dùng.',
   'Take it off before storing it.': 'Hãy tháo ra trước khi cất.',
   'There is none of that left to move.': 'Không còn món này để chuyển.',

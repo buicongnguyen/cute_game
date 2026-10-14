@@ -70,8 +70,10 @@ export class ContextGearSelection {
   forCombat(state: ContextGearState): ItemId | null {
     this.observe(state);
     if (this.fists) return null;
-    if (this.combat) return this.combat;
-    const weapons = Object.keys(state.bag).filter(id => ownedCombat(state, id));
+    // Weapon pair (weapon-pair.ts): with a gun in the side slot the main hand never picks a gun (one gun at most).
+    const side = (state.gear as Record<string, string | undefined>).side, gunFree = (id: string) => !side || ITEMS[id]?.weapon?.kind !== 'gun';
+    if (this.combat && gunFree(this.combat)) return this.combat;
+    const weapons = Object.keys(state.bag).filter(id => ownedCombat(state, id) && gunFree(id));
     weapons.sort((a, b) => attack(ITEMS[b]) - attack(ITEMS[a]) ||
       ITEMS[b].weapon!.range - ITEMS[a].weapon!.range ||
       ITEMS[a].weapon!.cd - ITEMS[b].weapon!.cd || idOrder(a, b));

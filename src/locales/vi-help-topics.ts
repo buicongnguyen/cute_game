@@ -1,6 +1,7 @@
 // Vietnamese for the help dialog (help-topics.ts).
 // Loaded only for Vietnamese players (locales/vi-pack.ts); the English text lives in the shared content module.
 import { ELITE_HELP_VI } from './vi-elite.ts';
+import { PAIR_HELP_VI } from './vi-pair.ts';
 import { HELP_TOPICS } from '../help-topics.ts';
 import { FIVE_HELP_VI } from './vi-five.ts';
 /** [English title, Vietnamese title, Vietnamese text]; the English text of each topic comes from HELP_TOPICS. */
@@ -33,6 +34,7 @@ const ROWS: ReadonlyArray<readonly [string, string, string]> = [
   ['Handy shortcuts', 'Phím tắt tiện dụng', 'I túi đồ · J nhật ký (P khi dùng WASD) · M bản đồ · F tương tác · Q/W/E/R kỹ năng (J/K/L/; khi dùng WASD) · Enter chat · Esc đóng. Phím tắt tạm dừng khi đang nhập chữ, kể cả tiếng Việt.'],
   ...FIVE_HELP_VI,
   ['Elite creatures', ELITE_HELP_VI[0], ELITE_HELP_VI[1]],
+  ['Weapon pair', PAIR_HELP_VI[0], PAIR_HELP_VI[1]],
 ];
 const VI_BY_TITLE = new Map(ROWS.map(([title, viTitle, viBody]) => [title, [viTitle, viBody] as const]));
 export const HELP_TOPICS_VI: Record<string, string> = Object.fromEntries(HELP_TOPICS.flatMap(([, title, body]) => [[title, VI_BY_TITLE.get(title)![0]], [body, VI_BY_TITLE.get(title)![1]]]));

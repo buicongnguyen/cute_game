@@ -1,6 +1,7 @@
 import { VI_CATALOG } from './vi-catalog.ts';
 import { ROAR_VI } from './vi-roar.ts';
 import { ELITE_VI } from './vi-elite.ts';
+import { PAIR_VI } from './vi-pair.ts';
 import { SHAPES_VI } from './vi-shapes.ts';
 import { CHAIN_VI } from './vi-chain.ts';
 import { INSIGHT_VI } from './vi-insight.ts';
@@ -41,6 +42,7 @@ export const VI_PACK: Record<string, string> = Object.assign(Object.create(null)
 Object.assign(VI_PACK, VI_GUIDE, VI_MOBILE);
 Object.assign(VI_PACK, ROAR_VI);
 Object.assign(VI_PACK, ELITE_VI);
+Object.assign(VI_PACK, PAIR_VI);
 Object.assign(VI_PACK, SHAPES_VI);
 Object.assign(VI_PACK, CHAIN_VI);
 Object.assign(VI_PACK, MOVES_VI);

@@ -312,3 +312,23 @@ test('elite split online: at the live-children cap the splitter dies without spl
  await new Promise(r=>setTimeout(r,400));
  assert.ok(other.hp>0,'the splitter is back');assert.equal(live.filter(k=>k.hp>0&&k.parentId===other.id).length,0,'and its children are gone');
 });
+test('weapon pair online: the server holds the weapon in hand from swap packets, keeps the gap and the draw, and pays the +20% swap bonus once',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
+ const f=await fixture(t,{profile:p=>{p.level=20;p.bag.sword_lava=1;p.bag.gun_ice=1;p.gear.weapon='sword_lava';p.gear.side='gun_ice';}}),enemy=f.spawn('mushroom'),engine=f.authority.engineFor(f.peer);
+ engine.sim.random=()=>.5;enemy.hp=enemy.maxHp=1e6;enemy.phase='chase';
+ const blow=()=>{engine.nextBasic=0;const before=enemy.hp;f.authority.basic(f.peer,enemy.id);return before-enemy.hp;};
+ const plain=blow();assert.ok(plain>0,'the blade hits');assert.equal(engine.pair.hand,'main');
+ t.mock.timers.tick(1500);
+ assert.equal(f.authority.swap(f.peer,'side'),true);assert.equal(engine.pair.hand,'side');
+ assert.equal(f.authority.swap(f.peer,'main'),false,'0.6 s between swaps');assert.equal(f.authority.swap(f.peer,'sword'),false,'only main or side');
+ assert.equal(blow(),0,'drawing: no attack for 0.15 s');
+ t.mock.timers.tick(200);engine.nextBasic=0;f.authority.basic(f.peer,enemy.id);assert.ok(engine.sim.projectiles.length>0,'the gun in hand shoots');
+ for(let i=0;i<20;i++)engine.sim.update(.05);
+ t.mock.timers.tick(1500);engine.sim.projectiles.length=0;
+ assert.equal(f.authority.swap(f.peer,'main'),true);t.mock.timers.tick(200);
+ const bonus=blow(),after=blow();
+ assert.ok(Math.abs(bonus/plain-1.2)<.02,`first blade hit after the swap: ${bonus} vs ${plain}`);
+ assert.ok(after<bonus,'the bonus is spent');
+ // No side gun any more: the server falls back to the main hand and refuses the side.
+ delete f.account.profile.gear.side;t.mock.timers.tick(1000);assert.equal(f.authority.swap(f.peer,'side'),false);assert.equal(engine.pair.hand,'main');
+});
