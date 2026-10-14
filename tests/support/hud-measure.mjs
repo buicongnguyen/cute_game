@@ -25,7 +25,7 @@ export function measureHud() {
   // The hero plate's own pieces (they sit inside it, so they are not a group of their own): the name, the level badge on the
   // portrait tile, the energy count over the health bar. `cut` = the text is wider than its box; `tall` = the height of its glyphs.
   const piece = sel => { const el = document.querySelector(sel); if (!seen(el)) return null; const cs = getComputedStyle(el); return { ...box(el), text: el.textContent.trim(), cut: el.scrollWidth > el.clientWidth + 1, font: parseFloat(cs.fontSize), ellipsis: cs.textOverflow === 'ellipsis' }; };
-  const plate = { name: piece('#hud #player-name'), level: piece('#hud .level-badge'), energy: piece('#hud .hero-energy'), energyText: piece('#hud #energy'), avatar: piece('#hud .avatar'), health: piece('#hud .meter.health'), oldTag: document.querySelectorAll('#hud .top-actions .energy, #hud .level-chip, #hud [data-action="news"]').length };
+  const plate = { name: piece('#hud #player-name'), level: piece('#hud .level-badge'), energy: piece('#hud .hero-energy'), energyText: piece('#hud #energy'), avatar: piece('#hud .avatar'), health: piece('#hud .meter.health'), oldTag: document.querySelectorAll('#hud .top-actions .energy, #hud .level-chip').length };
   return { W: innerWidth, H: innerHeight, coarse, air: document.body.classList.contains('air-combat'), leftHanded: !!document.querySelector('#hud.joystick-right'), groups, plate, small, dockW: getComputedStyle(document.documentElement).getPropertyValue('--dock-w') };
 }
 /** Toes and the pad are round: two of them overlap when their centres are closer than their radii allow, not when their boxes meet.
@@ -78,7 +78,7 @@ export function findings(m) {
 export function plateFindings(m) {
   const out = [], p = m.plate, hero = m.groups.hero[0]; if (!p || !hero) return ['the hero plate is missing'];
   const within = (b, slack = .5) => b.l >= hero.l - slack && b.t >= hero.t - slack && b.r <= hero.r + slack && b.b <= hero.b + slack;
-  if (p.oldTag) out.push('the separate energy tag, the level chip or the News button is still in the HUD');
+  if (p.oldTag) out.push('the separate energy tag, or the level chip is still in the HUD (the News button is now the inbox)');
   for (const key of ['name', 'level', 'energy', 'energyText', 'health']) if (!p[key]) out.push(`hero plate: ${key} is not shown`);
   if (out.length) return out;
   if (!within(p.name) || !within(p.energy) || !within(p.health)) out.push(`hero plate: a piece leaves the plate ${JSON.stringify([hero, p.name, p.energy, p.health].map(b => [b.l, b.t, b.r, b.b].map(Math.round)))}`);

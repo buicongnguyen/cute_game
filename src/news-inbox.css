@@ -1,6 +1,4 @@
 /* The News inbox button, its panel and the ⋯ More menu (news-inbox-ui.ts). */
-#app #hud .inbox-button > span, #app #hud .more-button > span { font-size: calc(var(--b, 40px) * .5); line-height: 1; pointer-events: none; }
-#app #hud .more-button > span { font-weight: 1000; color: var(--plum, #3a2433); translate: 0 -.12em; }
 #app #hud .icon-button > i.inbox-count, #app #hud .icon-button > i.more-count {
   position: absolute; right: -6px; top: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; box-sizing: border-box;
   display: grid; place-items: center; background: #ff4f6d; color: #fff; border: 2px solid var(--cream, #fff8ec);
