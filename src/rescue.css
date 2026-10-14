@@ -153,7 +153,8 @@ body.in-rescue #zone-name { opacity: .9; }
 /* Mission picks in the briefing are real buttons: raised pill, ringed when chosen. */
 .rescue-dialog .rescue-actions button { border: 2px solid #e8d3ae; background: #fff; color: #5a3410; box-shadow: 0 3px 0 #e2cf9f; cursor: pointer; }
 .rescue-dialog .rescue-actions button[aria-pressed="true"] { border-color: #ff8a3d; background: #fff1e0; color: #8a3d05; box-shadow: 0 3px 0 #e07a2a, 0 0 0 3px rgba(255, 138, 61, .28); }
-.rescue-dialog .rescue-actions button.primary { border-color: transparent; color: #fff; }
+.rescue-dialog .rescue-actions button.primary { border-color: #fff; background: linear-gradient(180deg, #ffd66b, #ffa53a); color: #4a2400; box-shadow: 0 3px 0 #d9822a; }
+.rescue-dialog .rescue-actions button.primary:disabled { background: #efe6d6; color: #6b5a44; box-shadow: none; }
 /* Small HUD buttons keep their look and grow an invisible 44 px hit area. */
 #rescue-hud button, .rescue-tabs button.fold { position: relative; }
 #rescue-hud button::after, .rescue-tabs button.fold::after { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
