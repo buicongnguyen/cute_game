@@ -15,5 +15,7 @@
 @media (pointer: coarse), (max-width: 900px), (max-height: 520px) {
   #app #hud .pair-swap { width: 44px; height: 44px; right: calc(var(--paw-edge, 18px) + var(--safe-right, 0px) + var(--sk) * .1); bottom: calc(22px + var(--safe-bottom, 0px) + var(--sk) * 2.38 + 12px); }
   #app #hud.joystick-right .pair-swap { right: auto; left: calc(var(--paw-edge, 18px) + var(--safe-left, 0px) + var(--sk) * .1); }
+  /* Jump and air combat: the paw is a 3.36-skill square; the button stands over its outer column, clear of the toes and the crown. */
+  body.air-combat #app #hud .pair-swap { bottom: calc(22px + var(--safe-bottom, 0px) + var(--sk) * 3.15 + 10px); }
 }
 body.indoors #app #hud .pair-swap { display: none; }
