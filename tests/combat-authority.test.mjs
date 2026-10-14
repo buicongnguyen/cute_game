@@ -50,7 +50,9 @@ test('magma turtle shell and recovery modifiers apply on the authoritative damag
 });
 test('pets deal real server damage without client hit packets and pause with inactive combat',async t=>{
  const f=await fixture(t,{profile:p=>{p.bag.pet_t_turtle=1;p.gear.pet='pet_t_turtle';}}),enemy=f.spawn('mushroom');enemy.z=5;f.peer.pose.z=0;
- const engine=f.authority.engineFor(f.peer);engine.sim.update(.05,false);assert.equal(engine.sim.projectiles.length,0);engine.sim.update(.4);assert.ok(enemy.hp<enemy.maxHp);
+ // A peaceful creature is left alone; one that is after the explorer is shot (pet-guard.ts).
+ const engine=f.authority.engineFor(f.peer);for(let i=0;i<20;i++)engine.sim.update(.1);assert.equal(enemy.hp,enemy.maxHp,'peaceful: not shot');
+ enemy.phase='chase';engine.sim.update(.05,false);assert.equal(engine.sim.projectiles.length,0);engine.sim.update(.05);engine.sim.update(.4);assert.ok(enemy.hp<enemy.maxHp);
 });
 
 test('rejected hits against a pending defeat cannot grant vampire lifesteal',async t=>{

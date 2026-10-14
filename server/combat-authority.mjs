@@ -10,6 +10,7 @@ import {BOSS_SKILLS,BOSS_WINDUPS,bossTelegraphs,bossPhase,hitControl,BOSS_RESIST
 import {atHome,homeRecoveryBonus} from '../src/home-care.ts';
 import {trailSpot,dogTossFactor,DOG_TOSS_CD} from '../src/guard-dog.ts';
 import {companionId,dogWorn} from '../src/pet-slots.ts';
+import {DOG_GUARD,petFighter} from '../src/pet-guard.ts';
 import {commandHash} from './action-service.mjs';
 import {gearFactor,skillLevel,skillCooldown} from '../src/upgrades.ts';
 import {clearJourney} from './adventure-lifecycle.mjs';
@@ -79,15 +80,20 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     // A new wind-up must not erase lingering orbs, poison pools or shockwaves.
     (enemy.combatAttacks??=[]).push(enemy.cast);enemy.nextCastAt=now+(windup+cooldown)*1000;
   }
+  /** True when a hit would land on `peer` now: nothing hurts an explorer standing in the safe zone round the cottage (safe-zone.ts), whatever the host reports. */
+  function vulnerable(peer,source){const e=engineFor(peer);return !(peer.visit||!peer.active||peer.account.profile.hp<=0||inSafeZone(peer.pose,peer.planet)||Date.now()-e.damageAt<550||e.sim.invulnerable||source==='melee'&&e.sim.statuses.flight>0);}
   function hurtPlayer(peer,amount,source='melee'){
-    const e=engineFor(peer),now=Date.now();// Nothing hurts an explorer standing in the safe zone round the cottage (safe-zone.ts), whatever the host reports.
-    if(peer.visit||!peer.active||peer.account.profile.hp<=0||inSafeZone(peer.pose,peer.planet)||now-e.damageAt<550||e.sim.invulnerable||source==='melee'&&e.sim.statuses.flight>0)return;
+    const e=engineFor(peer),now=Date.now();
+    if(!vulnerable(peer,source))return;
     e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);hp(peer,-Math.max(1,Math.round(amount*60/(defense+60))),source);
   }
   function hurtEnemyTarget(peer,enemy,multiplier,source='melee'){
     // The knight's raised shield, facing the creature, stops the blow; a shot it stops flies back and hits the shooter (combat.reflect).
     const sim=engineFor(peer).sim;if(sim.blocks(enemy)){if(source==='shot'&&!peer.visit&&peer.active)sim.reflect(enemy,dist(peer.pose,enemy)/DZ.block.speed);return;}
-    hurtPlayer(peer,enemy.damage*multiplier,source);
+    // The explorer's own pets guard it (pet-guard.ts): the server's copy of the rules decides what is left of the hit.
+    // Only a hit that would land spends a guard, and only this explorer's pets are asked: nobody else's protect it.
+    if(!vulnerable(peer,source))return;const left=sim.guardIncoming(enemy.damage*multiplier,source,enemy);if(!(left>0))return;
+    hurtPlayer(peer,left,source);
   }
   /**
    * A creature's blow, shot or area reached one of `peer`'s summons (the room host reports it; combat.ts SUMMON_HP).
@@ -269,7 +275,8 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     engine={peer,room:peer.room,planet:peer.planet,reconciledLife:epoch(peer.account),lastSeen:Date.now(),nextBasic:0,nextSkill:[0,0,0,0],healthEvents:[],hpAt:0,damageAt:0,lastSkill:new Map(),environment:new EnvironmentSimulation(createEnvironmentLayout(peer.planet))};
     const current=()=>engine.peer,room=()=>rooms.get(current().room);
     const targets=()=>room()?[...state(room()).enemies.values()]:[];
-    const petShooter=(p,index)=>{const id=companionId(p.account.profile.gear,index),pet=id?Game.ITEMS[id]?.pet:undefined;return pet&&!p.visit&&!atHome(p.planet,p.pose)?{...pet,dmg:pet.dmg*gearFactor(p.account.profile,id),x:p.pose.x,z:p.pose.z}:null;};
+    // A pet's shot and its guard come from the one table (pet-guard.ts), scaled by its level; it stands with its explorer.
+    const petShooter=(p,index)=>{const id=companionId(p.account.profile.gear,index),pet=id?Game.ITEMS[id]?.pet:undefined,fighter=pet&&!p.visit&&!atHome(p.planet,p.pose)?petFighter(id,gearFactor(p.account.profile,id),pet.shot):null;return fighter?{...fighter,x:p.pose.x,z:p.pose.z}:null;};
     engine.sim=new CombatSimulation({position:()=>current().pose,facing:()=>current().pose.facing,face:a=>{current().pose.facing=a;},targets,
       weapon:()=>{const weapon=Game.weaponStats(combatProfile(current()));return weapon.kind==='rod'?{kind:'fist',range:1.6,cd:.5,special:'fist'}:weapon;},
       stats:()=>Game.activeStats(combatProfile(current())),moving:()=>current().pose.moving,
@@ -281,7 +288,12 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       // Two pet slots (pet-slots.ts): each worn companion shoots on its own cooldown; the dog pet tosses through `dog` below.
       pet:()=>petShooter(current(),0),pet2:()=>petShooter(current(),1),
       // The guard dog throws only while the server says it follows (pose.dog is null at home and on visits); it stands at the trailing spot.
-      dog:()=>{const p=current();if(p.visit||typeof p.pose?.dog!=='number'||!dogWorn(p.account.profile.gear)||atHome(p.planet,p.pose))return null;const at=trailSpot(p.pose,p.pose.facing||0);return {x:at.x,z:at.z,dmg:dogTossFactor(p.account.profile.level),cd:DOG_TOSS_CD,target:p.target??null};},
+      dog:()=>{const p=current();if(p.visit||typeof p.pose?.dog!=='number'||!dogWorn(p.account.profile.gear)||atHome(p.planet,p.pose))return null;const at=trailSpot(p.pose,p.pose.facing||0);return {x:at.x,z:at.z,dmg:dogTossFactor(p.account.profile.level),cd:DOG_TOSS_CD,guard:DOG_GUARD,target:p.target??null};},
+      // Pets shoot only what fights their explorer and guard only their own explorer (pet-guard.ts): the chosen creature, the health
+      // as the server has it (with the blows not yet saved), and the word to that explorer alone when a guard fired.
+      focus:()=>current().target??null,
+      health:()=>{const p=current(),profile=p.account.profile;let hp=profile.hp;for(const event of engine.healthEvents)hp+=event.amount;return Math.max(0,hp)/Math.max(1,Game.maxHp(profile));},
+      guarded:event=>send(current().socket,{type:'guard',event}),
       skillLevel:index=>skillLevel(combatProfile(current()),index),
       status:(target,kind,duration)=>{if(kind==='stun'){/* a freeze or a root holds bosses too */target.stun=Math.max(target.stun||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});return;}if(target.boss&&BOSS_RESISTED.includes(kind)){kind='slow';duration*=RESIST_SLOW;}target.statuses[kind]=Math.max(target.statuses[kind]||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});},
       moveTarget:(target,x,z)=>{if(dist(target,{x,z})>12)return;target.x=x;target.z=z;if(room())broadcast(room(),{type:'moveEnemy',id:target.id,x,z});}});

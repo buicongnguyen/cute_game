@@ -155,6 +155,8 @@ import { WORK_ACTIONS, CATCH_UP_ACTIONS, explorerAway } from './delivery.ts';
 import { initStoredNote } from './delivery-ui.ts';
 import * as IG from './item-groups.ts';
 import { dogMayToss, dogTossFactor, DOG_TOSS_CD } from './guard-dog.ts';
+import { DOG_GUARD, petFighter, type PetFighter } from './pet-guard.ts';
+import { PetGuardView } from './pet-guard-view.ts';
 import type { DungeonApi } from './dungeon.ts';
 import { HARVEST, SKILL_NAME_RISE } from './feel-rules.ts';
 import type { CtfApi } from './ctf.ts';
@@ -331,7 +333,9 @@ const combat=new CombatSimulation({
   // The pet shoots only while it follows you away from home (pet-pen.ts); waiting by the pen it never fights.
   pet:()=>petShooter(0),pet2:()=>petShooter(1),
   // The guard dog tosses bones only while it follows you away from home (guard-dog.ts); your target first.
-  dog:()=>{const g=world.guardDogs;return g&&started&&!visiting&&!fishGame&&!world.boarded&&dogMayToss(g.place,world.planet,world.position,!!world.interior)?{x:g.link.x,z:g.link.z,dmg:dogTossFactor(state.level),cd:DOG_TOSS_CD,target:world.selected?.kind==='enemy'?(world.selected as Enemy).id:null}:null;},
+  dog:()=>{const g=world.guardDogs;return g&&started&&!visiting&&!fishGame&&!world.boarded&&dogMayToss(g.place,world.planet,world.position,!!world.interior)?{x:g.link.x,z:g.link.z,dmg:dogTossFactor(state.level),cd:DOG_TOSS_CD,guard:DOG_GUARD,target:world.selected?.kind==='enemy'?(world.selected as Enemy).id:null}:null;},
+  // Pets fight only what fights you, and guard you (pet-guard.ts): your chosen creature, your health, and the guard's picture.
+  focus:()=>world.selected?.kind==='enemy'?(world.selected as Enemy).id:null,health:()=>state.hp/Math.max(1,M.maxHp(state)),guarded:event=>petGuardView.show(event),
   targets:()=>world.enemies,weapon:()=>M.weaponStats(state),stats:()=>M.activeStats(state),
   move:(x,z)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);},
   hit:(target,impact)=>hit(target as Enemy,impact.amount,impact.stun,impact),
@@ -343,6 +347,10 @@ const combat=new CombatSimulation({
   moveTarget:(target,x,z)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){moveEnemy(target as Enemy,x,z);return;}if(actionHandler)return;if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
 });
 combatHud.isMarked=id=>combat.marked.has(id);
+// The picture of a pet's guard (pet-guard-view.ts): pooled effects only, idle while nothing is in flight.
+const petGuardView=new PetGuardView({fx:()=>world.fx,petModel:slot=>slot===0?world.companion:slot===1?world.companion2:null,hero:()=>world.position,creature:id=>world.enemies.find(e=>e.id===id),
+  counter:shot=>combat.counterShot(shot),local:()=>!actionHandler||!!dungeonApi?.active,color:slot=>shotColor(M.ITEMS[M.companionId(state.gear,slot)??'']?.pet?.shot??'fire'),maxHp:()=>M.maxHp(state),t:(key,vars)=>t(key,vars),sound:kind=>tone(kind==='mend'?'magic':'pop')});
+world.onPlayerShot=shot=>petGuardView.shotNear(shot);frameListeners.add(dt=>petGuardView.update(dt));
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 /** The Strike chain's hits so far (which cut the next one makes), and the thin ground arc that marks the area of the explorer's own hit. */
 let chainHit=-1,chainAt=-9;/** What a disguise skill draws at the moment it is cast, kept for its wind (castDisguise). */let castEffects:CombatEffect[]|null=null;const HIT_AREA_ARC={y:.14,life:.3,thick:.09,opacity:.5,from:1,to:1} as const;
@@ -821,9 +829,13 @@ function collectFarm(uid?:number){
   };if(n)setTimeout(run,n*140);else run();});
 }
 /** A worn pet's shot for the combat simulation (pet-slots.ts: index 0 = the first companion, 1 = the second; the dog tosses through `dog`). */
+const petFighters:{key:string;fighter:PetFighter|null}[]=[{key:'',fighter:null},{key:'',fighter:null}];
 function petShooter(index:0|1){
   const id=M.companionId(state.gear,index),pet=id?M.ITEMS[id]?.pet:undefined,pen=index?world.petPen2:world.petPen,at=(index?world.companion2:world.companion).position;
-  return id&&pet&&Number.isFinite(pet.dmg)&&Number.isFinite(pet.cd)&&started&&!visiting&&!fishGame&&!!pen?.mayFight(world.planet,world.position,!!world.interior)?{dmg:pet.dmg!*M.gearFactor(state,id),cd:pet.cd!,shot:pet.shot,x:at.x,z:at.z}:null;
+  if(!id||!pet||!started||visiting||fishGame||!pen?.mayFight(world.planet,world.position,!!world.interior))return null;
+  // One object a slot, rebuilt only when the pet or its level changes: the simulation asks every frame while a pet is out.
+  const factor=M.gearFactor(state,id),key=id+':'+factor,cache=petFighters[index];if(cache.key!==key){cache.key=key;const f=petFighter(id,factor,pet.shot);cache.fighter=f?{...f,x:0,z:0}:null;}
+  if(cache.fighter){cache.fighter.x=at.x;cache.fighter.z=at.z;}return cache.fighter;
 }
 /**
  * The old Settings switch 'Guard dog follows me' (this device, 'zoo-dog-stays') is gone: who comes along is chosen in the
@@ -1708,6 +1720,8 @@ world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   // The knight's raised shield stops blows and shots from creatures in front (combat.blocks).
   // A shot is also bounced back at its shooter (combat.reflect; world.ts flies the ball home).
   {const from=enemyId?world.enemies.find(e=>e.id===enemyId):undefined;if(from&&combat.blocks(from)){world.fx?.burst(world.position,{n:6,color:['#fff3c4','#ffffff'],glow:true,size:.12,speed:3,up:2,y:1});if(source==='shot'){combat.reflect(from,Math.hypot(from.x-world.position.x,from.z-world.position.z)/DZ.block.speed);tone('hit');}return;}}
+  // The pets' guards (pet-guard.ts): a block, a counter, a distraction; what is left of the hit lands.
+  if(enemyId){amount=combat.guardIncoming(amount,source,world.enemies.find(e=>e.id===enemyId));if(!(amount>0))return;}
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
   state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
@@ -1764,6 +1778,7 @@ export const gameBridge:GameBridge={
   applySharedKill(id,xp,boss,type){if(sharedKills.has(id))return;sharedKills.add(id);if(sharedKills.size>500)sharedKills.delete(sharedKills.values().next().value!);const enemy=world.enemies.find(e=>e.id===id);grantDefeat({id,xp,boss,type,x:enemy?.x,z:enemy?.z});},
   applyRemoteEffect(effect){showEffect(effect);},
   applyRemoteDamage(amount,source){world.onDamage(amount,source==='shot'||source==='hazard'?source:'melee');},
+  applyGuard(event){petGuardView.show(event);},
   applyDecoyHp(id,hp,kind,x,z){
     // The server's copy of a summon may carry another id than this browser's: the same kind nearest the spot then.
     const ally=combat.allies.find(a=>a.id===id&&a.kind===kind)??combat.allies.filter(a=>a.kind===kind&&a.hp!==undefined&&Math.hypot(a.x-x,a.z-z)<4).sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z))[0];

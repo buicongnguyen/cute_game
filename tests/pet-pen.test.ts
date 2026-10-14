@@ -142,7 +142,7 @@ test('the cottage keeps the pet outdoors by the pen', () => {
 
 test('the client combat host gives no pet shot while it waits at the pen', () => {
   // main.ts: pet() returns null unless world.petPen.mayFight(...); here the same gate drives a real simulation.
-  const c = new PetCompanion(), h = host('pet_parrot'), target = { id: 'boar', x: -4, z: 6, hp: 500, radius: .8 }, hits: number[] = [];
+  const c = new PetCompanion(), h = host('pet_parrot'), target = { id: 'boar', x: -4, z: 6, hp: 500, radius: .8, phase: 'chase' }, hits: number[] = [];
   const sim = new CombatSimulation({ position: () => h.position, facing: () => 0, face() {}, targets: () => [target], weapon: () => ({ kind: 'fist', range: 1.6, cd: .5 }), stats: () => ({ attack: 50, critChance: 0 }), move() {}, hit(e, hit) { hits.push(hit.amount); e.hp -= hit.amount; return hit.amount; }, effect() {},
     pet: () => c.mayFight(h.planet, h.position) ? { dmg: .3, cd: 1.3, shot: 'arrow', x: h.companion.position.x, z: h.companion.position.z } : null }, () => .5);
   for (let i = 0; i < 180; i++) { c.update(h, dt); sim.update(dt); }
@@ -161,6 +161,7 @@ test('the server gives no pet shot from the safe village and shoots again outsid
   t.after(async () => { await authority.close(); await store.close(); });
   const definition = enemyRoster('home').find(e => e.type === 'mushroom')!;
   authority.acceptSnapshots(room, [{ id: definition.id, type: 'mushroom', x: -30, z: 0, hp: 1 }]); const enemy = authority.state(room).enemies.get(definition.id)!;
+  enemy.phase = 'chase'; // it is after the explorer: pets only shoot what fights (pet-guard.ts)
   enemy.x = -21; // just outside the village edge, 5 m from the explorer (new creatures are only accepted 22 m out)
   const engine = authority.engineFor(peer); for (let i = 0; i < 10; i++) engine.sim.update(.2);
   assert.ok(enemy, 'a creature just outside the village edge'); assert.equal(enemy.hp, enemy.maxHp, 'the explorer inside the safe village: the pet waits at the pen');

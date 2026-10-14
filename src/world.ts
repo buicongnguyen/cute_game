@@ -200,7 +200,9 @@ export class World {
   onEnvironmentAction:(action:EnvironmentAction)=>void=()=>{};
   onHazardEnemy:(enemy:Enemy,amount:number)=>void=(enemy,amount)=>this.damageEnemy(enemy,amount,0,true);
   private dynamicObstacles:Obstacle[]=[];private environmentSignature='';private gateHits=0;private resourceTimers=new Map<string,number>();
-  private enemyShots:Array<{id:string;ownerId:string;mesh:T.Mesh;vx:number;vz:number;life:number;damage:number;targetId?:string;targetEnemyId?:string;electric?:boolean;/** Bounced off the knight's shield: the explorer's skill deals its damage (combat.reflect), not the shot. */reflected?:boolean}>=[];
+  /** A creature's shot aimed at an explorer, each step of its flight (pet-guard-view.ts: a counter pet may shoot it down). */
+  onPlayerShot?:(shot:{mesh:T.Mesh;vx:number;vz:number;life:number;damage:number;ownerId:string;targetId?:string;guarded?:boolean})=>void;
+  private enemyShots:Array<{id:string;ownerId:string;mesh:T.Mesh;vx:number;vz:number;life:number;damage:number;targetId?:string;targetEnemyId?:string;electric?:boolean;/** A pet has answered it (pet-guard-view.ts). */guarded?:boolean;/** Bounced off the knight's shield: the explorer's skill deals its damage (combat.reflect), not the shot. */reflected?:boolean}>=[];
   /** The Giant Toy Robot fires electric orbs (skill-fx.ts): a crackle each frame in flight and a small shock where each one ends. */
   onElectricShot?:(x:number,y:number,z:number,dx:number,dz:number)=>void;onElectricPop?:(x:number,z:number)=>void;
   private sun: T.DirectionalLight; private cropMaterials: T.Material[] = [];
@@ -1973,6 +1975,7 @@ export class World {
     if(simulateWorld)for(let i=this.enemyShots.length-1;i>=0;i--){
       const shot=this.enemyShots[i],from={x:shot.mesh.position.x,z:shot.mesh.position.z};shot.mesh.position.x+=shot.vx*dt;shot.mesh.position.z+=shot.vz*dt;shot.life-=dt;
       if(!shot.targetEnemyId&&Math.hypot(shot.mesh.position.x,shot.mesh.position.z)<(this.planet==='home'?18:11)-.3)shot.life=0; // shots aimed at players die at the safe zone's edge
+      if(this.onPlayerShot&&!shot.targetEnemyId&&!shot.reflected&&!shot.guarded&&shot.life>0)this.onPlayerShot(shot);
       if(this.networkRole!=='peer'){
       if(!clearSegment(from,shot.mesh.position,this.obstacles,{bounds:WORLD_BOUNDS,clearance:.1}))shot.life=0;
       if(shot.targetEnemyId){const enemy=this.enemies.find(e=>e.id===shot.targetEnemyId);if(enemy&&enemy.hp>0&&shot.life>0&&Math.hypot(shot.mesh.position.x-enemy.x,shot.mesh.position.z-enemy.z)<enemy.radius+.2){if(shot.reflected)this.burst(enemy.x,enemy.z,'#fff3c4',10);else (this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(enemy,shot.damage);shot.life=0;}}

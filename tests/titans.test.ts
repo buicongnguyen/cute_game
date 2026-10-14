@@ -69,7 +69,7 @@ test('each Titan reward can be earned, equipped for real stats, saved, and used 
   state.level=Math.max(state.level,Game.gearLevel(hat),Game.gearLevel(pet)); // titan trophies wait for their planet's level (level-gates.ts)
   const before=Game.activeStats(state);assert.equal(Game.equip(state,hat),true);assert.notDeepEqual(Game.activeStats(state),before,hat);assert.equal(Game.equip(state,pet),true);
   const restored=Game.parseSave(JSON.stringify(state))!;assert.equal(restored.gear.hat,hat);assert.equal(restored.gear.pet,pet);
-  const target={id:'enemy',x:0,z:4,radius:.7,hp:100000},definition=TITAN_ITEMS[pet].pet!;
+  const target={id:'enemy',x:0,z:4,radius:.7,hp:100000,phase:'chase'},definition=Game.ITEMS[pet].pet!; // its shot as the game has it (pet-guard.ts PET_ROLES)
   const sim=new CombatSimulation({position:()=>({x:0,z:0}),facing:()=>0,face(){},move(){},targets:()=>[target],weapon:()=>({kind:'fist'}),stats:()=>Game.activeStats(restored),effect(){},hit:(t,hit)=>{t.hp-=hit.amount;},pet:()=>({x:0,z:0,dmg:definition.dmg!,cd:definition.cd!,shot:definition.shot})},()=>.5);
   for(let n=0;n<20;n++)sim.update(.05);assert.ok(target.hp<100000,pet);
  }

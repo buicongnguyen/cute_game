@@ -278,7 +278,7 @@ test('the companion controllers: both pets wait on different pen spots at home a
 function arena() {
   const p = { x: 0, z: 0 }, targets: CombatTarget[] = [], hits: (CombatHit & { at: number })[] = []; let time = 0;
   const host: CombatHost = { position: () => p, facing: () => 0, face() {}, targets: () => targets, weapon: () => ({ kind: 'fist' }), stats: () => ({ attack: 10, critChance: 0 }), move() {}, effect() {}, moving: () => false, hit: (t, h) => { hits.push({ ...h, at: time }); t.hp -= h.amount; }, heal() {} };
-  const sim = new CombatSimulation(host, () => .5), target = { id: 'foe', x: 0, z: 5, hp: 1e9, maxHp: 1e9, boss: false, radius: .5 }; targets.push(target);
+  const sim = new CombatSimulation(host, () => .5), target = { id: 'foe', x: 0, z: 5, hp: 1e9, maxHp: 1e9, boss: false, radius: .5, phase: 'chase' }; targets.push(target);
   return { host, sim, hits, target, run: (sec: number) => { for (let t = 0; t < sec - 1e-6; t += .025) { time += .025; sim.update(.025); } } };
 }
 
@@ -317,7 +317,7 @@ test('online: the server shoots for both worn pets, for the dog only when worn, 
   const authority = createCombatAuthority({ store, peers, rooms, remember: (v: unknown) => v, onError: (e: Error) => t.diagnostic(e.stack ?? ''), send() {}, broadcast: (_: unknown, m: { type: string; visual?: { kind: string } }) => { if (m.type === 'effect' && m.visual) effects.push(m.visual); }, onDeath() {} });
   t.after(async () => { await authority.close(); await store.close(); });
   const definition = enemyRoster('home').find(e => e.type === 'mushroom')!;
-  authority.acceptSnapshots(room, [{ id: definition.id, type: 'mushroom', x: -30, z: 5, hp: 1 }]); const enemy = authority.state(room).enemies.get(definition.id)!; enemy.hp = enemy.maxHp = 1e6;
+  authority.acceptSnapshots(room, [{ id: definition.id, type: 'mushroom', x: -30, z: 5, hp: 1 }]); const enemy = authority.state(room).enemies.get(definition.id)!; enemy.hp = enemy.maxHp = 1e6; enemy.phase = 'chase';
   const engine = authority.engineFor(peer), run = (sec: number) => { for (let i = 0; i < sec * 20; i++) engine.sim.update(.05); }, casts = () => effects.filter(e => e.kind === 'cast').length;
   const two = (() => { const c = casts(); run(13); return casts() - c; })();
   const turtle = M.ITEMS.pet_t_turtle.pet!.cd!, firefly = M.ITEMS.pet_firefly.pet!.cd!, expected = 13 / turtle + 13 / firefly;

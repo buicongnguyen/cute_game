@@ -59,7 +59,7 @@ test('morning glow: a shield, a heal, and the pets shoot half again as fast whil
   a.run(K.time - .1); assert.equal(a.sim.invulnerable, true); a.run(.2); assert.equal(a.sim.invulnerable, false);
   assert.ok(a.effects.some(e => e.look === 'shield')); assert.ok(BUFF_CHIPS.cheer && BUFF_CHIPS.shield);
   // A pet with a 1 s cooldown: 6 shots in 6 plain seconds, 9 in the 6 cheered ones (and the dog's toss runs on the same clock).
-  const shots = (cheered: boolean) => { const b = arena([{ x: 0, z: 3 }], [{ dmg: .5, cd: 1 }]); if (cheered) b.sim.disguise(ID, 1); let n = 0, seen = new Set<number>(); for (let i = 0; i < K.cheerTime * 40; i++) { b.sim.update(.025); for (const s of b.sim.projectiles) if (s.helper && !seen.has(s.id)) { seen.add(s.id); n++; } } return n; };
+  const shots = (cheered: boolean) => { const b = arena([{ x: 0, z: 3, phase: 'chase' }], [{ dmg: .5, cd: 1 }]); if (cheered) b.sim.disguise(ID, 1); let n = 0, seen = new Set<number>(); for (let i = 0; i < K.cheerTime * 40; i++) { b.sim.update(.025); for (const s of b.sim.projectiles) if (s.helper && !seen.has(s.id)) { seen.add(s.id); n++; } } return n; };
   const plain = shots(false), cheered = shots(true); assert.equal(plain, 6); assert.equal(cheered, Math.round(6 * (1 + K.cheer)));
 });
 
