@@ -10,6 +10,7 @@ import * as F from '../src/friends.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { ContextGearSelection, type GearContext } from '../src/context-gear.ts';
 import { previewGear, canTryOn, autoHeld } from '../src/try-on.ts';
+import { needsDuplicateConfirm } from '../src/shop-owned.ts';
 import { sideOpen, isGun, SIDE_LEVEL } from '../src/weapon-pair.ts';
 import { sideButtonHtml, pairSettingHtml } from '../src/pair-ui.ts';
 import * as BagTile from '../src/bag-tile.ts';
@@ -101,7 +102,7 @@ const compiled = ts.transpileModule(`${fn('inventory')}\n${fn('tryOnButton')}\na
 function fixture(...items: string[]) {
   const state = owning(...items), gear = new ContextGearSelection(), html: string[] = [], calls: string[] = [];
   const ctx = vm.createContext({
-    ...BagTile, placeBagCard() {}, $: () => null, M, IG, state, contextGear: gear, sideOpen, isGun, SIDE_LEVEL, sideButtonHtml, pairSettingHtml, canTryOn, autoHeld, slotMeterHtml, expandCardHtml, mini: (id: string) => id, selectedItem: null, tryingOn: null, modal: 'bag', bagMode: 'bag', wardrobeItem: (item?: { slot?: string }) => !!item?.slot,
+    ...BagTile, placeBagCard() {}, $: () => null, M, IG, state, contextGear: gear, sideOpen, isGun, SIDE_LEVEL, sideButtonHtml, pairSettingHtml, canTryOn, autoHeld, needsDuplicateConfirm, slotMeterHtml, expandCardHtml, mini: (id: string) => id, selectedItem: null, tryingOn: null, modal: 'bag', bagMode: 'bag', wardrobeItem: (item?: { slot?: string }) => !!item?.slot,
     // As main.ts perform: a refused action is a toast and resolves undefined.
     perform: async (type: string, payload: Record<string, unknown>) => { calls.push(type); try { return applyGameAction(state, { type, payload }); } catch { return undefined; } },
     world: { refreshPlayer() {}, position: { x: 0, z: 0 } }, save() {}, shop() { calls.push('shop'); }, equipFeedback(id: string) { calls.push(`feedback:${id}`); },

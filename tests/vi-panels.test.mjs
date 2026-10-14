@@ -21,6 +21,7 @@ const M=await import('../src/model.ts');
 const P=await import('../src/progression.ts');
 const {t,localizeHtml,setLanguage,getLanguage}=await import('../src/i18n.ts');
 const {canTryOn}=await import('../src/try-on.ts');
+const {needsDuplicateConfirm}=await import('../src/shop-owned.ts');
 const {ENEMY_TYPES}=await import('../src/enemy-types.ts');
 const {produceLots,upgradeCards,cookSellPlan}=await import('../src/item-views.ts');
 const {cookSellHtml,treeFertilizerNote}=await import('../src/econ-ui.ts');
@@ -98,7 +99,7 @@ function advancedState(){
 function mainPanels(state,only){
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
-  const context={...BagTile,sideOpen,isGun,SIDE_LEVEL,sideButtonHtml,pairSettingHtml,hudIcon,CAMERA_PITCH,cameraPitch,...GUIDE,cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},...extraModules,M,IG,planRoutes,...P,...JB,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,iconUrl:p=>'/assets/icons/'+p,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
+  const context={...BagTile,needsDuplicateConfirm,sideOpen,isGun,SIDE_LEVEL,sideButtonHtml,pairSettingHtml,hudIcon,CAMERA_PITCH,cameraPitch,...GUIDE,cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},...extraModules,M,IG,planRoutes,...P,...JB,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,iconUrl:p=>'/assets/icons/'+p,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
     HELP_TOPICS,restoreRowHtml:()=>'',saveGuard:null,inbox:{settingHtml:()=>'',popups:false,announce:()=>false},activeKey:()=>'cute-game-save-v1',joystickEnabled:()=>state.settings.movePad??false,neighboursOn:()=>true,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},

@@ -179,6 +179,8 @@ export class World {
   aim = new T.Vector3(); cameraTarget = new T.Vector3(); distanceToInteract = 2;
   /** While set, the camera follows this point (the starship) instead of the explorer. */
   cameraFocus: T.Vector3 | null = null;
+  /** The speed tool's spot (promo/perf-budget.mjs via __zoo.pinHero): main.ts keeps the hero on it, unpushable and unhurt (FIX-PLAN 3.8). */
+  perfPin: { x: number; z: number } | null = null;
   /** Camera position relative to cameraTarget for the current screen and zoom (set by resize). */
   viewOffset = cameraOffset(16 / 9);
   /** The explorer is inside the starship: hidden, with the companion. */

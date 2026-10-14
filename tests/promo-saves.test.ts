@@ -17,6 +17,6 @@ test('the speed tool pins the hero on its spot while measuring (FIX-PLAN 3.8)', 
   const tool = readFileSync(new URL('../promo/perf-budget.mjs', import.meta.url), 'utf8');
   assert.match(tool, /__zoo\.pinHero\?\.\(\{ x, z \}\)/);
   const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
-  assert.match(main, /if\(perfPin\)\{world\.position\.x=world\.player\.position\.x=perfPin\.x;world\.position\.z=world\.player\.position\.z=perfPin\.z;combatTimers\.invulnerable=/);
-  assert.match(main, /pinHero:\(spot:\{x:number;z:number\}\|null\)=>\{perfPin=spot;\}/);
+  assert.match(main, /const pin=world\.perfPin;if\(pin\)\{world\.position\.x=world\.player\.position\.x=pin\.x;world\.position\.z=world\.player\.position\.z=pin\.z;combatTimers\.invulnerable=/);
+  assert.match(main, /pinHero:\(spot:\{x:number;z:number\}\|null\)=>\{world\.perfPin=spot;\}/);
 });
