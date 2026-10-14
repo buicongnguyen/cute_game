@@ -97,6 +97,7 @@ export const VI_ONLINE: Record<string, string> = {
   'Fullscreen': 'Toàn màn hình',
   'Toggle fullscreen': 'Bật/tắt toàn màn hình',
   'Use your browser’s fullscreen option on this device.': 'Hãy dùng tùy chọn toàn màn hình của trình duyệt trên thiết bị này.',
+  'For full screen on iPhone, tap Share and then Add to Home Screen, and play from the new icon.': 'Để chơi toàn màn hình trên iPhone, chạm Chia sẻ rồi Thêm vào Màn hình chính, và chơi từ biểu tượng mới.',
   'Install game': 'Cài đặt trò chơi',
   'Installation is unavailable right now. You can keep playing in your browser.': 'Hiện chưa thể cài đặt. Bạn vẫn có thể tiếp tục chơi trong trình duyệt.',
   'Zoo Garden is installed. Your offline adventure is ready anywhere.': 'Đã cài đặt Zoo Garden. Bạn có thể tiếp tục cuộc phiêu lưu ngoại tuyến ở bất cứ đâu.',
