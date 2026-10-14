@@ -316,7 +316,7 @@ const graphics=loadGraphics(state.settings.lowGraphics);graphics.setResolution(s
 let world: World;
 try { world = new World($('#world'), state, { antialias: !(graphics.mobile && devicePixelRatio >= 2) }); }
 catch (error) { app.innerHTML = localizeHtml('<div class="fatal"><h1>Your garden needs WebGL</h1><p>Enable hardware acceleration in your browser, then reload this page.</p><p>Your saved adventure is safe.</p></div>'); throw error; }
-const swim=mountSwim({world,active:()=>started,toast:(message,icon)=>toast(message,icon)}); // crossing water: wade, swim, glide (swim.ts)
+const swim=mountSwim({world,active:()=>started,toast:(message,icon)=>toast(message,icon),sound:kind=>tone(kind)}); // crossing water: wade, swim, glide (swim.ts)
 frameListeners.add(titleOrbit(world,()=>started)); // the title card floats over the village, the camera swaying slowly (title-card.ts)
 onInstallChange(()=>syncInstallButtons());
 initDockFraming(world.camera); // desktop menus dock right; slide the picture so the hero stays clear (dialog-dock.ts)
@@ -439,7 +439,7 @@ frameListeners.add(()=>{const urls=lateArt.take();if(!urls.length)return;if(!sta
 const sfx=new Sfx();
 // Settings volume sliders (audio-settings.ts): effects preview with a click while dragging; letting go saves.
 bindAudioSliders(app,(kind,value)=>{if(kind==='sfx'){sfx.volume=value;sfx.play('click');}},(kind,value)=>{void perform('settings',{settings:kind==='music'?{musicVolume:value}:{sfxVolume:value}}).then(()=>syncAudio(state.settings));});
-function tone(kind: Sound = 'click') { sfx.volume = audioOf(state.settings).sfxVolume; sfx.play(kind); }
+function tone(kind: Sound = 'click') { try { sfx.volume = audioOf(state.settings).sfxVolume; sfx.play(kind); } catch { /* before the mixer exists (early boot) a sound is simply skipped */ } }
 const vibrate=(ms:number)=>{try{if(audioOf(state.settings).vibrate&&matchMedia('(pointer: coarse)').matches)navigator.vibrate?.(ms);}catch{/* Optional. */}};
 function save() { if(!started)return;if(persistence){persistence(state);return;}if(!saveGuard.canWrite(activeKey()))return;try { state.savedAt=Date.now();localStorage.setItem(activeKey(),JSON.stringify(contextGear.persisted(state)));saveGuard.wrote(activeKey(),state.savedAt);saveFailed=false;$('#save-status').textContent=t('● Saved on this device'); } catch { saveFailed=true;$('#save-status').textContent=t('○ Saving unavailable'); } }
 // Keep at most three messages on screen (two on phones, where they also leave sooner); older ones fade out instead of stacking up the view.
@@ -494,7 +494,7 @@ function botActive(){return started&&!actionHandler&&!document.hidden&&!uiBlocke
 /** 'wardrobe' while the bag was opened from the bedroom wardrobe: it then lists only things to wear (house-stores.ts). */
 let bagMode:'bag'|'wardrobe'='bag';
 function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF AT HOME',icon?:string) {
-  if(fishGame)endFishing();
+  if(fishGame)endFishing();if($('#dialog-layer').hidden)tone('open');
   // Inside the cottage the stove, workbench, globe, wardrobe and mirror are their own places, not the village shops (house-stores.ts).
   const store=indoorStore(type,!!world.interior,bagMode==='wardrobe');if(store){title=store.title;kicker=store.kicker;icon=store.icon;body=purposeHtml(store)+body;}$('#dialog').dataset.station=store?type:'';setDock(type);
   if(!modal)lastFocused=document.activeElement as HTMLElement;const reopened=modal===type;modal=type;clearHeldInput();world.destination=null;world.route=[];
@@ -510,7 +510,7 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
 let shopFocus='';
 function focusShopRow(){const id=shopFocus;shopFocus='';const row=$('#dialog-body').querySelector(`[data-action="buy"][data-item="${id}"]`)?.closest<HTMLElement>('.shop-item');if(!row)return;row.scrollIntoView({block:'center'});row.classList.add('shop-focus');setTimeout(()=>row.classList.remove('shop-focus'),2600);}
 // The Mirror docks with 'trying-on' even before a preview (look-shop.ts), so closing always clears it: a later panel or confirmation must not inherit it.
-function closeDialog(){endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();clearHeldInput();}
+function closeDialog(){if(modal)tone('close');endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();clearHeldInput();}
 /** The three save profiles on the title screen: name and level of each, or an empty slot for a new game. */
 function profilePicker(){
   const cur=activeSlot();
@@ -726,12 +726,12 @@ async function buyPlot(){
   if(state.planet!=='home'||visiting){toast('Garden beds belong at home. Return to your garden first.','🏡');return;}
   if(!(state.bag.plot_kit||0)&&state.energy<M.gardenExpansionCost(state)){toast(t('You need {amount} energy to expand the garden.',{amount:M.gardenExpansionCost(state)}),'ϟ');return;}
   const result=await perform('buyBedKit');if(!result)return;
-  if(result==='bought')tone('coin');beginPlacement('plot_kit');
+  if(result==='bought')tone('buy');beginPlacement('plot_kit');
 }
 /** Puts a bed kit from the bag down automatically (expandGarden picks the spot); the kit stays in the bag if there is no room. */
 async function autoPlaceBed(){
   if(!await perform('expandGarden')){toast('There is no free spot left for another bed. Your kit stays in your bag.','🌱');return;}
-  const i=state.plots.length-1,p=M.bedPosition(state,i);closeDialog();world.syncCrops();plantBurst(i);tone('pop');
+  const i=state.plots.length-1,p=M.bedPosition(state,i);closeDialog();world.syncCrops();plantBurst(i);tone('plant');
   world.fx?.burst({x:p.x,z:p.z},{n:10,color:['#9be36f','#ffe66d'],glow:true,speed:2.5,up:4,y:.3});
   toast('A new garden bed! Tap it to plant.','🌱');
 }
@@ -954,7 +954,7 @@ async function confirmPlacement(){
   if(!state.bag[id]){cancelPlacement();return;}
   if(!await perform('placeDecoration',{id,x,z,rotation})){movePlacement(x,z);return;}
   cancelPlacement();
-  if(item.type==='placeable'){world.syncCrops();plantBurst(state.plots.length-1);tone('pop');toast('A new garden bed! Tap it to plant.','🌱');}
+  if(item.type==='placeable'){world.syncCrops();plantBurst(state.plots.length-1);tone('plant');toast('A new garden bed! Tap it to plant.','🌱');}
   else{world.syncDecorations();tone('success');toast(`${t(item.name)} placed.`,'🏡');}
 }
 function placeAt(x:number,y:number){const point=world.groundPoint(x,y);if(placement&&point)movePlacement(point.x,point.z);}
@@ -1346,7 +1346,7 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
   if(!vault&&!ctfApi?.owns(e)&&!rescueApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
-  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard,impact?.source);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0);if(!hazard||impact)tone(impact?.critical?'crit':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
+  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard,impact?.source);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0);if(!hazard||impact)tone(impact?.critical?'crit':(impact?.knock??0)>=2||(impact?.lift??0)>0?'hitHeavy':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');
@@ -1685,7 +1685,7 @@ function releasePower(level:number,air:boolean){
   if(fx){powerFx.play(fx,shape,level,{x:p.x,y:p.y,z:p.z},world.facing,color);fx.freeze(shape==='wave'?POWER.stop*.5:POWER.stop);fx.shake(level>1?.42:.32);fx.text({x:p.x,y:p.y+1.4,z:p.z},t(level>1?'POWER STRIKE ×2!':'POWER STRIKE!'),'crit big');}
   pondSplash.power(shape,level,p,world.facing); // a pond in the strike's area bursts (pond-splash.ts)
   breakables.power(target=>powerReach(shape,level,p,world.facing,target)>=0,p,Math.max(area.length,area.radius)); // and breakable scenery takes the blow (breakables.ts)
-  tone('boom');tone('zap');vibrate(60);noteChain(t('POWER!'));emitAction({kind:'basic'});
+  tone('power');vibrate(60);noteChain(t('POWER!'));emitAction({kind:'basic'});
 }
 /** A ground attack passed under the explorer. A perfect one (solo) slows the moment and makes the next hit a sure critical. */
 function dodged(perfect:boolean){
@@ -2038,7 +2038,7 @@ app.addEventListener('click',async event=>{
     case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'level':'pop');}forgeMenu(id);break;}
     case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0&&!M.isPenned(id)){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
     case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'open-market':market();break;case 'inspect':if(id){const again=id===selectedItem;if(modal==='bag'&&isDoubleTap(id,again,performance.now())){$<HTMLButtonElement>('#dialog-body .tile-e:not(:disabled)')?.click();break;}if(!again)bagUi.card=false;selectedItem=id;inventory();}break;case 'bag-card':bagUi.card=!bagUi.card;inventory();if(bagUi.card)$<HTMLElement>('#bag-card .card-close')?.focus();break;case 'bag-card-close':bagUi.card=false;inventory();$<HTMLElement>('#dialog-body .item-cell.sel .tile-q')?.focus();break;case 'quests':if(button.id==='quest-summary'&&walkToQuest())break;quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'news':inbox.open();break;
-    case 'claim':if(await perform('claimQuest')){tone('success');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
+    case 'claim':if(await perform('claimQuest')){tone('quest');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
     case 'plant':{const i=activePlot,opened=modal,root=world.root,taken=state.plots[i]?.crop;if(taken){toast(t('This bed already grows {crop}.',{crop:t(M.CROPS[taken].name)}),'🌱');refreshPlot();break;}if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
     case 'cook-everything':{let made=0;for(const id of M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id])){const n=M.pantry(state,id);if(n>0&&await perform('cook',{id,count:n}))made+=n;}if(made){tone('success');toast(t('Cooked {count} meals. Enjoy!',{count:made}),'🍲');}cooking();break;}
     // Open panels can be out of date: a helper may have used the last one meanwhile. Then the panel just catches up.
@@ -2072,7 +2072,7 @@ app.addEventListener('click',async event=>{
     case 'journal-group':journalTab=groupTarget(journalBadges(state),button.dataset.group as JournalGroup);quests();break;
     case 'start-challenge':if(await perform('startChallenge',{kind:button.dataset.kind})){quests();toast('Quick challenge started!','⏱️');}break;
     case 'reroll-daily':await perform('rerollDaily',{index});quests();break;
-    case 'progress-claim':if(await perform('claimProgress',{kind:button.dataset.kind,id:button.dataset.id})){tone('success');toast('Reward collected.','🎁');}quests();break;
+    case 'progress-claim':if(await perform('claimProgress',{kind:button.dataset.kind,id:button.dataset.id})){tone('quest');toast('Reward collected.','🎁');}quests();break;
     case 'plant-all':{const empty=state.plots.map((p,i)=>p.crop?-1:i).filter(i=>i>=0);const count=await perform('plantAll',{id});if(count===undefined)break;empty.filter(i=>state.plots[i]?.crop).slice(0,12).forEach(i=>plantBurst(i));if(count)tone('pop');world.syncCrops();closeDialog();toast(`Planted ${count} garden beds.`,'🌱');break;}
     case 'harvest-all':{const ready=state.plots.map((p,i)=>p.crop&&M.cropProgress(p)>=1?[i,p.crop] as const:null).filter(Boolean) as (readonly [number,M.CropId])[];const count=await perform('harvestAll');if(count===undefined)break;ready.slice(0,12).forEach(([i,crop])=>harvestBurst(i,crop));world.syncCrops();closeDialog();toast(`Harvested ${typeof count==='number'?count:Array.isArray(count)?count.length:0} crops.`,'🌾');break;}
     case 'unequip':{if(await perform('unequip',{slot:button.dataset.slot})&&button.dataset.slot==='weapon')contextGear.holdFists(state);world.refreshPlayer();save();inventory();break;}
@@ -2085,7 +2085,7 @@ app.addEventListener('click',async event=>{
     case 'remove-decor':if(await perform('removeDecoration',{uid:button.dataset.id})){world.syncDecorations();decorations();}break;
     case 'buy':if(await perform('buy',{id})){
       // Gear goes straight onto the explorer, like picking up a fishing rod.
-      if(M.ITEMS[id].slot&&!autoHeld(id)&&await perform('equip',{id}))equipFeedback(id);else{floating(`+ ${t(M.ITEMS[id].name)}`,world.position.x,world.position.z,'item');tone('success');}
+      if(M.ITEMS[id].slot&&!autoHeld(id)&&await perform('equip',{id}))equipFeedback(id);else{floating(`+ ${t(M.ITEMS[id].name)}`,world.position.x,world.position.z,'item');tone('buy');}
       shop();}break;
     case 'equip':if(await perform('equip',button.dataset.slot?{id,slot:button.dataset.slot}:{id})){equipFeedback(id);if(modal==='shop')shop();else inventory();}break;
     case 'eat':await eatFood(id);inventory();break;
@@ -2093,9 +2093,9 @@ app.addEventListener('click',async event=>{
     case 'quick-eat-pick':quickEatMenu($('#quick-eat-menu').hidden);break;
     case 'quick-eat-choose':quickEatChoice=id as FoodChoice;try{localStorage.setItem(QUICK_EAT_KEY,quickEatChoice);}catch{}quickEatMenu(false);updateQuickEat();break;
     case 'try-on':tryOn(id);break;
-    case 'sell-one':case 'sell-all':{if(M.looseQuantity(state,id)<1){market();break;}const n=action==='sell-all'?M.looseQuantity(state,id):1;const value=await perform('sell',{id,count:n});if(value){tone('success');toast(`Sold for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
+    case 'sell-one':case 'sell-all':{if(M.looseQuantity(state,id)<1){market();break;}const n=action==='sell-all'?M.looseQuantity(state,id):1;const value=await perform('sell',{id,count:n});if(value){tone('sell');toast(`Sold for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
     case 'cook-sell-produce':{const value=await perform<number>('cookSellProduce');if(value){tone('success');floating(`+${value} ϟ`);toast(t('Cooked and sold everything for {amount} energy.',{amount:value}),'🔥');}market();break;}
-    case 'sell-produce':{const chest=produceLots(state).fromChest,value=await perform('sellProduce');if(value){tone('success');floating(`+${value} ϟ`);toast(t('Sold all your produce for {amount} energy. Thank you, neighbor!',{amount:value})+(chest?' '+t('{count} from the chest',{count:chest})+'.':''),'ϟ');}market();break;}
+    case 'sell-produce':{const chest=produceLots(state).fromChest,value=await perform('sellProduce');if(value){tone('sell');floating(`+${value} ϟ`);toast(t('Sold all your produce for {amount} energy. Thank you, neighbor!',{amount:value})+(chest?' '+t('{count} from the chest',{count:chest})+'.':''),'ϟ');}market();break;}
     // A tap moves the whole stack, like the reference's chest (equipped gear stays in the backpack).
     case 'transfer':{const store=button.dataset.direction==='store',n=store?M.looseQuantity(state,id):state.chest[id]??0;if(n<1){storage();break;}await perform('transfer',{id,count:n,toChest:store});tone('click');storage();break;}
     case 'take-all':{const r=await perform<{count:number}>('takeChest');if(r?.count){tone('click');toast(t('Took {count} items from the chest.',{count:r.count}),'📦');}storage();break;}

@@ -14,6 +14,8 @@ export interface SwimHost {
   /** The explorer is in play and may move (started, no menu, alive). */
   active(): boolean;
   toast(message: string, icon?: string): void;
+  /** Optional sound hook: a splash on the way in, a swish per stroke (sfx.ts). */
+  sound?(kind: 'dive' | 'stroke'): void;
 }
 export interface SwimApi {
   mode(): SwimMode;
@@ -46,7 +48,7 @@ function strokePose(l: Limbs, t: number, moving: boolean) {
 
 export function mountSwim(host: SwimHost): SwimApi {
   const w = host.world, state = new SwimState();
-  let pools: Pool[] = [], poolsFrom: unknown = null, poolsLen = -1, rippleT = 0, sinkNow = 0, wasMode: SwimMode = 'land', lastPlanet = '';
+  let pools: Pool[] = [], poolsFrom: unknown = null, poolsLen = -1, rippleT = 0, strokeT = 0, sinkNow = 0, wasMode: SwimMode = 'land', lastPlanet = '';
   const remoteRipple = new Map<string, number>();
   // The ring above the head: stamina while in the water, and the push filling up at the shore.
   const ring = document.createElement('div'); ring.id = 'swim-ring'; ring.hidden = true; ring.setAttribute('aria-hidden', 'true');
@@ -99,6 +101,7 @@ export function mountSwim(host: SwimHost): SwimApi {
     w.waterPass = step.pass; w.swimSpeed = swimSpeed(step.mode);
     if (j) j.glide = step.glide ? SWIM.glideFall : 0;
     if (step.entered) {
+      host.sound?.('dive');
       if (step.entered.to) w.walkTo(step.entered.to.x, step.entered.to.z);
       w.fx?.ring({ x: w.position.x, y: 0, z: w.position.z }, { color: '#d8f3ff', from: .3, to: 1.4, life: .45, y: .33, thick: .16, opacity: .85 });
       if (!tipSeen('enter')) { markTip('enter'); host.toast('In the water! The rim is shallow; the middle is deep: no attacks or skills there, and watch the stamina ring.', '🏊'); }
@@ -112,6 +115,7 @@ export function mountSwim(host: SwimHost): SwimApi {
     const sink = swimSink(state.mode); sinkNow += (sink - sinkNow) * Math.min(1, dt * 10);
     if (sinkNow > .005 && !j?.airborne) w.player.position.y -= sinkNow;
     if (state.mode === 'swim' && !j?.airborne) strokePose(limbs(w.player), w.time, w.moving);
+    strokeT -= dt; if (state.mode === 'swim' && w.moving && !j?.airborne && strokeT <= 0) { strokeT = .85; host.sound?.('stroke'); }
     if (step.glide) { const l = limbs(w.player); l.armL?.rotation.set(-.2, 0, -1.35); l.armR?.rotation.set(-.2, 0, 1.35); l.legL?.rotation.set(.25, 0, 0); l.legR?.rotation.set(-.1, 0, 0); }
     if (state.mode !== 'land' && !j?.airborne) {
       rippleT -= dt;

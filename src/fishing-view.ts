@@ -120,8 +120,8 @@ export class FishingView {
 
   /** Every kit fish (rod view, hunting view, leaps) draws instanced through this (fish-school.ts). */
   readonly school: FishSchool;
-  private fx:Effects;private kit:KitLibrary;private sound:(name:'pop'|'splash'|'cast'|'snap'|'reel')=>void;
-  constructor(scene: T.Scene, fx: Effects, kit: KitLibrary, sound: (name: 'pop' | 'splash' | 'cast' | 'snap' | 'reel') => void, monotonicNow:()=>number=()=>performance.now()/1000) {
+  private fx:Effects;private kit:KitLibrary;private sound:(name:'pop'|'splash'|'cast'|'snap'|'reel'|'bite'|'catch')=>void;
+  constructor(scene: T.Scene, fx: Effects, kit: KitLibrary, sound: (name: 'pop' | 'splash' | 'cast' | 'snap' | 'reel' | 'bite' | 'catch') => void, monotonicNow:()=>number=()=>performance.now()/1000) {
     this.fx=fx;this.kit=kit;this.sound=sound;void monotonicNow;
     this.root.name = 'fishing';
     scene.add(this.root);
@@ -348,7 +348,7 @@ export class FishingView {
     const from = obj.position.clone(); from.y = (pond?.surface ?? 0) + .1;
     this.fx.burst(from, { n: 20, color: ['#ffffff', '#9fe3ff'], glow: true, speed: 5, up: 7, y: 0 });
     this.fx.ring(from, { color: '#ffffff', to: 2, life: .5, y: (pond?.surface ?? 0) + .02 });
-    this.sound('splash');
+    this.sound('catch');
     this.leaps.push({ obj, from, target, t: 0, done });
     this.cancel();
   }
@@ -413,7 +413,7 @@ export class FishingView {
     }
     if (phase === 'bite') {
       this.fx.ring(bob, { color: '#ffffff', from: .3, to: 1.5, life: .5, y: pond.surface + .01 });
-      this.fx.burst(bob, { n: 10, color: ['#ffffff', '#bfe9ff'], glow: true, speed: 3, up: 4, y: 0 }); this.sound('splash');
+      this.fx.burst(bob, { n: 10, color: ['#ffffff', '#bfe9ff'], glow: true, speed: 3, up: 4, y: 0 }); this.sound('bite');
       if (this.interest) this.interest.state = 'bite';
     }
     if (phase === 'hooked') {
