@@ -1,0 +1,28 @@
+/* The daily welcome-back card (welcome-back.ts, FIX-PLAN 5.2). */
+.wb-card { display: grid; gap: 12px; }
+.wb-streak { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: linear-gradient(135deg, #fff1c9, #ffd88a); color: #6a3d06; }
+.wb-streak b { font-size: 1.15rem; }
+.wb-flame { font-size: 2.1rem; line-height: 1; filter: drop-shadow(0 2px 2px rgba(160, 70, 0, .35)); }
+.wb-dots { display: flex; gap: 6px; margin-top: 6px; }
+.wb-dots i { width: 14px; height: 14px; border-radius: 50%; background: rgba(255, 255, 255, .7); box-shadow: inset 0 0 0 2px #e7b44e; }
+.wb-dots i.on { background: #ff9d2e; box-shadow: inset 0 0 0 2px #d86a00; }
+.wb-dots i.big { width: 18px; height: 18px; margin-top: -2px; }
+.wb-reward { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px; padding: 10px 14px; border-radius: 14px; background: #f3fbe9; box-shadow: inset 0 0 0 2px #cfe8b5; }
+.wb-label { font-weight: 800; color: #3f6b1f; }
+.wb-gift { font-weight: 700; color: #4a3a22; }
+.wb-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.wb-lines li { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 12px; background: #fbf6ea; color: #4a3a22; font-weight: 600; }
+.wb-lines li > span:first-child { font-size: 1.2rem; }
+.wb-lines .wb-away { background: #eaf6ff; }
+.wb-actions { justify-content: center; }
+.wb-actions .wb-collect:not(:disabled) { background: linear-gradient(180deg, #ffd34d, #ffae1a); color: #5a3300; box-shadow: 0 3px 0 #c97800, 0 0 0 3px rgba(255, 211, 77, .35); animation: wb-glow 1.6s ease-in-out infinite; }
+@keyframes wb-glow { 50% { box-shadow: 0 3px 0 #c97800, 0 0 0 6px rgba(255, 211, 77, .2); } }
+@media (prefers-reduced-motion: reduce) { .wb-actions .wb-collect { animation: none !important; } }
+/* Phones: compact, so the card never fills the screen. */
+@media (max-width: 560px) {
+  .wb-card { gap: 8px; }
+  .wb-streak { padding: 8px 10px; }
+  .wb-flame { font-size: 1.6rem; }
+  .wb-reward { padding: 8px 10px; }
+  .wb-lines li { padding: 6px 10px; font-size: .9rem; }
+}

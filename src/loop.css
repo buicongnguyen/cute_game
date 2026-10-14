@@ -1,0 +1,12 @@
+/* FIX-PLAN 5.4: every Collect button in the Journal (and the welcome-back card) is gold when a reward waits, dimmed when not. */
+#dialog-body [data-action="progress-claim"]:not(:disabled),
+#dialog-body [data-action="claim"]:not(:disabled) {
+  background: linear-gradient(180deg, #ffe066, #ffb21f);
+  color: #5a3300;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .45);
+  box-shadow: inset 0 -3px 0 rgba(160, 80, 0, .18), 0 4px 0 #c97800, 0 0 0 3px rgba(255, 210, 70, .35);
+}
+#dialog-body [data-action="progress-claim"]:not(:disabled):hover,
+#dialog-body [data-action="claim"]:not(:disabled):hover { filter: brightness(1.06); }
+#dialog-body [data-action="progress-claim"]:disabled,
+#dialog-body [data-action="claim"]:disabled { opacity: .55; filter: saturate(.4); }

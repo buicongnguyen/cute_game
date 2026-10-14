@@ -43,6 +43,7 @@ import { SWIM_VI } from './vi-swim.ts';
 import { BREAK_VI } from './vi-break.ts';
 import { NEWS_VI } from './vi-news.ts';
 import { BADGE_VI } from './vi-badge.ts';
+import { LOOP_VI } from './vi-loop.ts';
 
 /** Every Vietnamese phrase in one table. Only this module imports the catalog files, so a build ships them as one lazy chunk (i18n.ts loadVietnamese). */
 export const VI_PACK: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS, VI_HOUSE, VI_HOUSE_TALK, VI_FRIEND_LINES, VI_LOOKS, VI_UPGRADES, VI_TESTER, VI_SKILLS, VI_GROUPS, VI_DOG_TOSS, VI_SHOP, VI_LAKE, VI_GARDEN, VI_REFUSALS, VI_RANKING, VI_FIXES, VI_BOTS, VI_ECON, VI_EXTRAS, VI_SAVE);
@@ -54,6 +55,7 @@ Object.assign(VI_PACK, BAG_VI);
 Object.assign(VI_PACK, SWIM_VI);
 Object.assign(VI_PACK, BREAK_VI);
 Object.assign(VI_PACK, NEWS_VI, BADGE_VI);
+Object.assign(VI_PACK, LOOP_VI);
 Object.assign(VI_PACK, SHAPES_VI);
 Object.assign(VI_PACK, CHAIN_VI);
 Object.assign(VI_PACK, MOVES_VI);
