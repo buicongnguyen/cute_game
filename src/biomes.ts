@@ -32,23 +32,27 @@ export const DECOR: Record<string, DecorKind> = {
   sky_bloom: { kit: 'dressing', cover: true, dressing: true }, jungle_bloom: { kit: 'dressing', cover: true, dressing: true }, shells: { kit: 'dressing', cover: true, dressing: true },
   ice_shards: { kit: 'dressing', cover: true, dressing: true }, embers: { kit: 'dressing', cover: true, dressing: true }, glow_shrooms: { kit: 'dressing', cover: true, dressing: true },
 };
-/** [type, count, collision radius (0 = walk through), where: land by default, or 'sea']. */
+/**
+ * [type, count, collision radius (0 = walk through), where: land by default, or 'sea'].
+ * Low pieces (rocks, crystals, sweets, balls) block only their solid core, a little inside what is drawn, so they never
+ * stop the explorer short of a gap that looks open (owner, 2026-10-15); trees block their trunk.
+ */
 export type DecorRule = [string, number, number?, ('sea')?];
 export const HOME_DECOR: Record<'forest' | 'meadow' | 'swamp' | 'canyon', DecorRule[]> = {
-  forest: [['tree_round', 160, .55], ['tree_pine', 160, .45], ['bush', 110], ['toadstools', 130], ['rock', 45, .7], ['tuft', 360], ['flowers', 90], ['log', 30]],
-  meadow: [['tree_round', 70, .55], ['tree_blossom', 50, .5], ['bush', 70], ['flowers', 320], ['tuft', 380], ['rock', 36, .7], ['toadstools', 30]],
-  swamp: [['tree_swamp', 140, .55], ['reeds', 140], ['bush', 45], ['tuft', 250], ['log', 28], ['toadstools', 70], ['rock', 28, .7]],
-  canyon: [['rock_red', 125, 1.1], ['tree_dead', 70, .35], ['dry_bush', 160], ['crystals', 60, .5], ['rock', 55, .7]],
+  forest: [['tree_round', 160, .55], ['tree_pine', 160, .45], ['bush', 110], ['toadstools', 130], ['rock', 45, .35], ['tuft', 360], ['flowers', 90], ['log', 30]],
+  meadow: [['tree_round', 70, .55], ['tree_blossom', 50, .5], ['bush', 70], ['flowers', 320], ['tuft', 380], ['rock', 36, .35], ['toadstools', 30]],
+  swamp: [['tree_swamp', 140, .55], ['reeds', 140], ['bush', 45], ['tuft', 250], ['log', 28], ['toadstools', 70], ['rock', 28, .35]],
+  canyon: [['rock_red', 125, .8], ['tree_dead', 70, .35], ['dry_bush', 160], ['crystals', 60, .3], ['rock', 55, .35]],
 };
 export const PLANET_DECOR: Partial<Record<PlanetId, { decor: DecorRule[]; rim: string[] }>> = {
-  candy: { decor: [['candy_tree', 160, .35], ['candy_cane', 140, .3], ['gumdrops', 200], ['donut', 50, .9], ['cupcake', 60, .6], ['flowers', 140]], rim: ['candy_tree', 'candy_cane', 'cupcake'] },
-  ice: { decor: [['snow_pine', 270, .45], ['ice_spire', 100, .55], ['snow_rock', 110, .8], ['snowman', 36, .45], ['dry_bush', 110]], rim: ['snow_pine', 'snow_pine', 'ice_spire'] },
-  lava: { decor: [['lava_rock', 130, .85], ['obsidian', 80, .5], ['ash_tree', 110, .35]], rim: ['lava_rock', 'obsidian', 'mini_volcano'] },
-  toy: { decor: [['toyblock', 45, 1.3], ['toyball', 40, .9], ['flowers', 90]], rim: ['toyblock', 'toyball'] },
+  candy: { decor: [['candy_tree', 160, .35], ['candy_cane', 140, .3], ['gumdrops', 200], ['donut', 50, .55], ['cupcake', 60, .4], ['flowers', 140]], rim: ['candy_tree', 'candy_cane', 'cupcake'] },
+  ice: { decor: [['snow_pine', 270, .45], ['ice_spire', 100, .55], ['snow_rock', 110, .5], ['snowman', 36, .45], ['dry_bush', 110]], rim: ['snow_pine', 'snow_pine', 'ice_spire'] },
+  lava: { decor: [['lava_rock', 130, .6], ['obsidian', 80, .5], ['ash_tree', 110, .35]], rim: ['lava_rock', 'obsidian', 'mini_volcano'] },
+  toy: { decor: [['toyblock', 45, 1.3], ['toyball', 40, .6], ['flowers', 90]], rim: ['toyblock', 'toyball'] },
   jungle: { decor: [['jungletree', 150, .6], ['fern', 260], ['bush', 120], ['flowers', 80]], rim: ['jungletree', 'jungletree', 'fern'] },
   ocean: { decor: [['palm', 70, .35], ['coral', 160, 0, 'sea'], ['fern', 60]], rim: ['palm'] },
-  cloud: { decor: [['cloudtree', 90, .4], ['skyrock', 50, .8], ['flowers', 90], ['tuft', 160]], rim: [] },
-  shadow: { decor: [['deadtree', 130, .35], ['rock', 50, .7], ['tuft', 120]], rim: ['deadtree'] },
+  cloud: { decor: [['cloudtree', 90, .4], ['skyrock', 50, .55], ['flowers', 90], ['tuft', 160]], rim: [] },
+  shadow: { decor: [['deadtree', 130, .35], ['rock', 50, .35], ['tuft', 120]], rim: ['deadtree'] },
 };
 /**
  * Small dressing per world, [type, count]. It is planned after everything else from its own seeded stream, so adding it
