@@ -32,6 +32,7 @@ import { VI_GUIDE } from './vi-guide.ts';
 import { VI_SAVE } from './vi-save.ts';
 import { VI_MOBILE } from './vi-mobile.ts';
 import { DAWNSTAR_VI } from './vi-dawnstar.ts';
+import { PETGUARD_VI } from './vi-petguard.ts';
 
 /** Every Vietnamese phrase in one table. Only this module imports the catalog files, so a build ships them as one lazy chunk (i18n.ts loadVietnamese). */
 export const VI_PACK: Record<string, string> = Object.assign(Object.create(null), VI_CATALOG, VI_GAMEPLAY, VI_ONLINE, VI_UI, VI_FRIENDS, VI_HOUSE, VI_HOUSE_TALK, VI_FRIEND_LINES, VI_LOOKS, VI_UPGRADES, VI_TESTER, VI_SKILLS, VI_GROUPS, VI_DOG_TOSS, VI_SHOP, VI_LAKE, VI_GARDEN, VI_REFUSALS, VI_RANKING, VI_FIXES, VI_BOTS, VI_ECON, VI_EXTRAS, VI_SAVE);
@@ -45,5 +46,6 @@ Object.assign(VI_PACK, JUMP_VI);
 Object.assign(VI_PACK, CAMERA_VI);
 Object.assign(VI_PACK, INSIGHT_VI);
 Object.assign(VI_PACK, DAWNSTAR_VI);
+Object.assign(VI_PACK, PETGUARD_VI);
 /** The time words a counter may carry in a template slot (i18n.ts compileTemplates): h/m/s/p/g plus the spelled-out units. */
 export const VI_TIME_UNITS = 'h|m|s|p|g|giờ|phút|giây';

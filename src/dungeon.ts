@@ -17,6 +17,7 @@ import './dungeon.css';
 import type { World, Enemy, Entity, RemotePose } from './world.ts';
 import type { SaveState } from './model.ts';
 import { companionId } from './pet-slots.ts';
+import { hostilePhase } from './pet-guard.ts';
 import { t } from './i18n.ts';
 import { ENEMY_TYPES, enemyScale } from './enemy-types.ts';
 import { adoptCreatureModel } from './creature-art.ts';
@@ -35,6 +36,8 @@ export interface DungeonHooks {
   openDialog: (type: string, title: string, body: string, kicker?: string, icon?: string) => void; closeDialog: () => void;
   neighbours: () => { cast: readonly Neighbour[]; isFriend: (id: string) => boolean } | null;
   attack: () => number; maxHp: () => number; hitEnemy: (e: Enemy, amount: number) => void; updateHud: () => void; save: () => void;
+  /** The creature a pet standing at `from` may strike: one that is fighting the explorer, within the leash (pet-guard.ts), or nothing. */
+  petTarget: (from: { x: number; z: number }) => Enemy | null | undefined;
   onFrame: (listener: (dt: number) => void) => void;
 }
 type Role = 'local' | 'host' | 'peer';
@@ -410,13 +413,14 @@ export function initDungeon(h: DungeonHooks) {
     petClocks[index] -= dt; if (petClocks[index] > 0) return;
     const model = index ? world.companion2 : world.companion;
     const pet = DUNGEON_PETS[id], from = { x: model.position.x, z: model.position.z };
-    let target: Enemy | null = null, best = 12; for (const e of world.enemies) if (e.hp > 0 && e.mesh.visible) { const d = Math.hypot(e.x - from.x, e.z - from.z); if (d < best) { best = d; target = e; } }
-    if (!target) { petClocks[index] = .5; return; }
-    petClocks[index] = pet.skillCd; const skill = pet.skills[Math.floor(Date.now() / 1000 / pet.skillCd) % 2], { marks, mult, color } = petSkillMarks(skill, from, target, Math.random);
+    // Like its shots, the skill is only for a creature that is fighting the explorer (pet-guard.ts): never a peaceful or a far one.
+    const target = h.petTarget(from) ?? null;
+    if (!target || !target.mesh.visible) { petClocks[index] = .5; return; }
+    petClocks[index] = pet.skillCd; const skill = pet.attack, { marks, mult, color } = petSkillMarks(skill, from, target, Math.random);
     for (const m of marks) { world.fx?.ring({ x: m.x, z: m.z }, { color, from: .2, to: m.shape === 'line' ? 1.2 : m.r, life: .4, y: .1, thick: .3 }); world.fx?.burst({ x: m.x, z: m.z }, { n: 6, color: [color, '#ffffff'], glow: true, speed: 3, up: 3, size: .1 }); }
     if (marks[0]?.shape === 'line') world.fx?.burst({ x: (from.x + target.x) / 2, z: (from.z + target.z) / 2 }, { n: 10, color, glow: true, speed: 2, up: 1, size: .12 });
-    const damage = Math.round(h.attack() * mult * pet.skillDmg * .5);
-    for (const e of petHits(marks, world.enemies)) h.hitEnemy(e, damage);
+    const damage = Math.round(h.attack() * mult * pet.skillDmg);
+    for (const e of petHits(marks, world.enemies)) if (e === target || hostilePhase(e.phase)) h.hitEnemy(e, damage); // the area spares a peaceful creature that stands in it
     world.fx?.text({ x: from.x, y: 1.2, z: from.z }, t(PET_SKILLS[skill].name), 'item');
   }
 

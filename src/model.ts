@@ -32,6 +32,7 @@ export { isTreeCrop, TREE_CROP_MS } from './tree-crops.ts';
 export * from './weapon-forge.ts';
 // Purchase-list order and item level tags (main.ts renders them as M.*, which the panel tests already provide).
 export { sortByPower, powerChip, levelTag, ownedScore, gearProgressHtml } from './item-power.ts';
+export { petCardHtml } from './pet-card.ts';
 export { gearFactor, skillLevel, skillCooldown, jumpLevel } from './upgrades.ts';
 export * from './content.ts';
 export * from './farm.ts';

@@ -678,6 +678,8 @@ export class CombatSimulation {
   }
   /** The pets' fight memory and guard cooldowns (pet-guard.ts): who is fighting the explorer, and when each guard is ready. */
   readonly crew=new PetCrew();
+  /** The creature a pet standing at `pet` may strike now (the Vault pets' skills, dungeon.ts): the same rule as its shots. */
+  petTarget(pet:CombatPoint){return this.crew.target(pet,this.host.position(),this.host.targets(),this.host.focus?.(),this.time);}
   private petAt(slot:number):PetFighter|null|undefined{return slot===0?this.host.pet?.():slot===1?this.host.pet2?.():this.host.dog?.();}
   /**
    * One pet's shot at a creature that is fighting the explorer (pet-guard.ts PetCrew.target: within the leash, never a

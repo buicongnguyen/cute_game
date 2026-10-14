@@ -44,8 +44,8 @@ export const PET_RULES = {
   chill: 1.2,
   /** The explorer's own sustained damage per second, x attack, without criticals (promo/pet-sim.mts). The share bounds are measured against it. */
   heroDps: 3.6,
-  /** Design bounds (tests/pet-guard.test.ts): one pet's share of the explorer's damage, and the best pair at +10. */
-  shareMax: .11, pairMax: .3,
+  /** Design bounds (tests/pet-guard.test.ts): one pet's share of the explorer's damage (a Vault pet's skill included), and the best pair at +10. */
+  shareMax: .125, pairMax: .31,
 } as const;
 
 const r = (dmg: number, cd: number, guard: GuardKind, power: number, every: number): PetRole => ({ dmg, cd, guard, power, every });
@@ -74,20 +74,20 @@ export const PET_ROLES: Readonly<Record<string, PetRole>> = {
   pet_b_shadowlord: r(.4, 1.5, 'distract', 2, 9),
   // Titan pets
   pet_t_turtle: r(.44, 1.6, 'block', .64, 6.5),
-  pet_t_clock: r(.22, .8, 'distract', 2, 8),
+  pet_t_clock: r(.22, .8, 'distract', 2.1, 8),
   pet_t_hydra: r(.26, .9, 'counter', .68, 7),
   pet_t_flower: r(.35, 1.2, 'mend', .055, 11),
   pet_t_crystal: r(.33, 1.1, 'counter', .72, 7),
   pet_t_kraken: r(.33, 1.1, 'block', .72, 6.5),
   pet_t_scorpion: r(.31, 1, 'counter', .76, 7),
-  pet_t_whale: r(.37, 1.2, 'mend', .06, 11),
-  pet_t_eye: r(.32, 1, 'counter', .8, 7),
+  pet_t_whale: r(.38, 1.2, 'mend', .06, 11),
+  pet_t_eye: r(.325, 1, 'counter', .8, 7),
   // Vault pets
   pet_dg_morel: r(.41, 1.3, 'block', .88, 6.5),
-  pet_dg_owl: r(.355, 1.1, 'distract', 2.2, 8),
+  pet_dg_owl: r(.355, 1.1, 'distract', 2.3, 8),
   pet_dg_anemone: r(.295, .9, 'mend', .065, 11),
   pet_dg_bellows: r(.265, .8, 'counter', .96, 6.5),
-  pet_dg_empress: r(.305, .9, 'distract', 2.4, 8),
+  pet_dg_empress: r(.305, .9, 'distract', 2.5, 8),
   // The Colossus keepsake: the best of them
   pet_colossus: r(.44, 1.2, 'block', 1.12, 6),
 };

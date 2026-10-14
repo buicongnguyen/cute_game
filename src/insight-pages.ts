@@ -10,6 +10,7 @@ import { barsHtml, sparkSvg } from './insight-charts.ts';
 import { CHAPTERS, productGraph, isItemNode, type Cell, type ChapterId, type Group, type Row } from './insight-graph.ts';
 import { ADVENTURE, SCORE_ICON, SCORE_LABEL, STRENGTH, itemView, lockOf, nextSteps, praise, report, scores, standouts, trend, type Msg, type ScoreId, type Step } from './insight-rules.ts';
 import { HISTORY_CAP } from './insight-history.ts';
+import { petCardHtml } from './pet-card.ts';
 
 export interface BookUi extends PageUi { now: number; lang: string }
 const fmt = (ui: BookUi, v: string | number) => typeof v === 'number' ? (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString(ui.lang === 'vi' ? 'vi-VN' : 'en-US') : String(Math.round(v * 10) / 10)) : v;
@@ -71,6 +72,7 @@ function detailHtml(ui: BookUi, id: string): string {
   const buff = item.buff ? Object.entries(item.buff).filter(([k]) => k !== 'time').length : 0;
   return `<div class="ins-detail" role="region" aria-label="${ui.esc(ui.t(item.name))}"><div class="ins-detail-head"><span class="ins-node-art big">${ui.art(id, item.icon)}</span><div><h4>${ui.esc(ui.t(item.name))}</h4><div class="chips">${chips.map(c => `<span class="chip">${ui.esc(c)}</span>`).join('')}${buff ? `<span class="chip chip-xp">${ui.esc(ui.t('Gives a buff for {time} s', { time: item.buff!.time }))}</span>` : ''}</div></div>`
     + `<button class="soft-button ins-close" data-insight="node-close" aria-label="${ui.esc(ui.t('Close'))}">×</button></div>`
+    + petCardHtml(id, s) // a pet: its share of your damage and its guard (pet-card.ts)
     + (view.best ? `<p class="ins-best"><b>${ui.esc(ui.t('Best use now'))}</b> ${ui.esc(say(ui, view.best))}</p>` : '')
     + (view.lock ? `<p class="ins-lock">🔒 ${ui.esc(ui.t('How to meet it: {how}', { how: say(ui, view.lock) }))}</p>` : '')
     + (view.from.length ? `<h5>${ui.esc(ui.t('Where it comes from'))}</h5><ul>${view.from.map(line => `<li>${ui.esc(say(ui, line))}</li>`).join('')}</ul>` : '')

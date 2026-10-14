@@ -28,6 +28,8 @@ export interface PetGuardHost {
   maxHp(): number;
   t(key: string, vars?: Record<string, string | number>): string;
   sound?(kind: 'guard' | 'mend'): void;
+  /** The name of the pet's own guard skill, when it has one (the Vault pets): floated over the pet as it guards. */
+  label?(slot: number): string | undefined;
 }
 interface Bolt { slot: number; t: number; tau: number; fx: number; fy: number; fz: number; tx: number; tz: number; color: string; shot: GuardShot | null; left: number; cut: number }
 interface Pulse { model: T.Object3D; t: number; base: number }
@@ -65,6 +67,7 @@ export class PetGuardView {
     const fx = this.h.fx(), hero = this.h.hero(), model = e.slot < 2 ? this.h.petModel(e.slot) : null;
     if (model && !this.pulses.some(p => p.model === model)) this.pulses.push({ model, t: 0, base: model.scale.x });
     if (!fx) return;
+    const label = e.slot < 2 ? this.h.label?.(e.slot) : undefined; if (label) fx.text({ x: e.x, y: (model?.position.y ?? hero.y) - .6, z: e.z }, label, 'item');
     const y = hero.y, from = { x: e.x, y: (model?.position.y ?? y) + .5, z: e.z }, tx = e.tx ?? hero.x, tz = e.tz ?? hero.z;
     if (e.kind === 'counter') {
       const d = Math.hypot(tx - e.x, tz - e.z), bolt: Bolt = { slot: e.slot, t: 0, tau: Math.max(.06, Math.min(.2, d / BOLT_SPEED)), fx: from.x, fy: from.y, fz: from.z, tx, tz, color: this.h.color(e.slot), shot: null, left: e.left, cut: e.power };
@@ -85,7 +88,7 @@ export class PetGuardView {
       // A distraction or the dog's bark: a small ring from the pet, and a mark over the creature it fooled.
       const c = e.target ? this.h.creature(e.target) : undefined, at = c ?? { x: tx, z: tz };
       fx.ring({ x: e.x, z: e.z }, { color: e.kind === 'bark' ? '#fff1d6' : '#ffe9a8', from: .3, to: e.kind === 'bark' ? 2.6 : 1.4, life: .35, y: y + .1, thick: .12, opacity: .7 });
-      fx.text({ x: at.x, y, z: at.z }, this.h.t(e.kind === 'bark' ? '🐕 Woof!' : '💫 Distracted'), 'dmg block');
+      fx.text({ x: at.x, y, z: at.z }, e.kind === 'bark' ? '🐕' : '💫', 'dmg block');
     }
   }
 

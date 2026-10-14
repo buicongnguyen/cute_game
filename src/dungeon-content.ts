@@ -100,7 +100,12 @@ export const DUNGEON_SKILL_INFO: Record<DungeonSkill, { name: string; color: str
 };
 
 export type PetSkill = 'p_sporeburst' | 'p_glowbeam' | 'p_chime' | 'p_featherdrop' | 'p_bubblepop' | 'p_tentacle' | 'p_anvil' | 'p_sparks' | 'p_moonbeam' | 'p_stardust';
-/** Pet skills: mult x skillDmg x the owner's attack, on the nearest creature within 12 m (dungeon.ts). */
+/**
+ * Pet skills (dungeon.ts): each Vault pet keeps ONE as its attack, `mult` x its skillDmg x the owner's attack, cast only at a
+ * creature that is fighting its explorer (pet-guard.ts: within the leash, never a peaceful one). Its other skill is the
+ * name and the look of its guard (pet-guard.ts PET_ROLES): the Bellows' Spark Shower shoots enemy shots down, the Owl's
+ * chime distracts, the Anemone's bubbles mend, the Morel's spores cushion a blow, the Moth's stardust dazzles.
+ */
 export const PET_SKILLS: Record<PetSkill, { name: string; mult: number; radius: number; count: number; color: string; shape: 'nova' | 'drops' | 'line' }> = {
   p_sporeburst: { name: 'Spore Burst', mult: 2.2, radius: 3.2, count: 1, color: '#9dff5a', shape: 'nova' },
   p_glowbeam: { name: 'Glow Beam', mult: 1.4, radius: 1.2, count: 1, color: '#7fe7ff', shape: 'line' },
@@ -113,14 +118,21 @@ export const PET_SKILLS: Record<PetSkill, { name: string; mult: number; radius: 
   p_moonbeam: { name: 'Moonbeam', mult: 1.5, radius: 1.2, count: 1, color: '#8fe6ff', shape: 'line' },
   p_stardust: { name: 'Stardust', mult: 1.2, radius: 1.4, count: 6, color: '#fff36b', shape: 'drops' },
 };
-export interface DungeonPet { boss: string; skills: [PetSkill, PetSkill]; skillCd: number; skillDmg: number }
+/**
+ * `attack`: the skill it casts every `skillCd` s for mult x skillDmg x attack. `guard`: the skill its guard is drawn as.
+ * Before 2026-10-14 both skills were attacks on the nearest creature within 12 m of the pet, peaceful or not, every
+ * `was.cd` s for mult x `was.dmg` x attack (kept for the before/after table of promo/pet-sim.mts).
+ */
+export interface DungeonPet { boss: string; skills: [PetSkill, PetSkill]; attack: PetSkill; guard: PetSkill; skillCd: number; skillDmg: number; was: { cd: number; dmg: number } }
 export const DUNGEON_PETS: Record<string, DungeonPet> = {
-  pet_dg_morel: { boss: 'dg_morel', skills: ['p_sporeburst', 'p_glowbeam'], skillCd: 6, skillDmg: 2.2 },
-  pet_dg_owl: { boss: 'dg_owl', skills: ['p_chime', 'p_featherdrop'], skillCd: 6, skillDmg: 2.1 },
-  pet_dg_anemone: { boss: 'dg_anemone', skills: ['p_bubblepop', 'p_tentacle'], skillCd: 5.5, skillDmg: 2.3 },
-  pet_dg_bellows: { boss: 'dg_bellows', skills: ['p_anvil', 'p_sparks'], skillCd: 5, skillDmg: 1.9 },
-  pet_dg_empress: { boss: 'dg_empress', skills: ['p_moonbeam', 'p_stardust'], skillCd: 4.5, skillDmg: 1.7 },
+  pet_dg_morel: { boss: 'dg_morel', skills: ['p_sporeburst', 'p_glowbeam'], attack: 'p_glowbeam', guard: 'p_sporeburst', skillCd: 12, skillDmg: .4, was: { cd: 6, dmg: 1.1 } },
+  pet_dg_owl: { boss: 'dg_owl', skills: ['p_chime', 'p_featherdrop'], attack: 'p_featherdrop', guard: 'p_chime', skillCd: 12, skillDmg: .4, was: { cd: 6, dmg: 1.05 } },
+  pet_dg_anemone: { boss: 'dg_anemone', skills: ['p_bubblepop', 'p_tentacle'], attack: 'p_tentacle', guard: 'p_bubblepop', skillCd: 11, skillDmg: .4, was: { cd: 5.5, dmg: 1.15 } },
+  pet_dg_bellows: { boss: 'dg_bellows', skills: ['p_anvil', 'p_sparks'], attack: 'p_anvil', guard: 'p_sparks', skillCd: 10, skillDmg: .4, was: { cd: 5, dmg: .95 } },
+  pet_dg_empress: { boss: 'dg_empress', skills: ['p_moonbeam', 'p_stardust'], attack: 'p_moonbeam', guard: 'p_stardust', skillCd: 9, skillDmg: .4, was: { cd: 4.5, dmg: .85 } },
 };
+/** A Vault pet's skill damage per second, x the owner's attack (its share of the fight on top of its shots). */
+export const petSkillDps = (id: string) => { const p = DUNGEON_PETS[id]; return p ? PET_SKILLS[p.attack].mult * p.skillDmg / p.skillCd : 0; };
 export const DUNGEON_PET_IDS = Object.keys(DUNGEON_PETS);
 
 /** The level the vault recommends; its companions need it to be worn (level-gates.ts). */

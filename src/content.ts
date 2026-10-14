@@ -3959,8 +3959,6 @@ ITEMS.wood = { name: 'Wild wood', icon: '🪵', type: 'material', sell: 5, keeps
 ITEMS.bunny = { name: 'Mochi bunny', icon: '🐰', type: 'pet', slot: 'pet', sell: 0, keepsake: true, stats: { atk: 3 }, attack: 3, pet: { scale: .5, dmg: .25, cd: 1.5 }, desc: 'Your original companion stays with you.' };
 // The garden guard dog as a pet (pet-slots.ts): owning the pen's dog grants it; worn, the dog comes along and tosses bones (guard-dog.ts).
 ITEMS.pet_dog = { name: 'Garden guard dog', icon: '🐕', type: 'pet', slot: 'pet', sell: 0, keepsake: true, penned: true, desc: 'Your guard dog. Bring it along and it tosses bones at creatures; left at home it rests by its pen. It guards your garden either way.' };
-// A pet's shot (damage x your attack, seconds between shots) is read from the one table of pet-guard.ts, with its guard.
-for (const [id, role] of Object.entries(PET_ROLES)) { const item = ITEMS[id]; if (item?.pet) item.pet = { ...item.pet, dmg: role.dmg, cd: role.cd }; }
 export const LEGACY_ITEMS: Record<string, string> = { turnip: 'radish', fertilizer: 'spore', fish: 'fish_perch', goldenfish: 'fish_koi', sword: 'sword_wood', blaster: 'gun_bubble', hat: 'hat_straw', outfit: 'armor_leather', boots: 'boots_cloud', firesword: 'sword_lava', fireboots: 'boots_lava', dragon: 'pet_dragon', crystal: 'starshard', ember: 'magma' };
 export function canonicalItem(id: string) { return Object.hasOwn(LEGACY_ITEMS, id) ? LEGACY_ITEMS[id] : id; }
 export const SHOP_CATEGORIES = SHOP_FACTS;
@@ -4164,5 +4162,8 @@ RECIPES.push({result:'harpoon',energy:1000,materials:{},category:'Weapons',stati
 ITEMS.fish_guardian={name:'Lake Guardian',icon:'🎏',desc:'A glowing koi that guards the big meadow lake. It surfaces now and then, only a harpoon can catch it, and it comes back for you once every 6 hours.',type:'fish',sell:450,heal:250,buff:{luck:.4,regen:6,time:240},rare:true,legend:true,power:.98,size:[180,260]};
 FISH.fish_guardian={id:'fish_guardian',name:ITEMS.fish_guardian.name,icon:ITEMS.fish_guardian.icon,rarity:'legendary',speed:.98,power:.98,stamina:.98,sell:450,xp:Math.round((4+.98*25)*4),size:[180,260],planet:['home']};
 LOOT_TABLES.forest_raptor=[['feather',1,1,2],['meat',.7,1,2]];
+// A pet's shot (damage x your attack, seconds between shots) is read from the one table of pet-guard.ts, with its guard.
+// Every pet item exists by now (the Titan, boss, Vault and Colossus keepsakes join above), and the dyed pets below copy it.
+for (const [id, role] of Object.entries(PET_ROLES)) { const item = ITEMS[id]; if (item?.pet) item.pet = { ...item.pet, dmg: role.dmg, cd: role.cd }; }
 // Dyes (dye-skins.ts): energy-priced recolours of existing gear, generated last so every base item exists.
 registerDyes(ITEMS);
