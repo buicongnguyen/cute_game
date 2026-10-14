@@ -57,6 +57,9 @@ import { mountLongPress, cancelLongPresses } from './long-press.ts';
 import { mountTouchButtons, cancelButtonTouches } from './touch-buttons.ts';
 import { previewGear, canTryOn, autoHeld } from './try-on.ts';
 import './quick-eat.css';
+import './hud-first.css';
+import { CALM_UNTIL_LEVEL, freshStart, tutorialPreview, calmHud, applyCalm, tendCritters, nearestCritter, type CritterWorld } from './first-run.ts';
+import { foldLists } from './fold-lists.ts';
 import { CombatTimers, FishingInput, MovementControls, gameplayKey, handKey, keyboardBindings, movementKey, skillKeyIndex } from './gameplay-controls.ts';
 import {mountJoystick} from './joystick.ts';
 import { CombatSimulation, BASE_SKILLS, SPECIALS, DZ, DISGUISE_KITS, shotColor, type CombatHit, type CombatEffect, type CombatAlly, type DisguiseAir } from './combat.ts';
@@ -196,7 +199,7 @@ const esc = (value: string) => value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':
 let saved: M.SaveState | null = null;
 const saveGuard = new SaveGuard((() => { try { return localStorage; } catch { return null; } })());
 try { saved = saveGuard.load(activeKey(), M.parseSave).state; } catch { /* Play remains available without storage. */ }
-let state = saved ?? M.newGame();
+let state = saved ?? freshStart(M.newGame()); // a new player's save gets the first-minutes help (first-run.ts)
 let started = false, modal = '', selectedItem: M.ItemId | null = null, activePlot = 0, lastFocused: HTMLElement | null = null;
 let saveFailed = false, elapsed = 0, uiElapsed = 0, frameTime = 16;
 const combatTimers = new CombatTimers();
@@ -274,7 +277,7 @@ app.innerHTML = `
   <div id="darkness" hidden></div><div id="world-labels" aria-label="Nearby places"></div>
   <div id="hud" hidden>
     <header class="player-card"><div class="player-name"><strong id="player-name"></strong></div><div class="hero-face"><button class="avatar" data-action="bag" aria-label="Open character and backpack"><span>${hudIcon('sprout')}</span><img class="hero-pic" alt="" hidden draggable="false"></button><span class="level-badge" role="group" aria-label="Level"><b id="level-text">1</b></span></div><div class="player-details"><div class="hero-energy" role="group" aria-label="Energy"><span>${hudIcon('bolt')}</span><b id="energy">0</b></div><div class="meter health"><div id="hp-fill"></div><span id="hp-text">100 / 100</span></div><div class="meter experience"><div id="xp-fill"></div><span id="xp-text">EXP 0 / 32</span></div><div class="location"><span class="location-dot"></span><span id="zone-name">Clover Village</span></div></div></header>
-    <nav class="top-actions" aria-label="Game menu"><button class="icon-button" data-action="bag" title="Backpack · I" aria-label="Backpack">${hudIcon('bag')}</button><button class="icon-button" data-action="quests" title="Journal · J" aria-label="Quest journal">${hudIcon('journal')}<i id="quest-dot"></i></button><button class="icon-button inbox-button" data-action="news" title="News" aria-label="News">${hudIcon('news')}<i class="inbox-count" hidden></i></button><button class="icon-button more-button" data-action="more" title="More" aria-label="More" aria-haspopup="true" aria-expanded="false">${hudIcon('more')}<i class="more-count" hidden></i></button><div id="more-menu" role="menu" hidden></div><div id="more-stash" hidden><button class="icon-button" data-action="ranking" title="Ranking and news" aria-label="Ranking and news">${hudIcon('ranking')}<i id="news-count" class="news-count" hidden></i></button><div id="social-slot"></div><button class="icon-button" data-action="help" title="How to play" aria-label="How to play">${hudIcon('help')}</button><div id="platform-slot"></div><button class="icon-button" data-action="settings" title="Settings" aria-label="Settings">${hudIcon('settings')}</button></div></nav>
+    <nav class="top-actions" aria-label="Game menu"><button class="icon-button" data-action="bag" title="Backpack · I" aria-label="Backpack">${hudIcon('bag')}</button><button class="icon-button" data-action="quests" title="Journal · J" aria-label="Quest journal">${hudIcon('journal')}<i id="quest-dot"></i></button><button class="icon-button inbox-button" data-action="news" title="News" aria-label="News">${hudIcon('news')}<i class="inbox-count" hidden></i></button><button class="icon-button more-button" data-action="more" title="More" aria-label="More" aria-haspopup="true" aria-expanded="false">${hudIcon('more')}<i class="more-count" hidden></i></button><div id="more-menu" role="menu" hidden></div><div id="more-stash" hidden><button class="icon-button" data-action="ranking" title="Ranking" aria-label="Ranking">${hudIcon('ranking')}<i id="news-count" class="news-count" hidden></i></button><div id="social-slot"></div><button class="icon-button" data-action="help" title="How to play" aria-label="How to play">${hudIcon('help')}</button><div id="platform-slot"></div><button class="icon-button" data-action="settings" title="Settings" aria-label="Settings">${hudIcon('settings')}</button></div></nav>
     <div class="tracker-stack"><button id="tracker-chip" class="tracker-chip" data-action="trackers" aria-label="Show quest and bounty" hidden><span id="chip-quest">🥕 0/3</span><span id="chip-chal"></span><span id="chip-bounty">🎯</span><i>▸</i></button><div class="tracker-panels"><aside class="quest-tracker"><button class="tracker-fold" data-action="trackers" aria-label="Fold quest and bounty">▾ Fold</button><div class="eyebrow">ADVENTURE <span id="quest-chapter">1 / 9</span></div><button id="quest-summary" data-action="quests"><span class="quest-icon" id="quest-icon">🥕</span><span><strong id="quest-title">A little green beginning</strong><small id="quest-task">Harvest 3 crops · 0 / 3</small></span><b class="tracker-count" id="quest-count"></b><span class="chevron">›</span></button><div class="quest-progress"><i id="quest-fill"></i></div><button id="quick-claim" data-action="claim" hidden>Collect your reward ✨</button></aside>
     <button id="challenge-tracker" class="challenge-tracker" data-action="journal-tab" data-kind="challenges" hidden><span class="ch-ring" aria-hidden="true"><span class="ch-icon">⏱️</span></span><div><strong>Quick challenge</strong><small></small></div><b class="tracker-count"></b></button>
     <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div><b class="tracker-count" id="bounty-count"></b></button></div><div id="buff-bar" aria-label="Active effects"></div><div class="quick-eat"><button id="quick-eat" class="idle" data-action="quick-eat" title="Eat · H" aria-label="Eat"><span id="quick-eat-icon" aria-hidden="true">🍽️</span><b id="quick-eat-count">0</b></button><button class="quick-eat-pick" data-action="quick-eat-pick" aria-label="Choose food" aria-expanded="false">▾</button><div id="quick-eat-menu" hidden></div></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="150" height="150"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
@@ -304,7 +307,7 @@ app.innerHTML = `
   <div id="toasts" role="status" aria-live="polite"></div><div id="floating-text"></div><div id="bubble-layer"></div><div id="damage-flash"></div>
 `;
 // The News inbox (news-inbox-ui.ts): level-ups, unlocks and rewards gather there instead of popping up mid-screen; the ⋯ More menu holds the dock buttons used less often.
-const inbox=initInbox({state:()=>state,save,esc,openDialog,closeDialog,modal:()=>modal||null,go:target=>{({quests,achievements:()=>{journalTab='achievements';quests();},bag:()=>{bagMode='bag';inventory();},insight:()=>openInsight('report'),map,shop,ranking:()=>{if(rankingApi)rankingApi.open();else $<HTMLButtonElement>('#hud [data-action="ranking"]').click();},discovery:planets} as Record<string,()=>void>)[target]?.();}});
+const inbox=initInbox({state:()=>state,save,esc,openDialog,closeDialog,modal:()=>modal||null,go:target=>{({quests,achievements:()=>{journalTab='achievements';quests();},bag:()=>{bagMode='bag';inventory();},insight:()=>openInsight('report'),map,shop,ranking:()=>{/* the "New game updates" entry: the board's News section */if(newsApi)newsApi.open();else if(rankingApi)rankingApi.open();else $<HTMLButtonElement>('#hud [data-action="ranking"]').click();},discovery:planets} as Record<string,()=>void>)[target]?.();}});
 const moreMenu=initMoreMenu();
 const refreshStaticLanguage=bindLanguage(app), refreshWorldLanguage=bindLanguage($('#world'));
 // Scenery is batched when a world is built, so give the small scenery kit a moment
@@ -501,7 +504,7 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   const [defaultIcon,look]=DIALOG_LOOK[type]??['✨','garden'];$('#dialog').dataset.tone=look;$('#dialog-icon').innerHTML=localizeHtml(icon??defaultIcon);
   // Re-rendering the same panel (a tab, a purchase) keeps the reader's scroll position.
   const bodyNode=$('#dialog-body'),scroll=bodyNode.scrollTop,tab=bodyNode.querySelector('.panel-tabs .active')?.textContent;
-  $('#dialog-title').textContent=t(title);$('#dialog-kicker').textContent=t(kicker);bodyNode.innerHTML=localizeHtml(body);if(bodyNode.querySelector('[data-dz]'))void loadInsight().then(()=>insight?.fill(bodyNode)).catch(()=>{});$('#dialog-layer').hidden=false;$('#hud').inert=true;$('#world-labels').inert=true;
+  $('#dialog-title').textContent=t(title);$('#dialog-kicker').textContent=t(kicker);bodyNode.innerHTML=localizeHtml(body);foldLists(type,bodyNode);/* locked rows fold into one line (fold-lists.ts) */if(bodyNode.querySelector('[data-dz]'))void loadInsight().then(()=>insight?.fill(bodyNode)).catch(()=>{});$('#dialog-layer').hidden=false;$('#hud').inert=true;$('#world-labels').inert=true;
   bodyNode.scrollTop=reopened&&bodyNode.querySelector('.panel-tabs .active')?.textContent===tab?scroll:0;
   if(type==='shop'&&shopFocus)focusShopRow();
   $('.close-button').focus({preventScroll:true});
@@ -537,6 +540,7 @@ function updateHud() {
   setText($('#player-name'),state.name);setText($('#level-text'),String(state.level));setText($('#energy'),t(state.energy.toLocaleString()));
   setWidth($('#hp-fill'),`${state.hp/M.maxHp(state)*100}%`);setText($('#hp-text'),t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`));setWidth($('#xp-fill'),`${state.xp/M.xpNeeded(state.level)*100}%`);
   updateQuickEat();
+  {const x=world.position.x,z=world.position.z;if(started&&world.state===state)tendCritters(world as unknown as CritterWorld,state,!actionHandler&&!visiting);applyCalm($('#hud'),calmHud(state,{fighting:fightNear(world.enemies,x,z),creatureNear:world.enemies.some(e=>e.hp>0&&Math.hypot(e.x-x,e.z-z)<10)}));} // the first minutes (first-run.ts)
   setText($('#xp-text'),`EXP ${Math.floor(state.xp)} / ${M.xpNeeded(state.level)}`);
   {const xpTitle=t(`${Math.floor(state.xp)} / ${M.xpNeeded(state.level)} experience`),xpNode=$('.experience');if(xpNode.getAttribute('title')!==xpTitle)xpNode.setAttribute('title',xpTitle);}
   const q=progressEntries(state,'story')[0],progress=q?.progress??0;
@@ -766,7 +770,7 @@ function plotDialog(index:number) {
   // ripe beds around it, so the old "Harvest all" button is gone from here.
   openDialog('plant','Choose a seed',`<div class="garden-actions">${M.isExtraBed(state,index)&&!M.bedLevel(state.plots[index])?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.MAX_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
     const level=M.cropLevel(state,id),locked=state.level<level,needsSeed=!!c.seed&&!state.bag[c.seed],item=M.ITEMS[id],effect=item?effectText(item):'';
-    return `<div class="crop-row garden-row ${locked?'locked':''}"><span class="crop-art">${art(id,c.icon)}</span><div><strong>${esc(t(c.name))}</strong>${effect?`<p>${esc(effect)}</p>`:''}<div class="chips"><span class="chip chip-time">⏱ ${(ms=>ms>=3_600_000?`${+(ms/3_600_000).toFixed(1)} h`:`${ms/1000}s`)(M.bedGrowTime(state.plots[index],M.cropGrowTime(state,id)))}</span><span class="chip chip-xp">✨ ${M.cropXp(state,id)} XP</span>${item?`<span class="chip chip-energy">ϟ ${M.sellPrice(state,id)}</span>`:''}${c.seed?`<span class="chip chip-seed">${M.ITEMS[c.seed]?mini(c.seed):'🌰'} ${state.bag[c.seed]||0} seeds</span>`:''}</div></div>${locked?`<span class="chip chip-lock">🔒 Level ${level}</span>`:`<div class="button-row"><button class="primary" data-action="plant" data-item="${id}" ${needsSeed?'disabled':''}>Plant</button><button class="sky-button" data-action="plant-all" data-item="${id}" ${needsSeed||!empty?'disabled':''}>All (${c.seed?Math.min(empty,state.bag[c.seed]||0):empty})</button></div>`}</div>`;
+    return `<div class="crop-row garden-row ${locked?'locked':''}"><span class="crop-art">${art(id,c.icon)}</span><div><strong>${esc(t(c.name))}</strong>${effect?`<p>${esc(effect)}</p>`:''}<div class="chips"><span class="chip chip-time">⏱ ${(ms=>ms>=3_600_000?`${+(ms/3_600_000).toFixed(1)} h`:`${ms/1000}s`)(tutorialPreview(state,id,M.bedGrowTime(state.plots[index],M.cropGrowTime(state,id))))}</span><span class="chip chip-xp">✨ ${M.cropXp(state,id)} XP</span>${item?`<span class="chip chip-energy">ϟ ${M.sellPrice(state,id)}</span>`:''}${c.seed?`<span class="chip chip-seed">${M.ITEMS[c.seed]?mini(c.seed):'🌰'} ${state.bag[c.seed]||0} seeds</span>`:''}</div></div>${locked?`<span class="chip chip-lock">🔒 Level ${level}</span>`:`<div class="button-row"><button class="primary" data-action="plant" data-item="${id}" ${needsSeed?'disabled':''}>Plant</button><button class="sky-button" data-action="plant-all" data-item="${id}" ${needsSeed||!empty?'disabled':''}>All (${c.seed?Math.min(empty,state.bag[c.seed]||0):empty})</button></div>`}</div>`;
   }).join('')}</div><div class="garden-secondary">${bedUpgradeRow(index)}${expandButton(false)}${helperRow(state,!!visiting,index)}</div>`,'YOUR GARDEN');
 }
 function inventory() {
@@ -805,7 +809,7 @@ function quests(){
     const done=steps.filter(step=>step.i<index).map(step=>`<div class="quest-row complete"><span>✓</span><div><strong>${esc(step.title)}</strong><small>Step ${step.i+1} · complete</small></div></div>`).join('');
     const next=steps.filter(step=>step.i>index).map(step=>`<div class="quest-row locked"><span>🔒</span><div><strong>${esc(step.title)}</strong><small>Finish the step before to unlock</small></div></div>`).join('');
     list.insertAdjacentHTML('afterbegin',localizeHtml(`<div class="chapter-banner">${esc(storyStep(index).icon??'📖')} Chapter ${chapter+1} <b>${steps.filter(step=>step.i<index).length} / ${steps.length}</b></div>${done}`));
-    list.insertAdjacentHTML('beforeend',localizeHtml(next));
+    list.insertAdjacentHTML('beforeend',localizeHtml(next));foldLists('quests',$('#dialog-body'));
   }
 }
 const SHOP_TABS=['Weapons','Clothing','Pets','Disguises','Supplies','Decor','Dyes'];
@@ -1917,11 +1921,14 @@ export const gameBridge:GameBridge={
 /** The story step's place (garden, market, outfitters...) while it is not done and the explorer is not already there: the tracker row walks there. */
 function questTarget(){
   if(!started||visiting||state.planet!=='home'||world.interior||world.state!==state||fightNear(world.enemies,world.position.x,world.position.z))return null;
-  const entry=progressEntries(state,'story')[0],place=entry&&!entry.complete?questPlace(storyStep(state.progression.story.index,state)):null;if(!place)return null;
+  const entry=progressEntries(state,'story')[0],step=storyStep(state.progression.story.index,state),place=entry&&!entry.complete?questPlace(step):null;
+  // Steps with no place still point somewhere (first-run.ts): a creature for "defeat" and "use skills", the backpack for "equip".
+  if(!place&&entry&&!entry.complete){if(step.event==='kill'||step.event==='skill'){const e=nearestCritter(world.enemies,world.position.x,world.position.z);return e&&Math.hypot(e.x-world.position.x,e.z-world.position.z)>4?{place:'enemy',target:e as unknown as Entity}:null;}if(step.condition==='equipped')return {place:'bag',target:null as unknown as Entity};}
+  if(!place)return null;
   const target=world.entities.find(e=>e.kind===place&&(place!=='plot'||!state.plots[e.index!]?.crop))??world.entities.find(e=>e.kind===place);
   return target&&Math.hypot(target.x-world.position.x,target.z-world.position.z)>7?{place,target}:null;
 }
-function walkToQuest(){const goal=questTarget();if(!goal)return false;tone('click');go(goal.place);return true;}
+function walkToQuest(){const goal=questTarget();if(!goal)return false;tone('click');if(goal.place==='bag'){bagMode='bag';inventory();}else if(goal.place==='enemy'){closeDialog();world.select(goal.target);}else go(goal.place);return true;}
 function go(kind:string){closeDialog();const entities=world.entities.filter(e=>e.kind===kind);const entity=kind==='plot'?entities.find(e=>!world.state.plots[e.index!]?.crop)||entities[0]:entities[0];if(entity){world.select(entity);toast(`Off to ${kind==='plot'?'the garden':entity.name.toLowerCase()}…`,'👣');}else toast('That place is back in Clover Village.','🏡');}
 // ---- The starship: take-off, a piloted flight between planets, and landing ----
 const SCENERY_KITS={scenery:sceneryKit,wilds:wildsKit,bright:brightKit,harsh:harshKit,dressing:dressingKit};
@@ -2291,7 +2298,7 @@ if(new URLSearchParams(location.search).get('colossus')==='1')colossus.start();
 $('#colossus-banner')?.addEventListener('click',()=>document.body.classList.toggle('guide-colossus-fold')); // a tap folds the banner to a chip (guide.css)
 const ranking=m.initRanking(gameBridge);rankingApi=ranking;rankingTapOff?.(); // the 🏆 leaderboard (ranking.ts)
 // The 📰 news board (news-board.ts) lives in the leaderboard dialog's News section: its unread count shows on the Ranking button, and it opens there once for new updates.
-newsApi=m.initNewsBoard({host:ranking.news,autoOpen:()=>inbox.popups,onUnread:(_n,newest)=>{if(!state.inbox?.some(e=>e.title==='New game updates'&&e.params?.update===newest))inbox.announce({kind:'other',icon:'📰',title:'New game updates',text:'See what is new in Zoo Garden.',params:{update:newest},open:'ranking'});},idle:()=>started&&!modal&&!uiBlocked(),url:`${import.meta.env.BASE_URL}news.json`});
+newsApi=m.initNewsBoard({host:ranking.news,autoOpen:()=>inbox.popups,onUnread:(_n,newest)=>{if(!state.inbox?.some(e=>e.title==='New game updates'&&e.params?.update===newest))inbox.announce({kind:'other',icon:'📰',title:'New game updates',text:'See what is new in Zoo Garden.',params:{update:newest},open:'ranking'});},idle:()=>started&&!modal&&!uiBlocked(),freshSave:()=>!!state.firstRun&&state.level<CALM_UNTIL_LEVEL,url:`${import.meta.env.BASE_URL}news.json`});
 // The Delvers' Vault (dungeon.ts): the keeper and circle by the south gate, the five-room co-op dungeon.
 dungeonApi=m.initDungeon({world,state:()=>state,started:()=>started,blocked:uiBlocked,visiting:()=>!!visiting,online:()=>!!actionHandler,
   perform:(type,payload,quiet=false)=>perform(type,payload,{quiet}),toast,tone:kind=>tone(kind as Sound),openDialog,closeDialog,

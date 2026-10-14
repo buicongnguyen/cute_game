@@ -11,6 +11,6 @@ test('start fresh removes optional purchased helper and all adventure progress w
   assert.ok(M.plant(state,0,'apple',10_000));const original=state,settings={...state.settings};
   assert.equal(applyGameAction(state,{type:'reset'},{now:20_000,random:()=>.5}),true);
   assert.equal(state,original,'shared action callers retain the active save object');assert.deepEqual(state.settings,settings);
-  const expected=M.newGame('Original',M.COLORS[2]);expected.settings=settings;expected.savedAt=20_000;
+  const expected=M.newGame('Original',M.COLORS[2]);expected.settings=settings;expected.savedAt=20_000;expected.firstRun={}; // a new adventure gets the first-minutes help (first-run.ts)
   assert.deepEqual(state,expected);
 });

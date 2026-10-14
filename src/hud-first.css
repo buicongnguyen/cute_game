@@ -1,0 +1,16 @@
+/* The calm HUD of a new save (first-run.ts applyCalm): pieces wait until they mean something. */
+#app #hud.calm-skills .skill,
+#app #hud.calm-attack .attack-pad,
+#app #hud.calm-attack .jump-pad,
+#app #hud.calm-attack #touch-controls [data-action="attack"],
+#app #hud.calm-eat .quick-eat { display: none !important; }
+/* Folded locked rows (fold-lists.ts). */
+#dialog-body .fold-hidden { display: none !important; }
+#dialog-body .fold-more {
+  display: block; width: 100%; margin: 8px 0 4px; padding: 11px 14px; min-height: 44px;
+  border: 2px dashed rgba(120, 100, 60, .35); border-radius: 14px; background: rgba(255, 250, 235, .7);
+  color: #6b5a33; font: 800 15px/1.2 inherit; text-align: center; cursor: pointer;
+}
+#dialog-body .fold-more:hover { background: rgba(255, 244, 210, .95); }
+/* The News inbox shows a quiet dot for unread announcements; red numbers are for things to collect (news-inbox-ui.ts). */
+#app #hud .icon-button > i.inbox-count.inbox-dot { min-width: 12px; width: 12px; height: 12px; padding: 0; right: -2px; top: -2px; }

@@ -193,7 +193,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     // Cottage activities: rests and buffs with cooldowns (house-activities.ts).
     case 'houseUse': result = useActivity(state, id(), now); break;
     case 'rest': if (state.planet !== 'home') return refuse(); state.hp = Game.maxHp(state); result = true; break;
-    case 'reset': { const fresh=Game.newGame(state.name,state.color); fresh.settings={...state.settings}; delete fresh.settings.tester; /* a new adventure starts outside tester mode */ for(const key of Object.keys(state))delete (state as unknown as Record<string,unknown>)[key]; Object.assign(state,fresh); result=true; break; }
+    case 'reset': { const fresh=Game.newGame(state.name,state.color); fresh.settings={...state.settings}; delete fresh.settings.tester; /* a new adventure starts outside tester mode */ fresh.firstRun={}; /* and with the first-minutes help (first-run.ts) */ for(const key of Object.keys(state))delete (state as unknown as Record<string,unknown>)[key]; Object.assign(state,fresh); result=true; break; }
     case 'settings': {
       const settings = p.settings;
       if (settings && typeof settings === 'object' && !Array.isArray(settings)) { applyAudio(state.settings, settings as Record<string, unknown>); for (const key of ['lowGraphics', 'movePad', 'placeBeds', 'keepBagOnDeath', 'pairManual'] as const) if (typeof (settings as Record<string, unknown>)[key] === 'boolean') state.settings[key] = (settings as Record<string, boolean>)[key]; }
