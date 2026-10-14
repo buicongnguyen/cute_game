@@ -184,7 +184,8 @@ export function initRanking(game: GameBridge) {
   trigger?.addEventListener('click', open);
   const count = trigger?.querySelector<HTMLElement>('.news-count');
   const label = () => {
-    if (trigger) { trigger.title = t('Ranking and news'); trigger.setAttribute('aria-label', unreadNews ? `${t('Ranking and news')} · ${t('{n} unread news', { n: unreadNews })}` : t('Ranking and news')); }
+    // The dock entry is plain "Ranking" with no count: game updates reach the player as an entry in the News inbox (docs/FIX-PLAN.md 4.4).
+    if (trigger) { trigger.title = t('Ranking'); trigger.setAttribute('aria-label', t('Ranking')); }
     if (dialog.open) render();
   };
   label(); onLanguageChange(label);
@@ -193,7 +194,7 @@ export function initRanking(game: GameBridge) {
     panel: newsPanel as HTMLElement,
     open: () => show('news'),
     shown: () => dialog.open && section === 'news',
-    setUnread(n: number) { if (n === unreadNews) return; unreadNews = n; if (count) { count.hidden = n <= 0; count.textContent = badgeText(n); } label(); },
+    setUnread(n: number) { if (n === unreadNews) return; unreadNews = n; if (count) { count.hidden = true; count.textContent = ''; } label(); },
     onShown(listener: () => void) { newsListeners.add(listener); },
   };
   return { open, close: () => dialog.close(), news };

@@ -73,7 +73,8 @@ test('wiring: level-ups, milestones, the side-slot unlock and the update board g
   assert.match(level, /inbox\.announce\(/); assert.match(level, /if\(popups\)\{void loadInsight\(\)\.then\(\(\)=>insight\?\.levelUp/);
   assert.match(main, /if\(!seen&&inbox\.announce\(\{kind:'unlock'/);
   assert.match(main, /initNewsBoard\(\{host:ranking\.news,autoOpen:\(\)=>inbox\.popups,onUnread:/);
-  assert.match(src('news-board.ts'), /if \(d\.autoOpen && !d\.autoOpen\(\)\) \{/);
+  assert.match(src('news-board.ts'), /d\.onUnread\?\.\(waiting\.length, waiting\[0\]\?\.id \?\? ''\); \}\r?\n    if \(!auto \|\| d\.autoOpen && !d\.autoOpen\(\)\) return;/, 'updates always note an inbox entry; the board opens by itself only with pop-ups on');
+  assert.match(src('news-board.ts'), /if \(d\.freshSave\?\.\(\) && loaded\) \{ markRead\(/, 'a new save starts with nothing unread');
   assert.match(main, /case 'news':inbox\.open\(\);break;/);
   assert.match(main, /\$\{inbox\.settingHtml\(\)\}/);
 });

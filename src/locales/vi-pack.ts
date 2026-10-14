@@ -2,6 +2,7 @@ import { VI_CATALOG } from './vi-catalog.ts';
 import { ROAR_VI } from './vi-roar.ts';
 import { ELITE_VI } from './vi-elite.ts';
 import { PAIR_VI } from './vi-pair.ts';
+import { FIRST_VI } from './vi-first.ts';
 import { BAG_VI } from './vi-bag.ts';
 import { SHAPES_VI } from './vi-shapes.ts';
 import { CHAIN_VI } from './vi-chain.ts';
@@ -64,3 +65,4 @@ Object.assign(VI_PACK, FIVE_VI);
 Object.assign(VI_PACK, PETGUARD_VI);
 /** The time words a counter may carry in a template slot (i18n.ts compileTemplates): h/m/s/p/g plus the spelled-out units. */
 export const VI_TIME_UNITS = 'h|m|s|p|g|giờ|phút|giây';
+Object.assign(VI_PACK, FIRST_VI);

@@ -280,7 +280,7 @@ export async function createGameServer(options = {}) {
       if (route === 'auth/register') {
         if (account) throw failure(409, 'That username is already taken.');
         const salt = randomBytes(16).toString('hex'), hash = (await derive(password, salt, 64)).toString('hex');
-        account = { id: randomUUID(), username, salt, hash, createdAt: Date.now(), friends: [], requests: [], profile: Game.newGame(text(data.name, 20) || username, Game.COLORS.includes(data.color) ? data.color : Game.COLORS[0]) };
+        account = { id: randomUUID(), username, salt, hash, createdAt: Date.now(), friends: [], requests: [], profile: { ...Game.newGame(text(data.name, 20) || username, Game.COLORS.includes(data.color) ? data.color : Game.COLORS[0]), firstRun: {} } }; // a new account gets the first-minutes help (src/first-run.ts)
         account = remember(await store.create(account));
       } else {
         const salt = account?.salt || 'missing-user-salt', hash = (await derive(password, salt, 64)).toString('hex');

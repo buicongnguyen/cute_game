@@ -1,4 +1,5 @@
 import test, {afterEach} from 'node:test';
+import { tutorialPreview } from '../src/first-run.ts';
 import {hudIcon} from '../src/hud-icons.ts';
 import {sideOpen,isGun,SIDE_LEVEL} from '../src/weapon-pair.ts';
 import {sideButtonHtml,pairSettingHtml} from '../src/pair-ui.ts';
@@ -55,7 +56,7 @@ function fixture(advanced=true){
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
   const context={...BagTile,needsDuplicateConfirm,sideOpen,isGun,SIDE_LEVEL,sideButtonHtml,pairSettingHtml,hudIcon,CAMERA_PITCH,cameraPitch,...GUIDE,slotMeterHtml,expandCardHtml,installRowHtml,titleCardHtml,M,cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},IG,planRoutes,...P,...JB,STORY_STEPS:P.STORY_STEPS,t,helperRow,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,autoHeld,bagMode:'bag',wardrobeItem,visiting:null,activePlot:0,selectedItem:advanced?'manure':null,shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home'},saveFailed:false,persistence:null,actionHandler:null,testerOpen:false,Tester:{isTester:()=>false,testerKitchenHtml:()=>'',testerMakeButton:()=>'',TESTER_TAG:''},
-    HELP_TOPICS,joystickEnabled:()=>state.settings.movePad??false,restoreBackupRow:()=>'',inbox:{settingHtml:()=>'',popups:false,announce:()=>false},neighboursOn:()=>true,
+    HELP_TOPICS,joystickEnabled:()=>state.settings.movePad??false,restoreBackupRow:()=>'',inbox:{settingHtml:()=>'',popups:false,announce:()=>false},tutorialPreview,foldLists:()=>0,neighboursOn:()=>true,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},
     farmUi:{art,esc,mini,chips:()=>'',effect:item=>t(item.desc)},

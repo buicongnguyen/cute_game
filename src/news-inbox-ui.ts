@@ -28,7 +28,8 @@ export function initInbox(d: InboxDeps) {
   const refreshBadge = (pulse = false) => {
     const b = button(); if (!b) return;
     const n = unreadCount(list()), badge = b.querySelector<HTMLElement>('.inbox-count');
-    if (badge) { badge.textContent = badgeText(n); badge.hidden = n === 0; }
+    // A quiet dot, not a red count: numbers are kept for things to collect (docs/FIX-PLAN.md 4.4).
+    if (badge) { badge.textContent = ''; badge.classList.add('inbox-dot'); badge.hidden = n === 0; }
     const label = n ? `${t('News')} · ${t('{n} unread', { n })}` : t('News');
     if (b.getAttribute('aria-label') !== label) b.setAttribute('aria-label', label);
     if (pulse) { b.classList.remove('inbox-pulse'); void b.offsetWidth; b.classList.add('inbox-pulse'); }

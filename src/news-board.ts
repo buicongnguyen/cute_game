@@ -86,8 +86,10 @@ export interface NewsDeps {
   idle(): boolean;
   /** Whether a timed auto-open is allowed (Settings "Show announcements as pop-ups", news-inbox.ts); absent = allowed. */
   autoOpen?(): boolean;
-  /** Called once per load when updates are unread and the board does not open by itself (the News inbox notes it). */
+  /** Called once per load when updates are unread (the News inbox notes it as an entry). */
   onUnread?(count: number, newest: string): void;
+  /** A brand-new save: what is already published counts as read, so the first minutes show no unread news. */
+  freshSave?(): boolean;
   url: string;
   fetch?: typeof fetch;
 }
@@ -117,8 +119,10 @@ export function initNewsBoard(d: NewsDeps) {
   // Automated browsers (tests) open it only when asked with ?news=1, so a timed panel never lands in a scripted run.
   const auto = !(globalThis.navigator?.webdriver) || /[?&]news=1(&|$)/.test(globalThis.location?.search ?? '');
   const ready = load().then(() => {
-    if (!auto || !unread(data, readIds()).length) return;
-    if (d.autoOpen && !d.autoOpen()) { const waiting = unread(data, readIds()); d.onUnread?.(waiting.length, waiting[0]?.id ?? ''); return; }
+    if (d.freshSave?.() && loaded) { markRead(data.news.map(e => e.id)); refreshBadge(); return; }
+    if (!unread(data, readIds()).length) return;
+    { const waiting = unread(data, readIds()); d.onUnread?.(waiting.length, waiting[0]?.id ?? ''); }
+    if (!auto || d.autoOpen && !d.autoOpen()) return;
     let tries = 0;
     const attempt = () => { if (!unread(data, readIds()).length) return; if (d.idle()) { api.open('news'); return; } if (++tries < AUTO_OPEN.tries) setTimeout(attempt, AUTO_OPEN.retryMs); };
     setTimeout(attempt, AUTO_OPEN.firstMs);

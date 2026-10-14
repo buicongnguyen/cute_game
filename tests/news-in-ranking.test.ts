@@ -115,7 +115,8 @@ test('ranking.ts: the section tabs come first in the dialog, the badge is writte
   assert.match(src, /dialog\.append\(header, sections, tabs, chips, hint, list, mine, newsPanel\);/);
   // The dock button: its count element is the one main.ts put there; it is written only when the count changes.
   assert.match(src, /const count = trigger\?\.querySelector<HTMLElement>\('\.news-count'\);/);
-  assert.match(src, /setUnread\(n: number\) \{ if \(n === unreadNews\) return; unreadNews = n; if \(count\) \{ count\.hidden = n <= 0; count\.textContent = badgeText\(n\); \} label\(\); \}/);
+  // Since FIX-PLAN 4.4 the dock count stays hidden: updates reach the player as an entry in the News inbox.
+  assert.match(src, /setUnread\(n: number\) \{ if \(n === unreadNews\) return; unreadNews = n; if \(count\) \{ count\.hidden = true; count\.textContent = ''; \} label\(\); \}/);
   // The News tab wears the same count; a section change redraws, Ranking reloads the board, News calls the board's listeners.
   assert.match(src, /if \(id === 'news' && unreadNews > 0\) \{ const badge = el\('i', 'news-count', badgeText\(unreadNews\)\);/);
   assert.match(src, /if \(next === 'ranking'\) void load\(\); else \{ newsPanel\.scrollTop = 0; for \(const listener of newsListeners\) listener\(\); \}/);

@@ -26,6 +26,7 @@ import { AUDIO_DEFAULTS, parseAudio } from './audio-settings.ts';
 import { isTreeCrop } from './tree-crops.ts';
 import { noteHistory, parseHistory, type Snapshot } from './insight-history.ts';
 import { parseInbox, type InboxItem } from './news-inbox.ts';
+import { parseFirstRun, tutorialGrow, type FirstRun } from './first-run.ts';
 import { fits, noteFull, noteDelivered, clearFullNote, delivering, chestFits, nextExpansion, hasExpansionMaterials, isStorageKind, type StorageKind } from './storage-slots.ts';
 import { pruneBags, bagId, parseDeathBags, MAX_DEATH_BAGS, type DeathBag } from './death-bags.ts';
 export * from './storage-slots.ts';
@@ -202,6 +203,8 @@ export interface SaveState {
     history?: Snapshot[];
     /** The News inbox (news-inbox.ts): announcements, newest first, at most 50; missing in older saves = empty. */
     inbox?: InboxItem[];
+    /** The first minutes (first-run.ts): tutorial plantings used, first fight, first food. Only saves a player started since 2026-10-15 have it (freshStart). */
+    firstRun?: FirstRun;
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
@@ -311,7 +314,7 @@ export function gainXp(s: SaveState, amount: number, now = Date.now(), bonus = r
 } if (s.level > before) noteHistory(s, 'level', now); return s.level - before; }
 export function plant(s: SaveState, index: number, raw: CropId, now = Date.now()) { const crop = canonicalItem(raw), p = s.plots[index], def = Object.hasOwn(CROPS, crop) ? CROPS[crop] : undefined; if (!p || p.crop || !def || cropLevel(s, crop) > s.level || !Number.isFinite(now) || now < 0)
     return false; if (def.seed && !removeItem(s.bag, def.seed))
-    return false; p.crop = crop; p.plantedAt = now; p.growDuration = bedGrowTime(p, cropGrowTime(s, crop)); p.difficulty = difficultyOf(s); s.nextPlantId = (s.nextPlantId || 0) + 1; p.generation = `${now}-${s.nextPlantId}`; return true; }
+    return false; p.crop = crop; p.plantedAt = now; p.growDuration = tutorialGrow(s, crop, bedGrowTime(p, cropGrowTime(s, crop))); p.difficulty = difficultyOf(s); s.nextPlantId = (s.nextPlantId || 0) + 1; p.generation = `${now}-${s.nextPlantId}`; return true; }
 export function plantAll(s: SaveState, crop: CropId, now = Date.now()) { let count = 0; s.plots.forEach((_, i) => { if (plant(s, i, crop, now))
     count++; }); return count; }
 export function cropDuration(p: Plot) { const def = p.crop && Object.hasOwn(CROPS, p.crop) ? CROPS[p.crop] : undefined; return def ? (Number.isFinite(p.growDuration) && p.growDuration! > 0 ? p.growDuration! : def.duration) : 0; }
@@ -1010,6 +1013,7 @@ export function parseSave(raw: string | null): SaveState | null {
         const rescue = parseRescue(v.rescue); if (rescue) s.rescue = rescue;
         { const history = parseHistory(v.history); if (history.length) s.history = history; }
         { const inbox = parseInbox(v.inbox); if (inbox.length) s.inbox = inbox; }
+        { const run = parseFirstRun(v.firstRun); if (run) s.firstRun = run; else delete s.firstRun; } // older saves: no tutorial, full HUD
         const looks = parseLooks(v.looks); if (looks) s.looks = looks; else delete s.looks; // older saves keep the look they had: the default hero
         dropUnownedFriendLooks(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));
