@@ -1,0 +1,21 @@
+// Vietnamese for the long-term goals chip and panel (goals-ui.ts, docs/FIX-PLAN.md 5.5).
+export const GOALS_VI: Record<string, string> = {
+  'Everything is open': 'Đã mở hết mọi thứ',
+  'Next level: {thing}': 'Cấp sau: {thing}',
+  'In {n} levels: {thing}': 'Còn {n} cấp: {thing}',
+  'In {n} lv: {thing}': 'Còn {n} cấp: {thing}',
+  'You have opened every world, crop and the Vault. Keep collecting!': 'Bạn đã mở mọi hành tinh, mọi loại cây và Hầm báu. Cứ tiếp tục sưu tầm nhé!',
+  'A new world to land on. Earn EXP with crops, fish and creatures, then fly the starship.': 'Một hành tinh mới để hạ cánh. Kiếm EXP bằng trồng cây, câu cá và đánh quái, rồi lái phi thuyền tới.',
+  'The five-room dungeon by the south gate. Earn EXP to be ready.': 'Hầm ngục năm phòng cạnh cổng nam. Kiếm EXP để sẵn sàng.',
+  'A new seed for your garden beds. Earn EXP with crops, fish and creatures.': 'Một loại hạt mới cho luống vườn. Kiếm EXP bằng trồng cây, câu cá và đánh quái.',
+  'Planets discovered': 'Hành tinh đã khám phá',
+  'Fly the starship from the launch pad and spot new worlds on the star map.': 'Lái phi thuyền từ bệ phóng và tìm hành tinh mới trên bản đồ sao.',
+  'Star map': 'Bản đồ sao',
+  'Fish {fish} · Treasures {items} · Bosses {bosses}': 'Cá {fish} · Báu vật {items} · Trùm {bosses}',
+  'Collection book': 'Sổ sưu tập',
+  'Next unlock': 'Mở khóa tiếp theo',
+  'Goals: planets {p}, collection {c}%. {next}': 'Mục tiêu: hành tinh {p}, sưu tập {c}%. {next}',
+  'Goals': 'Mục tiêu',
+  'Your long-term goals': 'Mục tiêu lâu dài của bạn',
+  'GOALS': 'MỤC TIÊU',
+};

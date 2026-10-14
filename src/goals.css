@@ -1,0 +1,23 @@
+/* The goals chip on the quick-eat row and the Goals panel (goals-ui.ts, docs/FIX-PLAN.md 5.5). */
+#app #hud #goals-chip {
+  margin-left: 12px; min-height: 44px; max-width: min(180px, calc(100vw - 245px));
+  display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 4px 10px; pointer-events: auto;
+  border: 2px solid rgba(255, 255, 255, .55); border-radius: 14px; background: rgba(43, 49, 58, .72); color: #fff;
+  font: 800 12px/1.15 inherit; text-align: left; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, .18);
+}
+#app #hud #goals-chip[hidden] { display: none; }
+#app #hud #goals-chip .gc-top { display: flex; gap: 10px; white-space: nowrap; }
+#app #hud #goals-chip small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font: 700 10.5px/1.2 inherit; color: #ffe7a3; overflow: hidden; max-width: 100%; overflow-wrap: anywhere; }
+#app #hud #goals-chip:hover { background: rgba(43, 49, 58, .86); }
+#app #hud.calm-eat #goals-chip { display: none; }
+#dialog-body .goals-list { display: grid; gap: 12px; }
+#dialog-body .goal-row { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: start; padding: 12px; border-radius: 16px; background: rgba(255, 250, 235, .8); }
+#dialog-body .goal-icon { font-size: 30px; line-height: 44px; text-align: center; }
+#dialog-body .goal-row strong { display: flex; justify-content: space-between; gap: 8px; font-size: 16px; }
+#dialog-body .goal-row strong b { color: #b06a00; }
+#dialog-body .goal-bar { height: 10px; margin: 6px 0; border-radius: 6px; background: rgba(120, 100, 60, .18); overflow: hidden; }
+#dialog-body .goal-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #7bd05a, #f6c343); }
+#dialog-body .goal-row small { display: block; color: #6b5a33; }
+#dialog-body .goal-row .soft-button { margin-top: 8px; }
+/* Too narrow for a third thing beside the quest chips (the hit counter takes this spot in a fight): the goals wait in the Journal. */
+@media (max-width: 360px) { #app #hud #goals-chip { display: none; } }

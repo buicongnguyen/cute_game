@@ -181,6 +181,8 @@ import type { CtfApi } from './ctf.ts';
 import type { RescueApi } from './rescue.ts';
 import { initInbox, initMoreMenu } from './news-inbox-ui.ts';
 import { reportLevelFor } from './news-inbox.ts';
+import './goals.css';
+import { initGoals } from './goals-ui.ts'; // long-term goals chip and panel (docs/FIX-PLAN.md 5.5)
 import { socialHold } from './social-hold.ts';
 import { needsDuplicateConfirm } from './shop-owned.ts';
 
@@ -309,6 +311,7 @@ app.innerHTML = `
   <div id="toasts" role="status" aria-live="polite"></div><div id="floating-text"></div><div id="bubble-layer"></div><div id="damage-flash"></div>
 `;
 // The News inbox (news-inbox-ui.ts): level-ups, unlocks and rewards gather there instead of popping up mid-screen; the ⋯ More menu holds the dock buttons used less often.
+const goals=initGoals($('#hud'),{esc,openDialog});
 const inbox=initInbox({state:()=>state,save,esc,openDialog,closeDialog,modal:()=>modal||null,go:target=>{({quests,achievements:()=>{journalTab='achievements';quests();},bag:()=>{bagMode='bag';inventory();},insight:()=>openInsight('report'),map,shop,ranking:()=>{/* the "New game updates" entry: the board's News section */if(newsApi)newsApi.open();else if(rankingApi)rankingApi.open();else $<HTMLButtonElement>('#hud [data-action="ranking"]').click();},discovery:planets} as Record<string,()=>void>)[target]?.();}});
 const moreMenu=initMoreMenu();
 const refreshStaticLanguage=bindLanguage(app), refreshWorldLanguage=bindLanguage($('#world'));
@@ -544,6 +547,7 @@ function updateHud() {
   setText($('#player-name'),state.name);setText($('#level-text'),String(state.level));setText($('#energy'),t(state.energy.toLocaleString()));
   setWidth($('#hp-fill'),`${state.hp/M.maxHp(state)*100}%`);setText($('#hp-text'),t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`));setWidth($('#xp-fill'),`${state.xp/M.xpNeeded(state.level)*100}%`);
   updateQuickEat();
+  goals.update(state); // redraws only when a goal changes (goals-ui.ts)
   {const x=world.position.x,z=world.position.z;if(started&&world.state===state)tendCritters(world as unknown as CritterWorld,state,!actionHandler&&!visiting);applyCalm($('#hud'),calmHud(state,{fighting:fightNear(world.enemies,x,z),creatureNear:world.enemies.some(e=>e.hp>0&&Math.hypot(e.x-x,e.z-z)<10)}));} // the first minutes (first-run.ts)
   setText($('#xp-text'),`EXP ${Math.floor(state.xp)} / ${M.xpNeeded(state.level)}`);
   {const xpTitle=t(`${Math.floor(state.xp)} / ${M.xpNeeded(state.level)} experience`),xpNode=$('.experience');if(xpNode.getAttribute('title')!==xpTitle)xpNode.setAttribute('title',xpTitle);}
@@ -2080,7 +2084,7 @@ app.addEventListener('click',async event=>{
     case 'shop-tab':shopTab=button.dataset.kind!;shop();break;
     case 'toggle-group':{const shut=IG.toggleFold(button.dataset.panel??'',button.dataset.group??''),section=button.closest('.item-group');button.setAttribute('aria-expanded',String(!shut));section?.classList.toggle('folded',shut);break;}
     case 'insight':openInsight();break;
-    case 'journal-tab':journalTab=button.dataset.kind as ProgressKind;quests();break;
+    case 'goals':goals.open(state);break;case 'journal-tab':journalTab=button.dataset.kind as ProgressKind;quests();break;
     case 'journal-group':journalTab=groupTarget(journalBadges(state),button.dataset.group as JournalGroup);quests();break;
     case 'start-challenge':if(await perform('startChallenge',{kind:button.dataset.kind})){quests();toast('Quick challenge started!','⏱️');}break;
     case 'reroll-daily':await perform('rerollDaily',{index});quests();break;

@@ -11,7 +11,7 @@ export function measureHud() {
     hero: all('#hud .player-card'), dock: all('#hud .top-actions button'), map: all('#hud .minimap'), home: all('#hud .home-button'),
     slips: all('#hud .tracker-panels > *, #hud #tracker-chip'), eat: all('#hud #quick-eat, #hud .quick-eat-pick'), buffs: all('#hud #buff-bar > *'),
     skills: all('#hud .skill'), pad: all('#hud .attack-pad'), jump: all('#hud .jump-pad'), stick: all('#movement-joystick'), boss: all('#boss-bar'), target: all('#target-frame'),
-    colossus: all('.colossus-banner'), prompt: all('#context-prompt button'), counter: all('#combo-counter'), keys: all('#keys-guide'), reel: all('#reel-button'), fishHint: all('#fish-hint'), weather: all('#environment-bar > *'),
+    colossus: all('.colossus-banner'), prompt: all('#context-prompt button'), counter: all('#combo-counter'), keys: all('#keys-guide'), reel: all('#reel-button'), fishHint: all('#fish-hint'), weather: all('#environment-bar > *'), goals: all('#hud #goals-chip'),
   };
   // Touch targets: what a finger really gets at each control's centre row and column.
   const coarse = matchMedia('(pointer: coarse)').matches, small = [];
