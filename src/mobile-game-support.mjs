@@ -218,7 +218,10 @@ export function installMobileGameSupport({ menus = [], controls = [], existingBu
   // Games move their controls by toggling classes (mission started, panel opened, landscape layout).
   // Refresh in the same microtask batch as the class change, so a read right after the game moves
   // its controls never sees the previous (now stale) adjustment.
-  layoutObserver = new MutationObserver(() => keepControlsSafe());
-  layoutObserver.observe(document.body, { attributes: true, attributeFilter: ['class', 'hidden'], subtree: true });
+  // Games also rewrite unchanged flags every frame (el.hidden = false when it already is): each rewrite still queues a
+  // record, and running the style-reading pass for them cost about a tenth of a slow phone's frame time. Only a value
+  // that really changed can move a control.
+  layoutObserver = new MutationObserver(records => { if (records.some(r => r.target.getAttribute(r.attributeName) !== r.oldValue)) keepControlsSafe(); });
+  layoutObserver.observe(document.body, { attributes: true, attributeOldValue: true, attributeFilter: ['class', 'hidden'], subtree: true });
   mount();
 }

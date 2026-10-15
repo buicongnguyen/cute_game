@@ -223,7 +223,7 @@ export class Effects {
   }
 
   ring(at: Point3, { color = '#ffffff', from = .3, to = 4, life = .5, y = .08, thick = .18, opacity = .9 }: RingOptions = {}) {
-    const fx = this.take('ring', () => { const mesh = new T.Mesh(this.ringGeometry(thick), new T.MeshBasicMaterial({ transparent: true, depthWrite: false, side: T.DoubleSide })); mesh.renderOrder = 2; return mesh; });
+    const fx = this.take('ring', () => { const mesh = new T.Mesh(this.ringGeometry(thick), new T.MeshBasicMaterial({ transparent: true, depthWrite: false, side: T.DoubleSide, forceSinglePass: true })); mesh.renderOrder = 2; return mesh; });
     const ring = fx.object as T.Mesh; ring.geometry = this.ringGeometry(thick);
     (fx.material as T.MeshBasicMaterial).color.set(color); fx.material.opacity = opacity;
     ring.position.set(at.x, y, at.z); ring.scale.setScalar(from);
@@ -258,7 +258,7 @@ export class Effects {
       this.arcGeometries.set(key, geometry);
     }
     const shape = geometry;
-    const fx = this.take('arc', () => { const mesh = new T.Mesh(shape, new T.MeshBasicMaterial({ transparent: true, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide })); mesh.renderOrder = 3; return mesh; });
+    const fx = this.take('arc', () => { const mesh = new T.Mesh(shape, new T.MeshBasicMaterial({ transparent: true, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide, forceSinglePass: true })); mesh.renderOrder = 3; return mesh; });
     const mesh = fx.object as T.Mesh; mesh.geometry = shape;
     (fx.material as T.MeshBasicMaterial).color.set(color); fx.material.opacity = opacity;
     mesh.position.set(at.x, (at.y ?? 0) + y, at.z); mesh.rotation.y = facing - Math.PI / 2; mesh.scale.setScalar(from);

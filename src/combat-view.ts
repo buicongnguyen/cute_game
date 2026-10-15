@@ -21,7 +21,7 @@ export class CombatView {
     if(!geometry){if(e.kind==='beam')geometry=new T.PlaneGeometry(e.width??.65,e.radius);else if(e.kind==='arc')geometry=new T.RingGeometry(e.radius*.78,e.radius,28,1,-Math.PI*.65,Math.PI*1.3);else if(e.kind==='cast')geometry=new T.RingGeometry(e.radius*.92,e.radius,40);else geometry=new T.RingGeometry(e.radius*.65,e.radius,32);this.shapes.set(key,geometry);}
     return geometry;}
   effect(e:CombatEffect){
-    const mesh=this.spare.pop()??new T.Mesh(undefined,new T.MeshBasicMaterial({transparent:true,opacity:.72,side:T.DoubleSide,depthWrite:false}));
+    const mesh=this.spare.pop()??new T.Mesh(undefined,new T.MeshBasicMaterial({transparent:true,opacity:.72,side:T.DoubleSide,forceSinglePass:true,depthWrite:false}));
     mesh.geometry=this.shape(e);(mesh.material as T.MeshBasicMaterial).color.set(e.color);(mesh.material as T.MeshBasicMaterial).opacity=.72;
     mesh.rotation.set(-Math.PI/2,0,0);mesh.scale.setScalar(1);mesh.position.set(e.x,(e.kind==='cast'?.15:.6)+Math.max(0,Math.min(8,e.y||0)),e.z);
     // The plane's long side lies along (sin f, cos f) only with +f (−f mirrored every diagonal beam across the z axis).

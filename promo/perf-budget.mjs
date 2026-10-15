@@ -18,6 +18,11 @@ const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, d
 await ctx.addInitScript(([s]) => { try { localStorage.setItem('cute-game-save-v1', s); localStorage.setItem('cute-game-slot', '0'); localStorage.setItem('cute-game-language', 'en'); localStorage.setItem('zoo-colossus-sleeps', 'asleep'); } catch {} }, [save]);
 const page = await ctx.newPage(), cdp = await ctx.newCDPSession(page); page.on('pageerror', e => console.log('ERR', e.message.slice(0, 120)));
 await page.goto(base + '/'); await page.waitForSelector('[data-action="start"]'); await page.click('[data-action="start"]'); await page.waitForTimeout(8000);
+// Close what greets the hero (the daily welcome-back card, a welcome gift): an open dialog pauses play and blurs the view.
+for (let i = 0; i < 5 && await page.evaluate(() => { const d = document.querySelector('#dialog-layer'); return !!d && !d.hidden; }); i++) {
+  await page.evaluate(() => { const d = document.querySelector('#dialog-layer'); [...d.querySelectorAll('button')].find(b => /^(Close|No, thanks)$/i.test(b.textContent.trim()) || b.dataset.action === 'welcome-pass')?.click(); });
+  await page.waitForTimeout(400); await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+}
 // The dev server hands out the very module the game uses, so the camera can be tilted from here.
 await page.evaluate(async () => { window.__cam = (await import('/src/camera-rig.ts')).CAMERA; });
 const tilt = (deg, far) => page.evaluate(([deg, far, d]) => { const r = deg * Math.PI / 180, w = __zoo.world; __cam.offset[1] = d * Math.sin(r); __cam.offset[2] = d * Math.cos(r); w.camera.far = far; w.camera.updateProjectionMatrix(); w.resize(); }, [deg, far, DISTANCE]);

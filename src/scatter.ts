@@ -51,7 +51,7 @@ export function partsExtent(parts: KitPart[]) {
 export function buildScatter(placements: readonly DecorPlacement[], parts: PartSource, detail = 1, cover?: CoverBuilder): T.Group {
   const group = new T.Group(), buckets = new Map<string, DecorPlacement[]>(), coverTiles = new Map<string, DecorPlacement[]>();
   group.name = 'scatter'; group.userData.scatter = true;
-  const casters: T.InstancedMesh[] = [], tall = new Map<string, TallPiece[]>();
+  const casters: T.InstancedMesh[] = [], tall = new Map<string, TallPiece[]>(), tiles: T.Object3D[] = [];
   let coverIndex = 0;
   for (const p of placements) {
     const isCover = !!DECOR[p.type]?.cover;
@@ -75,6 +75,7 @@ export function buildScatter(placements: readonly DecorPlacement[], parts: PartS
       // Ground cover and low pieces never cast; taller ones cast only near the camera target (updateScatterShadows).
       mesh.castShadow = false; mesh.receiveShadow = true; mesh.userData.scatter = type; mesh.userData.pieces = list; mesh.userData.extent = extent; // breakables-view.ts finds a piece's instance slots by these
       if (!DECOR[type]?.cover && extent.height >= LOW_DECOR) casters.push(mesh);
+      mesh.userData.area = area(list, extent.radius); tiles.push(mesh);
       group.add(mesh);
       return mesh;
     });
@@ -86,9 +87,29 @@ export function buildScatter(placements: readonly DecorPlacement[], parts: PartS
       pieces.push({ x: p.x, z: p.z, y: p.y, height, radius: extent.radius * p.scale, meshes, index });
     });
   }
-  for (const list of coverTiles.values()) { const cards = cover!(list); if (cards) group.add(cards); }
-  group.userData.casters = casters; group.userData.tall = tall;
+  for (const list of coverTiles.values()) { const cards = cover!(list); if (cards) { cards.userData.area = area(list, 1); tiles.push(cards); group.add(cards); } }
+  group.userData.casters = casters; group.userData.tall = tall; group.userData.tiles = tiles;
   return group;
+}
+
+/** The ground a batch covers, [minX, minZ, maxX, maxZ], widened by its pieces' size. */
+function area(list: readonly DecorPlacement[], radius: number) {
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  for (const p of list) { const r = radius * p.scale; x0 = Math.min(x0, p.x - r); z0 = Math.min(z0, p.z - r); x1 = Math.max(x1, p.x + r); z1 = Math.max(z1, p.z + r); }
+  return [x0, z0, x1, z1] as const;
+}
+
+/**
+ * Hides the batches whose ground lies farther than `reach` from (x, z). three.js tests every visible mesh against the
+ * view each frame (and again for the shadow pass); with the whole map's tiles visible that was about 500 tests a frame
+ * for the scenery alone, most of them for tiles far off screen (FIX-PLAN 1.6). Hidden batches are skipped whole.
+ */
+export function updateScatterReach(group: T.Object3D, x: number, z: number, reach: number) {
+  for (const mesh of (group.userData.tiles ?? []) as T.Object3D[]) {
+    const a = mesh.userData.area as readonly number[] | undefined; if (!a) continue;
+    const near = Math.hypot(Math.max(a[0] - x, 0, x - a[2]), Math.max(a[1] - z, 0, z - a[3])) < reach;
+    if (mesh.visible !== near) mesh.visible = near;
+  }
 }
 
 /** Turns shadows on for the tall-piece batches whose bounds come within `reach` of (x, z), and off for the rest. */

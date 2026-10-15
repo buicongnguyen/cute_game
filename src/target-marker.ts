@@ -39,7 +39,7 @@ export class TargetMarker {
     const ring = new T.Mesh(
       new T.RingGeometry(.86, 1, 48, 1, 0, Math.PI * 1.7).rotateX(-Math.PI / 2),
       // Unlit, lifted off the ground with a polygon offset: the body hides the back of the ring and the front arc shows over the feet.
-      new T.MeshBasicMaterial({ color: TARGET_RED, transparent: true, opacity: .85, depthWrite: false, side: T.DoubleSide, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      new T.MeshBasicMaterial({ color: TARGET_RED, transparent: true, opacity: .85, depthWrite: false, side: T.DoubleSide, forceSinglePass: true, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
     );
     ring.renderOrder = 10; ring.raycast = () => {}; ring.name = 'target-ring';
     this.ring = ring;

@@ -32,7 +32,7 @@ export class TelegraphDecals {
     let set = this.materials.get(color);
     if (!set) {
       const make = (opacity: number, order: number) => {
-        const m = new T.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: -order, polygonOffsetUnits: -order, toneMapped: false });
+        const m = new T.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: T.DoubleSide, forceSinglePass: true, polygonOffset: true, polygonOffsetFactor: -order, polygonOffsetUnits: -order, toneMapped: false });
         m.userData.sharedKit = true; return m;
       };
       set = { base: make(TELEGRAPH_LOOK.base, 1), fill: make(TELEGRAPH_LOOK.fill, 2), edge: make(TELEGRAPH_LOOK.edge, 3) };

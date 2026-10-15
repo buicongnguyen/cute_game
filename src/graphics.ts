@@ -8,18 +8,38 @@
 export type QualityLevel = 'low' | 'medium' | 'high';
 export type QualitySetting = 'auto' | QualityLevel;
 
-/** `outlines`: ink outlines on actors; they go last (only battery saver drops them), since they carry fight readability. */
-export interface QualityProfile { label: string; ratio: number; shadow: number; particles: number; outlines: boolean }
+/**
+ * `outlines`: ink outlines on actors; they go last (only battery saver drops them), since they carry fight readability.
+ * `shadowReach`: creatures cast shadows only within this many metres of the view (default 16).
+ * `scatter`: share of grass and flowers drawn (default: half when particles are under .6, else all).
+ * `shadowEvery`: the shadow map is redrawn every this many frames (default 1).
+ */
+export interface QualityProfile { label: string; ratio: number; shadow: number; particles: number; outlines: boolean; shadowReach?: number; scatter?: number; shadowEvery?: number }
 export const QUALITY: Record<QualityLevel, QualityProfile> = {
   low: { label: 'Battery saver', ratio: .85, shadow: 0, particles: .45, outlines: false },
   medium: { label: 'Balanced', ratio: 1.25, shadow: 1024, particles: .75, outlines: true },
   high: { label: 'Sharp', ratio: 2, shadow: 2048, particles: 1, outlines: true },
 };
-/** Keep model detail, outlines and atlas/pixel resolution while relieving mobile rendering cost. */
+/**
+ * Phones on Auto start with a 1024 shadow map: the shadow box only covers the ground in view (about 15 x 25 m in
+ * portrait), so 1024 texels still give 2-3 cm each, and the map costs a quarter of 2048 to draw and to sample.
+ */
+const MOBILE_AUTO: Record<QualityLevel, QualityProfile> = {
+  low: QUALITY.low,
+  medium: { ...QUALITY.medium, shadow: 1024 },
+  high: { ...QUALITY.high, shadow: 1024 },
+};
+/**
+ * A phone's first relief keeps model detail, outlines, resolution and the scenery, and lightens the shadow pass
+ * without switching it off: a 512 map redrawn every other frame, creature shadows within 8 m and trees within 12 m
+ * (in a fight about 20% fewer shadow draws, and half as many frames draw them). Map size and the caster list are not
+ * part of any shader, so nothing recompiles (switching shadows off rebuilt every shader: a 0.4-0.8 s freeze in a
+ * fight, FIX-PLAN 1.1). Shadows go off only at Battery saver, prepared in the background first (shadow-switch.ts).
+ */
 const MOBILE_REDUCED: Record<QualityLevel, QualityProfile> = {
   low: QUALITY.low,
-  medium: { ...QUALITY.medium, shadow: 0, particles: .45 },
-  high: { ...QUALITY.high, shadow: 0, particles: .45 },
+  medium: { ...QUALITY.medium, shadow: 512, shadowReach: 8, shadowEvery: 2, particles: .45, scatter: 1 },
+  high: { ...QUALITY.high, shadow: 512, shadowReach: 8, shadowEvery: 2, particles: .45, scatter: 1 },
 };
 /**
  * Render resolution (Settings, saved with the adventure: settings.renderRes): the most device pixels drawn per CSS pixel.
@@ -76,7 +96,7 @@ export class GraphicsGovernor {
     if (this.setting !== 'auto') return this.setting;
     return this.autoLevel ?? this.defaultLevel;
   }
-  get profile() { return this.env.mobile && this.setting === 'auto' && this.effectsReduced ? MOBILE_REDUCED[this.level] : QUALITY[this.level]; }
+  get profile() { return this.env.mobile && this.setting === 'auto' ? (this.effectsReduced ? MOBILE_REDUCED : MOBILE_AUTO)[this.level] : QUALITY[this.level]; }
   /** The Render resolution setting (settings.renderRes); see RESOLUTION. */
   resolution: ResolutionSetting = 'auto';
   targetRatio() { return Math.min(this.env.devicePixelRatio, this.profile.ratio, resolutionCap(this.resolution, this.env.mobile)); }
@@ -90,8 +110,9 @@ export class GraphicsGovernor {
 
   /**
    * Feed every frame's duration. Once per second in automatic mode: three slow
-   * seconds in a row (under 36 fps) first remove shadows and extra decoration on
-   * mobile, then lower resolution by a quarter step down to 1×,
+   * seconds in a row (under 36 fps) first lighten shadows and effects on mobile
+   * (after one slow second there: the step costs nothing, FIX-PLAN 1.4; its
+   * resolution steps then wait two), then lower resolution by a quarter step down to 1×,
    * then the quality level, then resolution again down to 0.7×; a fast second
    * (over 57 fps) restores resolution toward the level's target, and ten good
    * seconds in a row (55 fps or more) at full resolution step back up a level.
@@ -112,7 +133,8 @@ export class GraphicsGovernor {
     if (this.upTrial > 0) this.upTrial--;
     if (fps < 36) {
       this.goodSeconds = 0;
-      if (++this.slowSeconds < 3) return null;
+      const lighten = this.env.mobile && !this.effectsReduced && this.profile.shadow > 0;
+      if (++this.slowSeconds < (lighten ? 1 : this.env.mobile && this.ratio > 1 ? 2 : 3)) return null;
       this.slowSeconds = 0;
       if (this.env.mobile && !this.effectsReduced && this.profile.shadow > 0) {
         if (this.upTrial > 0) this.upWait = Math.min(160, this.upWait * 2);

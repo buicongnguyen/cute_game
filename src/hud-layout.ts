@@ -2,7 +2,8 @@
  * Publishes how wide the dock (the menu column on the right edge) is as the CSS variable --dock-w, so the
  * map panel, the Home tab and the quest slips (hud-ours.css) sit just left of it however many columns its buttons
  * fold into on this screen. It also keeps --menu-bottom (where the dock's buttons end) for sheets that want it.
- * Measured when the dock's size changes, never per frame.
+ * Measured when the dock's size changes, never per frame: DOM changes are filtered (the game rewrites unchanged
+ * `hidden` flags every frame, and each rewrite still makes a mutation record) and coalesced to one measure per frame.
  */
 export function dockMetrics(dock: DOMRect, buttons: readonly DOMRect[]) {
   const shown = buttons.filter(b => b.width > 0 && b.height > 0);
@@ -10,6 +11,10 @@ export function dockMetrics(dock: DOMRect, buttons: readonly DOMRect[]) {
   // The buttons, not the dock's box: the dock is as tall as the room it may use, and only its filled columns count.
   return { width: Math.ceil(dock.right - Math.min(...shown.map(b => b.left))), bottom: Math.ceil(Math.max(...shown.map(b => b.bottom))) };
 }
+/** A mutation that can move a button: nodes added or removed, or an attribute whose value really changed. */
+export const realChange = (r: Pick<MutationRecord, 'type' | 'target' | 'attributeName' | 'oldValue' | 'addedNodes' | 'removedNodes'>) =>
+  r.type === 'childList' ? r.addedNodes.length + r.removedNodes.length > 0
+    : r.type === 'attributes' ? (r.target as Element).getAttribute(r.attributeName ?? '') !== r.oldValue : false;
 export function initHudLayout() {
   const menu = document.querySelector<HTMLElement>('#hud .top-actions'); if (!menu) return;
   let lastWidth = -1, lastBottom = -1;
@@ -20,13 +25,15 @@ export function initHudLayout() {
     if (bottom !== lastBottom && bottom > 0) { lastBottom = bottom; root.setProperty('--menu-bottom', bottom + 'px'); }
   };
   measure();
-  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(measure).observe(menu);
+  let queued = 0;
+  const later = () => { if (!queued) queued = requestAnimationFrame(() => { queued = 0; measure(); }); };
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(measure).observe(menu); // runs after layout: no forced reflow
   // Buttons come and go (online, neighbours, install): only the dock's own child list and its two slots are watched.
   if (typeof MutationObserver !== 'undefined') {
-    const watch = new MutationObserver(measure); watch.observe(menu, { childList: true });
-    menu.querySelectorAll('#social-slot, #platform-slot').forEach(slot => watch.observe(slot, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] }));
+    const watch = new MutationObserver(records => { if (records.some(realChange)) later(); }); watch.observe(menu, { childList: true });
+    menu.querySelectorAll('#social-slot, #platform-slot').forEach(slot => watch.observe(slot, { childList: true, subtree: true, attributes: true, attributeOldValue: true, attributeFilter: ['hidden'] }));
   }
-  addEventListener('resize', measure); addEventListener('orientationchange', measure);
+  addEventListener('resize', later); addEventListener('orientationchange', later);
   // Buttons are added after start-up (online, neighbours, platform tools): measure again as the page settles.
   for (const ms of [300, 1200, 3000]) setTimeout(measure, ms);
 }

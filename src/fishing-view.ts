@@ -4,6 +4,20 @@ import type { Effects } from './fx.ts';
 import { CAST, FISH_PER_WATER, RESTOCK_AFTER_CATCH, MYSTERY, type FishingState, type Point } from './fishing.ts';
 import { toonMaterial } from './toon.ts';
 import { FishSchool } from './fish-school.ts';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+/** The body parts of a kit fish (all but the tail) merged into one position-only geometry, kept per kit geometry. */
+const silhouettes = new WeakMap<T.BufferGeometry, T.BufferGeometry | null>();
+function silhouetteBody(model: T.Group): T.BufferGeometry | null {
+  const parts = model.children.filter(o => (o as T.Mesh).isMesh && !o.name.endsWith('_tail')) as T.Mesh[];
+  if (parts.length < 2) return null;
+  const key = parts[0].geometry; if (silhouettes.has(key)) return silhouettes.get(key)!;
+  const pieces = parts.map(m => { m.updateMatrix(); const g = new T.BufferGeometry(); g.setAttribute('position', m.geometry.getAttribute('position').clone()); if (m.geometry.index) g.setIndex(m.geometry.index.clone()); return g.applyMatrix4(m.matrix); });
+  const all = pieces.every(g => g.index) ? pieces : pieces.map(g => g.index ? g.toNonIndexed() : g);
+  const merged = mergeGeometries(all, false); pieces.forEach(g => g.dispose());
+  if (merged) { merged.computeBoundingSphere(); merged.userData.sharedKit = true; }
+  silhouettes.set(key, merged); return merged;
+}
 
 /** Swimmable water of one pond, in world units. */
 export interface PondView { id: string; x: number; z: number; rx: number; rz: number; surface: number; waterId: string }
@@ -240,6 +254,10 @@ export class FishingView {
     const model = this.kit.ready ? this.kit.instance(species) : null; if (!model) return null;
     const key = String(opacity); let material = this.shadowMaterials.get(key);
     if (!material) { material = new T.MeshBasicMaterial({ color: '#0d1626', transparent: true, opacity, depthWrite: false }); material.userData.sharedKit = true; this.shadowMaterials.set(key, material); }
+    // A silhouette paints every body part the same colour, so the parts become one mesh: one draw instead of six or
+    // more per deep fish (FIX-PLAN 1.5). The tail stays its own mesh: it wags.
+    const body = silhouetteBody(model);
+    if (body) { for (const o of [...model.children]) if ((o as T.Mesh).isMesh && !o.name.endsWith('_tail')) model.remove(o); const m = new T.Mesh(body, material); m.name = species + '_silhouette'; model.add(m); }
     model.traverse(o => { const mesh = o as T.Mesh; if (mesh.isMesh) { mesh.material = material!; mesh.castShadow = false; } });
     model.scale.setScalar(look(species)[0]); model.scale.y *= .35;
     return { obj: model, tail: model.children.find(c => c.name.endsWith('_tail')) ?? null };

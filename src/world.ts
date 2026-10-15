@@ -8,7 +8,7 @@ import {TitanAttackView} from './titan-view.ts';
 import {dungeonKit} from './dungeon-view.ts';
 import {colossusGearKit} from './colossus-art.ts';
 import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
-import { buildScatter, disposeScatter, fallbackParts, updateScatterShadows } from './scatter.ts';
+import { buildScatter, disposeScatter, fallbackParts, updateScatterReach, updateScatterShadows } from './scatter.ts';
 import { OccluderFade } from './occluders.ts';
 import { INDOOR_Y } from './house.ts';
 import {atHome,homeRecoveryBonus} from './home-care.ts';
@@ -78,6 +78,7 @@ import {AFTERSHOCK,BLOCK,JumpState,JUMP,MAX_AIR_SECONDS,MAX_HEIGHT,attackClass,d
 import {AIR_CASTING,carryStep} from './air-cast.ts';
 import {jellyWobble,type Barrier,type BarrierEvent,type EliteTag,type HitSource} from './elite-roles.ts';
 import {applyEliteSnapshot,dressWorld,eliteIncoming,retireChildren,splitWorld,stepBarriers} from './elite-world.ts';
+import {ShadowSwitch} from './shadow-switch.ts';
 
 export interface Entity { id: string; kind: string; name: string; icon: string; mesh: T.Group; x: number; z: number; radius: number; index?: number;waterId?:string;animalUid?:number;
   /** Swimmable water of a pond: half-extents of its ellipse and the height of the surface. */
@@ -293,22 +294,33 @@ export class World {
     if(shadow){Object.assign(shadow,shadowBox(viewFootprint(aspect,this.zoom),this.sunAxes??=lightAxes(this.sunOffset)));shadow.updateProjectionMatrix();}
   }
   setQuality(low: boolean) { this.renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = !low; this.resize(); }
+  /** Creatures cast shadows within this many metres of the view (graphics profile shadowReach). */
+  shadowNear=16;private shadowReach=16;
+  /** The shadow map is redrawn every this many frames (graphics profile shadowEvery; a phone's lighter step: 2). */
+  shadowEvery=1;
+  /** Shadows on/off, prepared in the background so the switch does not freeze a frame (shadow-switch.ts, FIX-PLAN 1.1). */
+  private shadowSwitch?:ShadowSwitch;
   /** Apply a graphics profile: render resolution, shadow map size (0 turns shadows off) and particle density. */
   applyGraphics(profile: QualityProfile, ratio: number) {
     this.renderer.setPixelRatio(ratio);
-    const size = profile.shadow, shadows = size > 0, toggled = this.renderer.shadowMap.enabled !== shadows;
-    this.renderer.shadowMap.enabled = shadows; this.sun.castShadow = shadows;
-    if (shadows && this.sun.shadow.mapSize.x !== size) {
-      this.sun.shadow.mapSize.set(size, size); this.sun.shadow.map?.dispose(); (this.sun.shadow as { map: T.WebGLRenderTarget | null }).map = null;
+    const size = profile.shadow, shadows = size > 0;
+    const sw = this.shadowSwitch ??= new ShadowSwitch({ renderer: this.renderer, camera: this.camera, sun: this.sun, scene: () => this.interior?.scene ?? this.scene });
+    // Map size and the caster list change at once (no shader depends on them). Turning shadows on or off changes
+    // every material's shader: before the first frame that is free, later it is prepared over a few frames first,
+    // and until it flips, shadows that are about to go stay on at their lightest.
+    if (this.renderSerial === 0) sw.flip(shadows); else sw.request(shadows);
+    const going = sw.target === false, mapSize = shadows ? size : going ? 512 : this.sun.shadow.mapSize.x;
+    this.shadowReach = profile.shadowReach ?? 16; this.shadowNear = going ? 6 : this.shadowReach; this.shadowEvery = going ? 2 : profile.shadowEvery ?? 1;
+    if (this.sun.shadow.mapSize.x !== mapSize) {
+      this.sun.shadow.mapSize.set(mapSize, mapSize); this.sun.shadow.map?.dispose(); (this.sun.shadow as { map: T.WebGLRenderTarget | null }).map = null;
+      this.renderer.shadowMap.needsUpdate = true; // the new map is drawn on the next frame even when maps are redrawn every other frame
     }
-    // Switching shadows on or off changes every lit material's shader.
-    if (toggled) this.scene.traverse(o => { if (o instanceof T.Mesh) for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.needsUpdate = true; });
     if (this.fx) this.fx.density = profile.particles;
     setOutlinesEnabled(profile.outlines ?? true);
     // Crop cards: 256 px atlas cells on high, 128 px otherwise.
     this.cardCellPx = profile.ratio >= QUALITY.high.ratio ? 256 : 128; this.cropCards?.setCellPx(this.cardCellPx);
     // Battery saver draws half of the grass and flowers; trees and rocks always stay.
-    const detail = profile.particles < .6 ? .5 : 1;
+    const detail = profile.scatter ?? (profile.particles < .6 ? .5 : 1);
     if (detail !== this.detail) { this.detail = detail; if (this.scatterGroup) this.refreshScenery(); }
     this.resize();
   }
@@ -362,7 +374,7 @@ export class World {
   /** Fades tall scenery in front of the explorer and its target (CC-06). */
   occluders?:OccluderFade;
   private coverAtlas?:CoverAtlas;
-  private shadowsAt?:{x:number;z:number};
+  private shadowsAt?:{x:number;z:number;reach?:number;cast?:number};
   /** Redraws the scenery from the plan, using whichever model files have loaded. */
   refreshScenery(){
     if(this.scatterGroup){this.root.remove(this.scatterGroup);disposeScatter(this.scatterGroup);}
@@ -383,7 +395,9 @@ export class World {
   private updateScenery(dt:number,force=false){
     const group=this.scatterGroup;if(!group)return;
     tickCoverCards(this.time);
-    const t=this.cameraTarget;if(!this.shadowsAt||Math.hypot(t.x-this.shadowsAt.x,t.z-this.shadowsAt.z)>2){this.shadowsAt={x:t.x,z:t.z};updateScatterShadows(group,t.x,t.z);}
+    // Tiles beyond the ground in view (plus a margin for shadows cast into it) are hidden, so culling skips them (FIX-PLAN 1.6).
+    // Trees cast within 4 m more than creatures do: 20 m normally, 12 m in a phone's lighter shadow step.
+    const t=this.cameraTarget,reach=(this.viewReach??Infinity)+4,cast=(this.shadowNear??16)+4;if(!this.shadowsAt||Math.hypot(t.x-this.shadowsAt.x,t.z-this.shadowsAt.z)>2||this.shadowsAt.reach!==reach||this.shadowsAt.cast!==cast){this.shadowsAt={x:t.x,z:t.z,reach,cast};updateScatterShadows(group,t.x,t.z,cast);updateScatterReach(group,t.x,t.z,reach);}
     const height=HERO_MODEL_HEIGHT*HERO_SCALE*(this.player?.scale.y?this.player.scale.y/HERO_SCALE:1),p=this.position,points=occluderPoints;
     points[0].set(p.x,p.y+height*.5,p.z);points[1].set(p.x,p.y+height*.88,p.z);let n=2;
     const target=this.selected;
@@ -1921,7 +1935,7 @@ export class World {
     if(e.driver)return;
     // Only creatures near the view cast shadows; the shadow box reaches well past the screen,
     // and distant creatures would otherwise double their draw cost for shadows nobody sees.
-    const view=Math.hypot(e.x-this.cameraTarget.x,e.z-this.cameraTarget.z),near=view<16;
+    const view=Math.hypot(e.x-this.cameraTarget.x,e.z-this.cameraTarget.z),near=view<(this.shadowNear??16);
     if(e.mesh.userData.castsShadow!==near){e.mesh.userData.castsShadow=near;e.mesh.traverse(o=>{if(o instanceof T.Mesh&&!o.userData.outline)o.castShadow=near;});}
     // Ink outlines, like the reference, only on creatures within 20 m of the view: one extra draw per part.
     showOutlines(e.mesh,view<20);
@@ -2368,5 +2382,5 @@ export class World {
 
   /** Elite roles drawn (elite-view.ts), just before the frame. */
   eliteFrame?:()=>void;
-  render(){this.eliteFrame?.();this.beforeRender?.();const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);}this.updateTrail(scene);this.renderer.render(scene,this.camera);this.renderSerial++;}
+  render(){this.eliteFrame?.();this.beforeRender?.();const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);}this.updateTrail(scene);if(this.shadowSwitch?.step())this.shadowNear=this.shadowReach;{const sm=this.renderer.shadowMap,every=this.shadowEvery??1;if(sm){sm.autoUpdate=every<=1;if(every>1&&this.renderSerial%every===0)sm.needsUpdate=true;}}this.renderer.render(scene,this.camera);this.renderSerial++;}
 }

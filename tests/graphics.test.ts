@@ -68,21 +68,36 @@ test('a step up that fails soon after waits twice as long before the next try', 
   feed(g, 60, 8); assert.equal(g.level, 'medium', 'twenty are');
 });
 
+test('phones on Auto start with a 1024 shadow map; Sharp and Balanced chosen by hand keep theirs', () => {
+  const g = sharpPhone();
+  assert.equal(g.profile.shadow, 1024); assert.equal(g.profile.ratio, QUALITY.high.ratio); assert.equal(g.profile.particles, 1);
+  g.choose('high'); assert.equal(g.profile, QUALITY.high, 'a hand-picked Sharp keeps the 2048 map');
+  assert.equal(new GraphicsGovernor(desktop).profile, QUALITY.high, 'desktops are unchanged');
+});
+
 test('mobile auto reduces rendering work before resolution and restores effects after sustained recovery', () => {
   const g = sharpPhone(), start = g.profile;
-  assert.equal(nextChange(g, 30), 'effects');
+  assert.deepEqual(feed(g, 30, 1.05), ['effects'], 'the first relief comes after one slow second (FIX-PLAN 1.4)');
   assert.equal(g.level, 'high'); assert.equal(g.ratio, 2, 'the first fallback keeps the original pixel dimensions');
   assert.equal(g.profile.ratio, start.ratio); assert.equal(g.profile.outlines, start.outlines);
-  assert.equal(g.profile.shadow, 0, 'remove the complete shadow pass');
-  assert.ok(g.profile.particles < .6, 'world draws half of decorative grass/flowers at this density');
+  assert.equal(g.profile.shadow, 512, 'a lighter shadow pass, not none: switching shadows off recompiles every shader (FIX-PLAN 1.1)');
+  assert.equal(g.profile.shadowReach, 8, 'creatures cast shadows only close to the view');
+  assert.equal(g.profile.shadowEvery, 2, 'and the shadow map is redrawn every other frame');
+  assert.equal(g.profile.scatter, 1, 'the scenery is not rebuilt mid-fight');
+  assert.ok(g.profile.particles < .6);
   assert.deepEqual(g.toJSON(), { setting: 'auto', autoLevel: null, autoVersion: AUTO_GRAPHICS_VERSION }, 'a temporary effects fallback is never saved as low quality');
-  feed(g, 60, 10); assert.equal(g.profile.shadow, 0, 'brief recovery cannot flicker shadows');
+  feed(g, 60, 10); assert.equal(g.profile.shadow, 512, 'brief recovery cannot flicker shadows');
   assert.equal(nextChange(g, 60), 'effects');
   assert.equal(g.profile, start); assert.equal(g.ratio, 2);
 
   assert.equal(nextChange(g, 30), 'effects');
+  assert.deepEqual(feed(g, 30, 1.05), [], 'resolution steps wait for two slow seconds on phones');
   assert.equal(nextChange(g, 30), 'ratio', 'resolution remains a last fallback if less drawing is still insufficient');
   assert.equal(g.ratio, 1.75);
+  for (const r of [1.5, 1.25, 1]) { assert.equal(nextChange(g, 30), 'ratio'); assert.equal(g.ratio, r); }
+  assert.deepEqual(feed(g, 30, 2.05), [], 'level steps still wait three slow seconds');
+  assert.equal(nextChange(g, 30), 'level'); assert.equal(g.level, 'medium'); assert.equal(g.profile.shadow, 512, 'Balanced keeps the light shadows');
+  assert.equal(nextChange(g, 30), 'level'); assert.equal(g.level, 'low'); assert.equal(g.profile.shadow, 0, 'only Battery saver turns them off');
   g.choose('high'); feed(g, 20, 20);
   assert.equal(g.profile, QUALITY.high); assert.equal(g.ratio, 2, 'explicit Sharp remains sharp, including full shadows');
   g.choose('medium'); feed(g, 20, 20);
@@ -94,7 +109,7 @@ test('a remembered Sharp auto level also restores mobile shadows after recovery'
   assert.equal(nextChange(g, 30), 'effects');
   assert.equal(g.ratio, 2); assert.equal(g.profile.outlines, true);
   assert.equal(nextChange(g, 60), 'effects');
-  assert.equal(g.level, 'high'); assert.equal(g.profile, QUALITY.high);
+  assert.equal(g.level, 'high'); assert.equal(g.profile.shadow, 1024); assert.equal(g.profile.shadowReach, undefined);
 });
 
 test('old mobile automatic levels reset once while current learned and explicit choices remain intact', () => {
@@ -123,12 +138,15 @@ test('manual choices and paused play are never adjusted', () => {
 });
 
 test('even a brief pause discards partial samples and breaks the slow-frame streak', () => {
-  const g = sharpPhone();
+  const g = new GraphicsGovernor(desktop);
   feed(g, 20, 2.5);
   assert.equal(g.sample(.01, false), null);
   assert.deepEqual(feed(g, 20, .55), [], 'the old two slow seconds must not carry across a menu or background pause');
-  assert.equal(g.profile, QUALITY.high);
-  assert.equal(nextChange(g, 20), 'effects', 'three fresh slow seconds still trigger the normal fallback');
+  assert.equal(g.ratio, 2);
+  assert.deepEqual(feed(g, 20, 1.9), [], 'the streak starts again');
+  assert.equal(nextChange(g, 20), 'ratio', 'three fresh slow seconds still trigger the normal fallback');
+  const p = sharpPhone(); feed(p, 20, .9); p.sample(.01, false);
+  assert.deepEqual(feed(p, 20, .9), [], 'a phone also starts its one slow second again after a pause');
 
   const resumed = sharpPhone();
   feed(resumed, 20, 2.5); resumed.sample(0, false);
@@ -140,7 +158,7 @@ test('choosing graphics discards frames measured under the previous setting', ()
   const g = sharpPhone(); feed(g, 2, .5); g.choose('auto');
   feed(g, 60, 1); assert.ok(g.fps > 59);
   for (const dt of [0, -1, NaN, Infinity]) assert.equal(g.sample(dt, true), null);
-  assert.ok(Number.isFinite(g.fps)); assert.equal(g.profile, QUALITY.high);
+  assert.ok(Number.isFinite(g.fps)); assert.equal(g.level, 'high'); assert.equal(g.profile.shadow, 1024);
 });
 
 test('stored choices and the legacy low-graphics flag are respected', () => {
