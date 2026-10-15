@@ -71,6 +71,7 @@ import {PUNCH,WIND,punchPose,stretchFor,type PunchKind,type PunchPose} from './p
 import {SKILL_WIND,THRUST,TURN,sweepTurn,handBlade} from './skill-wind.ts';
 import type {CombatEffect} from './combat.ts';
 import {applyReaction,newReaction,newReactionPose,reactionPose,reactStop,reactStrength,startReaction,REACT,type Reaction} from './hit-react.ts';
+import {weightClass,flinches,flingDistance,flingPose,deathTime,bumpShare,hurtSpeed,startsFleeing,WEIGHT,FLINCH,FLING,FLEE,BUMP,HURT,HOP,newFlingPose,type Weight} from './creature-weight.ts';
 import {mergeParts} from './avatar-merge.ts';
 import {perfFlags} from './perf-flags.ts';
 import {enemyFlash,HIT_FLASH,HURT_TINT,meleeArc,inMeleeArc,MELEE_ARC} from './feel-rules.ts';
@@ -107,6 +108,9 @@ export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
 export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):number}}
 /** Elite roles (elite-roles.ts, elite-world.ts): the role, its drawn size, the barrier, a split child's parent and depth. */
 export interface Enemy {elite?:EliteTag;eliteSize?:number;barrier?:Barrier;parentId?:string;depth?:number;born?:number}
+/** How a small creature takes blows (creature-weight.ts). `fling`: the killing blow's throw, looks only (from where, which way, how far, seconds in, ground height, bounce dust shown); made once per creature and reused.
+ *  `flinchT`/`flinchAt`: the earned stagger left and when it began (host rule). `fleeT`/`fled`: a timid creature's one run for it. `hopT`: a light body's hop on a big hit (looks only). `blow*`: the last blow's way and strength, for an online kill that arrives without it. */
+export interface Enemy {fling?:{x:number;z:number;y0:number;dx:number;dz:number;d:number;t:number;ground:number;dust:boolean};flinchT?:number;flinchAt?:number;fleeT?:number;fled?:boolean;hopT?:number;flipT?:boolean;blowX?:number;blowZ?:number;blowS?:number;blowAt?:number}
 export type EliteEvent=BarrierEvent|'split'|'regrow';
 export interface RemotePose {/** In the water (swim.ts; server-cleaned): wading or swimming. */swim?:'land'|'wade'|'swim';/** More pets that follow this explorer besides gear.pet (the AI neighbours' second pet). */pets?:string[];/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;/** The knight's shield is up (server-set): shots from in front bounce back. */block?:boolean;/** Hittable summons (server-checked, combat.ts shareableDecoys). */decoys?:DecoyPose[];id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
@@ -116,6 +120,8 @@ export interface EnvironmentAction {kind:'light-pillar'|'collect-ore';id:string;
 export interface EnvironmentReward {id:string;count:number}
 type Particle = { mesh: T.Mesh; velocity: T.Vector3; life: number; max: number };
 const UP = new T.Vector3(0, 1, 0);
+/** Scratch pose of a thrown body (updateEnemyVisual): one object for every creature, so a death throw allocates nothing per frame. */
+const FLING_POSE=newFlingPose();
 const matCache = new Map<string, T.MeshToonMaterial>();
 const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', sell: 'market', shop: 'outfitters', upgrade: 'crystal', chest: 'chest', craft: 'workshop', cook: 'kitchen' };
 // A bed's entity holds only this invisible shape, the bed slab plus a column where its crop card stands, so tap raycasts
@@ -1097,10 +1103,14 @@ export class World {
     if(Number.isFinite(snapshot.chaseGrace))e.lastHitAt=this.time-4+Math.max(0,Math.min(4,snapshot.chaseGrace!));
     if(snapshot.statuses)e.statuses={...snapshot.statuses};if(Number.isFinite(snapshot.stun))e.stun=snapshot.stun!;
     if(e.elite){const before=e.barrier?.open??0;applyEliteSnapshot(e,snapshot);const event=(snapshot.impact as {barrier?:BarrierEvent}|undefined)?.barrier;if(event&&snapshot.impactId&&!this.authorityImpacts?.has(snapshot.impactId))this.onEliteEvent?.(e,event);else if(before>0&&!(e.barrier?.open))this.onEliteEvent?.(e,'regrow');}
-    if(wasAlive&&e.hp<=0){e.dying=.3;e.telegraphs=[];e.skillEffects=[];e.titanAttacks=[];e.titanLift=0;e.knockVX=e.knockVZ=0;this.defeatFeedback(e);return;}
+    if(wasAlive&&e.hp<=0){const recent=(this.time??0)-(e.blowAt??-Infinity)<1.5;this.startDeathFling(e,recent?e.blowX??0:0,recent?e.blowZ??0:0,recent?e.blowS??0:0);e.telegraphs=[];e.skillEffects=[];e.titanAttacks=[];e.titanLift=0;e.knockVX=e.knockVZ=0;this.defeatFeedback(e);return;}
     const impact=snapshot.impact;if(!impact||!Number.isFinite(impact.amount))return;
     this.authorityImpacts??=new Set();if(snapshot.impactId){if(this.authorityImpacts.has(snapshot.impactId))return;this.authorityImpacts.add(snapshot.impactId);if(this.authorityImpacts.size>512)this.authorityImpacts.delete(this.authorityImpacts.values().next().value!);}
-    this.hitFeedback(e,impact.amount,!!impact.critical);e.lastHitAt=this.time;
+    // A small creature (creature-weight.ts) reads a hard knock or a launch as the last hit of a chain, as main.ts hit() does; a boss's look stays as it was.
+    const small=!!this.weightOf(e),big=small&&((impact.knock??0)>=2||(impact.lift??0)>0),critical=!!impact.critical;
+    this.hitFeedback(e,impact.amount,critical,big);e.lastHitAt=this.time;
+    // Kept for the kill, which reaches this browser later and without the blow (the server holds the creature at 1 HP until the reward is saved).
+    if(small){const d=impact.direction,l=d?Math.hypot(d.x,d.z):0;if(l>1e-6&&Number.isFinite(l)){e.blowX=d!.x/l;e.blowZ=d!.z/l;}else{e.blowX=e.x-this.position.x;e.blowZ=e.z-this.position.z;}e.blowS=reactStrength({critical,big});e.blowAt=this.time??0;this.flinchEnemy(e,{critical,big});}
     if(impact.knock&&impact.direction)this.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
     if(impact.lift)this.knockUpEnemy(e,impact.lift,.8);
   }
@@ -1365,7 +1375,12 @@ export class World {
     // The recoil (hit-react.ts): knocked back along the blow, squashed and tipped away; harder for a critical and for the
     // last hit of a chain (`big`), lighter on a boss. It moves the drawn model only.
     const dx=this.position.x-e.x,dz=this.position.z-e.z,d=Math.hypot(dx,dz)||1;
+    // Weight (creature-weight.ts) scales it: a light body recoils further, a heavy one hardly at all. A killing blow throws a small body along it instead,
+    // and a big hit or a critical makes a light one hop (a critical flips it over).
+    const weight=this.weightOf(e);
     startReaction(e.react??=newReaction(),-dx,-dz,reactStrength({critical,big,boss:e.boss,titan:!!e.definition?.titan}),e.boss); // a boss staggers where it stands
+    if(weight)e.react.strength=Math.min(REACT.max,e.react.strength*WEIGHT[weight].react);
+    if(weight&&e.hp<=0)this.startDeathFling(e,-dx,-dz,reactStrength({critical,big}));else if(weight==='light'&&(critical||big)){e.hopT=HOP.time;e.flipT=critical;}
     // A stand-in body whose owner draws it (e.driver) is not posed here: a Flag Rush hero reacts through its avatar (animateRemotes), a Rescue Call raider in rescue-view.ts.
     if(e.driver){const remote=this.remotePlayers?.get(e.id);if(remote)remote.mesh.userData.react=e.react;}
     const fx=this.fx;if(!fx)return;
@@ -1377,9 +1392,41 @@ export class World {
     fx.burst(hit,{n:critical?12:big?8:5,color:['#ffffff','#fff7a8'],glow:true,size:heavy?.16:.1,speed:heavy?8:5,up:3,y:0,life:.35});
     fx.ring({x:e.x,z:e.z},{color:critical?'#ffe14d':'#ffffff',from:.2,to:critical?1.6:big?1.35:1,life:.2,thick:.35,y:chest});
     fx.text(at,critical?amount+'!':String(amount),critical?'crit big':'dmg',e.id);
+    if(weight&&WEIGHT[weight].dust)this.dustPuff(e.x,e.z,at.y,heavy?7:4); // a heavy body does not budge: the blow kicks up dust at its feet
     // A heartbeat of stillness for a critical or a big hit: never on Battery saver, and the longer one wins (fx.freeze does not add them up).
     const stop=reactStop({critical,big},fx.density<=.5);if(stop)fx.freeze(stop);
   }
+  /** A creature's weight class (creature-weight.ts), or null for a boss, a titan, an elite with a role or a body someone else drives: those keep their old feel. */
+  weightOf(e:Enemy):Weight|null{return weightClass(e.type,e.definition,e);}
+  /**
+   * Earned flinch (creature-weight.ts flinches): a light creature hit by the last blow of a chain or a critical, or a medium one
+   * by a critical, is staggered FLINCH.time s and its wind-up (or run) is cancelled, to start over after; not again for
+   * FLINCH.cooldown s. The rule runs where creatures are simulated (solo, or the room's host); a peer only notes it, so the
+   * cancelled wind-up is not drawn as a lunge. Returns whether it flinched.
+   */
+  flinchEnemy(e:Enemy,hit:{critical?:boolean;big?:boolean}){
+    if(e.hp<=0||!flinches(this.weightOf(e),hit,(this.time??0)-(e.flinchAt??-Infinity)))return false;
+    e.flinchAt=this.time??0;e.mesh.userData.flinchAt=e.flinchAt;if(this.networkRole==='peer')return true;
+    e.flinchT=FLINCH.time;if(e.phase==='windup'||e.phase==='charge'){e.phase='chase';e.telegraphs=[];}
+    return true;
+  }
+  /**
+   * The killing blow throws a small creature along (dx, dz) (creature-weight.ts FLING): it tumbles through the air, bounces
+   * once with a dust puff and then swells and shrinks away where it lies. Looks only: the rule place (x, z) stays where it
+   * died. The throw is cut to half, or to none, where scenery is in the way, so a body never sails through a wall. Sets how
+   * long the death shows (e.dying); with no throw (a boss, a heavy body, no blow) that is the old 0.3 s.
+   */
+  startDeathFling(e:Enemy,dx:number,dz:number,strength:number){
+    const l=Math.hypot(dx,dz);let d=l>1e-6&&Number.isFinite(l)&&this.environment?flingDistance(this.weightOf(e),strength):0;
+    const nx=d>0?dx/l:0,nz=d>0?dz/l:0,f=e.fling??={x:0,z:0,y0:0,dx:0,dz:0,d:0,t:0,ground:0,dust:false};
+    if(d>0){const obstacles=this.creatureObstacles(),options=this.navigationOptions(e.radius*.5,true),from={x:e.mesh.position.x,z:e.mesh.position.z};
+      if(!clearSegment(from,{x:from.x+nx*d,z:from.z+nz*d},obstacles,options))d=clearSegment(from,{x:from.x+nx*d*.5,z:from.z+nz*d*.5},obstacles,options)?d*.5:0;
+      f.ground=this.planet==='ocean'&&inWater(this.environment.layout,from)?-.5:Math.max(-.7,terrainHeight(this.environment.layout,from));f.x=from.x;f.z=from.z;f.y0=Math.max(0,e.mesh.position.y-f.ground);}
+    f.dx=nx;f.dz=nz;f.d=d;f.t=0;f.dust=false;e.dying=deathTime(d);e.hopT=0;
+    if(!d&&this.weightOf(e)==='heavy')this.dustPuff(e.x,e.z,e.mesh.position.y,8);
+  }
+  /** A puff of dust at the feet (a heavy body hit, a thrown body's bounce, a landing): particles from the shared pool only, none on Battery saver. */
+  private dustPuff(x:number,z:number,y:number,n=6){const fx=this.fx;if(!fx||fx.density<=.5)return;fx.burst({x,y,z},{n,color:['#d8c6a0','#f2e8d2','#bfae8c'],size:.15,speed:2.4,up:1.8,y:.12,life:.45,gravity:4,spread:1.6});}
   /** A defeated creature bursts into a puff: a 2.5 m ring, about 25 particles in its colours and a short freeze. */
   defeatFeedback(e:Enemy){
     const fx=this.fx;if(!fx)return;const at={x:e.x,y:e.mesh.position.y,z:e.z},color=e.definition?.color??'#ffffff';
@@ -1561,7 +1608,7 @@ export class World {
     // A hit never staggers a boss (its wind-up and skill go on, as in the reference); a hard stun only slows it.
     const control=hitControl(e.boss,stun);if(!hazard)e.lastHitAt=this.time??0;
     e.hp=Math.max(0,e.hp-amount);e.stun=Math.max(e.stun,control.stun);if(control.slow&&e.hp>0){e.statuses??={};e.statuses.slow=Math.max(e.statuses.slow??0,control.slow);this.resistFeedback(e);}this.burst(e.x,e.z,'#fff0bb',8);
-    if(e.hp===0){e.respawn=e.type==='minislime'||e.type==='dragon'||e.elite==='mini'?999999:e.definition?.titan?600:e.boss?90:22+Math.random()*10;e.dying=.3;e.knockVX=e.knockVZ=0;e.telegraphs=[];e.skillEffects=[];e.titanAttacks=[];e.titanLift=0;
+    if(e.hp===0){e.respawn=e.type==='minislime'||e.type==='dragon'||e.elite==='mini'?999999:e.definition?.titan?600:e.boss?90:22+Math.random()*10;e.dying=.3;if(e.fling)e.fling.d=0;e.knockVX=e.knockVZ=0;e.telegraphs=[];e.skillEffects=[];e.titanAttacks=[];e.titanLift=0;
       if(e.type==='magmaslime'&&this.networkRole!=='peer')this.enemies.filter(m=>m.type==='minislime'&&m.hp<=0).slice(0,3).forEach((minion,index)=>{const a=index*Math.PI*2/3;minion.x=e.x+Math.cos(a)*.9;minion.z=e.z+Math.sin(a)*.9;this.resolveOverlap(minion,this.collisionObstacles(),minion.radius);minion.homeX=minion.x;minion.homeZ=minion.z;minion.hp=minion.maxHp;minion.phase='idle';minion.stun=0;minion.respawn=0;});
       if(e.elite&&this.networkRole!=='peer'&&splitWorld(e,this.enemies,(m,x,z)=>{m.x=x;m.z=z;this.resolveOverlap(m,this.collisionObstacles(),m.radius);m.homeX=m.x;m.homeZ=m.z;m.phase='chase';m.stun=0;m.lift=0;m.dying=0;}).length)this.onEliteEvent?.(e,'split');
       if(this.selected===e){this.selected=null;this.destination=null;this.route=[];this.ring.visible=false;}}
@@ -1612,6 +1659,8 @@ export class World {
         if(i>=j)continue;const b=living[j],moveA=(a.definition?.speed??2.4)>0,moveB=(b.definition?.speed??2.4)>0;if(!moveA&&!moveB)continue;
         const dx=a.x-b.x,dz=a.z-b.z,d=Math.hypot(dx,dz),minimum=a.radius+b.radius;if(d>=minimum)continue;
         const angle=(i*2.399+j*.73),nx=d>.0001?dx/d:Math.cos(angle),nz=d>.0001?dz/d:Math.sin(angle),amount=(minimum-d+.002)/(moveA&&moveB?2:1);
+        // Bodies bump (creature-weight.ts BUMP): one knocked into another passes part of its push on, so a blow into a crowd ripples through it.
+        if(a.knockVX||a.knockVZ||b.knockVX||b.knockVZ){const va=Math.hypot(a.knockVX??0,a.knockVZ??0),vb=Math.hypot(b.knockVX??0,b.knockVZ??0);if(va>vb)this.bumpInto(a,b,va);else this.bumpInto(b,a,vb);}
         if(moveA){push[i*2]+=nx*amount;push[i*2+1]+=nz*amount;}if(moveB){push[j*2]-=nx*amount;push[j*2+1]-=nz*amount;}
       }
     });
@@ -1625,6 +1674,12 @@ export class World {
       const dx=e.x-px,dz=e.z-pz,d=Math.hypot(dx,dz),minimum=EXPLORER_RADIUS+e.radius;if(d>=minimum)continue;
       const nx=d>.0001?dx/d:Math.sin(this.facing),nz=d>.0001?dz/d:Math.cos(this.facing);this.moveCreature(e,nx*(minimum-d+.002),nz*(minimum-d+.002));
     }
+  }
+  /** A knocked creature moving at `speed` m/s into `to` passes it part of its push (creature-weight.ts bumpShare) and keeps BUMP.keep of its own. Never a boss, a rooted or a standing creature. */
+  private bumpInto(from:Enemy,to:Enemy,speed:number){
+    const vx=from.knockVX??0,vz=from.knockVZ??0;if((to.x-from.x)*vx+(to.z-from.z)*vz<=0||to.definition?.behavior==='rooted'||!((to.definition?.speed??2.4)>0))return; // only when moving towards it
+    const share=bumpShare(this.weightOf(to),speed);if(!share)return;
+    to.knockVX=(to.knockVX??0)+vx*share;to.knockVZ=(to.knockVZ??0)+vz*share;from.knockVX=vx*BUMP.keep;from.knockVZ=vz*BUMP.keep;
   }
   /** The nearest explorer outside the safe village (or, charmed, the nearest other creature). Runs for every creature every step, so it
    *  keeps the nearest as it goes instead of building and sorting a list: one small object per call, for the winner only. */
@@ -1821,8 +1876,10 @@ export class World {
     if(e.driver)return;
     e.cooldown=Math.max(0,e.cooldown-dt);this.updateTitanAttacks(e,dt);if(e.phase==='titan-leap'&&e.titanAttacks?.some(a=>a.skill==='leap'))return;e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
     if(e.statuses)for(const key in e.statuses)e.statuses[key]=Math.max(0,e.statuses[key]-dt); // no key array per creature per step
+    // Small creatures (creature-weight.ts): the earned stagger and a timid run wear off; a light one's attack comes round 10% sooner (its cooldown x0.9), which pays for the flinches it now suffers.
+    if(e.flinchT)e.flinchT=Math.max(0,e.flinchT-dt);if(e.fleeT)e.fleeT=Math.max(0,e.fleeT-dt);if(e.cooldown>0&&!e.boss&&this.weightOf(e)==='light')e.cooldown=Math.max(0,e.cooldown-dt*(1/WEIGHT.light.attackCooldown-1));
     if(e.barrier&&stepBarriers(e,dt))this.onEliteEvent?.(e,'regrow');
-    if(e.hp<=0){e.respawn=Math.max(0,e.respawn-dt);if(this.authoritativeAction)return;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.enraged=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];if(e.elite){retireChildren(e,this.enemies);if(e.barrier)Object.assign(e.barrier,{cracks:0,open:0,idle:0});}}return;}
+    if(e.hp<=0){e.respawn=Math.max(0,e.respawn-dt);if(this.authoritativeAction)return;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.fled=false;e.fleeT=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.enraged=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];if(e.elite){retireChildren(e,this.enemies);if(e.barrier)Object.assign(e.barrier,{cracks:0,open:0,idle:0});}}return;}
     const def=e.definition??(e.boss?DEFAULT_BOSS_AI:DEFAULT_AI);
     const target=this.enemyTarget(e),distance=target?Math.hypot(target.x-e.x,target.z-e.z):Infinity;
     if(!this.authoritativeAction&&e.boss&&!e.scaled&&distance<def.sight&&e.hp===e.maxHp){
@@ -1840,9 +1897,13 @@ export class World {
       dt=lod.wait;lod.wait=0;lod.age=0;lod.x=e.x;lod.z=e.z;
     }else e.lod=undefined;
     if(e.boss){e.bossStage=e.type==='dragon'?bossPhase(e.hp,e.maxHp):1;for(const pulse of e.skillEffects??[]){pulse.remaining-=dt;if(pulse.remaining<=0){this.areaDamage(e,pulse.x,pulse.z,pulse.r,pulse.multiplier,pulse.inner,attackClass('quake'));this.burst(pulse.x,pulse.z,'#edb875',12);}}e.skillEffects=e.skillEffects?.filter(p=>p.remaining>0);}
-    const statuses=e.statuses??{},noAttack=(statuses.blind??0)>0||(statuses.sheep??0)>0||(statuses.fear??0)>0;
+    // A timid creature (creature-weight.ts TIMID) badly hurt for the first time runs for it for FLEE.time s: it neither attacks nor winds up meanwhile.
+    if(e.hp<e.maxHp*FLEE.below&&startsFleeing(e.type,this.weightOf(e),e.hp,e.maxHp,!!e.fled)){e.fled=true;e.fleeT=FLEE.time;if(e.phase==='windup'||e.phase==='charge')e.phase='chase';e.telegraphs=[];}
+    const fleeing=(e.fleeT??0)>0;
+    const statuses=e.statuses??{},noAttack=(statuses.blind??0)>0||(statuses.sheep??0)>0||(statuses.fear??0)>0||fleeing;
     if(e.boss&&!e.enraged&&e.hp<e.maxHp*.3&&e.phase!=='idle'&&e.phase!=='return')this.enrageBoss(e);
     if(e.stun>0){e.phase='chase';e.telegraphs=[];return;}
+    if(e.flinchT)return; // staggered by an earned flinch (flinchEnemy): its wind-up was cancelled and starts over afterwards
     if(e.phase==='windup'){
       e.phaseTime=(e.phaseTime??0)-dt;
       if(e.phaseTime<=0){
@@ -1877,7 +1938,7 @@ export class World {
     let returning=!chasing&&(wasChasing||e.phase==='return');
     if(returning){e.phase='return';if(!this.authoritativeAction)e.hp=Math.min(e.maxHp,e.hp+e.maxHp*.3*dt);if(homeDistance<.8||def.speed===0){if(!this.authoritativeAction)e.hp=e.maxHp;e.phase='idle';returning=false;e.enraged=false;e.scaled=false;}}
     let goal:Point=chasing?target!:returning?{x:e.homeX,z:e.homeZ}:{x:e.homeX+Math.sin(this.time*.25+e.homeZ)*2,z:e.homeZ+Math.cos(this.time*.25+e.homeX)*2};
-    if((statuses.fear??0)>0&&target)goal={x:e.x+(e.x-target.x),z:e.z+(e.z-target.z)};
+    if(((statuses.fear??0)>0||fleeing)&&target)goal={x:e.x+(e.x-target.x),z:e.z+(e.z-target.z)};
     const canWindup=!!def.titan&&distance<24||distance<(e.type==='lavaworm'?1.2:def.reach+(e.boss?BOSS_REACH.windup:0))||(e.type==='boar'||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''))&&distance<8;
     if(chasing&&canWindup&&!e.cooldown&&!noAttack){
       e.phase='windup';e.phaseTime=this.jumpRules?warningTime(def.windup):def.windup;e.targetX=target!.x;e.targetZ=target!.z;e.mesh.userData.attackCount=(e.mesh.userData.attackCount??0)+1;e.mesh.userData.slam=e.boss&&!BOSS_SKILLS[e.type??'']&&e.mesh.userData.attackCount%3===0;
@@ -1903,13 +1964,15 @@ export class World {
       if(!e.routeTime){e.routeTime=.7;const endpoint=approach(e,goal,0,obstacles,chasing?Math.max(.7,def.reach*.7):.3,options);e.route=endpoint?findRoute(e,endpoint,obstacles,chasing?options:{...options,maxIterations:ROUTE_BUDGET}):[];}
       if(e.route?.length){if(Math.hypot(e.route[0].x-e.x,e.route[0].z-e.z)<.12)e.route.shift();if(e.route.length)goal=e.route[0];}
     }else e.route=[];
-    const dx=goal.x-e.x,dz=goal.z-e.z,d=Math.hypot(dx,dz),speed=(chasing?def.speed:returning?def.speed*1.2:.6)*(e.boss&&e.hp<e.maxHp*.5?1.35:1)*(e.boss&&e.hp<e.maxHp*.3?1.25:1)*((e.bossStage??1)>=3?1.2:1)*((statuses.slow??0)>0?.45:1)*((statuses.sheep??0)>0?.45:1);
+    const dx=goal.x-e.x,dz=goal.z-e.z,d=Math.hypot(dx,dz),speed=(chasing?def.speed:returning?def.speed*1.2:.6)*(e.boss&&e.hp<e.maxHp*.5?1.35:1)*(e.boss&&e.hp<e.maxHp*.3?1.25:1)*((e.bossStage??1)>=3?1.2:1)*((statuses.slow??0)>0?.45:1)*((statuses.sheep??0)>0?.45:1)*(e.hp<e.maxHp*HURT.below?hurtSpeed(this.weightOf(e),e.hp,e.maxHp):1); // badly hurt small creatures limp along (creature-weight.ts HURT)
     if(d>.05){const step=Math.min(d,speed*dt);this.moveCreature(e,dx/d*step,dz/d*step);e.mesh.rotation.y=Math.atan2(dx,dz);e.phase=chasing?'chase':returning?'return':'idle';}
   }
   /** Push a creature back; it slides and slows like the reference's knockback, blocked by scenery. */
   knockEnemy(e:Enemy,dirX:number,dirZ:number,strength:number){
     // The reference's impulse: 6 m/s per knock unit, x0.15 on a boss (a punch nudges a boss about 0.1 m).
     if(e.boss)strength*=BOSS_KNOCK;if(e.definition?.behavior==='rooted'||!(e.definition?.speed??1))return;
+    // Weight (creature-weight.ts): a light body flies 30% further, a heavy one barely slides. Host rule only: the server never moves creatures.
+    const weight=this.weightOf(e);if(weight)strength*=WEIGHT[weight].knock;
     e.knockVX=(e.knockVX??0)+dirX*strength*KNOCK_IMPULSE;e.knockVZ=(e.knockVZ??0)+dirZ*strength*KNOCK_IMPULSE;
   }
   /**
@@ -1926,8 +1989,9 @@ export class World {
     u.anim=(u.anim??(e.homeX*3.7%6))+dt*(moving?(e.phase==='charge'?22:10):3);
     const o=u.anim,s=Math.sin(o),behavior=def?.behavior??'melee';
     if(u.lastPhase!==e.phase){
-      if((u.lastPhase==='idle'||u.lastPhase==='return')&&e.phase==='chase'&&Math.hypot(e.x-this.position.x,e.z-this.position.z)<20){this.fx?.text({x:e.x,y:m.position.y+(e.boss?2.4:1.1),z:e.z},'!','alert');this.onAlert?.(e);}
-      if(u.lastPhase==='windup'&&e.phase!=='windup')u.strikeT=.25;
+      if((u.lastPhase==='idle'||u.lastPhase==='return')&&e.phase==='chase'&&Math.hypot(e.x-this.position.x,e.z-this.position.z)<20){this.fx?.text({x:e.x,y:m.position.y+(e.boss?2.4:1.1),z:e.z},'!','alert');this.onAlert?.(e);if(this.weightOf(e))u.noticeT=HOP.noticeTime;}
+      // A wind-up cancelled by a flinch (flinchEnemy) is not a strike: no lunge.
+      if(u.lastPhase==='windup'&&e.phase!=='windup'&&!((this.time??0)-(u.flinchAt??-Infinity)<.5))u.strikeT=.25;
       u.lastPhase=e.phase;
     }
     u.strikeT=Math.max(0,(u.strikeT??0)-dt);
@@ -1943,6 +2007,9 @@ export class World {
     if(windup>0){sx*=1+windup*.2;sy*=1-windup*.25;sz*=1+windup*.2;lean=-windup*.2;shake=Math.sin(this.time*60)*.04*windup;}
     if(u.strikeT>0)lean=(behavior==='rooted'?.55:.4)*(u.strikeT/.25);
     if(e.phase==='charge')lean=.25;
+    // A small creature's hop of surprise when it first notices an explorer, and a limp when it is badly hurt (creature-weight.ts HURT).
+    if(u.noticeT>0){u.noticeT=Math.max(0,u.noticeT-dt);const k=1-u.noticeT/HOP.noticeTime;lift+=4*k*(1-k)*HOP.notice;}
+    if(moving&&e.hp<e.maxHp*HURT.below&&behavior!=='hopper'&&!def?.flying&&this.weightOf(e)){const limp=Math.sin(o*.5);roll+=limp*.12;lift+=Math.max(0,limp)*.06;}
     if(e.stun>.25&&!e.lift){roll=Math.sin(this.time*20)*.1;if(this.fx&&Math.random()<dt*6)this.fx.burst({x:e.x,y:m.position.y+(e.boss?2.6:1.3),z:e.z},{n:1,color:'#fff27a',glow:true,size:.09,speed:1.5,up:.5,life:.5,gravity:0});}
     m.position.y+=lift;m.position.x+=shake;m.rotation.x=lean;m.rotation.z=roll;m.scale.x*=sx;m.scale.y*=sy;m.scale.z*=sz;
   }
@@ -1952,7 +2019,10 @@ export class World {
    */
   stepCreatureMotion(e:Enemy,dt:number){
     if(!(dt>0)||e.hp<=0)return;
-    e.liftVelocity=Math.max(-15,(e.liftVelocity??0)-24*dt);e.lift=Math.max(0,(e.lift??0)+(e.liftVelocity??0)*dt);if(!e.lift)e.liftVelocity=0;
+    const wasUp=e.lift??0;e.liftVelocity=Math.max(-15,(e.liftVelocity??0)-24*dt);e.lift=Math.max(0,(e.lift??0)+(e.liftVelocity??0)*dt);
+    // A small creature coming down from a launch lands in a puff of dust (looks only, and only near the view).
+    if(wasUp>0&&!e.lift&&(e.liftVelocity??0)<-4&&this.fx&&Math.abs(e.x-this.cameraTarget.x)+Math.abs(e.z-this.cameraTarget.z)<40&&this.weightOf(e))this.dustPuff(e.x,e.z,e.mesh.position.y-wasUp,7);
+    if(!e.lift)e.liftVelocity=0;
     // Knockback velocity decays quickly; scenery stops the slide.
     if(this.networkRole!=='peer'&&(Math.abs(e.knockVX??0)>.05||Math.abs(e.knockVZ??0)>.05)){
       this.moveCreature(e,(e.knockVX??0)*dt,(e.knockVZ??0)*dt);const k=Math.max(0,1-dt*8);e.knockVX=(e.knockVX??0)*k;e.knockVZ=(e.knockVZ??0)*k;
@@ -1966,8 +2036,16 @@ export class World {
     if(e.mesh.userData.castsShadow!==near){e.mesh.userData.castsShadow=near;e.mesh.traverse(o=>{if(o instanceof T.Mesh&&!o.userData.outline)o.castShadow=near;});}
     // Ink outlines, like the reference, only on creatures within 20 m of the view: one extra draw per part.
     showOutlines(e.mesh,view<20);
-    // A defeated creature swells and shrinks away instead of blinking out.
-    if(e.hp<=0&&(e.dying??0)>0){e.dying=Math.max(0,e.dying!-dt);const t=1-e.dying/.3;e.mesh.visible=true;e.mesh.scale.setScalar(enemyScale(e.type,e.boss)*(e.eliteSize??1)*(1+t*.3)*Math.max(.001,1-t));if(!e.dying)e.mesh.visible=false;return;}
+    // A defeated creature swells and shrinks away instead of blinking out. A small one thrown by the killing blow (startDeathFling) first
+    // tumbles along it and bounces once with a dust puff, drawn from where it was hit; the swell and shrink then runs where it landed.
+    if(e.hp<=0&&(e.dying??0)>0){e.dying=Math.max(0,e.dying!-dt);const base=enemyScale(e.type,e.boss)*(e.eliteSize??1),f=e.fling;e.mesh.visible=true;
+      if(f&&f.d>0){f.t+=dt;const p=flingPose(f.t,f.d,FLING_POSE),flying=f.t<FLING.fly+FLING.bounce;
+        // The white hit flash still fades out on a thrown body (its own material copies, as in the hit reaction below: no new material), so it does not tumble glowing.
+        if(e.flashLit&&!(e.flash=Math.max(0,(e.flash??0)-dt))){e.flashLit=false;for(const m of flashMaterialsSoFar(e.mesh)){m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}
+        e.mesh.position.set(f.x+f.dx*f.d*(flying?p.along:1),f.ground+(flying?p.up+f.y0*Math.max(0,1-f.t/FLING.fly):0),f.z+f.dz*f.d*(flying?p.along:1));e.mesh.rotation.set(-p.spin,Math.atan2(-f.dx,-f.dz),0);
+        if(!f.dust&&f.t>=FLING.fly){f.dust=true;this.dustPuff(e.mesh.position.x,e.mesh.position.z,f.ground,6);}
+        if(flying){e.mesh.scale.set(base*(1+p.squash*.5),base*(1-p.squash),base*(1+p.squash*.5));return;}}
+      const t=1-Math.min(e.dying,FLING.poof)/FLING.poof;e.mesh.scale.setScalar(base*(1+t*.3)*Math.max(.001,1-t));if(!e.dying)e.mesh.visible=false;return;}
     this.drawTelegraphs(e);
     // Gear stats only matter on the shadow planet; adding them up for every creature on every step was a measurable cost.
     const lightRadius=this.planet==='shadow'&&M.activeStats(this.state).light?7.5:3.6;
@@ -1989,6 +2067,8 @@ export class World {
     const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of lit?flashMaterialsOf(e.mesh):flashMaterialsSoFar(e.mesh)){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.setRGB(1,1,1);m.emissiveIntensity=enemyFlash(e.flash??0,!!e.definition?.titan);}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}
     this.animateEnemy(e,dt);
     if(e.react&&e.react.left>0)applyReaction(e.mesh,e.react,dt);
+    // A light body's hop on a big hit, head over heels on a critical (hitFeedback): looks only.
+    if(e.hopT){e.hopT=Math.max(0,e.hopT-dt);const s=1-e.hopT/HOP.time;e.mesh.position.y+=4*s*(1-s)*WEIGHT.light.hop;if(e.flipT)e.mesh.rotation.x-=Math.PI*2*s*s*(3-2*s);}
     const shell=part(e.mesh,'shell');if(shell)shell.rotation.x=e.phase==='recover'?-.95:0;
   }
   /** Runs at the start of every world step, after main has set this step's movement lock (colossus.ts: the daily boss). */

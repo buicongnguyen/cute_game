@@ -1396,6 +1396,8 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
   if(!vault&&!ctfApi?.owns(e)&&!rescueApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
   const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard,impact?.source);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0);if(!hazard||impact)tone(impact?.critical?'crit':(impact?.knock??0)>=2||(impact?.lift??0)>0?'hitHeavy':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
+  // Earned flinch (creature-weight.ts): a small creature's wind-up is cut short by the last hit of a chain or a critical.
+  if(impact&&!hazard&&e.hp>0)world.flinchEnemy(e,{critical:!!impact.critical,big:(impact.knock??0)>=2||(impact.lift??0)>0});
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');
