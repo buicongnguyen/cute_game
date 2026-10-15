@@ -32,6 +32,20 @@ export function onArtStatus(listener: () => void) { statusListeners.add(listener
 /** Fires after a model that had given up loads after all; its library is already updated. */
 export function onArtLoaded(listener: (url: string) => void) { loadedListeners.add(listener); return () => { loadedListeners.delete(listener); }; }
 const status = () => { for (const f of statusListeners) f(); };
+// Downloads in progress, and since when there have been none (background work waits for a quiet network).
+let inFlight = 0, quietSince = 0;
+const track = async <V>(attempt: () => Promise<V>) => { inFlight++; try { return await attempt(); } finally { if (--inFlight === 0) quietSince = performance.now(); } };
+/**
+ * Resolves once no model has been downloading for `quiet` ms (or after `cap` ms at most). The offline worker's first
+ * fill waits for this, so it does not compete with the title and first-view models for a phone's bandwidth.
+ */
+export function whenArtQuiet(quiet = 3000, cap = 45000): Promise<void> {
+  const start = performance.now();
+  return new Promise(resolve => {
+    const check = () => { const now = performance.now(); if ((inFlight === 0 && now - Math.max(quietSince, start) >= quiet) || now - start >= cap) resolve(); else setTimeout(check, 250); };
+    check();
+  });
+}
 
 /**
  * Loads `key` with quick retries. Resolves with the value, or undefined once the quick retries are spent:
@@ -40,7 +54,7 @@ const status = () => { for (const f of statusListeners) f(); };
  */
 export async function loadWithRetry<V>(key: string, attempt: () => Promise<V>, late: (value: V) => void, policy: RetryPolicy = DEFAULT_POLICY): Promise<V | undefined> {
   for (let i = 0; ; i++) {
-    try { return await attempt(); }
+    try { return await track(attempt); }
     catch { if (i >= policy.delays.length) break; await policy.sleep(policy.delays[i]); }
   }
   failing.add(key); status();
@@ -48,7 +62,7 @@ export async function loadWithRetry<V>(key: string, attempt: () => Promise<V>, l
     for (;;) {
       await policy.wake();
       let value: V;
-      try { value = await attempt(); } catch { continue; /* Still unavailable: wait for the next wake-up. */ }
+      try { value = await track(attempt); } catch { continue; /* Still unavailable: wait for the next wake-up. */ }
       // Outside the try: an error in a callback is not a failed download, and must not fetch the file again.
       failing.delete(key); late(value); status();
       for (const f of loadedListeners) try { f(key); } catch (error) { console.error(error); }
