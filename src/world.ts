@@ -514,7 +514,7 @@ export class World {
   /** Every bed of the garden as instances of one baked bed model (G2D-5); none away from home. */
   private syncBeds(assets: RefinedAssetLibrary = refinedAssets){
     const beds=this.gardenBeds??=new GardenBeds();if(beds.group.parent!==this.scene)this.scene.add(beds.group);
-    const plots=this.planet==='home'?this.outdoorEntities.filter(e=>e.kind==='plot'):[],refined=assets.has('garden');
+    const lifted=this.lifted?.kind==='bed'?this.lifted.index:-1,plots=this.planet==='home'?this.outdoorEntities.filter(e=>e.kind==='plot'&&e.index!==lifted):[],refined=assets.has('garden');
     beds.sync(()=>refined?assets.clone('garden'):this.bedBoxes(),refined?'refined':'boxes',plots.map(e=>({x:e.x,z:e.z,rotation:e.mesh.rotation.y,level:M.bedLevel(this.state?.plots?.[e.index!])})),refined,M.BED_SCALE);
   }
   /**
@@ -573,6 +573,20 @@ export class World {
   }
   /** The beds' draw calls, for tests and probes. */
   get bedDraws(){return this.gardenBeds?.draws??0;}
+  /** A placed decoration or bed being moved (decor-move.ts): hidden while its ghost is out, and a decoration stops blocking. */
+  lifted?:{kind:'decor';uid:string}|{kind:'bed';index:number};
+  /** Lifts a placed item for a move; null sets it down again from the save (where ✔ Place moved it, or where it was). */
+  liftPlaced(target:{kind:'decor';uid:string}|{kind:'bed';index:number}|null){
+    const was=this.lifted;this.lifted=target??undefined;
+    if(was?.kind==='decor'||target?.kind==='decor')this.syncDecorations();
+    if(was?.kind==='bed'||target?.kind==='bed'){
+      for(const e of this.outdoorEntities)if(e.kind==='plot')e.mesh.visible=!(target?.kind==='bed'&&e.index===target.index);
+      if(was?.kind==='bed'&&this.planet==='home'){const e=this.outdoorEntities.find(e=>e.kind==='plot'&&e.index===was.index),p=this.state.plots[was.index];
+        // ✔ Place moved the bed in the save: its pick box (and 3D crops) follow; the crop cards read the box each frame.
+        if(e&&p){const at=M.bedPosition(this.state,was.index);e.x=at.x;e.z=at.z;e.mesh.position.set(at.x,0,at.z);e.mesh.rotation.y=p.rotation??0;}}
+      this.syncBeds();
+    }
+  }
   private ghost?: PlacementGhost;
   /** Shows the see-through bed kit or decoration being placed (red where refused); null hides it. */
   placementGhost(spot:{id:string;x:number;z:number;rotation:number;ok:boolean}|null){
@@ -1028,7 +1042,10 @@ export class World {
     this.entities=this.entities.filter(e=>e.kind!=='decoration');this.obstacles=this.obstacles.filter(o=>!o.tag?.startsWith('decor:'));
     if(this.planet!=='home')return;
     for(const d of this.state.decorations??[]){const item=M.ITEMS[d.id];if(!item)continue;const g=buildDecoration(d.id);
-      g.rotation.y=d.rotation;const e=this.addEntity('decoration',item.name,item.icon??'🏡',g,d.x,d.z,.9);e.id=`home:decoration:${d.uid}`;g.userData.decorationUid=d.uid;this.obstacles.push({x:d.x,z:d.z,r:.65,tag:'decor:'+d.uid});
+      g.rotation.y=d.rotation;const e=this.addEntity('decoration',item.name,item.icon??'🏡',g,d.x,d.z,.9);e.id=`home:decoration:${d.uid}`;g.userData.decorationUid=d.uid;
+      // One being moved (liftPlaced) is hidden and blocks nothing until ✔ Place or ✕ sets it down.
+      if(this.lifted?.kind==='decor'&&this.lifted.uid===d.uid){g.visible=false;continue;}
+      this.obstacles.push({x:d.x,z:d.z,r:.65,tag:'decor:'+d.uid});
     }
   }
   groundPoint(clientX:number,clientY:number){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const p=this.raycaster.ray.intersectPlane(new T.Plane(UP,0),new T.Vector3());return p?{x:p.x,z:p.z}:null;}
@@ -2073,7 +2090,7 @@ export class World {
     if(this.planet!=='home')return;
     if(cards){
       const beds=this.bedCrops??=[];beds.length=0;
-      this.plotMeshes.forEach((g,i)=>{const plot=g.parent,p=this.state.plots[i];if(plot&&p)beds.push({x:plot.position.x,z:plot.position.z,crop:p.crop,progress:cropProgress(p)});});
+      this.plotMeshes.forEach((g,i)=>{const plot=g.parent,p=this.state.plots[i];if(plot?.visible&&p)beds.push({x:plot.position.x,z:plot.position.z,crop:p.crop,progress:cropProgress(p)});});
       cards.update(beds,this.time,dt);
     }
     this.plotMeshes.forEach((g,i)=>{

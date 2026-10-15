@@ -187,6 +187,8 @@ import { initInbox, initMoreMenu } from './news-inbox-ui.ts';
 import { reportLevelFor } from './news-inbox.ts';
 import './goals.css';
 import { initGoals } from './goals-ui.ts'; // long-term goals chip and panel (docs/FIX-PLAN.md 5.5)
+import { mountDecorMenu, moveStart, moveSpotOk, moveIntent, turnIntent, type MoveTarget } from './decor-move.ts'; // move / turn / pack away placed decorations and beds
+import './decor-move.css';
 import { socialHold } from './social-hold.ts';
 import { needsDuplicateConfirm } from './shop-owned.ts';
 
@@ -225,7 +227,7 @@ let fishingEpoch=0;
 let lastCast:{id:string;x:number;z:number}|null=null;
 let fishingWater='home';
 let wildArmed:{kind:string;until:number}|null=null,shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forge'='craft',craftTab='All';
-let placement:{id:string;rotation:number;x:number;z:number;ok:boolean}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
+let placement:{id:string;rotation:number;x:number;z:number;ok:boolean;move?:MoveTarget}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
 let persistence:((state:M.SaveState)=>void)|null=null,network:NetworkHooks={role:null};
 let actionHandler:((intent:GameIntent)=>Promise<ActionReply>)|null=null;
 /** The Delvers' Vault (dungeon.ts), set up at the end of this file: its creatures are fought locally, also online. */
@@ -618,6 +620,7 @@ function updateLabels() {
   // Ripe crops wear happy faces now, so only the nearest ripe bed carries the 👆 badge: a full ripe garden no longer shows a badge over every crop.
   let nearestRipe:object|null=null;{let best=Infinity;for(const e of world.entities){if(e.kind!=='plot')continue;const plot=world.state.plots[e.index!];if(!plot?.crop||M.cropProgress(plot)<1)continue;const d=Math.hypot(e.x-world.position.x,e.z-world.position.z);if(d<best){best=d;nearestRipe=e;}}}
   for(const e of world.entities){
+    if(!e.mesh.visible&&(e.kind==='decoration'||e.kind==='plot'))continue; // lifted for a move (decor-move.ts): its ghost speaks for it
     const distance=Math.hypot(e.x-world.position.x,e.z-world.position.z);
     let text=t(e.name),icon=e.icon,y:number,back=0,dx=0,centre=e.kind==='plot',className='world-label',rank=2,reach=world.selected===e?30:11,aria='',spot:ReturnType<typeof house.house.labelAt>;
     if(e.kind==='plot'){
@@ -775,14 +778,14 @@ function plotDialog(index:number) {
     // Reference openPlot: the crop with a big progress bar, a card per fertilizer, a tip when there is none, then expand.
     const crop=M.CROPS[plot.crop],progress=M.cropProgress(plot),fertilizer=(['manure','spore'] as const).map(id=>{const n=state.bag[id]||0,item=M.ITEMS[id];
       return `<div class="crop-row garden-row fertilizer-row"><span class="crop-art">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))} <span class="chip">×${n}</span></strong><p>${esc(item.desc)}</p></div><button class="primary" data-action="${id==='spore'?'fertilize':'fertilize-manure'}" ${n?'':'disabled'}>Use</button></div>`;}).join('');
-    openDialog('plot','Growing bed',`<div class="crop-row garden-row bed-status"><span class="crop-art">${art(plot.crop,crop.icon)}</span><div><strong>${esc(t(crop.name))}</strong><div class="grow-meter big"><i id="grow-fill" style="width:${progress*100}%"></i></div><p class="muted" id="grow-time">${growText(plot)}</p></div></div>${noRoom?`<div class="button-row"><button class="primary" data-action="bag">🎒 ${esc(t('Open backpack'))}</button><button class="soft-button" data-action="open-market">🧺 ${esc(t('Sell produce'))}</button></div>`:''}${ripe?'':(M.isTreeCrop(plot.crop)?treeFertilizerNote():'')+fertilizer}${!state.bag.manure&&!state.bag.spore?'<p class="garden-tip">💡 Defeat Grumpy Mushrooms, Wild Boars, Snapping Flowers… to collect fertilizer, or buy it at the equipment shop.</p>':''}${bedUpgradeRow(index)}${expandButton(true)}${helperRow(state,!!visiting,index)}`,'GARDEN BED '+(index+1),art(plot.crop,crop.icon));return;
+    openDialog('plot','Growing bed',`<div class="crop-row garden-row bed-status"><span class="crop-art">${art(plot.crop,crop.icon)}</span><div><strong>${esc(t(crop.name))}</strong><div class="grow-meter big"><i id="grow-fill" style="width:${progress*100}%"></i></div><p class="muted" id="grow-time">${growText(plot)}</p></div></div>${noRoom?`<div class="button-row"><button class="primary" data-action="bag">🎒 ${esc(t('Open backpack'))}</button><button class="soft-button" data-action="open-market">🧺 ${esc(t('Sell produce'))}</button></div>`:''}${ripe?'':(M.isTreeCrop(plot.crop)?treeFertilizerNote():'')+fertilizer}<div class="garden-actions bed-move"><button class="soft-button" data-action="move-bed">✥ Move bed</button><span>The crop moves with its bed.</span></div>${!state.bag.manure&&!state.bag.spore?'<p class="garden-tip">💡 Defeat Grumpy Mushrooms, Wild Boars, Snapping Flowers… to collect fertilizer, or buy it at the equipment shop.</p>':''}${bedUpgradeRow(index)}${expandButton(true)}${helperRow(state,!!visiting,index)}`,'GARDEN BED '+(index+1),art(plot.crop,crop.icon));return;
   }
   const empty=state.plots.filter(p=>!p.crop).length;
   // Unlocked crops first, then locked ones by the level that opens them.
   const crops=Object.entries(M.CROPS).sort(([,a],[,b])=>Number(state.level<a.level)-Number(state.level<b.level)||a.level-b.level);
   // Reference openSeeds: the grow button first, "store this bed" on an extra bed, then the seeds. A ripe tap gathers the
   // ripe beds around it, so the old "Harvest all" button is gone from here.
-  openDialog('plant','Choose a seed',`<div class="garden-actions">${M.isExtraBed(state,index)&&!M.bedLevel(state.plots[index])?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.MAX_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
+  openDialog('plant','Choose a seed',`<div class="garden-actions"><button class="soft-button" data-action="move-bed">✥ Move bed</button>${M.isExtraBed(state,index)&&!M.bedLevel(state.plots[index])?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.MAX_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
     const level=M.cropLevel(state,id),locked=state.level<level,needsSeed=!!c.seed&&!state.bag[c.seed],item=M.ITEMS[id],effect=item?effectText(item):'';
     return `<div class="crop-row garden-row ${locked?'locked':''}"><span class="crop-art">${art(id,c.icon)}</span><div><strong>${esc(t(c.name))}</strong>${effect?`<p>${esc(effect)}</p>`:''}<div class="chips"><span class="chip chip-time">⏱ ${(ms=>ms>=3_600_000?`${+(ms/3_600_000).toFixed(1)} h`:`${ms/1000}s`)(tutorialPreview(state,id,M.bedGrowTime(state.plots[index],M.cropGrowTime(state,id))))}</span><span class="chip chip-xp">✨ ${M.cropXp(state,id)} XP</span>${item?`<span class="chip chip-energy">ϟ ${M.sellPrice(state,id)}</span>`:''}${c.seed?`<span class="chip chip-seed">${M.ITEMS[c.seed]?mini(c.seed):'🌰'} ${state.bag[c.seed]||0} seeds</span>`:''}</div></div>${locked?`<span class="chip chip-lock">🔒 Level ${level}</span>`:`<div class="button-row"><button class="primary" data-action="plant" data-item="${id}" ${needsSeed?'disabled':''}>Plant</button><button class="sky-button" data-action="plant-all" data-item="${id}" ${needsSeed||!empty?'disabled':''}>All (${c.seed?Math.min(empty,state.bag[c.seed]||0):empty})</button></div>`}</div>`;
   }).join('')}</div><div class="garden-secondary">${bedUpgradeRow(index)}${expandButton(false)}${helperRow(state,!!visiting,index)}</div>`,'YOUR GARDEN');
@@ -939,7 +942,7 @@ function forgeMenu(id?:string){
 }
 function decorations(){
   const owned=Object.entries(state.bag).filter(([id,n])=>n!>0&&(M.ITEMS[id].type==='decor'));
-  openDialog('decor','Make this place your own',`<p class="intro">Pick an item, tap the ground to move it, ↻ turns it, then ✔ Place.</p><div class="shop-grid">${owned.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} ×${n}</strong></div><button class="primary" data-action="place-decor" data-item="${id}">Place</button></div>`).join('')||'<p class="muted">No decorations yet. Find them in the shop’s Decor tab.</p>'}</div><div class="section-label">PLACED AT HOME</div><div class="shop-grid">${state.decorations.map(d=>`<div class="storage-row"><span>${mini(d.id)} ${esc(t(M.ITEMS[d.id].name))}</span><button class="soft-button" data-action="remove-decor" data-id="${d.uid}">Pack away</button></div>`).join('')||'<p class="muted">A fresh canvas.</p>'}</div><button class="soft-button" data-action="decor-shop">Browse decorations</button>`,'YOUR HOME');
+  openDialog('decor','Make this place your own',`<p class="intro">Pick an item, tap the ground to move it, ↻ turns it, then ✔ Place.</p><div class="shop-grid">${owned.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} ×${n}</strong></div><button class="primary" data-action="place-decor" data-item="${id}">Place</button></div>`).join('')||'<p class="muted">No decorations yet. Find them in the shop’s Decor tab.</p>'}</div><div class="section-label">PLACED AT HOME</div><div class="shop-grid">${state.decorations.map(d=>`<div class="storage-row decor-row"><span>${mini(d.id)} ${esc(t(M.ITEMS[d.id].name))}</span><span class="decor-row-buttons"><button class="sky-button" data-action="move-decor" data-id="${d.uid}">Move</button><button class="soft-button" data-action="turn-decor" data-id="${d.uid}" aria-label="Turn" title="Turn">↻</button><button class="soft-button" data-action="remove-decor" data-id="${d.uid}">Pack away</button></span></div>`).join('')||'<p class="muted">A fresh canvas.</p>'}</div>${state.decorations.length?'<p class="muted decor-tip">Tip: tap a decoration in your garden to move, turn or pack it away.</p>':''}<button class="soft-button" data-action="decor-shop">Browse decorations</button>`,'YOUR HOME');
 }
 /**
  * Placing a garden bed kit or a decoration (reference decor.startPlace/moveGhost/rotate/confirm): a see-through model
@@ -957,17 +960,26 @@ function beginPlacement(id:string){if(visiting)return;if(state.planet!=='home'){
   movePlacement(world.position.x+Math.sin(world.facing)*2.2,world.position.z+Math.cos(world.facing)*2.2);
   if(bed)toast('Tap an empty spot in the garden to choose where, then press ✔ Place.','👆');
 }
-function cancelPlacement(){placement=null;$('#placement-bar').hidden=true;document.body.classList.remove('placing');$('#placement-bar').classList.remove('bad');world.placementGhost(null);}
+/** Moving a placed decoration or bed (decor-move.ts): the same bar and ghost, starting where the item stands and as it is turned; the item is lifted meanwhile and ✕ / Esc sets it back. */
+function beginMove(target:MoveTarget){const start=visiting?null:moveStart(state,target);if(!start){if(visiting||state.planet!=='home')toast('Decorations belong at home. Return to your garden first.','🏡');return;}
+  if(placement)cancelPlacement();closeDialog();decorMenu.close();world.liftPlaced(target);
+  placement={id:start.id,rotation:start.rotation,x:start.x,z:start.z,ok:false,move:target};
+  $('#placement-bar').hidden=false;document.body.classList.add('placing');$('#placement-name').innerHTML=localizeHtml(`Move <b>${esc(t(start.name))}</b>: tap the garden to choose a spot`);
+  movePlacement(start.x,start.z);
+}
+function cancelPlacement(){placement=null;$('#placement-bar').hidden=true;document.body.classList.remove('placing');$('#placement-bar').classList.remove('bad');world.placementGhost(null);if(world.lifted)world.liftPlaced(null);}
 function movePlacement(x:number,z:number){
-  if(!placement)return;placement.x=Math.round(x*100)/100;placement.z=Math.round(z*100)/100;const {id,rotation}=placement;
-  placement.ok=M.ITEMS[id]?.type==='placeable'?M.bedSpotOk(state,placement.x,placement.z,rotation):M.decorSpotOk(state,placement.x,placement.z)&&!world.blocked(placement.x,placement.z);
+  if(!placement)return;placement.x=Math.round(x*100)/100;placement.z=Math.round(z*100)/100;const {id,rotation,move}=placement;
+  placement.ok=move?moveSpotOk(state,move,placement.x,placement.z,rotation)&&(move.kind==='bed'||!world.blocked(placement.x,placement.z)):M.ITEMS[id]?.type==='placeable'?M.bedSpotOk(state,placement.x,placement.z,rotation):M.decorSpotOk(state,placement.x,placement.z)&&!world.blocked(placement.x,placement.z);
   world.placementGhost(placement);$('#placement-bar').classList.toggle('bad',!placement.ok);
   $('#placement-hint').textContent=t(placement.ok?'':'Blocked here or outside the fence');
 }
 function rotatePlacement(){if(!placement)return;placement.rotation=(placement.rotation+Math.PI/4)%(Math.PI*2);movePlacement(placement.x,placement.z);tone('pop');}
 async function confirmPlacement(){
-  if(!placement)return;const {id,x,z,rotation,ok}=placement,item=M.ITEMS[id];
+  if(!placement)return;const {id,x,z,rotation,ok,move}=placement,item=M.ITEMS[id];
   if(!ok){toast('Can’t place it here (blocked by something or outside the fence).','❌');return;}
+  if(move){const intent=moveIntent(move,x,z,rotation);if(!await perform(intent.type,intent.payload)){movePlacement(x,z);return;}
+    cancelPlacement();tone('success');toast(t('{item} moved.',{item:t(move.kind==='bed'?'Garden bed':item.name)}),move.kind==='bed'?'🌱':'🏡');return;}
   // The kit pays for the bed: without one expandGarden would charge energy, so a vanished item just ends placement.
   if(!state.bag[id]){cancelPlacement();return;}
   if(!await perform('placeDecoration',{id,x,z,rotation})){movePlacement(x,z);return;}
@@ -976,6 +988,10 @@ async function confirmPlacement(){
   else{world.syncDecorations();tone('success');toast(`${t(item.name)} placed.`,'🏡');}
 }
 function placeAt(x:number,y:number){const point=world.groundPoint(x,y);if(placement&&point)movePlacement(point.x,point.z);}
+/** Turn: a placed decoration turns 45° where it stands (decor-move.ts turnIntent). */
+async function turnDecor(uid:string){const intent=turnIntent(state,uid);if(!intent||!await perform(intent.type,intent.payload))return false;world.syncDecorations();tone('pop');return true;}
+/** Pack away: a placed decoration goes back into the bag. */
+async function packDecor(uid:string){const d=state.decorations.find(d=>d.uid===uid);if(!d||!await perform('removeDecoration',{uid}))return false;world.syncDecorations();tone('poof');toast(t('{item} is back in your bag.',{item:t(M.ITEMS[d.id]?.name??d.id)}),'🎒');return true;}
 
 /** Star-map routes for the current save: easiest first, with locks and the recommended pick. */
 function starRoutes(){return planRoutes(starRouteInput());}
@@ -1305,6 +1321,7 @@ world.onInteract=async(e)=>{
   if(!started||uiBlocked())return;tone();if(house.interact(e))return;if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='well')wellDialog();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
   else if(e.kind==='pen')penTap();
+  else if(e.kind==='decoration')decorMenu.open(String(e.mesh.userData.decorationUid??''));
   else if(e.kind==='cage')crew.tapCage(e);
   else if(e.kind==='friend'&&e.index!==undefined)friendDialog(FRIEND_IDS[e.index]);
   else if(e.kind==='animal'){if(M.readyAnimals(state).some(a=>a.uid===e.animalUid))collectFarm(e.animalUid);else penDialog();}
@@ -1859,6 +1876,8 @@ world.onDecoyDamage=(owner,id,amount,source,enemyId)=>{
 };
 watchTabScroll($('#dialog-body'));
 const gardenGuide=mountGardenGuide({world,hud:$('#hud'),state:()=>state,bedAt:i=>M.bedPosition(state,i),active:()=>started&&!uiBlocked()&&!visiting&&!world.interior&&state.hp>0&&world.state===state&&world.planet==='home'&&!world.enemies.some(e=>e.hp>0&&aggro(e))});frameListeners.add(dt=>gardenGuide.frame(dt)); // never during a fight
+// Placed decorations: a tap at home opens Move / Turn / Pack away over the item; it closes when the explorer walks off (decor-move.ts).
+const decorMenu=mountDecorMenu($('#hud'),{state:()=>state,usable:()=>started&&!visiting&&!modal&&!placement&&!flight&&state.planet==='home'&&world.planet==='home'&&world.state===state&&!world.interior&&state.hp>0,hero:()=>world.position,screen:(x,y,z)=>world.screen(x,y,z),icon:id=>mini(id),esc,move:beginMove,turn:turnDecor,pack:packDecor});frameListeners.add(()=>decorMenu.frame());
 world.onEnvironmentEvent=event=>{if(event.message)toast(event.message,'🌍');save();updateHud();};
 /**
  * Other explorers' summons that creatures can fight (their pose's decoys, world.remoteDecoys), drawn with ours: each
@@ -2106,7 +2125,10 @@ app.addEventListener('click',async event=>{
     case 'place-decor':beginPlacement(id);break;
     case 'cancel-decor':cancelPlacement();break;
     case 'rotate-decor':rotatePlacement();break;
-    case 'remove-decor':if(await perform('removeDecoration',{uid:button.dataset.id})){world.syncDecorations();decorations();}break;
+    case 'remove-decor':if(await packDecor(button.dataset.id??''))decorations();break;
+    case 'move-decor':beginMove({kind:'decor',uid:button.dataset.id??''});break;
+    case 'turn-decor':await turnDecor(button.dataset.id??'');break;
+    case 'move-bed':beginMove({kind:'bed',index:activePlot});break;
     case 'buy':if(id&&needsDuplicateConfirm(state,id)&&button.dataset.sure!=='1'){button.dataset.sure='1';button.classList.add('confirm-dup');button.textContent=t('Buy another? ϟ {price}',{price:(M.shopPrice(state,id)??0).toLocaleString()});button.title=t('You already own this. A spare can go to a helper.');break;}
       if(await perform('buy',{id})){
       // Gear goes straight onto the explorer, like picking up a fishing rod.
