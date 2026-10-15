@@ -179,6 +179,9 @@ import { dogMayToss, dogTossFactor, DOG_TOSS_CD } from './guard-dog.ts';
 import { DOG_GUARD, petFighter, petRoleId, type PetFighter } from './pet-guard.ts';
 import { DUNGEON_PETS, PET_SKILLS } from './dungeon-content.ts';
 import { PetGuardView } from './pet-guard-view.ts';
+import { PetSurgeView } from './pet-surge-view.ts';
+import { SURGE } from './pet-surge.ts';
+import { HERO_MODEL_HEIGHT, HERO_SCALE } from './world.ts';
 import type { DungeonApi } from './dungeon.ts';
 import { HARVEST, SKILL_NAME_RISE } from './feel-rules.ts';
 import type { CtfApi } from './ctf.ts';
@@ -368,7 +371,7 @@ const combat=new CombatSimulation({
   // The guard dog tosses bones only while it follows you away from home (guard-dog.ts); your target first.
   dog:()=>{const g=world.guardDogs;return g&&started&&!visiting&&!fishGame&&!world.boarded&&dogMayToss(g.place,world.planet,world.position,!!world.interior)?{x:g.link.x,z:g.link.z,dmg:dogTossFactor(state.level),cd:DOG_TOSS_CD,guard:DOG_GUARD,target:world.selected?.kind==='enemy'?(world.selected as Enemy).id:null}:null;},
   // Pets fight only what fights you, and guard you (pet-guard.ts): your chosen creature, your health, and the guard's picture.
-  focus:()=>world.selected?.kind==='enemy'?(world.selected as Enemy).id:null,health:()=>state.hp/Math.max(1,M.maxHp(state)),guarded:event=>petGuardView.show(event),
+  focus:()=>world.selected?.kind==='enemy'?(world.selected as Enemy).id:null,health:()=>state.hp/Math.max(1,M.maxHp(state)),guarded:event=>petGuardView.show(event),surged:event=>{if(surgeLocal())surgeView.show(event);},
   targets:()=>world.enemies,weapon:()=>M.weaponStats(state),stats:()=>M.activeStats(state),
   move:(x,z)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);},
   // The first own hit after a weapon swap does +20% (weapon-pair.ts); a pet's shot leaves the bonus waiting.
@@ -401,6 +404,14 @@ const petGuardView=new PetGuardView({fx:()=>world.fx,petModel:slot=>slot===0?wor
   // A Vault pet's guard carries the name of its own skill (dungeon-content.ts): the Bellows' Spark Shower, the Owl's Little Chime.
   label:slot=>{const skill=DUNGEON_PETS[petRoleId(M.companionId(state.gear,slot))??'']?.guard;return skill?t(PET_SKILLS[skill].name):undefined;}});
 world.onPlayerShot=shot=>petGuardView.shotNear(shot);frameListeners.add(dt=>petGuardView.update(dt));
+// Bond Surge (pet-surge.ts): the third hit of the chain makes a pet near you grow and fire its signature. Solo the
+// simulation here decides; online the server does and its word arrives through applySurge. The view scales the pet's own model.
+function surgeLocal(){return !actionHandler||!!dungeonApi?.active;}
+const surgeView=new PetSurgeView({fx:()=>world.fx,petModel:slot=>slot===0?world.companion:slot===1?world.companion2:null,pen:slot=>slot===0?world.petPen:slot===1?world.petPen2:null,dog:()=>world.guardDogs,
+  hero:()=>world.position,heroHeight:()=>HERO_MODEL_HEIGHT*(world.player?.scale.y||HERO_SCALE),eye:()=>world.camera?.position,color:slot=>shotColor(M.ITEMS[M.companionId(state.gear,slot)??'']?.pet?.shot??'fire'),creature:id=>world.enemies.find(e=>e.id===id),
+  canSurge:()=>started&&!visiting&&(!!petShooter(0)||!!petShooter(1)||!!(world.guardDogs&&!fishGame&&!world.boarded&&dogMayToss(world.guardDogs.place,world.planet,world.position,!!world.interior))),
+  fighting:()=>world.selected?.kind==='enemy',t:(key,vars)=>t(key,vars),toast:(message,icon)=>toast(message,icon),sound:kind=>tone(kind==='grow'||kind==='magic'?'magic':kind==='heavy'?'boom':kind==='zap'?'zap':'poof')});
+surgeView.mount(document.querySelector<HTMLElement>('#hud .avatar'));frameListeners.add(dt=>surgeView.update(dt));
 {const eliteView=new EliteView(world,(message,icon)=>toast(message,icon));world.eliteFrame=()=>eliteView.frame();} // elite roles on the normal planets (elite-view.ts)
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 /** The Strike chain's hits so far (which cut the next one makes), and the thin ground arc that marks the area of the explorer's own hit. */
@@ -1840,11 +1851,13 @@ world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   // The knight's raised shield stops blows and shots from creatures in front (combat.blocks).
   // A shot is also bounced back at its shooter (combat.reflect; world.ts flies the ball home).
   {const from=enemyId?world.enemies.find(e=>e.id===enemyId):undefined;if(from&&combat.blocks(from)){world.fx?.burst(world.position,{n:6,color:['#fff3c4','#ffffff'],glow:true,size:.12,speed:3,up:2,y:1});if(source==='shot'){combat.reflect(from,Math.hypot(from.x-world.position.x,from.z-world.position.z)/DZ.block.speed);tone('hit');}return;}}
+  // Bloom's ward (pet-surge.ts): poison, lava and storms pass by for a few seconds.
+  if(source==='hazard'&&(combat.statuses.ward??0)>0)return;
   // The pets' guards (pet-guard.ts): a block, a counter, a distraction; what is left of the hit lands.
   if(enemyId){amount=combat.guardIncoming(amount,source,world.enemies.find(e=>e.id===enemyId));if(!(amount>0))return;}
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
-  state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();if(airOn())streak.hurt(damage);world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
+  state.hp=Math.max(0,state.hp-damage);if(state.hp<=0&&combat.surge.revive()){state.hp=Math.max(1,Math.round(M.maxHp(state)*SURGE.revive));surgeView.revived();}dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();if(airOn())streak.hurt(damage);world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
   checkDefeat();
   updateHud();
 };
@@ -1870,7 +1883,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){world.clearSkillWind();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();streak.clear();attackHold.clear();sureLeft=0;chainSum=null;chainNoteLeft=0;chainLive=false;powerWind=null;powerDive=0;powerFx.clear();showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){world.clearSkillWind();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();streak.clear();attackHold.clear();sureLeft=0;chainSum=null;chainNoteLeft=0;chainLive=false;powerWind=null;powerDive=0;powerFx.clear();showCombo();combat.reset();surgeView.clear();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1899,6 +1912,7 @@ export const gameBridge:GameBridge={
   applyRemoteEffect(effect){showEffect(effect);},
   applyRemoteDamage(amount,source){world.onDamage(amount,source==='shot'||source==='hazard'?source:'melee');},
   applyGuard(event){petGuardView.show(event);},
+  applySurge(event){if(event.revived)surgeView.revived();else if(!surgeLocal())surgeView.show(event);},
   applyDecoyHp(id,hp,kind,x,z){
     // The server's copy of a summon may carry another id than this browser's: the same kind nearest the spot then.
     const ally=combat.allies.find(a=>a.id===id&&a.kind===kind)??combat.allies.filter(a=>a.kind===kind&&a.hp!==undefined&&Math.hypot(a.x-x,a.z-z)<4).sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z))[0];
@@ -2349,4 +2363,4 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{inbox,questWalk,get welcomeBack(){return welcomeBack;},pinHero:(spot:{x:number;z:number}|null)=>{world.perfPin=spot;},newsDemo:()=>{const before=state.level;state.level=Math.max(before+1,4);levelCheck(before);updateHud();},breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({news:inbox.open,bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{inbox,surgeView,questWalk,get welcomeBack(){return welcomeBack;},pinHero:(spot:{x:number;z:number}|null)=>{world.perfPin=spot;},newsDemo:()=>{const before=state.level;state.level=Math.max(before+1,4);levelCheck(before);updateHud();},breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({news:inbox.open,bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

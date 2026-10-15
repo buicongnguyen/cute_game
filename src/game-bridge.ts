@@ -33,6 +33,8 @@ export interface GameBridge {
   applyRemoteDamage(amount:number,source?:string):void;
   /** The server's word that one of this explorer's pets guarded it (pet-guard.ts): drawn, never decided, here. */
   applyGuard?(event:import('./pet-guard.ts').GuardEvent):void;
+  /** Bond Surge (pet-surge.ts), decided by the server for this explorer's pets. */
+  applySurge?(event:import('./pet-surge.ts').SurgeEvent):void;
   /** The server's health count of one of this explorer's summons (0: it popped). */
   applyDecoyHp(id:number,hp:number,kind:string,x:number,z:number):void;
   applyRemoteEffect(effect:CombatEffect):void;

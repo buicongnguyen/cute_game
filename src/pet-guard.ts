@@ -25,7 +25,7 @@ export type GuardKind = 'counter' | 'block' | 'mend' | 'distract' | 'bark';
 export interface PetRole { /** Shot damage x the explorer's attack. */ dmg: number; /** Seconds between shots. */ cd: number; guard: GuardKind; /** Damage taken off x the explorer's attack (counter, block), share of full health (mend), seconds (distract, bark). */ power: number; /** Seconds between guards. */ every: number }
 export interface PetGuard { kind: GuardKind; power: number; every: number }
 /** A pet as the simulation sees it: where it is, its shot and its guard. */
-export interface PetFighter { x: number; z: number; dmg: number; cd: number; shot?: string; guard?: PetGuard; target?: string | null }
+export interface PetFighter { /** The pet's table id (a dyed pet's base): its surge signature (pet-surge.ts). */ id?: string; x: number; z: number; dmg: number; cd: number; shot?: string; guard?: PetGuard; target?: string | null }
 
 export const PET_RULES = {
   /** A pet only shoots creatures this close to its explorer (m, plus the creature's radius), and only while it is this close itself. */
@@ -117,7 +117,7 @@ export function guardOf(id: string | undefined, factor = 1): PetGuard | undefine
 /** The shot and guard a worn pet brings to the simulation (the hosts add where it stands). */
 export function petFighter(id: string | undefined, factor = 1, shot?: string): Omit<PetFighter, 'x' | 'z'> | null {
   const role = petRole(id); if (!role) return null; const f = Number.isFinite(factor) && factor > 0 ? factor : 1;
-  return { dmg: role.dmg * f, cd: role.cd, ...(shot ? { shot } : {}), guard: guardOf(id, f) };
+  return { id: petRoleId(id), dmg: role.dmg * f, cd: role.cd, ...(shot ? { shot } : {}), guard: guardOf(id, f) };
 }
 
 /** What the rules need to know of a creature. `phase` is its AI phase (world.ts, the server's copy of it). */

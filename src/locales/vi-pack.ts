@@ -39,6 +39,7 @@ import { VI_MOBILE } from './vi-mobile.ts';
 import { DAWNSTAR_VI } from './vi-dawnstar.ts';
 import { FIVE_VI } from './vi-five.ts';
 import { PETGUARD_VI } from './vi-petguard.ts';
+import { SURGE_VI } from './vi-surge.ts';
 import { SWIM_VI } from './vi-swim.ts';
 import { BREAK_VI } from './vi-break.ts';
 import { NEWS_VI } from './vi-news.ts';
@@ -66,6 +67,7 @@ Object.assign(VI_PACK, INSIGHT_VI);
 Object.assign(VI_PACK, DAWNSTAR_VI);
 Object.assign(VI_PACK, FIVE_VI);
 Object.assign(VI_PACK, PETGUARD_VI);
+Object.assign(VI_PACK, SURGE_VI);
 /** The time words a counter may carry in a template slot (i18n.ts compileTemplates): h/m/s/p/g plus the spelled-out units. */
 export const VI_TIME_UNITS = 'h|m|s|p|g|giờ|phút|giây';
 Object.assign(VI_PACK, FIRST_VI);
