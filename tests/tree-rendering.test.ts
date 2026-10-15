@@ -2,8 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import * as T from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {KitLibrary} from '../src/assets.ts';
+import {KitLibrary,createGltfLoader} from '../src/assets.ts';
 import {buildScatter, fallbackParts, tallPiecesNear, type TallPiece} from '../src/scatter.ts';
 import {OccluderFade} from '../src/occluders.ts';
 import type {DecorPlacement} from '../src/biomes.ts';
@@ -54,7 +53,7 @@ test('colored occluders preserve their shade through fades and reused overlay sl
 
 test('shipped trees remain small opaque meshes merged into one runtime batch per tree type',async()=>{
   const bytes=await readFile(new URL('../public/assets/models/scenery.glb',import.meta.url));assert.ok(bytes.length<100_000);
-  const gltf=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+  const gltf=await createGltfLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
   const kit=new KitLibrary(['scenery.glb'],async()=>gltf.scene);await kit.load();
   for(const [id,limit] of [['tree_round',600],['tree_blossom',600],['tree_pine',400]] as const){
     const parts=kit.mergedParts(id)!;assert.equal(parts.length,1,id);

@@ -13,6 +13,7 @@
     "share": "node --env-file-if-exists=.env server/share.mjs",
     "loadtest": "node server/load-test.mjs",
     "build:pages": "node server/build-pages.mjs",
+    "art:compress": "node art/compress-models.mjs",
     "db:check": "node --env-file-if-exists=.env server/database-cli.mjs check",
     "db:import": "node --env-file-if-exists=.env server/database-cli.mjs import"
   },
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
     "@types/three": "^0.180.0",
+    "meshoptimizer": "0.22.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.7"
   },

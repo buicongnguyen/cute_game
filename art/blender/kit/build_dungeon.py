@@ -542,7 +542,7 @@ def main():
 def icons():
     import build_items
     style.reset_scene()
-    bpy.ops.import_scene.gltf(filepath=OUT)
+    style.import_glb(OUT)
     meshes = [o for o in bpy.data.objects if o.type == 'MESH']
     style.studio(size=(256, 256), transparent=True)
     build_items._eevee(48)

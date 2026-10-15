@@ -18,7 +18,7 @@ LIMIT = 18000
 
 def main():
     style.reset_scene()
-    bpy.ops.import_scene.gltf(filepath=os.path.join(REPO, 'public', 'assets', 'models', 'titans.glb'))
+    style.import_glb(os.path.join(REPO, 'public', 'assets', 'models', 'titans.glb'))
     meshes = [obj for obj in bpy.data.objects if obj.type == 'MESH']
     style.studio(size=(160, 160), transparent=True)
     build_items._eevee(48)

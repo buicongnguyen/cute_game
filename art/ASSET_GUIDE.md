@@ -78,7 +78,15 @@ blender -b --factory-startup --python art/blender/kit/build_worlds_bright.py -- 
 blender -b --factory-startup --python art/blender/kit/build_worlds_harsh.py -- --install --render
 blender -b --factory-startup --python art/blender/kit/build_space.py -- --install --render
 blender -b --factory-startup --python art/blender/kit/build_farm.py -- --install --render
+npm run art:compress
 ```
+
+`--install` writes plain GLBs; `npm run art:compress` (`art/compress-models.mjs`) then meshopt-compresses every model
+not yet compressed (about 55% less to download after gzip; `tests/model-compression.test.ts` fails until it has run).
+Only the binary changes: names, pivots, materials and triangle counts stay; positions keep 14 bits of mantissa,
+normals become 8-bit octahedral vectors and the game turns them back into floats on load (`createGltfLoader` in
+`src/assets.ts`). Blender cannot import meshopt, so generators that read an installed model use `style.import_glb`,
+which decodes a plain temporary copy first (`node art/compress-models.mjs --decode in.glb out.glb` does the same by hand).
 
 - `--install` copies the results into `public/`. Without it, output stays in `art/generated/kit/`, which is not tracked.
 - `--render` refreshes the previews. `--fbx` refreshes the Unity exports.

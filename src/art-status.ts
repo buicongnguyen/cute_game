@@ -1,6 +1,6 @@
 import './art-status.css';
 import { t, onLanguageChange } from './i18n.ts';
-import { failingArt, onArtStatus, wakeArt } from './art-retry.ts';
+import { failingArt, onArtStatus, wakeArt, whenArtQuiet } from './art-retry.ts';
 
 // Two small notices about what the player is looking at: art that is still missing after its retries
 // (tap to try again), and a newer build that has taken over the service worker (tap to reload).
@@ -46,7 +46,12 @@ export function registerWorker(url: string, entry = new URL(import.meta.url).pat
     const data = event.data as { type?: string; scripts?: string[] } | null;
     if (data?.type === 'zoo-sw-ready' && Array.isArray(data.scripts) && !data.scripts.includes(entry)) prompt.hidden = false;
   });
-  void navigator.serviceWorker.register(url).catch(() => {});
+  // On a first visit, installing the worker downloads the files for offline play (icons, sounds, the modes' models:
+  // about 2.7 MB). It registers once the page has loaded and no model has been downloading for a few seconds, so that
+  // download no longer competes with the title and first-view models (FIX-PLAN 2.2). A returning visit is controlled
+  // already: the browser checks for a new build on navigation by itself.
+  const register = () => { void whenArtQuiet().then(() => navigator.serviceWorker.register(url)).catch(() => {}); };
+  if (document.readyState === 'complete') register(); else addEventListener('load', register, { once: true });
   // The first page of a first visit is not controlled by the worker, so the models it loads never reach the cache. Once the
   // worker is active and the game has settled, ask it to fetch the on-demand files (a few at a time) for the next offline visit.
   void navigator.serviceWorker.ready.then(reg => { setTimeout(() => reg.active?.postMessage({ type: 'zoo-fill' }), 8000); }).catch(() => {});

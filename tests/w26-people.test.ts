@@ -6,12 +6,11 @@ import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import * as T from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { World, HERO_SCALE } from '../src/world.ts';
 import * as M from '../src/model.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { EnvironmentSimulation, createEnvironmentLayout } from '../src/environments.ts';
-import { heroKit, heroKitFor, useHeroLoader, wearKit } from '../src/assets.ts';
+import { createGltfLoader, heroKit, heroKitFor, useHeroLoader, wearKit } from '../src/assets.ts';
 import { DEFAULT_LOOK, HEIGHT_RATIO, OPTIONS, ROWS, lookOf, type Height, type LookId, type LookOption } from '../src/looks.ts';
 import { GROWTH } from '../src/growth.ts';
 import { FRIEND_IDS, parseFriends, type Friend, type FriendId } from '../src/friends-state.ts';
@@ -24,7 +23,7 @@ import { lookArt, lookRowsHtml } from '../src/look-tiles.ts';
 import { friendLooksHtml } from '../src/friend-looks-ui.ts';
 
 const T0 = 1_000_000_000;
-const disk = async (url: string) => { const file = url.split('/').pop()!.split('?')[0], bytes = readFileSync(new URL(`../public/assets/models/${file}`, import.meta.url)); return (await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '')).scene; };
+const disk = async (url: string) => { const file = url.split('/').pop()!.split('?')[0], bytes = readFileSync(new URL(`../public/assets/models/${file}`, import.meta.url)); return (await createGltfLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '')).scene; };
 /** The real explorer and gear files from disk (in a browser they are fetched). */
 async function kits() {
   useHeroLoader(disk);
