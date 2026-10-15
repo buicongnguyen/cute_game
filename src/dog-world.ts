@@ -32,6 +32,8 @@ export class GuardDogs {
   private kit = farmKit.ready;
   private remote = new Map<string, DogLink>();
   private poses: DogPose[] = [];
+  /** Your dog's drawn size, x its usual, and how far further to its side it is drawn (m) (a Bond Surge, pet-surge-view.ts). */
+  scale = 1; aside = 0;
   /** Where your dog is now: 'pen', 'follow' or 'return' (for probes and tests). */
   get place() { return this.link.place; }
   update(h: DogHost, dt: number) {
@@ -50,7 +52,7 @@ export class GuardDogs {
       // Sent home from far away (a respawn at home): it is simply back at its pen.
       if (place === 'return' && leash && Math.hypot(this.link.x - leash.x, this.link.z - leash.z) > DOG_FAR * 1.6) { this.link.place = 'pen'; this.link.x = leash.x; this.link.z = leash.z; }
       pen?.setDogAway(this.link.place !== 'pen', this.link);
-      if (this.link.place !== 'pen' && !h.boarded) poses.push({ key: 'me', x: this.link.x, z: this.link.z, y: -(h.dogSink?.(this.link.x, this.link.z) ?? 0), heading: this.link.heading, coat });
+      if (this.link.place !== 'pen' && !h.boarded) { const ax = this.aside ? Math.cos(h.facing) * this.aside : 0, az = this.aside ? -Math.sin(h.facing) * this.aside : 0; poses.push({ key: 'me', x: this.link.x + ax, z: this.link.z + az, y: -(h.dogSink?.(this.link.x, this.link.z) ?? 0), heading: this.link.heading, coat, scale: this.scale }); }
     }
     this.planet = h.planet;
     for (const [id, r] of h.remotePlayers ?? []) {

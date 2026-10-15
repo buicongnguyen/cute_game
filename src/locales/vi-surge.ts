@@ -1,0 +1,32 @@
+// Vietnamese for Bond Surge (pet-surge.ts, pet-surge-view.ts, pet-card.ts, the Help topic).
+export const SURGE_VI: Record<string, string> = {
+  '💞 Bond Surge: {name}. {text}': '💞 Bùng nổ gắn kết: {name}. {text}',
+  'Bulwark': 'Tường chắn',
+  'Steps in front of you: soaks the next hit while it is big (a boss still lands most of its blow) and knocks small creatures back.': 'Bước lên che cho bạn: đỡ trọn đòn kế tiếp khi còn to (trùm vẫn đánh trúng phần lớn) và hất lùi quái nhỏ.',
+  'Return fire': 'Phản đạn',
+  'Sends creature shots aimed at you back at the shooter while it is big (up to three).': 'Khi còn to, đánh bật đạn của quái nhắm vào bạn ngược về kẻ bắn (tối đa ba viên).',
+  'Bloom': 'Nở hoa',
+  'A ring of petals heals you and wards off poison, lava and storms for a few seconds.': 'Một vòng cánh hoa hồi máu cho bạn và che chắn khỏi khí độc, dung nham và bão trong vài giây.',
+  'Taunt': 'Khiêu khích',
+  'Every creature nearby glares at your pet for 3 s instead of attacking you (a boss is slowed).': 'Mọi quái gần đó trừng mắt nhìn thú cưng trong 3 giây thay vì tấn công bạn (trùm thì bị làm chậm).',
+  'Big bark': 'Tiếng sủa lớn',
+  'One huge bark knocks nearby creatures back and slows them.': 'Một tiếng sủa thật to hất lùi và làm chậm quái gần đó.',
+  'Titan stomp': 'Dậm chân khổng lồ',
+  'A stomp that stuns everything round it, then it soaks the next hit for you.': 'Một cú dậm làm choáng mọi thứ xung quanh, rồi đỡ trọn đòn kế tiếp cho bạn.',
+  'Rebirth': 'Tái sinh',
+  'Heals you, and if a blow would knock you out it brings you back at 30% health (once every 5 minutes).': 'Hồi máu cho bạn, và nếu một đòn sắp hạ gục bạn thì đưa bạn trở lại với 30% máu (mỗi 5 phút một lần).',
+  'Fire breath': 'Hơi thở lửa',
+  'Breathes a cone of fire at the creatures ahead, then sends shots back at their owners.': 'Phun một luồng lửa hình nón vào quái phía trước, rồi đánh bật đạn về kẻ bắn.',
+  'Tentacle slam': 'Xúc tu nện đất',
+  'Slams a ring of tentacles round itself, knocking creatures back, then soaks the next hit.': 'Nện một vòng xúc tu quanh mình, hất lùi quái, rồi đỡ trọn đòn kế tiếp.',
+  'Shadow bind': 'Trói bóng tối',
+  'Roots every creature nearby in shadow for 2 s.': 'Trói chân mọi quái gần đó bằng bóng tối trong 2 giây.',
+  '🔥 Rebirth!': '🔥 Tái sinh!',
+  '💫 Staggered': '💫 Choáng váng',
+  'Bond Surge ready: land a 3-hit chain': 'Bùng nổ gắn kết sẵn sàng: đánh trúng chuỗi 3 đòn',
+  'Bond Surge: your pet is big': 'Bùng nổ gắn kết: thú cưng đang hóa to',
+  'Bond Surge cooling down': 'Bùng nổ gắn kết đang hồi',
+  'Land a 3-hit chain to make your pet surge': 'Đánh trúng chuỗi 3 đòn để thú cưng bùng nổ',
+};
+/** The Help topic 'Bond Surge': its Vietnamese title and body (help-topics.ts has the English). */
+export const SURGE_HELP_VI: readonly [string, string] = ['Bùng nổ gắn kết', 'Đánh trúng chuỗi 3 đòn khi có thú cưng ở gần và vòng nhỏ trên thẻ nhân vật đang sáng: thú cưng to lên gần bằng bạn trong 8 giây. Đạn của nó mạnh gấp đôi, khả năng bảo vệ mạnh hơn 50%, và nó tung chiêu riêng: Tường chắn (thú đỡ đòn) đỡ trọn đòn kế tiếp, Phản đạn (thú bắn hạ đạn) đánh bật đạn về kẻ bắn, Nở hoa (thú chữa lành) hồi máu và che chắn khỏi hiểm họa, Khiêu khích (thú đánh lạc hướng) khiến quái thôi tấn công bạn 3 giây; vài thú trùm có chiêu riêng. Trùm ở gần bị choáng và nhận thêm 15% sát thương từ đòn của chính bạn trong 4 giây. Sau đó thú nhỏ lại và vòng đầy lại sau 5 giây; có hai thú thì chúng thay phiên nhau.'];

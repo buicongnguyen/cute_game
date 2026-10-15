@@ -11,6 +11,7 @@ import * as Game from '../src/model.ts';
 import {enemyRoster} from '../src/enemy-roster.ts';
 import {ENEMY_TYPES} from '../src/enemy-types.ts';
 import {createEnvironmentLayout,terrainHeight} from '../src/environments.ts';
+import {SURGE} from '../src/pet-surge.ts';
 
 async function fixture(t,{planet='home',profile:configure=()=>{},options={}}={}){
  const dataDir=await mkdtemp(path.join(tmpdir(),'cute-combat-authority-')),store=await createAccountStore({dataDir,databaseUrl:''}),profile=Game.newGame();profile.planet=planet;configure(profile);
@@ -354,4 +355,23 @@ test('breakable scenery: the server wears, breaks and regrows a piece for the ro
  // A stone takes several heavy blows: four Quakes crack it apart (one heavy blow per 0.7 s).
  for(let i=0;i<3;i++){ledger['last'].clear();await new Promise(r=>setTimeout(r,720));f.authority.scenery(f.peer,stone,'quake');}assert.ok(ledger.broken(stone));
  assert.equal(f.messages.filter(m=>m.type==='sceneryWood').length,1,'a stone drops nothing');
+});
+test('Bond Surge online: the server decides the surge from three basic packets, doubles the pet\'s shots, staggers the boss, opens it to the explorer and soaks to the boss cap (pinned random)',async t=>{
+ const f=await fixture(t,{profile:p=>{p.level=20;p.bag.sword_wood=1;p.gear.weapon='sword_wood';p.bag.pet_colossus=1;p.gear.pet='pet_colossus';}});
+ const bear=f.spawn('bear',107,-46),engine=f.authority.engineFor(f.peer);bear.x=-30;bear.z=3;bear.phase='chase'; // accepted in its own zone (the canyon), then beside the explorerengine.sim.random=()=>.5; // no lucky criticals: the +15% is exact
+ const press=()=>{engine.nextBasic=0;const before=bear.hp;f.authority.basic(f.peer,bear.id);return before-bear.hp;},surges=()=>f.messages.filter(m=>m.type==='surge').map(m=>m.event);
+ press();engine.sim.update(.3);const plain=press();engine.sim.update(.3);assert.equal(surges().length,0,'two hits: nothing yet');press();
+ assert.deepEqual(surges().map(e=>[e.phase,e.sig,e.slot]),[['start','stomp',0]],'the third basic hit: the Colossus surges, told to its explorer');
+ bear.phase='chase';const shots=new Set(),shoot=engine.sim.shoot.bind(engine.sim);engine.sim.shoot=(kind,angle,multiplier,...rest)=>{if(rest[1]?.helper)shots.add(Math.round(multiplier*100)/100);return shoot(kind,angle,multiplier,...rest);};engine.sim.update(.35);
+ const big=surges().find(e=>e.phase==='big');assert.equal(big.boss,bear.id);assert.ok(bear.stun>0,'the boss is staggered');assert.ok(engine.sim.surge.vulnerable(bear.id));
+ for(let i=0;i<60;i++)engine.sim.update(.025);
+ assert.ok(shots.has(Math.round(Game.ITEMS.pet_colossus.pet.dmg*SURGE.damage*100)/100),`the pet's shot is doubled on the server: ${[...shots]}`);
+ const open=press();assert.ok(Math.abs(open/plain-(1+SURGE.vuln))<.02,`the explorer's own hit on the open boss: ${plain} -> ${open}`);
+ // Bulwark (the Colossus keeps it): the boss's next blow loses only the 30% cap; the explorer is told it was blocked.
+ const lost=()=>engine.healthEvents.reduce((sum,e)=>sum-Math.min(0,e.amount),0),before=lost(),profile=f.peer.account.profile;engine.damageAt=0;f.authority.damage(f.peer,bear.id,'melee');
+ assert.equal(lost()-before,Math.max(1,Math.round(bear.damage*.7*60/(Game.defense(profile)+60))));
+ assert.ok(f.messages.some(m=>m.type==='guard'&&m.event.kind==='block'&&Math.abs(m.event.power-bear.damage*.3)<1e-6));
+ // After the surge and its cooldown the next three hits surge again; a reset (a new room) ends a surge on the server too.
+ for(let i=0;i<14/.05;i++)engine.sim.update(.05);assert.equal(engine.sim.surge.state,'ready');press();engine.sim.update(.3);press();engine.sim.update(.3);press();
+ assert.equal(surges().filter(e=>e.phase==='start').length,2);f.authority.resetPeer(f.peer);assert.equal(engine.sim.surge.state,'ready');
 });

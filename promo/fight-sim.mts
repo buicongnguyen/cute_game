@@ -23,6 +23,7 @@ import { EnvironmentSimulation, createEnvironmentLayout } from '../src/environme
 import { CombatSimulation, BASE_SKILLS, SPECIALS, type CombatTarget } from '../src/combat.ts';
 import { MOVES, AIR_MOVES, MOVE_SKILLS, MOVE_SLOTS, moveAt, windowDamage, type MoveId } from '../src/moves.ts';
 import { CHAIN, HOLD, STREAK, UntouchedStreak, chainGain, chainKind } from '../src/five-rules.ts';
+import type { SurgeEvent } from '../src/pet-surge.ts';
 import { skillTuning } from '../src/skill-upgrades.ts';
 import * as J from '../src/jump-rules.ts';
 import { POWER, PowerCharge, powerShape, powerReach, powerCap } from '../src/power-rules.ts';
@@ -38,7 +39,7 @@ import { WeaponPair, DRAW_TIME } from '../src/weapon-pair.ts';
  * creatures fought with (or instead of) the one the fight names, and `before`: the numbers and the target choice from
  * before the 2026-10-14 rebalance (the nearest creature within 7 m, peaceful or not, and no guard).
  */
-export interface PetOptions { ids: readonly string[]; level?: number; before?: boolean; /** Worn for their stats only: no shot, no guard (the fair 'no pet' to compare with). */ mute?: boolean }
+export interface PetOptions { ids: readonly string[]; level?: number; before?: boolean; /** Worn for their stats only: no shot, no guard (the fair 'no pet' to compare with). */ mute?: boolean; /** No Bond Surge (pet-surge.ts): the 2026-10-14 rules alone. */ nosurge?: boolean }
 
 type Route = 'ground' | 'launch' | 'chase';
 export type Script = 'classic' | 'careless' | 'single' | 'double' | Route | `only-${MoveId}` | 'only-attack';
@@ -53,7 +54,7 @@ export const ROUTES: Record<Route | 'double', readonly Step[]> = {
 const quiet = { text() {}, burst() {}, ring() {}, spark() {}, shake() {}, flash() {}, freeze() {}, update() {}, slash() {}, shakeOffset: () => new T.Vector3() };
 function seeded(seed: number) { return () => { seed = Math.imul(seed ^ seed >>> 15, 1 | seed); seed ^= seed + Math.imul(seed ^ seed >>> 7, 61 | seed); return ((seed ^ seed >>> 14) >>> 0) / 4294967296; }; }
 
-export interface FightResult { /** Weapon pair: hand changes made by the auto swap. */ swaps?: number; won: boolean; seconds: number; taken: number; hits: number; dodged: number; perfect: number; biggest: number; bossHp: number; blocked: number; /** Times the script's route ran to its end, and the longest chain. */ routes: number; combo: number; finishers: number; /** Power strikes used (power-rules.ts), and the damage dealt in all. */ powers: number; damage: number; /** Pets (pet-guard.ts): damage they dealt, damage their guards took off (in full healths, like `taken`), guards fired by kind, health mended. */ petDamage: number; /** EXP of every creature beaten (an elite's children too), and the barrier's deflects and breaks (elite-roles.ts). */ xp: number; deflected: number; breaks: number; saved: number; guards: Record<string, number>; mended: number; /** The longest untouched streak, and the average damage bonus it gave over the fight (0.12 = +12%). */ streak: number; bonus: number }
+export interface FightResult { /** Weapon pair: hand changes made by the auto swap. */ swaps?: number; won: boolean; seconds: number; taken: number; hits: number; dodged: number; perfect: number; biggest: number; bossHp: number; blocked: number; /** Times the script's route ran to its end, and the longest chain. */ routes: number; combo: number; finishers: number; /** Power strikes used (power-rules.ts), and the damage dealt in all. */ powers: number; damage: number; /** Pets (pet-guard.ts): damage they dealt, damage their guards took off (in full healths, like `taken`), guards fired by kind, health mended. */ petDamage: number; /** EXP of every creature beaten (an elite's children too), and the barrier's deflects and breaks (elite-roles.ts). */ xp: number; deflected: number; breaks: number; saved: number; guards: Record<string, number>; mended: number; /** The longest untouched streak, and the average damage bonus it gave over the fight (0.12 = +12%). */ streak: number; bonus: number; /** Bond Surges started, and signatures that staggered a boss (pet-surge.ts). */ surges?: number; staggers?: number }
 export function fight(boss: string, planet: M.PlanetId, zone: [number, number], level: number, gear: Partial<M.SaveState['gear']>, script: Script, seed = 1, blockOverride?: number, /** `power`: the hero holds Attack for the power strike whenever it is charged and the boss is in its area. */ opts: { power?: boolean; pets?: PetOptions; /** More creatures of these kinds round the first: the fight is won when all are down. */ pack?: readonly string[];
   /** The creature carries this elite role (elite-roles.ts); a splitter's children must be beaten too. */ elite?: EliteRoleId;
   /** The hero keeps this far from the creature's edge (m) and attacks from there (a gun kept at range); default: beside it. */ range?: number;
@@ -100,7 +101,8 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
       ...(pets ? { pet: () => petAt(0), pet2: () => petAt(1), focus: () => pets.before ? nearest(7)?.id ?? null : e.id, health: () => hp,
         heal: (fraction: number) => { const got = Math.min(1 - hp, fraction); hp += got; out.taken -= got; out.mended += got; },
         status: (target: CombatTarget, kind: Parameters<World['statusEnemy']>[1], duration: number) => w.statusEnemy(target as Enemy, kind, duration),
-        guarded: (event: { kind: string }) => { out.guards[event.kind] = (out.guards[event.kind] ?? 0) + 1; } } : {}),
+        guarded: (event: { kind: string }) => { out.guards[event.kind] = (out.guards[event.kind] ?? 0) + 1; },
+        surged: (event: SurgeEvent) => { if (event.phase === 'start') out.surges = (out.surges ?? 0) + 1; else if (event.phase === 'big' && !event.reflect && event.boss) out.staggers = (out.staggers ?? 0) + 1; } } : {}),
       hit: (target, impact) => {
         if (pairs && !impact.helper) { const m = pairs.takeBonus(); if (m !== 1) impact = { ...impact, amount: impact.amount * m }; } // the first hit after a swap: +20%
         const en = target as Enemy, before = en.hp, wasOpen = (en.barrier?.open ?? 0) > 0; w.damageEnemy(en, impact.amount, impact.stun, false, impact.source); if (before > 0 && en.hp <= 0) out.xp += en.xp; if (en.barrier && !wasOpen) { if (en.barrier.open > 0) out.breaks++; else if (impact.source === 'shot' || impact.source === 'pet' || impact.source === 'summon') out.deflected++; } out.biggest = Math.max(out.biggest, before - en.hp); out.damage += before - en.hp; if (impact.blocked) out.blocked++; if (impact.helper) { out.petDamage += before - en.hp; return; } if (on) charge.hit();
@@ -108,6 +110,7 @@ export function fight(boss: string, planet: M.PlanetId, zone: [number, number], 
         if (on && combo.hit(kind ?? (w.jump.airborne ? 'air' : impact.lift > 0 ? 'launcher' : 'ground'))) { out.combo = Math.max(out.combo, combo.count); streak.hit(); out.streak = Math.max(out.streak, streak.count); }
       },
     }, random);
+    if (pets?.nosurge || pets?.before) sim.surge.enabled = false;
     const share = blockOverride ?? J.blockShare(boss, M.PLANETS[planet].level);
     if (on) {
       sim.edge.moves = true; sim.edge.chain = true; sim.edge.launch = J.AIR.launch; sim.edge.target = () => e as CombatTarget; sim.edge.spent = () => { sure = 0; };

@@ -7,13 +7,14 @@ import { dogTossFactor, DOG_TOSS_CD } from './guard-dog.ts';
 import { DOG_PET } from './pet-slots.ts';
 import { DUNGEON_PETS, PET_SKILLS, petSkillDps } from './dungeon-content.ts';
 import { petRoleId } from './pet-guard.ts';
+import { SIGNATURES, signatureOf } from './pet-surge.ts';
 
 /**
  * What a pet does, in plain words, for its card in the backpack, the shop and the Almanac: how much it adds to your
  * own damage, who it shoots, and how it protects you (pet-guard.ts). The numbers are the ones the fight uses: the
  * pet's level and your attack and health as they are now.
  */
-export interface PetCard { /** "Adds about 8% to your damage." */ attack: string; /** Who it shoots. */ rule: string; /** Its guard, with its power and how often. */ guard: string; /** The boss note, for a counter or a block. */ boss: string; kind: PetGuard['kind'] }
+export interface PetCard { /** "Adds about 8% to your damage." */ attack: string; /** Who it shoots. */ rule: string; /** Its guard, with its power and how often. */ guard: string; /** The boss note, for a counter or a block. */ boss: string; kind: PetGuard['kind']; /** Its Bond Surge signature (pet-surge.ts). */ surge: string }
 const num = (v: number) => String(Math.round(v * 10) / 10);
 
 /** The guard's line: its power as the player meets it (damage points, health points or seconds) and its rhythm. */
@@ -39,8 +40,11 @@ export function petCard(id: string, s: SaveState): PetCard | null {
     rule: t('It only goes for creatures that are fighting you, within {leash} m.', { leash: PET_RULES.leash }),
     guard: named(vault?.guard, guardLine(guard, stats.attack, stats.maxHp)),
     boss: guard.kind === 'counter' || guard.kind === 'block' ? t('A boss loses at most {cap}% of a hit.', { cap: Math.round(PET_RULES.bossCap * 100) }) : '', kind: guard.kind,
+    surge: surgeLine(id, guard.kind),
   };
 }
+/** The Bond Surge line: the signature's name and what it does. */
+function surgeLine(id: string, kind: PetGuard['kind']) { const sig = SIGNATURES[signatureOf(id, kind) ?? 'bigbark']; return t('💞 Bond Surge: {name}. {text}', { name: `${sig.icon} ${t(sig.name)}`, text: t(sig.text) }); }
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 /**
  * The card as HTML ('' for anything that is not a pet): two short lines under the item's description. `brief` (the
@@ -48,5 +52,5 @@ const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt
  */
 export function petCardHtml(id: string, s: SaveState, brief = false): string {
   const card = petCard(id, s); if (!card) return '';
-  return `<div class="pet-card" data-guard="${card.kind}"><p>${esc(card.attack)}${brief ? '' : ` <span class="muted">${esc(card.rule)}</span>`}</p><p>${esc(card.guard)}${card.boss && !brief ? ` <span class="muted">${esc(card.boss)}</span>` : ''}</p></div>`;
+  return `<div class="pet-card" data-guard="${card.kind}"><p>${esc(card.attack)}${brief ? '' : ` <span class="muted">${esc(card.rule)}</span>`}</p><p>${esc(card.guard)}${card.boss && !brief ? ` <span class="muted">${esc(card.boss)}</span>` : ''}</p>${brief ? '' : `<p class="pet-surge">${esc(card.surge)}</p>`}</div>`;
 }
