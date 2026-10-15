@@ -5,6 +5,7 @@ import { ENEMY_TYPES } from './enemy-types.ts';
 import { kitchenLevel } from './difficulty.ts';
 import { catchUpStory } from './story-catchup.ts';
 import { noteHistory } from './insight-history.ts';
+import { storyEnergy, storyItems, storyXp } from './story-gifts.ts';
 export { STORY_STEPS } from './content.ts';
 export type ProgressKind = 'story' | 'daily' | 'weekly' | 'achievements' | 'pass' | 'bounties' | 'collection' | 'challenges';
 export interface ProgressEntry {
@@ -283,7 +284,9 @@ export function fitReward(s: SaveState, r: Reward): Reward {
 function give(s: SaveState, raw: Reward, now: number) { const r = fitReward(s, raw); s.energy += r.energy || 0; if (r.xp)
     gainXp(s, r.xp, now); for (const [id, n] of Object.entries(r.items || {}))
     stowItem(s, id, n); /* a full bag sends rewards to the chest (the reference: "đã vào túi đồ / rương") */ refreshProgress(s, now); s.progression.pass.stars += r.stars || 0; }
-function storyReward(s: SaveState): Reward { const index = s.progression.story.index, step = storyStep(index, s); return { energy: 30 + s.level * 6 + Math.min(index, 40) * 4, xp: Math.round(xpNeeded(s.level) * (index >= 29 ? .3 : .25)), items: step.end, stars: 15 + (step.end ? 40 : 0) }; }
+/** A story step's reward at a level (story-gifts.ts: energy and EXP grow with levelRewardBonus; the first chapters add starter items). */
+export function storyRewardAt(level: number, index: number, end?: Inventory): Reward { const bonus = levelRewardBonus(level), items = storyItems(index, end); return { energy: storyEnergy(level, index, bonus), xp: storyXp(xpNeeded(level), index, bonus), ...(items ? { items } : {}), stars: 15 + (end ? 40 : 0) }; }
+function storyReward(s: SaveState): Reward { const index = s.progression.story.index; return storyRewardAt(s.level, index, storyStep(index, s).end); }
 function taskReward(s: SaveState, t: Task, weekly = false): Reward { if (weekly) {
     const bonus = ['seed_star', 'spore', 'seed_fire', 'seed_ice'][hash(t.type) % 4];
     return { energy: 150 + s.level * 20, xp: Math.round(xpNeeded(s.level) * .35), items: { starshard: 1, [bonus]: 2 }, stars: 30 };

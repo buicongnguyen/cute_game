@@ -186,7 +186,8 @@ import type { RescueApi } from './rescue.ts';
 import { initInbox, initMoreMenu } from './news-inbox-ui.ts';
 import { reportLevelFor } from './news-inbox.ts';
 import './goals.css';
-import { initGoals } from './goals-ui.ts'; // long-term goals chip and panel (docs/FIX-PLAN.md 5.5)
+import { initGoals } from './goals-ui.ts'; // long-term goals: the flag badge on the map and the Goals panel (docs/FIX-PLAN.md 5.5)
+import { mountPlaceFlags } from './place-flags-view.ts'; // arrival flags in the world and on the map (place-flags.ts)
 import { mountDecorMenu, moveStart, moveSpotOk, moveIntent, turnIntent, type MoveTarget } from './decor-move.ts'; // move / turn / pack away placed decorations and beds
 import './decor-move.css';
 import { socialHold } from './social-hold.ts';
@@ -331,6 +332,7 @@ let world: World;
 try { world = new World($('#world'), state, { antialias: !(graphics.mobile && devicePixelRatio >= 2) }); }
 catch (error) { app.innerHTML = localizeHtml('<div class="fatal"><h1>Your garden needs WebGL</h1><p>Enable hardware acceleration in your browser, then reload this page.</p><p>Your saved adventure is safe.</p></div>'); throw error; }
 const swim=mountSwim({world,active:()=>started,toast:(message,icon)=>toast(message,icon),sound:kind=>tone(kind)}); // crossing water: wade, swim, glide (swim.ts)
+const placeFlags=mountPlaceFlags({world,state:()=>state,active:()=>started&&world.state===state&&!visiting&&!flight&&!arriving&&!shipSequence?.busy&&state.hp>0&&!document.body.classList.contains('in-mode'),online:()=>!!actionHandler,calm:()=>world.selected?.kind!=='enemy'&&!world.enemies.some(e=>{if(e.hp<=0)return false;const d=Math.hypot(e.x-world.position.x,e.z-world.position.z);return e.boss?d<35&&(aggro(e)||e.hp<e.maxHp):d<16&&aggro(e);}),planted:place=>{toast(t('Flag planted: {place}',{place:t(place.name)}),'🚩');tone('flag');},storage:(()=>{try{return localStorage;}catch{return null;}})()}); // arrival flags (place-flags-view.ts)
 frameListeners.add(titleOrbit(world,()=>started)); // the title card floats over the village, the camera swaying slowly (title-card.ts)
 onInstallChange(()=>syncInstallButtons());
 initDockFraming(world.camera); // desktop menus dock right; slide the picture so the hero stays clear (dialog-dock.ts)
@@ -348,7 +350,7 @@ const keysGuide=new KeysGuide($('#keys-guide'),(()=>{try{return localStorage;}ca
 const combatHud=new CombatHud($('#world-labels'),(x,y,z)=>world.screen(x,y,z));let trackerMode:'auto'|'open'|'fold'='auto',wasFight=false;
 // The whole-world minimap (minimap.ts): terrain cached per world, markers redrawn five times a second.
 const minimap=new Minimap($<HTMLCanvasElement>('#minimap'),$('#map-caption'),()=>started?{planet:world.planet,layout:world.environment.layout,position:world.position,facing:world.facing,entities:world.entities,enemies:world.enemies,
-  penBuilt:M.penBuilt(world.state),ready:[...world.entities.filter(e=>e.kind==='plot'&&!!world.state.plots[e.index!]?.crop&&M.cropProgress(world.state.plots[e.index!])>=1),...(world.planet==='home'?M.readyAnimals(world.state).flatMap(a=>world.farmView?.positionOf(a.uid)??[]):[])],remotes:[...world.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh.position)}:null);
+  penBuilt:M.penBuilt(world.state),ready:[...world.entities.filter(e=>e.kind==='plot'&&!!world.state.plots[e.index!]?.crop&&M.cropProgress(world.state.plots[e.index!])>=1),...(world.planet==='home'?M.readyAnimals(world.state).flatMap(a=>world.farmView?.positionOf(a.uid)??[]):[])],remotes:[...world.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh.position),flags:world.state===state?placeFlags.marks():[],flagColor:state.color}:null);
 const movement = new MovementControls(world.keys);
 const joystick=mountJoystick($('#hud'),()=>started&&!uiBlocked()&&!placement&&!flight,direction=>{world.joystickInput=direction;});
 const combatView=new CombatView(world.scene);
@@ -555,7 +557,7 @@ function updateHud() {
   setText($('#player-name'),state.name);setText($('#level-text'),String(state.level));setText($('#energy'),t(state.energy.toLocaleString()));
   setWidth($('#hp-fill'),`${state.hp/M.maxHp(state)*100}%`);setText($('#hp-text'),t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`));setWidth($('#xp-fill'),`${state.xp/M.xpNeeded(state.level)*100}%`);
   updateQuickEat();
-  goals.update(state); // redraws only when a goal changes (goals-ui.ts)
+  placeFlags.update();goals.update(state); // plants a flag on arrival; the badge redraws only when a goal changes (goals-ui.ts)
   {const x=world.position.x,z=world.position.z;if(started&&world.state===state)tendCritters(world as unknown as CritterWorld,state,!actionHandler&&!visiting);applyCalm($('#hud'),calmHud(state,{fighting:fightNear(world.enemies,x,z),creatureNear:world.enemies.some(e=>e.hp>0&&Math.hypot(e.x-x,e.z-z)<10)}));} // the first minutes (first-run.ts)
   setText($('#xp-text'),`EXP ${Math.floor(state.xp)} / ${M.xpNeeded(state.level)}`);
   {const xpTitle=t(`${Math.floor(state.xp)} / ${M.xpNeeded(state.level)} experience`),xpNode=$('.experience');if(xpNode.getAttribute('title')!==xpTitle)xpNode.setAttribute('title',xpTitle);}
@@ -1292,7 +1294,7 @@ async function finishFishingCatch(f:FishingRound){
 
 
 world.onAlert=()=>tone('alert');
-world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();minimap.invalidate();};
+world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();minimap.invalidate();placeFlags.rebuild();};
 stockPonds();
 // fish.glb (153 KB) streams in once the explorer is within 30 m of the water's edge (or casts a line), then the ponds are restocked.
 // Ponds out of sight keep their code stand-ins and cost no download.

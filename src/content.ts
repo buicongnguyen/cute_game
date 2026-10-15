@@ -4059,7 +4059,9 @@ export const STORY_STEPS: {
     { title: 'Place another garden bed', condition: 'plots', target: 1, chapter: 1, icon: '🌱' },
     { title: 'Cook three meals', event: 'cook', target: 3, chapter: 1, icon: '🔥' },
     { title: 'Defeat a boss', event: 'boss', target: 1, chapter: 1, icon: '👑' },
-    { title: 'Catch a rare fish', event: 'fishrare', target: 1, chapter: 1, icon: '🐠' },
+    // Was 'Catch a rare fish': at the village pond only the koi is rare (about 6 bites in 100) and the bamboo rod snaps on it
+    // 60% of the time, so new explorers stalled here (FIX-PLAN 5.6). The daily 'rare' task still asks for one from level 3.
+    { title: 'Catch five fish', event: 'fish', target: 5, chapter: 1, icon: '🐠' },
     { title: 'Reach level 8', condition: 'level', target: 8, chapter: 1, icon: '⭐', end: { seed_fire: 2, seed_ice: 2, claw: 2 } },
     { title: 'Visit another planet', event: 'planet', target: 1, chapter: 2, icon: '🚀' },
     { title: 'Mine five deposits', event: 'mine', target: 5, chapter: 2, icon: '⛏️' },
