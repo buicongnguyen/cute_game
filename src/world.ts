@@ -286,12 +286,22 @@ export class World {
     const w = innerWidth, h = innerHeight, aspect = w / h;
     // The reference camera (camera-rig.ts): portrait phones sit 1.3x further back and see about ±4.75 m across.
     this.camera.aspect = aspect; this.camera.updateProjectionMatrix(); this.renderer.setSize(w, h);
-    cameraOffset(aspect, this.zoom, this.viewOffset);
+    if (this.viewRig) this.viewRig.offset(this.viewOffset); else cameraOffset(aspect, this.zoom, this.viewOffset);
+    this.fitViewBox();
+  }
+  /**
+   * A mode's own camera (Rescue Call, rescue-camera.ts): it sets the offset from the camera target and tells which ground
+   * is in view, so the view reach and the shadow box follow it instead of the explorer's camera. Null: the usual rig.
+   */
+  viewRig: { offset(out: T.Vector3): void; footprint(): Array<{ x: number; z: number }> } | null = null;
+  /** The view reach and the shadow box for the ground in view (resize, or a mode's camera after it moved). */
+  fitViewBox() {
+    const footprint = this.viewRig ? this.viewRig.footprint() : viewFootprint(this.camera.aspect, this.zoom);
     // The shadow box hugs the ground in view, in the light's own axes: sharp up close, wide enough when zoomed out.
     const shadow=this.sun?.shadow?.camera;
     // How far from the camera target the ground in view reaches, plus a creature's size: beyond it nothing can be seen.
-    this.viewReach=Math.max(...viewFootprint(aspect,this.zoom).map(p=>Math.hypot(p.x,p.z)))+6;
-    if(shadow){Object.assign(shadow,shadowBox(viewFootprint(aspect,this.zoom),this.sunAxes??=lightAxes(this.sunOffset)));shadow.updateProjectionMatrix();}
+    this.viewReach=Math.max(...footprint.map(p=>Math.hypot(p.x,p.z)))+6;
+    if(shadow){Object.assign(shadow,shadowBox(footprint,this.sunAxes??=lightAxes(this.sunOffset)));shadow.updateProjectionMatrix();}
   }
   setQuality(low: boolean) { this.renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = !low; this.resize(); }
   /** Creatures cast shadows within this many metres of the view (graphics profile shadowReach). */
@@ -2139,7 +2149,7 @@ export class World {
     if(this.renderer)setGrade(this.renderer,look);
     applyLook(look,this.hemi,this.sun,this.sunOffset??=new T.Vector3());this.sunAxes=null;
     // The shadow box lies in the sun's own axes, so it is fitted again when the sun moves.
-    const box=this.sun?.shadow?.camera;if(box&&this.camera){Object.assign(box,shadowBox(viewFootprint(this.camera.aspect,this.zoom),this.sunAxes=lightAxes(this.sunOffset)));box.updateProjectionMatrix();}
+    const box=this.sun?.shadow?.camera;if(box&&this.camera){this.sunAxes=lightAxes(this.sunOffset);this.fitViewBox();}
   }
   /**
    * The sky gradient costs one draw, so it is on only while sky can be on screen: when the view reaches past the edge of

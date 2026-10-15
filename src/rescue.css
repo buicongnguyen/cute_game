@@ -195,3 +195,32 @@ body.in-rescue #zone-name { opacity: .9; }
 /* While Rescue, Flag Rush or the Vault runs (body.in-mode): the daily Colossus banner and the "away" toasts step aside. */
 body.in-mode .colossus-banner, body.in-mode .tracker-stack { display: none !important; }
 body.in-mode #toasts .toast:not(:last-child) { display: none; }
+
+/* ---- the compact build drawer (top-down camera round, rescue-camera.ts): at most about a quarter of the screen, docked to
+   an edge away from your end, so the camera fits the whole lane into the rest (rescue.ts freeRect). */
+/* Phone held upright: a bottom sheet a quarter of the screen tall; the pads scroll sideways in one row. */
+body[data-rescue-orient="portrait"] #rescue-build:not(.folded) { max-height: 25vh; padding: 6px 6px 4px; }
+body[data-rescue-orient="portrait"] #rescue-build .rescue-tabs { padding-bottom: 4px; top: -6px; }
+body[data-rescue-orient="portrait"] #rescue-build .rescue-pads, #rescue-build .rescue-pads.row { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; margin-bottom: 4px; padding-bottom: 2px; }
+body[data-rescue-orient="portrait"] #rescue-build .rescue-pads button { flex: 0 0 44px; }
+body[data-rescue-orient="portrait"] .rescue-built { padding: 4px 6px; }
+body[data-rescue-orient="portrait"] .rescue-built img { width: 40px; height: 40px; }
+body[data-rescue-orient="portrait"] .rescue-row { margin-top: 4px; }
+/* Short landscape phones: a slim column on the right edge (raiders' side), under the corner buttons; folded, a 🏰 chip. */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* It sits over the skill buttons only while building (no raiders yet: the drawer hides when a wave starts), so it beats hud-ours.css's paw gap. */
+  #rescue-build, body[data-rescue-orient="portrait"] #rescue-build, html body.in-rescue.in-mode #rescue-build { top: calc(var(--menu-bottom, 60px) + 60px); bottom: calc(env(safe-area-inset-bottom, 0px) + 6px); right: calc(env(safe-area-inset-right, 0px) + 6px); left: auto; width: min(214px, 25vw); min-width: 0; max-height: none; padding: 5px; }
+  #rescue-build .rescue-tabs { top: -5px; }
+  #rescue-build .rescue-tabs button:not(.fold) { font-size: 18px; padding: 4px 2px; }
+  #rescue-build .rescue-tabs button span { display: none; }
+  #rescue-build .rescue-pads { gap: 4px; }
+  #rescue-build .rescue-pads button { width: 44px; height: 44px; }
+  .rescue-cards, .rescue-boosts, body[data-rescue-orient="portrait"] .rescue-cards, body[data-rescue-orient="portrait"] .rescue-boosts { grid-template-columns: 1fr; }
+  .rescue-cards .card small { display: none; }
+  .rescue-built img { width: 40px; height: 40px; }
+  #rescue-build.folded, body[data-rescue-orient="portrait"] #rescue-build.folded, html body.in-rescue.in-mode #rescue-build.folded { bottom: auto; left: auto; width: auto; padding: 4px; border-radius: 24px; overflow: visible; }
+  #rescue-build.folded .rescue-tabs { position: static; padding: 0; background: none; }
+  #rescue-build.folded .rescue-tabs button:not(.fold) { display: none; }
+  #rescue-build.folded .rescue-tabs button.fold { flex: 0 0 auto; min-width: 64px; min-height: 44px; transform: none; font-size: 0; }
+  #rescue-build.folded .rescue-tabs button.fold::before { content: '🏰 ▴'; font-size: 18px; }
+}

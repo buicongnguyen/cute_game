@@ -46,9 +46,13 @@ export function buildPortal(): T.Group {
 }
 
 // ---------------------------------------------------------------- the field
-const GROUND_PAD = 10;
+/**
+ * Painted grass around the field (metres beyond each side, along the lanes and across them): wide enough that the fitted
+ * camera (rescue-camera.ts) never sees past it at the sizes it is tested at, so the plain skirt beyond can stay hidden.
+ */
+export const GROUND_PAD = { x: 44, z: 34 } as const;
 function groundTexture(field: Field, mission: MissionId) {
-  const md = MISSIONS[mission], W = RESCUE.half.x * 2 + GROUND_PAD * 2, H = RESCUE.half.z * 2 + GROUND_PAD * 2, px = 7;
+  const md = MISSIONS[mission], W = RESCUE.half.x * 2 + GROUND_PAD.x * 2, H = RESCUE.half.z * 2 + GROUND_PAD.z * 2, px = 7;
   const c = document.createElement('canvas'); c.width = Math.round(W * px); c.height = Math.round(H * px);
   const g = c.getContext('2d'); if (!g) return null;
   const X = (x: number) => (x + W / 2) * px, Z = (z: number) => (z + H / 2) * px;
@@ -65,7 +69,7 @@ function groundTexture(field: Field, mission: MissionId) {
     for (const l of field.lanes) for (const rt of l.routes) { g.beginPath(); rt.pts.forEach((p, i) => (i ? g.lineTo(X(p.x), Z(p.z)) : g.moveTo(X(p.x), Z(p.z)))); g.stroke(); }
   }
   // Your end: a sandy yard with a warm stripe where raiders must not pass; their side: a red dashed spawn line.
-  g.fillStyle = sand; g.fillRect(X(-W / 2), Z(-RESCUE.half.z - 2), (RESCUE.endX + W / 2) * px, (RESCUE.half.z * 2 + 4) * px);
+  g.fillStyle = sand; g.fillRect(X(-RESCUE.half.x - 4), Z(-RESCUE.half.z - 2), (RESCUE.endX + RESCUE.half.x + 4) * px, (RESCUE.half.z * 2 + 4) * px); // your yard, then grass again
   g.fillStyle = 'rgba(255,200,60,.55)'; g.fillRect(X(RESCUE.endX - .25), Z(-RESCUE.half.z), .5 * px, RESCUE.half.z * 2 * px);
   g.strokeStyle = 'rgba(230,60,60,.5)'; g.lineWidth = .3 * px; g.setLineDash([1 * px, .7 * px]); g.beginPath(); g.moveTo(X(30.5), Z(-RESCUE.half.z)); g.lineTo(X(30.5), Z(RESCUE.half.z)); g.stroke(); g.setLineDash([]);
   // Pads' soft shadows
@@ -86,12 +90,12 @@ function instanced(name: string, spots: Spot[], tint?: Record<string, string>, s
   });
   return g;
 }
-export interface FieldParts { root: T.Group; pads: T.Group; marker: T.Mesh; range: T.Mesh; farmhouse: T.Object3D }
+export interface FieldParts { root: T.Group; pads: T.Group; marker: T.Mesh; range: T.Mesh; farmhouse: T.Object3D; /** The plain grass beyond the painted ground: hidden while the camera sees none of it (rescue.ts). */ skirt: T.Mesh }
 export function buildFieldView(field: Field, mission: MissionId): FieldParts {
   const md = MISSIONS[mission], root = new T.Group(); root.name = 'rescue-field';
-  const W = RESCUE.half.x * 2 + GROUND_PAD * 2, H = RESCUE.half.z * 2 + GROUND_PAD * 2, tex = groundTexture(field, mission);
+  const W = RESCUE.half.x * 2 + GROUND_PAD.x * 2, H = RESCUE.half.z * 2 + GROUND_PAD.z * 2, tex = groundTexture(field, mission);
   const ground = new T.Mesh(new T.PlaneGeometry(W, H).rotateX(-Math.PI / 2), tex ? toonMaterial({ map: tex }) : mat(md.ground[0])); ground.receiveShadow = true; ground.position.y = -.01; root.add(ground);
-  const skirt = new T.Mesh(new T.PlaneGeometry(W + 260, H + 260).rotateX(-Math.PI / 2), basic(md.ground[0])); skirt.position.y = -.05; root.add(skirt);
+  const skirt = new T.Mesh(new T.PlaneGeometry(W + 260, H + 260).rotateX(-Math.PI / 2), mat(md.ground[0])); skirt.position.y = -.05; root.add(skirt); // lit like the painted ground, so its edge does not show
   // Chevrons along every route, pointing toward your end.
   const chevrons: Spot[] = [];
   for (const l of field.lanes) l.routes.forEach((rt, ri) => { for (let d = 3; d < rt.length - 2; d += 4.2) { if (ri > 0 && d < 12) continue; const p = pointAt(rt, d); chevrons.push({ x: p.x, z: p.z, rot: Math.atan2(-p.dx, -p.dz) }); } });
@@ -114,7 +118,7 @@ export function buildFieldView(field: Field, mission: MissionId): FieldParts {
   const marker = new T.Mesh(new T.RingGeometry(1.35, 1.6, 32).rotateX(-Math.PI / 2), basic('#ffe14d', .9)); marker.position.y = .28; marker.visible = false; marker.renderOrder = 4; root.add(marker);
   const range = new T.Mesh(new T.CircleGeometry(1, 48).rotateX(-Math.PI / 2), basic('#7fd0ff', .14)); range.position.y = .06; range.visible = false; range.renderOrder = 3; root.add(range);
   noPick(root);
-  return { root, pads, marker, range, farmhouse: farm };
+  return { root, pads, marker, range, farmhouse: farm, skirt };
 }
 /** The field's decor from content plus border trees, as [kit piece, x, z, rot?]. */
 function FIELD_DECOR(mission: MissionId, field: Field): Array<[string, number, number, number?]> {
@@ -124,6 +128,13 @@ function FIELD_DECOR(mission: MissionId, field: Field): Array<[string, number, n
   for (let x = -RESCUE.half.x - 2; x <= RESCUE.half.x + 2; x += 4.6) for (const z of [-RESCUE.half.z - 3, RESCUE.half.z + 3]) out.push(['rs_tree', x + ((x * 7) % 2), z + (x % 2.4), x]);
   for (let z = -RESCUE.half.z + 1; z <= RESCUE.half.z - 1; z += 4.4) out.push(['rs_tree', RESCUE.half.x + 3.4, z, z]);
   for (const z of [-RESCUE.half.z + 1, -RESCUE.half.z + 5, RESCUE.half.z - 5, RESCUE.half.z - 1]) out.push(['rs_tree', -RESCUE.half.x - 4, z, z]);
+  // A looser wood further out fills the margin the top-down camera shows (same instanced draws, a few more triangles).
+  const jit = (a: number, b: number) => ((Math.sin(a * 12.9898 + b * 78.233) * 43758.5453) % 1 + 1) % 1;
+  for (let z = -RESCUE.half.z - 20; z <= RESCUE.half.z + 20; z += 7) for (const sx of [-1, 1]) out.push(['rs_tree', sx * (RESCUE.half.x + 27 + jit(z, 27) * 4), z + jit(27, z) * 3, z]);
+  for (const ring of [9, 16]) {
+    for (let x = -RESCUE.half.x - ring; x <= RESCUE.half.x + ring; x += 6.5) for (const sz of [-1, 1]) out.push(['rs_tree', x + jit(x, ring) * 3 - 1.5, sz * (RESCUE.half.z + ring + jit(ring, x) * 3 - 1.5), x + ring]);
+    for (let z = -RESCUE.half.z - ring + 6; z <= RESCUE.half.z + ring - 6; z += 6.5) for (const sx of [-1, 1]) out.push(['rs_tree', sx * (RESCUE.half.x + ring + jit(z, ring) * 3 - 1.5), z + jit(ring, z) * 3 - 1.5, z - ring]);
+  }
   return out;
 }
 const FIELD_DECOR_LIST = (mission: MissionId) => FIELDS[mission].decor;

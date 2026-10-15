@@ -31,12 +31,13 @@ import { FRIENDS, type Friend } from './friends-state.ts';
 import { friendLook } from './friend-looks.ts';
 import { RESCUE, MISSIONS, MISSION_IDS, FIELDS, DEFENCES, DEFENCE_KINDS, BOOSTS, BOOST_KINDS, LADDER_STEPS, STEP_TEXT, SOS, RESCUE_REWARD, type MissionId, type DefenceKind, type BoostKind, type EnemyRole, type SquadRole, type Point } from './rescue-content.ts';
 import { createRun, stepRun, startWave, placeDefence, upgradeDefence, sellDefence, buyStep, buyBoost, setOrder, heroHit, statusEnemy, pushBack, setHero, forfeit, claimOf, sellValue, stepCost, hero as runHero, unit as runUnit,
-  chooseOrientation, wideScreen, toWorld, toLocal, facingToWorld, fieldYaw, buildField, totalWaves, heroHaste, heroCooldownScale, ME,
+  chooseOrientation, wideScreen, toWorld, toLocal, facingToWorld, pointAt, fieldYaw, buildField, totalWaves, heroHaste, heroCooldownScale, ME,
   type RsRun, type RsEvent, type RsUnit, type Orientation, type Field, type SquadSpec, type Refusal } from './rescue-rules.ts';
 import { heroBot, autoPlan } from './rescue-ai.ts';
 import { HELPER_ROLES, spreadRoles } from './rescue-ladder.ts';
 import { fullWinsLeft, wavesLeft, isMission, type RescueClaimResult } from './rescue-claim.ts';
-import { rescueKit, rescueIcon, buildPortal, buildFieldView, DefenceViews, EnemyViews, ShotViews, type FieldParts } from './rescue-view.ts';
+import { rescueKit, rescueIcon, buildPortal, buildFieldView, DefenceViews, EnemyViews, ShotViews, GROUND_PAD, type FieldParts } from './rescue-view.ts';
+import { fitView, footprintOf, RESCUE_VIEW, type Rect, type ViewFit, type Ground } from './rescue-camera.ts';
 
 interface Neighbour { id: string; name: string; level: number; color: string; gear: Record<string, string | undefined> }
 export interface RescueHooks {
@@ -67,6 +68,8 @@ interface Session {
   saved: { root: T.Group; entities: Entity[]; enemies: Enemy[]; obstacles: World['obstacles']; detached: T.Object3D[]; background: T.Scene['background']; fog: T.Scene['fog']; onZone: World['onZone']; onStep: World['onStep']; beforeRender: World['beforeRender']; pointer: World['pointer']; hp: number; zoom: number };
   proxies: Map<number, Enemy>; pool: Enemy[]; squadRoot: T.Group; views: Map<string, { root: T.Group; key: string; gait: Gait; swing: number; t: number; attack: number; x: number; z: number }>;
   pad: number; tab: 'defences' | 'squad' | 'me'; tryOn: { id: string; until: number } | null; focusUntil: number;
+  /** The fitted camera (rescue-camera.ts): route and pad samples, the free screen rectangle, the damped distance. */
+  view: { points: Ground[]; free: Rect | null; freeKey: string; freeAt: number; fit: ViewFit | null; whole: ViewFit | null; wholeKey: string; dist: number; boxDist: number; zoom0: number; focus: Ground | null; after: World['afterAnimate'] };
   ended: boolean; claimed: boolean; claim: RescueClaimResult | null; hpWritten: number; heroWasDown: boolean; autopilot: boolean; bot: { cd: number };
   pending: RsEvent[]; time: number;
 }
@@ -232,8 +235,12 @@ export function initRescue(h: RescueHooks) {
     world.scene.background = new T.Color(md.sky); world.scene.fog = new T.Fog(md.fog, 70, 160);
     world.zoom = Math.max(world.zoom, o === 'portrait' ? 1.7 : 1.8); world.resize();
     const s: Session = { m, o, field, parts, defs, raiders, shots, saved, proxies: new Map(), pool: [], squadRoot, views: new Map(), pad: -1, tab: 'defences', tryOn: null, focusUntil: 0,
-      ended: false, claimed: false, claim: null, hpWritten: -1, heroWasDown: false, autopilot: false, bot: { cd: 0 }, pending: [], time: 0 };
+      ended: false, claimed: false, claim: null, hpWritten: -1, heroWasDown: false, autopilot: false, bot: { cd: 0 }, pending: [], time: 0,
+      view: { points: fieldPoints(field, o), free: null, freeKey: '', freeAt: -1, fit: null, whole: null, wholeKey: '', dist: 0, boxDist: 0, zoom0: world.zoom, focus: null, after: world.afterAnimate } };
     session = s;
+    // The fitted camera runs just before the world places its camera each frame (after the explorer moved).
+    world.afterAnimate = dt => { s.view.after?.(dt); if (session === s) cameraFrame(s, dt); };
+    world.viewRig = { offset: out => viewOffset(s, out), footprint: () => (s.view.fit ? footprintOf({ ...s.view.fit, distance: s.view.dist }, innerWidth, innerHeight, 160, s.view.points) : [{ x: -30, z: -30 }, { x: 30, z: -30 }, { x: 30, z: 30 }, { x: -30, z: 30 }]) };
     // Taps on a build pad pick it at once (no walking there); any other tap moves the explorer as usual.
     world.pointer = (x: number, y: number) => { const pad = padAt(x, y); if (pad >= 0 && s.m.phase !== 'over') { selectPad(pad, false); world.destination = null; world.route = []; world.marker.visible = false; return; } saved.pointer.call(world, x, y); };
     const me = runHero(m); const at = toWorld(me, o); teleport(at.x, at.z, facingToWorld(Math.PI / 2, o));
@@ -245,6 +252,7 @@ export function initRescue(h: RescueHooks) {
     h.refreshPlayer(); h.tone('level'); banner(t(md.title), `${md.friendIcon} ${t(md.friend)} · ${t('{n} waves', { n: md.waves.length })}`);
     world.fx?.burst({ x: world.position.x, z: world.position.z }, { n: 40, color: ['#ff8a4d', '#ffd23f', '#ffffff'], glow: true, speed: 5, up: 9 });
     renderHud(true); renderPanel(true); h.updateHud();
+    cameraFrame(s, 0); world.resize();
     return true;
   }
   function refreshArt(s: Session, makeModel: (type: string) => T.Object3D | null) {
@@ -280,7 +288,8 @@ export function initRescue(h: RescueHooks) {
     if (fromPanel) focus(s.field.pads[i], 1.6);
     h.tone('pop'); renderPanel(true);
   }
-  function focus(p: Point, seconds: number) { const s = session; if (!s) return; const w = toWorld(p, s.o); world.cameraFocus = lookAt.set(w.x, 0, w.z); s.focusUntil = s.time + seconds; }
+  /** The camera slides to show `p` for a while (only when the whole field does not fit already: rescue-camera.ts). */
+  function focus(p: Point, seconds: number) { const s = session; if (!s) return; s.view.focus = toWorld(p, s.o); s.focusUntil = s.time + seconds; }
   function confirmLeave() {
     if (!session) return;
     if (session.m.phase === 'over') { exit(); return; }
@@ -293,7 +302,7 @@ export function initRescue(h: RescueHooks) {
     for (const e of [...s.proxies.values(), ...s.pool]) e.mesh.removeFromParent();
     retire(s.parts.root, () => { s.defs.dispose(); s.raiders.dispose(); });
     const w = world as unknown as Record<string, unknown>; delete w.applyEnemySnapshots; delete w.applyAuthoritativeEnemyHealth; delete w.enemySnapshots;
-    world.pointer = s.saved.pointer; world.cameraFocus = null; world.playerLift = 0;
+    world.pointer = s.saved.pointer; world.cameraFocus = null; world.playerLift = 0; world.viewRig = null; world.afterAnimate = s.view.after;
     world.onZone = s.saved.onZone; world.onStep = s.saved.onStep; world.beforeRender = s.saved.beforeRender;
     if (!rebuilt) {
       world.entities = s.saved.entities; world.enemies = s.saved.enemies; world.obstacles = s.saved.obstacles;
@@ -315,7 +324,61 @@ export function initRescue(h: RescueHooks) {
   function restoreAfterReload() { try { const raw = localStorage.getItem('zoo-rescue-restore'); if (!raw) return; localStorage.setItem(COOLDOWN_KEY, String(Date.now() + RECOVERY_MS)); wasRecovering = true; localStorage.removeItem('zoo-rescue-restore'); const v = JSON.parse(raw) as { hp: number }; if (Number.isFinite(v.hp) && v.hp > 0) h.state().hp = Math.min(h.maxHp(), v.hp); } catch { /* nothing */ } }
 
   // ---------------------------------------------------------------- the frame
-  const camQ = new T.Quaternion(), rootQ = new T.Quaternion(), lookAt = new T.Vector3(), LOOK_AHEAD = 5;
+  const camQ = new T.Quaternion(), rootQ = new T.Quaternion(), lookAt = new T.Vector3();
+  // ---------------------------------------------------------------- the fitted camera (rescue-camera.ts)
+  /** What the camera must keep in view: every route (a sample each 2 m), every pad, and your end's yard. */
+  function fieldPoints(field: Field, o: Orientation): Ground[] {
+    const out: Ground[] = [];
+    for (const l of field.lanes) for (const rt of l.routes) for (let d = 0; d <= rt.length + 1.9; d += 2) out.push(toWorld(pointAt(rt, Math.min(d, rt.length)), o));
+    for (const p of field.pads) out.push(toWorld(p, o));
+    out.push(toWorld({ x: RESCUE.camp.x - 1.5, z: 0 }, o));
+    return out;
+  }
+  /**
+   * The part of the screen the field may use: below the mission HUD, beside or above the build drawer when it is open,
+   * and (a phone held upright) above the stick and the skill buttons. CSS px.
+   */
+  function freeRect(s: Session): Rect {
+    const W = innerWidth, H = innerHeight, r: Rect = { left: 8, top: 8, right: W - 8, bottom: H - 8 };
+    if (!hud.hidden) { const b = hud.getBoundingClientRect(); if (b.height) r.top = Math.max(r.top, b.bottom + 6); }
+    if (s.o === 'portrait') r.bottom = Math.min(r.bottom, H - Math.round(Math.min(170, H * .18)));
+    if (!panel.hidden && !panel.classList.contains('folded')) {
+      const b = panel.getBoundingClientRect();
+      if (b.width > W * .6) r.bottom = Math.min(r.bottom, b.top - 6); else if (b.left > W / 2) r.right = Math.min(r.right, b.left - 6); else r.left = Math.max(r.left, b.right + 6);
+    }
+    if (r.bottom - r.top < H * .3) r.top = Math.max(8, r.bottom - H * .3);
+    return r;
+  }
+  /** The plain skirt beyond the painted ground costs a draw in every pass: it shows only while the view reaches past the paint. */
+  function skirtFrame(s: Session) {
+    const fit = s.view.fit; if (!fit) return;
+    const t = world.cameraTarget, ex = RESCUE.half.x + GROUND_PAD.x - 2, ez = RESCUE.half.z + GROUND_PAD.z - 2;
+    s.parts.skirt.visible = footprintOf({ ...fit, distance: s.view.dist || fit.distance }, innerWidth, innerHeight).some(p => { const l = toLocal({ x: p.x + t.x, z: p.z + t.z }, s.o); return Math.abs(l.x) > ex || Math.abs(l.z) > ez; });
+  }
+  const PITCH = (o: Orientation) => RESCUE_VIEW.pitch[o] * Math.PI / 180;
+  function viewOffset(s: Session, out: T.Vector3) { const r = PITCH(s.o), d = s.view.dist || 60; return out.set(0, d * Math.sin(r), d * Math.cos(r)); }
+  /**
+   * Each frame: fit the field into the free rectangle (re-measured every 0.25 s, or at once when the drawer opens or
+   * folds). A pinch or wheel zoom in from the entry zoom brings the camera closer, and then it follows the explorer.
+   */
+  function cameraFrame(s: Session, dt: number) {
+    const v = s.view, W = innerWidth, H = innerHeight, key = `${W}x${H}:${panel.hidden ? 0 : panel.classList.contains('folded') ? 1 : 2}:${hud.hidden ? 0 : 1}`;
+    if (!v.free || key !== v.freeKey || s.time - v.freeAt > .25) { v.free = freeRect(s); v.freeKey = key; v.freeAt = s.time; skirtFrame(s); }
+    const f = v.free, wholeKey = `${W}x${H}:${f.left}:${f.top}:${f.right}:${f.bottom}`;
+    if (!v.whole || wholeKey !== v.wholeKey) { v.whole = fitView(v.points, W, H, f, s.o, world.position, { minPxPerM: 0 }); v.wholeKey = wholeKey; }
+    const me = runHero(s.m), follow = v.focus ?? (me.down > 0 ? toWorld(RESCUE.camp, s.o) : world.position);
+    const closer = Math.max(1, Math.min(2.5, v.zoom0 / Math.max(.1, world.zoom))), floor = Math.max(RESCUE_VIEW.minPxPerM, v.whole.pxPerM * closer);
+    v.fit = v.whole.pxPerM >= floor - 1e-6 ? v.whole : fitView(v.points, W, H, f, s.o, follow, { minPxPerM: floor, anchor: toWorld(RESCUE.camp, s.o) });
+    // The distance eases (about 0.3 s) so opening the drawer or zooming glides; the target eases through cameraFocus.
+    v.dist = !v.dist || dt <= 0 ? v.fit.distance : T.MathUtils.damp(v.dist, v.fit.distance, 7, dt);
+    world.cameraFocus = lookAt.set(v.fit.target.x, 0, v.fit.target.z); viewOffset(s, world.viewOffset);
+    if (dt <= 0) world.cameraTarget.copy(lookAt);
+    if (!v.boxDist || Math.abs(v.dist - v.boxDist) / v.boxDist > .04) {
+      v.boxDist = v.dist; world.fitViewBox();
+      // Fog starts beyond the far edge of the field in view, so a far camera never hazes the lanes.
+      const fog = world.scene.fog; if (fog instanceof T.Fog) { fog.near = v.dist * 2 + 40; fog.far = v.dist * 2 + 200; }
+    }
+  }
   h.onFrame(dt => {
     if (!h.started()) return;
     if (!restored) { restored = true; restoreAfterReload(); }
@@ -332,9 +395,7 @@ export function initRescue(h: RescueHooks) {
       if (!session) return;
       outputFrame(s);
     }
-    if (s.focusUntil && s.time > s.focusUntil) s.focusUntil = 0;
-    // Without a picked focus, the camera looks a little ahead of the explorer toward the raiders' side.
-    if (!s.focusUntil) { const me = runHero(s.m), p = me.down > 0 ? RESCUE.camp : toLocal(world.position, s.o), w = toWorld({ x: p.x + (s.o === 'portrait' ? 7 : LOOK_AHEAD), z: p.z * .85 }, s.o); world.cameraFocus = lookAt.set(w.x, 0, w.z); }
+    if (s.focusUntil && s.time > s.focusUntil) { s.focusUntil = 0; s.view.focus = null; }
     if (s.tryOn && s.time > s.tryOn.until) { s.tryOn = null; renderPanel(true); }
     // Billboards face the camera in the field root's own space (the root turns for portrait).
     s.parts.root.getWorldQuaternion(rootQ); camQ.copy(rootQ.invert()).multiply(world.camera.quaternion);
@@ -535,7 +596,7 @@ export function initRescue(h: RescueHooks) {
     const show = m.phase === 'build'; panel.hidden = !show || h.blocked();
     if (!show) { panelShown = ''; return; }
     if (!force && Math.floor(s.time * 4) % 2) return; // a few times a second is plenty
-    const tab = (id: Session['tab'], label: string, icon: string) => `<button data-rescue="tab" data-tab="${id}" class="${s.tab === id ? 'sel' : ''}" aria-pressed="${s.tab === id}">${icon} ${esc(t(label))}</button>`;
+    const tab = (id: Session['tab'], label: string, icon: string) => `<button data-rescue="tab" data-tab="${id}" class="${s.tab === id ? 'sel' : ''}" aria-pressed="${s.tab === id}" aria-label="${esc(t(label))}">${icon}<span> ${esc(t(label))}</span></button>`;
     let body = '';
     if (s.tab === 'defences') {
       const chips = s.field.pads.map((p, i) => { const d = m.defences[i]; return `<button data-rescue="pad" data-pad="${i}" class="${i === s.pad ? 'sel' : ''} ${d ? 'built' : ''}" title="${esc(t('Pad {n}', { n: i + 1 }))}">${d ? DEFENCES[d.kind].icon + `<sup>${d.level}</sup>` : i + 1}</button>`; }).join('');
@@ -662,6 +723,8 @@ export function initRescue(h: RescueHooks) {
     finish(won = true) { const s = session; if (!s || s.m.phase === 'over') return; if (won) { s.m.cleared = totalWaves(s.m); s.m.enemies = []; s.m.queue = []; s.m.elapsed = Math.max(s.m.elapsed, totalWaves(s.m) * RESCUE_REWARD.minSecondsPerWave + 5); s.m.phase = 'wave'; s.m.wave = totalWaves(s.m) - 1; handle(stepRun(s.m, .05)); } else handle(forfeit(s.m)); },
     get run() { return session?.m ?? null; },
     get orientation() { return session?.o ?? null; },
+    /** The fitted camera now: target, distance, px per metre, whole field or following, the free screen rectangle (rescue-camera.ts). */
+    get view() { const s = session; return s?.view.fit ? { ...s.view.fit, dist: s.view.dist, free: s.view.free, points: s.view.points } : null; },
     get lastClaim() { return lastClaim; },
     get lastResult() { return lastResult; },
     get draws() { return session?.raiders.draws ?? 0; },
