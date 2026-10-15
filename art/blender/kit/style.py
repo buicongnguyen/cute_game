@@ -328,6 +328,28 @@ def export_glb(objects, path):
     return os.path.getsize(path)
 
 
+def import_glb(path):
+    """Import a GLB into the current scene. The installed models (public/assets/models) are meshopt-compressed by
+    art/compress-models.mjs and Blender's glTF importer cannot read that, so such a file is first decoded to a plain
+    temporary copy (with node, which must be on the PATH). Plain files import directly."""
+    import struct
+    import subprocess
+    import tempfile
+    with open(path, 'rb') as fh:
+        head = fh.read(20)
+        doc = fh.read(struct.unpack_from('<I', head, 12)[0])
+    if b'EXT_meshopt_compression' not in doc:
+        return bpy.ops.import_scene.gltf(filepath=path)
+    tool = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'compress-models.mjs'))
+    handle, plain = tempfile.mkstemp(suffix='.glb')
+    os.close(handle)
+    try:
+        subprocess.run(['node', tool, '--decode', path, plain], check=True)
+        return bpy.ops.import_scene.gltf(filepath=plain)
+    finally:
+        os.remove(plain)
+
+
 # ----------------------------------------------------------------- preview
 def _engine(scene):
     for engine in ('BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE'):

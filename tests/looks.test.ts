@@ -6,9 +6,8 @@ import * as T from 'three';
 import * as M from '../src/model.ts';
 import * as F from '../src/friends.ts';
 import { applyGameAction } from '../src/actions.ts';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { BUILD, DECOS, DEFAULT_LOOK, DEFAULT_PIVOTS, FIT, LOOK_IDS, OPTIONS, ROWS, bodyFile, buyLook, fitOf, joinLook, lookOf, lookPrice, ownsLook, parseLooks, rowOf, splitLook, swapOption, toLook, wearLook, type Body, type Fit, type Height, type LookId } from '../src/looks.ts';
-import { HeroLibrary, heroKitFor, tuckEars, useHeroLoader } from '../src/assets.ts';
+import { HeroLibrary, createGltfLoader, heroKitFor, tuckEars, useHeroLoader } from '../src/assets.ts';
 import { HIP, applyGait, gaitSwing, newGait, stepGait } from '../src/walk-cycle.ts';
 import { GROWTH, earnedStage, friendHeight, friendStage, growUp } from '../src/growth.ts';
 import { friendScale, buildFriend, poseFriend } from '../src/friend-view.ts';
@@ -219,7 +218,7 @@ test('ears and hoods sit on the head and tails on the back at every height and b
   for (const deco of DECOS) assert.ok(partTris(parts, 'deco-' + deco) <= 360, `${deco}: ${partTris(parts, 'deco-' + deco)} triangles`);
 });
 
-const disk = async (url: string) => { const file = url.split('/').pop()!.split('?')[0], bytes = readFileSync(new URL(`../public/assets/models/${file}`, import.meta.url)); return (await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '')).scene; };
+const disk = async (url: string) => { const file = url.split('/').pop()!.split('?')[0], bytes = readFileSync(new URL(`../public/assets/models/${file}`, import.meta.url)); return (await createGltfLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '')).scene; };
 const draws = (o: T.Object3D) => { let n = 0; o.traverse(m => { if (m instanceof T.Mesh && m.visible && m.layers.mask) n++; }); return n; };
 const headVerts = (hero: T.Object3D) => hero.getObjectByName('head')!.children.find((o): o is T.Mesh => o instanceof T.Mesh && !!o.geometry.getAttribute('color'))!;
 test('at run time every body, build, height, ears and hood draws no more than the default explorer; hoods replace ears and tuck under hats', async () => {

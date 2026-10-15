@@ -1205,7 +1205,7 @@ def _import_explorer():
     if not os.path.exists(HERO_GLB):
         return []
     before = set(bpy.data.objects)
-    bpy.ops.import_scene.gltf(filepath=HERO_GLB)
+    style.import_glb(HERO_GLB)
     new = [o for o in bpy.data.objects if o not in before]
     return [o for o in new if o.parent is None]
 

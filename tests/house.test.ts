@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import * as T from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createGltfLoader } from '../src/assets.ts';
 import { World } from '../src/world.ts';
 import { newGame, type SaveState } from '../src/model.ts';
 import { applyGameAction } from '../src/actions.ts';
@@ -171,7 +171,7 @@ test('friends sit in the big room wearing what they were given, and change at on
 test('draw budget: the whole interior from the Blender kit is two batches (plus the door)', async () => {
   const bytes = await readFile(new URL('../public/assets/models/house.glb', import.meta.url));
   assert.ok(bytes.length < 580_000); // 544 KB + the upgrade bench (~19 KB)
-  const gltf = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '');
+  const gltf = await createGltfLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '');
   // Earlier tests asked for the kit without a server; load it again from the file.
   Object.assign(houseKit, { loadScene: async () => gltf.scene, loading: null });
   await houseKit.load(); assert.equal(houseKit.ready, true);

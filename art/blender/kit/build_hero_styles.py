@@ -61,7 +61,7 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 import build_hero as BH  # noqa: E402
 import hero_spec as HS  # noqa: E402
-from style import export_glb, reset_scene  # noqa: E402
+from style import export_glb, import_glb, reset_scene  # noqa: E402
 
 BODIES = ('boy', 'girl', 'man', 'woman')
 # What each body is made from: the boy's or the girl's pieces, and its dress.
@@ -717,7 +717,7 @@ def measure(body, height, P, pivots):
 def import_gear():
     path = os.path.join(BH.PUBLIC_MODELS, 'gear-wear.glb')
     before = set(bpy.data.objects)
-    bpy.ops.import_scene.gltf(filepath=path)
+    import_glb(path)
     return [o for o in bpy.data.objects if o not in before]
 
 

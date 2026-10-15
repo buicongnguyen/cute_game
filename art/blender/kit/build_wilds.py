@@ -1001,7 +1001,7 @@ def import_nodes(path, names=None):
         return {}
     before = set(bpy.data.objects)
     try:
-        bpy.ops.import_scene.gltf(filepath=path)
+        style.import_glb(path)
     except Exception as exc:  # noqa: BLE001 - previews are optional
         print(f'  (could not import {path}: {exc})')
         return {}

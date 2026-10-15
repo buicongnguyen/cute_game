@@ -1048,7 +1048,7 @@ class HeroStandIn:
         self.source = 'proxy'
         if os.path.exists(path):
             try:
-                bpy.ops.import_scene.gltf(filepath=path)
+                style.import_glb(path)
                 self.source = 'hero.glb'
             except Exception as exc:  # noqa: BLE001 - fall back to the proxy
                 print('hero.glb import failed, using the proxy:', exc)
