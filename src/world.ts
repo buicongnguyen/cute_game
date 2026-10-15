@@ -60,6 +60,9 @@ import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
 import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
+import {BOSS_DRAW,chargeTouches} from './boss-body.ts';
+import {STAGGER,adoptStaggerView,newStagger,staggerBroken,staggerDamage,staggerHit,type Stagger,type StaggerBlow,type StaggerView} from './boss-stagger.ts';
+import {BossFeel,isSolidBoss,type FeelHost} from './boss-feel.ts';
 import {applyGait,armOf,armSwing,gaitSwing,hipOf,limbsOf,newGait,stepGait,strideOf,type Gait} from './walk-cycle.ts';
 import {DEFAULT_PIVOTS,fitOf,lookOf,lookTrim,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {fitArmPiece} from './arm-fit.ts';
@@ -104,6 +107,8 @@ export interface Enemy { /** Its recoil from the last blow (hit-react.ts): looks
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
 export interface AvatarVisual {size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
 export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
+/** A boss's stagger meter (boss-stagger.ts; online a copy of the server's) and the charge that last threw the explorer (boss-feel.ts). */
+export interface Enemy {stagger?:Stagger;chargeKnock?:number}
 /** An enemy run by its own module (colossus.ts): no generic AI or drawing here; `incoming` may scale a blow before it lands. */
 export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):number}}
 /** Elite roles (elite-roles.ts, elite-world.ts): the role, its drawn size, the barrier, a split child's parent and depth. */
@@ -114,7 +119,7 @@ export interface Enemy {fling?:{x:number;z:number;y0:number;dx:number;dz:number;
 export type EliteEvent=BarrierEvent|'split'|'regrow';
 export interface RemotePose {/** In the water (swim.ts; server-cleaned): wading or swimming. */swim?:'land'|'wade'|'swim';/** More pets that follow this explorer besides gear.pet (the AI neighbours' second pet). */pets?:string[];/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;/** The knight's shield is up (server-set): shots from in front bounce back. */block?:boolean;/** Hittable summons (server-checked, combat.ts shareableDecoys). */decoys?:DecoyPose[];id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
-export interface EnemySnapshot {elite?:EliteTag;parentId?:string;depth?:number;barrier?:Barrier;homeX?:number;homeZ?:number;titanAttacks?:TitanAttack[];titanLift?:number;chaseGrace?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
+export interface EnemySnapshot {elite?:EliteTag;parentId?:string;depth?:number;barrier?:Barrier;homeX?:number;homeZ?:number;titanAttacks?:TitanAttack[];titanLift?:number;chaseGrace?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[];stagger?:StaggerView}
 export interface EnvironmentSnapshot {time:number;lamps:Array<[number,number]>;eclipseUntil?:number;weather?:LavaWeatherSnapshot;nestLevel?:number;fireRain?:EnvironmentSimulation['fireRain'];lightning?:LightningState}
 export interface EnvironmentAction {kind:'light-pillar'|'collect-ore';id:string;index?:number}
 export interface EnvironmentReward {id:string;count:number}
@@ -1102,19 +1107,20 @@ export class World {
     const wasAlive=e.hp>0;e.hp=Math.max(0,snapshot.hp);if(Number.isFinite(snapshot.maxHp))e.maxHp=snapshot.maxHp;if(Number.isFinite(snapshot.damage))e.damage=snapshot.damage!;if(Number.isFinite(snapshot.respawn))e.respawn=snapshot.respawn;e.scaled=true;
     if(Number.isFinite(snapshot.chaseGrace))e.lastHitAt=this.time-4+Math.max(0,Math.min(4,snapshot.chaseGrace!));
     if(snapshot.statuses)e.statuses={...snapshot.statuses};if(Number.isFinite(snapshot.stun))e.stun=snapshot.stun!;
+    if(snapshot.stagger)adoptStaggerView(e.stagger??=newStagger(),snapshot.stagger,this.time); // the server's stagger meter (boss-stagger.ts)
     if(e.elite){const before=e.barrier?.open??0;applyEliteSnapshot(e,snapshot);const event=(snapshot.impact as {barrier?:BarrierEvent}|undefined)?.barrier;if(event&&snapshot.impactId&&!this.authorityImpacts?.has(snapshot.impactId))this.onEliteEvent?.(e,event);else if(before>0&&!(e.barrier?.open))this.onEliteEvent?.(e,'regrow');}
     if(wasAlive&&e.hp<=0){const recent=(this.time??0)-(e.blowAt??-Infinity)<1.5;this.startDeathFling(e,recent?e.blowX??0:0,recent?e.blowZ??0:0,recent?e.blowS??0:0);e.telegraphs=[];e.skillEffects=[];e.titanAttacks=[];e.titanLift=0;e.knockVX=e.knockVZ=0;this.defeatFeedback(e);return;}
     const impact=snapshot.impact;if(!impact||!Number.isFinite(impact.amount))return;
     this.authorityImpacts??=new Set();if(snapshot.impactId){if(this.authorityImpacts.has(snapshot.impactId))return;this.authorityImpacts.add(snapshot.impactId);if(this.authorityImpacts.size>512)this.authorityImpacts.delete(this.authorityImpacts.values().next().value!);}
-    // A small creature (creature-weight.ts) reads a hard knock or a launch as the last hit of a chain, as main.ts hit() does; a boss's look stays as it was.
-    const small=!!this.weightOf(e),big=small&&((impact.knock??0)>=2||(impact.lift??0)>0),critical=!!impact.critical;
-    this.hitFeedback(e,impact.amount,critical,big);e.lastHitAt=this.time;
+    // A hard knock or a launch reads as the last hit of a chain, as main.ts hit() does; a boss also learns of its break (boss-stagger.ts).
+    const broke=!!(impact as {brk?:boolean}).brk,small=!!this.weightOf(e),big=(impact.knock??0)>=2||(impact.lift??0)>0,critical=!!impact.critical;
+    this.hitFeedback(e,impact.amount,critical,big,broke);e.lastHitAt=this.time;if(broke)this.staggerBreak(e);
     // Kept for the kill, which reaches this browser later and without the blow (the server holds the creature at 1 HP until the reward is saved).
     if(small){const d=impact.direction,l=d?Math.hypot(d.x,d.z):0;if(l>1e-6&&Number.isFinite(l)){e.blowX=d!.x/l;e.blowZ=d!.z/l;}else{e.blowX=e.x-this.position.x;e.blowZ=e.z-this.position.z;}e.blowS=reactStrength({critical,big});e.blowAt=this.time??0;this.flinchEnemy(e,{critical,big});}
     if(impact.knock&&impact.direction)this.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
     if(impact.lift)this.knockUpEnemy(e,impact.lift,.8);
   }
-  applyEnemySnapshots(snapshots:EnemySnapshot[]){const own=`${this.planet}:`;for(const snapshot of snapshots){if(typeof snapshot.id!=='string'||!snapshot.id.startsWith(own)||!Number.isFinite(snapshot.x)||!Number.isFinite(snapshot.z)||!Number.isFinite(snapshot.hp))continue;let e=this.enemies.find(e=>e.id===snapshot.id);if(!e&&snapshot.type&&ENEMY_TYPES[snapshot.type]){e=this.spawnSpecies(snapshot.type,snapshot.x,snapshot.z,this.enemies.length)??undefined;if(e)e.id=snapshot.id;}if(!e)continue;e.x=snapshot.x;e.z=snapshot.z;e.hp=Math.max(0,snapshot.hp);e.maxHp=snapshot.maxHp;e.respawn=snapshot.respawn;e.phase=snapshot.phase;e.lift=snapshot.lift??0;e.stun=snapshot.stun??0;e.phaseTime=snapshot.phaseTime??0;if(Number.isFinite(snapshot.chaseGrace))e.lastHitAt=this.time-4+Math.max(0,Math.min(4,snapshot.chaseGrace!));e.cooldown=snapshot.cooldown??0;e.statuses={...snapshot.statuses};e.targetX=snapshot.targetX;e.targetZ=snapshot.targetZ;e.bossStage=snapshot.bossStage;e.skill=snapshot.skill;e.attackCount=snapshot.attackCount;e.skillCount=snapshot.skillCount;e.telegraphs=snapshot.telegraphs?.map(p=>({...p}));e.skillEffects=snapshot.skillEffects?.map(p=>({...p}));e.spinTick=snapshot.spinTick;e.damage=snapshot.damage??e.damage;e.titanAttacks=sanitizeTitanAttacks(snapshot.titanAttacks);e.titanLift=snapshot.titanLift??0;e.scaled=true;if(e.elite)applyEliteSnapshot(e,snapshot);e.mesh.position.set(e.x,terrainHeight(this.environment.layout,e)+(e.lift??0),e.z);e.mesh.rotation.y=snapshot.facing??0;e.mesh.visible=e.hp>0;
+  applyEnemySnapshots(snapshots:EnemySnapshot[]){const own=`${this.planet}:`;for(const snapshot of snapshots){if(typeof snapshot.id!=='string'||!snapshot.id.startsWith(own)||!Number.isFinite(snapshot.x)||!Number.isFinite(snapshot.z)||!Number.isFinite(snapshot.hp))continue;let e=this.enemies.find(e=>e.id===snapshot.id);if(!e&&snapshot.type&&ENEMY_TYPES[snapshot.type]){e=this.spawnSpecies(snapshot.type,snapshot.x,snapshot.z,this.enemies.length)??undefined;if(e)e.id=snapshot.id;}if(!e)continue;e.x=snapshot.x;e.z=snapshot.z;e.hp=Math.max(0,snapshot.hp);e.maxHp=snapshot.maxHp;e.respawn=snapshot.respawn;e.phase=snapshot.phase;e.lift=snapshot.lift??0;e.stun=snapshot.stun??0;e.phaseTime=snapshot.phaseTime??0;if(Number.isFinite(snapshot.chaseGrace))e.lastHitAt=this.time-4+Math.max(0,Math.min(4,snapshot.chaseGrace!));e.cooldown=snapshot.cooldown??0;e.statuses={...snapshot.statuses};e.targetX=snapshot.targetX;e.targetZ=snapshot.targetZ;e.bossStage=snapshot.bossStage;e.skill=snapshot.skill;e.attackCount=snapshot.attackCount;e.skillCount=snapshot.skillCount;e.telegraphs=snapshot.telegraphs?.map(p=>({...p}));e.skillEffects=snapshot.skillEffects?.map(p=>({...p}));e.spinTick=snapshot.spinTick;e.damage=snapshot.damage??e.damage;e.titanAttacks=sanitizeTitanAttacks(snapshot.titanAttacks);e.titanLift=snapshot.titanLift??0;e.scaled=true;if(snapshot.stagger)adoptStaggerView(e.stagger??=newStagger(),snapshot.stagger,this.time);if(e.elite)applyEliteSnapshot(e,snapshot);e.mesh.position.set(e.x,terrainHeight(this.environment.layout,e)+(e.lift??0),e.z);e.mesh.rotation.y=snapshot.facing??0;e.mesh.visible=e.hp>0;
       if(snapshot.shots){this.enemyShots??=[];const ids=new Set(snapshot.shots.map(s=>s.id));for(let i=this.enemyShots.length-1;i>=0;i--)if(this.enemyShots[i].ownerId===e.id&&!ids.has(this.enemyShots[i].id)){const old=this.enemyShots[i];this.scene.remove(old.mesh);old.mesh.geometry.dispose();this.enemyShots.splice(i,1);}for(const source of snapshot.shots){if(![source.x,source.y,source.z,source.vx,source.vz,source.life,source.damage].every(Number.isFinite)||source.life<=0)continue;let shot=this.enemyShots.find(s=>s.id===source.id);if(!shot){const electric=e.type==='robot',model=ball(electric?'#e8fbff':e.definition?.accent??'#ffbb72',.17);this.scene.add(model);shot={...source,ownerId:e.id,mesh:model,...(electric?{electric}:{})};this.enemyShots.push(shot);}Object.assign(shot,{vx:source.vx,vz:source.vz,life:source.life,damage:source.damage,targetEnemyId:source.targetEnemyId});shot.mesh.position.set(source.x,source.y,source.z);}}
     }}
   /**
@@ -1370,8 +1376,8 @@ export class World {
    * height, chips in the creature's colours and the number. Crits are bigger and yellow, with a short
    * hit-stop but no camera shake: shake stays the signal for "you got hit" and big slams.
    */
-  hitFeedback(e:Enemy,amount:number,critical:boolean,big=false){
-    e.flash=HIT_FLASH.enemy;this.lastHit={e,t:this.time??0};
+  hitFeedback(e:Enemy,amount:number,critical:boolean,big=false,broke=false){
+    e.flash=HIT_FLASH.enemy;this.lastHit={e,t:this.time??0};if(e.boss)this.onBossHit?.(e,broke); // a boss's deeper thud (main.ts)
     // The recoil (hit-react.ts): knocked back along the blow, squashed and tipped away; harder for a critical and for the
     // last hit of a chain (`big`), lighter on a boss. It moves the drawn model only.
     const dx=this.position.x-e.x,dz=this.position.z-e.z,d=Math.hypot(dx,dz)||1;
@@ -1384,9 +1390,11 @@ export class World {
     // A stand-in body whose owner draws it (e.driver) is not posed here: a Flag Rush hero reacts through its avatar (animateRemotes), a Rescue Call raider in rescue-view.ts.
     if(e.driver){const remote=this.remotePlayers?.get(e.id);if(remote)remote.mesh.userData.react=e.react;}
     const fx=this.fx;if(!fx)return;
-    const at={x:e.x,y:e.mesh.position.y,z:e.z},colors=[e.definition?.color??'#fff0bb',e.definition?.accent??'#ffffff'],chest=at.y+.8*(e.boss?1.85:1);
+    const at={x:e.x,y:e.mesh.position.y,z:e.z},colors=[e.definition?.color??'#fff0bb',e.definition?.accent??'#ffffff'],chest=at.y+.8*(e.boss?BOSS_DRAW:1);
     // The contact point: the creature's surface on the explorer's side, at chest height. The star, the chips and the sparks all leave from there.
+    // A boss is struck on its real surface, its nearest body circle (boss-body.ts), with a puff of dust as well.
     const reach=Math.min(e.radius*.8,d*.5),hit={x:e.x+dx/d*reach,y:chest,z:e.z+dz/d*reach},heavy=critical||big;
+    if(e.boss&&!e.driver&&this.bossFeel){this.bossFeel.contact(e,this.position,hit);fx.burst(hit,{n:heavy?7:4,color:['#e9dfcf','#ffffff',colors[0]],size:.15,speed:2.2,up:1.6,y:-.3,life:.5,gravity:3});}
     fx.spark(hit,critical?1.6:big?1.45:1.25,critical?.13:.1,critical?'#ffe14d':'#ffffff');
     fx.burst(hit,{n:critical?14:big?11:8,color:colors,size:.12,speed:5,up:4,y:0});
     fx.burst(hit,{n:critical?12:big?8:5,color:['#ffffff','#fff7a8'],glow:true,size:heavy?.16:.1,speed:heavy?8:5,up:3,y:0,life:.35});
@@ -1395,6 +1403,7 @@ export class World {
     if(weight&&WEIGHT[weight].dust)this.dustPuff(e.x,e.z,at.y,heavy?7:4); // a heavy body does not budge: the blow kicks up dust at its feet
     // A heartbeat of stillness for a critical or a big hit: never on Battery saver, and the longer one wins (fx.freeze does not add them up).
     const stop=reactStop({critical,big},fx.density<=.5);if(stop)fx.freeze(stop);
+    if(broke&&fx.density>.5)fx.freeze(STAGGER.stop); // the blow that breaks a boss holds a little longer (never on Battery saver)
   }
   /** A creature's weight class (creature-weight.ts), or null for a boss, a titan, an elite with a role or a body someone else drives: those keep their old feel. */
   weightOf(e:Enemy):Weight|null{return weightClass(e.type,e.definition,e);}
@@ -1427,6 +1436,8 @@ export class World {
   }
   /** A puff of dust at the feet (a heavy body hit, a thrown body's bounce, a landing): particles from the shared pool only, none on Battery saver. */
   private dustPuff(x:number,z:number,y:number,n=6){const fx=this.fx;if(!fx||fx.density<=.5)return;fx.burst({x,y,z},{n,color:['#d8c6a0','#f2e8d2','#bfae8c'],size:.15,speed:2.4,up:1.8,y:.12,life:.45,gravity:4,spread:1.6});}
+  /** A boss was hit (main.ts plays its thud, and the break's sound). */
+  onBossHit?:(e:Enemy,broke:boolean)=>void;
   /** A defeated creature bursts into a puff: a 2.5 m ring, about 25 particles in its colours and a short freeze. */
   defeatFeedback(e:Enemy){
     const fx=this.fx;if(!fx)return;const at={x:e.x,y:e.mesh.position.y,z:e.z},color=e.definition?.color??'#ffffff';
@@ -1447,7 +1458,7 @@ export class World {
   /** A boss blocked a low hit (jump-rules.ts BLOCK): a blue shield ring at its chest and a 'Blocked' float, at most every BLOCK.textGap s. */
   blockFeedback(e:Enemy){
     const now=this.time??0;if(now-(e.blockAt??-1)<BLOCK.textGap)return;e.blockAt=now;const fx=this.fx;if(!fx)return;
-    const chest=e.mesh.position.y+.8*(e.boss?1.85:1);
+    const chest=e.mesh.position.y+.8*(e.boss?BOSS_DRAW:1);
     fx.ring({x:e.x,z:e.z},{color:'#8fd0ff',from:e.radius*.7,to:e.radius*1.25,life:.28,y:chest,thick:.22,opacity:.9});
     fx.text({x:e.x,y:e.mesh.position.y+1,z:e.z},t('🛡️ Blocked'),'dmg block');
   }
@@ -1597,29 +1608,56 @@ export class World {
    * the length of `warm` (the shader warm-up, main.ts start: three.js compiles only what is visible when the warm-up
    * is called) and hidden again at once, so the first swing does not wait for its program.
    */
-  readyTrail(warm:()=>void){const trail=this.bladeTrail??=new WeaponTrail(),m=trail.mesh;if(m.parent!==this.scene)this.scene.add(m);const was=m.visible;m.visible=true;try{warm();}finally{m.visible=was;}}
+  readyTrail(warm:()=>void){const trail=this.bladeTrail??=new WeaponTrail(),m=trail.mesh;if(m.parent!==this.scene)this.scene.add(m);const was=m.visible;m.visible=true;
+    // The boss wear batches (boss-wear-view.ts) are warmed with it: a plaster or a dizzy star never waits for its program mid-fight.
+    this.feel();const wear=this.bossFeel!.wear;if(wear.group.parent!==this.scene)this.scene.add(wear.group);wear.warm(true);
+    try{warm();}finally{m.visible=was;wear.warm(false);}}
   /** An elite's barrier was hit, a splitter split, a barrier regrew (elite-view.ts draws it). */
   onEliteEvent?:(e:Enemy,event:EliteEvent)=>void;
-  damageEnemy(e:Enemy,amount:number,stun=0,hazard=false,source?:HitSource) {
+  /**
+   * `impact`: what kind of blow it was (a critical, a hard knock or launch), for a boss's stagger meter (boss-stagger.ts).
+   * Returns 'break' when the blow broke a boss (it drops to its knees; hitFeedback shows it).
+   */
+  damageEnemy(e:Enemy,amount:number,stun=0,hazard=false,source?:HitSource,impact?:StaggerBlow):'break'|undefined {
     if(e.hp<=0)return;
     if(e.driver)amount=e.driver.incoming(e,amount,hazard);
     if(e.elite){const r=eliteIncoming(e,amount,stun,hazard,source);amount=r.amount;stun=r.stun;if(r.event)this.onEliteEvent?.(e,r.event);}
     if(!hazard&&e.type==='magmaturtle')amount*=e.phase==='recover'?2:.12;
     // A hit never staggers a boss (its wind-up and skill go on, as in the reference); a hard stun only slows it.
     const control=hitControl(e.boss,stun);if(!hazard)e.lastHitAt=this.time??0;
+    // A boss on its knees takes STAGGER.vulnerable times the damage; heavy blows and criticals fill its meter (not the Colossus: e.driver).
+    let broke=false;if(e.boss&&!e.driver&&!hazard){const s=e.stagger??=newStagger(),now=this.time??0;amount=staggerDamage(s,now,amount);broke=staggerHit(s,{...impact,stun},now,!!e.definition?.titan)==='break';}
     e.hp=Math.max(0,e.hp-amount);e.stun=Math.max(e.stun,control.stun);if(control.slow&&e.hp>0){e.statuses??={};e.statuses.slow=Math.max(e.statuses.slow??0,control.slow);this.resistFeedback(e);}this.burst(e.x,e.z,'#fff0bb',8);
     if(e.hp===0){e.respawn=e.type==='minislime'||e.type==='dragon'||e.elite==='mini'?999999:e.definition?.titan?600:e.boss?90:22+Math.random()*10;e.dying=.3;if(e.fling)e.fling.d=0;e.knockVX=e.knockVZ=0;e.telegraphs=[];e.skillEffects=[];e.titanAttacks=[];e.titanLift=0;
       if(e.type==='magmaslime'&&this.networkRole!=='peer')this.enemies.filter(m=>m.type==='minislime'&&m.hp<=0).slice(0,3).forEach((minion,index)=>{const a=index*Math.PI*2/3;minion.x=e.x+Math.cos(a)*.9;minion.z=e.z+Math.sin(a)*.9;this.resolveOverlap(minion,this.collisionObstacles(),minion.radius);minion.homeX=minion.x;minion.homeZ=minion.z;minion.hp=minion.maxHp;minion.phase='idle';minion.stun=0;minion.respawn=0;});
       if(e.elite&&this.networkRole!=='peer'&&splitWorld(e,this.enemies,(m,x,z)=>{m.x=x;m.z=z;this.resolveOverlap(m,this.collisionObstacles(),m.radius);m.homeX=m.x;m.homeZ=m.z;m.phase='chase';m.stun=0;m.lift=0;m.dying=0;}).length)this.onEliteEvent?.(e,'split');
       if(this.selected===e){this.selected=null;this.destination=null;this.route=[];this.ring.visible=false;}}
+    if(broke&&e.hp>0){this.staggerBreak(e);return 'break';}
   }
+  /** A boss's stagger meter is full: it kneels (a stun the AI already obeys: no wind-up, no skill), its telegraphs vanish. Online the server's stun arrives with the health. */
+  staggerBreak(e:Enemy){
+    const left=Math.max(0,(e.stagger?.until??0)-(this.time??0));if(this.networkRole!=='peer'&&!this.authoritativeAction)e.stun=Math.max(e.stun,left);
+    if(e.phase==='windup'||e.phase==='charge'||e.phase==='bspin')e.phase='chase';e.telegraphs=[];e.mesh.userData.slam=false;e.mesh.userData.chargeHit=true;e.windupTotal=0;
+    const fx=this.fx;if(!fx)return;const top=e.mesh.position.y+this.modelHeight(e)*.9;
+    fx.text({x:e.x,y:e.mesh.position.y+this.modelHeight(e)*.35,z:e.z},t('BREAK!'),'crit big callout');fx.ring({x:e.x,z:e.z},{color:'#ffe14d',from:.4,to:3.4,life:.4,y:.15,thick:.3});
+    fx.burst({x:e.x,y:top,z:e.z},{n:14,color:['#ffe14d','#fff7a8','#ffffff'],glow:true,size:.16,speed:5,up:4,y:0,life:.5});fx.shake(.35);
+  }
+  /** Bosses are solid (boss-feel.ts): each try of a step first slides round their bodies, unless `passBodies` (a portal skill, a push out of a body). */
+  passBodies=false;
   move(dx:number,dz:number,allowVoid=false) {
-    const obstacles=this.moverObstacles(),options=this.navigationOptions(.36,allowVoid);
-    const next={x:this.position.x+dx,z:this.position.z+dz};
+    const obstacles=this.moverObstacles(),options=this.navigationOptions(.36,allowVoid),feel=this.passBodies?undefined:this.bossFeel;
+    const next={x:this.position.x+dx,z:this.position.z+dz};feel?.slide(this.position,next);
     if(clearSegment(this.position,next,obstacles,options)){this.position.x=next.x;this.position.z=next.z;return;}
-    if(clearSegment(this.position,{x:next.x,z:this.position.z},obstacles,options))this.position.x=next.x;
-    if(clearSegment(this.position,{x:this.position.x,z:next.z},obstacles,options))this.position.z=next.z;
+    const across={x:next.x,z:this.position.z};feel?.slide(this.position,across);
+    if(clearSegment(this.position,across,obstacles,options)){this.position.x=across.x;this.position.z=across.z;}
+    const along={x:this.position.x,z:next.z};feel?.slide(this.position,along);
+    if(clearSegment(this.position,along,obstacles,options)){this.position.x=along.x;this.position.z=along.z;}
   }
+  /** Solid bosses (boss-feel.ts): their circles near the explorer, its knockback and the boss wear view. */
+  bossFeel?:BossFeel;
+  private feelHost?:FeelHost&{scene:T.Scene;viewX:number;viewZ:number};
+  private feel(){const w=this;this.bossFeel??=new BossFeel();return this.feelHost??={get time(){return w.time;},get position(){return w.position;},get enemies(){return w.enemies;},get fx(){return w.fx??null;},get scene(){return w.scene;},get viewX(){return w.cameraTarget.x;},get viewZ(){return w.cameraTarget.z;},
+    shove:(x,z,solid)=>{const was=this.passBodies;this.passBodies=!solid;try{this.move(x,z);}finally{this.passBodies=was;}},moveBoss:(e,x,z)=>{if(this.networkRole==='peer')return false;this.moveCreature(e as Enemy,x,z);return true;}};}
   dash() {for(let i=0;i<18;i++)this.move(Math.sin(this.facing)*.25,Math.cos(this.facing)*.25);this.burst(this.position.x,this.position.z,'#e8f5e1');}
   private resolveOverlap(point:Point,obstacles:Obstacle[],clearance:number){
     // Only obstacles in nearby grid cells can touch the point (a push moves it, so each pass looks again).
@@ -1670,7 +1708,7 @@ export class World {
     // in the middle of a skill keeps its course and telegraphs.
     const px=this.position.x,pz=this.position.z;
     for(const e of living){
-      if(!((e.definition?.speed??2.4)>0)||e.phase==='charge'||e.boss&&(e.phase==='windup'&&!!e.skill||e.phase==='bspin'))continue;
+      if(!((e.definition?.speed??2.4)>0)||e.phase==='charge'||e.boss&&(e.phase==='windup'&&!!e.skill||e.phase==='bspin')||isSolidBoss(e))continue; // a solid boss shoves the explorer instead (boss-feel.ts)
       const dx=e.x-px,dz=e.z-pz,d=Math.hypot(dx,dz),minimum=EXPLORER_RADIUS+e.radius;if(d>=minimum)continue;
       const nx=d>.0001?dx/d:Math.sin(this.facing),nz=d>.0001?dz/d:Math.cos(this.facing);this.moveCreature(e,nx*(minimum-d+.002),nz*(minimum-d+.002));
     }
@@ -1813,7 +1851,7 @@ export class World {
       for(let i=0;i<count;i++){const a=i/count*Math.PI*2+e.mesh.rotation.y;this.shootEnemy(e,{x:e.x+Math.sin(a)*10,z:e.z+Math.cos(a)*10});}
     }
     if(skill==='charge'){
-      const dx=(e.targetX??e.x)-e.x,dz=(e.targetZ??e.z)-e.z,d=Math.hypot(dx,dz)||1;e.targetX=e.x+dx/d*14;e.targetZ=e.z+dz/d*14;e.phase='charge';e.phaseTime=.7;e.mesh.userData.chargeHit=false;
+      const dx=(e.targetX??e.x)-e.x,dz=(e.targetZ??e.z)-e.z,d=Math.hypot(dx,dz)||1;e.targetX=e.x+dx/d*14;e.targetZ=e.z+dz/d*14;e.mesh.rotation.y=Math.atan2(dx,dz);e.phase='charge';e.phaseTime=.7;e.mesh.userData.chargeHit=false;
     }
     if(skill==='spin'){e.phase='bspin';e.phaseTime=2.4;e.spinTick=0;}
     if(skill==='eclipse'){this.areaDamage(e,e.x,e.z,7,.9);this.environment.eclipseUntil=this.environment.time+6;}
@@ -1879,7 +1917,7 @@ export class World {
     // Small creatures (creature-weight.ts): the earned stagger and a timid run wear off; a light one's attack comes round 10% sooner (its cooldown x0.9), which pays for the flinches it now suffers.
     if(e.flinchT)e.flinchT=Math.max(0,e.flinchT-dt);if(e.fleeT)e.fleeT=Math.max(0,e.fleeT-dt);if(e.cooldown>0&&!e.boss&&this.weightOf(e)==='light')e.cooldown=Math.max(0,e.cooldown-dt*(1/WEIGHT.light.attackCooldown-1));
     if(e.barrier&&stepBarriers(e,dt))this.onEliteEvent?.(e,'regrow');
-    if(e.hp<=0){e.respawn=Math.max(0,e.respawn-dt);if(this.authoritativeAction)return;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.fled=false;e.fleeT=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.enraged=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];if(e.elite){retireChildren(e,this.enemies);if(e.barrier)Object.assign(e.barrier,{cracks:0,open:0,idle:0});}}return;}
+    if(e.hp<=0){e.respawn=Math.max(0,e.respawn-dt);if(this.authoritativeAction)return;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.fled=false;e.fleeT=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.enraged=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];e.stagger=undefined;if(e.elite){retireChildren(e,this.enemies);if(e.barrier)Object.assign(e.barrier,{cracks:0,open:0,idle:0});}}return;}
     const def=e.definition??(e.boss?DEFAULT_BOSS_AI:DEFAULT_AI);
     const target=this.enemyTarget(e),distance=target?Math.hypot(target.x-e.x,target.z-e.z):Infinity;
     if(!this.authoritativeAction&&e.boss&&!e.scaled&&distance<def.sight&&e.hp===e.maxHp){
@@ -1925,8 +1963,11 @@ export class World {
     if(e.phase==='charge'){
       const dx=(e.targetX??e.x)-e.x,dz=(e.targetZ??e.z)-e.z,d=Math.hypot(dx,dz);
       if(d>.1)this.moveCreature(e,dx/d*(e.skill==='charge'?18:13)*dt,dz/d*(e.skill==='charge'?18:13)*dt);
-      if(target&&distance<(e.boss&&e.skill==='charge'?e.radius+.6:def.reach+.4)&&!e.mesh.userData.chargeHit){this.hitEnemyTarget(target,e.damage*1.3,'melee',e.id,attackClass(e.boss?'charge':'rush'));e.mesh.userData.chargeHit=true;}
-      e.phaseTime=(e.phaseTime??0)-dt;if((e.phaseTime??0)<=0||d<.3){e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);}return;
+      // A boss's charge touches with its body (boss-body.ts: its nose, for a long one) and stops there: the explorer is thrown back (boss-feel.ts).
+      const bossCharge=e.boss&&e.skill==='charge',touched=!!target&&(bossCharge?chargeTouches(e.type,e.radius,e.x,e.z,e.mesh.rotation.y,target.x,target.z):distance<def.reach+.4);
+      if(touched&&!e.mesh.userData.chargeHit){this.hitEnemyTarget(target!,e.damage*1.3,'melee',e.id,attackClass(e.boss?'charge':'rush'));e.mesh.userData.chargeHit=true;}
+      if(bossCharge&&touched&&!target!.id&&!target!.enemy&&!target!.decoy&&isSolidBoss(e))this.bossFeel?.thrown(this.feel(),e); // the local explorer is thrown back
+      e.phaseTime=(e.phaseTime??0)-dt;if((e.phaseTime??0)<=0||d<.3||bossCharge&&touched&&!target!.decoy){e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);}return;
     }
     if(e.phase==='recover'){e.phaseTime=(e.phaseTime??0)-dt;if(e.phaseTime!<=0)e.phase='chase';return;}
     const homeDistance=Math.hypot(e.x-e.homeX,e.z-e.homeZ),leash=e.type==='dragon'?75:30,wasChasing=e.phase==='chase'||e.hp<e.maxHp&&e.phase!=='return';
@@ -2010,7 +2051,9 @@ export class World {
     // A small creature's hop of surprise when it first notices an explorer, and a limp when it is badly hurt (creature-weight.ts HURT).
     if(u.noticeT>0){u.noticeT=Math.max(0,u.noticeT-dt);const k=1-u.noticeT/HOP.noticeTime;lift+=4*k*(1-k)*HOP.notice;}
     if(moving&&e.hp<e.maxHp*HURT.below&&behavior!=='hopper'&&!def?.flying&&this.weightOf(e)){const limp=Math.sin(o*.5);roll+=limp*.12;lift+=Math.max(0,limp)*.06;}
-    if(e.stun>.25&&!e.lift){roll=Math.sin(this.time*20)*.1;if(this.fx&&Math.random()<dt*6)this.fx.burst({x:e.x,y:m.position.y+(e.boss?2.6:1.3),z:e.z},{n:1,color:'#fff27a',glow:true,size:.09,speed:1.5,up:.5,life:.5,gravity:0});}
+    // A broken boss (boss-stagger.ts) drops to its knees: sunk, squashed and sat back on its haunches, swaying; the stars are boss-wear-view.ts's.
+    if(e.boss&&staggerBroken(e.stagger,this.time)){const left=e.stagger!.until-this.time,k=Math.min(1,(STAGGER.time-left)*7,left*3);lift-=.42*k;sy*=1-.22*k;sx*=1+.1*k;sz*=1+.1*k;lean=-.12*k;roll=Math.sin(this.time*6)*.07*k;shake=0;}
+    else if(e.stun>.25&&!e.lift){roll=Math.sin(this.time*20)*.1;if(this.fx&&Math.random()<dt*6)this.fx.burst({x:e.x,y:m.position.y+(e.boss?2.6:1.3),z:e.z},{n:1,color:'#fff27a',glow:true,size:.09,speed:1.5,up:.5,life:.5,gravity:0});}
     m.position.y+=lift;m.position.x+=shake;m.rotation.x=lean;m.rotation.z=roll;m.scale.x*=sx;m.scale.y*=sy;m.scale.z*=sz;
   }
   /**
@@ -2136,6 +2179,8 @@ export class World {
     if(simulateWorld&&this.networkRole!=='peer')for(const enemy of [...this.enemies]){if(!this.enemies.includes(enemy))break;this.updateEnemyAi(enemy,dt);}
     if(this.environment!==environmentForFrame)return;
     this.wantTitanKit();
+    // Solid bosses (boss-feel.ts): on every browser for its own explorer, a peer too (it sees the host's bosses move into it). Before the creatures are spaced, so none is left inside the explorer's new place.
+    if(active||simulateWorld){const host=this.feel();this.bossFeel!.step(host,dt,active&&!this.interior&&!this.boarded);}
     if(simulateWorld&&this.networkRole!=='peer')this.separateCreatures();
     if(simulateWorld&&this.networkRole==='peer')for(const enemy of this.enemies)this.updateTitanAttacks(enemy,dt,false);
     // Indoors the outdoor scene is not drawn: posing every creature there was a third of the cottage's frame on slow phones.
@@ -2489,5 +2534,5 @@ export class World {
 
   /** Elite roles drawn (elite-view.ts), just before the frame. */
   eliteFrame?:()=>void;
-  render(){this.eliteFrame?.();this.beforeRender?.();const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);}this.updateTrail(scene);if(this.shadowSwitch?.step())this.shadowNear=this.shadowReach;{const sm=this.renderer.shadowMap,every=this.shadowEvery??1;if(sm){sm.autoUpdate=every<=1;if(every>1&&this.renderSerial%every===0)sm.needsUpdate=true;}}this.renderer.render(scene,this.camera);this.renderSerial++;}
+  render(){this.eliteFrame?.();this.beforeRender?.();const scene=this.interior?.scene??this.scene;if(scene===this.scene){manageSceneMatrices(scene);updateSceneMatrices(scene);if(this.bossFeel)this.bossFeel.frame(this.feel());}this.updateTrail(scene);if(this.shadowSwitch?.step())this.shadowNear=this.shadowReach;{const sm=this.renderer.shadowMap,every=this.shadowEvery??1;if(sm){sm.autoUpdate=every<=1;if(every>1&&this.renderSerial%every===0)sm.needsUpdate=true;}}this.renderer.render(scene,this.camera);this.renderSerial++;}
 }

@@ -217,6 +217,7 @@ test('received boss projectiles animate without peer damage and survive host mig
   const host=world();host.planet='candy';host.environment=new EnvironmentSimulation(createEnvironmentLayout('candy'));host.position.set(32,0,0);
   const boss=host.spawnSpecies('cake',30,0,0)!;boss.attackCount=1;host.update(.01,true,false);assert.equal(boss.skill,'barrage');
   for(let i=0;i<37;i++)host.update(.025,true,false);const snapshots=host.enemySnapshots();assert.ok(snapshots[0].shots!.length>0);snapshots[0].shots=snapshots[0].shots!.slice(0,1);
+  snapshots[0].x+=6; // the shot has just left the boss: the boss stands aside, or its solid body (boss-feel.ts) would shove the explorer off the shot
   const peer=world();peer.planet='candy';peer.environment=new EnvironmentSimulation(createEnvironmentLayout('candy'));peer.setNetworkRole('peer');peer.applyEnemySnapshots(snapshots);
   const shot=peer.enemySnapshots()[0].shots![0];peer.position.set(shot.x+shot.vx*.01,0,shot.z+shot.vz*.01);let hits=0;peer.onDamage=()=>hits++;
   peer.update(.01,true,false);assert.equal(hits,0);const moved=peer.enemySnapshots()[0].shots!.find(s=>s.id===shot.id)!;assert.ok(Math.hypot(moved.x-shot.x,moved.z-shot.z)>0);

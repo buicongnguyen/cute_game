@@ -442,6 +442,11 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 .boss-head b { flex: none; font-size: var(--t-xs); font-weight: 900; font-variant-numeric: tabular-nums; }
 .boss-meter { height: 20px; margin-top: 2px; border-radius: 999px; background: rgba(0, 0, 0, .35); overflow: hidden; border: 2px solid rgba(255, 255, 255, .6); }
 .boss-meter > i { display: block; height: 100%; background: linear-gradient(90deg, #ff8a5a, #e03b3b); transition: width .15s; }
+/* The boss stagger meter (boss-stagger.ts): a thin gold bar under its health, only after the first heavy blow; full and pulsing while it kneels. */
+.boss-stagger { height: 5px; margin: 3px 10px 0; border-radius: 999px; background: rgba(0, 0, 0, .3); overflow: hidden; }
+.boss-stagger > i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #ffe14d, #ffb13d); transition: width .2s; }
+.boss-stagger.broken > i { background: #fff3a0; animation: stagger-pulse .35s ease-in-out infinite alternate; }
+@keyframes stagger-pulse { to { background: #ffd23f; } }
 #app.boss-on #toasts { bottom: calc(170px + var(--safe-bottom)); }
 /* Target frame (CC-03, RC-17): the selected creature, or the last one hit within 3 s. Top centre on desktop and
    landscape, above the skills on portrait phones; never over the middle of the screen, never hit-testable. */
