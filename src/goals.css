@@ -1,15 +1,25 @@
-/* The goals chip on the quick-eat row and the Goals panel (goals-ui.ts, docs/FIX-PLAN.md 5.5). */
-#app #hud #goals-chip {
-  margin-left: 12px; min-height: 44px; max-width: min(180px, calc(100vw - 245px));
-  display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 4px 10px; pointer-events: auto;
-  border: 2px solid rgba(255, 255, 255, .55); border-radius: 14px; background: rgba(43, 49, 58, .72); color: #fff;
-  font: 800 12px/1.15 inherit; text-align: left; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, .18);
+/* The goals badge on the map panel's corner and the Goals panel (goals-ui.ts, docs/FIX-PLAN.md 5.5). The map panel is
+   placed by hud-ours.css (right: --col, top: --map-top, --mm square); the badge hangs inside its top-right corner, so it
+   never covers the play area. Its tap area is 44 px tall (the ::before strip reaches up over the map's top margin, never
+   down to the map's middle, so the map keeps its own 44 px tap area round its centre). */
+#app #hud #goals-flag {
+  position: absolute; left: auto; bottom: auto; right: calc(var(--col) + 3px); top: calc(var(--map-top) + 2px); z-index: 3;
+  display: flex; align-items: center; gap: 1px; height: 22px; min-width: 46px; padding: 0 7px 0 4px; pointer-events: auto;
+  border: 2px solid var(--cream, #fff6e0); border-radius: 11px; background: rgba(58, 36, 51, .88); color: var(--cream, #fff6e0);
+  font: 900 11px/1 inherit; white-space: nowrap; cursor: pointer; box-shadow: 0 2px 0 rgba(58, 36, 51, .45);
 }
-#app #hud #goals-chip[hidden] { display: none; }
-#app #hud #goals-chip .gc-top { display: flex; gap: 10px; white-space: nowrap; }
-#app #hud #goals-chip small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font: 700 10.5px/1.2 inherit; color: #ffe7a3; overflow: hidden; max-width: 100%; overflow-wrap: anywhere; }
-#app #hud #goals-chip:hover { background: rgba(43, 49, 58, .86); }
-#app #hud.calm-eat #goals-chip { display: none; }
+#app #hud #goals-flag::before { content: ''; position: absolute; left: -4px; right: -4px; top: -16px; bottom: -10px; }
+#app #hud #goals-flag[hidden] { display: none; }
+#app #hud #goals-flag .flag-icon { width: 15px; height: 15px; flex: none; color: var(--flag, #4aa8ff); }
+#app #hud #goals-flag b { margin-left: 2px; color: var(--honey, #ffc93a); font-size: 12px; }
+#app #hud #goals-flag small { font-size: 10px; font-weight: 800; opacity: .9; }
+#app #hud #goals-flag:hover { background: rgba(58, 36, 51, .96); }
+#app #hud #goals-flag:focus-visible { outline: 3px solid var(--honey, #ffc93a); outline-offset: 1px; }
+#app #hud #goals-flag.hop { animation: goals-flag-hop .7s ease-out; }
+@keyframes goals-flag-hop { 0% { transform: scale(1); } 30% { transform: translateY(-3px) scale(1.18); } 60% { transform: scale(.96); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { #app #hud #goals-flag.hop { animation: none; } }
+/* With the map: gone in a mode (Vault, Flag Rush, Rescue) and indoors; never on the calm HUD of a new save. */
+body.in-mode #app #hud #goals-flag, body.indoors #app #hud #goals-flag { display: none; }
 #dialog-body .goals-list { display: grid; gap: 12px; }
 #dialog-body .goal-row { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: start; padding: 12px; border-radius: 16px; background: rgba(255, 250, 235, .8); }
 #dialog-body .goal-icon { font-size: 30px; line-height: 44px; text-align: center; }
@@ -19,8 +29,15 @@
 #dialog-body .goal-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #7bd05a, #f6c343); }
 #dialog-body .goal-row small { display: block; color: #6b5a33; }
 #dialog-body .goal-row .soft-button { margin-top: 8px; }
-/* Too narrow for a third thing beside the quest chips (the hit counter takes this spot in a fight): the goals wait in the Journal. */
-@media (max-width: 360px) { #app #hud #goals-chip { display: none; } }
-/* The chip gives way first: the eat button and its picker keep their full size on the shared row. */
-#app #hud .quick-eat > #quick-eat, #app #hud .quick-eat > .quick-eat-pick { flex-shrink: 0; }
-#app #hud #goals-chip { flex: 0 0 auto; min-width: 0; }
+/* Places reached: every place as a chip; reached ones carry a flag in the explorer's colour. */
+/* On the light panel the flag's pole is wood, not cream. */
+#dialog-body .flag-icon path:first-child { stroke: #a8743f; }
+#dialog-body .goal-places .goal-icon .flag-icon { display: inline-block; width: 34px; height: 34px; vertical-align: middle; color: var(--flag, #4aa8ff); }
+#dialog-body .place-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 5px; margin: 8px 0 0; padding: 0; list-style: none; }
+#dialog-body .place-list li { display: flex; align-items: center; gap: 5px; min-height: 30px; padding: 4px 8px 4px 5px; border-radius: 10px; font-size: 12.5px; font-weight: 800; line-height: 1.15; }
+#dialog-body .place-list li > span:first-child { display: grid; place-items: center; width: 20px; height: 20px; flex: none; font-size: 15px; }
+#dialog-body .place-list li .flag-icon { width: 18px; height: 18px; color: var(--flag, #4aa8ff); }
+#dialog-body .place-list li.got { background: #fff3cf; color: #4a3523; box-shadow: inset 0 0 0 2px rgba(176, 106, 0, .25); }
+#dialog-body .place-list li.todo { background: rgba(120, 100, 60, .1); color: #8a7a5a; }
+#dialog-body .place-list li.todo > span:first-child { filter: grayscale(1); opacity: .55; }
+#dialog-body .place-list .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

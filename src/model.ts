@@ -27,6 +27,7 @@ import { isTreeCrop } from './tree-crops.ts';
 import { noteHistory, parseHistory, type Snapshot } from './insight-history.ts';
 import { parseInbox, type InboxItem } from './news-inbox.ts';
 import { parseFirstRun, tutorialGrow, type FirstRun } from './first-run.ts';
+import { parsePlaceFlags, type PlaceFlags } from './place-flags.ts';
 import { fits, noteFull, noteDelivered, clearFullNote, delivering, chestFits, nextExpansion, hasExpansionMaterials, isStorageKind, type StorageKind } from './storage-slots.ts';
 import { pruneBags, bagId, parseDeathBags, MAX_DEATH_BAGS, type DeathBag } from './death-bags.ts';
 export * from './storage-slots.ts';
@@ -205,6 +206,8 @@ export interface SaveState {
     inbox?: InboxItem[];
     /** The first minutes (first-run.ts): tutorial plantings used, first fight, first food. Only saves a player started since 2026-10-15 have it (freshStart). */
     firstRun?: FirstRun;
+    /** Arrival flags (place-flags.ts): one per place reached, where it stands and when. Missing = made on first use (older saves: every planet landed on). */
+    placeFlags?: PlaceFlags;
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
@@ -1017,6 +1020,7 @@ export function parseSave(raw: string | null): SaveState | null {
         { const history = parseHistory(v.history); if (history.length) s.history = history; }
         { const inbox = parseInbox(v.inbox); if (inbox.length) s.inbox = inbox; }
         { const run = parseFirstRun(v.firstRun); if (run) s.firstRun = run; else delete s.firstRun; } // older saves: no tutorial, full HUD
+        { const flags = parsePlaceFlags(v.placeFlags); if (flags) s.placeFlags = flags; } // older saves: made on first use (place-flags.ts backfillFlags)
         const looks = parseLooks(v.looks); if (looks) s.looks = looks; else delete s.looks; // older saves keep the look they had: the default hero
         dropUnownedFriendLooks(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));

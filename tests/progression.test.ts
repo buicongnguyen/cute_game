@@ -8,7 +8,7 @@ const start=Date.UTC(2026,8,30,12);
 const reload=(s:M.SaveState)=>M.parseSave(JSON.stringify(s))!;
 test('story progression counts only actions performed during the current event step',()=>{
   const s=M.newGame();P.recordEvent(s,'sell',100,undefined,start);P.recordEvent(s,'harvest',3,undefined,start);
-  const first=P.progressEntries(s,'story',start)[0];assert.equal(first.complete,true);assert.equal(first.rewardLabel,'36 energy · 6 XP · 15 stars');assert.equal(P.claimProgress(s,'story',first.id,start),true);assert.equal(P.claimProgress(s,'story',first.id,start),false);
+  const first=P.progressEntries(s,'story',start)[0];assert.equal(first.complete,true);assert.equal(first.rewardLabel,'67 energy · 24 XP · 15 stars · Fertilizer ×4'); /* story-gifts.ts: level bonus and starter items (FIX-PLAN 5.6) */assert.equal(P.claimProgress(s,'story',first.id,start),true);assert.equal(P.claimProgress(s,'story',first.id,start),false);
   assert.equal(P.progressEntries(s,'story',start)[0].progress,0);P.recordEvent(s,'sell',19,undefined,start);assert.equal(P.claimProgress(s,'story','story:1',start),false);P.recordEvent(s,'sell',1,undefined,start);assert.equal(P.claimProgress(s,'story','story:1',start),true);assert.equal(s.quest,2);
 });
 test('daily and weekly selections are deterministic, unique and level eligible',()=>{
