@@ -1,5 +1,7 @@
 /** Vietnamese for the wave-15 review fixes (deliveries, garden trim, bed upgrades, difficulty, tester, friends). */
 export const VI_FIXES: Record<string, string> = {
+  'The Cinderpeak Colossus has woken': 'Cự Thạch Cinderpeak đã thức giấc',
+  'In Redrock Canyon until 24:00. The sky darkens over every planet.': 'Ở Hẻm Núi Đá Đỏ đến 24:00. Bầu trời tối lại trên mọi hành tinh.',
   // Deliveries: the chest's "Take all", selling and cooking from the chest.
   'Take all': 'Lấy hết',
   'Took {count} items from the chest.': 'Đã lấy {count} món từ rương.',

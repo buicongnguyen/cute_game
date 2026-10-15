@@ -33,7 +33,7 @@ export function measureHud() {
     meet on a 320 px phone while the discs are over 20 px apart. */
 const ROUND = new Set(['skills|skills', 'skills|pad', 'skills|jump', 'pad|jump', 'pad|stick', 'jump|stick', 'skills|stick']);
 /** Pieces made to sit on another: the goals badge is a tag on the map panel's corner (goals.css). It must stay inside the map's box. */
-const ATTACHED = new Set(['map|goals']);
+const ATTACHED = new Set(['map|goals', 'map|colossus']); // and the Colossus badge, closed, sits in the map's top-left corner (hud-ours.css)
 /**
  * The five-button paw (jumping on, a touch screen): the rules of docs/FIGHT-PLAN.md section 11.
  *   - the Attack pad is at least 60 px, each special at least 48 px, Jump at least 52 px;

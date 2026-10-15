@@ -2350,9 +2350,8 @@ function mountModes(m:typeof import('./modes.ts')){
 // The daily world boss (colossus.ts): offline it runs here on the local clock, online it mirrors the server's.
 colossus=new m.ColossusEvent({world,state:()=>state,online:()=>!!actionHandler,playing:()=>started&&!visiting&&!flight,
   defence:()=>M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),hurt:(amount,cls)=>world.onDamage(amount,'melee',COLOSSUS_ID,cls),
-  change,toast,floating:(text,x,z,style)=>floating(text,x,z,style),spawnLoot:(loot,x,z)=>drops.spawnLoot(loot,x,z),tone:kind=>tone(kind as Parameters<typeof tone>[0]),hud:$('#hud')});
+  change,toast,news:(title,text)=>inbox.announce({kind:'other',icon:'🌋',title,text,open:'map'}),floating:(text,x,z,style)=>floating(text,x,z,style),spawnLoot:(loot,x,z)=>drops.spawnLoot(loot,x,z),tone:kind=>tone(kind as Parameters<typeof tone>[0]),hud:$('#hud')});
 if(new URLSearchParams(location.search).get('colossus')==='1')colossus.start();
-$('#colossus-banner')?.addEventListener('click',()=>document.body.classList.toggle('guide-colossus-fold')); // a tap folds the banner to a chip (guide.css)
 const ranking=m.initRanking(gameBridge);rankingApi=ranking;rankingTapOff?.(); // the 🏆 leaderboard (ranking.ts)
 // The 📰 news board (news-board.ts) lives in the leaderboard dialog's News section: its unread count shows on the Ranking button, and it opens there once for new updates.
 newsApi=m.initNewsBoard({host:ranking.news,autoOpen:()=>inbox.popups,onUnread:(_n,newest)=>{if(!state.inbox?.some(e=>e.title==='New game updates'&&e.params?.update===newest))inbox.announce({kind:'other',icon:'📰',title:'New game updates',text:'See what is new in Zoo Garden.',params:{update:newest},open:'ranking'});},idle:()=>started&&!modal&&!uiBlocked(),freshSave:()=>!!state.firstRun&&state.level<CALM_UNTIL_LEVEL,url:`${import.meta.env.BASE_URL}news.json`});

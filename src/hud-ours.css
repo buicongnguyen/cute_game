@@ -493,3 +493,24 @@ body.in-rescue #app #hud .home-button { right: calc(var(--edge) + var(--safe-rig
 }
 /* Portrait phones: the context button stands clear above the crown (a long Vietnamese label reaches over it). */
 @media (orientation: portrait) and (max-width: 600px) { body.air-combat #app:not(.target-on) #hud.joystick-on #context-prompt { bottom: max(calc(218px + var(--safe-bottom)), calc(22px + var(--safe-bottom) + var(--sk) * 4 + 6px)); } }
+
+/* The Colossus notice is a badge, never a banner (owner, 2026-10-15): a small round 🌋 in the map's top-left corner on
+   every screen, so it can never cover a button or the play area; its wake-up goes to News. A tap opens the whole card
+   under the map, another tap closes it. Near the giant the boss bar shows its health, so the badge steps away. */
+body #app #colossus-banner { left: auto; right: calc(var(--col) + var(--mm) - 31px); top: calc(var(--map-top) + 3px); bottom: auto;
+  transform: none; width: auto; max-width: none; margin: 0; padding: 3px; gap: 0; border-radius: 50%; pointer-events: auto; cursor: pointer; z-index: 3; }
+body #app #colossus-banner::before { content: ''; position: absolute; left: -16px; top: -16px; right: 0; bottom: -2px; }
+/* It takes the map's top-left corner, where the little N sits; the N steps aside while the badge shows. */
+#app #hud:has(#colossus-banner:not([hidden]):not(.near)) .minimap > span { visibility: hidden; }
+/* Two tags share the map's top edge then: the flag badge drops its "/16" so they never touch on small maps. */
+#app #hud:has(#colossus-banner:not([hidden]):not(.near)) #goals-flag { min-width: 0; padding: 0 5px 0 8px; }
+#app #hud:has(#colossus-banner:not([hidden]):not(.near)) #goals-flag small { display: none; }
+body #app #colossus-banner:not(.open) .cb-text, body #app #colossus-banner:not(.open) .cb-pct { display: none; }
+body #app #colossus-banner:not(.open) { padding: 2px; border-width: 2px; }
+body #app #colossus-banner:not(.open) .cb-icon { width: 20px; height: 20px; font-size: 13px; }
+body #app #colossus-banner.open { left: max(12px, calc(100vw - var(--col) - 300px)); right: var(--col); top: calc(var(--map-top) + var(--mm) + 8px); width: auto; padding: 5px 12px 6px 5px; gap: 8px; border-radius: 18px; z-index: 6; }
+/* Wide screens: the open card sits left of the map, under Home, clear of the quest card below the map. */
+@media (min-width: 901px) { body #app #colossus-banner.open { left: auto; right: calc(var(--col) + var(--mm) + 10px); top: calc(var(--map-top) + 52px); width: 300px; } }
+body #app #colossus-banner.open small, body #app #colossus-banner.open .cb-meter { display: block; }
+body #app #colossus-banner.open .cb-pct { display: inline; }
+body #app #colossus-banner.near { display: none; }

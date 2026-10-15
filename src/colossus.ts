@@ -29,6 +29,8 @@ export interface ColossusHost {
   hurt(amount: number, cls?: AttackClass): void;
   change<R>(fn: () => R): R;
   toast(message: string, icon?: string): void;
+  /** Puts a notice in News (news-inbox.ts); true when the old toast should show too ("Show announcements as pop-ups"). */
+  news?(title: string, text: string): boolean;
   floating(text: string, x: number, z: number, style?: string): void;
   spawnLoot(loot: { id: string; count: number }[], x: number, z: number): void;
   tone(kind: string): void;
@@ -83,7 +85,7 @@ export class ColossusEvent {
   private get attack(): ColossusAttack | null { const list = this.h.online() ? this.serverAttacks : this.attacks; for (let i = list.length - 1; i >= 0; i--) if (!list[i].done) return list[i]; return null; }
   /** A forced window for testing (?colossus=1 or __zoo.colossus.start()). */
   private forcedUntil = 0;
-  private banner: HTMLElement; private bannerKey = ''; private bannerOpen = false;
+  private banner: HTMLElement; private bannerKey = ''; private bannerOpen = false; private bannerShut?: ReturnType<typeof setTimeout>;
   /** Explorer lift while being hurled (world.playerLift draws it). */
   lift = 0;
 
@@ -91,8 +93,10 @@ export class ColossusEvent {
     this.h = host;
     try { this.killedDay = Number(localStorage.getItem('zoo-colossus-killed') ?? -1); } catch { this.killedDay = -1; }
     this.banner = document.createElement('div'); this.banner.id = 'colossus-banner'; this.banner.hidden = true; this.banner.setAttribute('role', 'status');
-    // Phones show a small chip that opens on a tap (colossus.css); wide screens always show the whole banner.
-    this.banner.addEventListener('click', () => { this.bannerOpen = !this.bannerOpen; this.banner.classList.toggle('open', this.bannerOpen); });
+    // A small badge on the map's edge on every screen (hud-ours.css); a tap opens the whole card under the map, another closes it.
+    this.banner.addEventListener('click', () => { this.bannerOpen = !this.bannerOpen; this.banner.classList.toggle('open', this.bannerOpen); clearTimeout(this.bannerShut);
+      // An open card folds back to the badge by itself after 8 s, so it never stays over the game.
+      if (this.bannerOpen) this.bannerShut = setTimeout(() => { this.bannerOpen = false; this.banner.classList.remove('open'); }, 8000); });
     host.hud.append(this.banner);
     // The fight steps with the world (after main sets the step's movement lock) and poses just before each draw.
     host.world.onStep = dt => { this.step(dt); if (this.locked) host.world.movementLocked = true; };
@@ -338,7 +342,7 @@ export class ColossusEvent {
     rig.root.userData.pickHeight = 9 / 1.85; rig.root.userData.pickHeightAsset = null; rig.root.userData.footprint = S.radius * .8;
     w.enemies.push(e); this.enemy = e; this.spawnedWeak = this.weak; this.rig = rig; this.rise = online && (this.server?.hp ?? 1) < (this.server?.maxHp ?? 1) ? 1 : 0; this.dying = 0;
     if (!online && this.day < 0) this.resetDay(this.window(Date.now()).day);
-    if (!online) { this.nextAt = this.time + 3; this.h.toast(t('The Cinderpeak Colossus has woken in Redrock Canyon! The sky darkens over every planet.'), '🌋'); this.h.tone('level'); }
+    if (!online) { this.nextAt = this.time + 3; if (this.h.news?.('The Cinderpeak Colossus has woken', 'In Redrock Canyon until 24:00. The sky darkens over every planet.') ?? true) this.h.toast(t('The Cinderpeak Colossus has woken in Redrock Canyon! The sky darkens over every planet.'), '🌋'); this.h.tone('level'); }
   }
   /** Swaps the stand-in for the Blender giant once it arrives. */
   private restyle() {
