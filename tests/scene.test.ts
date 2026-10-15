@@ -23,8 +23,8 @@ test('ordinary common creatures stand 0.55-0.8x the explorer; large forest quarr
   const hawk=drawnHeight('forest_raptor')/explorer;assert.ok(hawk>.4&&hawk<1,'forest hawk '+hawk.toFixed(2)+'x the explorer');
 });
 
-test('bosses keep their size and still tower over the explorer',()=>{
-  for(const [type,def] of Object.entries(ENEMY_TYPES))if(def.boss&&!def.titan){assert.equal(enemyScale(type,true),1.85);assert.ok(drawnHeight(type)>explorer,type);}
+test('bosses are drawn 20% smaller (1.85 -> 1.48, FEEL pass) and still tower over the explorer',()=>{
+  for(const [type,def] of Object.entries(ENEMY_TYPES))if(def.boss&&!def.titan){assert.ok(Math.abs(enemyScale(type,true)-1.48)<1e-9,type);assert.ok(drawnHeight(type)>explorer,type);}
 });
 
 test('a spawned creature is drawn, picked and labelled at its smaller size',()=>{

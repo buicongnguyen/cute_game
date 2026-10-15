@@ -7,6 +7,7 @@ import { PLANETS, type PlanetId } from './model.ts';
 import { modelIcon } from './icons.ts';
 import { statusMarks } from './skill-info.ts';
 import { eliteBadge } from './elite-roles.ts';
+import { staggerBroken, staggerShare } from './boss-stagger.ts';
 
 /**
  * The combat HUD: over-head HP bars, the target frame, the boss-bar rule, tracker folding and the
@@ -176,8 +177,8 @@ export class CombatHud {
   /** Text written only when it differs: an unchanged write still replaces the node and dirties style. */
   private put(el: Element, text: string) { if (el.textContent !== text) el.textContent = text; }
 
-  /** A few times a second: the target frame and the boss bar. Returns whether each shows, for layout classes. */
-  panels(enemies: readonly Enemy[], selected: Entity | null, px: number, pz: number, on: boolean): { target: boolean; boss: boolean } {
+  /** A few times a second: the target frame and the boss bar. Returns whether each shows, for layout classes. `now`: the world's clock (the stagger meter's). */
+  panels(enemies: readonly Enemy[], selected: Entity | null, px: number, pz: number, on: boolean, now = 0): { target: boolean; boss: boolean } {
     const target = on ? targetOf(selected, this.lastHit, performance.now()) : null, frame = document.getElementById('target-frame')!;
     frame.hidden = !target;
     if (target) {
@@ -194,8 +195,21 @@ export class CombatHud {
       if (boss.id !== this.bossId) { const icon = portrait(boss); document.getElementById('boss-icon')!.innerHTML = icon ?? '👑'; document.getElementById('boss-name')!.textContent = `👑 ${t(boss.name)}`; if (icon !== null) this.bossId = boss.id; }
       this.put(document.getElementById('boss-name')!, `👑 ${t(boss.name)}`);
       const fill = document.getElementById('boss-fill')!, bw = `${boss.hp / boss.maxHp * 100}%`; if (fill.style.width !== bw) fill.style.width = bw;
+      this.stagger(bar, boss, now);
     } else this.bossId = '';
     return { target: !!target, boss: !!boss };
+  }
+  /**
+   * The stagger meter (boss-stagger.ts): a thin bar under the boss's health, shown only once the meter has started to fill
+   * (or the boss has broken once), full and pulsing while the boss is on its knees. Written only when it changes.
+   */
+  private staggerSeen = '';
+  private stagger(bar: HTMLElement, boss: Enemy, now: number) {
+    let el = bar.querySelector('.boss-stagger') as HTMLElement | null; const s = boss.stagger, shown = !!s && (s.fill > 0 || s.breaks > 0);
+    if (!el) { if (!shown) return; el = document.createElement('div'); el.className = 'boss-stagger'; el.innerHTML = '<i></i>'; (bar.querySelector('.boss-meter') ?? bar).after(el); }
+    const broken = staggerBroken(s, now), key = shown ? `${Math.round(staggerShare(s) * 100)}${broken ? 'b' : ''}` : '';
+    if (key === this.staggerSeen && el.hidden === !shown) return; this.staggerSeen = key;
+    el.hidden = !shown; el.classList.toggle('broken', broken); (el.firstElementChild as HTMLElement).style.width = `${broken ? 100 : Math.round(staggerShare(s) * 100)}%`;
   }
   clear() { for (const bar of this.bars.values()) bar.el.remove(); this.bars.clear(); this.lastHit = null; }
 }

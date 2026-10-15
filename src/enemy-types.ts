@@ -1,6 +1,7 @@
 import {PLANETS,type PlanetId} from './model.ts';
 import {TITANS} from './titan-content.ts';
 import {SIZE_FACTORS,sized,sizeFactor} from './creature-sizes.ts';
+import {BOSS_SHAPES,fitBoss} from './boss-body.ts';
 
 export type EnemyBehavior='hopper'|'melee'|'charger'|'rooted'|'shooter'|'boss';
 export interface EnemyDefinition {name:string;hp:number;damage:number;speed:number;reach:number;sight:number;xp:number;radius:number;behavior:EnemyBehavior;family:string;color:string;accent:string;cooldown:number;windup:number;boss:boolean;titan?:boolean;flying?:boolean;stealth?:number;aquatic?:boolean}
@@ -801,6 +802,8 @@ const combatRules:Record<string,Partial<EnemyDefinition>>={
 for(const [id,rule] of Object.entries(combatRules))if(ENEMY_TYPES[id])Object.assign(ENEMY_TYPES[id],rule);
 // Titans 0.75, forest hawks 0.5 (creature-sizes.ts): radius and reach follow the drawn size.
 for(const id of Object.keys(SIZE_FACTORS))if(ENEMY_TYPES[id])ENEMY_TYPES[id]=sized(id,ENEMY_TYPES[id]);
+// Bosses: hit radius and reach fitted to the drawn body (boss-body.ts), after the size factor above.
+for(const id of Object.keys(BOSS_SHAPES))if(ENEMY_TYPES[id])ENEMY_TYPES[id]=fitBoss(id,ENEMY_TYPES[id]);
 
 /**
  * Size hierarchy (CC-05, RC-04): the reference's common creatures stand 0.60-0.74x its hero (hero 1.79 m; mushroom 1.14,
@@ -808,7 +811,7 @@ for(const id of Object.keys(SIZE_FACTORS))if(ENEMY_TYPES[id])ENEMY_TYPES[id]=siz
  * 1.43-2.43 m tall (measured with speciesModel: mushroom 2.43, bunny 2.35, flowers/cactus/lollipop/urchin 2.12, jackbox 1.95,
  * blobs/bipeds/winged/frog/penguin 1.65, worms 1.62, eye 1.68, volcano 1.45, quadrupeds/crabs/turtle 1.43), so most stood
  * as tall as the explorer or taller. These scales bring every common creature to about 0.62x (small hoppers and fliers),
- * 0.67x (middling) or 0.73x (big brutes and rooted plants) of the explorer. Bosses keep their own 1.85 scale and are not
+ * 0.67x (middling) or 0.73x (big brutes and rooted plants) of the explorer. Bosses keep their own scale (1.85 x boss-body.ts BOSS_SIZE) and are not
  * listed; the tiny magma slime that the magma slime splits into stays the smallest. Hit radii stay the reference's.
  */
 export const ENEMY_SCALE:Readonly<Record<string,number>>={
@@ -824,5 +827,5 @@ export const ENEMY_SCALE:Readonly<Record<string,number>>={
   cloudsheep:.99,thunderbird:.85,windspirit:.78,
   wisp:.73,spider:.99,demoneye:.84,
 };
-/** The scale a creature's model is drawn at: bosses 1.85, common creatures their ENEMY_SCALE. */
+/** The scale a creature's model is drawn at: bosses 1.85 x their size factor (1.48), common creatures their ENEMY_SCALE. */
 export function enemyScale(type:string|undefined,boss=false){return (type&&Object.hasOwn(TITANS,type)?TITANS[type as keyof typeof TITANS].scale:boss?1.85:ENEMY_SCALE[type??'']??1)*sizeFactor(type);}

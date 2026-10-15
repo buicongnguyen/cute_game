@@ -375,3 +375,14 @@ test('Bond Surge online: the server decides the surge from three basic packets, 
  for(let i=0;i<14/.05;i++)engine.sim.update(.05);assert.equal(engine.sim.surge.state,'ready');press();engine.sim.update(.3);press();engine.sim.update(.3);press();
  assert.equal(surges().filter(e=>e.phase==='start').length,2);f.authority.resetPeer(f.peer);assert.equal(engine.sim.surge.state,'ready');
 });
+test('a boss stagger break is the server\'s: a full meter kneels the boss, cancels its wind-up and goes out with the health',async t=>{
+ const {STAGGER,newStagger}=await import('../src/boss-stagger.ts');
+ const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_fairy';p.bag.dz_fairy=1;}}),boss=f.spawn('treant');const engine=f.authority.engineFor(f.peer);
+ // A fight 10 s old with the meter one heavy blow from full; the launch (a heavy blow) breaks it.
+ boss.stagger=Object.assign(newStagger(),{start:Date.now()/1000-10,last:Date.now()/1000,fill:STAGGER.need-1});boss.phase='windup';boss.telegraphs=[{x:0,z:0,r:3,delay:1}];
+ const from=f.messages.length;engine.sim.skill(2);engine.sim.update(.43);
+ const health=await f.next(m=>m.type==='enemyHealth'&&m.id===boss.id&&m.impact?.brk,from);
+ assert.equal(boss.phase,'chase');assert.deepEqual(boss.telegraphs,[]);assert.ok(boss.stun>=STAGGER.time-.1);
+ assert.ok(health.stagger&&health.stagger.broken>1.5&&health.stagger.breaks===1,'the browsers get the share and the seconds left');
+ assert.equal(typeof health.stagger.until,'undefined','never the server clock');
+});

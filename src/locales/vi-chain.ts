@@ -8,4 +8,6 @@ export const CHAIN_VI: Record<string, string> = {
   'POWER STRIKE!': 'ĐÒN UY LỰC!',
   'POWER STRIKE ×2!': 'ĐÒN UY LỰC ×2!',
   'POWER!': 'UY LỰC!',
+  // The boss stagger break (boss-stagger.ts, world.ts staggerBreak).
+  'BREAK!': 'CHOÁNG!',
 };

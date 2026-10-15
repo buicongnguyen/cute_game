@@ -377,6 +377,8 @@ const combat=new CombatSimulation({
   focus:()=>world.selected?.kind==='enemy'?(world.selected as Enemy).id:null,health:()=>state.hp/Math.max(1,M.maxHp(state)),guarded:event=>petGuardView.show(event),surged:event=>{if(surgeLocal())surgeView.show(event);},
   targets:()=>world.enemies,weapon:()=>M.weaponStats(state),stats:()=>M.activeStats(state),
   move:(x,z)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);},
+  // A portal (backstab, teleport) passes through a boss's body (boss-feel.ts); walls still stop it.
+  teleport:(x,z)=>{world.passBodies=true;try{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);}finally{world.passBodies=false;}},
   // The first own hit after a weapon swap does +20% (weapon-pair.ts); a pet's shot leaves the bonus waiting.
   hit:(target,impact)=>{const m=impact.helper?1:pair.takeBonus();if(m!==1)impact={...impact,amount:impact.amount*m};hit(target as Enemy,impact.amount,impact.stun,impact);},
   clearShot:(from,to)=>clearSegment(from,to,world.obstacles,{bounds:WORLD_BOUNDS,clearance:.05}),
@@ -583,7 +585,7 @@ function updateHud() {
   setHtml($('#environment-bar'),localizeHtml(world.environmentStatus().map(e=>`<span>${e.icon??''} ${esc(e.label)} <b>${esc(String(e.value))}</b></span>`).join('')));
   const dark=$('#darkness');dark.hidden=!world.darknessActive()||!started;
   // Target frame and boss bar (hud-combat.ts). While a fight is near (or on a phone in the wild) the trackers fold into one chip.
-  const hud=app,shown=combatHud.panels(world.enemies,world.selected,world.position.x,world.position.z,started);hud.classList.toggle('boss-on',shown.boss);hud.classList.toggle('target-on',shown.target);
+  const hud=app,shown=combatHud.panels(world.enemies,world.selected,world.position.x,world.position.z,started,world.time);hud.classList.toggle('boss-on',shown.boss);hud.classList.toggle('target-on',shown.target);
   const fight=fightNear(world.enemies,world.position.x,world.position.z);if(fight&&!wasFight&&trackerMode==='open')trackerMode='auto';wasFight=fight;
   const folded=trackerMode==='fold'||trackerMode==='auto'&&(fight||shown.boss||innerWidth<600&&(state.planet!=='home'||world.lastZone!=='Clover Village'));
   $('.tracker-stack').classList.toggle('folded',folded);$('#tracker-chip').hidden=!folded;
@@ -1306,6 +1308,8 @@ async function finishFishingCatch(f:FishingRound){
 
 
 world.onAlert=()=>tone('alert');
+// A blow on a boss lands with a deeper thud, and the one that breaks it (boss-stagger.ts) with a crack (sfx.ts).
+world.onBossHit=(_e,broke)=>{tone('thud');if(broke)tone('break');};
 world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();minimap.invalidate();placeFlags.rebuild();};
 stockPonds();
 // fish.glb (153 KB) streams in once the explorer is within 30 m of the water's edge (or casts a line), then the ponds are restocked.
@@ -1395,7 +1399,7 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
   if(!vault&&!ctfApi?.owns(e)&&!rescueApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
-  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard,impact?.source);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0);if(!hazard||impact)tone(impact?.critical?'crit':(impact?.knock??0)>=2||(impact?.lift??0)>0?'hitHeavy':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
+  const hpBefore=e.hp,broke=world.damageEnemy(e,damage,stun,hazard,impact?.source,impact)==='break';combatHud.noteHit(e);world.hitFeedback(e,e.driver||e.boss?Math.max(e.hp>0?1:0,Math.round(hpBefore-e.hp)):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0,broke);if(!hazard||impact)tone(impact?.critical?'crit':(impact?.knock??0)>=2||(impact?.lift??0)>0?'hitHeavy':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');

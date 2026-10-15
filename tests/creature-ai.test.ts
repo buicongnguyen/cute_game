@@ -75,13 +75,14 @@ test('throttled wanderers are staggered and glide instead of hopping',()=>{
   assert.ok(jumps.filter(d=>d>1e-6).length>=6,'it keeps moving between thinking steps');
 });
 
-test('creatures never pile onto the explorer; a boss mid-skill holds its ground',()=>{
+test('creatures never pile onto the explorer; a boss mid-skill holds its ground and shoves the explorer out of its body',()=>{
   const w=homeWorld();w.position.set(40,0,0);
   const wolf=w.spawnSpecies('wolf',40.3,.95,0)!;wolf.stun=999;
   const boss=w.spawnSpecies('treant',40,-1.4,1)!;Object.assign(boss,{phase:'windup',phaseTime:30,skill:'slam'});const bossAt={x:boss.x,z:boss.z};
   step(w,2);
   assert.ok(distance(wolf,w.position)>=.45+wolf.radius-.001,'the creature is pushed out of the explorer');
-  assert.deepEqual({x:w.position.x,z:w.position.z},{x:40,z:0},'the explorer is not moved');
+  // A boss is solid (boss-feel.ts): the explorer, overlapped by the treant's body, is pushed clear of it; the creature moves for itself.
+  assert.ok(distance(boss,w.position)>=boss.radius+.45-.01,'the explorer is pushed out of the boss');
   assert.deepEqual({x:boss.x,z:boss.z},bossAt,'a boss in the middle of a skill keeps its course');
 });
 

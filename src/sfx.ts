@@ -10,7 +10,7 @@ export type Sound = 'alert' | 'click' | 'open' | 'close' | 'punch' | 'swing' | '
   | 'splash' | 'cast' | 'reel' | 'snap' | 'bite' | 'catch' | 'stroke' | 'dive'
   | 'jump' | 'flip' | 'land'
   | 'success' | 'quest' | 'level' | 'harvest' | 'shoot' | 'poof' | 'coin' | 'buy' | 'sell' | 'ready' | 'power'
-  | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock' | 'flag';
+  | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock' | 'flag' | 'thud' | 'break';
 
 /** Every game event the sound pass covers, and the voice it plays (tests check each one has a recipe). */
 export const SOUND_EVENTS = {
@@ -18,7 +18,7 @@ export const SOUND_EVENTS = {
   harvest: 'harvest', plant: 'plant', energyGain: 'coin', buy: 'buy', sell: 'sell', levelUp: 'level',
   fishBite: 'bite', fishCatch: 'catch', uiTap: 'click', uiOpen: 'open', uiClose: 'close', questComplete: 'quest',
   powerStrike: 'power', jump: 'jump', land: 'land', swimStroke: 'stroke', swimSplash: 'dive',
-  swingBlade: 'swing', swingFist: 'punch', gunShot: 'shoot', flagPlanted: 'flag',
+  swingBlade: 'swing', swingFist: 'punch', gunShot: 'shoot', flagPlanted: 'flag', bossHit: 'thud', bossBreak: 'break',
 } as const satisfies Record<string, Sound>;
 
 export type WeaponKind = 'blade' | 'fist' | 'gun';
@@ -27,7 +27,7 @@ const WEAPON_OF: Partial<Record<Sound, WeaponKind>> = { swing: 'blade', punch: '
 const WEAPON_MEMORY = 1.2; // seconds an attack sound colours the hits after it
 
 /** Per-sound limits inside a 100 ms window; everything else allows 2. */
-export const RATE: Partial<Record<Sound, number>> = { hit: 3, hitHeavy: 2, coin: 4, crit: 2, poof: 2, reel: 1, stroke: 1, ready: 1 };
+export const RATE: Partial<Record<Sound, number>> = { hit: 3, hitHeavy: 2, coin: 4, crit: 2, poof: 2, reel: 1, stroke: 1, ready: 1, thud: 1, break: 1 };
 export const RATE_WINDOW = .1;
 export const MAX_VOICES = 14;
 /** These still play over a full cap (a fanfare should not vanish in a brawl), up to MAX_VOICES + 4. */
@@ -50,7 +50,7 @@ export class SoundGate {
 }
 
 /** Rough voice lengths (seconds) so the cap knows when a voice is done. */
-const LENGTH: Partial<Record<Sound, number>> = { flag: .8, level: 1.1, quest: .9, catch: .8, power: .7, success: .55, buy: .5, sell: .55, poof: .45, harvest: .4, dive: .5, boom: .4, magic: .45, freeze: .4 };
+const LENGTH: Partial<Record<Sound, number>> = { break: .6, thud: .25, flag: .8, level: 1.1, quest: .9, catch: .8, power: .7, success: .55, buy: .5, sell: .55, poof: .45, harvest: .4, dive: .5, boom: .4, magic: .45, freeze: .4 };
 
 type Ctx = AudioContext;
 interface Kit { ctx: Ctx; at: number; p: number; g: number }
@@ -240,6 +240,11 @@ export class Sfx {
         this.hiss(k, .07, 'bandpass', 1200, 2600, .09, .07, 2.2, .01); this.hiss(k, .15, 'bandpass', 1500, 3000, .08, .05, 2.2, .01);
         [[587, .12], [880, .2]].forEach(([f, d], i) => { this.tone(k, .16 + i * .13, 'triangle', f, f, d + .14, .07, .012); this.tone(k, .16 + i * .13, 'square', f, f, d, .012, .012); });
         this.bell(k, .32, 1760, .35, .03, 3.5, 1.4); break;
+      // A boss's body takes the blow (played with the weapon's own hit): a deep, round thump, like striking a big drum.
+      case 'thud': this.tone(k, 0, 'sine', 120, 42, .2, .3, .003); this.hiss(k, 0, 'lowpass', 700, 110, .14, .14); break;
+      // The stagger break: a woody crack, a sub drop and a dizzy two-note wobble going down.
+      case 'break': this.hiss(k, 0, 'bandpass', 2400, 900, .09, .22, 1.6, .002); this.tone(k, 0, 'sine', 160, 38, .38, .34, .003);
+        this.hiss(k, .02, 'lowpass', 1600, 120, .3, .2); this.tone(k, .12, 'triangle', 880, 660, .14, .05); this.tone(k, .26, 'triangle', 740, 520, .2, .045); break;
     }
   }
 }
@@ -247,4 +252,4 @@ export class Sfx {
 /** Every Sound name (tests check each has a recipe). */
 export const ALL_SOUNDS: readonly Sound[] = ['alert', 'click', 'open', 'close', 'punch', 'swing', 'hit', 'hitHeavy', 'crit', 'hurt', 'pop', 'plant',
   'splash', 'cast', 'reel', 'snap', 'bite', 'catch', 'stroke', 'dive', 'jump', 'flip', 'land', 'success', 'quest', 'level', 'harvest', 'shoot',
-  'poof', 'coin', 'buy', 'sell', 'ready', 'power', 'boom', 'zap', 'freeze', 'magic', 'shock', 'flag'];
+  'poof', 'coin', 'buy', 'sell', 'ready', 'power', 'boom', 'zap', 'freeze', 'magic', 'shock', 'flag', 'thud', 'break'];

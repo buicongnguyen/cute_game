@@ -7,6 +7,7 @@ import {EnvironmentSimulation,createEnvironmentLayout} from '../src/environments
 import {BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,hitControl,keepsChasing,liftHeight} from '../src/boss-patterns.ts';
 import {CombatSimulation,type CombatHit,type CombatTarget} from '../src/combat.ts';
 import type {Effects} from '../src/fx.ts';
+import {ENEMY_TYPES} from '../src/enemy-types.ts';
 
 // Boss fights against the reference's rules (bundle apply/applyStatus/beginWindup/castSkill/enrage, RC-13, RU-F10).
 function world() {
@@ -87,12 +88,13 @@ test('enrage fires once when a boss drops below 30% in the fight, and resets whe
 });
 
 test('bosses with a skill list never throw the plain slam; their off-beat attacks are ordinary blows within range + 0.6 m',()=>{
-  const w=world();let damage=0;w.onDamage=n=>{damage+=n;};w.position.set(32.7,0,0);const e=w.spawnSpecies('bear',30,0,0)!;
+  // Just inside the wind-up range (reach + 0.2; the bear's reach is 2.08 m since the FEEL pass resized bosses).
+  const w=world();let damage=0;w.onDamage=n=>{damage+=n;};w.position.set(30+ENEMY_TYPES.bear.reach+.1,0,0);const e=w.spawnSpecies('bear',30,0,0)!;
   e.attackCount=2;e.mesh.userData.attackCount=2;e.hp=e.maxHp; // the 3rd attack at full HP: no skill in the reference
   step(w);assert.equal(e.phase,'windup');assert.equal(e.skill,undefined);assert.equal(e.mesh.userData.slam,false);
   assert.ok(Math.abs(e.windupTotal!-e.definition!.windup)<1e-9,'the plain blow uses the creature wind-up, not the 1.1 s slam');
   for(let i=0;i<40&&e.phase==='windup';i++)step(w);
-  assert.ok(damage>0,'2.7 m away is inside range 2.6 + 0.6 for a boss');
+  assert.ok(damage>0,'reach + 0.1 m away is inside range + 0.6 for a boss');
   assert.equal(w.decals?.active.length??0,0);
 });
 
@@ -141,7 +143,7 @@ test('boss cooldowns: x0.7 below half health and x0.6 once enraged, for plain bl
   assert.equal(b(100),1);assert.equal(b(40),.7);assert.ok(Math.abs(b(40,true)-.42)<1e-12);assert.equal(b(80,true),.6,'keyed on enraged, not on a health line');
   assert.equal(bossCooldownScale({boss:false,hp:10,maxHp:100,enraged:true}),1);
   // A plain blow (3rd attack above half health: no skill) from an enraged boss.
-  const w=world();w.fx=quietFx();w.position.set(32.7,0,0);const e=w.spawnSpecies('bear',30,0,0)!;
+  const w=world();w.fx=quietFx();w.position.set(30+ENEMY_TYPES.bear.reach+.1,0,0);const e=w.spawnSpecies('bear',30,0,0)!;
   e.attackCount=2;e.mesh.userData.attackCount=2;e.scaled=true;e.hp=e.maxHp*.8;e.enraged=true;
   step(w);assert.equal(e.phase,'windup');assert.equal(e.skill,undefined,'a plain blow');
   for(let i=0;i<40&&e.phase==='windup';i++)step(w);

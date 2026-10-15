@@ -119,7 +119,7 @@ export interface DisguiseAir { power?:number; cap?:(target:CombatTarget)=>number
 export interface CombatHost {
   position(): CombatPoint; facing(): number; face(angle: number): void;
   targets(): CombatTarget[]; weapon(): WeaponProfile; stats(): CombatStats;
-  move(x: number, z: number): void; hit(target: CombatTarget, hit: CombatHit): number|void;
+  move(x: number, z: number): void; /** A portal's move (backstab, teleport): past bodies that block walking (main.ts); without it, move. */ teleport?(x: number, z: number): void; hit(target: CombatTarget, hit: CombatHit): number|void;
   effect(effect: CombatEffect): void; clearShot?(from: CombatPoint, to: CombatPoint): boolean;
   heal?(fraction: number): void;
   /** Online execution is resolved by the authority; healing is awarded only on its confirmation. */
@@ -291,6 +291,7 @@ export class CombatSimulation {
   get dashLeft(){return this.action?.kind==='dash'?Math.max(0,this.action.until-this.time):0;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
   reset(){this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.chainStep=-1;this.chainAt=-Infinity;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.crew.reset();this.surge.reset();this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  private portal(x:number,z:number){if(this.host.teleport)this.host.teleport(x,z);else this.host.move(x,z);}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,source:this.hitSource(),...(look?{look}:{}),...(quiet?{quiet:true}:{}),...this.up(point)});}
@@ -575,13 +576,13 @@ export class CombatSimulation {
         for(let i=0;i<K.clones.count;i++){const a=angle+Math.PI/4+i*Math.PI*2/K.clones.count,x=p.x+Math.sin(a)*K.clones.ring,z=p.z+Math.cos(a)*K.clones.ring;this.summon({kind:'clone',x,z,life:K.clones.life,cooldown:i*.1,orbit:a,facing:angle});this.visual('poof',{x:x-Math.sin(a)*.35,z:z-Math.cos(a)*.35},.45,.3,'#b9a6e8');}
         break;}
       case 'stealth':this.statuses.stealth=K.stealth.time;this.haste(K.stealth.speed,K.stealth.time);this.visual('poof',p,2,.7,'#c0ace8');break;
-      case 'backstab':{const t=this.nearest(K.backstab.range);if(!t)return false;const behind=direction(t.facing??angle),gap=t.radius+.8;this.visual('portal',p,1,.35);this.host.move(t.x-p.x-behind.x*gap,t.z-p.z-behind.z*gap);air?.arrive?.();this.aim(t);this.visual('portal',this.host.position(),1,.35);this.damage(t,K.backstab.power,0,0,1,true);this.emit('arc',t,2.5,'#c9c9ff');break;}
+      case 'backstab':{const t=this.nearest(K.backstab.range);if(!t)return false;const behind=direction(t.facing??angle),gap=t.radius+.8;this.visual('portal',p,1,.35);this.portal(t.x-p.x-behind.x*gap,t.z-p.z-behind.z*gap);air?.arrive?.();this.aim(t);this.visual('portal',this.host.position(),1,.35);this.damage(t,K.backstab.power,0,0,1,true);this.emit('arc',t,2.5,'#c9c9ff');break;}
       case 'smoke':this.visual('smoke',p,K.smoke.radius,K.smoke.time);for(let i=0;i<K.smoke.time/K.smoke.tick;i++)this.later(i*K.smoke.tick,()=>{for(const t of this.within(p,K.smoke.radius))this.host.status?.(t,'blind',K.smoke.blind);const at=this.host.position();if(Math.hypot(at.x-p.x,at.z-p.z)<K.smoke.radius)this.statuses.stealth=Math.max(this.statuses.stealth??0,.6);});break;
       // ---- Archmage
       case 'fireball':this.visual('charge',p,1,K.fireball.charge,'#ffad6b');this.later(K.fireball.charge,()=>{
         const from=this.host.position(),t=this.nearest(K.fireball.range),to=t?{x:t.x,z:t.z}:{x:from.x+d.x*K.fireball.fallback,z:from.z+d.z*K.fireball.fallback},gap=Math.max(.5,Math.hypot(to.x-from.x,to.z-from.z));
         this.shoot('fireball',Math.atan2(to.x-from.x,to.z-from.z),K.fireball.power,gap,{x:from.x,z:from.z,radius:.6,speed:Math.max(12,gap/K.fireball.flight),burst:K.fireball.radius,burstLift:K.fireball.lift,...(t?{homing:t.id}:{})});});break;
-      case 'teleport':this.visual('portal',p,1,.45);this.host.move(d.x*K.teleport.distance,d.z*K.teleport.distance);air?.arrive?.();this.statuses.invuln=Math.max(this.statuses.invuln??0,K.teleport.guard);this.visual('portal',this.host.position(),1,.45);break;
+      case 'teleport':this.visual('portal',p,1,.45);this.portal(d.x*K.teleport.distance,d.z*K.teleport.distance);air?.arrive?.();this.statuses.invuln=Math.max(this.statuses.invuln??0,K.teleport.guard);this.visual('portal',this.host.position(),1,.45);break;
       case 'sheep':{const t=this.nearest(K.sheep.range);if(!t)return false;const others=this.within(t,K.sheep.around).filter(e=>e!==t).sort((a,b)=>Math.hypot(a.x-t.x,a.z-t.z)-Math.hypot(b.x-t.x,b.z-t.z)).slice(0,K.sheep.count-1);
         for(const e of [t,...others])this.host.status?.(e,'sheep',K.sheep.time);this.visual('sheep',t,K.sheep.around,1,'#ccbae8');break;}
       case 'blackhole':{const c=this.spot(K.blackhole.range,K.blackhole.fallback,d);this.visual('blackhole',c,K.blackhole.pull,K.blackhole.time,'#9c8ee5');

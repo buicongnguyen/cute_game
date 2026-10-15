@@ -9,6 +9,8 @@ import {zoneAt,createEnvironmentLayout,EnvironmentSimulation} from '../src/envir
 import {sanitizeTitanAttacks,beginTitanAttack,stepTitanAttack,titanTelegraphs,isTitanSkill} from '../src/titan-patterns.ts';
 import {BOSS_SKILLS,BOSS_WINDUPS,bossTelegraphs,bossPhase,hitControl,BOSS_RESISTED,RESIST_SLOW,liftHeight} from '../src/boss-patterns.ts';
 import {atHome,homeRecoveryBonus} from '../src/home-care.ts';
+import {chargeTouches} from '../src/boss-body.ts';
+import {newStagger,staggerDamage,staggerHit,staggerView} from '../src/boss-stagger.ts';
 import {SPLIT,barrierHit,childSpot,newBarrier,splitChildren,stepBarrier} from '../src/elite-roles.ts';
 import {eliteDefeat} from '../src/elite-rewards.ts';
 import {trailSpot,dogTossFactor,DOG_TOSS_CD} from '../src/guard-dog.ts';
@@ -28,7 +30,8 @@ import {BREAK_PLANET,BreakLedger,breakClass,parsePieceId,inReach,bossHolds,fight
 
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const finite=(value,fallback=0,min=-160,max=160)=>Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;
-const snapshot=enemy=>{const {roster,home,changedAt,deadUntil,generation,pending,contributors,scaled,damageAt,cast,nextCastAt,hostPhase,hostAttackCount,combatAttacks,lastHitAt,...publicState}=enemy;return {...publicState,chaseGrace:Math.max(0,Math.min(4,((lastHitAt||0)+4000-Date.now())/1000))};};
+// A boss's stagger meter (boss-stagger.ts) goes out as its share and the seconds left on its knees, never the server's clock.
+const snapshot=enemy=>{const {roster,home,changedAt,deadUntil,generation,pending,contributors,scaled,damageAt,cast,nextCastAt,hostPhase,hostAttackCount,combatAttacks,lastHitAt,stagger,...publicState}=enemy;return {...publicState,...(stagger?{stagger:staggerView(stagger,Date.now()/1000)}:{}),chaseGrace:Math.max(0,Math.min(4,((lastHitAt||0)+4000-Date.now())/1000))};};
 const STATUS=['fear','charm','slow','blind','sheep','taunt'];
 
 /** The browser host animates navigation; the server owns HP, skill timing, stats, kills and rewards. */
@@ -146,7 +149,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     if(c.skill==='rain')once(0,0,()=>{for(const mark of c.marks)area(mark,mark.r,1.3,'shot');});
     if(c.skill==='quake')for(let i=0;i<3;i++)once(i,.12+i*.32,()=>area(c.source,3+i*3+.4,1.1,'melee',3+i*3-2.4));
     if(c.skill==='eclipse')once(0,0,()=>{area(enemy,7,.9,'shot');state(room).environment.eclipseUntil=state(room).environment.time+6;});
-    if(c.skill==='charge'&&c.elapsed<.8)for(const peer of targets)if(dist(peer.pose,enemy)<enemy.radius+.6&&!c.fired.includes(peer.account.id)){c.fired.push(peer.account.id);hurtEnemyTarget(peer,enemy,1.3);}
+    if(c.skill==='charge'&&c.elapsed<.8)for(const peer of targets)if(chargeTouches(enemy.type,enemy.radius,enemy.x,enemy.z,enemy.facing||0,peer.pose.x,peer.pose.z)&&!c.fired.includes(peer.account.id)){c.fired.push(peer.account.id);hurtEnemyTarget(peer,enemy,1.3);}
     if(c.skill==='spin'&&c.elapsed<2.4)once(Math.floor(c.elapsed/.35),0,()=>area(enemy,3.4,.5));
     if(c.skill==='barrage'){
       once(0,0,()=>{const count=enemy.hp<enemy.maxHp*.5?20:14;for(let i=0;i<count;i++){const a=i/count*Math.PI*2+c.source.facing;c.shots.push({x:c.source.x,z:c.source.z,vx:Math.sin(a)*13,vz:Math.cos(a)*13,life:1.4});}});
@@ -212,7 +215,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       const drops=loot.map(item=>({id:randomUUID(),ownerId:owner.id,item:item.id,count:item.count,room:room.id,planet:state(room).planet,x:killPoint.x,z:killPoint.z,owner:owner.id,releaseAt:now+10000,expiresAt:now+30000}));owner.drops.push(...drops);
       return {enemyId:enemy.id,drops,execute};
     },requestId).then(committed=>{
-      if(!committed)throw new Error('Missing killer');enemy.pending=false;enemy.hp=0;enemy.deadUntil=Date.now()+enemy.roster.respawn*1000;enemy.respawn=enemy.roster.respawn;enemy.titanAttacks=[];enemy.shots=[];enemy.skillEffects=[];enemy.telegraphs=[];enemy.combatAttacks=[];enemy.cast=null;
+      if(!committed)throw new Error('Missing killer');enemy.pending=false;enemy.hp=0;enemy.stagger=undefined;enemy.deadUntil=Date.now()+enemy.roster.respawn*1000;enemy.respawn=enemy.roster.respawn;enemy.titanAttacks=[];enemy.shots=[];enemy.skillEffects=[];enemy.telegraphs=[];enemy.combatAttacks=[];enemy.cast=null;
       room.killed.add(enemy.id);health(room,enemy);broadcast(room,{type:'defeat',id:enemy.id,by:contributors,eventId:requestId});colossus.killed(room,enemy,killer.account.id);
       for(const drop of committed.reply.result.drops)broadcast(room,{type:'dropSpawn',drop});
       if(execute&&committed.reply.result.execute)send((peers.get(killer.account.id)||killer).socket,{type:'executeResult',id:enemy.id,requestId,ok:true,profile:committed.reply.profile,revision:committed.reply.revision});
@@ -229,9 +232,13 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     const control=hitControl(enemy.boss,impact.stun||0);
     if(!hazard&&!execute&&enemy.type==='magmaturtle')impact={...impact,amount:impact.amount*(enemy.phase==='recover'?2:.12)};
     if(enemy.type===COLOSSUS_TYPE&&!hazard)impact={...impact,amount:colossus.incoming(room,enemy,peer,impact.amount)};
+    // The stagger meter (boss-stagger.ts, the same rule as solo): a kneeling boss takes more, heavy blows and criticals fill it.
+    let broke=false;if(enemy.boss&&enemy.type!==COLOSSUS_TYPE&&!hazard&&!execute){const st=enemy.stagger??=newStagger(),sec=Date.now()/1000;impact={...impact,amount:staggerDamage(st,sec,impact.amount)};broke=staggerHit(st,impact,sec,!!enemy.titan)==='break';}
     const dealt=Math.min(enemy.hp,Math.max(0,impact.amount));enemy.contributors.set(peer.account.id,Date.now());enemy.lastHitAt=Date.now();enemy.hp-=dealt;enemy.stun=Math.max(enemy.stun||0,control.stun);
     if(control.slow)enemy.statuses.slow=Math.max(enemy.statuses.slow||0,control.slow);
     if(impact.lift>0){enemy.liftVelocity=Math.max(enemy.liftVelocity||0,Math.sqrt(liftHeight(enemy.boss,impact.lift)*24));enemy.stun=Math.max(enemy.stun||0,.8);enemy.phase='chase';enemy.telegraphs=[];enemy.combatAttacks=(enemy.combatAttacks??[]).filter(c=>c.attack||c.elapsed>0);enemy.cast=enemy.combatAttacks.at(-1)??null;}
+    // A break kneels the boss: a stun the host's creature AI obeys, and the wind-up and skill it was on are cancelled, as for a launch.
+    if(broke&&enemy.hp>0){enemy.stun=Math.max(enemy.stun||0,enemy.stagger.until-Date.now()/1000);enemy.phase='chase';enemy.telegraphs=[];enemy.combatAttacks=(enemy.combatAttacks??[]).filter(c=>c.attack||c.elapsed>0);enemy.cast=enemy.combatAttacks.at(-1)??null;impact={...impact,brk:true};}
     if(enemy.hp<=0){enemy.hp=1;kill(room,enemy,peer,execute);}health(room,enemy,impact);return dealt;
   }
   const epoch=account=>({adventure:account.adventureEpoch||0,life:account.lifeEpoch||0});
