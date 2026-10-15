@@ -20,7 +20,7 @@ export interface PetSurgeHost {
   /** Where pet slot 0 or 1 trails: `spread` multiplies its distance to the side (pet-world.ts PetCompanion). */
   pen(slot: number): { spread: number } | null | undefined;
   /** The guard dog's drawn scale (dog-world.ts GuardDogs.scale). */
-  dog(): { scale: number } | null | undefined;
+  dog(): { scale: number; aside: number } | null | undefined;
   hero(): { x: number; y: number; z: number };
   /** The explorer's height (m). */
   heroHeight(): number;
@@ -38,7 +38,9 @@ export interface PetSurgeHost {
   toast?(message: string, icon: string): void;
 }
 /** The guard dog's drawn height at its normal size (m): farm.glb's puppy at SHOWN.dog. */
-export const DOG_HEIGHT = .62;
+export const DOG_HEIGHT = .82;
+/** The big dog is drawn this much further out on its side (m), clear of the explorer. */
+const DOG_ASIDE = -1.3;
 const SIDE_BIG = 2.4, SIDE_CLEAR = 3.6, TIP_KEY = 'zoo-garden-surge-tip';
 const SOUND: Record<SignatureId, 'heavy' | 'magic' | 'zap'> = { bulwark: 'heavy', returnfire: 'zap', bloom: 'magic', taunt: 'heavy', bigbark: 'heavy', stomp: 'heavy', rebirth: 'magic', breath: 'zap', slam: 'heavy', bind: 'magic' };
 const TINT: Partial<Record<SignatureId, string>> = { bulwark: '#bfe6ff', bloom: '#ffb3d9', rebirth: '#ffb347', taunt: '#ffd166', bigbark: '#fff1d6', stomp: '#ffcf8a', bind: '#9b7bff', slam: '#7fd7ff', breath: '#ff8a3d' };
@@ -52,7 +54,7 @@ export class PetSurgeView {
   private coolUntil = -Infinity;
   private clock = 0;
   private ringEl: HTMLElement | null = null;
-  private ringFace = '';
+  private ringState = ''; private ringStep = -1;
   private tipped = false;
   /** Surges and signatures shown since the start, by signature (probes and tests read it). */
   readonly shown: Record<string, number> = {};
@@ -130,7 +132,7 @@ export class PetSurgeView {
       else { k = 1; sy = 1 + .025 * Math.sin((l.t - SURGE.grow) * 2.6); }
       const scale = 1 + (l.target / l.base - 1) * k, xz = 1 / Math.sqrt(sy);
       if (l.model) l.model.scale.set(l.base * scale * xz, l.base * scale * sy, l.base * scale * xz);
-      else if (l.slot === 2) { const d = this.h.dog(); if (d) d.scale = scale; }
+      else if (l.slot === 2) { const d = this.h.dog(); if (d) { d.scale = scale; d.aside = DOG_ASIDE * Math.min(1, Math.max(0, k)); } }
       // Aside and a little behind, so the big pet never hides the explorer: further out while it stands in the camera's line.
       if (l.slot < 2) { const pen = this.h.pen(l.slot); if (pen) { const want = l.ending >= 0 && l.ending > SURGE.shrink * .5 ? 1 : this.blocking(l) ? SIDE_CLEAR : SIDE_BIG; l.side += (want - l.side) * (1 - Math.exp(-dt * 4)); pen.spread = l.side; } }
       if (l.ending >= SURGE.shrink) { this.finish(); this.coolUntil = this.clock + SURGE.cooldown; }
@@ -148,25 +150,28 @@ export class PetSurgeView {
   /** Ends the running surge's picture at once: every pet at its own size, back at its usual side. */
   private finish() {
     const l = this.live; if (!l) return; this.live = null;
-    if (l.model) l.model.scale.setScalar(l.base); if (l.slot === 2) { const d = this.h.dog(); if (d) d.scale = 1; }
+    if (l.model) l.model.scale.setScalar(l.base); if (l.slot === 2) { const d = this.h.dog(); if (d) { d.scale = 1; d.aside = 0; } }
     if (l.slot < 2) { const pen = this.h.pen(l.slot); if (pen) pen.spread = 1; }
     const fx = this.h.fx(), hero = this.h.hero(); if (fx && l.model) fx.burst({ x: l.model.position.x, z: l.model.position.z }, { n: 8, color: '#ffffff', glow: true, size: .1, speed: 2, up: 2, y: hero.y + .3, life: .4 });
     this.h.sound?.('shrink');
   }
-  /** The surge's state as the ring shows it: 'ready', 'active' (k: share left) or 'cool' (k: share done). */
-  state(): { state: 'ready' | 'active' | 'cool'; k: number } {
-    const l = this.live; if (l) return { state: 'active', k: l.ending >= 0 ? 0 : Math.max(0, Math.min(1, 1 - Math.max(0, l.t - SURGE.grow) / SURGE.hold)) };
-    if (this.clock < this.coolUntil) return { state: 'cool', k: 1 - (this.coolUntil - this.clock) / SURGE.cooldown };
-    return { state: 'ready', k: 1 };
+  private now: { state: 'ready' | 'active' | 'cool'; k: number } = { state: 'ready', k: 1 };
+  /** The surge's state as the ring shows it: 'ready', 'active' (k: share left) or 'cool' (k: share done). One object, reused. */
+  state(): { readonly state: 'ready' | 'active' | 'cool'; readonly k: number } {
+    const l = this.live, o = this.now;
+    if (l) { o.state = 'active'; o.k = l.ending >= 0 ? 0 : Math.max(0, Math.min(1, 1 - Math.max(0, l.t - SURGE.grow) / SURGE.hold)); }
+    else if (this.clock < this.coolUntil) { o.state = 'cool'; o.k = 1 - (this.coolUntil - this.clock) / SURGE.cooldown; }
+    else { o.state = 'ready'; o.k = 1; }
+    return o;
   }
   /** The ring on the hero plate: `el` is where it goes (the plate's face). */
   mount(el: HTMLElement | null) {
     if (!el || typeof document === 'undefined') return; injectStyle();
-    const ring = document.createElement('span'); ring.className = 'surge-ring'; ring.hidden = true; ring.setAttribute('role', 'img'); ring.innerHTML = '<i></i><b>💞</b>'; el.appendChild(ring); this.ringEl = ring;
+    const ring = document.createElement('em'); ring.className = 'surge-ring'; ring.hidden = true; ring.setAttribute('role', 'img'); ring.innerHTML = '<i></i><span class="surge-glyph">💞</span>'; el.appendChild(ring); this.ringEl = ring;
   }
   private ring() {
-    const el = this.ringEl; if (!el) return; const on = this.h.canSurge(), s = on ? this.state() : null, step = s ? Math.round(s.k * 24) : 0, face = s ? `${s.state}:${step}` : 'off';
-    if (face === this.ringFace) return; this.ringFace = face; el.hidden = !s; if (!s) return;
+    const el = this.ringEl; if (!el) return; const on = this.h.canSurge(), s = on ? this.state() : null, step = s ? Math.round(s.k * 24) : -1, state = s ? s.state : 'off';
+    if (state === this.ringState && step === this.ringStep) return; this.ringState = state; this.ringStep = step; el.hidden = !s; if (!s) return;
     el.dataset.state = s.state; el.style.setProperty('--k', String(step / 24));
     el.setAttribute('aria-label', this.h.t(s.state === 'ready' ? 'Bond Surge ready: land a 3-hit chain' : s.state === 'active' ? 'Bond Surge: your pet is big' : 'Bond Surge cooling down'));
     el.title = el.getAttribute('aria-label') ?? '';
@@ -180,18 +185,19 @@ export class PetSurgeView {
 }
 
 const box = new Box3();
-/** A model's height in the world (m): its bounding box, measured once a surge. */
-function modelHeight(model: Object3D) { box.setFromObject(model); return box.isEmpty() ? 0 : box.max.y - box.min.y; }
+/** A model's size in the world (m), measured once a surge: its height, or for a wide walker (a turtle) 70% of its length, so its breadth never hides the hero. A flyer's wings do not count. */
+function modelHeight(model: Object3D) { box.setFromObject(model); return box.isEmpty() ? 0 : Math.max(box.max.y - box.min.y, model.userData.flying ? 0 : .7 * Math.max(box.max.x - box.min.x, box.max.z - box.min.z)); }
 let styled = false;
 function injectStyle() {
   if (styled || typeof document === 'undefined') return; styled = true;
   const css = document.createElement('style'); css.id = 'surge-ring-style';
-  css.textContent = `.surge-ring{position:absolute;left:-7px;bottom:-7px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;pointer-events:none;z-index:2;background:#3a2433;box-shadow:0 1px 3px #0005}
+  css.textContent = `#hud .surge-ring[hidden]{display:none!important}
+#hud .surge-ring{font-style:normal;position:absolute;left:-7px;bottom:-7px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;pointer-events:none;z-index:3;background:#3a2433;box-shadow:0 1px 3px #0005}
 .surge-ring>i{position:absolute;inset:0;border-radius:50%;background:conic-gradient(var(--c,#ffd166) calc(var(--k,1)*360deg),#ffffff33 0);-webkit-mask:radial-gradient(circle,transparent 7.5px,#000 8px);mask:radial-gradient(circle,transparent 7.5px,#000 8px)}
-.surge-ring>b{position:relative;font-size:11px;line-height:1;filter:saturate(1.2)}
+.surge-ring>.surge-glyph{position:relative;font-size:11px;line-height:1;filter:saturate(1.2)}
 .surge-ring[data-state=ready]{--c:#ffd166;animation:surge-ready 1.6s ease-in-out infinite}
 .surge-ring[data-state=active]{--c:#ff7ab6;background:#5a2448}
-.surge-ring[data-state=cool]{--c:#bcd3e6}.surge-ring[data-state=cool]>b{opacity:.55}
+.surge-ring[data-state=cool]{--c:#bcd3e6}.surge-ring[data-state=cool]>.surge-glyph{opacity:.55}
 @keyframes surge-ready{50%{box-shadow:0 0 0 3px #ffd16688,0 1px 3px #0005}}
 @media (prefers-reduced-motion:reduce){.surge-ring[data-state=ready]{animation:none;box-shadow:0 0 0 2px #ffd16699}}`;
   document.head.appendChild(css);

@@ -155,7 +155,7 @@ function viewRig() {
   const calls: string[] = [], texts: string[] = [], sounds: string[] = [];
   const fx = { flash: () => calls.push('flash'), ring: () => calls.push('ring'), spark: () => calls.push('spark'), burst: () => calls.push('burst'), shake: () => calls.push('shake'), text: (_at: unknown, m: string) => { texts.push(m); } };
   const model = new THREE.Group(); model.add(new THREE.Mesh(new THREE.BoxGeometry(.5, .5, .5).translate(0, .25, 0))); model.scale.setScalar(.8); model.position.set(.9, 0, -1); model.updateMatrixWorld(true);
-  const pen = { spread: 1 }, dog = { scale: 1 }; let can = true;
+  const pen = { spread: 1 }, dog = { scale: 1, aside: 0 }; let can = true;
   const view = new PetSurgeView({ fx: () => fx as never, petModel: slot => slot === 0 ? model : null, pen: slot => slot === 0 ? pen : null, dog: () => dog, hero: () => ({ x: 0, y: 0, z: 0 }), heroHeight: () => 1.93, eye: () => ({ x: 0, y: 8, z: -10 }),
     color: () => '#ff985f', creature: () => ({ x: 0, z: 2, boss: true }), canSurge: () => can, t: k => k, sound: k => sounds.push(k) });
   return { view, calls, texts, sounds, model, pen, dog, setCan: (v: boolean) => { can = v; } };
