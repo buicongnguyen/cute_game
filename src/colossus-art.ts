@@ -1,6 +1,5 @@
 import * as T from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { KitLibrary, modelUrl } from './assets.ts';
+import { KitLibrary, createGltfLoader, modelUrl } from './assets.ts';
 import { toonify, toonMaterial } from './toon.ts';
 import { COLOSSUS_ACTIVE, colossusFeet, forwardOf, type ColossusAttack } from './colossus-patterns.ts';
 import { COLOSSUS_STATS } from './colossus-content.ts';
@@ -12,7 +11,7 @@ import { COLOSSUS_STATS } from './colossus-content.ts';
  */
 export const colossusFile = modelUrl('colossus.glb');
 let scene: Promise<T.Group> | null = null;
-const loadScene = () => scene ??= new GLTFLoader().loadAsync(colossusFile).then(g => g.scene);
+const loadScene = () => scene ??= createGltfLoader().loadAsync(colossusFile).then(g => g.scene);
 export const colossusGearKit = new KitLibrary([colossusFile], () => loadScene()); colossusGearKit.warmOnLoad = true;
 let template: T.Object3D | null = null, failed = false;
 /** Starts the download once; `then` runs when the model is ready (not on failure: the stand-in stays). */

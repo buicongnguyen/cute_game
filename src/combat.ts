@@ -113,6 +113,7 @@ import { MOVES, AIR_MOVES, airDashTurn, lobLanding, lobPower, lobReaches, moveAt
 import { CHAIN, chainKind, chainLaunches, chainNext, chainPower } from './five-rules.ts';
 import { DOG_TOSS_FLIGHT, DOG_TOSS_RANGE } from './guard-dog.ts';
 import { PetCrew, PET_RULES, guardCut, type GuardEvent, type PetFighter } from './pet-guard.ts';
+import { PetSurge, SURGE, fireSignature, signatureOf, type SurgeEvent, type SurgeOps } from './pet-surge.ts';
 /** A disguise skill cast from a jump (air-cast.ts). */
 export interface DisguiseAir { power?:number; cap?:(target:CombatTarget)=>number; grounded?:boolean; landed?:boolean; arrive?:()=>void }
 export interface CombatHost {
@@ -136,6 +137,8 @@ export interface CombatHost {
   health?():number;
   /** A pet's guard fired (pet-guard.ts): the browser draws it; the server tells the explorer it protected. */
   guarded?(event:GuardEvent):void;
+  /** A pet surged, fired its signature, sent a shot back or began to shrink (pet-surge.ts): the browser draws it; the server tells its explorer. */
+  surged?(event:SurgeEvent):void;
   /** 'stun' freezes or roots a creature in place (no damage). */
   status?(target:CombatTarget,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun',duration:number):void;
   moveTarget?(target:CombatTarget,x:number,z:number):void;
@@ -287,7 +290,7 @@ export class CombatSimulation {
   /** Seconds the dash in progress still runs (0 when there is none). */
   get dashLeft(){return this.action?.kind==='dash'?Math.max(0,this.action.until-this.time):0;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.chainStep=-1;this.chainAt=-Infinity;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.crew.reset();this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.chainStep=-1;this.chainAt=-Infinity;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.crew.reset();this.surge.reset();this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,source:this.hitSource(),...(look?{look}:{}),...(quiet?{quiet:true}:{}),...this.up(point)});}
@@ -312,7 +315,7 @@ export class CombatSimulation {
     if(target.hp<=0)return 0;const stats=this.host.stats(),p=this.host.position();
     const own=!this.helperShot&&!this.summonHit,sure=own&&(this.forced||this.edge.sure);
     const critical=this.random()<stats.critChance||sure,angle=Math.atan2(target.x-p.x,target.z-p.z);
-    const bonus=(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?DZ.stealth.bonus:1)*(this.marked.has(target.id)?1.5:1)*((this.statuses.rally??0)>0?1+DZ.torch.bonus:1);
+    const bonus=(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?DZ.stealth.bonus:1)*(this.marked.has(target.id)?1.5:1)*((this.statuses.rally??0)>0?1+DZ.torch.bonus:1)*(own?this.surge.bonus(target):1);
     this.statuses.stealth=0;
     const share=this.edge.scale?.(target)??1;
     const amount=Math.max(1,Math.min(this.hitCap,own&&this.castCap?this.castCap(target):Infinity,Math.round(stats.attack*multiplier*this.power*bonus*(own?this.edge.bonus:1)*share*(critical?((own?this.edge.crit?.():undefined)??stats.critDamage??2):1)*(.9+this.random()*.2))));
@@ -352,7 +355,7 @@ export class CombatSimulation {
     target??=this.nearest(attackRange(weapon));if(!target)return false;
     const p=this.host.position();if(Math.hypot(target.x-p.x,target.z-p.z)>attackRange(weapon,target.radius))return false;
     const angle=this.aim(target);
-    if(this.edge.chain&&!this.lift)return this.chainHit(weapon,target,angle);
+    if(this.edge.chain&&!this.lift){this.chainHit(weapon,target,angle);this.surgePress(this.chainStep);return true;}
     // The launcher: with edge.launch set, every third melee hit pops ordinary creatures into the air.
     const launch=weapon.kind!=='gun'&&this.edge.launch>0&&(this.swings=(this.swings+1)%3)===0?this.edge.launch:0;
     this.power=factor;this.basicCall=true;try{
@@ -360,7 +363,7 @@ export class CombatSimulation {
       const count=Math.max(1,weapon.spread??1);for(let i=0;i<count;i++)this.shoot(weapon.shot??'pea',angle+(count===1?0:(i/(count-1)-.5)*.6),count>1?.45:1,(weapon.range??8)+1);
     }else if(weapon.kind==='sword')this.arc(weapon.range??2,1.1,weapon.arc??.2,target,1.2,launch);
     else{this.combo=(this.combo+1)%3;this.arc(1.6,this.combo===0?1.5:1,.5,target,this.combo===0?2.2:.8,launch);}// the reference's punch knock: 0.8, 2.2 on the third
-    }finally{this.power=1;this.basicCall=false;}
+    }finally{this.power=1;this.basicCall=false;}this.surgePress();
     return true;
   }
   /**
@@ -692,7 +695,7 @@ export class CombatSimulation {
     this.dogCooldown=Math.max(0,this.dogCooldown-dt);if(this.dogCooldown>0)return;const dog=this.host.dog?.();
     if(!dog||!(dog.dmg>0)||!(dog.cd>0)||!Number.isFinite(dog.x)||!Number.isFinite(dog.z))return;
     const target=this.crew.target(dog,position,this.host.targets(),dog.target??this.host.focus?.(),this.time);if(!target||Math.hypot(target.x-dog.x,target.z-dog.z)-target.radius>DOG_TOSS_RANGE+2)return;
-    const from={x:dog.x,z:dog.z},dmg=dog.dmg;this.dogCooldown=dog.cd;
+    const from={x:dog.x,z:dog.z},dmg=dog.dmg*this.surge.damage(2);this.dogCooldown=dog.cd;
     this.emit('toss',from,Math.hypot(target.x-from.x,target.z-from.z),'#fff1d6',Math.atan2(target.x-from.x,target.z-from.z));
     this.later(DOG_TOSS_FLIGHT,()=>{if(target.hp<=0||Math.hypot(target.x-from.x,target.z-from.z)>DOG_TOSS_RANGE+3+target.radius)return;this.helperShot=true;this.damage(target,dmg,0,0,.4);/* the puppy's kill is not the player's for timed challenges */this.emit('impact',target,.45,'#fff1d6');this.helperShot=false;});
   }
@@ -705,11 +708,11 @@ export class CombatSimulation {
    * One pet's shot at a creature that is fighting the explorer (pet-guard.ts PetCrew.target: within the leash, never a
    * peaceful one); returns the cooldown it starts, or 0 when it did not shoot. An ice shot chills (slows), it no longer freezes.
    */
-  private petShot(pet:PetFighter|null|undefined,position:CombatPoint){
+  private petShot(pet:PetFighter|null|undefined,position:CombatPoint,slot=0){
     if(!pet||!Number.isFinite(pet.dmg)||!(pet.dmg>0)||!Number.isFinite(pet.cd)||!(pet.cd>0)||!Number.isFinite(pet.x)||!Number.isFinite(pet.z))return 0;
     const target=this.crew.target(pet,position,this.host.targets(),this.host.focus?.(),this.time);if(!target)return 0;
     const angle=Math.atan2(target.x-pet.x,target.z-pet.z),gap=Math.hypot(target.x-pet.x,target.z-pet.z);
-    this.shoot(pet.shot??'fire',angle,pet.dmg,Math.min(PET_RULES.range,gap+1.5),{x:pet.x,z:pet.z,stun:0,...(pet.shot==='ice'?{slow:PET_RULES.chill}:{}),helper:true});
+    this.shoot(pet.shot??'fire',angle,pet.dmg*this.surge.damage(slot),Math.min(PET_RULES.range,gap+1.5),{x:pet.x,z:pet.z,stun:0,...(pet.shot==='ice'?{slow:PET_RULES.chill}:{}),helper:true});
     this.emit('cast',pet,.35,colorFor(pet.shot??'fire'),angle);return Math.max(.1,pet.cd);
   }
   /**
@@ -721,12 +724,12 @@ export class CombatSimulation {
   guardIncoming(amount:number,source:string,from?:CombatTarget|null):number{
     if(!(amount>0)||!from||source==='hazard')return amount;
     this.crew.noteHurt(from.id,this.time);
-    const answer=source==='shot'?'counter':'block',hero=this.host.position(),attack=this.host.stats().attack;let left=amount,taken=0;
+    const answer=source==='shot'?'counter':'block',hero=this.host.position(),attack=this.host.stats().attack,pre=this.surgeIncoming(amount,source,from);let left=amount-pre,taken=pre;if(!(left>0))return 0;
     for(let slot=0;slot<3;slot++){
       if(!this.crew.ready(slot))continue;const pet=this.petAt(slot),g=pet?.guard;if(!pet||!g||g.kind==='mend'||Math.hypot(pet.x-hero.x,pet.z-hero.z)>PET_RULES.reach)continue;
-      if(g.kind===answer){const cut=guardCut(left,g.power*attack,!!from.boss,amount,taken);if(cut<=0)continue;left-=cut;taken+=cut;this.crew.use(slot,g.every);
+      if(g.kind===answer){const cut=guardCut(left,g.power*attack*this.surge.guard(slot),!!from.boss,amount,taken);if(cut<=0)continue;left-=cut;taken+=cut;this.crew.use(slot,g.every);
         this.host.guarded?.({slot,kind:g.kind,power:cut,left,x:pet.x,z:pet.z,tx:hero.x,tz:hero.z,target:from.id});}
-      else if((g.kind==='distract'||g.kind==='bark')&&from.hp>0&&this.host.status){const time=from.boss?g.power*.5:g.power;this.crew.use(slot,g.every);
+      else if((g.kind==='distract'||g.kind==='bark')&&from.hp>0&&this.host.status){const time=(from.boss?g.power*.5:g.power)*this.surge.guard(slot);this.crew.use(slot,g.every);
         this.host.status(from,g.kind==='bark'||from.boss?'slow':'blind',time);this.host.guarded?.({slot,kind:g.kind,power:time,left,x:pet.x,z:pet.z,tx:from.x,tz:from.z,target:from.id});}
     }
     return left;
@@ -737,21 +740,55 @@ export class CombatSimulation {
    * undefined when no pet answered. `boss`: the shooter is a boss (the cap applies).
    */
   counterShot(shot:{x:number;z:number;damage:number;boss?:boolean;owner?:string}):number|undefined{
-    if(!(shot.damage>0))return undefined;const hero=this.host.position(),attack=this.host.stats().attack;let left=shot.damage,taken=0,answered=false;
+    if(!(shot.damage>0))return undefined;const hero=this.host.position(),attack=this.host.stats().attack;const pre=this.surgeShot(shot.damage,!!shot.boss,shot.owner,shot.x,shot.z);let left=shot.damage-pre,taken=pre,answered=pre>0;
     for(let slot=0;slot<2;slot++){
       if(!this.crew.ready(slot))continue;const pet=this.petAt(slot),g=pet?.guard;
       if(!pet||g?.kind!=='counter'||Math.hypot(pet.x-hero.x,pet.z-hero.z)>PET_RULES.leash||Math.hypot(pet.x-shot.x,pet.z-shot.z)>PET_RULES.reach)continue;
-      const cut=guardCut(left,g.power*attack,!!shot.boss,shot.damage,taken);if(cut<=0)continue;left-=cut;taken+=cut;answered=true;this.crew.use(slot,g.every);
+      const cut=guardCut(left,g.power*attack*this.surge.guard(slot),!!shot.boss,shot.damage,taken);if(cut<=0)continue;left-=cut;taken+=cut;answered=true;this.crew.use(slot,g.every);
       this.host.guarded?.({slot,kind:'counter',power:cut,left,x:pet.x,z:pet.z,tx:shot.x,tz:shot.z,target:shot.owner,flight:true});
     }
     return answered?left:undefined;
+  }
+  /** Bond Surge (pet-surge.ts): whose turn, the signature, the boss left open. The server's copy decides online. */
+  readonly surge=new PetSurge();
+  private surgeOps:SurgeOps<CombatTarget>|null=null;
+  /** A basic press reached a creature: the third of the chain (or of three quick presses) makes a pet within the leash surge. */
+  private surgePress(chainStep?:number){
+    if(!this.surge.press(chainStep)||!this.surge.ready)return;const hero=this.host.position();
+    const slot=this.surge.pick(s=>{const p=this.petAt(s);return !!p&&Number.isFinite(p.x)&&Number.isFinite(p.z)&&Math.hypot(p.x-hero.x,p.z-hero.z)<=PET_RULES.leash&&!!signatureOf(p.id,p.guard?.kind);});if(slot<0)return;
+    const pet=this.petAt(slot)!,sig=signatureOf(pet.id,pet.guard?.kind)!;this.surge.start(slot,sig);this.host.surged?.({slot,phase:'start',sig,x:pet.x,z:pet.z});
+  }
+  /** The surge's clock: the signature fires as the pet has grown; the end is told as it begins to shrink. Free while ready. */
+  private surgeStep(dt:number,hero:CombatPoint){
+    const s=this.surge;if(s.state==='ready'&&!s.reviveArmed){s.clock+=dt;return;}const slot=s.slot,phase=s.step(dt);if(!phase)return;
+    const pet=this.petAt(slot)??hero,sig=s.sig!;if(phase==='end'){this.host.surged?.({slot,phase:'end',sig,x:pet.x,z:pet.z});return;}
+    const g=(pet as PetFighter).guard,mend=g?.kind==='mend'?g.power*SURGE.guard:0,focus=this.host.focus?.(),aim=focus?this.host.targets().find(t=>t.id===focus&&t.hp>0)??null:this.nearest(PET_RULES.leash)??null;
+    this.host.surged?.(fireSignature(this.surgeOps??=this.makeSurgeOps(),s,slot,sig,pet,hero,aim,mend));
+  }
+  private makeSurgeOps():SurgeOps<CombatTarget>{return {targets:()=>this.host.targets(),
+    hit:(t,power,stun,knock)=>{const old=this.helperShot;this.helperShot=true;try{this.damage(t,power,stun,0,knock);}finally{this.helperShot=old;}},
+    status:(t,kind,time)=>this.host.status?.(t,kind,time),heal:f=>{if(f>0)this.host.heal?.(f);},ward:time=>{this.statuses.ward=Math.max(this.statuses.ward??0,time);}};}
+  /** Return fire: the big counter pet sends a creature's shot (damage `damage`, met at x, z) back at its owner. Returns the damage taken off it. */
+  private surgeShot(damage:number,boss:boolean,ownerId:string|undefined,x:number,z:number){
+    const s=this.surge;if(!(s.reflects>0)||!s.big(s.slot)||!(damage>0))return 0;const pet=this.petAt(s.slot),hero=this.host.position();if(!pet||Math.hypot(pet.x-hero.x,pet.z-hero.z)>PET_RULES.leash)return 0;
+    const cut=guardCut(damage,Infinity,boss,damage,0);if(cut<=0)return 0;s.reflects--;const owner=ownerId?this.host.targets().find(t=>t.id===ownerId&&t.hp>0):undefined;
+    if(owner)this.later(Math.min(2,Math.hypot(owner.x-x,owner.z-z)/DZ.block.speed),()=>{if(owner.hp>0)this.surgeOps?.hit(owner,SURGE.reflect,.2,1);});
+    this.surgeOps??=this.makeSurgeOps();this.host.surged?.({slot:s.slot,phase:'big',sig:s.sig!,x,z,reflect:true,tx:owner?.x??x,tz:owner?.z??z,...(owner?{boss:owner.id}:{})});return cut;
+  }
+  /** A creature's hit while a pet is big: a shot goes back (return fire) or the next hit is soaked (bulwark). Returns what it took off. */
+  private surgeIncoming(amount:number,source:string,from:CombatTarget){
+    const s=this.surge;if(s.slot<0||!s.big(s.slot))return 0;const hero=this.host.position();
+    if(source==='shot'&&s.reflects>0)return this.surgeShot(amount,!!from.boss,from.id,hero.x,hero.z);
+    if(!s.soak)return 0;const pet=this.petAt(s.slot);if(!pet||Math.hypot(pet.x-hero.x,pet.z-hero.z)>PET_RULES.leash)return 0;
+    const cut=guardCut(amount,Infinity,!!from.boss,amount,0);if(cut<=0)return 0;s.soak=false;
+    this.host.guarded?.({slot:s.slot,kind:'block',power:cut,left:amount-cut,x:pet.x,z:pet.z,tx:hero.x,tz:hero.z,target:from.id});return cut;
   }
   /** A mending pet heals an explorer that has just been hurt and is below half health. Only looked at right after a blow. */
   private petMend(){
     const share=this.host.health?.();if(!(share!>0)||share!>=PET_RULES.mendBelow||!this.host.heal)return;const hero=this.host.position();
     for(let slot=0;slot<2;slot++){
       if(!this.crew.ready(slot))continue;const pet=this.petAt(slot),g=pet?.guard;if(!pet||g?.kind!=='mend'||Math.hypot(pet.x-hero.x,pet.z-hero.z)>PET_RULES.reach)continue;
-      this.crew.use(slot,g.every);this.host.heal(g.power);this.host.guarded?.({slot,kind:'mend',power:g.power,left:0,x:pet.x,z:pet.z,tx:hero.x,tz:hero.z});
+      const power=g.power*this.surge.guard(slot);this.crew.use(slot,g.every);this.host.heal(power);this.host.guarded?.({slot,kind:'mend',power,left:0,x:pet.x,z:pet.z,tx:hero.x,tz:hero.z});
     }
   }
   update(dt:number,active=true){
@@ -764,8 +801,8 @@ export class CombatSimulation {
     const petDt=dt*((this.statuses.cheer??0)>0?1+DZ.dawnglow.cheer:1);
     this.petCooldown=Math.max(0,this.petCooldown-petDt);this.pet2Cooldown=Math.max(0,this.pet2Cooldown-petDt);
     if(this.petCooldown<=0){const cd=this.petShot(this.host.pet?.(),position);if(cd)this.petCooldown=cd;}
-    if(this.pet2Cooldown<=0&&this.host.pet2){const cd=this.petShot(this.host.pet2(),position);if(cd)this.pet2Cooldown=cd;}
-    this.dogToss(petDt,position);
+    if(this.pet2Cooldown<=0&&this.host.pet2){const cd=this.petShot(this.host.pet2(),position,1);if(cd)this.pet2Cooldown=cd;}
+    this.dogToss(petDt,position);this.surgeStep(dt,position);
     this.crew.step(dt,this.time);if(this.time-this.crew.hurtAt<=PET_RULES.mendWindow)this.petMend();
     for(const key of Object.keys(this.statuses))this.statuses[key]=Math.max(0,this.statuses[key]-dt);
     for(const[id,time]of this.marked){if(time<=dt)this.marked.delete(id);else this.marked.set(id,time-dt);}

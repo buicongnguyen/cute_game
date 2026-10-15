@@ -49,7 +49,7 @@ def frame(cam, objects):
 
 def main():
     style.reset_scene()
-    bpy.ops.import_scene.gltf(filepath=GLB)
+    style.import_glb(GLB)
     dog = bpy.data.objects.get('dog')
     if dog is None:
         raise SystemExit('farm.glb has no `dog`')

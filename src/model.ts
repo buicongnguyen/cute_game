@@ -27,6 +27,7 @@ import { isTreeCrop } from './tree-crops.ts';
 import { noteHistory, parseHistory, type Snapshot } from './insight-history.ts';
 import { parseInbox, type InboxItem } from './news-inbox.ts';
 import { parseFirstRun, tutorialGrow, type FirstRun } from './first-run.ts';
+import { parsePlaceFlags, type PlaceFlags } from './place-flags.ts';
 import { fits, noteFull, noteDelivered, clearFullNote, delivering, chestFits, nextExpansion, hasExpansionMaterials, isStorageKind, type StorageKind } from './storage-slots.ts';
 import { pruneBags, bagId, parseDeathBags, MAX_DEATH_BAGS, type DeathBag } from './death-bags.ts';
 export * from './storage-slots.ts';
@@ -205,6 +206,8 @@ export interface SaveState {
     inbox?: InboxItem[];
     /** The first minutes (first-run.ts): tutorial plantings used, first fight, first food. Only saves a player started since 2026-10-15 have it (freshStart). */
     firstRun?: FirstRun;
+    /** Arrival flags (place-flags.ts): one per place reached, where it stands and when. Missing = made on first use (older saves: every planet landed on). */
+    placeFlags?: PlaceFlags;
 }
 export const COLORS = ['#4aa8ff', '#ff7ab0', '#6fd35a', '#ffb13d', '#a07bff', '#ff5a5a'];
 export const SAVE_KEY = 'cute-game-save-v1';
@@ -558,10 +561,16 @@ export function ripeNearby(s: SaveState, index: number, now = Date.now(), reach 
     const near = s.plots.map((_, i) => { const p = bedPosition(s, i); return { i, d: Math.round(Math.hypot(p.x - at.x, p.z - at.z) * 1000) / 1000 }; }).filter(b => b.d < reach && ripe(b.i));
     return near.sort((a, b) => a.d - b.d || a.i - b.i).map(b => b.i);
 }
-/** Whether a new bed may go here: clear of the cottage, pen, trails and fence (bedClear) and of other beds and decorations. */
-export function bedSpotOk(s: SaveState, x: number, z: number, rotation = 0) { return s.planet === 'home' && bedClear(x, z, rotation) && bedRoom(s, x, z, rotation); }
-/** Whether a decoration may stand here (clear of beds, other decorations and the animal pen, inside the fence); obstacles are the world's. */
-export function decorSpotOk(s: SaveState, x: number, z: number) { return s.planet === 'home' && placementFree(s, x, z, 1.9) && clearOfPen(x, z, .3, .2) && !inYard(x, z, .5); }
+/**
+ * Whether a new bed may go here: clear of the cottage, pen, trails and fence (bedClear) and of other beds and decorations.
+ * `moving` names a bed being moved (decor-move.ts): its own old square does not count, as in moveBed.
+ */
+export function bedSpotOk(s: SaveState, x: number, z: number, rotation = 0, moving?: number) { return s.planet === 'home' && bedClear(x, z, rotation) && bedRoom(s, x, z, rotation, moving === undefined ? bedSpots(s) : bedSpots(s).filter((_, i) => i !== moving)); }
+/**
+ * Whether a decoration may stand here (clear of beds, other decorations and the animal pen, inside the fence); obstacles are the world's.
+ * `moving` is the uid of a decoration being moved: it does not block its own new spot, as in moveDecoration.
+ */
+export function decorSpotOk(s: SaveState, x: number, z: number, moving?: string) { return s.planet === 'home' && placementFree(s, x, z, 1.9, moving) && clearOfPen(x, z, .3, .2) && !inYard(x, z, .5); }
 /**
  * "Expand garden" (reference buyPlot): at the cap nothing happens; with a garden bed kit already in the bag the player
  * just places it; otherwise 60 + 20 x extra beds of energy buys one. The kit is spent only when the bed is placed.
@@ -579,10 +588,14 @@ export function storeBed(s: SaveState, i: number) {
     if (s.planet !== 'home' || !isExtraBed(s, i) || s.plots[i].crop || bedLevel(s.plots[i]) > 0 || !addItem(s, 'plot_kit')) return false;
     s.plots.splice(i, 1); return true;
 }
-/** Reposition a bed without changing its crop or its original growing duration. */
-export function moveBed(s: SaveState, i: number, x: number, z: number, rotation = 0) {
-    if (s.planet !== 'home' || !Number.isInteger(i) || !s.plots[i] || !Number.isFinite(rotation) || !bedClear(x,z,rotation) || !bedRoom(s,x,z,rotation,bedSpots(s).filter((_,index)=>index!==i))) return false;
-    Object.assign(s.plots[i], { x, z, rotation }); return true;
+/**
+ * Reposition a bed without changing its crop or its original growing duration: a growing crop moves with its bed.
+ * Without `rotation` the bed keeps its turn; an unturned bed saves no rotation, as a newly placed one (expandGarden).
+ */
+export function moveBed(s: SaveState, i: number, x: number, z: number, rotation?: number) {
+    const p = Number.isInteger(i) ? s.plots[i] : undefined, turn = rotation ?? p?.rotation ?? 0;
+    if (!p || !Number.isFinite(turn) || !bedSpotOk(s, x, z, turn, i)) return false;
+    p.x = x; p.z = z; if (turn) p.rotation = turn; else delete p.rotation; return true;
 }
 export * from './difficulty.ts';
 export function sell(s: SaveState, raw: ItemId, count = 1) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (!item || !Number.isSafeInteger(count) || count < 1 || !item.sell || count > looseQuantity(s, id))
@@ -1017,6 +1030,7 @@ export function parseSave(raw: string | null): SaveState | null {
         { const history = parseHistory(v.history); if (history.length) s.history = history; }
         { const inbox = parseInbox(v.inbox); if (inbox.length) s.inbox = inbox; }
         { const run = parseFirstRun(v.firstRun); if (run) s.firstRun = run; else delete s.firstRun; } // older saves: no tutorial, full HUD
+        { const flags = parsePlaceFlags(v.placeFlags); if (flags) s.placeFlags = flags; } // older saves: made on first use (place-flags.ts backfillFlags)
         const looks = parseLooks(v.looks); if (looks) s.looks = looks; else delete s.looks; // older saves keep the look they had: the default hero
         dropUnownedFriendLooks(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));

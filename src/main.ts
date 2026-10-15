@@ -1,7 +1,6 @@
 import { assetUrl } from './asset-url.ts';
 import './mobile-game-init.mjs';
 import {cropBadgeAnchor} from './crop-cards.ts';
-import {HELP_TOPICS} from './help-topics.ts';
 import './farm.css';
 import './joystick.css';
 import { FishingProof } from './fishing-proof.ts';
@@ -179,6 +178,9 @@ import { dogMayToss, dogTossFactor, DOG_TOSS_CD } from './guard-dog.ts';
 import { DOG_GUARD, petFighter, petRoleId, type PetFighter } from './pet-guard.ts';
 import { DUNGEON_PETS, PET_SKILLS } from './dungeon-content.ts';
 import { PetGuardView } from './pet-guard-view.ts';
+import { PetSurgeView } from './pet-surge-view.ts';
+import { SURGE } from './pet-surge.ts';
+import { HERO_MODEL_HEIGHT, HERO_SCALE } from './world.ts';
 import type { DungeonApi } from './dungeon.ts';
 import { HARVEST, SKILL_NAME_RISE } from './feel-rules.ts';
 import type { CtfApi } from './ctf.ts';
@@ -186,7 +188,10 @@ import type { RescueApi } from './rescue.ts';
 import { initInbox, initMoreMenu } from './news-inbox-ui.ts';
 import { reportLevelFor } from './news-inbox.ts';
 import './goals.css';
-import { initGoals } from './goals-ui.ts'; // long-term goals chip and panel (docs/FIX-PLAN.md 5.5)
+import { initGoals } from './goals-ui.ts'; // long-term goals: the flag badge on the map and the Goals panel (docs/FIX-PLAN.md 5.5)
+import { mountPlaceFlags } from './place-flags-view.ts'; // arrival flags in the world and on the map (place-flags.ts)
+import { mountDecorMenu, moveStart, moveSpotOk, moveIntent, turnIntent, type MoveTarget } from './decor-move.ts'; // move / turn / pack away placed decorations and beds
+import './decor-move.css';
 import { socialHold } from './social-hold.ts';
 import { needsDuplicateConfirm } from './shop-owned.ts';
 
@@ -225,7 +230,7 @@ let fishingEpoch=0;
 let lastCast:{id:string;x:number;z:number}|null=null;
 let fishingWater='home';
 let wildArmed:{kind:string;until:number}|null=null,shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forge'='craft',craftTab='All';
-let placement:{id:string;rotation:number;x:number;z:number;ok:boolean}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
+let placement:{id:string;rotation:number;x:number;z:number;ok:boolean;move?:MoveTarget}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
 let persistence:((state:M.SaveState)=>void)|null=null,network:NetworkHooks={role:null};
 let actionHandler:((intent:GameIntent)=>Promise<ActionReply>)|null=null;
 /** The Delvers' Vault (dungeon.ts), set up at the end of this file: its creatures are fought locally, also online. */
@@ -329,6 +334,7 @@ let world: World;
 try { world = new World($('#world'), state, { antialias: !(graphics.mobile && devicePixelRatio >= 2) }); }
 catch (error) { app.innerHTML = localizeHtml('<div class="fatal"><h1>Your garden needs WebGL</h1><p>Enable hardware acceleration in your browser, then reload this page.</p><p>Your saved adventure is safe.</p></div>'); throw error; }
 const swim=mountSwim({world,active:()=>started,toast:(message,icon)=>toast(message,icon),sound:kind=>tone(kind)}); // crossing water: wade, swim, glide (swim.ts)
+const placeFlags=mountPlaceFlags({world,state:()=>state,active:()=>started&&world.state===state&&!visiting&&!flight&&!arriving&&!shipSequence?.busy&&state.hp>0&&!document.body.classList.contains('in-mode'),online:()=>!!actionHandler,calm:()=>world.selected?.kind!=='enemy'&&!world.enemies.some(e=>{if(e.hp<=0)return false;const d=Math.hypot(e.x-world.position.x,e.z-world.position.z);return e.boss?d<35&&(aggro(e)||e.hp<e.maxHp):d<16&&aggro(e);}),planted:place=>{toast(t('Flag planted: {place}',{place:t(place.name)}),'🚩');tone('flag');},storage:(()=>{try{return localStorage;}catch{return null;}})()}); // arrival flags (place-flags-view.ts)
 frameListeners.add(titleOrbit(world,()=>started)); // the title card floats over the village, the camera swaying slowly (title-card.ts)
 onInstallChange(()=>syncInstallButtons());
 initDockFraming(world.camera); // desktop menus dock right; slide the picture so the hero stays clear (dialog-dock.ts)
@@ -346,7 +352,7 @@ const keysGuide=new KeysGuide($('#keys-guide'),(()=>{try{return localStorage;}ca
 const combatHud=new CombatHud($('#world-labels'),(x,y,z)=>world.screen(x,y,z));let trackerMode:'auto'|'open'|'fold'='auto',wasFight=false;
 // The whole-world minimap (minimap.ts): terrain cached per world, markers redrawn five times a second.
 const minimap=new Minimap($<HTMLCanvasElement>('#minimap'),$('#map-caption'),()=>started?{planet:world.planet,layout:world.environment.layout,position:world.position,facing:world.facing,entities:world.entities,enemies:world.enemies,
-  penBuilt:M.penBuilt(world.state),ready:[...world.entities.filter(e=>e.kind==='plot'&&!!world.state.plots[e.index!]?.crop&&M.cropProgress(world.state.plots[e.index!])>=1),...(world.planet==='home'?M.readyAnimals(world.state).flatMap(a=>world.farmView?.positionOf(a.uid)??[]):[])],remotes:[...world.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh.position)}:null);
+  penBuilt:M.penBuilt(world.state),ready:[...world.entities.filter(e=>e.kind==='plot'&&!!world.state.plots[e.index!]?.crop&&M.cropProgress(world.state.plots[e.index!])>=1),...(world.planet==='home'?M.readyAnimals(world.state).flatMap(a=>world.farmView?.positionOf(a.uid)??[]):[])],remotes:[...world.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh.position),flags:world.state===state?placeFlags.marks():[],flagColor:state.color}:null);
 const movement = new MovementControls(world.keys);
 const joystick=mountJoystick($('#hud'),()=>started&&!uiBlocked()&&!placement&&!flight,direction=>{world.joystickInput=direction;});
 const combatView=new CombatView(world.scene);
@@ -368,7 +374,7 @@ const combat=new CombatSimulation({
   // The guard dog tosses bones only while it follows you away from home (guard-dog.ts); your target first.
   dog:()=>{const g=world.guardDogs;return g&&started&&!visiting&&!fishGame&&!world.boarded&&dogMayToss(g.place,world.planet,world.position,!!world.interior)?{x:g.link.x,z:g.link.z,dmg:dogTossFactor(state.level),cd:DOG_TOSS_CD,guard:DOG_GUARD,target:world.selected?.kind==='enemy'?(world.selected as Enemy).id:null}:null;},
   // Pets fight only what fights you, and guard you (pet-guard.ts): your chosen creature, your health, and the guard's picture.
-  focus:()=>world.selected?.kind==='enemy'?(world.selected as Enemy).id:null,health:()=>state.hp/Math.max(1,M.maxHp(state)),guarded:event=>petGuardView.show(event),
+  focus:()=>world.selected?.kind==='enemy'?(world.selected as Enemy).id:null,health:()=>state.hp/Math.max(1,M.maxHp(state)),guarded:event=>petGuardView.show(event),surged:event=>{if(surgeLocal())surgeView.show(event);},
   targets:()=>world.enemies,weapon:()=>M.weaponStats(state),stats:()=>M.activeStats(state),
   move:(x,z)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);},
   // The first own hit after a weapon swap does +20% (weapon-pair.ts); a pet's shot leaves the bonus waiting.
@@ -401,6 +407,14 @@ const petGuardView=new PetGuardView({fx:()=>world.fx,petModel:slot=>slot===0?wor
   // A Vault pet's guard carries the name of its own skill (dungeon-content.ts): the Bellows' Spark Shower, the Owl's Little Chime.
   label:slot=>{const skill=DUNGEON_PETS[petRoleId(M.companionId(state.gear,slot))??'']?.guard;return skill?t(PET_SKILLS[skill].name):undefined;}});
 world.onPlayerShot=shot=>petGuardView.shotNear(shot);frameListeners.add(dt=>petGuardView.update(dt));
+// Bond Surge (pet-surge.ts): the third hit of the chain makes a pet near you grow and fire its signature. Solo the
+// simulation here decides; online the server does and its word arrives through applySurge. The view scales the pet's own model.
+function surgeLocal(){return !actionHandler||!!dungeonApi?.active;}
+const surgeView=new PetSurgeView({fx:()=>world.fx,petModel:slot=>slot===0?world.companion:slot===1?world.companion2:null,pen:slot=>slot===0?world.petPen:slot===1?world.petPen2:null,dog:()=>world.guardDogs,
+  hero:()=>world.position,heroHeight:()=>HERO_MODEL_HEIGHT*(world.player?.scale.y||HERO_SCALE),eye:()=>world.camera?.position,color:slot=>shotColor(M.ITEMS[M.companionId(state.gear,slot)??'']?.pet?.shot??'fire'),creature:id=>world.enemies.find(e=>e.id===id),
+  canSurge:()=>started&&!visiting&&(!!petShooter(0)||!!petShooter(1)||!!(world.guardDogs&&!fishGame&&!world.boarded&&dogMayToss(world.guardDogs.place,world.planet,world.position,!!world.interior))),
+  fighting:()=>world.selected?.kind==='enemy',t:(key,vars)=>t(key,vars),toast:(message,icon)=>toast(message,icon),sound:kind=>tone(kind==='grow'||kind==='magic'?'magic':kind==='heavy'?'boom':kind==='zap'?'zap':'poof')});
+surgeView.mount(document.querySelector<HTMLElement>('#hud .avatar'));frameListeners.add(dt=>surgeView.update(dt));
 {const eliteView=new EliteView(world,(message,icon)=>toast(message,icon));world.eliteFrame=()=>eliteView.frame();} // elite roles on the normal planets (elite-view.ts)
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 /** The Strike chain's hits so far (which cut the next one makes), and the thin ground arc that marks the area of the explorer's own hit. */
@@ -553,7 +567,7 @@ function updateHud() {
   setText($('#player-name'),state.name);setText($('#level-text'),String(state.level));setText($('#energy'),t(state.energy.toLocaleString()));
   setWidth($('#hp-fill'),`${state.hp/M.maxHp(state)*100}%`);setText($('#hp-text'),t(`${Math.ceil(state.hp)} / ${M.maxHp(state)}`));setWidth($('#xp-fill'),`${state.xp/M.xpNeeded(state.level)*100}%`);
   updateQuickEat();
-  goals.update(state); // redraws only when a goal changes (goals-ui.ts)
+  placeFlags.update();goals.update(state); // plants a flag on arrival; the badge redraws only when a goal changes (goals-ui.ts)
   {const x=world.position.x,z=world.position.z;if(started&&world.state===state)tendCritters(world as unknown as CritterWorld,state,!actionHandler&&!visiting);applyCalm($('#hud'),calmHud(state,{fighting:fightNear(world.enemies,x,z),creatureNear:world.enemies.some(e=>e.hp>0&&Math.hypot(e.x-x,e.z-z)<10)}));} // the first minutes (first-run.ts)
   setText($('#xp-text'),`EXP ${Math.floor(state.xp)} / ${M.xpNeeded(state.level)}`);
   {const xpTitle=t(`${Math.floor(state.xp)} / ${M.xpNeeded(state.level)} experience`),xpNode=$('.experience');if(xpNode.getAttribute('title')!==xpTitle)xpNode.setAttribute('title',xpTitle);}
@@ -618,6 +632,7 @@ function updateLabels() {
   // Ripe crops wear happy faces now, so only the nearest ripe bed carries the 👆 badge: a full ripe garden no longer shows a badge over every crop.
   let nearestRipe:object|null=null;{let best=Infinity;for(const e of world.entities){if(e.kind!=='plot')continue;const plot=world.state.plots[e.index!];if(!plot?.crop||M.cropProgress(plot)<1)continue;const d=Math.hypot(e.x-world.position.x,e.z-world.position.z);if(d<best){best=d;nearestRipe=e;}}}
   for(const e of world.entities){
+    if(!e.mesh.visible&&(e.kind==='decoration'||e.kind==='plot'))continue; // lifted for a move (decor-move.ts): its ghost speaks for it
     const distance=Math.hypot(e.x-world.position.x,e.z-world.position.z);
     let text=t(e.name),icon=e.icon,y:number,back=0,dx=0,centre=e.kind==='plot',className='world-label',rank=2,reach=world.selected===e?30:11,aria='',spot:ReturnType<typeof house.house.labelAt>;
     if(e.kind==='plot'){
@@ -775,14 +790,14 @@ function plotDialog(index:number) {
     // Reference openPlot: the crop with a big progress bar, a card per fertilizer, a tip when there is none, then expand.
     const crop=M.CROPS[plot.crop],progress=M.cropProgress(plot),fertilizer=(['manure','spore'] as const).map(id=>{const n=state.bag[id]||0,item=M.ITEMS[id];
       return `<div class="crop-row garden-row fertilizer-row"><span class="crop-art">${art(id,item.icon)}</span><div><strong>${esc(t(item.name))} <span class="chip">×${n}</span></strong><p>${esc(item.desc)}</p></div><button class="primary" data-action="${id==='spore'?'fertilize':'fertilize-manure'}" ${n?'':'disabled'}>Use</button></div>`;}).join('');
-    openDialog('plot','Growing bed',`<div class="crop-row garden-row bed-status"><span class="crop-art">${art(plot.crop,crop.icon)}</span><div><strong>${esc(t(crop.name))}</strong><div class="grow-meter big"><i id="grow-fill" style="width:${progress*100}%"></i></div><p class="muted" id="grow-time">${growText(plot)}</p></div></div>${noRoom?`<div class="button-row"><button class="primary" data-action="bag">🎒 ${esc(t('Open backpack'))}</button><button class="soft-button" data-action="open-market">🧺 ${esc(t('Sell produce'))}</button></div>`:''}${ripe?'':(M.isTreeCrop(plot.crop)?treeFertilizerNote():'')+fertilizer}${!state.bag.manure&&!state.bag.spore?'<p class="garden-tip">💡 Defeat Grumpy Mushrooms, Wild Boars, Snapping Flowers… to collect fertilizer, or buy it at the equipment shop.</p>':''}${bedUpgradeRow(index)}${expandButton(true)}${helperRow(state,!!visiting,index)}`,'GARDEN BED '+(index+1),art(plot.crop,crop.icon));return;
+    openDialog('plot','Growing bed',`<div class="crop-row garden-row bed-status"><span class="crop-art">${art(plot.crop,crop.icon)}</span><div><strong>${esc(t(crop.name))}</strong><div class="grow-meter big"><i id="grow-fill" style="width:${progress*100}%"></i></div><p class="muted" id="grow-time">${growText(plot)}</p></div></div>${noRoom?`<div class="button-row"><button class="primary" data-action="bag">🎒 ${esc(t('Open backpack'))}</button><button class="soft-button" data-action="open-market">🧺 ${esc(t('Sell produce'))}</button></div>`:''}${ripe?'':(M.isTreeCrop(plot.crop)?treeFertilizerNote():'')+fertilizer}<div class="garden-actions bed-move"><button class="soft-button" data-action="move-bed">✥ Move bed</button><span>The crop moves with its bed.</span></div>${!state.bag.manure&&!state.bag.spore?'<p class="garden-tip">💡 Defeat Grumpy Mushrooms, Wild Boars, Snapping Flowers… to collect fertilizer, or buy it at the equipment shop.</p>':''}${bedUpgradeRow(index)}${expandButton(true)}${helperRow(state,!!visiting,index)}`,'GARDEN BED '+(index+1),art(plot.crop,crop.icon));return;
   }
   const empty=state.plots.filter(p=>!p.crop).length;
   // Unlocked crops first, then locked ones by the level that opens them.
   const crops=Object.entries(M.CROPS).sort(([,a],[,b])=>Number(state.level<a.level)-Number(state.level<b.level)||a.level-b.level);
   // Reference openSeeds: the grow button first, "store this bed" on an extra bed, then the seeds. A ripe tap gathers the
   // ripe beds around it, so the old "Harvest all" button is gone from here.
-  openDialog('plant','Choose a seed',`<div class="garden-actions">${M.isExtraBed(state,index)&&!M.bedLevel(state.plots[index])?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.MAX_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
+  openDialog('plant','Choose a seed',`<div class="garden-actions"><button class="soft-button" data-action="move-bed">✥ Move bed</button>${M.isExtraBed(state,index)&&!M.bedLevel(state.plots[index])?'<button class="soft-button" data-action="store-bed">🎒 Store this bed</button>':''}<span>${state.plots.length} / ${M.MAX_PLOTS} beds · ${empty} empty</span></div><div class="crop-list">${crops.map(([id,c])=>{
     const level=M.cropLevel(state,id),locked=state.level<level,needsSeed=!!c.seed&&!state.bag[c.seed],item=M.ITEMS[id],effect=item?effectText(item):'';
     return `<div class="crop-row garden-row ${locked?'locked':''}"><span class="crop-art">${art(id,c.icon)}</span><div><strong>${esc(t(c.name))}</strong>${effect?`<p>${esc(effect)}</p>`:''}<div class="chips"><span class="chip chip-time">⏱ ${(ms=>ms>=3_600_000?`${+(ms/3_600_000).toFixed(1)} h`:`${ms/1000}s`)(tutorialPreview(state,id,M.bedGrowTime(state.plots[index],M.cropGrowTime(state,id))))}</span><span class="chip chip-xp">✨ ${M.cropXp(state,id)} XP</span>${item?`<span class="chip chip-energy">ϟ ${M.sellPrice(state,id)}</span>`:''}${c.seed?`<span class="chip chip-seed">${M.ITEMS[c.seed]?mini(c.seed):'🌰'} ${state.bag[c.seed]||0} seeds</span>`:''}</div></div>${locked?`<span class="chip chip-lock">🔒 Level ${level}</span>`:`<div class="button-row"><button class="primary" data-action="plant" data-item="${id}" ${needsSeed?'disabled':''}>Plant</button><button class="sky-button" data-action="plant-all" data-item="${id}" ${needsSeed||!empty?'disabled':''}>All (${c.seed?Math.min(empty,state.bag[c.seed]||0):empty})</button></div>`}</div>`;
   }).join('')}</div><div class="garden-secondary">${bedUpgradeRow(index)}${expandButton(false)}${helperRow(state,!!visiting,index)}</div>`,'YOUR GARDEN');
@@ -939,7 +954,7 @@ function forgeMenu(id?:string){
 }
 function decorations(){
   const owned=Object.entries(state.bag).filter(([id,n])=>n!>0&&(M.ITEMS[id].type==='decor'));
-  openDialog('decor','Make this place your own',`<p class="intro">Pick an item, tap the ground to move it, ↻ turns it, then ✔ Place.</p><div class="shop-grid">${owned.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} ×${n}</strong></div><button class="primary" data-action="place-decor" data-item="${id}">Place</button></div>`).join('')||'<p class="muted">No decorations yet. Find them in the shop’s Decor tab.</p>'}</div><div class="section-label">PLACED AT HOME</div><div class="shop-grid">${state.decorations.map(d=>`<div class="storage-row"><span>${mini(d.id)} ${esc(t(M.ITEMS[d.id].name))}</span><button class="soft-button" data-action="remove-decor" data-id="${d.uid}">Pack away</button></div>`).join('')||'<p class="muted">A fresh canvas.</p>'}</div><button class="soft-button" data-action="decor-shop">Browse decorations</button>`,'YOUR HOME');
+  openDialog('decor','Make this place your own',`<p class="intro">Pick an item, tap the ground to move it, ↻ turns it, then ✔ Place.</p><div class="shop-grid">${owned.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} ×${n}</strong></div><button class="primary" data-action="place-decor" data-item="${id}">Place</button></div>`).join('')||'<p class="muted">No decorations yet. Find them in the shop’s Decor tab.</p>'}</div><div class="section-label">PLACED AT HOME</div><div class="shop-grid">${state.decorations.map(d=>`<div class="storage-row decor-row"><span>${mini(d.id)} ${esc(t(M.ITEMS[d.id].name))}</span><span class="decor-row-buttons"><button class="sky-button" data-action="move-decor" data-id="${d.uid}">Move</button><button class="soft-button" data-action="turn-decor" data-id="${d.uid}" aria-label="Turn" title="Turn">↻</button><button class="soft-button" data-action="remove-decor" data-id="${d.uid}">Pack away</button></span></div>`).join('')||'<p class="muted">A fresh canvas.</p>'}</div>${state.decorations.length?'<p class="muted decor-tip">Tip: tap a decoration in your garden to move, turn or pack it away.</p>':''}<button class="soft-button" data-action="decor-shop">Browse decorations</button>`,'YOUR HOME');
 }
 /**
  * Placing a garden bed kit or a decoration (reference decor.startPlace/moveGhost/rotate/confirm): a see-through model
@@ -957,17 +972,26 @@ function beginPlacement(id:string){if(visiting)return;if(state.planet!=='home'){
   movePlacement(world.position.x+Math.sin(world.facing)*2.2,world.position.z+Math.cos(world.facing)*2.2);
   if(bed)toast('Tap an empty spot in the garden to choose where, then press ✔ Place.','👆');
 }
-function cancelPlacement(){placement=null;$('#placement-bar').hidden=true;document.body.classList.remove('placing');$('#placement-bar').classList.remove('bad');world.placementGhost(null);}
+/** Moving a placed decoration or bed (decor-move.ts): the same bar and ghost, starting where the item stands and as it is turned; the item is lifted meanwhile and ✕ / Esc sets it back. */
+function beginMove(target:MoveTarget){const start=visiting?null:moveStart(state,target);if(!start){if(visiting||state.planet!=='home')toast('Decorations belong at home. Return to your garden first.','🏡');return;}
+  if(placement)cancelPlacement();closeDialog();decorMenu.close();world.liftPlaced(target);
+  placement={id:start.id,rotation:start.rotation,x:start.x,z:start.z,ok:false,move:target};
+  $('#placement-bar').hidden=false;document.body.classList.add('placing');$('#placement-name').innerHTML=localizeHtml(`Move <b>${esc(t(start.name))}</b>: tap the garden to choose a spot`);
+  movePlacement(start.x,start.z);
+}
+function cancelPlacement(){placement=null;$('#placement-bar').hidden=true;document.body.classList.remove('placing');$('#placement-bar').classList.remove('bad');world.placementGhost(null);if(world.lifted)world.liftPlaced(null);}
 function movePlacement(x:number,z:number){
-  if(!placement)return;placement.x=Math.round(x*100)/100;placement.z=Math.round(z*100)/100;const {id,rotation}=placement;
-  placement.ok=M.ITEMS[id]?.type==='placeable'?M.bedSpotOk(state,placement.x,placement.z,rotation):M.decorSpotOk(state,placement.x,placement.z)&&!world.blocked(placement.x,placement.z);
+  if(!placement)return;placement.x=Math.round(x*100)/100;placement.z=Math.round(z*100)/100;const {id,rotation,move}=placement;
+  placement.ok=move?moveSpotOk(state,move,placement.x,placement.z,rotation)&&(move.kind==='bed'||!world.blocked(placement.x,placement.z)):M.ITEMS[id]?.type==='placeable'?M.bedSpotOk(state,placement.x,placement.z,rotation):M.decorSpotOk(state,placement.x,placement.z)&&!world.blocked(placement.x,placement.z);
   world.placementGhost(placement);$('#placement-bar').classList.toggle('bad',!placement.ok);
   $('#placement-hint').textContent=t(placement.ok?'':'Blocked here or outside the fence');
 }
 function rotatePlacement(){if(!placement)return;placement.rotation=(placement.rotation+Math.PI/4)%(Math.PI*2);movePlacement(placement.x,placement.z);tone('pop');}
 async function confirmPlacement(){
-  if(!placement)return;const {id,x,z,rotation,ok}=placement,item=M.ITEMS[id];
+  if(!placement)return;const {id,x,z,rotation,ok,move}=placement,item=M.ITEMS[id];
   if(!ok){toast('Can’t place it here (blocked by something or outside the fence).','❌');return;}
+  if(move){const intent=moveIntent(move,x,z,rotation);if(!await perform(intent.type,intent.payload)){movePlacement(x,z);return;}
+    cancelPlacement();tone('success');toast(t('{item} moved.',{item:t(move.kind==='bed'?'Garden bed':item.name)}),move.kind==='bed'?'🌱':'🏡');return;}
   // The kit pays for the bed: without one expandGarden would charge energy, so a vanished item just ends placement.
   if(!state.bag[id]){cancelPlacement();return;}
   if(!await perform('placeDecoration',{id,x,z,rotation})){movePlacement(x,z);return;}
@@ -976,6 +1000,10 @@ async function confirmPlacement(){
   else{world.syncDecorations();tone('success');toast(`${t(item.name)} placed.`,'🏡');}
 }
 function placeAt(x:number,y:number){const point=world.groundPoint(x,y);if(placement&&point)movePlacement(point.x,point.z);}
+/** Turn: a placed decoration turns 45° where it stands (decor-move.ts turnIntent). */
+async function turnDecor(uid:string){const intent=turnIntent(state,uid);if(!intent||!await perform(intent.type,intent.payload))return false;world.syncDecorations();tone('pop');return true;}
+/** Pack away: a placed decoration goes back into the bag. */
+async function packDecor(uid:string){const d=state.decorations.find(d=>d.uid===uid);if(!d||!await perform('removeDecoration',{uid}))return false;world.syncDecorations();tone('poof');toast(t('{item} is back in your bag.',{item:t(M.ITEMS[d.id]?.name??d.id)}),'🎒');return true;}
 
 /** Star-map routes for the current save: easiest first, with locks and the recommended pick. */
 function starRoutes(){return planRoutes(starRouteInput());}
@@ -1010,7 +1038,9 @@ async function testerApply(){testerOpen=true;if(testerOnline()){toast(t('Tester 
   testerDo(Tester.unlockTester);toast(t('Tester mode on: {count} energy',{count:Tester.TESTER_ENERGY.toLocaleString()}),'🧪');settings();}
 function restoreBackupRow(){return restoreRowHtml(saveGuard,activeKey());}
 function settings(){openDialog('settings','Your little preferences',`<div class="settings-row"><div><strong>Language</strong><small>Choose your language</small></div>${languageSelector('settings')}</div><div class="settings-row"><div><strong>Full screen</strong><small>Fill the whole screen; press again to leave.</small></div><button class="toggle ${document.fullscreenElement?'on':''}" role="switch" aria-checked="${!!document.fullscreenElement}" aria-label="Full screen" data-action="fullscreen"></button></div>${installRowHtml(t)}${restoreBackupRow()}${audioRowsHtml(state.settings)}${inbox.settingHtml()}<div class="settings-row"><div><strong>AI neighbours</strong><small>Friendly explorers who fight in the wild, make friends and give gifts. Always off while you play online.</small></div><button class="toggle ${neighboursOn()?'on':''}" role="switch" aria-checked="${neighboursOn()}" aria-label="AI neighbours" data-action="neighbours"></button></div><div class="settings-row"><div><strong>Show joystick</strong><small>Drag the stick to walk in any direction. Skill buttons move to the opposite side.</small></div><button class="toggle ${joystickEnabled()?'on':''}" role="switch" aria-checked="${joystickEnabled()}" aria-label="Show joystick" data-action="move-pad"></button></div><div class="settings-row"><div><strong>Joystick side</strong><small>Choose the hand you use to move</small></div><div class="segmented" role="radiogroup" aria-label="Joystick side">${(['left','right'] as const).map(side=>`<button role="radio" aria-checked="${(state.settings.joystickSide??'left')===side}" data-action="joystick-side" data-kind="${side}">${side==='left'?'Left':'Right'}</button>`).join('')}</div></div>${keyboardSettings()}<div class="settings-row"><div><strong>Graphics</strong><small>${graphics.setting==='auto'?`Automatic · now ${QUALITY[graphics.level].label}`:QUALITY[graphics.level].label} · ${graphics.ratio.toFixed(2)}× resolution${graphics.fps?` · ${Math.round(graphics.fps)} fps`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Graphics quality">${(['auto','high','medium','low'] as QualitySetting[]).map(q=>`<button role="radio" aria-checked="${graphics.setting===q}" class="${graphics.setting===q?'on':''}" data-action="graphics" data-kind="${q}">${q==='auto'?'Auto':QUALITY[q].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Camera angle</strong><small>${cameraPitch()>=CAMERA_PITCH.max?'Looking down from above':'A lower view shows more of the world and may run a little slower'}</small></div><div class="camera-angle"><div class="volume-control"><input type="range" min="${CAMERA_PITCH.min}" max="52" step="1" value="${Math.round(cameraPitch())}" data-camera-pitch aria-label="Camera angle"><output data-camera-pitch-out>${Math.round(cameraPitch())}°</output></div><div class="segmented" role="group" aria-label="Camera angle presets">${(Object.keys(CAMERA_PITCH.presets) as CameraPreset[]).map(v=>`<button aria-pressed="${cameraPitch()===CAMERA_PITCH.presets[v]}" class="${cameraPitch()===CAMERA_PITCH.presets[v]?'on':''}" data-action="camera-view" data-kind="${v}">${({classic:'Classic',tilted:'Tilted',low:'Low',lower:'Lower',lowest:'Lowest'})[v]}</button>`).join('')}</div></div></div><div class="settings-row" id="render-res-row"><div><strong>Render resolution</strong><small>${graphics.resolution==='auto'?(graphics.mobile?'Light on phones, like the original':'Follows the Graphics setting'):({sharp:'Crisp, but phones work harder',balanced:'Smoother play and a cooler phone',saver:'Fewest pixels for the longest battery'} as Record<string,string>)[graphics.resolution]}${typeof innerWidth==='number'?` · ${innerWidth*graphics.ratio|0}×${innerHeight*graphics.ratio|0} px`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Render resolution">${RESOLUTION_SETTINGS.map(r=>`<button role="radio" aria-checked="${graphics.resolution===r}" class="${graphics.resolution===r?'on':''}" data-action="render-res" data-kind="${r}">${r==='auto'?'Auto':RESOLUTION[r].label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Difficulty</strong><small>${M.DIFFICULTY_NOTE[M.difficultyOf(state)]}${world.roomDifficulty&&world.roomDifficulty!==M.difficultyOf(state)?` <span class="host-difficulty">${esc(t('Host difficulty: {level}',{level:t(M.DIFFICULTY_LABEL[world.roomDifficulty])}))}</span>`:''}</small></div><div class="segmented" role="radiogroup" aria-label="Difficulty">${M.DIFFICULTIES.map(d=>`<button role="radio" aria-checked="${M.difficultyOf(state)===d}" class="${M.difficultyOf(state)===d?'on':''}" data-action="difficulty" data-kind="${d}">${M.DIFFICULTY_LABEL[d]}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Place new beds myself</strong><small>Off: a new garden bed goes down by itself next to the garden</small></div><button class="toggle ${state.settings.placeBeds?'on':''}" role="switch" aria-checked="${!!state.settings.placeBeds}" aria-label="Place new beds myself" data-action="place-beds"></button></div><div class="settings-row"><div><strong>Camera distance</strong><small>See more of your little world</small></div><div class="button-row"><button class="soft-button" data-action="zoom-in" aria-label="Zoom in">−</button><span id="zoom-value">${Math.round(world.zoom*100)}%</span><button class="soft-button" data-action="zoom-out" aria-label="Zoom out">＋</button></div></div>${testerMore()}${pairSettingHtml(state,t)}<div class="settings-row"><div><strong>${t('Keep backpack on defeat')}</strong><small>${t('Keep carried items when defeated. Existing dropped bags stay recoverable.')}</small></div><button class="toggle ${M.keepsBag(state)?'on':''}" role="switch" aria-checked="${M.keepsBag(state)}" aria-label="${t('Keep backpack on defeat')}" data-action="keep-bag"></button></div><div class="save-note">🌱 <span>Your progress saves automatically ${persistence?'to your online account':'in this browser'}.${saveFailed?' Storage is unavailable. Keep this tab open to preserve this session.':''}</span></div><div class="button-row"><button class="soft-button" data-action="help">How to play</button><button class="text-button danger" data-action="reset-confirm">Start a new adventure</button></div><p class="fineprint">Zoo Garden · progress saved on this device when offline</p>`,'SETTINGS');}
-function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.filter(([,title])=>title!=='Attack and four specials'&&(airOn()||title!=='Jump and air combat'&&title!=='Power strike'&&title!=='Untouched streak')).map(row=>airOn()&&row[1]==='Four skills'?HELP_TOPICS.find(r=>r[1]==='Attack and four specials')??row:row).map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div>${disguiseTableHtml()}<div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
+// The guide's text is fetched the first time it opens, not with the page (FIX-PLAN 2.3); a failed fetch retries on the next tap.
+let HELP_TOPICS:typeof import('./help-topics.ts').HELP_TOPICS=[];
+function help(){if(!HELP_TOPICS.length){void import('./help-topics.ts').then(m=>{HELP_TOPICS=m.HELP_TOPICS;help();},()=>{});return;}openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.filter(([,title])=>title!=='Attack and four specials'&&(airOn()||title!=='Jump and air combat'&&title!=='Power strike'&&title!=='Untouched streak')).map(row=>airOn()&&row[1]==='Four skills'?HELP_TOPICS.find(r=>r[1]==='Attack and four specials')??row:row).map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div>${disguiseTableHtml()}<div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
 /** Help: every disguise from strongest to weakest. A disguise costs ten energy per point of its all-round strength (tests/disguise-price.test.ts), so the price is the power. */
 function disguiseTableHtml(){
   const rows=Object.keys(M.DISGUISES).map(id=>({id,price:M.ITEMS[id]?.price??0})).filter(r=>r.price>0).sort((a,b)=>b.price-a.price||a.id.localeCompare(b.id));
@@ -1276,7 +1306,7 @@ async function finishFishingCatch(f:FishingRound){
 
 
 world.onAlert=()=>tone('alert');
-world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();minimap.invalidate();};
+world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();minimap.invalidate();placeFlags.rebuild();};
 stockPonds();
 // fish.glb (153 KB) streams in once the explorer is within 30 m of the water's edge (or casts a line), then the ponds are restocked.
 // Ponds out of sight keep their code stand-ins and cost no download.
@@ -1305,6 +1335,7 @@ world.onInteract=async(e)=>{
   if(!started||uiBlocked())return;tone();if(house.interact(e))return;if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='well')wellDialog();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
   else if(e.kind==='pen')penTap();
+  else if(e.kind==='decoration')decorMenu.open(String(e.mesh.userData.decorationUid??''));
   else if(e.kind==='cage')crew.tapCage(e);
   else if(e.kind==='friend'&&e.index!==undefined)friendDialog(FRIEND_IDS[e.index]);
   else if(e.kind==='animal'){if(M.readyAnimals(state).some(a=>a.uid===e.animalUid))collectFarm(e.animalUid);else penDialog();}
@@ -1840,11 +1871,13 @@ world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   // The knight's raised shield stops blows and shots from creatures in front (combat.blocks).
   // A shot is also bounced back at its shooter (combat.reflect; world.ts flies the ball home).
   {const from=enemyId?world.enemies.find(e=>e.id===enemyId):undefined;if(from&&combat.blocks(from)){world.fx?.burst(world.position,{n:6,color:['#fff3c4','#ffffff'],glow:true,size:.12,speed:3,up:2,y:1});if(source==='shot'){combat.reflect(from,Math.hypot(from.x-world.position.x,from.z-world.position.z)/DZ.block.speed);tone('hit');}return;}}
+  // Bloom's ward (pet-surge.ts): poison, lava and storms pass by for a few seconds.
+  if(source==='hazard'&&(combat.statuses.ward??0)>0)return;
   // The pets' guards (pet-guard.ts): a block, a counter, a distraction; what is left of the hit lands.
   if(enemyId){amount=combat.guardIncoming(amount,source,world.enemies.find(e=>e.id===enemyId));if(!(amount>0))return;}
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
-  state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();if(airOn())streak.hurt(damage);world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
+  state.hp=Math.max(0,state.hp-damage);if(state.hp<=0&&combat.surge.revive()){state.hp=Math.max(1,Math.round(M.maxHp(state)*SURGE.revive));surgeView.revived();}dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();if(airOn())streak.hurt(damage);world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
   checkDefeat();
   updateHud();
 };
@@ -1859,6 +1892,8 @@ world.onDecoyDamage=(owner,id,amount,source,enemyId)=>{
 };
 watchTabScroll($('#dialog-body'));
 const gardenGuide=mountGardenGuide({world,hud:$('#hud'),state:()=>state,bedAt:i=>M.bedPosition(state,i),active:()=>started&&!uiBlocked()&&!visiting&&!world.interior&&state.hp>0&&world.state===state&&world.planet==='home'&&!world.enemies.some(e=>e.hp>0&&aggro(e))});frameListeners.add(dt=>gardenGuide.frame(dt)); // never during a fight
+// Placed decorations: a tap at home opens Move / Turn / Pack away over the item; it closes when the explorer walks off (decor-move.ts).
+const decorMenu=mountDecorMenu($('#hud'),{state:()=>state,usable:()=>started&&!visiting&&!modal&&!placement&&!flight&&state.planet==='home'&&world.planet==='home'&&world.state===state&&!world.interior&&state.hp>0,hero:()=>world.position,screen:(x,y,z)=>world.screen(x,y,z),icon:id=>mini(id),esc,move:beginMove,turn:turnDecor,pack:packDecor});frameListeners.add(()=>decorMenu.frame());
 world.onEnvironmentEvent=event=>{if(event.message)toast(event.message,'🌍');save();updateHud();};
 /**
  * Other explorers' summons that creatures can fight (their pose's decoys, world.remoteDecoys), drawn with ours: each
@@ -1870,7 +1905,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){world.clearSkillWind();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();streak.clear();attackHold.clear();sureLeft=0;chainSum=null;chainNoteLeft=0;chainLive=false;powerWind=null;powerDive=0;powerFx.clear();showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){world.clearSkillWind();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();streak.clear();attackHold.clear();sureLeft=0;chainSum=null;chainNoteLeft=0;chainLive=false;powerWind=null;powerDive=0;powerFx.clear();showCombo();combat.reset();surgeView.clear();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1899,6 +1934,7 @@ export const gameBridge:GameBridge={
   applyRemoteEffect(effect){showEffect(effect);},
   applyRemoteDamage(amount,source){world.onDamage(amount,source==='shot'||source==='hazard'?source:'melee');},
   applyGuard(event){petGuardView.show(event);},
+  applySurge(event){if(event.revived)surgeView.revived();else if(!surgeLocal())surgeView.show(event);},
   applyDecoyHp(id,hp,kind,x,z){
     // The server's copy of a summon may carry another id than this browser's: the same kind nearest the spot then.
     const ally=combat.allies.find(a=>a.id===id&&a.kind===kind)??combat.allies.filter(a=>a.kind===kind&&a.hp!==undefined&&Math.hypot(a.x-x,a.z-z)<4).sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z))[0];
@@ -2106,7 +2142,10 @@ app.addEventListener('click',async event=>{
     case 'place-decor':beginPlacement(id);break;
     case 'cancel-decor':cancelPlacement();break;
     case 'rotate-decor':rotatePlacement();break;
-    case 'remove-decor':if(await perform('removeDecoration',{uid:button.dataset.id})){world.syncDecorations();decorations();}break;
+    case 'remove-decor':if(await packDecor(button.dataset.id??''))decorations();break;
+    case 'move-decor':beginMove({kind:'decor',uid:button.dataset.id??''});break;
+    case 'turn-decor':await turnDecor(button.dataset.id??'');break;
+    case 'move-bed':beginMove({kind:'bed',index:activePlot});break;
     case 'buy':if(id&&needsDuplicateConfirm(state,id)&&button.dataset.sure!=='1'){button.dataset.sure='1';button.classList.add('confirm-dup');button.textContent=t('Buy another? ϟ {price}',{price:(M.shopPrice(state,id)??0).toLocaleString()});button.title=t('You already own this. A spare can go to a helper.');break;}
       if(await perform('buy',{id})){
       // Gear goes straight onto the explorer, like picking up a fishing rod.
@@ -2349,4 +2388,4 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{inbox,questWalk,get welcomeBack(){return welcomeBack;},pinHero:(spot:{x:number;z:number}|null)=>{world.perfPin=spot;},newsDemo:()=>{const before=state.level;state.level=Math.max(before+1,4);levelCheck(before);updateHud();},breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({news:inbox.open,bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{inbox,surgeView,questWalk,get welcomeBack(){return welcomeBack;},pinHero:(spot:{x:number;z:number}|null)=>{world.perfPin=spot;},newsDemo:()=>{const before=state.level;state.level=Math.max(before+1,4);levelCheck(before);updateHud();},breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({news:inbox.open,bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

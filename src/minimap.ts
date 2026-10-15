@@ -36,6 +36,8 @@ export interface MapView {
   /** Ready garden beds (world positions). */
   ready: readonly { x: number; z: number }[];
   remotes: readonly { x: number; z: number }[];
+  /** Arrival flags standing on this world (place-flags-view.ts), drawn as little flags in the explorer's colour. */
+  flags?: readonly { x: number; z: number }[]; flagColor?: string;
 }
 
 type Ctx = CanvasRenderingContext2D;
@@ -128,7 +130,15 @@ export function drawTerrain(ctx: Ctx, view: Pick<MapView, 'planet' | 'layout' | 
   for (const e of view.entities) if (e.pond) { const p = mapPoint(e.x, e.z); ctx.beginPath(); ctx.ellipse(p.x, p.y, Math.max(1.5, e.pond.rx * s), Math.max(1.2, e.pond.rz * s), 0, 0, TAU); ctx.fill(); }
 }
 
-/** Markers over the terrain: buildings, creatures, beds, players and the explorer's arrow. */
+/** One arrival flag on the map: a pole with a pennant in the explorer's colour, outlined in ink, its foot on the spot. */
+export function drawFlagMark(ctx: Ctx, x: number, z: number, color = '#4aa8ff') {
+  const p = mapPoint(x, z), px = Math.round(p.x) + .5, py = Math.round(p.y);
+  ctx.strokeStyle = '#3a2433'; ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, py - 9); ctx.stroke();
+  ctx.fillStyle = color; ctx.lineWidth = 1.2; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(px, py - 9); ctx.lineTo(px + 6.5, py - 7); ctx.lineTo(px, py - 4.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#fff6e0'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, py - 8.5); ctx.stroke();
+}
+
+/** Markers over the terrain: buildings, arrival flags, creatures, beds, players and the explorer's arrow. */
 export function drawMarkers(ctx: Ctx, view: MapView) {
   const { position: me } = view;
   for (const e of view.entities) {
@@ -139,6 +149,7 @@ export function drawMarkers(ctx: Ctx, view: MapView) {
     else if (e.kind === 'rescue-portal') { const p = mapPoint(e.x, e.z); ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, TAU); ctx.fill(); ctx.fillText('📯', p.x, p.y + .5); }
     else if (e.kind === 'travel') { const p = mapPoint(e.x, e.z); ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🚀', p.x, p.y); }
   }
+  for (const f of view.flags ?? []) drawFlagMark(ctx, f.x, f.z, view.flagColor);
   ctx.fillStyle = '#ffe66d'; for (const b of view.ready) { const p = mapPoint(b.x, b.z); ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
   for (const e of view.enemies) {
     if (e.hp <= 0) continue;

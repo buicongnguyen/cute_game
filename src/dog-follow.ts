@@ -9,7 +9,7 @@ import { newGait, stepGait, type Gait } from './walk-cycle.ts';
  * shadow. Legs use the shared walk cycle (walk-cycle.ts): the cadence follows the ground covered, diagonal pairs
  * swing together, and the swing fades in and out as the dog starts and stops; standing still it sits and wags.
  */
-export interface DogPose { key: string; x: number; z: number; y?: number; heading: number; coat: number }
+export interface DogPose { key: string; x: number; z: number; y?: number; heading: number; coat: number; /** x its usual size (a Bond Surge). */ scale?: number }
 /** Most dogs drawn at once: yours and a room's worth of explorers. */
 export const MAX_DOGS = 12;
 /** Drawn at the pen's size; its hip height (metres) is the walk cycle's leg length. */
@@ -55,7 +55,7 @@ export class DogFollowView {
       // After a moment standing still it sits; it gets up the instant it moves.
       l.sit += ((l.still > 1.2 ? 1 : 0) - l.sit) * (1 - Math.exp(-dt * (l.still > 1.2 ? 4 : 12)));
       const b = l.gait.blend, phase = l.gait.phase, bob = Math.abs(Math.cos(phase)) * .045 * b, swing = .75 * b;
-      this.root.compose(this.v.set(d.x, (d.y ?? 0) + bob - l.sit * .07, d.z), this.q.setFromEuler(this.e.set(-l.sit * .32, d.heading, 0)), this.s.setScalar(SIZE));
+      this.root.compose(this.v.set(d.x, (d.y ?? 0) + bob - l.sit * .07, d.z), this.q.setFromEuler(this.e.set(-l.sit * .32, d.heading, 0)), this.s.setScalar(SIZE * (d.scale ?? 1)));
       const coat = dogCoat(d.coat);
       for (const p of this.meshes) {
         const part = p.part;

@@ -2830,7 +2830,7 @@ def load_hero():
     """hero.glb when it exists, else the hero_spec proxy with eye and blush marks. Returns (objects, source)."""
     if os.path.exists(HERO_GLB):
         before = set(bpy.data.objects)
-        bpy.ops.import_scene.gltf(filepath=HERO_GLB)
+        style.import_glb(HERO_GLB)
         objs = [o for o in bpy.data.objects if o not in before]
         for o in objs:
             if o.name.startswith('head-leaf'):

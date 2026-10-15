@@ -25,6 +25,8 @@ export interface CoverAtlas {
 const time = { value: 0 };
 /** Advances the wind on every card. */
 export function tickCoverCards(seconds: number) { time.value = seconds; }
+/** The same wind clock for other swaying things (place-flags-view.ts): shared, so they need no per-frame update of their own. */
+export const windClock: { readonly value: number } = time;
 
 const corners = Array.from({ length: 8 }, () => new T.Vector3());
 /** Card extent of a model seen from the camera direction: x across, y along cardUp, square and padded. */

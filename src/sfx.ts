@@ -10,7 +10,7 @@ export type Sound = 'alert' | 'click' | 'open' | 'close' | 'punch' | 'swing' | '
   | 'splash' | 'cast' | 'reel' | 'snap' | 'bite' | 'catch' | 'stroke' | 'dive'
   | 'jump' | 'flip' | 'land'
   | 'success' | 'quest' | 'level' | 'harvest' | 'shoot' | 'poof' | 'coin' | 'buy' | 'sell' | 'ready' | 'power'
-  | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock';
+  | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock' | 'flag';
 
 /** Every game event the sound pass covers, and the voice it plays (tests check each one has a recipe). */
 export const SOUND_EVENTS = {
@@ -18,7 +18,7 @@ export const SOUND_EVENTS = {
   harvest: 'harvest', plant: 'plant', energyGain: 'coin', buy: 'buy', sell: 'sell', levelUp: 'level',
   fishBite: 'bite', fishCatch: 'catch', uiTap: 'click', uiOpen: 'open', uiClose: 'close', questComplete: 'quest',
   powerStrike: 'power', jump: 'jump', land: 'land', swimStroke: 'stroke', swimSplash: 'dive',
-  swingBlade: 'swing', swingFist: 'punch', gunShot: 'shoot',
+  swingBlade: 'swing', swingFist: 'punch', gunShot: 'shoot', flagPlanted: 'flag',
 } as const satisfies Record<string, Sound>;
 
 export type WeaponKind = 'blade' | 'fist' | 'gun';
@@ -31,9 +31,9 @@ export const RATE: Partial<Record<Sound, number>> = { hit: 3, hitHeavy: 2, coin:
 export const RATE_WINDOW = .1;
 export const MAX_VOICES = 14;
 /** These still play over a full cap (a fanfare should not vanish in a brawl), up to MAX_VOICES + 4. */
-const PRIORITY = new Set<Sound>(['level', 'quest', 'hurt', 'catch', 'power']);
+const PRIORITY = new Set<Sound>(['level', 'quest', 'hurt', 'catch', 'power', 'flag']);
 /** Musical cues stay in tune: less pitch spread. */
-const TUNED = new Set<Sound>(['level', 'quest', 'success', 'coin', 'buy', 'sell', 'harvest', 'magic', 'freeze', 'ready', 'open', 'close']);
+const TUNED = new Set<Sound>(['level', 'quest', 'success', 'coin', 'buy', 'sell', 'harvest', 'magic', 'freeze', 'ready', 'open', 'close', 'flag']);
 
 /** Rate limit + voice cap, pure so tests can drive it with a fake clock. */
 export class SoundGate {
@@ -50,7 +50,7 @@ export class SoundGate {
 }
 
 /** Rough voice lengths (seconds) so the cap knows when a voice is done. */
-const LENGTH: Partial<Record<Sound, number>> = { level: 1.1, quest: .9, catch: .8, power: .7, success: .55, buy: .5, sell: .55, poof: .45, harvest: .4, dive: .5, boom: .4, magic: .45, freeze: .4 };
+const LENGTH: Partial<Record<Sound, number>> = { flag: .8, level: 1.1, quest: .9, catch: .8, power: .7, success: .55, buy: .5, sell: .55, poof: .45, harvest: .4, dive: .5, boom: .4, magic: .45, freeze: .4 };
 
 type Ctx = AudioContext;
 interface Kit { ctx: Ctx; at: number; p: number; g: number }
@@ -235,6 +235,11 @@ export class Sfx {
       case 'shock': this.tone(k, 0, 'square', 1900, 240, .12, .035); this.hiss(k, 0, 'highpass', 5200, 2600, .16, .09); this.tone(k, .015, 'sine', 120, 45, .2, .2); break;
       case 'freeze': [1568, 2093, 2637].forEach((f, i) => this.bell(k, i * .04, f, .25, .03, 3.5, 1.5)); this.hiss(k, 0, 'highpass', 5000, 3000, .2, .05); break;
       case 'magic': [784, 1175, 1568].forEach((f, i) => this.bell(k, i * .05, f, .24, .04, 3.5, 1.8)); this.hiss(k, 0, 'highpass', 5000, 8000, .3, .02, 1, .1); break;
+      // Arrival flag (place-flags.ts): the pole thunks into the soil, the cloth snaps open in the wind, a bright two-note horn call.
+      case 'flag': this.tone(k, 0, 'sine', 210, 70, .12, .2, .002); this.hiss(k, 0, 'lowpass', 900, 160, .1, .12);
+        this.hiss(k, .07, 'bandpass', 1200, 2600, .09, .07, 2.2, .01); this.hiss(k, .15, 'bandpass', 1500, 3000, .08, .05, 2.2, .01);
+        [[587, .12], [880, .2]].forEach(([f, d], i) => { this.tone(k, .16 + i * .13, 'triangle', f, f, d + .14, .07, .012); this.tone(k, .16 + i * .13, 'square', f, f, d, .012, .012); });
+        this.bell(k, .32, 1760, .35, .03, 3.5, 1.4); break;
     }
   }
 }
@@ -242,4 +247,4 @@ export class Sfx {
 /** Every Sound name (tests check each has a recipe). */
 export const ALL_SOUNDS: readonly Sound[] = ['alert', 'click', 'open', 'close', 'punch', 'swing', 'hit', 'hitHeavy', 'crit', 'hurt', 'pop', 'plant',
   'splash', 'cast', 'reel', 'snap', 'bite', 'catch', 'stroke', 'dive', 'jump', 'flip', 'land', 'success', 'quest', 'level', 'harvest', 'shoot',
-  'poof', 'coin', 'buy', 'sell', 'ready', 'power', 'boom', 'zap', 'freeze', 'magic', 'shock'];
+  'poof', 'coin', 'buy', 'sell', 'ready', 'power', 'boom', 'zap', 'freeze', 'magic', 'shock', 'flag'];

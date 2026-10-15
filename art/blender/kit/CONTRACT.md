@@ -789,8 +789,9 @@ before it arrived. Creatures it lacks, and every creature while it is missing, k
   vertex-coloured mesh and names the hinges `leg0` (back left) … `leg3`, `wing-l`, `wing-r`.
 - Heights stay within 20 % of the old shapes (before `enemyScale`; bosses are drawn 1.85x). Budgets: 2,500
   triangles per common creature, 5,000 per boss. Flat colours named `Creature <name>`, single sided, no textures.
-- Positions and normals are quantised (`KHR_mesh_quantization`, int16 / int8; each part node carries the
-  dequantising scale), about 855 KB for 26 creatures (limit 900 KB).
+- The generator quantises positions and normals (`KHR_mesh_quantization`, int16 / int8; each part node carries the
+  dequantising scale), about 855 KB for 26 creatures (limit 900 KB); `npm run art:compress` then meshopt-encodes the
+  file like every model (about 410 KB, 185 KB after gzip), keeping the node scales.
 
 Redrawn: mushroom, mushking, boar, bee, wolf, frog, crab, chomper, cactus, bear, treant, croc, gummy, jelly,
 snowball, penguin, icebloom, magmaslime, minislime, firelizard, magmacrab, chameleon, flytrap, cloudsheep, yeti,

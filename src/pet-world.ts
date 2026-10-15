@@ -28,6 +28,8 @@ export class PetCompanion {
   private spots: Spot[] = [];
   /** False while the pet is away at your own pen in another garden (a visit): the companion is not drawn. */
   shown = true;
+  /** How far to the side it trails, x its usual distance (a big pet in a Bond Surge keeps clear of you, pet-surge-view.ts). */
+  spread = 1;
   /** Where the pet is now: 'pen', 'follow' or 'return' (for probes, tests and the fighting gate). */
   get place() { return this.link.place; }
   /** True while the pet may shoot (pet-pen.ts petMayFight). */
@@ -35,7 +37,7 @@ export class PetCompanion {
   update(h: PetHost, dt: number) {
     const id = companionId(h.state.gear, this.index) ?? '', c = this.index ? h.companion2 : h.companion;
     if (!id || !c) { this.id = ''; this.shown = true; return; }
-    const side = this.index ? PET2_SIDE : PET_SIDE, both = !!companionId(h.state.gear, 1);
+    const side = (this.index ? PET2_SIDE : PET_SIDE) * this.spread, both = !!companionId(h.state.gear, 1);
     const style = petStyle(id), feet = PERCH_FEET[id] ?? 0, away = !!h.petStaysHome?.();
     this.shown = !away;
     if (away) { this.link.place = 'pen'; this.link.hop = null; this.planet = h.planet; return; }

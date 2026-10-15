@@ -1193,7 +1193,7 @@ def main():
     style.reset_scene()
     imported = set()
     if any(i.startswith('cooked_fish_') for i in ids):
-        bpy.ops.import_scene.gltf(filepath=FISH_GLB)
+        style.import_glb(FISH_GLB)
         imported = names()
     objs = {iid: build(iid) for iid in ids}
     for name in imported:

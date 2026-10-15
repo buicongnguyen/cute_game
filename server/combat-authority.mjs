@@ -14,6 +14,7 @@ import {eliteDefeat} from '../src/elite-rewards.ts';
 import {trailSpot,dogTossFactor,DOG_TOSS_CD} from '../src/guard-dog.ts';
 import {companionId,dogWorn} from '../src/pet-slots.ts';
 import {DOG_GUARD,petFighter} from '../src/pet-guard.ts';
+import {SURGE} from '../src/pet-surge.ts';
 import {commandHash} from './action-service.mjs';
 import {gearFactor,skillLevel,skillCooldown} from '../src/upgrades.ts';
 import {clearJourney} from './adventure-lifecycle.mjs';
@@ -89,7 +90,12 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   function hurtPlayer(peer,amount,source='melee'){
     const e=engineFor(peer),now=Date.now();
     if(!vulnerable(peer,source))return;
-    e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);hp(peer,-Math.max(1,Math.round(amount*60/(defense+60))),source);
+    // Bloom's ward (pet-surge.ts): hazards pass by for a few seconds.
+    if(source==='hazard'&&e.sim.statuses.ward>0)return;
+    e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);let loss=Math.max(1,Math.round(amount*60/(defense+60)));
+    // Phoenix rebirth (pet-surge.ts): a blow that would knock the explorer out leaves SURGE.revive of full health instead, once in five minutes.
+    {const max=Game.maxHp(peer.account.profile);let hpNow=peer.account.profile.hp;for(const event of e.healthEvents)hpNow+=event.amount;if(hpNow-loss<=0&&e.sim.surge.revive()){loss=Math.max(0,hpNow-Math.max(1,Math.round(max*SURGE.revive)));send(peer.socket,{type:'surge',event:{slot:e.sim.surge.slot,phase:'big',sig:'rebirth',x:peer.pose.x,z:peer.pose.z,revived:true}});if(!(loss>0))return;}}
+    hp(peer,-loss,source);
   }
   function hurtEnemyTarget(peer,enemy,multiplier,source='melee'){
     // The knight's raised shield, facing the creature, stops the blow; a shot it stops flies back and hits the shooter (combat.reflect).
@@ -302,6 +308,8 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       focus:()=>current().target??null,
       health:()=>{const p=current(),profile=p.account.profile;let hp=profile.hp;for(const event of engine.healthEvents)hp+=event.amount;return Math.max(0,hp)/Math.max(1,Game.maxHp(profile));},
       guarded:event=>send(current().socket,{type:'guard',event}),
+      // Bond Surge (pet-surge.ts): the server's copy decides the surge, its doubled shots, the signature and the boss's weakness; the explorer is told.
+      surged:event=>send(current().socket,{type:'surge',event}),
       skillLevel:index=>skillLevel(combatProfile(current()),index),
       status:(target,kind,duration)=>{if(kind==='stun'){/* a freeze or a root holds bosses too */target.stun=Math.max(target.stun||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});return;}if(target.boss&&BOSS_RESISTED.includes(kind)){kind='slow';duration*=RESIST_SLOW;}target.statuses[kind]=Math.max(target.statuses[kind]||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});},
       moveTarget:(target,x,z)=>{if(dist(target,{x,z})>12)return;target.x=x;target.z=z;if(room())broadcast(room(),{type:'moveEnemy',id:target.id,x,z});}});

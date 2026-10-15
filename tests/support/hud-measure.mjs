@@ -11,7 +11,7 @@ export function measureHud() {
     hero: all('#hud .player-card'), dock: all('#hud .top-actions button'), map: all('#hud .minimap'), home: all('#hud .home-button'),
     slips: all('#hud .tracker-panels > *, #hud #tracker-chip'), eat: all('#hud #quick-eat, #hud .quick-eat-pick'), buffs: all('#hud #buff-bar > *'),
     skills: all('#hud .skill'), pad: all('#hud .attack-pad'), jump: all('#hud .jump-pad'), stick: all('#movement-joystick'), boss: all('#boss-bar'), target: all('#target-frame'),
-    colossus: all('.colossus-banner'), prompt: all('#context-prompt button'), counter: all('#combo-counter'), keys: all('#keys-guide'), reel: all('#reel-button'), fishHint: all('#fish-hint'), weather: all('#environment-bar > *'), goals: all('#hud #goals-chip'),
+    colossus: all('.colossus-banner'), prompt: all('#context-prompt button'), counter: all('#combo-counter'), keys: all('#keys-guide'), reel: all('#reel-button'), fishHint: all('#fish-hint'), weather: all('#environment-bar > *'), goals: all('#hud #goals-flag'),
   };
   // Touch targets: what a finger really gets at each control's centre row and column.
   const coarse = matchMedia('(pointer: coarse)').matches, small = [];
@@ -32,6 +32,8 @@ export function measureHud() {
     The stick is a disc too (joystick.css, border-radius 50%): with jumping on, the attack toe sits by its lower corner, where the boxes
     meet on a 320 px phone while the discs are over 20 px apart. */
 const ROUND = new Set(['skills|skills', 'skills|pad', 'skills|jump', 'pad|jump', 'pad|stick', 'jump|stick', 'skills|stick']);
+/** Pieces made to sit on another: the goals badge is a tag on the map panel's corner (goals.css). It must stay inside the map's box. */
+const ATTACHED = new Set(['map|goals']);
 /**
  * The five-button paw (jumping on, a touch screen): the rules of docs/FIGHT-PLAN.md section 11.
  *   - the Attack pad is at least 60 px, each special at least 48 px, Jump at least 52 px;
@@ -65,7 +67,9 @@ export function findings(m) {
   const rounds = (a, b) => Math.hypot((a.l + a.r - b.l - b.r) / 2, (a.t + a.b - b.t - b.b) / 2) < (a.r - a.l + b.r - b.l) / 4 - .5;
   for (let i = 0; i < names.length; i++) for (let j = i; j < names.length; j++) {
     const A = m.groups[names[i]], B = m.groups[names[j]];
-    const hit = ROUND.has(names[i] + '|' + names[j]) ? rounds : boxes;
+    const pair = names[i] + '|' + names[j];
+    if (ATTACHED.has(pair)) { for (const b of B) if (!A.some(a => b.l >= a.l - .5 && b.t >= a.t - .5 && b.r <= a.r + .5 && b.b <= a.b + .5)) out.push(`${names[j]} is not on its ${names[i]} ${JSON.stringify([b.l, b.t, b.r, b.b].map(Math.round))}`); continue; }
+    const hit = ROUND.has(pair) ? rounds : boxes;
     for (let x = 0; x < A.length; x++) for (let y = i === j ? x + 1 : 0; y < B.length; y++) if (hit(A[x], B[y])) out.push(`${names[i]} overlaps ${names[j]} ${JSON.stringify([A[x], B[y]].map(b => [b.l, b.t, b.r, b.b].map(Math.round)))}`);
   }
   for (const [name, boxes] of Object.entries(m.groups)) for (const b of boxes) if (b.l < -.5 || b.t < -.5 || b.r > m.W + .5 || b.b > m.H + .5) out.push(`${name} leaves the screen ${JSON.stringify([b.l, b.t, b.r, b.b].map(Math.round))}`);

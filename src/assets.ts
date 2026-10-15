@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { perfFlags } from './perf-flags.ts';
 import { shadeGeometry } from './look.ts';
@@ -54,8 +55,37 @@ export const HERO_FILE = modelUrl('hero.glb');
 
 export type RefinedAsset = keyof typeof REFINED_ASSET_FILES;
 type SceneLoader = (url: string) => Promise<T.Group>;
-const gltfLoader = new GLTFLoader();
-const loadGltfScene: SceneLoader = async url => (await gltfLoader.loadAsync(url)).scene;
+/**
+ * Replaces packed vertex attributes (normalised integers, interleaved views) with plain 32-bit float copies. The model
+ * files store normals as 8-bit vectors (art/compress-models.mjs); baking, merging and measuring code (bakeModel,
+ * mergeGeometries, arm-fit, scatter extents...) expects the floats Blender wrote, and mixing types would stop merges.
+ */
+export function floatAttributes(root: T.Object3D) {
+  const done = new Set<T.BufferGeometry>();
+  root.traverse(o => {
+    const geometry = (o as Partial<T.Mesh>).geometry;
+    if (!geometry?.isBufferGeometry || done.has(geometry)) return;
+    done.add(geometry);
+    for (const [name, a] of Object.entries(geometry.attributes) as [string, T.BufferAttribute | T.InterleavedBufferAttribute][]) {
+      if (!(a as T.InterleavedBufferAttribute).isInterleavedBufferAttribute && !a.normalized) continue;
+      const size = a.itemSize, out = new Float32Array(a.count * size);
+      for (let i = 0; i < a.count; i++) for (let c = 0; c < size; c++) out[i * size + c] = a.getComponent(i, c);
+      geometry.setAttribute(name, new T.BufferAttribute(out, size));
+    }
+  });
+}
+/**
+ * The loader for the game's models: they are meshopt-compressed (EXT_meshopt_compression, art/compress-models.mjs),
+ * and every loaded scene comes back with float attributes (floatAttributes). Tests load model files with it too.
+ */
+export function createGltfLoader() {
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  loader.register(() => ({ name: 'zoo_float_attributes', afterRoot: async (gltf: { scene: T.Group }) => { floatAttributes(gltf.scene); } }));
+  return loader;
+}
+// Made on first use: the module also loads where nothing is downloaded (Node tests that only read URLs).
+let gltfLoader: GLTFLoader | null = null;
+const loadGltfScene: SceneLoader = async url => (await (gltfLoader ??= createGltfLoader()).loadAsync(url)).scene;
 
 export class RefinedAssetLibrary {
   private scenes = new Map<RefinedAsset, T.Group>();

@@ -7,6 +7,7 @@ import { PETS2_ITEMS_VI } from './vi-pets2.ts';
 import { DAWNSTAR_ITEMS_VI } from './vi-dawnstar.ts';
 import { CTF_VI } from './vi-ctf.ts';
 import { RESCUE_VI } from './vi-rescue.ts';
+import { FLAGS_STORY_VI } from './vi-flags.ts';
 /** Vietnamese catalog labels. Short reference terms matched by stable item IDs;
  * original descriptions and farm additions translated for this game. IDs and game rules stay unchanged.
  * Exact English keys also cover generated cooked names and catalog stat descriptions.
@@ -835,6 +836,7 @@ Object.assign(VI_CATALOG, VI_DYES);
 Object.assign(VI_CATALOG, PETS2_ITEMS_VI);
 Object.assign(VI_CATALOG, DAWNSTAR_ITEMS_VI);
 Object.assign(VI_CATALOG, CTF_VI);
+Object.assign(VI_CATALOG, FLAGS_STORY_VI);
 Object.assign(VI_CATALOG, RESCUE_VI);
 
 Object.assign(VI_CATALOG, {'duck eggs':'trứng vịt','garden truffles':'nấm cục vườn','Bigger pen: +{chickens} chickens, +{ducks} ducks, +{cows} cows, +{pigs} pigs (ϟ {cost})':'Mở rộng chuồng: +{chickens} gà, +{ducks} vịt, +{cows} bò, +{pigs} heo (ϟ {cost})'});
