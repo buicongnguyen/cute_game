@@ -42,8 +42,11 @@ export const FIRST_VI: Record<string, string> = {
   'The Colossus stirs…': 'Cự Thạch trở mình…',
   'From now on the Cinderpeak Colossus shows for you in Redrock Canyon at its daily hour.': 'Từ nay Cự Thạch Núi Tro hiện ra với sếp ở Hẻm Núi Đỏ vào giờ thức mỗi ngày.',
   'The Cinderpeak Colossus can wake for you now. Your choice at the Ember Well still holds.': 'Giờ Cự Thạch Núi Tro có thể thức dậy với sếp. Lựa chọn của sếp ở Giếng Tro Than vẫn giữ nguyên.',
-  'The Cinderpeak Colossus can wake for you now. Its first day comes soothed; the Ember Well decides after that.': 'Giờ Cự Thạch Núi Tro có thể thức dậy với sếp. Ngày đầu nó đến thật hiền; sau đó Giếng Tro Than quyết định.',
-  'Your choice at the well holds. Without one it would sleep until level {need} (you are level {level}).': 'Lựa chọn của sếp ở giếng được giữ. Nếu chưa chọn, nó sẽ ngủ tới cấp {need} (sếp đang cấp {level}).',
   'Sleeping until level {need} (you are level {level}).': 'Đang ngủ tới cấp {need} (sếp đang cấp {level}).',
   'That was already noted.': 'Việc này đã được ghi lại rồi.',
+  'The Cinderpeak Colossus can wake for you now, soothed until you choose otherwise at the Ember Well.': 'Giờ Cự Thạch Núi Tro có thể thức dậy với sếp, thật hiền cho tới khi sếp chọn khác ở Giếng Tro Than.',
+  'Automatic: it comes soothed now that you are level {level}.': 'Tự động: nó đến thật hiền vì sếp đã cấp {level}.',
+  'Asleep below level {need}, soothed from level {need} on.': 'Ngủ khi dưới cấp {need}, hiền dịu từ cấp {need} trở đi.',
+  'The lid hangs open on its chain. The Colossus wakes at full strength and the canyon darkens.': 'Nắp giếng treo mở trên dây xích. Cự Thạch thức dậy với toàn bộ sức mạnh và hẻm núi tối sầm.',
+  'The well looks after itself again: asleep below level {level}, soothed after.': 'Giếng lại tự lo liệu: ngủ khi dưới cấp {level}, hiền dịu từ đó trở đi.',
 };

@@ -13,7 +13,7 @@ import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage
 import { colossusContributors, grantColossusReward, grantRoarBonus } from './colossus-rewards.ts';
 import { loadColossusArt, makeColossusRig, poseColossus, colossusArtReady, type ColossusRig } from './colossus-art.ts';
 import { ColossusAttackView } from './colossus-view.ts';
-import { colossusChoice, colossusLid, noteColossusDay, COLOSSUS_LEVEL, SOOTHE_FACTOR, SOOTHE_HP_DIVISOR, type ColossusLid } from './colossus-sleep.ts';
+import { colossusChoice, colossusLid, COLOSSUS_LEVEL, SOOTHE_FACTOR, SOOTHE_HP_DIVISOR, type ColossusLid } from './colossus-sleep.ts';
 
 /** What the runtime needs from the game (main.ts wires it). */
 export interface ColossusHost {
@@ -215,7 +215,7 @@ export class ColossusEvent {
   /** Solo, with the Ember Well's lid at "soothed": hits 50 times lighter and a fifth of the health, about 200,000 (online is never weakened). */
   private get weak() { return !this.h.online() && this.lid(this.day) === 'soothed' ? SOOTHE_FACTOR : 1; }
   /** The well's lid in force (colossus-sleep.ts): the player's choice, else the level rule. A forced event (start(), day -2: tests and ?colossus=1) skips the level rule. */
-  private lid(day: number): ColossusLid { return day === -2 && !colossusChoice() ? 'wild' : colossusLid(this.h.state().level, String(day)); }
+  private lid(day: number): ColossusLid { return day === -2 && !colossusChoice() ? 'wild' : colossusLid(this.h.state().level); }
   private spawnedWeak = 1;
   private soloMaxHp() { return Math.max(1, Math.round(colossusMaxHp(1 + this.nearbyExplorers(), true) / (this.weak > 1 ? SOOTHE_HP_DIVISOR : 1))); }
   private resetDay(day: number) {
@@ -344,7 +344,6 @@ export class ColossusEvent {
     rig.root.userData.pickHeight = 9 / 1.85; rig.root.userData.pickHeightAsset = null; rig.root.userData.footprint = S.radius * .8;
     w.enemies.push(e); this.enemy = e; this.spawnedWeak = this.weak; this.rig = rig; this.rise = online && (this.server?.hp ?? 1) < (this.server?.maxHp ?? 1) ? 1 : 0; this.dying = 0;
     if (!online && this.day < 0) this.resetDay(this.window(Date.now()).day);
-    if (!online && this.day >= 0) noteColossusDay(this.h.state().level, String(this.day)); // the first day after reaching level 20 unchosen is the soothed one
     if (!online) { this.nextAt = this.time + 3; if (this.h.news?.('The Cinderpeak Colossus has woken', 'In Redrock Canyon until 24:00. The sky darkens over every planet.') ?? true) this.h.toast(t('The Cinderpeak Colossus has woken in Redrock Canyon! The sky darkens over every planet.'), '🌋'); this.h.tone('level'); }
   }
   /** Swaps the stand-in for the Blender giant once it arrives. */
