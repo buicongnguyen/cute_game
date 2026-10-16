@@ -38,7 +38,7 @@
   color: var(--cream, #fff6e0); font-size: 12px; font-weight: 800; line-height: 1; white-space: nowrap;
   transition: opacity .32s ease, transform .32s ease;
 }
-#app #hud .pf-line.out { opacity: 0; transform: translateX(10px); }
+#app #hud .pf-line.out { opacity: 0; transform: translateY(-6px); } /* fades upward: a sideways slide left the screen at 320 px */
 #app #hud .pf-icon { flex: none; display: grid; place-items: center; width: 20px; height: 20px; font-size: 15px; }
 #app #hud .pf-icon > img { width: 20px; height: 20px; object-fit: contain; }
 #app #hud .pf-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }

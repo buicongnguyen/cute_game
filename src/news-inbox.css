@@ -46,3 +46,5 @@
 #dialog-body .panel-tabs .tab-badge { position: absolute; right: -6px; top: -7px; min-width: 17px; height: 17px; padding: 0 4px; box-sizing: border-box; border-radius: 9px;
   display: grid; place-items: center; background: #ff4f6d; color: #fff; border: 2px solid var(--cream, #fff8ec); font: 900 10px/1 system-ui, sans-serif; font-style: normal; pointer-events: none; z-index: 1; }
 #dialog #dialog-body .panel-tabs.journal-sections { position: static; margin: 0 -12px; }
+/* Phones pad the dialog body 10 px (menus.css), so the full-width tabs pull out by that much, not 12 px (no sideways scroll). */
+@media (max-width: 600px) { #dialog #dialog-body .panel-tabs.journal-sections { margin: 0 -10px; } }

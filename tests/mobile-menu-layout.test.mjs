@@ -19,7 +19,7 @@ for (const [width, height] of [[320, 568], [390, 844], [844, 390]]) {
         await page.addInitScript(lang => { localStorage.setItem('cute-game-language', lang); localStorage.setItem('cute-game-neighbours-on', '0'); }, lang);
         await page.routeWebSocket(u => new URL(u).searchParams.has('token'), () => {});
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
-        await page.waitForFunction(() => !document.querySelector('#title-screen').inert);
+        await page.waitForFunction(() => document.querySelector('#title-screen')?.inert === false, null, { timeout: 60000 }); // the title is drawn by script after 'load'
         // The short title card scrolls: its final action must remain reachable by a real tap.
         await page.locator('#title-screen button.primary').tap();
         await page.waitForFunction(() => !!window.__zoo?.world);
@@ -27,7 +27,9 @@ for (const [width, height] of [[320, 568], [390, 844], [844, 390]]) {
         await page.evaluate(() => { window.__zoo.world.onDamage = () => {}; });
         for (const panel of panels) {
           await page.evaluate(panel => window.__zoo.panel(panel), panel);
+          // Measure once the sheet has finished sliding in (its box holds still for 0.3 s: the help text is fetched when it opens), not mid-animation.
           await page.waitForTimeout(300);
+          await page.waitForFunction(() => new Promise(done => { const a = document.querySelector('#dialog').getBoundingClientRect(); setTimeout(() => { const b = document.querySelector('#dialog').getBoundingClientRect(); done(a.top === b.top && a.bottom === b.bottom); }, 300); }), null, { timeout: 8000 });
           const result = await page.evaluate(() => {
             const dialog = document.querySelector('#dialog'), body = document.querySelector('#dialog-body');
             const r = dialog.getBoundingClientRect();
