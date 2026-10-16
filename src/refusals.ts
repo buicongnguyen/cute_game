@@ -217,6 +217,7 @@ export const REFUSALS: Record<string, Reason> = {
   friendsArrive: home,
   setFriendAutoFeed: (s, p) => friendReason(s, p),
   welcomeStart: 'The welcome gift has already been settled.',
+  firstRunSeen: 'That was already noted.',
   friendOutfit: (s, p) => friendReason(s, p),
   callHelper: s => !s.helper?.owned ? 'You do not have a garden robot yet.' : s.helper.paused ? 'Bolt is switched off. Switch him on first.' : home,
   callFriend: (s, p) => friendReason(s, p),

@@ -36,6 +36,9 @@ import { decorIcon } from './icons.ts';
 import { CombatHud, fightNear, lootText, zoneInfo, aggro } from './hud-combat.ts';
 import { QuestWalk } from './quest-walk.ts';
 import { initWelcomeBack, type WelcomeBackApi } from './welcome-back.ts';
+import { initWelcomeCards, CARDS_DIALOG } from './welcome-cards.ts';
+import { mountMomentTips } from './moment-tips.ts';
+import './welcome-cards.css'; // the welcome cards, the moment tips and the way pointer's ×
 import './loop.css';
 import './welcome-back.css';
 import { ChallengeDirector, renderChallenge } from './hud-challenge.ts';
@@ -61,7 +64,7 @@ import { mountTouchButtons, cancelButtonTouches } from './touch-buttons.ts';
 import { previewGear, canTryOn, autoHeld } from './try-on.ts';
 import './quick-eat.css';
 import './hud-first.css';
-import { CALM_UNTIL_LEVEL, freshStart, tutorialPreview, calmHud, applyCalm, tendCritters, nearestCritter, type CritterWorld } from './first-run.ts';
+import { CALM_UNTIL_LEVEL, freshStart, tutorialPreview, calmHud, applyCalm, tendCritters, nearestCritter, type CritterWorld, welcomeCardsDue, oneGoal, chapterOneGuide, type FirstSeen } from './first-run.ts';
 import { foldLists } from './fold-lists.ts';
 import { CombatTimers, FishingInput, MovementControls, gameplayKey, handKey, keyboardBindings, movementKey, skillKeyIndex } from './gameplay-controls.ts';
 import {mountJoystick} from './joystick.ts';
@@ -85,7 +88,8 @@ import { journalBadges, journalTabsHtml, groupTarget, badgeCount, type JournalGr
 import { progressEntries, claimProgress, recordEvent, dailyRerollsUsed, rerollDaily, startChallenge, storyStep, challengeTitle, asHelper, type ProgressKind } from './progression.ts';
 import { STORY_STEPS } from './content.ts';
 import { refuelForHome, questPlace, wildRoute, wildDanger, shopTabMatches, rodShopTab, energyKicker, chooseOwnPathHint, surpriseOk, COLOSSUS_BANNER_LEVEL, priceButtonState, formatEnergy } from './guide.ts';
-import { mountGardenGuide, mountSpaceHome, watchTabScroll } from './guide-ui.ts';
+import { mountGardenGuide, mountSpaceHome, watchTabScroll, type GuideGoal } from './guide-ui.ts';
+import { isTouch, GARDEN_GUIDE } from './guide.ts';
 import type { GameBridge, GameAction, NetworkHooks, NetworkDrop } from './game-bridge.ts';
 import { initOnline } from './online.ts';
 import { defeatPaysPlayer } from './safe-zone.ts';
@@ -102,7 +106,7 @@ import { initBots, neighboursOn, setNeighboursOn } from './bots.ts';
 import type { ColossusEvent } from './colossus.ts';
 import './colossus.css';
 import { COLOSSUS_ID } from './colossus-content.ts';
-import { colossusLid, setColossusLid } from './colossus-sleep.ts';
+import { colossusLid, colossusChoice, setColossusLid, COLOSSUS_LEVEL } from './colossus-sleep.ts';
 import { initPlatform, toggleFullscreen } from './platform.ts';
 import { titleCardHtml, titleOrbit, toggleProfiles } from './title-card.ts';
 import './title-card.css';
@@ -254,9 +258,9 @@ let modes:typeof import('./modes.ts')|null=null,modesLoading:Promise<void>|null=
  * refusal of a `quiet` intent, which the helpers send by themselves (another worker or the player got there first).
  */
 async function perform<T=any>(type:string,payload:Record<string,unknown>={},{quiet=false}:{quiet?:boolean}={}):Promise<T|undefined>{
-  const before=state.level,original=state,online=!!actionHandler;
+  const before=state.level,original=state,online=!!actionHandler,gift=state.welcome==='pending';
   try{const result=actionHandler?(await actionHandler({type,payload})).result:applyGameAction(state,{type,payload},{now:Date.now(),random:Math.random});
-    if(state!==original)return undefined;if(!online)levelCheck(before);save();updateHud();return result as T;
+    if(state!==original)return undefined;if(!online)levelCheck(before);save();updateHud();if(gift&&state.welcome==='done'&&type.startsWith('harvest'))pepperGift();return result as T;
   }catch(error){if(state===original)reportRefusal(type,payload,error,quiet);return undefined;}
 }
 function reportRefusal(type:string,payload:Record<string,unknown>,error:unknown,quiet:boolean){
@@ -511,6 +515,8 @@ function levelCheck(before:number) {if(state.level>before){const after=state.lev
   // Level-ups and milestones go to News (news-inbox-ui.ts); the old toasts and the Almanac chip only with "Show announcements as pop-ups" on.
   const report=reportLevelFor(before,after);const popups=inbox.announce(report?{kind:'report',icon:'📒',title:'Level {level}!',text:'Your level {level} report card is ready',params:{level:after},open:'insight'}:{kind:'level',icon:'🌟',title:'Level {level}!',text:'A little stronger, a little braver.',params:{level:after},open:'insight'});
   for(const l of M.milestonesBetween(before,after))inbox.announce({kind:'milestone',icon:'🏅',title:'Milestone: level {level}',text:'+{energy} energy and a moonstone. Onward, legend!',params:{level:l,energy:M.milestoneReward(l).energy.toLocaleString()},open:'bag'});
+  // The Colossus wakes for an explorer from level 20 (colossus-sleep.ts): one News entry as it stirs.
+  if(before<COLOSSUS_LEVEL&&after>=COLOSSUS_LEVEL)inbox.announce({kind:'other',icon:'🌋',title:'The Colossus stirs…',text:actionHandler||persistence?'From now on the Cinderpeak Colossus shows for you in Redrock Canyon at its daily hour.':colossusChoice()?'The Cinderpeak Colossus can wake for you now. Your choice at the Ember Well still holds.':'The Cinderpeak Colossus can wake for you now, soothed until you choose otherwise at the Ember Well.',open:'map'});
   if(popups){void loadInsight().then(()=>insight?.levelUp(before,after)).catch(()=>{});toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');for(const l of M.milestonesBetween(before,state.level))toast(t('Milestone: level {level}! +{energy} energy and a moonstone. Onward, legend!',{level:l,energy:M.milestoneReward(l).energy.toLocaleString()}),'🏅');}tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);levelFlash();}}
 /** M sits beside N (attack): in a fight it does nothing, so a slip never opens the map; a hint shows once a minute. The minimap still opens it. */
 let mapHintAt=0;function mapKeyHint(){const now=performance.now();if(now-mapHintAt<60000)return;mapHintAt=now;toast(t('The map opens after the fight (or tap the minimap).'),'🗺️');}
@@ -538,7 +544,7 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
 let shopFocus='';
 function focusShopRow(){const id=shopFocus;shopFocus='';const row=$('#dialog-body').querySelector(`[data-action="buy"][data-item="${id}"]`)?.closest<HTMLElement>('.shop-item');if(!row)return;row.scrollIntoView({block:'center'});row.classList.add('shop-focus');setTimeout(()=>row.classList.remove('shop-focus'),2600);}
 // The Mirror docks with 'trying-on' even before a preview (look-shop.ts), so closing always clears it: a later panel or confirmation must not inherit it.
-function closeDialog(){if(modal)tone('close');endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();clearHeldInput();}
+function closeDialog(){if(modal)tone('close');if(modal===CARDS_DIALOG){modal='';welcomeCards.closed();}endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();clearHeldInput();}
 /** The three save profiles on the title screen: name and level of each, or an empty slot for a new game. */
 function profilePicker(){
   const cur=activeSlot();
@@ -546,14 +552,16 @@ function profilePicker(){
     return `<button type="button" data-action="profile" data-slot="${i}" class="${i===cur?'selected':''}" aria-pressed="${i===cur}"><b>${t('Profile')} ${i+1}</b><small>${s?`${esc(s.name)} · ${t('Level')} ${s.level}`:t('New game')}</small></button>`;}).join('');
   return `<fieldset class="profile-picker"><legend>${t('Choose a save profile')}</legend>${items}</fieldset>`;
 }
-/** Settles the welcome gift. Closing the dialog with × (or Escape) takes it too, so the gift is never left pending unseen. */
-async function settleWelcome(take:boolean){if(state.welcome==='pending'&&await perform('welcomeStart',{take})){closeDialog();toast(take?t('Pepper joined you, and you start with 10,000 energy!'):t('Pepper joined you. A fair start it is!'),'🍳');updateHud();}}
-/** The first helper's greeting: the cook introduces herself and offers the 10,000 energy she says she won in the lottery. */
-function welcomeDialog(){
-  openDialog('welcome',t('Welcome to the game!'),`<p class="intro">${t('Hi boss! I am Pepper, your cook. Welcome to the game!')}</p><p>${t('Guess what? You are lucky today! I played the lottery and won 10,000 energy. Do you want it?')}</p><div class="button-row"><button class="primary" data-action="welcome-take">${t('Yes, take it!')}</button><button class="soft-button" data-action="welcome-pass">${t('No, thanks')}</button></div>`,t('YOUR COOK'),'🍳');
-}
-async function start() {setTimeout(()=>void loadInsight().catch(()=>{}),5000);/* the Almanac's chunk, once play is under way: its scores join the save's snapshots and a waiting report card is offered */settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();welcomeBack??=initWelcomeBack({state:()=>state,newSave:(pending=>()=>pending)(state.welcome==='pending'),calm:()=>started&&!modal&&!uiBlocked()&&!placement&&!visiting&&!fishGame&&state.hp>0&&!fightNear(world.enemies,world.position.x,world.position.z,16)&&!dungeonApi?.active&&!ctfApi?.active&&!rescueApi?.active,colossusAsleep:()=>colossusLid()==='asleep',openDialog,closeDialog,modal:()=>modal||null,perform:(type,payload)=>perform(type,payload),toast:(text,icon)=>toast(text,icon),tone:kind=>tone(kind as Parameters<typeof tone>[0]),esc,saveKey:activeKey});world.readyTrail(()=>void compileAsyncSafe(world.renderer,world.scene,world.camera)); // warm the village's shaders off the first walk, and the weapon trail's off the first swing
-  applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
+/**
+ * Pepper's thank-you after the first harvest (FIX-PLAN 4.6): the harvest action already gave the 10,000 energy and brought
+ * her (friends.ts firstHarvestGift, the server runs the same); this is the moment. It waits a beat for the harvest burst
+ * and for any open panel to close, so it never stacks on another dialog.
+ */
+function pepperGift(){const show=()=>{if(modal||!started){setTimeout(show,700);return;}tone('quest');openDialog('welcome',t('Your first harvest!'),`<p class="intro">${esc(t('Hi boss! I am Pepper, the village cook. What a lovely first harvest!'))}</p><p>${esc(t('I won 10,000 energy in the lottery. It is yours: spend it on seeds and gear!'))}</p><div class="button-row"><button class="primary" data-action="close">${esc(t('Thank you, Pepper!'))}</button></div>`,t('YOUR COOK'),'🍳');};setTimeout(show,900);}
+/** The three welcome cards of an untouched save (welcome-cards.ts); closing them in any way saves them as seen. */
+const welcomeCards=initWelcomeCards({openDialog,closeDialog,modal:()=>modal||null,seen:()=>void perform('firstRunSeen',{id:'cards'},{quiet:true}),touch:isTouch,planets:()=>Object.keys(M.PLANETS).length,tone:kind=>tone(kind as Parameters<typeof tone>[0]),esc});
+async function start() {setTimeout(()=>void loadInsight().catch(()=>{}),5000);/* the Almanac's chunk, once play is under way: its scores join the save's snapshots and a waiting report card is offered */settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;const cards=welcomeCardsDue(state);if(cards)welcomeCards.show();welcomeBack??=initWelcomeBack({state:()=>state,newSave:(pending=>()=>pending)(state.welcome==='pending'),calm:()=>started&&!modal&&!uiBlocked()&&!placement&&!visiting&&!fishGame&&state.hp>0&&!fightNear(world.enemies,world.position.x,world.position.z,16)&&!dungeonApi?.active&&!ctfApi?.active&&!rescueApi?.active,colossusAsleep:()=>colossusLid(state.level)==='asleep',openDialog,closeDialog,modal:()=>modal||null,perform:(type,payload)=>perform(type,payload),toast:(text,icon)=>toast(text,icon),tone:kind=>tone(kind as Parameters<typeof tone>[0]),esc,saveKey:activeKey});world.readyTrail(()=>void compileAsyncSafe(world.renderer,world.scene,world.camera)); // warm the village's shaders off the first walk, and the weapon trail's off the first swing
+  applyMovePad();save();updateHud();updateLabels();if(saved||!cards)toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):isTouch()?'Start small: tap a garden bed to plant your first carrot.':'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
 async function helperCatchUp(){const r=actionHandler?await workPerform<ReturnType<typeof Helper.catchUp>>('helperCatchUp'):change(()=>applyGameAction(state,{type:'helperCatchUp',payload:{away:catchUpAway()}}) as ReturnType<typeof Helper.catchUp>);if(r&&(r.harvested.length||r.planted.length)){const text=t('While you were away, Bolt harvested {count} crops and planted {beds} beds.',{count:r.harvested.length,beds:r.planted.length});if(!welcomeBack?.absorb(text,'🤖'))setTimeout(()=>toast(text,'🤖'),2600);}}
@@ -589,8 +597,8 @@ function updateHud() {
   const fight=fightNear(world.enemies,world.position.x,world.position.z);if(fight&&!wasFight&&trackerMode==='open')trackerMode='auto';wasFight=fight;
   const folded=trackerMode==='fold'||trackerMode==='auto'&&(fight||shown.boss||innerWidth<600&&(state.planet!=='home'||world.lastZone!=='Clover Village'));
   $('.tracker-stack').classList.toggle('folded',folded);$('#tracker-chip').hidden=!folded;
-  const bounty=progressEntries(state,'bounties')[0];$('#bounty-tracker').hidden=!bounty;if(bounty){$('#bounty-title').textContent=t(bounty.title);$('#bounty-task').textContent=t(`${bounty.progress}/${bounty.target} · ${bounty.claimed?'Complete':bounty.description}`);$('#bounty-count').textContent=t(bounty.claimed?'✓':`${bounty.progress}/${bounty.target}`);}
-  const chal=challenges.view();renderChallenge($('#challenge-tracker'),chal);setText($('#chip-chal'),chal?chal.chip:'');keysGuide.render(state.settings.keyboardLayout,getLanguage(),airOn()?spaceKey:undefined);
+  const one=oneGoal(state),bounty=one?undefined:progressEntries(state,'bounties')[0];$('#bounty-tracker').hidden=!bounty; // one goal at a time on a new save (first-run.ts oneGoal)if(bounty){$('#bounty-title').textContent=t(bounty.title);$('#bounty-task').textContent=t(`${bounty.progress}/${bounty.target} · ${bounty.claimed?'Complete':bounty.description}`);$('#bounty-count').textContent=t(bounty.claimed?'✓':`${bounty.progress}/${bounty.target}`);}
+  const chal=one?null:challenges.view();renderChallenge($('#challenge-tracker'),chal);setText($('#chip-chal'),chal?chal.chip:'');keysGuide.render(state.settings.keyboardLayout,getLanguage(),airOn()?spaceKey:undefined);
   if(folded){$('#chip-quest').textContent=t(q?`${q.icon} ${progress}/${q.target}`:'🚀');$('#chip-bounty').textContent=t(bounty?`🎯 ${bounty.progress}/${bounty.target}`:'');}
   // Light pools cut holes in the darkness; a lamp behind the perspective camera would project mirrored, so it is skipped.
   if(!dark.hidden){const holes=world.lightSources().flatMap(light=>{const p=world.screen(light.x,.7,light.z),edge=world.screen(light.x+light.radius,.7,light.z);return p.front?[`radial-gradient(circle ${Math.abs(edge.x-p.x)}px at ${p.x}px ${p.y}px, transparent 65%, black 100%)`]:[];});
@@ -871,11 +879,13 @@ function applyMovePad(){$('#hud').classList.remove('move-pad');joystick.setEnabl
 function upgrades(){openDialog('upgrade','A wish for something more',`<div class="en-head">Energy: <b>ϟ ${state.energy.toLocaleString()}</b></div><div class="upgrade-cards">${upgradeCards(state).map(c=>`<div class="upgrade-card"><span class="upgrade-icon">${c.icon}</span><div><strong>${t(c.name)} <small>Level ${c.level}</small></strong><p>Now: ${c.now} • ${c.gain}</p></div><button class="primary" data-action="upgrade" data-kind="${c.kind}" ${c.affordable?'':'disabled'}>${c.max?'MAX':`ϟ ${c.cost}`}</button></div>`).join('')}</div>`,'THE WISHING CRYSTAL');}
 /** The Ember Well: lower its stone lid to keep the Cinderpeak Colossus asleep (solo play), lift it to let the daily event come (colossus-sleep.ts). */
 function wellDialog(){
-  const online=!!actionHandler||!!persistence,lid=colossusLid();
+  // `lid`: the player's own lid, or 'auto' for the level rule (the default: asleep below 20, soothed from 20 on; colossus-sleep.ts).
+  const online=!!actionHandler||!!persistence,choice=colossusChoice(),lid=choice??'auto',level=state.level;
+  const rule=!choice?`<p class="well-rule">🌙 ${esc(t(level<COLOSSUS_LEVEL?'Sleeping until level {need} (you are level {level}).':'Automatic: it comes soothed now that you are level {level}.',{need:COLOSSUS_LEVEL,level}))}</p>`:'';
   const story=`<p class="intro">${esc(t('The old well was dug on the Cinderpeak Colossus’s sleeping shoulder. Its water stays warm because the giant is breathing under the stones.'))}</p>`;
-  const choice=(action:string,icon:string,label:string,hint:string,on:boolean)=>`<button class="${on?'primary':'soft-button'} well-choice" data-action="${action}" aria-pressed="${on}">${icon} <span>${esc(t(label))}</span><small>${esc(t(hint))}</small></button>`;
+  const pick=(action:string,icon:string,label:string,hint:string,on:boolean)=>`<button class="${on?'primary':'soft-button'} well-choice" data-action="${action}" aria-pressed="${on}">${icon} <span>${esc(t(label))}</span><small>${esc(t(hint))}</small></button>`;
   const body=online?`<p>${esc(t('In a shared world the Colossus belongs to everyone, so the lid will not budge. It wakes on the server’s clock.'))}</p>`
-    :`<p>${esc(t(lid==='soothed'?'The well water glows soft blue. The Colossus will still come, but gentle as a sleepy pup: with 200,000 health and blows fifty times lighter, under a normal sky.':lid==='asleep'?'The stone lid is down. The sky stays bright and the Colossus sleeps through its hour.':'A heavy lid hangs on a chain beside the bucket, and a cool spring runs beneath it. Choose how the Colossus should wake.'))}</p><div class="button-row well-choices">${choice('well-wild','🌋','Let it wake','The canyon darkens and the giant fights at full strength.',lid==='wild')}${choice('well-soothe','💧','Soothe it','It comes with 200,000 health and 50 times lighter blows, and the sky stays bright.',lid==='soothed')}${choice('well-sleep','🪨','Lower the lid','It sleeps through its hour. Nothing happens.',lid==='asleep')}</div>`;
+    :`<p>${esc(t(lid==='soothed'?'The well water glows soft blue. The Colossus will still come, but gentle as a sleepy pup: with 200,000 health and blows fifty times lighter, under a normal sky.':lid==='asleep'?'The stone lid is down. The sky stays bright and the Colossus sleeps through its hour.':lid==='wild'?'The lid hangs open on its chain. The Colossus wakes at full strength and the canyon darkens.':'A heavy lid hangs on a chain beside the bucket, and a cool spring runs beneath it. Choose how the Colossus should wake.'))}</p>${rule}<div class="button-row well-choices">${pick('well-auto','🌙','Automatic',t('Asleep below level {need}, soothed from level {need} on.',{need:COLOSSUS_LEVEL}),!choice)}${pick('well-wild','🌋','Let it wake','The canyon darkens and the giant fights at full strength.',choice==='wild')}${pick('well-soothe','💧','Soothe it','It comes with 200,000 health and 50 times lighter blows, and the sky stays bright.',choice==='soothed')}${pick('well-sleep','🪨','Lower the lid','It sleeps through its hour. Nothing happens.',choice==='asleep')}</div>`;
   openDialog('well','The Ember Well',story+body,'REDROCK SPRING','🪨');
 }
 function cooking(){if(!M.kitchenOpen(state)&&!Tester.isTester(state)){openDialog('cook','A warm meal for the trail',`<p class="intro">🔒 ${esc(t('Unlocks at level {level}',{level:M.KITCHEN_LEVEL}))}</p>`,'VOLCANO KITCHEN');return;}const ingredients=M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id]).map(id=>[id,M.pantry(state,id)] as const);const cookTotal=ingredients.reduce((a,[,n])=>a+n,0);openDialog('cook','A warm meal for the trail',`<p class="intro">Cooked food heals more and lasts longer. Cooking here is free.</p>${cookTotal?`<button class="primary sell-produce cook-everything" data-action="cook-everything">${esc(t('Cook all → {count} meals',{count:cookTotal}))}</button>`:''}<div class="shop-grid">${ingredients.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} <small>×${n}</small></strong><p>${esc(M.ITEMS['cooked_'+id].desc)}</p><span class="chips"><span class="chip cook-result">→ ${mini('cooked_'+id)} ${esc(t(M.ITEMS['cooked_'+id].name))}</span></span></div><div class="button-row"><button class="soft-button" data-action="cook-one" data-item="${id}">Cook 1</button><button class="primary" data-action="cook-all" data-item="${id}" aria-label="Cook all">All</button></div></div>`).join('')||'<p class="empty-state">Bring crops, fish, or meat from your adventures.</p>'}</div>${dishesHtml(state,farmUi)}${Tester.testerKitchenHtml(state,art)}`,'VOLCANO KITCHEN');}
@@ -1897,7 +1907,38 @@ world.onDecoyDamage=(owner,id,amount,source,enemyId)=>{
   if(owner===null)combat.hurtAlly(id,amount);
 };
 watchTabScroll($('#dialog-body'));
-const gardenGuide=mountGardenGuide({world,hud:$('#hud'),state:()=>state,bedAt:i=>M.bedPosition(state,i),active:()=>started&&!uiBlocked()&&!visiting&&!world.interior&&state.hp>0&&world.state===state&&world.planet==='home'&&!world.enemies.some(e=>e.hp>0&&aggro(e))});frameListeners.add(dt=>gardenGuide.frame(dt)); // never during a fight
+const gardenGuide=mountGardenGuide({world,hud:$('#hud'),state:()=>state,bedAt:i=>M.bedPosition(state,i),active:()=>started&&!uiBlocked()&&!visiting&&!world.interior&&state.hp>0&&world.state===state&&world.planet==='home'&&!fightNear(world.enemies,world.position.x,world.position.z),goal:()=>chapterGoal,quiet:()=>!!momentTips?.shown,off:guideIsOff,setOff:()=>{setGuideOff(true);questWalk.point(null);}});frameListeners.add(dt=>gardenGuide.frame(dt)); // never during a fight near the explorer (creatures chasing a neighbour 40 m away used to hide it for good)
+/**
+ * Chapter 1 of a new save points the way by itself (FIX-PLAN 4.6): the trail and the edge arrow go to the next step's
+ * place, read five times a second; a ripe bed first while the step is the harvest; nothing while crops only grow or the
+ * explorer is already there. The pointer's × turns it off for this save (kept in this browser); a tap on the quest tracker
+ * turns it back on.
+ */
+let chapterGoal:(GuideGoal&{radius:number})|null=null,goalClock=0,guideOff=false,guideOffKey='';
+function guideIsOff(){const key=`zoo-guide-off:${activeKey()}`;if(key!==guideOffKey){guideOffKey=key;try{guideOff=localStorage.getItem(key)==='1';}catch{guideOff=false;}}return guideOff;}
+function setGuideOff(off:boolean){guideOff=off;guideOffKey=`zoo-guide-off:${activeKey()}`;try{if(off)localStorage.setItem(guideOffKey,'1');else localStorage.removeItem(guideOffKey);}catch{/* lasts for this visit */}}
+const GOAL_LABEL:Record<string,string>={sell:'🧺 Sell at the market',shop:'🗡️ Buy or craft here',upgrade:'💎 The wishing crystal',fish:'🎣 Fish here',cook:'🍳 Cook here',travel:'🚀 Your starship',enemy:'⚔️ Defeat creatures'};
+function findChapterGoal():(GuideGoal&{radius:number})|null{
+  if(!started||!chapterOneGuide(state)||guideIsOff()||uiBlocked()||visiting||world.interior||world.planet!=='home'||world.state!==state)return null;
+  const x=world.position.x,z=world.position.z,step=storyStep(state.progression.story.index,state),now=Date.now();
+  if(step.event==='harvest'&&!fightNear(world.enemies,x,z)){const i=state.plots.findIndex(p=>p.crop&&M.cropProgress(p,now)>=1);if(i>=0){const at=M.bedPosition(state,i),far=Math.hypot(at.x-x,at.z-z);return far>4&&far<GARDEN_GUIDE.reach?{x:at.x,z:at.z,radius:1.2,label:'🧺 Ripe! Harvest here'}:null;}}
+  const goal=questTarget();if(!goal||goal.place==='bag')return null;
+  if(goal.place==='plot'&&state.plots[goal.target.index!]?.crop)return null; // every bed is growing: nothing to walk to yet
+  const e=goal.target;return {get x(){return e.x;},get z(){return e.z;},radius:e.radius,label:goal.place==='plot'?(isTouch()?'🌱 Tap a bed to plant':'🌱 Click a bed to plant'):GOAL_LABEL[goal.place]??'✨ Your next goal'};
+}
+frameListeners.add(dt=>{goalClock+=dt;if(goalClock<.2)return;goalClock=0;const was=chapterGoal;chapterGoal=findChapterGoal();if(chapterGoal||was)questWalk.point(chapterGoal);});
+/** One-time moment tips on a new save (moment-tips.ts): a small bubble beside the bed, the creature, the drop or the backpack. */
+const momentTips=mountMomentTips({hud:$('#hud'),state:()=>state,active:()=>started&&!uiBlocked()&&!visiting&&!placement&&!fishGame&&!world.interior&&state.hp>0&&world.state===state,
+  facts:()=>{
+    const x=world.position.x,z=world.position.z,d=(p:{x:number;z:number})=>Math.hypot(p.x-x,p.z-z),home=world.planet==='home',now=Date.now();
+    type At={x:number;y:number;z:number}|null;let emptyBed:At=null,ripeBed:At=null,creature:At=null,drop:At=null;
+    if(home&&state.counters.harvests===0){const fresh=state.plots.every(p=>!p.crop);let best=6;state.plots.forEach((p,i)=>{const at=M.bedPosition(state,i),far=d(at);if(p.crop){if(!ripeBed&&far<14&&M.cropProgress(p,now)>=1)ripeBed={x:at.x,y:1,z:at.z};}else if(fresh&&far<best){best=far;emptyBed={x:at.x,y:1,z:at.z};}});}
+    let near=8;for(const e of world.enemies){if(e.hp<=0||e.boss)continue;const far=d(e);if(far<near){near=far;creature={x:e.x,y:2.2,z:e.z};}}
+    for(const o of drops.sim.drops)if(o.resting&&d(o)<10){drop={x:o.x,y:o.y+.9,z:o.z};break;}
+    const equip=storyStep(state.progression.story.index,state).condition==='equipped'&&!state.gear.weapon&&Object.keys(state.bag).some(id=>(state.bag[id]??0)>0&&M.ITEMS[id]?.slot==='weapon');
+    return {touch:isTouch(),emptyBed,ripeBed,creature,drop,equip};
+  },screen:(x,y,z)=>world.screen(x,y,z),bag:()=>document.querySelector<HTMLElement>('#hud .top-actions [data-action="bag"]'),seen:(id:FirstSeen)=>void perform('firstRunSeen',{id},{quiet:true})});
+frameListeners.add(dt=>momentTips.frame(dt));
 // Placed decorations: a tap at home opens Move / Turn / Pack away over the item; it closes when the explorer walks off (decor-move.ts).
 const decorMenu=mountDecorMenu($('#hud'),{state:()=>state,usable:()=>started&&!visiting&&!modal&&!placement&&!flight&&state.planet==='home'&&world.planet==='home'&&world.state===state&&!world.interior&&state.hp>0,hero:()=>world.position,screen:(x,y,z)=>world.screen(x,y,z),icon:id=>mini(id),esc,move:beginMove,turn:turnDecor,pack:packDecor});frameListeners.add(()=>decorMenu.frame());
 world.onEnvironmentEvent=event=>{if(event.message)toast(event.message,'🌍');save();updateHud();};
@@ -1985,9 +2026,9 @@ function questTarget(){
   const target=world.entities.find(e=>e.kind===place&&(place!=='plot'||!state.plots[e.index!]?.crop))??world.entities.find(e=>e.kind===place);
   return target&&Math.hypot(target.x-world.position.x,target.z-world.position.z)>7?{place,target}:null;
 }
-function walkToQuest(){const goal=questTarget();if(!goal)return false;tone('click');if(goal.place==='bag'){bagMode='bag';inventory();}else if(goal.place==='enemy'){closeDialog();world.select(goal.target);}else{go(goal.place);if(world.selected===goal.target)questWalk.start(goal.target);}return true;}
+function walkToQuest(){setGuideOff(false);const goal=questTarget();if(!goal)return false;tone('click');if(goal.place==='bag'){bagMode='bag';inventory();}else if(goal.place==='enemy'){closeDialog();world.select(goal.target);}else{go(goal.place);if(world.selected===goal.target)questWalk.start(goal.target);}return true;}
 /** The guided quest walk (quest-walk.ts, FIX-PLAN 5.3): auto-fight holds back on the way unless attacked; a dotted trail shows the way. */
-const questWalk=new QuestWalk({get position(){return world.position;},get route(){return world.route;},get selected(){return world.selected;},get destination(){return world.destination;},get keys(){return world.keys;},get joystickInput(){return world.joystickInput;},get enemies(){return world.enemies;},select:e=>world.select(e),get scene(){return world.scene;},ground:p=>terrainHeight(world.environment.layout,p)});
+const questWalk=new QuestWalk({get position(){return world.position;},get route(){return world.route;},get selected(){return world.selected;},get destination(){return world.destination;},get keys(){return world.keys;},get joystickInput(){return world.joystickInput;},get enemies(){return world.enemies;},select:e=>world.select(e),get scene(){return world.scene;},ground:p=>terrainHeight(world.environment.layout,p),path:to=>world.findPath(new Vector3(to.x,0,to.z))});
 function go(kind:string){closeDialog();const entities=world.entities.filter(e=>e.kind===kind);const entity=kind==='plot'?entities.find(e=>!world.state.plots[e.index!]?.crop)||entities[0]:entities[0];if(entity){world.select(entity);toast(`Off to ${kind==='plot'?'the garden':entity.name.toLowerCase()}…`,'👣');}else toast('That place is back in Clover Village.','🏡');}
 // ---- The starship: take-off, a piloted flight between planets, and landing ----
 const SCENERY_KITS={scenery:sceneryKit,wilds:wildsKit,bright:brightKit,harsh:harshKit,dressing:dressingKit};
@@ -2103,7 +2144,7 @@ app.addEventListener('click',async event=>{
     case 'craft-back':crafting();break;
     case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'level':'pop');}forgeMenu(id);break;}
     case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0&&!M.isPenned(id)){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
-    case 'close':if(modal==='welcome'&&state.welcome==='pending'){await settleWelcome(true);break;}closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'open-market':market();break;case 'inspect':if(id){const again=id===selectedItem;if(modal==='bag'&&isDoubleTap(id,again,performance.now())){$<HTMLButtonElement>('#dialog-body .tile-e:not(:disabled)')?.click();break;}if(!again)bagUi.card=false;selectedItem=id;inventory();}break;case 'bag-card':bagUi.card=!bagUi.card;inventory();if(bagUi.card)$<HTMLElement>('#bag-card .card-close')?.focus();break;case 'bag-card-close':bagUi.card=false;inventory();$<HTMLElement>('#dialog-body .item-cell.sel .tile-q')?.focus();break;case 'quests':if(button.id==='quest-summary'&&walkToQuest())break;quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'news':inbox.open();break;
+    case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'open-market':market();break;case 'inspect':if(id){const again=id===selectedItem;if(modal==='bag'&&isDoubleTap(id,again,performance.now())){$<HTMLButtonElement>('#dialog-body .tile-e:not(:disabled)')?.click();break;}if(!again)bagUi.card=false;selectedItem=id;inventory();}break;case 'bag-card':bagUi.card=!bagUi.card;inventory();if(bagUi.card)$<HTMLElement>('#bag-card .card-close')?.focus();break;case 'bag-card-close':bagUi.card=false;inventory();$<HTMLElement>('#dialog-body .item-cell.sel .tile-q')?.focus();break;case 'quests':if(button.id==='quest-summary'&&walkToQuest())break;quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'news':inbox.open();break;
     case 'claim':if(await perform('claimQuest')){tone('quest');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
     case 'plant':{const i=activePlot,opened=modal,root=world.root,taken=state.plots[i]?.crop;if(taken){toast(t('This bed already grows {crop}.',{crop:t(M.CROPS[taken].name)}),'🌱');refreshPlot();break;}if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
     case 'cook-everything':{let made=0;for(const id of M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id])){const n=M.pantry(state,id);if(n>0&&await perform('cook',{id,count:n}))made+=n;}if(made){tone('success');toast(t('Cooked {count} meals. Enjoy!',{count:made}),'🍲');}cooking();break;}
@@ -2202,6 +2243,7 @@ app.addEventListener('click',async event=>{
     case 'tester-planets':if(!button.dataset.sure){button.dataset.sure='1';button.textContent=t('Tap again to confirm');break;}if(testerDo(Tester.testerPlanets))toast(t('All planets unlocked'),'🪐');testerShop();break;
     case 'well-sleep':setColossusLid('asleep');toast(t('The lid thuds down. The canyon goes quiet and the sky clears.'),'🪨');wellDialog();break;
     case 'well-soothe':setColossusLid('soothed');toast(t('Cool spring water runs over the stones. The giant will be gentle today.'),'💧');wellDialog();break;
+    case 'well-auto':setColossusLid('auto');toast(t('The well looks after itself again: asleep below level {level}, soothed after.',{level:COLOSSUS_LEVEL}),'🌙');wellDialog();break;
     case 'well-wild':setColossusLid('wild');toast(t('You lift the lid. Far away, something heavy turns over.'),'🌋');wellDialog();break;
     case 'tester-exit':if(testerDo(Tester.exitTester)){toast(t('Tester mode is off. Your energy stays.'),'🧪');settings();}break;
     case 'tester-level':if(!button.dataset.sure){button.dataset.sure='1';button.textContent=t('Tap again to confirm');break;}if(testerDo(Tester.testerMaxLevel))world.refreshPlayer();testerShop();break;
@@ -2229,14 +2271,13 @@ app.addEventListener('click',async event=>{
     // Backpack +4 / chest +10 slots (storage-slots.ts).
     case 'expand-storage':{const kind=button.dataset.kind==='chest'?'chest':'bag',r=await perform<{size:number}>('expandStorage',{kind});if(r){tone('level');toast(t(kind==='bag'?'Your backpack now has {size} slots.':'Your chest now has {size} slots.',{size:r.size}),kind==='bag'?'🎒':'📦');}if(modal==='chest')storage();else if(modal==='bag')inventory();break;}
     case 'profile':{const slot=Number(button.dataset.slot);if(slot!==activeSlot()&&setActiveSlot(slot))location.reload();break;}
-    case 'welcome-take':case 'welcome-pass':await settleWelcome(action==='welcome-take');break;
     case 'friend-call':{const id=button.dataset.kind as FriendId;if(await perform('callFriend',{id}))friendDialog(id);break;}
     case 'helper-call':{if(await perform('callHelper'))helperDialog();break;}
     case 'friend-pause':{const id=button.dataset.kind as FriendId,f=state.friends?.find(f=>f.id===id);if(f&&await perform('setFriendPaused',{id,paused:!f.paused}))friendDialog(id);break;}
     case 'cook-dish':if(await perform('cookDish',{id})){tone('success');toast(`${t(M.ITEMS[id].name)} is ready. Enjoy!`,M.ITEMS[id].icon);cooking();}break;case 'camera-view':setCameraPitch(button.dataset.kind??'classic');saveCameraPitch();world.resize();settings();break;case 'graphics':graphics.choose(button.dataset.kind as QualitySetting);world.applyGraphics(graphics.profile,graphics.ratio);saveGraphics(graphics);await perform('settings',{settings:{lowGraphics:graphics.level==='low'}});settings();break;
     case 'zoom-in':case 'zoom-out':world.zoom=clampZoom(Math.round((world.zoom+(action==='zoom-in'?-ZOOM.button:ZOOM.button))*100)/100,'wheel');world.resize();$('#zoom-value').textContent=t(`${Math.round(world.zoom*100)}%`);break;
     case 'reset-confirm':openDialog('reset','Begin a brand-new story?',`<p class="intro">This replaces your ${persistence?'online account adventure':'offline adventure in this browser'}, including your garden, items, and levels.</p><div class="button-row"><button class="soft-button" data-action="settings">Keep my adventure</button><button class="primary danger-button" data-action="reset">Start fresh</button></div>`,'A FRESH START');break;
-    case 'reset':{const offline=!actionHandler;if(!await perform('reset'))break;if(offline)neighbours.reset();state=structuredClone(state);world.state=state;rebuildHomePresentation('home');world.refreshPlayer();resetCombat();selectedItem=null;save();closeDialog();if(state.welcome==='pending')welcomeDialog();updateHud();toast('Every adventure starts with a little seed.','🌱');break;} // the new story's welcome (Pepper and her offer) at once, not on the next reload
+    case 'reset':{const offline=!actionHandler;if(!await perform('reset'))break;if(offline)neighbours.reset();state=structuredClone(state);world.state=state;rebuildHomePresentation('home');world.refreshPlayer();resetCombat();selectedItem=null;save();closeDialog();if(welcomeCardsDue(state))welcomeCards.show();updateHud();toast('Every adventure starts with a little seed.','🌱');break;} // the new story's welcome cards at once, not on the next reload (Pepper comes with the first harvest)
   }
 });
 $('#dialog-layer').addEventListener('click',e=>{if(e.target===$('#dialog-layer'))closeDialog();});
@@ -2253,7 +2294,7 @@ document.addEventListener('keydown',event=>{
   if(document.querySelector('dialog[open]'))return;
   const typing=(event.target as HTMLElement).matches('input,textarea,select')||(event.target as HTMLElement).isContentEditable;
   if(flight){if(typing)return;const key=pressed.toLowerCase();if(key===' '||key.startsWith('arrow'))event.preventDefault();if(!event.repeat&&['l','enter','f'].includes(key))tryLanding();else spaceKeys.add(key);return;}
-  if(event.key==='Escape'){if(placement)cancelPlacement();else if(modal==='bag'&&bagUi.card){bagUi.card=false;inventory();$<HTMLElement>('#dialog-body .item-cell.sel .tile-q')?.focus();}else if(modal==='welcome'&&state.welcome==='pending')void settleWelcome(true);else closeDialog();return;}
+  if(event.key==='Escape'){if(placement)cancelPlacement();else if(modal==='bag'&&bagUi.card){bagUi.card=false;inventory();$<HTMLElement>('#dialog-body .item-cell.sel .tile-q')?.focus();}else closeDialog();return;}
   // E in the bag: the selected tile's primary action (Equip / Use / Place); the world's E keys are off while a panel is open.
   if(modal==='bag'&&!typing&&!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&pressed.toLowerCase()==='e'&&selectedItem){const e=$<HTMLButtonElement>('#dialog-body .tile-e:not(:disabled)');if(e){event.preventDefault();e.click();return;}}if(placement&&event.key==='Enter'){confirmPlacement();return;}
   if(modal&&event.key==='Tab'){const controls=Array.from($('#dialog').querySelectorAll<HTMLElement>('button:not(:disabled),input,select,a,[tabindex="0"]'));const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}return;}

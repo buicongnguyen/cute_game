@@ -20,6 +20,7 @@ import { refusalReason } from './refusals.ts';
 import { startRun, claimStage, leaveRun } from './dungeon-rules.ts';
 import { claimMatch } from './ctf-claim.ts';
 import { claimRescue } from './rescue-claim.ts';
+import { isFirstSeen, markSeen } from './first-run.ts';
 
 export const ACTION_RULES_VERSION = 1;
 export interface GameIntent { type: string; payload?: Record<string, unknown> }
@@ -94,8 +95,9 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'plantAll': result = AutoPlant.plantAllByHand(state, id(), now); break;
     case 'setAutoPlant': if (typeof p.on !== 'boolean') return invalid(); result = AutoPlant.setAutoPlant(state, p.on); break;
     case 'clearBedChoices': result = AutoPlant.forgetChoices(state); break;
-    case 'harvest': result = Game.harvest(state, index(), now); break;
-    case 'harvestAll': result = Game.harvestAll(state, now); break;
+    // The first harvest by hand brings Pepper and her 10,000-energy gift (friends.ts firstHarvestGift); helpers' harvests do not.
+    case 'harvest': result = Game.harvest(state, index(), now); if (result) Friends.firstHarvestGift(state, now); break;
+    case 'harvestAll': result = Game.harvestAll(state, now); if ((result as unknown[]).length) Friends.firstHarvestGift(state, now); break;
     case 'fertilize': result = Game.fertilize(state, index(), now, id()); break;
     case 'expandGarden': result = Game.expandGarden(state, p.x === undefined ? undefined : number(p.x), p.z === undefined ? undefined : number(p.z), p.rotation === undefined ? 0 : number(p.rotation)); break;
     case 'buyBedKit': result = Game.readyPlotKit(state); if (!['bought', 'have'].includes(result as string)) return refuse(); break;
@@ -135,6 +137,8 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'friendsArrive': result = Friends.arriveHome(state, { x: number(p.x), z: number(p.z) }); break;
     case 'setFriendAutoFeed': if (typeof p.autoFeed !== 'boolean') return invalid(); result = Friends.setFriendAutoFeed(state, string(p.id, 40) as Friends.FriendId, p.autoFeed); break;
     case 'welcomeStart': if (typeof p.take !== 'boolean') return invalid(); result = Friends.welcomeStart(state, p.take, now); break;
+    // A welcome card or moment tip a new save has seen (first-run.ts), kept in the save so every device agrees.
+    case 'firstRunSeen': if (!isFirstSeen(p.id)) return invalid(); result = markSeen(state, p.id); break;
     // Nothing new to wear is not a refusal: she simply keeps her clothes ({ changed: false }).
     case 'friendOutfit': {
       const friend = string(p.id, 40) as Friends.FriendId, pick = number(p.pick); if (pick < 0 || pick >= 1) return invalid();
