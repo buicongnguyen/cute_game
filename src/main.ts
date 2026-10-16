@@ -11,14 +11,14 @@ import './skills.css';
 import { viewWidth, viewHeight } from './viewport.ts';
 import { t, localizeHtml, getLanguage, switchLanguage, onLanguageChange, bindLanguage } from './i18n.ts';
 import './menus.css';
-import { Box3, Vector3 } from 'three';
+import { Box3, Mesh, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
 import { dogCoatOf } from './dog-world.ts';
 import { dogFollows } from './guard-dog.ts';
 import { KitLibrary, refinedAssets, sceneryKit, cropKit, fishKit, heroKit, spaceKit, wildsKit, brightKit, harshKit, dressingKit, KIT_FILES } from './assets.ts';
 import { onArtLoaded } from './art-retry.ts';
 import { LateArtQueue } from './late-art.ts';
-import { parseHouse } from './house-activities.ts';
+import { parseHouse, activity } from './house-activities.ts';
 import { HOUSE_FILE } from './house-view.ts';
 import { initArtNote } from './art-status.ts';
 import { SpaceFlight, planRoutes, type RouteOption, type SpaceEvent } from './space.ts';
@@ -65,7 +65,7 @@ import { CALM_UNTIL_LEVEL, freshStart, tutorialPreview, calmHud, applyCalm, tend
 import { foldLists } from './fold-lists.ts';
 import { CombatTimers, FishingInput, MovementControls, gameplayKey, handKey, keyboardBindings, movementKey, skillKeyIndex } from './gameplay-controls.ts';
 import {mountJoystick} from './joystick.ts';
-import { CombatSimulation, BASE_SKILLS, SPECIALS, DZ, DISGUISE_KITS, shotColor, type CombatHit, type CombatEffect, type CombatAlly, type DisguiseAir } from './combat.ts';
+import { CombatSimulation, attackRange, BASE_SKILLS, SPECIALS, DZ, DISGUISE_KITS, shotColor, type CombatHit, type CombatEffect, type CombatAlly, type DisguiseAir } from './combat.ts';
 import { AIR_CASTING, AIR_WEAPON, airCastBonus, airCastPlan, airSwingFor, diveStrikeFor, flightCarry, type AirCastRule } from './air-cast.ts';
 import { AIR_MOVES, AIR_NAMES, CHAIN_SKILL, MOVE_SKILLS, moveAt } from './moves.ts';
 import { skillTuning } from './skill-upgrades.ts';
@@ -89,6 +89,10 @@ import { mountGardenGuide, mountSpaceHome, watchTabScroll } from './guide-ui.ts'
 import type { GameBridge, GameAction, NetworkHooks, NetworkDrop } from './game-bridge.ts';
 import { initOnline } from './online.ts';
 import { defeatPaysPlayer } from './safe-zone.ts';
+import { PromptFocus, promptLabel } from './action-prompt.ts';
+import { interactGap } from './interact-pick.ts';
+import { attackIntent } from './attack-intent.ts';
+import { VillageFun, pokeTarget, fencePoint, type PokeThing } from './village-fun.ts';
 import { initHudLayout } from './hud-layout.ts';
 import { hudIcon, skillArt, publishHudIcons } from './hud-icons.ts';
 import { bagUi, bagCornerHtml, isDoubleTap, placeBagCard, type BagPrimary } from './bag-tile.ts';
@@ -298,7 +302,7 @@ app.innerHTML = `
     <div id="target-frame" hidden aria-live="off"><span class="target-icon"></span><div><div class="target-head"><strong></strong><span class="target-level">Lv 1</span></div><div class="target-meter"><i></i><b class="target-hp"></b></div></div></div>
     <div id="zone-banner" role="status"><strong id="banner-name">Clover Village</strong><small id="banner-detail">A little place to call home</small><span id="banner-chip"></span></div>
     <button id="reel-button" class="reel-hud" data-action="reel" hidden aria-label="Reel in the line"><span class="reel-icon" aria-hidden="true">🎣</span><span id="reel-text">Reel</span></button><div id="fish-hint" role="status" hidden></div>
-    <div id="context-prompt" hidden><button id="interact-button" data-action="interact"><kbd>F</kbd><span id="interact-text">Interact</span></button></div>
+    <div id="context-prompt" hidden><button id="interact-button" data-action="interact"><kbd>F</kbd><i id="interact-icon" aria-hidden="true"></i><span id="interact-text">Interact</span></button></div>
     <div class="bottom-bar"><div class="skills" aria-label="Combat skills"><button class="skill skill-spin" data-action="skill" data-index="0" aria-label="Q Petal Gale"><kbd>Q</kbd><span>${hudIcon('gale')}</span><small>Petal Gale</small><b class="cooldown"></b></button><button class="skill skill-dash" data-action="skill" data-index="1" aria-label="W Breeze Step"><kbd>W</kbd><span>${hudIcon('breeze')}</span><small>Breeze Step</small><b class="cooldown"></b></button><button class="skill skill-stomp" data-action="skill" data-index="2" aria-label="E Root Quake"><kbd>E</kbd><span>${hudIcon('quake')}</span><small>Root Quake</small><b class="cooldown"></b></button><button class="skill skill-special" data-action="skill" data-index="3" aria-label="R Paw Storm"><kbd>R</kbd><span>${hudIcon('paw')}</span><small id="special-name">Paw Storm</small><b class="cooldown"></b></button><button class="attack-pad" data-action="attack" aria-label="Basic attack" title="Basic attack">${hudIcon('attack')}</button></div><div id="keys-guide" class="keys-guide" aria-label="Keyboard controls"></div><button id="pair-swap" class="pair-swap" data-action="pair-swap" aria-label="Swap weapon" title="Swap weapon (Tab)" hidden></button><div class="control-hint"><span>Click to wander</span><i>•</i> <span id="movement-hint">Arrows to move</span> <i>•</i> <kbd>Space</kbd> attack</div><button class="home-button" data-action="return-home" title="Return home">${hudIcon('home')} <span>Home</span></button></div>
     <div id="touch-controls"><button data-move="ArrowUp" aria-label="Move up">▲</button><div><button data-move="ArrowLeft" aria-label="Move left">◀</button><button data-action="attack" aria-label="Attack">⚔</button><button data-move="ArrowRight" aria-label="Move right">▶</button></div><button data-move="ArrowDown" aria-label="Move down">▼</button></div>
     <div id="environment-bar" aria-label="Environment"></div><div id="placement-bar" hidden><p><span id="placement-name"></span><span id="placement-hint"></span></p><div class="placement-buttons"><button class="sky-button" data-action="rotate-decor">↻ Rotate</button><button class="primary" data-action="confirm-place">✔ Place</button><button class="soft-button" data-action="cancel-decor" aria-label="Cancel">✕</button></div></div><div id="visit-banner" hidden></div>
@@ -382,7 +386,7 @@ const combat=new CombatSimulation({
   // The first own hit after a weapon swap does +20% (weapon-pair.ts); a pet's shot leaves the bonus waiting.
   hit:(target,impact)=>{const m=impact.helper?1:pair.takeBonus();if(m!==1)impact={...impact,amount:impact.amount*m};hit(target as Enemy,impact.amount,impact.stun,impact);},
   clearShot:(from,to)=>clearSegment(from,to,world.obstacles,{bounds:WORLD_BOUNDS,clearance:.05}),
-  effect:effect=>{castEffects?.push(effect);showEffect(effect);pondSplash.effect(effect);breakables.effect(effect);emitAction({kind:'effect',effect});},
+  effect:effect=>{castEffects?.push(effect);showEffect(effect);pondSplash.effect(effect);pokeEffect(effect);breakables.effect(effect);emitAction({kind:'effect',effect});},
   heal:fraction=>{if(!actionHandler)state.hp=Math.min(M.maxHp(state),state.hp+M.maxHp(state)*fraction);},
   execute:(target,fraction)=>executeEnemy(target as Enemy,fraction),
   status:(target,kind,duration)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){world.statusEnemy(target as Enemy,kind,duration);return;}if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
@@ -598,9 +602,70 @@ function updateHud() {
     for(const g of world.eyeGlints()){const p=world.screen(g.x,g.y,g.z),edge=world.screen(g.x+g.radius,g.y,g.z);if(p.front)holes.push(`radial-gradient(circle ${Math.max(18,Math.abs(edge.x-p.x))}px at ${p.x}px ${p.y}px, transparent 45%, black 100%)`);}
     dark.style.maskImage=holes.join(',');dark.style.maskComposite='intersect';}
 
-  // The prompt stays short (the target frame names the creature) so the biggest tappable thing on a phone stays small.
-  if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!e;$('#interact-text').textContent=t(e?e.kind==='enemy'?'Attack':e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'');}else $('#context-prompt').hidden=true;
+  updatePrompt();
 }
+// The context button (action-prompt.ts): a verb and an icon per thing, a short fade+slide in and out, and a target that stays
+// put while walking past others. The DOM is written only when the label changes. The prompt stays one short line so the biggest
+// tappable thing on a phone stays small. A ground ring (sharing the selection ring's mesh data) marks the thing it refers to.
+const promptFocus=new PromptFocus<Entity>();let promptAt=0,promptKey='',promptShown='',promptHide=0,focusRing:Mesh|null=null;
+const promptGap=(e:Entity)=>interactGap(e,world.position.x,world.position.z,world.facing),promptReach=(e:Entity)=>world.inReach(e);
+/** The thing the button refers to while it shows (F and the button act on it), else null. */
+function promptTarget(){return promptKey?promptFocus.target:null;}
+function updatePrompt(){
+  const now=performance.now(),dt=Math.min(.5,(now-promptAt)/1000),box=$('#context-prompt');promptAt=now;
+  if(!started||modal){promptFocus.reset();promptKey='';if(promptShown||!box.hidden){promptShown='';clearTimeout(promptHide);box.hidden=true;box.classList.remove('leaving');}placeFocusRing(null);attackFace('','');return;}
+  const e=promptFocus.step(dt,world.nearest()??null,promptReach,promptGap);let key='',icon='',text='';
+  if(e){const plot=e.kind==='plot'?world.state.plots[e.index!]:undefined,aid=(e as Entity&{activity?:string}).activity,act=aid?activity(aid):undefined; // house things carry their own verb (house-activities.ts)
+    const l=promptLabel(e,{plot:e.kind!=='plot'?undefined:!plot?.crop?'empty':M.cropProgress(plot)===1?'ripe':'growing',ready:e.kind==='animal'&&M.readyAnimals(state).some(a=>a.uid===e.animalUid),verb:act?{icon:act.icon,text:act.verb}:undefined});
+    icon=l.icon;text=t(l.text,{name:t(e.name)});key=icon+'|'+text;}
+  promptKey=key;
+  // Attack shows the thing's icon while a fresh press would use it. On a touch screen where the Attack button is shown, the big
+  // green button gives way to a small quiet label (hud-first.css .quiet: no tap target of its own) that says what Attack will do,
+  // and it shows only then; tapping the thing itself still uses it (world.select). Indoors and on a new save's calm HUD (no Attack
+  // button) and with a mouse, the big button stays.
+  const use=!!key&&e!.kind!=='enemy'&&attackUses(true);attackFace(use?icon:'',use?text:'');
+  const quiet=!!key&&coarsePointer.matches&&attackShown(),show=quiet?(use?key+'|q':''):key;
+  if(show!==promptShown){const was=promptShown;promptShown=show;clearTimeout(promptHide);
+    if(show){setText($('#interact-icon'),icon);$('#context-prompt kbd').dataset.icon=icon;/* touch shows the icon in the key's circle */setText($('#interact-text'),text);box.classList.toggle('quiet',quiet);box.classList.remove('leaving');if(box.hidden)box.hidden=false;else if(was)box.classList.remove('swap'),void box.offsetWidth,box.classList.add('swap');}
+    else{box.classList.add('leaving');promptHide=window.setTimeout(()=>{if(!promptShown){box.hidden=true;box.classList.remove('leaving');}},170);} // fades out (hud-first.css), then leaves the layout
+  }
+  placeFocusRing(key?e:null);
+}
+const coarsePointer=globalThis.matchMedia?.('(pointer: coarse)')??{matches:false};
+/** The Attack button (or the old pad's ⚔) is on screen. Read on the HUD tick only while there is a thing to use: the layout is already fresh then (measureHud follows). */
+function attackShown(){const pad=document.querySelector<HTMLElement>('#hud .attack-pad'),dpad=document.querySelector<HTMLElement>('#touch-controls [data-action="attack"]');return !!(pad&&pad.offsetWidth>0)||!!(dpad&&dpad.offsetWidth>0);}
+/** The marker on the ground under the button's thing: outdoors only (the house has its own highlight), not under creatures (their own marker) or ponds. */
+function placeFocusRing(e:Entity|null){
+  const show=!!e&&!world.interior&&e.kind!=='enemy'&&!e.pond&&!(world.ring.visible&&world.selected===e);
+  if(show&&!focusRing){focusRing=new Mesh(world.ring.geometry,world.ring.material);focusRing.rotation.x=-Math.PI/2;focusRing.renderOrder=world.ring.renderOrder;world.scene.add(focusRing);}
+  if(!focusRing)return;if(focusRing.parent!==world.scene)world.scene.add(focusRing);
+  if(focusRing.visible!==show)focusRing.visible=show;
+  if(show){const s=e!.kind==='plot'?e!.radius*.9:e!.radius;if(focusRing.position.x!==e!.x||focusRing.position.z!==e!.z)focusRing.position.set(e!.x,.1,e!.z);if(focusRing.scale.x!==s)focusRing.scale.setScalar(s);}
+}
+/** F and the button: the thing the button shows when it is still in reach, else the old nearest pick. */
+function interactPrompted(){const e=promptTarget();if(e&&world.inReach(e)){world.select(e);return true;}return world.interactNearest();}
+// Attack is also the "use" button (attack-intent.ts): a hostile creature targeted or in reach > the usable thing the context
+// button shows > a swing. Only a fresh press uses, never a held one, and not within half a second of the last swing.
+let lastSwingAt=-Infinity,lastUseAt=-Infinity;
+/** A living creature is targeted, or one is within the weapon's reach. No allocation: it runs on the HUD tick. */
+function hostileNear(){const s=world.selected;if(s?.kind==='enemy'&&(s as Enemy).hp>0)return true;const w=M.weaponStats(state),x=world.position.x,z=world.position.z;
+  for(const e of world.enemies)if(e.hp>0&&e.mesh.visible&&Math.hypot(e.x-x,e.z-z)<=attackRange(w,e.radius)+.5)return true;return false;}
+function attackUses(fresh:boolean){const p=promptTarget();return attackIntent({hostile:hostileNear(),usable:!!p&&p.kind!=='enemy'&&world.inReach(p),fresh,sinceSwing:(performance.now()-lastSwingAt)/1000})==='use';}
+/** A press of Attack (or F) that uses the thing beside the explorer instead of swinging: true when it was taken (the caller must not swing). */
+function useInstead(fresh:boolean){if(!started||uiBlocked()||!attackUses(fresh))return false;const now=performance.now();if(now-lastUseAt>400){lastUseAt=now;interactPrompted();}return true;} // a phone's late duplicate click of the same press is swallowed
+/** F on a PC: the same priority as the phone's Attack. Classic rules (jumping off): F never swings at nothing; it picks the nearest creature to walk to and fight. */
+function fKey(code:string){
+  if(useInstead(!world.jump?.airborne))return;
+  const hostile=hostileNear(),pick=()=>{const n=world.nearest();if(n?.kind==='enemy'){world.select(n);return true;}return false;};
+  if(!airOn()){if(hostile)basicAttack();else pick();return;}
+  if(world.jump?.airborne||hostile||!pick())attackDown('key:'+code);else attackHold.down('key:'+code); // F chose a creature (the explorer walks to it and attacks): holding F on is the hold too
+}
+/** The Attack button's face: the thing's icon while a press would use it, the fist otherwise (hud-first.css cross-fades). Written only on change. */
+let padUse='';
+function attackFace(icon:string,label:string){const key=icon?icon+'|'+label:'';if(key===padUse)return;padUse=key;
+  const pad=document.querySelector<HTMLElement>('#hud .attack-pad');if(pad){let face=pad.querySelector<HTMLElement>('.ap-use');if(!face){face=document.createElement('span');face.className='ap-use';face.setAttribute('aria-hidden','true');pad.append(face);}
+    if(icon)face.textContent=icon;pad.classList.toggle('use',!!icon);pad.setAttribute('aria-label',icon?label:t('Basic attack'));}
+  const dpad=document.querySelector<HTMLElement>('#touch-controls [data-action="attack"]');if(dpad){dpad.textContent=icon||'⚔';dpad.setAttribute('aria-label',icon?label:t('Basic attack'));}}
 // The zone banner is outlined text with a difficulty chip and no card (C2): it plays once for 2.8 s and never blocks taps.
 let zoneTimer=0;
 function showZone(name:string) {const info=zoneInfo(name,state.planet),banner=$('#zone-banner');$('#zone-name').textContent=t(name);$('#banner-name').textContent=t(name);$('#banner-detail').textContent=t(info.detail);$('#banner-chip').textContent=t(info.chip);banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');clearTimeout(zoneTimer);zoneTimer=window.setTimeout(()=>banner.classList.remove('show'),2800);}
@@ -630,7 +695,7 @@ const boxesMeet=(a:{left:number;right:number;top:number;bottom:number},b:{left:n
 const clearOfHud=(r:{left:number;right:number;top:number;bottom:number},panels:typeof hudPanels)=>!panels.some(p=>boxesMeet(p,r));
 function updateLabels() {
   if(!started)return;
-  if(hudFresh)hudFresh=false;else measureHud();const near=world.nearest(),candidates:{a:LabelAnchor;rank:number;distance:number}[]=[],active=new Set<string>();
+  if(hudFresh)hudFresh=false;else measureHud();const near=promptTarget(),candidates:{a:LabelAnchor;rank:number;distance:number}[]=[],active=new Set<string>();
   // Ripe crops wear happy faces now, so only the nearest ripe bed carries the 👆 badge: a full ripe garden no longer shows a badge over every crop.
   let nearestRipe:object|null=null;{let best=Infinity;for(const e of world.entities){if(e.kind!=='plot')continue;const plot=world.state.plots[e.index!];if(!plot?.crop||M.cropProgress(plot)<1)continue;const d=Math.hypot(e.x-world.position.x,e.z-world.position.z);if(d<best){best=d;nearestRipe=e;}}}
   for(const e of world.entities){
@@ -1060,6 +1125,21 @@ function mysteryGotAway(f:FishingRound){if(!f.mysteryOut)return;f.mysteryOut=fal
 const pondSplash=new PondSplash({root:()=>world.interior?null:world.scene,fx:()=>world.fx??null,now:()=>world.time,reduced:()=>!!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
   ponds:()=>world.interior?[]:world.outdoorEntities.filter(e=>e.kind==='fish'&&e.pond).map(e=>({id:e.id,x:e.x,z:e.z,r:e.pond!.rx,surface:e.pond!.surface,waterId:e.waterId??state.planet})),
   fish:species=>fishKit.ready?fishingView.makeFish(species):null,species:waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id]?.rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';}});
+// Swings and skills in the village get a harmless, playful answer (village-fun.ts): leaves shake from a tree, dust from a fence or a stall, hearts from a friend.
+const villageFun=new VillageFun(()=>world.fx??null,()=>world.time);
+/** What a swing may meet: the village trees, and the things standing about (not creatures, not ponds: pond-splash.ts answers those). Built per press only. */
+function pokeThings(){const out:PokeThing[]=[];for(const tr of world.villageTrees??[])out.push({id:tr.uuid,kind:'tree',x:tr.position.x,z:tr.position.z,r:.9,obj:tr});
+  for(const e of world.outdoorEntities)if(e.kind!=='enemy'&&e.kind!=='fish'&&e.mesh.visible)out.push({id:e.id,kind:e.kind==='friend'||e.kind==='animal'?'happy':'bump',x:e.x,z:e.z,r:e.kind==='plot'?.8:Math.min(e.radius,2.4)});return out;}
+/** A swing with no creature in reach: a pond at the edge splashes, else the thing in front answers, else the village fence. True when something answered. */
+function pokeScenery(reach:number){
+  if(world.interior)return false;const x=world.position.x,z=world.position.z,f=world.facing;
+  if(pondSplash.swing(x,z,f,reach))return true;
+  const thing=pokeTarget(pokeThings(),x,z,f,reach);if(thing)return villageFun.poke(thing,x,z);
+  const fence=world.planet==='home'?fencePoint(x,z,18,reach):null; // the fence has gaps at the four gates
+  if(fence&&Math.abs(Math.sin(2*Math.atan2(fence.z,fence.x)))>=.32)return villageFun.poke({id:'fence:'+Math.round(Math.atan2(fence.x,fence.z)*8),kind:'bump',x:fence.x,z:fence.z,r:.2},x,z);
+  return false;}
+/** A skill's area landing in the village shakes the trees it reaches. */
+function pokeEffect(e:CombatEffect){if(e.quiet||e.kind!=='ring'||!(e.radius>=1)||world.interior||!world.villageTrees?.length)return;for(const tr of world.villageTrees)if(Math.hypot(tr.position.x-e.x,tr.position.z-e.z)<=e.radius+.9)villageFun.poke({id:tr.uuid,kind:'tree',x:tr.position.x,z:tr.position.z,r:.9,obj:tr},e.x,e.z);}
 // Breakable trees and stones on the Ice planet (breakables.ts): solo the ledger here decides, online the server does.
 const breakables=mountBreakables({world,state:()=>state,online:()=>!!actionHandler,send:(id,source)=>emitAction({kind:'scenery',scenery:{id,source}}),addItem:(id,n)=>M.addItem(state,id as M.ItemId,n),changed:()=>{save();updateHud();},toast,tone,t:(k,v)=>t(k,v)});
 /** Attack with no creature in reach: the nearest breakable piece in front within the weapon's reach is struck (a swing, or a shot from a gun). */
@@ -1131,7 +1211,7 @@ const rodTip=new Vector3();
 const FAR_AWAY=new Vector3(1e4,0,1e4);
 function tipPosition(){const tip=world.player.getObjectByName('rod-tip');if(tip){world.player.updateWorldMatrix(true,true);tip.getWorldPosition(rodTip);}else rodTip.set(world.position.x,1.4,world.position.z);return rodTip;}
 function pondView(e:Entity):PondView{return {id:e.id,x:e.x,z:e.z,rx:e.pond!.rx,rz:e.pond!.rz,surface:e.pond!.surface,waterId:e.waterId??state.planet};}
-function stockPonds(){pondSplash.clear();fishingView.attach(world.scene);fishingView.populate(world.outdoorEntities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
+function stockPonds(){pondSplash.clear();villageFun.clear();fishingView.attach(world.scene);fishingView.populate(world.outdoorEntities.filter(e=>e.kind==='fish'&&e.pond).map(pondView),waterId=>(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).flatMap(([id,weight])=>Array(Math.max(1,Math.min(6,Math.round(weight/8)))).fill(id)),waterId=>{const pool=(M.FISH_WEIGHTS[waterId]??M.FISH_WEIGHTS.home).filter(([id])=>M.FISH[id].rarity!=='junk');return pool[Math.floor(Math.random()*pool.length)]?.[0]??'fish_carp';},pondStock);}
 // Rod fish follow the harpoon slots' species so picking up hunting gear by the shore keeps the pond's look.
 function pondStock(pond:PondView){const hunt=huntingPondAt(state.planet,pond.x,pond.z);return hunt?fishHuntTargets(hunt,0,state.hunting).map(t=>t.id):null;}
 const formatSize=(cm:number)=>cm>=100?`${(cm/100).toFixed(2).replace(/\.?0+$/,'')} m`:`${cm} cm`;
@@ -1807,6 +1887,7 @@ function basicAttack(e?:Enemy){
   // The dive is its own move: a press while falling from height starts it even while the last swing's cooldown still runs.
   if(!e&&world.jump?.airborne&&!world.jump.diving&&world.jump.falling&&world.jump.height>=DIVE.minHeight&&pressKind(world.jump)==='air'&&startDive())return;
   if(combatTimers.attackCooldown>0)return;
+  lastSwingAt=performance.now(); // a press right after this keeps swinging instead of using a thing (attack-intent.ts)
   // In the air: a press while falling is the dive; otherwise a quick, lighter swing (a whiff still swings).
   const jump=world.jump;
   if(jump?.airborne){
@@ -1827,8 +1908,8 @@ function basicAttack(e?:Enemy){
     tone(volt?'zap':weapon.kind==='gun'?'shoot':weapon.kind==='sword'?'swing':'punch');emitAction({kind:'basic',targetId:e?.id});}
   // Nothing in reach but a breakable tree or stone (breakables.ts): face it and strike it.
   else if(!e&&chopScenery()){/* struck */}
-  // Nothing in reach: the hero still swings (with jumping on), so the button never looks dead.
-  else if(!e&&airOn()){const weapon=M.weaponStats(state);if(weapon.kind!=='rod'){combatTimers.attackCooldown=(weapon.cd??.4)*.6;world.playerAttack(weapon.kind);tone('swing');}}
+  // Nothing in reach: the hero still swings (with jumping on), so the button never looks dead; a pond, a tree, a stall or a friend in front answers it (village-fun.ts).
+  else if(!e){const weapon=M.weaponStats(state);if(weapon.kind!=='rod'){const poked=pokeScenery(weapon.kind==='gun'?Math.min(10,weapon.range??8):Math.max(1.6,weapon.range??1)+.6);if(airOn()||poked){combatTimers.attackCooldown=(weapon.cd??.4)*.6;world.playerAttack(weapon.kind);tone('swing');}}}
 }
 world.onAttackEnemy=basicAttack;
 /** The tooltip and long-press tip of skill slot i, with the numbers at the current level (skill-info.ts). */
@@ -2177,7 +2258,7 @@ app.addEventListener('click',async event=>{
     case 'shop-rod':shopTab=rodShopTab;shopFocus='rod';if(IG.isFolded('shop','tool'))IG.toggleFold('shop','tool');go('shop');break;
     case 'wild':{closeDialog();const destinations:Record<string,[number,number]>={forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]};const kind=button.dataset.kind??'forest',destination=destinations[kind]??[0,-30],armed=wildArmed?.kind===kind&&Date.now()<wildArmed.until,route=wildRoute(destination,armed);world.walkTo(route.x,route.z);if(route.inside){wildArmed=null;toast('Follow the path beyond the garden gate.','🍄');}else{wildArmed={kind,until:Date.now()+45000};toast(wildDanger(state.level)?'Wild creatures ahead, and they come in packs! Get ready at the village edge, then choose this place on the map again to walk in.':'You are at the edge of the wild. Choose this place on the map again to walk in.','⚠️');}break;}
     case 'return-home':if(state.planet!=='home')flyHome();else{endFishing();huntingPending=null;movement.clear();closeDialog();world.position.set(0,0,0);world.destination=null;world.route=[];world.selected=null;world.pondTap=null;updateHunting(0);toast('Home, sweet home.','🏡');}break;
-    case 'interact':world.interactNearest();break;case 'attack':if(!airOn()||(event as MouseEvent).detail===0)basicAttack();break;/* with jumping on a pointer attacked as it went down (below), so that it can be held: this is the keyboard's press of the button */case 'jump':if(airOn()&&(event as MouseEvent).detail===0){jumpInput.down();jumpInput.up();}break;/* a pointer already jumped on the way down (below): this is the keyboard's press of the button */case 'skill':skill(index);break;
+    case 'interact':interactPrompted();break;case 'attack':if(!airOn()||(event as MouseEvent).detail===0){if(!useInstead(true))basicAttack();}break;/* with jumping on a pointer attacked as it went down (below), so that it can be held: this is the keyboard's press of the button */case 'jump':if(airOn()&&(event as MouseEvent).detail===0){jumpInput.down();jumpInput.up();}break;/* a pointer already jumped on the way down (below): this is the keyboard's press of the button */case 'skill':skill(index);break;
     case 'fish-again':fish(fishPond);break;
     case 'reel':if(fishGame){if(event.detail===0)fishGame.input.toggle();}else if(button.classList.contains('hunt'))void throwHarpoon();else if(button.classList.contains('cast'))fish(fishPond);break;
     case 'render-res':{const res=button.dataset.kind as ResolutionSetting;graphics.setResolution(res);world.applyGraphics(graphics.profile,graphics.ratio);await perform('settings',{settings:{renderRes:res}});settings();break;}
@@ -2267,7 +2348,7 @@ document.addEventListener('keydown',event=>{
   const spaceAction=jumpKeyAction(event.code||'',spaceKey,airOn());
   if(spaceAction==='jump'){event.preventDefault();if(!event.repeat){touchFight=false;jumpInput.down();}return;}
   if(event.repeat)return;
-  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=skillKeyIndex(key,state.settings.keyboardLayout,skillList().length);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m'){if(world.enemies.some(e=>e.hp>0&&aggro(e))){mapKeyHint();return;}map();}else if(key==='f'){if(!airOn())world.interactNearest();else if(world.jump?.airborne||!world.interactNearest())attackDown('key:'+event.code);else if(world.selected?.kind==='enemy')attackHold.down('key:'+event.code);/* F chose a creature (the explorer attacks it): holding F on is the hold too */}else if(handKey(key,airOn())==='eat')void quickEat();else if(handKey(key,airOn())==='attack')attackDown('key:'+event.code);else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();attackDown('key:'+event.code);}
+  const key=pressed.toLowerCase(),bindings=keyboardBindings(state.settings.keyboardLayout),skillIndex=skillKeyIndex(key,state.settings.keyboardLayout,skillList().length);if(placement&&key==='r'){rotatePlacement();return;}if(key==='i')inventory();else if(key===bindings.journal)quests();else if(key==='m'){if(world.enemies.some(e=>e.hp>0&&aggro(e))){mapKeyHint();return;}map();}else if(key==='f'){fKey(event.code);}else if(handKey(key,airOn())==='eat')void quickEat();else if(handKey(key,airOn())==='attack')attackDown('key:'+event.code);else if(skillIndex>=0){event.preventDefault();skill(skillIndex);}else if(spaceAction==='attack'){event.preventDefault();attackDown('key:'+event.code);}
 });
 // The keyboard guide counts game keys to learn when to fold itself (hud-keys.ts).
 window.addEventListener('keydown',event=>{if(started&&!uiBlocked()&&!event.repeat&&gameplayKey(event))keysGuide.used();});
@@ -2278,7 +2359,7 @@ document.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=
     // The slide: this same finger may go on to the attack toe or a skill toe for the air move (jump-rules.ts SlideCombo).
     if(e.pointerType!=='mouse'){slideCombo.begin(e.pointerId);try{target.setPointerCapture(e.pointerId);}catch{/* already captured */}}}if(target?.id==='reel-button'&&fishGame&&fishGame.input.ready){e.preventDefault();fishGame.input.pressPointer(e.pointerId);target.setPointerCapture(e.pointerId);}
   // The Attack button acts as the finger (or the mouse) lands, and may be held: it keeps attacking, and a charged power strike goes off after HOLD.time (stepHold). A finger that slides off ends the hold.
-  if(target?.dataset.action==='attack'&&started&&!uiBlocked()&&airOn()){e.preventDefault();attackPointers.add(e.pointerId);attackDown('pointer:'+e.pointerId);try{target.setPointerCapture(e.pointerId);}catch{/* already captured */}}});
+  if(target?.dataset.action==='attack'&&started&&!uiBlocked()&&airOn()){e.preventDefault();if(!useInstead(true)){attackPointers.add(e.pointerId);attackDown('pointer:'+e.pointerId);try{target.setPointerCapture(e.pointerId);}catch{/* already captured */}}}}); // beside a usable thing a fresh press uses it (attack-intent.ts)
 document.addEventListener('pointermove',e=>{if(attackPointers.has(e.pointerId)&&fightButtonAt(e.clientX,e.clientY)!=='attack'){attackPointers.delete(e.pointerId);attackHold.up('pointer:'+e.pointerId);}if(slideCombo.owns(e.pointerId))fireSlide(slideCombo.move(e.pointerId,fightButtonAt(e.clientX,e.clientY),performance.now()/1000));});
 const releasePointer=(e:PointerEvent)=>{if(slideCombo.owns(e.pointerId)){if(e.type==='pointerup'){slideCombo.move(e.pointerId,fightButtonAt(e.clientX,e.clientY),-1);fireSlide(slideCombo.release(e.pointerId));}else if(e.type==='pointercancel')slideCombo.cancel();}if(attackPointers.delete(e.pointerId))attackHold.up('pointer:'+e.pointerId);if(worldHold===e.pointerId){worldHold=null;attackHold.up('world');}gestures.up(e.pointerId,e.type!=='pointerup');movement.releasePointer(e.pointerId);if(jumpPointers.delete(e.pointerId)&&!jumpPointers.size)jumpInput.up();fishGame?.input.releasePointer(e.pointerId);};
 document.addEventListener('pointerup',releasePointer);document.addEventListener('pointercancel',releasePointer);document.addEventListener('lostpointercapture',releasePointer);
@@ -2313,7 +2394,7 @@ function frame(now:number){
   const weaponKind=M.weaponStats(state).kind;world.weaponKind=state.gear.weapon&&M.ITEMS[state.gear.weapon]?.weapon?.kind==='rod'?'rod':weaponKind;world.pose=combat.pose;world.invulnerable=combatTimers.invulnerable>0;world.fishTension=fishGame?.simulation.tension??0;
   questWalk.update(dt);autoAttack(weaponKind);
   updateHunting(dt);updateGuardian(dt);
-  pondSplash.update(dt);breakables.update(dt);fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);
+  pondSplash.update(dt);villageFun.update(dt);breakables.update(dt);fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);
   skillFx.update(dt);world.gazeAngle=skillFx.gazeAngle(world.player);
   if(!fishGame&&!$('#reel-button').hidden&&!$('#reel-button').classList.contains('hunt')&&(performance.now()>recastUntil||world.moving))showReel(false);
   // Resizing the WebGL canvas clears its drawing buffer. Apply automatic quality changes

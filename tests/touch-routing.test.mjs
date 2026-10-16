@@ -32,6 +32,7 @@ function fixture() {
     // main.ts attackDown: the press attacks at once and the hold begins.
     attackDown: source => { attackHold.down(source); attacks.push(source); }, slideCombo: { owns: () => false, cancel() {} }, airOn: () => true, started: true, flight: {}, arriving: false, spacePointer: null, boostHeld: false, boostPointers: new Set(), spaceKeys: new Set(), fishGame: null,
     movement, joystick: { clear: () => cleared.push('joystick') }, cancelLongPresses: () => cleared.push('longPress'), cancelButtonTouches() {}, mountTouchButtons() {}, gestures: { up() {}, clear() {} }, save() {}, uiBlocked: () => false,
+    useInstead: () => false, // nothing to use beside the pad here (attack-intent.ts has its own tests)
   });
   vm.runInContext(compile(flightRouting + '\n' + groundRouting), ctx);
   const fire = (target, type, pointerId = 1, extra = {}) => {
@@ -126,5 +127,5 @@ test('the Attack pad acts as the finger lands and is held; a tap, a slide off th
   f = fixture(); f.fire(pad, 'pointerdown', 1, { button: 2 }); assert.equal(f.attackHold.held, false); f.ctx.uiBlocked = () => true; f.fire(pad, 'pointerdown', 1); assert.deepEqual(f.attacks, []);
   // Switched off, the pad is the click button it always was: nothing on the way down.
   f = fixture(); f.ctx.airOn = () => false; f.fire(pad, 'pointerdown', 1); assert.deepEqual(f.attacks, []); assert.equal(f.attackHold.held, false);
-  assert.match(source, /case 'attack':if\(!airOn\(\)\|\|\(event as MouseEvent\)\.detail===0\)basicAttack\(\);break;/, 'the click that follows a pointer press does not attack twice; switched off it is the attack, as before');
+  assert.match(source, /case 'attack':if\(!airOn\(\)\|\|\(event as MouseEvent\)\.detail===0\)\{if\(!useInstead\(true\)\)basicAttack\(\);\}break;/, 'the click that follows a pointer press does not attack twice; switched off it is the attack, as before');
 });

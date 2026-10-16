@@ -187,7 +187,7 @@ export class World {
   position = new T.Vector3(0, 0, 1); destination: T.Vector3 | null = null; route: T.Vector3[] = [];
   selected: Entity | null = null; obstacles: Obstacle[] = []; particles: Particle[] = [];
   keys = new Set<string>(); facing = 0; moving = false; time = 0; zoom = 1; planet: PlanetId = 'home';
-  marker: T.Mesh; ring: T.Mesh; raycaster = new T.Raycaster(); plotMeshes: T.Group[] = []; cropSignatures: string[] = [];
+  marker: T.Mesh; ring: T.Mesh; /** The village's blossom trees (home only; empty elsewhere): a swing shakes them (village-fun.ts). */ villageTrees: T.Object3D[] = []; raycaster = new T.Raycaster(); plotMeshes: T.Group[] = []; cropSignatures: string[] = [];
   aim = new T.Vector3(); cameraTarget = new T.Vector3(); distanceToInteract = 2;
   /** While set, the camera follows this point (the starship) instead of the explorer. */
   cameraFocus: T.Vector3 | null = null;
@@ -462,11 +462,11 @@ export class World {
   kit(name: string) { return sceneryKit.ready ? sceneryKit.instance(name, KIT_TINTS[this.planet]) : null; }
   tree(x: number, z: number, scale = 1, pink = false, random = Math.random) {
     const model = this.kit(pink ? 'tree_blossom' : this.planet === 'ice' || this.planet === 'home' && zoneAt({x,z}) === 'forest' && Math.abs(x * 7 + z * 3) % 5 < 2 ? 'tree_pine' : 'tree_round');
-    if (model) { model.position.set(x, 0, z); model.scale.setScalar(scale); model.rotation.y = random() * 6; this.root.add(model); this.obstacle(x, z, scale * 0.55); return; }
+    if (model) { model.position.set(x, 0, z); model.scale.setScalar(scale); model.rotation.y = random() * 6; this.root.add(model); this.obstacle(x, z, scale * 0.55); return model; }
     const trunk = cyl('#95694b', 0.18, 0.3, 2.2, 0, 1.1);
     const colors = this.planet === 'home' ? pink ? ['#ec9eb7', '#f3b3c7', '#df8eaa'] : ['#78ad6a', '#8bbc78', '#6b9c64'] : this.planet === 'candy' ? ['#ef9fc1', '#f5ca98', '#c8a5dd'] : this.planet === 'ice' ? ['#d5edf2', '#add4dc', '#eff8ef'] : this.planet === 'shadow' ? ['#8b80b1','#a398c5','#706694'] : this.planet === 'lava' ? ['#9d736e','#b08972','#866168'] : ['#5b9a74','#75ac7b','#498360'];
     const tree = group(trunk, ball(colors[0], 1.5, 0, 3), ball(colors[1], 1.1, -0.7, 2.75, 0.5), ball(colors[2], 1.15, 0.65, 2.75, -0.2));
-    tree.position.set(x, 0, z); tree.scale.setScalar(scale); tree.rotation.y = random() * 6; this.root.add(tree); this.obstacle(x, z, scale * 0.55);
+    tree.position.set(x, 0, z); tree.scale.setScalar(scale); tree.rotation.y = random() * 6; this.root.add(tree); this.obstacle(x, z, scale * 0.55); return tree;
   }
   flower(x: number, z: number, color: string, scale = 1) {
     const cluster = this.kit('flowers');
@@ -646,7 +646,7 @@ export class World {
     if(this.interior){const inside=this.interior;this.interior=null;inside.drop();}
     this.farmView?.dispose();this.farmView=undefined;this.titanView?.clear();this.joystickInput=null;
     this.disposeTree(this.root);this.scene.remove(this.root);this.root=new T.Group();this.scene.add(this.root);
-    this.entities=[];this.enemies=[];this.obstacles=[];this.dynamicObstacles=[];this.plotMeshes=[];this.cropSignatures=[];this.planet=planet;
+    this.entities=[];this.enemies=[];this.obstacles=[];this.dynamicObstacles=[];this.plotMeshes=[];this.cropSignatures=[];this.villageTrees=[];this.planet=planet;
     this.destination=null;this.route=[];this.selected=null;this.ring.visible=false;this.marker.visible=false;this.gateHits=0;
     for(const shot of this.enemyShots??[]){this.scene.remove(shot.mesh);shot.mesh.geometry.dispose();}this.enemyShots=[];
     this.environment=new EnvironmentSimulation(createEnvironmentLayout(planet));this.environmentView=new EnvironmentView(this.environment.layout);
@@ -672,7 +672,7 @@ export class World {
         for(const d of [-.6,0,.6])this.obstacle(Math.cos(a)*18-Math.sin(a)*d,Math.sin(a)*18+Math.cos(a)*d,.42);
       }
       for(let i=0;i<4;i++){const a=i*Math.PI/2,g=this.kit('gate')??group(cyl('#b18c59',.14,.14,3.1,-1.7,1.55),cyl('#b18c59',.14,.14,3.1,1.7,1.55),box('#edc57a',3.75,.2,.2,0,3));g.position.set(Math.cos(a)*18,0,Math.sin(a)*18);g.rotation.y=-a-Math.PI/2;this.root.add(g);}
-      for(const [x,z] of [[-13,-8],[-14,7],[3,-13],[10,-11],[14,5],[-2,15]])this.tree(x,z,.75,true,rng);
+      this.villageTrees=[[-13,-8],[-14,7],[3,-13],[10,-11],[14,5],[-2,15]].map(([x,z])=>this.tree(x,z,.75,true,rng)); // kept: a swing shakes them (village-fun.ts)
       // The home pond first, so the stones and fence-side bushes below keep off its water.
       this.makePond(-7.5,11.2,3.3);
       // Stepping-stone trails lead from the cottage to the four gates.
@@ -1362,6 +1362,8 @@ export class World {
   /** The thing the context button acts on: the current target while it is still in reach (so the prompt and the target frame agree and a press never swaps creatures mid-fight), else the nearest valid entity in reach. */
   nearest() {const s=this.selected,kept=s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2?s:null;/* The cottage door wins over a helper standing in front of it (a friend coming out used to take the Interact button, so the house seemed locked). */const gap=(e:Entity)=>interactGap(e,this.position.x,this.position.z,this.facing);const best=this.entities.filter(e=>this.validTarget(e)).sort((a,b)=>gap(a)-gap(b)).find(e=>Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.radius+2);/* A pond the explorer stands at or faces (interact-pick.ts) also beats a bed selected earlier. */if(kept&&!(best&&best!==kept&&best.kind==='fish'&&gap(best)<gap(kept)))return kept;return best;}
   /** True when something was in reach to act on. */
+  /** The context button's thing is still usable and in reach (action-prompt.ts); a little looser than nearest() so it does not flicker on the edge. */
+  inReach(e:Entity) {return this.validTarget(e)&&Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.radius+2.3;}
   interactNearest() {const e=this.nearest();if(e)this.select(e);return !!e;}
   burst(x:number,z:number,color:string,count=14) {
     if(this.fx){this.fx.burst({x,z},{n:count,color:[color,'#ffffff'],speed:4,up:5,size:.13});this.fx.burst({x,z},{n:Math.ceil(count/2),color,glow:true,size:.12,speed:3,up:4,life:.5});return;}
