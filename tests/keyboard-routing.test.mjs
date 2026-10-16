@@ -12,7 +12,7 @@ import {AttackHold,HOLD} from '../src/five-rules.ts';
 const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
 const ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
 const registration=ast.statements.filter(node=>ts.isExpressionStatement(node)&&/^(?:document\.addEventListener\('(keydown|keyup|visibilitychange)'|window\.addEventListener\('blur')/.test(node.getText(ast))).map(node=>node.getText(ast)).join('\n');
-const cleanup=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='clearHeldInput').getText(ast);
+const cleanup=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='clearHeldInput').getText(ast)+'\n'+ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='fKey').getText(ast);
 const compiled=ts.transpileModule(cleanup+'\n'+registration,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
 
 function target(kind='body'){
@@ -24,7 +24,8 @@ function fixture(layout='classic'){
   const state={settings:{keyboardLayout:layout}},movement=new Controls.MovementControls(keys);
   const jumpInput=new JumpInput(),attackHold=new AttackHold();
   const ctx=vm.createContext({...Controls,controls:{bindingKey,translate:(key,code)=>({key,code}),jumpUp:()=>false},jumpKeyAction,jumpInput,attackHold,attackPointers:new Set(),worldHold:null,skills:4,skillList:()=>Array.from({length:ctx.skills},()=>({})),jumpPointers:new Set(),slideCombo:{cancel(){}},air:true,airOn:()=>ctx.air,spaceKey:'jump',state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
-    world:{keys,interactNearest:()=>calls.push(['interact'])},document:{hidden:false,activeElement:body,addEventListener:(name,fn)=>register(documentHandlers,name,fn),querySelector:selector=>selector==='dialog[open]'&&ctx.nativeDialog?{}:null},window:{addEventListener:(name,fn)=>register(windowHandlers,name,fn)},
+    usable:true,hostile:false,useInstead:fresh=>{if(ctx.usable&&fresh){calls.push(['interact']);return true;}return false;},hostileNear:()=>ctx.hostile,
+    world:{keys,nearest:()=>null,select:()=>calls.push(['select'])},document:{hidden:false,activeElement:body,addEventListener:(name,fn)=>register(documentHandlers,name,fn),querySelector:selector=>selector==='dialog[open]'&&ctx.nativeDialog?{}:null},window:{addEventListener:(name,fn)=>register(windowHandlers,name,fn)},
     previous:0,performance:{now:()=>12345},graphics:{sample:(...args)=>calls.push(['graphicsSample',...args])},
     $:()=>({querySelectorAll:()=>[]}),uiBlocked:()=>!!ctx.modal||ctx.nativeDialog,
     tryLanding:()=>calls.push(['land']),cancelPlacement:()=>{calls.push(['cancelPlacement']);ctx.placement=null;},confirmPlacement:()=>calls.push(['place']),rotatePlacement:()=>calls.push(['rotate']),
@@ -108,10 +109,10 @@ test('Space jumps by default and F attacks when nothing is in reach; the old way
   const f=fixture('wasd');
   assert.equal(f.fire('keydown','Space').defaultPrevented,true);assert.equal(f.jumpInput.held,true);assert.deepEqual(f.calls,[],'Space no longer attacks');
   f.fire('keydown','Space',' ',{repeat:true});f.fire('keyup','Space');assert.equal(f.jumpInput.held,false);
-  // F is interact first (the stub finds something), and the basic attack when nothing is in reach or the explorer is in the air.
+  // F uses the thing beside the explorer first (the shared Attack rule, attack-intent.ts), and is the basic attack when there is nothing to use, a creature is near, or the explorer is in the air.
   f.fire('keydown','KeyF');assert.deepEqual(f.calls,[['interact']]);
-  f.ctx.world.interactNearest=()=>false;f.fire('keydown','KeyF');assert.deepEqual(f.calls,[['interact'],['attack']]);
-  f.ctx.world.jump={airborne:true};f.ctx.world.interactNearest=()=>{throw new Error('no interacting in the air');};f.fire('keydown','KeyF');assert.deepEqual(f.calls.at(-1),['attack']);
+  f.ctx.usable=false;f.fire('keydown','KeyF');assert.deepEqual(f.calls,[['interact'],['attack']]);
+  f.ctx.usable=true;f.ctx.world.jump={airborne:true};f.fire('keydown','KeyF');assert.deepEqual(f.calls.at(-1),['attack'],'no using in the air');
   f.fire('keydown','ShiftLeft','Shift');assert.equal(f.jumpInput.held,false,'Left Shift does nothing while Space jumps');
   const old=fixture('classic');old.ctx.spaceKey='attack';
   assert.equal(old.fire('keydown','Space').defaultPrevented,true);assert.deepEqual(old.calls,[['attack']]);assert.equal(old.jumpInput.held,false);
@@ -127,7 +128,7 @@ test('with jumping on N is a second basic attack for the right hand and H still 
     f.fire('keydown','KeyH');assert.deepEqual(f.calls,[['attack'],['eat']],layout+': H eats');
     f.fire('keydown','KeyN','n',{repeat:true});f.fire('keydown','KeyH','h',{repeat:true});f.fire('keydown','KeyN','n',{ctrlKey:true});assert.equal(f.calls.length,2);
     // H attacks in the air too, and never interacts; F and Space keep their jobs.
-    f.ctx.world.jump={airborne:true};f.ctx.world.interactNearest=()=>{throw new Error('N never interacts');};f.fire('keydown','KeyN');assert.deepEqual(f.calls.at(-1),['attack']);
+    f.ctx.world.jump={airborne:true};f.ctx.useInstead=()=>{throw new Error('N never interacts');};f.fire('keydown','KeyN');assert.deepEqual(f.calls.at(-1),['attack']);
     f.ctx.modal='settings';f.fire('keydown','KeyN');f.fire('keydown','KeyH');assert.equal(f.calls.length,3,'not under a menu');
     assert.equal(f.jumpInput.held,false);assert.equal(f.keys.size,0);
   }
@@ -142,7 +143,8 @@ test('with jumping switched off H eats as before and G does nothing, in both lay
 test('with jumping switched off the keys are the ones from before: Space attacks, F only interacts, nothing jumps',()=>{
   const f=fixture('wasd');f.ctx.air=false;
   assert.equal(f.fire('keydown','Space').defaultPrevented,true);assert.deepEqual(f.calls,[['attack']]);assert.equal(f.jumpInput.held,false);
-  f.ctx.world.interactNearest=()=>{f.calls.push(['interact']);return false;};f.fire('keydown','KeyF');assert.deepEqual(f.calls,[['attack'],['interact']],'F never attacks');
+  f.ctx.usable=false;f.ctx.world.nearest=()=>{f.calls.push(['interact']);return null;};f.fire('keydown','KeyF');assert.deepEqual(f.calls,[['attack'],['interact']],'F never swings at nothing: it looks for a creature to walk to');
+  f.ctx.hostile=true;f.fire('keydown','KeyF');assert.deepEqual(f.calls.at(-1),['attack'],'a creature in reach: F hits it');
   f.fire('keydown','ShiftLeft','Shift');assert.equal(f.jumpInput.held,false);f.ctx.spaceKey='attack';f.fire('keydown','ShiftLeft','Shift');assert.equal(f.jumpInput.held,false,'not even with the old-way choice saved');
 });
 
@@ -160,16 +162,22 @@ test('G is free, and so is the fourth skill key while there are three specials; 
 
 test('holding an attack key holds the attack (F, N, or Space when it attacks); the release, a blur or a menu ends it; switched off nothing is held',()=>{
   for(const [code,setup] of [['KeyN',()=>{}],['KeyF',()=>{}],['Space',f=>{f.ctx.spaceKey='attack';}]]){
-    const f=fixture('wasd');f.ctx.world.interactNearest=()=>false;setup(f);
+    const f=fixture('wasd');f.ctx.usable=false;setup(f);
     f.fire('keydown',code);assert.deepEqual(f.calls,[['attack']],code+' attacks as it goes down');assert.equal(f.attackHold.held,true,code+' is held');
     f.fire('keydown',code,undefined,{repeat:true});assert.equal(f.calls.length,1,'the repeat of the key itself does nothing: the hold repeats (main.ts stepHold)');
     assert.equal(f.attackHold.step(HOLD.time/2,true),'fill');f.fire('keyup',code);assert.equal(f.attackHold.held,false);assert.equal(f.attackHold.step(1,true),null,'released early: no strike');
     f.fire('keydown',code);assert.equal(f.attackHold.held,true);for(const handler of f.windowHandlers.get('blur'))handler();assert.equal(f.attackHold.held,false,'a blur lets go');
   }
   // Two keys at once: the hold lasts until both are up.
-  const two=fixture('wasd');two.ctx.world.interactNearest=()=>false;two.fire('keydown','KeyF');two.fire('keydown','KeyN');two.fire('keyup','KeyF');assert.equal(two.attackHold.held,true);two.fire('keyup','KeyN');assert.equal(two.attackHold.held,false);
-  // F with something to interact with interacts and holds nothing.
-  const near=fixture('wasd');near.ctx.world.interactNearest=()=>true;near.fire('keydown','KeyF');assert.deepEqual(near.calls,[]);assert.equal(near.attackHold.held,false);
+  const two=fixture('wasd');two.ctx.usable=false;two.fire('keydown','KeyF');two.fire('keydown','KeyN');two.fire('keyup','KeyF');assert.equal(two.attackHold.held,true);two.fire('keyup','KeyN');assert.equal(two.attackHold.held,false);
+  // F with something to use uses it and holds nothing.
+  const near=fixture('wasd');near.fire('keydown','KeyF');assert.deepEqual(near.calls,[['interact']]);assert.equal(near.attackHold.held,false);
   // Switched off: Space attacks once, as before, and nothing is held.
   const off=fixture('wasd');off.ctx.air=false;off.fire('keydown','Space');assert.deepEqual(off.calls,[['attack']]);assert.equal(off.attackHold.held,false);
+});
+
+test('a custom key for Interact (Settings > Controls > Keys) follows the same Attack rule as F: use beside a thing, else attack', () => {
+  const f = fixture('wasd'); f.ctx.controls = { ...f.ctx.controls, translate: (key, code) => key === 'x' ? { key: 'f', code: 'KeyF' } : { key, code } };
+  f.fire('keydown', 'KeyX'); assert.deepEqual(f.calls, [['interact']], 'the custom key uses the workshop');
+  f.ctx.usable = false; f.fire('keydown', 'KeyX'); assert.deepEqual(f.calls.at(-1), ['attack'], 'and swings when there is nothing to use');
 });

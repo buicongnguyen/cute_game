@@ -33,7 +33,7 @@ function fixture() {
     innerWidth: 1280, innerHeight: 720, network: { role: null },
     ship: { update: noop }, gestures: { update: noop }, joystick:{update:noop},combatTimers: { advance: noop }, stepFight: noop,
     combat: { update: noop, statuses: {}, airborne: 0, projectiles: [], allies: [], pose: 'idle' },
-    combatView: { update: noop }, fishingView: { update: noop, active: false }, pondSplash: { update: noop }, breakables: { update: noop }, rodTip: {}, skillFx: { disguises: new DisguiseFx({ground:()=>0,explorerAt:()=>null}), boulders, update: noop, gazeAngle: () => null },
+    combatView: { update: noop }, fishingView: { update: noop, active: false }, pondSplash: { update: noop }, villageFun: { update: noop }, breakables: { update: noop }, rodTip: {}, skillFx: { disguises: new DisguiseFx({ground:()=>0,explorerAt:()=>null}), boulders, update: noop, gazeAngle: () => null },
     uiBlocked: () => context.blocked,
     world: {
       time: 0, player: { position: { y: 0 } }, position: { x: 0, z: 0 },

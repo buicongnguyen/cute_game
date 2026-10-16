@@ -103,6 +103,13 @@ export class PondSplash {
   /** The power strike (main.ts releasePower). */
   power(shape: PowerShape, level: number, at: { x: number; z: number }, facing: number) { const ponds = this.host.ponds(); if (ponds.length) this.splash(powerHits(ponds, shape, level, at, facing)); }
 
+  /** A plain swing at the water's edge (main.ts, a swing with no creature in reach): `reach` m ahead along `facing`. True when a pond splashed. */
+  swing(x: number, z: number, facing: number, reach: number) {
+    const ponds = this.host.ponds(), ax = x + Math.sin(facing) * reach * .6, az = z + Math.cos(facing) * reach * .6, before = this.count;
+    for (const pond of ponds) if (ringTouches(pond, ax, az, reach * .6)) { this.splash([{ pond, ...waterPoint(pond, ax, az) }]); break; }
+    return this.count > before;
+  }
+
   private splash(hits: SplashHit[]) {
     const fx = this.host.fx(); if (!fx || !hits.length) return;
     const now = this.host.now(), reduced = this.host.reduced(), low = fx.density <= .5, rnd = this.host.random ?? Math.random;

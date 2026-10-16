@@ -44,7 +44,7 @@ test('the whole Vietnamese pack is unchanged: same keys, same text (plus the ful
   const now = plain(VI_PACK), expected = { ...snapshot.pack, ...snapshot.tables.MOBILE_SUPPORT_VI } as Record<string, string>;
   for (const [key, value] of Object.entries(expected)) assert.equal(now[key], value, `changed or missing: ${key}`);
   const added = Object.keys(now).filter(key => !(key in expected));
-  assert.ok(added.length < 800, `unexpected growth of the pack: ${added.length} new strings`);
+  assert.ok(added.length < 900, /* raised from 800: the context button verbs (vi-prompt.ts) on top of the controls, tips and pickup strings */ `unexpected growth of the pack: ${added.length} new strings`);
 });
 
 // Vietnamese letters: Latin-1 and Latin Extended accents plus the Latin Extended Additional block (all the tone marks).

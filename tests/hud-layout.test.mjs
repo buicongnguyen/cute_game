@@ -525,6 +525,41 @@ for (const [size, lang] of [['1280x720', 'en'], ['390x844', 'vi'], ['320x568', '
   });
 }
 
+// Attack is also the use button (attack-intent.ts, action-prompt.ts): beside the workshop with nothing hostile near, the Attack pad wears the
+// workshop's icon and a fresh press opens it. On a touch screen the green prompt becomes a quiet label that takes no taps (Attack does the job);
+// with a mouse the big button stays. Stepping away puts the fist back.
+for (const size of ['390x844', '1600x900']) {
+  test(`Attack uses the workshop beside you at ${size}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 120000 }, async () => {
+    const [width, height, touch] = SIZES[size];
+    const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+    try {
+      const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: touch ? 2 : 1, hasTouch: touch, isMobile: touch });
+      await context.addInitScript(([s]) => { try { localStorage.setItem('cute-game-save-v1', s); localStorage.setItem('cute-game-slot', '0'); localStorage.setItem('cute-game-language', 'en'); localStorage.setItem('cute-game-tutorial', 'done'); localStorage.setItem('zoo-colossus-sleeps', 'asleep'); } catch { /* storage blocked */ } }, [fullSave]);
+      const page = await context.newPage();
+      await page.routeWebSocket(socketUrl => new URL(socketUrl).searchParams.has('token'), () => {});
+      await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await page.waitForSelector('[data-action="start"]', { timeout: 60000 });
+      await page.evaluate(() => document.querySelector('[data-action="start"]').click());
+      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(6000);
+      await page.evaluate(() => { document.querySelectorAll('dialog[open]').forEach(d => d.close()); (document.querySelector('#dialog-layer [data-action="close"]') || document.querySelector('#dialog-close'))?.click(); });
+      const stand = (x, z) => page.evaluate(([x, z]) => { const w = __zoo.world; w.selected = null; w.destination = null; w.route = []; w.position.set(x, 0, z); w.facing = 0; w.cameraTarget.copy(w.position); __zoo.pinHero?.({ x, z }); setInterval(() => { __zoo.state.hp = Math.max(__zoo.state.hp, 999); }, 100); }, [x, z]);
+      const look = () => page.evaluate(() => { const pad = document.querySelector('#hud .attack-pad'), box = document.querySelector('#context-prompt'), b = box.querySelector('button'), cs = getComputedStyle(b);
+        return { use: pad.classList.contains('use'), icon: pad.querySelector('.ap-use')?.textContent ?? '', aria: pad.getAttribute('aria-label'), shown: !box.hidden, quiet: box.classList.contains('quiet'), taps: cs.pointerEvents !== 'none', font: parseFloat(getComputedStyle(document.querySelector('#interact-text')).fontSize), text: document.querySelector('#interact-text').textContent }; });
+      await stand(5.5, 4.6); await page.waitForTimeout(1500);
+      const near = await look();
+      assert.equal(near.use, true, 'the pad wears the action'); assert.equal(near.icon, '🔨'); assert.equal(near.aria, 'Open workshop');
+      assert.equal(near.shown, true); assert.equal(near.text, 'Open workshop'); assert.ok(near.font >= 11, `readable (${near.font}px)`);
+      assert.equal(near.quiet, touch, touch ? 'a quiet label on the phone' : 'the big button with a mouse'); assert.equal(near.taps, !touch, 'the quiet label takes no taps');
+      const pad = page.locator('#hud .attack-pad');
+      if (touch) await pad.tap(); else await pad.click();
+      await page.waitForFunction(() => { const d = document.querySelector('#dialog-layer'); return !!d && !d.hidden; }, null, { timeout: 5000 });
+      await page.evaluate(() => (document.querySelector('#dialog-layer [data-action="close"]') || document.querySelector('#dialog-close'))?.click()); await page.waitForTimeout(400);
+      await stand(0, 4); await page.waitForTimeout(1500);
+      const away = await look(); assert.equal(away.use, false, 'nothing to use: the fist is back'); assert.equal(away.aria, 'Basic attack');
+    } finally { await browser.close(); }
+  });
+}
+
 // Settings > Controls (controls-ui.ts): Large buttons with the skills on the left, faded, stay clear of the HUD on every
 // screen measured above; a custom layout is placed, a layout over the map falls back to the default, and modes keep theirs.
 for (const [name, view] of Object.entries(VIEWS)) {

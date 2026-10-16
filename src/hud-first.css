@@ -14,3 +14,27 @@
 #dialog-body .fold-more:hover { background: rgba(255, 244, 210, .95); }
 /* The News inbox shows a quiet dot for unread announcements; red numbers are for things to collect (news-inbox-ui.ts). */
 #app #hud .icon-button > i.inbox-count.inbox-dot { min-width: 12px; width: 12px; height: 12px; padding: 0; right: -2px; top: -2px; }
+/* The context button (action-prompt.ts): a short fade + slide in, a fade out, a soft pop when it moves to another thing. */
+#context-prompt button { animation: prompt-in .15s ease-out; transition: transform .12s, filter .12s, box-shadow .12s, background .12s, opacity .17s ease-in, translate .17s ease-in; }
+#context-prompt.leaving button { opacity: 0; translate: 0 8px; pointer-events: none; }
+#context-prompt.swap button { animation: prompt-swap .16s ease-out; }
+@keyframes prompt-in { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
+@keyframes prompt-swap { from { opacity: .55; scale: .96; } to { opacity: 1; scale: 1; } }
+#interact-icon { flex: none; font-style: normal; font-size: 1.15em; line-height: 1; }
+#interact-icon:empty { display: none; }
+@media (prefers-reduced-motion: reduce) { #context-prompt button, #context-prompt.swap button { animation: none; } }
+/* Touch screens have no F key: the verb's icon takes the 👆 hint's place in the white circle. */
+@media (pointer: coarse) {
+  #context-prompt kbd[data-icon]::before { content: attr(data-icon); }
+  #interact-icon { display: none; }
+}
+/* Touch, with the Attack button shown: the big green button becomes a small quiet label of what Attack will do (main.ts updatePrompt).
+   It takes no taps (Attack, or a tap on the thing itself, does the job), so it is not a touch target of its own. */
+#context-prompt.quiet button { pointer-events: none; gap: 5px; padding: 2px 11px 2px 2px; border: 0; background: rgba(58, 36, 51, .66); box-shadow: none; color: #fff6e0; font-size: 12px; font-weight: 800; text-shadow: none; }
+#context-prompt.quiet kbd { width: 22px; height: 22px; background: rgba(255, 246, 224, .94); }
+#context-prompt.quiet kbd::before { font-size: 13px; }
+/* Attack as the use button (attack-intent.ts): the thing's icon cross-fades over the fist while a press would use it. */
+body.air-combat #app #hud .attack-pad > .ap-use { display: grid; place-items: center; position: absolute; inset: 0; z-index: 2; font-size: 30px; line-height: 1; opacity: 0; scale: .7; pointer-events: none; transition: opacity .14s, scale .14s; }
+body.air-combat #app #hud .attack-pad.use > .ap-use { opacity: 1; scale: 1; }
+body.air-combat #app #hud .attack-pad > svg { transition: opacity .14s, scale .14s; }
+body.air-combat #app #hud .attack-pad.use > svg { opacity: 0; scale: .7; }

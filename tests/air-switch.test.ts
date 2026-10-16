@@ -36,7 +36,9 @@ test('off: the keys are the old ones (Space attacks, nothing jumps) whatever the
     [['Move', 'W A S D'], ['Basic attack', 'Space'], ['Skills', 'J K L ;'], ['Interact', 'F'], ['Journal', 'P'], ['Backpack', 'I'], ['Eat', 'H'], ['Map', 'M']]);
   assert.match(main, /keysGuide\.render\(state\.settings\.keyboardLayout,getLanguage\(\),airOn\(\)\?spaceKey:undefined,controls\.customKeys\(\)\)/);
   assert.match(main, /const spaceAction=jumpKeyAction\(codeIn,spaceKey,airOn\(\)\);/ /* codeIn: event.code unless a custom key (Settings > Controls > Keys) stands for a preset key */);
-  assert.match(main, /else if\(key==='f'\)\{if\(!airOn\(\)\)world\.interactNearest\(\);/, 'F is interact only, as before');
+  // F asks the shared Attack rule first (attack-intent.ts); switched off it never swings at nothing: it uses the thing beside you, hits a creature in reach, or picks one to walk to.
+  assert.match(main, /else if\(key==='f'\)\{fKey\(event\.code\);\}/);
+  assert.match(main, /if\(!airOn\(\)\)\{if\(hostile\)basicAttack\(\);else pick\(\);return;\}/, 'F is interact only, as before');
   // H is Eat, as before, and G does nothing.
   assert.equal(eatKey(false), 'h'); assert.equal(handKey('h', false), 'eat'); assert.equal(handKey('g', false), '');
 });
