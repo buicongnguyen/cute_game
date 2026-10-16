@@ -77,7 +77,7 @@ test('each save profile has its own "resume indoors" flag', () => {
 
 test('Start fresh offers the welcome again at once', () => {
   const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
-  assert.match(main, /case 'reset':\{[^\n]*closeDialog\(\);if\(state\.welcome==='pending'\)welcomeDialog\(\);/);
+  assert.match(main, /case 'reset':\{[^\n]*closeDialog\(\);if\(welcomeCardsDue\(state\)\)welcomeCards\.show\(\);/);
   const s = M.newGame(); s.welcome = 'done'; act(s, 'reset'); assert.equal(s.welcome, 'pending');
 });
 

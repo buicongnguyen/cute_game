@@ -62,15 +62,24 @@ export function rescue(s: M.SaveState, id: FriendId, now = Date.now()): boolean 
   if (!FRIEND_IDS.includes(id) || cageState(s, id) !== 'open' || s.planet !== CAGES[id].planet) return false;
   (s.friends ??= []).push({ id, role: FRIENDS[id].role, rescuedAt: now, gear: {}, home: false, borrowed: true, look: HELPER_LOOK }); return true;
 }
-/** Welcome gift for a new game: the cook joins at once; `take` also gives the 10,000 energy she "won in the lottery". False when already settled. */
 /** Every helper is a girl: small (half the explorer's height) when freed, growing up with the days and jobs (growth.ts). */
 export const HELPER_LOOK = 'girl-chibi-none-bare' as const;
 export const WELCOME_ENERGY = 10_000;
+/** Settles the welcome: the cook joins; `take` also gives the 10,000 energy. False when already settled. Kept as an action for older clients; the game now gives it after the first harvest (firstHarvestGift). */
 export function welcomeStart(s: M.SaveState, take: boolean, now = Date.now()): boolean {
   if (s.welcome !== 'pending' || typeof take !== 'boolean') return false;
   if (!friendOf(s, 'pepper')) (s.friends ??= []).push({ id: 'pepper', role: 'cook', rescuedAt: now, gear: {}, home: true, borrowed: true, look: HELPER_LOOK });
   if (take && Number.isSafeInteger(s.energy + WELCOME_ENERGY)) s.energy += WELCOME_ENERGY;
   s.welcome = 'done'; return true;
+}
+/**
+ * The cook's gift is the first harvest's reward (FIX-PLAN 4.6, owner's choice): no offer at the start any more; the harvest
+ * action (actions.ts, the server runs the same) calls this after a harvest by the explorer's own hand. Pepper joins and hands
+ * over the 10,000 energy she "won in the lottery". A save that already decided keeps what it chose; an older save that
+ * never answered the old offer ('pending') gets it on its next harvest. Once only: it settles `welcome`.
+ */
+export function firstHarvestGift(s: M.SaveState, now = Date.now()): boolean {
+  return s.welcome === 'pending' && s.counters.harvests > 0 && welcomeStart(s, true, now);
 }
 /**
  * The cook's change of clothes after a visit home: a random hat, outfit and boots from what the explorer has obtained

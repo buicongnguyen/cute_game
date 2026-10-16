@@ -148,14 +148,14 @@ function run(place: { planet: string; indoors: boolean; x: number; z: number }) 
   const effects: string[] = [];
   const fx = { burst: () => effects.push('burst'), orbs: () => effects.push('orbs'), text: () => effects.push('text'), ring: () => effects.push('ring') };
   const world = { planet: place.planet, interior: place.indoors ? {} : null, position: new T.Vector3(place.x, 0, place.z), entities: [{ kind: 'plot', index: 0, x: -4, z: 6 }, { kind: 'chest', x: 3, z: 3 }] as Entity[], fx, syncCrops() {} };
-  const ctx = vm.createContext({ M, HARVEST, setTimeout: (run: () => void) => run(), state, world, t, tone: () => effects.push('tone'), explorerAway, showsGain, applyGameAction, change: (f: () => unknown) => f(), actionHandler: null, helperPending: new Set(), perform: async () => null });
+  const ctx = vm.createContext({ M, HARVEST, setTimeout: (run: () => void) => run(), state, world, t, tone: () => effects.push('tone'), gainItem: () => effects.push('gain'), gainStat: () => effects.push('stat'), explorerAway, showsGain, applyGameAction, change: (f: () => unknown) => f(), actionHandler: null, helperPending: new Set(), perform: async () => null });
   const api = vm.runInContext(compiled, ctx) as { harvestBurst(i: number, crop: string, source?: string): void; helperAction(kind: string, i: number): unknown };
   return { state, effects, api };
 }
 test('a helper harvest: effects outdoors in the village only, the carrot arrives everywhere; your own harvest in the wilds still shows', () => {
   const village = run({ planet: 'home', indoors: false, x: 2, z: 2 });
   assert.equal(village.api.helperAction('helperHarvest', 0), true);
-  assert.ok(village.effects.includes('orbs') && village.effects.includes('burst') && village.effects.includes('text'), village.effects.join()); assert.ok(village.effects.includes('ring'), 'the bed pulses (feel-rules.ts HARVEST)');
+  assert.ok(village.effects.includes('orbs') && village.effects.includes('burst') && village.effects.includes('gain') && village.effects.includes('stat'), village.effects.join()); // the crop to the pickup list or tracker, its EXP to the bar (gain-feed.ts) assert.ok(village.effects.includes('ring'), 'the bed pulses (feel-rules.ts HARVEST)');
   assert.equal(village.state.bag.carrot, 1);
   const indoors = run({ planet: 'home', indoors: true, x: -7, z: 2 });
   indoors.api.helperAction('helperHarvest', 0);
@@ -165,8 +165,8 @@ test('a helper harvest: effects outdoors in the village only, the carrot arrives
   assert.deepEqual(wilds.effects, []); assert.equal(wilds.state.chest.carrot, 1, 'out in the wilds: the chest'); assert.ok(!wilds.state.bag.carrot);
   const planet = run({ planet: 'forest', indoors: false, x: 0, z: 0 });
   planet.api.harvestBurst(0, 'carrot', 'worker'); assert.deepEqual(planet.effects, []);
-  // The explorer's own harvest keeps its sparkles, orbs and XP float in the wilds and on planets.
-  wilds.api.harvestBurst(0, 'carrot'); assert.ok(wilds.effects.includes('orbs') && wilds.effects.includes('text'));
+  // The explorer's own harvest keeps its sparkles, orbs, pickup line and EXP in the wilds and on planets.
+  wilds.api.harvestBurst(0, 'carrot'); assert.ok(wilds.effects.includes('orbs') && wilds.effects.includes('gain') && wilds.effects.includes('stat'));
   planet.api.harvestBurst(0, 'carrot', 'own'); assert.ok(planet.effects.includes('burst'));
 });
 

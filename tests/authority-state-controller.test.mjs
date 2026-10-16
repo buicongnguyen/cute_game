@@ -17,7 +17,7 @@ function fixture(){
   const ctx=vm.createContext({state,world,actionHandler:null,visiting:null,visitHome:null,structuredClone,applyGameAction,M,gearWater:false,
     updateHud(){},updateLabels(){},save(){},toast:(...args)=>notifications.push(args),t:text=>text,
     levelCheck(before){if(ctx.state.level>before)notifications.push(['level',ctx.state.level]);},
-    endFishing(){},resetCombat(){},rebuildHomePresentation(){},Date,Math});vm.runInContext(compiled,ctx);
+    endFishing(){},resetCombat(){},rebuildHomePresentation(){},pepperGift(){notifications.push(['pepper']);},Date,Math});vm.runInContext(compiled,ctx);
   return {ctx,state,notifications};
 }
 test('authoritative reset removes stale optional helper while preserving active save identity',()=>{
@@ -31,5 +31,5 @@ test('an online level gain is announced once when its authoritative reply is app
 });
 test('offline actions still announce their local level gain once',async()=>{
   const f=fixture();const now=Date.now();f.state.xp=M.xpNeeded(1)-1;assert.ok(M.plant(f.state,0,'carrot',now-M.CROPS.carrot.duration));
-  assert.equal(await f.ctx.perform('harvest',{index:0}),'carrot');assert.deepEqual(f.notifications,[['level',2]]);
+  assert.equal(await f.ctx.perform('harvest',{index:0}),'carrot');assert.deepEqual(f.notifications,[['level',2],['pepper']],"a new game's first harvest also brings Pepper's gift (FIX-PLAN 4.6)");
 });

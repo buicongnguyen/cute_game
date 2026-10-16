@@ -1,0 +1,37 @@
+/* The three welcome cards of a brand-new save (welcome-cards.ts, FIX-PLAN 4.6) and the moment tips (moment-tips.ts). */
+.wc-card { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 2px 0 0; }
+.wc-art { display: grid; place-items: center; width: min(260px, 100%); min-height: 92px; border-radius: 22px; font-size: 46px; letter-spacing: 6px; line-height: 1; background: radial-gradient(circle at 50% 120%, #c9f0a8 0 45%, transparent 46%), linear-gradient(180deg, #bfe8ff, #fff3d6); box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .8), 0 4px 0 rgba(120, 90, 40, .15); animation: wc-pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+.wc-2 .wc-art { background: radial-gradient(circle at 50% 120%, #ffd9a8 0 45%, transparent 46%), linear-gradient(180deg, #d9ccff, #fff0f6); }
+.wc-3 .wc-art { background: radial-gradient(circle at 50% 120%, #b9784a 0 45%, transparent 46%), linear-gradient(180deg, #c9f7d0, #fff7d6); }
+.wc-text { margin: 0; max-width: 34ch; font-size: 16px; font-weight: 700; line-height: 1.35; color: #4a3a22; }
+.wc-dots { display: flex; gap: 8px; }
+.wc-dots i { width: 11px; height: 11px; border-radius: 50%; background: #eadfc6; transition: width .2s; }
+.wc-dots i.on { width: 26px; border-radius: 999px; background: #ff9d2e; }
+.wc-actions { display: flex; justify-content: center; gap: 10px; width: 100%; }
+.wc-actions button { min-height: 48px; min-width: 112px; font-size: 16px; }
+.wc-actions .wc-next { flex: 1 1 auto; max-width: 220px; }
+@keyframes wc-pop { from { transform: scale(.85); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .wc-art { animation: none; } }
+@media (max-width: 560px) {
+  .wc-card { gap: 10px; }
+  .wc-art { min-height: 76px; font-size: 38px; }
+  .wc-text { font-size: 15px; }
+}
+
+/* ---- Moment tips: a small pointer bubble beside the thing it is about ---- */
+#moment-tip { position: fixed; left: 0; top: 0; z-index: 41; pointer-events: none; will-change: transform; }
+#moment-tip[hidden] { display: none; }
+#moment-tip .mt-bubble { position: absolute; left: 0; bottom: 12px; translate: calc(-50% + var(--mt-shift, 0px)) 0; display: flex; align-items: center; gap: 7px; width: max-content; max-width: min(250px, calc(100vw - 32px)); padding: 8px 13px; border-radius: 16px; background: #fffdf4; border: 3px solid #ffb300; color: #3b2a12; font-weight: 900; font-size: 14px; line-height: 1.25; box-shadow: 0 4px 0 rgba(122, 79, 0, .35), 0 6px 18px rgba(0, 0, 0, .18); animation: mt-in .35s cubic-bezier(.2, 1.4, .4, 1) both, mt-bob 1.6s ease-in-out .35s infinite; }
+#moment-tip .mt-bubble > span { font-size: 18px; flex: none; }
+/* The tail stays on the anchor while the bubble shifts sideways to stay on screen. */
+#moment-tip .mt-tail { position: absolute; left: calc(50% - 9px - var(--mt-shift, 0px)); bottom: -14px; width: 0; height: 0; border: 9px solid transparent; border-top: 12px solid #ffb300; border-bottom: 0; }
+#moment-tip.below .mt-bubble { bottom: auto; top: 12px; }
+#moment-tip.below .mt-tail { bottom: auto; top: -14px; border-top: 0; border-bottom: 12px solid #ffb300; }
+@keyframes mt-in { from { opacity: 0; scale: .7; } }
+@keyframes mt-bob { 50% { translate: calc(-50% + var(--mt-shift, 0px)) -4px; } }
+@media (prefers-reduced-motion: reduce) { #moment-tip .mt-bubble { animation: none; } }
+
+/* ---- The guide pointer's off switch (guide-ui.ts): a small x just past the label's end, inside a 44 px tap area ---- */
+#guide-pointer:not(.edge) .gp-label { position: relative; }
+#guide-pointer .gp-off { pointer-events: auto; position: absolute; top: 50%; right: -36px; width: 44px; height: 44px; margin-top: -22px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+#guide-pointer .gp-off > i { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: rgba(40, 24, 8, .85); color: #fff6d0; font: 900 15px/1 sans-serif; font-style: normal; box-shadow: 0 0 0 2px #ffd23f; }

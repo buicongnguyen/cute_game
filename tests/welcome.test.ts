@@ -49,11 +49,11 @@ test('a uniform in the outfit slot brings its own fighting skill in place of the
   delete s.gear.outfit; assert.equal(M.weaponStats(s).special, 'fist');
 });
 
-test('closing the welcome gift with × or Escape takes the 10,000 energy instead of leaving it pending unseen', async () => {
+test('the gift is no offer at the start any more: Pepper brings it after the first harvest (FIX-PLAN 4.6)', async () => {
   const { readFileSync } = await import('node:fs');
   const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
-  assert.match(main, /case 'close':if\(modal==='welcome'&&state\.welcome==='pending'\)\{await settleWelcome\(true\);break;\}/);
-  assert.match(main, /else if\(modal==='welcome'&&state\.welcome==='pending'\)void settleWelcome\(true\);else closeDialog\(\)/);
+  assert.doesNotMatch(main, /welcomeDialog|settleWelcome|welcome-take|welcome-pass/, 'no lottery dialog at the start');
+  assert.match(main, /if\(gift&&state\.welcome==='done'&&type\.startsWith\('harvest'\)\)pepperGift\(\);/, 'her thank-you follows the harvest that settled it');
   assert.equal(F.WELCOME_ENERGY, 10_000);
   const { TESTER_ENERGY } = await import('../src/tester.ts'); assert.equal(TESTER_ENERGY, 1_000_000, 'the tester gift is untouched');
 });

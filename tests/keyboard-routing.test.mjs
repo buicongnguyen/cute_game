@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import ts from 'typescript';
 import * as Controls from '../src/gameplay-controls.ts';
+import {bindingKey} from '../src/controls-keys.ts';
 import {JumpInput,jumpKeyAction} from '../src/jump-rules.ts';
 import {AttackHold,HOLD} from '../src/five-rules.ts';
 
@@ -22,7 +23,7 @@ function fixture(layout='classic'){
   const register=(handlers,name,fn)=>{const list=handlers.get(name)??[];list.push(fn);handlers.set(name,list);};
   const state={settings:{keyboardLayout:layout}},movement=new Controls.MovementControls(keys);
   const jumpInput=new JumpInput(),attackHold=new AttackHold();
-  const ctx=vm.createContext({...Controls,jumpKeyAction,jumpInput,attackHold,attackPointers:new Set(),worldHold:null,skills:4,skillList:()=>Array.from({length:ctx.skills},()=>({})),jumpPointers:new Set(),slideCombo:{cancel(){}},air:true,airOn:()=>ctx.air,spaceKey:'jump',state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
+  const ctx=vm.createContext({...Controls,controls:{bindingKey,translate:(key,code)=>({key,code}),jumpUp:()=>false},jumpKeyAction,jumpInput,attackHold,attackPointers:new Set(),worldHold:null,skills:4,skillList:()=>Array.from({length:ctx.skills},()=>({})),jumpPointers:new Set(),slideCombo:{cancel(){}},air:true,airOn:()=>ctx.air,spaceKey:'jump',state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
     usable:true,hostile:false,useInstead:fresh=>{if(ctx.usable&&fresh){calls.push(['interact']);return true;}return false;},hostileNear:()=>ctx.hostile,
     world:{keys,nearest:()=>null,select:()=>calls.push(['select'])},document:{hidden:false,activeElement:body,addEventListener:(name,fn)=>register(documentHandlers,name,fn),querySelector:selector=>selector==='dialog[open]'&&ctx.nativeDialog?{}:null},window:{addEventListener:(name,fn)=>register(windowHandlers,name,fn)},
     previous:0,performance:{now:()=>12345},graphics:{sample:(...args)=>calls.push(['graphicsSample',...args])},
@@ -173,4 +174,10 @@ test('holding an attack key holds the attack (F, N, or Space when it attacks); t
   const near=fixture('wasd');near.fire('keydown','KeyF');assert.deepEqual(near.calls,[['interact']]);assert.equal(near.attackHold.held,false);
   // Switched off: Space attacks once, as before, and nothing is held.
   const off=fixture('wasd');off.ctx.air=false;off.fire('keydown','Space');assert.deepEqual(off.calls,[['attack']]);assert.equal(off.attackHold.held,false);
+});
+
+test('a custom key for Interact (Settings > Controls > Keys) follows the same Attack rule as F: use beside a thing, else attack', () => {
+  const f = fixture('wasd'); f.ctx.controls = { ...f.ctx.controls, translate: (key, code) => key === 'x' ? { key: 'f', code: 'KeyF' } : { key, code } };
+  f.fire('keydown', 'KeyX'); assert.deepEqual(f.calls, [['interact']], 'the custom key uses the workshop');
+  f.ctx.usable = false; f.fire('keydown', 'KeyX'); assert.deepEqual(f.calls.at(-1), ['attack'], 'and swings when there is nothing to use');
 });

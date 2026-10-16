@@ -317,9 +317,16 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
       await page.evaluate(() => { document.querySelector('.tutorial,.welcome')?.remove(); document.querySelectorAll('dialog[open]').forEach(d => d.close()); (document.querySelector('#dialog-layer [data-action="close"]') || document.querySelector('#dialog-close'))?.click(); });
       for (const [state, enter] of Object.entries(STATES)) {
         await enter(page);
+        // A fight's loot just picked up: the pickup list by the backpack shows (gain-feed-ui.ts) and must cover nothing.
+        await page.evaluate(() => window.__zoo.gainDemo?.()); await page.waitForTimeout(450);
         const m = await page.evaluate(measureHud);
         assert.deepEqual(findings(m), [], `${state} at ${size} in ${lang}`);
+        const pf = await page.evaluate(() => { const root = document.querySelector('#pickup-feed'), lines = [...root.querySelectorAll('.pf-line:not(.out)')]; return { taps: getComputedStyle(root).pointerEvents, lines: lines.length, fonts: lines.map(l => parseFloat(getComputedStyle(l).fontSize)), phone: matchMedia('(max-width: 600px), (max-height: 520px)').matches, scroll: document.documentElement.scrollWidth - innerWidth }; });
+        assert.equal(pf.taps, 'none', 'the pickup list never takes a tap');
+        assert.equal(pf.lines, pf.phone ? 2 : 3, `three lines at most, two on phones (${state} at ${size})`);
+        assert.ok(pf.fonts.every(f => f >= 11), `pickup lines are readable: ${pf.fonts}`); assert.ok(pf.scroll <= 0, 'no sideways scroll');
         if (state !== 'calm') continue;
+        { const bag = m.groups.dock[0], top = m.groups.pickups[0], near = !!top && Math.hypot(top.r - bag.l, top.t - bag.b) < 300; /* the newest line's corner, where the list hangs */ assert.ok(m.groups.pickups.length && near, `the pickup list hangs by the backpack at ${size}: ${JSON.stringify(m.groups.pickups)}`); }
         const g = m.groups, dock = g.dock, map = g.map[0], hero = g.hero[0], plate = m.plate;
         // The dock: bag, journal, News (the inbox) and More, in whole columns at the right edge, each cell at least 44 px;
         // ranking, play together, help, settings and the platform tools wait in the More menu (news-inbox-ui.ts).
@@ -549,6 +556,66 @@ for (const size of ['390x844', '1600x900']) {
       await page.evaluate(() => (document.querySelector('#dialog-layer [data-action="close"]') || document.querySelector('#dialog-close'))?.click()); await page.waitForTimeout(400);
       await stand(0, 4); await page.waitForTimeout(1500);
       const away = await look(); assert.equal(away.use, false, 'nothing to use: the fist is back'); assert.equal(away.aria, 'Basic attack');
+    } finally { await browser.close(); }
+  });
+}
+
+// Settings > Controls (controls-ui.ts): Large buttons with the skills on the left, faded, stay clear of the HUD on every
+// screen measured above; a custom layout is placed, a layout over the map falls back to the default, and modes keep theirs.
+for (const [name, view] of Object.entries(VIEWS)) {
+  test(`controls: Large, left-handed and a custom layout stay clear of the HUD at ${name}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 120000 }, async () => {
+    const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+    try {
+      const context = await browser.newContext(view);
+      await context.addInitScript(() => { try { localStorage.setItem('zoo-garden-controls', JSON.stringify({ side: 'left', size: 'large', opacity: 60 })); } catch {} });
+      const page = await context.newPage();
+      await page.routeWebSocket(socketUrl=>new URL(socketUrl).searchParams.has('token'),()=>{});
+      await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
+      await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
+      await page.fill('#name-input', 'Controls'); await page.click('#title-screen button.primary');
+      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await dismissWelcome(page);
+      await page.evaluate(() => { const s = window.__zoo.state; s.level = 12; /* past the calm first-run HUD: every fight button shows */ s.bag.apple = (s.bag.apple ?? 0) + 3; window.__zoo.world.onDamage = () => {}; setInterval(() => { s.hp = 999; }, 100); });
+      await page.waitForTimeout(3500);
+      const measure = () => page.evaluate(() => {
+        const box = el => { const b = el.getBoundingClientRect(); return b.width > 1 && b.height > 1 ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
+        const all = sel => [...document.querySelectorAll(sel)].filter(el => !el.closest('[hidden]')).map(box).filter(Boolean);
+        return { W: innerWidth, H: innerHeight, custom: document.querySelector('#hud').classList.contains('ctl-custom'), opacity: getComputedStyle(document.querySelector('#hud .attack-pad')).opacity,
+          fight: { skills: all('#hud .skill'), attack: all('#hud .attack-pad'), jump: all('#hud .jump-pad'), stick: all('#movement-joystick') },
+          panels: { player: all('.player-card'), dock: all('.top-actions > button'), minimap: all('.minimap'), trackers: all('.tracker-panels > :not([hidden]), #tracker-chip:not([hidden])'), eat: all('#quick-eat, .quick-eat-pick'), home: all('.home-button') } };
+      });
+      const overlap = (a, b) => a.l < b.r - .5 && b.l < a.r - .5 && a.t < b.b - .5 && b.t < a.b - .5;
+      const clear = (m, where) => {
+        for (const [part, boxes] of Object.entries(m.fight)) for (const b of boxes) {
+          assert.ok(b.r - b.l >= 44 - .5 && b.b - b.t >= 44 - .5, `${where}: ${part} keeps a 44 px target`);
+          assert.ok(b.l >= -.5 && b.t >= -.5 && b.r <= m.W + .5 && b.b <= m.H + .5, `${where}: ${part} is on screen`);
+          for (const [panel, others] of Object.entries(m.panels)) for (const o of others) assert.ok(!overlap(b, o), `${where}: ${part} overlaps ${panel} ${JSON.stringify([b, o])}`);
+        }
+        const parts = [...m.fight.attack, ...m.fight.jump, ...m.fight.stick];
+        for (const [i, p] of parts.entries()) for (const q of parts.slice(0, i)) assert.ok(!overlap(p, q), `${where}: two fight buttons overlap`);
+      };
+      const big = await measure(); clear(big, `${name} large left`);
+      assert.equal(big.opacity, '0.6', 'the resting opacity applies');
+      if (view.hasTouch) assert.ok(Math.min(...big.fight.skills.map(b => b.l)) <= 30, 'the skills stand on the left');
+      // A custom layout: the Attack button in the middle of the screen, anchored to the nearest corner.
+      const placed = await page.evaluate(() => {
+        const c = window.__zoo.controls, a = document.querySelector('#hud .attack-pad').getBoundingClientRect(), W = innerWidth, H = innerHeight, l = Math.round(W * .5 - a.width / 2), t = Math.round(H * .5 - a.height / 2);
+        c.prefs.layouts = { [c.screen()]: { attack: { h: 'r', v: 'b', x: (W - l - a.width) / W, y: (H - t - a.height) / H } } }; c.apply();
+        const b = document.querySelector('#hud .attack-pad').getBoundingClientRect(); return { want: [l, t], got: [Math.round(b.left), Math.round(b.top)] };
+      });
+      const custom = await measure();
+      assert.ok(custom.custom, `${name}: the custom layout is placed`); assert.deepEqual(placed.got, placed.want, `${name}: Attack stands where it was saved`);
+      clear(custom, `${name} custom`);
+      // Modes keep their own layout: in Flag Rush / the Vault / Rescue Call (body.in-mode) the Attack goes back to the paw.
+      const inMode = await page.evaluate(() => { document.body.classList.add('in-mode'); const b = document.querySelector('#hud .attack-pad').getBoundingClientRect(); document.body.classList.remove('in-mode'); return [Math.round(b.left), Math.round(b.top)]; });
+      assert.notDeepEqual(inMode, placed.want, `${name}: modes ignore the custom layout`);
+      // A layout over the map does not fit: the default is used.
+      const fallback = await page.evaluate(() => {
+        const c = window.__zoo.controls, m = document.querySelector('#hud .minimap').getBoundingClientRect(), W = innerWidth, H = innerHeight;
+        c.prefs.layouts = { [c.screen()]: { attack: { h: 'l', v: 't', x: m.left / W, y: m.top / H } } }; c.apply();
+        return { custom: document.querySelector('#hud').classList.contains('ctl-custom'), fallback: c.view().fallback };
+      });
+      assert.deepEqual(fallback, { custom: false, fallback: true }, `${name}: a layout over the map falls back`);
     } finally { await browser.close(); }
   });
 }
