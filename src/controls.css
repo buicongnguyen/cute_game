@@ -1,0 +1,86 @@
+/*
+ * Settings > Controls (controls-ui.ts): button size and opacity, the skill buttons' side on PC, custom layouts, the
+ * "Move buttons" editor and the keys panel. Imported after hud-ours.css and tap-targets.css. Paint and layout only; the
+ * script writes custom properties when a setting or the screen changes, never per frame.
+ */
+
+/* ------------------------------------------------------------------ Size: Small / Normal / Large (--ctl-scale .85 / 1 / 1.2) */
+/* The paw and the tray are drawn in skill widths (--sk), so the fight cluster scales by giving it a scaled --sk. --sk-base
+   is the screen's own --sk as the HUD inherits it; a toe never goes under 44 px, and small screens cap the large size
+   (--sk-cap) so the bigger paw still clears the joystick (320 px wide) and the quick-eat button (short landscape, paw on
+   the left): there Large stays the normal size. The joystick keeps its size
+   there too (--stick-cap). tests/hud-layout.test.mjs checks Large at every size it measures. */
+#app { --sk-base: var(--sk); }
+#app #hud .skills { --sk: max(44px, min(var(--sk-cap, 999px), calc(var(--sk-base) * var(--ctl-scale, 1)))); }
+@media (orientation: portrait) and (max-width: 360px) { #app { --sk-cap: 48px; } }
+@media (orientation: portrait) and (max-width: 340px) { #app { --sk-cap: 44px; --stick-cap: 1; } }
+@media (max-height: 400px) and (orientation: landscape) { #app { --sk-cap: 50px; } #app #hud.joystick-right .skills { --sk-cap: 46px; } }
+/* The dock leaves room under it for the paw: as tall as the scaled paw. */
+@media (pointer: coarse), (max-width: 900px), (max-height: 520px) {
+  :root { --dock-room: calc(max(44px, min(var(--sk-cap, 999px), var(--sk) * var(--ctl-scale, 1))) * 2.38 + 44px); }
+  body.air-combat { --dock-room: calc(max(44px, min(var(--sk-cap, 999px), var(--sk) * var(--ctl-scale, 1))) * 3.36 + 44px); }
+}
+/* The joystick scales from the corner it stands in (its input radius is the same; only the drawing grows). */
+#app #hud .movement-joystick { scale: min(var(--ctl-scale, 1), var(--stick-cap, 9)); transform-origin: left bottom; }
+#app #hud.joystick-right .movement-joystick { transform-origin: right bottom; }
+
+/* ------------------------------------------------------------------ Opacity: the resting look; a pressed button is solid */
+#app #hud.ctl-faded .skills .skill, #app #hud.ctl-faded .attack-pad, #app #hud.ctl-faded .jump-pad, #app #hud.ctl-faded .movement-joystick { opacity: var(--ctl-alpha, 1); transition: opacity .12s; }
+#app #hud.ctl-faded .skills .skill:active, #app #hud.ctl-faded .attack-pad:active, #app #hud.ctl-faded .attack-pad.holding, #app #hud.ctl-faded .jump-pad:active, #app #hud.ctl-faded .movement-joystick:active { opacity: 1; transition: none; }
+
+/* ------------------------------------------------------------------ PC: the tray on the left (skill buttons side) */
+@media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
+  /* hud-desk.css draws the tray's skills at a fixed 60 px; with Small or Large chosen they follow --sk like the paw. */
+  #app #hud.ctl-sized .skills .skill { width: var(--sk); height: var(--sk); }
+  #app #hud.joystick-right .bottom-bar .skills { right: auto; left: -6px; }
+  #app #hud.joystick-right .bottom-bar .keys-guide { left: auto; right: 0; bottom: 22px; }
+}
+
+/* ------------------------------------------------------------------ A custom layout (controls-layout.ts) */
+/* Each placed part stands where the script measured it fits. Modes keep their own arrangement: Flag Rush, the Vault and
+   Rescue Call (body.in-mode), the cottage and fishing fall back to the sheets' layout. */
+body:not(.in-mode):not(.indoors) #app #hud.ctl-custom:not(.fishing) [data-ctl-placed] {
+  position: fixed !important; left: var(--ctl-x) !important; top: var(--ctl-y) !important; right: auto !important; bottom: auto !important; margin: 0 !important;
+}
+body:not(.in-mode):not(.indoors) #app #hud.ctl-custom:not(.fishing) .movement-joystick[data-ctl-placed] { transform-origin: left top; }
+/* Measuring (one moment, no paint) and editing: the quest cards are measured open, the way they take the most room. */
+#app #hud.ctl-measure .tracker-stack.folded .tracker-panels { display: flex !important; }
+.ctl-safe-probe { position: fixed; inset: 0; z-index: -1; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+
+/* ------------------------------------------------------------------ The editor */
+/* A dim layer under the HUD (it is #hud's first child) catches taps on the world; dashed boxes ring what is taken. */
+#app #hud .ctl-editor-layer { position: fixed; inset: 0; z-index: 0; background: rgba(30, 18, 28, .38); pointer-events: auto; touch-action: none; }
+#app #hud .ctl-zone { position: absolute; border: 2px dashed rgba(255, 246, 224, .9); border-radius: 14px; background: rgba(255, 246, 224, .1); pointer-events: none; }
+#app #hud .ctl-zone.bad { border: 3px solid #ff4d6d; background: rgba(255, 77, 109, .3); }
+#app #hud.ctl-editing [data-ctl-part]:not(.skills), #app #hud.ctl-editing .skills[data-ctl-part] .skill:not([hidden]) { outline: 3px dashed #fff; outline-offset: 4px; cursor: grab; touch-action: none; }
+#app #hud.ctl-editing .skills[data-ctl-part] { touch-action: none; }
+/* Editing shows the buttons solid, whatever their resting opacity. */
+#app #hud.ctl-editing.ctl-faded [data-ctl-part], #app #hud.ctl-editing.ctl-faded [data-ctl-part] .skill { opacity: 1; }
+#app #hud.ctl-editing .ctl-bad:not(.skills), #app #hud.ctl-editing .skills.ctl-bad .skill:not([hidden]) { outline: 3px solid #ff4d6d; }
+#app #hud.ctl-dragging [data-ctl-part] { cursor: grabbing; }
+#app #hud .ctl-editor-bar {
+  position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%); z-index: 60; width: min(360px, calc(100vw - 32px)); box-sizing: border-box;
+  padding: 10px 12px 12px; border-radius: 18px; border: 3px solid var(--plum, #3a2433); background: var(--cream, #fff6e0); color: var(--plum, #3a2433);
+  box-shadow: 0 6px 0 rgba(58, 36, 51, .45), 0 12px 30px rgba(20, 10, 20, .3); text-align: center; pointer-events: auto; transition: opacity .15s;
+}
+#app #hud.ctl-dragging .ctl-editor-bar { opacity: .25; pointer-events: none; }
+#app #hud .ctl-editor-bar strong { display: block; font-size: 16px; font-weight: 1000; }
+#app #hud .ctl-editor-bar .ctl-where { display: block; font-size: 11px; font-weight: 800; opacity: .75; }
+#app #hud .ctl-editor-bar .ctl-status { margin: 6px 0 10px; min-height: 2.7em; font-size: 12.5px; line-height: 1.35; font-weight: 700; }
+#app #hud .ctl-editor-bar .ctl-status.bad { color: #b3173f; }
+#app #hud .ctl-bar-buttons { display: flex; gap: 6px; }
+#app #hud .ctl-bar-buttons button { flex: 1 1 auto; min-height: 44px; min-width: 44px; padding: 0 8px; font-size: 13px; font-weight: 900; border-radius: 12px; }
+#app #hud .ctl-bar-buttons .text-button { flex: 1.4 1 auto; }
+
+/* ------------------------------------------------------------------ Settings: the Controls group and the keys panel */
+#dialog-body .settings-group { display: grid; gap: inherit; gap: 8px; padding: 8px; border-radius: 16px; border: 2px solid var(--line, #eadfca); background: rgba(255, 246, 224, .55); }
+#dialog-body .settings-group-title { margin: 2px 4px 0; font-size: 13px; font-weight: 1000; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-soft, #6b5560); }
+#dialog-body .ctl-keys-note { margin: 0 0 8px; font-size: 12.5px; line-height: 1.35; }
+#dialog-body .ctl-keys-list { display: grid; gap: 6px; }
+#dialog-body .ctl-key-row { padding: 6px 10px; }
+#dialog-body .ctl-key { min-width: 88px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 2px solid var(--plum, #3a2433); background: #fff; color: var(--plum, #3a2433); font: 900 14px/1 var(--font, inherit); box-shadow: 0 3px 0 rgba(58, 36, 51, .35); }
+#dialog-body .ctl-key.listening { background: #fff1b8; border-color: #e09a00; animation: ctl-listen 1s ease-in-out infinite alternate; }
+#dialog-body .ctl-key:disabled { opacity: .5; box-shadow: none; }
+#dialog-body .ctl-keys-status { min-height: 1.4em; margin: 8px 2px; font-size: 12.5px; font-weight: 800; color: #7a3a10; }
+@keyframes ctl-listen { to { box-shadow: 0 3px 0 rgba(58, 36, 51, .35), 0 0 0 4px rgba(255, 196, 40, .45); } }
+@media (prefers-reduced-motion: reduce) { #dialog-body .ctl-key.listening { animation: none; } }
