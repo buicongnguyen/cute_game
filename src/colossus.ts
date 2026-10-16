@@ -32,6 +32,8 @@ export interface ColossusHost {
   /** Puts a notice in News (news-inbox.ts); true when the old toast should show too ("Show announcements as pop-ups"). */
   news?(title: string, text: string): boolean;
   floating(text: string, x: number, z: number, style?: string): void;
+  /** EXP and energy rise from the hero plate's numbers (gain-feed.ts); without it the gain floats over the giant as before. */
+  gain?(kind: 'xp' | 'energy', amount: number): void;
   spawnLoot(loot: { id: string; count: number }[], x: number, z: number): void;
   tone(kind: string): void;
   hud: HTMLElement;
@@ -395,7 +397,7 @@ export class ColossusEvent {
       // Roar hour bonus (+25% EXP and loot counts): solo/offline only, this method returns early online (server-authoritative).
       const loot = this.h.change(() => { const l = grantColossusReward(this.h.state(), lastHit, Math.random, false); if (roar) extraXp = grantRoarBonus(this.h.state(), l); return l; });
       this.h.spawnLoot(loot, e.x - 6, e.z);
-      this.h.floating(extraXp ? t('+{xp} EXP (roar hour)', { xp: S.xp + Math.round(extraXp) }) : `+${S.xp} EXP`, e.x - 6, e.z, 'xp');
+      if (this.h.gain) this.h.gain('xp', S.xp + Math.round(extraXp)); else this.h.floating(extraXp ? t('+{xp} EXP (roar hour)', { xp: S.xp + Math.round(extraXp) }) : `+${S.xp} EXP`, e.x - 6, e.z, 'xp');
       this.h.world.fx?.orbs({ x: e.x, z: e.z }, 8, '#7ff0ff', () => this.h.world.position, () => this.h.tone('coin'));
       if (lastHit) this.h.toast(bare(t('👑 You landed the FINAL BLOW! Little Cinderpeak joins you.')), '👑');
       else this.h.toast(t('A neighbour landed the final blow. Your share of the spoils is on the ground.'), '🎁');

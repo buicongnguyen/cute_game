@@ -106,7 +106,7 @@ function fixture(...items: string[]) {
     // As main.ts perform: a refused action is a toast and resolves undefined.
     perform: async (type: string, payload: Record<string, unknown>) => { calls.push(type); try { return applyGameAction(state, { type, payload }); } catch { return undefined; } },
     world: { refreshPlayer() {}, position: { x: 0, z: 0 } }, save() {}, shop() { calls.push('shop'); }, equipFeedback(id: string) { calls.push(`feedback:${id}`); },
-    floating() {}, tone() {}, t: (s: string) => s, esc: (s: string) => s, art: (id: string) => id, openDialog: (_k: string, _t: string, body: string) => html.push(body),
+    floating() {}, gainItem() {}, gainStat() {}, tone() {}, t: (s: string) => s, esc: (s: string) => s, art: (id: string) => id, openDialog: (_k: string, _t: string, body: string) => html.push(body),
   });
   vm.runInContext(compiled + '\nthis.act=act;this.inventory=inventory;', ctx);
   return { state, gear, ctx, html, calls };

@@ -1,0 +1,64 @@
+/*
+ * The gain feed (gain-feed.ts, gain-feed-ui.ts): the pickup list by the backpack button, the "+N" on the hero plate's numbers
+ * and the tick on a tracker row. Nothing here takes a tap; motion is played by the script on transform and opacity only.
+ *
+ * Where the list hangs (each place checked by tests/hud-layout.test.mjs with three lines shown):
+ *   - desktop: under the Home tab, left of the map, its lines growing leftwards (the slips hang under the map);
+ *   - 601-1000 px wide: left of the quest slips, level with their top (Home hangs under the map there);
+ *   - phones upright: right under the dock; in a boss fight under the boss bar, which runs under the map;
+ *   - phones on their side: under the map, above the paw.
+ */
+#app #hud #pickup-feed {
+  position: fixed; z-index: 7; pointer-events: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  right: calc(var(--col) + var(--mm) + 12px); top: calc(var(--map-top) + max(40px, var(--b)) + 10px);
+  --pf-w: min(240px, calc(50vw - 346px));
+}
+@media (min-width: 601px) and (min-height: 521px) and (max-width: 1000px) {
+  #app #hud #pickup-feed { right: calc(var(--col) + 246px); top: calc(var(--map-top) + var(--mm) + 10px + max(40px, var(--b)) + 10px); --pf-w: 200px; }
+}
+@media (min-width: 601px) and (min-height: 521px) and (max-width: 900px) { #app #hud #pickup-feed { right: calc(var(--col) + 230px); } }
+@media (orientation: portrait) and (max-width: 600px) {
+  #app #hud #pickup-feed { right: calc(var(--edge) + var(--safe-right)); top: calc(var(--menu-bottom, 180px) + 8px);
+    /* Never wider than the gap right of the quest chips (their width: hud-ours.css, the phones' .tracker-stack). */
+    --pf-w: min(170px, calc(100vw - 2 * var(--edge) - var(--safe-left) - var(--safe-right) - min(188px, calc(100vw - var(--dock-w) - var(--mm) - var(--edge) * 3 - var(--safe-left) - var(--safe-right) - 12px)) - 6px)); }
+  /* In a boss fight it steps under the boss bar and keeps to picture and count, clear of the context button in the middle. */
+  #app.boss-on #hud #pickup-feed { top: calc(var(--row3) + 58px); }
+  #app.boss-on #hud .pf-name { display: none; }
+  /* The zone banner (2.8 s, a quarter down the screen) shares this band: the list steps down under it while it shows. */
+  #app #hud #pickup-feed { transition: transform .25s ease; }
+  #app #hud #zone-banner.show ~ #pickup-feed { transform: translateY(max(0px, calc(24vh + 58px - var(--menu-bottom, 180px) - 8px))); }
+  #app.boss-on #hud #zone-banner.show ~ #pickup-feed { transform: translateY(60px); }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  #app #hud #pickup-feed { right: var(--col); top: calc(var(--map-top) + var(--mm) + 8px); --pf-w: 190px; }
+}
+#app #hud .pf-line {
+  display: flex; align-items: center; gap: 5px; box-sizing: border-box; height: 26px; max-width: var(--pf-w); padding: 0 9px 0 4px;
+  border-radius: 13px; border: 1.5px solid rgba(255, 246, 224, .55); background: rgba(58, 36, 51, .84); box-shadow: 0 2px 0 rgba(58, 36, 51, .35);
+  color: var(--cream, #fff6e0); font-size: 12px; font-weight: 800; line-height: 1; white-space: nowrap;
+  transition: opacity .32s ease, transform .32s ease;
+}
+#app #hud .pf-line.out { opacity: 0; transform: translateX(10px); }
+#app #hud .pf-icon { flex: none; display: grid; place-items: center; width: 20px; height: 20px; font-size: 15px; }
+#app #hud .pf-icon > img { width: 20px; height: 20px; object-fit: contain; }
+#app #hud .pf-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#app #hud .pf-count { flex: none; color: var(--honey, #ffc93a); font-weight: 900; font-variant-numeric: tabular-nums; }
+
+/* "+24" over the EXP bar, "+120" by the energy count: hidden but while their animation plays. */
+#app #hud .gf-float {
+  position: absolute; z-index: 2; pointer-events: none; opacity: 0; font-size: 12px; font-weight: 900; line-height: 1; white-space: nowrap;
+  color: var(--honey, #ffc93a); text-shadow: 0 0 2px var(--plum, #3a2433), 0 1px 0 var(--plum, #3a2433), 1px 0 0 var(--plum, #3a2433), -1px 0 0 var(--plum, #3a2433);
+}
+#app #hud .gf-float.gf-xp { right: 10px; bottom: 4px; }
+#app #hud .gf-float.gf-energy { right: 10px; top: 2px; color: #fff3b0; }
+#app #hud .gf-glow { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: linear-gradient(90deg, rgba(255, 255, 255, .15), rgba(255, 244, 190, .85), rgba(255, 255, 255, .15)); }
+
+/* A tracker row moved on: a honey glow over the row and a "+1" rising by its number. */
+#app #hud #quest-summary, #app #hud #bounty-tracker, #app #hud #challenge-tracker { position: relative; }
+@media (max-width: 600px), (max-height: 520px) { #app #hud #tracker-chip { position: relative; } }
+#app #hud .gf-row-glow { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; background: rgba(255, 201, 58, .28); box-shadow: inset 0 0 0 2px #ffc93a; }
+#app #hud .gf-plus {
+  position: absolute; z-index: 2; right: 8px; top: -6px; pointer-events: none; opacity: 0; font-size: 12px; font-weight: 900; line-height: 1;
+  padding: 2px 5px; border-radius: 8px; background: var(--honey, #ffc93a); color: var(--plum, #3a2433); box-shadow: 0 1px 0 rgba(58, 36, 51, .5);
+}
+#app #hud #tracker-chip .gf-plus { right: 16px; top: -10px; }
