@@ -171,6 +171,9 @@ import {perfFlags} from './perf-flags.ts';
 import {matrixStats,updateSceneMatrices} from './scene-matrices.ts';
 import {setDock,initDockFraming} from './dialog-dock';
 import {iconPath} from './item-icons.ts';
+import {gainPlace,TaskWatch} from './gain-feed.ts';
+import {initGainFeed} from './gain-feed-ui.ts';
+import './gain-feed.css'; // the pickup list, the plate's "+N" and the tracker tick
 import { WORK_ACTIONS, CATCH_UP_ACTIONS, explorerAway } from './delivery.ts';
 import { initStoredNote } from './delivery-ui.ts';
 import * as IG from './item-groups.ts';
@@ -505,6 +508,18 @@ const DIALOG_LOOK:Record<string,[string,string]>={
   settings:['⚙️','calm'],help:['🧭','calm'],'fish-help':['🎣','water'],fishing:['🎣','water'],catch:['🐟','water'],death:['🌷','rose'],reset:['🌱','rose'],
 };
 function floating(text:string,x=world.position.x,z=world.position.z,style='item',rise=0) {world.fx?.text({x,y:rise,z},t(text),style);}
+/** Gains are told where progress is tracked (gain-feed.ts has the rule): an item that moved a tracker row on ticks that row, any
+    other item gets a line in the pickup list by the backpack, EXP and energy rise from their numbers on the hero plate. floating()
+    above stays for action feedback (damage, level-ups, catches, warnings). */
+const taskWatch=new TaskWatch(),gainFeed=initGainFeed({hud:$('#hud'),iconUrl:id=>Object.hasOwn(M.ITEMS,id)&&M.ITEMS[id].type==='decor'?decorIcon(id)||null:iconPath(id)&&!missingIcons.has(id)?iconUrl(iconPath(id)!):null,emoji:id=>M.ITEMS[id]?.icon??'✨',name:id=>t(M.ITEMS[id]?.name??id),phone:()=>phoneScreen.matches});
+/** Sees the tracker rows (quest step, bounty, timed challenge) and ticks the ones that moved on (TaskWatch). Called by the HUD redraw and by each item gain. */
+let watchedState:M.SaveState|null=null;
+function watchTasks(q=progressEntries(state,'story')[0],folded=$('.tracker-stack').classList.contains('folded')){const now=performance.now(),p=state.progression,b=p.bounty,c=p.challenge;
+  const fresh=!started||watchedState!==state;watchedState=state;if(fresh)taskWatch.reset(); // another save or profile: a baseline, not a tick
+  const dq=taskWatch.see('quest',q&&!q.claimed?q.id:null,q?.progress??0,now),db=taskWatch.see('bounty',b&&!b.claimed?b.key:null,b?.progress??0,now),dc=taskWatch.see('chal',c&&!c.claimed?c.ends:null,c?.progress??0,now);
+  if(fresh)return;if(dq)gainFeed.tick('quest',dq,folded);if(db)gainFeed.tick('bounty',db,folded);if(dc)gainFeed.tick('chal',dc,folded);}
+function gainItem(id:string,count:number){if(!Object.hasOwn(M.ITEMS,id)||!(count>0))return;watchTasks();if(gainPlace('item',taskWatch.recent(performance.now()))==='pickups')gainFeed.pickup(id,count);}
+function gainStat(kind:'xp'|'energy',amount:number){if(gainPlace(kind)==='stat')gainFeed.stat(kind,amount);}
 /** Home clears bad effects (home-care.ts): a short sparkle and a toast. */
 function cleansedFx(){world.fx?.burst({x:world.position.x,z:world.position.z},{n:18,color:['#ffffff','#bff7ff','#ffe9a8'],glow:true,size:.1,speed:3,up:4,y:1});toast('Cleansed! Bad effects wash away at home.','✨');}
 function levelCheck(before:number) {if(state.level>before){const after=state.level;
@@ -592,6 +607,7 @@ function updateHud() {
   const bounty=progressEntries(state,'bounties')[0];$('#bounty-tracker').hidden=!bounty;if(bounty){$('#bounty-title').textContent=t(bounty.title);$('#bounty-task').textContent=t(`${bounty.progress}/${bounty.target} · ${bounty.claimed?'Complete':bounty.description}`);$('#bounty-count').textContent=t(bounty.claimed?'✓':`${bounty.progress}/${bounty.target}`);}
   const chal=challenges.view();renderChallenge($('#challenge-tracker'),chal);setText($('#chip-chal'),chal?chal.chip:'');keysGuide.render(state.settings.keyboardLayout,getLanguage(),airOn()?spaceKey:undefined);
   if(folded){$('#chip-quest').textContent=t(q?`${q.icon} ${progress}/${q.target}`:'🚀');$('#chip-bounty').textContent=t(bounty?`🎯 ${bounty.progress}/${bounty.target}`:'');}
+  watchTasks(q,folded); // a row that moved on ticks (gain-feed-ui.ts)
   // Light pools cut holes in the darkness; a lamp behind the perspective camera would project mirrored, so it is skipped.
   if(!dark.hidden){const holes=world.lightSources().flatMap(light=>{const p=world.screen(light.x,.7,light.z),edge=world.screen(light.x+light.radius,.7,light.z);return p.front?[`radial-gradient(circle ${Math.abs(edge.x-p.x)}px at ${p.x}px ${p.y}px, transparent 65%, black 100%)`]:[];});
     // Creatures' glowing eyes show through small holes outside the light (C8).
@@ -621,7 +637,7 @@ interface LabelAnchor {e:Entity;wy:number;back:number;dx:number;centre:boolean;w
 const labelAnchors=new Map<string,LabelAnchor>();
 let hudPanels:{left:number;right:number;top:number;bottom:number}[]=[];
 let hudFresh=false;
-function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#keys-guide,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
+function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#pickup-feed,#keys-guide,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
 /** The label's screen box at its anchor: bottom centre for buildings, centre for the small crop marks. */
 function labelRect(a:LabelAnchor){const p=world.screen(a.e.x+a.dx,a.wy,a.e.z-a.back),top=p.y-(a.centre?a.h/2:a.h);return {x:p.x,y:p.y,front:p.front,left:p.x-a.w/2,right:p.x+a.w/2,top,bottom:top+a.h};}
 const smallLabels=()=>viewWidth()<=600||viewHeight()<=520;
@@ -721,9 +737,9 @@ function harvestBurst(index:number,crop:M.CropId,source:GainSource='own',by?:{x:
   fx?.burst({x:e.x,z:e.z},{n:10,color:['#9be36f','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.4});
   fx?.orbs({x:e.x,z:e.z},2,'#7ff0ff',target); // XP motes home in on the collector too
   world.cropCards?.aim(e.x,e.z,()=>{const p=target();return {x:p.x,y:(p.y||0)+.9,z:p.z};});
-  floating(t('+1 {name}',{name:t(M.CROPS[crop].name)}),e.x,e.z,'item');tone('harvest');
+  gainItem(crop,1);tone('harvest');
   const xp=M.CROPS[crop].xp,startedIn=world.root;
-  setTimeout(()=>{if(world.root!==startedIn)return;const p=target();floating('+'+xp+' XP',p.x,p.z,'xp');tone('pop');},HARVEST.xpDelay*1000);
+  setTimeout(()=>{if(world.root!==startedIn)return;gainStat('xp',xp);tone('pop');},HARVEST.xpDelay*1000); // as the motes land
 }
 function plantBurst(index:number,source:GainSource='own'){if(!gainShows(source))return;const e=world.entities.find(x=>x.kind==='plot'&&x.index===index);if(e)world.fx?.burst({x:e.x,z:e.z},{n:6,color:['#8a5a3a','#6a3f2a'],size:.1,speed:2,up:3,y:.25});}
 /** Ripe tap: harvest every ripe bed in the garden (the user's rule; the reference stops at 5 m), nearest first, 140 ms apart, then one summary toast. */
@@ -901,7 +917,7 @@ function feedBurst(uid:number,source:GainSource='own'){if(!gainShows(source))ret
 function farmCollectFeedback(collected:readonly M.Collected[],origin?:{x:number;z:number},source:GainSource='own',by?:{x:number;z:number}){
   if(!gainShows(source))return; // the products are already in the bag or chest: only the flight, orbs and floats are skipped
   const groups=new Map<number,M.Collected[]>();for(const product of collected){const list=groups.get(product.uid)??[];list.push(product);groups.set(product.uid,list);world.farmView?.collect(product.uid,product.item,origin??world.farmView?.positionOf(product.uid)??M.PEN);}
-  for(const [uid,list]of groups){const p=world.farmView?.positionOf(uid)??origin??M.PEN;world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',orbTarget(source==='worker'?by:undefined));floating('+'+M.ANIMALS[list[0].kind].xp*list.length+' XP',p.x,p.z,'xp');}
+  for(const [uid,list]of groups){const p=world.farmView?.positionOf(uid)??origin??M.PEN;world.fx?.burst({x:p.x,z:p.z},{n:8,color:['#fff7c2','#ffe66d','#ffffff'],glow:true,speed:3,up:5,y:.6});world.fx?.orbs({x:p.x,z:p.z},2,'#ffe66d',orbTarget(source==='worker'?by:undefined));gainStat('xp',M.ANIMALS[list[0].kind].xp*list.length);}
   if(collected.length)tone('harvest');
 }
 function collectFarm(uid?:number){
@@ -1105,7 +1121,7 @@ const crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!vi
     if(task.kind==='harvest'){harvestBurst(task.index,Object.keys(r.raw)[0]??'carrot','worker',at);world.syncCrops();}else if(task.kind==='plant'){plantBurst(task.index,'worker');world.syncCrops();}
     else if(task.kind==='feed')feedBurst(task.uid,'worker');else farmCollectFeedback(r.collected??[],at,'worker',at);
     if(!gainShows('worker'))return;
-    for(const [item,n] of Object.entries(r.cooked))floating('+'+n+' '+t(M.ITEMS[item]?.name??item),postFor(id).x,postFor(id).z,'item',1);
+    for(const [item,n] of Object.entries(r.cooked))gainItem(item,n);
     if(Object.keys(r.cooked).length)tone('pop');
   },
   grew(id,stage){toast(t('{name} grew up! Now {share} of your height.',{name:t(FRIENDS[id].name),share:String(GROWTH[stage].height)}),'🌱');tone('success');},
@@ -1348,11 +1364,11 @@ world.onInteract=async(e)=>{
   else if(e.kind==='mine'){const index=e.index;if(index===undefined||!M.mineAvailable(state,state.planet,index)){toast('This crystal needs a moment to regrow.','💎');return;}if(!await perform('claimMine',{index}))return;world.burst(e.x,e.z,'#d9c9f3');toast('A crystal for your crafting collection!','💎');}
   else if(e.kind==='gift'){if(e.index===undefined)return;const outcome=await perform<M.GiftOutcome>('claimGift',{index:e.index!});if(!outcome)return;e.mesh.visible=false;if(outcome.kind==='bomb'){for(const target of world.enemies)if(target.hp>0&&Math.hypot(target.x-e.x,target.z-e.z)<(outcome.radius??4.5))hit(target,Math.round(M.attack(state)*(outcome.damageMultiplier??3)));world.burst(e.x,e.z,'#ffb269',28);checkDefeat();}toast(outcome.label,'🎁');}
 };
-// Loot lands on the ground (drops.ts) and reaches the bag through the pickup magnet, with a '+n name' float.
+// Loot lands on the ground (drops.ts) and reaches the bag through the pickup magnet: a line in the pickup list by the backpack (gain-feed.ts).
 const drops=createDrops(world,{layer:$('#world-labels'),alive:()=>state.hp>0&&!world.interior,item:id=>Object.hasOwn(M.ITEMS,id)?M.ITEMS[id]:undefined,
   iconUrl:id=>Object.hasOwn(M.ITEMS,id)&&M.ITEMS[id].type==='decor'?decorIcon(id)||null:iconPath(id)?iconUrl(iconPath(id)!):null,
-  canAdd:(id,n)=>Number.isSafeInteger((state.bag[id]??0)+n)&&M.canAddItem(state,id,n),onPick:(d,stack)=>{
-    const feedback=(id:string,count:number)=>{floating('+'+count+' '+t(M.ITEMS[id].name),world.position.x,world.position.z,'item',stack*.7);tone('coin');};
+  canAdd:(id,n)=>Number.isSafeInteger((state.bag[id]??0)+n)&&M.canAddItem(state,id,n),onPick:d=>{
+    const feedback=(id:string,count:number)=>{gainItem(id,count);tone('coin');}; // the pickup list, or the tracker when it counts (gain-feed.ts)
     if(actionHandler){const meta=networkDrops.get(d.uid);if(!meta)return;networkDrops.delete(d.uid);const collectingState=state,root=world.root;
       void perform<{item:string;count:number}>('claimDrop',{ownerId:meta.drop.ownerId,id:meta.drop.id}).then(result=>{
         if(state!==collectingState||world.root!==root||visiting)return;
@@ -1385,8 +1401,8 @@ function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:stri
   // Experience flies in as cyan orbs; the loot is tossed onto the ground where the creature fell.
   const x=e.x??world.position.x,z=e.z??world.position.z;
   world.fx?.orbs({x,z},Math.min(8,3+Math.floor(e.xp/20)),'#7ff0ff',()=>world.position,()=>tone('coin'));
-  floating(`+${e.xp} EXP`,x,z,'xp',.5);
-  // Loot lands on the ground (drops.ts); picking it up shows the +n float.
+  gainStat('xp',e.xp); // the EXP bar fills and shows +N (gain-feed.ts)
+  // Loot lands on the ground (drops.ts); picking it up adds a line to the pickup list.
   drops.spawnLoot(loot,x,z);
   if(e.boss){toast(`${e.name??'Boss'} defeated!`,'👑');tone('level');}
   // The first-defeat companion is banked straight into the bag (model.ts grantDefeat), never dropped on the ground.
@@ -2155,7 +2171,7 @@ app.addEventListener('click',async event=>{
     case 'buy':if(id&&needsDuplicateConfirm(state,id)&&button.dataset.sure!=='1'){button.dataset.sure='1';button.classList.add('confirm-dup');button.textContent=t('Buy another? ϟ {price}',{price:(M.shopPrice(state,id)??0).toLocaleString()});button.title=t('You already own this. A spare can go to a helper.');break;}
       if(await perform('buy',{id})){
       // Gear goes straight onto the explorer, like picking up a fishing rod.
-      if(M.ITEMS[id].slot&&!autoHeld(id)&&await perform('equip',{id}))equipFeedback(id);else{floating(`+ ${t(M.ITEMS[id].name)}`,world.position.x,world.position.z,'item');tone('buy');}
+      if(M.ITEMS[id].slot&&!autoHeld(id)&&await perform('equip',{id}))equipFeedback(id);else{gainItem(id,1);tone('buy');}
       shop();}break;
     case 'equip':if(await perform('equip',button.dataset.slot?{id,slot:button.dataset.slot}:{id})){equipFeedback(id);if(modal==='shop')shop();else inventory();}break;
     case 'eat':await eatFood(id);inventory();break;
@@ -2164,8 +2180,8 @@ app.addEventListener('click',async event=>{
     case 'quick-eat-choose':quickEatChoice=id as FoodChoice;try{localStorage.setItem(QUICK_EAT_KEY,quickEatChoice);}catch{}quickEatMenu(false);updateQuickEat();break;
     case 'try-on':tryOn(id);break;
     case 'sell-one':case 'sell-all':{if(M.looseQuantity(state,id)<1){market();break;}const n=action==='sell-all'?M.looseQuantity(state,id):1;const value=await perform('sell',{id,count:n});if(value){tone('sell');toast(`Sold for ${value} energy. Thank you, neighbor!`,'ϟ');}market();break;}
-    case 'cook-sell-produce':{const value=await perform<number>('cookSellProduce');if(value){tone('success');floating(`+${value} ϟ`);toast(t('Cooked and sold everything for {amount} energy.',{amount:value}),'🔥');}market();break;}
-    case 'sell-produce':{const chest=produceLots(state).fromChest,value=await perform('sellProduce');if(value){tone('sell');floating(`+${value} ϟ`);toast(t('Sold all your produce for {amount} energy. Thank you, neighbor!',{amount:value})+(chest?' '+t('{count} from the chest',{count:chest})+'.':''),'ϟ');}market();break;}
+    case 'cook-sell-produce':{const value=await perform<number>('cookSellProduce');if(value){tone('success');gainStat('energy',value);toast(t('Cooked and sold everything for {amount} energy.',{amount:value}),'🔥');}market();break;}
+    case 'sell-produce':{const chest=produceLots(state).fromChest,value=await perform('sellProduce');if(value){tone('sell');gainStat('energy',value);toast(t('Sold all your produce for {amount} energy. Thank you, neighbor!',{amount:value})+(chest?' '+t('{count} from the chest',{count:chest})+'.':''),'ϟ');}market();break;}
     // A tap moves the whole stack, like the reference's chest (equipped gear stays in the backpack).
     case 'transfer':{const store=button.dataset.direction==='store',n=store?M.looseQuantity(state,id):state.chest[id]??0;if(n<1){storage();break;}await perform('transfer',{id,count:n,toChest:store});tone('click');storage();break;}
     case 'take-all':{const r=await perform<{count:number}>('takeChest');if(r?.count){tone('click');toast(t('Took {count} items from the chest.',{count:r.count}),'📦');}storage();break;}
@@ -2356,7 +2372,7 @@ function mountModes(m:typeof import('./modes.ts')){
 // The daily world boss (colossus.ts): offline it runs here on the local clock, online it mirrors the server's.
 colossus=new m.ColossusEvent({world,state:()=>state,online:()=>!!actionHandler,playing:()=>started&&!visiting&&!flight,
   defence:()=>M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),hurt:(amount,cls)=>world.onDamage(amount,'melee',COLOSSUS_ID,cls),
-  change,toast,news:(title,text)=>inbox.announce({kind:'other',icon:'🌋',title,text,open:'map'}),floating:(text,x,z,style)=>floating(text,x,z,style),spawnLoot:(loot,x,z)=>drops.spawnLoot(loot,x,z),tone:kind=>tone(kind as Parameters<typeof tone>[0]),hud:$('#hud')});
+  change,toast,news:(title,text)=>inbox.announce({kind:'other',icon:'🌋',title,text,open:'map'}),floating:(text,x,z,style)=>floating(text,x,z,style),gain:(kind,n)=>gainStat(kind,n),spawnLoot:(loot,x,z)=>drops.spawnLoot(loot,x,z),tone:kind=>tone(kind as Parameters<typeof tone>[0]),hud:$('#hud')});
 if(new URLSearchParams(location.search).get('colossus')==='1')colossus.start();
 const ranking=m.initRanking(gameBridge);rankingApi=ranking;rankingTapOff?.(); // the 🏆 leaderboard (ranking.ts)
 // The 📰 news board (news-board.ts) lives in the leaderboard dialog's News section: its unread count shows on the Ranking button, and it opens there once for new updates.
@@ -2393,4 +2409,4 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{inbox,surgeView,questWalk,get welcomeBack(){return welcomeBack;},pinHero:(spot:{x:number;z:number}|null)=>{world.perfPin=spot;},newsDemo:()=>{const before=state.level;state.level=Math.max(before+1,4);levelCheck(before);updateHud();},breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({news:inbox.open,bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{inbox,gainFeed,gainDemo:()=>gainFeed.demo(),surgeView,questWalk,get welcomeBack(){return welcomeBack;},pinHero:(spot:{x:number;z:number}|null)=>{world.perfPin=spot;},newsDemo:()=>{const before=state.level;state.level=Math.max(before+1,4);levelCheck(before);updateHud();},breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({news:inbox.open,bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

@@ -52,7 +52,7 @@ function fixture(holdResponse = false) {
     },
     closeDialog() { closed++; context.modal = null; },
     toast: (message, icon) => notices.push({ message, icon }),
-    floating() {}, tone() {},
+    floating() {}, gainItem() {}, gainStat() {}, tone() {},
     setTimeout: (run, delay) => { pending.push({ run, delay }); return pending.length; },
   };
   const ctx = vm.createContext(context); vm.runInContext(compiled, ctx);

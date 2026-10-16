@@ -317,9 +317,16 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
       await page.evaluate(() => { document.querySelector('.tutorial,.welcome')?.remove(); document.querySelectorAll('dialog[open]').forEach(d => d.close()); (document.querySelector('#dialog-layer [data-action="close"]') || document.querySelector('#dialog-close'))?.click(); });
       for (const [state, enter] of Object.entries(STATES)) {
         await enter(page);
+        // A fight's loot just picked up: the pickup list by the backpack shows (gain-feed-ui.ts) and must cover nothing.
+        await page.evaluate(() => window.__zoo.gainDemo?.()); await page.waitForTimeout(450);
         const m = await page.evaluate(measureHud);
         assert.deepEqual(findings(m), [], `${state} at ${size} in ${lang}`);
+        const pf = await page.evaluate(() => { const root = document.querySelector('#pickup-feed'), lines = [...root.querySelectorAll('.pf-line:not(.out)')]; return { taps: getComputedStyle(root).pointerEvents, lines: lines.length, fonts: lines.map(l => parseFloat(getComputedStyle(l).fontSize)), phone: matchMedia('(max-width: 600px), (max-height: 520px)').matches, scroll: document.documentElement.scrollWidth - innerWidth }; });
+        assert.equal(pf.taps, 'none', 'the pickup list never takes a tap');
+        assert.equal(pf.lines, pf.phone ? 2 : 3, `three lines at most, two on phones (${state} at ${size})`);
+        assert.ok(pf.fonts.every(f => f >= 11), `pickup lines are readable: ${pf.fonts}`); assert.ok(pf.scroll <= 0, 'no sideways scroll');
         if (state !== 'calm') continue;
+        { const bag = m.groups.dock[0], top = m.groups.pickups[0], near = !!top && Math.hypot(top.r - bag.l, top.t - bag.b) < 300; /* the newest line's corner, where the list hangs */ assert.ok(m.groups.pickups.length && near, `the pickup list hangs by the backpack at ${size}: ${JSON.stringify(m.groups.pickups)}`); }
         const g = m.groups, dock = g.dock, map = g.map[0], hero = g.hero[0], plate = m.plate;
         // The dock: bag, journal, News (the inbox) and More, in whole columns at the right edge, each cell at least 44 px;
         // ranking, play together, help, settings and the platform tools wait in the More menu (news-inbox-ui.ts).
