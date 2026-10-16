@@ -13,7 +13,7 @@ import { colossusClock, clockText } from './colossus-content.ts';
 import { runsLeft, DUNGEON } from './dungeon-rules.ts';
 import { DUNGEON_LEVEL } from './dungeon-content.ts';
 import { fullWinsLeft } from './rescue-claim.ts';
-import { COLOSSUS_BANNER_LEVEL } from './guide.ts';
+import { COLOSSUS_LEVEL } from './colossus-sleep.ts';
 
 export const WELCOME_BACK_KEY = 'zoo-welcome-back';
 /** The player's local calendar day ("2026-10-15"), not UTC: the card greets a new morning where the player lives. */
@@ -26,7 +26,7 @@ export interface WelcomeFacts { checkIn: ProgressEntry | null; streak: number; l
 /** What the card says at `now` (pure: tests and the card share it). `rescueCall`: a rescue call is waiting at the portal. */
 export function welcomeFacts(s: SaveState, now: number, o: { colossusAsleep?: boolean; rescueCall?: boolean; away?: { text: string; icon: string }[] } = {}): WelcomeFacts {
   const checkIn = progressEntries(s, 'daily', now).find(e => e.id.endsWith(':login')) ?? null, lines: WelcomeLine[] = [];
-  if (s.level >= COLOSSUS_BANNER_LEVEL) {
+  if (s.level >= COLOSSUS_LEVEL) { // below level 20 the Colossus sleeps for this explorer (colossus-sleep.ts): no line about it
     const c = colossusClock(now);
     lines.push({ icon: '🌋', kind: 'colossus', text: o.colossusAsleep ? t('The Colossus sleeps under the Ember Well lid.') : c.phase === 'active' ? t('The Colossus is awake now · {time} left', { time: clockText(c.left) }) : t('The Colossus wakes in {time}', { time: clockText(c.left) }) });
   }

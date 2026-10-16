@@ -4,6 +4,8 @@
  * goes for the explorer (aggro within a few metres) is fought, and the walk resumes after it. A light trail of dots on
  * the ground points the way: one instanced mesh (a single draw call), its matrices rebuilt five times a second along the
  * pathfinder's route, not every frame. The walk (and its trail) ends on arrival or as soon as the player steers.
+ * Chapter 1 of a new save also shows the trail without walking (`point`, FIX-PLAN 4.6): the same dots from the explorer
+ * to the next step's place, along a route asked for at most once a second, until the step is done or the player turns it off.
  */
 import * as T from 'three';
 
@@ -39,6 +41,8 @@ export interface QuestWalkWorld {
   position: WalkPoint; route: readonly WalkPoint[]; selected: unknown; destination: unknown;
   keys: { size: number }; joystickInput: WalkPoint | null; enemies: readonly WalkEnemy[];
   select(e: any): void; scene: T.Object3D; ground(p: WalkPoint): number;
+  /** A walking route to a point (the pointing trail follows it); a straight line without it. */
+  path?(to: WalkPoint): readonly WalkPoint[];
 }
 export type WalkEnd = 'arrived' | 'steered' | 'gone';
 const DOTS = 14, GAP = 1.15, REFRESH = .2;
@@ -48,6 +52,8 @@ export class QuestWalk {
   /** The last reason a walk ended (tests, the dev hook). */
   ended: WalkEnd | null = null;
   private w: QuestWalkWorld;
+  /** The pointing trail's goal (no walking), its route and when the route was asked for. */
+  private aim: WalkTarget | null = null; private aimRoute: readonly WalkPoint[] = []; private aimClock = 0; private aimFrom: WalkPoint = { x: 0, z: 0 };
   constructor(w: QuestWalkWorld) {
     this.w = w;
     const geo = new T.CircleGeometry(.24, 12), mat = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .95, depthWrite: false, toneMapped: false });
@@ -56,12 +62,19 @@ export class QuestWalk {
     w.scene.add(this.mesh);
   }
   get walking() { return !!this.target; }
+  /** Shows the trail to `goal` without walking there (null clears it); a guided walk takes over while it runs. */
+  point(goal: WalkTarget | null) {
+    const moved = !goal || !this.aim || Math.hypot(goal.x - this.aim.x, goal.z - this.aim.z) > 1.5;
+    this.aim = goal; if (moved) this.aimClock = Infinity; // a new goal asks for a fresh route at once
+    if (!goal && !this.target) { this.mesh.visible = false; this.mesh.count = 0; }
+  }
+  get pointing() { return !!this.aim && !this.target; }
   start(entity: { x: number; z: number; radius: number }) { this.target = { x: entity.x, z: entity.z, radius: entity.radius, entity }; this.ended = null; this.clock = REFRESH; this.mesh.visible = true; }
   stop(why: WalkEnd) { if (!this.target) return; this.target = null; this.ended = why; this.mesh.visible = false; this.mesh.count = 0; }
   /** True while auto-fight should stay out of the way. */
   holds() { return holdsAutoFight(this.walking, this.w.enemies, this.w.position); }
   update(dt: number) {
-    const tg = this.target, w = this.w; if (!tg) return;
+    const tg = this.target, w = this.w; if (!tg) { this.updatePoint(dt); return; }
     const j = w.joystickInput;
     if (w.keys.size || (j && Math.hypot(j.x, j.z) > .1)) { this.stop('steered'); return; }
     const sel = w.selected as { kind?: string } | null;
@@ -75,7 +88,17 @@ export class QuestWalk {
       if (!w.selected) { this.stop('gone'); return; }
     } else if (sel === tg.entity) { const foe = attacker(w.enemies, w.position); if (foe) w.select(foe); }
     this.clock += dt; if (this.clock < REFRESH) return; this.clock = 0; this.phase = (this.phase + .23) % 1;
-    const path: WalkPoint[] = [{ x: w.position.x, z: w.position.z }, ...(sel === tg.entity ? w.route : []), { x: tg.x, z: tg.z }];
+    this.draw([{ x: w.position.x, z: w.position.z }, ...(sel === tg.entity ? w.route : []), { x: tg.x, z: tg.z }], tg);
+  }
+  private updatePoint(dt: number) {
+    const aim = this.aim, w = this.w; if (!aim) return;
+    this.clock += dt; this.aimClock += dt; if (this.clock < REFRESH) return; this.clock = 0; this.phase = (this.phase + .23) % 1;
+    // The route is asked for at most once a second, and only after the explorer moved a little: one pathfinder call, not five.
+    if (this.aimClock >= 1 && (this.aimClock === Infinity || Math.hypot(w.position.x - this.aimFrom.x, w.position.z - this.aimFrom.z) > .8)) { this.aimClock = 0; this.aimFrom = { x: w.position.x, z: w.position.z }; this.aimRoute = w.path?.(aim) ?? []; }
+    this.mesh.visible = true; this.draw([{ x: w.position.x, z: w.position.z }, ...this.aimRoute, { x: aim.x, z: aim.z }], aim);
+  }
+  private draw(path: WalkPoint[], tg: WalkTarget) {
+    const w = this.w;
     const dots = trailDots(path, DOTS, GAP, 1.1 + this.phase * GAP), left = Math.hypot(tg.x - w.position.x, tg.z - w.position.z);
     let n = 0;
     for (const d of dots) {

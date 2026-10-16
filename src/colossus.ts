@@ -13,7 +13,7 @@ import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage
 import { colossusContributors, grantColossusReward, grantRoarBonus } from './colossus-rewards.ts';
 import { loadColossusArt, makeColossusRig, poseColossus, colossusArtReady, type ColossusRig } from './colossus-art.ts';
 import { ColossusAttackView } from './colossus-view.ts';
-import { colossusSleeps, colossusSoothed, SOOTHE_FACTOR, SOOTHE_HP_DIVISOR } from './colossus-sleep.ts';
+import { colossusChoice, colossusLid, noteColossusDay, COLOSSUS_LEVEL, SOOTHE_FACTOR, SOOTHE_HP_DIVISOR, type ColossusLid } from './colossus-sleep.ts';
 
 /** What the runtime needs from the game (main.ts wires it). */
 export interface ColossusHost {
@@ -156,7 +156,7 @@ export class ColossusEvent {
     if (!(dt > 0)) return;
     this.time += dt;
     const now = Date.now(), w = this.h.world, clock = this.window(now), online = this.h.online();
-    const awake = online ? !!this.server?.on && !this.server?.killed : clock.phase === 'active' && this.killedDay !== clock.day && !colossusSleeps();
+    const awake = online ? !!this.server?.on && !this.server?.killed : clock.phase === 'active' && this.killedDay !== clock.day && this.lid(clock.day) !== 'asleep';
     if (!online && clock.phase === 'active' && this.day !== clock.day) this.resetDay(clock.day);
     if (clock.phase !== this.lastPhase) { if (this.lastPhase === 'active' && clock.phase !== 'active' && !online) this.retreat(); this.lastPhase = clock.phase; }
     const home = w.planet === 'home' && !w.interior && this.h.playing();
@@ -213,7 +213,9 @@ export class ColossusEvent {
 
   // ---- Offline fight ----
   /** Solo, with the Ember Well's lid at "soothed": hits 50 times lighter and a fifth of the health, about 200,000 (online is never weakened). */
-  private get weak() { return !this.h.online() && colossusSoothed() ? SOOTHE_FACTOR : 1; }
+  private get weak() { return !this.h.online() && this.lid(this.day) === 'soothed' ? SOOTHE_FACTOR : 1; }
+  /** The well's lid in force (colossus-sleep.ts): the player's choice, else the level rule. A forced event (start(), day -2: tests and ?colossus=1) skips the level rule. */
+  private lid(day: number): ColossusLid { return day === -2 && !colossusChoice() ? 'wild' : colossusLid(this.h.state().level, String(day)); }
   private spawnedWeak = 1;
   private soloMaxHp() { return Math.max(1, Math.round(colossusMaxHp(1 + this.nearbyExplorers(), true) / (this.weak > 1 ? SOOTHE_HP_DIVISOR : 1))); }
   private resetDay(day: number) {
@@ -342,6 +344,7 @@ export class ColossusEvent {
     rig.root.userData.pickHeight = 9 / 1.85; rig.root.userData.pickHeightAsset = null; rig.root.userData.footprint = S.radius * .8;
     w.enemies.push(e); this.enemy = e; this.spawnedWeak = this.weak; this.rig = rig; this.rise = online && (this.server?.hp ?? 1) < (this.server?.maxHp ?? 1) ? 1 : 0; this.dying = 0;
     if (!online && this.day < 0) this.resetDay(this.window(Date.now()).day);
+    if (!online && this.day >= 0) noteColossusDay(this.h.state().level, String(this.day)); // the first day after reaching level 20 unchosen is the soothed one
     if (!online) { this.nextAt = this.time + 3; if (this.h.news?.('The Cinderpeak Colossus has woken', 'In Redrock Canyon until 24:00. The sky darkens over every planet.') ?? true) this.h.toast(t('The Cinderpeak Colossus has woken in Redrock Canyon! The sky darkens over every planet.'), '🌋'); this.h.tone('level'); }
   }
   /** Swaps the stand-in for the Blender giant once it arrives. */
@@ -454,8 +457,9 @@ export class ColossusEvent {
     const now = Date.now(), online = this.h.online(), clock = this.window(now), e = this.enemy, s = this.server;
     let mode: 'none' | 'soon' | 'awake' | 'done' = 'none', left = clock.left;
     if (online && s) { if (s.on && !s.killed) mode = 'awake'; else if (s.soon) mode = 'soon'; else if (s.on && s.killed) mode = 'done'; if (s.startsAt && mode === 'soon') left = s.startsAt - now; if (s.endsAt && mode === 'awake') left = s.endsAt - now; }
-    else if (!online && !colossusSleeps()) { if (clock.phase === 'soon') mode = 'soon'; else if (clock.phase === 'active') mode = this.killedDay === clock.day ? 'done' : 'awake'; }
-    if (!this.h.playing()) mode = 'none';
+    else if (!online && this.lid(clock.day) !== 'asleep') { if (clock.phase === 'soon') mode = 'soon'; else if (clock.phase === 'active') mode = this.killedDay === clock.day ? 'done' : 'awake'; }
+    // Online the server's Colossus wakes for everyone, but below level 20 it shows no badge (they can still walk there and join).
+    if (!this.h.playing() || online && this.h.state().level < COLOSSUS_LEVEL) mode = 'none';
     const hp = e && e.hp > 0 ? e.hp / e.maxHp : (online && s?.maxHp ? (s.hp ?? 0) / s.maxHp : 1);
     // Close by, the boss bar already shows its health: the banner steps back (hidden on phones, no meter on desktop).
     const bar = document.getElementById('boss-bar'), near = mode === 'awake' && !!bar && !bar.hidden && !!e && Math.hypot(this.h.world.position.x - e.x, this.h.world.position.z - e.z) < 36;

@@ -10,13 +10,20 @@
  *   and keep their full HUD.
  * - The "defeat creatures" step of Chapter 1: easy, slow creatures wait beside the garden (solo play only), and the
  *   tracker walks to the nearest one, so there is always a next visible goal.
+ * - The start (FIX-PLAN 4.6): three welcome cards on an untouched save, one goal on screen until the first fight is won
+ *   (or level 3), Chapter 1's way pointed out, and one-time moment tips. What was seen is saved in `seen` through the
+ *   `firstRunSeen` action, so the server keeps the same list and a second device does not show it again.
  *
  * Pure rules here (model.ts and the server use tutorialGrow); the DOM and world parts take what they need as arguments.
  */
 import { CROPS, ITEMS, STORY_STEPS } from './content.ts';
 
 /** Present only on saves started after this change; missing = an older save (full HUD, no tutorial crops). */
-export interface FirstRun { plants?: number; fought?: 1; food?: 1 }
+export interface FirstRun { plants?: number; fought?: 1; food?: 1; seen?: FirstSeen[] }
+/** What a new save shows once: the welcome cards and the moment tips (moment-tips.ts). */
+export const FIRST_SEEN = ['cards', 'tip:plant', 'tip:harvest', 'tip:fight', 'tip:drop', 'tip:equip'] as const;
+export type FirstSeen = typeof FIRST_SEEN[number];
+export const isFirstSeen = (v: unknown): v is FirstSeen => (FIRST_SEEN as readonly unknown[]).includes(v);
 export const TUTORIAL_PLANTS = 3;
 export const TUTORIAL_GROW_MS = 20_000;
 /** From this level on the HUD is always full. */
@@ -33,8 +40,30 @@ export function parseFirstRun(v: unknown): FirstRun | undefined {
   if (Number.isSafeInteger(r.plants) && (r.plants as number) > 0) out.plants = Math.min(TUTORIAL_PLANTS, r.plants as number);
   if (r.fought === 1) out.fought = 1;
   if (r.food === 1) out.food = 1;
+  if (Array.isArray(r.seen)) { const seen = FIRST_SEEN.filter(id => (r.seen as unknown[]).includes(id)); if (seen.length) out.seen = seen; }
   return out;
 }
+
+// ---- The start: welcome cards, one goal, tips (FIX-PLAN 4.6) ----
+export const hasSeen = (s: { firstRun?: FirstRun }, id: FirstSeen) => !!s.firstRun?.seen?.includes(id);
+/** Notes a card or tip as seen. Saves without `firstRun` (older ones) never show them, so there is nothing to note: still true. */
+export function markSeen(s: { firstRun?: FirstRun }, id: FirstSeen): boolean {
+  if (!isFirstSeen(id)) return false;
+  const run = s.firstRun; if (run && !run.seen?.includes(id)) (run.seen ??= []).push(id);
+  return true;
+}
+interface StartSave extends RunSave { plots: readonly { crop: unknown }[] }
+/** A save started now that has not been played yet: level 1, nothing planted, harvested or defeated, the story on its first step. An online account that already played is not untouched. */
+export const untouched = (s: StartSave) => !!s.firstRun && s.level === 1 && s.counters.harvests === 0 && s.counters.kills === 0 && s.progression.story.index === 0 && s.plots.every(p => !p.crop);
+/** The three welcome cards: on an untouched save, until they are seen or skipped. */
+export const welcomeCardsDue = (s: StartSave) => untouched(s) && !hasSeen(s, 'cards');
+/**
+ * One goal at a time: on a new save only the story tracker shows until the first creature is defeated (Chapter 1's
+ * first fight) or level 3, whichever comes first. The bounty, the quick challenge and the other trackers wait. Older saves: never.
+ */
+export const oneGoal = (s: RunSave) => !!s.firstRun && s.counters.kills === 0 && s.level < CALM_UNTIL_LEVEL;
+/** Chapter 1 of a new save: the way to the next step is pointed out by itself (trail and edge arrow). */
+export const chapterOneGuide = (s: RunSave) => !!s.firstRun && STORY_STEPS[s.progression.story.index]?.chapter === 0;
 
 /** The grow time a planting would get, without counting it (the seed picker's time chip). */
 export function tutorialPreview(s: RunSave, crop: string, duration: number) { const run = s.firstRun ? { ...s.firstRun } : undefined; return tutorialGrow({ ...s, firstRun: run }, crop, duration); }
