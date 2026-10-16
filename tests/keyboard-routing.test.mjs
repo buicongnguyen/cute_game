@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import ts from 'typescript';
 import * as Controls from '../src/gameplay-controls.ts';
+import {bindingKey} from '../src/controls-keys.ts';
 import {JumpInput,jumpKeyAction} from '../src/jump-rules.ts';
 import {AttackHold,HOLD} from '../src/five-rules.ts';
 
@@ -22,7 +23,7 @@ function fixture(layout='classic'){
   const register=(handlers,name,fn)=>{const list=handlers.get(name)??[];list.push(fn);handlers.set(name,list);};
   const state={settings:{keyboardLayout:layout}},movement=new Controls.MovementControls(keys);
   const jumpInput=new JumpInput(),attackHold=new AttackHold();
-  const ctx=vm.createContext({...Controls,jumpKeyAction,jumpInput,attackHold,attackPointers:new Set(),worldHold:null,skills:4,skillList:()=>Array.from({length:ctx.skills},()=>({})),jumpPointers:new Set(),slideCombo:{cancel(){}},air:true,airOn:()=>ctx.air,spaceKey:'jump',state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
+  const ctx=vm.createContext({...Controls,controls:{bindingKey,translate:(key,code)=>({key,code}),jumpUp:()=>false},jumpKeyAction,jumpInput,attackHold,attackPointers:new Set(),worldHold:null,skills:4,skillList:()=>Array.from({length:ctx.skills},()=>({})),jumpPointers:new Set(),slideCombo:{cancel(){}},air:true,airOn:()=>ctx.air,spaceKey:'jump',state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
     world:{keys,interactNearest:()=>calls.push(['interact'])},document:{hidden:false,activeElement:body,addEventListener:(name,fn)=>register(documentHandlers,name,fn),querySelector:selector=>selector==='dialog[open]'&&ctx.nativeDialog?{}:null},window:{addEventListener:(name,fn)=>register(windowHandlers,name,fn)},
     previous:0,performance:{now:()=>12345},graphics:{sample:(...args)=>calls.push(['graphicsSample',...args])},
     $:()=>({querySelectorAll:()=>[]}),uiBlocked:()=>!!ctx.modal||ctx.nativeDialog,
