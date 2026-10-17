@@ -86,7 +86,9 @@ function suite(app){
   return result;
 }
 
-test('all main menus switch Vietnamese and back with identical game actions and saved state',()=>{
+test('all main menus switch Vietnamese and back with identical game actions and saved state',(ctx)=>{
+  // Keep bounty rotation stable while comparing the three language renders.
+  ctx.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 9, 17, 6, 0) });
   const app=fixture();setLanguage('en');const english=suite(app),saved=JSON.stringify(app.state);
   setLanguage('vi');const vietnamese=suite(app);
   assert.equal(english.length,28);assert.equal(vietnamese.length,english.length);
