@@ -1,0 +1,14 @@
+/* Informational reminders never block movement, steal focus or require Close. */
+#place-notice { position: fixed; z-index: 110; left: 50%; top: calc(10px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 6px; width: max-content; max-width: min(360px, calc(100vw - 32px)); padding: 7px 11px; border: 1px solid rgba(255,255,255,.5); border-radius: 11px; background: rgba(43,35,40,.94); color: #fff6e0; box-shadow: 0 2px 6px #0002; font-size: 12px; font-weight: 750; line-height: 1.35; pointer-events: none; }
+#place-notice[hidden] { display: none; }
+#place-notice > span:first-child { flex: none; font-size: 15px; }
+#place-notice.passive { padding: 4px 9px; border: 0; box-shadow: none; background: rgba(43,35,40,.8); }
+#dialog[data-notice="intro"] { width: 360px; max-width: calc(100vw - 24px); }
+#dialog[data-notice="intro"] > header { padding: 8px 10px; }
+#dialog[data-notice="intro"] h2 { font-size: 16px; }
+#dialog[data-notice="intro"] #dialog-body { padding: 12px; gap: 9px; font-size: 13px; line-height: 1.35; }
+#dialog[data-notice="intro"] #dialog-body p { margin: 0; }
+#dialog[data-notice="intro"] #dialog-icon { width: 30px; height: 30px; font-size: 20px; border-radius: 9px; }
+@media (max-width: 600px), (max-height: 520px) {
+  #place-notice { top: calc(var(--edge, 10px) + env(safe-area-inset-top, 0px) + max(var(--mm, 90px), var(--hero-h, 60px)) + 48px); max-width: calc(100vw - 24px); font-size: 11.5px; }
+}

@@ -1,3 +1,5 @@
+import { mountPlaceNotices } from './place-notices.ts';
+import './place-notices.css';
 import { assetUrl } from './asset-url.ts';
 import './mobile-game-init.mjs';
 import {cropBadgeAnchor} from './crop-cards.ts';
@@ -492,6 +494,8 @@ const vibrate=(ms:number)=>{try{if(audioOf(state.settings).vibrate&&matchMedia('
 function save() { if(!started)return;if(persistence){persistence(state);return;}if(!saveGuard.canWrite(activeKey()))return;try { state.savedAt=Date.now();localStorage.setItem(activeKey(),JSON.stringify(contextGear.persisted(state)));saveGuard.wrote(activeKey(),state.savedAt);saveFailed=false;$('#save-status').textContent=t('● Saved on this device'); } catch { saveFailed=true;$('#save-status').textContent=t('○ Saving unavailable'); } }
 // Keep at most three messages on screen (two on phones, where they also leave sooner); older ones fade out instead of stacking up the view.
 const phoneScreen=matchMedia('(max-width: 600px), (max-height: 520px)');
+const placeNotices=mountPlaceNotices(app,activeKey);
+frameListeners.add(()=>placeNotices.sync(started&&!document.hidden));
 function toast(message: string, icon='✨') {
   message=t(message);
   const stack=$('#toasts'),el=document.createElement('div');el.className='toast';el.innerHTML=`<span>${icon}</span><div>${esc(message)}</div>`;stack.append(el);
@@ -556,6 +560,16 @@ function botActive(){return started&&!actionHandler&&!document.hidden&&!uiBlocke
 /** 'wardrobe' while the bag was opened from the bedroom wardrobe: it then lists only things to wear (house-stores.ts). */
 let bagMode:'bag'|'wardrobe'='bag';
 function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF AT HOME',icon?:string) {
+  // Information-only encounters never become a recurring modal. Functional menus stay available.
+  if(type==='fish-help'){
+    const reminder=t('Bring a fishing rod. Outfitters → Supplies → Rods & tools (ϟ {price}).',{price:M.shopPrice(state,'rod')??20});
+    if(!placeNotices.first('fishing')){placeNotices.show('fishing',reminder,'🎣');return;}
+    title='Fishing';kicker='';icon='🎣';body=`<p>${esc(t('Keep a fishing rod in your backpack to cast your line.'))}</p><p>${esc(reminder)}</p><button class="primary" data-action="shop-rod">${esc(t('Visit the outfitters'))}</button>`;
+  }
+  if(type==='cook'&&!M.kitchenOpen(state)&&!Tester.isTester(state)){placeNotices.show('kitchen-locked',t('Kitchen unlocks at level {level}.',{level:M.KITCHEN_LEVEL}),'🔒',true);return;}
+  if(type==='well'&&(actionHandler||persistence)){placeNotices.show('well-shared','The well is shared. The Colossus follows the server’s clock.','🪨',true);return;}
+  if(type==='house-trophies'&&!(state.bosses??[]).length&&!(state.friends??[]).length){placeNotices.show('trophies-empty','Defeat bosses and rescue friends to fill this wall.','🏆',true);return;}
+  $('#dialog').dataset.notice=type==='fish-help'?'intro':'';
   if(fishGame)endFishing();if($('#dialog-layer').hidden)tone('open');
   // Inside the cottage the stove, workbench, globe, wardrobe and mirror are their own places, not the village shops (house-stores.ts).
   const store=indoorStore(type,!!world.interior,bagMode==='wardrobe');if(store){title=store.title;kicker=store.kicker;icon=store.icon;body=purposeHtml(store)+body;}$('#dialog').dataset.station=store?type:'';setDock(type);
@@ -1461,7 +1475,7 @@ world.onInteract=async(e)=>{
   else if(e.kind==='animal'){if(M.readyAnimals(state).some(a=>a.uid===e.animalUid))collectFarm(e.animalUid);else penDialog();}
   else if(e.kind==='home'){if(!await perform('rest'))return;toast('Home, sweet home. Your health is restored.','🏡');}
   else if(e.kind==='dropped')void deathBags.pick(e);
-  else if(e.kind==='mine'){const index=e.index;if(index===undefined||!M.mineAvailable(state,state.planet,index)){toast('This crystal needs a moment to regrow.','💎');return;}if(!await perform('claimMine',{index}))return;world.burst(e.x,e.z,'#d9c9f3');toast('A crystal for your crafting collection!','💎');}
+  else if(e.kind==='mine'){const index=e.index;if(index===undefined||!M.mineAvailable(state,state.planet,index)){placeNotices.show('mine-regrowing','This crystal needs a moment to regrow.','💎',true);return;}if(!await perform('claimMine',{index}))return;world.burst(e.x,e.z,'#d9c9f3');toast('A crystal for your crafting collection!','💎');}
   else if(e.kind==='gift'){if(e.index===undefined)return;const outcome=await perform<M.GiftOutcome>('claimGift',{index:e.index!});if(!outcome)return;e.mesh.visible=false;if(outcome.kind==='bomb'){for(const target of world.enemies)if(target.hp>0&&Math.hypot(target.x-e.x,target.z-e.z)<(outcome.radius??4.5))hit(target,Math.round(M.attack(state)*(outcome.damageMultiplier??3)));world.burst(e.x,e.z,'#ffb269',28);checkDefeat();}toast(outcome.label,'🎁');}
 };
 // Loot lands on the ground (drops.ts) and reaches the bag through the pickup magnet: a line in the pickup list by the backpack (gain-feed.ts).

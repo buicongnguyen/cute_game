@@ -1,5 +1,11 @@
 // Vietnamese for the first minutes of a new save (first-run.ts, fold-lists.ts).
 export const FIRST_VI: Record<string, string> = {
+  'Fishing': 'Câu cá',
+  'Keep a fishing rod in your backpack to cast your line.': 'Giữ một cần câu trong ba lô để thả câu.',
+  'Bring a fishing rod. Outfitters → Supplies → Rods & tools (ϟ {price}).': 'Mang theo cần câu. Tiệm đồ → Vật dụng → Cần câu & dụng cụ (ϟ {price}).',
+  'Kitchen unlocks at level {level}.': 'Bếp mở khóa ở cấp {level}.',
+  'The well is shared. The Colossus follows the server’s clock.': 'Giếng thuộc về thế giới chung. Người Khổng Lồ xuất hiện theo giờ máy chủ.',
+  'Defeat bosses and rescue friends to fill this wall.': 'Đánh bại trùm và cứu bạn bè để lấp đầy bức tường này.',
   'Play': 'Chơi',
   'Tap a garden bed to plant your first carrot.': 'Chạm vào luống đất để trồng củ cà rốt đầu tiên.',
   'Click a garden bed to plant your first carrot.': 'Nhấp vào luống đất để trồng củ cà rốt đầu tiên.',
