@@ -63,21 +63,15 @@ export function hipOf(model: T.Object3D | null | undefined): number {
 export const WALK_RATE = 11;
 /** The swing (radians) of the longest legs; shorter styles sit between this and the default 0.7. */
 const LONG_SWING = .55, LONG_HIP = 1.36;
-/**
- * The explorer's own walk fitted to its legs. The default explorer (and anything shorter) keeps its cartoon patter:
- * `rate` 1, `swing` 0.7; its legs are short under a big head and nobody reads the feet. Longer legs are read, so they
- * walk TRUE to the ground: the swing narrows a little as the hips rise, and the step clock is set from the speed the
- * explorer really moves at, so that one step covers one stride (a stride is 2 x hip x scale x sin(swing) metres and a
- * cycle is two of them). Before this the Grown explorer's body covered about three times the ground its steps did.
- * The clock never runs past MAX_RATE (legs would blur), so a very fast explorer on middle-length legs still glides a
- * little. `drop` is how far (model units) the hips sink at full swing, so the standing foot stays on the ground.
- */
+/** Distance-matched steps for every height; short cartoon legs may patter faster than long legs. */
 export function strideOf(hip: number, speed = 6, scale = .84): { rate: number; swing: number; drop: number } {
-  if (!(hip > HIP + .01)) return { rate: 1, swing: .7, drop: 0 };
-  const swing = .7 - (.7 - LONG_SWING) * Math.min(1, (hip - HIP) / (LONG_HIP - HIP)), stride = 2 * hip * scale * Math.sin(swing);
-  const rate = Math.min(MAX_RATE, Math.max(4, Math.PI * Math.max(0, speed) / stride)) / WALK_RATE;
-  return { rate, swing, drop: hip * (1 - Math.cos(swing)) };
+  const leg = Math.max(.2, hip), k = Math.max(0, Math.min(1, (leg - HIP) / (LONG_HIP - HIP)));
+  const swing = .7 + Math.max(0, Math.min(.3, (HIP - leg) * 2)) - (.7 - LONG_SWING) * k, stride = 2 * leg * Math.max(.1, scale) * Math.sin(swing);
+  const limit = MAX_RATE + (1 - k) * 18;
+  const rate = Math.min(limit, Math.PI * Math.max(0, speed) / stride) / WALK_RATE;
+  return { rate, swing, drop: leg * (1 - Math.cos(swing)) };
 }
+
 /**
  * Blends the walk swing over whatever pose the limbs already hold (x rotations only; an arm's splay on z is kept).
  * Returns the body bob (model units) to add to the walker's height. Pass arms = false to leave the arms to a pose.

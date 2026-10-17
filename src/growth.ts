@@ -1,7 +1,7 @@
 import type { Friend } from './friends-state.ts';
 
 /**
- * Rescued friends grow up: half the explorer's height when freed, then 0.75, then 0.8 (never taller than the explorer,
+ * Rescued friends grow up: 65% of the base explorer's height when freed, then 75%, then 85% (never taller than the explorer,
  * so the explorer still reads as the hero). A stage is reached by EITHER time at home OR work done, whichever comes first:
  * - time (1 day, then 3 days after the rescue) so a player who checks in daily sees them grow even on a slow farm;
  * - jobs (40, then 150) so a busy session is rewarded. Only harvests and collects count (planting and feeding are
@@ -11,9 +11,9 @@ import type { Friend } from './friends-state.ts';
  * Stages are saved (`grown`) and never go back, so a friend that grew stays grown after a reset of the day counter.
  */
 export const GROWTH = [
-  { height: .5, days: 0, jobs: 0 },
+  { height: .65, days: 0, jobs: 0 },
   { height: .75, days: 1, jobs: 40 },
-  { height: .8, days: 3, jobs: 150 },
+  { height: .85, days: 3, jobs: 150 },
 ] as const;
 const DAY = 86_400_000;
 /** Most jobs a day that count toward growth. */

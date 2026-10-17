@@ -36,12 +36,12 @@ test('welcome cards: only on an untouched new save, once, saved in the save thro
   assert.ok(markSeen(s, 'tip:fight') && FIRST_SEEN.every(id => markSeen(s, id)) && s.firstRun!.seen!.length === FIRST_SEEN.length);
 });
 
-test('the three cards say who you are, what the game is and what to do now, Tap on phones and Click with a mouse', () => {
+test('one compact welcome gives the first action on phones and desktop', () => {
   const phone = welcomeCards(true, 9), pc = welcomeCards(false, 9);
-  assert.equal(phone.length, 3);
-  assert.match(phone[0].title, /keeper of Clover Village/); assert.match(phone[1].body, /fly to \{n\} planets/); assert.equal(phone[1].params!.n, 9);
-  assert.match(phone[2].body, /^Tap a garden bed/); assert.match(pc[2].body, /^Click a garden bed/);
-  for (const c of [...phone, pc[2]]) assert.ok(c.body.length <= 72, `two lines at most on a phone: ${c.body}`);
+  assert.equal(phone.length, 1); assert.equal(pc.length, 1);
+  assert.match(phone[0].title, /Welcome home/);
+  assert.match(phone[0].body, /^Tap a garden bed/); assert.match(pc[0].body, /^Click a garden bed/);
+  assert.ok(phone[0].body.length < 60);
 });
 
 test('one goal at a time: the bounty and challenge trackers wait until the first creature is defeated or level 3', () => {
@@ -108,7 +108,7 @@ test('every new start string has its Vietnamese', () => {
   for (const src of files) for (const m of src.matchAll(/(?:title|body|text): (?:touch \? |f\.touch \? )?'([^']+)'(?: : '([^']+)')?/g)) { strings.add(m[1]); if (m[2]) strings.add(m[2]); }
   for (const src of files) for (const m of src.matchAll(/\Wt\('([^']+)'/g)) strings.add(m[1]);
   strings.add("You're the new keeper of Clover Village"); strings.add("Let's grow!");
-  assert.ok(strings.size >= 20, `found ${strings.size}`);
+  assert.ok(strings.size >= 16, `found ${strings.size}`);
   for (const en of strings) assert.ok(VI_PACK[en] && VI_PACK[en] !== en, en);
   for (const [en, vi] of Object.entries(FIRST_VI)) assert.equal(VI_PACK[en], vi, en);
 });

@@ -827,5 +827,9 @@ export const ENEMY_SCALE:Readonly<Record<string,number>>={
   cloudsheep:.99,thunderbird:.85,windspirit:.78,
   wisp:.73,spider:.99,demoneye:.84,
 };
+/** Ordinary small creatures travel at 75% pace; large quarry and bosses retain their pace. */
+export function creatureTravelPace(type: string | undefined, boss = false): number {
+  return !boss && !!type && Object.hasOwn(ENEMY_SCALE, type) && type !== 'forest_raptor' ? .75 : 1;
+}
 /** The scale a creature's model is drawn at: bosses 1.85 x their size factor (1.48), common creatures their ENEMY_SCALE. */
 export function enemyScale(type:string|undefined,boss=false){return (type&&Object.hasOwn(TITANS,type)?TITANS[type as keyof typeof TITANS].scale:boss?1.85:ENEMY_SCALE[type??'']??1)*sizeFactor(type);}

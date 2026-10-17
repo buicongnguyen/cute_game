@@ -9,7 +9,7 @@
 #guide-pointer .gp-arrow { font-size: 34px; line-height: 1; color: #ffd23f; text-shadow: 0 0 6px #000, 0 2px 0 #7a4f00; display: inline-block; transform-origin: 50% 50%; margin-left: -17px; margin-top: -17px; animation: gp-nudge .8s ease-in-out infinite; }
 @keyframes gp-pulse { 50% { scale: 1.08; } }
 @keyframes gp-nudge { 50% { translate: 4px 0; } }
-.quest-tracker #quest-summary.can-walk { box-shadow: inset 0 0 0 2px rgba(255, 210, 63, .8); border-radius: 12px; animation: gp-glow 1.6s ease-in-out infinite; }
+.quest-tracker #quest-summary.can-walk { border-radius: 12px; }
 #quest-summary.can-walk::after { content: '👣'; flex: none; margin-left: 4px; font-size: 16px; }
 /* Touch HUDs let taps fall through the tracker rows (style.css); a row that can walk you somewhere takes its own tap. */
 @media (pointer: coarse) { #quest-summary.can-walk { pointer-events: auto; min-height: 34px; align-items: center; position: relative; }

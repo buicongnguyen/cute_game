@@ -14,8 +14,8 @@
  * so the Ears row's ears are left off while it is worn (the tail stays), and a hat covers it (one thing on the head).
  * Owning an option unlocks it for both bodies and every combination, and switching between owned options is free.
  * Prices: the old Tall look cost 120 and stays 120; teen is a smaller step. Ears were sold with a whole body at 180
- * (Cat boy / Bunny girl); on their own they are a little cheaper, still between a hat and an outfit. Cosmetic only:
- * stats, hitboxes and HERO_SCALE are the same for every combination.
+ * (Cat boy / Bunny girl); on their own they are a little cheaper, still between a hat and an outfit. Body and accessories are cosmetic; height also sets a gentle walking pace.
+ * Hitboxes and HERO_SCALE are the same for every combination.
  *
  * Pure state (no three.js) so model.ts parses it and the server runs the same rules (actions.ts buyLook / wearLook).
  * The art is art/blender/kit/build_hero_styles.py: one file per body x height (bodyFile) plus hero-parts.glb with the
@@ -67,6 +67,9 @@ export const HEIGHT_RATIO: Record<Height, number> = { tiny: .979, chibi: 1, teen
  * for a day (2026-10-13, the owner found it a little too tall), then its body file was rebuilt 8% shorter with the cut
  * taken from the shins (build_hero_styles.py, 2026-10-14), so its head, hats and gear are full size again.
  */
+/** A gentler travel pace for longer legs. Equipment and skill bonuses remain independent. */
+export const HEIGHT_PACE: Record<Height, number> = { tiny: 1, chibi: 1, teen: .97, tall: .94, grown: .9 };
+export function lookPace(look: unknown): number { const l = typeof look === 'string' ? toLook(look) : null; return l ? HEIGHT_PACE[splitLook(l).height] : 1; }
 export const HEIGHT_TRIM: Partial<Record<Height, number>> = {};
 /** The trim of the look an avatar was built with (its userData.look); 1 for anything else. */
 export function lookTrim(look: unknown): number { const l = typeof look === 'string' ? toLook(look) : null; return l ? HEIGHT_TRIM[splitLook(l).height] ?? 1 : 1; }

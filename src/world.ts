@@ -59,12 +59,12 @@ import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
 import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
-import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
+import {creatureTravelPace,ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
 import {BOSS_DRAW,chargeTouches} from './boss-body.ts';
 import {STAGGER,adoptStaggerView,newStagger,staggerBroken,staggerDamage,staggerHit,type Stagger,type StaggerBlow,type StaggerView} from './boss-stagger.ts';
 import {BossFeel,isSolidBoss,type FeelHost} from './boss-feel.ts';
 import {applyGait,armOf,armSwing,gaitSwing,hipOf,limbsOf,newGait,stepGait,strideOf,type Gait} from './walk-cycle.ts';
-import {DEFAULT_PIVOTS,fitOf,lookOf,lookTrim,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
+import {DEFAULT_PIVOTS,fitOf,lookOf,lookTrim,lookPace,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {fitArmPiece} from './arm-fit.ts';
 import {part} from './part-cache.ts';
 import {WeaponTrail,measureBlade,type HeldBlade} from './weapon-trail.ts';
@@ -1990,7 +1990,7 @@ export class World {
     }
     if(chasing&&distance<8&&distance>.001&&['firebat','thunderbird','jellyzap','wisp'].includes(e.type??'')&&!noAttack){
       const side=(Number(e.id.split(':').at(-1))||0)%2?1:-1,dx=(target!.x-e.x)/distance,dz=(target!.z-e.z)/distance,radial=(distance-5)*.4;
-      const vx=-dz*side+dx*radial,vz=dx*side+dz*radial,n=Math.hypot(vx,vz),speed=def.speed*.8*((statuses.slow??0)>0?.45:1);
+      const vx=-dz*side+dx*radial,vz=dx*side+dz*radial,n=Math.hypot(vx,vz),speed=def.speed*creatureTravelPace(e.type,e.boss)*.8*((statuses.slow??0)>0?.45:1);
       this.moveCreature(e,vx/n*speed*dt,vz/n*speed*dt);e.mesh.rotation.y=Math.atan2(vx,vz);e.phase='chase';return;
     }
     if(def.speed===0)return;
@@ -2007,7 +2007,7 @@ export class World {
       if(!e.routeTime){e.routeTime=.7;const endpoint=approach(e,goal,0,obstacles,chasing?Math.max(.7,def.reach*.7):.3,options);e.route=endpoint?findRoute(e,endpoint,obstacles,chasing?options:{...options,maxIterations:ROUTE_BUDGET}):[];}
       if(e.route?.length){if(Math.hypot(e.route[0].x-e.x,e.route[0].z-e.z)<.12)e.route.shift();if(e.route.length)goal=e.route[0];}
     }else e.route=[];
-    const dx=goal.x-e.x,dz=goal.z-e.z,d=Math.hypot(dx,dz),speed=(chasing?def.speed:returning?def.speed*1.2:.6)*(e.boss&&e.hp<e.maxHp*.5?1.35:1)*(e.boss&&e.hp<e.maxHp*.3?1.25:1)*((e.bossStage??1)>=3?1.2:1)*((statuses.slow??0)>0?.45:1)*((statuses.sheep??0)>0?.45:1)*(e.hp<e.maxHp*HURT.below?hurtSpeed(this.weightOf(e),e.hp,e.maxHp):1); // badly hurt small creatures limp along (creature-weight.ts HURT)
+    const dx=goal.x-e.x,dz=goal.z-e.z,d=Math.hypot(dx,dz),speed=(chasing?def.speed:returning?def.speed*1.2:.6)*creatureTravelPace(e.type,e.boss)*(e.boss&&e.hp<e.maxHp*.5?1.35:1)*(e.boss&&e.hp<e.maxHp*.3?1.25:1)*((e.bossStage??1)>=3?1.2:1)*((statuses.slow??0)>0?.45:1)*((statuses.sheep??0)>0?.45:1)*(e.hp<e.maxHp*HURT.below?hurtSpeed(this.weightOf(e),e.hp,e.maxHp):1); // badly hurt small creatures limp along (creature-weight.ts HURT)
     if(d>.05){const step=Math.min(d,speed*dt);this.moveCreature(e,dx/d*step,dz/d*step);e.mesh.rotation.y=Math.atan2(dx,dz);e.phase=chasing?'chase':returning?'return':'idle';}
   }
   /** Push a creature back; it slides and slows like the reference's knockback, blocked by scenery. */
@@ -2147,7 +2147,7 @@ export class World {
     if(active||simulateWorld){
       const environmentAtStart=this.environment;
       this.environment.authoritative=!this.authoritativeAction&&this.networkRole!=='peer';const dragon=this.enemies.find(e=>e.type==='dragon'&&e.hp>0);this.environment.dragonPhase=dragon?bossPhase(dragon.hp,dragon.maxHp):0;this.environment.nearbyPlayers=1+[...this.remotePlayers?.values()??[]].filter(r=>r.mesh.visible&&Math.hypot(r.pose.x-this.position.x,r.pose.z-this.position.z)<40).length;this.environment.weatherBlocked=(x,z,r)=>this.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+r);
-      const step=this.environment.step(dt,this.position,input,{speed:stats.speed*(1+Math.max(0,this.playerSpeedBonus||0))*(this.swimSpeed||1),maxHp:stats.maxHp,fireResistance:stats.lavaproof?1:stats.fireResistance,poisonImmune:stats.poisonImmune,flippers:stats.flippers,featherFall:stats.featherFall,flying:this.playerFlying||stats.flying,hop:!!this.jumpRules&&dodges('ground',this.jump.height)},this.networkRole==='peer'?[]:this.enemies.map(e=>({id:e.id,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,boss:e.boss,flying:e.definition?.flying||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''),lavaImmune:e.type==='lavaworm'})));
+      const step=this.environment.step(dt,this.position,input,{speed:stats.speed*lookPace(this.player.userData.look)*(1+Math.max(0,this.playerSpeedBonus||0))*(this.swimSpeed||1),maxHp:stats.maxHp,fireResistance:stats.lavaproof?1:stats.fireResistance,poisonImmune:stats.poisonImmune,flippers:stats.flippers,featherFall:stats.featherFall,flying:this.playerFlying||stats.flying,hop:!!this.jumpRules&&dodges('ground',this.jump.height)},this.networkRole==='peer'?[]:this.enemies.map(e=>({id:e.id,x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,boss:e.boss,flying:e.definition?.flying||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''),lavaImmune:e.type==='lavaworm'})));
       this.dynamicObstacles=this.environment.dynamicObstacles();const signature=this.dynamicObstacles.map(o=>o.x+','+o.z).join(';');
       if(signature!==this.environmentSignature){this.environmentSignature=signature;this.resolveOverlap(this.position,this.collisionObstacles(),.36);if(this.destination)this.route=this.findPath(this.destination);}
       if(step.relocate){this.position.set(step.relocate.x,step.relocate.y??0,step.relocate.z);this.destination=null;this.route=[];this.selected=null;}
@@ -2414,8 +2414,8 @@ export class World {
     // The trail keeps its times in single precision: its clock starts over now and then, while nothing swings.
     if(this.trailClock>300&&!(this.punchT>0)&&!(this.spinT>0)&&!this.bladeTrail?.active){this.trailClock=0;this.swingAt=-9;this.windHold=0;}
     // The walk is fitted to the body style's legs (walk-cycle.ts strideOf): longer legs step slower and swing less.
-    // Long legs walk true to the ground: the step clock follows the speed the explorer really moves at (smoothed).
-    const at=this.position??{x:0,z:0},was=this.walkFrom??(this.walkFrom={x:at.x,z:at.z,v:0});if(dt>0){const v=Math.min(30,Math.hypot(at.x-was.x,at.z-was.z)/dt);was.v+=(v-was.v)*Math.min(1,dt*10);}was.x=at.x;was.z=at.z;
+    // All body heights walk true to the ground: the step clock follows the speed the explorer really moves at.
+    const at=this.position??{x:0,z:0},was=this.walkFrom??(this.walkFrom={x:at.x,z:at.z,v:0});if(dt>0){const v=Math.min(30,Math.hypot(at.x-was.x,at.z-was.z)/dt);was.v=v;}was.x=at.x;was.z=at.z;
     const stride=strideOf(hipOf(this.player),was.v,this.player.scale?.y||HERO_SCALE),arm=armSwing(armOf(this.player));/* longer arms swing less and hang closer (walk-cycle.ts armSwing) */
     this.walkClock=(this.walkClock||0)+dt*(this.moving?11*stride.rate:3);
     const o=this.walkClock,c=Math.sin(o),p=this.player;

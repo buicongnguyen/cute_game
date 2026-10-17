@@ -18,8 +18,8 @@ import { applyGait, limbsOf, type Gait } from './walk-cycle.ts';
  * Kept cheap: no shadow casting (a soft blob instead, shared geometry and material), the explorer's merged outlines,
  * and the hero kit's baked-colour parts; only the head geometry is copied, to recolour the baked hair.
  */
-export const FRIEND_SCALE = HERO_SCALE * .5;
-/** The root scale at a growth stage (growth.ts): 0.5, 0.75 or 0.8 of the explorer's height. */
+export const FRIEND_SCALE = HERO_SCALE * friendHeight(0);
+/** The root scale at a growth stage (growth.ts): 0.65, 0.75 or 0.85 of the explorer's height. */
 export const friendScale = (stage = 0) => HERO_SCALE * friendHeight(stage);
 type Dresser = (color: string, gear: SaveState['gear'], look: LookId) => T.Group;
 let dresser: Dresser | null = null;
@@ -85,7 +85,7 @@ export function buildAvatar(tint: string, hair: string | null, gear: SaveState['
   const scale = HERO_SCALE * height / ratio, root = new T.Group(); root.scale.setScalar(scale); root.add(model);
   blobGeometry ??= new T.CircleGeometry(.36, 14); blobMaterial ??= new T.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: .2, depthWrite: false });
   blobGeometry.userData.sharedKit = true; blobMaterial.userData.sharedKit = true;
-  const blob = new T.Mesh(blobGeometry, blobMaterial); blob.scale.setScalar(ratio / FRIEND_SCALE) /* grows with the friend: .36 m at half size */; blob.rotation.x = -Math.PI / 2; blob.position.y = .03 / scale; blob.name = 'friend-blob'; root.add(blob);
+  const blob = new T.Mesh(blobGeometry, blobMaterial); blob.scale.setScalar(ratio / FRIEND_SCALE) /* grows with the friend: .36 m at the initial size */; blob.rotation.x = -Math.PI / 2; blob.position.y = .03 / scale; blob.name = 'friend-blob'; root.add(blob);
   root.userData.model = model; root.userData.look = toLook(model.userData.look) ?? DEFAULT_LOOK;
   return root;
 }

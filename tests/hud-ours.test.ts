@@ -126,11 +126,13 @@ test('modes and the cottage keep working: hidden pieces stay hidden and Rescue l
 
 // The hero plate (the owner's layout): the level is a number on a badge on the portrait tile, the name sits small above the
 // tile, and the energy count lives in the plate over the health bar. The measured side is in tests/hud-layout.test.mjs.
-test('the hero plate: name above the tile, the level as a badge number on it, energy over the health bar', () => {
+test('the hero plate: name and energy share a row, the level stays on the tile', () => {
   const main = read('main.ts'), hud = main.slice(main.indexOf('<div id="hud" hidden>'), main.indexOf('<div id="space-hud" hidden>'));
   const plate = hud.slice(hud.indexOf('<header class="player-card">'), hud.indexOf('</header>'));
   // Order in the plate: the name, the tile with its badge, then energy, health and EXP.
-  assert.match(plate, /^<header class="player-card"><div class="player-name"><strong id="player-name"><\/strong><\/div><div class="hero-face"><button class="avatar" data-action="bag" aria-label="Open character and backpack">.*?<\/button><span class="level-badge" role="group" aria-label="Level"><b id="level-text">1<\/b><\/span><\/div><div class="player-details"><div class="hero-energy" role="group" aria-label="Energy"><span>\$\{hudIcon\('bolt'\)\}<\/span><b id="energy">0<\/b><\/div><div class="meter health">/s);
+  const nameRow = plate.slice(plate.indexOf('<div class="player-name">'), plate.indexOf('<div class="hero-face">'));
+  assert.match(nameRow, /id="player-name"/); assert.match(nameRow, /class="hero-energy"/);
+  assert.ok(plate.indexOf('id="energy"') < plate.indexOf('class="meter health"'));
   assert.ok(plate.indexOf('class="meter health"') < plate.indexOf('class="meter experience"'));
   // One energy count and one level in the HUD; the separate tag by the dock and the "Lv" chip are gone.
   assert.equal(hud.match(/id="energy"/g)?.length, 1); assert.equal(hud.match(/id="level-text"/g)?.length, 1);
@@ -148,10 +150,10 @@ test('the hero plate sheet: the badge sits on the tile corner and takes no taps,
   // Readable at phone size and wide enough for three digits: at least 11 px bold digits, the box grows with its text.
   assert.match(badge, /min-width: 22px; height: 18px; padding: 0 4px;/); assert.ok(+badge.match(/font-size: ([\d.]+)px/)![1] >= 11); assert.doesNotMatch(badge, /max-width|overflow/);
   const name = rule('#app #hud .player-name');
-  assert.match(name, /grid-area: name;/); assert.match(name, /width: 0; min-width: 100%;/); assert.ok(+name.match(/font-size: ([\d.]+)px/)![1] <= 12, 'the name is small');
+  assert.match(name, /grid-area: name;/); assert.match(name, /display: flex; align-items: center; justify-content: space-between;/); assert.ok(+name.match(/font-size: ([\d.]+)px/)![1] <= 12, 'the name is small');
   assert.match(rule('#app #hud .player-name > strong'), /overflow: hidden; text-overflow: ellipsis; white-space: nowrap;/);
   assert.match(rule('#app #hud .player-name > strong'), /padding-top: 4px; margin-top: -4px;/, 'headroom for stacked Vietnamese marks');
-  assert.match(rule('#app #hud .player-card'), /grid-template-areas: "name name" "face details";/);
+  assert.match(rule('#app #hud .player-card'), /grid-template-areas: "face name" "face details";/);
   const energy = rule('#app #hud .hero-energy');
   assert.ok(+energy.match(/font-size: ([\d.]+)px/)![1] >= 12); assert.match(energy, /font-variant-numeric: tabular-nums; white-space: nowrap;/);
   // 360 px and narrower: no tile; the badge stands before the name and the bars take what the map leaves, never under 30vw.

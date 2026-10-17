@@ -10,7 +10,8 @@ test('flight leans along the facing in every direction with both arms ahead and 
 });
 test('actual local animation holds flight limbs still, hovers without steps and restores walking on landing',()=>{
  const w=Object.create(World.prototype) as World;Object.assign(w,{state:M.newGame(),player:avatar(),playerFlying:true,moving:true,weaponKind:'fist',time:0,facing:1,walkClock:0});w.state.gear.disguise='dz_superhero';
- const tick=()=>{w.player.position.set(0,1.7,0);w.player.scale.setScalar(1);(w as any).animatePlayer(.1);};tick();const leg=w.player.getObjectByName('leg-left')!;const angle=leg.rotation.x;tick();assert.equal(leg.rotation.x,angle);assert.equal(w.player.position.y,1.7);assert.equal(w.player.rotation.x,1.2);
+ w.position=new T.Vector3();
+ const tick=()=>{if(w.moving)w.position.x+=.6;w.player.position.set(0,1.7,0);w.player.scale.setScalar(1);(w as any).animatePlayer(.1);};tick();const leg=w.player.getObjectByName('leg-left')!;const angle=leg.rotation.x;tick();assert.equal(leg.rotation.x,angle);assert.equal(w.player.position.y,1.7);assert.equal(w.player.rotation.x,1.2);
  w.moving=false;tick();assert.equal(w.player.rotation.x,.18);assert.equal(leg.rotation.x,angle);w.playerFlying=false;w.moving=true;tick();assert.equal(w.player.rotation.order,'XYZ');assert.equal(w.player.rotation.x,.1);const walking=leg.rotation.x;tick();assert.notEqual(leg.rotation.x,walking);
 });
 test('remote superhero flight removes walk bob and landing clears the flight pose',()=>{

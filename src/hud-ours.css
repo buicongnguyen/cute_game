@@ -2,12 +2,12 @@
  * Zoo Garden's own HUD (stage 2 of docs/QUALITY-PLAN.md). Loaded after every older HUD sheet and before tap-targets.css.
  *
  * The arrangement
- *   - Hero plate, top left: a plum plate with the name small along its top, a square-ish portrait wearing the level as a
+ *   - Hero plate, top left: a plum plate with name and energy on one row, a square-ish portrait wearing the level as a
  *     honey badge on its corner, and beside it the energy count over the health and EXP bars.
  *   - The dock, right edge: every menu button as a cream tile in one column. When the screen is too short for one column
  *     it folds into two or three (CSS grid, no script). hud-layout.ts publishes its width as --dock-w.
- *   - Map panel, Home tab and (on roomy screens) the quest slips hang in one column just left of the dock, the map
- *     level with the dock's first button. The map is a rounded panel with the place name on a strip inside it.
+ *   - Map panel and Home tab hang in one column just left of the dock; compact tasks sit below the hero. The map is
+ *     level with the dock's first button, with the place name on a strip inside it.
  *   - Fight cluster, bottom right. Touch screens: a paw print, the big attack pad with the four skills as toes on an arc
  *     above it, in key order left to right. Desktop: the four skills in a row on a tray.
  *   - Phones keep the quest chips under the hero plate; the boss bar and the Colossus strip sit under the map and stop
@@ -61,12 +61,12 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
 /* Three pieces on a grid: the name along the top, the portrait tile under it, the energy count and the bars beside the tile. */
 #app #hud .player-card {
   left: calc(var(--edge) + var(--safe-left)); top: calc(var(--edge) + var(--safe-top)); padding: 3px 10px 5px 5px;
-  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "name name" "face details"; align-items: center; gap: 2px 8px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "face name" "face details"; align-items: center; gap: 2px 8px;
   border-radius: 16px; background: var(--glass); border: 2px solid var(--glass-line); box-shadow: 0 3px 0 rgba(58, 36, 51, .35);
 }
 /* The name never widens the plate (width 0, then stretched to the plate): a long one ends in an ellipsis. */
 #app #hud .player-name {
-  grid-area: name; display: block; width: 0; min-width: 100%; box-sizing: border-box; margin: 0; padding: 0 1px 0 3px; height: 14px;
+  grid-area: name; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: auto; min-width: 0; box-sizing: border-box; margin: 0; padding: 0 1px 0 3px; height: 14px;
   font-size: 12px; line-height: 14px; font-weight: 900; letter-spacing: .2px;
 }
 /* The 4 px of headroom keeps stacked Vietnamese marks on capitals (Ệ, Ẵ) inside the clip. */
@@ -162,9 +162,9 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
 #app #hud .quest-tracker, #app #hud .bounty-tracker, #app #hud .challenge-tracker { box-shadow: 0 3px 0 rgba(58, 36, 51, .35); }
 #app #hud .tracker-chip { box-shadow: 0 2px 0 rgba(58, 36, 51, .35); }
 #app #hud .tracker-stack { left: calc(var(--edge) + var(--safe-left)); top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 8px); }
-/* Roomy screens: the slips hang under the map, right-aligned with it; the left column keeps effects and quick eat. */
+/* Roomy screens: compact task rows stay below the hero on the left. */
 @media (min-width: 601px) and (min-height: 521px) {
-  #app #hud .tracker-panels, #app #hud #tracker-chip { position: fixed; right: var(--col); top: calc(var(--map-top) + var(--mm) + 12px); }
+  #app #hud .tracker-panels, #app #hud #tracker-chip { position: static; right: auto; top: auto; }
   #app #hud .tracker-panels { width: 236px; gap: 6px; }
   html[lang="vi"] #app #hud .quest-tracker .eyebrow { padding-right: 78px; } /* "Thu gọn" is wider than "Fold" */
   #app #hud .quest-tracker, #app #hud .bounty-tracker, #app #hud .challenge-tracker { border-radius: 14px; border-left: 5px solid var(--honey); }
@@ -514,3 +514,49 @@ body #app #colossus-banner.open { left: max(12px, calc(100vw - var(--col) - 300p
 body #app #colossus-banner.open small, body #app #colossus-banner.open .cb-meter { display: block; }
 body #app #colossus-banner.open .cb-pct { display: inline; }
 body #app #colossus-banner.near { display: none; }
+
+/* Compact hero and tasks: the action text is the message; headings belong in the journal. */
+#app #hud .player-name > strong { flex: 1; min-width: 0; }
+#app #hud .player-name .hero-energy { flex: none; margin: 0; height: 14px; line-height: 14px; font-size: 12px; }
+#app #hud .player-name .hero-energy > span { width: 13px; height: 13px; }
+#app #hud .tracker-panels, #app #hud #tracker-chip { position: static; inset: auto; }
+#app #hud .tracker-stack { gap: 4px; }
+#app #hud .tracker-panels { gap: 4px; width: 100%; }
+#app #hud .quest-tracker { padding: 3px 24px 3px 6px; border-radius: 11px; border-left-width: 3px; }
+#app #hud .bounty-tracker { padding: 4px 7px; gap: 6px; border-radius: 11px; border-left-width: 3px; }
+#app #hud .quest-tracker .eyebrow, #app #hud #quest-title, #app #hud #bounty-title,
+#app #hud .quest-progress, #app #hud #quest-count, #app #hud #bounty-count, #app #hud #quest-summary .chevron { display: none; }
+#app #hud #quest-summary { padding: 0; gap: 6px; min-height: 24px; }
+#app #hud .quest-icon { width: 20px; height: 20px; border-radius: 6px; font-size: 14px; background: none; }
+#app #hud #quest-summary small, #app #hud .bounty-tracker small { display: block; margin: 0; font-size: 12px; line-height: 1.25; color: var(--cream); }
+#app #hud .bounty-tracker > span { font-size: 15px; }
+#app #hud .tracker-fold { width: 20px; height: 22px; top: 3px; right: 2px; padding: 0; font-size: 0; }
+#app #hud .tracker-fold::before { content: '▾'; font-size: 12px; }
+#app #hud #quick-claim { margin-top: 3px; padding: 3px 6px; font-size: 11px; }
+@media (min-width: 601px) and (min-height: 521px) {
+  #app #hud .tracker-stack { width: 236px; }
+}
+@media (min-width: 901px) and (min-height: 521px) {
+  #dialog:has(.wc-card) { width: 400px; }
+  #dialog > header { padding: 8px 10px; gap: 8px; }
+  #dialog h2 { font-size: 18px; }
+  #dialog-icon { width: 34px; height: 34px; font-size: 21px; border-radius: 11px; }
+  #dialog-body { padding: 11px 14px 13px; gap: 8px; font-size: 13px; line-height: 1.3; }
+  #dialog-body > p { margin-block: 0; }
+  #dialog-body .wc-card { gap: 8px; }
+  #dialog-body .wc-text { font-size: 13px; line-height: 1.3; }
+  #dialog-body .wc-art { min-height: 44px; width: 150px; font-size: 27px; }
+  #dialog-body .wc-actions { gap: 7px; }
+  #dialog-body .wc-actions button { font-size: 13px; min-width: 80px; }
+  #toasts { gap: 4px; }
+  #toasts .toast { max-width: 360px; padding: 4px 11px 4px 4px; gap: 6px; font-size: 12px; line-height: 1.25; border-width: 2px; }
+  #toasts .toast > span { width: 23px; height: 23px; font-size: 14px; }
+}
+@media (pointer: fine) and (min-width: 901px) {
+  #dialog-body .wc-actions button { min-height: 32px; padding: 5px 12px; }
+  #dialog .close-button { width: 30px; height: 30px; font-size: 19px; border-width: 2px; }
+}
+
+#app #hud #quest-summary.can-walk::after { content: none; }
+/* Handedness changes combat controls; the task column stays with the hero. */
+#app #hud.joystick-right .tracker-stack { left: calc(var(--edge) + var(--safe-left)); right: auto; top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 6px); align-items: stretch; }

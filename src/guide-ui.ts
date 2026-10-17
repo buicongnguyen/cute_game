@@ -9,7 +9,7 @@ import * as T from 'three';
 import { t } from './i18n.ts';
 import type { World } from './world.ts';
 import type { SaveState } from './model.ts';
-import { GARDEN_GUIDE, nearestEmptyBed, needsGardenGuide, edgeArrow, homeButtonUrgent, isTouch } from './guide.ts';
+import { GUIDE_SECONDS, GARDEN_GUIDE, nearestEmptyBed, needsGardenGuide, edgeArrow, homeButtonUrgent, isTouch } from './guide.ts';
 import './guide.css';
 
 export interface GuideGoal { x: number; z: number; label: string }
@@ -17,6 +17,7 @@ interface GardenGuideHost {
   world: World; hud: HTMLElement; state: () => SaveState; bedAt: (i: number) => { x: number; z: number }; active: () => boolean;
   /** Chapter 1's next place when there is no bed to point at (null: none). */
   goal?: () => GuideGoal | null;
+  key?: () => string;
   /** A moment tip is up near the target: the label steps back while the target is on screen (the ring stays). */
   quiet?: () => boolean;
   /** The player turned the pointer off with its ×. */
@@ -34,16 +35,31 @@ export function mountGardenGuide(host: GardenGuideHost) {
   host.hud.append(pointer);
   const label = pointer.querySelector<HTMLElement>('.gp-label')!, textEl = pointer.querySelector<HTMLElement>('.gp-text')!, arrowEl = pointer.querySelector<HTMLElement>('.gp-arrow')!, offEl = pointer.querySelector<HTMLButtonElement>('.gp-off')!;
   offEl.addEventListener('click', event => { event.stopPropagation(); host.setOff?.(); pointer.hidden = true; group.visible = false; });
-  let time = 0, shownText = '';
+  let time = 0, shownText = '', visibleSeconds = 0, saveKey = '';
+  let previouslyOff = true;
   return {
     frame(dt: number) {
       time += dt;
+      const key = host.key?.() ?? '';
+      if (key !== saveKey) {
+        saveKey = key; previouslyOff = !!host.off?.();
+        try { visibleSeconds = Math.max(0, Math.min(GUIDE_SECONDS, Number(localStorage.getItem('zoo-guide-seconds:' + key)) || 0)); } catch { visibleSeconds = 0; }
+      }
+      const off = !!host.off?.();
+      if (previouslyOff && !off) visibleSeconds = 0; // An explicit quest-tracker tap grants another short hint.
+      previouslyOff = off;
       const s = host.state(), on = host.active() && !host.off?.();
       const near = on && needsGardenGuide(s) ? nearestEmptyBed(s.plots, host.bedAt, host.world.position) : null, at = host.world.position;
       const bed = near && Math.hypot(near.x - at.x, near.z - at.z) <= GARDEN_GUIDE.reach ? near : null; // out in the wilds it would only point off screen
       const goal: GuideGoal | null = bed ? { x: bed.x, z: bed.z, label: isTouch() ? '🌱 Tap a bed to plant' : '🌱 Click a bed to plant' } : on ? host.goal?.() ?? null : null;
       group.visible = !!goal; pointer.hidden = !goal;
       if (!goal) return;
+      const beforeSecond = Math.floor(visibleSeconds);
+      visibleSeconds += Math.max(0, dt);
+      if (Math.floor(visibleSeconds) !== beforeSecond) {
+        try { localStorage.setItem('zoo-guide-seconds:' + key, String(Math.min(GUIDE_SECONDS, visibleSeconds))); } catch { /* Session-only when storage is unavailable. */ }
+      }
+      if (visibleSeconds >= GUIDE_SECONDS) { host.setOff?.(); pointer.hidden = true; group.visible = false; return; }
       const pulse = 1 + Math.sin(time * 4.2) * .12;
       group.position.set(goal.x, .12, goal.z); ring.scale.setScalar(pulse); arrow.position.y = 2.4 + Math.sin(time * 4.2) * .35;
       const text = t(goal.label);

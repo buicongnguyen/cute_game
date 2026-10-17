@@ -164,8 +164,8 @@ test('friends sit in the big room wearing what they were given, and change at on
   assert.equal(before.parent, null, 'the old look is gone');
   // Friends keep a schedule around the house (house-activities.ts HANGOUTS): each stands in some room.
   for (const v of view.friends.values()) { assert.equal(v.group.parent, view.root); assert.ok(roomAt(v.group.position)); }
-  // Half the explorer's size.
-  assert.ok(Math.abs(view.friends.get('clover')!.group.scale.x - .42) < 1e-9);
+  // Initial friend height is 65% of the base explorer.
+  assert.ok(Math.abs(view.friends.get('clover')!.group.scale.x - .84 * .65) < 1e-9);
 });
 
 test('draw budget: the whole interior from the Blender kit is two batches (plus the door)', async () => {

@@ -1,6 +1,6 @@
-/* The three welcome cards of a brand-new save (welcome-cards.ts, FIX-PLAN 4.6) and the moment tips (moment-tips.ts). */
+/* The compact welcome message of a brand-new save (welcome-cards.ts, FIX-PLAN 4.6) and the moment tips (moment-tips.ts). */
 .wc-card { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 2px 0 0; }
-.wc-art { display: grid; place-items: center; width: min(260px, 100%); min-height: 92px; border-radius: 22px; font-size: 46px; letter-spacing: 6px; line-height: 1; background: radial-gradient(circle at 50% 120%, #c9f0a8 0 45%, transparent 46%), linear-gradient(180deg, #bfe8ff, #fff3d6); box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .8), 0 4px 0 rgba(120, 90, 40, .15); animation: wc-pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+.wc-art { display: grid; place-items: center; width: min(200px, 100%); min-height: 60px; border-radius: 22px; font-size: 34px; letter-spacing: 6px; line-height: 1; background: radial-gradient(circle at 50% 120%, #c9f0a8 0 45%, transparent 46%), linear-gradient(180deg, #bfe8ff, #fff3d6); box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .8), 0 4px 0 rgba(120, 90, 40, .15); animation: wc-pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
 .wc-2 .wc-art { background: radial-gradient(circle at 50% 120%, #ffd9a8 0 45%, transparent 46%), linear-gradient(180deg, #d9ccff, #fff0f6); }
 .wc-3 .wc-art { background: radial-gradient(circle at 50% 120%, #b9784a 0 45%, transparent 46%), linear-gradient(180deg, #c9f7d0, #fff7d6); }
 .wc-text { margin: 0; max-width: 34ch; font-size: 16px; font-weight: 700; line-height: 1.35; color: #4a3a22; }
@@ -14,7 +14,7 @@
 @media (prefers-reduced-motion: reduce) { .wc-art { animation: none; } }
 @media (max-width: 560px) {
   .wc-card { gap: 10px; }
-  .wc-art { min-height: 76px; font-size: 38px; }
+  .wc-art { min-height: 52px; font-size: 30px; }
   .wc-text { font-size: 15px; }
 }
 

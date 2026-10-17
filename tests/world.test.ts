@@ -363,3 +363,10 @@ test('incremental remote pose updates retain transformations until an explicit v
  assert.equal(remote.mesh.scale.x,HERO_SCALE*2);assert.equal(remote.mesh.userData.statusOpacity,.25);assert.equal(remote.mesh.getObjectByName('status-shield')!.visible,true);assert.equal(remote.mesh.position.y,2);assert.equal(remote.mesh.rotation.y,1);
  w.updateRemotePlayer('friend',{x:4,z:5,visual:{size:1,stealth:false,shield:false}});assert.equal(remote.mesh.scale.x,HERO_SCALE);assert.equal(remote.mesh.userData.statusOpacity,1);assert.equal(remote.mesh.getObjectByName('status-shield')!.visible,false);
 });
+
+test('grown explorers travel at a gentler pace with equipment bonuses still applied',()=>{
+  const travel=(look:string,bonus=0)=>{const w=world();w.player.userData.look=look;w.keys.add('ArrowRight');w.playerSpeedBonus=bonus;w.update(.05,true,false);return w.position.x;};
+  const small=travel('boy-chibi-none-bare'),grown=travel('boy-grown-none-bare');
+  assert.ok(Math.abs(grown/small-.9)<1e-9);
+  assert.ok(Math.abs(travel('boy-grown-none-bare',.2)/grown-1.2)<1e-9);
+});

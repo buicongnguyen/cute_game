@@ -121,7 +121,7 @@ test('a delayed chat reply from the old adventure cannot speak in the new one',(
 
 test('actual Start fresh routing resets neighbours only after a successful offline reset',async()=>{
   for(const online of [false,true])for(const success of [false,true])for(const disconnect of [false,true]){
-    let resets=0;const state={welcome:'done'},ctx=vm.createContext({perform:async()=>success,actionHandler:online?()=>{}:null,neighbours:{reset(){resets++;}},state,world:{refreshPlayer(){}},structuredClone,rebuildHomePresentation(){},resetCombat(){},selectedItem:null,save(){},closeDialog(){},welcomeCardsDue:()=>false,welcomeCards:{show(){}},updateHud(){},toast(){}});
+    let resets=0;const state={welcome:'done'},ctx=vm.createContext({perform:async()=>success,actionHandler:online?()=>{}:null,neighbours:{reset(){resets++;}},state,world:{refreshPlayer(){}},structuredClone,rebuildHomePresentation(){},resetCombat(){},selectedItem:null,setGuideOff(){},save(){},closeDialog(){},welcomeCardsDue:()=>false,welcomeCards:{show(){}},updateHud(){},toast(){}});
     vm.runInContext(resetCompiled,ctx);const pending=ctx.resetAdventure();if(disconnect)ctx.actionHandler=null;await pending;assert.equal(resets,success&&!online?1:0);
   }
 });

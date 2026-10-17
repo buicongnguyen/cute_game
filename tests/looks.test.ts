@@ -17,17 +17,17 @@ const DAY = 86_400_000, T0 = 1_000_000_000;
 const act = (s: M.SaveState, type: string, payload: Record<string, unknown> = {}, now = T0) => applyGameAction(s, { type, payload }, { now, random: () => .5 });
 
 // ---------------------------------------------------------------- growth
-test('friends grow from half to 0.75 to 0.8 of the explorer, by days at home or jobs done, and never shrink', () => {
+test('friends grow from 0.65 to 0.75 to 0.85 of the explorer, by days at home or jobs done, and never shrink', () => {
   const f: F.Friend = { id: 'sprout', role: 'garden', rescuedAt: T0, gear: {}, home: true };
-  assert.deepEqual(GROWTH.map(g => g.height), [.5, .75, .8]);
+  assert.deepEqual(GROWTH.map(g => g.height), [.65, .75, .85]);
   assert.equal(earnedStage(f, T0), 0);
   assert.equal(earnedStage(f, T0 + DAY - 1), 0); assert.equal(earnedStage(f, T0 + DAY), 1); assert.equal(earnedStage(f, T0 + 3 * DAY), 2);
   assert.equal(earnedStage({ ...f, jobs: 39 }, T0), 0); assert.equal(earnedStage({ ...f, jobs: 40 }, T0), 1); assert.equal(earnedStage({ ...f, jobs: 150 }, T0), 2);
   assert.equal(earnedStage({ ...f, rescuedAt: 0 }, T0 + 9 * DAY), 0, 'an unknown rescue time never counts as days');
   assert.equal(growUp(f, T0 + DAY), true); assert.equal(friendStage(f), 1); assert.equal(growUp(f, T0 + DAY), false, 'the moment fires once');
   f.rescuedAt = T0 + 5 * DAY; assert.equal(growUp(f, T0), false); assert.equal(friendStage(f), 1, 'a grown friend never shrinks');
-  assert.equal(friendScale(0), HERO_SCALE * .5); assert.equal(friendScale(1), HERO_SCALE * .75); assert.equal(friendScale(2), HERO_SCALE * .8);
-  assert.equal(friendHeight(9), .8);
+  assert.equal(friendScale(0), HERO_SCALE * .65); assert.equal(friendScale(1), HERO_SCALE * .75); assert.equal(friendScale(2), HERO_SCALE * .85);
+  assert.equal(friendHeight(9), .85);
 });
 
 test('harvests count toward growing up (60 a day at most), and the catch-up grows a friend who rested at home for days', () => {
@@ -326,10 +326,13 @@ test('no height is drawn smaller than its body file: the Grown body itself is 8%
   assert.equal(L.FIT.grown['leg-left']!.offset[1], -.84);
   // The explorer's own walk: the default legs keep their patter; longer legs walk true to the ground (one step covers
   // one stride at the speed really moved), swing a little less, and the hips sink so the standing foot stays down.
-  assert.deepEqual(W.strideOf(W.HIP), { rate: 1, swing: .7, drop: 0 }); assert.deepEqual(W.strideOf(.42, 9), { rate: 1, swing: .7, drop: 0 });
+  for (const hip of [.42, W.HIP, .98, 1.36]) for (const speed of [0, 1, 4, 6]) {
+    const s = W.strideOf(hip, speed, .84), covered = s.rate * W.WALK_RATE / Math.PI * 2 * hip * .84 * Math.sin(s.swing);
+    assert.ok(Math.abs(covered - speed) < 1e-9, 'footsteps track distance for every body height');
+  }
   for (const speed of [4, 6, 6.8]) { const s = W.strideOf(1.36, speed, .84), stride = 2 * 1.36 * .84 * Math.sin(s.swing), perSecond = s.rate * W.WALK_RATE / Math.PI * stride; assert.ok(Math.abs(perSecond - speed) < 1e-9, `grown at ${speed} m/s covers ${perSecond.toFixed(2)} m/s with its steps`); }
   assert.ok(Math.abs(W.strideOf(1.36).swing - .55) < 1e-9); assert.ok(W.strideOf(.98).swing > .55 && W.strideOf(.98).swing < .7);
-  assert.ok(W.strideOf(.72, 20).rate * W.WALK_RATE <= 18 + 1e-9, 'legs never blur'); assert.ok(W.strideOf(1.36, 0).rate > 0, 'a standing start still steps');
+  assert.ok(W.strideOf(.72, 20).rate * W.WALK_RATE <= 36 + 1e-9, 'legs never blur'); assert.ok(W.strideOf(1.36, 0).rate === 0, 'blocked feet stop stepping');
   assert.ok(Math.abs(W.strideOf(1.36).drop - 1.36 * (1 - Math.cos(.55))) < 1e-9);
   // The hips are read off the model's own leg pivot; a stand-in without real hips walks as the default explorer.
   const T = await import('three'), legged = (y: number) => { const g = new T.Group(), leg = new T.Group(); leg.name = 'leg-left'; leg.position.y = y; g.add(leg); return g; };

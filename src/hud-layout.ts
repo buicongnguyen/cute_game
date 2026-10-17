@@ -17,17 +17,20 @@ export const realChange = (r: Pick<MutationRecord, 'type' | 'target' | 'attribut
     : r.type === 'attributes' ? (r.target as Element).getAttribute(r.attributeName ?? '') !== r.oldValue : false;
 export function initHudLayout() {
   const menu = document.querySelector<HTMLElement>('#hud .top-actions'); if (!menu) return;
-  let lastWidth = -1, lastBottom = -1;
+  const hero = document.querySelector<HTMLElement>('#hud .player-card');
+  let lastWidth = -1, lastBottom = -1, lastHeroHeight = -1;
   const measure = () => {
     const { width, bottom } = dockMetrics(menu.getBoundingClientRect(), Array.from(menu.querySelectorAll<HTMLElement>('button'), b => b.getBoundingClientRect()));
     const root = document.documentElement.style;
+    const heroHeight = hero ? Math.ceil(hero.getBoundingClientRect().height) : 0;
+    if (heroHeight > 0 && heroHeight !== lastHeroHeight) { lastHeroHeight = heroHeight; root.setProperty('--hero-h', heroHeight + 'px'); }
     if (width !== lastWidth && width > 0) { lastWidth = width; root.setProperty('--dock-w', width + 'px'); }
     if (bottom !== lastBottom && bottom > 0) { lastBottom = bottom; root.setProperty('--menu-bottom', bottom + 'px'); }
   };
   measure();
   let queued = 0;
   const later = () => { if (!queued) queued = requestAnimationFrame(() => { queued = 0; measure(); }); };
-  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(measure).observe(menu); // runs after layout: no forced reflow
+  if (typeof ResizeObserver !== 'undefined') { const sizes = new ResizeObserver(measure); sizes.observe(menu); if (hero) sizes.observe(hero); } // runs after layout: no forced reflow
   // Buttons come and go (online, neighbours, install): only the dock's own child list and its two slots are watched.
   if (typeof MutationObserver !== 'undefined') {
     const watch = new MutationObserver(records => { if (records.some(realChange)) later(); }); watch.observe(menu, { childList: true });
