@@ -1,0 +1,531 @@
+{
+  "url": "http://127.0.0.1:5299/",
+  "viewport": [
+    1280,
+    720
+  ],
+  "mobile": false,
+  "cpuThrottle": 1,
+  "flag": "mergeLocalAvatar",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER (0x00002702) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "characterChecks": [
+    {
+      "name": "recoloured",
+      "picture": {
+        "pixels": 921600,
+        "differing": 0,
+        "maxDelta": 0
+      },
+      "handSocket": true,
+      "sproutVisible": null
+    },
+    {
+      "name": "hat-and-outfit",
+      "picture": {
+        "pixels": 921600,
+        "differing": 0,
+        "maxDelta": 0
+      },
+      "handSocket": true,
+      "sproutVisible": null
+    },
+    {
+      "name": "grown-body",
+      "picture": {
+        "pixels": 921600,
+        "differing": 0,
+        "maxDelta": 0
+      },
+      "handSocket": true,
+      "sproutVisible": null
+    },
+    {
+      "name": "walking",
+      "picture": {
+        "pixels": 921600,
+        "differing": 0,
+        "maxDelta": 0
+      },
+      "handSocket": true,
+      "sproutVisible": null
+    },
+    {
+      "name": "hurt-flash",
+      "picture": {
+        "pixels": 921600,
+        "differing": 0,
+        "maxDelta": 0
+      },
+      "handSocket": true,
+      "sproutVisible": null
+    },
+    {
+      "name": "stealth",
+      "picture": {
+        "pixels": 921600,
+        "differing": 9,
+        "maxDelta": 1
+      },
+      "handSocket": true,
+      "sproutVisible": null
+    },
+    {
+      "name": "fishing-pose",
+      "picture": {
+        "pixels": 921600,
+        "differing": 0,
+        "maxDelta": 0
+      },
+      "handSocket": true,
+      "sproutVisible": null
+    },
+    {
+      "name": "stealth-transition",
+      "transitionsVerified": true,
+      "handSocket": true
+    }
+  ],
+  "canvas": [
+    1280,
+    720
+  ],
+  "msaa": true,
+  "scenes": [
+    {
+      "scene": "village",
+      "position": [
+        0,
+        3.6
+      ],
+      "before": {
+        "calls": 256,
+        "triangles": 204843,
+        "instanced": 44,
+        "passes": {
+          "main": 141,
+          "shadow": 115
+        },
+        "renderMs": 4.600000023841858,
+        "geometryBytes": 10750082,
+        "top": [
+          [
+            "main:player",
+            23
+          ],
+          [
+            "main:Mesh",
+            19
+          ],
+          [
+            "main:scatter",
+            19
+          ],
+          [
+            "shadow:player",
+            17
+          ],
+          [
+            "shadow:Mesh",
+            13
+          ],
+          [
+            "main:outline",
+            12
+          ],
+          [
+            "main:fish-layer",
+            8
+          ],
+          [
+            "shadow:upgrade",
+            7
+          ],
+          [
+            "shadow:scatter",
+            7
+          ],
+          [
+            "main:upgrade",
+            7
+          ],
+          [
+            "main:pen",
+            6
+          ],
+          [
+            "shadow:travel",
+            5
+          ]
+        ]
+      },
+      "after": {
+        "calls": 234,
+        "triangles": 204843,
+        "instanced": 44,
+        "passes": {
+          "main": 130,
+          "shadow": 104
+        },
+        "renderMs": 3.899999976158142,
+        "geometryBytes": 11002850,
+        "top": [
+          [
+            "main:Mesh",
+            19
+          ],
+          [
+            "main:scatter",
+            19
+          ],
+          [
+            "shadow:Mesh",
+            13
+          ],
+          [
+            "main:outline",
+            12
+          ],
+          [
+            "main:player",
+            12
+          ],
+          [
+            "main:fish-layer",
+            8
+          ],
+          [
+            "shadow:upgrade",
+            7
+          ],
+          [
+            "shadow:scatter",
+            7
+          ],
+          [
+            "main:upgrade",
+            7
+          ],
+          [
+            "shadow:player",
+            6
+          ],
+          [
+            "main:pen",
+            6
+          ],
+          [
+            "shadow:travel",
+            5
+          ]
+        ]
+      },
+      "picture": {
+        "pixels": 921600,
+        "differing": 2,
+        "maxDelta": 1
+      },
+      "nullPicture": {
+        "pixels": 921600,
+        "differing": 2,
+        "maxDelta": 1
+      },
+      "timing": {
+        "offMedian": 2.700000047683716,
+        "onMedian": 2.799999952316284,
+        "nullAMedian": 2.4000000953674316,
+        "nullBMedian": 2.6999999284744263
+      }
+    },
+    {
+      "scene": "forest",
+      "position": [
+        -13,
+        -57
+      ],
+      "before": {
+        "calls": 96,
+        "triangles": 80056,
+        "instanced": 48,
+        "passes": {
+          "main": 69,
+          "shadow": 27
+        },
+        "renderMs": 2.700000047683716,
+        "geometryBytes": 10981154,
+        "top": [
+          [
+            "main:scatter",
+            29
+          ],
+          [
+            "main:player",
+            23
+          ],
+          [
+            "shadow:player",
+            17
+          ],
+          [
+            "shadow:scatter",
+            9
+          ],
+          [
+            "main:Mesh",
+            8
+          ],
+          [
+            "main:enemy",
+            2
+          ],
+          [
+            "shadow:guard-dog-body",
+            1
+          ],
+          [
+            "main:place-flags",
+            1
+          ],
+          [
+            "main:guard-dog-head",
+            1
+          ],
+          [
+            "main:guard-dog-body",
+            1
+          ],
+          [
+            "main:guard-dog-tail",
+            1
+          ],
+          [
+            "main:guard-dog-legs",
+            1
+          ]
+        ]
+      },
+      "after": {
+        "calls": 74,
+        "triangles": 80056,
+        "instanced": 48,
+        "passes": {
+          "main": 58,
+          "shadow": 16
+        },
+        "renderMs": 3.0999999046325684,
+        "geometryBytes": 11233922,
+        "top": [
+          [
+            "main:scatter",
+            29
+          ],
+          [
+            "main:player",
+            12
+          ],
+          [
+            "shadow:scatter",
+            9
+          ],
+          [
+            "main:Mesh",
+            8
+          ],
+          [
+            "shadow:player",
+            6
+          ],
+          [
+            "main:enemy",
+            2
+          ],
+          [
+            "shadow:guard-dog-body",
+            1
+          ],
+          [
+            "main:place-flags",
+            1
+          ],
+          [
+            "main:guard-dog-head",
+            1
+          ],
+          [
+            "main:guard-dog-body",
+            1
+          ],
+          [
+            "main:guard-dog-tail",
+            1
+          ],
+          [
+            "main:guard-dog-legs",
+            1
+          ]
+        ]
+      },
+      "picture": {
+        "pixels": 921600,
+        "differing": 0,
+        "maxDelta": 0
+      },
+      "nullPicture": {
+        "pixels": 921600,
+        "differing": 0,
+        "maxDelta": 0
+      },
+      "timing": {
+        "offMedian": 2,
+        "onMedian": 1.899999976158142,
+        "nullAMedian": 1.899999976158142,
+        "nullBMedian": 1.899999976158142
+      }
+    },
+    {
+      "scene": "canyon",
+      "position": [
+        105,
+        -40
+      ],
+      "before": {
+        "calls": 133,
+        "triangles": 71475,
+        "instanced": 44,
+        "passes": {
+          "main": 88,
+          "shadow": 45
+        },
+        "renderMs": 3,
+        "geometryBytes": 10981154,
+        "top": [
+          [
+            "main:enemy",
+            26
+          ],
+          [
+            "main:player",
+            23
+          ],
+          [
+            "main:scatter",
+            20
+          ],
+          [
+            "shadow:player",
+            17
+          ],
+          [
+            "shadow:scatter",
+            14
+          ],
+          [
+            "shadow:enemy",
+            12
+          ],
+          [
+            "main:Mesh",
+            10
+          ],
+          [
+            "shadow:Mesh",
+            1
+          ],
+          [
+            "shadow:guard-dog-body",
+            1
+          ],
+          [
+            "main:outline",
+            1
+          ],
+          [
+            "main:guard-dog-head",
+            1
+          ],
+          [
+            "main:guard-dog-body",
+            1
+          ]
+        ]
+      },
+      "after": {
+        "calls": 111,
+        "triangles": 71475,
+        "instanced": 44,
+        "passes": {
+          "main": 77,
+          "shadow": 34
+        },
+        "renderMs": 2.299999952316284,
+        "geometryBytes": 11233922,
+        "top": [
+          [
+            "main:enemy",
+            26
+          ],
+          [
+            "main:scatter",
+            20
+          ],
+          [
+            "shadow:scatter",
+            14
+          ],
+          [
+            "shadow:enemy",
+            12
+          ],
+          [
+            "main:player",
+            12
+          ],
+          [
+            "main:Mesh",
+            10
+          ],
+          [
+            "shadow:player",
+            6
+          ],
+          [
+            "shadow:Mesh",
+            1
+          ],
+          [
+            "shadow:guard-dog-body",
+            1
+          ],
+          [
+            "main:outline",
+            1
+          ],
+          [
+            "main:guard-dog-head",
+            1
+          ],
+          [
+            "main:guard-dog-body",
+            1
+          ]
+        ]
+      },
+      "picture": {
+        "pixels": 921600,
+        "differing": 0,
+        "maxDelta": 0
+      },
+      "nullPicture": {
+        "pixels": 921600,
+        "differing": 0,
+        "maxDelta": 0
+      },
+      "timing": {
+        "offMedian": 1.5,
+        "onMedian": 1.7000000476837158,
+        "nullAMedian": 1.4000000953674316,
+        "nullBMedian": 1.399999976158142
+      }
+    }
+  ],
+  "errors": []
+}

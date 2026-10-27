@@ -1,0 +1,381 @@
+{
+  "url": "http://127.0.0.1:5299/",
+  "mobile": true,
+  "cpuThrottle": 4,
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER (0x00002702) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "canvas": [
+    487,
+    1055
+  ],
+  "rows": [
+    {
+      "name": "idle",
+      "frames": 60,
+      "draws": 163.53333333333333,
+      "shadow": 62,
+      "main": 101.53333333333333,
+      "triangles": 171256.33333333334,
+      "uploads": 15.483333333333333,
+      "bytes": 12620.066666666668,
+      "allocations": 0,
+      "allocated": 0,
+      "compose": 249.13333333333333,
+      "multiply": 674.9,
+      "matrixVisited": 922,
+      "memory": {
+        "geometryBytes": 12289446,
+        "geometries": 350,
+        "textures": 7,
+        "programs": 53,
+        "heap": 103000000
+      }
+    },
+    {
+      "name": "effects",
+      "frames": 60,
+      "draws": 152,
+      "shadow": 62,
+      "main": 90,
+      "triangles": 163087.33333333334,
+      "uploads": 15.8,
+      "bytes": 18811.266666666666,
+      "allocations": 0,
+      "allocated": 0,
+      "compose": 331.5833333333333,
+      "multiply": 643.2,
+      "matrixVisited": 944,
+      "memory": {
+        "geometryBytes": 12293158,
+        "geometries": 350,
+        "textures": 7,
+        "programs": 53,
+        "heap": 103000000
+      }
+    },
+    {
+      "name": "walking-effects",
+      "frames": 60,
+      "draws": 144.83333333333334,
+      "shadow": 62,
+      "main": 82.83333333333333,
+      "triangles": 139544.63333333333,
+      "uploads": 15.866666666666667,
+      "bytes": 18604.933333333334,
+      "allocations": 0,
+      "allocated": 0,
+      "compose": 328.6166666666667,
+      "multiply": 633.35,
+      "matrixVisited": 897,
+      "memory": {
+        "geometryBytes": 12293158,
+        "geometries": 350,
+        "textures": 7,
+        "programs": 53,
+        "heap": 103000000
+      }
+    }
+  ],
+  "paired": [
+    {
+      "active": false,
+      "before": {
+        "uploads": 4,
+        "bytes": 59280,
+        "compose": 4,
+        "multiply": 145,
+        "draws": 139,
+        "shadow": 62,
+        "main": 77
+      },
+      "after": {
+        "uploads": 0,
+        "bytes": 0,
+        "compose": 4,
+        "multiply": 145,
+        "draws": 139,
+        "shadow": 62,
+        "main": 77
+      },
+      "different": 0,
+      "nullDifferent": 0
+    },
+    {
+      "active": true,
+      "before": {
+        "uploads": 4,
+        "bytes": 59280,
+        "compose": 100,
+        "multiply": 145,
+        "draws": 141,
+        "shadow": 62,
+        "main": 79
+      },
+      "after": {
+        "uploads": 2,
+        "bytes": 6144,
+        "compose": 100,
+        "multiply": 145,
+        "draws": 141,
+        "shadow": 62,
+        "main": 79
+      },
+      "different": 0,
+      "nullDifferent": 0
+    }
+  ],
+  "transformAudit": {
+    "ordinary": {
+      "compose": 2641,
+      "multiply": 2667
+    },
+    "cached": {
+      "compose": 0,
+      "multiply": 0,
+      "visited": 897,
+      "frozenSkips": 0
+    }
+  },
+  "timings": [
+    {
+      "moving": false,
+      "medians": {
+        "before": 18.400000005960464,
+        "after": 21.69999998807907,
+        "nullA": 16.650000005960464,
+        "nullB": 21.424999982118607
+      },
+      "samples": {
+        "before": [
+          26.32499998807907,
+          13.75,
+          17.875,
+          20.775000005960464,
+          22.525000005960464,
+          24.174999982118607,
+          20.599999994039536,
+          18.400000005960464,
+          15.875,
+          17.75,
+          13.424999982118607,
+          15
+        ],
+        "after": [
+          13,
+          18.44999998807907,
+          13.850000023841858,
+          27,
+          24,
+          31.375,
+          19.075000017881393,
+          28.150000005960464,
+          12.125,
+          22.44999998807907,
+          11,
+          21.69999998807907
+        ],
+        "nullA": [
+          18.474999994039536,
+          14.049999982118607,
+          16.650000005960464,
+          14.175000011920929,
+          21.149999976158142,
+          20.674999982118607,
+          18.5,
+          16.025000005960464,
+          12.349999994039536,
+          20.174999982118607,
+          11.799999982118607,
+          16.474999994039536
+        ],
+        "nullB": [
+          27.150000005960464,
+          16.05000001192093,
+          25,
+          22.07499998807907,
+          24.025000005960464,
+          24.375,
+          21.424999982118607,
+          16.19999998807907,
+          17.575000017881393,
+          15.900000005960464,
+          16,
+          16.599999994039536
+        ]
+      }
+    },
+    {
+      "moving": true,
+      "medians": {
+        "before": 12.925000011920929,
+        "after": 13.650000005960464,
+        "nullA": 11.674999982118607,
+        "nullB": 13.875
+      },
+      "samples": {
+        "before": [
+          21.224999994039536,
+          10.75,
+          15.324999988079071,
+          10.174999982118607,
+          12.25,
+          11,
+          14.675000011920929,
+          9.550000011920929,
+          12.925000011920929,
+          13.375,
+          18.42500001192093,
+          10.150000005960464
+        ],
+        "after": [
+          12.25,
+          13.650000005960464,
+          12.324999988079071,
+          17.424999982118607,
+          9.724999994039536,
+          12.100000023841858,
+          12.599999994039536,
+          16.42500001192093,
+          10.324999988079071,
+          18.80000001192093,
+          14.424999982118607,
+          36.17499998211861
+        ],
+        "nullA": [
+          12.174999982118607,
+          11.674999982118607,
+          10.849999994039536,
+          10,
+          10.125,
+          10.650000005960464,
+          18.299999982118607,
+          10.199999988079071,
+          16.44999998807907,
+          17.724999994039536,
+          12.099999994039536,
+          10.825000017881393
+        ],
+        "nullB": [
+          15.425000011920929,
+          14.699999988079071,
+          20.299999982118607,
+          12.25,
+          12.350000023841858,
+          12.900000005960464,
+          12.349999994039536,
+          13.049999982118607,
+          18.224999994039536,
+          14.599999994039536,
+          13.875,
+          13.799999982118607
+        ]
+      }
+    }
+  ],
+  "memoryBefore": {
+    "geometryBytes": 12293158,
+    "geometries": 350,
+    "textures": 7,
+    "programs": 53,
+    "heap": 103000000
+  },
+  "memoryAfter": {
+    "geometryBytes": 12293158,
+    "geometries": 350,
+    "textures": 7,
+    "programs": 53,
+    "heap": 103000000
+  },
+  "errors": [],
+  "cpuTop": [
+    {
+      "name": "attackShown",
+      "url": "http://127.0.0.1:5299/src/main.ts?t=1792921445902",
+      "line": 1388,
+      "samples": 101
+    },
+    {
+      "name": "world.scene.onBeforeRender",
+      "url": "http://127.0.0.1:5299/src/drops-view.ts",
+      "line": 180,
+      "samples": 59
+    },
+    {
+      "name": "visit",
+      "url": "http://127.0.0.1:5299/src/scene-matrices.ts?t=1792921445902",
+      "line": 25,
+      "samples": 42
+    },
+    {
+      "name": "update",
+      "url": "http://127.0.0.1:5299/src/world.ts?t=1792921445902",
+      "line": 4094,
+      "samples": 40
+    },
+    {
+      "name": "projectObject",
+      "url": "http://127.0.0.1:5299/node_modules/.vite/deps/chunk-IT3TP6RZ.js?v=8474b093",
+      "line": 40592,
+      "samples": 35
+    },
+    {
+      "name": "bindVertexArray",
+      "url": "",
+      "line": -1,
+      "samples": 35
+    },
+    {
+      "name": "renderObject",
+      "url": "http://127.0.0.1:5299/node_modules/.vite/deps/chunk-IT3TP6RZ.js?v=8474b093",
+      "line": 36699,
+      "samples": 30
+    },
+    {
+      "name": "projectObject",
+      "url": "http://127.0.0.1:5299/node_modules/.vite/deps/chunk-IT3TP6RZ.js?v=8474b093",
+      "line": 40592,
+      "samples": 28
+    },
+    {
+      "name": "updateEnemyAi",
+      "url": "http://127.0.0.1:5299/src/world.ts?t=1792921445902",
+      "line": 3627,
+      "samples": 27
+    },
+    {
+      "name": "updateEnemyVisual",
+      "url": "http://127.0.0.1:5299/src/world.ts?t=1792921445902",
+      "line": 3983,
+      "samples": 27
+    },
+    {
+      "name": "renderObject",
+      "url": "http://127.0.0.1:5299/node_modules/.vite/deps/chunk-IT3TP6RZ.js?v=8474b093",
+      "line": 36699,
+      "samples": 26
+    },
+    {
+      "name": "WebGLRenderer.renderBufferDirect",
+      "url": "http://127.0.0.1:5299/node_modules/.vite/deps/chunk-IT3TP6RZ.js?v=8474b093",
+      "line": 40313,
+      "samples": 25
+    },
+    {
+      "name": "setProgram",
+      "url": "http://127.0.0.1:5299/node_modules/.vite/deps/chunk-IT3TP6RZ.js?v=8474b093",
+      "line": 40854,
+      "samples": 25
+    },
+    {
+      "name": "frame",
+      "url": "http://127.0.0.1:5299/src/main.ts?t=1792921445902",
+      "line": 6076,
+      "samples": 24
+    },
+    {
+      "name": "positionLabels",
+      "url": "http://127.0.0.1:5299/src/main.ts?t=1792921445902",
+      "line": 1638,
+      "samples": 24
+    }
+  ]
+}

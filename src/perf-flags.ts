@@ -4,6 +4,10 @@
  * Nothing in the shipped game turns one off.
  */
 export const perfFlags = {
+  /** Upload only live particle matrices and changed colours; retain pending hidden updates. */
+  selectiveParticleUploads: true,
+  /** The local explorer uses the same exact per-part batching as neighbours, with independent status materials. */
+  mergeLocalAvatar: true,
   /** Remote players and bots draw one merged mesh per rigid part, like the friends (avatar-merge.ts). */
   mergeRemoteAvatars: true,
   /** Your pets (up to two, pet-slots.ts) draw one merged mesh per rigid part too, only where the look is identical (mergeParts exact). */

@@ -1,3 +1,5 @@
+import { perfFlags } from './perf-flags.ts';
+import { queueAttributeRange } from './buffer-updates.ts';
 import * as T from 'three';
 import { toonMaterial } from './toon.ts';
 import { nextStackSlot, stackLift, STACK, POWER_LANE_LIFT } from './feel-rules.ts';
@@ -44,6 +46,7 @@ export class ParticlePool {
   private life: Float32Array; private span: Float32Array; private size: Float32Array; private spin: Float32Array; private grav: Float32Array;
   private homing: Float32Array; private targets: Array<(() => T.Vector3) | null>; private arrive: Array<(() => void) | null>;
   private camera: T.Camera | null = null;
+  private colorsDirty = false;
 
   constructor(max: number, glow: boolean) {
     this.max = max; this.glow = glow;
@@ -78,6 +81,7 @@ export class ParticlePool {
     this.life[i] = life; this.span[i] = life; this.size[i] = size; this.spin[i] = between(-10, 10); this.grav[i] = gravity;
     this.targets[i] = target; this.arrive[i] = arrive; this.homing[i] = target ? -homingDelay : 0;
     this.mesh.setColorAt(i, tmpColor);
+    this.colorsDirty = true;
   }
 
   private remove(i: number) {
@@ -88,6 +92,7 @@ export class ParticlePool {
     this.grav[i] = this.grav[last]; this.homing[i] = this.homing[last]; this.targets[i] = this.targets[last]; this.arrive[i] = this.arrive[last];
     this.targets[last] = null; this.arrive[last] = null;
     this.mesh.setColorAt(i, tmpColor.setRGB(this.c[i * 3], this.c[i * 3 + 1], this.c[i * 3 + 2]));
+    this.colorsDirty = true;
   }
 
   update(dt: number) {
@@ -118,8 +123,18 @@ export class ParticlePool {
       this.mesh.setMatrixAt(i, tmpMatrix.compose(tmpPos, tmpQuat, tmpScale.setScalar(scale)));
     }
     this.mesh.count = this.count;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    if (perfFlags.selectiveParticleUploads) {
+      // count controls expiry/clear; unused tail slots never need a GPU write.
+      if (this.count) queueAttributeRange(this.mesh.instanceMatrix, 0, this.count * 16);
+      if (this.count && this.colorsDirty && this.mesh.instanceColor) {
+        queueAttributeRange(this.mesh.instanceColor, 0, this.count * 3);
+        this.colorsDirty = false;
+      }
+    } else {
+      this.mesh.instanceMatrix.clearUpdateRanges(); this.mesh.instanceMatrix.needsUpdate = true;
+      if (this.mesh.instanceColor) { this.mesh.instanceColor.clearUpdateRanges(); this.mesh.instanceColor.needsUpdate = true; }
+      this.colorsDirty = true; // A/B switch back must synchronize colours.
+    }
   }
 
   clear() { this.count = 0; this.mesh.count = 0; this.targets.fill(null); this.arrive.fill(null); }

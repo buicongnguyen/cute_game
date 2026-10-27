@@ -912,12 +912,14 @@ export class World {
   get outdoorEntities(){return this.interior?.outdoor??this.entities;}
   /** Gear shown on the explorer while trying something on in a menu: local only, never saved or sent online. */
   tryOnGear?:SaveState['gear']|null;
-  refreshPlayer() {
+  refreshPlayer(playerOnly=false) {
     const gear=this.tryOnGear??this.state.gear;
     this.disposeTree(this.player);this.player.removeFromParent();this.player=this.avatar(this.state.color,{...gear,pet:undefined,pet2:undefined},this.tryOnLook??lookOf(this.state));this.player.rotation.order='YXZ';
+    this.player.userData.localBatchOpaque=!this.playerStealth;
+    if(perfFlags.mergeLocalAvatar&&!this.playerStealth)mergeParts(this.player,{exact:true,keep:o=>o.name==='head-leaf'||o.children.length>0});
     // These copies are the explorer's own (flash and blink edit them), so the stealth fade below reuses them instead of copying again.
     this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;o.userData.statusMaterials=true;this.playerMaterials.push(o.material);}});this.root.add(this.player);
-    for(let i=0;i<2;i++){const pet=(i?this.companion2:this.companion)??new T.Group(),id=M.companionId(gear,i),next=id?this.petFor(id):new T.Group();this.disposeTree(pet);pet.removeFromParent();next.position.copy(pet.position);next.rotation.copy(pet.rotation);next.visible=pet.visible;if(perfFlags.mergeCompanions)mergeParts(next,{exact:true});/* same-look pieces of each rigid part drawn as one: a second pet costs about what one cost before */addOutlines(next,{merge:true});this.root.add(next);if(i)this.companion2=next;else this.companion=next;}
+    if(!playerOnly)for(let i=0;i<2;i++){const pet=(i?this.companion2:this.companion)??new T.Group(),id=M.companionId(gear,i),next=id?this.petFor(id):new T.Group();this.disposeTree(pet);pet.removeFromParent();next.position.copy(pet.position);next.rotation.copy(pet.rotation);next.visible=pet.visible;if(perfFlags.mergeCompanions)mergeParts(next,{exact:true});/* same-look pieces of each rigid part drawn as one: a second pet costs about what one cost before */addOutlines(next,{merge:true});this.root.add(next);if(i)this.companion2=next;else this.companion=next;}
     this.interior?.adopt();
     this.showHand(this.pairShown);
   }
@@ -2215,6 +2217,8 @@ export class World {
     // Home heals 4x faster (home-care.ts); this line had slipped into the comment above, so offline the village never healed.
     this.homeRecovering=atHome(this.planet,this.position,!!this.interior)&&this.state.hp>0&&this.state.hp<stats.maxHp;if(!this.authoritativeAction&&active&&this.homeRecovering)this.state.hp=Math.min(stats.maxHp,this.state.hp+homeRecoveryBonus(stats.regen)*dt);
     if(this.airCarry)this.airCarry=this.playerFlying?carryStep(this.airCarry,dt):0;
+    // Transparent pieces need their original per-mesh sorting. Rebuild only the explorer at a stealth transition.
+    if(perfFlags.mergeLocalAvatar&&this.player.userData.localBatchOpaque!==undefined&&this.player.userData.localBatchOpaque===this.playerStealth)this.refreshPlayer(true);
     this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height+(this.airCarry||0);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE*lookTrim(this.player.userData.look));this.applyAvatarVisual(this.player,this.visualSnapshot());
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
     (this.petPen??=new PetCompanion()).update(this,dt);(this.petPen2??=new PetCompanion(1)).update(this,dt);
@@ -2394,7 +2398,8 @@ export class World {
         if(this.fx&&shown){const dx=this.position.x-h.e.x,dz=this.position.z-h.e.z,d=Math.hypot(dx,dz)||1,r=Math.min(h.e.radius*.8,d*.5);this.fx.burst({x:h.e.x+dx/d*r,y:this.position.y+.75,z:h.e.z+dz/d*r},{n:5,color:['#ffffff',watch.color],glow:true,size:.09,speed:3.5,up:1.6,y:0,life:.24,gravity:5});}
       }
     }
-    if(!trail.draw(now,this.fx?.density??1,tone[0],tone[1],tone[2],this.camera.position)&&!this.skillSteps?.length&&!this.dashWind)this.skillTint=null;
+    // Local combat feedback stays full length/detail even when Auto reduces ambient particles.
+    if(!trail.draw(now,1,tone[0],tone[1],tone[2],this.camera.position)&&!this.skillSteps?.length&&!this.dashWind)this.skillTint=null;
   }
   /**
    * The explorer's poses, after the reference: a leaning, bouncing walk; breathing

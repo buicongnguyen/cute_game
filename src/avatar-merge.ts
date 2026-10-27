@@ -15,12 +15,14 @@ export function mergesExactly(m: T.MeshToonMaterial) {
  * Merges each rigid part's meshes (skin, shirt, hair, the hat's pieces...) into one vertex-coloured mesh with one shared
  * toon material: a friend then costs one draw per part plus its merged outline, not three or four per part. Textured,
  * see-through or glowing pieces stay as they are. `exact` merges only pieces that look identical through the shared
- * material and keeps each piece's shadow flags (remote players and bots, whose look must not change).
+ * material and keeps each piece's shadow flags. The local player also keeps its sprout and socket-owning meshes
+ * independent through `keep`, so hiding a hat's sprout and animating held weapons still work.
  */
-export function mergeParts(model: T.Object3D, { exact = false } = {}) {
+export function mergeParts(model: T.Object3D, { exact = false, keep = (_mesh: T.Mesh) => false }: { exact?: boolean; keep?: (mesh: T.Mesh) => boolean } = {}) {
   const byParent = new Map<string, { parent: T.Object3D; cast: boolean; recv: boolean; list: T.Mesh[] }>(), ids = new Map<T.Object3D, number>();
   model.traverse(o => {
     if (!(o instanceof T.Mesh) || o.userData.outline || o.userData.gear || o.userData.animated /* a part that moves on its own (a pet's wing) */ || !o.parent || Array.isArray(o.material) || o.parent.name === 'remote-pet' || o.parent.parent?.name === 'remote-pet') return;
+    if (keep(o)) return;
     const m = o.material as T.MeshToonMaterial;
     if (m.map || m.transparent || (m.emissive && m.emissive.getHex() !== 0) || !m.color) return;
     if (exact && (!mergesExactly(m) || !o.visible || o.layers.mask !== 1 || !o.geometry.getAttribute('normal'))) return;

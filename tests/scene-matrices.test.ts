@@ -88,3 +88,22 @@ test('an object with matrixAutoUpdate off still updates through matrixWorldNeeds
   try { hand.matrix.makeTranslation(9, 0, 0); hand.matrixWorldNeedsUpdate = true; updateSceneMatrices(scene); assert.equal(child.matrixWorld.elements[12], 9); }
   finally { perfFlags.trustTransforms = true; }
 });
+
+test('manual matrix edits cannot poison the automatic transform cache', () => {
+ const scene=new T.Scene(), child=new T.Object3D();scene.add(child);manageSceneMatrices(scene);
+ child.position.x=3;updateSceneMatrices(scene);
+ child.matrixAutoUpdate=false;child.matrix.makeTranslation(9,0,0);child.matrixWorldNeedsUpdate=true;updateSceneMatrices(scene);
+ assert.equal(child.matrixWorld.elements[12],9);
+ child.matrixAutoUpdate=true;updateSceneMatrices(scene);assert.equal(child.matrixWorld.elements[12],3);
+});
+
+test('cached transforms match Three.js through animation, reparenting, hidden movement and picking', () => {
+ const make=()=>{const scene=new T.Scene(),a=new T.Group(),b=new T.Group(),child=new T.Group(),tip=new T.Object3D();scene.add(a,b);a.add(child);child.add(tip);return{scene,a,b,child,tip}};
+ const cached=make(),normal=make();manageSceneMatrices(cached.scene);
+ for(let frame=0;frame<30;frame++){
+  for(const s of [cached,normal]){s.a.position.x=frame*.2;s.b.rotation.y=frame*.03;s.child.rotation.z=frame*.05;s.tip.scale.setScalar(1+frame*.01);s.child.visible=frame<8||frame>=12;if(frame===10)s.b.add(s.child);}
+  updateSceneMatrices(cached.scene);normal.scene.updateMatrixWorld(true);
+  if(cached.child.visible)for(const key of ['a','b','child','tip'] as const)assert.deepEqual(cached[key].matrixWorld.elements,normal[key].matrixWorld.elements);
+  assert.deepEqual(cached.tip.getWorldPosition(new T.Vector3()).toArray(),normal.tip.getWorldPosition(new T.Vector3()).toArray());
+ }
+});

@@ -45,6 +45,7 @@ function visit(o: Tracked, parentChanged: boolean) {
   const auto = o.matrixAutoUpdate && perfFlags.trustTransforms;
   let changed = parentChanged || (o.matrixWorldNeedsUpdate && !auto) || !!o._stale || o._parent !== o.parent;
   o._parent = o.parent;
+  if (!o.matrixAutoUpdate) o._trs = undefined; // Returning from a manual matrix must recompose TRS.
   if (o.matrixAutoUpdate && moved(o)) { o.matrix.compose(o.position, o.quaternion, o.scale); changed = true; }
   if (changed) {
     if (o.matrixWorldAutoUpdate) { if (o.parent === null) o.matrixWorld.copy(o.matrix); else o.matrixWorld.multiplyMatrices(o.parent.matrixWorld, o.matrix); }

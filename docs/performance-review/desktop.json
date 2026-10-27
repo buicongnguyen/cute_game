@@ -1,0 +1,381 @@
+{
+  "url": "http://127.0.0.1:5299/",
+  "mobile": false,
+  "cpuThrottle": 1,
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 SUPER (0x00002702) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "canvas": [
+    1280,
+    720
+  ],
+  "rows": [
+    {
+      "name": "idle",
+      "frames": 60,
+      "draws": 204.86666666666667,
+      "shadow": 74,
+      "main": 130.86666666666667,
+      "triangles": 191369.5,
+      "uploads": 18.9,
+      "bytes": 10927,
+      "allocations": 0,
+      "allocated": 0,
+      "compose": 187.33333333333334,
+      "multiply": 622.0833333333334,
+      "matrixVisited": 852,
+      "memory": {
+        "geometryBytes": 9958474,
+        "geometries": 391,
+        "textures": 7,
+        "programs": 54,
+        "heap": 97400000
+      }
+    },
+    {
+      "name": "effects",
+      "frames": 60,
+      "draws": 204.73333333333332,
+      "shadow": 74,
+      "main": 130.73333333333332,
+      "triangles": 192149.26666666666,
+      "uploads": 19.133333333333333,
+      "bytes": 16794,
+      "allocations": 0,
+      "allocated": 0,
+      "compose": 273.45,
+      "multiply": 621.8333333333334,
+      "matrixVisited": 846,
+      "memory": {
+        "geometryBytes": 9958474,
+        "geometries": 391,
+        "textures": 7,
+        "programs": 54,
+        "heap": 97400000
+      }
+    },
+    {
+      "name": "walking-effects",
+      "frames": 60,
+      "draws": 186.63333333333333,
+      "shadow": 72.75,
+      "main": 113.88333333333334,
+      "triangles": 181019.53333333333,
+      "uploads": 16.433333333333334,
+      "bytes": 16744.733333333334,
+      "allocations": 4,
+      "allocated": 840,
+      "compose": 273.75,
+      "multiply": 597.1666666666666,
+      "matrixVisited": 834,
+      "memory": {
+        "geometryBytes": 9958474,
+        "geometries": 392,
+        "textures": 7,
+        "programs": 54,
+        "heap": 97400000
+      }
+    }
+  ],
+  "paired": [
+    {
+      "active": false,
+      "before": {
+        "uploads": 4,
+        "bytes": 59280,
+        "compose": 4,
+        "multiply": 170,
+        "draws": 164,
+        "shadow": 69,
+        "main": 95
+      },
+      "after": {
+        "uploads": 0,
+        "bytes": 0,
+        "compose": 4,
+        "multiply": 170,
+        "draws": 164,
+        "shadow": 69,
+        "main": 95
+      },
+      "different": 0,
+      "nullDifferent": 0
+    },
+    {
+      "active": true,
+      "before": {
+        "uploads": 4,
+        "bytes": 59280,
+        "compose": 100,
+        "multiply": 170,
+        "draws": 166,
+        "shadow": 69,
+        "main": 97
+      },
+      "after": {
+        "uploads": 2,
+        "bytes": 6144,
+        "compose": 100,
+        "multiply": 170,
+        "draws": 166,
+        "shadow": 69,
+        "main": 97
+      },
+      "different": 0,
+      "nullDifferent": 0
+    }
+  ],
+  "transformAudit": {
+    "ordinary": {
+      "compose": 2497,
+      "multiply": 2523
+    },
+    "cached": {
+      "compose": 0,
+      "multiply": 0,
+      "visited": 834,
+      "frozenSkips": 0
+    }
+  },
+  "timings": [
+    {
+      "moving": false,
+      "medians": {
+        "before": 1.6500000059604645,
+        "after": 1.7249999940395355,
+        "nullA": 1.9500000178813934,
+        "nullB": 1.375
+      },
+      "samples": {
+        "before": [
+          2.8250000178813934,
+          2.5,
+          1.425000011920929,
+          2.024999976158142,
+          2.125,
+          2.0499999821186066,
+          1.6500000059604645,
+          1.5999999940395355,
+          1.5250000059604645,
+          1.3499999940395355,
+          1.5499999821186066,
+          1.225000023841858
+        ],
+        "after": [
+          2.5999999940395355,
+          1.574999988079071,
+          2.399999976158142,
+          1.7249999940395355,
+          1.7000000178813934,
+          1.574999988079071,
+          1.600000023841858,
+          2.149999976158142,
+          1.9749999940395355,
+          1.875,
+          1.2999999821186066,
+          1.5750000178813934
+        ],
+        "nullA": [
+          2.9249999821186066,
+          2.199999988079071,
+          2.375,
+          1.9749999940395355,
+          2.050000011920929,
+          1.9500000178813934,
+          1.875,
+          1.7750000059604645,
+          1.625,
+          1.9500000178813934,
+          1.925000011920929,
+          1.850000023841858
+        ],
+        "nullB": [
+          1.975000023841858,
+          1.7000000178813934,
+          1.425000011920929,
+          1.5250000059604645,
+          1.2000000178813934,
+          1.375,
+          1.300000011920929,
+          2.1500000059604645,
+          1.0999999940395355,
+          1.074999988079071,
+          1.050000011920929,
+          1
+        ]
+      }
+    },
+    {
+      "moving": true,
+      "medians": {
+        "before": 2,
+        "after": 2.1749999821186066,
+        "nullA": 2.649999976158142,
+        "nullB": 1.8499999940395355
+      },
+      "samples": {
+        "before": [
+          1.4749999940395355,
+          1.9249999821186066,
+          2.7750000059604645,
+          2,
+          2.2750000059604645,
+          2.75,
+          4,
+          1.649999976158142,
+          2.050000011920929,
+          1.774999976158142,
+          1.75,
+          1.699999988079071
+        ],
+        "after": [
+          2.0999999940395355,
+          1.5999999940395355,
+          3.050000011920929,
+          1.949999988079071,
+          2.7999999821186066,
+          2.3250000178813934,
+          2.875,
+          3.300000011920929,
+          1.425000011920929,
+          2.1749999821186066,
+          1.625,
+          2.0999999940395355
+        ],
+        "nullA": [
+          3.2750000059604645,
+          3.074999988079071,
+          3.6500000059604645,
+          2.5,
+          2.649999976158142,
+          2.2750000059604645,
+          2.5750000178813934,
+          1.949999988079071,
+          1.875,
+          3.3499999940395355,
+          2.2750000059604645,
+          3.0750000178813934
+        ],
+        "nullB": [
+          1.699999988079071,
+          3.875,
+          2.25,
+          2.9749999940395355,
+          1.699999988079071,
+          2.949999988079071,
+          1.8499999940395355,
+          1.0999999940395355,
+          1.2750000059604645,
+          2.074999988079071,
+          1.175000011920929,
+          1.125
+        ]
+      }
+    }
+  ],
+  "memoryBefore": {
+    "geometryBytes": 9958474,
+    "geometries": 392,
+    "textures": 7,
+    "programs": 54,
+    "heap": 97400000
+  },
+  "memoryAfter": {
+    "geometryBytes": 9958474,
+    "geometries": 392,
+    "textures": 7,
+    "programs": 54,
+    "heap": 97400000
+  },
+  "errors": [],
+  "cpuTop": [
+    {
+      "name": "getBoundingClientRect",
+      "url": "",
+      "line": -1,
+      "samples": 11
+    },
+    {
+      "name": "moved",
+      "url": "http://127.0.0.1:5299/src/scene-matrices.ts?t=1792921445902",
+      "line": 9,
+      "samples": 8
+    },
+    {
+      "name": "getParameters",
+      "url": "http://127.0.0.1:5299/node_modules/.vite/deps/chunk-IT3TP6RZ.js?v=8474b093",
+      "line": 35491,
+      "samples": 7
+    },
+    {
+      "name": "visit",
+      "url": "http://127.0.0.1:5299/src/scene-matrices.ts?t=1792921445902",
+      "line": 25,
+      "samples": 6
+    },
+    {
+      "name": "(program)",
+      "url": "",
+      "line": -1,
+      "samples": 5
+    },
+    {
+      "name": "frame",
+      "url": "http://127.0.0.1:5299/src/main.ts?t=1792921445902",
+      "line": 6076,
+      "samples": 5
+    },
+    {
+      "name": "bindVertexArray",
+      "url": "",
+      "line": -1,
+      "samples": 5
+    },
+    {
+      "name": "projectObject",
+      "url": "http://127.0.0.1:5299/node_modules/.vite/deps/chunk-IT3TP6RZ.js?v=8474b093",
+      "line": 40592,
+      "samples": 5
+    },
+    {
+      "name": "update",
+      "url": "http://127.0.0.1:5299/src/world.ts?t=1792921445902",
+      "line": 4094,
+      "samples": 5
+    },
+    {
+      "name": "ownedWeapon",
+      "url": "http://127.0.0.1:5299/src/context-gear.ts",
+      "line": 1,
+      "samples": 5
+    },
+    {
+      "name": "updateLabels",
+      "url": "http://127.0.0.1:5299/src/main.ts?t=1792921445902",
+      "line": 1521,
+      "samples": 4
+    },
+    {
+      "name": "updateEnemyVisual",
+      "url": "http://127.0.0.1:5299/src/world.ts?t=1792921445902",
+      "line": 3983,
+      "samples": 4
+    },
+    {
+      "name": "visit",
+      "url": "http://127.0.0.1:5299/src/scene-matrices.ts?t=1792921445902",
+      "line": 25,
+      "samples": 3
+    },
+    {
+      "name": "multiplyMatrices",
+      "url": "http://127.0.0.1:5299/node_modules/.vite/deps/chunk-IT3TP6RZ.js?v=8474b093",
+      "line": 6651,
+      "samples": 3
+    },
+    {
+      "name": "renderObjects",
+      "url": "http://127.0.0.1:5299/node_modules/.vite/deps/chunk-IT3TP6RZ.js?v=8474b093",
+      "line": 40731,
+      "samples": 3
+    }
+  ]
+}

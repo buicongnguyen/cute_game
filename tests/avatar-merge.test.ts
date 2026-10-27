@@ -39,3 +39,16 @@ test('the friend path (not exact) still merges everything plain into one piece p
   mergeParts(root);
   assert.equal(meshesUnder(root).length, 1);
 });
+
+test('local-avatar batching preserves independently hidden parts and mesh-owned hand sockets',()=>{
+  const root=new T.Group(),arm=new T.Group();root.add(arm);
+  const sleeve=box(toonMaterial({color:'#287fca'})),skin=box(toonMaterial({color:'#f6bb91'}),1);
+  const leaf=box(toonMaterial({color:'#67b851'}),2);leaf.name='head-leaf';
+  const socketOwner=box(toonMaterial({color:'#f6bb91'}),3),hand=new T.Object3D();hand.name='hand-right';socketOwner.add(hand);
+  arm.add(sleeve,skin,leaf,socketOwner);
+  mergeParts(root,{exact:true,keep:o=>o.name==='head-leaf'||o.children.length>0});
+  assert.equal(root.getObjectByName('head-leaf'),leaf);assert.equal(root.getObjectByName('hand-right'),hand);
+  assert.equal(hand.parent,socketOwner);assert.equal(socketOwner.parent,arm);
+  assert.equal(arm.children.filter(o=>(o as T.Mesh).isMesh).length,3,'sleeve and skin share a draw; leaf and hand owner remain independent');
+  leaf.visible=false;assert.equal(root.getObjectByName('head-leaf')!.visible,false);
+});

@@ -7,6 +7,8 @@
     "dev": "node --env-file-if-exists=.env server/start-dev.mjs",
     "build": "tsc --noEmit && vite build && node server/build-offline.mjs",
     "preview": "vite preview --host 127.0.0.1",
+    "perf:draw": "node promo/draw-call-review.mjs",
+    "perf:work": "node promo/performance-work-review.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
     "dev:client": "vite --host 127.0.0.1",
     "start": "node --env-file-if-exists=.env server/server.mjs",
@@ -14,6 +16,7 @@
     "loadtest": "node server/load-test.mjs",
     "build:pages": "node server/build-pages.mjs",
     "art:compress": "node art/compress-models.mjs",
+    "perf:draws": "node promo/draw-call-review.mjs",
     "db:check": "node --env-file-if-exists=.env server/database-cli.mjs check",
     "db:import": "node --env-file-if-exists=.env server/database-cli.mjs import"
   },
