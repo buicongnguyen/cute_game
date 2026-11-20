@@ -1,7 +1,7 @@
 {
  "version": 1,
  "runs": 2,
- "rowsIdenticalAcrossRuns": 20,
+ "rowsIdenticalAcrossRuns": 21,
  "rows": {
   "village/late/42/desktop-high": {
    "key": "village/late/42/desktop-high",
@@ -23,6 +23,8 @@
    "geometryBytes": 8765510,
    "fx": 3,
    "roam": 39,
+   "fxTriangles": 288,
+   "roamTriangles": 28934,
    "visited": 824
   },
   "village/late/30/desktop-high": {
@@ -45,6 +47,8 @@
    "geometryBytes": 8765510,
    "fx": 3,
    "roam": 39,
+   "fxTriangles": 196,
+   "roamTriangles": 28934,
    "visited": 1014
   },
   "village/late/51.5/desktop-high": {
@@ -67,6 +71,8 @@
    "geometryBytes": 8765510,
    "fx": 3,
    "roam": 26,
+   "fxTriangles": 194,
+   "roamTriangles": 18756,
    "visited": 793
   },
   "wild/late/42/desktop-high": {
@@ -89,6 +95,8 @@
    "geometryBytes": 9095414,
    "fx": 4,
    "roam": 0,
+   "fxTriangles": 658,
+   "roamTriangles": 0,
    "visited": 698
   },
   "wild/late/30/desktop-high": {
@@ -111,6 +119,8 @@
    "geometryBytes": 9095414,
    "fx": 0,
    "roam": 0,
+   "fxTriangles": 0,
+   "roamTriangles": 0,
    "visited": 835
   },
   "wild/late/51.5/desktop-high": {
@@ -133,6 +143,8 @@
    "geometryBytes": 9095414,
    "fx": 0,
    "roam": 0,
+   "fxTriangles": 0,
+   "roamTriangles": 0,
    "visited": 683
   },
   "canyon/late/42/desktop-high": {
@@ -155,6 +167,8 @@
    "geometryBytes": 9098278,
    "fx": 1,
    "roam": 0,
+   "fxTriangles": 180,
+   "roamTriangles": 0,
    "visited": 685
   },
   "canyon/late/30/desktop-high": {
@@ -177,6 +191,8 @@
    "geometryBytes": 9105794,
    "fx": 5,
    "roam": 0,
+   "fxTriangles": 620,
+   "roamTriangles": 0,
    "visited": 751
   },
   "canyon/late/51.5/desktop-high": {
@@ -199,6 +215,8 @@
    "geometryBytes": 9107590,
    "fx": 2,
    "roam": 0,
+   "fxTriangles": 1174,
+   "roamTriangles": 0,
    "visited": 671
   },
   "village/save/42/desktop-high": {
@@ -221,6 +239,8 @@
    "geometryBytes": 8047550,
    "fx": 4,
    "roam": 26,
+   "fxTriangles": 292,
+   "roamTriangles": 18756,
    "visited": 790
   },
   "wild/save/42/desktop-high": {
@@ -243,6 +263,8 @@
    "geometryBytes": 8283918,
    "fx": 5,
    "roam": 0,
+   "fxTriangles": 1746,
+   "roamTriangles": 0,
    "visited": 658
   },
   "canyon/save/42/desktop-high": {
@@ -265,6 +287,8 @@
    "geometryBytes": 8283070,
    "fx": 3,
    "roam": 0,
+   "fxTriangles": 140,
+   "roamTriangles": 0,
    "visited": 632
   },
   "village/new/42/desktop-high": {
@@ -287,6 +311,8 @@
    "geometryBytes": 6756722,
    "fx": 3,
    "roam": 0,
+   "fxTriangles": 198,
+   "roamTriangles": 0,
    "visited": 730
   },
   "wild/new/42/desktop-high": {
@@ -309,6 +335,8 @@
    "geometryBytes": 6758306,
    "fx": 2,
    "roam": 0,
+   "fxTriangles": 386,
+   "roamTriangles": 0,
    "visited": 597
   },
   "canyon/new/42/desktop-high": {
@@ -331,6 +359,8 @@
    "geometryBytes": 6761170,
    "fx": 0,
    "roam": 13,
+   "fxTriangles": 0,
+   "roamTriangles": 6622,
    "visited": 567
   },
   "village/late/42/phone-high": {
@@ -353,6 +383,8 @@
    "geometryBytes": 8536594,
    "fx": 1,
    "roam": 13,
+   "fxTriangles": 4,
+   "roamTriangles": 9162,
    "visited": 790
   },
   "wild/late/42/phone-high": {
@@ -375,6 +407,8 @@
    "geometryBytes": 8769250,
    "fx": 4,
    "roam": 0,
+   "fxTriangles": 826,
+   "roamTriangles": 0,
    "visited": 657
   },
   "canyon/late/42/phone-high": {
@@ -397,6 +431,8 @@
    "geometryBytes": 8877746,
    "fx": 4,
    "roam": 0,
+   "fxTriangles": 142,
+   "roamTriangles": 0,
    "visited": 653
   },
   "village/late/42/desktop-medium": {
@@ -417,9 +453,11 @@
    "geometries": 386,
    "textures": 7,
    "geometryBytes": 8765510,
-   "fx": 3,
+   "fx": 2,
    "roam": 39,
-   "visited": 823
+   "fxTriangles": 98,
+   "roamTriangles": 28934,
+   "visited": 822
   },
   "wild/late/42/desktop-medium": {
    "key": "wild/late/42/desktop-medium",
@@ -439,9 +477,11 @@
    "geometries": 414,
    "textures": 9,
    "geometryBytes": 8998166,
-   "fx": 4,
+   "fx": 0,
    "roam": 0,
-   "visited": 691
+   "fxTriangles": 0,
+   "roamTriangles": 0,
+   "visited": 689
   },
   "canyon/late/42/desktop-medium": {
    "key": "canyon/late/42/desktop-medium",
@@ -449,21 +489,23 @@
    "shadowMap": 1024,
    "pitch": 42,
    "spread": {
-    "main": 1,
+    "main": 0,
     "shadow": 0,
-    "triangles": 84,
+    "triangles": 0,
     "programs": 0
    },
-   "main": 93,
+   "main": 92,
    "shadow": 37,
-   "triangles": 81993,
+   "triangles": 81909,
    "programs": 53,
-   "geometries": 439,
+   "geometries": 438,
    "textures": 9,
-   "geometryBytes": 9009414,
-   "fx": 4,
+   "geometryBytes": 9001030,
+   "fx": 1,
    "roam": 0,
-   "visited": 642
+   "fxTriangles": 240,
+   "roamTriangles": 0,
+   "visited": 638
   },
   "village/late/42/desktop-low": {
    "key": "village/late/42/desktop-low",
@@ -483,9 +525,11 @@
    "geometries": 380,
    "textures": 6,
    "geometryBytes": 8717378,
-   "fx": 2,
+   "fx": 3,
    "roam": 21,
-   "visited": 822
+   "fxTriangles": 194,
+   "roamTriangles": 14488,
+   "visited": 823
   },
   "wild/late/42/desktop-low": {
    "key": "wild/late/42/desktop-low",
@@ -507,6 +551,8 @@
    "geometryBytes": 8950034,
    "fx": 4,
    "roam": 0,
+   "fxTriangles": 486,
+   "roamTriangles": 0,
    "visited": 691
   },
   "canyon/late/42/desktop-low": {
@@ -529,6 +575,8 @@
    "geometryBytes": 8961282,
    "fx": 4,
    "roam": 0,
+   "fxTriangles": 142,
+   "roamTriangles": 0,
    "visited": 640
   }
  }

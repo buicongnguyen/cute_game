@@ -56,6 +56,8 @@ Do not edit `src/` while they run. The HUD test measures the plate the way hud-o
 
 The two draw counts leave out `fx` and `roam` (above). Two earlier tables of this file (2026-10-11, the tool before the freeze) counted a moving scene and a slow-CPU frame rate; they are replaced because they could not be repeated.
 
+Measured with `perf:bytes` on 2026-11-21 (b3b9f57 plus the tools): English start 778 KB gzip, Vietnamese start 908 KB, install list 4.55 MB (377 files; icons about 1.4 MB and models about 1.6 MB of it, raw). An earlier estimate of 2.7 MB did not hold up.
+
 The live site on 2026-10-10: about 2.3 MB downloaded before play, a steady 60 frames a second standing in the village, no slow frames.
 
 **The gate**

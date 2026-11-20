@@ -46,3 +46,10 @@ test('memory counters may grow 5%, no more', () => {
   assert.equal(compareRows(b, [row('a', { geometries: 525, textures: 84, geometryBytes: 4_200_000 })]).ok, true);
   for (const o of [{ geometries: 526 }, { textures: 85 }, { geometryBytes: 4_200_001 }]) assert.equal(compareRows(b, [row('a', o)]).ok, false, JSON.stringify(o));
 });
+
+test('chance counts (fx, roam and their triangles) have a small allowance above the baseline, no more', () => {
+  const b = baseline([row('a', { fx: 2, roam: 13, fxTriangles: 300, roamTriangles: 9000 })]);
+  const ok = row('a', { fx: 5, roam: 29, fxTriangles: 800, roamTriangles: 11500 });
+  assert.equal(compareRows(b, [ok]).ok, true);
+  for (const o of [{ fx: 6 }, { roam: 30 }, { fxTriangles: 801 }, { roamTriangles: 11501 }]) assert.equal(compareRows(b, [{ ...ok, ...o }]).ok, false, JSON.stringify(o));
+});

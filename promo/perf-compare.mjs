@@ -12,7 +12,7 @@ export const MEMORY = ['geometries', 'textures', 'geometryBytes'];
 export const MEMORY_GROWTH = 0.05;
 // `fx` (particle pools and loot cards, drawn while one is alive) and `roam` (a rescued friend's avatar, drawn while it walks through the view)
 // are chance: a small allowance, not an exact limit. They are kept out of the exact draw and triangle counts.
-export const SOFT = { fx: 3, roam: 16 };
+export const SOFT = { fx: 3, roam: 16, fxTriangles: 500, roamTriangles: 2500 };
 
 /** Fold the rows of several runs of one place into a baseline row. */
 export function foldRuns(runs) {

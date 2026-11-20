@@ -572,4 +572,4 @@ body #app #colossus-banner.near { display: none; }
   #app #hud .player-name { gap: 4px; }
 }
 /* The quest chip stays a positioned box (hud-compact.css grows its tap area with ::after): it is 43 px tall on a 768 px touch screen otherwise. */
-#app #hud #tracker-chip { position: relative; }
+#app #hud #tracker-chip { position: relative; inset: auto; }

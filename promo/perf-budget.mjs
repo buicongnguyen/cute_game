@@ -23,7 +23,9 @@ import { compareRows, foldRuns } from './perf-compare.mjs';
 const args = process.argv.slice(2), mode = args.includes('--baseline') ? 'baseline' : args.includes('--compare') ? 'compare' : 'print';
 const here = new URL('./', import.meta.url);
 const pwPath = process.env.PLAYWRIGHT_MODULE;
-const { chromium } = pwPath ? await import(pwPath.startsWith('file:') ? pwPath : pathToFileURL(pwPath).href) : createRequire('C:/Users/n/source/repos/3D_claudeopus55/package.json')('playwright');
+let chromium;
+try { ({ chromium } = pwPath ? await import(pwPath.startsWith('file:') ? pwPath : pathToFileURL(pwPath).href) : createRequire(import.meta.url)('playwright')); }
+catch (e) { console.error(`Playwright was not found (${e.message.split(String.fromCharCode(10))[0]}). Set PLAYWRIGHT_MODULE to the path of an installed playwright/index.mjs.`); process.exit(2); }
 const base = `http://127.0.0.1:${process.env.PORT || 5298}`, RUNS = Number(process.env.RUNS || (mode === 'compare' ? 1 : 2));
 const only = (process.env.ONLY || '').split(',').filter(Boolean);
 
@@ -139,7 +141,7 @@ async function measureGroup(browser, [profile, device, level, saveName, pitches]
         else if (Math.hypot(p.x - x, p.z - z) > 8) invalid = 'the hero left the spot';
         else if (__zoo.state.planet !== 'home') invalid = 'not on the home map';
         else if (d && !d.hidden) invalid = 'a dialog is open: ' + d.textContent.trim().replace(/\s+/g, ' ').slice(0, 60);
-        return { key, main: c.calls - w.__zooSplit.shadow - w.__zooSplit.fx - w.__zooSplit.roam, shadow: w.__zooSplit.shadow, triangles: Math.round(c.triangles - w.__zooSplit.fxTriangles - w.__zooSplit.roamTriangles), fx: w.__zooSplit.fx, roam: w.__zooSplit.roam, programs: r.info.programs.length, geometries: r.info.memory.geometries, textures: r.info.memory.textures, geometryBytes: bytes,
+        return { key, main: c.calls - w.__zooSplit.shadow - w.__zooSplit.fx - w.__zooSplit.roam, shadow: w.__zooSplit.shadow, triangles: Math.round(c.triangles - w.__zooSplit.fxTriangles - w.__zooSplit.roamTriangles), fx: w.__zooSplit.fx, roam: w.__zooSplit.roam, fxTriangles: Math.round(w.__zooSplit.fxTriangles), roamTriangles: Math.round(w.__zooSplit.roamTriangles), programs: r.info.programs.length, geometries: r.info.memory.geometries, textures: r.info.memory.textures, geometryBytes: bytes,
           ...(window.__attr ? { attr: window.__attr } : {}), visited: __zoo.matrixStats.visited, level, shadowMap: mapSize, pitch: +pitch.toFixed(2), ...(invalid ? { invalid } : {}) };
       }, [x, z, deg, key, level, process.env.PROBE_ADD || '']);
       if (settled.timedOut) row.note = 'kits or crop bake still changing after 20 s';
@@ -174,7 +176,7 @@ if (mode === 'baseline') {
 } else if (mode === 'compare') {
   const baseline = JSON.parse(readFileSync(BASELINE, 'utf8')), ledger = existsSync(LEDGER) ? JSON.parse(readFileSync(LEDGER, 'utf8')) : { entries: [] };
   // With several runs the smaller value of each field is compared: noise cannot fail a row, a real addition shows in every run.
-  const fields = ["fx", "roam", "main", "shadow", 'triangles', 'programs', 'geometries', 'textures', 'geometryBytes'];
+  const fields = ["fx", "roam", "fxTriangles", "roamTriangles", "main", "shadow", 'triangles', 'programs', 'geometries', 'textures', 'geometryBytes'];
   const rows = runs[0].map(r => ({ ...r, ...Object.fromEntries(fields.map(f => [f, Math.min(...runs.map(run => run.find(x => x.key === r.key)?.[f] ?? Infinity))])) }));
   const subset = only.length ? { rows: Object.fromEntries(Object.entries(baseline.rows).filter(([k]) => wanted(k))) } : baseline;
   const result = compareRows(subset, rows, ledger);
