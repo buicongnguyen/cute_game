@@ -377,14 +377,16 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
         }, measureHud.toString());
         assert.deepEqual(plateFindings(stretched), [], `a long name and level 100 at ${size} in ${lang}`);
         assert.equal(stretched.plate.level.text, '100'); assert.equal(stretched.plate.level.cut, false);
-        assert.ok(Math.abs((stretched.groups.hero[0].r - stretched.groups.hero[0].l) - (hero.r - hero.l)) < 1, 'a long name does not widen the plate');
+        // Since e78e839 the name and the energy count share one row and the plate sizes to that row, so a long name widens it a little (it may not push into the map: the next check).
+        { const grown = (stretched.groups.hero[0].r - stretched.groups.hero[0].l) - (hero.r - hero.l); assert.ok(grown > -1 && grown < 72, `a long name widens the plate by ${grown} px at most 72 (measured 64 at 1600x900)`); }
         assert.ok(!stretched.plate.name.cut || stretched.plate.name.ellipsis, 'a name that does not fit ends in an ellipsis');
         assert.ok(stretched.groups.map[0].l >= stretched.groups.hero[0].r + 8, 'and the plate still stops before the map');
         const look = await page.evaluate(() => { const map = document.querySelector('#hud .minimap'), cap = document.querySelector('#map-caption').getBoundingClientRect(), box = map.getBoundingClientRect(), cs = getComputedStyle(map); return { radius: parseFloat(cs.borderTopLeftRadius) / box.width, inside: cap.width > 0 && cap.top >= box.top && cap.bottom <= box.bottom + .5 && cap.left >= box.left - .5 && cap.right <= box.right + .5, emoji: [...document.querySelectorAll('#hud .top-actions button')].filter(b => !b.querySelector('svg') && !getComputedStyle(b).backgroundImage.includes('svg')).length }; });
         assert.ok(look.radius < .3, `the map is a rounded panel (corner ${look.radius.toFixed(2)} of its width)`);
         assert.ok(look.inside, 'the place name is on a strip inside the map');
         assert.equal(look.emoji, 0, 'every dock button carries a drawing from the icon set');
-        if (width >= 601 && height >= 521) assert.ok(g.slips.every(s => s.t >= map.b && s.r <= dockLeft), 'on roomy screens the quest slips hang under the map');
+        // e78e839 moved them: on roomy screens the compact task rows stand in the left column, under the hero plate.
+        if (width >= 601 && height >= 521) assert.ok(g.slips.every(s => s.t >= hero.b - 1 && s.l >= hero.l - 1 && s.r <= map.l), 'on roomy screens the quest slips hang under the hero plate');
         else assert.ok(g.slips.every(s => s.r <= map.l && s.t >= g.hero[0].b - .5), 'on phones the quest chips stay under the hero plate, left of the map');
       }
       if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/ours-${size}-${lang}.png` });
@@ -616,6 +618,30 @@ for (const [name, view] of Object.entries(VIEWS)) {
         return { custom: document.querySelector('#hud').classList.contains('ctl-custom'), fallback: c.view().fallback };
       });
       assert.deepEqual(fallback, { custom: false, fallback: true }, `${name}: a layout over the map falls back`);
+    } finally { await browser.close(); }
+  });
+}
+
+// The quest chip is a positioned box so its tap area can grow (hud-compact.css); on roomy touch screens it must stay in the left
+// column under the hero plate, not jump to the 601-1000 px slot of the older layout, and keep a 44 px tap area.
+for (const [width, height] of [[768, 1024], [800, 700], [1000, 600]]) {
+  test(`the quest chip stays under the hero plate with a 44 px tap area at ${width}x${height}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 180000 }, async () => {
+    const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+    try {
+      const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+      await context.addInitScript(([s]) => { try { localStorage.setItem('cute-game-save-v1', s); localStorage.setItem('cute-game-slot', '0'); localStorage.setItem('cute-game-language', 'en'); localStorage.setItem('cute-game-tutorial', 'done'); } catch { /* storage blocked */ } }, [fullSave]);
+      const page = await context.newPage();
+      await page.routeWebSocket(socketUrl => new URL(socketUrl).searchParams.has('token'), () => {});
+      await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await page.waitForSelector('[data-action="start"]', { timeout: 60000 });
+      await page.evaluate(() => document.querySelector('[data-action="start"]').click());
+      await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(6000);
+      await page.evaluate(() => { document.querySelector('.tutorial,.welcome')?.remove(); document.querySelectorAll('dialog[open]').forEach(d => d.close()); (document.querySelector('#dialog-layer [data-action="close"]') || document.querySelector('#dialog-close'))?.click(); });
+      await STATES.calm(page);
+      const m = await page.evaluate(measureHud), g = m.groups, hero = g.hero[0];
+      assert.deepEqual(findings(m), [], `calm at ${width}x${height}`);
+      const chip = await page.evaluate(() => { const el = document.querySelector('#hud #tracker-chip'); if (!el || el.offsetParent === null) return null; const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, h: b.height }; });
+      if (chip) assert.ok(chip.t >= hero.b - 1 && chip.t < hero.b + 90 && chip.l <= hero.r, `the chip stands under the hero plate: ${JSON.stringify([chip, hero])}`);
     } finally { await browser.close(); }
   });
 }

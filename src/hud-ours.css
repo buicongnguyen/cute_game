@@ -560,3 +560,16 @@ body #app #colossus-banner.near { display: none; }
 #app #hud #quest-summary.can-walk::after { content: none; }
 /* Handedness changes combat controls; the task column stays with the hero. */
 #app #hud.joystick-right .tracker-stack { left: calc(var(--edge) + var(--safe-left)); right: auto; top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 6px); align-items: stretch; }
+
+/* Portrait phones: the name and the energy count share one row (e78e839), so a long name or a big count must not push the plate
+   under the map. The plate stops 8 px before the map; the name gives way first (it ends in an ellipsis). */
+@media (orientation: portrait) and (max-width: 600px) {
+  #app #hud .player-card { max-width: calc(100vw - var(--col) - var(--mm) - 8px - var(--edge) - var(--safe-left)); }
+}
+/* Portrait phones at 360 px and narrower: two px less padding on the right and a 4 px gap between the name and the energy count keep the plate 8 px clear of the map with "Clover" whole. */
+@media (orientation: portrait) and (max-width: 360px) {
+  #app #hud .player-card { padding-right: 6px; }
+  #app #hud .player-name { gap: 4px; }
+}
+/* The quest chip stays a positioned box (hud-compact.css grows its tap area with ::after): it is 43 px tall on a 768 px touch screen otherwise. */
+#app #hud #tracker-chip { position: relative; inset: auto; }
