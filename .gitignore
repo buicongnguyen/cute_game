@@ -21,3 +21,6 @@ __pycache__/
 # Big promo renders stay on disk but out of git (regenerate with promo/render.sh)
 promo/*.mp4
 promo/*.wav
+
+# Session scratch (evaluation shots, probes, worktree caches); never committed
+.scratch/
