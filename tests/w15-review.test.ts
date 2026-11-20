@@ -1,5 +1,5 @@
 // Wave 15 review fixes: one test (or more) per finding, numbered as in the review.
-import test from 'node:test';
+import test, { after, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as T from 'three';
@@ -32,6 +32,9 @@ import { VI_FIXES } from '../src/locales/vi-fixes.ts';
 import { t, setLanguage } from '../src/i18n.ts';
 
 const T0 = Date.parse('2026-10-02T10:00:00Z'), MIN = 60_000, DAY = 86_400_000;
+// The whole file runs at T0 (src/progression.ts reads the real clock for the daily and weekly rotations), as 8c401e6 did for the locale test.
+mock.timers.enable({ apis: ['Date'], now: T0 });
+after(() => mock.timers.reset());
 const act = (s: M.SaveState, type: string, payload: Record<string, unknown> = {}, now = T0) => applyGameAction(s, { type, payload }, { now, random: () => .5 });
 const src = (file: string) => readFileSync(new URL('../src/' + file, import.meta.url), 'utf8');
 
