@@ -56,7 +56,8 @@ for (const [name, view] of Object.entries(VIEWS)) {
       await page.click('[data-action="shop-tab"][data-kind="Clothing"]');
       const hat = await page.evaluate(() => document.querySelector('[data-action="try-on"][data-item^="hat_"]')?.dataset.item);
       assert.ok(hat, 'the clothing tab offers Try on for hats');
-      const meshes = () => page.evaluate(() => { let n = 0; window.__zoo.world.player.traverse(o => { if (o.isMesh) n++; }); return n; });
+      // The explorer's pieces are merged into a few meshes (src/avatar-merge.ts), so a worn hat shows as more vertices and a taller box, not as one more mesh.
+      const meshes = () => page.evaluate(() => { let n = 0; window.__zoo.world.player.traverse(o => { if (o.isMesh && o.geometry?.attributes.position) n += o.geometry.attributes.position.count; }); return n; });
       const plain = await meshes();
       await page.click(`[data-action="try-on"][data-item="${hat}"]`); await page.waitForTimeout(800);
       const wearing = await page.evaluate(h => ({ preview: window.__zoo.world.tryOnGear?.hat, saved: window.__zoo.state.gear.hat ?? null, layer: document.querySelector('#dialog-layer').classList.contains('trying-on'), pressed: document.querySelector(`[data-action="try-on"][data-item="${h}"]`).getAttribute('aria-pressed') }), hat);
@@ -66,7 +67,9 @@ for (const [name, view] of Object.entries(VIEWS)) {
       const visible = await page.evaluate(() => { const w = window.__zoo.world, p = w.player.position.clone(); p.y += 1.2; p.project(w.camera); const x = (p.x + 1) / 2 * innerWidth, y = (1 - p.y) / 2 * innerHeight, d = document.querySelector('#dialog').getBoundingClientRect(); return { x, y, covered: x > d.left && x < d.right && y > d.top && y < d.bottom }; });
       assert.equal(visible.covered, false, `the explorer stays visible beside the panel: ${JSON.stringify(visible)}`);
       await shot(page, '4-try-on-hat');
-      assert.equal(await page.evaluate(() => localStorage.getItem('cute-game-save-v1')), savedBefore, 'try-on never saves');
+      // The game's own autosave may stamp `savedAt` meanwhile (it is slower on a busy machine); everything else must be as it was.
+      const unstamped = raw => { const o = JSON.parse(raw); delete o.savedAt; return o; };
+      assert.deepEqual(unstamped(await page.evaluate(() => localStorage.getItem('cute-game-save-v1'))), unstamped(savedBefore), 'try-on never saves');
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);
       assert.equal(await page.evaluate(() => window.__zoo.world.tryOnGear ?? null), null, 'closing reverts the try-on');
       assert.equal(await meshes(), plain, 'the explorer is back in their own gear');

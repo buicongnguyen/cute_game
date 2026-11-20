@@ -78,7 +78,7 @@ export function findings(m) {
   out.push(...plateFindings(m), ...pawFindings(m));
   return out;
 }
-/** The hero plate: the name over the tile, the level as a number on a badge, the energy count over the health bar, all inside the
+/** The hero plate: the name row beside the tile, the level as a number on a badge, the energy count over the health bar, all inside the
     plate and none of them cut (a long name may end in an ellipsis: that is `name.cut` with `name.ellipsis`, and is not a finding). */
 export function plateFindings(m) {
   const out = [], p = m.plate, hero = m.groups.hero[0]; if (!p || !hero) return ['the hero plate is missing'];
@@ -94,12 +94,16 @@ export function plateFindings(m) {
   if (p.energyText.cut || p.energy.cut || p.energyText.r > p.energy.r + .5) out.push(`the energy count is cut ${JSON.stringify(p.energyText)}`);
   if (p.energyText.font < 12) out.push(`the energy count is ${p.energyText.font}px, too small to read`);
   if (p.energy.b > p.health.t + .5) out.push('the energy count is not above the health bar');
+  if (p.energy.l < p.name.r - .5 || p.energy.t >= p.name.b || p.energy.b <= p.name.t) out.push('the energy count is not on the name row, after the name');
   if (p.name.cut && !p.name.ellipsis) out.push('a long name is clipped without an ellipsis');
   if (p.avatar) {
-    if (p.name.b > p.avatar.t + .5) out.push('the name is not above the portrait tile');
+    // Since e78e839 the name row (name left, energy count right) stands beside the tile at its top, over the bars. Short landscape phones keep
+    // the older arrangement: the name row above the tile, the tile beside the bars.
+    const beside = p.name.l >= p.avatar.r - .5 && p.name.t >= p.avatar.t - 5 && p.name.b <= p.health.t + .5, above = p.name.b <= p.avatar.t + .5;
+    if (!beside && !above) out.push('the name is neither beside the portrait tile nor above it');
     const cx = (p.level.l + p.level.r) / 2, cy = (p.level.t + p.level.b) / 2;
     if (cx < p.avatar.l || cx > p.avatar.r + 2 || cy < p.avatar.t || cy > p.avatar.b + 2 || p.level.r < p.avatar.r - 2 || p.level.b < p.avatar.b - 2) out.push(`the level badge is not on the tile's corner ${JSON.stringify([p.avatar, p.level].map(b => [b.l, b.t, b.r, b.b].map(Math.round)))}`);
-  } else if (p.level.r > p.name.l + .5 || p.level.b <= p.name.t || p.level.t >= p.name.b || p.name.b > p.energy.t + .5) out.push('without the tile the level badge should stand before the name, over the energy count');
+  } else if (p.level.r > p.name.l + .5 || p.level.b <= p.name.t || p.level.t >= p.name.b || p.name.b > p.health.t + .5) out.push('without the tile the level badge should stand before the name row, over the bars');
   return out;
 }
 /** The three states the probe measures; each returns when the HUD has settled. */

@@ -377,14 +377,16 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
         }, measureHud.toString());
         assert.deepEqual(plateFindings(stretched), [], `a long name and level 100 at ${size} in ${lang}`);
         assert.equal(stretched.plate.level.text, '100'); assert.equal(stretched.plate.level.cut, false);
-        assert.ok(Math.abs((stretched.groups.hero[0].r - stretched.groups.hero[0].l) - (hero.r - hero.l)) < 1, 'a long name does not widen the plate');
+        // Since e78e839 the name and the energy count share one row and the plate sizes to that row, so a long name widens it a little (it may not push into the map: the next check).
+        { const grown = (stretched.groups.hero[0].r - stretched.groups.hero[0].l) - (hero.r - hero.l); assert.ok(grown > -1 && grown < 160, `a long name widens the plate by ${grown} px at most 160`); }
         assert.ok(!stretched.plate.name.cut || stretched.plate.name.ellipsis, 'a name that does not fit ends in an ellipsis');
         assert.ok(stretched.groups.map[0].l >= stretched.groups.hero[0].r + 8, 'and the plate still stops before the map');
         const look = await page.evaluate(() => { const map = document.querySelector('#hud .minimap'), cap = document.querySelector('#map-caption').getBoundingClientRect(), box = map.getBoundingClientRect(), cs = getComputedStyle(map); return { radius: parseFloat(cs.borderTopLeftRadius) / box.width, inside: cap.width > 0 && cap.top >= box.top && cap.bottom <= box.bottom + .5 && cap.left >= box.left - .5 && cap.right <= box.right + .5, emoji: [...document.querySelectorAll('#hud .top-actions button')].filter(b => !b.querySelector('svg') && !getComputedStyle(b).backgroundImage.includes('svg')).length }; });
         assert.ok(look.radius < .3, `the map is a rounded panel (corner ${look.radius.toFixed(2)} of its width)`);
         assert.ok(look.inside, 'the place name is on a strip inside the map');
         assert.equal(look.emoji, 0, 'every dock button carries a drawing from the icon set');
-        if (width >= 601 && height >= 521) assert.ok(g.slips.every(s => s.t >= map.b && s.r <= dockLeft), 'on roomy screens the quest slips hang under the map');
+        // e78e839 moved them: on roomy screens the compact task rows stand in the left column, under the hero plate.
+        if (width >= 601 && height >= 521) assert.ok(g.slips.every(s => s.t >= hero.b - 1 && s.l >= hero.l - 1 && s.r <= map.l), 'on roomy screens the quest slips hang under the hero plate');
         else assert.ok(g.slips.every(s => s.r <= map.l && s.t >= g.hero[0].b - .5), 'on phones the quest chips stay under the hero plate, left of the map');
       }
       if (process.env.HUD_SHOTS) await page.screenshot({ path: `${process.env.HUD_SHOTS}/ours-${size}-${lang}.png` });
