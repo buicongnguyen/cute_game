@@ -15,29 +15,53 @@ Every stage is measured before and after with one command, and merges only if it
 
 **How to measure**
 
+One tool, `promo/perf-budget.mjs` (npm scripts `perf:gate`, `perf:baseline`, `perf:bytes`), frozen so that the same tree gives the same numbers.
+
 ```
-npx vite --port 5298 --host 127.0.0.1 --strictPort     (in one terminal)
-node promo/perf-budget.mjs                              (in another)
+npx vite --port 5298 --host 127.0.0.1 --strictPort                    (one terminal; the dev server has the __zoo hook)
+PORT=5298 node promo/perf-budget.mjs --compare                        (another; about 1 to 2 minutes; exit 1 on any row over its limit)
+PORT=5298 node promo/perf-budget.mjs --baseline                       (only to re-take promo/perf-baseline.json: two runs)
+npm run build:pages && npm run perf:bytes                             (download weight, see below)
 ```
 
-It stands the hero at three fixed places and prints, for each one, the draw calls (how many separate things the graphics card is asked to draw in a frame), the triangles, and the frame rate on a CPU slowed four times to act like a phone. When a change needs an exact before and after, `promo/frozen-ab.mjs` renders the same frozen frame with the change off and on.
+- **What it measures.** 24 rows at 1600 x 900 unless stated: village, wild and canyon at the default 42 degree camera on the late, mid and new test saves (9); 30 and 51.5 degrees on the late save (6); a phone (390 x 844, device scale 3, touch) on graphics High (3); Balanced and Battery saver on the late save (6). A row is invalid, and refused, if the camera is more than 0.5 degrees off its pitch, the graphics level is not the pinned one, the hero is not on the spot or a dialog is open.
+- **How it is frozen** (copied from `promo/draw-call-review.mjs`): `performance.now` and `Date.now` are fake, `requestAnimationFrame` is pumped by hand, `Math.random` is seeded, neighbours are off, the Colossus sleeps, graphics are seeded. After Start and the greeting cards it pumps 120 frames, waits until the kits and the crop bake are idle (up to 20 s), pins the hero, and counts ONE `world.render()` with a draw counter that is active only inside that call. No frame rate is measured (a slow CPU makes it a lottery).
+- **What a row holds:** main draws, shadow draws, triangles, shader programs, geometries, textures, geometry bytes, scene matrices visited, the graphics level and shadow-map size. Two things that chance decides are counted apart and may wobble a little: `fx` (spark and glow pools, loot cards) and `roam` (a rescued friend walking through the view; about 13 draws each). They are kept out of the exact counts.
+- **Limits** (`promo/perf-compare.mjs`, tested by `tests/perf-compare.test.mjs`): draws, shadow draws, triangles and programs must match the baseline exactly; if the two baseline runs differed, the limit is the larger value plus the observed spread. Memory counters may grow 5%. `fx` may grow 3 and `roam` 16. A named entry in `promo/perf-ledger.json` (`{ "row": "<key>", "name": "<package>", "allow": { "main": 6 } }`) raises its own row's limit and nothing else; every entry is a decision, so it carries the package's name. Compare takes the smaller of its runs (`RUNS=2`), so noise cannot fail a row while a real addition shows in every run.
+- **Self-test:** `PROBE_ADD=village node promo/perf-budget.mjs --compare` adds one mesh to the village rows and must fail them.
+- **Download weight:** `npm run perf:bytes` (after `build:pages`) prints the English start (index.html and every script, modulepreload and stylesheet before Start, gzip), the Vietnamese start (that plus the vi-pack chunk) and the install list (the service worker's CORE and EXTRA lists: gzip for scripts, stylesheets, JSON and SVG, raw for models, audio and images), per file, so a new lazy chunk shows up by name.
+- **When a change needs an exact picture before and after,** `promo/frozen-ab.mjs` renders the same frozen frame with the change off and on.
 
-**Baseline** (dev build, 1600 x 900, level-41 test save, whole frame including shadows, two runs on 2026-10-11)
+**Browser tests** (the eight suites that need a running dev server; run after every merge, about 16 minutes; `CI=1` style limits do not apply here):
 
-| Place | Draw calls | Triangles | Slow-CPU frame rate |
+```
+npx vite --port <own port> --host 127.0.0.1 --strictPort        (a private cacheDir in a wrapper config, so other servers are not disturbed)
+HUD_LAYOUT_URL=http://127.0.0.1:<own port>/ PLAYWRIGHT_MODULE=<a playwright install>/index.mjs node --test tests/art-retry-browser.test.mjs tests/device-qa.test.mjs tests/dialog-dock.test.mjs tests/hud-layout.test.mjs tests/item-layout.test.mjs tests/mobile-menu-layout.test.mjs tests/quick-eat-browser.test.mjs tests/rescue-view-browser.test.mjs
+```
+
+Do not edit `src/` while they run. The HUD test measures the plate the way hud-ours.css lays it out (name and energy count on one row beside the portrait tile; short landscape phones keep the name above the tile).
+
+**Baseline** (dev build, frozen as above, two runs on 2026-11-21 at b3b9f57 plus the tools; `promo/perf-baseline.json` holds every row)
+
+| Row (late save, High) | Main + shadow draws | Triangles | Programs |
 |---|---|---|---|
-| Village (the heaviest view) | 248 to 259 | 200,000 to 206,000 | 59 to 60 |
-| Wilds | 96 to 98 | 80,000 to 82,000 | 60 |
-| Redrock Canyon | 113 to 124 | 68,000 to 73,000 | 53 to 60 |
+| Village, 42 degrees | 147 + 76 | 206,005 | 51 |
+| Village, 30 degrees | 196 + 76 | 248,178 | 51 |
+| Village, 51.5 degrees | 134 + 76 | 199,083 | 51 |
+| Wilds, 42 degrees | 71 + 24 | 91,511 | 54 |
+| Redrock Canyon, 42 degrees | 92 + 37 | 81,909 | 54 |
+| Village, phone | 84 + 70 | 160,204 | 48 |
+| Village, Balanced | 147 + 76 | 206,005 | 51 |
+| Village, Battery saver | 139 + 0 | 127,362 | 47 |
+
+The two draw counts leave out `fx` and `roam` (above). Two earlier tables of this file (2026-10-11, the tool before the freeze) counted a moving scene and a slow-CPU frame rate; they are replaced because they could not be repeated.
 
 The live site on 2026-10-10: about 2.3 MB downloaded before play, a steady 60 frames a second standing in the village, no slow frames.
 
-Creatures keep moving while the tool measures, and other programs share the test PC, so numbers wander by 5 to 10 percent between runs. The slow-CPU frame rate is the noisiest. The test PC also has a strong graphics card, so it under-reports what a weak phone would feel: treat triangles and draw calls as the real limits.
-
 **The gate**
 
-1. Draw calls and triangles at all three places stay inside the baseline range, on every graphics setting.
-2. The download before play does not grow. New art and sound load only when needed.
+1. `perf:gate` passes: draws, shadow draws, triangles and programs on all 24 rows stay at or under the baseline (plus any ledger entry for that row).
+2. The download before play does not grow (`perf:bytes`). New art and sound load only when needed.
 3. Anything that costs graphics time on every frame (glow, depth blur) is an optional extra: off by default, never on phones, and switched off by the existing automatic fallback when frames slow down. The existing Sharp, Balanced and Battery saver settings keep their meaning.
 4. Prefer work done once, when the art is made, over work done every frame. Shading baked into the models costs nothing while playing.
 5. The type check and the full test suite pass.
