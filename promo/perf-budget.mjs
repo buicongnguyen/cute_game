@@ -108,7 +108,7 @@ async function measureGroup(browser, [profile, device, level, saveName, pitches]
       const [x, z] = SCENES[scene];
       const row = await page.evaluate(([x, z, deg, key, level, probeAdd]) => {
         const f = window.__frozen, w = __zoo.world, r = w.renderer, cam = window.__cam, c = f.count;
-        f.seedWith(2468); w.position.set(x, 0, z); w.cameraTarget.set(x, 0, z); w.facing = 0; w.zoom = 1; __zoo.pinHero({ x, z });
+        f.seedWith(2468); w.position.set(x, 0, z); w.cameraTarget.set(x, 0, z); w.facing = 0; w.zoom = 1; __zoo.pinHero?.({ x, z });
         cam.setCameraPitch(deg); w.resize();
         const v = w.viewOffset, pitch = Math.atan2(v.y, Math.hypot(v.x, v.z)) * 180 / Math.PI;
         f.pump(120);
