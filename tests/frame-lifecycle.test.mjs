@@ -1,31 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import vm from 'node:vm';
-import ts from 'typescript';
-import * as M from '../src/model.ts';
 import {SpaceFlight} from '../src/space.ts';
 import {GraphicsGovernor} from '../src/graphics.ts';
+import {mainHarness} from './support/main-harness.mjs';
 
 // The actual main loop, flight controller and visibility hook: a hidden phone must not
 // spend a resumed frame's whole one-second cap on fuel, hazards or autopilot movement.
-const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
-const ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
-const nodes=ast.statements.filter(n=>ts.isFunctionDeclaration(n)&&['frame','updateSpace'].includes(n.name?.text)
-  ||ts.isExpressionStatement(n)&&n.getText(ast).startsWith("document.addEventListener('visibilitychange'")&&n.getText(ast).includes('previous=performance.now()'));
-assert.equal(nodes.length,3);
-const code=ts.transpileModule(nodes.map(n=>n.getText(ast)).join('\n'),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+const main=await mainHarness({functions:['frame','updateSpace'],
+  statements:[text=>text.startsWith("document.addEventListener('visibilitychange'")&&text.includes('previous=performance.now()')]});
+assert.equal(main.pieces.length,3);
 function fixture(){
   let now=0,draws=0,saves=0,scheduled=0;const handlers=new Map(),events=[],noop=()=>{};
   const flight=new SpaceFlight('home',['home','candy']);flight.setAutopilot('candy');
   const graphics=new GraphicsGovernor({mobile:true,devicePixelRatio:3});
-  const ctx=vm.createContext({M,graphics,frameTime:0,previous:0,elapsed:0,uiElapsed:0,flight,arriving:false,
+  const fakes={graphics,frameTime:0,previous:0,elapsed:0,uiElapsed:0,flight,arriving:false,
     document:{hidden:false,addEventListener:(name,fn)=>handlers.set(name,fn)},performance:{now:()=>now},
     spaceKeys:new Set(),spacePointer:null,boostHeld:false,innerWidth:390,innerHeight:844,
     world:{renderer:{}},state:{level:60,energy:100},spaceHome:{update:noop},spaceView:{update:noop,render:()=>draws++,drawRadar:noop},
     onSpaceEvent:event=>events.push(event),$:()=>({style:{},classList:{toggle:noop},getContext:()=>null}),
-    t:text=>text,updateHud:noop,save:()=>saves++,requestAnimationFrame:()=>scheduled++});
-  vm.runInContext(code,ctx);
+    t:text=>text,updateHud:noop,save:()=>saves++,requestAnimationFrame:()=>scheduled++};
+  const ctx=main.context(fakes);
   return {ctx,flight,graphics,events,frame(time){now=time;ctx.frame(time);},visibility(hidden,time){now=time;ctx.document.hidden=hidden;handlers.get('visibilitychange')();},
     get draws(){return draws;},get saves(){return saves;},get scheduled(){return scheduled;}};
 }

@@ -1,50 +1,19 @@
 import test, {afterEach} from 'node:test';
-import { tutorialPreview } from '../src/first-run.ts';
-import {hudIcon} from '../src/hud-icons.ts';
-import {sideOpen,isGun,SIDE_LEVEL} from '../src/weapon-pair.ts';
-import {sideButtonHtml,pairSettingHtml} from '../src/pair-ui.ts';
-import * as BagTile from '../src/bag-tile.ts';
-import {CAMERA_PITCH,cameraPitch} from '../src/camera-rig.ts';
-import {controlsSectionHtml} from '../src/controls-html.ts';
-import {effectiveKeys} from '../src/controls-keys.ts';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import * as JB from '../src/journal-badges.ts';
-import vm from 'node:vm';
-import ts from 'typescript';
-const IG=await import('../src/item-groups.ts');
 import * as M from '../src/model.ts';
 import * as P from '../src/progression.ts';
-import {t,localizeHtml,setLanguage,getLanguage} from '../src/i18n.ts';
-import {canTryOn,autoHeld} from '../src/try-on.ts';
-import {needsDuplicateConfirm} from '../src/shop-owned.ts';
-import {wardrobeItem} from '../src/house-stores.ts';
-import {ENEMY_TYPES} from '../src/enemy-types.ts';
-import {produceLots,upgradeCards,cookSellPlan} from '../src/item-views.ts';
-import {cookSellHtml,treeFertilizerNote} from '../src/econ-ui.ts';
-import {audioRowsHtml} from '../src/audio-settings.ts';
-import {dishesHtml,penHtml,penSignature} from '../src/farm-ui.ts';
-import {QUALITY,RESOLUTION,RESOLUTION_SETTINGS} from '../src/graphics.ts';
-import {planRoutes} from '../src/space.ts';
-import {helperRow} from '../src/helper-ui.ts';
+import {t,localizeHtml,setLanguage} from '../src/i18n.ts';
+import {effectiveKeys} from '../src/controls-keys.ts';
 import {HELP_TOPICS} from '../src/help-topics.ts';
-import {slotMeterHtml,expandCardHtml} from '../src/bag-slots-ui.ts';
-import {installRowHtml} from '../src/install-app.ts';
-import {titleCardHtml} from '../src/title-card.ts';
-import * as GUIDE from '../src/guide.ts';
+import {mainHarness} from './support/main-harness.mjs';
 
 afterEach(()=>setLanguage('en'));
 
 // Run the real panel renderers without a GPU; game data, catalogs and localization
 // are their production modules. We intercept only the dialog/DOM display boundary.
-const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
-const ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
+// The harness cuts the renderers out of main.ts and imports whatever main.ts imports for them.
 const renderers=['languageSelector','disguiseTableHtml','profilePicker','keyboardSettings','tryOnButton','effectText','growText','expandButton','bedUpgradeRow','plotDialog','inventory','rewardChips','materialChips','quests','shop','market','storage','upgrades','cooking','crafting','decorations','planets','map','settings','testerMore','testerOnline','help','penDialog'];
-const functions=ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&renderers.includes(node.name?.text)).map(node=>node.getText(ast)).join('\n');
-const globals=['BUFF_WORDS','JOURNAL_TABS','SHOP_TABS'];
-const declarations=ast.statements.filter(node=>ts.isVariableStatement(node)&&node.declarationList.declarations.some(item=>globals.includes(item.name.getText(ast)))).map(node=>node.getText(ast)).join('\n');
-const shell=ast.statements.find(node=>ts.isExpressionStatement(node)&&node.getText(ast).startsWith('app.innerHTML =')).getText(ast).replaceAll('import.meta.env.VITE_STATIC_HOST',"'true'").replaceAll('import.meta.env.VITE_ONLINE_URL',"''");
-const compiled=ts.transpileModule(declarations+'\n'+functions,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+const main=await mainHarness({functions:renderers,optional:renderers,variables:['BUFF_WORDS','JOURNAL_TABS','SHOP_TABS'],later:{shell:'app.innerHTML ='},env:{VITE_STATIC_HOST:'true',VITE_ONLINE_URL:''}});
 const esc=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 function fixture(advanced=true){
   const state=M.newGame('Carrot <Send> {name}');
@@ -57,15 +26,16 @@ function fixture(advanced=true){
   P.refreshProgress(state);
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
-  const context={...BagTile,needsDuplicateConfirm,sideOpen,isGun,SIDE_LEVEL,sideButtonHtml,pairSettingHtml,hudIcon,CAMERA_PITCH,cameraPitch,...GUIDE,slotMeterHtml,expandCardHtml,installRowHtml,titleCardHtml,M,cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},IG,planRoutes,...P,...JB,STORY_STEPS:P.STORY_STEPS,t,helperRow,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,autoHeld,bagMode:'bag',wardrobeItem,visiting:null,activePlot:0,selectedItem:advanced?'manure':null,shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home'},saveFailed:false,persistence:null,actionHandler:null,testerOpen:false,Tester:{isTester:()=>false,testerKitchenHtml:()=>'',testerMakeButton:()=>'',TESTER_TAG:''},
-    HELP_TOPICS,joystickEnabled:()=>state.settings.movePad??false,controlsSectionHtml,controls:{view:()=>({side:'right',size:'normal',opacity:100,joystick:!!state.settings.movePad,screen:'desktop',custom:false,fallback:false,pc:true,keys:effectiveKeys({layout:state.settings.keyboardLayout,air:true,space:'jump'},{}),customKeys:false})},restoreBackupRow:()=>'',inbox:{settingHtml:()=>'',popups:false,announce:()=>false},tutorialPreview,foldLists:()=>0,neighboursOn:()=>true,
+  // Fakes only: the player's state and main.ts's own state, the dialog/DOM display boundary and a few stubs.
+  const context={document:{fullscreenElement:null},HELP_TOPICS,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},esc,art,mini,state,saved:state,app:{innerHTML:''},tryingOn:null,bagMode:'bag',visiting:null,activePlot:0,selectedItem:advanced?'manure':null,shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home'},saveFailed:false,persistence:null,actionHandler:null,testerOpen:false,Tester:{isTester:()=>false,testerKitchenHtml:()=>'',testerMakeButton:()=>'',TESTER_TAG:''},
+    joystickEnabled:()=>state.settings.movePad??false,controls:{view:()=>({side:'right',size:'normal',opacity:100,joystick:!!state.settings.movePad,screen:'desktop',custom:false,fallback:false,pc:true,keys:effectiveKeys({layout:state.settings.keyboardLayout,air:true,space:'jump'},{}),customKeys:false})},restoreBackupRow:()=>'',inbox:{settingHtml:()=>'',popups:false,announce:()=>false},foldLists:()=>0,neighboursOn:()=>true,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},
     farmUi:{art,esc,mini,chips:()=>'',effect:item=>t(item.desc)},
   };
   context.spaceKey='jump';context.airCombat=true;context.airOn=()=>true;context.actionHandler??=null;
-  const ctx=vm.createContext(context);vm.runInContext(compiled,ctx);
-  return {state,ctx,render(name,...args){panels=[];ctx[name](...args);return panels;},shell(){vm.runInContext(shell,ctx);return localizeHtml(ctx.app.innerHTML);}};
+  const ctx=main.context(context);
+  return {state,ctx,render(name,...args){panels=[];ctx[name](...args);return panels;},shell(){main.run(ctx,'shell');return localizeHtml(ctx.app.innerHTML);}};
 }
 
 // Only presentation copy may change. Every game action, item identifier, field
