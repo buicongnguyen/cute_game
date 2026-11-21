@@ -23,7 +23,7 @@ function fixture(){
     leaveWorld(){},toast:message=>notices.push(message),tone(){},warp:fn=>fn(),enterSpace:()=>calls.push(['enterSpace']),
     $:()=>flash,setTimeout:(fn,delay)=>{if(delay===600)queueMicrotask(fn);},
     kitsFor:()=>[],SCENERY_KITS:{},exitSpace(){},settle(){},updateLabels(){},
-    plantBurst:index=>animations.push(index),feedBurst:uid=>animations.push(uid),
+    keysGuide:{planted(){}},plantBurst:index=>animations.push(index),feedBurst:uid=>animations.push(uid),
     closeDialog:()=>panels.push('close'),plotDialog:index=>panels.push(index),penDialog:()=>panels.push('pen'),t:text=>text,
     change:fn=>fn(),hit:(enemy,damage,stun,impact,remote,hazard)=>{calls.push(['hit',damage,hazard]);enemy.hp=Math.max(0,enemy.hp-damage*(hazard?1:.2));},
   });

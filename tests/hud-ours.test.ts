@@ -147,15 +147,22 @@ test('the hero plate sheet: the badge sits on the tile corner and takes no taps,
   const rule = (sel: string) => { const m = css.match(new RegExp(`\n${sel.replace(/[.#]/g, '\\$&')} \\{([^}]*)\\}`)); assert.ok(m, sel); return m![1]; };
   const badge = rule('#app #hud .level-badge');
   assert.match(badge, /position: absolute; right: -\d+px; bottom: -\d+px;/); assert.match(badge, /pointer-events: none;/);
-  // Readable at phone size and wide enough for three digits: at least 11 px bold digits, the box grows with its text.
-  assert.match(badge, /min-width: 22px; height: 18px; padding: 0 4px;/); assert.ok(+badge.match(/font-size: ([\d.]+)px/)![1] >= 11); assert.doesNotMatch(badge, /max-width|overflow/);
-  const name = rule('#app #hud .player-name');
-  assert.match(name, /grid-area: name;/); assert.match(name, /display: flex; align-items: center; justify-content: space-between;/); assert.ok(+name.match(/font-size: ([\d.]+)px/)![1] <= 12, 'the name is small');
-  assert.match(rule('#app #hud .player-name > strong'), /overflow: hidden; text-overflow: ellipsis; white-space: nowrap;/);
-  assert.match(rule('#app #hud .player-name > strong'), /padding-top: 4px; margin-top: -4px;/, 'headroom for stacked Vietnamese marks');
-  assert.match(rule('#app #hud .player-card'), /grid-template-areas: "face name" "face details";/);
-  const energy = rule('#app #hud .hero-energy');
-  assert.ok(+energy.match(/font-size: ([\d.]+)px/)![1] >= 12); assert.match(energy, /font-variant-numeric: tabular-nums; white-space: nowrap;/);
+  // What each rule must DO, read from its declarations (not its exact text, so the sheet can be retuned): the browser suite
+  // (tests/hud-layout.test.mjs, plateFindings) then measures the result with a 20-letter name, level 100 and a big energy count.
+  const prop = (body: string, name: string) => body.match(new RegExp(`(?:^|[;\\s])${name}:\\s*([^;]+);`))?.[1].trim(), px = (body: string, name: string) => parseFloat(prop(body, name) ?? 'NaN');
+  // The badge reads at phone size and holds three digits: digits of 11 px or more in a box taller than them that may grow sideways.
+  assert.ok(px(badge, 'font-size') >= 11, 'the level is at least 11 px'); assert.ok(px(badge, 'height') >= px(badge, 'font-size') + 4, 'the badge is taller than its digits');
+  assert.ok(px(badge, 'min-width') >= px(badge, 'height'), 'one digit still makes a round badge'); assert.equal(prop(badge, 'max-width'), undefined, 'three digits may widen it'); assert.equal(prop(badge, 'overflow'), undefined, 'and are never clipped');
+  // The name row: the name on the left gives way with an ellipsis, the energy count on the right is never cut and its digits do not jitter.
+  const name = rule('#app #hud .player-name'), strong = rule('#app #hud .player-name > strong'), energy = rule('#app #hud .hero-energy');
+  assert.equal(prop(name, 'grid-area'), 'name'); assert.equal(prop(name, 'display'), 'flex'); assert.equal(prop(name, 'justify-content'), 'space-between'); assert.equal(prop(name, 'min-width'), '0');
+  assert.ok(px(name, 'font-size') >= 11 && px(name, 'font-size') <= 12, 'the name is small, never under 11 px'); assert.ok(px(name, 'line-height') >= px(name, 'font-size'));
+  assert.equal(prop(strong, 'overflow'), 'hidden'); assert.equal(prop(strong, 'text-overflow'), 'ellipsis'); assert.equal(prop(strong, 'white-space'), 'nowrap');
+  assert.ok(px(strong, 'padding-top') >= 4 && px(strong, 'margin-top') === -px(strong, 'padding-top'), 'headroom for stacked Vietnamese marks that moves nothing');
+  assert.match(prop(rule('#app #hud .player-card'), 'grid-template-areas') ?? '', /^"face name" "face details"$/, 'the name row stands beside the tile, over the bars');
+  assert.ok(px(energy, 'font-size') >= 12, 'the energy count is at least 12 px'); assert.equal(prop(energy, 'font-variant-numeric'), 'tabular-nums'); assert.equal(prop(energy, 'white-space'), 'nowrap');
+  // No number on the plate is under 11 px in any media block of our sheet (the EXP and HP counts were 8.5 and 9.5 px).
+  for (const m of css.matchAll(/#app #hud \.(?:experience|meter) > span \{([^}]*)\}/g)) if (prop(m[1], 'font-size')) assert.ok(px(m[1], 'font-size') >= 11, `a bar's count is ${prop(m[1], 'font-size')}`);
   // 360 px and narrower: no tile; the badge stands before the name and the bars take what the map leaves, never under 30vw.
   const narrow = css.slice(css.indexOf("/* 360 px and narrower: the portrait tile steps aside"));
   assert.match(narrow, /#app #hud \.avatar \{ display: none; \}\s*#app #hud \.player-card \{ grid-template-areas: "face name" "details details";/);

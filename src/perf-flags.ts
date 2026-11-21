@@ -24,8 +24,11 @@ export const perfFlags = {
    * shading on scenery. Off draws the reference's flat rig; a world must be rebuilt (world.build) to switch. */
   richLook: true,
   /** The toy finish (AAA plan WP6): our own colour ramp (toon.ts) and ink (outline.ts), the baked top highlights
-   * (look.ts) and crop cards drawn from the player's camera angle with thin ink, capped to their bed (crop-cards.ts).
+   * (look.ts) and crop cards drawn from the player's camera angle with bold ink, capped to their bed (crop-cards.ts).
    * Off gives the grey ramp, the old ink and the 51.5 degree cards back. Read as the page loads: preset it (above). */
   ownRamp: true,
+  /** The explorer eases between standing and walking, fidgets and sits (hero-motion.ts, features/hero-idle.ts). Off is the
+   * old switch between the two poses, for a frozen A/B. */
+  heroMotion: true,
 };
 Object.assign(perfFlags, (globalThis as { __zooFlagPreset?: Partial<typeof perfFlags> }).__zooFlagPreset);

@@ -60,8 +60,8 @@
   #app #hud #combo-counter .cc-ring::before { -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask: radial-gradient(closest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
   #app #hud #combo-counter .cc-w { font-size: 12px; }
   #app #hud #combo-counter .cc-bonus { font-size: 11px; }
-  #app #hud #combo-counter .cc-note { font-size: 10px; padding: 0 6px 1px; }
-  #app #hud #combo-counter.done .cc-note { font-size: 10.5px; }
+  #app #hud #combo-counter .cc-note { font-size: 11px; padding: 0 6px 1px; }
+  #app #hud #combo-counter.done .cc-note { font-size: 11px; }
   #app #hud #combo-counter.t1 { --cc-size: 22px; } #app #hud #combo-counter.t2 { --cc-size: 23px; } #app #hud #combo-counter.t3 { --cc-size: 24px; } #app #hud #combo-counter.t4 { --cc-size: 25px; }
 }
 

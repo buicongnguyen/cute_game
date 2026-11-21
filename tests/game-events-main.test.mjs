@@ -178,4 +178,23 @@ test('a feature chunk that cannot be fetched is logged and asked for once more, 
   assert.equal(never.loads(), 2); assert.equal(never.timers.length, 1, 'one retry, not a loop'); assert.equal(never.logged.length, 2); assert.deepEqual(never.told, []);
 });
 
+test('asking again (the radio before its player came): one more load while the features are missing, none once they are mounted', async () => {
+  const again = await mainHarness({ functions: ['loadFeatures', 'retryFeatures'], variables: ['featuresAsked'] });
+  const frame = listeners => { for (const listener of [...listeners]) listener(1 / 60); };
+  // Missing: the first fetch failed and its 8 s retry has not run. The tap asks at once, on the next frame.
+  const told = listen(), frameListeners = new Set(), timers = [], logged = [];
+  const ctx = again.context({ frameListeners, serviceHost: {}, addPhrases() {}, console: { error: error => logged.push(String(error)) }, setTimeout: (fn, ms) => { timers.push([fn, ms]); } });
+  let loads = 0; const load = async () => { if (!loads++) throw new Error('offline'); return { mountFeatures: async () => ({ mounted: true }) }; };
+  ctx.loadFeatures(load); frame(frameListeners); await tick(); await tick();
+  assert.equal(logged.length, 1); assert.equal(frameListeners.size, 0); assert.equal(timers.length, 1, 'the 8 s retry is waiting');
+  ctx.retryFeatures(load); assert.equal(frameListeners.size, 1, 'asked for again (house-life.ts asks once per wish)');
+  assert.deepEqual(told, []);
+  frame(frameListeners); await tick(); await tick(); await tick();
+  assert.equal(loads, 2); assert.deepEqual(plain(told), [['started', {}]], 'mounted by the tap');
+  // Mounted: asking again does nothing, and the old 8 s retry answering late does not tell 'started' twice.
+  ctx.retryFeatures(load); assert.equal(frameListeners.size, 0, 'nothing more to load');
+  timers[0][0](); await tick(); await tick(); await tick();
+  assert.equal(loads, 3); assert.deepEqual(plain(told), [['started', {}]], 'started fires once per page, however many loads answer');
+});
+
 test.after(() => connect(undefined));

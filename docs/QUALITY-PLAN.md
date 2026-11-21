@@ -43,6 +43,8 @@ npx vite --port <own port> --host 127.0.0.1 --strictPort        (a private cache
 HUD_LAYOUT_URL=http://127.0.0.1:<own port>/ PLAYWRIGHT_MODULE=<a playwright install>/index.mjs node --test tests/art-retry-browser.test.mjs tests/device-qa.test.mjs tests/dialog-dock.test.mjs tests/hud-layout.test.mjs tests/item-layout.test.mjs tests/mobile-menu-layout.test.mjs tests/quick-eat-browser.test.mjs tests/rescue-view-browser.test.mjs
 ```
 
+`npm run test:browser` does both steps (AAA plan WP16, `tests/support/browser-suites.mjs`): it starts the dev server on a private port (`BROWSER_PORT`, default 5391) with its own cacheDir, runs the eight files and stops the server. `PLAYWRIGHT_MODULE` names the Playwright install as above; `HUD_LAYOUT_URL` uses a server that is already running; `BROWSER_JOBS=2` runs fewer files side by side on a busy machine; `npm run test:browser -- tests/hud-layout.test.mjs` runs one file.
+
 Do not edit `src/` while they run. The HUD test measures the plate the way hud-ours.css lays it out (name and energy count on one row beside the portrait tile; short landscape phones keep the name above the tile).
 
 **Test foundations** (WP1 of `docs/AAA-PLAN.md`; they change nothing in the game)

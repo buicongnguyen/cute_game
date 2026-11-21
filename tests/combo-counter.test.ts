@@ -8,7 +8,7 @@ import * as M from '../src/model.ts';
 import { CHAIN_VI } from '../src/locales/vi-chain.ts';
 import { FIVE_VI, FIVE_HELP_VI } from '../src/locales/vi-five.ts';
 import { VI_PACK } from '../src/locales/vi-pack.ts';
-import { HELP_TOPICS } from '../src/help-topics.ts';
+import { HELP_TOPICS, forDevice } from '../src/help-topics.ts';
 
 test('the counter warms at 5, 10, 20 and 30 hits and flashes once on each', () => {
   assert.deepEqual(COUNTER_TIERS, [5, 10, 20, 30]);
@@ -117,7 +117,7 @@ test('every new line reads in Vietnamese, with its placeholders and numbers kept
   for (const line of ['{count} hits · {damage}', 'New best!', 'Power strike', 'POWER READY!', 'POWER ×2!', 'POWER STRIKE!', 'POWER STRIKE ×2!', 'POWER!', 'Power strike ready! Hold Attack to unleash it.', 'UNTOUCHED ×{n}!', 'Attack: hold to unleash the power strike', 'HITS', 'LAUNCH!', 'FINISHER!']) { assert.ok(VI_PACK[line], 'missing: ' + line); assert.ok(main.includes(`'${line}'`), 'main.ts uses: ' + line); }
   for (const [en, vi] of Object.entries(FIVE_VI)) { assert.equal(VI_PACK[en], vi, en); assert.notEqual(vi, en); assert.deepEqual((vi.match(/\{\w+\}/g) ?? []).sort(), (en.match(/\{\w+\}/g) ?? []).sort(), en); assert.deepEqual(vi.match(/×?\d+/g) ?? [], en.match(/×?\d+/g) ?? [], en); }
   // The four help topics of the fight: each has its Vietnamese, with the same numbers (1.5 is written 1,5).
-  for (const [title, viTitle, viBody] of FIVE_HELP_VI) { const topic = HELP_TOPICS.find(row => row[1] === title)!; assert.ok(topic, title); assert.equal(VI_PACK[topic[1]], viTitle); assert.equal(VI_PACK[topic[2]], viBody); assert.deepEqual(viBody.replace(/(\d),(\d)/g, '$1.$2').match(/\d+(\.\d+)?/g), topic[2].match(/\d+(\.\d+)?/g), title + ': the same numbers in both languages'); }
+  for (const [title, viTitle, viBody] of FIVE_HELP_VI) { const topic = HELP_TOPICS.find(row => row[1] === title)!; assert.ok(topic, title); assert.equal(VI_PACK[topic[1]], viTitle); assert.equal(VI_PACK[topic[2]], forDevice(viBody, false)); assert.deepEqual(forDevice(viBody, false).replace(/(\d),(\d)/g, '$1.$2').match(/\d+(\.\d+)?/g), topic[2].match(/\d+(\.\d+)?/g), title + ': the same numbers in both languages'); }
   // Later topics (Elite creatures, Weapon pair) come after these four, which keep their order together.
   const titles = HELP_TOPICS.map(row => row[1]), jump = titles.indexOf('Jump and air combat');
   assert.ok(jump >= 0 && titles.indexOf('Elite creatures') > jump);

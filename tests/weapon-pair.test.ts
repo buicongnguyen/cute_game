@@ -8,7 +8,7 @@ import { WeaponPair, autoHand, sideGun, equipSide, withHand, pairMode, SIDE_LEVE
 import { pairTarget, sideButtonHtml } from '../src/pair-ui.ts';
 import { PAIR_VI, PAIR_HELP_VI } from '../src/locales/vi-pair.ts';
 import { VI_PACK } from '../src/locales/vi-pack.ts';
-import { HELP_TOPICS } from '../src/help-topics.ts';
+import { HELP_TOPICS, forDevice } from '../src/help-topics.ts';
 import { refusalReason } from '../src/refusals.ts';
 
 function explorer(level = 20, ...items: string[]) { const s = M.newGame(); s.level = level; for (const id of items) M.addItem(s, id); return s; }
@@ -100,7 +100,7 @@ test('the side-slot button, the swap button outside the paw, and both languages'
   assert.match(main, /id="pair-swap"/);
   for (const [en, vi] of Object.entries(PAIR_VI)) { assert.equal(VI_PACK[en], vi, en); assert.notEqual(vi, en); assert.deepEqual(vi.match(/\{\w+\}/g) ?? [], en.match(/\{\w+\}/g) ?? [], en); }
   const topic = HELP_TOPICS.find(([, title]) => title === 'Weapon pair')!; assert.ok(topic);
-  assert.equal(VI_PACK[topic[1]], PAIR_HELP_VI[0]); assert.equal(VI_PACK[topic[2]], PAIR_HELP_VI[1]);
+  assert.equal(VI_PACK[topic[1]], PAIR_HELP_VI[0]); assert.equal(VI_PACK[topic[2]], forDevice(PAIR_HELP_VI[1], false));
   assert.deepEqual(PAIR_HELP_VI[1].replace(/(\d),(\d)/g, '$1.$2').match(/\d+(\.\d+)?/g), topic[2].match(/\d+(\.\d+)?/g), 'the same numbers');
   for (const line of ['The side slot opens at level {level}.', 'Only a gun fits the side slot.', 'Side gun', 'Swap weapon (Tab)']) assert.ok(VI_PACK[line], line);
 });

@@ -27,14 +27,12 @@
 /* ---- Colossus banner: only from level 10; the zone name sits above it; a tap folds it ---- */
 body.guide-low-level #colossus-banner { display: none !important; }
 #zone-banner { z-index: 40; }
-body.guide-colossus-fold #colossus-banner .cb-meter, body.guide-colossus-fold #colossus-banner .cb-pct, body.guide-colossus-fold #colossus-banner small { display: none; }
-body.guide-colossus-fold #colossus-banner { max-width: 190px; }
 
 /* ---- Panels ---- */
 /* Seeds first: the garden's expand and helper rows sit below the seed list, smaller. */
 .garden-secondary { margin-top: 10px; display: grid; gap: 6px; opacity: .95; }
 .garden-secondary .grow-button, .garden-secondary .wide { min-height: 36px; font-size: 12px; padding-top: 4px; padding-bottom: 4px; }
-.garden-secondary .helper-row, .garden-secondary .crop-row { padding-top: 4px; padding-bottom: 4px; }
+.garden-secondary .crop-row { padding-top: 4px; padding-bottom: 4px; }
 .harvest-ready { width: 100%; margin-top: 8px; min-height: 48px; font-size: 16px; }
 /* A shop price that is out of reach stays tappable (the toast says what is missing) but looks greyed. */
 .primary.looks-disabled { background: #efe9d8; color: #8d8672; border: 0; text-shadow: none; box-shadow: inset 0 0 0 2px #e4dcc6; }

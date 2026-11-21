@@ -446,7 +446,7 @@ From `AAA-EVALUATION.md` section 4.
   - Under a cool sun (the Night Planet) the two light steps are neutral, so moonlit blue keeps its saturation.
   - The ramp's shade is #6466b4 and its light #fff6e8 (tuned from the plan's "about" values so warm paint in shade does not turn redder).
   - Crop cards: the rim is the new ink at the old sticker weight (the 1 px rim lost the cards' presence, owner review); the bed cap stays at 0.95 (at 1.00 with the idle bob only 2.7 px stay clear of the next bed at 390x844); a lopsided crop is centred on its bed by its silhouette, which lets the fruit trees stand about 14% larger than with a pivot-centred cap.
-  - Start bytes: +507 gzip, over the 0.3 KB estimate; recorded as a named entry in `promo/perf-ledger.json`.
+  - Start bytes: +669 gzip against staging at the merge (+507 against the staging it was built on), over the 0.3 KB estimate; recorded as a named entry in `promo/perf-ledger.json`.
 
 ### WP7. Sound core: one audio system with buses
 - **Result:** the music slider works on iPhone, and the 444 KB theme no longer downloads in the background on a first visit. The base for every sound package.
@@ -480,7 +480,7 @@ From `AAA-EVALUATION.md` section 4.
 - **Files:** `src/sfx.ts`, `src/main.ts`, `src/ship-sequence.ts`, `src/colossus.ts`, `src/ctf.ts`, `src/dungeon.ts`, `src/rescue.ts`, `src/upgrade-bench.ts`, `src/house-life.ts`, `src/skill-sounds.ts`, `promo/loudness.mjs`, `tests/sound-mix.test.ts`, `tests/sound.test.ts`, `tests/w14-equip.test.ts`.
 - **Hot files:** `src/main.ts`.
 - **Tests:** `sound-mix.test.ts`: recorded peak gains keep the `LOUDNESS` order; `levelUp`, `rewardLarge`, `victory` and `equip` are 4 different recipes; each mode's fake host receives the named stinger at its former `level` site; a stinger ducks the music bus 6 dB and restores it (recording fake).
-- **Acceptance:** `promo/loudness.mjs`: punch and cast -26 dBFS or louder (were -36 to -47), ready -24 or louder (was -36 to -38), impacts -14 to -18, UI -26 to -30. A search with the pattern `tone\([^)]*'level'` (which also catches the ternaries) plus `sound('level')` finds only the level-up path (`main.ts:552`), and the review lists the stinger used at each of the 30 former sites. `w14-equip` green. English and Vietnamese starts +0.3 KB or less (`sfx.ts` loads before Start).
+- **Acceptance:** `promo/loudness.mjs --check` (settled readings, the bands of `LOUDNESS` in `src/sfx.ts`): impacts -12 to -6 and UI -26 to -21, both as loud as before; each whoosh 6 to 10 dB under its hit and never under -26 (punch -17.3, was -30.8; cast -21.6, was -36.4); cues -24 to -10, with `ready` about -20 (was -25.5) and `powerReady`, the POWER READY moment, about -14.5. The numbers first written here (impacts -14 to -18, UI -26 to -30, punch and cast "were -36 to -47") were read on the first sound of a new audio context, where Chromium's compressor is still fading in and a short sound reads 5 to 12 dB too low; the order and the raises are unchanged (docs/SOUNDS.md, "The mix and the stingers"). A search with the pattern `tone\([^)]*'level'` (which also catches the ternaries) plus `sound('level')` finds only the level-up path (`main.ts:552`), and the review lists the stinger used at each of the 30 former sites. `w14-equip` green. English and Vietnamese starts +0.3 KB or less (`sfx.ts` loads before Start).
 - **Speed:** 0 draw calls; 0 download bytes (synthesized); at most 0.3 KB gzip of code before Start (bytes-ledger allowance).
 - **Refs:** P15, P14, O62.
 

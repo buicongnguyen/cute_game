@@ -21,7 +21,7 @@
 .ctf-heroes button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 3px 6px; border-radius: 12px; border: 2px solid #e2dcf2; background: #fff; cursor: pointer; font: inherit; min-width: 0; }
 .ctf-heroes button img { width: 46px; height: 46px; object-fit: contain; }
 .ctf-heroes button b { font-size: 11px; line-height: 1.1; text-align: center; overflow: hidden; text-overflow: ellipsis; max-width: 100%; white-space: nowrap; }
-.ctf-heroes button small { font-size: 10px; opacity: .7; white-space: nowrap; }
+.ctf-heroes button small { font-size: 11px; opacity: .7; white-space: nowrap; }
 .ctf-heroes button.sel { border-color: #ffb300; background: #fff4cc; box-shadow: 0 0 0 2px rgba(255, 179, 0, .35); }
 .ctf-kit { margin-top: 8px; padding: 8px 10px; border-radius: 12px; background: #f1f6ff; font-size: 13px; }
 .ctf-kit ul { margin: 4px 0 0; padding-left: 18px; columns: 2; column-gap: 18px; }
@@ -104,12 +104,14 @@ body.in-ctf .minimap, body.in-ctf .tracker-stack, body.in-ctf #discovery-progres
   #ctf-hud .ctf-team i { display: none; }
   #ctf-hud .ctf-team b { font-size: 21px; }
   #ctf-hud .ctf-clock { font-size: 16px; }
-  #ctf-hud .ctf-flags span { font-size: 10.5px; padding: 1px 6px; }
+  #ctf-hud .ctf-flags span { font-size: 11px; padding: 1px 6px; }
   #ctf-feed { top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 236px); right: 8px; max-width: 64vw; }
   #ctf-feed p { font-size: 11px; padding: 3px 8px; }
   .ctf-heroes { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
   .ctf-heroes button img { width: 36px; height: 36px; }
-  .ctf-heroes button b { font-size: 9.5px; }
+  /* 11 px names on a 70 px tile: two lines ("Shadow / ninja") instead of dots, on tiles that stay level. */
+  .ctf-heroes button { padding: 5px 1px 6px; }
+  .ctf-heroes button b { display: grid; place-items: center; min-height: 2.2em; font-size: 11px; letter-spacing: -.3px; white-space: normal; }
   .ctf-heroes button small { display: none; }
   .ctf-kit ul { columns: 1; }
   .ctf-tables { grid-template-columns: 1fr; }
@@ -118,5 +120,5 @@ body.in-ctf .minimap, body.in-ctf .tracker-stack, body.in-ctf #discovery-progres
   .ctf-banner span { font-size: 12.5px; }
 }
 
-.ctf-map{display:block;width:100%;height:100px;margin:5px 0;pointer-events:none}.ctf-objective{margin-top:5px;color:#fff3a1}.ctf-map-key{font-size:10px;opacity:.85}
+.ctf-map{display:block;width:100%;height:100px;margin:5px 0;pointer-events:none}.ctf-objective{margin-top:5px;color:#fff3a1}.ctf-map-key{font-size:11px;opacity:.85}
 @media(max-height:500px){.ctf-map{height:55px}.ctf-map-key{display:none}}

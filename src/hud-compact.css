@@ -23,12 +23,12 @@
 .player-card { left: var(--edge); top: calc(var(--edge) + var(--safe-top)); gap: 8px; }
 .avatar { width: calc(var(--b) + 12px); height: calc(var(--b) + 12px); border-width: 3px; }
 .avatar > span { font-size: calc(var(--b) * .6); }
-.avatar b { min-width: 20px; height: 20px; padding: 0 5px; border-width: 2px; font-size: 10px; right: -5px; bottom: -4px; }
+.avatar b { min-width: 20px; height: 20px; padding: 0 5px; border-width: 2px; font-size: 11px; right: -5px; bottom: -4px; }
 .player-details { width: 176px; }
 .player-name { margin-bottom: 3px; font-size: var(--t-sm); }
 .meter { height: 16px; border-width: 2px; }
 .experience { height: 16px; margin-top: 3px; background: #fff2c8; border-width: 1px; }
-.experience > span { color: #49330b; font-size: 10px; line-height: 1; text-shadow: 0 1px 0 #ffffff99; }
+.experience > span { color: #49330b; font-size: 11px; line-height: 1; text-shadow: 0 1px 0 #ffffff99; }
 .location { margin-top: 3px; font-size: var(--t-xs); }
 
 /* Top-right menu: round buttons of --b and the energy pill at the same height */
@@ -43,8 +43,8 @@
 
 /* Minimap: --mm wide under the menu; the caption names the zone the explorer is in (desktop only). */
 .minimap { right: var(--edge); top: calc(var(--edge) + var(--safe-top) + var(--b) + 8px); width: var(--mm); height: var(--mm); border-width: calc(var(--mm) / 40 + 1px); }
-.minimap > span { pointer-events: none; left: calc(50% - 8px); top: -8px; width: 16px; height: 16px; border-width: 1.5px; font-size: 9px; }
-.minimap > small { top: calc(100% + 3px); padding: 1px 8px; font-size: 10px; letter-spacing: .6px; text-transform: uppercase; }
+.minimap > span { pointer-events: none; left: calc(50% - 8px); top: -8px; width: 16px; height: 16px; border-width: 1.5px; font-size: 11px; }
+.minimap > small { top: calc(100% + 3px); padding: 1px 8px; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; }
 
 /* Quest and bounty trackers */
 .tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 82px); width: 236px; gap: 6px; }
@@ -64,8 +64,8 @@
 .skills { gap: 18px; }
 .skill { width: var(--sk); height: var(--sk); border-width: 3px; }
 .skill > span { font-size: calc(var(--sk) * .44); }
-.skill > kbd { width: 20px; height: 20px; right: -5px; top: -5px; font-size: 10px; }
-.skill > small { top: calc(100% - 8px); padding: 1px 6px; font-size: 10px; max-width: calc(var(--sk) + 30px); }
+.skill > kbd { width: 20px; height: 20px; right: -5px; top: -5px; font-size: 11px; }
+.skill > small { top: calc(100% - 8px); padding: 1px 6px; font-size: 11px; max-width: calc(var(--sk) + 30px); }
 .cooldown { font-size: calc(var(--sk) * .3); }
 .home-button { height: var(--b); padding: 0 12px 0 9px; gap: 4px; border-width: 2px; font-size: calc(var(--b) * .45); }
 .home-button span { font-size: var(--t-sm); }
@@ -99,13 +99,13 @@
   .energy { padding: 0 9px 0 3px; }
   .icon-button, #social-slot .social-toggle, #platform-slot .platform-tools button { width: var(--b); height: var(--b); font-size: calc(var(--b) * .46); }
   .minimap { top: calc(var(--edge) + var(--safe-top) + var(--b) * 2 + var(--gap) + 6px); right: var(--edge); width: var(--mm); height: var(--mm); }
-  .meter > span { font-size: 9.5px; line-height: 1; }
+  .meter > span { font-size: 11px; line-height: 1; }
   .tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 72px); width: min(196px, 50vw); gap: 4px; }
   .bottom-bar { left: var(--edge); right: var(--edge); bottom: calc(10px + var(--safe-bottom)); }
   .skills { gap: max(12px, calc(44px - var(--sk) + 6px)); bottom: 8px; }
   .skill { width: var(--sk); height: var(--sk); }
   .skill > span { font-size: calc(var(--sk) * .44); }
-  .skill > small { font-size: 9px; max-width: calc(var(--sk) + 16px); padding: 0 5px; white-space: nowrap; line-height: 1.35; }
+  .skill > small { font-size: 11px; max-width: calc(var(--sk) + 16px); padding: 0 5px; white-space: nowrap; line-height: 1.35; }
   .home-button { width: var(--b); height: var(--b); padding: 0; justify-content: center; bottom: 8px; }
   #context-prompt { bottom: calc(86px + var(--safe-bottom)); }
   #boss-bar { top: calc(var(--edge) + var(--safe-top) + var(--b) * 2 + var(--gap) + var(--mm) + 16px); }
@@ -123,7 +123,7 @@
   .energy { height: var(--b); }
   .energy > span { width: calc(var(--b) - 10px); height: calc(var(--b) - 10px); }
   .minimap { top: calc(var(--edge) + var(--safe-top) + var(--b) + 6px); right: var(--edge); width: var(--mm); height: var(--mm); }
-  .meter > span { font-size: 9.5px; line-height: 1; }
+  .meter > span { font-size: 11px; line-height: 1; }
   .tracker-stack { left: var(--edge); top: calc(var(--edge) + var(--safe-top) + 62px); width: 184px; gap: 4px; }
   .bottom-bar { left: var(--edge); right: var(--edge); bottom: calc(var(--edge) + var(--safe-bottom)); }
   .skills { grid-template-columns: repeat(2, var(--sk)); gap: 10px; }
@@ -139,7 +139,7 @@
 .tracker-count { display: none; }
 @media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
   .tracker-stack { width: min(188px, 50vw); gap: 4px; }
-  .tracker-count { display: block; flex: none; margin-left: auto; padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, .16); color: #ffe08a; font-size: 10px; font-weight: 900; line-height: 16px; font-variant-numeric: tabular-nums; }
+  .tracker-count { display: block; flex: none; margin-left: auto; padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, .16); color: #ffe08a; font-size: 11px; font-weight: 900; line-height: 16px; font-variant-numeric: tabular-nums; }
   .quest-tracker { padding: 3px 26px 3px 4px; border-width: 1px; border-radius: 999px; }
   #quest-summary { padding: 0; gap: 5px; }
   .quest-icon { width: 20px; height: 20px; font-size: 12px; border-radius: 50%; }
@@ -149,18 +149,18 @@
   .bounty-tracker > span { font-size: 13px; }
   .tracker-fold { top: calc(50% - 9px); right: 3px; width: 18px; height: 18px; }
   .tracker-fold::before { font-size: 11px; }
-  #quick-claim { margin-top: 3px; padding: 3px 8px; border-radius: 999px; font-size: 10.5px; }
-  .tracker-chip { height: 24px; padding: 0 8px; gap: 6px; font-size: 10.5px; }
+  #quick-claim { margin-top: 3px; padding: 3px 8px; border-radius: 999px; font-size: 11px; }
+  .tracker-chip { height: 24px; padding: 0 8px; gap: 6px; font-size: 11px; }
   #toasts { gap: 4px; max-width: min(78vw, 340px); }
   .toast { padding: 3px 10px 3px 3px; gap: 6px; border-width: 2px; font-size: 11px; line-height: 1.25; box-shadow: 0 2px 0 rgba(227, 154, 12, .4), 0 4px 10px rgba(30, 60, 20, .15); }
   .toast > span { width: 20px; height: 20px; font-size: 12px; }
   .toast > div { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   #zone-banner { gap: 2px; }
   #zone-banner strong { font-size: 20px; -webkit-text-stroke-width: 4px; }
-  #zone-banner small { font-size: 10px; -webkit-text-stroke-width: 2.5px; }
-  #banner-chip { padding: 1px 8px; font-size: 10px; }
+  #zone-banner small { font-size: 11px; -webkit-text-stroke-width: 2.5px; }
+  #banner-chip { padding: 1px 8px; font-size: 11px; }
   #buff-bar, #environment-bar { gap: 4px; }
-  #buff-bar span, #environment-bar span { padding: 2px 7px; font-size: 10px; }
+  #buff-bar span, #environment-bar span { padding: 2px 7px; font-size: 11px; }
 }
 
 /* The touch pad: small light glass keys on a 44 px pitch (the hit areas meet, the visuals do not). */
@@ -214,7 +214,7 @@
   #reel-button #reel-text { font-size: 11px; }
   #reel-button + #fish-hint {
     right: calc(18px + env(safe-area-inset-right)); bottom: calc(52px + var(--sk) * 2 + var(--safe-bottom));
-    max-width: calc(var(--sk) * 2 + 16px); padding: 4px 6px; font-size: 10px; line-height: 1.2;
+    max-width: calc(var(--sk) * 2 + 16px); padding: 4px 6px; font-size: 11px; line-height: 1.2;
     pointer-events: none;
   }
   #hud:has(#reel-button:not([hidden])) #context-prompt { display: none; }
@@ -259,7 +259,7 @@
 }
 /* 360 px and narrower: skill names stay on one short line, and the toast lane moves under the Colossus banner so they never overlap. */
 @media (max-width: 360px) {
-  html[lang] #hud .skill > small { font-size: 8px; white-space: nowrap; width: max-content; max-width: none; padding: 0 4px; line-height: 1.3; text-wrap: nowrap; letter-spacing: -.1px; }
+  html[lang] #hud .skill > small { font-size: 11px; white-space: nowrap; width: max-content; max-width: none; padding: 0 4px; line-height: 1.3; text-wrap: nowrap; letter-spacing: -.1px; }
 }
 @media (orientation: portrait) and (max-width: 600px) and (max-height: 700px) {
   #app:has(#hud.joystick-on) #toasts, #app.target-on:has(#hud.joystick-on) #toasts { top: calc(300px + var(--safe-top)); bottom: auto; }

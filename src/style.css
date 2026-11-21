@@ -476,7 +476,7 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 .target-level { flex: none; padding: 0 6px; border-radius: 999px; background: #3a2433; font-size: 11px; font-weight: 800; line-height: 16px; }
 .target-meter { position: relative; height: 14px; margin-top: 4px; border-radius: 999px; background: rgba(0, 0, 0, .35); overflow: hidden; }
 .target-meter > i { display: block; height: 100%; background: linear-gradient(90deg, #ff8a8a, #ff4d5e); transition: width .15s; }
-.target-hp { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; font-weight: 900; line-height: 1; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); font-variant-numeric: tabular-nums; }
+.target-hp { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; font-weight: 900; line-height: 1; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); font-variant-numeric: tabular-nums; }
 #app.target-on #environment-bar { top: calc(80px + var(--safe-top)); }
 /* Zone banner (C2): outlined text and a small difficulty chip, no card; it plays for 2.8 s and never takes taps. */
 #zone-banner {
@@ -782,7 +782,7 @@ body.placing #toasts { bottom: calc(262px + var(--safe-bottom)); }
 }
 /* Compact crop labels on the bed's front edge (reference 29/09 update): a 20 px ready badge or a 22x5 px growth bar. */
 .plot-label, .plot-label.ready { padding: 0; gap: 0; border: 0; background: none; box-shadow: none; pointer-events: none; }
-.plot-label.ready > span { width: 20px; height: 20px; border: 2px solid #fff; background: var(--sun); box-shadow: 0 2px 0 var(--sun-deep); font-size: 10px; animation: bounce 1.2s ease-in-out infinite; }
+.plot-label.ready > span { width: 20px; height: 20px; border: 2px solid #fff; background: var(--sun); box-shadow: 0 2px 0 var(--sun-deep); font-size: 11px; animation: bounce 1.2s ease-in-out infinite; }
 .plot-label.growing > span { display: block; width: 22px; height: 5px; border-radius: 3px; background: rgba(58, 36, 51, .55); box-shadow: 0 0 0 1px rgba(255, 255, 255, .85); overflow: hidden; }
 .plot-label.growing > span > b { display: block; height: 100%; border-radius: 3px; background: #9be36f; }
 /* Creature HP bars (reference .ehp): an ink level pill and a 56x9 bar, no name (that is in the target frame).
@@ -835,19 +835,6 @@ body.placing #toasts { bottom: calc(262px + var(--safe-bottom)); }
   box-shadow: 0 8px 0 rgba(44, 58, 38, .16), 0 30px 80px rgba(30, 60, 20, .3);
   animation: appear .5s ease;
 }
-.welcome-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: #eaffd8;
-  color: var(--grass-deep);
-  font-size: var(--t-xs);
-  font-weight: 1000;
-  letter-spacing: 1.2px;
-}
-.welcome-eyebrow span { width: 7px; height: 7px; border-radius: 50%; background: var(--grass); }
 .brand-sprout { margin: 12px 0 0; font-size: 54px; line-height: 1; filter: drop-shadow(0 5px 0 rgba(44, 58, 38, .12)); }
 h1 {
   margin-top: 4px;
@@ -905,32 +892,6 @@ h1 > span {
   border-radius: 18px;
 }
 .start-button > span { font-size: 24px; line-height: 1; }
-.welcome-footer {
-  display: flex;
-  justify-content: center;
-  gap: 18px;
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 2px dashed var(--line);
-  font-size: var(--t-sm);
-  color: var(--ink-soft);
-}
-.local-note { display: block; margin-top: 10px; font-size: var(--t-xs); color: var(--ink-faint); }
-.title-caption {
-  position: absolute;
-  bottom: calc(22px + var(--safe-bottom));
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
-  border-radius: 999px;
-  background: var(--glass);
-  color: #fff;
-  font-size: var(--t-xs);
-  letter-spacing: 1.6px;
-  font-weight: 900;
-}
-.title-caption > span { font-size: 18px; }
 
 /* ------------------------------------------------------------ Buttons */
 .primary,
@@ -979,7 +940,6 @@ h1 > span {
 .primary.danger-button { background: linear-gradient(180deg, #ff7b6b, var(--danger)); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .1), 0 4px 0 #b0322a; }
 .button-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .center { text-align: center; }
-.center-row { justify-content: center; }
 .muted { color: var(--ink-soft); }
 .wide { display: flex; width: 100%; }
 
@@ -1207,7 +1167,7 @@ h1 > span {
 }
 .fish-card > span { width: 56px; height: 56px; display: grid; place-items: center; font-size: 30px; }
 .fish-card strong { font-size: var(--t-xs); line-height: 1.2; overflow-wrap: anywhere; }
-.fish-card small { font-size: 10px; font-weight: 900; color: #0f5d86; text-transform: capitalize; }
+.fish-card small { font-size: 11px; font-weight: 900; color: #0f5d86; text-transform: capitalize; }
 .fish-card.rare { border-color: #b79cff; background: linear-gradient(180deg, #f3eeff, #e2d6ff); }
 .fish-card.legendary { border-color: #ffc93a; background: linear-gradient(180deg, #fff8dc, #ffe89a); }
 .fish-card.unknown { background: #eef3f5; border-color: #dde6ea; }
@@ -1388,7 +1348,7 @@ h1 > span {
   border-radius: 999px;
   background: var(--violet);
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-style: normal;
   font-weight: 1000;
   text-transform: uppercase;
@@ -1435,16 +1395,6 @@ h1 > span {
 .storage-row > span { min-width: 0; font-size: var(--t-md); overflow-wrap: anywhere; }
 .storage-row b { color: var(--ink-soft); font-size: var(--t-sm); }
 .storage-row .soft-button { min-height: 34px; padding: 5px 10px; font-size: var(--t-sm); }
-.upgrade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.upgrade-grid > div {
-  padding: 16px;
-  text-align: center;
-  border-radius: var(--radius-md);
-  background: #fff;
-  border: 2px solid var(--line);
-  box-shadow: 0 3px 0 var(--line);
-}
-.upgrade-grid p { margin: 6px 0 12px; font-size: var(--t-md); color: var(--ink-soft); }
 .planet-grid { display: flex; flex-direction: column; gap: 10px; }
 .planet-card {
   display: flex;
@@ -1514,31 +1464,10 @@ h1 > span {
 .help-grid p { font-size: var(--t-md); color: var(--ink-soft); }
 
 /* Fishing */
-.fishing-scene {
-  position: relative;
-  flex: none;
-  height: 150px;
-  overflow: hidden;
-  border-radius: 22px;
-  border: 4px solid #fff;
-  box-shadow: 0 0 0 2px #bfe6f7;
-  background: linear-gradient(180deg, #7fd7f5, #2ea9e0);
-}
-.fishing-scene.surging { background: linear-gradient(180deg, #5cc2ec, #1583c0); }
 .bobber { position: absolute; left: 49%; top: 35%; font-size: 34px; animation: bob 2s infinite ease-in-out; }
-.swimming-fish { position: absolute; left: 24%; top: 58%; font-size: 30px; opacity: .6; animation: swim 9s linear infinite; }
-.fishing-scene.surging .swimming-fish { animation-duration: 1.4s; opacity: .95; }
-.fishing-scene.biting .bobber { animation-duration: .2s; }
 .ripple { position: absolute; top: 62%; left: 44%; width: 60px; height: 20px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .7); animation: ripple 3s infinite; }
 .ripple.r2 { animation-delay: 1.5s; }
-.fish-stage { min-height: 24px; text-align: center; font-size: var(--t-md); color: var(--ink-soft); }
-.tension-label { display: flex; justify-content: space-between; font-size: var(--t-xs); letter-spacing: 1px; font-weight: 1000; color: var(--ink-soft); }
-.tension-track { position: relative; height: 20px; border-radius: 999px; background: linear-gradient(90deg, #ffe0a3, #ffb28a); border: 3px solid #fff; box-shadow: 0 0 0 2px var(--line); }
 .safe-zone { position: absolute; left: 23%; width: 55%; top: 0; height: 100%; background: #8fe06a; }
-.tension-track > b { position: absolute; left: 30%; top: -7px; width: 8px; height: 28px; border-radius: 4px; background: var(--ink); border: 2px solid #fff; transform: translateX(-50%); }
-.tension-ends { display: flex; justify-content: space-between; font-size: var(--t-xs); color: var(--ink-faint); font-weight: 900; }
-.catch-progress { height: 10px; border-radius: 999px; background: #e6f4fb; overflow: hidden; }
-.catch-progress > i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #6cd3ff, var(--sky)); }
 .reel-button { min-height: 50px; touch-action: none; user-select: none; }
 
 /* ------------------------------------------------------------ Feedback */
@@ -1627,7 +1556,6 @@ h1 > span {
 @keyframes bob { 50% { translate: 0 -7px; } }
 @keyframes bounce { 50% { translate: 0 -4px; } }
 @keyframes nudge { 50% { scale: 1.03; } }
-@keyframes swim { 50% { translate: 150px -25px; } 100% { translate: 0 0; } }
 @keyframes ripple { from { scale: .4; opacity: 1; } to { scale: 2; opacity: 0; } }
 
 /* ------------------------------------------------------------ Layouts */
@@ -1677,7 +1605,6 @@ h1 > span {
   .energy > span { width: 26px; height: 26px; font-size: 15px; }
   .icon-button, #social-slot .social-toggle, #platform-slot .platform-tools button { width: 36px; height: 36px; font-size: 16px; border-width: 2px; }
   .icon-button > i { width: 13px; height: 13px; }
-  .top-actions .secondary-icon { display: none; }
   .minimap { top: calc(100px + var(--safe-top)); right: 10px; width: 84px; height: 84px; border-width: 4px; }
   .minimap > small { display: none; }
   .tracker-stack { left: 10px; top: calc(76px + var(--safe-top)); width: min(220px, 54vw); gap: 6px; }
@@ -1690,14 +1617,14 @@ h1 > span {
   .chevron { display: none; }
   .bounty-tracker { padding: 6px 10px; }
   .bounty-tracker > span { font-size: 20px; }
-  #buff-bar span, #environment-bar span { padding: 3px 8px; font-size: 10px; }
+  #buff-bar span, #environment-bar span { padding: 3px 8px; font-size: 11px; }
   #environment-bar { top: auto; bottom: calc(170px + var(--safe-bottom)); max-width: calc(100vw - 24px); }
   .bottom-bar { left: 10px; right: 10px; bottom: calc(12px + var(--safe-bottom)); }
   .skills { flex-direction: row; gap: 12px; bottom: 8px; }
   .skill { width: 56px; height: 56px; border-width: 3px; }
   .skill > span { font-size: 25px; }
   .skill > kbd { display: none; }
-  .skill > small { font-size: 10px; width: max-content; max-width: 74px; padding: 1px 6px; border-radius: 9px; white-space: normal; text-align: center; line-height: 1.15; }
+  .skill > small { font-size: 11px; width: max-content; max-width: 74px; padding: 1px 6px; border-radius: 9px; white-space: normal; text-align: center; line-height: 1.15; }
   .home-button { bottom: 10px; height: 44px; padding: 0 12px; }
   .reel-hud { right: 12px; bottom: calc(76px + var(--safe-bottom)); width: 96px; height: 96px; }
   #fish-hint { right: 10px; bottom: calc(182px + var(--safe-bottom)); }
@@ -1739,7 +1666,7 @@ h1 > span {
   .equipment { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .equipment > div > button:first-child { min-height: 70px; }
   .inventory-grid { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
-  .storage-columns, .upgrade-grid, .help-grid { grid-template-columns: 1fr; }
+  .storage-columns, .help-grid { grid-template-columns: 1fr; }
   .planet-card { flex-wrap: wrap; }
   .planet-card > div { flex-basis: calc(100% - 80px); }
   .planet-card button { margin-left: auto; }
@@ -1747,7 +1674,6 @@ h1 > span {
   .welcome-card { padding: 22px 20px 18px; border-radius: 28px; }
   h1 { font-size: 44px; }
   .brand-sprout { font-size: 44px; }
-  .title-caption { display: none; }
 }
 
 @media (pointer: coarse) {
@@ -1820,7 +1746,6 @@ h1 > span {
   .experience { height: 8px; margin-top: 2px; }
   .location { margin-top: 2px; font-size: var(--t-xs); }
   .top-actions { right: 10px; top: calc(6px + var(--safe-top)); gap: 6px; }
-  .top-actions .secondary-icon { display: none; }
   .energy { height: 34px; min-width: 0; padding: 0 10px 0 4px; font-size: var(--t-sm); border-width: 2px; }
   .energy > span { width: 24px; height: 24px; font-size: 14px; }
   .icon-button, #social-slot .social-toggle, #platform-slot .platform-tools button { width: 34px; height: 34px; font-size: 15px; border-width: 2px; }
@@ -1832,7 +1757,7 @@ h1 > span {
   #quest-summary { padding: 2px 0 4px; gap: 8px; }
   .quest-icon { width: 26px; height: 26px; font-size: 16px; border-radius: 8px; }
   #quest-summary strong { font-size: var(--t-xs); }
-  #quest-summary small { font-size: 10px; }
+  #quest-summary small { font-size: 11px; }
   .bounty-tracker { padding: 4px 9px; gap: 8px; }
   .bounty-tracker > span { font-size: 18px; }
   .tracker-fold { top: 4px; right: 4px; width: 22px; height: 22px; padding: 0; font-size: 0; }
@@ -1970,9 +1895,7 @@ h1 > span {
   .planet-card { flex-wrap: wrap; }
 }
 @media (pointer: coarse) { .space-help { display: none; } }
-/* Ground-loot countdown pills, placed by drops-view.ts every frame (reference .droptag: dark pill, red under 10 s). */
-.droptag { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap; color: #fff; text-shadow: 0 1px #000; background: rgba(40, 28, 52, .7); border-radius: 8px; padding: 1px 6px; font-size: 11px; font-weight: 800; will-change: transform; }
-.droptag.warn { background: rgba(201, 60, 42, .85); }
+/* Ground-loot countdown pills, placed by drops-view.ts every frame: a dark pill, red under 10 s. */
 
 /* w18 home care + pen robot auto-restock (home-care.ts, farm-helper-ui.ts restockSection) */
 #buff-bar .home-recovery-chip { background: rgba(72, 150, 86, .85); }

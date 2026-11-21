@@ -47,7 +47,7 @@
 }
 .social-header .social-title { flex: 1; min-width: 0; }
 .social-icon { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; background: #fff; font-size: 20px; line-height: 1; box-shadow: 0 2px 0 var(--tone-edge); }
-.social-kicker { display: block; font-size: 10px; line-height: 1.2; letter-spacing: .9px; color: var(--tone-ink); opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.social-kicker { display: block; font-size: 11px; line-height: 1.2; letter-spacing: .9px; color: var(--tone-ink); opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .social-header h2 { margin: 0; font-size: 17px; line-height: 1.15; font-weight: 1000; color: var(--tone-ink); text-wrap: balance; }
 .social-header .social-close { margin-left: auto; }
 .social-dialog button {

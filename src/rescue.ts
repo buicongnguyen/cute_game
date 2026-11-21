@@ -249,7 +249,7 @@ export function initRescue(h: RescueHooks) {
     document.body.classList.add('in-rescue', 'in-mode'); document.body.dataset.rescueOrient = o;
     hud.hidden = false; tags.hidden = false; panel.hidden = false; panel.classList.remove('folded'); bubble.hidden = true;
     selectPad(nearestEmptyPad(s), false);
-    h.refreshPlayer(); h.tone('level'); banner(t(md.title), `${md.friendIcon} ${t(md.friend)} · ${t('{n} waves', { n: md.waves.length })}`);
+    h.refreshPlayer(); h.tone('go'); banner(t(md.title), `${md.friendIcon} ${t(md.friend)} · ${t('{n} waves', { n: md.waves.length })}`);
     world.fx?.burst({ x: world.position.x, z: world.position.z }, { n: 40, color: ['#ff8a4d', '#ffd23f', '#ffffff'], glow: true, speed: 5, up: 9 });
     renderHud(true); renderPanel(true); h.updateHud();
     cameraFrame(s, 0); world.resize();
@@ -505,7 +505,7 @@ export function initRescue(h: RescueHooks) {
   function handle(events: RsEvent[]) {
     const s = session; if (!s) return; const fx = world.fx, m = s.m;
     for (const ev of events) switch (ev.kind) {
-      case 'wave': { panel.classList.add('folded'); /* the build sheet steps aside once a wave starts; a tap on a pad or its chip opens it again */ const md = MISSIONS[m.mission]; banner(t('Wave {n}!', { n: ev.wave + 1 }), ev.boss ? t('The boss is coming!') : md.waves[ev.wave].groups.some(g => g.role === 'flyer') ? '🪽 ' + t('Flyers ahead') : '', ev.boss ? 'bad' : ''); h.tone(ev.boss ? 'alert' : 'level'); s.pad = -1; renderPanel(true); break; }
+      case 'wave': { panel.classList.add('folded'); /* the build sheet steps aside once a wave starts; a tap on a pad or its chip opens it again */ const md = MISSIONS[m.mission]; banner(t('Wave {n}!', { n: ev.wave + 1 }), ev.boss ? t('The boss is coming!') : md.waves[ev.wave].groups.some(g => g.role === 'flyer') ? '🪽 ' + t('Flyers ahead') : '', ev.boss ? 'bad' : ''); h.tone(ev.boss ? 'alert' : 'go'); s.pad = -1; renderPanel(true); break; }
       case 'clear': banner(t('Wave cleared!'), t('+{spark} Spark · +{stars} Star bit', { spark: ev.spark, stars: ev.stars }), 'good'); h.tone('success'); fx?.burst({ x: world.position.x, z: world.position.z }, { n: 24, color: ['#ffd23f', '#ffffff', '#7fd0ff'], glow: true, speed: 4, up: 8 }); s.pad = nearestEmptyPad(s); renderPanel(true); break;
       case 'spawn': if (ev.boss) { banner('👑 ' + enemyName(ev.enemy), t('The boss is coming!'), 'bad'); world.fx?.shake?.(.4); h.tone('alert'); } break;
       case 'leak': { banner('💔 ' + t('A raider got through!'), `❤️ ${ev.hearts}/${RESCUE.hearts}`, 'bad'); h.tone('hurt'); fx?.shake?.(.35); fx?.burst(at(ev), { n: 20, color: ['#ff5a5f', '#ffffff'], glow: true, speed: 4, up: 6 }); break; }
@@ -533,9 +533,9 @@ export function initRescue(h: RescueHooks) {
       case 'swing': { const u = runUnit(m, ev.unit), v = s.views.get(ev.unit); if (v) v.attack = .25; if (u && !ev.ranged && near(u, 22)) fx?.slash(at(u), facingToWorld(u.facing, s.o), 1.4, '#ffffff', { arc: 1.6, life: .18 }); break; }
       case 'split': fx?.burst(at(ev), { n: 14, color: ['#ff6fae', '#ffffff'], glow: true, speed: 4, up: 4 }); break;
       case 'freeze': h.tone('freeze'); break;
-      case 'step': { const u = runUnit(m, ev.unit); if (!u) break; s.tryOn = null; fx?.burst(at(u), { n: 26, color: ['#ffe66d', '#ffffff', u.color], glow: true, speed: 4, up: 7 }); fx?.text(at(u, 2.6), `${t('Step {n}/{total}', { n: u.step, total: LADDER_STEPS })} ↑`, 'item big'); h.tone('level'); focus(u, 1.4); break; }
+      case 'step': { const u = runUnit(m, ev.unit); if (!u) break; s.tryOn = null; fx?.burst(at(u), { n: 26, color: ['#ffe66d', '#ffffff', u.color], glow: true, speed: 4, up: 7 }); fx?.text(at(u, 2.6), `${t('Step {n}/{total}', { n: u.step, total: LADDER_STEPS })} ↑`, 'item big'); h.tone('rewardMedium'); focus(u, 1.4); break; }
       case 'boost': { fx?.burst({ x: world.position.x, z: world.position.z }, { n: 18, color: ['#7fd0ff', '#ffffff'], glow: true, speed: 3, up: 6 }); h.tone('magic'); break; }
-      case 'build': { const p = s.field.pads[ev.pad]; fx?.burst(at(p), { n: 18, color: ['#ffe66d', '#ffffff'], glow: true, speed: 3, up: 6 }); h.tone(ev.level > 1 ? 'level' : 'pop'); break; }
+      case 'build': { const p = s.field.pads[ev.pad]; fx?.burst(at(p), { n: 18, color: ['#ffe66d', '#ffffff'], glow: true, speed: 3, up: 6 }); h.tone(ev.level > 1 ? 'rewardSmall' : 'pop'); break; }
       case 'sold': { const p = s.field.pads[ev.pad]; fx?.text(at(p, 1.8), `+${ev.spark}✨`, 'xp'); h.tone('coin'); break; }
       case 'over': finish(ev.result); break;
     }

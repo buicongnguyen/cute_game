@@ -6,7 +6,6 @@
  * Per frame it only measures distances to a fixed list and moves one bubble; the prompt's DOM changes only when the
  * nearest activity (or its cooldown second) changes.
  */
-import { assetUrl } from './asset-url.ts';
 import { t } from './i18n.ts';
 import type { Entity, World } from './world.ts';
 import type { HouseSession, ActivityEntity } from './house-session.ts';
@@ -16,7 +15,7 @@ import { ACTIVITIES, activity, collectionLog, cooldownLeft, decorPlacements, dec
 import { PLANETS, type BuffDef } from './content.ts';
 import * as T from 'three';
 import { activityBox } from './house-hotspots.ts';
-import { audioLevels } from './audio-settings.ts';
+import { radio } from './audio-settings.ts';
 
 export interface LifeDeps {
   world: World; house: HouseSession;
@@ -47,51 +46,12 @@ export function buffText(buff: BuffDef | undefined) {
   return `${parts.join(', ')} · ${Math.round(buff.time / 60 * 10) / 10} ${t('min')}`;
 }
 
-/** The radio: plays the game's own theme (public/assets/audio/zoo-garden-theme.mp3, a loop). If the file cannot play, a tiny WebAudio music box (a looping pentatonic tune) stands in. */
-export class MusicBox {
-  private ctx: AudioContext | null = null; private gain: GainNode | null = null; private timer = 0; private step = 0;
-  playing = false;
-  private static NOTES = [523, 659, 784, 659, 587, 523, 440, 523, 659, 784, 880, 784, 659, 587, 523, 0];
-  private theme: HTMLAudioElement | null = null; private fallback = false;
-  constructor() {
-    // The <audio> loop plays on in a hidden tab, where the frame loop (which stops it on leaving) no longer runs: hold it while hidden, go on when back.
-    if (typeof document === 'undefined') return;
-    document.addEventListener('visibilitychange', () => { if (document.hidden) this.theme?.pause(); else if (this.playing && this.theme) void this.theme.play().catch(() => {}); });
-    globalThis.addEventListener?.('pagehide', () => this.stop());
-  }
-  start() {
-    if (!this.fallback && typeof Audio !== 'undefined') {
-      try {
-        this.theme ??= Object.assign(new Audio(assetUrl("audio/zoo-garden-theme.mp3")), { loop: true, volume: audioLevels.music });
-        this.playing = true;
-        void this.theme.play().catch(() => { this.fallback = true; this.theme = null; if (this.playing) this.start(); });
-        return;
-      } catch { this.fallback = true; this.theme = null; }
-    }
-    try { this.ctx ??= new AudioContext(); if (this.ctx.state === 'suspended') void this.ctx.resume(); } catch { return; }
-    if (!this.gain) { this.gain = this.ctx.createGain(); this.gain.gain.value = .07; this.gain.connect(this.ctx.destination); }
-    this.playing = true; this.step = 0; this.timer = 0;
-  }
-  stop() { this.playing = false; this.theme?.pause(); }
-  /** Called each frame while inside; schedules a note every 0.32 s. */
-  tick(dt: number) {
-    // The Settings music slider (audio-settings.ts audioLevels): the theme file at full level, the music box scaled alike.
-    if (this.theme && this.theme.volume !== audioLevels.music) this.theme.volume = audioLevels.music;
-    if (this.gain) this.gain.gain.value = .07 * audioLevels.music / .45;
-    if (!this.playing || !this.fallback || !this.ctx || !this.gain) return;
-    if ((this.timer -= dt) > 0) return; this.timer = .32;
-    const f = MusicBox.NOTES[this.step++ % MusicBox.NOTES.length]; if (!f) return;
-    const at = this.ctx.currentTime, osc = this.ctx.createOscillator(), env = this.ctx.createGain();
-    osc.type = 'triangle'; osc.frequency.value = f; env.gain.setValueAtTime(.9, at); env.gain.exponentialRampToValueAtTime(.001, at + .6);
-    osc.connect(env); env.connect(this.gain); osc.start(at); osc.stop(at + .62);
-  }
-}
-
 export function initHouseLife(d: LifeDeps) {
   const { world, house } = d, view = house.view;
   const prompt = document.createElement('button'); prompt.id = 'house-prompt'; prompt.type = 'button'; prompt.hidden = true; document.body.append(prompt);
   const bubble = document.createElement('div'); bubble.id = 'house-bubble'; bubble.hidden = true; (document.getElementById('bubble-layer') ?? document.body).append(bubble);
-  const music = new MusicBox();
+  // Before the features are mounted there is no player yet: remember the wish (features/radio.ts starts it) and ask for them again.
+  const music = { get playing() { return !!radio.box?.playing; }, start() { if (radio.box) radio.box.start(); else if (!radio.want) { radio.want = true; radio.ask?.(); } }, stop() { radio.want = false; radio.box?.stop(); } };
   let near: Activity | null = null, shown = '', scan = 0, chatClock = 4, chatLeft = 0, chatFriend: T.Object3D | null = null, decorClock = 0, bubbleAt = '';
   // Online the cooldown stamps are the server's: measure them on its clock (the last reply's `at`), as fish-hunting-view does.
   let clockOffset = 0, using = false;
@@ -110,7 +70,7 @@ export function initHouseLife(d: LifeDeps) {
     if (a.id === 'bed') { d.dim(1.4); f?.text(at, 'Zzz…', 'callout'); }
     else if (a.id === 'easel') f?.text(at, `+${Math.round(r.xp)} XP`, 'callout');
     else f?.text(at, t(a.verb) + '!', 'callout');
-    d.tone(a.id === 'bath' || a.id === 'sink' || a.id === 'tea' ? 'splash' : a.id === 'bed' ? 'level' : 'success');
+    d.tone(a.id === 'bath' || a.id === 'sink' || a.id === 'tea' ? 'splash' : a.id === 'bed' ? 'rewardSmall' : 'success');
     const note = a.id === 'easel' ? t('A new painting for the craft room wall! +{n} XP', { n: Math.round(r.xp) }) : a.note ? t(a.note, { n: r.buff?.regen ?? 0 }) : t(a.verb);
     d.toast(r.buff ? `${note} · ${Math.round(r.buff.time / 60 * 10) / 10} ${t('min')}` : note, a.icon);
   };
@@ -124,7 +84,7 @@ export function initHouseLife(d: LifeDeps) {
     }
     if (a.kind === 'fun') {
       if (a.id === 'duck') { d.tone('pop'); world.fx?.text(fx(a), t('Squeak!'), 'callout'); world.fx?.burst(fx(a), { n: 8, color: '#ffe36b', speed: 2, up: 3, size: .08, glow: true, y: 0 }); return; }
-      if (a.id === 'radio') { if (music.playing) { music.stop(); d.toast('The radio is off.', '📻'); } else if (d.soundOn()) { music.start(); d.toast('A cosy tune fills the cottage.', '🎶'); } else d.toast('Turn up the music volume in Settings to hear the radio.', '🔇'); return; }
+      if (a.id === 'radio') { if (music.playing) { music.stop(); d.toast('The radio is off.', '📻'); } else if (d.soundOn()) { music.start(); d.toast(radio.box ? 'A cosy tune fills the cottage.' : 'The radio is warming up…', '🎶'); } else d.toast('Turn up the music volume in Settings to hear the radio.', '🔇'); return; }
     }
     if (d.visiting()) return d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷');
     const left = cooldownLeft(world.state, a.id, now());
@@ -160,9 +120,9 @@ export function initHouseLife(d: LifeDeps) {
 
   const project = (x: number, y: number, z: number) => { v.set(x, y, z).project(world.camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight] as const; };
   const frame = (dt: number) => {
-    if (!house.inside) { if (!prompt.hidden) prompt.hidden = true; if (!bubble.hidden) bubble.hidden = true; view.highlight.visible = false; if (music.playing) music.stop(); return; }
+    if (!house.inside) { if (!prompt.hidden) prompt.hidden = true; if (!bubble.hidden) bubble.hidden = true; view.highlight.visible = false; if (music.playing || radio.want) music.stop(); return; }
     if (music.playing && !d.soundOn()) music.stop(); // sound switched off in Settings
-    music.tick(dt);
+    radio.box?.tick(dt);
     if ((decorClock -= dt) <= 0) { decorClock = .5; syncDecor(); }
     // The nearest activity: re-measured 8 times a second, the DOM touched only when the text changes.
     if ((scan -= dt) <= 0) {
