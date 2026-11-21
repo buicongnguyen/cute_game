@@ -382,7 +382,7 @@ the cottage and in a hidden tab.
 ### The audio features' own chunk (`src/features-audio.ts`, `src/features-audio/`)
 
 The mix (`sound-mix.ts`), the stingers, the radio, the music director with its score and tunes, and the creature
-voices build into a second lazy chunk, "features-audio" (12.4 KB gzip; the other features are 5.5 KB). The features
+voices build into a second lazy chunk, "features-audio" (12.5 KB gzip; the other features are 7.5 KB). The features
 chunk asks for it as soon as its own features are mounted and does not wait for it; a fetch that fails is tried once
 more 8 s later (`game-services.ts` `loadAudio`). Until it has mounted, and for good if it never comes, the game
 sounds as before any feature: a stinger is the success chime, the roar the hurt cry, a pet's hit the plain hit, a
