@@ -1,18 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
 import ts from 'typescript';
+import { mainHarness } from './support/main-harness.mjs';
 import * as M from '../src/model.ts';
-import * as IG from '../src/item-groups.ts';
-import { slotMeterHtml, expandCardHtml } from '../src/bag-slots-ui.ts';
 import * as F from '../src/friends.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { ContextGearSelection, type GearContext } from '../src/context-gear.ts';
 import { previewGear, canTryOn, autoHeld } from '../src/try-on.ts';
-import { needsDuplicateConfirm } from '../src/shop-owned.ts';
-import { sideOpen, isGun, SIDE_LEVEL } from '../src/weapon-pair.ts';
-import { sideButtonHtml, pairSettingHtml } from '../src/pair-ui.ts';
 import * as BagTile from '../src/bag-tile.ts';
 import { dressHtml } from '../src/house-ui.ts';
 
@@ -91,24 +85,25 @@ test('the server refuses to unequip a slot name that is not a gear slot', () => 
 });
 
 // ---- main.ts controllers, run for real against a stub world (as client-action-review.test.mjs does) ----
-const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-const fn = (name: string) => ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name)!.getText(ast);
-const click = ast.statements.find(node => ts.isExpressionStatement(node) && node.expression.getText(ast).startsWith("app.addEventListener('click',async")) as ts.ExpressionStatement;
-const handler = ((click.expression as ts.CallExpression).arguments[1] as ts.ArrowFunction).body as ts.Block;
-const actionSwitch = handler.statements.find(ts.isSwitchStatement)!;
-const cases = actionSwitch.caseBlock.clauses.filter(node => ts.isCaseClause(node) && ['unequip', 'buy', 'equip'].includes((node.expression as ts.StringLiteral).text)).map(node => node.getText(ast));
-const compiled = ts.transpileModule(`${fn('inventory')}\n${fn('tryOnButton')}\nasync function act(action,id,button){switch(action){${cases.join('\n')}}}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+// The harness cuts the two renderers and the three click cases, and imports what main.ts imports for them.
+const main = await mainHarness({ functions: ['inventory', 'tryOnButton'], extra({ ast }: { ast: ts.SourceFile }) {
+  const click = ast.statements.find(node => ts.isExpressionStatement(node) && node.expression.getText(ast).startsWith("app.addEventListener('click',async")) as ts.ExpressionStatement;
+  const handler = ((click.expression as ts.CallExpression).arguments[1] as ts.ArrowFunction).body as ts.Block;
+  const actionSwitch = handler.statements.find(ts.isSwitchStatement)!;
+  const cases = actionSwitch.caseBlock.clauses.filter(node => ts.isCaseClause(node) && ['unequip', 'buy', 'equip'].includes((node.expression as ts.StringLiteral).text)).map(node => node.getText(ast));
+  return `async function act(action,id,button){switch(action){${cases.join('\n')}}}`;
+} });
+const source: string = main.source, fn: (name: string) => string = main.fn;
 function fixture(...items: string[]) {
   const state = owning(...items), gear = new ContextGearSelection(), html: string[] = [], calls: string[] = [];
-  const ctx = vm.createContext({
-    ...BagTile, placeBagCard() {}, $: () => null, M, IG, state, contextGear: gear, sideOpen, isGun, SIDE_LEVEL, sideButtonHtml, pairSettingHtml, canTryOn, autoHeld, needsDuplicateConfirm, slotMeterHtml, expandCardHtml, mini: (id: string) => id, selectedItem: null, tryingOn: null, modal: 'bag', bagMode: 'bag', wardrobeItem: (item?: { slot?: string }) => !!item?.slot,
+  const fakes = {
+    placeBagCard() {}, $: () => null, state, contextGear: gear, mini: (id: string) => id, selectedItem: null, tryingOn: null, modal: 'bag', bagMode: 'bag', wardrobeItem: (item?: { slot?: string }) => !!item?.slot,
     // As main.ts perform: a refused action is a toast and resolves undefined.
     perform: async (type: string, payload: Record<string, unknown>) => { calls.push(type); try { return applyGameAction(state, { type, payload }); } catch { return undefined; } },
     world: { refreshPlayer() {}, position: { x: 0, z: 0 } }, save() {}, shop() { calls.push('shop'); }, equipFeedback(id: string) { calls.push(`feedback:${id}`); },
     floating() {}, gainItem() {}, gainStat() {}, tone() {}, t: (s: string) => s, esc: (s: string) => s, art: (id: string) => id, openDialog: (_k: string, _t: string, body: string) => html.push(body),
-  });
-  vm.runInContext(compiled + '\nthis.act=act;this.inventory=inventory;', ctx);
+  };
+  const ctx = main.context(fakes);
   return { state, gear, ctx, html, calls };
 }
 

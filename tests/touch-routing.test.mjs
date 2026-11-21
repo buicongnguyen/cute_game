@@ -1,18 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
-import ts from 'typescript';
 import { FishingInput, MovementControls } from '../src/gameplay-controls.ts';
 import { AttackHold, HOLD } from '../src/five-rules.ts';
+import { mainHarness } from './support/main-harness.mjs';
 
-const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-const flightStart = source.indexOf("$('#world').addEventListener('pointerdown',event=>{if(!flight");
-assert.ok(flightStart >= 0, 'the real flight touch routing is available');
-const flightRouting = source.slice(flightStart, source.indexOf("app.addEventListener('click'", flightStart));
-const groundStart = source.indexOf("document.addEventListener('pointerdown',e=>");
-const groundRouting = source.slice(groundStart, source.indexOf('let previous=', groundStart));
-const compile = text => ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+// The real flight and ground touch routing, cut out of main.ts as text (a missing marker fails in the harness).
+const main = await mainHarness({ slices: [
+  { from: "$('#world').addEventListener('pointerdown',event=>{if(!flight", to: "app.addEventListener('click'" },
+  { from: "document.addEventListener('pointerdown',e=>", to: 'let previous=' },
+] });
+const source = main.source;
+assert.equal(main.pieces.length, 2, 'the real flight touch routing is available');
 
 function surface(id = '', dataset = {}) {
   const listeners = new Map(), captures = new Set();
@@ -27,14 +25,14 @@ function surface(id = '', dataset = {}) {
 function fixture() {
   const world = surface('world'), boost = surface('boost-button'), document = surface(), window = surface();
   const keys = new Set(), movement = new MovementControls(keys), cleared = [], attackHold = new AttackHold(), attacks = [];
-  const ctx = vm.createContext({ document, window, addEventListener: window.addEventListener.bind(window), $: id => id === '#world' ? world : boost,
+  const ctx = { document, window, addEventListener: window.addEventListener.bind(window), $: id => id === '#world' ? world : boost,
     jumpInput: { down() {}, up() {}, clear() {} }, jumpPointers: new Set(), attackHold, attackPointers: new Set(), worldHold: null, under: 'attack', fightButtonAt: () => ctx.under,
     // main.ts attackDown: the press attacks at once and the hold begins.
     attackDown: source => { attackHold.down(source); attacks.push(source); }, slideCombo: { owns: () => false, cancel() {} }, airOn: () => true, started: true, flight: {}, arriving: false, spacePointer: null, boostHeld: false, boostPointers: new Set(), spaceKeys: new Set(), fishGame: null,
     movement, joystick: { clear: () => cleared.push('joystick') }, cancelLongPresses: () => cleared.push('longPress'), cancelButtonTouches() {}, mountTouchButtons() {}, gestures: { up() {}, clear() {} }, save() {}, uiBlocked: () => false,
     useInstead: () => false, // nothing to use beside the pad here (attack-intent.ts has its own tests)
-  });
-  vm.runInContext(compile(flightRouting + '\n' + groundRouting), ctx);
+  };
+  main.context(ctx);
   const fire = (target, type, pointerId = 1, extra = {}) => {
     let stopped = false;
     const event = { target, type, pointerId, button: 0, clientX: 20, clientY: 30, preventDefault() {}, stopPropagation() { stopped = true; }, ...extra };

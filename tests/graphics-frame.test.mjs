@@ -1,21 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
-import ts from 'typescript';
 import { GraphicsGovernor } from '../src/graphics.ts';
-import { frameSteps } from '../src/frame-steps.ts';
 import * as M from '../src/model.ts';
 import { BoulderFx } from '../src/boulder-fx.ts';
 import {DisguiseFx} from '../src/disguise-fx.ts';
+import { mainHarness } from './support/main-harness.mjs';
 
 // Exercise the real main-loop controller and governor. Rendering is intercepted
 // because changing a canvas's dimensions invalidates its last rendered image.
-const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-const declaration = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'frame');
-assert.ok(declaration, 'main.ts must provide the actual frame controller');
-const compiled = ts.transpileModule(declaration.getText(ast), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const main = await mainHarness({ functions: ['frame'] });
+assert.ok(main.fn('frame'), 'main.ts must provide the actual frame controller');
 
 function fixture() {
   const boulders=new BoulderFx({ground:()=>0,explorerAt:()=>null});
@@ -26,7 +20,7 @@ function fixture() {
   graphics.sample = (dt, playing) => { samples.push(playing); events.push('sample'); return sample(dt, playing); };
   const noop = () => {};
   const context = {
-    M, frameSteps, graphics, previous: 0, frameTime: 0, elapsed: 0, uiElapsed: 0,
+    graphics, previous: 0, frameTime: 0, elapsed: 0, uiElapsed: 0,
     flight: null, arriving: false, started: true, blocked: false, settledAt: -1,actionHandler:null,
     wasAirborne: false, fishGame: null, recastUntil: 0, modal: '',
     state: M.newGame(), document: { hidden: false }, performance: { now: () => now },
@@ -47,7 +41,7 @@ function fixture() {
     minimap: { frame: noop }, frameListeners: new Set(), updateHud: noop, updateLabels: noop, measureHud: noop, hudFresh: false,
     save: noop, saveGraphics: noop, requestAnimationFrame: () => { scheduled++; },
   };
-  const ctx = vm.createContext(context); vm.runInContext(compiled, ctx);
+  const ctx = main.context(context);
   return {
     ctx, graphics, changes, samples,
     run(fps, seconds) {
