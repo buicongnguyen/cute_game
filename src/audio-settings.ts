@@ -52,7 +52,7 @@ export function syncAudio(settings: Partial<AudioSettings>) { const a = audioOf(
  * house-life.ts switches it on and off, so the player stays out of the start download. A radio switched on before that
  * sets `want` and calls `ask` (main.ts: one more try to load the features), and the player starts as soon as it is there.
  */
-export const radio: { box?: { playing: boolean; start(): void; stop(): void; tick(dt: number): void }; want?: boolean; ask?(): void } = {};
+export const radio: { box?: { playing: boolean; start(): void; stop(): void; tick(dt: number): void }; want?: boolean; ask?(): void; /** The "Live music" row of Settings (features/music-director.ts). */ row?(): string } = {};
 
 const percent = (v: number) => `${Math.round(v * 100)}%`;
 /** The Settings rows (English; openDialog localizes the panel): a music slider, an effects slider and the vibration switch (main.ts settings()). */
@@ -60,7 +60,7 @@ export function audioRowsHtml(settings: Partial<AudioSettings>) {
   const a = audioOf(settings);
   const slider = (kind: 'music' | 'sfx', title: string, note: string, value: number) =>
     `<div class="settings-row audio-row"><div><strong>${title}</strong><small>${note}</small></div><div class="volume-control"><input type="range" min="0" max="100" step="5" value="${Math.round(value * 100)}" data-volume="${kind}" aria-label="${title}"><output data-volume-out="${kind}">${percent(value)}</output></div></div>`;
-  return slider('music', 'Music volume', 'Music in the world and the cottage radio', a.musicVolume)
+  return slider('music', 'Music volume', 'Music in the world and the cottage radio', a.musicVolume) + (radio.row?.() ?? '')
     + slider('sfx', 'Effects volume', 'Taps, hits, splashes and chimes', a.sfxVolume)
     + `<div class="settings-row"><div><strong>Vibration</strong><small>A little buzz on bites, hits and big moments (phones)</small></div><button class="toggle ${a.vibrate ? 'on' : ''}" role="switch" aria-checked="${a.vibrate}" aria-label="Vibration" data-action="vibrate"></button></div>`;
 }
