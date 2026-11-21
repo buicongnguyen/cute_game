@@ -17,11 +17,12 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { loadChromium, openPlayer, playRoute } from './journey.mjs';
+import { closeBrowsers, loadChromium, openPlayer, playRoute, watchdog } from './journey.mjs';
 
 const args = process.argv.slice(2), arg = (name, fallback) => { const i = args.indexOf('--' + name); return i < 0 ? fallback : args[i + 1]; };
 const here = path.dirname(fileURLToPath(import.meta.url)), tag = args[0] && !args[0].startsWith('--') ? args[0] : 'before';
-const out = path.resolve(arg('out', `.scratch/owner/reel/${tag}`)), work = path.join(out, 'work');
+// the working folder has a name of its own, so removing it at the end can never remove something of the user's
+const out = path.resolve(arg('out', `.scratch/owner/reel/${tag}`)), work = path.join(out, `.reel-work-${process.pid}-${Date.now()}`);
 const only = (arg('only', '') || '').split(',').filter(Boolean).map(Number);
 const midSave = path.resolve(arg('mid', path.join(here, 'save-mid.json')));
 const base = `http://127.0.0.1:${process.env.PORT || 5298}/`;
@@ -44,7 +45,7 @@ async function fromLateSave(name, planet, scene) {
     numbers.planet = (await P.page.evaluate(() => __zoo.state.planet));
     await scene(P, () => P.page.screenshot({ path: still }), numbers);
   } catch (e) { P.errors.push('script: ' + e.message.slice(0, 300)); }
-  const video = P.page.video(); await P.ctx.close(); const file = await video.path().catch(() => null); await P.browser.close();
+  const video = P.page.video(); await P.ctx.close().catch(() => {}); const file = await video.path().catch(() => null); await P.close();
   return { video: file, still: existsSync(still) ? still : null, errors: P.errors, numbers };
 }
 /** Walk the hero in a straight line at walking pace (the dev hook moves it; the camera follows as in play). */
@@ -55,7 +56,7 @@ const stroll = (P, to, seconds) => P.page.evaluate(async ([to, ms]) => {
 }, [to, seconds * 1000]);
 
 const CLIPS = [
-  ['title-to-first-harvest', () => fromRoute({ route: 'new', name: 'clip1', stopAt: 'first-named-line', holdMs: 6000, minutes: 3 }, 'first-harvest')],
+  ['title-to-first-harvest', () => fromRoute({ route: 'new', name: 'clip1', stopAt: 'first-named-dialog', holdMs: 6000, minutes: 3 }, 'first-harvest')],
   ['first-fight', () => fromRoute({ route: 'new', name: 'clip2', segment: 'fight', stopAt: 'fight-done', holdMs: 2500, minutes: 2 }, 'first-kill')],
   ['level-up', () => fromRoute({ route: 'new', name: 'clip3', segment: 'level-up', stopAt: 'level-up', holdMs: 6000, minutes: 2 }, 'level-up')],
   ['king-bear', () => existsSync(midSave) ? fromRoute({ route: 'mid', name: 'clip4', saveFile: midSave, bossSeconds: 45 }, 'boss-half') : { skipped: `no mid-game save at ${path.relative(process.cwd(), midSave)}` }],
@@ -75,7 +76,9 @@ const CLIPS = [
 const reportFile = path.join(out, 'reel.json'), report = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : {};
 for (const [i, [name, record]] of CLIPS.entries()) {
   const n = i + 1; if (only.length && !only.includes(n)) continue;
-  const started = Date.now(), clip = await record(), file = `${n}-${name}`;
+  const started = Date.now(), timer = watchdog(8 * 60_000, `clip ${n}`), file = `${n}-${name}`;
+  const clip = await Promise.resolve().then(record).catch(e => ({ video: null, errors: ['clip: ' + e.message.slice(0, 300)], numbers: {} }));
+  clearTimeout(timer); await closeBrowsers();
   if (clip.skipped) { report[file] = { skipped: clip.skipped }; console.log(file, 'SKIPPED:', clip.skipped); continue; }
   if (clip.video && existsSync(clip.video)) copyFileSync(clip.video, path.join(out, `${file}.webm`));
   if (clip.still && existsSync(clip.still)) copyFileSync(clip.still, path.join(out, `${file}.png`));
