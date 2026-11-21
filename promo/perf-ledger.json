@@ -69,7 +69,16 @@
     "english": 445,
     "vietnamese": 445
    },
-   "why": "Measured growth of the start against staging ef9501e (English 798,764 -> 799,209, Vietnamese 932,156 -> 932,601; plan allowance 0.1 KB): colour values the world reads as it is built, so they cannot load after Start. About 60 colours that did not exist before (our own ground colours for seven planets, which used to come from the planet facts; the island and sea colours of Ocean and Cloud, which were written into environment-art.ts; the warm shade under forest, swamp and canyon trees; the Crocodile King's paint; the blue basalt), and the small code that applies them (the paint by material name in creature-art.ts and space-view.ts, the round star map, the smooth stand-in rock, the look switch). The old tables are kept for a before and after in dev and perf builds only (a statically false branch in the shipped build: 0 bytes; with them the start grew 1,584 bytes). Two slimming passes saved about 220 bytes (the stars reuse the halo glow; fog and sun angles moved into the table so look.ts wears it as it is)."
+   "why": "Measured growth of the start against staging ef9501e (English 798,764 -> 799,209, Vietnamese 932,156 -> 932,601; plan allowance 0.1 KB): colour values the world reads as it is built, so they cannot load after Start. About 60 colours that did not exist before (our own ground colours for seven planets, which used to come from the planet facts; the island and sea colours of Ocean and Cloud, which were written into environment-art.ts; the warm shade under forest, swamp and canyon trees; the Crocodile King's paint; the blue basalt), and the small code that applies them (the paint by material name in creature-art.ts and space-view.ts, the round star map, the smooth stand-in rock, the look switch). The old tables are kept for a before and after in dev and perf builds only (a statically false branch in the shipped build: 0 bytes; with them the start grew 1,584 bytes). Two slimming passes saved about 220 bytes (the stars reuse the halo glow; fog and sun angles moved into the table so look.ts wears it as it is).",
+  },
+  {
+   "row": "start",
+   "name": "WP12 creature voices and warnings",
+   "allow": {
+    "english": 96,
+    "vietnamese": 96
+   },
+   "why": "Measured growth of the start against staging ef9501e, with WP9 merged (English 798,764 -> 798,860, Vietnamese 932,156 -> 932,252; the plan allows 0.1 KB): hooks and fallbacks only. world.ts tells a wind-up where a creature is seen to start one (onTelegraph, also for a guest in a room), main.ts forwards it as the telegraph event, plays the alert beep until the creatures have their own voices (graph.creatures), names a pet hit where it is played, and hands the features the health bar as a part of 1 (services.health); sfx.ts plays the hit for petHit and the hurt cry for roar until their recipes have come, and hands the stingers the options of a play (a detune, a pan). The voices, the wind-up warning, the roar, the pet hit, the heartbeat, the red edge and its sheet load after Start: the audio features in a lazy chunk of their own (features-audio, 12.5 KB gzip), the rest in the features chunk (7.5 KB gzip with the comfort rows of WP9)."
   }
  ]
 }

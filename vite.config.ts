@@ -25,6 +25,7 @@ const CHUNK_NAMES: Array<[string, RegExp]> = [
   ['world', /\/src\/world\.ts$/], // the 3D world, its views and the model loader (assets.ts, GLTFLoader, meshopt decoder)
   ['rules', /\/src\/combat\.ts$/], // game rules and content used at start and by the modes and the Almanac (never by vi-pack: see 'tables' below)
   ['features', /\/src\/features\.ts$/], // the feature modules, loaded after Start (see manualChunk below)
+  ['features-audio', /\/src\/features-audio\.ts$/], // the audio features, asked for by the features chunk once it has mounted
 ];
 export function chunkName(chunk: Pick<PreRenderedChunk, 'isEntry' | 'name' | 'moduleIds'>) {
   if (chunk.isEntry) return chunk.name;
@@ -39,7 +40,7 @@ export function manualChunk(id: string) {
   // The features' Vietnamese phrases: plain tables that import nothing, fetched only in Vietnamese. Pinned, or the small
   // chunk would be folded into the start download (experimentalMinChunkSize below).
   if (path.includes('/src/features-vi/')) return 'features-vi';
-  // src/features.ts, src/features/ and src/story/ are NOT pinned, on purpose: Rollup moves the static imports of a pinned
+  // src/features.ts, src/features/, src/features-audio.ts, src/features-audio/ and src/story/ are NOT pinned, on purpose: Rollup moves the static imports of a pinned
   // module into its chunk, so the first feature to import i18n.ts or sfx.ts would carry that module into "features" and
   // the start would have to import the lazy chunk. They form a chunk of their own anyway: only features.ts reaches them,
   // through the import() in main.ts, and its top-level `globalThis.zooFeatures = ...` line is a side effect, which keeps

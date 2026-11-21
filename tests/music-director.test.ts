@@ -1,4 +1,4 @@
-// The music director (AAA-PLAN WP13, src/features/music-director.ts): the state table, equal-power crossfades, the hold
+// The music director (AAA-PLAN WP13, src/features-audio/music-director.ts): the state table, equal-power crossfades, the hold
 // that keeps the drums from flapping, the village's rests, the theme, who wins against the radio, and the duck.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,11 +6,11 @@ import { Sfx, AudioGraph } from '../src/sfx.ts';
 import { audioLevels, radio } from '../src/audio-settings.ts';
 import { PLANETS } from '../src/content.ts';
 import { ZONE_NAMES } from '../src/minimap.ts';
-import { installMix, settle } from '../src/features/sound-mix.ts';
-import { installStingers, STINGER, STINGER_DUCK } from '../src/features/stingers.ts';
-import { MUSIC, HOME_ZONES, MODES, THEME_ONLY } from '../src/features/music-content.ts';
-import { Director, Held, mount, newScene, stateOf, regionOf, fadeLevel, FADE, HOLD, BOSS_HOLD, SETTLE, LINGER, THEME_GAP, REACH, CUT, THEME_WAIT, TRIM, type Scene } from '../src/features/music-director.ts';
-import { MusicBox } from '../src/features/radio.ts';
+import { installMix, settle } from '../src/features-audio/sound-mix.ts';
+import { installStingers, STINGER, STINGER_DUCK } from '../src/features-audio/stingers.ts';
+import { MUSIC, HOME_ZONES, MODES, THEME_ONLY } from '../src/features-audio/music-content.ts';
+import { Director, Held, mount, newScene, stateOf, regionOf, fadeLevel, FADE, HOLD, BOSS_HOLD, SETTLE, LINGER, THEME_GAP, REACH, CUT, THEME_WAIT, TRIM, type Scene } from '../src/features-audio/music-director.ts';
+import { MusicBox } from '../src/features-audio/radio.ts';
 import { fresh, node, type FakeContext, type FakeNode } from './support/fake-audio.ts';
 
 const scene = (patch: Partial<Scene> = {}) => ({ ...newScene(), ...patch });

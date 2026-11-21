@@ -52,7 +52,7 @@ export const FADE = 1.8, HOLD = 1.5, BOSS_HOLD = 2, REACH = 12;
 export const SETTLE = 1.5, LINGER = 4, THEME_GAP = 180;
 /** Seconds in which a starting radio silences the director; seconds after the first played frame before the theme is asked for. */
 export const CUT = .12, THEME_WAIT = 20;
-/** Everything of the director goes through this trim into the music bus, like the radio (features/radio.ts MusicBox.TRIM). */
+/** Everything of the director goes through this trim into the music bus, like the radio (features-audio/radio.ts MusicBox.TRIM). */
 export const TRIM = .55;
 /** A fade is drawn with this many straight pieces. */
 const PIECES = 12;

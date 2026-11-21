@@ -5,12 +5,20 @@
  * fetched only when the language is Vietnamese. Neither is part of the start download; `npm run perf:bytes` fails if
  * that changes.
  *
+ * The audio features (src/features-audio/*.ts) are a second lazy chunk, "features-audio" (src/features-audio.ts), asked for
+ * right after these are mounted and not waited for: if it fails to come (one retry, 8 s later) the game and the features here
+ * go on, with the sounds of before the features.
+ *
  * This file imports nothing from the start code at run time (addPhrases and the event bus are handed in). A feature may import game modules; it
  * should know that a static import of start code can move small shared modules between the start chunks, which
  * `npm run perf:bytes` shows as a few hundred bytes either way.
  */
 import type { addPhrases } from './i18n.ts';
-import { createServices, type GameServices, type ServiceHost } from './game-services.ts';
+import { createServices, loadAudio, type GameServices, type ServiceHost } from './game-services.ts';
+// Kept on purpose, though nothing here calls it: the audio features use asset-url.ts, and a module that only their chunk
+// reaches is moved by Rollup from the start's "rules" chunk into "world", which costs the start about 0.6 KB gzip.
+// Reached from this chunk as well, it stays where it was. `npm run perf:bytes` shows the difference.
+export { assetUrl } from './asset-url.ts';
 
 export interface Feature { mount?(services: GameServices): void }
 const features = import.meta.glob<Feature>('./features/*.ts', { eager: true });
@@ -47,5 +55,6 @@ async function mountOnce(host: ServiceHost, phrases: typeof addPhrases): Promise
     new Promise(resolve => setTimeout(resolve, PHRASE_WAIT)),
   ]);
   for (const file of Object.keys(features).sort()) try { features[file].mount?.(services); } catch (error) { console.error(file, error); }
+  loadAudio(services, () => import('./features-audio.ts'));
   return services;
 }

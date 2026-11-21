@@ -59,6 +59,33 @@ test('a ledger entry raises only its own row', () => {
   assert.equal(compareRows(b, [row('a', { main: 107 }), row('b')], ledger).ok, false, 'only up to what the entry allows');
 });
 
+test('textures and geometries that only sparks, shots and friends hold are chance too: counted apart, with a small allowance; the rest stays strict', () => {
+  // The case that moved rows for three packages: 8 textures in the baseline, and a spark's sprite on the GPU in the counted frame.
+  const b = baseline([row('a', { textures: 8, geometries: 400, fxTextures: 0, roamTextures: 0, fxGeometries: 0, roamGeometries: 0 })]);
+  const cur = o => row('a', { textures: 8, geometries: 400, fxTextures: 0, roamTextures: 0, fxGeometries: 0, roamGeometries: 0, ...o });
+  assert.deepEqual(rowLimit(b.rows.a).textures, 8, '5% of 8 is nothing: one more real texture fails');
+  assert.equal(compareRows(b, [cur({ fxTextures: 1 })]).ok, true, 'the spark\'s sprite: no failure');
+  assert.equal(compareRows(b, [cur({ fxTextures: 2, roamTextures: 2, fxGeometries: 4, roamGeometries: 4 })]).ok, true);
+  for (const [o, text] of [[{ fxTextures: 3 }, /fxTextures 3 is over its limit 2 \(baseline 0\)/], [{ roamTextures: 3 }, /roamTextures 3 is over its limit 2/], [{ fxGeometries: 5 }, /fxGeometries 5 is over its limit 4/], [{ roamGeometries: 5 }, /roamGeometries 5 is over its limit 4/]]) {
+    const out = compareRows(b, [cur(o)]); assert.equal(out.ok, false, JSON.stringify(o)); assert.match(out.failures[0], text);
+  }
+  // A texture something else in the scene uses is not chance: it is in `textures`, and one more of those still fails.
+  const real = compareRows(b, [cur({ textures: 9 })]); assert.equal(real.ok, false); assert.match(real.failures[0], /textures 9 is over its limit 8/);
+  assert.equal(compareRows(b, [cur({ textures: 9, fxTextures: 0 })]).ok, false, 'the allowance cannot be spent on a real texture');
+  // The allowance is above the baseline's own count, and a ledger entry for the row adds to it like to any field.
+  const withOne = baseline([row('a', { fxTextures: 1, roamTextures: 0, fxGeometries: 2, roamGeometries: 6 })]);
+  assert.deepEqual([rowLimit(withOne.rows.a).fxTextures, rowLimit(withOne.rows.a).roamTextures, rowLimit(withOne.rows.a).fxGeometries, rowLimit(withOne.rows.a).roamGeometries], [3, 2, 6, 10]);
+  assert.equal(rowLimit(withOne.rows.a, { entries: [{ row: 'a', name: 'x', allow: { fxTextures: 1 } }] }).fxTextures, 4);
+  // Folding: a baseline keeps the larger count of its runs; a compare of two runs takes the smaller (a real addition shows in both).
+  const folded = foldRuns([cur({ fxTextures: 0 }), cur({ fxTextures: 1 })]); assert.equal(folded.fxTextures, 1); assert.equal(folded.textures, 8); assert.equal(folded.spread.fxTextures, undefined, 'no spread is kept for a chance count');
+  const twice = foldCompareRuns([[cur({ fxTextures: 3 })], [cur({ fxTextures: 1 })]]); assert.equal(twice[0].fxTextures, 1); assert.equal(compareRows(b, twice).ok, true);
+  assert.equal(compareRows(b, foldCompareRuns([[cur({ fxTextures: 3 })], [cur({ fxTextures: 3 })]])).ok, false, 'in both runs: it is there');
+  // A baseline from before the split has no such fields: they are not gated until it is taken again, and nothing is "not measured".
+  const old = baseline([row('a', { textures: 8 })]); assert.equal(compareRows(old, [cur({ fxTextures: 9 })]).ok, true);
+  // A row measured by an old tool against a new baseline: the count is missing, and that is said.
+  const missing = compareRows(b, [row('a', { textures: 8, geometries: 400 })]); assert.equal(missing.ok, false); assert.match(missing.failures[0], /fxTextures was not measured/);
+});
+
 test('a missing row fails and an invalid row is refused', () => {
   const b = baseline([row('a'), row('b')]);
   const missing = compareRows(b, [row('a')]); assert.equal(missing.ok, false); assert.match(missing.failures[0], /b: missing/);
@@ -169,6 +196,7 @@ test('the download: exact plus 1% noise for each window and each type', () => {
 });
 
 test('the download: the named lazy chunks are counted apart, after Start only, within their allowances', () => {
+  assert.equal(lazyChunkOf('assets/features-audio-B9H_C_4f.js'), 'features-audio', 'the audio features are a lazy chunk of their own, not part of "features"'); assert.equal(LAZY_ALLOWANCE['features-audio'], 30 * 1024);
   assert.equal(lazyChunkOf('assets/features-B1x2.js'), 'features'); assert.equal(lazyChunkOf('assets/features-vi-9aZ.js'), 'features-vi');
   assert.equal(lazyChunkOf('assets/features-B1x2.css'), 'features'); assert.equal(lazyChunkOf('assets/world-B1x2.js'), null);
   const b = foldDownload([[visit('new/vi')]]);

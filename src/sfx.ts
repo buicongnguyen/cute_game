@@ -14,17 +14,20 @@ export type Sound = 'alert' | 'click' | 'open' | 'close' | 'punch' | 'swing' | '
   | 'splash' | 'cast' | 'reel' | 'snap' | 'bite' | 'catch' | 'stroke' | 'dive'
   | 'jump' | 'flip' | 'land'
   | 'success' | 'quest' | 'level' | 'harvest' | 'shoot' | 'poof' | 'coin' | 'buy' | 'sell' | 'ready' | 'power'
-  | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock' | 'flag' | 'thud' | 'break' | Stinger | 'powerReady';
+  | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock' | 'flag' | 'thud' | 'break' | Stinger | 'powerReady' | 'roar' | 'petHit';
 /**
  * The stingers (AAA-PLAN WP8): short musical cues for a reward, a discovery, a win, new gear, a refusal and a start. Their
- * recipes come with the features (features/stingers.ts, after the first played frame) through `AudioGraph.cue`; until
+ * recipes come with the features (features-audio/stingers.ts, after the first played frame) through `AudioGraph.cue`; until
  * then a stinger plays the 'success' chime. 'levelUp' is the level fanfare ('level'), which only a level-up plays.
  * The arrival flag's horn call ('flag') and the power strike's own ready chime ('powerReady') are made there too.
  */
 export type Stinger = 'levelUp' | 'rewardSmall' | 'rewardMedium' | 'rewardLarge' | 'discover' | 'victory' | 'equip' | 'deny' | 'go';
 export const STINGERS: readonly Stinger[] = ['levelUp', 'rewardSmall', 'rewardMedium', 'rewardLarge', 'discover', 'victory', 'equip', 'deny', 'go'];
-/** Every sound whose recipe is not in this file: the stingers and 'powerReady' ('flag' is listed in ALL_SOUNDS). */
-export const LATE_SOUNDS: readonly Sound[] = [...STINGERS, 'powerReady'];
+/**
+ * Every sound whose recipe is not in this file: the stingers, 'powerReady', the Colossus's 'roar' and 'petHit', the bite a
+ * pet's or a helper's blow lands with instead of the explorer's hit ('flag' is listed in ALL_SOUNDS).
+ */
+export const LATE_SOUNDS: readonly Sound[] = [...STINGERS, 'powerReady', 'roar', 'petHit'];
 
 /**
  * The mix (AAA-PLAN WP8): where each kind of sound peaks, in dBFS at the speakers with the sliders at their defaults
@@ -64,7 +67,7 @@ export const RATE: Partial<Record<Sound, number>> = { hit: 3, hitHeavy: 2, coin:
 export const RATE_WINDOW = .1;
 export const MAX_VOICES = 14;
 /** These still play over a full cap (a fanfare should not vanish in a brawl), up to MAX_VOICES + 4. */
-const PRIORITY = new Set<Sound>(['level', 'quest', 'hurt', 'catch', 'power']);
+const PRIORITY = new Set<Sound>(['level', 'quest', 'hurt', 'catch', 'power', 'roar']);
 /** Musical cues stay in tune: less pitch spread. */
 const TUNED = new Set<Sound>(['level', 'quest', 'success', 'coin', 'buy', 'sell', 'harvest', 'magic', 'freeze', 'ready', 'open', 'close']);
 
@@ -116,7 +119,7 @@ const UI = new Set<Sound>(['click', 'open', 'close']);
 /**
  * The game's one AudioContext and its mix: bus -> duck -> compressor -> speakers, for each of the four buses.
  * The music bus follows the Settings music slider (`music`); sfx, ui and ambience follow the effects slider (`sfx`).
- * After Start, features/sound-mix.ts lets the context sleep while both sliders are at 0 or the tab is hidden.
+ * After Start, features-audio/sound-mix.ts lets the context sleep while both sliders are at 0 or the tab is hidden.
  */
 export class AudioGraph {
   readonly voices = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? new Voices(TOUCH_VOICES + 2, 2) : new Voices();
@@ -124,7 +127,7 @@ export class AudioGraph {
   sfx = .8;
   /** The music slider, 0-1: whoever plays music sets it from audio-settings.ts audioLevels.music before asking for the bus. */
   music = .45;
-  /** The tab is hidden (features/sound-mix.ts keeps it). */
+  /** The tab is hidden (features-audio/sound-mix.ts keeps it). */
   hidden = false;
   /** The context once it is made; `ctx` makes it. */
   made: Ctx | null = null;
@@ -133,15 +136,16 @@ export class AudioGraph {
   readonly nodes: Partial<Record<Bus, { bus: GainNode; duck: GainNode; level?: number }>> = {};
   /**
    * Lowers a bus by `dB` for `seconds` so a cue or a spoken line stands out. Ducks do not stack: while one holds, another
-   * only makes it last longer. features/sound-mix.ts supplies it once the features are mounted (after the first played
+   * only makes it last longer. features-audio/sound-mix.ts supplies it once the features are mounted (after the first played
    * frame); before that a call does nothing.
    */
   duck: (name: Bus, dB?: number, seconds?: number) => void = () => {};
   /**
-   * The sounds whose recipes load after Start (features/stingers.ts): asked first for every play that may sound. It answers
+   * The sounds whose recipes load after Start (features-audio/stingers.ts): asked first for every play that may sound. It answers
    * true or false when the sound was its own (played, or refused), and nothing when the recipes here should play it.
+   * It gets the play's options too (a blow's combo detune, a pan).
    */
-  cue?: (sfx: Sfx, sound: Sound, ctx: Ctx) => boolean | void;
+  cue?: (sfx: Sfx, sound: Sound, ctx: Ctx, opts?: { detune?: number; pan?: number }) => boolean | void;
   private make: () => Ctx;
   constructor(make?: () => Ctx) { this.make = make ?? (() => new AudioContext()); }
 
@@ -163,9 +167,11 @@ export class AudioGraph {
   get rest() { return this.hidden || this.silent; }
   /** Counters for the browser probe: voices refused by the shared counter. */
   readonly stats = this.voices;
-  /** Moves a bus gain to a new level without a step (a step in a playing gain clicks); features/sound-mix.ts supplies it. */
+  /** Moves a bus gain to a new level without a step (a step in a playing gain clicks); features-audio/sound-mix.ts supplies it. */
   glide?: (gain: AudioParam, level: number, now: number) => void;
-  /** A panner in front of `to` (-1 left to 1 right) for one sound; features/sound-mix.ts supplies it, and until then sounds play in the middle. */
+  /** Set once the creatures have their own voices (creature-voices.ts): the game then leaves the alert beep to them. */
+  creatures?: unknown;
+  /** A panner in front of `to` (-1 left to 1 right) for one sound; features-audio/sound-mix.ts supplies it, and until then sounds play in the middle. */
   pan?: (to: AudioNode, pan: number) => AudioNode;
 
   /** A bus to connect to, at its slider's level right now (call it again after a slider moves); null without WebAudio. */
@@ -284,7 +290,7 @@ export class Sfx {
     // A resting context has a stopped clock: sounds asked for meanwhile would all play at once when it wakes.
     if (!this.enabled || !(this.volume > 0) || this.graph.rest) { this.stats.muted++; return false; }
     const ctx = this.context(); if (!ctx) return false;
-    const own = this.graph.cue?.(this, sound, ctx); if (own != null) return own;
+    const own = this.graph.cue?.(this, sound, ctx, opts); if (own != null) return own;
     const now = ctx.currentTime, end = now + (LENGTH[sound] ?? .3);
     const verdict = this.gate.admit(sound, now, end);
     if (verdict !== 'ok') { this.stats[verdict]++; return false; }
@@ -312,7 +318,7 @@ export class Sfx {
       case 'shoot': this.tone(k, 0, 'square', 1500, 280, .09, .045); this.tone(k, 0, 'sine', 900, 300, .1, .07);
         this.hiss(k, 0, 'highpass', 4500, 2500, .035, .1); this.tone(k, 0, 'sine', 170, 60, .07, .12); break;
       // Hits (the last attack sound chose the weapon): light, heavy (a knock or launch) and critical.
-      case 'hit': this.weaponHit(k, struck, 0); break;
+      case 'petHit': /* a pet's bite, until its recipe has come (features-audio/stingers.ts) */ case 'hit': this.weaponHit(k, struck, 0); break;
       case 'hitHeavy': this.weaponHit(k, struck, 1); break;
       case 'crit': this.weaponHit(k, struck, 1.2); this.bell(k, .02, 2350, .3, .05, 3.5, 2.5);
         this.tone(k, .02, 'sine', 1200, 2400, .16, .05); this.hiss(k, .02, 'highpass', 7000, 4000, .18, .04); break;
@@ -320,7 +326,7 @@ export class Sfx {
       case 'poof': this.hiss(k, 0, 'lowpass', 2600, 160, .36, .22, 1, .01); this.tone(k, 0, 'sine', 660, 170, .24, .08);
         this.bell(k, .1, 1568, .2, .035); this.bell(k, .16, 2093, .22, .03); break;
       // Hurt: a squeaky "oof" (two formant-ish sines) on a thump.
-      case 'hurt': this.tone(k, 0, 'triangle', 520, 300, .14, .09); this.tone(k, 0, 'sine', 980, 620, .12, .04);
+      case 'roar': /* the Colossus, until its recipe has come */ case 'hurt': this.tone(k, 0, 'triangle', 520, 300, .14, .09); this.tone(k, 0, 'sine', 980, 620, .12, .04);
         this.tone(k, 0, 'sine', 150, 60, .12, .2); this.hiss(k, 0, 'lowpass', 1100, 200, .1, .1); break;
       // Garden: a rising bubble pop; harvest = pop + leafy rustle + bright two-note pluck; plant = two soft dirt pats.
       case 'pop': this.tone(k, 0, 'sine', 380, 1100, .08, .1); break;
@@ -365,7 +371,7 @@ export class Sfx {
       case 'shock': this.tone(k, 0, 'square', 1900, 240, .12, .035); this.hiss(k, 0, 'highpass', 5200, 2600, .16, .09); this.tone(k, .015, 'sine', 120, 45, .2, .2); break;
       case 'freeze': [1568, 2093, 2637].forEach((f, i) => this.bell(k, i * .04, f, .25, .03, 3.5, 1.5)); this.hiss(k, 0, 'highpass', 5000, 3000, .2, .05); break;
       case 'magic': [784, 1175, 1568].forEach((f, i) => this.bell(k, i * .05, f, .24, .04, 3.5, 1.8)); this.hiss(k, 0, 'highpass', 5000, 8000, .3, .02, 1, .1); break;
-      // The arrival flag (place-flags.ts) is made in features/stingers.ts, with the stingers.
+      // The arrival flag (place-flags.ts) is made in features-audio/stingers.ts, with the stingers.
       // A boss's body takes the blow (played with the weapon's own hit): a deep, round thump, like striking a big drum.
       case 'thud': this.tone(k, 0, 'sine', 120, 42, .2, .3, .003); this.hiss(k, 0, 'lowpass', 700, 110, .14, .14); break;
       // The stagger break: a woody crack, a sub drop and a dizzy two-note wobble going down.
@@ -375,7 +381,7 @@ export class Sfx {
   }
 }
 
-/** Every Sound name but the stingers (tests check each has a recipe, here or for 'flag' in features/stingers.ts). */
+/** Every Sound name but the stingers (tests check each has a recipe, here or for 'flag' in features-audio/stingers.ts). */
 export const ALL_SOUNDS: readonly Sound[] = ['alert', 'click', 'open', 'close', 'punch', 'swing', 'hit', 'hitHeavy', 'crit', 'hurt', 'pop', 'plant',
   'splash', 'cast', 'reel', 'snap', 'bite', 'catch', 'stroke', 'dive', 'jump', 'flip', 'land', 'success', 'quest', 'level', 'harvest', 'shoot',
   'poof', 'coin', 'buy', 'sell', 'ready', 'power', 'boom', 'zap', 'freeze', 'magic', 'shock', 'flag', 'thud', 'break'];

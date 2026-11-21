@@ -1,5 +1,5 @@
 // The mix in numbers (docs/SOUNDS.md, AAA-PLAN WP8). Nobody can check a mix by reading code, and a build machine cannot
-// listen: this renders every synthesized sound of src/sfx.ts and every stinger of src/features/stingers.ts through the
+// listen: this renders every synthesized sound of src/sfx.ts and every stinger of src/features-audio/stingers.ts through the
 // game's own audio graph (bus, duck, compressor) in an OfflineAudioContext in Chromium, and measures what reaches the speakers.
 //
 //   node promo/loudness.mjs            the tables
@@ -20,10 +20,15 @@
 //   3. Against the game's theme on the music bus at the default sliders: how far each cue stands over the music, how deep
 //      the music goes under a stinger, and the highest peak of a crowded fight at full sliders (over 0 dBFS would clip).
 //   4. The LOUDNESS bands, sound by sound.
+//   5. The creature voices (src/features-audio/creature-voices.ts), family by family: each kind's peak, loudness, length and
+//      spectral centroid at full level (a creature beside the explorer), a boss's wind-up, and the heartbeat of
+//      src/features/low-health.ts; each against the music's RMS, a hit and the hurt cry; a pet's hit against the explorer's.
+//   6. The wind-up warning on the clock: for every boss skill, when the voice starts, when it is first over the music and
+//      when it peaks, counted back from the moment the blow lands.
 import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { signatures } from './sound-signature.mjs';
+import { signatures, voiceSignatures } from './sound-signature.mjs';
 
 const LF = String.fromCharCode(10);
 const args = process.argv.slice(2), check = args.includes('--check'), jsonAt = args.indexOf('--json');
@@ -36,9 +41,12 @@ const base = `http://127.0.0.1:${process.env.PORT || 5298}`, RUNS = Number(proce
 /** Runs in the page: renders and measures. Returns plain data. */
 async function measure(RUNS) {
   const { Sfx, ALL_SOUNDS, STINGERS, LATE_SOUNDS, LOUDNESS } = await import('/src/sfx.ts');
-  const { installMix } = await import('/src/features/sound-mix.ts');
-  const { installStingers, STINGER, LEVEL_LENGTH } = await import('/src/features/stingers.ts');
-  const { MusicBox } = await import('/src/features/radio.ts');
+  const { installMix } = await import('/src/features-audio/sound-mix.ts');
+  const { installStingers, STINGER, LEVEL_LENGTH } = await import('/src/features-audio/stingers.ts');
+  const { MusicBox } = await import('/src/features-audio/radio.ts');
+  const { CreatureVoices, VOICES, VOICE_KINDS, VOICE_BANDS, WARNING_BAND, PET_UNDER, windupRise } = await import('/src/features-audio/creature-voices.ts');
+  const { heartbeat, HEART_BAND } = await import('/src/features/low-health.ts');
+  const { BOSS_WINDUPS } = await import('/src/boss-patterns.ts');
   const RATE = 48000, dB = v => v > 0 ? 20 * Math.log10(v) : -120, round = v => Math.round(v * 10) / 10;
   const seeded = seed => () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
 
@@ -95,7 +103,9 @@ async function measure(RUNS) {
     let sum = 0; for (let i = first; i <= last; i++) sum += d[i] * d[i];
     const { power, hz } = spectrum(d, from, to); let top = 1; for (let i = 2; i < power.length; i++) if (power[i] > power[top]) top = i;
     const energy = BANDS.map(([name, lo, hi]) => { let e = 0; for (let i = Math.max(1, Math.floor(lo / hz)); i < Math.min(power.length, Math.ceil(hi / hz)); i++) e += power[i]; return [name, e]; }).sort((a, b) => b[1] - a[1]);
-    return { peak: dB(peak), rms: dB(Math.sqrt(sum / (last - first + 1))), lufs: loudness(d, first, last + 1), ms: Math.round((last - first + 1) / RATE * 1000), hz: Math.round(top * hz), band: energy[0][0] };
+    // The spectral centroid (where the sound sits by ear: a squeak high, a grunt low), over 30 Hz to 16 kHz by magnitude.
+    let weight = 0, moment = 0; for (let i = Math.ceil(30 / hz); i < Math.min(power.length, Math.floor(16000 / hz)); i++) { const m = Math.sqrt(power[i]); weight += m; moment += m * i * hz; }
+    return { peak: dB(peak), rms: dB(Math.sqrt(sum / (last - first + 1))), lufs: loudness(d, first, last + 1), ms: Math.round((last - first + 1) / RATE * 1000), hz: Math.round(top * hz), band: energy[0][0], centroid: Math.round(weight ? moment / weight : 0) };
   }
   const median = list => { const s = [...list].sort((a, b) => a - b); return s[s.length >> 1]; };
   /** The facts of the play with the median peak, with the lowest and highest peak of all plays. */
@@ -115,7 +125,7 @@ async function measure(RUNS) {
     pairs[whoosh] = { weapon, whoosh: fold(lead), hit: fold(hit) }; pairs[whoosh].under = round(pairs[whoosh].hit.peak - pairs[whoosh].whoosh.peak);
   }
 
-  // 3. Against the theme. The radio plays the file through its trim into the music bus (features/radio.ts).
+  // 3. Against the theme. The radio plays the file through its trim into the music bus (features-audio/radio.ts).
   const mix = { cues: {}, ducks: {} };
   let theme = null;
   try { const bytes = await (await fetch('/assets/audio/zoo-garden-theme.mp3')).arrayBuffer(); theme = await new OfflineAudioContext(2, 1, RATE).decodeAudioData(bytes); } catch { /* no theme: this part is skipped */ }
@@ -146,7 +156,49 @@ async function measure(RUNS) {
   for (const [whoosh, p] of Object.entries(pairs)) if (whoosh !== 'punch') judge('impact', `hit (${p.weapon})`, p.hit.peak, ...LOUDNESS.impact.peak, 'peak dBFS');
   for (const whoosh of Object.keys(LOUDNESS.whoosh.of)) judge('whoosh', whoosh, pairs[whoosh].under, ...LOUDNESS.whoosh.under, `dB under its hit (${pairs[whoosh].weapon})`);
   for (const sound of LOUDNESS.whoosh.sounds) judge('whoosh', sound, sounds[sound].peak, LOUDNESS.whoosh.floor, 0, 'peak dBFS, at least');
-  return { runs: RUNS, sounds, pairs, mix, verdicts };
+
+  // 5. The creature voices, at full level (beside the explorer), a creature of the table's size.
+  const VOICE_RUNS = Math.min(RUNS, 5), TELEGRAPH = .8, musicRms = mix.music?.rms ?? -22.8;
+  const speak = (family, kind, say, seed) => render(2.2, sfx => { new CreatureVoices(sfx.graph, { random: seeded(seed) }).speak(family, kind, say); }, { seed });
+  const voices = {};
+  for (const family of Object.keys(VOICES)) {
+    voices[family] = {};
+    for (const kind of [...VOICE_KINDS, 'warning']) {
+      const runs = []; for (let r = 0; r < VOICE_RUNS; r++) runs.push(facts(await speak(family, kind === 'warning' ? 'windup' : kind, kind === 'warning' ? { seconds: 1.1, boss: true, radius: 1.1 } : { seconds: TELEGRAPH }, 5 + r * 7919)));
+      const v = voices[family][kind] = fold(runs);
+      Object.assign(v, { overMusic: round(v.peak - musicRms), underHit: round(sounds.hit.peak - v.peak), underHurt: round(sounds.hurt.peak - v.peak) });
+      const band = kind === 'warning' ? WARNING_BAND : VOICE_BANDS[kind];
+      judge('voice', `${family} ${kind}`, v.peak, band[0], band[1], 'peak dBFS');
+    }
+  }
+  const beat = []; for (let r = 0; r < 3; r++) beat.push(facts(await render(2, sfx => heartbeat(sfx.graph.ctx, sfx.graph.bus('sfx'), sfx.graph.ctx.currentTime + .005))));
+  const heart = fold(beat); Object.assign(heart, { overMusic: round(heart.peak - musicRms), underHit: round(sounds.hit.peak - heart.peak), underHurt: round(sounds.hurt.peak - heart.peak) });
+  judge('voice', 'heartbeat', heart.peak, HEART_BAND[0], HEART_BAND[1], 'peak dBFS');
+  // A pet's blow: the bite it lands with against the explorer's own hit (a fist's, as in the table above).
+  const pet = { peak: sounds.petHit.peak, hit: sounds.hit.peak, under: round(sounds.hit.peak - sounds.petHit.peak) };
+  judge('voice', 'petHit', pet.under, PET_UNDER[0], PET_UNDER[1], 'dB under the hit of the explorer');
+
+  // 6. The warning on the clock. The telegraph is told at 0 and the blow lands `seconds` later; the voice is rendered alone
+  // and read in 10 ms steps: when it starts, when it is first over the music's RMS, when it is loudest.
+  const leads = {}, STEP = RATE / 100;
+  const patterns = [...Object.entries(BOSS_WINDUPS).filter(([name]) => ['slam', 'quake', 'charge', 'barrage', 'rain', 'spin', 'eclipse'].includes(name)), ['plain blow', .6], ['enraged spin', BOSS_WINDUPS.spin * .8], ['enraged rain', BOSS_WINDUPS.rain * .8]];
+  for (const [name, seconds] of patterns) {
+    const d = await speak('bear', 'windup', { seconds, boss: true, radius: 1.1 }, 5);
+    let start = -1, over = -1, top = 0, topAt = 0;
+    for (let i = 0; i + STEP <= d.length; i += STEP) { let m = 0; for (let j = i; j < i + STEP; j++) { const a = Math.abs(d[j]); if (a > m) m = a; } const level = dB(m), t = i / RATE; if (start < 0 && level > -60) start = t; if (over < 0 && level >= musicRms) over = t; if (m > top) { top = m; topAt = t; } }
+    leads[name] = { seconds: Math.round(seconds * 100) / 100, rise: Math.round(windupRise(seconds) * 100) / 100, starts: Math.round((seconds - start) * 100) / 100, overMusic: over < 0 ? 0 : Math.round((seconds - over) * 100) / 100, peakAt: Math.round((topAt - seconds) * 100) / 100, peak: round(dB(top)) };
+  }
+  // A crowded fight with voices in it: the same blows, a creature voice every 90 ms and a boss winding up, sliders at the top.
+  if (theme) {
+    const families = Object.keys(VOICES), brawl = ['swing', 'hit', 'hitHeavy', 'crit', 'punch', 'hit', 'poof', 'coin', 'boom', 'hurt', 'thud', 'shoot', 'zap', 'break'];
+    const music = (sfx, ctx) => { const src = ctx.createBufferSource(), trim = ctx.createGain(); src.buffer = theme; src.loop = true; trim.gain.value = MusicBox.TRIM; src.connect(trim); trim.connect(sfx.graph.bus('music')); src.start(0, 20); };
+    const d = await render(4.5, (sfx, at, ctx) => {
+      const v = new CreatureVoices(sfx.graph, { random: seeded(13) }); music(sfx, ctx);
+      for (let i = 0; i < 66; i++) at(.2 + i * .045, () => { sfx.play(i % 7 === 3 ? 'petHit' : brawl[i % brawl.length]); if (i % 2 === 0) v.speak(families[i % families.length], VOICE_KINDS[i % 4], { seconds: .5 }); if (i % 22 === 0) v.speak('bear', 'windup', { seconds: 1.1, boss: true, radius: 1.1 }); });
+    }, { sfxLevel: 1, musicLevel: 1, seed: 11 });
+    mix.brawlVoices = { peak: round(facts(d).peak) };
+  }
+  return { runs: RUNS, sounds, pairs, mix, verdicts, voices, heart, pet, leads };
 }
 
 const browser = await chromium.launch();
@@ -175,26 +227,41 @@ if (out) {
     console.log(`\nA crowded fight over the theme, both sliders at the top: peak ${out.mix.brawl.peak} dBFS (${out.mix.brawl.peak < 0 ? 'no clipping' : 'CLIPS'})`);
   } else console.log('\n3. The theme could not be read: the part against music was skipped.');
   console.log('\n4. The LOUDNESS bands (src/sfx.ts)');
-  for (const v of out.verdicts) console.log(`${v.ok ? 'ok  ' : 'OUT '} ${v.kind.padEnd(7)}${v.sound.padEnd(14)}${n(v.value)}  ${v.what} [${v.band[0]}, ${v.band[1]}]`);
-  const bad = out.verdicts.filter(v => !v.ok).length + (out.mix.brawl && !(out.mix.brawl.peak < 0) ? 1 : 0);
+  for (const v of out.verdicts) if (!v.ok || v.kind !== 'voice') console.log(`${v.ok ? 'ok  ' : 'OUT '} ${v.kind.padEnd(7)}${v.sound.padEnd(14)}${n(v.value)}  ${v.what} [${v.band[0]}, ${v.band[1]}]`);
+  console.log('\n5. The creature voices at full level (peak dBFS / loudness / ms / centroid Hz), and the wind-up of a boss');
+  console.log(`${'family'.padEnd(11)}${['notice', 'windup', 'hurt', 'death', 'warning'].map(k => k.padStart(27)).join('')}`);
+  for (const [family, kinds] of Object.entries(out.voices)) console.log(family.padEnd(11) + Object.values(kinds).map(v => `${n(v.peak, 8)}${n(v.lufs, 7)}${n(v.ms, 5)}${n(v.centroid, 7)}`).join(''));
+  const span = (kind, key) => { const all = Object.values(out.voices).map(f => f[kind][key]); return `${Math.min(...all)} to ${Math.max(...all)}`; };
+  for (const kind of ['notice', 'windup', 'hurt', 'death', 'warning']) console.log(`${kind.padEnd(9)} peak ${span(kind, 'peak')} dBFS; over the RMS of the music ${span(kind, 'overMusic')} dB; under a hit ${span(kind, 'underHit')} dB; under the hurt cry ${span(kind, 'underHurt')} dB`);
+  console.log(`heartbeat peak ${out.heart.peak} dBFS (${out.heart.low} to ${out.heart.high}), loudness ${out.heart.lufs}, ${out.heart.ms} ms, strongest at ${out.heart.hz} Hz (${out.heart.band}); ${out.heart.overMusic} dB against the RMS of the music, ${out.heart.underHit} under a hit`);
+  console.log(`the hit of a pet ${out.pet.peak} dBFS, of the explorer ${out.pet.hit}: ${out.pet.under} dB under`);
+  console.log('\n6. The warning on the clock (a boss; seconds before the blow lands)');
+  console.log(`${'pattern'.padEnd(14)}${n('wind-up', 9)}${n('starts', 9)}${n('over music', 12)}${n('peak at', 9)}${n('peak dBFS', 11)}`);
+  for (const [name, l] of Object.entries(out.leads)) console.log(`${name.padEnd(14)}${n(l.seconds, 9)}${n(l.starts, 9)}${n(l.overMusic, 12)}${n(l.peakAt, 9)}${n(l.peak, 11)}`);
+  if (out.mix.brawlVoices) console.log(`\nThe crowded fight with creature voices and a boss winding up: peak ${out.mix.brawlVoices.peak} dBFS (${out.mix.brawlVoices.peak < 0 ? 'no clipping' : 'CLIPS'})`);
+  const bad = out.verdicts.filter(v => !v.ok).length + (out.mix.brawl && !(out.mix.brawl.peak < 0) ? 1 : 0) + (out.mix.brawlVoices && !(out.mix.brawlVoices.peak < 0) ? 1 : 0);
   console.log(bad ? `\n${bad} outside the bands.` : '\nEvery sound is inside its band.');
   if (jsonAt >= 0 && args[jsonAt + 1]) writeFileSync(args[jsonAt + 1], JSON.stringify(out, null, 1));
   if (check && bad) process.exitCode = 1;
   if (args.includes('--write')) {
     if (bad) { console.error('Not written: tune the sounds into their bands first.'); process.exitCode = 1; }
     else {
-      const { Sfx } = await import('../src/sfx.ts'), { installStingers } = await import('../src/features/stingers.ts');
-      const sig = signatures(Sfx, Object.keys(out.sounds), installStingers);
+      const { Sfx, AudioGraph } = await import('../src/sfx.ts'), { installStingers } = await import('../src/features-audio/stingers.ts');
+      const { CreatureVoices, VOICES, VOICE_KINDS } = await import('../src/features-audio/creature-voices.ts'), { heartbeat } = await import('../src/features/low-health.ts');
+      const sig = signatures(Sfx, Object.keys(out.sounds), installStingers), voiceSig = voiceSignatures(AudioGraph, CreatureVoices, Object.keys(VOICES), VOICE_KINDS, heartbeat);
+      const level = (v, recipe) => ({ peak: v.peak, low: v.low, high: v.high, loudness: v.lufs, ms: v.ms, band: v.band, centroid: v.centroid, recipe });
       const kept = {
         about: 'Measured by promo/loudness.mjs --write: dBFS at the speakers, sliders at their defaults, the median of seeded plays. Do not edit by hand.',
         sounds: Object.fromEntries(Object.entries(out.sounds).map(([name, r]) => [name, { peak: r.peak, low: r.low, high: r.high, loudness: r.lufs, ms: r.ms, band: r.band, recipe: sig[name] }])),
         hits: Object.fromEntries(Object.entries(out.pairs).map(([name, p]) => [name, { weapon: p.weapon, whoosh: p.whoosh.peak, hit: p.hit.peak, under: p.under }])),
-        music: out.mix.music ?? null, brawl: out.mix.brawl ?? null,
+        music: out.mix.music ?? null, brawl: out.mix.brawl ?? null, brawlVoices: out.mix.brawlVoices ?? null,
+        voices: Object.fromEntries(Object.entries(out.voices).map(([family, kinds]) => [family, Object.fromEntries(Object.entries(kinds).map(([kind, v]) => [kind, level(v, voiceSig[family][kind])]))])),
+        heartbeat: level(out.heart, voiceSig.heartbeat), pet: out.pet, leads: out.leads,
       };
       const file = fileURLToPath(new URL('./loudness.json', import.meta.url));
       // One line per sound, so a change shows as that sound's line.
       const rows = table => '{' + LF + Object.entries(table).map(([name, row]) => `  ${JSON.stringify(name)}: ${JSON.stringify(row)}`).join(',' + LF) + LF + ' }';
-      const text = '{' + LF + Object.entries(kept).map(([key, value]) => ` ${JSON.stringify(key)}: ${key === 'sounds' || key === 'hits' ? rows(value) : JSON.stringify(value)}`).join(',' + LF) + LF + '}' + LF;
+      const text = '{' + LF + Object.entries(kept).map(([key, value]) => ` ${JSON.stringify(key)}: ${key === 'sounds' || key === 'hits' || key === 'voices' || key === 'leads' ? rows(value) : JSON.stringify(value)}`).join(',' + LF) + LF + '}' + LF;
       writeFileSync(file, text); console.log('Written: promo/loudness.json');
     }
   }
