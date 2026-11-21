@@ -8,15 +8,6 @@
     "vietnamese": 1005
    },
    "why": "Measured growth of the start (plan allowance 1.0 KB): the emit sites in main.ts and hud-combat.ts, the sending end of the event bus, the features loader with its one retry, bossApproach, and addPhrases in i18n.ts. The bus, the services and every feature load after Start."
-  },
-  {
-   "row": "start",
-   "name": "WP7 sound core",
-   "allow": {
-    "english": -58,
-    "vietnamese": -58
-   },
-   "why": "Measured change of the start (plan allowance +0.3 KB, not used): the audio graph with its four buses, the shared voice counter and the detune and pan options grow sfx.ts, and the radio player (MusicBox) leaves house-life.ts for the lazy features chunk, which more than pays for it. The duck, the rest rule and the radio load after Start: the features chunk goes from 621 to 2015 bytes (1.4 KB of its 30 KB). The install list is 432.2 KB smaller (4662.8 to 4230.6 KB): the theme is on demand."
   }
  ]
 }
