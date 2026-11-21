@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 900" width="1180" height="900" font-family="Verdana, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Option A: Ember Terraces: top-down plan of the village hub</title><desc id="d">Stations, garden, ranch, paths and water inside the round fence of radius 18 m, with the four gates on the axes. North is up; the camera looks from the bottom.</desc>
+<rect width="1180" height="900" fill="#fbf6ea"/>
+<defs><clipPath id="in"><circle cx="470" cy="480" r="360"/></clipPath></defs>
+<text x="30" y="40" font-size="24" font-weight="bold" fill="#3b2f25">Option A: Ember Terraces</text>
+<text x="30" y="62" font-size="13" fill="#6b5a4a">Design plan, not built. Scale: 1 m = 20 px. North is up; the camera looks from the bottom edge.</text>
+<circle cx="470" cy="480" r="360" fill="#9fd67a"/>
+<g clip-path="url(#in)">
+<polygon points="90,100 850,100 850,422 682,422 682,356 90,356" fill="#c4e89a"/>
+<polygon points="90,572 850,572 850,860 90,860" fill="#7fc163"/>
+<polyline points="470,132 470,828" fill="none" stroke="#ead7a4" stroke-width="22" stroke-linecap="round"/>
+<polyline points="122,480 818,480" fill="none" stroke="#ead7a4" stroke-width="22" stroke-linecap="round"/>
+<polyline points="528,254 538,356 538,572 560,626" fill="none" stroke="#58b8ea" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="132,356 682,356 682,422 824,422" fill="none" stroke="#8a6a4c" stroke-width="7" stroke-linejoin="round"/>
+<polyline points="122,572 818,572" fill="none" stroke="#8a6a4c" stroke-width="7" stroke-linejoin="round"/>
+<circle cx="538" cy="448" r="60" fill="#c99862" stroke="#7b5632" stroke-width="2" fill-opacity=".92"/>
+<circle cx="532" cy="296" r="24" fill="#c99862" stroke="#7b5632" stroke-width="2" fill-opacity=".92"/>
+<circle cx="548" cy="598" r="20" fill="#c99862" stroke="#7b5632" stroke-width="2" fill-opacity=".92"/>
+<rect x="449.2" y="345" width="41.6" height="22" fill="#f1e2bd" stroke="#8a6a4c" stroke-width="2" transform="rotate(0 470 356)"/><path d="M449.2 352.4h41.6M449.2 359.6h41.6" stroke="#8a6a4c" stroke-width="1.5"/>
+<rect x="366" y="345" width="32" height="22" fill="#f1e2bd" stroke="#8a6a4c" stroke-width="2" transform="rotate(0 382 356)"/><path d="M366 352.4h32M366 359.6h32" stroke="#8a6a4c" stroke-width="1.5"/>
+<rect x="718" y="411" width="32" height="22" fill="#f1e2bd" stroke="#8a6a4c" stroke-width="2" transform="rotate(0 734 422)"/><path d="M718 418.4h32M718 425.6h32" stroke="#8a6a4c" stroke-width="1.5"/>
+<rect x="449.2" y="561" width="41.6" height="22" fill="#f1e2bd" stroke="#8a6a4c" stroke-width="2" transform="rotate(0 470 572)"/><path d="M449.2 568.4h41.6M449.2 575.6h41.6" stroke="#8a6a4c" stroke-width="1.5"/>
+<rect x="302" y="561" width="32" height="22" fill="#f1e2bd" stroke="#8a6a4c" stroke-width="2" transform="rotate(0 318 572)"/><path d="M302 568.4h32M302 575.6h32" stroke="#8a6a4c" stroke-width="1.5"/>
+<rect x="622" y="561" width="32" height="22" fill="#f1e2bd" stroke="#8a6a4c" stroke-width="2" transform="rotate(0 638 572)"/><path d="M622 568.4h32M622 575.6h32" stroke="#8a6a4c" stroke-width="1.5"/>
+</g>
+<circle cx="470" cy="480" r="360" fill="none" stroke="#a9773f" stroke-width="5" stroke-dasharray="14 5"/>
+<ellipse cx="318" cy="664" rx="86" ry="58" fill="#ecd49a" stroke="#b9925a" stroke-width="2"/><rect x="250" y="620" width="136" height="88" fill="none" stroke="#b9925a" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="318" y="669" font-size="13" font-weight="bold" text-anchor="middle" fill="#5b4326">Ranch</text>
+<rect x="213.7" y="371.3" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="238.3" y="371.3" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="262.9" y="371.3" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="213.7" y="395.9" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="238.3" y="395.9" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="262.9" y="395.9" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="213.7" y="420.5" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="238.3" y="420.5" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="262.9" y="420.5" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="287.5" y="371.3" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="312.1" y="371.3" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="336.7" y="371.3" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="287.5" y="395.9" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="312.1" y="395.9" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="336.7" y="395.9" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="287.5" y="420.5" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="312.1" y="420.5" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="336.7" y="420.5" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="213.7" y="445.1" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="238.3" y="445.1" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="262.9" y="445.1" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="287.5" y="445.1" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="312.1" y="445.1" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<rect x="336.7" y="445.1" width="23.4" height="23.4" rx="3" fill="#8a5a36" stroke="#5c3a20" stroke-width="1.5"/>
+<text x="287" y="484.6" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25">Garden (24 beds)</text>
+<circle cx="202" cy="308" r="24" fill="#3f9a4f" stroke="#2c6e3a" stroke-width="2"/>
+<circle cx="702" cy="264" r="24" fill="#3f9a4f" stroke="#2c6e3a" stroke-width="2"/>
+<circle cx="178" cy="528" r="24" fill="#3f9a4f" stroke="#2c6e3a" stroke-width="2"/>
+<circle cx="766" cy="532" r="24" fill="#3f9a4f" stroke="#2c6e3a" stroke-width="2"/>
+<circle cx="198" cy="632" r="24" fill="#3f9a4f" stroke="#2c6e3a" stroke-width="2"/>
+<circle cx="506" cy="764" r="24" fill="#3f9a4f" stroke="#2c6e3a" stroke-width="2"/>
+<circle cx="742.8" cy="662.2" r="12.8" fill="#5fb061"/>
+<circle cx="652.2" cy="752.8" r="12.8" fill="#5fb061"/>
+<circle cx="534" cy="801.6" r="12.8" fill="#5fb061"/>
+<circle cx="406" cy="801.6" r="12.8" fill="#5fb061"/>
+<circle cx="287.8" cy="752.8" r="12.8" fill="#5fb061"/>
+<circle cx="148.4" cy="416" r="12.8" fill="#5fb061"/>
+<circle cx="406" cy="158.4" r="12.8" fill="#5fb061"/>
+<circle cx="534" cy="158.4" r="12.8" fill="#5fb061"/>
+<circle cx="652.2" cy="207.2" r="12.8" fill="#5fb061"/>
+<circle cx="742.8" cy="297.8" r="12.8" fill="#5fb061"/>
+<circle cx="791.6" cy="416" r="12.8" fill="#5fb061"/>
+<circle cx="326" cy="276" r="64" fill="#e9794b" stroke="#3b2f25" stroke-width="2"/>
+<text x="326" y="281" font-size="13" font-weight="bold" text-anchor="middle" fill="#ffffff" >Cottage</text>
+<circle cx="538" cy="428" r="40" fill="#f291a9" stroke="#3b2f25" stroke-width="2"/>
+<text x="538" y="381" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25" stroke="#fbf6ea" stroke-width="3.5" paint-order="stroke">Harvest market</text>
+<circle cx="626" cy="412" r="40" fill="#4fb3c4" stroke="#3b2f25" stroke-width="2"/>
+<text x="626" y="468" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25" stroke="#fbf6ea" stroke-width="3.5" paint-order="stroke">Equipment shop</text>
+<circle cx="418" cy="320" r="20" fill="#b98548" stroke="#3b2f25" stroke-width="2"/>
+<text x="430" y="293" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25" stroke="#fbf6ea" stroke-width="3.5" paint-order="stroke">Storage chest</text>
+<circle cx="602" cy="272" r="30" fill="#8b6fe8" stroke="#3b2f25" stroke-width="2"/>
+<text x="634" y="235" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25" stroke="#fbf6ea" stroke-width="3.5" paint-order="stroke">Energy crystal</text>
+<circle cx="734" cy="372" r="40" fill="#5d7fe0" stroke="#3b2f25" stroke-width="2"/>
+<text x="734" y="325" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25" stroke="#fbf6ea" stroke-width="3.5" paint-order="stroke">Launch pad</text>
+<circle cx="694" cy="620" r="26" fill="#8d8f98" stroke="#3b2f25" stroke-width="2"/>
+<text x="694" y="662" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25" stroke="#fbf6ea" stroke-width="3.5" paint-order="stroke">Workshop</text>
+<circle cx="426" cy="620" r="28" fill="#f0963a" stroke="#3b2f25" stroke-width="2"/>
+<text x="426" y="664" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25" stroke="#fbf6ea" stroke-width="3.5" paint-order="stroke">Kitchen</text>
+<circle cx="522" cy="228" r="28" fill="#ff6a3d" stroke="#3b2f25" stroke-width="2"/>
+<text x="522" y="193" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25" stroke="#fbf6ea" stroke-width="3.5" paint-order="stroke">Ember Well</text>
+<circle cx="586" cy="688" r="72" fill="#58b8ea" stroke="#3b2f25" stroke-width="2"/>
+<text x="586" y="693" font-size="13" font-weight="bold" text-anchor="middle" fill="#ffffff" >Pond</text>
+<text x="574" y="602" font-size="11" text-anchor="start" fill="#5b4326" stroke="#fbf6ea" stroke-width="3" paint-order="stroke">Stepping stones</text>
+<text x="538" y="518" font-size="11" text-anchor="middle" fill="#5b4326" stroke="#fbf6ea" stroke-width="3" paint-order="stroke">Market footbridge</text>
+<text x="178" y="236" font-size="12" font-style="italic" fill="#4d6b2f">Top terrace (+0.9 m)</text><text x="138" y="456" font-size="12" font-style="italic" fill="#3f6a2a" transform="rotate(-90 138 456)"> </text><text x="214" y="560" font-size="12" font-style="italic" fill="#3f6a2a">Middle terrace (+0.45 m)</text><text x="222" y="748" font-size="12" font-style="italic" fill="#2f5a22">Low terrace (0 m)</text><text x="754" y="412" font-size="11" font-style="italic" fill="#4d6b2f">East ledge</text>
+<path d="M326 333l8 9-8 9-8-9z" fill="#ffd84a" stroke="#3b2f25" stroke-width="2"/>
+<rect x="93" y="463" width="34" height="34" rx="6" fill="#edc57a" stroke="#7b5632" stroke-width="3"/><text x="110" y="456" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25">Forest gate</text>
+<rect x="453" y="823" width="34" height="34" rx="6" fill="#edc57a" stroke="#7b5632" stroke-width="3"/><text x="494" y="845" font-size="13" font-weight="bold" text-anchor="start" fill="#3b2f25">Meadow gate</text>
+<rect x="453" y="103" width="34" height="34" rx="6" fill="#edc57a" stroke="#7b5632" stroke-width="3"/><text x="494" y="125" font-size="13" font-weight="bold" text-anchor="start" fill="#3b2f25">Swamp gate</text>
+<rect x="813" y="463" width="34" height="34" rx="6" fill="#edc57a" stroke="#7b5632" stroke-width="3"/><text x="830" y="456" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25">Canyon gate</text>
+<text x="920" y="110" font-size="15" font-weight="bold" fill="#3b2f25">Key</text>
+<circle cx="932" cy="145" r="9" fill="#e9794b" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="150" font-size="13" fill="#3b2f25">Cottage</text>
+<circle cx="932" cy="171" r="9" fill="#f291a9" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="176" font-size="13" fill="#3b2f25">Harvest market</text>
+<circle cx="932" cy="197" r="9" fill="#4fb3c4" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="202" font-size="13" fill="#3b2f25">Equipment shop</text>
+<circle cx="932" cy="223" r="9" fill="#b98548" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="228" font-size="13" fill="#3b2f25">Storage chest</text>
+<circle cx="932" cy="249" r="9" fill="#8b6fe8" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="254" font-size="13" fill="#3b2f25">Energy crystal</text>
+<circle cx="932" cy="275" r="9" fill="#5d7fe0" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="280" font-size="13" fill="#3b2f25">Launch pad</text>
+<circle cx="932" cy="301" r="9" fill="#8d8f98" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="306" font-size="13" fill="#3b2f25">Workshop</text>
+<circle cx="932" cy="327" r="9" fill="#f0963a" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="332" font-size="13" fill="#3b2f25">Kitchen</text>
+<circle cx="932" cy="353" r="9" fill="#ff6a3d" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="358" font-size="13" fill="#3b2f25">Ember Well</text>
+<circle cx="932" cy="379" r="9" fill="#58b8ea" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="384" font-size="13" fill="#3b2f25">Pond</text>
+<rect x="924" y="397" width="16" height="16" rx="3" fill="#8a5a36" stroke="#5c3a20"/>
+<text x="954" y="410" font-size="13" fill="#3b2f25">Garden bed</text>
+<ellipse cx="932" cy="431" rx="11" ry="7" fill="#ecd49a" stroke="#b9925a"/>
+<text x="954" y="436" font-size="13" fill="#3b2f25">Ranch yard</text>
+<circle cx="932" cy="457" r="9" fill="#3f9a4f" stroke="#2c6e3a"/>
+<text x="954" y="462" font-size="13" fill="#3b2f25">Tree</text>
+<path d="M921 483h22" stroke="#ead7a4" stroke-width="9" stroke-linecap="round"/>
+<text x="954" y="488" font-size="13" fill="#3b2f25">Path to a gate</text>
+<path d="M921 509h22" stroke="#58b8ea" stroke-width="9" stroke-linecap="round"/>
+<text x="954" y="514" font-size="13" fill="#3b2f25">Ember spill (water)</text>
+<circle cx="932" cy="535" r="9" fill="#c99862" stroke="#7b5632"/>
+<text x="954" y="540" font-size="13" fill="#3b2f25">Bridge or crossing</text>
+<path d="M921 561h22" stroke="#8a6a4c" stroke-width="5"/>
+<text x="954" y="566" font-size="13" fill="#3b2f25">Terrace wall (0.45 m)</text>
+<rect x="922" y="580" width="20" height="14" fill="#f1e2bd" stroke="#8a6a4c"/>
+<text x="954" y="592" font-size="13" fill="#3b2f25">Stair</text>
+<path d="M932 604l8 9-8 9-8-9z" fill="#ffd84a" stroke="#3b2f25" stroke-width="1.5"/>
+<text x="954" y="618" font-size="13" fill="#3b2f25">Where the player starts</text>
+<rect x="923" y="630" width="18" height="18" rx="4" fill="#edc57a" stroke="#7b5632" stroke-width="2"/>
+<text x="954" y="644" font-size="13" fill="#3b2f25">Gate (not moved)</text>
+<circle cx="932" cy="665" r="9" fill="none" stroke="#a9773f" stroke-width="3" stroke-dasharray="5 3"/>
+<text x="954" y="670" font-size="13" fill="#3b2f25">Fence, 18 m radius</text>
+<path d="M920 830h100" stroke="#3b2f25" stroke-width="3"/><path d="M920 824v12M1020 824v12" stroke="#3b2f25" stroke-width="2"/><text x="970" y="820" font-size="12" text-anchor="middle" fill="#3b2f25">5 m</text>
+<path d="M1100 840v-44m-9 12l9-14 9 14" fill="none" stroke="#3b2f25" stroke-width="3"/><text x="1100" y="790" font-size="13" font-weight="bold" text-anchor="middle" fill="#3b2f25">N</text>
+<text x="470" y="886" font-size="12" text-anchor="middle" fill="#6b5a4a">Camera side (south)</text>
+</svg>
