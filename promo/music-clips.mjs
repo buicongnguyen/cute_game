@@ -75,35 +75,36 @@ async function measure({ clips, quick }) {
   const { installMix } = await import('/src/features/sound-mix.ts');
   const { installStingers } = await import('/src/features/stingers.ts');
   const { audioLevels } = await import('/src/audio-settings.ts');
-  const { HOME_ZONES } = await import('/src/features/music-content.ts');
-  // The tunes and the player are taken from the director's own module: after an edit a dev server may hand this page a
-  // second copy of a module, and a change made to that copy would not reach the director.
-  const { Director, newScene, FADE, MUSIC, Player } = await import('/src/features/music-director.ts');
+  const { MUSIC, HOME_ZONES } = await import('/src/features/music-content.ts');
+  const { Director, newScene, FADE } = await import('/src/features/music-director.ts');
   const DRUM = 3, HAT = 4;
   const RATE = 48000, LEAD = .5, dB = v => v > 1e-6 ? 20 * Math.log10(v) : -120, round = v => Math.round(v * 10) / 10;
   const seeded = seed => () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   // Every note the players begin, for the session table: [time, kind].
   // Nothing may be taken out of an offline graph: a deck that is closed during the planning would be silent from the start.
   Director.prototype.close = () => {};
-  let begun = []; const play = Player.prototype.play; Player.prototype.play = function (note, at) { begun.push([at, note.kind]); return play.call(this, note, at); };
+  // The player's own play() is wrapped as soon as the first player exists (its class is taken from the director's deck, not imported: after an edit a dev server may hand a page two copies of a module).
+  let begun = [], wrapped = false;
+  const wrap = director => { const player = director.decks.find(d => d.player)?.player; if (!player) return; const proto = Object.getPrototypeOf(player), play = proto.play; proto.play = function (note, at) { begun.push([at, note.kind]); return play.call(this, note, at); }; wrapped = true; };
 
   /**
    * One offline render of `seconds` of the director through a fresh graph. Everything is planned before the render starts:
    * the game reads the context's clock, so the loop sets the clock the game sees, ten times a second as mount() does.
-   * `script`: [seconds, step(scene, sfx, director)] in time order. Times count from LEAD (Chromium's compressor fades in
+   * `script`: [seconds, step(scene, sfx, director)] in time order. `rests`: the village rests as in the game (otherwise a tune plays on). Times count from LEAD (Chromium's compressor fades in
    * over its first 50 ms or so; promo/loudness.mjs has the story).
    */
-  async function session(seconds, script, { lite = false, live = true, theme = null, sfxLevel = .8, musicLevel = .45, seed = 1 } = {}) {
+  async function session(seconds, script, { lite = false, live = true, theme = null, rests = false, sfxLevel = .8, musicLevel = .45, seed = 1 } = {}) {
     const real = new OfflineAudioContext(1, Math.ceil(RATE * (seconds + LEAD)), RATE); let clock = 0;
     const ctx = new Proxy(real, { get(target, key) { if (key === 'currentTime') return clock; const v = target[key]; return typeof v === 'function' ? v.bind(target) : v; } });
     const sfx = new Sfx(() => ctx); sfx.random = seeded(seed); sfx.volume = sfxLevel; installMix(sfx.graph); installStingers(sfx.graph, () => {});
     audioLevels.music = musicLevel;
-    const director = new Director(sfx.graph, lite, seed), scene = newScene(), log = []; director.live = live; director.theme = theme; begun = [];
+    const director = new Director(sfx.graph, lite, seed), scene = newScene(), log = []; director.can = live; director.theme = theme; begun = [];
     let next = 0;
     for (let i = 0; i <= Math.floor(seconds * 10); i++) {
       clock = LEAD + i / 10;
       while (next < script.length && script[next][0] <= i / 10 + 1e-9) script[next++][1](scene, sfx, director);
-      director.tick(scene); if (i % 10 === 0) log.push({ t: i / 10, state: director.name, plays: director.resting ? '(rest)' : director.key ? director.cur?.src ? 'theme' : director.key : '-' });
+      director.tick(scene); if (!wrapped) wrap(director); if (!rests && director.cur?.player) director.until = director.cur.until = Infinity;
+      if (i % 10 === 0) log.push({ t: i / 10, state: director.name, plays: director.resting ? '(rest)' : director.key ? director.cur?.src ? 'theme' : director.key : '-' });
     }
     const data = (await real.startRendering()).getChannelData(0).subarray(Math.round(RATE * LEAD));
     for (const row of log) { let notes = 0, drums = 0; for (const [at, kind] of begun) if (at - LEAD >= row.t && at - LEAD < row.t + 1) { notes++; if (kind === DRUM || kind === HAT) drums++; } row.notes = notes; row.drums = drums; }
@@ -140,8 +141,7 @@ async function measure({ clips, quick }) {
   let theme = null;
   try { const bytes = await (await fetch('/assets/' + MUSIC.village.file)).arrayBuffer(); theme = await new OfflineAudioContext(2, 1, RATE).decodeAudioData(bytes); } catch { /* no theme: compared with nothing */ }
 
-  // 1. Every tune alone: 30 s of it, after its fade in. The village plays two phrases and rests: let it play on here.
-  const rest = MUSIC.village.rest; MUSIC.village.rest = undefined;
+  // 1. Every tune alone: 30 s of it, after its fade in.
   const out = { tunes: {}, layers: {}, mix: {}, theme: null, themeFacts: theme ? { seconds: round(theme.duration), channels: theme.numberOfChannels, megabytes: round(theme.length * theme.numberOfChannels * 4 / 1048576) } : null };
   const WINDOW = [FADE + .7, FADE + 30.7];
   if (theme) out.theme = facts((await session(33, [[0, s => place(s, 'village')]], { live: false, theme })).data, ...WINDOW);
@@ -160,32 +160,29 @@ async function measure({ clips, quick }) {
     const fight = top => { const script = [[0, s => place(s, 'boss')]]; for (let i = 0; i < 66; i++) script.push([4 + Math.round(i * .45) / 10, (s, sfx) => { for (let k = 0; k < 2; k++) sfx.play(brawl[(i * 2 + k) % brawl.length]); }]); script.push([5.5, (s, sfx) => sfx.play('power')], [6.4, (s, sfx) => { sfx.play('level'); sfx.play('victory'); }]); script.sort((a, b) => a[0] - b[0]); return session(9, script, top ? { sfxLevel: 1, musicLevel: 1, seed: 11 } : { seed: 11 }); };
     out.mix.brawlTop = round(peakOf((await fight(true)).data)); out.mix.brawl = round(peakOf((await fight(false)).data));
   }
-  MUSIC.village.rest = rest;
   // 4. A session, with the director as the game runs it (the village rests).
   if (!quick) {
     const script = [
       [0, s => place(s, 'village')],
-      [20, s => place(s, 'forest')],
+      [20, s => place(s, 'forest')], // the new place must hold 1.5 s before its tune takes over
       [30, (s, sfx, d) => { d.theme = theme; }], // the theme has come
       [40, s => { s.chase = true; }], [52, s => { s.chase = false; }],
       [62, s => { s.boss = true; }], [80, (s, sfx) => { s.boss = false; sfx.play('victory'); }],
       [92, s => place(s, 'village')],
       [280, s => { s.indoors = true; }], [284, s => { s.radio = true; }], [290, s => { s.radio = false; s.indoors = false; }],
     ];
-    const { data, log } = await session(300, script);
+    const { data, log } = await session(300, script, { rests: true });
     out.session = log.map(row => ({ ...row, rms: round(rmsOf(data, row.t, row.t + 1)), air: round(airOf(data, row.t, row.t + 1)) }));
   }
   // The clips.
   if (clips && !quick) {
     const pcm = d => { const bytes = new Uint8Array(d.length * 2), view = new DataView(bytes.buffer); for (let i = 0; i < d.length; i++) view.setInt16(i * 2, Math.max(-32768, Math.min(32767, Math.round(d[i] * 32767))), true); let text = ''; for (let i = 0; i < bytes.length; i += 32768) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768)); return btoa(text); };
-    MUSIC.village.rest = undefined; out.clips = {};
+    out.clips = {};
     for (const id of ['village', 'forest', 'boss']) out.clips[id] = pcm((await session(20, [[0, s => place(s, id)]])).data);
     out.clips.danger = pcm((await session(20, [[0, s => place(s, 'forest')], [5, s => { s.chase = true; }], [16, s => { s.chase = false; }]])).data);
     if (theme) out.clips.theme = pcm((await session(20, [[0, s => place(s, 'village')]], { live: false, theme })).data);
     out.clips['village-2min'] = pcm((await session(120, [[0, s => place(s, 'village')]])).data);
-    MUSIC.village.rest = rest;
   }
-  Player.prototype.play = play;
   return out;
 }
 

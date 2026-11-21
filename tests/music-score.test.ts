@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Voices, TOUCH_VOICES } from '../src/sfx.ts';
 import { MUSIC, type Tune } from '../src/features/music-content.ts';
-import { Score, Player, scoreBus, stats, AHEAD, SCORE_VOICES, TOUCH_SCORE, ECHO, MAR, BASS, PAD, DRUM, HAT } from '../src/features/music-score.ts';
+import { Score, Player, scoreBus, seeded, AHEAD, SCORE_VOICES, TOUCH_SCORE, FLOOR, ECHO, MAR, BASS, PAD, DRUM, HAT } from '../src/features/music-score.ts';
 import { signatures } from '../promo/music-clips.mjs';
 import { FakeContext, type FakeNode } from './support/fake-audio.ts';
 
@@ -121,17 +121,17 @@ test('the touch budget: at most 6 score voices at once, no pad, one oscillator a
     for (const n of made) { const at = n.starts[0]; let live = 0; for (const m of made) if (m.starts[0] <= at && m.stops[0] - .03 - 1e-6 > at) live++; assert.ok(live <= TOUCH_SCORE, `${id}: ${live} voices at ${at.toFixed(2)}`); }
     assert.equal(ctx.nodes.filter(n => n.kind === 'gain').length, made.length + 2, `${id}: one envelope a note (and the player's two gains)`);
   }
-  assert.equal(TOUCH_SCORE, TOUCH_VOICES, 'the same six as the effects have');
+  assert.equal(TOUCH_SCORE, 6); assert.equal(seeded(5)(), seeded(5)()); assert.notEqual(seeded(5)(), seeded(6)());
   // A desktop plays the pad and the mallet's partial, inside its own count.
   const ctx = ctxOf(), player = playerOf(ctx, MUSIC.village);
   for (let i = 0; i < 300; i++) { ctx.currentTime = i / 10; player.pass(ctx.currentTime); }
   assert.ok(sources(ctx).some(n => n.wave), 'the pad plays on a desktop');
 });
 
-test('the score never takes a voice from the effects, and on a touch device it makes room for them', () => {
+test('the score never takes a voice from the effects; on a touch device it makes room for them, down to a floor of two voices', () => {
+  assert.equal(FLOOR, 2);
   const run = (busy: number) => {
     const ctx = ctxOf(), player = playerOf(ctx, MUSIC.boss, true), effects = new Voices(TOUCH_VOICES + 2, 2);
-    const skipped = stats.skipped;
     for (let i = 0; i < 300; i++) {
       ctx.currentTime = i / 10;
       while (effects.live(ctx.currentTime) < busy) assert.ok(effects.take(ctx.currentTime, ctx.currentTime + .3)); // a fight keeps `busy` effect voices sounding
@@ -139,16 +139,17 @@ test('the score never takes a voice from the effects, and on a touch device it m
     }
     const made = sources(ctx); let most = 0;
     for (const n of made) { const at = n.starts[0]; let live = 0; for (const m of made) if (m.starts[0] <= at && m.stops[0] - .03 - 1e-6 > at) live++; most = Math.max(most, live); }
-    return { most, notes: made.length, capped: effects.capped, skipped: stats.skipped - skipped };
+    const drums = made.filter(n => (n.to[0] as FakeNode).to[0] === player.drums || ((n.to[0] as FakeNode).to[0] as FakeNode).kind === 'filter').length;
+    return { most, notes: made.length, drums, capped: effects.capped };
   };
-  const free = run(0), fight = run(4), full = run(6);
-  assert.ok(free.most <= 6 && fight.most <= 2, `with 4 effect voices the score keeps to 2 (it had ${fight.most})`);
+  const free = run(0), fight = run(4), full = run(8);
+  assert.ok(free.most <= 6 && free.most > 2); assert.ok(fight.most <= 2, `with 4 effect voices the score keeps to 2 (it had ${fight.most})`);
   assert.ok(fight.notes > 0 && fight.notes < free.notes, 'it thins out, it does not stop');
-  assert.equal(full.notes, 0, 'and with the effects at their six it waits');
+  // The fullest fight a phone plays (all 8 ordinary voices): two voices are still the score's, and they are the beat and the bass.
+  assert.equal(full.most, 2); assert.ok(full.drums >= free.drums * .6, `the boss beat stays (${full.drums} of ${free.drums} strokes)`);
   for (const r of [free, fight, full]) assert.equal(r.capped, 0, 'no effect was ever refused for the music');
-  // In a thinned step the beat and the bass are what stays: they are written first.
   const score = new Score(MUSIC.boss, 1, true); score.next();
-  assert.ok(score.notes[0].kind === DRUM && [DRUM, HAT, BASS].includes(score.notes[1].kind));
+  assert.ok(score.notes[0].kind === DRUM && [DRUM, HAT, BASS].includes(score.notes[1].kind), 'they are written first');
 });
 
 test('the instruments: every envelope starts at 0, ends before its source stops, and the echoes are the theme\'s', () => {

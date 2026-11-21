@@ -12,7 +12,8 @@
  * - Voices: the score counts its own (SCORE_VOICES on a desktop, TOUCH_SCORE on a touch device, where it also leaves
  *   out the pad and each marimba note's upper partial). It never takes from the effects' counter (sfx.ts Voices), so
  *   music cannot make an effect or a priority cue fail; on a touch device it also steps back while effects sound:
- *   a note is left out when the score's voices and the effects' together would pass TOUCH_SCORE.
+ *   a note is left out when the score's voices and the effects' together would pass TOUCH_SCORE, but two voices are
+ *   always the score's (FLOOR), so the beat and the bass stay under the fullest fight.
  *
  * This file imports sfx.ts for types only.
  */
@@ -23,14 +24,16 @@ import { MUSIC, type Tune } from './music-content.ts';
 export const AHEAD = .2;
 /** The score's voices at once: on a desktop, and on a touch device. */
 export const SCORE_VOICES = 14, TOUCH_SCORE = 6;
+/** Voices the score keeps on a touch device however many effects sound. */
+export const FLOOR = 2;
 /** The score's level into the music bus (promo/music-clips.mjs measures it against the theme). */
 export const LEVEL = 1.1;
 /** The theme's three echoes (promo/music.py): seconds and level. */
 export const ECHO = [[.23, .28], [.41, .18], [.67, .1]] as const;
 export const MAR = 0, BASS = 1, PAD = 2, DRUM = 3, HAT = 4;
 export interface Note { kind: number; f: number; len: number; amp: number }
-/** Counters for the browser probe: notes played, audio nodes made for them, notes left out for want of a voice. */
-export const stats = { notes: 0, nodes: 0, skipped: 0 };
+/** mulberry32: a generator of numbers from 0 to 1 that gives the same row for the same seed. */
+export const seeded = (seed: number) => () => { let t = seed = seed + 0x6D2B79F5 | 0; t = Math.imul(t ^ t >>> 15, 1 | t); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
 const MAJOR = [0, 2, 4, 5, 7, 9, 11], FIVE = [[0, 1, 2, 4, 5], [0, 2, 3, 4, 6]], MINOR = [0, 1, 1, 0, 0, 1], WALK = [-2, -1, -1, 0, 1, 1, 2], LEAD_AT = [0, -1, -1, 1, 2, -1, -1, 3];
 const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
@@ -44,15 +47,13 @@ export class Score {
   /** Seconds per beat. */
   readonly beat: number;
   readonly tune: Tune; readonly lite: boolean;
-  private seed: number; private scale: number[]; private order: number[] = []; private left = 0;
+  private random: () => number; private scale: number[]; private order: number[] = []; private left = 0;
   private arr = 0; private motif = [5, 5, 5, 5];
   constructor(tune: Tune, seed = 1, lite = false) {
-    this.tune = tune; this.lite = lite; this.seed = seed >>> 0; this.beat = 60 / (tune.bpm ?? 100);
+    this.tune = tune; this.lite = lite; this.random = seeded(seed); this.beat = 60 / (tune.bpm ?? 100);
     const m = tune.mode ?? 0; this.scale = MAJOR.map((_, i) => (MAJOR[(i + m) % 7] - MAJOR[m] + 12) % 12);
     for (let i = 0; i < (tune.progs?.length ?? 0); i++) this.order.push(i);
   }
-  /** mulberry32. */
-  private random() { let t = this.seed = this.seed + 0x6D2B79F5 | 0; t = Math.imul(t ^ t >>> 15, 1 | t); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
   /** The MIDI note of a scale degree (0 = the key; below 0 and above 6 are the octaves around it). */
   private midi(degree: number) { return this.tune.key! + 12 * Math.floor(degree / 7) + this.scale[(degree % 7 + 7) % 7]; }
   private add(kind: number, f: number, len: number, amp: number) { const note = this.notes[this.n]; if (!note) return; note.kind = kind; note.f = f; note.len = len; note.amp = amp; this.n++; }
@@ -127,10 +128,10 @@ export class Player {
   readonly out: GainNode; readonly drums: GainNode; readonly score: Score;
   /** When the next step sounds, on the audio clock (below 0: not started). */
   at = -1;
-  private ctx: BaseAudioContext; private hats: AudioNode; private ends: Float64Array; private level: number;
-  /** `ends` is the score's voice counter (when each voice ends), shared by the players of one director. */
+  private ctx: BaseAudioContext; private hats: AudioNode; private ends: Float64Array; private level: number; private cap: number;
+  /** `ends` is the score's voice counter (when each voice ends), shared by the players of one director; a `lite` player uses TOUCH_SCORE of it. */
   constructor(ctx: BaseAudioContext, to: AudioNode, tune: Tune, seed: number, lite: boolean, ends: Float64Array) {
-    this.ctx = ctx; this.ends = ends; this.score = new Score(tune, seed, lite); this.level = LEVEL * (tune.gain ?? 1);
+    this.ctx = ctx; this.ends = ends; this.cap = lite ? Math.min(TOUCH_SCORE, ends.length) : ends.length; this.score = new Score(tune, seed, lite); this.level = LEVEL * (tune.gain ?? 1);
     this.out = ctx.createGain(); this.out.gain.value = 0; this.out.connect(to);
     this.drums = ctx.createGain(); this.drums.gain.value = tune.beat ? 1 : 0; this.drums.connect(this.out);
     const high = ctx.createBiquadFilter(); high.type = 'highpass'; high.frequency.value = 6500; high.connect(this.drums); this.hats = high;
@@ -143,8 +144,8 @@ export class Player {
     if (this.at < now + .01) this.at = now + .06; // the first step, or back after a stall: from now, with nothing to catch up
     const score = this.score, eighth = score.beat / 2, swing = score.tune.swing ?? 0;
     for (let guard = 0; this.at <= now + AHEAD && guard < 4; guard++) {
-      const at = this.at, odd = score.step & 1, n = score.next(drums), room = this.ends.length - (effects ? effects.live(now) : 0);
-      for (let i = 0; i < n; i++) { const note = score.notes[i]; if (this.take(at, at + note.len, room)) this.play(note, at); else stats.skipped++; }
+      const at = this.at, odd = score.step & 1, n = score.next(drums), room = effects ? Math.max(FLOOR, this.cap - effects.live(now)) : this.cap;
+      for (let i = 0; i < n; i++) { const note = score.notes[i]; if (this.take(at, at + note.len, room)) this.play(note, at); }
       this.at = at + eighth * (odd ? 1 - swing : 1 + swing);
     }
   }
@@ -158,7 +159,7 @@ export class Player {
   private play(note: Note, at: number) {
     const ctx = this.ctx, env = ctx.createGain(), g = env.gain, amp = note.amp * this.level, end = at + note.len, kind = note.kind;
     // The envelope is 0 until its source starts (sfx.ts: a new gain is 1, which would let one sample through).
-    g.value = 0; g.setValueAtTime(amp, at); stats.notes++; stats.nodes += 2;
+    g.value = 0; g.setValueAtTime(amp, at);
     if (kind === HAT) {
       const src = ctx.createBufferSource(); src.buffer = kit(ctx).noise;
       g.exponentialRampToValueAtTime(.0008, end); src.connect(env); env.connect(this.hats); src.start(at); src.stop(end + .02); return;
@@ -172,7 +173,7 @@ export class Player {
       g.setTargetAtTime(0, at, kind === BASS ? 1 / 3.2 : 1 / 5.5); g.setTargetAtTime(0, end - .05, .012);
       if (kind === MAR && !this.score.lite) { // the mallet: the fourth partial, gone in a tenth of a second
         const top = ctx.createOscillator(), click = ctx.createGain(); top.frequency.value = note.f * 4; click.gain.value = 0; click.gain.setValueAtTime(.35, at); click.gain.setTargetAtTime(0, at, .04);
-        top.connect(click); click.connect(env); top.start(at); top.stop(end + .03); stats.nodes += 2;
+        top.connect(click); click.connect(env); top.start(at); top.stop(end + .03);
       }
     }
     osc.connect(env); env.connect(kind === DRUM ? this.drums : this.out); osc.start(at); osc.stop(end + .03);

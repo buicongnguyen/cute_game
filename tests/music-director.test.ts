@@ -9,7 +9,7 @@ import { ZONE_NAMES } from '../src/minimap.ts';
 import { installMix, settle } from '../src/features/sound-mix.ts';
 import { installStingers, STINGER, STINGER_DUCK } from '../src/features/stingers.ts';
 import { MUSIC, HOME_ZONES, MODES, THEME_ONLY } from '../src/features/music-content.ts';
-import { Director, Held, mount, newScene, stateOf, regionOf, fadeLevel, FADE, HOLD, REACH, CUT, THEME_WAIT, TRIM, type Scene } from '../src/features/music-director.ts';
+import { Director, Held, mount, newScene, stateOf, regionOf, fadeLevel, FADE, HOLD, BOSS_HOLD, SETTLE, LINGER, THEME_GAP, REACH, CUT, THEME_WAIT, TRIM, type Scene } from '../src/features/music-director.ts';
 import { MusicBox } from '../src/features/radio.ts';
 import { fresh, node, type FakeContext, type FakeNode } from './support/fake-audio.ts';
 
@@ -63,29 +63,29 @@ test('every planet, every zone of the home planet and every mode has an entry', 
 test('a crossfade is equal-power: the squares of the gains add up to 1 +/- 0.01 over 1.8 s', () => {
   assert.equal(FADE, 1.8);
   const { director, run, ctx } = stage(), s = scene({ zone: 'Redrock Canyon' });
-  run(s, 5); s.zone = 'Mushroom Forest'; const t0 = ctx.currentTime; run(s, .1);
+  run(s, 5); s.zone = 'Mushroom Forest'; run(s, SETTLE); const t0 = ctx.currentTime; run(s, .1); // the new place has held 1.5 s
   assert.equal(director.decks.length, 2);
   const [canyon, forest] = director.decks;
   for (let t = t0; t <= t0 + FADE + 1e-9; t += .03) { const sum = gainAt(canyon, t) ** 2 + gainAt(forest, t) ** 2; assert.ok(Math.abs(sum - 1) <= .01, `at ${(t - t0).toFixed(2)} s the squares add up to ${sum}`); }
   assert.ok(gainAt(canyon, t0 + FADE) < 1e-9 && Math.abs(gainAt(forest, t0 + FADE) - 1) < 1e-9 && gainAt(forest, t0) < 1e-9, 'from one to the other in 1.8 s');
   assert.ok(gainAt(forest, t0 + .9) > .7 && gainAt(canyon, t0 + .9) > .7, 'both at -3 dB in the middle, not at -6');
   // A change in the middle of a crossfade starts from where every deck is: three decks, and still 1.
-  run(s, .6); s.zone = 'Blue Lake Meadow'; const t1 = ctx.currentTime; run(s, .1);
+  run(s, .6); s.boss = true; const t1 = ctx.currentTime; run(s, .1);
   assert.equal(director.decks.length, 3);
   for (let t = t1; t <= t1 + FADE + 1e-9; t += .03) { const sum = director.decks.reduce((a, d) => a + gainAt(d, t) ** 2, 0); assert.ok(Math.abs(sum - 1) <= .01, `three decks at ${(t - t1).toFixed(2)} s: ${sum}`); }
   // No gain is ever stepped while it plays, and the model the director keeps matches the gain that was planned.
   for (const d of director.decks) { assert.equal(node(d.gain).gain.steps, 1, 'only the first 0'); assert.ok(Math.abs(director.levelOf(d, t1 + 1) - gainAt(d, t1 + 1)) < .005); }
-  run(s, 4); assert.equal(director.decks.length, 1, 'the decks that faded out are taken away');
+  run(s, FADE + LINGER + .3); assert.equal(director.decks.length, 1, 'the decks that faded out are taken away, once they can no longer come back');
   assert.equal(node(canyon.gain).to.length, 0, 'and disconnected');
   for (const x of [0, .25, .5, .75, 1]) assert.ok(Math.abs(fadeLevel(1, false, x) ** 2 + fadeLevel(0, true, x) ** 2 - 1) < 1e-12);
 });
 
-test('walking into Mushroom Forest crossfades within 2 s, and the music is there within 3 s of the first tick', () => {
+test('walking into Mushroom Forest: once the place has held 1.5 s the crossfade takes 1.8 s; the music is there within 3 s of the first tick', () => {
   const { director, run, ctx } = stage(), s = scene({ zone: 'Clover Village' });
   run(s, .2);
   const first = sources(ctx)[0]; assert.ok(first && first.starts[0] < .3, 'the first note within 0.3 s');
   assert.ok(director.levelOf(director.cur!, 1.8) > .99, 'and at full level within 1.8 s');
-  run(s, 6); s.zone = 'Mushroom Forest'; const t0 = ctx.currentTime; run(s, 2);
+  run(s, 6); s.zone = 'Mushroom Forest'; run(s, SETTLE); assert.equal(director.key, 'village', 'not yet'); const t0 = ctx.currentTime; run(s, 2);
   assert.equal(director.key, 'forest'); assert.equal(director.cur!.player!.score.tune, MUSIC.forest);
   assert.ok(gainAt(director.cur!, t0 + 2) > .999 && gainAt(director.decks[0], t0 + 2) < .001);
   assert.ok(sources(ctx).some(n => n.starts[0] > t0 && n.starts[0] < t0 + .3), 'its first note within 0.3 s');
@@ -121,7 +121,14 @@ test('a boss brings its own beat within 1 s of the boss bar, and the place comes
   const strokes = sources(ctx).filter(n => n.starts[0] >= t0 && ((n.to[0] as FakeNode).to[0] === drums || ((n.to[0] as FakeNode).to[0] as FakeNode).kind === 'filter'));
   assert.ok(strokes.length >= 4 && strokes[0].starts[0] < t0 + .3, 'the first stroke within 0.3 s');
   assert.ok(gainAt(director.cur!, t0 + 1) > .7, `and the boss tune is at ${gainAt(director.cur!, t0 + 1).toFixed(2)} of its level after 1 s`);
-  s.boss = false; run(s, 1.4); assert.equal(director.name, 'boss'); run(s, .3); assert.equal(director.name, 'forest'); assert.equal(director.key, 'forest');
+  assert.ok(BOSS_HOLD >= FADE, 'a boss lasts longer than a fade');
+  const forest = director.decks[0], bossDeck = director.cur!;
+  s.boss = false; run(s, BOSS_HOLD - .1); assert.equal(director.name, 'boss'); run(s, .3); assert.equal(director.name, 'forest'); assert.equal(director.key, 'forest');
+  assert.equal(director.cur, forest, 'the tune of the place comes back from where it is: it was never taken away'); assert.equal(director.made, 2);
+  // Kited at the edge of its reach: the boss comes and goes every 2.5 s. Its tune is faded up again each time, never started from its first bar.
+  const step = bossDeck.player!.score.step;
+  for (let i = 0; i < 6; i++) { s.boss = i % 2 === 0; run(s, 2.5); }
+  s.boss = true; run(s, .2); assert.equal(director.cur, bossDeck); assert.equal(director.made, 2, 'no new deck in 15 s of kiting'); assert.ok(bossDeck.player!.score.step > step + 30, 'and it played on unheard meanwhile');
 });
 
 test('the village rests: a tune of two phrases, 60 to 120 s of quiet, then a variation; the wild plays on', () => {
@@ -137,33 +144,86 @@ test('the village rests: a tune of two phrases, 60 to 120 s of quiet, then a var
   const wild = stage(), w = scene({ zone: 'Redrock Canyon' }); wild.run(w, 200); assert.equal(wild.director.resting, false); assert.equal(wild.director.until, Infinity);
 });
 
-test('the theme: once on each arrival in the village when it is there, the live score for the variations', () => {
+test('the theme: on an arrival in the village when it is there, not twice in three minutes; the live score plays the variations', () => {
   const { director, run, ctx } = stage(), s = scene({ zone: 'Mushroom Forest' });
   director.theme = THEME; run(s, 3); assert.ok(director.cur?.player, 'the forest has no recording: the live score');
-  s.zone = 'Clover Village'; const t0 = ctx.currentTime; run(s, 1);
+  s.zone = 'Clover Village'; run(s, SETTLE); const t0 = ctx.currentTime; run(s, 1);
   const deck = director.cur!, src = node(deck.src!);
   assert.ok(src && !deck.player, 'the theme plays'); assert.equal(src.buffer, THEME); assert.ok(src.starts[0] < t0 + .2);
   // It goes through the director's trim into the music bus, like the radio: no element, no element volume.
   const trim = node(deck.gain).to[0] as FakeNode; assert.equal(trim.gain.value, TRIM); assert.equal(TRIM, MusicBox.TRIM);
   assert.equal(trim.to[0], director['graph'].nodes.music!.bus);
-  run(s, 37); assert.equal(director.resting, true, 'once, then the rest');
-  run(s, director.until - ctx.currentTime + .2); assert.ok(director.cur?.player, 'then a variation by the live score');
   assert.ok(ctx.nodes.every(n => n.kind !== 'media'), 'no media element is routed: the theme is a decoded buffer');
+  // Out of the gate and back in ten seconds: the same theme is faded up again where it is, not started anew.
+  s.zone = 'Blue Lake Meadow'; run(s, SETTLE + 3); assert.equal(director.key, 'meadow'); s.zone = 'Clover Village'; run(s, SETTLE + .2);
+  assert.equal(director.cur, deck); assert.equal(src.starts.length, 1);
+  run(s, 37.3 - (ctx.currentTime - t0)); assert.equal(director.resting, true, 'once, then the rest');
+  run(s, director.until - ctx.currentTime + .2); assert.ok(director.cur?.player, 'then a variation by the live score');
+  // Away for ten seconds and back: it played less than three minutes ago, so a live variation greets the village.
+  assert.equal(THEME_GAP, 180);
+  s.zone = 'Blue Lake Meadow'; run(s, 10); s.zone = 'Clover Village'; run(s, SETTLE + .2); assert.equal(director.key, 'village'); assert.ok(director.cur?.player && !director.cur.src);
+  // After more than three minutes away it is the theme again.
+  s.zone = 'Blue Lake Meadow'; run(s, 200); s.zone = 'Clover Village'; run(s, SETTLE + .2); assert.ok(director.cur?.src); assert.equal(ctx.nodes.filter(n => n.kind === 'buffer' && n.buffer === THEME).length, 2);
 });
 
-test('theme only (below Sharp, Battery saver, the flag): no live score anywhere; the theme plays and rests', () => {
+test('a walk along a border changes nothing, and a diagonal across the village ring makes two decks, not twenty', () => {
+  assert.equal(SETTLE, 1.5);
+  // In and out of the forest every 0.8 s for 20 s: the village plays on.
+  const a = stage(), s = scene({ zone: 'Clover Village' }); a.run(s, 3); const village = a.director.cur;
+  for (let i = 0; i < 25; i++) { s.zone = i % 2 ? 'Clover Village' : 'Mushroom Forest'; a.run(s, .8); }
+  assert.equal(a.director.made, 1); assert.equal(a.director.cur, village); assert.equal(a.director.key, 'village'); assert.equal(a.director.decks.length, 1);
+  // A slower weave, 2.5 s on each side for 20 s: each tune is faded up again where it is.
+  const b = stage(), w = scene({ zone: 'Clover Village' }); b.run(w, 3); let most = 0;
+  for (let i = 0; i < 8; i++) { w.zone = i % 2 ? 'Clover Village' : 'Blue Lake Meadow'; b.run(w, 2.5); most = Math.max(most, b.director.decks.length); }
+  assert.equal(b.director.made, 2, 'two decks in 20 s'); assert.ok(most <= 2);
+  // The same with the theme in the village: it is never started again.
+  const c = stage(), v = scene({ zone: 'Clover Village' }); c.director.theme = THEME; c.run(v, 3); assert.ok(c.director.cur?.src);
+  for (let i = 0; i < 8; i++) { v.zone = i % 2 ? 'Clover Village' : 'Mushroom Forest'; c.run(v, 2.5); }
+  assert.equal(c.ctx.nodes.filter(n => n.kind === 'buffer' && n.buffer === THEME).length, 1, 'the theme began once'); assert.equal(c.director.made, 2);
+  // Through four places with three seconds in each: never more than three decks.
+  const d = stage(), x = scene({ zone: 'Clover Village' }); let decks = 0;
+  for (const zone of ['Mushroom Forest', 'Chomper Swamp', 'Redrock Canyon', 'Blue Lake Meadow', 'Clover Village', 'Mushroom Forest']) { x.zone = zone; for (let i = 0; i < 30; i++) { d.run(x, .1); decks = Math.max(decks, d.director.decks.length); } }
+  assert.ok(decks <= 3, `${decks} decks at once`);
+});
+
+test('theme only (below Sharp, Battery saver, the switch): the theme plays and rests; until it is there the live score stands in, lightly', () => {
+  for (const zone of ['Clover Village', 'Mushroom Forest']) { // Battery saver and medium alike: `can` is false
+    const { director, run, ctx } = stage(), s = scene({ zone });
+    director.can = false; run(s, 3);
+    assert.equal(director.mode, 'lite'); assert.equal(director.key, regionOf(s) + '~');
+    const made = sources(ctx); assert.ok(made.length > 3 && made[0].starts[0] < .3, 'not silent: the first note within 0.3 s');
+    assert.ok(director.levelOf(director.cur!, 1.8) > .99, 'at full level within 1.8 s, well inside 3 s');
+    run(s, 20); assert.ok(sources(ctx).every(n => !n.wave), 'no pad');
+  }
   const { director, run, ctx } = stage(), s = scene({ zone: 'Mushroom Forest', chase: true });
-  director.live = false; run(s, 30);
-  assert.equal(director.key, 'theme'); assert.equal(sources(ctx).length, 0, 'the theme is not here yet: silence, and not one oscillator');
-  director.theme = THEME; run(s, 3); assert.ok(director.cur?.src, 'it plays as soon as it is there');
-  const deck = director.cur; s.zone = 'Redrock Canyon'; s.boss = true; run(s, 5); assert.equal(director.cur, deck, 'the same theme everywhere: a new place does not start it again');
-  assert.equal(sources(ctx).length, 1); assert.ok(ctx.nodes.every(n => n.kind !== 'oscillator'));
-  run(s, 36); assert.equal(director.resting, true); const rest = director.until - ctx.currentTime; assert.ok(rest > 58 && rest <= 120);
+  director.can = false; run(s, 5); const lite = director.cur!; assert.equal(director.key, 'forest~');
+  // The theme comes in the middle of a chase: nothing changes until the place does, or a rest comes.
+  director.theme = THEME; run(s, 5); assert.equal(director.cur, lite); assert.equal(director.mode, 'lite');
+  s.chase = false; s.zone = 'Redrock Canyon'; run(s, HOLD + SETTLE + .3); assert.equal(director.mode, 'theme'); assert.equal(director.key, 'theme'); assert.ok(director.cur?.src, 'now the theme plays');
+  const deck = director.cur, before = sources(ctx).filter(n => n.kind === 'oscillator').length; s.zone = 'Chomper Swamp'; s.boss = true; run(s, 12); assert.equal(director.cur, deck, 'the same theme everywhere: a new place does not start it again');
+  assert.ok(sources(ctx).filter(n => n.kind === 'oscillator' && n.starts[0] > ctx.currentTime - 5).length === 0 && before > 0, 'and no live note is planned any more');
+  run(s, 37 - 12); assert.equal(director.resting, true); const rest = director.until - ctx.currentTime; assert.ok(rest > 58 && rest <= 120);
   run(s, rest + .2); assert.ok(director.cur?.src && director.cur !== deck, 'and again after the rest');
-  // The graphics level drops in the middle of a live tune, before the theme has come: the tune fades out and is taken away.
-  const late = stage(), w = scene({ zone: 'Mushroom Forest' }); late.run(w, 5); assert.ok(late.director.cur?.player);
-  late.director.live = false; late.run(w, 12); assert.equal(late.director.key, 'theme'); assert.equal(late.director.decks.length, 0, 'nothing is kept while the theme is waited for');
-  assert.ok(sources(late.ctx).every(n => n.starts[0] < 5 + FADE + .25), 'and nothing is planned');
+});
+
+test('the graphics governor cannot change the music in the middle of a tune: only at a change of place or in a rest, never in a boss fight', () => {
+  const { director, run, ctx } = stage(), s = scene({ zone: 'Mushroom Forest' });
+  run(s, 5); const forest = director.cur!; s.boss = true; run(s, 3); const boss = director.cur!; assert.equal(director.key, 'boss');
+  // The governor drops the level in the middle of the boss fight, then flips it a few times.
+  for (let i = 0; i < 10; i++) { director.can = i % 2 === 1; run(s, 1); assert.equal(director.cur, boss); assert.equal(director.mode, 'live'); }
+  director.can = false; run(s, 5); assert.equal(director.cur, boss, 'the boss tune and its beat play on'); assert.equal(director.made, 2);
+  // The boss falls: now the place's music is settled anew. The theme is not here, so the live score stands in.
+  s.boss = false; run(s, BOSS_HOLD + .3); assert.equal(director.mode, 'lite'); assert.equal(director.key, 'forest~'); assert.notEqual(director.cur, forest);
+  // In the calm it holds too: back to Sharp in the middle of the tune changes nothing until the next place.
+  director.can = true; run(s, 10); assert.equal(director.key, 'forest~'); s.chase = true; run(s, 3); assert.equal(director.key, 'forest~');
+  s.chase = false; s.zone = 'Redrock Canyon'; run(s, HOLD + SETTLE + .3); assert.equal(director.mode, 'live'); assert.equal(director.key, 'canyon');
+  // The switch in Settings is the player's own: it applies at once.
+  director.can = false; director.fresh = true; run(s, .2); assert.equal(director.key, 'canyon~'); assert.equal(director.fresh, false);
+  director.can = true; director.fresh = true; run(s, .2); assert.equal(director.key, 'canyon');
+  // In the village a rest is such a moment.
+  const v = stage(), w = scene({ zone: 'Clover Village' }); v.run(w, 5); v.director.can = false; v.director.theme = THEME; v.run(w, 30); assert.equal(v.director.key, 'village');
+  v.run(w, 10); assert.equal(v.director.resting, true); v.run(w, v.director.until - v.ctx.currentTime + SETTLE + .5); assert.equal(v.director.key, 'theme'); assert.ok(v.director.cur?.src);
+  assert.ok(ctx.nodes.length > 0);
 });
 
 test('the radio wins: indoors the director is silent, and a radio that starts cuts it in a moment', () => {
@@ -237,16 +297,17 @@ test('mount: the scene is read from the game ten times a second, and the theme i
   t.mock.method(globalThis, 'setTimeout', (run: () => void) => { run(); return 0; });
   t.mock.method(globalThis, 'fetch', async (url: string) => { fetched.push(url); return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) }; });
   const g = globalThis as { document?: unknown };
-  g.document = { body: { classList: { contains: (name: string) => classes.has(name) } }, getElementById: (id: string) => id === 'space-hud' ? spaceHud : null };
-  t.after(() => { delete g.document; radio.box = undefined; });
+  let click: (event: { target: unknown }) => void = () => {}; const prefs: Record<string, string> = {};
+  g.document = { body: { classList: { contains: (name: string) => classes.has(name) } }, getElementById: (id: string) => id === 'space-hud' ? spaceHud : null, addEventListener: (type: string, fn: typeof click) => { if (type === 'click') click = fn; } };
+  t.after(() => { delete g.document; radio.box = undefined; radio.row = undefined; });
   const enemy = (x: number, phase?: string, boss = false) => ({ x, z: 0, hp: 10, phase, boss });
   const world = { planet: 'home', lastZone: 'Mushroom Forest', interior: null as unknown, enemies: [] as ReturnType<typeof enemy>[], position: { x: 0, z: 0 } };
-  const services = { world, audio: graph, pref: () => '', touch: () => false, quality: () => quality, on: (event: string, fn: (p: { enemy: unknown }) => void) => { listeners[event] = fn; return () => {}; } };
+  const services = { world, audio: graph, pref: (key: string) => prefs[key] ?? '', setPref: (key: string, value: string) => { prefs[key] = value; return true; }, touch: () => false, quality: () => quality, on: (event: string, fn: (p: { enemy: unknown }) => void) => { listeners[event] = fn; return () => {}; } };
   mount(services as unknown as Parameters<typeof mount>[0]);
   assert.equal(timers.length, 1); assert.equal(timers[0].ms, 100, 'one timer, ten times a second (frames stop in space)');
   const director = (graph as unknown as { director: Director }).director; let tick = 0;
   const run = (seconds: number) => { for (const end = tick + Math.round(seconds * 10); tick < end; tick++) { ctx.currentTime = tick / 10; clock += 100; timers[0].run(); } };
-  run(1); assert.equal(director.name, 'forest'); assert.equal(director.live, true);
+  run(1); assert.equal(director.name, 'forest'); assert.equal(director.can, true);
   // A chaser counts within 12 m, when it is after someone: not asleep, not idle, not walking home, not dead.
   world.enemies = [enemy(13, 'chase'), enemy(5), enemy(5, 'idle'), enemy(5, 'return'), { ...enemy(5, 'chase'), hp: 0 }]; run(2); assert.equal(director.name, 'forest');
   world.enemies = [enemy(11.9, 'windup')]; run(.2); assert.equal(director.name, 'danger');
@@ -261,19 +322,46 @@ test('mount: the scene is read from the game ten times a second, and the theme i
   spaceHud.hidden = false; run(.2); assert.equal(director.name, 'space'); spaceHud.hidden = true;
   for (const [cls, mode] of Object.entries(MODES)) { classes.add('in-mode'); classes.add(cls); run(.2); assert.equal(director.name, mode); classes.clear(); }
   world.planet = 'ice'; world.lastZone = 'Frost Planet'; run(.2); assert.equal(director.name, 'ice');
-  // Below Sharp and on Battery saver: theme only.
-  quality = 'medium'; run(.2); assert.equal(director.live, false); assert.equal(director.key, 'theme'); quality = 'low'; run(.2); assert.equal(director.live, false); quality = 'high'; run(.2); assert.equal(director.live, true);
-  // The theme: not before 20 s after mount, then once.
+  // Below Sharp and on Battery saver the live score is not asked for (the director takes that up at a change of place).
+  quality = 'medium'; run(.2); assert.equal(director.can, false); quality = 'low'; run(.2); assert.equal(director.can, false); quality = 'high'; run(.2); assert.equal(director.can, true);
+  // The theme: not before 20 s after mount, and not in a fight.
   assert.deepEqual(fetched, [], `nothing was asked for in the first ${((clock - 1000) / 1000).toFixed(0)} s`);
   run(20 - (clock - 1000) / 1000 - .2); assert.deepEqual(fetched, []);
-  run(.3); assert.equal(fetched.length, 1); assert.match(fetched[0], /assets\/audio\/zoo-garden-theme\.mp3$/);
-  await new Promise<void>(resolve => setImmediate(resolve)); assert.equal(director.theme, THEME);
+  world.enemies = [enemy(5, 'chase')]; run(3); assert.deepEqual(fetched, [], 'a chase is on: the fetch waits');
+  world.enemies = []; run(.3); assert.equal(fetched.length, 1); assert.match(fetched[0], /assets\/audio\/zoo-garden-theme\.mp3$/);
+  await new Promise<void>(resolve => setImmediate(resolve)); run(5);
+  await new Promise<void>(resolve => setImmediate(resolve)); assert.equal(director.theme, null, 'with the live score on another planet it is kept as it came, not decoded');
+  world.planet = 'home'; world.lastZone = 'Clover Village'; run(.2);
+  await new Promise<void>(resolve => setImmediate(resolve)); assert.equal(director.theme, THEME, 'in the village it is decoded');
   run(30); assert.equal(fetched.length, 1, 'asked for once');
+  // The switch in Settings: a row after the music slider, drawn by audio-settings.ts through the slot; a click applies at once and is kept.
+  const { audioRowsHtml } = await import('../src/audio-settings.ts'); let html = audioRowsHtml({});
+  assert.match(html, /data-volume="music".*<strong>Live music<\/strong><small>Tunes played for each place\. Off: the recorded theme only\.<\/small>.*class="toggle on" role="switch" aria-checked="true" aria-label="Live music" data-live-music.*data-volume="sfx"/s);
+  const button = { on: true, checked: 'true', classList: { toggle(_: string, on: boolean) { button.on = on; } }, setAttribute(_: string, value: string) { button.checked = value; } };
+  click({ target: { closest: () => null } }); assert.equal(prefs.music, undefined, 'another click is not ours');
+  click({ target: { closest: (selector: string) => selector === '[data-live-music]' ? button : null } });
+  assert.equal(prefs.music, 'theme'); assert.equal(button.on, false); assert.equal(button.checked, 'false'); assert.equal(director.fresh, true);
+  run(.2); assert.equal(director.can, false); assert.equal(director.mode, 'theme'); assert.equal(director.key, 'theme', 'at once: no walk to another place is needed');
+  html = audioRowsHtml({}); assert.match(html, /class="toggle " role="switch" aria-checked="false" aria-label="Live music"/);
+  click({ target: { closest: () => button } }); assert.equal(prefs.music, ''); assert.equal(button.on, true); run(.2); assert.equal(director.can, true); assert.equal(director.mode, 'live');
+  // Its Vietnamese is in the features' own table.
+  const vi = (await import('../src/features-vi/music.ts')).default as Record<string, string>;
+  for (const phrase of ['Live music', 'Tunes played for each place. Off: the recorded theme only.']) { assert.ok(vi[phrase] && vi[phrase] !== phrase, phrase); assert.ok(html.includes(phrase)); }
   // The preference: `theme` is theme only on any device, `live` the live score at any graphics level.
   for (const [wish, q, live] of [['theme', 'high', false], ['live', 'low', true], ['', 'low', false]] as const) {
     const made = fresh(), other = new AudioGraph(made.make), before = timers.length;
     mount({ ...services, audio: other, pref: () => wish, quality: () => q } as unknown as Parameters<typeof mount>[0]);
-    made.ctx.currentTime = 1; timers[before].run(); assert.equal((other as unknown as { director: Director }).director.live, live, `music=${wish || '(unset)'} at ${q}`);
+    made.ctx.currentTime = 1; timers[before].run(); assert.equal((other as unknown as { director: Director }).director.can, live, `music=${wish || '(unset)'} at ${q}`);
+  }
+  // A fetch that fails is tried again, later each time: after 30 s, then a minute after that.
+  {
+    const made = fresh(), other = new AudioGraph(made.make), before = timers.length, at: number[] = []; const from = clock;
+    t.mock.method(globalThis, 'fetch', async () => { at.push(Math.round((clock - from) / 1000)); throw new Error('offline'); });
+    mount({ ...services, audio: other, quality: () => 'low' } as unknown as Parameters<typeof mount>[0]);
+    const lone = (other as unknown as { director: Director }).director;
+    for (let i = 0; i < 1300; i++) { made.ctx.currentTime = i / 10; clock += 100; timers[before].run(); if (i % 50 === 0) await new Promise<void>(resolve => setImmediate(resolve)); }
+    assert.equal(at.length, 3, `three tries in 130 s (at ${at.join(', ')} s)`); assert.ok(at[0] >= 20 && at[1] - at[0] >= 30 && at[2] - at[1] >= 60);
+    assert.equal(lone.theme, null); assert.equal(lone.mode, 'lite'); assert.ok(lone.made >= 1 && lone.key === 'village~', 'meanwhile the live score stands in: Battery saver is not silent');
   }
 });
 
