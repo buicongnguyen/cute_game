@@ -67,10 +67,10 @@
    "row": "start",
    "name": "WP17 first fight and danger signs",
    "allow": {
-    "english": 288,
-    "vietnamese": 288
+    "english": 367,
+    "vietnamese": 367
    },
-   "why": "Measured growth of the start against staging ef9501e (English 798,764 -> 799,052, Vietnamese 932,156 -> 932,444; plan allowance 0.3 KB): the fight flag of attack-intent.ts and the three hooks in main.ts (world.lesson fight, swing and bite), the spots of the first fight's creatures 7 m clear of the village's things (first-run.ts) and two more saved tip ids, the danger chip of zoneInfo with the explorer's level, the red band in ground.ts, and in world.ts a creature's own warning ring and the first fight's creatures going for the explorer inside the village. Loaded after Start: the rule for when a fight is on (fight-state.ts), the waiting swings, the ring and its bite, the tips, the first-win burst and event, the red chip look and the banner before the fence (features/tutorial-fight.ts: the features chunk grows from 14.3 to 16.9 KB gzip) and the Vietnamese (features-vi, 1.4 to 1.6 KB)."
+   "why": "Measured growth of the start against staging 66d897e (English 798,864 -> 799,231, Vietnamese 932,256 -> 932,623). The plan allowed 0.3 KB (307 bytes); the package itself measured 288 against ef9501e, and the review added 79: the guard that keeps the press which opens a dialog from also pressing a button of it (main.ts tapThrough, for every dialog), the saved once-flag of the first win, and the banner-only option of showZone. In the start: the fight flag of attack-intent.ts and the three hooks in main.ts (world.lesson fight, swing and bite), the spots of the first fight's creatures clear of the village's things (first-run.ts) and three more saved ids, the danger chip of zoneInfo with the explorer's level, the red band in ground.ts, and in world.ts a creature's own warning ring and the first fight's creatures going for the explorer inside the village. Loaded after Start: the rule for when a fight is on (fight-state.ts), the waiting swings, the ring and its bite, the tips, the first-win burst and event, the red chip look and the banner before the fence (features/tutorial-fight.ts) and the Vietnamese (features-vi)."
   }
  ]
 }
