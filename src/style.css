@@ -1833,7 +1833,7 @@ h1 > span {
 #space-hint {
   position: absolute; top: calc(78px + var(--safe-top)); left: 50%; transform: translate(-50%, -10px); max-width: min(520px, calc(100% - 40px));
   padding: 12px 20px; border-radius: 18px; text-align: center; font-weight: 800; font-size: var(--t-md); line-height: 1.45;
-  background: rgba(28, 18, 68, .88); border: 2px solid rgba(142, 246, 255, .45); box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+  background: rgba(8, 14, 48, .9); border: 2px solid rgba(142, 246, 255, .45); box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
   opacity: 0; transition: opacity .25s, transform .25s;
 }
 #space-hint.show { opacity: 1; transform: translate(-50%, 0); }
@@ -1863,9 +1863,9 @@ h1 > span {
 #boost-button span { font-size: 32px; line-height: 1; }
 #boost-button small { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .06em; }
 #boost-button:active { transform: translateY(3px); box-shadow: 0 2px 0 #a8400f; }
-.space-help {
-  position: absolute; left: 14px; bottom: calc(18px + var(--safe-bottom)); padding: 8px 14px; border-radius: 14px; max-width: calc(50% - 120px);
-  background: rgba(28, 18, 68, .7); font-weight: 800; font-size: var(--t-sm); line-height: 1.7; color: rgba(255, 255, 255, .92);
+.space-help { /* above the Return home button (guide.css #space-home: 30 px up, 64 px tall when urgent), which used to cover it */
+  position: absolute; left: 14px; bottom: calc(106px + var(--safe-bottom)); padding: 8px 14px; border-radius: 14px; max-width: calc(50% - 120px);
+  background: rgba(8, 14, 48, .86); font-weight: 800; font-size: var(--t-sm); line-height: 1.7; color: rgba(255, 255, 255, .92);
 }
 .space-help i { opacity: .5; font-style: normal; margin: 0 2px; }
 #warp-flash { position: fixed; inset: 0; z-index: 30; pointer-events: none; opacity: 0; transition: opacity .55s ease; background: radial-gradient(circle, #ffffff 35%, #dff6ff 70%, #c9b8ff); }
