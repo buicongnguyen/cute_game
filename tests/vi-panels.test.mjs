@@ -2,42 +2,23 @@
 // leftover English. Main-menu renderers run as in main-locale.test.mjs (TS transpile + vm);
 // module renderers (friends, helpers, pen, tester, dress, look shop, house, delivery,
 // difficulty) are imported directly. Item names and other data are covered by catalog tests.
-import { tutorialPreview } from '../src/first-run.ts';
 import test, {afterEach} from 'node:test';
-import {hudIcon} from '../src/hud-icons.ts';
-import {sideOpen,isGun,SIDE_LEVEL} from '../src/weapon-pair.ts';
-import {sideButtonHtml,pairSettingHtml} from '../src/pair-ui.ts';
-import * as BagTile from '../src/bag-tile.ts';
-import {CAMERA_PITCH,cameraPitch} from '../src/camera-rig.ts';
 import assert from 'node:assert/strict';
 import {readFile,readdir} from 'node:fs/promises';
-import {registerHooks} from 'node:module';
-import * as JB from '../src/journal-badges.ts';
-import vm from 'node:vm';
 import ts from 'typescript';
-// look-shop.ts and others import their stylesheet; Node only needs the code.
-registerHooks({load(url,context,next){return url.endsWith('.css')?{format:'module',source:'',shortCircuit:true}:next(url,context);}});
-const GUIDE=await import('../src/guide.ts');
+// The harness also registers the stylesheet hook: look-shop.ts and others import their .css, Node only needs the code.
+import {mainHarness} from './support/main-harness.mjs';
 const M=await import('../src/model.ts');
 const P=await import('../src/progression.ts');
-const {t,localizeHtml,setLanguage,getLanguage}=await import('../src/i18n.ts');
-const {canTryOn}=await import('../src/try-on.ts');
-const {needsDuplicateConfirm}=await import('../src/shop-owned.ts');
-const {ENEMY_TYPES}=await import('../src/enemy-types.ts');
-const {produceLots,upgradeCards,cookSellPlan}=await import('../src/item-views.ts');
-const {cookSellHtml,treeFertilizerNote}=await import('../src/econ-ui.ts');
-const {audioRowsHtml}=await import('../src/audio-settings.ts');
-const {controlsSectionHtml}=await import('../src/controls-html.ts');const {effectiveKeys}=await import('../src/controls-keys.ts');
-const {dishesHtml,penHtml,penSignature,sitePenHtml,collectText}=await import('../src/farm-ui.ts');
-const {QUALITY,RESOLUTION,RESOLUTION_SETTINGS}=await import('../src/graphics.ts');
-const {planRoutes}=await import('../src/space.ts');
+const {t,localizeHtml,setLanguage}=await import('../src/i18n.ts');
+const {effectiveKeys}=await import('../src/controls-keys.ts');
+const {penHtml,sitePenHtml,collectText}=await import('../src/farm-ui.ts');
 const {helperRow,helperPanel}=await import('../src/helper-ui.ts');
 const {farmHelperPanel,autoFeedNote}=await import('../src/farm-helper-ui.ts');
 const {HELP_TOPICS}=await import('../src/help-topics.ts');
 const {FRIENDS,FRIEND_IDS}=await import('../src/friends.ts');
 const {friendPanel,lockedHint,RESCUE_LINES}=await import('../src/friend-ui.ts');
 const Tester=await import('../src/tester.ts');
-const IG=await import('../src/item-groups.ts');
 const {dressHtml,DRESS_SLOTS}=await import('../src/house-ui.ts');
 const {lookShopHtml}=await import('../src/look-shop.ts');
 const {friendLooksHtml,friendTabsHtml}=await import('../src/friend-looks-ui.ts');
@@ -72,21 +53,12 @@ function leftovers(where,html,found){
 }
 
 // ---- main.ts panels, rendered by the production functions --------------------------------
-const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
-const ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
 const renderers=['languageSelector','profilePicker','tryOnButton','effectText','growText','expandButton','plotDialog','inventory','rewardChips','materialChips','quests','shop','market','storage','upgrades','cooking','crafting','forgeMenu','decorations','planets','map','settings','testerMore','testerOnline','testerShop','help','penDialog','helperDialog','farmHelperDialog','friendDialog'];
-// Pull in the pure helpers the renderers call (function declarations only; they are hoisted
-// and run nothing until called), so a new helper in main.ts does not break this test.
-const declared=new Map(ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&node.name).map(node=>[node.name.text,node.getText(ast)]));
-const wanted=new Set(renderers.filter(name=>declared.has(name)));
-for(const name of wanted)for(const [, other] of declared.get(name).matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g))if(declared.has(other)&&!/^(openDialog|toast|perform|save|tone|updateHud|closeDialog|start|art|decorIcon|harvestNearby|formatSize|joystickEnabled)$/.test(other))wanted.add(other);
-const functions=[...wanted].map(name=>declared.get(name)).join('\n');
-// Imports main.ts gets from small UI modules (e.g. house-stores.ts) are given to the renderers too.
-const extraModules={};
-for(const file of ['house-stores.ts','try-on.ts','bag-slots-ui.ts','install-app.ts','title-card.ts'])try{Object.assign(extraModules,await import('../src/'+file));}catch{/* Not every branch has it. */}
-const declarations=ast.statements.filter(node=>ts.isVariableStatement(node)&&node.declarationList.declarations.some(item=>['BUFF_WORDS','JOURNAL_TABS','SHOP_TABS'].includes(item.name.getText(ast)))).map(node=>node.getText(ast)).join('\n');
-const shell=ast.statements.find(node=>ts.isExpressionStatement(node)&&node.getText(ast).startsWith('app.innerHTML =')).getText(ast).replaceAll('import.meta.env.VITE_STATIC_HOST',"'true'").replaceAll('import.meta.env.VITE_ONLINE_URL',"''");
-const compiled=ts.transpileModule(declarations+'\n'+functions,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+// The harness also pulls in the pure helpers the renderers call (function declarations only; they are
+// hoisted and run nothing until called), so a new helper in main.ts does not break this test, and it
+// imports whatever main.ts imports for them, so a new import does not either.
+const main=await mainHarness({functions:renderers,optional:renderers,follow:true,followExcept:['openDialog','toast','perform','save','tone','updateHud','closeDialog','start','art','decorIcon','harvestNearby','formatSize','joystickEnabled'],
+  variables:['BUFF_WORDS','JOURNAL_TABS','SHOP_TABS'],later:{shell:'app.innerHTML ='},env:{VITE_STATIC_HOST:'true',VITE_ONLINE_URL:''}});
 const esc=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 function advancedState(){
   const state=M.newGame('Clover');
@@ -101,14 +73,15 @@ function advancedState(){
 function mainPanels(state,only){
   let panels=[];
   const art=(id,icon)=>`<span data-art="${id}">${icon}</span>`,mini=id=>`<span data-item="${id}">${M.ITEMS[id]?.icon??'✨'}</span>`;
-  const context={...BagTile,needsDuplicateConfirm,sideOpen,isGun,SIDE_LEVEL,sideButtonHtml,pairSettingHtml,hudIcon,CAMERA_PITCH,cameraPitch,...GUIDE,cookSellPlan,cookSellHtml,treeFertilizerNote,audioRowsHtml,document:{fullscreenElement:null},PROFILE_SLOTS:3,activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},...extraModules,M,IG,planRoutes,...P,...JB,STORY_STEPS:P.STORY_STEPS,t,helperRow,helperPanel,farmHelperPanel,FRIENDS,friendPanel,Tester,iconUrl:p=>'/assets/icons/'+p,localizeHtml,getLanguage,esc,art,mini,ENEMY_TYPES,produceLots,upgradeCards,dishesHtml,penHtml,penSignature,QUALITY,RESOLUTION,RESOLUTION_SETTINGS,ZOOM:{},state,saved:state,app:{innerHTML:''},tryingOn:null,canTryOn,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
-    HELP_TOPICS,restoreRowHtml:()=>'',saveGuard:null,inbox:{settingHtml:()=>'',popups:false,announce:()=>false},tutorialPreview,foldLists:()=>0,activeKey:()=>'cute-game-save-v1',joystickEnabled:()=>state.settings.movePad??false,controlsSectionHtml,controls:{view:()=>({side:'right',size:'normal',opacity:100,joystick:!!state.settings.movePad,screen:'desktop',custom:false,fallback:false,pc:true,keys:effectiveKeys({layout:state.settings.keyboardLayout,air:true,space:'jump'},{}),customKeys:false})},neighboursOn:()=>true,
+  // Fakes only: the player's state and main.ts's own state, the dialog/DOM display boundary and a few stubs.
+  const context={document:{fullscreenElement:null},activeSlot:()=>0,slotKey:i=>'k'+i,localStorage:{getItem:()=>null},iconUrl:p=>'/assets/icons/'+p,esc,art,mini,state,saved:state,app:{innerHTML:''},tryingOn:null,visiting:null,activePlot:0,selectedItem:'manure',shopTab:'Weapons',journalTab:'story',craftStation:'craft',craftTab:'All',penShown:'',graphics:{setting:'auto',level:'high',ratio:2,fps:60,resolution:'auto',mobile:false},world:{zoom:1,planet:'home',state},saveFailed:true,bagMode:'bag',persistence:null,actionHandler:null,testerOpen:true,
+    HELP_TOPICS,restoreRowHtml:()=>'',saveGuard:null,inbox:{settingHtml:()=>'',popups:false,announce:()=>false},foldLists:()=>0,activeKey:()=>'cute-game-save-v1',joystickEnabled:()=>state.settings.movePad??false,controls:{view:()=>({side:'right',size:'normal',opacity:100,joystick:!!state.settings.movePad,screen:'desktop',custom:false,fallback:false,pc:true,keys:effectiveKeys({layout:state.settings.keyboardLayout,air:true,space:'jump'},{}),customKeys:false})},neighboursOn:()=>true,
     openDialog:(type,title,html,kicker,icon)=>{panels.push({type,title:t(title),html:localizeHtml(html),kicker:t(kicker||''),icon});},
     $:()=>({insertAdjacentHTML:(_where,html)=>{panels.at(-1).html+=localizeHtml(html);}}),toast:()=>{},formatSize:cm=>`${cm} cm`,harvestNearby:()=>{},
     farmUi:{art,esc,mini,chips:()=>'',effect:item=>t(item.desc)},
   };
   context.spaceKey='jump';context.airCombat=true;context.airOn=()=>true;context.actionHandler??=null;
-  const ctx=vm.createContext(context);vm.runInContext(compiled,ctx);
+  const ctx=main.context(context);
   const render=(name,...args)=>{panels=[];ctx[name](...args);return panels;};
   if(only)return only(ctx,render);
   const all=[];
@@ -119,7 +92,7 @@ function mainPanels(state,only){
   all.push(...render('plotDialog',0));
   for(const station of ['craft','forge']){ctx.craftStation=station;all.push(...render('crafting'));}
   for(const id of FRIEND_IDS)all.push(...render('friendDialog',id));
-  vm.runInContext(shell,ctx);all.push({type:'welcome',title:'',kicker:'',html:localizeHtml(ctx.app.innerHTML)});
+  main.run(ctx,'shell');all.push({type:'welcome',title:'',kicker:'',html:localizeHtml(ctx.app.innerHTML)});
   return all;
 }
 

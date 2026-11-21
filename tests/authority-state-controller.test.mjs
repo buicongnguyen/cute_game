@@ -1,23 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import vm from 'node:vm';
-import ts from 'typescript';
 import * as M from '../src/model.ts';
-import {applyGameAction} from '../src/actions.ts';
+import ts from 'typescript';
+import {mainHarness} from './support/main-harness.mjs';
 
-const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8'),ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
-const perform=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='perform');
-const bridge=ast.statements.flatMap(node=>ts.isVariableStatement(node)?[...node.declarationList.declarations]:[]).find(node=>node.name.getText(ast)==='gameBridge');
-const apply=bridge.initializer.properties.find(node=>node.name?.getText(ast)==='applyAuthoritativeState');
-assert.ok(perform&&apply,'exercise actual bridge and action controller source');
-const compiled=ts.transpileModule(`${perform.getText(ast)}\nconst bridge={${apply.getText(ast)}};globalThis.applyReply=next=>bridge.applyAuthoritativeState(next);`,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+// The actual action controller, and the bridge's applyAuthoritativeState cut out of the gameBridge object.
+const main=await mainHarness({functions:['perform'],extra({ast}){
+  const bridge=ast.statements.flatMap(node=>ts.isVariableStatement(node)?[...node.declarationList.declarations]:[]).find(node=>node.name.getText(ast)==='gameBridge');
+  const apply=bridge.initializer.properties.find(node=>node.name?.getText(ast)==='applyAuthoritativeState');
+  assert.ok(apply,'exercise actual bridge and action controller source');
+  return `const bridge={${apply.getText(ast)}};globalThis.applyReply=next=>bridge.applyAuthoritativeState(next);`;
+}});
 function fixture(){
   const notifications=[],state=M.newGame(),world={state,planet:'home',position:{clone(){return this;},copy(){}},syncCrops(){},syncDecorations(){},syncDropped(){},build(){},refreshPlayer(){}};
-  const ctx=vm.createContext({state,world,actionHandler:null,visiting:null,visitHome:null,structuredClone,applyGameAction,M,gearWater:false,
+  const ctx={state,world,actionHandler:null,visiting:null,visitHome:null,structuredClone,gearWater:false,
     updateHud(){},updateLabels(){},save(){},toast:(...args)=>notifications.push(args),t:text=>text,
     levelCheck(before){if(ctx.state.level>before)notifications.push(['level',ctx.state.level]);},
-    endFishing(){},resetCombat(){},rebuildHomePresentation(){},pepperGift(){notifications.push(['pepper']);},Date,Math});vm.runInContext(compiled,ctx);
+    endFishing(){},resetCombat(){},rebuildHomePresentation(){},pepperGift(){notifications.push(['pepper']);},Date,Math};main.context(ctx);
   return {ctx,state,notifications};
 }
 test('authoritative reset removes stale optional helper while preserving active save identity',()=>{
