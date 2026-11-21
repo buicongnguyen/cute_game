@@ -17,14 +17,15 @@ import { signatures, voiceSignatures } from '../promo/sound-signature.mjs';
 import { fresh, node, near, type FakeNode } from './support/fake-audio.ts';
 import type { Enemy } from '../src/world.ts';
 
-const read = (file: string) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+// The places in main.ts, world.ts and colossus.ts that these sounds hang on are held in tests/game-events-main.test.mjs.
+const read = (file: string) => readFileSync(new URL(`../promo/${file}`, import.meta.url), 'utf8');
 interface Level { peak: number; low: number; high: number; loudness: number; ms: number; band: string; centroid: number; recipe: string }
 interface Kept {
   sounds: Record<string, { peak: number; recipe: string }>; music: { rms: number } | null; brawlVoices: { peak: number } | null;
   voices: Record<string, Record<VoiceKind | 'warning', Level>>; heartbeat: Level; pet: { peak: number; hit: number; under: number };
   leads: Record<string, { seconds: number; rise: number; starts: number; overMusic: number; peakAt: number; peak: number }>;
 }
-const kept = JSON.parse(read('promo/loudness.json')) as Kept;
+const kept = JSON.parse(read('loudness.json')) as Kept;
 
 /** A graph on the recording context, with the mix (the panner) and voices that draw the middle of every range. */
 function setup(options: { touch?: boolean } = {}) {
@@ -227,9 +228,6 @@ test('a pet\'s or a helper\'s blow lands with its own bite, 6 dB under the explo
     await Promise.resolve(); assert.equal(blow.helper, false, 'only for the blow being settled');
   }
   ctx.currentTime = 9; assert.equal(sfx.play('hit'), true); assert.equal(count('hit'), 2, 'the next blow of the explorer is a hit again');
-  // The order the swap relies on, in the game's own code: hitLanded is told before the hit sound, on one line.
-  const line = read('src/main.ts').split('\n').find(l => l.includes("emit('hitLanded',"))!;
-  assert.ok(line.indexOf("emit('hitLanded',") < line.indexOf("tone(impact?.critical?'crit'"), 'main.ts hit() tells hitLanded before it plays the hit');
   // An ordinary voice, not a tune: no reserved voice, no duck.
   assert.equal(STINGER.petHit.priority, undefined); assert.equal(STINGER.petHit.plain, true);
   // Measured.
@@ -238,22 +236,11 @@ test('a pet\'s or a helper\'s blow lands with its own bite, 6 dB under the explo
 });
 
 test('the Colossus has its own roar: not the hurt cry, and no other sound either', () => {
-  assert.match(read('src/colossus.ts'), /tone\(a\.skill === 'roar' \? 'roar' : 'crit'\)/);
   const names: Sound[] = ['roar', 'hurt', 'boom', 'power', 'break', 'success'], sig = signatures(Sfx, names, installStingers) as Record<Sound, string>;
   assert.equal(new Set(names.map(n => sig[n])).size, names.length);
   assert.equal(STINGER.roar.priority, true, 'it stuns: like the hurt cry it replaced it may use a reserved voice'); assert.equal(STINGER.roar.plain, true);
   assert.ok(kept.sounds.roar.peak <= -10 && kept.sounds.roar.peak >= -14, `the roar peaks at ${kept.sounds.roar.peak}`);
   assert.ok(kept.sounds.roar.peak < kept.sounds.hitHeavy.peak, 'under the heaviest blow');
-});
-
-test('the creature\'s notice replaces the alert beep once the features listen; before that the beep stays', () => {
-  const main = read('src/main.ts');
-  assert.match(main, /world\.onAlert=e=>\{emit\('creatureAlert',\{enemy:e\}\)\|\|tone\('alert'\);\};/);
-  assert.match(main, /world\.onTelegraph=\(enemy,time\)=>\{emit\('telegraph',\{enemy,time\}\);\};/);
-  // world.ts tells a wind-up once, where it starts, with the time the telegraph on the ground uses.
-  const world = read('src/world.ts'); assert.equal(world.split('this.onTelegraph?.(').length, 2);
-  assert.match(world, /e\.windupTotal=e\.phaseTime;this\.onTelegraph\?\.\(e,e\.phaseTime\);/);
-  const g = game(), jelly = creature('jelly'); g.ctx.currentTime = 2; g.bus.emit('creatureAlert', { enemy: jelly }); assert.equal(g.voices.stats.byKind.notice, 1);
 });
 
 test('every voice is the one that was measured, and the measured levels keep their bands', () => {

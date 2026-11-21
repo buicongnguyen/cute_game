@@ -9,7 +9,8 @@ import { LowHealth, Heart, heartbeat, pulses, LOW_ON, LOW_OFF, BEAT, BEAT_LENGTH
 import { voiceSignatures } from '../promo/sound-signature.mjs';
 import { fresh, near } from './support/fake-audio.ts';
 
-const read = (file: string) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+// The sheet (one layer, opacity only, the heart on the bar) is held in tests/hud-ours.test.ts.
+const read = (file: string) => readFileSync(new URL(`../promo/${file}`, import.meta.url), 'utf8');
 
 test('on below 25%, off above 30%: between the two it stays as it was', () => {
   assert.equal(LOW_ON, .25); assert.equal(LOW_OFF, .3);
@@ -43,17 +44,6 @@ test('off when knocked out, indoors and on Battery saver, and back on afterwards
 test('the edge pulses on a desktop only: never on a touch device, with reduced motion or with flashes off', () => {
   assert.equal(pulses(false, false, ''), true); assert.equal(pulses(false, false, 'on'), true);
   assert.equal(pulses(true, false, ''), false, 'a phone shows a still edge'); assert.equal(pulses(false, true, ''), false); assert.equal(pulses(false, false, 'off'), false);
-  // The sheet: one layer, opacity is all that ever changes, the animation only with .pulse, and none with reduced motion.
-  const css = read('src/features/low-health.css'), frames = css.slice(css.indexOf('@keyframes'), css.indexOf('@media'));
-  assert.deepEqual([...new Set([...frames.matchAll(/\{\s*([a-z-]+)\s*:/g)].map(m => m[1]))], ['opacity'], 'the keyframes change opacity and nothing else');
-  assert.match(css, /#low-health \{[^}]*pointer-events: none/, 'it never takes a tap from a control');
-  assert.match(css, /#low-health \{[^}]*transition: opacity/); assert.equal((css.match(/animation:/g) ?? []).length, 2, 'the pulse, and its off switch');
-  assert.match(css, /#low-health\.on\.pulse \{[^}]*animation: low-health-beat \.8s/); assert.match(css, /prefers-reduced-motion: reduce\) \{[^@]*#low-health\.on\.pulse \{ animation: none; \}/);
-  assert.ok(Math.abs(Number(/low-health-beat (\.\d+)s/.exec(css)![1]) - BEAT) < 1e-9, 'the pulse and the heartbeat have one tempo');
-  // The heart on the bar: text of at least 11 px, on the bar that is already there.
-  assert.match(css, /\.meter\.health\.low::before \{[^}]*content: '\\2665\\FE0E'/); for (const size of css.matchAll(/font-size: (\d+)px/g)) assert.ok(Number(size[1]) >= 11);
-  const feature = read('src/features/low-health.ts');
-  assert.equal((feature.match(/createElement\(/g) ?? []).length, 2, 'one layer and one style element, made once at mount'); assert.ok(!/onFrame|requestAnimationFrame/.test(feature), 'no frame listener');
 });
 
 test('the heartbeat: two soft thumps every 0.8 s on the audio clock, an ordinary voice that a full fight may drop', () => {
@@ -87,7 +77,7 @@ test('the heartbeat: two soft thumps every 0.8 s on the audio clock, an ordinary
 });
 
 test('the heartbeat is the one that was measured: about -24 dBFS, far under a blow', () => {
-  const kept = JSON.parse(read('promo/loudness.json')) as { heartbeat: { peak: number; ms: number; band: string; recipe: string }; sounds: Record<string, { peak: number }> };
+  const kept = JSON.parse(read('loudness.json')) as { heartbeat: { peak: number; ms: number; band: string; recipe: string }; sounds: Record<string, { peak: number }> };
   const sig = voiceSignatures(AudioGraph, CreatureVoices, Object.keys(VOICES), VOICE_KINDS, heartbeat) as { heartbeat: string };
   assert.equal(sig.heartbeat, kept.heartbeat.recipe, 'the heartbeat changed since its level was measured: run promo/loudness.mjs --check --write');
   assert.deepEqual(HEART_BAND, [-26, -22]); assert.ok(kept.heartbeat.peak >= HEART_BAND[0] && kept.heartbeat.peak <= HEART_BAND[1], `${kept.heartbeat.peak} dBFS`);

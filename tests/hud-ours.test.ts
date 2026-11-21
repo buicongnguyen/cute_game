@@ -196,3 +196,16 @@ test('dockMetrics reads the filled columns, not the dock box', () => {
   assert.deepEqual(dockMetrics(dock, [rect(793, 13, 34, 34), rect(749, 13, 34, 34), rect(0, 0, 0, 0)]), { width: 83, bottom: 47 });
   assert.deepEqual(dockMetrics(dock, []), { width: 132, bottom: 228 });
 });
+
+test('the low-health warning (features/low-health.css): one layer whose opacity alone changes, a heart on the bar of at least 11 px', () => {
+  const css = read('features/low-health.css'), frames = css.slice(css.indexOf('@keyframes'), css.indexOf('@media'));
+  assert.deepEqual([...new Set([...frames.matchAll(/\{\s*([a-z-]+)\s*:/g)].map(m => m[1]))], ['opacity'], 'the keyframes change opacity and nothing else');
+  assert.match(css, /#low-health \{[^}]*pointer-events: none/, 'it never takes a tap from a control');
+  assert.match(css, /#low-health \{[^}]*transition: opacity/); assert.equal((css.match(/animation:/g) ?? []).length, 2, 'the pulse, and its off switch');
+  assert.match(css, /#low-health\.on\.pulse \{[^}]*animation: low-health-beat \.8s/, 'the pulse has the heartbeat\'s tempo (BEAT in features/low-health.ts)');
+  assert.match(css, /prefers-reduced-motion: reduce\) \{[^@]*#low-health\.on\.pulse \{ animation: none; \}/);
+  // The heart: the warning is not colour alone; text of at least 11 px, on the bar that is already there.
+  assert.match(css, /\.meter\.health\.low::before \{[^}]*content: '\\2665\\FE0E'/); for (const size of css.matchAll(/font-size: (\d+)px/g)) assert.ok(Number(size[1]) >= 11);
+  const feature = read('features/low-health.ts');
+  assert.equal((feature.match(/createElement\(/g) ?? []).length, 2, 'one layer and one style element, made once at mount'); assert.ok(!/onFrame|requestAnimationFrame/.test(feature), 'no frame listener');
+});

@@ -358,7 +358,7 @@ speaks (pitch = (0.7 / radius)^0.6, kept between 0.4 and 1.6 of the family's pit
 - **A pet's or a helper's blow lands with a bite** (`petHit` in `stingers.ts`: teeth snap and a short bark), 6.1 dB
   under the explorer's own hit (-15.3 against -9.2 dBFS), in place of hit, hitHeavy and crit. No line of the hit path
   changed for it: `hitLanded` is told just before the hit sound in `main.ts` hit(), the feature notes whose blow it is
-  (`blow.helper`), and the stingers' `cue` swaps the sound. `tests/creature-voices.test.ts` holds that order.
+  (`blow.helper`), and the stingers' `cue` swaps the sound. `tests/game-events-main.test.mjs` holds that order.
 
 ### The low-health warning (`src/features/low-health.ts`, `low-health.css`)
 

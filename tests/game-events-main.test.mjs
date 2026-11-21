@@ -197,4 +197,22 @@ test('asking again (the radio before its player came): one more load while the f
   assert.equal(loads, 3); assert.deepEqual(plain(told), [['started', {}]], 'started fires once per page, however many loads answer');
 });
 
+// ---- WP12: the places the creature voices hang on --------------------------------------------------------------------
+test('telegraph, the alert beep and the hit sound: the lines features/creature-voices.ts relies on', () => {
+  const src = file => readFileSync(new URL('../src/' + file, import.meta.url), 'utf8'), main = src('main.ts'), world = src('world.ts');
+  // The creature's own notice replaces the beep once a feature listens (emit is true then); before that the beep stays.
+  assert.match(main, /world\.onAlert=e=>\{emit\('creatureAlert',\{enemy:e\}\)\|\|tone\('alert'\);\};/);
+  assert.match(main, /world\.onTelegraph=\(enemy,time\)=>\{emit\('telegraph',\{enemy,time\}\);\};/);
+  // world.ts tells a wind-up once, where it starts, with the time the telegraph on the ground uses.
+  assert.equal(world.split('this.onTelegraph?.(').length, 2);
+  assert.match(world, /e\.windupTotal=e\.phaseTime;this\.onTelegraph\?\.\(e,e\.phaseTime\);/);
+  // A pet's hit is swapped for its own sound by the feature, which must know whose blow it is before the sound is asked for:
+  // hitLanded is told before the hit sound, in one step.
+  const line = main.split('\n').find(l => l.includes("emit('hitLanded',"));
+  assert.ok(line.indexOf("emit('hitLanded',") < line.indexOf("tone(impact?.critical?'crit'") && line.includes("tone(impact?.critical?'crit'"), 'main.ts hit() tells hitLanded before it plays the hit');
+  // The Colossus roars with its own sound, and the features get the health bar as a part of 1.
+  assert.match(src('colossus.ts'), /tone\(a\.skill === 'roar' \? 'roar' : 'crit'\)/);
+  assert.match(main, /health:\(\)=>state\.hp\/M\.maxHp\(state\),/);
+});
+
 test.after(() => connect(undefined));
