@@ -5,7 +5,8 @@ import * as T from 'three';
 import { TRAIL, SWING, CUTS, SPIN, TrailSamples, buildRibbon, bridgeStrip, bladeAxis, bladeTint, plainBlade, maxSections, swingPose, nextCut, contactDelay, spinLead, spinTurn, type SwingPose } from '../src/trail-ribbon.ts';
 import { WIND, WIND_SECTIONS, PUNCH, WindBursts, buildWind, gustHead, punchPose, type PunchKind, type PunchPose } from '../src/punch-wind.ts';
 import { WeaponTrail, TrailPool, measureBlade, trailMaterial } from '../src/weapon-trail.ts';
-import { REACT, reactCurve, reactStrength, reactStop, newReaction, startReaction, applyReaction, reactionPose, newReactionPose } from '../src/hit-react.ts';
+import { hitStop } from '../src/hit-stop.ts';
+import { REACT, reactCurve, reactStrength, newReaction, startReaction, applyReaction, reactionPose, newReactionPose } from '../src/hit-react.ts';
 import { CHAIN } from '../src/five-rules.ts';
 
 const finite = (a: ArrayLike<number>, n: number) => { for (let i = 0; i < n; i++) if (!Number.isFinite(a[i])) return false; return true; };
@@ -220,7 +221,7 @@ test('gameplay timing is untouched by the new swing', () => {
   // Hits still land on the press: the attack functions call the combat rules first and only then start the animation.
   const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
   assert.match(main, /if\(combat\.basic\(e\)\)\{const stats=M\.activeStats\(state\),weapon=M\.weaponStats\(state\);combatTimers\.attackCooldown=\(weapon\.cd\?\?\.4\)\/Math\.max\(\.2,1\+stats\.haste\);/, 'the basic attack and its cooldown are as they were');
-  assert.match(main, /world\.hitFeedback\([^\n]*\);if\(!hazard\|\|impact\)tone\(impact\?\.critical\?'crit':[^;]*'hitHeavy':'hit'\);/, 'a hit still plays its sound (the call had slipped into a comment)');
+  assert.match(main, /world\.hitFeedback\([^\n]*\);if\(!hazard\|\|impact\)tone\(impact\?\.critical\?'crit':[^;]*'hitHeavy':'hit',[^;]*\);/, 'a hit still plays its sound (the call had slipped into a comment)');
   assert.match(main, /world\.readyTrail\(\(\)=>void compileAsyncSafe\(world\.renderer,world\.scene,world\.camera\)\);/, 'the trail\'s shader is compiled with the start-up warm-up');
 });
 
@@ -381,8 +382,8 @@ test('hit reaction strength: criticals and big hits are stronger, bosses react l
   const plain = reactStrength({}), crit = reactStrength({ critical: true }), big = reactStrength({ big: true }), both = reactStrength({ critical: true, big: true });
   assert.equal(plain, 1); assert.ok(crit > plain && big > plain && both >= crit); assert.ok(both <= REACT.max);
   assert.equal(reactStrength({ boss: true }), REACT.boss); assert.ok(reactStrength({ boss: true, critical: true, big: true }) < plain, 'a boss stays heavy');
-  assert.equal(reactStop({}, false), 0); assert.ok(reactStop({ big: true }, false) > 0 && reactStop({ critical: true }, false) >= reactStop({ big: true }, false));
-  assert.equal(reactStop({ critical: true, big: true }, true), 0, 'never on Battery saver'); assert.ok(reactStop({ critical: true, big: true }, false) <= .06, 'a few frames, not added up');
+  assert.ok(hitStop({}, false) > 0 && hitStop({ big: true }, false) > hitStop({}, false) && hitStop({ critical: true }, false) >= hitStop({ big: true }, false));
+  assert.equal(hitStop({ critical: true, big: true }, true), 0, 'never on Battery saver'); assert.ok(hitStop({ critical: true, big: true }, false) <= .08, 'a few frames, not added up');
 });
 
 test('a hit reaction moves only the drawn model, stays bounded and returns exactly to rest', () => {

@@ -3,6 +3,9 @@ import { queueAttributeRange } from './buffer-updates.ts';
 import * as T from 'three';
 import { toonMaterial } from './toon.ts';
 import { nextStackSlot, stackLift, STACK, POWER_LANE_LIFT } from './feel-rules.ts';
+import type { Shake } from './shake.ts';
+import { PUNCH, zoomPunch } from './camera-rig.ts';
+import type { CombatHit } from './combat.ts';
 
 /**
  * Pooled visual feedback: particles, glow sparks, rings, flashes, slash arcs and
@@ -171,7 +174,20 @@ export class Effects {
   readonly glow = new ParticlePool(360, true);
   /** 0–1: fewer particles on lower graphics settings. */
   density = 1;
-  shakeAmp = 0; shakeTime = 0; hitstop = 0;
+  /** The camera's shake (shake.ts) and the feel of a landed blow (hit-stop.ts hitFeel: it returns the cents the blow's sound goes up by). Both come after Start (features/comfort.ts): until then the camera neither shakes nor punches, whatever asks for it. */
+  rig?: Shake; feel?: (hit: CombatHit, broke: boolean, kill: boolean, chain: number) => number;
+  /** The seconds of hit-stop still to spend (main.ts frame). */
+  hitstop = 0;
+  /** A world step has run since the hit-stop was asked for, so the blow it holds on has been posed (main.ts frame waits for it). */
+  posed = false;
+  /** Seconds since the last zoom punch (camera-rig.ts zoomPunch). */
+  private punchT = 1;
+  /** The Flashes setting: 1, or .5 on Low; .5 too until features/comfort.ts has read the stored choice (the safe value). It scales the light blooms here and a creature's white hit flash (world.ts). */
+  flashes = .5;
+  /** A phone's buzz, through the game's one gate (main.ts vibrate: the Vibration switch, a touch screen); features/comfort.ts puts it here. */
+  buzz?: (pattern: number | number[]) => void;
+  /** Asked by that gate before every buzz: false when a longer one is still running and this one would cut it short (features/comfort.ts). */
+  buzzFree?: (pattern: number | number[]) => boolean;
   private root = new T.Group();
   private transients: Transient[] = [];
   /**
@@ -248,9 +264,9 @@ export class Effects {
   /** A quick additive bloom at a point, used for magic and muzzle flashes. */
   flash(at: Point3, color = '#ffffff', size = 1.4, life = .12) {
     const fx = this.take('flash', () => { const sprite = new T.Sprite(new T.SpriteMaterial({ map: softDot(), transparent: true, blending: T.AdditiveBlending, depthWrite: false })); sprite.renderOrder = 3; return sprite; });
-    (fx.material as T.SpriteMaterial).color.set(color); fx.material.opacity = 1;
+    (fx.material as T.SpriteMaterial).color.set(color); fx.material.opacity = this.flashes;
     fx.object.position.set(at.x, at.y ?? 1, at.z); fx.object.scale.setScalar(size);
-    Object.assign(fx, { life, from: size, to: size * 1.6, opacity: 1 });
+    Object.assign(fx, { life, from: size, to: size * 1.6, opacity: this.flashes });
   }
 
   /** The impact star at the point of contact: a 1.2–1.6 m card for about a tenth of a second, turned at random. */
@@ -311,22 +327,29 @@ export class Effects {
     if (this.floaters.length > 40) { const old = this.floaters.shift()!; old.el.remove(); }
   }
 
-  shake(amount: number) { this.shakeAmp = Math.max(this.shakeAmp, amount); this.shakeTime = .3; }
-  freeze(seconds: number) { this.hitstop = Math.max(this.hitstop, seconds); }
+  /** A camera shake of `amount` (metres at its start); with (dx, dz) it kicks along that way first. */
+  shake(amount: number, dx = 0, dz = 0) { this.rig?.add(amount, dx, dz); }
+  /** Asks for a hit-stop; the longer of two wins. `_light`: a plain light hit (hit-stop.ts budgetStops reads it once the features are there). */
+  freeze(seconds: number, _light?: boolean) { if (!(this.hitstop > 0)) this.posed = false; this.hitstop = Math.max(this.hitstop, seconds); }
+  /** The zoom punch: the camera jumps 3% closer and is back in 80 ms (not with Screen shake Off). */
+  punch() { this.punchT = 0; }
+  /** The camera's roll for this frame (rad). */
+  get roll() { return this.rig?.roll ?? 0; }
 
-  /** Camera offset for this frame; the world adds it after following the player. */
-  shakeOffset(dt: number, out: T.Vector3) {
-    if (this.shakeTime <= 0) return out.set(0, 0, 0);
-    this.shakeTime -= dt;
-    const k = Math.max(0, this.shakeTime / .3) * this.shakeAmp;
-    if (this.shakeTime <= 0) this.shakeAmp = 0;
-    return out.set((Math.random() - .5) * 2 * k, (Math.random() - .5) * k, (Math.random() - .5) * 2 * k);
+  /**
+   * Camera offset for this frame; the world adds it after following the player. With `view` (the camera's place from
+   * its target) the zoom punch is in it too: that much of the way towards the target.
+   */
+  shakeOffset(dt: number, out: T.Vector3, view?: T.Vector3) {
+    if (this.rig) this.rig.offset(dt, out); else out.set(0, 0, 0);
+    if (this.punchT < PUNCH.time) { if (view) out.addScaledVector(view, zoomPunch(this.punchT, this.rig?.gain ?? 0) - 1); this.punchT += dt; }
+    return out;
   }
 
   private release(fx: Transient) { this.root.remove(fx.object); fx.object.visible = false; this.free[fx.kind].push(fx); }
 
   update(dt: number) {
-    this.sparks.update(dt); this.glow.update(dt);
+    this.posed = true; this.sparks.update(dt); this.glow.update(dt);
     for (let i = this.transients.length - 1; i >= 0; i--) {
       const fx = this.transients[i]; fx.t += dt;
       const r = Math.min(1, fx.t / fx.life), eased = 1 - (1 - r) ** 3;
@@ -359,7 +382,7 @@ export class Effects {
     this.transients = [];
     for (const f of this.floaters) f.el.remove();
     this.floaters = []; this.stacks.clear();
-    this.shakeAmp = 0; this.shakeTime = 0; this.hitstop = 0;
+    if (this.rig) this.rig.trauma = 0; this.punchT = 1; this.hitstop = 0;
   }
 
   get activeCount() { return this.sparks.count + this.glow.count + this.transients.length; }

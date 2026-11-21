@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
 import { Effects, ParticlePool } from '../src/fx.ts';
+import { Shake } from '../src/shake.ts';
 
 test('particles share one instanced draw call, fade out and are recycled when full', () => {
   const pool = new ParticlePool(8, false);
@@ -28,7 +29,7 @@ test('particle density scales bursts, and hit-stop and shake settle over time', 
   assert.equal(fx.sparks.count, 5);
   fx.ring({ x: 0, z: 0 }); fx.slash({ x: 0, z: 0 }, 0); fx.flash({ x: 0, z: 0 });
   assert.equal(fx.activeCount, 8);
-  fx.shake(.4); fx.freeze(.06);
+  fx.rig = new Shake(); fx.shake(.4); fx.freeze(.06);
   const offset = new T.Vector3(); fx.shakeOffset(.01, offset); assert.ok(offset.length() > 0);
   for (let i = 0; i < 60; i++) { fx.shakeOffset(1 / 60, offset); fx.update(1 / 60); }
   assert.equal(offset.length(), 0); assert.equal(fx.activeCount, 0, 'rings, slashes and flashes clean themselves up');
