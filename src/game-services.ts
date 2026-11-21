@@ -35,6 +35,8 @@ export interface ServiceHost {
   touch(): boolean;
   /** The explorer's health as a part of the full bar: 0 to 1. */
   health(): number;
+  /** A buzz of the phone, in ms or as a pattern: behind the Vibration switch, and only on a touch screen. */
+  vibrate(pattern: number | number[]): void;
   /** The graphics level in use right now. */
   quality(): QualityLevel;
   /** game-events.ts connect: from here on the game's events reach this bus. */

@@ -32,6 +32,7 @@
     "goals.test.ts",
     "graphics-frame.test.mjs",
     "harvest-controller.test.mjs",
+    "hit-feel-frame.test.mjs",
     "hero-portrait.test.ts",
     "home-care.test.mjs",
     "hud-ours.test.ts",

@@ -113,7 +113,7 @@ export function installStingers(graph: AudioGraph, later: (run: () => void, seco
   // When the fanfare ends, when the last big stinger ends, and whether the cue being played now is a held one coming back.
   let fanfareEnd = -9, tuneEnd = -9, back = false;
   const hold = (sfx: Sfx, sound: Sound, seconds: number) => { later(() => { back = true; try { sfx.play(sound); } finally { back = false; } }, seconds); return true; };
-  graph.cue = (sfx, sound, ctx) => {
+  graph.cue = (sfx, sound, ctx, opts) => {
     const now = ctx.currentTime;
     if (sound === 'levelUp') return sfx.play('level');
     if (sound === 'level') {
@@ -125,13 +125,15 @@ export function installStingers(graph: AudioGraph, later: (run: () => void, seco
     }
     const stinger = (STINGER as Partial<Record<Sound, typeof STINGER.go>>)[sound]; if (!stinger) return;
     if (!back && !stinger.plain && now < fanfareEnd) { if (stinger.priority) tuneEnd = Math.max(tuneEnd, fanfareEnd + stinger.length); return hold(sfx, sound, fanfareEnd - now); }
-    const to = graph.bus('sfx');
+    let to: AudioNode | null = graph.bus('sfx');
     if (!to || now - (last[sound] ?? -9) < STINGER_GAP) { sfx.stats.limited++; return false; }
     if (!graph.voices.take(now, now + stinger.length, !!stinger.priority)) { sfx.stats.capped++; return false; }
     last[sound] = now; sfx.stats.started++; sfx.stats.byKind[sound] = (sfx.stats.byKind[sound] ?? 0) + 1;
     if (stinger.priority) tuneEnd = Math.max(tuneEnd, now + stinger.length);
     if (!stinger.plain) graph.duck('music', STINGER_DUCK, stinger.length);
-    try { stinger.play(sfx, { ctx, to, at: now + .005, p: 1 + (sfx.random() - .5) * .015, g: stinger.gain * (.94 + sfx.random() * .12) }); } catch { /* a missing WebAudio feature only loses this cue */ }
+    // The play's own options, as the effects player applies them: a pet's bite climbs with the combo like any blow.
+    if (opts?.pan && graph.pan) to = graph.pan(to, opts.pan);
+    try { stinger.play(sfx, { ctx, to, at: now + .005, p: (1 + (sfx.random() - .5) * .015) * 2 ** ((opts?.detune ?? 0) / 1200), g: stinger.gain * (.94 + sfx.random() * .12) }); } catch { /* a missing WebAudio feature only loses this cue */ }
     return true;
   };
 }

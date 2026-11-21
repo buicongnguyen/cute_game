@@ -268,7 +268,7 @@ export class ColossusEvent {
   private stepOffline(dt: number) {
     const e = this.enemy!, share = e.hp / e.maxHp, cadence = colossusCadence(share), targets = this.targets();
     this.kneel = Math.min(1, Math.max(0, this.kneel + (cadence.kneeling ? dt : -dt) / 1.6));
-    if (cadence.kneeling && !this.announced.kneel) { this.announced.kneel = true; this.h.toast(t('The Cinderpeak Colossus falls to its knees! Its head is in reach.'), '💥'); this.h.world.fx?.shake(.9); }
+    if (cadence.kneeling && !this.announced.kneel) { this.announced.kneel = true; this.h.toast(t('The Cinderpeak Colossus falls to its knees! Its head is in reach.'), '💥'); this.h.world.fx?.shake(.9); this.h.world.fx?.buzz?.([20, 30, 40]); }
     if (cadence.enraged && !this.announced.enrage) { this.announced.enrage = true; this.h.toast(t('The Cinderpeak Colossus is enraged! Its attacks come faster.'), '😡'); }
     const near = targets.filter(p => Math.hypot(p.x - e.x, p.z - e.z) < S.sight);
     // Turn slowly toward the nearest explorer (it never walks).

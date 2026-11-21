@@ -74,7 +74,7 @@ import {CUTS,SPIN,SWING,TRAIL,spinLead,spinTurn,swingPose,nextCut,type Blade,typ
 import {PUNCH,WIND,punchPose,stretchFor,type PunchKind,type PunchPose} from './punch-wind.ts';
 import {SKILL_WIND,THRUST,TURN,sweepTurn,handBlade} from './skill-wind.ts';
 import type {CombatEffect} from './combat.ts';
-import {applyReaction,newReaction,newReactionPose,reactionPose,reactStop,reactStrength,startReaction,REACT,type Reaction} from './hit-react.ts';
+import {applyReaction,newReaction,newReactionPose,reactionPose,reactStrength,startReaction,REACT,type Reaction} from './hit-react.ts';
 import {weightClass,flinches,flingDistance,flingPose,deathTime,bumpShare,hurtSpeed,startsFleeing,WEIGHT,FLINCH,FLING,FLEE,BUMP,HURT,HOP,newFlingPose,type Weight} from './creature-weight.ts';
 import {mergeParts} from './avatar-merge.ts';
 import {perfFlags} from './perf-flags.ts';
@@ -1383,7 +1383,7 @@ export class World {
    * Visual response to a landed hit, after the reference: a pop in the creature's own colour (not a white
    * wash, so its outline and shape stay readable), an impact star where the blow lands, a ring at chest
    * height, chips in the creature's colours and the number. Crits are bigger and yellow, with a short
-   * hit-stop but no camera shake: shake stays the signal for "you got hit" and big slams.
+   * the stop and the camera's kick are the explorer's own (hit-stop.ts).
    */
   hitFeedback(e:Enemy,amount:number,critical:boolean,big=false,broke=false){
     e.flash=HIT_FLASH.enemy;this.lastHit={e,t:this.time??0};if(e.boss)this.onBossHit?.(e,broke); // a boss's deeper thud (main.ts)
@@ -1410,9 +1410,6 @@ export class World {
     fx.ring({x:e.x,z:e.z},{color:critical?'#ffe14d':'#ffffff',from:.2,to:critical?1.6:big?1.35:1,life:.2,thick:.35,y:chest});
     fx.text(at,critical?amount+'!':String(amount),critical?'crit big':'dmg',e.id);
     if(weight&&WEIGHT[weight].dust)this.dustPuff(e.x,e.z,at.y,heavy?7:4); // a heavy body does not budge: the blow kicks up dust at its feet
-    // A heartbeat of stillness for a critical or a big hit: never on Battery saver, and the longer one wins (fx.freeze does not add them up).
-    const stop=reactStop({critical,big},fx.density<=.5);if(stop)fx.freeze(stop);
-    if(broke&&fx.density>.5)fx.freeze(STAGGER.stop); // the blow that breaks a boss holds a little longer (never on Battery saver)
   }
   /** A creature's weight class (creature-weight.ts), or null for a boss, a titan, an elite with a role or a body someone else drives: those keep their old feel. */
   weightOf(e:Enemy):Weight|null{return weightClass(e.type,e.definition,e);}
@@ -1453,7 +1450,7 @@ export class World {
     fx.burst(at,{n:e.boss?40:16,color:[color,'#ffffff',e.definition?.accent??color],size:.16,speed:6,up:6,y:.6});
     fx.burst(at,{n:e.boss?30:9,color:['#ffffff','#fff7a8'],glow:true,size:.18,speed:4,up:5,life:.7});
     fx.ring({x:e.x,z:e.z},{color:'#ffffff',from:.3,to:e.boss?4:2.5,life:.45,y:.1});fx.spark({x:e.x,y:at.y+.8,z:e.z},e.boss?2.4:1.6,.14);
-    fx.freeze(.05);if(e.boss)fx.shake(.45);
+    if(e.boss)fx.shake(.45);
   }
   /** The player flinches and briefly glows pink (feel-rules.ts HURT_TINT). */
   hurtFeedback(amount:number,from?:{x:number;z:number}|null){
@@ -2117,7 +2114,7 @@ export class World {
     // Hit reaction, after the reference: a white flash (feel-rules.ts HIT_FLASH, emissive on the creature's own material copies,
     // made once when it spawned, never per hit) and a ×1.15 squash.
     if((e.flash??0)>0){e.flash=Math.max(0,e.flash!-dt);const k=e.flash!/.14;e.mesh.scale.x*=1+k*.15;e.mesh.scale.z*=1+k*.15;e.mesh.scale.y*=1+k*.06;}
-    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of lit?flashMaterialsOf(e.mesh):flashMaterialsSoFar(e.mesh)){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.setRGB(1,1,1);m.emissiveIntensity=enemyFlash(e.flash??0,!!e.definition?.titan);}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}
+    const lit=(e.flash??0)>0;if(lit!==!!e.flashLit){e.flashLit=lit;for(const m of lit?flashMaterialsOf(e.mesh):flashMaterialsSoFar(e.mesh)){if(lit){m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;m.emissive.setRGB(1,1,1);m.emissiveIntensity=enemyFlash(e.flash??0,!!e.definition?.titan)*(this.fx?.flashes??1);}else{m.emissive.setHex(m.userData.baseEmissive??0);m.emissiveIntensity=m.userData.baseGlow??1;}}}
     this.animateEnemy(e,dt);
     if(e.react&&e.react.left>0)applyReaction(e.mesh,e.react,dt);
     // A light body's hop on a big hit, head over heels on a critical (hitFeedback): looks only.
@@ -2231,8 +2228,7 @@ export class World {
     this.animatePlayer(dt);this.animateRemotes(dt);this.afterAnimate?.(dt);
     this.player.visible=!this.boarded;this.companion.visible=!this.boarded&&this.petPen.shown;if(this.companion2)this.companion2.visible=!this.boarded&&this.petPen2.shown;
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
-    this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);
-    if(this.fx)this.camera.position.add(this.fx.shakeOffset(dt,this.shakeOffset));
+    this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.frameCamera(dt);
     this.updateScenery(dt);this.updateEyeGlints();this.updateHeroLight();
     this.followSun();this.updateSky();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
@@ -2244,6 +2240,10 @@ export class World {
     this.marker.scale.setScalar(1+Math.sin(this.time*5)*.12);if(draw)this.render();
   }
 
+  /** The camera at its place over the target, with this frame's shake, roll and zoom punch (fx.ts). */
+  private frameCamera(dt:number){const c=this.camera,fx=this.fx,v=this.viewOffset??=cameraOffset(16/9);c.position.copy(this.cameraTarget).add(v);c.lookAt(this.cameraTarget);if(fx){c.position.add(fx.shakeOffset(dt,this.shakeOffset,v));if(fx.roll)c.rotateZ(fx.roll);}}
+  /** Hit-stop (main.ts frame): the rules get no time; the camera's shake and the effects run on for `dt` s. */
+  hold(dt:number){this.frameCamera(dt);this.fx?.update(dt);}
   /** Pop-in, sway and the sparkle of ripe crops, on the cards or on the 3D fallback. */
   private animateCrops(dt:number){
     const cards=this.planet==='home'&&!this.cropCardsOff&&this.cropCards?.ready?this.cropCards:null;

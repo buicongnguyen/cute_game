@@ -212,6 +212,8 @@ test('telegraph, the alert beep and the hit sound: the lines features-audio/crea
   // The Colossus roars with its own sound, and the features get the health bar as a part of 1.
   assert.match(src('colossus.ts'), /tone\(a\.skill === 'roar' \? 'roar' : 'crit'\)/);
   assert.match(main, /health:\(\)=>state\.hp\/M\.maxHp\(state\),/);
+  // With the hit feel of WP9 on the same call: the sound's name first, the combo detune second.
+  assert.match(main, /tone\(impact\?\.helper\?'petHit':[^;]*'hitHeavy':'hit',impact&&!remote&&!hazard\?world\.fx\?\.feel\?\.\(/);
 });
 
 test.after(() => connect(undefined));

@@ -143,8 +143,9 @@ export class AudioGraph {
   /**
    * The sounds whose recipes load after Start (features-audio/stingers.ts): asked first for every play that may sound. It answers
    * true or false when the sound was its own (played, or refused), and nothing when the recipes here should play it.
+   * It gets the play's options too (a blow's combo detune, a pan).
    */
-  cue?: (sfx: Sfx, sound: Sound, ctx: Ctx) => boolean | void;
+  cue?: (sfx: Sfx, sound: Sound, ctx: Ctx, opts?: { detune?: number; pan?: number }) => boolean | void;
   private make: () => Ctx;
   constructor(make?: () => Ctx) { this.make = make ?? (() => new AudioContext()); }
 
@@ -289,7 +290,7 @@ export class Sfx {
     // A resting context has a stopped clock: sounds asked for meanwhile would all play at once when it wakes.
     if (!this.enabled || !(this.volume > 0) || this.graph.rest) { this.stats.muted++; return false; }
     const ctx = this.context(); if (!ctx) return false;
-    const own = this.graph.cue?.(this, sound, ctx); if (own != null) return own;
+    const own = this.graph.cue?.(this, sound, ctx, opts); if (own != null) return own;
     const now = ctx.currentTime, end = now + (LENGTH[sound] ?? .3);
     const verdict = this.gate.admit(sound, now, end);
     if (verdict !== 'ok') { this.stats[verdict]++; return false; }

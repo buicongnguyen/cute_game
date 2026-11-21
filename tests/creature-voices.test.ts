@@ -13,6 +13,7 @@ import { installStingers, STINGER } from '../src/features-audio/stingers.ts';
 import { CreatureVoices, listen, VOICES, VOICE_KINDS, DEFAULT_VOICE, pitchOf, panOf, fadeOf, windupRise, PAN_MAX, HEAR, FULL, HURT_GAP, GAP, FAMILY_GAP, LIVE, LIVE_TOUCH, PER_SECOND, PER_SECOND_TOUCH, WINDUP_MAX, WINDUP_NEAR, WATCH, SIZE_REF, NOTICE_FLOOR, SPARE,
   VOICE_BANDS, WARNING_BAND, PET_UNDER, type VoiceKind } from '../src/features-audio/creature-voices.ts';
 import { heartbeat } from '../src/features/low-health.ts';
+import { hitFeel } from '../src/hit-stop.ts';
 import { signatures, voiceSignatures } from '../promo/sound-signature.mjs';
 import { fresh, node, near, type FakeNode } from './support/fake-audio.ts';
 import type { Enemy } from '../src/world.ts';
@@ -227,6 +228,14 @@ test('a pet\'s or a helper\'s blow lands with its own bite, 6 dB under the explo
   ctx.currentTime = 4; assert.equal(sfx.play('hit'), true); assert.equal(sfx.play('crit'), true); assert.deepEqual([count('petHit'), count('hit'), count('crit')], [1, 1, 1], 'the explorer\'s own blows are untouched, in the same moment too');
   // An ordinary voice, not a tune: no reserved voice, no duck.
   assert.equal(STINGER.petHit.priority, undefined); assert.equal(STINGER.petHit.plain, true);
+  // The play's options reach the recipe: a detune of 200 cents raises every pitch of the bite by a whole tone.
+  const pitches = (detune: number) => { const f = fresh(), s = new Sfx(f.make); s.random = () => .5; installMix(s.graph); installStingers(s.graph); f.ctx.currentTime = 2; s.play('petHit', { detune }); return f.ctx.nodes.filter(n => n.kind === 'oscillator').map(n => n.frequency.events[0].value); };
+  const plain = pitches(0), up = pitches(200); assert.ok(plain.length >= 3); plain.forEach((p, i) => assert.ok(near(up[i] / p, 2 ** (200 / 1200), 1e-6)));
+  // A pet's bite has no hit-stop, no shake and no camera punch (hit-stop.ts), and so no combo detune of its own.
+  const felt: string[] = [], fx = { density: 1, freeze: () => felt.push('freeze'), shake: () => felt.push('shake'), punch: () => felt.push('punch') };
+  const blow = { critical: true, knock: 3, lift: 1, direction: { x: 1, z: 0 } };
+  assert.equal(hitFeel(fx as never, { ...blow, helper: true }, true, true, 5), 0); assert.deepEqual(felt, []);
+  hitFeel(fx as never, blow, false, false, 5); assert.ok(felt.includes('shake'), 'the explorer\'s own blow is felt');
   // Before the recipes have come, or if their chunk never does: the hit recipe, never silence and never the success chime.
   const early = signatures(Sfx, ['petHit', 'hit', 'success']) as Record<string, string>, late = signatures(Sfx, ['petHit', 'hit'], installStingers) as Record<string, string>;
   assert.equal(early.petHit, early.hit); assert.notEqual(early.petHit, early.success); assert.notEqual(late.petHit, late.hit, 'with the recipes it is its own sound');

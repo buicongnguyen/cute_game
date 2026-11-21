@@ -23,8 +23,6 @@ export const STAGGER = {
   grace: 3, time: 2, forget: 15,
   /** Damage taken on its knees. */
   vulnerable: 1.25,
-  /** Seconds the world holds still on the blow that breaks it (a critical holds 0.06). Never on Battery saver. */
-  stop: .11,
   /** Titans: the meter is this many times bigger and the knees last `titanTime` s. */
   titan: 2, titanTime: 1.2,
 } as const;
