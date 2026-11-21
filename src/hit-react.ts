@@ -22,8 +22,6 @@ export const REACT = {
   stagger: .55,
   /** The explorer's own reaction to being hurt. */
   hero: .9,
-  /** Seconds the world holds still on a critical and on a big hit (never on Battery saver; the longer one wins, they do not add). */
-  stopCritical: .06, stopBig: .04,
 } as const;
 
 /** How hard a blow shows: 1 for an ordinary hit. */
@@ -31,8 +29,7 @@ export function reactStrength(hit: { critical?: boolean; big?: boolean; boss?: b
   return Math.min(REACT.max, (hit.critical ? REACT.critical : 1) * (hit.big ? REACT.big : 1)) * (hit.boss || hit.titan ? REACT.boss : 1) * (hit.titan ? REACT.titan : 1);
 }
 
-/** The world holds still this long for the blow: only for a critical or a big one, and never when `saver` (Battery saver) is on. */
-export function reactStop(hit: { critical?: boolean; big?: boolean }, saver: boolean) { return saver ? 0 : hit.critical ? REACT.stopCritical : hit.big ? REACT.stopBig : 0; }
+// Hit-stop, the camera's kick and the pitch ladder of a blow are in hit-stop.ts (loaded after Start with the features).
 
 /** 0 at rest, 1 at the far point: out fast, back smoothly, and exactly 0 from `t` = 1 on (and before 0). */
 export function reactCurve(t: number) {

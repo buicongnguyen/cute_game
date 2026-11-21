@@ -45,6 +45,14 @@ export function cameraOffset(aspect: number, zoom = 1, out = new T.Vector3()) {
   return out.set(viewOffset[0], viewOffset[1], viewOffset[2]).multiplyScalar(scale);
 }
 
+/**
+ * The zoom punch (AAA-PLAN WP9): on a power strike, a finisher and a boss's break the camera jumps PUNCH.amount of its
+ * distance closer and eases back within PUNCH.time. It is the factor on world.viewOffset `t` seconds after the blow,
+ * applied inside the frame (fx.ts shakeOffset): the view is never resized. `gain` is the Screen shake setting (0 = none).
+ */
+export const PUNCH = { amount: .03, time: .08 } as const;
+export const zoomPunch = (t: number, gain = 1) => t >= 0 && t < PUNCH.time ? 1 - PUNCH.amount * gain * (1 - t / PUNCH.time) ** 2 : 1;
+
 /** Share of the remaining distance the camera covers in dt: 9/s while playing, 5/s in cut-scenes. */
 export function followBlend(dt: number, cutScene: boolean) { return 1 - Math.exp(-dt * (cutScene ? CAMERA.cutSceneFollow : CAMERA.follow)); }
 
