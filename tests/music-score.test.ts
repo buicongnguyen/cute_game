@@ -5,8 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Voices, TOUCH_VOICES } from '../src/sfx.ts';
 import { MUSIC, type Tune } from '../src/features-audio/music-content.ts';
-import { Score, Player, scoreBus, AHEAD, SCORE_VOICES, TOUCH_SCORE, FLOOR, ECHO, MAR, BASS, PAD, DRUM, HAT } from '../src/features-audio/music-score.ts';
-import { mulberry32 as seeded } from '../src/features-rng.ts';
+import { Score, Player, scoreBus, seeded, AHEAD, SCORE_VOICES, TOUCH_SCORE, FLOOR, ECHO, MAR, BASS, PAD, DRUM, HAT } from '../src/features-audio/music-score.ts';
 import { signatures } from '../promo/music-clips.mjs';
 import { FakeContext, type FakeNode } from './support/fake-audio.ts';
 
