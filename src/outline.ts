@@ -3,15 +3,16 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { perfFlags } from './perf-flags.ts';
 
 /**
- * Ink outlines for the play layer (explorer, pets, creatures, the target arrow), after the
- * reference: an inverted hull — the same shape drawn again from its back faces, pushed out
+ * Ink outlines for the play layer (explorer, pets, creatures, the target arrow): an inverted hull — the same shape drawn again from its back faces, pushed out
  * along the normals in one ink colour, unlit. Scenery, buildings, plots and instanced decor are
  * never outlined, so the actors read as the things you can fight or touch.
  *
  * One material is shared by every outline, so turning outlines off on the lowest graphics tier
  * is a single flag and the shader is compiled once.
  */
-export const INK = '#3a2433';
+export const INK_CLASSIC = '#3a2433';
+/** Our own ink (AAA plan WP6): a warm plum-brown, the same on outlines and on the crop cards' rim. */
+export const INK = perfFlags.ownRamp ? '#4a2c2a' : INK_CLASSIC;
 /** Model-space push in metres. The reference uses 0.022; ours is a little thicker so the ink still reads at about one pixel on phone screens. */
 export const OUTLINE_PUSH = .03;
 

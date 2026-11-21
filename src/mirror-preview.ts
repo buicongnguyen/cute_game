@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { planetLight } from './toon.ts';
+import { planetLight, withClassicRamp } from './toon.ts';
 import { dropTree } from './dispose-tree.ts';
 
 /**
@@ -74,7 +74,7 @@ export class MirrorPreview {
       model = build(); if (!model) return false;
       const r = this.opts.renderer ?? (shared ??= makeRenderer()), pw = Math.round(w * dpr), ph = Math.round(h * dpr);
       this.holder.add(model); model.rotation.y += this.opts.yaw ?? -.42; this.frame(model, w / h);
-      r.setSize(pw, ph, false); r.render(this.scene, this.camera);
+      r.setSize(pw, ph, false); withClassicRamp(this.holder, () => r.render(this.scene, this.camera)); // the grey ramp, like the item icons
       // Copied at once, in the same task as the render, so the GL canvas needs no preserved drawing buffer.
       this.canvas.width = pw; this.canvas.height = ph;
       const ctx = this.canvas.getContext('2d'); ctx?.clearRect(0, 0, pw, ph); ctx?.drawImage(r.domElement, 0, 0);

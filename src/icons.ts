@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { buildDecoration } from './decorations-art.ts';
-import { planetLight } from './toon.ts';
+import { planetLight, withClassicRamp } from './toon.ts';
 
 /**
  * Decoration icons drawn from the same 3D models the player places at home, the way
@@ -59,7 +59,8 @@ export function modelShot(build: () => T.Object3D | null, aim: IconAim = itemAim
     const model = build(); if (!model) return '';
     holder.add(model); scene!.add(holder); holder.updateMatrixWorld(true);
     aim(camera!, holder);
-    renderer!.render(scene!, camera!);
+    // Icons keep the grey ramp for now (AAA plan section 9): the pictures stay exactly as they were.
+    withClassicRamp(holder, () => renderer!.render(scene!, camera!));
     url = renderer!.getContext().isContextLost() ? '' : renderer!.domElement.toDataURL('image/png');
   } catch { url = ''; } finally { holder.removeFromParent(); try { free?.(holder); } catch { /* the picture stands */ } }
   return url;
