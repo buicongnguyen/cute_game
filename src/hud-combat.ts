@@ -84,15 +84,22 @@ export function lootText(items: readonly { icon: string; name: string; count: nu
 export const ZONE_DIFFICULTY: Record<string, number> = { home: 0, forest: 1, meadow: 1, swamp: 2, canyon: 3, candy: 3, ice: 4, lava: 5, toy: 2, jungle: 3, ocean: 4, cloud: 5, shadow: 6 };
 const HOME_ZONES: Record<string, { id: string; boss: string }> = { 'Mushroom Forest': { id: 'forest', boss: 'treant' }, 'Blue Lake Meadow': { id: 'meadow', boss: 'mushking' }, 'Chomper Swamp': { id: 'swamp', boss: 'croc' }, 'Redrock Canyon': { id: 'canyon', boss: 'bear' } };
 const names = (types: readonly string[]) => types.map(type => t(ENEMY_TYPES[type]?.name ?? '')).filter(Boolean).slice(0, 3).join(', ');
-/** Zone banner text: the detail names what lives there, the chip rates it ('★★ · Lv 4+ · King Bear'). */
-export function zoneInfo(name: string, planet: PlanetId | string): { detail: string; chip: string } {
+/** A zone whose creatures start this many levels above the explorer is dangerous: its chip says so (AAA-PLAN WP17). */
+export const DANGER_LEVELS = 3;
+/**
+ * Zone banner text: the detail names what lives there, the chip rates it ('★★ · Lv 4+ · King Bear'). With the explorer's
+ * level given, a zone DANGER_LEVELS or more above it gets the warning chip instead ('⚠️ Lv 7+ Dangerous · 👑 King Bear')
+ * and `danger`, which main.ts showZone puts on the banner as a class (the red look comes with features/tutorial-fight.ts).
+ */
+export function zoneInfo(name: string, planet: PlanetId | string, heroLevel = Infinity): { detail: string; chip: string; danger?: boolean } {
   if (planet === 'home' && name === 'Clover Village') return { detail: t('A peaceful place · health restores here'), chip: t('Safe') };
   const home = planet === 'home' ? HOME_ZONES[name] : undefined, id = home?.id ?? planet, level = Math.max(1, (ZONE_DIFFICULTY[id] ?? 1) * 3 - 2);
   const spawns = home ? HOME_SPAWNS[home.id] : PLANET_SPAWNS[planet as PlanetId], bosses = home ? [home.boss] : PLANET_BOSSES[planet as PlanetId] ?? [];
   const stars = '★'.repeat(Math.max(1, Math.min(5, Math.ceil((ZONE_DIFFICULTY[id] ?? 1) / 1.3))));
   const detail = home ? t('Wild creatures: {names}', { names: names((spawns ?? []).map(s => s[0])) }) : t(PLANETS[planet as PlanetId]?.description ?? '');
   const boss = bosses[0] ? t(ENEMY_TYPES[bosses[0]]?.name ?? '') : '';
-  return { detail, chip: `${stars} · ${t('Lv {level}', { level })}+${boss ? ` · 👑 ${boss}` : ''}` };
+  const danger = level >= heroLevel + DANGER_LEVELS, crown = boss ? ` · 👑 ${boss}` : '';
+  return danger ? { detail, chip: `⚠️ ${t('Lv {level}+ Dangerous', { level })}${crown}`, danger } : { detail, chip: `${stars} · ${t('Lv {level}', { level })}+${crown}` };
 }
 
 /** Where a creature's bar sits: just above its own model, measured once per model (and again when Blender art replaces it). */

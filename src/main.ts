@@ -97,7 +97,7 @@ import { initOnline } from './online.ts';
 import { defeatPaysPlayer } from './safe-zone.ts';
 import { PromptFocus, promptLabel } from './action-prompt.ts';
 import { interactGap } from './interact-pick.ts';
-import { attackIntent } from './attack-intent.ts';
+import { attackIntent, inFight } from './attack-intent.ts';
 import { VillageFun, pokeTarget, fencePoint, type PokeThing } from './village-fun.ts';
 import { initHudLayout } from './hud-layout.ts';
 import { hudIcon, skillArt, publishHudIcons } from './hud-icons.ts';
@@ -714,7 +714,7 @@ let lastSwingAt=-Infinity,lastUseAt=-Infinity;
 /** A living creature is targeted, or one is within the weapon's reach. No allocation: it runs on the HUD tick. */
 function hostileNear(){const s=world.selected;if(s?.kind==='enemy'&&(s as Enemy).hp>0)return true;const w=M.weaponStats(state),x=world.position.x,z=world.position.z;
   for(const e of world.enemies)if(e.hp>0&&e.mesh.visible&&Math.hypot(e.x-x,e.z-z)<=attackRange(w,e.radius)+.5)return true;return false;}
-function attackUses(fresh:boolean){const p=promptTarget();return attackIntent({hostile:hostileNear(),usable:!!p&&p.kind!=='enemy'&&world.inReach(p),fresh,sinceSwing:(performance.now()-lastSwingAt)/1000})==='use';}
+function attackUses(fresh:boolean){const p=promptTarget(),h=world.position;return !!p&&p.kind!=='enemy'&&world.inReach(p)&&attackIntent({fight:inFight(world.enemies,h.x,h.z,aggro),hostile:hostileNear(),usable:true,fresh,sinceSwing:(performance.now()-lastSwingAt)/1000})==='use';} // in a fight Attack never uses (WP17)
 /** A press of Attack (or F) that uses the thing beside the explorer instead of swinging: true when it was taken (the caller must not swing). */
 function useInstead(fresh:boolean){if(!started||uiBlocked()||!attackUses(fresh))return false;const now=performance.now();if(now-lastUseAt>400){lastUseAt=now;interactPrompted();}return true;} // a phone's late duplicate click of the same press is swallowed
 /** F on a PC: the same priority as the phone's Attack. Classic rules (jumping off): F never swings at nothing; it picks the nearest creature to walk to and fight. */
@@ -732,7 +732,7 @@ function attackFace(icon:string,label:string){const key=icon?icon+'|'+label:'';i
   const dpad=document.querySelector<HTMLElement>('#touch-controls [data-action="attack"]');if(dpad){dpad.textContent=icon||'⚔';dpad.setAttribute('aria-label',icon?label:t('Basic attack'));}}
 // The zone banner is outlined text with a difficulty chip and no card (C2): it plays once for 2.8 s and never blocks taps.
 let zoneTimer=0;
-function showZone(name:string) {const info=zoneInfo(name,state.planet),banner=$('#zone-banner');$('#zone-name').textContent=t(name);$('#banner-name').textContent=t(name);$('#banner-detail').textContent=t(info.detail);$('#banner-chip').textContent=t(info.chip);banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');clearTimeout(zoneTimer);zoneTimer=window.setTimeout(()=>banner.classList.remove('show'),2800);}
+function showZone(name:string,ahead?:boolean) {const info=zoneInfo(name,state.planet,state.level),banner=$('#zone-banner');banner.classList.toggle('danger',!!info.danger);if(!ahead)$('#zone-name').textContent=t(name);/* ahead: a zone the explorer is walking towards (features/tutorial-fight.ts) */$('#banner-name').textContent=t(name);$('#banner-detail').textContent=t(info.detail);$('#banner-chip').textContent=t(info.chip);banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');clearTimeout(zoneTimer);zoneTimer=window.setTimeout(()=>banner.classList.remove('show'),2800);}
 world.onZone=showZone;
 const labelNodes=new Map<string,HTMLElement>();
 // Labels sit just above each model's real top. Heights are measured once per
@@ -1951,7 +1951,7 @@ combat.edge.crit=()=>{if(!airOn())return undefined;const from=strikeFrom??world.
 function basicAttack(e?:Enemy){
   if(ctfApi?.active&&!ctfApi.canAct)return;
   if(swim.blocksActions())return; // no attacks while swimming (swim-rules.ts)
-  if(!started||uiBlocked()||visiting)return;
+  if(!started||uiBlocked()||visiting||world.lesson?.swing(!!e))return; // the first fight waits for a press of Attack (features/tutorial-fight.ts)
   // The dive is its own move: a press while falling from height starts it even while the last swing's cooldown still runs.
   if(!e&&world.jump?.airborne&&!world.jump.diving&&world.jump.falling&&world.jump.height>=DIVE.minHeight&&pressKind(world.jump)==='air'&&startDive())return;
   if(combatTimers.attackCooldown>0){if(!e)pressBuffer.press();return;} // kept a moment: it swings when the cooldown ends (press-buffer.ts)
@@ -2030,7 +2030,8 @@ world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   if(source==='hazard'&&(combat.statuses.ward??0)>0)return;
   // The pets' guards (pet-guard.ts): a block, a counter, a distraction; what is left of the hit lands.
   if(enemyId){amount=combat.guardIncoming(amount,source,world.enemies.find(e=>e.id===enemyId));if(!(amount>0))return;}
-  const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
+  const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0);let damage=Math.max(1,Math.round(amount*60/(defense+60)));
+  if(world.lesson&&!(damage=world.lesson.bite(damage,enemyId,state.hp,M.maxHp(state))))return; // a creature of the first fight bites only in its ring, never below 60% health
   if(fishGame)endFishing('The fish got away when you were hit.');
   state.hp=Math.max(0,state.hp-damage);if(state.hp<=0&&combat.surge.revive()){state.hp=Math.max(1,Math.round(M.maxHp(state)*SURGE.revive));surgeView.revived();}dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();if(airOn())streak.hurt(damage);world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');emit('playerHurt',{amount:damage,source});vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
   checkDefeat();
@@ -2576,5 +2577,5 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
 /** What the feature modules get from this file; features.ts makes their services of it (game-services.ts). */
-const serviceHost:ServiceHost={world,state:()=>state,perform,toast,tone,audio:sfx.graph,openDialog,closeDialog,modal:()=>modal,onFrame:gameBridge.onFrame,slot:activeSlot,touch:isTouch,quality:()=>graphics.level,vibrate,connect};
+const serviceHost:ServiceHost={world,state:()=>state,perform,toast,tone,audio:sfx.graph,openDialog,closeDialog,modal:()=>modal,onFrame:gameBridge.onFrame,slot:activeSlot,touch:isTouch,quality:()=>graphics.level,vibrate,connect,showZone,t};
 if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{get services(){return services;},inbox,controls,gainFeed,gainDemo:()=>gainFeed.demo(),surgeView,questWalk,get welcomeBack(){return welcomeBack;},pinHero:(spot:{x:number;z:number}|null)=>{world.perfPin=spot;},newsDemo:()=>{const before=state.level;state.level=Math.max(before+1,4);levelCheck(before);updateHud();},breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({news:inbox.open,bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

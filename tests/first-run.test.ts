@@ -4,10 +4,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as M from '../src/model.ts';
 import { applyGameAction } from '../src/actions.ts';
-import { freshStart, CALM_UNTIL_LEVEL, CRITTER, CRITTERS, TUTORIAL_GROW_MS, TUTORIAL_PLANTS, calmHud, nearestCritter, parseFirstRun, tendCritters, tutorialFightStep, tutorialPreview, type CritterWorld } from '../src/first-run.ts';
+import { freshStart, CRITTER_NAME, SPOT_CLEAR, SPOT_APART, SPOT_HUB, critterSpots, isFirstSeen, markSeen, hasSeen, CALM_UNTIL_LEVEL, CRITTER, CRITTERS, TUTORIAL_GROW_MS, TUTORIAL_PLANTS, calmHud, nearestCritter, parseFirstRun, tendCritters, tutorialFightStep, tutorialPreview, type CritterWorld } from '../src/first-run.ts';
 import { FIRST_VI } from '../src/locales/vi-first.ts';
 import { VI_PACK } from '../src/locales/vi-pack.ts';
 import { STORY_STEPS } from '../src/content.ts';
+import { PEN } from '../src/farm.ts';
+import { ZONE_DIFFICULTY } from '../src/hud-combat.ts';
+import { LESSON, WARN, WILDS, biteAllowed, createLesson, wildAhead } from '../src/features/tutorial-fight.ts';
+import TUTORIAL_VI from '../src/features-vi/tutorial.ts';
 
 const fresh = () => { const s = freshStart(M.newGame('Tester')); s.bag.seed_radish = 99; return s; };
 const old = () => { const s = M.parseSave(JSON.stringify({ ...M.newGame('Old'), firstRun: undefined }))!; return s; };
@@ -72,6 +76,7 @@ test('easy creatures wait beside the garden during the first "defeat" step (solo
   assert.equal(tendCritters(w, s, true), CRITTERS);
   for (const e of w.enemies) {
     assert.equal(e.hp, CRITTER.hp); assert.equal(e.damage, CRITTER.damage); assert.equal(e.definition.speed, CRITTER.speed);
+    assert.equal(e.name, CRITTER_NAME); assert.equal(e.definition.name, 'Gloomcap nibbler', 'shown as a nibbler; the species stays the mushroom'); assert.equal(e.type, 'mushroom');
     const d = Math.hypot(e.x - 1, e.z); assert.ok(d > 8 && d < 13, `beside the garden (${d.toFixed(1)} m)`);
     assert.ok(Math.hypot(e.x - 10, e.z) > 3.5, 'clear of obstacles');
   }
@@ -83,10 +88,118 @@ test('easy creatures wait beside the garden during the first "defeat" step (solo
   const older = old(); older.progression.story.index = KILL_STEP; assert.equal(tendCritters(fakeWorld(), older, true), 0, 'older saves: none');
 });
 
+// ---- the first fight (AAA-PLAN WP17) ----
+/** The village as world.ts builds it: every thing it adds at home with fixed numbers, the pen, the home pond and the starting beds. */
+function village() {
+  const src = readFileSync(new URL('../src/world.ts', import.meta.url), 'utf8'), home = src.slice(src.indexOf("if(planet==='home'){"), src.indexOf('for(let i=0;i<54;i++)'));
+  const entities = [...home.matchAll(/addEntity\('([\w-]+)','[^']*','[^']*',[^;]*?,(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)\)/g)].map(m => ({ kind: m[1], x: +m[2], z: +m[3] }));
+  const obstacles = [...home.matchAll(/this\.obstacle\((-?[\d.]+),(-?[\d.]+),(-?[\d.]+)\)/g)].map(m => ({ x: +m[1], z: +m[2], r: +m[3] }));
+  const s = fresh(); for (let i = 0; i < s.plots.length; i++) entities.push({ kind: 'plot', ...M.bedPosition(s, i) });
+  entities.push({ kind: 'pen', x: PEN.x, z: PEN.z }, { kind: 'fish', x: -7.5, z: 11.2 });
+  return { entities, obstacles };
+}
+const USED_BY_ATTACK = ['shop', 'craft', 'pen', 'chest', 'sell', 'home', 'well'];
+test('on the real village two creatures of the first fight wait 7 m from every thing, and the third as far as the village has room (5.5 m or more)', () => {
+  const w = village(), far = (p: { x: number; z: number }, kinds?: string[]) => Math.min(...w.entities.filter(e => !kinds || kinds.includes(e.kind)).map(e => Math.hypot(e.x - p.x, e.z - p.z)));
+  for (const kind of [...USED_BY_ATTACK, 'cook', 'upgrade', 'travel', 'plot', 'fish']) assert.ok(w.entities.some(e => e.kind === kind), `the village has a ${kind}`);
+  const spots = critterSpots(w); assert.equal(spots.length, CRITTERS);
+  for (const [i, p] of spots.entries()) {
+    assert.ok(far(p, USED_BY_ATTACK) >= (i < 2 ? SPOT_CLEAR : 5.5), `spot ${i}: ${far(p, USED_BY_ATTACK).toFixed(1)} m from the nearest of the shop, workshop, pen, chest, market, cottage and well`);
+    assert.ok(far(p) >= 5.5, `spot ${i}: ${far(p).toFixed(1)} m from every thing (the kitchen, the crystal, the beds, the pond too)`);
+    assert.ok(Math.hypot(p.x, p.z) <= SPOT_HUB, 'inside the fence: no wild creature joins');
+    for (const q of spots) assert.ok(q === p || Math.hypot(p.x - q.x, p.z - q.z) >= SPOT_APART);
+  }
+  assert.ok(spots.filter(p => far(p) >= SPOT_CLEAR).length >= 2, 'two of the three keep 7 m from everything; the crowded village has no third such spot');
+  // A village with no room at all gets none (a real one is never this full); one chest beside the garden changes nothing.
+  const crowded = { entities: [{ kind: 'plot', x: 0, z: 0 }, ...Array.from({ length: 400 }, (_, i) => ({ kind: 'chest', x: -19 + i % 20 * 2 + 1, z: -19 + Math.floor(i / 20) * 2 + 1 }))], obstacles: [] };
+  assert.equal(critterSpots(crowded).length, 0);
+  assert.equal(critterSpots({ entities: [{ kind: 'plot', x: 0, z: 0 }, { kind: 'chest', x: 6, z: 0 }], obstacles: [] }).length, CRITTERS);
+});
+
+function lessonWorld(kills = 0) {
+  const save = { firstRun: {} as { seen?: string[] }, counters: { kills } }, hero = { x: 0, z: 0 };
+  const critter = (id: string, x: number) => ({ id, x, z: 0, hp: 30, damage: 3, tutorial: true, definition: { windup: .45, reach: 1.3, speed: 1.5 } }) as any;
+  const enemies = [critter('home:90000', 1), critter('home:90001', 1), critter('home:90002', 1), { id: 'home:7', x: 1, z: 0, hp: 40, damage: 9, definition: { windup: .45, reach: 1.3 } } as any];
+  const rules = createLesson({ enemies: () => enemies, hero: () => hero, save: () => save });
+  return { save, hero, enemies, rules };
+}
+test('the first fight: swings wait for the first press, then never again', () => {
+  const w = lessonWorld(); w.rules.tend();
+  assert.equal(w.rules.swing(true), true, 'the auto-fight, a tap on the creature, the tracker: held');
+  assert.equal(w.rules.swing(true), true);
+  assert.equal(w.rules.swing(false), false, 'a press of Attack swings');
+  assert.equal(w.rules.swing(true), false, 'and from then on everything swings by itself again');
+  const blow = lessonWorld(); blow.rules.tend(); blow.rules.release(); assert.equal(blow.rules.swing(true), false, 'a blow that landed (a skill) ends the wait too');
+  const won = lessonWorld(1); won.rules.tend(); assert.equal(won.rules.swing(true), false, 'a save with a win (a player past or in the middle of the step) never waits');
+  const older = lessonWorld(); delete (older.save as any).firstRun; older.rules.tend(); assert.equal(older.rules.swing(true), false, 'an older save: never');
+  const none = lessonWorld(); none.enemies.length = 0; none.rules.tend(); assert.equal(none.rules.swing(true), false, 'no creature of the first fight about: nothing waits (another planet, the step not reached, online)');
+  const dead = lessonWorld(); for (const e of dead.enemies) e.hp = 0; dead.rules.tend(); assert.equal(dead.rules.swing(true), false);
+});
+test('the first fight: only the first creature has the ring, the others never reach; a bite lands only in the ring and never below 60%', () => {
+  const w = lessonWorld(), [first, second, third, wild] = w.enemies;
+  assert.equal(w.rules.tend(), first);
+  assert.deepEqual(first.warn, { r: LESSON.ring, at: 'around', color: LESSON.color }); assert.equal(first.definition.windup, 1); assert.equal(first.definition.reach, LESSON.reach);
+  assert.equal(LESSON.ring, 2, 'a radius the telegraph pool already has (boss-patterns.ts CREATURE_TELEGRAPHS: the lava worm)');
+  for (const e of [second, third]) { assert.equal(e.warn, undefined); assert.equal(e.definition.reach, 0, 'no wind-up without reach'); assert.equal(e.definition.speed, 1.5); }
+  assert.equal(wild.definition.reach, 1.3, 'other creatures are left alone');
+  const once = first.definition; w.rules.tend(); assert.equal(first.definition, once, 'prepared once');
+  assert.equal(w.rules.bite(3, first.id, 100, 100), 3, 'in the ring');
+  w.hero.x = first.x + LESSON.ring + .1; assert.equal(w.rules.bite(3, first.id, 100, 100), 0, 'stepped out: nothing');
+  w.hero.x = 0; assert.equal(w.rules.bite(3, second.id, 100, 100), 0, 'the others never bite');
+  assert.equal(w.rules.bite(9, wild.id, 100, 100), 9, 'a wild creature bites as ever'); assert.equal(w.rules.bite(5, undefined, 100, 100), 5, 'and so does a hazard');
+  assert.equal(LESSON.floor, .6);
+  assert.equal(biteAllowed(3, 100, 100), 3); assert.equal(biteAllowed(3, 62, 100), 2, 'only down to 60'); assert.equal(biteAllowed(3, 60, 100), 0); assert.equal(biteAllowed(3, 40, 100), 0, 'already below: nothing more');
+  assert.equal(biteAllowed(60, 130, 130), 52, '60% of 130 is 78'); assert.equal(biteAllowed(3, 78.9, 130), 0, 'never a fraction below');
+  let hp = 100; for (let i = 0; i < 40; i++) hp -= w.rules.bite(3, first.id, hp, 100); assert.equal(hp, 60, 'forty bites in the ring: 60% and no lower');
+});
+test('the two tips of the first fight are kept in the save like the other moment tips: once', () => {
+  for (const id of ['tip:ring', 'tip:finisher'] as const) {
+    assert.ok(isFirstSeen(id)); const s = fresh(); assert.equal(hasSeen(s, id), false); assert.ok(markSeen(s, id)); markSeen(s, id);
+    assert.deepEqual(M.parseSave(JSON.stringify(s))!.firstRun!.seen, [id], 'saved once, and it survives a reload');
+    assert.ok(applyGameAction(fresh(), { type: 'firstRunSeen', payload: { id } }), 'the action the tips use takes it');
+  }
+  assert.deepEqual(parseFirstRun({ seen: ['tip:ring', 'nonsense'] }), { seen: ['tip:ring'] });
+});
+test('danger ahead: the banner of a zone 3 levels above the explorer shows before the fence, not for a zone within reach', () => {
+  for (const [id, [, level]] of Object.entries(WILDS)) assert.equal(level, Math.max(1, ZONE_DIFFICULTY[id] * 3 - 2), `${id}: the level of hud-combat.ts`);
+  assert.deepEqual(WARN, { from: 14.5, edge: 18, rearm: 11, levels: 3 });
+  assert.equal(wildAhead(15, 2, 2), 'canyon', 'level 2 walking east past the market: Lv 7+');
+  assert.equal(wildAhead(14, 2, 2), null, 'not yet'); assert.equal(wildAhead(18.5, 2, 2), null, 'past the fence the zone has its own banner');
+  assert.equal(wildAhead(15, 2, 4), 'canyon'); assert.equal(wildAhead(15, 2, 5), null, 'at level 5 the canyon is 2 levels up: no warning');
+  assert.equal(wildAhead(0, -15, 1), 'swamp', 'Lv 4+ for a level 1'); assert.equal(wildAhead(0, -15, 2), null);
+  assert.equal(wildAhead(-15, 0, 1), null, 'the forest is level 1'); assert.equal(wildAhead(0, 15, 1), null);
+});
+test('the first fight and the danger chip have their Vietnamese (a lazy table: all of it shows after Start)', () => {
+  const vi: Record<string, string> = TUTORIAL_VI;
+  for (const en of [CRITTER_NAME, 'Tap Attack!', 'Press F!', 'Step out of the ring!', 'One more for a finisher!', 'Lv {level}+ Dangerous']) assert.ok(vi[en] && vi[en] !== en, en);
+  assert.match(vi['Lv {level}+ Dangerous'], /\{level\}/);
+  for (const en of Object.keys(vi)) assert.equal(VI_PACK[en], undefined, `${en}: not in the start pack (0 bytes before Start)`);
+  const feature = readFileSync(new URL('../src/features/tutorial-fight.ts', import.meta.url), 'utf8');
+  for (const m of feature.matchAll(/show\('\w+', (?:s\.touch\(\) \? )?'([^']+)'(?: : '([^']+)')?/g)) for (const en of [m[1], m[2]]) if (en) assert.ok(Object.hasOwn(vi, en), en);
+});
+test('old saves and the first fight: a save past the step, or one in the middle of it, loads and plays as before', () => {
+  for (const file of ['save-new.json', 'save-mid.json', 'save-late.json']) {
+    const text = readFileSync(new URL('../promo/' + file, import.meta.url), 'utf8'), s = M.parseSave(text)!;
+    assert.deepEqual(M.parseSave(JSON.stringify(s)), s, `${file}: loading it changes nothing`);
+    const w = fakeWorld(); assert.equal(tendCritters(w, s, true), tutorialFightStep(s) ? CRITTERS : 0, file);
+  }
+  // In the middle of the step with wins already: the creatures are there, nothing waits for a press, and the step still counts.
+  const mid = fresh(); mid.progression.story.index = KILL_STEP; mid.counters.kills = 3;
+  const w = fakeWorld(); assert.equal(tendCritters(w, mid, true), CRITTERS);
+  const rules = createLesson({ enemies: () => w.enemies as any, hero: () => ({ x: 0, z: 0 }), save: () => mid }); rules.tend();
+  assert.equal(rules.swing(true), false);
+  // In the middle of it with no win yet (the step just reached on the old version): one press of Attack and it goes on.
+  const zero = fresh(); zero.progression.story.index = KILL_STEP; const z = fakeWorld(); tendCritters(z, zero, true);
+  const first = createLesson({ enemies: () => z.enemies as any, hero: () => ({ x: 0, z: 0 }), save: () => zero }); first.tend();
+  assert.equal(first.swing(true), true); assert.equal(first.swing(false), false); assert.equal(first.swing(true), false);
+});
+
 test('wiring: the HUD tick, the tracker, the panels and the news dock', () => {
   const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
   assert.match(main, /applyCalm\(\$\('#hud'\),calmHud\(state,/);
   assert.match(main, /tendCritters\(world as unknown as CritterWorld,state,!actionHandler&&!visiting\)/);
+  assert.match(main, /\|\|world\.lesson\?\.swing\(!!e\)\)return;/, 'every swing asks the first fight (absent until the features load)');
+  assert.match(main, /if\(world\.lesson&&!\(damage=world\.lesson\.bite\(damage,enemyId,state\.hp,M\.maxHp\(state\)\)\)\)return;/, 'and every blow on the explorer');
   assert.match(main, /step\.event==='kill'\|\|step\.event==='skill'/);
   assert.match(main, /foldLists\(type,bodyNode\)/);
   assert.match(main, /foldLists\('quests'/);

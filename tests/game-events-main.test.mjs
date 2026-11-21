@@ -28,13 +28,14 @@ const SITES = {
   rescue: 'main.ts', friendHome: 'main.ts', playerHurt: 'main.ts', fishCatch: 'main.ts',
   storyStep: 'game-services.ts', place: 'game-services.ts', // compared at the HUD tick: main.ts updateHud hands the facts over (noteProgress)
   bossApproach: 'hud-combat.ts', bossEngaged: 'hud-combat.ts', bossBreak: 'hud-combat.ts',
-  telegraph: 'WP12', firstWin: 'WP17',
+  firstWin: 'features/tutorial-fight.ts', // the first win of a new save (AAA-PLAN WP17)
+  telegraph: 'WP12',
 };
-const OWNERS = { WP12: 'creature voices and warnings, through world.onTelegraph', WP17: 'the first tutorial win' };
+const OWNERS = { WP12: 'creature voices and warnings, through world.onTelegraph' };
 
 test('every event has a site that emits it, or a named later owner', () => {
   assert.deepEqual(Object.keys(SITES).sort(), Object.keys(EVENT_SAMPLES).sort(), 'the table lists exactly the events of game-events.ts (tests/support/game-event-samples.mjs)');
-  const text = Object.fromEntries(['main.ts', 'hud-combat.ts', 'game-services.ts'].map(file => [file, readFileSync(new URL('../src/' + file, import.meta.url), 'utf8')]));
+  const text = Object.fromEntries(['main.ts', 'hud-combat.ts', 'game-services.ts', 'features/tutorial-fight.ts'].map(file => [file, readFileSync(new URL('../src/' + file, import.meta.url), 'utf8')]));
   for (const [event, site] of Object.entries(SITES)) {
     if (site in OWNERS) continue;
     assert.match(text[site], new RegExp(`emit\\('${event}',`), `src/${site} emits ${event}`);
