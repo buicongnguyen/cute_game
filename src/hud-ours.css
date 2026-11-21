@@ -568,7 +568,8 @@ body #app #colossus-banner.near { display: none; }
 /* Portrait phones at 360 px and narrower: two px less padding on the right and a 4 px gap between the name and the energy count keep the plate 8 px clear of the map with "Clover" whole. */
 @media (orientation: portrait) and (max-width: 360px) {
   #app #hud .player-card { padding-right: 6px; }
-  #app #hud .player-name { gap: 4px; }
+  /* With a seven-digit energy count the name was 2 px short at 320 px ("Clov..."): no side padding or letter spacing there (WP16). */
+  #app #hud .player-name { gap: 4px; padding: 0; letter-spacing: 0; }
 }
 /* The quest chip stays a positioned box (hud-compact.css grows its tap area with ::after): it is 43 px tall on a 768 px touch screen otherwise. */
 #app #hud #tracker-chip { position: relative; inset: auto; }
