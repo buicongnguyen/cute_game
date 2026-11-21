@@ -8,6 +8,7 @@ import { CREATURE_PARTS, CREATURE_TRIANGLES, creatureArt, creatureKit } from '..
 import { ENEMY_TYPES } from '../src/enemy-types.ts';
 import { World } from '../src/world.ts';
 import { newGame } from '../src/model.ts';
+import { PALETTE } from '../src/planet-palette.ts';
 import { EnvironmentSimulation, createEnvironmentLayout } from '../src/environments.ts';
 
 /** The JSON chunk of a GLB. */
@@ -141,4 +142,18 @@ test('creatures that spawned before the kit arrived are re-dressed in place, kee
   assert.equal((root.userData.legs as T.Object3D[]).length, 4);
   // New spawns use the kit straight away.
   assert.equal(w.spawnSpecies('boar', 48, 0, 2)!.mesh.userData.creatureArt, true);
+});
+
+test('our own paint replaces the file colours of a creature by material name; unnamed materials and other creatures keep theirs', async () => {
+  const CROC = { body: [0, .6, .1], leg_fl: [-.3, .5, -.5], leg_fr: [.3, .5, -.5], leg_bl: [-.3, .5, .6], leg_br: [.3, .5, .6] } as Record<string, [number, number, number]>;
+  const kit = new KitLibrary(['creatures.glb'], fakeKit({ croc: CROC, boar: BOAR }, scene => {
+    for (const id of ['croc', 'boar']) scene.getObjectByName(id)!.traverse(o => { if (o instanceof T.Mesh) (o.material as T.Material).name = o.name.endsWith('_body') ? 'Creature croc' : 'Creature claw'; });
+    const belly = new T.Mesh(new T.BoxGeometry(.1, .1, .1), new T.MeshStandardMaterial({ color: '#00ff00', name: 'Creature croc belly' })); belly.name = 'croc_body_1'; belly.position.set(0, .6, .1); scene.getObjectByName('croc')!.add(belly);
+  }));
+  await kit.load();
+  const colours = (model: T.Object3D, part: string) => { const c = (model.getObjectByName(part) as T.Mesh).geometry.getAttribute('color'), seen = new Set<string>(); for (let i = 0; i < c.count; i++) seen.add('#' + new T.Color(c.getX(i), c.getY(i), c.getZ(i)).getHexString()); return [...seen].sort(); };
+  const paint = PALETTE.paint.croc, croc = creatureArt('croc', kit)!, boar = creatureArt('boar', kit)!;
+  assert.deepEqual(colours(croc, 'creature-body'), [paint['Creature croc'], paint['Creature croc belly']].sort(), 'body and belly wear the paint');
+  assert.deepEqual(colours(croc.getObjectByName('leg0')!, 'creature-leg_bl'), ['#0000ff'], 'claws keep the colour of the file');
+  assert.deepEqual(colours(boar, 'creature-body'), ['#ff0000'], 'a creature without paint keeps the colours of its file, whatever its materials are called');
 });

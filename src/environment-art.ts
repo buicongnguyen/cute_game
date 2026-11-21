@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {toonMaterial} from './toon.ts';
+import {PALETTE} from './planet-palette.ts';
 import {type EnvironmentLayout,EnvironmentSimulation,terrainHeight,thornRaised,tideHeight,trainPosition,ventPhase,raftPosition} from './environments.ts';
 
 export interface EnvironmentNode {kind:string;name:string;icon:string;index:number;x:number;z:number;radius:number;mesh:T.Group}
@@ -22,18 +23,18 @@ export class EnvironmentView {
   private turtle(){const g=new T.Group();const shell=this.ball('#73ad72',1,0,.48);shell.scale.set(1,.48,1.25);g.add(shell,this.ball('#b6d692',.35,0,.48,1.2));for(const x of [-1,1])for(const z of [-.6,.6]){const flipper=this.ball('#a2c583',.32,x*.78,.14,z);flipper.scale.set(1.2,.24,.8);g.add(flipper);}return g;}
   private build(){const l=this.layout;
     for(const island of l.islands){
-      const ocean=l.planet==='ocean';this.staticRoot.add(this.cyl(ocean?'#e9d19a':'#8da1b4',island.r, ocean?.55:3,island.x,ocean?-.27:-1.5,island.z,island.r));
-      this.staticRoot.add(this.disk(island.id===0?'#a9dc83':ocean?'#f4dea4':'#aada92',island.r*.998,island.x,island.z,.01));
+      const ocean=l.planet==='ocean',[pad,isle,side]=PALETTE.isles[ocean?'ocean':'cloud'];this.staticRoot.add(this.cyl(side,island.r, ocean?.55:3,island.x,ocean?-.27:-1.5,island.z,island.r));
+      this.staticRoot.add(this.disk(island.id===0?pad:isle,island.r*.998,island.x,island.z,.01));
       if(island.id>0){const tree=new T.Group();tree.add(this.cyl('#a77d58',.22,2.6,0,1.3));for(let k=0;k<5;k++){const leaf=this.ball(ocean?'#61bd75':'#daeeff',1.0,Math.sin(k*1.25)*.7,2.5,Math.cos(k*1.25)*.7);leaf.scale.y=.36;tree.add(leaf);}tree.position.set(island.x+island.r*.4,0,island.z);this.staticRoot.add(tree);this.colliders.push({x:tree.position.x,z:tree.position.z,r:.35});}
     }
     if(l.planet==='ocean'){
-      this.staticRoot.add(this.disk('#56bce6',151,0,0,-.16));
+      this.staticRoot.add(this.disk(PALETTE.isles.ocean[3],151,0,0,-.16));
       l.bubbles.forEach(p=>{const g=new T.Group();g.add(this.cyl('#b8d7df',.8,.5,0,-.8));for(let i=0;i<5;i++)g.add(this.ball('#dcf8ff',.12+(i%2)*.06,Math.sin(i)*.4,-.6+i*.32,Math.cos(i)*.4));g.position.set(p.x,0,p.z);this.dynamicRoot.add(g);});
       l.turtles.forEach(p=>{const g=this.turtle();this.node('turtle','Sea turtle · ride for 45 seconds','🐢',p.id,p.x,p.z,1.3,g);this.turtles.set(p.id,g);});
       l.bubbles.slice(0,16).forEach((p,index)=>{const g=new T.Group();const shell=this.ball('#c3a0d4',.6,0,-.5);shell.scale.y=.45;g.add(shell,this.ball('#fff0d2',.2,0,-.25));this.node('clam','Pearl clam','🐚',index,p.x+2.3,p.z+.8,.8,g);});
     }
     if(l.planet==='cloud'){
-      this.staticRoot.add(this.disk('#e1f3ff',220,0,0,-12));
+      this.staticRoot.add(this.disk(PALETTE.isles.cloud[3],220,0,0,-12));
       l.links.forEach((link,index)=>{for(const [side,p] of [link.a,link.b].entries()){const g=new T.Group();for(let i=0;i<5;i++){const ball=this.ball('#f8fcff',.8,Math.cos(i*1.256)*.42,.28,Math.sin(i*1.256)*.42);ball.scale.y=.5;g.add(ball);}const arrow=this.cyl('#f4ce65',.38,.13,0,.55,0,0);arrow.rotation.z=Math.PI/2;g.add(arrow);g.userData.bounceTo=side===0?link.b:link.a;this.node('bounce','Bounce cloud · cross to the next island','☁️',index*2+side,p.x,p.z,1.15,g);}});
     }
     if(l.planet==='lava'){

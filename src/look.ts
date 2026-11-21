@@ -3,6 +3,7 @@ import type { PlanetId } from './content.ts';
 import { perfFlags } from './perf-flags.ts';
 import { LIGHT, PLANET_LIGHT, SUN_OFFSET, TOON_OWN, warmRamp } from './toon.ts';
 import { FOG } from './camera-rig.ts';
+import { PALETTE, type PlanetLight } from './planet-palette.ts';
 
 /**
  * Our own look (docs/QUALITY-PLAN.md, stage 1): warm, saturated and toy-glossy, with a mood per planet. All of it is free
@@ -10,38 +11,9 @@ import { FOG } from './camera-rig.ts';
  * curve is a few multiply-adds inside the material shaders that draw anyway (three's tone-mapping hook), with no extra pass.
  * `perfFlags.richLook` off gives the reference's flat rig back, for an exact before/after.
  */
-export interface PlanetLook {
-  /** Sky colour high up and at the horizon. Fog fades the far ground into the horizon colour. */
-  sky: readonly [top: string, horizon: string];
-  fog: readonly [near: number, far: number];
-  hemi: readonly [sky: string, ground: string, intensity: number];
-  /** Sun colour, intensity, and where it stands: degrees round from the camera's side (positive lights right-hand faces) and above the ground. */
-  sun: readonly [color: string, intensity: number, azimuth: number, elevation: number];
-  /** Brightness into the colour curve. */
-  exposure: number;
-}
-/** Clear days keep the reference's fog, which starts well beyond the fight radius (camera-rig.ts). */
-const DAY_FOG = [FOG.near, FOG.far] as const;
-export const LOOKS: Record<PlanetId, PlanetLook> = {
-  // A warm late-morning sun against cool blue shade.
-  home: { sky: ['#3f9cf2', '#bfe6ff'], fog: DAY_FOG, hemi: ['#d4e8ff', '#a8d86a', 1.18], sun: ['#fff0d8', 2.55, 54.5, 60.2], exposure: 1 },
-  // Strawberry light: peach sun, raspberry bounce.
-  candy: { sky: ['#ff6fb8', '#ffc2e6'], fog: DAY_FOG, hemi: ['#ffe2f2', '#ff7fc0', 1.1], sun: ['#fff0d4', 2.4, 38, 63], exposure: 1 },
-  // A low winter sun from the left, long blue shadows.
-  ice: { sky: ['#3d93ea', '#c4e6ff'], fog: DAY_FOG, hemi: ['#d6eaff', '#7fb0f0', 1.12], sun: ['#fff4e0', 2.5, -46, 50], exposure: 1 },
-  // Ember glow from low in front, everything else in deep maroon shade.
-  lava: { sky: ['#2a0f1c', '#b8452c'], fog: [34, 100], hemi: ['#ffb494', '#8a3038', 1.3], sun: ['#ffc284', 2.5, 26, 50], exposure: 1.08 },
-  // A bright playroom lamp straight overhead.
-  toy: { sky: ['#ff8fc6', '#ffe0ef'], fog: DAY_FOG, hemi: ['#ffeaf6', '#ffb4dc', 1.05], sun: ['#fff2d6', 2.3, 54.5, 66], exposure: .96 },
-  // Golden shafts through green canopy.
-  jungle: { sky: ['#2f9e62', '#b4e894'], fog: [36, 104], hemi: ['#dcffc8', '#2f8a3a', 1.25], sun: ['#fff2cc', 2.55, 68, 55], exposure: 1 },
-  // High tropical noon over turquoise.
-  ocean: { sky: ['#1f8ef0', '#a6e8ff'], fog: DAY_FOG, hemi: ['#c8f2ff', '#4fb0e6', 1.1], sun: ['#fff4c8', 2.5, 30, 68], exposure: .98 },
-  // Thin bright air above the clouds: white stays white, shade goes sky blue, the sun comes low from the left.
-  cloud: { sky: ['#3f8cf0', '#a4d2ff'], fog: DAY_FOG, hemi: ['#eef6ff', '#a4c4ff', 1.22], sun: ['#fff8ec', 2.5, -42, 52], exposure: 1 },
-  // Moonlight: very dark blue, but every shape still reads.
-  shadow: { sky: ['#03061a', '#101a52'], fog: [24, 78], hemi: ['#8494ff', '#2c2a78', 1.5], sun: ['#a8bcff', 1.9, -36, 62], exposure: 1.05 },
-};
+export type PlanetLook = PlanetLight;
+/** Each planet's look: the colours, the fog and where the sun stands are planet-palette.ts's. */
+export const LOOKS: Record<PlanetId, PlanetLook> = PALETTE.light;
 
 const SUN_DISTANCE = Math.hypot(...SUN_OFFSET);
 /** Where the sun sits relative to the camera target, at the reference's distance so the shadow camera's depth range still fits. */
