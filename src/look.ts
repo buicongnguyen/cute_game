@@ -169,7 +169,7 @@ export const GLOSS = { top: .6, lift: [.06, .1], bevel: .2, catch: [1.14, 1.12, 
 export function contactShade(y: number, height: number, ny: number, out: [number, number, number] = [1, 1, 1]) {
   const reach = Math.max(.12, Math.min(CONTACT.reach, height * CONTACT.share)), t = Math.max(0, Math.min(1, y / reach)), near = 1 - t * t * (3 - 2 * t);
   const under = ny < 0 ? 1 - (1 - CONTACT.under) * Math.min(1, -ny) : 1, crown = 1 + CONTACT.crown * (height > 0 ? Math.max(0, Math.min(1, y / height)) * 2 - 1 : 0);
-  const up = perfFlags.ownRamp && ny > GLOSS.bevel, lift = 1 + GLOSS.lift[0] + (GLOSS.lift[1] - GLOSS.lift[0]) * (height > 0 ? Math.max(0, Math.min(1, y / height)) : 0);
+  const up = perfFlags.ownRamp && ny > GLOSS.bevel, lift = 1 + GLOSS.lift[0] + (GLOSS.lift[1] - GLOSS.lift[0]) * (crown - 1 + CONTACT.crown) / 2 / CONTACT.crown;
   for (let i = 0; i < 3; i++) out[i] = (1 + (CONTACT.tint[i] - 1) * near) * under * crown * (!up ? 1 : ny > GLOSS.top ? lift : GLOSS.catch[i]);
   return out;
 }

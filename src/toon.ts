@@ -21,14 +21,12 @@ export function rampAt(steps: readonly (number | readonly number[])[], dotNL: nu
   return (typeof step === 'number' ? [step, step, step] : [...step]).map(v => v / 255);
 }
 
-const GREY_LOOKUP = 'vec3( texture2D( gradientMap, coord ).r )';
 /**
  * three reads only the red channel of a toon ramp. This makes it read the colour, once, as this module loads (before
  * any renderer compiles a shader), so no shader program is added; with a grey ramp the result is the same as before.
  */
 export function installRampColour() {
-  const chunk = T.ShaderChunk.gradientmap_pars_fragment;
-  if (chunk.includes(GREY_LOOKUP)) T.ShaderChunk.gradientmap_pars_fragment = chunk.replace(GREY_LOOKUP, 'texture2D( gradientMap, coord ).rgb');
+  T.ShaderChunk.gradientmap_pars_fragment = T.ShaderChunk.gradientmap_pars_fragment.replace('vec3( texture2D( gradientMap, coord ).r )', 'texture2D( gradientMap, coord ).rgb');
 }
 installRampColour();
 
@@ -50,8 +48,8 @@ export const TOON_RAMP = perfFlags.ownRamp ? makeRamp(TOON_OWN) : TOON_RAMP_CLAS
  */
 export function withClassicRamp<R>(root: T.Object3D, draw: () => R): R {
   const swapped: T.MeshToonMaterial[] = [];
-  if (TOON_RAMP !== TOON_RAMP_CLASSIC) root.traverse(o => {
-    for (const m of [(o as T.Mesh).material].flat()) if (m && (m as T.MeshToonMaterial).gradientMap === TOON_RAMP) { (m as T.MeshToonMaterial).gradientMap = TOON_RAMP_CLASSIC; swapped.push(m as T.MeshToonMaterial); }
+  root.traverse(o => {
+    for (const m of [(o as T.Mesh).material].flat() as T.MeshToonMaterial[]) if (m?.gradientMap === TOON_RAMP) { m.gradientMap = TOON_RAMP_CLASSIC; swapped.push(m); }
   });
   try { return draw(); } finally { for (const m of swapped) m.gradientMap = TOON_RAMP; }
 }

@@ -104,11 +104,12 @@ export const CROP_BOOST: Readonly<Record<number, number>> = { 1: 1, 2: 1.3, 3: 1
 export const FOOTPRINT = .95;
 /** The card's width in the garden, pivot centred: twice the wider side, at the garden's crop size. */
 export const cardWidth = (b: ViewBounds, scale: number) => 2 * Math.max(-b.left, b.right) * scale * CROP_SCALE;
+/** How many times too wide a card is for FOOTPRINT of its bed; 1 when it fits. */
+const overWide = (b: ViewBounds, scale: number) => Math.max(1, cardWidth(b, scale) / (FOOTPRINT * 2 * BED_HALF));
 /** `scale`, or the largest scale at which the card still fits FOOTPRINT of its bed (a melon is far wider than it is tall). */
-export function footprintScale(b: ViewBounds, scale: number) {
-  const wide = cardWidth(b, scale), most = FOOTPRINT * 2 * BED_HALF;
-  return perfFlags.ownRamp && wide > most ? scale * most / wide : scale;
-}
+export const footprintScale = (b: ViewBounds, scale: number) => perfFlags.ownRamp ? scale / overWide(b, scale) : scale;
+/** A ripe crop's size before the footprint cap. */
+const ripeScale = (crop: string, b: ViewBounds) => STAGE_SCALE[3] * bedScale(b) * (isTreeCrop(crop) ? TREE_BOOST : CROP_BOOST)[3];
 export { isTreeCrop } from './tree-crops.ts';
 import { isTreeCrop } from './tree-crops.ts';
 /** Size of a crop at a stage relative to its model: the stage scale times the model's bed scale. */
@@ -116,9 +117,7 @@ export function stageScale(crop: string, stage: CropStage) {
   if (!stage) return 0;
   const b = cropBounds(stage === 1 ? 'sprout' : crop);
   const boost = (isTreeCrop(crop) ? TREE_BOOST : CROP_BOOST)[stage] ?? 1;
-  if (!b) return STAGE_SCALE[stage] * boost;
-  const scale = STAGE_SCALE[stage] * bedScale(b, stage === 1) * boost;
-  return stage === 3 ? footprintScale(b, scale) : scale;
+  return !b ? STAGE_SCALE[stage] * boost : stage === 3 ? footprintScale(b, ripeScale(crop, b)) : STAGE_SCALE[stage] * bedScale(b, stage === 1) * boost;
 }
 /** A compact ready badge above the mature silhouette, in the same view plane as crop cards. */
 export function cropBadgeAnchor(crop: string, size = 1): { y: number; back: number } {
@@ -238,7 +237,7 @@ export class CropCards {
       camera.position.copy(back).multiplyScalar(20); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
       // The rim: 1 CSS px on a phone (the reference's was about 2; under 1 px a line breaks into dots without antialiasing).
       // A crop that the footprint cap draws smaller gets a wider rim in its cell, so the ink is as thin on screen as its neighbours'.
-      const thin = perfFlags.ownRamp, rim = (id: string, b: ViewBounds) => { if (!thin) return Math.max(2.5, px / 36); const full = STAGE_SCALE[3] * bedScale(b) * (isTreeCrop(id) ? TREE_BOOST : CROP_BOOST)[3]; return Math.min(4, full / footprintScale(b, full)) * INK_PX * px / 128; };
+      const thin = perfFlags.ownRamp;
       const composite = new T.ShaderMaterial({
         uniforms: { src: { value: scratch.texture }, texel: { value: new T.Vector2(1 / px, 1 / px) }, radius: { value: 1 }, ink: { value: new T.Color(CARD_INK) }, outline: { value: 1 }, exposure: { value: renderer.toneMappingExposure }, toned: { value: renderer.toneMapping === T.NeutralToneMapping ? 1 : 0 } },
         vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
@@ -256,7 +255,7 @@ export class CropCards {
       const cells = new Map<string, Cell>();
       entries.forEach(({ id, model, outline: inked }, k) => {
         const bounds = viewBounds(model); if (!bounds) return;
-        const outline = inked || !thin ? rim(id, bounds) : INK_PX * px / 128, pad = (outline + 2) / px;
+        const outline = thin ? (inked ? Math.min(4, overWide(bounds, ripeScale(id, bounds))) : 1) * INK_PX * px / 128 : Math.max(2.5, px / 36), pad = (outline + 2) / px;
         // A square cell around the silhouette, pivot centred horizontally, with room for the outline.
         const half = Math.max(-bounds.left, bounds.right), bottom = Math.min(0, bounds.bottom), size = Math.max(2 * half, bounds.top - bottom) / (1 - 2 * pad);
         const low = bottom - pad * size;
