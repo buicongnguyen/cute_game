@@ -30,5 +30,8 @@ export const perfFlags = {
   /** The explorer eases between standing and walking, fidgets and sits (hero-motion.ts, features/hero-idle.ts). Off is the
    * old switch between the two poses, for a frozen A/B. */
   heroMotion: true,
+  /** Our own colours (AAA plan WP18, planet-palette.ts): light, sky, ground, water and kit tints per planet, the dark blue
+   * space with round stars, the teal Crocodile King. Off gives the old tables back (dev and perf builds). Read as the page loads: preset it. */
+  ownColours: true,
 };
 Object.assign(perfFlags, (globalThis as { __zooFlagPreset?: Partial<typeof perfFlags> }).__zooFlagPreset);

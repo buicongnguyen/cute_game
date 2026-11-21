@@ -3,6 +3,7 @@ import { transferFlash } from './flash-materials.ts';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { KitLibrary, KIT_FILES, type KitPart } from './assets.ts';
 import { toToon } from './toon.ts';
+import { PALETTE } from './planet-palette.ts';
 
 /**
  * Creature art from creatures.glb (art/blender/kit/build_creatures.py, CONTRACT.md "Creatures"): each creature
@@ -49,7 +50,7 @@ function floats(a: T.BufferAttribute | T.InterleavedBufferAttribute) {
 }
 
 /** The pieces of one part in its hinge's space, merged with their colours baked into the vertices. */
-function mergePart(pieces: KitPart[], pivot: T.Vector3) {
+function mergePart(pieces: KitPart[], pivot: T.Vector3, paint?: Record<string, string>) {
   const indexed = pieces.every(p => p.geometry.index), toPivot = new T.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z);
   const geometries = pieces.map(part => {
     let g = new T.BufferGeometry();
@@ -58,7 +59,8 @@ function mergePart(pieces: KitPart[], pivot: T.Vector3) {
     if (part.geometry.index) g.setIndex(part.geometry.index.clone());
     if (!indexed && g.index) g = g.toNonIndexed();
     g.applyMatrix4(toPivot.clone().multiply(part.matrix));
-    const color = (part.material as T.MeshStandardMaterial).color ?? new T.Color('#ffffff'), count = g.getAttribute('position').count, colors = new Float32Array(count * 3);
+    // Our own paint for this creature (planet-palette.ts) replaces the file's colour, by material name.
+    const own = paint?.[(part.material as T.Material).name], color = own ? new T.Color(own) : (part.material as T.MeshStandardMaterial).color ?? new T.Color('#ffffff'), count = g.getAttribute('position').count, colors = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) colors.set([color.r, color.g, color.b], i * 3);
     g.setAttribute('color', new T.BufferAttribute(colors, 3));
     return g;
@@ -81,7 +83,7 @@ function template(type: string, kit: KitLibrary): T.Group | null {
   if (wanted.some(role => !byPart.has(role))) return null;
   const group = new T.Group(); group.name = `creature-${type}`;
   for (const role of wanted) {
-    const pieces = byPart.get(role)!, pivot = new T.Vector3().setFromMatrixPosition(pieces[0].matrix), geometry = mergePart(pieces, pivot);
+    const pieces = byPart.get(role)!, pivot = new T.Vector3().setFromMatrixPosition(pieces[0].matrix), geometry = mergePart(pieces, pivot, PALETTE.paint[type]);
     if (!geometry) return null;
     const mesh = new T.Mesh(geometry, bakedMaterial()); mesh.name = `creature-${role}`; mesh.castShadow = true; mesh.receiveShadow = true;
     const node = NODE_NAMES[role];

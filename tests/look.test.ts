@@ -22,7 +22,7 @@ test('every planet has its own look: sky, fog, light colours, a sun in front of 
     assert.ok(l.fog[0] < l.fog[1] && l.fog[0] >= 20, `${id} fog starts beyond the fight radius`);
     // The sun lights the faces the camera sees (never from behind the scene) and stands high enough for short shadows.
     assert.ok(Math.abs(l.sun[2]) <= 75, `${id} sun azimuth`); assert.ok(l.sun[3] >= 45 && l.sun[3] <= 75, `${id} sun elevation`);
-    assert.ok(l.hemi[2] >= .9 && l.hemi[2] <= 1.6 && l.sun[1] >= 1.5 && l.sun[1] <= 2.8 && l.exposure >= .9 && l.exposure <= 1.15, `${id} light levels`);
+    assert.ok(l.hemi[2] >= .9 && l.hemi[2] <= 1.85 && l.sun[1] >= 1.5 && l.sun[1] <= 2.8 && l.exposure >= .9 && l.exposure <= 1.15, `${id} light levels`);
   }
   assert.equal(seen.size, Object.keys(PLANETS).length, 'no two planets share a rig');
   assert.equal(planetLook('nowhere'), LOOKS.home, 'unknown planets fall back to home');
@@ -127,7 +127,8 @@ test('the ground is corrected so flat sunlit ground is lit exactly as under the 
     const look = LOOKS[id], keep = groundKeep(id), sky = new T.Color(look.hemi[0]).multiplyScalar(look.hemi[2]), sun = new T.Color(look.sun[0]).multiplyScalar(look.sun[1]);
     if (id === 'shadow') { assert.deepEqual(keep, [1, 1, 1]); continue; }
     (['r', 'g', 'b'] as const).forEach((c, i) => assert.ok(Math.abs(keep[i] * (sky[c] + sun[c] * TOON_OWN[4][i] / 255) - (sky[c] + sun[c])) < 1e-12, id));
-    assert.equal(keep[0], 1); assert.ok(keep[2] > keep[1] && keep[1] > 1 && keep[2] < 1.08, id + ': a small lift of green and blue');
+    assert.equal(keep[0], 1); assert.ok(keep[1] > 1 && keep[2] > 1 && Math.max(keep[1], keep[2]) < 1.08, id + ': a small lift of green and blue');
+    if (id !== 'lava') assert.ok(keep[2] > keep[1], id + ': blue is lifted more than green'); // lava's amber sun has almost no blue to lose
   }
   // Flat ground is on the ramp's top step only while the sun stands above asin(0.6): the correction relies on it.
   for (const id of Object.keys(LOOKS) as PlanetId[]) assert.ok(LOOKS[id].sun[3] >= 37, id + ': sun elevation ' + LOOKS[id].sun[3]);

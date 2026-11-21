@@ -446,7 +446,7 @@ From `AAA-EVALUATION.md` section 4.
   - Under a cool sun (the Night Planet) the two light steps are neutral, so moonlit blue keeps its saturation.
   - The ramp's shade is #6466b4 and its light #fff6e8 (tuned from the plan's "about" values so warm paint in shade does not turn redder).
   - Crop cards: the rim is the new ink at the old sticker weight (the 1 px rim lost the cards' presence, owner review); the bed cap stays at 0.95 (at 1.00 with the idle bob only 2.7 px stay clear of the next bed at 390x844); a lopsided crop is centred on its bed by its silhouette, which lets the fruit trees stand about 14% larger than with a pivot-centred cap.
-  - Start bytes: +733 gzip against staging at the merge (+507 against the staging it was built on), over the 0.3 KB estimate; recorded as a named entry in `promo/perf-ledger.json`.
+  - Start bytes: +1,013 gzip (English and Vietnamese) against staging 66d897e, over the 0.1 KB estimate; a named ledger entry. The old tables ship only in dev and perf builds.
 
 ### WP7. Sound core: one audio system with buses
 - **Result:** the music slider works on iPhone, and the 444 KB theme no longer downloads in the background on a first visit. The base for every sound package.
@@ -655,6 +655,33 @@ From `AAA-EVALUATION.md` section 4.
 - **Acceptance:** Candy at 1600x900, 26 m from the pad: frame mean lightness 0.62 or less (was 0.74) and mean saturation 0.45 or more; space: under 2% of pixels in the magenta band 280-330 and the key hints fully visible at 390x844 and 1600x900; screenshot pairs for the 9 planets plus forest and swamp at 1600x900 and 4 pairs at 390x844, looked at, with Night still very dark blue; frozen gate exact at village, wild and canyon (programs included); the space row +1 program (ledger), draws and triangles exact.
 - **Speed:** 0 draw calls, 0 triangles; colour values only, plus one runtime star sprite; at most 0.1 KB gzip of code before Start.
 - **Refs:** P18, P22, O8, O46.
+- **Result (as built):**
+  - Measured on the speed gate's frozen page, the same frame with the old and the new table (`perfFlags.ownColours`, read as the page loads; with it off the picture equals staging without this package: 0 differing pixels in all 26 scenes on both devices, bosses included). Desktop 1600x900 / phone 390x844, HSV saturation and HSL lightness of the whole frame:
+
+    | Scene | Saturation | Lightness | Note |
+    |---|---|---|---|
+    | Candy, 26 m from the pad | .49 → .72 / .47 → .70 | .72 → .54 / .73 → .55 | acceptance .62 or less and .45 or more: met |
+    | Forest | .78 → .90 / .79 → .89 | .36 → .34 | sunlit floor hue 114 → 95 (towards yellow) |
+    | Swamp | .69 → .78 / .77 → .84 | .42 → .40 | sunlit ground a warm green, nudged greener after review |
+    | Canyon | .64 → .73 / .63 → .71 | .61 → .57 | |
+    | Ice | .28 → .64 / .30 → .65 | .80 → .62 | |
+    | Toy | .24 → .58 / .23 → .59 | .80 → .59 | softened after review: rose #dc6a96 and blue #62a6e4 as drawn |
+    | Ocean | .60 → .81 / .59 → .79 | .59 → .54 | |
+    | Cloud | .39 → .76 / .41 → .73 | .72 → .51 | |
+    | Jungle, Lava | .80 → .84, .89 → .92 | unchanged within .01 | |
+    | Village, garden, meadow | unchanged within .01 | unchanged within .002 | the village green and the meadow keep their colours |
+    | Night Planet | identical | identical | 0 pixels of the table changed |
+
+    No scene gained pixels at pure white or pure black (0.00 to 0.19% white before and after, 0% black).
+  - Shade (the follow-up from WP6): every day light is split anew. The sky half is bluer and stronger, the sun warmer, and their sum on flat ground is what it was within 1.5% per channel, so sunlit ground is not relit. In shaded pixels blue minus red rises by .051/.046 (village), .046/.045 (garden) and .051/.046 (meadow): the .05 target is reached on two of the six and missed by .004 to .005 on the others. Shaded lightness +.016 (limit .03). Shaded saturation falls by .04 to .08 (HSV): blue added to green shade is less pure than green alone; lit saturation is up by .01. On Ice +.19, Cloud +.24, Toy +.07, Candy +.07, Ocean +.06. The explorer's own colours stay within 1 L* under every planet's light, with saturation +.00 to +.03 and hue within 2 degrees, except on Ice (+6) and Cloud (-8), where the pale outfit is almost colourless (saturation .16) and its hue is not a stable number.
+  - The Crocodile King: its paint is set where its model's colours are baked (`creature-art.ts`, by the material names of `creatures.glb`); the colour field in `enemy-types.ts` only colours the stand-in shape and the sparks. In the picture, the mean of the boss against the mean of what surrounds it: 8.5 → 19.9 L* apart and 47 → 65 degrees of hue (phone 8.1 → 19.8, 45 → 66).
+  - Bosses, same measure (L* apart, before → after, desktop / phone): Cake King 6.3 → 22.1 / 6.9 → 22.7, King Bear 21.5 → 22.5 / 21.6 → 22.4 (his own paint a shade darker, since the canyon had to come under lightness .65), Toy Robot 10.4 → 17.2 / 8.5 → 18.2, Magma Golem 1.0 → 9.3 / 1.4 → 9.8 (deep plum with a stronger ember accent; black read as a blob), Thunder Phoenix 5.0 → 7.8 / 3.2 → 6.0 (hue 50 → 67 degrees, colour distance 68 → 126), Leviathan 5.5 → 7.8 (colour distance 88 → 133), gorilla 22 → 22.5, Mushroom King 17.5 → 16.5, treant 9.4 → 11.5. The Snow Yeti stays 7 L* from the glacier (7.1 → 6.8) but is now cream with indigo shadows against deep blue: 10 → 162 degrees of hue apart, colour distance 41 → 101. The rule in the tests is on the paint that covers most of a boss, on flat sunlit ground (20 L* or more on every day planet); a whole model with its shaded sides, crown and cape measures lower, as above, and the golem, the phoenix, the leviathan and the yeti do not reach 20 L* as drawn. The bosses' own colours (eight, the croc among them) live in the table and are put on `ENEMY_TYPES` as the page loads, so the switch turns bodies, health chips, bursts and sparks back together; `enemy-types.ts`, which the server shares, keeps the old colours. The Shadow Lord is unchanged: he is seen against the explorer's pool of light, which is lighter than he is (15 L* apart).
+  - Ocean and Cloud: their ground lies under the sea, so the visible colours are the islands and the sea (`environment-art.ts`), now in the table too: golden sand in a turquoise sea (the landing island as well), deep green islands in a blue sky (the cloud sea was near white). Each island top is one mesh as before, with four rings inside it so a second colour dapples it in vertex colours: 256 triangles instead of 48 per island, no texture, no extra draw, no new program.
+  - The play mat's texture deepens the colours it is given (`ground.ts` `checker` writes linear values into an sRGB texture); the table holds the values that draw as rose #dc6a96 and blue #62a6e4, and the test applies the same step.
+  - Space: background #050a24 (hue 230, value .14), four blue and teal clouds, round stars, blue basalt on the lava rocks (they were mauve). Pixels in the magenta band 280 to 330: 14.9% → 0.00% (phone 44% → 0.01%). No program was added: all three star layers wear the round map, so their one program changed (programs 7, draws 31, triangles 65,990: exact). The ledger entry is one texture instead (the 128 px round map). The stand-in rock is smooth; the kit's rocks keep the facets of their file (an art change, round 2).
+  - The hidden key hints were `.space-help` (bottom left), covered by the Return home button, not `#space-hint`: they now sit above it (0 px overlap at 1600x900; on touch they are not shown, by design, and the top hint is clear of every control at 390x844). Text against its box: 15.2:1 (9.1:1 over the key caps), top hint 16.1:1.
+  - The explorer seen from the play camera against sunlit village grass: in the pale outfit of the late save 1.5 L* apart (phone 2.2) and 39 degrees of hue, so told apart by saturation only (.19 against .68); in a darker outfit 19.5 L*. Recorded for round 2's art pass; nothing was changed for it.
+  - Start bytes: +445 gzip (English and Vietnamese) against staging, over the 0.1 KB estimate; a named ledger entry. The old tables ship only in dev and perf builds.
 
 ### WP19. Chunky toy effects
 - **Result:** hits throw chunky stars, petals and puffs in a colour per skill instead of thin white chips; rings and slashes are thick and two-toned; dashes and landings kick up dust. Same pools, same draw calls.
@@ -864,7 +891,7 @@ No package edits `src/actions.ts`, `src/content.ts` or `src/locales/vi-pack.ts`.
 | Live rows (King Bear and treant 4 s peaks, scripted fight peak, idle village layout) | Draws and triangles +5%; programs created during the fight not above the baseline; CDP layout counts (LayoutCount, RecalcStyleCount, Nodes) +5%, in the fight and idle in the village. |
 | Memory and CPU counters (geometries, textures, geometry bytes, matrix visits) | +5%. |
 | Colossus fight (WP3 row f) | Report only, until two runs agree within 5%. |
-| Ledger | Named entries only. Round 1 has one: the space row +1 program (WP18, round stars). |
+| Ledger | Named entries only. Round 1 has one: the space row, for WP18's round stars (planned as +1 program; as built +1 texture and no program). |
 
 **Bytes.** Three static rows from `perf:bytes` (English start, Vietnamese start, service-worker install list) and the before-play download from `perf:download` (WP3: new and late saves, English and Vietnamese, with the service worker blocked, to the Start button and from Start to 10 s after the first played frame). The bytes ledger in the merge log tracks every package's pre-Start change against its allowance. Each package checks its own English and Vietnamese start against the batch's starting commit before review (rules in section 5), and the integrator checks the running total after every merge:
 

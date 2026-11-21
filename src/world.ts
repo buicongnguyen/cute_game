@@ -54,6 +54,7 @@ import {addOutlines,setOutlinesEnabled,showOutlines} from './outline.ts';
 import {viewWidth,viewHeight} from './viewport.ts';
 import {deferFlash,flashMaterialsOf,flashMaterialsSoFar} from './flash-materials.ts';
 import {SUN_OFFSET,isLit,toonMaterial,type LitMaterial} from './toon.ts';
+import {PALETTE} from './planet-palette.ts';
 import {applyLook,planetLook,setGrade,skyTexture,skyInView,lightPool,NIGHT_GLOW,type PlanetLook} from './look.ts';
 import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
 import {TelegraphDecals} from './telegraph.ts';
@@ -135,15 +136,7 @@ const ENTITY_ASSETS: Partial<Record<string, RefinedAsset>> = { home: 'cottage', 
 const BED_PICK=mergeGeometries([new T.BoxGeometry(1.94*M.BED_SCALE,.32,1.94*M.BED_SCALE).translate(0,.16,0),new T.BoxGeometry(.8*M.CROP_SCALE,1.05*M.CROP_SCALE,.8*M.CROP_SCALE).translate(0,.75*M.CROP_SCALE,0)]),BED_PICK_MATERIAL=new T.MeshBasicMaterial({visible:false});BED_PICK.userData.sharedKit=BED_PICK_MATERIAL.userData.sharedKit=true;
 // Planet palettes for the shared scenery kit (material name → colour). Home uses the kit's own colours.
 const SCENERY_KITS = { scenery: sceneryKit, wilds: wildsKit, bright: brightKit, harsh: harshKit, dressing: dressingKit };
-const KIT_TINTS: Partial<Record<PlanetId, Record<string, string>>> = {
-  // "A" is the darker lower lobe, "B" the lighter crown on top.
-  candy: { 'Leaf A': '#ff7fb8', 'Leaf B': '#ffb8d9', 'Blossom A': '#a97cff', 'Blossom B': '#dcc8ff', 'Pine A': '#ff8a5c', 'Pine B': '#ffc49a', Bark: '#b06a52', Grass: '#ff9ccf', Rock: '#d7a3e8' },
-  ice: { 'Leaf A': '#8fcbe6', 'Leaf B': '#dcf5ff', 'Blossom A': '#b5e2fa', 'Blossom B': '#ecfaff', 'Pine A': '#7fbcd8', 'Pine B': '#d0f0fb', Bark: '#8b9db5', Grass: '#c6ecf7', Rock: '#b9d6e6' },
-  lava: { 'Leaf A': '#7e3f36', 'Leaf B': '#b0604a', 'Blossom A': '#ff6a2a', 'Blossom B': '#ffb36b', 'Pine A': '#6a3a32', 'Pine B': '#9a5a48', Bark: '#4a3434', Grass: '#8c5a48', Rock: '#5e4553' },
-  toy: { 'Leaf A': '#34b84a', 'Leaf B': '#8fe06a', 'Pine A': '#2f8fe0', 'Pine B': '#7cc8ff' },
-  jungle: { 'Leaf A': '#1c8a3a', 'Leaf B': '#3cc04e', 'Pine A': '#18763a', 'Pine B': '#2fae52', Grass: '#3fbf4f' },
-  shadow: { 'Leaf A': '#554a96', 'Leaf B': '#8f7fd6', 'Blossom A': '#8f6ff0', 'Blossom B': '#d3c3ff', 'Pine A': '#4a4080', 'Pine B': '#7a6cc0', Bark: '#3e3656', Grass: '#73699b', Rock: '#6d6690' },
-};
+const KIT_TINTS = PALETTE.kit;
 function material(color: string, flat = true) {
   const key = color + flat;
   if (!matCache.has(key)) { const m = toonMaterial({ color, flatShading: flat }); keepAlive.add(m); matCache.set(key, m); }

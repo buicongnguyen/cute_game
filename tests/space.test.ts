@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SpaceFlight, STAR_MAP, SPACE_EDGE, FUEL_MAX, spaceLayout, type SpaceInput } from '../src/space.ts';
+import { PALETTES } from '../src/planet-palette.ts';
 
 const empty = () => ({ asteroids: [], dust: [] });
 const fly = (flight: SpaceFlight, seconds: number, input: Partial<SpaceInput> = {}) => {
@@ -150,4 +151,23 @@ test('a star-map trip still pays the ϟ launch and respects the landing level', 
   assert.equal(M.launch(s), true); assert.equal(s.energy, 5);
   assert.equal(M.travel(s, 'candy'), false, 'level 1 cannot land on candy'); s.level = 6;
   assert.equal(M.travel(s, 'candy'), true); assert.equal(s.planet, 'candy');
+});
+
+/** Hue (degrees), saturation and value of 0..255 channels. */
+const hsv = (r: number, g: number, b: number) => { const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min, h = !d ? 0 : max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4; return { h: h * 60, s: max ? d / max : 0, v: max / 255 }; };
+const hexHsv = (hex: string) => hsv(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16));
+const cloudHsv = (rgba: string) => { const [r, g, b] = rgba.slice(5).split(',').map(Number); return hsv(r, g, b); };
+
+test('space is very dark blue with blue and teal clouds only, and round stars (it was violet with a magenta cloud and square stars)', () => {
+  const own = PALETTES.own.space, sky = hexHsv(own.sky);
+  assert.ok(sky.h >= 210 && sky.h <= 240, `background hue ${sky.h.toFixed(0)}`); assert.ok(sky.v <= .15, `background value ${sky.v.toFixed(2)}`); assert.ok(sky.s >= .6, 'blue, not grey');
+  assert.ok(own.nebulae.length >= 4);
+  for (const cloud of own.nebulae) { const c = cloudHsv(cloud); assert.ok(c.h >= 160 && c.h <= 245, `${cloud}: hue ${c.h.toFixed(0)} is blue or teal`); assert.ok(!(c.h >= 280 && c.h <= 330), 'no magenta'); assert.ok(c.s >= .5, 'saturated'); }
+  assert.ok(own.nebulae.some(c => cloudHsv(c).h < 190) && own.nebulae.some(c => cloudHsv(c).h > 210), 'both teal and blue');
+  assert.equal(own.round, true); assert.equal(own.stars.length, 3);
+  for (const star of own.stars) assert.ok(hexHsv(star).v >= .98, 'bright stars');
+  const basalt = hexHsv(own.paint!.Basalt); assert.ok(basalt.h >= 210 && basalt.h <= 250, 'the lava rocks are blue-black basalt, not mauve');
+  const lower = hexHsv(own.hemi[1]); assert.ok(lower.h >= 210 && lower.h <= 240, 'the light from below is blue too');
+  const old = PALETTES.classic!.space;
+  assert.ok(hexHsv(old.sky).h > 240, 'the old sky was violet'); assert.ok(old.nebulae.some(c => { const h = cloudHsv(c).h; return h >= 280 && h <= 330; }), 'the old sky had a magenta cloud'); assert.equal(old.round, false); assert.equal(old.paint, undefined);
 });
