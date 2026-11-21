@@ -1,7 +1,15 @@
 # Zoo Garden: AAA plan
 
 **Plan v2 (final for round 1)** · 2026-11-19 · written on `develop` at commit b3b9f57 (the same as `origin/main`).
-Status: plan only. Nothing in the game has changed. This file replaces plan v1.
+This file replaces plan v1. The sections below are the plan as written; the status of round 1 is here.
+
+## Round 1 status (2026-11-21)
+
+Round 1 stopped after batch 4 plus WP17 and WP18. The merged packages are on `aaa/staging`, `develop` and `main` (live on Pages):
+
+- **Merged and live (17):** WP0 frozen speed gate and date test · WP1 test harness and guards · WP2 events, services, lazy features · WP3 more before numbers and the mid-game save · WP4 journey tool and before reel · WP5 owner decision pack · WP6 toy finish (own ramp, ink, crop cards) · WP7 sound core with buses · WP8 mix and stingers · WP9 hit feel 2.0 · WP10 hero gait, idle acts and poses · WP12 creature voices and low-health warning · WP13 music director and live score · WP16 readable HUD (11 px, 44 px) · WP17 first fight and readable danger · WP18 own planet colours · WP24 Ember Well trade-offs, bounty cap, text fixes.
+- **Not built (10):** WP11 ambience and footsteps · WP14 story scenes · WP15 moments and conductor · WP19 toy effects · WP20 chapter 1 · WP21 chapter 2 and rescues · WP22 boss events · WP23 King Bear and treant signature moves · WP25 own names and title · WP27 byte payback and mode bridges. Their sections below are plans only; nothing for them is in the code.
+- **WP26 (cleanup)** was done only in part, on the round's own code: unused exports, one shared seeded generator for the feature modules, promo tools without machine paths, stale lines in this file and `QUALITY-PLAN.md`/`SOUNDS.md`. The rest of section 8 (one `escapeHtml`, one `dist2D`, `noUnusedLocals`, the round report) is open.
 
 **Where it comes from.** Plan v1 took the judges' winning plan (A) and the best parts of B and C. Five critics then checked v1:
 speed, feasibility, owner intent, player impact and completeness. They raised 120 issues (27 high). Plan v2 applies every high issue

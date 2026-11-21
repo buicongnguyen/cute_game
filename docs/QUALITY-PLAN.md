@@ -176,7 +176,7 @@ Optional and off by default: a "Fancy effects" switch for strong PCs (glow, a sl
 
 Done when: before-and-after pictures of the village, the wilds and three planets are clearly better, and the gate passes.
 
-**Built on the `dev-light` branch (2026-10-11), not yet merged.** The code is `src/look.ts`; `perfFlags.richLook` switches it off for a before and after.
+**Built on the `dev-light` branch (2026-10-11), merged since.** The code is `src/look.ts`; `perfFlags.richLook` switches it off for a before and after.
 
 - Colour curve: a few multiply-adds inside the shaders that already draw (three's custom tone-mapping slot), no extra pass. More contrast and saturation, and a soft roll-off so sunlit surfaces no longer clip to pastel. The interface's own small pictures (item icons, the mirror) do not use it and did not change.
 - A light setup per planet: sun colour and direction, sky light, fog and sky colours for all nine.
