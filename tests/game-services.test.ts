@@ -78,12 +78,13 @@ test('the facts of the HUD tick become storyStep and place events, once per chan
 test('the start code only sends: events are dropped until the services connect a bus, then reach its listeners', () => {
   connect(undefined as never);
   assert.doesNotThrow(() => { emit('levelUp', { level: 2 }); noteProgress({}, 1, 'Clover Village', 'home'); }, 'before the features load nobody listens');
+  assert.equal(emit('friendHome', { id: 'pepper' }), false, 'and the sender is told so: a once-only site keeps its news for later');
   let connected = 0;
   const services = createServices(host({ connect: bus => { connected++; connect(bus); } }));
   assert.equal(connected, 1); assert.equal('connect' in services, false, 'features get the bus, not the plug');
   const levels: number[] = [], places: string[] = [];
   services.on('levelUp', ({ level }) => { levels.push(level); }); services.on('place', ({ name }) => { places.push(name); });
-  emit('levelUp', { level: 3 }); services.emit('levelUp', { level: 4 }); // the game's emit, and a feature's own
+  assert.equal(emit('levelUp', { level: 3 }), true); services.emit('levelUp', { level: 4 }); // the game's emit, and a feature's own
   noteProgress({}, 1, 'Clover Village', 'home');
   assert.deepEqual(levels, [3, 4]); assert.deepEqual(places, ['Clover Village']);
   assert.equal(services.state().level, 3); assert.equal(services.quality(), 'high'); assert.equal(services.world.planet, 'home');

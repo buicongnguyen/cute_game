@@ -46,7 +46,12 @@ export function addPhrases(loader: () => Promise<Record<string, string>>): Promi
 }
 /** Switches language once its phrases are in memory, so the page never shows a half-translated flash. */
 export async function switchLanguage(next: Language) {
-  if (next === 'vi') { try { await Promise.all([loadVietnamese(), ...sources.map(load => load())]); } catch { /* Offline and uncached: setLanguage still switches; the phrases follow when the load succeeds. */ } }
+  if (next === 'vi') {
+    // Every load is waited for to its end, whatever the others do: one table that fails must not switch the page while the pack is still on its way.
+    const added = Promise.allSettled(sources.map(load => load()));
+    try { await loadVietnamese(); } catch { /* Offline and uncached: setLanguage still switches; the phrases follow when the load succeeds. */ }
+    await added;
+  }
   setLanguage(next);
 }
 export function setLanguage(next: Language) {

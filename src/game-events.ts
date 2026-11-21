@@ -4,6 +4,15 @@
  * the services (game-services.ts), which also hold the bus itself. Nothing in the start code listens.
  *
  * Every event has a site that emits it or a named later owner; tests/game-events-main.test.mjs holds that table.
+ *
+ * Rules for a listener:
+ * - Subscribe synchronously inside mount(). Events from before the features are mounted are dropped, not kept: read
+ *   what you need to know at mount from the services (state(), world), then listen for changes.
+ * - Never change a payload. It is the game's own object (the creature, the blow, the progress entry), handed to every
+ *   listener as it is.
+ * - Never call back into the fight or into perform() from inside a listener: the emit sits in the middle of the game's
+ *   own step (a blow being settled, an action being finished). Defer such work with queueMicrotask.
+ * - A listener that throws is logged and skipped; the game and the other listeners go on.
  */
 import type { Enemy } from './world.ts';
 import type { CombatHit } from './combat.ts';
@@ -16,7 +25,11 @@ export interface GameEvents {
   levelUp: { level: number };
   /** The story moved to another step (compared at the HUD tick). */
   storyStep: { index: number; from: number };
-  /** A quest, task, pass or achievement reward was claimed: the entry as it stood before the claim, and the energy it paid. */
+  /**
+   * A quest, task, pass or achievement reward was claimed: the entry as it stood before the claim, and the energy the save
+   * gained by it. `energy` is exact in solo play; in an online room it is the difference seen when the server's reply
+   * is in, which may include other income of that moment or miss the claim's: use `entry.rewardLabel` for display.
+   */
   reward: { kind: string; entry: ProgressEntry; energy: number };
   /** The hero is in another zone or on another planet (compared at the HUD tick); `from` is the place before as 'planet/zone', '' at first. */
   place: { name: string; planet: string; from: string };
@@ -43,7 +56,7 @@ export interface GameEvents {
   harvest: { crops: string[]; all: boolean; first: boolean };
   /** A caged friend was freed, at this spot. */
   rescue: { id: string; at: { x: number; z: number } };
-  /** A rescued friend reached the village, once per friend and page. */
+  /** A rescued friend reached the village, once per friend and page (an arrival before the features listen is told at the next one). */
   friendHome: { id: string };
   /** WP17: the first tutorial win. */
   firstWin: Record<string, never>;
@@ -68,6 +81,7 @@ export interface EventSink extends EventBus {
 // here for the price of one test.
 let sink: EventSink | undefined;
 export const connect = (bus: EventSink) => { sink = bus; };
-export const emit: EventBus['emit'] = (event, payload) => sink?.emit(event, payload);
+/** Sends an event; false when nobody can hear it yet (no bus connected), so a once-only site can keep it for later. */
+export const emit = <K extends GameEvent>(event: K, payload: GameEvents[K]): boolean => !!sink && (sink.emit(event, payload), true);
 /** Called at the HUD tick with the save in play, its story index and where the hero is (storyStep and place come of it). */
 export const noteProgress: EventSink['note'] = (save, story, zone, planet) => sink?.note(save, story, zone, planet);

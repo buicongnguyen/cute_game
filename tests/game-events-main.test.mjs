@@ -47,7 +47,7 @@ test('every event has a site that emits it, or a named later owner', () => {
 const performer = await mainHarness({ functions: ['perform'] });
 function game() {
   const state = M.parseSave(readFileSync(new URL('../promo/save-new.json', import.meta.url), 'utf8')), calls = [];
-  const ctx = performer.context({ state, actionHandler: null, Date, Math, save() {}, updateHud() {}, levelCheck() {}, pepperGift() { calls.push('pepper'); }, reportRefusal(type) { calls.push('refused:' + type); } });
+  const ctx = performer.context({ state, actionHandler: null, Date, Math, structuredClone, save() {}, updateHud() {}, levelCheck() {}, pepperGift() { calls.push('pepper'); }, reportRefusal(type) { calls.push('refused:' + type); } });
   const ripen = (...beds) => { for (const index of beds) Object.assign(state.plots[index], { crop: 'carrot', plantedAt: 1 }); };
   return { state, ctx, calls, ripen };
 }
@@ -98,6 +98,28 @@ test('claimProgress emits reward for the entry named in the payload', async () =
   assert.deepEqual(told.map(([event, reward]) => [event, reward.kind, reward.entry.id]), [['reward', 'story', 'story:0']]);
 });
 
+test('the claim lookup never touches the save before the action, and a lookup that fails costs only the event', async () => {
+  // Online: the save must reach the server call as the server last sent it (listing the entries refreshes them, so it reads a copy).
+  const g = game(), told = listen();
+  g.ripen(0, 1, 2);
+  for (const index of [0, 1, 2]) await g.ctx.perform('harvest', { index });
+  told.length = 0;
+  g.state.progression.daily.day = -1; // stale: listing the entries of the save itself would roll the day over
+  const before = JSON.stringify(g.state); let atCall = '';
+  g.ctx.actionHandler = async () => { atCall = JSON.stringify(g.state); g.state.energy += 67; return { result: true }; };
+  assert.equal(await g.ctx.perform('claimQuest'), true);
+  assert.equal(atCall, before, 'unchanged when the server is asked');
+  assert.deepEqual(told.map(([event, reward]) => [event, reward.entry.id, reward.energy]), [['reward', 'story:0', 67]]);
+  // Solo, with a lookup that throws: the claim itself still goes through, without an event; a refused one still reports its refusal.
+  const h = game(); h.ripen(0, 1, 2);
+  for (const index of [0, 1, 2]) await h.ctx.perform('harvest', { index });
+  told.length = 0;
+  h.ctx.structuredClone = () => { throw new Error('cannot copy'); };
+  assert.equal(await h.ctx.perform('claimQuest'), true); assert.equal(h.state.quest, 1); assert.deepEqual(told, []);
+  await h.ctx.perform('claimQuest');
+  assert.deepEqual(h.calls.filter(call => call.startsWith('refused')), ['refused:claimQuest'], 'the refusal toast is not lost');
+});
+
 // ---- levelCheck(): one levelUp per level gained --------------------------------------------------------------------
 const leveller = await mainHarness({ functions: ['levelCheck'] });
 test('levelCheck emits exactly one levelUp per level gained', () => {
@@ -116,7 +138,7 @@ test('levelCheck emits exactly one levelUp per level gained', () => {
 const loader = await mainHarness({ functions: ['loadFeatures'], variables: ['featuresAsked'] });
 test('the features are asked for once, after the first played frame, and started fires once when they are mounted', async () => {
   const told = listen(), order = [], frameListeners = new Set(), serviceHost = { name: 'host' }, addPhrases = () => {};
-  const ctx = loader.context({ frameListeners, serviceHost, addPhrases, console });
+  const ctx = loader.context({ frameListeners, serviceHost, addPhrases, console, setTimeout() { assert.fail('no retry after a load that worked'); } });
   let loads = 0;
   const load = async () => { loads++; order.push('chunk'); return { async mountFeatures(host, phrases) {
     assert.equal(host, serviceHost); assert.equal(phrases, addPhrases);
@@ -136,13 +158,24 @@ test('the features are asked for once, after the first played frame, and started
   assert.equal(names(told).filter(event => event === 'started').length, 1, 'started fires once per page');
 });
 
-test('a feature chunk that cannot be fetched is logged, and the game goes on without started', async () => {
-  const told = listen(), frameListeners = new Set(), logged = [];
-  const ctx = loader.context({ frameListeners, serviceHost: {}, addPhrases() {}, console: { error: error => logged.push(String(error)) } });
-  ctx.loadFeatures(async () => { throw new Error('offline'); });
-  for (const listener of frameListeners) listener(1 / 60);
-  await tick(); await tick();
-  assert.deepEqual(plain(told), []); assert.equal(logged.length, 1); assert.match(logged[0], /offline/);
+test('a feature chunk that cannot be fetched is logged and asked for once more, 8 s later; started then fires once', async () => {
+  const run = async answers => {
+    const told = listen(), frameListeners = new Set(), logged = [], timers = [];
+    const ctx = loader.context({ frameListeners, serviceHost: {}, addPhrases() {}, console: { error: error => logged.push(String(error)) }, setTimeout: (fn, ms) => { timers.push([fn, ms]); } });
+    let loads = 0;
+    ctx.loadFeatures(async () => { if (!answers[loads++]) throw new Error('offline'); return { mountFeatures: async () => ({}) }; });
+    for (const listener of frameListeners) listener(1 / 60);
+    await tick(); await tick();
+    return { told, logged, timers, loads: () => loads };
+  };
+  const second = await run([false, true]);
+  assert.deepEqual(second.told, [], 'the game goes on without its features for now'); assert.equal(second.logged.length, 1); assert.match(second.logged[0], /offline/);
+  assert.deepEqual(second.timers.map(([, ms]) => ms), [8000]);
+  second.timers[0][0](); await tick(); await tick();
+  assert.equal(second.loads(), 2); assert.deepEqual(plain(second.told), [['started', {}]]);
+  const never = await run([false, false]);
+  never.timers[0][0](); await tick(); await tick();
+  assert.equal(never.loads(), 2); assert.equal(never.timers.length, 1, 'one retry, not a loop'); assert.equal(never.logged.length, 2); assert.deepEqual(never.told, []);
 });
 
 test.after(() => connect(undefined));

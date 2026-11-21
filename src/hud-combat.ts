@@ -62,9 +62,11 @@ export function bossFor(enemies: readonly Enemy[], x: number, z: number): Enemy 
  */
 export function bossApproach(enemies: readonly Enemy[], x: number, z: number, margin = 6): Enemy | null {
   let best: Enemy | null = null, bestD = Infinity;
-  for (const e of enemies) if (e.boss && e.hp > 0 && !aggro(e)) { const d = Math.hypot(e.x - x, e.z - z); if (d < ((e.definition ?? ENEMY_TYPES[e.type ?? ''])?.sight ?? 13) + margin && d < bestD) { best = e; bestD = d; } }
+  for (const e of enemies) if (!aggro(e) && bossClose(e, x, z, margin)) { const d = Math.hypot(e.x - x, e.z - z); if (d < bestD) { best = e; bestD = d; } }
   return best;
 }
+/** A living boss within its sight radius plus `margin` metres. */
+export const bossClose = (e: Enemy, x: number, z: number, margin: number) => e.boss && e.hp > 0 && Math.hypot(e.x - x, e.z - z) < ((e.definition ?? ENEMY_TYPES[e.type ?? ''])?.sight ?? 13) + margin;
 /** A fight is near when an aggro creature is within 12 m: the trackers fold into a chip so they cannot hide it. */
 export const fightNear = (enemies: readonly Enemy[], x: number, z: number, r = 12) => enemies.some(e => e.hp > 0 && aggro(e) && Math.hypot(e.x - x, e.z - z) < r);
 
@@ -143,7 +145,7 @@ export class CombatHud {
   private lastHit: { e: Enemy; at: number } | null = null;
   private targetId = ''; private bossId = '';
   /** For the events (game-events.ts): the boss whose approach, fight and break were already told. */
-  private nearId = ''; private foughtId = ''; private broken = false;
+  private near = new Set<string>(); private foughtId = ''; private broken = false;
   private layer: HTMLElement; private screen: Screen;
   constructor(layer: HTMLElement, screen: Screen) { this.layer = layer; this.screen = screen; }
 
@@ -225,15 +227,17 @@ export class CombatHud {
     el.hidden = !shown; el.classList.toggle('broken', broken); (el.firstElementChild as HTMLElement).style.width = `${broken ? 100 : Math.round(staggerShare(s) * 100)}%`;
   }
   /**
-   * Boss events, at the HUD's pace: bossApproach as the hero nears a calm boss (again only after walking 4 m further out
-   * than where it fired), bossEngaged each time the boss bar comes up for a boss, bossBreak as its stagger meter breaks.
+   * Boss events, at the HUD's pace: bossApproach as the hero nears a calm boss (for that boss again only after walking 4 m
+   * further out than where it fired; two bosses each have their own, so the nearest of two changing says nothing new),
+   * bossEngaged each time the boss bar comes up for a boss, bossBreak as its stagger meter breaks.
    */
   private tell(enemies: readonly Enemy[], boss: Enemy | null, px: number, pz: number, now: number) {
-    const near = boss ?? bossApproach(enemies, px, pz, this.nearId ? 10 : 6), broken = !!boss && staggerBroken(boss.stagger, now);
-    if (near && !boss && near.id !== this.nearId) emit('bossApproach', { enemy: near });
+    const near = boss ?? bossApproach(enemies, px, pz), broken = !!boss && staggerBroken(boss.stagger, now);
+    for (const id of this.near) if (id !== near?.id && !enemies.some(e => e.id === id && bossClose(e, px, pz, 10))) this.near.delete(id);
+    if (near && !this.near.has(near.id)) { this.near.add(near.id); if (!boss) emit('bossApproach', { enemy: near }); }
     if (boss && boss.id !== this.foughtId) emit('bossEngaged', { enemy: boss });
     if (broken && !this.broken) emit('bossBreak', { enemy: boss! });
-    this.nearId = near?.id ?? ''; this.foughtId = boss?.id ?? ''; this.broken = broken;
+    this.foughtId = boss?.id ?? ''; this.broken = broken;
   }
   clear() { for (const bar of this.bars.values()) bar.el.remove(); this.bars.clear(); this.lastHit = null; }
 }

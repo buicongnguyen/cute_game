@@ -42,8 +42,8 @@ export function manualChunk(id: string) {
   // src/features.ts, src/features/ and src/story/ are NOT pinned, on purpose: Rollup moves the static imports of a pinned
   // module into its chunk, so the first feature to import i18n.ts or sfx.ts would carry that module into "features" and
   // the start would have to import the lazy chunk. They form a chunk of their own anyway: only features.ts reaches them,
-  // through the import() in main.ts, and its top-level addPhrases() call is a side effect, which keeps Rollup from
-  // folding the chunk into another. `npm run perf:bytes` reads the chunk map (below) and fails if this stops being true.
+  // through the import() in main.ts, and its top-level `globalThis.zooFeatures = ...` line is a side effect, which keeps
+  // Rollup from folding the chunk into another. `npm run perf:bytes` reads the chunk map (below) and fails if this stops being true.
   if (path.includes('/node_modules/three/build/')) return 'three';
   if (path.endsWith('/src/help-topics.ts')) return 'help';
   // The content tables the Vietnamese pack reads its English names from. i18n.ts awaits the pack at start (top-level await), so the

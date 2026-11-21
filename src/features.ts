@@ -20,6 +20,8 @@ const tables = import.meta.glob<Record<string, string>>('./features-vi/*.ts', { 
 // small chunk without one into the start download (experimentalMinChunkSize in vite.config.ts), so keep the line.
 (globalThis as { zooFeatures?: string[] }).zooFeatures = Object.keys(features).sort();
 
+/** The longest the features wait for their Vietnamese phrases before they mount, in ms. */
+export const PHRASE_WAIT = 4000;
 /** Every feature's Vietnamese phrases, merged into one table. */
 export const featurePhrases = async (): Promise<Record<string, string>> => Object.assign({}, ...await Promise.all(Object.keys(tables).sort().map(file => tables[file]())));
 
@@ -31,7 +33,12 @@ export const featurePhrases = async (): Promise<Record<string, string>> => Objec
 export async function mountFeatures(host: ServiceHost, phrases: typeof addPhrases): Promise<GameServices> {
   const services = createServices(host);
   // Asked for only when a feature has phrases: adding a table re-renders the page's text, which an empty one must not cost.
-  try { if (Object.keys(tables).length) await phrases(featurePhrases); } catch { /* Offline and uncached: the features mount in English; a later language switch tries again. */ }
+  // Waited for at most PHRASE_WAIT: a request that hangs must not hold every feature back. Phrases that come later still
+  // join the table and re-render the page.
+  if (Object.keys(tables).length) await Promise.race([
+    phrases(featurePhrases).catch(() => { /* Offline and uncached: the features mount in English; a later language switch tries again. */ }),
+    new Promise(resolve => setTimeout(resolve, PHRASE_WAIT)),
+  ]);
   for (const file of Object.keys(features).sort()) try { features[file].mount?.(services); } catch (error) { console.error(file, error); }
   return services;
 }

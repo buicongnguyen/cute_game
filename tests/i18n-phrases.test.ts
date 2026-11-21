@@ -65,6 +65,18 @@ test('a loader that fails does not block the switch, and is tried again', async 
   assert.equal(tries, 3); assert.equal(t('A phrase that came on the third try'), 'Cụm từ đến ở lần thử thứ ba');
 });
 
+test('a table that fails at once does not switch the page before the slower loads are in', async () => {
+  await switchLanguage('en');
+  let slowIn = false;
+  await addPhrases(async () => { throw new Error('404'); });
+  await addPhrases(async () => { await new Promise(resolve => setTimeout(resolve, 40)); slowIn = true; return { 'A phrase from the slow table': 'Cụm từ từ bảng chậm' }; });
+  let atChange: [boolean, string] | null = null;
+  const off = onLanguageChange(() => { atChange ??= [slowIn, t('A phrase from the slow table')]; });
+  await switchLanguage('vi');
+  off();
+  assert.deepEqual(atChange, [true, 'Cụm từ từ bảng chậm'], 'the switch waited for every load to end: no half-translated page');
+});
+
 test('the phrase tables of the features (src/features-vi) load for the locale tests and never redefine a phrase of the pack', async () => {
   const tables = await featurePhraseTables(), merged = await featurePhrases();
   for (const [name, table] of tables) {

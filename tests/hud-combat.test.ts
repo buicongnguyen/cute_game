@@ -127,3 +127,25 @@ test('the boss events: approach once (again only after walking away), engaged wh
   assert.deepEqual(told.splice(0), ['bossEngaged:treant']);
   connect(undefined as never);
 });
+
+test('two calm bosses side by side: each approach is said once, however the nearest of the two alternates', () => {
+  const bus = createEvents(), told: string[] = [];
+  connect(bus);
+  bus.on('bossApproach', ({ enemy: e }) => { told.push(e.id); }); bus.on('bossEngaged', ({ enemy: e }) => { told.push('engaged:' + e.id); });
+  const hud = new CombatHud(null as never, null as never) as unknown as { tell(enemies: Enemy[], boss: Enemy | null, x: number, z: number, now: number): void };
+  const left = enemy({ id: 'left', boss: true, type: 'bear', x: -10 }), right = enemy({ id: 'right', boss: true, type: 'treant', x: 10 });
+  const tick = (x: number) => hud.tell([left, right], bossFor([left, right], x, 0), x, 0, 0);
+  tick(-1); tick(1); tick(-1); tick(1); tick(-2); tick(2);
+  assert.deepEqual(told.splice(0), ['left', 'right'], 'the hero sways between them: two approaches, not six');
+  // Walking out of one's range (past sight + 10 m) while staying in the other's: only the one left behind can be said again.
+  tick(14); tick(1); tick(-1);
+  assert.deepEqual(told.splice(0), ['left']);
+  // A fight with one does not make the other new, and the fought one is not an approach when it calms down.
+  right.phase = 'chase'; tick(1); tick(-1);
+  right.phase = 'idle'; tick(1); tick(-1); tick(1);
+  assert.deepEqual(told.splice(0), ['engaged:right']);
+  // A boss that fell and came back is approached anew.
+  left.hp = 0; tick(-1); left.hp = left.maxHp; tick(-1);
+  assert.deepEqual(told.splice(0), ['left']);
+  connect(undefined as never);
+});
