@@ -22,6 +22,8 @@ export function noise2(x: number, z: number) {
 const HOME = { home: new T.Color('#93e06a'), forest: new T.Color('#5cbf57'), meadow: new T.Color('#a6e070'), swamp: new T.Color('#5fb889'), canyon: new T.Color('#f1bb7c') };
 /** A planet's ground colours [low, high, landing pad]: our own (planet-palette.ts), or the planet facts'. */
 export const groundBase = (planet: PlanetId) => PALETTE.ground[planet].base ?? PLANETS[planet].ground;
+/** Width of the red band on the canyon's side of the village fence, in metres. */
+export const DANGER_BAND = 4;
 const SAMPLES = [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3], [2.2, 2.2], [-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2]];
 const scratch = new T.Color();
 
@@ -111,6 +113,8 @@ export function groundColor(planet: PlanetId, x: number, z: number, ponds: reado
     if (detail && trail < 5 && r < RIM_START - 3) out.lerp(scratch.set(zoneAt({ x, z }) === 'canyon' ? '#dd9858' : '#c9c078'), (1 - smoothstep(trail, 1.6, 5)) * .4);
     if (trail < 2.2 && r < RIM_START - 3) out.lerp(scratch.set(zoneAt({ x, z }) === 'canyon' ? (detail ? '#e8a060' : '#e8a868') : detail ? '#ecd090' : '#e8cf92'), 1 - smoothstep(trail, 1.2, 2.2));
     if (Math.abs(r - 18) < .9) out.offsetHSL(0, 0, -.04);
+    // The canyon's edge with the village warns before anything attacks (AAA-PLAN WP17): red at the fence line, back to warm clay DANGER_BAND m out.
+    if (r >= 18 && x > Math.abs(z)) out.lerp(scratch.set('#d81c14'), (1 - smoothstep(r, 18, 18 + DANGER_BAND)) * .92);
     if (r > 146) out.lerp(scratch.set('#3f8f4a'), smoothstep(r, 146, 156));
   } else {
     const [low, high, pad] = groundBase(planet), n = noise2(x * .08, z * .08) * .65 + noise2(x * .4, z * .4) * .35;

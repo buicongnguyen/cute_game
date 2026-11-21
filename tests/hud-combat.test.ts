@@ -71,7 +71,6 @@ test('zone banner text names the wild zone, its level and boss instead of the ho
   const ice = zoneInfo('Frost Peaks', 'ice');
   assert.ok(ice.detail.length > 0); assert.match(ice.chip, /Lv 10\+/);
 });
-
 test('bossApproach: a calm boss inside its sight radius plus 6 m, the nearest one; never one that is already in the fight', () => {
   // King Bear sees 13 m (enemy-types.ts boss()), so the approach starts under 19 m.
   const bear = (over: Partial<Enemy> = {}) => enemy({ boss: true, type: 'bear', name: 'King Bear', ...over });

@@ -73,7 +73,7 @@ test('the fight step: presses it needed, eager presses and the dialogs Attack op
   assert.deepEqual(fight, {
     startS: 69.9, completed: true, attackPressesNeeded: 0, eagerAttackPresses: 6, trackerTaps: 2,
     dialogsOpenedByAttack: 2, dialogsOpenedByAttackDistinct: 1, maxRepeatsOfOneDialog: 2,
-    kills: 5, firstKillAfterS: 6, tookS: 21.5, lowestHealthPct: 71,
+    kills: 5, firstKillAfterS: 6, firstWins: 0, tookS: 21.5, lowestHealthPct: 71,
   });
   const cut = FIXTURE.filter(e => !(e.type === 'kill' && e.t > 97000));
   assert.equal(buildTimeline(cut).fight.completed, false, 'three kills when the step ended: not completed');
@@ -109,11 +109,14 @@ test('beats are counted, with the time of the first', () => {
 });
 
 test('a later package adds its beat and its check to the table', () => {
-  const firstWin = { id: 'first-win', on: e => e.type === 'card' && e.id === 'first-win', check: t => t.fight.dialogsOpenedByAttack ? `${t.fight.dialogsOpenedByAttack} dialogs opened by Attack in the fight step` : null };
-  const t = buildTimeline(FIXTURE, { route: 'new', device: 'phone', beats: [...BEATS, firstWin] });
-  assert.deepEqual(t.beats['first-win'], { count: 1, firstS: 108.9 });
+  const winCard = { id: 'win-card', on: e => e.type === 'card' && e.id === 'first-win', check: t => t.cards.length > 1 ? 'more than one card' : null };
+  const t = buildTimeline(FIXTURE, { route: 'new', device: 'phone', beats: [...BEATS, winCard] });
+  assert.deepEqual(t.beats['win-card'], { count: 1, firstS: 108.9 });
+  // WP17's own row is in the table: the first win, and the complaint when Attack opened a dialog during the fight step (the fixture is a run from before that package).
   assert.deepEqual(t.complaints, ['first-win: 2 dialogs opened by Attack in the fight step']);
-  assert.deepEqual(buildTimeline(FIXTURE).complaints, []);
+  assert.deepEqual(t.beats['first-win'], { count: 0, firstS: null }); assert.equal(t.fight.firstWins, 0);
+  const won = buildTimeline([...FIXTURE, { t: FIXTURE.at(-1).t, type: 'firstWin' }]);
+  assert.equal(won.beats['first-win'].count, 1); assert.equal(won.fight.firstWins, 1);
 });
 
 test('the boss route: cage opened or time ran out', () => {

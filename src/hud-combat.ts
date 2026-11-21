@@ -84,7 +84,7 @@ export function lootText(items: readonly { icon: string; name: string; count: nu
 export const ZONE_DIFFICULTY: Record<string, number> = { home: 0, forest: 1, meadow: 1, swamp: 2, canyon: 3, candy: 3, ice: 4, lava: 5, toy: 2, jungle: 3, ocean: 4, cloud: 5, shadow: 6 };
 const HOME_ZONES: Record<string, { id: string; boss: string }> = { 'Mushroom Forest': { id: 'forest', boss: 'treant' }, 'Blue Lake Meadow': { id: 'meadow', boss: 'mushking' }, 'Chomper Swamp': { id: 'swamp', boss: 'croc' }, 'Redrock Canyon': { id: 'canyon', boss: 'bear' } };
 const names = (types: readonly string[]) => types.map(type => t(ENEMY_TYPES[type]?.name ?? '')).filter(Boolean).slice(0, 3).join(', ');
-/** Zone banner text: the detail names what lives there, the chip rates it ('★★ · Lv 4+ · King Bear'). */
+/** Zone banner text: the detail names what lives there, the chip rates it ('★★ · Lv 4+ · King Bear'). For a zone far above the explorer features/tutorial-fight.ts turns the chip into a warning (dangerChip). */
 export function zoneInfo(name: string, planet: PlanetId | string): { detail: string; chip: string } {
   if (planet === 'home' && name === 'Clover Village') return { detail: t('A peaceful place · health restores here'), chip: t('Safe') };
   const home = planet === 'home' ? HOME_ZONES[name] : undefined, id = home?.id ?? planet, level = Math.max(1, (ZONE_DIFFICULTY[id] ?? 1) * 3 - 2);

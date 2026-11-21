@@ -109,6 +109,17 @@ export interface Enemy { /** Its recoil from the last blow (hit-react.ts): looks
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
 export interface AvatarVisual {size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
 export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
+/** A creature of the first fight (first-run.ts), and the ring its wind-up shows instead of its kind's own mark ('around': round itself, no ripple). */
+export interface Enemy {/** `tutorial` creatures go for the explorer inside the village's safe zone too (enemyTarget); no blow of theirs lands there but the lesson's. */tutorial?:boolean;warn?:{r:number;at:'self'|'front'|'target'|'around';color:string}}
+/** The first fight's lesson (features/tutorial-fight.ts sets it once mounted; without it the game plays as it always did). */
+export interface Lesson {
+  /** A fight is on round the explorer, the last swing `sinceSwing` s ago (fight-state.ts inFight): Attack never uses then. */
+  fight(sinceSwing:number):boolean;
+  /** A swing is about to start; `auto`: not a press of the player's. True holds it back. */
+  swing(auto:boolean):boolean;
+  /** A blow of `damage` from the creature `enemyId` is about to land on the explorer, whose full health is `max`: what may land (0: nothing). */
+  bite(damage:number,enemyId:string|undefined,max:number):number;
+}
 /** A boss's stagger meter (boss-stagger.ts; online a copy of the server's) and the charge that last threw the explorer (boss-feel.ts). */
 export interface Enemy {stagger?:Stagger;chargeKnock?:number}
 /** An enemy run by its own module (colossus.ts): no generic AI or drawing here; `incoming` may scale a blow before it lands. */
@@ -192,7 +203,7 @@ export class World {
   /** The explorer is inside the starship: hidden, with the companion. */
   boarded = false;
   onInteract: (e: Entity) => void = () => {}; onAttackEnemy: (e: Enemy) => void = () => {}; /** `cls`: 'ground' attacks pass under a jumping explorer (jump-rules.ts); everything else is 'body'. */ onDamage: (amount: number,source?:'melee'|'shot'|'hazard',enemyId?:string,cls?:AttackClass) => void = () => {};
-  onZone: (name: string) => void = () => {}; lastZone = ''; hazardTimer = 0;
+  onZone: (name: string) => void = () => {}; lastZone = ''; hazardTimer = 0; lesson?:Lesson;
   /** Called after every world build, so views such as the fishing ponds can restock. */
   onBuilt?: () => void;
   /** A creature has just noticed the explorer. */
@@ -1672,7 +1683,7 @@ export class World {
       if(!this.environment.lavaAt(e)&&this.environment.lavaAt(point))return false;
     }
     const safe=(this.planet==='home'?18:11)+1.5;
-    return Math.hypot(point.x,point.z)>=Math.min(safe,Math.hypot(e.x,e.z))-.001;
+    return e.tutorial||Math.hypot(point.x,point.z)>=Math.min(safe,Math.hypot(e.x,e.z))-.001; // the first fight's creatures live inside the village
   }
   private moveCreature(e:Enemy,dx:number,dz:number,allowVoid=false){
     const obstacles=this.creatureObstacles(),options=this.navigationOptions(e.radius,true);
@@ -1723,7 +1734,7 @@ export class World {
   private enemyTarget(e:Enemy):(Point&{id?:string;enemy?:Enemy;decoy?:{owner:string|null;id:number}})|undefined{
     if((e.statuses?.charm??0)>0){let best:Enemy|undefined,bestD=Infinity;for(const other of this.enemies){if(other===e||other.hp<=0)continue;const d=Math.hypot(other.x-e.x,other.z-e.z);if(d<bestD){bestD=d;best=other;}}return best?{x:best.x,z:best.z,enemy:best}:undefined;}
     const safe=this.planet==='home'?18:11;let bx=0,bz=0,bid:string|undefined,bestD=Infinity;
-    if(!this.playerStealth&&Math.hypot(this.position.x,this.position.z)>=safe){bx=this.position.x;bz=this.position.z;bestD=Math.hypot(bx-e.x,bz-e.z);}
+    if(!this.playerStealth&&(e.tutorial||Math.hypot(this.position.x,this.position.z)>=safe)){bx=this.position.x;bz=this.position.z;bestD=Math.hypot(bx-e.x,bz-e.z);}
     if(this.remotePlayers)for(const [id,remote] of this.remotePlayers)if(remote.mesh.visible&&!remote.pose.visual?.stealth&&(remote.pose.hp??1)>0&&Math.hypot(remote.pose.x,remote.pose.z)>=safe){const d=Math.hypot(remote.pose.x-e.x,remote.pose.z-e.z);if(d<bestD){bestD=d;bx=remote.pose.x;bz=remote.pose.z;bid=id;}}
     // Summons creatures can fight (combat.ts SUMMON_HP): a decoy within DECOY.lure m wins over every explorer, any other
     // summon is attacked when it is the nearest target. The knight's challenge (taunt) keeps a creature on the knight.
@@ -1883,7 +1894,7 @@ export class World {
     // Ground-class attacks (jump-rules.ts) ripple: rings run out from the centre, so one look says 'jump over this'.
     if(e.skill){const low=!!this.jumpRules&&attackClass(e.skill)==='ground';for(const mark of e.telegraphs??[]){const safe='safe' in mark&&!!mark.safe;decals.draw(mark.x,ground(mark),mark.z,mark.r,progress,safe?'#5aff9a':BOSS_TELEGRAPH_COLORS[e.skill],low&&!safe);}return;}
     if(e.boss&&e.mesh.userData.slam){decals.draw(e.x,ground(e),e.z,4.8,progress,BOSS_TELEGRAPH_COLORS.slam,!!this.jumpRules);return;}
-    const look=CREATURE_TELEGRAPHS[e.type??''];
+    const look=e.warn??CREATURE_TELEGRAPHS[e.type??''];
     // Every other ordinary melee creature lays a red arc of its real reach in front of itself (feel-rules.ts MELEE_ARC).
     if(!look){const def=e.definition;if(!e.boss&&def&&def.behavior!=='shooter'&&def.behavior!=='charger'&&!def.titan){const arc=meleeArc(def.reach);decals.cone(e.x,ground(e),e.z,arc.r,e.mesh.rotation.y,arc.half,progress,MELEE_ARC.color);}
       // With jumping on: a boss's plain bite or swipe shows its arc too (the blow lands only inside it), and a charger lays its lane towards whoever it is about to run at.
