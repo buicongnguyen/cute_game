@@ -40,11 +40,15 @@ export class FakeNode {
     this.context = context; this.kind = kind;
     const p = (base = 0) => new FakeParam(() => context.currentTime, base);
     this.gain = p(1); this.frequency = p(440); this.Q = p(1); this.pan = p(); this.detune = p();
-    this.threshold = p(); this.knee = p(); this.ratio = p(); this.attack = p(); this.release = p();
+    this.threshold = p(); this.knee = p(); this.ratio = p(); this.attack = p(); this.release = p(); this.delayTime = p();
   }
+  /** When each start() and stop() was asked for, and the wave an oscillator was given (music-score.ts). */
+  starts: number[] = []; stops: number[] = []; wave: unknown = null; delayTime: FakeParam;
   connect(target: unknown) { this.to.push(target); return target; }
-  start() { this.started++; }
-  stop() {}
+  disconnect() { this.to = []; }
+  start(when = this.context.currentTime) { this.started++; this.starts.push(when); }
+  stop(when = this.context.currentTime) { this.stops.push(when); }
+  setPeriodicWave(wave: unknown) { this.wave = wave; }
 }
 /** A recording WebAudio stand-in: every node, every connection and every schedule is kept. */
 export class FakeContext {
@@ -61,6 +65,8 @@ export class FakeContext {
   createDynamicsCompressor() { return this.node('compressor'); }
   createAnalyser() { return this.node('analyser'); }
   createStereoPanner() { return this.node('panner'); }
+  createDelay() { return this.node('delay'); }
+  createPeriodicWave(real: Float32Array, imag: Float32Array) { return { real, imag }; }
   createMediaElementSource(element: unknown) { const n = this.node('media'); n.media = element; return n; }
   createBuffer(_channels: number, length: number) { return { getChannelData: () => new Float32Array(length) }; }
   async suspend() { this.calls.suspend++; this.state = 'suspended'; }

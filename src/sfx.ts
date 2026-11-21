@@ -69,7 +69,7 @@ const PRIORITY = new Set<Sound>(['level', 'quest', 'hurt', 'catch', 'power']);
 const TUNED = new Set<Sound>(['level', 'quest', 'success', 'coin', 'buy', 'sell', 'harvest', 'magic', 'freeze', 'ready', 'open', 'close']);
 
 /** Live synthesized voices on a touch device, shared by everything that plays through the graph; priority cues get 2 more. */
-export const TOUCH_VOICES = 6;
+export const TOUCH_VOICES = 8;
 /**
  * The shared count of live synthesized voices (one per played sound or note). `budget` is the most at once; the last
  * `reserve` of them are kept for priority cues (a fanfare in a brawl).
