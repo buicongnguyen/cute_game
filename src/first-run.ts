@@ -21,7 +21,7 @@ import { CROPS, ITEMS, STORY_STEPS } from './content.ts';
 /** Present only on saves started after this change; missing = an older save (full HUD, no tutorial crops). */
 export interface FirstRun { plants?: number; fought?: 1; food?: 1; seen?: FirstSeen[] }
 /** What a new save shows once: the welcome cards and the moment tips (moment-tips.ts). */
-export const FIRST_SEEN = ['cards', 'tip:plant', 'tip:harvest', 'tip:fight', 'tip:drop', 'tip:equip', 'tip:ring', 'tip:finisher'] as const;
+export const FIRST_SEEN = ['cards', 'tip:plant', 'tip:harvest', 'tip:fight', 'tip:drop', 'tip:equip', 'tip:ring', 'tip:chain'] as const;
 export type FirstSeen = typeof FIRST_SEEN[number];
 export const isFirstSeen = (v: unknown): v is FirstSeen => (FIRST_SEEN as readonly unknown[]).includes(v);
 export const TUTORIAL_PLANTS = 3;
@@ -102,7 +102,7 @@ export function tutorialFightStep(s: RunSave) {
 }
 
 // ---- the easy creatures beside the garden ----
-interface Critter { x: number; z: number; hp: number; maxHp: number; name?: string; damage: number; baseDamage?: number; baseMaxHp?: number; xp: number; respawn: number; homeX: number; homeZ: number; boss?: boolean; type?: string; definition?: object; mesh: { visible: boolean }; tutorial?: boolean; phase?: string; kind?: string; index?: number; level?: number }
+interface Critter { x: number; z: number; hp: number; maxHp: number; damage: number; baseDamage?: number; baseMaxHp?: number; xp: number; respawn: number; homeX: number; homeZ: number; boss?: boolean; type?: string; definition?: object; mesh: { visible: boolean }; tutorial?: boolean; phase?: string; kind?: string; index?: number; level?: number }
 export interface CritterWorld {
   enemies: Critter[]; entities: { kind: string; x: number; z: number }[]; planet: string; networkRole: unknown; interior?: unknown;
   obstacles: { x: number; z: number; r: number }[];
@@ -113,33 +113,28 @@ export const CRITTER = { type: 'mushroom', hp: 30, damage: 3, speed: 1.5, sight:
 /** Index range of the tutorial creatures: far past the village roster, so they never take a real creature's identity. */
 export const CRITTER_INDEX = 90_000;
 
-/** The name the first fight's creatures show (display only: the species and its rules stay the mushroom's). */
-export const CRITTER_NAME = 'Gloomcap nibbler';
 /** A spot keeps this far from everything a press of Attack could use, and from the other spots (metres). */
 export const SPOT_CLEAR = 7, SPOT_APART = 3.2;
 /** Spots stay inside the village fence (its ring is 18 m out), so the wild creatures of the forest never join the first fight. */
 export const SPOT_HUB = 16.5;
 /**
- * Free spots beside the garden, each SPOT_CLEAR m from every thing of the village (so no dialog is one press away from
- * the first fight) and SPOT_APART m from each other, in a ring 9 to 12 m out from the garden's middle, else 12 to 15 m
- * out. The village is crowded (it has room for two such spots): each spot still missing is the free place of both rings
- * that lies farthest from every thing but the garden beds, at least SPOT_APART from all. The step is never without
- * creatures in a village a player can build.
+ * Spots beside the garden for the first fight's creatures: 9 to 15 m out from the garden's middle, SPOT_APART m from each
+ * other, and as far from every thing of the village as it has room for, so that no dialog is one press away from the
+ * fight. A place SPOT_CLEAR m clear is as good as any (the nearest ring first); the crowded village has two such
+ * places, and the third creature gets the place with the most room left (never under SPOT_APART).
  */
 export function critterSpots(w: Pick<CritterWorld, 'entities' | 'obstacles'>, n = CRITTERS) {
-  const beds = w.entities.filter(e => e.kind === 'plot'); if (!beds.length) return [];
+  const beds = w.entities.filter(e => e.kind === 'plot'), spots: { x: number; z: number }[] = []; if (!beds.length) return spots;
   const cx = beds.reduce((a, e) => a + e.x, 0) / beds.length, cz = beds.reduce((a, e) => a + e.z, 0) / beds.length;
-  const things = w.entities.filter(e => e.kind !== 'enemy' && e.kind !== 'plot'), spots: { x: number; z: number }[] = [];
-  /** How far the place is from the nearest thing; 0 when it is not free (outside the fence, in scenery, on a bed, beside another spot). */
-  const room = (x: number, z: number, bed: number) => {
-    if (Math.hypot(x, z) > SPOT_HUB || w.obstacles.some(o => Math.hypot(x - o.x, z - o.z) < o.r + 1.6) || beds.some(e => Math.hypot(x - e.x, z - e.z) < bed) || spots.some(p => Math.hypot(x - p.x, z - p.z) < SPOT_APART)) return 0;
-    return things.reduce((least, e) => Math.min(least, Math.hypot(x - e.x, z - e.z)), 99);
-  };
-  const at = (from: number, k: number) => { const a = k * 2.399963, d = from + (k % 7) * .5; return { x: cx + Math.cos(a) * d, z: cz + Math.sin(a) * d }; };
-  for (const from of [9, 12]) for (let k = 0; k < 280 && spots.length < n; k++) { const p = at(from, k); if (room(p.x, p.z, SPOT_CLEAR) >= SPOT_CLEAR) spots.push(p); }
+  const things = w.entities.filter(e => e.kind !== 'enemy');
+  const near = (list: readonly { x: number; z: number; r?: number }[], x: number, z: number, pad = 0) => list.reduce((least, e) => Math.min(least, Math.hypot(x - e.x, z - e.z) - (e.r ?? 0) - pad), SPOT_CLEAR);
   while (spots.length < n) {
     let best: { x: number; z: number } | null = null, most = SPOT_APART;
-    for (const from of [9, 12]) for (let k = 0; k < 280; k++) { const p = at(from, k), r = room(p.x, p.z, SPOT_APART); if (r > most) { most = r; best = p; } }
+    for (let k = 0; k < 520; k++) {
+      const a = k * 2.399963, d = 9 + (k % 13) * .5, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
+      if (Math.hypot(x, z) > SPOT_HUB || near(w.obstacles, x, z, 1.6) < 0 || near(spots, x, z) < SPOT_APART) continue;
+      const room = near(things, x, z); if (room > most) { most = room; best = { x, z }; }
+    }
     if (!best) break; spots.push(best);
   }
   return spots;
@@ -157,8 +152,8 @@ export function tendCritters(w: CritterWorld, s: RunSave, solo: boolean) {
   for (const [i, p] of critterSpots(w).entries()) {
     if (i < mine.length) continue;
     const e = w.spawnSpecies(CRITTER.type, p.x, p.z, CRITTER_INDEX + i); if (!e) continue;
-    e.tutorial = true; e.name = CRITTER_NAME; e.level = 1; e.hp = e.maxHp = e.baseMaxHp = CRITTER.hp; e.damage = e.baseDamage = CRITTER.damage;
-    if (e.definition) e.definition = { ...(e.definition as Record<string, unknown>), name: CRITTER_NAME, speed: CRITTER.speed, sight: CRITTER.sight };
+    e.tutorial = true; e.level = 1; e.hp = e.maxHp = e.baseMaxHp = CRITTER.hp; e.damage = e.baseDamage = CRITTER.damage;
+    if (e.definition) e.definition = { ...(e.definition as Record<string, unknown>), speed: CRITTER.speed, sight: CRITTER.sight };
   }
   return w.enemies.filter(e => e.tutorial).length;
 }

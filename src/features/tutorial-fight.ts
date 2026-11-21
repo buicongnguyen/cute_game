@@ -22,6 +22,8 @@
  * and walking out of the village towards such a zone shows its banner WARN.edge - WARN.from m before the fence, before
  * its creatures can see the explorer.
  *
+ * It also carries the rule for when a fight is on (fight-state.ts), which keeps Attack from using things then.
+ *
  * Until this module is mounted (just after the first played frame), and if it never loads, the first fight plays as it
  * did before: creatures bite as their kind does and swings start by themselves.
  * No run-time import of start code (types only): see features.ts.
@@ -29,7 +31,10 @@
 import type { GameServices } from '../game-services.ts';
 import type { Enemy, Lesson } from '../world.ts';
 import type { FirstSeen } from '../first-run.ts';
+import { inFight } from '../fight-state.ts';
 
+/** The name the first fight's creatures show (display only: the species and its rules stay the mushroom's). */
+export const CRITTER_NAME = 'Gloomcap nibbler';
 /** The ring creature: its ring and reach in metres, its wind-up in seconds, the share of health a bite never goes below. */
 export const LESSON = { ring: 2, reach: 1.6, windup: 1, floor: .6, color: '#ff3b3b' } as const;
 /** A tip stays this long (seconds); two blows this close together are "in a row". */
@@ -55,7 +60,7 @@ export function wildAhead(x: number, z: number, level: number): keyof typeof WIL
   return WILDS[id][1] >= level + WARN.levels ? id : null;
 }
 
-interface LessonSave { firstRun?: { seen?: readonly string[] }; counters: { kills: number } }
+interface LessonSave { firstRun?: { seen?: readonly string[] }; counters: { kills: number }; hp: number }
 export interface LessonHost {
   enemies(): readonly Enemy[];
   hero(): { x: number; z: number };
@@ -76,6 +81,7 @@ export function createLesson(h: LessonHost) {
       mine.length = 0; for (const e of h.enemies()) if (e.tutorial) mine.push(e);
       for (let i = 0; i < mine.length; i++) {
         const e = mine[i]; if (taught.has(e) || !e.definition) continue; taught.add(e);
+        e.name = CRITTER_NAME; e.definition = { ...e.definition, name: CRITTER_NAME };
         // The first winds up slowly inside a ring; the others never reach (a creature winds up only inside its reach).
         if (i === 0) { e.definition = { ...e.definition, windup: LESSON.windup, reach: LESSON.reach }; e.warn = { r: LESSON.ring, at: 'around', color: LESSON.color }; }
         else e.definition = { ...e.definition, reach: 0 };
@@ -86,12 +92,13 @@ export function createLesson(h: LessonHost) {
     waiting() { const s = h.save(); return !!s.firstRun && s.counters.kills === 0 && pressed !== s && live(); },
     /** The wait is over for this save (a press, a blow that landed). */
     release() { pressed = h.save(); },
+    fight(sinceSwing: number) { const p = h.hero(); return inFight(h.enemies(), p.x, p.z, undefined, sinceSwing); },
     swing(auto: boolean) { if (!rules.waiting()) return false; if (auto) return true; rules.release(); return false; },
-    bite(damage: number, enemyId: string | undefined, hp: number, max: number) {
+    bite(damage: number, enemyId: string | undefined, max: number) {
       if (!enemyId) return damage;
       let from: Enemy | undefined; for (const e of h.enemies()) if (e.id === enemyId) { from = e; break; }
       if (!from?.tutorial) return damage;
-      return from.warn && inRing(from, h.hero()) ? biteAllowed(damage, hp, max) : 0;
+      return from.warn && inRing(from, h.hero()) ? biteAllowed(damage, h.save().hp, max) : 0;
     },
   };
   return rules satisfies Lesson;
@@ -112,6 +119,9 @@ export function mount(s: GameServices) {
   const w = s.world, rules = createLesson({ enemies: () => w.enemies, hero: () => w.position, save: () => s.state() });
   w.lesson = rules;
   const style = document.createElement('style'); style.textContent = CSS; document.head.append(style);
+  // The warning chip (hud-combat.ts zoneInfo writes it with a warning sign in front) is red: the banner gets a class whenever its chip changes.
+  const chip = document.querySelector('#banner-chip'), banner = document.querySelector('#zone-banner');
+  if (chip && banner) { const mark = () => banner.classList.toggle('danger', !!chip.textContent?.startsWith('\u26a0')); new MutationObserver(mark).observe(chip, { childList: true, characterData: true, subtree: true }); mark(); }
   const tip = document.createElement('div'); tip.id = 'lesson-tip'; tip.hidden = true; tip.setAttribute('role', 'status'); tip.dataset.beat = 'tip';
   const words = document.createElement('b'); tip.append(words); (document.querySelector('#hud') ?? document.body).append(tip);
   const pad = () => document.querySelector<HTMLElement>('#hud .attack-pad');
@@ -166,12 +176,12 @@ export function mount(s: GameServices) {
     let near = false; if (ring && !calm() && rules.waiting()) for (const e of rules.mine) if (e.hp > 0 && Math.hypot(e.x - hero.x, e.z - hero.z) < PROMPT_NEAR) { near = true; break; }
     pulse(near);
     if (near) { if (!shown) show('press', s.touch() ? 'Tap Attack!' : 'Press F!', Infinity); } else if (shown === 'press') hide();
-    if (ring && blows >= 2 && w.time - lastBlow < CHAIN_GAP_S && !shown && !seen('tip:finisher') && !calm()) { show('finisher', 'One more for a finisher!', TIP_S); void s.perform('firstRunSeen', { id: 'tip:finisher' }, { quiet: true }); }
+    if (ring && blows >= 2 && w.time - lastBlow < CHAIN_GAP_S && !shown && !seen('tip:chain') && !calm()) { show('finisher', 'One more for a finisher!', TIP_S); void s.perform('firstRunSeen', { id: 'tip:chain' }, { quiet: true }); }
     // Danger ahead: the banner of a zone far above the explorer, before the fence.
     if (w.planet === 'home' && !w.interior) {
       const r = Math.hypot(hero.x, hero.z);
       if (r < WARN.rearm) armed = true;
-      else if (armed && !s.modal()) { const id = wildAhead(hero.x, hero.z, state.level); if (id) { armed = false; s.showZone(WILDS[id][0], true); } }
+      else if (armed && !s.modal()) { const id = wildAhead(hero.x, hero.z, state.level); if (id) { armed = false; const place = document.querySelector('#zone-name'), here = place?.textContent ?? ''; s.showZone(WILDS[id][0]); if (place) place.textContent = here; } } // the banner of the zone ahead; the HUD keeps the name of the place the explorer is in
     }
   });
 }

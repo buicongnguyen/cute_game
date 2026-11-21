@@ -37,8 +37,8 @@ export interface ServiceHost {
   vibrate(pattern: number | number[]): void;
   /** The graphics level in use right now. */
   quality(): QualityLevel;
-  /** Shows the zone banner for a place of the planet in play, as on arriving there (main.ts showZone); `ahead`: a zone still ahead, the HUD's place name stays. */
-  showZone(name: string, ahead?: boolean): void;
+  /** Shows the zone banner for a place of the planet in play, as on arriving there (main.ts showZone: it also writes the HUD's place name). */
+  showZone(name: string): void;
   /** i18n.ts t: the text in the player's language. */
   t(source: string, params?: Record<string, string | number>): string;
   /** game-events.ts connect: from here on the game's events reach this bus. */

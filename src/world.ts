@@ -112,10 +112,12 @@ export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
 export interface Enemy {/** `tutorial` creatures go for the explorer inside the village's safe zone too (enemyTarget); no blow of theirs lands there but the lesson's. */tutorial?:boolean;warn?:{r:number;at:'self'|'front'|'target'|'around';color:string}}
 /** The first fight's lesson (features/tutorial-fight.ts sets it once mounted; without it the game plays as it always did). */
 export interface Lesson {
+  /** A fight is on round the explorer, the last swing `sinceSwing` s ago (fight-state.ts inFight): Attack never uses then. */
+  fight(sinceSwing:number):boolean;
   /** A swing is about to start; `auto`: not a press of the player's. True holds it back. */
   swing(auto:boolean):boolean;
-  /** A blow of `damage` from the creature `enemyId` is about to land on an explorer with `hp` of `max`: what may land (0: nothing). */
-  bite(damage:number,enemyId:string|undefined,hp:number,max:number):number;
+  /** A blow of `damage` from the creature `enemyId` is about to land on the explorer, whose full health is `max`: what may land (0: nothing). */
+  bite(damage:number,enemyId:string|undefined,max:number):number;
 }
 /** A boss's stagger meter (boss-stagger.ts; online a copy of the server's) and the charge that last threw the explorer (boss-feel.ts). */
 export interface Enemy {stagger?:Stagger;chargeKnock?:number}
@@ -1686,7 +1688,7 @@ export class World {
       if(!this.environment.lavaAt(e)&&this.environment.lavaAt(point))return false;
     }
     const safe=(this.planet==='home'?18:11)+1.5;
-    return !!e.tutorial||Math.hypot(point.x,point.z)>=Math.min(safe,Math.hypot(e.x,e.z))-.001; // the first fight's creatures live inside the village
+    return e.tutorial||Math.hypot(point.x,point.z)>=Math.min(safe,Math.hypot(e.x,e.z))-.001; // the first fight's creatures live inside the village
   }
   private moveCreature(e:Enemy,dx:number,dz:number,allowVoid=false){
     const obstacles=this.creatureObstacles(),options=this.navigationOptions(e.radius,true);

@@ -119,7 +119,7 @@ export function groundColor(planet: PlanetId, x: number, z: number, ponds: reado
     if (trail < 2.2 && r < RIM_START - 3) out.lerp(scratch.set(zoneAt({ x, z }) === 'canyon' ? (detail ? '#e8a060' : '#e8a868') : detail ? '#ecd090' : '#e8cf92'), 1 - smoothstep(trail, 1.2, 2.2));
     if (Math.abs(r - 18) < .9) out.offsetHSL(0, 0, -.04);
     // The canyon's edge with the village warns before anything attacks (AAA-PLAN WP17): red at the fence line, back to warm clay DANGER_BAND m out.
-    if (r >= 18 && r < 18 + DANGER_BAND && x > Math.abs(z)) out.lerp(scratch.set('#d81c14'), (1 - smoothstep(r, 18, 18 + DANGER_BAND)) * smoothstep(x - Math.abs(z), 0, 3) * .92);
+    if (r >= 18 && x > Math.abs(z)) out.lerp(scratch.set('#d81c14'), (1 - smoothstep(r, 18, 18 + DANGER_BAND)) * .92);
     if (r > 146) out.lerp(scratch.set('#3f8f4a'), smoothstep(r, 146, 156));
   } else {
     const def = PLANETS[planet], [low, high, pad] = def.ground, n = noise2(x * .08, z * .08) * .65 + noise2(x * .4, z * .4) * .35;

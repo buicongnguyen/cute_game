@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { attackIntent, inFight, FIGHT, USE_AFTER_SWING_S } from '../src/attack-intent.ts';
+import { attackIntent, USE_AFTER_SWING_S } from '../src/attack-intent.ts';
+import { inFight, angry as noticed, FIGHT } from '../src/fight-state.ts';
 import { mainHarness } from './support/main-harness.mjs';
 import { pokeTarget, fencePoint, PokeGate, VillageFun, POKE, type PokeThing } from '../src/village-fun.ts';
 import { PondSplash, type SplashPond } from '../src/pond-splash.ts';
@@ -54,7 +55,7 @@ test('a fight is on: an angry creature within 8 m, any living creature within 6 
 const main = await mainHarness({ functions: ['attackUses', 'useInstead', 'hostileNear', 'interactPrompted', 'fKey'], variables: ['lastSwingAt'] });
 function atTheShop(enemies: unknown[] = []) {
   const used: string[] = [], shop = { kind: 'shop', x: 1, z: 0, radius: 2 };
-  const world = { position: { x: 0, z: 0 }, enemies, selected: null, jump: null, inReach: () => true, select: (e: { kind: string }) => used.push('use:' + e.kind), interactNearest: () => false, nearest: () => null };
+  const world = { lesson: { fight: (since: number) => inFight(enemies as never[], 0, 0, undefined, since) }, position: { x: 0, z: 0 }, enemies, selected: null, jump: null, inReach: () => true, select: (e: { kind: string }) => used.push('use:' + e.kind), interactNearest: () => false, nearest: () => null };
   const ctx = main.context({ world, state: {}, started: true, uiBlocked: () => false, promptTarget: () => shop, attackRange: () => 2, airOn: () => false, basicAttack: () => used.push('swing'), attackDown: () => used.push('swing'), attackHold: { down() {} }, M: { weaponStats: () => ({}) }, performance: { now: () => 1e7 } });
   return { ctx, used };
 }
@@ -68,6 +69,8 @@ test('F and the phone Attack beside the shop: it opens out of a fight, and never
     fight.ctx.fKey('KeyF'); assert.ok(!fight.used.includes('use:shop'), 'F too: ' + what);
   }
   const far = atTheShop([{ ...foe(6.5), radius: .5 }]); assert.equal(far.ctx.useInstead(true), true, 'a calm creature 6.5 m away is no fight');
+  const early = atTheShop([{ ...foe(5), radius: .5 }]); delete (early.ctx.world as { lesson?: unknown }).lesson; assert.equal(early.ctx.useInstead(true), true, 'before the features are in (the first moment after Start) Attack follows the old table');
+  assert.equal(noticed({ phase: 'chase' }), true); assert.equal(noticed({ phase: 'idle' }), false); assert.equal(noticed({ phase: 'return' }), false); assert.equal(noticed({}), false);
 });
 
 const things: PokeThing[] = [{ id: 'tree', kind: 'tree', x: 0, z: 2, r: .9 }, { id: 'stall', kind: 'bump', x: 2.5, z: 0, r: 1 }, { id: 'hen', kind: 'happy', x: 0, z: -1.2, r: .3 }];
