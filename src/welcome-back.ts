@@ -8,7 +8,7 @@
  */
 import { t } from './i18n.ts';
 import type { SaveState } from './model.ts';
-import { progressEntries, type ProgressEntry } from './progression.ts';
+import { progressEntries, streakText, type ProgressEntry } from './progression.ts';
 import { colossusClock, clockText } from './colossus-content.ts';
 import { runsLeft, DUNGEON } from './dungeon-rules.ts';
 import { DUNGEON_LEVEL } from './dungeon-content.ts';
@@ -76,7 +76,7 @@ export function initWelcomeBack(h: WelcomeHost): WelcomeBackApi {
     const ready = !!c && c.complete && !c.claimed;
     const dots = Array.from({ length: 7 }, (_, i) => `<i class="${i < ((f.streak - 1) % 7) + 1 ? 'on' : ''}${i === 6 ? ' big' : ''}"></i>`).join('');
     const body = `<div class="wb-card">
-      <div class="wb-streak"><div class="wb-flame" aria-hidden="true">🔥</div><div><b>${e(t('{count} consecutive days', { count: f.streak }))}</b><div class="wb-dots" aria-hidden="true">${dots}</div></div></div>
+      <div class="wb-streak"><div class="wb-flame" aria-hidden="true">🔥</div><div><b>${e(streakText(f.streak))}</b><div class="wb-dots" aria-hidden="true">${dots}</div></div></div>
       ${c ? `<div class="wb-reward"><span class="wb-label">${e(t("Today's check-in"))}</span><span class="wb-gift">${e(c.rewardLabel)}</span></div>` : ''}
       <ul class="wb-lines">${f.lines.map(l => `<li class="wb-${l.kind}"><span aria-hidden="true">${l.icon}</span><span>${e(l.text)}</span></li>`).join('')}</ul>
       <div class="button-row wb-actions">${ready ? `<button class="primary wb-collect" data-wb="collect">🎁 ${e(t('Collect'))}</button>` : `<button class="primary wb-collect" disabled>${e(t('Collected'))}</button>`}<button class="soft-button" data-wb="close">${e(t('Close'))}</button></div>

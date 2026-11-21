@@ -53,7 +53,7 @@ export const FIRST_VI: Record<string, string> = {
   'The Cinderpeak Colossus can wake for you now. Your choice at the Ember Well still holds.': 'Giờ Cự Thạch Núi Tro có thể thức dậy với sếp. Lựa chọn của sếp ở Giếng Tro Than vẫn giữ nguyên.',
   'Sleeping until level {need} (you are level {level}).': 'Đang ngủ tới cấp {need} (sếp đang cấp {level}).',
   'That was already noted.': 'Việc này đã được ghi lại rồi.',
-  'The Cinderpeak Colossus can wake for you now, soothed until you choose otherwise at the Ember Well.': 'Giờ Cự Thạch Núi Tro có thể thức dậy với sếp, thật hiền cho tới khi sếp chọn khác ở Giếng Tro Than.',
+  'The Cinderpeak Colossus can wake for you now, soothed. The Ember Well shows what each choice pays.': 'Giờ Cự Thạch Núi Tro có thể thức dậy với sếp, thật hiền. Giếng Tro Than cho biết mỗi lựa chọn được thưởng gì.',
   'Automatic: it comes soothed now that you are level {level}.': 'Tự động: nó đến thật hiền vì sếp đã cấp {level}.',
   'Asleep below level {need}, soothed from level {need} on.': 'Ngủ khi dưới cấp {need}, hiền dịu từ cấp {need} trở đi.',
   'The lid hangs open on its chain. The Colossus wakes at full strength and the canyon darkens.': 'Nắp giếng treo mở trên dây xích. Cự Thạch thức dậy với toàn bộ sức mạnh và hẻm núi tối sầm.',

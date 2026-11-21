@@ -129,3 +129,57 @@ test('AI neighbours gather on a ring just outside the Colossus body', () => {
   const r = { id: 'home:colossus', x: 78, z: 0, r: 9 };
   for (let i = 0; i < 5; i++) { const p = rallySpot(r, i), d = Math.hypot(p.x - 78, p.z); assert.ok(d >= 12 - 1e-9 && d <= 15 + 1e-9, String(d)); }
 });
+
+// ---- AAA-PLAN WP24: what the well's lid pays ----
+/** All the EXP a save ever earned: its levels' needs plus what it holds toward the next. */
+const earned = (s: M.SaveState) => { let total = s.xp; for (let l = 1; l < s.level; l++) total += M.xpNeeded(l); return total; };
+test('a soothed kill pays a fifth of the EXP, no horn-crown roll and 2 fire seeds; wild (the default) is unchanged', async () => {
+  const { SOOTHED_XP, SOOTHED_GIFT } = await import('../src/colossus-rewards.ts');
+  assert.equal(S.xp, 30000); assert.equal(SOOTHED_XP, .2); assert.deepEqual(SOOTHED_GIFT, ['seed_fire', 2]);
+  // rng 0 wins every roll: a wild kill has the crown, a soothed one never.
+  const wild = M.newGame(), w0 = earned(wild), wildLoot = grantColossusReward(wild, true, () => 0, true, 1);
+  const calm = M.newGame(), c0 = earned(calm), calmLoot = grantColossusReward(calm, true, () => 0, true, 1, 'soothed');
+  assert.equal(earned(wild) - w0, 30000, 'wild pays the whole 30,000'); assert.equal(earned(calm) - c0, 6000, 'soothed pays 6,000');
+  assert.ok(wildLoot.some(i => i.id === 'hat_colossus')); assert.ok(!calmLoot.some(i => i.id === 'hat_colossus'), 'no crown, even on the luckiest dice');
+  assert.equal(calm.bag.hat_colossus, undefined); assert.equal(calm.chest?.hat_colossus, undefined);
+  assert.deepEqual(calmLoot.at(-1), { id: 'seed_fire', count: 2 }); assert.equal(calm.bag.seed_fire, 2);
+  // The rest of the loot falls as it does for a wild kill with the same dice, and it is banked once.
+  assert.deepEqual(calmLoot.filter(i => i.id !== 'seed_fire'), wildLoot.filter(i => i.id !== 'hat_colossus'));
+  for (const item of calmLoot) assert.equal((calm.bag[item.id] ?? 0) + (calm.chest?.[item.id] ?? 0), item.count, item.id);
+  assert.equal(calmLoot.pet, 'pet_colossus', 'the final blow brings the companion whatever the lid'); assert.equal(calm.bag.pet_colossus, 1);
+  // Unbanked (solo: the loot lies on the ground): nothing but the companion reaches the bag.
+  const ground = M.newGame(), drops = grantColossusReward(ground, false, () => .99, false, 1, 'soothed');
+  assert.equal(ground.bag.seed_fire, undefined); assert.ok(drops.some(i => i.id === 'seed_fire' && i.count === 2)); assert.equal(drops.pet, undefined);
+  // The default: exactly the old call, as the server makes it (five arguments).
+  const a = M.newGame(), b = M.newGame(), dice = () => { let n = 0; return () => (n++ * .37) % 1; };
+  assert.deepEqual(grantColossusReward(a, true, dice(), false, 1), grantColossusReward(b, true, dice(), false, 1, 'wild')); assert.equal(earned(a), earned(b)); assert.equal(earned(a) - w0, 30000);
+});
+test('Automatic pays its first soothed kill in full and later ones at the soothed rate; an own "Soothe it" pick pays soothed at once', async () => {
+  const { colossusPay, AUTO_ALWAYS_FULL, AUTO_PAID_KEY } = await import('../src/colossus.ts');
+  assert.equal(AUTO_ALWAYS_FULL, false, 'the round-1 rule (owner decision D19)');
+  assert.equal(colossusPay('soothed', true, false), 'soothed', 'the player chose "Soothe it"');
+  assert.equal(colossusPay('soothed', false, false), 'wild', 'Automatic, first kill'); assert.equal(colossusPay('soothed', false, true), 'soothed', 'Automatic, later kills');
+  for (const chosen of [true, false]) for (const paid of [true, false]) assert.equal(colossusPay('wild', chosen, paid), 'wild', 'a full-strength fight always pays in full');
+  // Two Automatic kills on one save: 30,000, then 6,000.
+  const s = M.newGame(); let paid = false; const gains: number[] = [];
+  for (let kill = 0; kill < 2; kill++) { const before = earned(s), pay = colossusPay('soothed', false, paid); if (pay === 'wild') paid = true; grantColossusReward(s, true, () => .99, false, 1, pay); gains.push(earned(s) - before); }
+  assert.deepEqual(gains, [30000, 6000]); assert.equal(AUTO_PAID_KEY, 'zoo-colossus-auto-paid');
+});
+test('saves from before the lid rule take either reward (promo saves), and an old lid on the device pays by the new rule', async () => {
+  const { colossusPay } = await import('../src/colossus.ts');
+  for (const name of ['save-new', 'save-mid', 'save', 'save-late']) for (const lid of ['wild', 'soothed'] as const) {
+    const s = M.parseSave(readFileSync(new URL('../promo/' + name + '.json', import.meta.url), 'utf8'))!; assert.ok(s, name);
+    const before = earned(s), loot = grantColossusReward(s, true, () => .5, true, 1, lid);
+    assert.equal(earned(s) - before, lid === 'soothed' ? 6000 : 30000, name + ' ' + lid);
+    assert.equal(loot.some(i => i.id === 'seed_fire'), lid === 'soothed'); assert.ok(M.parseSave(JSON.stringify(s)), name + ' still saves and loads');
+  }
+  // A device that stored a lid before this rule has no full-pay flag: its own "soothed" pays soothed, Automatic gets its one full kill.
+  assert.equal(colossusPay('soothed', true, false), 'soothed'); assert.equal(colossusPay('soothed', false, false), 'wild');
+});
+test('the roar hour adds a quarter of the EXP the kill paid: 7,500 on a full kill, 1,500 on a soothed one', async () => {
+  const { grantRoarBonus, SOOTHED_XP } = await import('../src/colossus-rewards.ts');
+  const full = M.newGame(), f0 = earned(full); assert.equal(grantRoarBonus(full, [], () => .5), 7500); assert.equal(earned(full) - f0, 7500, 'the default: unchanged');
+  const calm = M.newGame(), c0 = earned(calm), loot = grantColossusReward(calm, true, () => .5, false, 1, 'soothed'), counts = loot.map(i => i.count);
+  assert.equal(grantRoarBonus(calm, loot, () => .5, S.xp * SOOTHED_XP), 1500); assert.equal(earned(calm) - c0, 6000 + 1500, 'soothed in a roar hour: 7,500 in all (was 13,500 with the full bonus)');
+  assert.ok(loot.every((item, i) => item.count >= counts[i]), 'the loot counts still grow');
+});

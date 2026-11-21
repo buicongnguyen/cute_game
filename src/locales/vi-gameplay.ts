@@ -37,7 +37,7 @@ export const VI_GAMEPLAY: Record<string, string> = {
   'Weekly chest': 'Rương tuần',
   'Daily chest': 'Rương ngày',
   'Daily check-in': 'Điểm danh hằng ngày',
-  '{count} consecutive days': '{count} ngày liên tiếp',
+  '{count} days in a row': '{count} ngày liên tiếp', '1 day in a row': '1 ngày liên tiếp',
   'Star pass · Tier {tier}': 'Vé sao · Bậc {tier}',
   'Season {season}': 'Mùa {season}',
   'Wanted: {name}': 'Truy nã: {name}',

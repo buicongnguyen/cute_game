@@ -77,6 +77,8 @@ export const ENEMY_TYPES:Record<string,EnemyDefinition>={
 
 Object.assign(ENEMY_TYPES,TITANS);
 
+/** Difficulty by home zone or planet; a creature's level is difficulty x 3 - 2 (world.spawnSpecies). */
+export const ZONE_DIFFICULTY:Record<string,number>={home:0,forest:1,meadow:1,swamp:2,canyon:3,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,sky:5,cloud:5,dark:6,shadow:6};
 export const HOME_SPAWNS:Record<string,Array<[string,number]>>={forest:[['mushroom',20],['boar',12],['bee',6]],meadow:[['mushroom',12],['boar',8],['bee',12]],swamp:[['chomper',14],['wolf',10],['frog',12],['mushroom',6]],canyon:[['cactus',14],['wolf',8],['crab',12]]};
 /** Append after existing bosses/Titan: their durable combat identities must not move. */
 export const FOREST_RAPTOR_COUNT=6;
