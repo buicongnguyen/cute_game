@@ -41,5 +41,16 @@ export const onDemand = url => /\/assets\/(models\/(gear-[a-z-]+|hero-[a-z-]+|di
  */
 export const backgroundFill = url => onDemand(url) && !url.includes('/assets/audio/');
 
+/**
+ * The bytes a `Range: bytes=...` header asks for in a body of `size` bytes, as [first, last]; null when it asks for
+ * nothing the body has (the worker then answers 416). One range only, which is all a media element sends.
+ */
+export function byteRange(header, size) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(header || '').trim());
+  if (!m || (!m[1] && !m[2]) || !(size > 0)) return null;
+  const first = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2])), last = m[1] && m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
+  return first <= last && first < size ? [first, last] : null;
+}
+
 /** Vite's content-hashed output (assets/name-HASH.ext) never changes under the same name. */
 export const isHashedBuildFile = url => /\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/.test(url);

@@ -2,7 +2,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { assetVersions, modelVersions } from './model-versions.mjs';
-import { staleCaches, strategy, isHashedBuildFile, onDemand, backgroundFill } from './sw-logic.mjs';
+import { staleCaches, strategy, isHashedBuildFile, onDemand, backgroundFill, byteRange } from './sw-logic.mjs';
 
 // Keep the worker's paths aligned with Vite's deployment base. GitHub project
 // Pages uses /repository/, while the local Node server serves the root path.
@@ -67,6 +67,7 @@ const PINNED=${JSON.stringify(pinned)};
 const SCRIPTS=${JSON.stringify(scripts)};
 ${staleCaches.toString()}
 ${strategy.toString()}
+${byteRange.toString()}
 const PINNED_SET=new Set(PINNED);
 // Unpinned files install past the HTTP cache (Pages sends max-age=600), or index.html could be older than its scripts.
 // A pinned URL names one exact build of a file (hash or ?v=), so an older worker's copy of it is used as is, and
@@ -97,6 +98,15 @@ self.addEventListener('activate',event=>{
     .then(clients=>{for(const client of clients)client.postMessage({type:'zoo-sw-ready',version:VERSION,scripts:SCRIPTS});}));
 });
 const keep=(cache,request,response)=>response.ok?cache.put(request,response.clone()).then(()=>response,()=>response):response;
+// A media element asks for its file in ranges (Range: bytes=0-). A host answers that with 206, which a cache cannot
+// store, so the radio's theme was never kept. For a pinned file the worker fetches the whole file once, without the
+// Range header, keeps that 200 and cuts every asked range out of it (browsers want a 206 back, Safari above all).
+const ranged=(range,response)=>response.status!==200?response:response.arrayBuffer().then(body=>{
+  const part=byteRange(range,body.byteLength),headers=new Headers(response.headers);
+  if(!part)return new Response(null,{status:416,statusText:'Range Not Satisfiable',headers:{'Content-Range':'bytes */'+body.byteLength}});
+  headers.set('Content-Range','bytes '+part[0]+'-'+part[1]+'/'+body.byteLength);headers.set('Content-Length',String(part[1]-part[0]+1));headers.set('Accept-Ranges','bytes');
+  return new Response(body.slice(part[0],part[1]+1),{status:206,statusText:'Partial Content',headers});
+});
 self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url);
   const how=strategy({method:request.method,mode:request.mode,origin:url.origin,pathname:url.pathname,search:url.search},self.location.origin,BASE,KNOWN,PINNED);
@@ -107,6 +117,11 @@ self.addEventListener('fetch',event=>{
   }
   // Offline, a copy an older (kept) cache holds beats a stand-in.
   const elsewhere=(error,ignoreSearch)=>caches.match(request,{ignoreSearch}).then(cached=>cached||Promise.reject(error));
+  const range=how==='pinned'&&request.headers&&request.headers.get('range');
+  if(range){
+    event.respondWith(caches.open(VERSION).then(cache=>cache.match(request.url).then(cached=>cached||fetch(request.url).then(response=>keep(cache,request.url,response),error=>elsewhere(error,false)))).then(response=>ranged(range,response)));
+    return;
+  }
   event.respondWith(caches.open(VERSION).then(cache=>how==='pinned'
     ?cache.match(request).then(cached=>cached||fetch(request).then(response=>keep(cache,request,response),error=>elsewhere(error,false)))
     :fetch(request,{cache:'no-cache'}).then(response=>keep(cache,request,response),error=>cache.match(request,{ignoreSearch:true}).then(cached=>cached||elsewhere(error,true)))));
