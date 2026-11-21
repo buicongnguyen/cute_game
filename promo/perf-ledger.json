@@ -53,6 +53,15 @@
     "vietnamese": 16
    },
    "why": "Each package measured its growth against the staging it was built on; gzip deltas do not add up exactly. Measured on staging after merging WP6 and WP24: Vietnamese start 931,981 against a summed limit of 931,979 (2 bytes over). 16 bytes cover that rounding; no code was added."
+  },
+  {
+   "row": "start",
+   "name": "WP12 creature voices and warnings",
+   "allow": {
+    "english": 96,
+    "vietnamese": 96
+   },
+   "why": "Measured growth of the start against staging ef9501e, with WP9 merged (English 798,764 -> 798,860, Vietnamese 932,156 -> 932,252; the plan allows 0.1 KB): hooks and fallbacks only. world.ts tells a wind-up where a creature is seen to start one (onTelegraph, also for a guest in a room), main.ts forwards it as the telegraph event, plays the alert beep until the creatures have their own voices (graph.creatures), names a pet hit where it is played, and hands the features the health bar as a part of 1 (services.health); sfx.ts plays the hit for petHit and the hurt cry for roar until their recipes have come, and hands the stingers the options of a play (a detune, a pan). The voices, the wind-up warning, the roar, the pet hit, the heartbeat, the red edge and its sheet load after Start: the audio features in a lazy chunk of their own (features-audio, 12.5 KB gzip), the rest in the features chunk (7.5 KB gzip with the comfort rows of WP9)."
   }
  ]
 }

@@ -48,11 +48,11 @@ export const audioLevels = { music: AUDIO_DEFAULTS.musicVolume as number, sfx: A
 export function syncAudio(settings: Partial<AudioSettings>) { const a = audioOf(settings); audioLevels.music = a.musicVolume; audioLevels.sfx = a.sfxVolume; audioLevels.vibrate = a.vibrate; return a; }
 
 /**
- * The cottage radio's player. features/radio.ts puts it here when the features mount (after the first played frame) and
+ * The cottage radio's player. features-audio/radio.ts puts it here when the features mount (after the first played frame) and
  * house-life.ts switches it on and off, so the player stays out of the start download. A radio switched on before that
  * sets `want` and calls `ask` (main.ts: one more try to load the features), and the player starts as soon as it is there.
  */
-export const radio: { box?: { playing: boolean; start(): void; stop(): void; tick(dt: number): void }; want?: boolean; ask?(): void; /** The "Live music" row of Settings (features/music-director.ts). */ row?(): string } = {};
+export const radio: { box?: { playing: boolean; start(): void; stop(): void; tick(dt: number): void }; want?: boolean; ask?(): void; /** The "Live music" row of Settings (features-audio/music-director.ts). */ row?(): string } = {};
 
 const percent = (v: number) => `${Math.round(v * 100)}%`;
 /** The Settings rows (English; openDialog localizes the panel): a music slider, an effects slider and the vibration switch (main.ts settings()). */

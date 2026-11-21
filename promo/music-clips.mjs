@@ -1,5 +1,5 @@
 // The music in numbers and in clips (docs/SOUNDS.md, AAA-PLAN WP13). Nobody can listen on a build machine: this plays the
-// music director (src/features/music-director.ts) and its live score through the game's own audio graph (music bus,
+// music director (src/features-audio/music-director.ts) and its live score through the game's own audio graph (music bus,
 // duck, compressor) in an OfflineAudioContext in Chromium, with the same code the game runs, and measures what reaches the speakers.
 //
 //   node promo/music-clips.mjs            the tables, and the clips with their listen page in .scratch/owner/music/
@@ -41,7 +41,7 @@ export const keyName = tune => `${NOTE_NAMES[tune.key % 12]} ${MODE_NAMES[tune.m
  * for a touch device. It changes when the tune, a level or the way the score writes notes changes.
  */
 export async function signatures() {
-  const { MUSIC } = await import('../src/features/music-content.ts'), score = await import('../src/features/music-score.ts'), { TRIM } = await import('../src/features/music-director.ts');
+  const { MUSIC } = await import('../src/features-audio/music-content.ts'), score = await import('../src/features-audio/music-score.ts'), { TRIM } = await import('../src/features-audio/music-director.ts');
   const out = {};
   for (const [id, tune] of Object.entries(MUSIC)) {
     if (!tune.progs) continue;
@@ -54,7 +54,7 @@ export async function signatures() {
 
 /** The score alone, without any audio: per tune the notes a second and the most voices at once, over three minutes. */
 export async function scoreFacts() {
-  const { MUSIC } = await import('../src/features/music-content.ts'), { Score } = await import('../src/features/music-score.ts');
+  const { MUSIC } = await import('../src/features-audio/music-content.ts'), { Score } = await import('../src/features-audio/music-score.ts');
   const out = {};
   for (const [id, tune] of Object.entries(MUSIC)) {
     if (!tune.progs) continue;
@@ -72,11 +72,11 @@ export async function scoreFacts() {
 /** Runs in the page: renders and measures. Returns plain data. */
 async function measure({ clips, quick }) {
   const { Sfx } = await import('/src/sfx.ts');
-  const { installMix } = await import('/src/features/sound-mix.ts');
-  const { installStingers } = await import('/src/features/stingers.ts');
+  const { installMix } = await import('/src/features-audio/sound-mix.ts');
+  const { installStingers } = await import('/src/features-audio/stingers.ts');
   const { audioLevels } = await import('/src/audio-settings.ts');
-  const { MUSIC, HOME_ZONES } = await import('/src/features/music-content.ts');
-  const { Director, newScene, FADE } = await import('/src/features/music-director.ts');
+  const { MUSIC, HOME_ZONES } = await import('/src/features-audio/music-content.ts');
+  const { Director, newScene, FADE } = await import('/src/features-audio/music-director.ts');
   const DRUM = 3, HAT = 4;
   const RATE = 48000, LEAD = .5, dB = v => v > 1e-6 ? 20 * Math.log10(v) : -120, round = v => Math.round(v * 10) / 10;
   const seeded = seed => () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
@@ -203,7 +203,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   } catch (e) { console.error(`Could not measure at ${base} (${e.message.split(LF)[0]}). Is the dev server running? Set PORT.`); process.exitCode = 2; }
   finally { await browser.close(); }
   if (out) {
-    const { MUSIC } = await import('../src/features/music-content.ts');
+    const { MUSIC } = await import('../src/features-audio/music-content.ts');
     const kept = JSON.parse(readFileSync(new URL('./loudness.json', import.meta.url), 'utf8')), score = await scoreFacts(), sig = await signatures();
     const n = (v, w = 8) => String(v).padStart(w), problems = [];
     console.log('1. Every tune alone (30 s on the music bus, music slider 0.45; dBFS at the speakers)');
@@ -244,7 +244,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       }
       const about = { village: 'The village (C major, 104 beats a minute): the theme\'s own key and instruments. In the game it plays two phrases, then rests 60 to 120 s.', forest: 'Mushroom Forest (F lydian, 92, a little swing).', danger: 'Mushroom Forest with a chase: the drums join at 5 s and leave after 16 s.', boss: 'A boss (D minor, 138), with its own beat.', theme: 'The recorded theme, as the director plays it in the village: for comparing levels.', 'village-2min': 'Two minutes of the village\'s variations, without the rests between them.' };
       const row = name => { const f = out.tunes[name] ?? (name === 'theme' ? out.theme : null); return `<section><h2>${name}</h2><p>${about[name] ?? ''}${f ? ` Measured: loudness ${f.lufs} LKFS, peak ${f.peak} dBFS.` : ''}</p><audio controls preload="none" src="${name}.wav"></audio></section>`; };
-      writeFileSync(dir + 'index.html', `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Zoo Garden: the live score</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:44rem;margin:2rem auto;padding:0 1rem;color:#223}h1{font-size:1.5rem}h2{font-size:1.1rem;margin:1.6rem 0 .2rem}audio{width:100%}p{margin:.2rem 0 .5rem}small{color:#556}</style><h1>Zoo Garden: the live score</h1><p>Rendered by <code>promo/music-clips.mjs</code> with the game's own score code, through the game's music bus and compressor at the default music volume (45%), so the clips are as quiet as the music is in play: turn the volume up to judge the tunes. Nothing here is a recording: every note is an oscillator, and the melodies are drawn from each tune's seed.</p>${names.map(row).join('')}<p><small>To hear only the recorded theme in the game: set THEME_ONLY in src/features/music-content.ts, or on one device the preference "music" to "theme".</small></p>${LF}`);
+      writeFileSync(dir + 'index.html', `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Zoo Garden: the live score</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:44rem;margin:2rem auto;padding:0 1rem;color:#223}h1{font-size:1.5rem}h2{font-size:1.1rem;margin:1.6rem 0 .2rem}audio{width:100%}p{margin:.2rem 0 .5rem}small{color:#556}</style><h1>Zoo Garden: the live score</h1><p>Rendered by <code>promo/music-clips.mjs</code> with the game's own score code, through the game's music bus and compressor at the default music volume (45%), so the clips are as quiet as the music is in play: turn the volume up to judge the tunes. Nothing here is a recording: every note is an oscillator, and the melodies are drawn from each tune's seed.</p>${names.map(row).join('')}<p><small>To hear only the recorded theme in the game: set THEME_ONLY in src/features-audio/music-content.ts, or on one device the preference "music" to "theme".</small></p>${LF}`);
       console.log(`${LF}Clips and the listen page: ${dir}index.html (${names.join(', ')})`);
     }
     console.log(problems.length ? `${LF}${problems.map(p => 'OUT  ' + p).join(LF)}` : `${LF}Every tune is within 2 LU of the theme, under the effects, and nothing clips.`);

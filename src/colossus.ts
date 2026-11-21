@@ -305,7 +305,7 @@ export class ColossusEvent {
   /** The moment a blow lands: shake, sound and dust, scaled by distance. */
   private landed(a: ColossusAttack) {
     const w = this.h.world, d = Math.hypot(w.position.x - a.source.x, w.position.z - a.source.z), near = Math.max(0, 1 - d / 70);
-    if (a.skill === 'stomp' || a.skill === 'slap' || a.skill === 'roar') { w.fx?.shake(.35 + .55 * near); if (near > 0) this.h.tone(a.skill === 'roar' ? 'hurt' : 'crit'); }
+    if (a.skill === 'stomp' || a.skill === 'slap' || a.skill === 'roar') { w.fx?.shake(.35 + .55 * near); if (near > 0) this.h.tone(a.skill === 'roar' ? 'roar' : 'crit'); }
   }
   private burst(x: number, z: number, r: number, skill: string) {
     const w = this.h.world, fx = w.fx; if (!fx) return;

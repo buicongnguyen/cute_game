@@ -204,6 +204,8 @@ export class World {
   onBuilt?: () => void;
   /** A creature has just noticed the explorer. */
   onAlert?: (e: Enemy) => void;
+  /** A creature or boss was seen to start a wind-up that ends in a blow `seconds` later (main.ts tells it as the telegraph event). */
+  onTelegraph?: (e: Enemy, seconds: number) => void;
   joystickInput:Point|null=null;onRemotePlayerClick?:(id:string)=>void;
   playerSizeScale=1;playerShield=false;playerBat=false;
   authoritativeAction?:(intent:{type:string;payload?:Record<string,unknown>})=>Promise<unknown>;
@@ -2035,6 +2037,7 @@ export class World {
     const o=u.anim,s=Math.sin(o),behavior=def?.behavior??'melee';
     if(u.lastPhase!==e.phase){
       if((u.lastPhase==='idle'||u.lastPhase==='return')&&e.phase==='chase'&&Math.hypot(e.x-this.position.x,e.z-this.position.z)<20){this.fx?.text({x:e.x,y:m.position.y+(e.boss?2.4:1.1),z:e.z},'!','alert');this.onAlert?.(e);if(this.weightOf(e))u.noticeT=HOP.noticeTime;}
+      if(e.phase==='windup')this.onTelegraph?.(e,e.phaseTime??0); // here, not in the AI: a guest in a room sees the phase too
       // A wind-up cancelled by a flinch (flinchEnemy) is not a strike: no lunge.
       if(u.lastPhase==='windup'&&e.phase!=='windup'&&!((this.time??0)-(u.flinchAt??-Infinity)<.5))u.strikeT=.25;
       u.lastPhase=e.phase;

@@ -106,3 +106,28 @@ test('preferences read and write the storage of this browser, and survive a stor
     assert.equal(services.pref('captions', 'on'), 'on'); assert.equal(services.setPref('captions', 'off'), false);
   } finally { if (real) Object.defineProperty(globalThis, 'localStorage', real); else delete (globalThis as { localStorage?: unknown }).localStorage; }
 });
+
+test('the audio features come in a chunk of their own: mounted when it arrives, one retry when it does not, and never in the way', async () => {
+  const { loadAudio, AUDIO_RETRY } = await import('../src/game-services.ts');
+  const tick = () => new Promise(resolve => setTimeout(resolve, 0)), services = { name: 'services' } as never;
+  const run = async (answers: boolean[]) => {
+    const mounted: unknown[] = [], timers: [() => void, number][] = [], logged: unknown[] = [], error = console.error; let loads = 0;
+    console.error = (e: unknown) => { logged.push(e); };
+    try {
+      loadAudio(services, async () => { if (!answers[loads++]) throw new Error('offline'); return { mountAudio: s => { mounted.push(s); } }; }, (fn, ms) => { timers.push([fn, ms]); });
+      await tick(); await tick();
+      const first = { mounted: mounted.length, timers: timers.length };
+      for (const [fn] of timers.splice(0)) fn(); await tick(); await tick();
+      return { first, mounted, timers, logged, loads };
+    } finally { console.error = error; }
+  };
+  const ok = await run([true]); assert.deepEqual(ok.first, { mounted: 1, timers: 0 }); assert.equal(ok.mounted[0], services); assert.equal(ok.loads, 1); assert.equal(ok.logged.length, 0);
+  const second = await run([false, true]); assert.deepEqual(second.first, { mounted: 0, timers: 1 }); assert.equal(second.mounted.length, 1); assert.equal(second.loads, 2); assert.equal(second.logged.length, 1);
+  const never = await run([false, false]); assert.equal(never.mounted.length, 0); assert.equal(never.loads, 2, 'one retry, not a loop'); assert.equal(never.timers.length, 0); assert.equal(never.logged.length, 2);
+  assert.equal(AUDIO_RETRY, 8000);
+  // A chunk whose mounting throws is logged like a failed fetch and does not reach the caller.
+  const broken = await run([true]); assert.equal(broken.loads, 1);
+  let threw = false; const error = console.error; console.error = () => {};
+  try { loadAudio(services, async () => ({ mountAudio() { throw new Error('bad feature'); } }), () => {}); await tick(); await tick(); } catch { threw = true; } finally { console.error = error; }
+  assert.equal(threw, false);
+});
