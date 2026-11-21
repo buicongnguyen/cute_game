@@ -6,7 +6,7 @@ import * as M from '../src/model.ts';
 import {perfFlags} from '../src/perf-flags.ts';
 import {heroPose,type HeroMotion} from '../src/hero-motion.ts';
 import {strideOf,armSwing} from '../src/walk-cycle.ts';
-import {HeroIdle,busyOf,mount,FIDGET_MIN,FIDGET_MAX,SIT_AT,LEAN_IN,LEAN_TIME,SETTLE_TIME,type HeroParts,type Act} from '../src/features/hero-idle.ts';
+import {HeroIdle,busyOf,mount,FIDGET_MIN,FIDGET_MAX,SIT_AT,LEAN_IN,LEAN_TIME,SETTLE_TIME,CLIP_HOLD,HOLD_UP_DELAY,type HeroParts,type Act} from '../src/features/hero-idle.ts';
 
 const DT=1/60,NAMES=['arm-left','arm-right','leg-left','leg-right','head'];
 function avatar(hip=.52){const m=new T.Group(),body=new T.Group();m.add(body);for(const name of NAMES){const p=new T.Group();p.name=name;if(name.startsWith('leg'))p.position.y=hip;body.add(p);}return m;}
@@ -121,9 +121,8 @@ test('input cancels within one frame: a fidget and the sit end at the next step 
     assert.ok(posed());
     reset();if(how==='poke')idle.poke();idle.step(m,parts,DT,how==='walk'?1:how==='fight'?2:0,false,.5,.35);
     assert.equal(idle.act,'',`${until}/${how}: over in one frame`);assert.equal(idle.idle,0);
-    if(how==='fight'){assert.equal(posed(),false,'nothing is applied under a fight pose');assert.equal(idle.w,0);}
-    else assert.ok(idle.w<1);
-    for(let i=0;i<frames(.12)+1;i++){reset();idle.step(m,parts,DT,how==='walk'?1:0,false,.5,.35);}
+    assert.ok(idle.w<1&&idle.w>0,'it eases out, under a fight pose too (no pop up from the ground)');
+    for(let i=0;i<frames(.12)+1;i++){reset();idle.step(m,parts,DT,how==='walk'?1:how==='fight'&&i<3?2:0,false,.5,.35);}
     assert.equal(idle.w,0);assert.equal(posed(),false);assert.equal(idle.shown,'');
     // And the wait starts over: nothing for the next 6 s.
     for(let i=0;i<frames(FIDGET_MIN)-10;i++){reset();idle.step(m,parts,DT,0,false,.5,.35);assert.equal(idle.act,'');}
@@ -148,8 +147,8 @@ test('no new objects after warm-up: the motion, its gait and the idle keep their
 /** The feature mounted on a World as the game mounts it, with the services it reads. */
 function mounted(quality='high'){
   const {w,tick}=world();Object.assign(w,{enemies:[],plotMeshes:[],companion:new T.Group(),companion2:new T.Group(),interior:null});
-  const on:Record<string,(p:unknown)=>void>={},level={now:quality};
-  mount({world:w,slot:()=>0,quality:()=>level.now,state:()=>w.state,on:(e:string,f:(p:unknown)=>void)=>{on[e]=f;return()=>{};}} as never);
+  const on:Record<string,(p:unknown)=>void>={},level={now:quality,modal:''};
+  mount({world:w,slot:()=>0,quality:()=>level.now,state:()=>w.state,modal:()=>level.modal,on:(e:string,f:(p:unknown)=>void)=>{on[e]=f;return()=>{};}} as never);
   return {w,tick,on,level,idle:(w.heroExtras as unknown as {idle:HeroIdle}).idle};
 }
 const armX=(w:World)=>w.player.getObjectByName('arm-left')!.rotation.x;
@@ -160,22 +159,23 @@ test('playPose: a clip raises the arms, lasts its seconds and returns to the idl
     w.playPose!(kind,1);let top=0,lift=0;
     for(let i=0;i<frames(1);i++){tick();top=Math.min(top,armX(w));lift=Math.max(lift,w.player.position.y);}
     assert.equal(idle.act,'');
-    assert.ok(top<-2.3,`${kind}: arms overhead (${top})`);if(kind==='cheer')assert.ok(lift>.1,'a hop');
+    assert.ok(top<(kind==='cheer'?-2.3:-1.9),`${kind}: arms up (${top})`);if(kind==='cheer')assert.ok(lift>.1,'a hop');
     for(let i=0;i<frames(.2);i++)tick();
     assert.equal(Math.abs(armX(w)),0);assert.equal(w.player.position.y,0);assert.equal(idle.shown,'');assert.equal(Math.abs(w.player.rotation.x),0);
     // Lengths are kept between 0.6 and 1.2 s.
-    w.playPose!(kind,5);assert.equal(idle.time,1.2);w.playPose!(kind,.1);assert.equal(idle.time,.6);
+    w.playPose!(kind,5);assert.equal(idle.clipTime,1.2);w.playPose!(kind,.1);assert.equal(idle.clipTime,.6);
   }
 });
 
 test('a clip waits under a fight pose and is not played at all on Battery saver; level-ups cheer and catches hold up',()=>{
   const {w,tick,on,level,idle}=mounted();for(let i=0;i<10;i++)tick();
-  on.levelUp({level:2});assert.equal(idle.act,'cheer');
-  w.punchT=.2;tick();assert.equal(idle.w,0,'the punch has the body');
+  on.levelUp({level:2});assert.equal(idle.clip,'cheer');
+  w.punchT=.2;tick();assert.equal(idle.w,0,'the punch has the body');assert.equal(idle.act,'');
   for(let i=0;i<frames(.5);i++)tick();assert.ok(armX(w)<-2,'the cheer shows once the punch is over');
   for(let i=0;i<frames(1);i++)tick();assert.equal(Math.abs(armX(w)),0);
-  on.fishCatch({id:'x',size:1});assert.equal(idle.act,'holdUp');for(let i=0;i<frames(1.6);i++)tick();assert.equal(idle.act,'');
-  level.now='low';w.playPose!('cheer',1);assert.equal(idle.act,'');
+  on.fishCatch({id:'x',size:1});assert.equal(idle.clip,'holdUp');for(let i=0;i<frames(HOLD_UP_DELAY)-2;i++)tick();assert.equal(idle.act,'','the arms wait for the fish');
+  for(let i=0;i<6;i++)tick();assert.equal(idle.act,'holdUp');for(let i=0;i<frames(1.4);i++)tick();assert.equal(idle.act,'');
+  level.now='low';w.playPose!('cheer',1);assert.equal(idle.clip,'');
   for(let i=0;i<frames(35);i++)tick();assert.equal(idle.act,'');assert.equal(Math.abs(armX(w)),0);assert.equal(w.player.position.y,0);
 });
 
@@ -186,4 +186,71 @@ test('mounted: the explorer looks at a near creature, ignores a far one, and a w
   assert.ok(looked,'a look within 26 s');
   const head=w.player.getObjectByName('head')!;assert.ok(Math.abs(head.rotation.y-Math.PI/4)<.02,`the head turns to the creature (${head.rotation.y})`);
   w.moving=true;tick();assert.equal(idle.act,'');
+});
+
+test('the idle clock does not run while the game is not played: a dialog, the starship, a knock-out',()=>{
+  // Reading a shop dialog for 40 s: nothing behind it, and a fresh wait after it closes.
+  {const {w,tick,level,idle}=mounted();level.modal='shop';for(let i=0;i<frames(40);i++){tick();assert.equal(idle.act,'');assert.equal(idle.idle,0);}
+    assert.equal(w.player.position.y,0);level.modal='';for(let i=0;i<frames(FIDGET_MIN)-5;i++){tick();assert.equal(idle.act,'');}}
+  // Holding the flight stick for 35 s (on board, the explorer hidden): not seated on arrival.
+  {const {w,tick,idle}=mounted();w.boarded=true;w.player.visible=false;for(let i=0;i<frames(35);i++)tick();assert.equal(idle.idle,0);
+    w.boarded=false;w.player.visible=true;for(let i=0;i<frames(3);i++){tick();assert.equal(idle.act,'');}assert.equal(w.player.position.y,0);}
+  {const {w,tick,idle}=mounted();w.state.hp=0;for(let i=0;i<frames(35);i++)tick();assert.equal(idle.act,'');assert.equal(idle.idle,0);}
+  // A dialog that opens on a seated explorer stands it up.
+  {const {tick,level,idle}=mounted();for(let i=0;i<frames(31.5);i++)tick();assert.equal(idle.act,'sit');level.modal='bag';tick();assert.equal(idle.act,'');}
+});
+
+test('no sitting with a live creature within 8 m; one that comes near stands the explorer up with the ease',()=>{
+  const {w,tick,idle}=mounted(),mesh=new T.Group(),foe={hp:5,mesh};mesh.position.set(5,0,0);(w as any).enemies=[foe];
+  for(let i=0;i<frames(34);i++){tick();assert.notEqual(idle.act,'sit');}
+  mesh.position.set(30,0,0);for(let i=0;i<30;i++)tick();assert.equal(idle.act,'sit','it sits once the creature is gone');
+  for(let i=0;i<frames(1);i++)tick();assert.ok(w.player.position.y<-.3);
+  mesh.position.set(6,0,0);let n=0;while(idle.act==='sit'){tick();assert.ok(++n<=13,'noticed within the poll');}
+  assert.ok(w.player.position.y<-.2,'no pop: still most of the way down on the frame it is cut');
+  for(let i=0;i<frames(.12)+1;i++)tick();assert.equal(w.player.position.y,0);
+  foe.hp=0;for(let i=0;i<frames(31);i++)tick();assert.equal(idle.act,'sit','a fallen creature is no threat');
+});
+
+test('hurt while seated: the body comes up over the ease, not in one frame',()=>{
+  const {w,tick,idle}=mounted();for(let i=0;i<frames(31.5);i++)tick();const down=w.player.position.y;assert.ok(down<-.3);
+  w.hurtT=.3;tick();assert.equal(idle.act,'');const first=w.player.position.y;assert.ok(first<down*.6&&first>down,`eased (${first} from ${down})`);
+  let was=first;for(let i=0;i<frames(.12)+1;i++){tick();assert.ok(w.player.position.y>=was-1e-9);was=w.player.position.y;}assert.equal(was,0);
+});
+
+test('a clip asked for while seated eases out of the sit first, then plays whole',()=>{
+  const {w,tick,idle}=mounted();for(let i=0;i<frames(31.5);i++)tick();assert.equal(idle.act,'sit');assert.equal(idle.w,1);
+  w.playPose!('cheer',1);tick();assert.equal(idle.shown,'sit');assert.ok(idle.w<1&&idle.w>.8,'the weight is not zeroed');
+  let n=1;while(idle.act!=='cheer'){tick();assert.ok(++n<12);}
+  assert.equal(idle.t,DT,'the clip begins at its start');let top=0;for(let i=0;i<frames(1.3);i++){tick();top=Math.min(top,armX(w));}
+  assert.ok(top<-2.3);assert.equal(idle.act,'');assert.equal(w.player.position.y,0);
+});
+
+test('a clip waits for a fight pose at its start (a blaster aim of 0.7 s), starts over when cut, and is dropped after CLIP_HOLD',()=>{
+  const {w,tick,idle}=mounted();for(let i=0;i<10;i++)tick();
+  w.aimT=.7;w.playPose!('cheer',1);for(let i=0;i<frames(.7)-1;i++){tick();assert.equal(idle.act,'');}
+  for(let i=0;i<4;i++)tick();assert.equal(idle.act,'cheer');assert.ok(idle.t<=4*DT+1e-9);
+  for(let i=0;i<20;i++)tick();w.punchT=.1;tick();assert.equal(idle.act,'');assert.equal(idle.clip,'cheer');
+  for(let i=0;i<14;i++)tick();assert.equal(idle.act,'cheer');assert.ok(idle.t<.2,`from its start again (${idle.t})`);
+  for(let i=0;i<frames(1.3);i++)tick();assert.equal(idle.act,'');
+  w.playPose!('cheer',1);for(let i=0;i<frames(CLIP_HOLD)+3;i++){w.punchT=.1;tick();}assert.equal(idle.clip,'','a long fight drops the cheer');
+  for(let i=0;i<30;i++)tick();assert.equal(idle.act,'');
+});
+
+test('a pad button is input too; Battery saver and the sit do not search for things to look at; swapped parts are found again',()=>{
+  const heard:Record<string,()=>void>={},g=globalThis as any,hadAdd=g.addEventListener,pad={buttons:[{pressed:false}],axes:[0,0]};
+  g.addEventListener=(type:string,f:()=>void)=>{heard[type]=f;};
+  const nav=Object.getOwnPropertyDescriptor(g,'navigator');Object.defineProperty(g,'navigator',{value:{getGamepads:()=>[null,pad]},configurable:true});
+  try{
+    const {w,tick,level,idle}=mounted();let reads=0;const list:unknown[]=[];Object.defineProperty(w,'enemies',{get(){reads++;return list;},configurable:true});
+    for(let i=0;i<frames(31.5);i++)tick();assert.equal(idle.act,'sit');
+    pad.buttons[0].pressed=true;tick();assert.equal(idle.act,'sit','no pad connected: not read');
+    heard.gamepadconnected();tick();assert.equal(idle.act,'','a held button stands the explorer up');pad.buttons[0].pressed=false;
+    pad.axes[1]=.6;for(let i=0;i<frames(12);i++){tick();assert.equal(idle.act,'');}pad.axes[1]=0;heard.gamepaddisconnected();
+    // The sit: only the 5-a-second threat check reads the creatures, never the look.
+    for(let i=0;i<frames(31.5);i++)tick();assert.equal(idle.act,'sit');reads=0;for(let i=0;i<120;i++)tick();assert.ok(reads<=11,`${reads} reads in 2 s of sitting`);
+    idle.poke();tick();level.now='low';reads=0;for(let i=0;i<frames(12);i++)tick();assert.equal(reads,0,'Battery saver reads nothing');level.now='high';
+    // Another head (a look or a disguise swaps the part): the new one is posed.
+    const old=w.player.getObjectByName('head')!,head=new T.Group();head.name='head';old.parent!.add(head);old.removeFromParent();
+    idle.poke();tick();(idle as any).start('look',2.6);idle.yaw=.8;for(let i=0;i<40;i++)tick();assert.ok(head.rotation.y>.6,`the new head turns (${head.rotation.y})`);
+  }finally{g.addEventListener=hadAdd;if(nav)Object.defineProperty(g,'navigator',nav);else delete g.navigator;}
 });
