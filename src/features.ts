@@ -29,7 +29,7 @@ const tables = import.meta.glob<Record<string, string>>('./features-vi/*.ts', { 
 (globalThis as { zooFeatures?: string[] }).zooFeatures = Object.keys(features).sort();
 
 /** The longest the features wait for their Vietnamese phrases before they mount, in ms. */
-export const PHRASE_WAIT = 4000;
+const PHRASE_WAIT = 4000;
 /** Every feature's Vietnamese phrases, merged into one table. */
 export const featurePhrases = async (): Promise<Record<string, string>> => Object.assign({}, ...await Promise.all(Object.keys(tables).sort().map(file => tables[file]())));
 

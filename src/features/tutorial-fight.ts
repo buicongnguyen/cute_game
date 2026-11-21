@@ -41,9 +41,9 @@ export const CRITTER_NAME = 'Gloomcap nibbler';
 /** The ring creature: its ring and reach in metres, its wind-up in seconds, the share of health a bite never goes below. */
 export const LESSON = { ring: 2, reach: 1.6, windup: 1, floor: .6, color: '#ff3b3b' } as const;
 /** A tip stays this long (seconds); two blows this close together are "in a row". */
-export const TIP_S = 2.5, CHAIN_GAP_S = 1.2;
+const TIP_S = 2.5, CHAIN_GAP_S = 1.2;
 /** The press prompt shows when a creature of the first fight is this near (metres). */
-export const PROMPT_NEAR = 6;
+const PROMPT_NEAR = 6;
 /** Leaving the village: the banner of a dangerous zone shows from `from` m out (the fence is at `edge`), again after walking back inside `rearm`. */
 export const WARN = { from: 14.5, edge: 18, rearm: 11, levels: 3 } as const;
 /** The wilds round the village: banner name and the level its creatures start at (hud-combat.ts ZONE_DIFFICULTY x 3 - 2; a test keeps them in step). */
@@ -90,7 +90,7 @@ export function wildAhead(x: number, z: number, level: number): keyof typeof WIL
 }
 
 interface LessonSave { firstRun?: { seen?: readonly string[] }; counters: { kills: number }; hp: number }
-export interface LessonHost {
+interface LessonHost {
   /** A creature of the first fight came back (the puff of its return). */
   back?(e: Enemy): void;
   enemies(): readonly Enemy[];

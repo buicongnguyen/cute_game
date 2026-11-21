@@ -16,9 +16,11 @@ Never call `new AudioContext()` anywhere else.
 ```
 effects (Sfx.play) ──► sfx ──► duck ─┐
 click / open / close ─► ui ──► duck ─┤
-(WP11 ambience) ─► ambience ─► duck ─┼─► compressor ─► speakers
+(nothing yet)   ─► ambience ─► duck ─┼─► compressor ─► speakers
 radio theme, WP13 score ──► music ► duck ┘
 ```
+
+The ambience bus is made but nothing plays on it: its package (WP11, ambience and footsteps) was not built in round 1.
 
 - **Levels.** `sfx`, `ui` and `ambience` follow the effects slider (0.55 at the default 0.8, the old loudness); `music` follows
   the music slider (its gain is the slider value, so 0 is silence). Buses add no saved setting: the two volumes stay in

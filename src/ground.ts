@@ -23,7 +23,7 @@ const HOME = { home: new T.Color('#93e06a'), forest: new T.Color('#5cbf57'), mea
 /** A planet's ground colours [low, high, landing pad]: our own (planet-palette.ts), or the planet facts'. */
 export const groundBase = (planet: PlanetId) => PALETTE.ground[planet].base ?? PLANETS[planet].ground;
 /** Width of the red band on the canyon's side of the village fence, in metres. */
-export const DANGER_BAND = 4;
+const DANGER_BAND = 4;
 const SAMPLES = [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3], [2.2, 2.2], [-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2]];
 const scratch = new T.Color();
 

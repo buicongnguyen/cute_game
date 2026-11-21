@@ -64,7 +64,7 @@ export interface GameEvents {
   telegraph: { enemy: Enemy; time: number };
 }
 export type GameEvent = keyof GameEvents;
-export type Listener<K extends GameEvent> = (payload: GameEvents[K]) => void;
+type Listener<K extends GameEvent> = (payload: GameEvents[K]) => void;
 export interface EventBus {
   /** Listens; the returned function stops listening. */
   on<K extends GameEvent>(event: K, listener: Listener<K>): () => void;

@@ -10,9 +10,10 @@
 // the picture reports `differing: 0`. Two separate page loads are NOT comparable (asset arrival order moves animals and
 // particles), which is why both renders come from one frozen page.
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-const require = createRequire('C:/Users/n/source/repos/3D_claudeopus55/package.json');
-const { chromium } = require('playwright');
+// Playwright: PLAYWRIGHT_MODULE (a playwright/index.mjs) or the project's own install.
+const { chromium } = process.env.PLAYWRIGHT_MODULE ? await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href) : createRequire(import.meta.url)('playwright');
 const BASE = 1.8e12;
 const [url, flag, out, ...want] = process.argv.slice(2);
 if (!url || !flag || !out) { console.log('usage: node promo/frozen-ab.mjs <url> <flag> <outdir> [village|bots|vault ...]'); process.exit(2); }

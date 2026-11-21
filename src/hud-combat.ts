@@ -66,7 +66,7 @@ export function bossApproach(enemies: readonly Enemy[], x: number, z: number, ma
   return best;
 }
 /** A living boss within its sight radius plus `margin` metres. */
-export const bossClose = (e: Enemy, x: number, z: number, margin: number) => e.boss && e.hp > 0 && Math.hypot(e.x - x, e.z - z) < ((e.definition ?? ENEMY_TYPES[e.type ?? ''])?.sight ?? 13) + margin;
+const bossClose = (e: Enemy, x: number, z: number, margin: number) => e.boss && e.hp > 0 && Math.hypot(e.x - x, e.z - z) < ((e.definition ?? ENEMY_TYPES[e.type ?? ''])?.sight ?? 13) + margin;
 /** A fight is near when an aggro creature is within 12 m: the trackers fold into a chip so they cannot hide it. */
 export const fightNear = (enemies: readonly Enemy[], x: number, z: number, r = 12) => enemies.some(e => e.hp > 0 && aggro(e) && Math.hypot(e.x - x, e.z - z) < r);
 

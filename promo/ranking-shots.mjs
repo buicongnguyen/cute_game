@@ -1,12 +1,13 @@
 // Screenshots of the 🏆 leaderboard: solo (neighbourhood) board and a server board built by server/ranking.mjs.
 // Dev server: npx vite --port 5254 --strictPort. Run: node --experimental-strip-types promo/ranking-shots.mjs [outDir]
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { readFileSync, mkdirSync } from 'node:fs';
 import * as M from '../src/model.ts';
 import { createRanking } from '../server/ranking.mjs';
 import { weekKey } from '../src/ranking-logic.ts';
-const require = createRequire('C:/Users/n/source/repos/3D_claudeopus55/package.json');
-const { chromium } = require('playwright');
+// Playwright: PLAYWRIGHT_MODULE (a playwright/index.mjs) or the project's own install.
+const { chromium } = process.env.PLAYWRIGHT_MODULE ? await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href) : createRequire(import.meta.url)('playwright');
 const save = readFileSync(new URL('./save.json', import.meta.url), 'utf8');
 const out = process.argv[2] || 'shots'; mkdirSync(out, { recursive: true });
 const URL_ = process.env.GAME_URL || 'http://localhost:5254/';

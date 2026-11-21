@@ -64,9 +64,9 @@ export const LADDER = { step: 100, cap: 5 } as const;
 export const pitchStep = (chain: number) => LADDER.step * Math.max(0, Math.min(LADDER.cap, (Math.floor(chain) || 0) - 1));
 
 /** What the feel of a blow needs of the effects (fx.ts Effects). */
-export interface Feel { density: number; freeze(seconds: number, light?: boolean): void; shake(amount: number, dx?: number, dz?: number): void; punch(): void }
+interface Feel { density: number; freeze(seconds: number, light?: boolean): void; shake(amount: number, dx?: number, dz?: number): void; punch(): void }
 /** A blow as the fight tells it (combat.ts CombatHit). */
-export interface FeltHit { critical: boolean; knock: number; lift: number; direction: { x: number; z: number }; helper?: boolean; source?: string }
+interface FeltHit { critical: boolean; knock: number; lift: number; direction: { x: number; z: number }; helper?: boolean; source?: string }
 /**
  * The feel of a blow that landed (main.ts hit): the stop, the kick along the blow, and the zoom punch of a power strike
  * and of a boss's break. `chain` is the hit's place in the running chain (0 = none). Returns the cents its sound goes up
