@@ -714,7 +714,7 @@ let lastSwingAt=-Infinity,lastUseAt=-Infinity;
 /** A living creature is targeted, or one is within the weapon's reach. No allocation: it runs on the HUD tick. */
 function hostileNear(){const s=world.selected;if(s?.kind==='enemy'&&(s as Enemy).hp>0)return true;const w=M.weaponStats(state),x=world.position.x,z=world.position.z;
   for(const e of world.enemies)if(e.hp>0&&e.mesh.visible&&Math.hypot(e.x-x,e.z-z)<=attackRange(w,e.radius)+.5)return true;return false;}
-function attackUses(fresh:boolean){const p=promptTarget(),h=world.position;return !!p&&p.kind!=='enemy'&&world.inReach(p)&&attackIntent({fight:inFight(world.enemies,h.x,h.z,aggro),hostile:hostileNear(),usable:true,fresh,sinceSwing:(performance.now()-lastSwingAt)/1000})==='use';} // in a fight Attack never uses (WP17)
+function attackUses(fresh:boolean){const p=promptTarget(),h=world.position,sinceSwing=(performance.now()-lastSwingAt)/1000;return !!p&&p.kind!=='enemy'&&world.inReach(p)&&attackIntent({fight:inFight(world.enemies,h.x,h.z,aggro,sinceSwing),hostile:hostileNear(),usable:true,fresh,sinceSwing})==='use';} // in a fight Attack never uses (WP17)
 /** A press of Attack (or F) that uses the thing beside the explorer instead of swinging: true when it was taken (the caller must not swing). */
 function useInstead(fresh:boolean){if(!started||uiBlocked()||!attackUses(fresh))return false;const now=performance.now();if(now-lastUseAt>400){lastUseAt=now;interactPrompted();}return true;} // a phone's late duplicate click of the same press is swallowed
 /** F on a PC: the same priority as the phone's Attack. Classic rules (jumping off): F never swings at nothing; it picks the nearest creature to walk to and fight. */

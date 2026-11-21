@@ -32,7 +32,7 @@ test('in a fight Attack always attacks: beside a usable thing, on a fresh press,
 const foe = (x: number, o: { hp?: number; phase?: string; tutorial?: boolean; visible?: boolean } = {}) => ({ x, z: 0, hp: o.hp ?? 10, phase: o.phase ?? 'idle', tutorial: o.tutorial, mesh: { visible: o.visible ?? true } });
 const angry = (e: { phase: string }) => e.phase !== 'idle' && e.phase !== 'return';
 test('a fight is on: an angry creature within 8 m, any living creature within 6 m, a creature of the first fight within 10 m', () => {
-  assert.deepEqual(FIGHT, { aggro: 8, hostile: 6, lesson: 10 });
+  assert.deepEqual(FIGHT, { aggro: 8, hostile: 6, lesson: 10, lessonSwing: 4 });
   assert.equal(inFight([], 0, 0, angry), false);
   assert.equal(inFight([foe(5.9)], 0, 0, angry), true, 'a calm creature 5.9 m away');
   assert.equal(inFight([foe(6.1)], 0, 0, angry), false, 'a calm creature 6.1 m away: Attack still uses');
@@ -40,6 +40,12 @@ test('a fight is on: an angry creature within 8 m, any living creature within 6 
   assert.equal(inFight([foe(8.1, { phase: 'chase' })], 0, 0, angry), false);
   assert.equal(inFight([foe(9.9, { tutorial: true })], 0, 0, angry), true, 'the first fight: 9.9 m');
   assert.equal(inFight([foe(10.1, { tutorial: true })], 0, 0, angry), false);
+  assert.equal(inFight([{ ...foe(3, { tutorial: true, hp: 0 }), respawn: 5 }], 0, 0, angry), true, 'the first fight: all three fell and come back in 5 s; Attack still opens nothing');
+  assert.equal(inFight([{ ...foe(3, { tutorial: true, hp: 0, visible: false }), respawn: 999_999 }], 0, 0, angry), false, 'the step is done: they are gone for good');
+  assert.equal(inFight([foe(14, { tutorial: true })], 0, 0, angry, 3.9), true, 'the first fight: its creatures are 14 m off, but the last swing was 3.9 s ago (beside the garden beds)');
+  assert.equal(inFight([foe(14, { tutorial: true })], 0, 0, angry, 4.1), false, 'four quiet seconds: Attack plants again');
+  assert.equal(inFight([foe(14)], 0, 0, angry, 0), false, 'only the first fight step has this: a swing elsewhere changes nothing');
+  assert.equal(inFight([{ ...foe(14, { tutorial: true, hp: 0, visible: false }), respawn: 999_999 }], 0, 0, angry, 0), false);
   assert.equal(inFight([foe(1, { hp: 0 }), foe(1, { visible: false })], 0, 0, angry), false, 'a fallen or hidden creature is no fight');
   assert.equal(inFight([foe(40), foe(3)], 0, 0, angry), true);
 });
