@@ -13,6 +13,9 @@
  *   levelUp       the level fanfare of sfx.ts ('level')             a level-up, and nothing else
  *   flag          the pole thunks in, the cloth snaps, two horns    the arrival flag (place-flags.ts); it lived in sfx.ts before
  *   powerReady    the skill-ready chime of sfx.ts, 5.5 dB louder     POWER READY: the power strike is charged (not a tune: no duck)
+ *   roar          a rough low voice that sinks, in a rush of air    the Colossus's roar lands (not a tune; it was the hurt cry)
+ *   petHit        a snap of teeth and a short bark                  a pet's or a helper's blow lands: 6 dB under the explorer's hit,
+ *                                                                   in place of hit, hitHeavy and crit (creature-voices.ts `blow`)
  *
  * Every stinger lowers the music bus 6 dB for its length (sound-mix.ts duck), once it is sure to play, takes one voice of
  * the shared budget and plays on the sfx bus. Only the big ones (`priority`: a win, a large reward, a discovery, a start,
@@ -23,6 +26,7 @@
  */
 import type { AudioGraph, Kit, Sfx, Sound, Stinger } from '../sfx.ts';
 import type { GameServices } from '../game-services.ts';
+import { blow } from './creature-voices.ts';
 
 /** How far the music goes down under a stinger, in dB. */
 export const STINGER_DUCK = 6;
@@ -42,7 +46,7 @@ const horn: (s: Sfx, k: Kit, dt: number, f: number, length: number, volume: numb
  * `priority`: it may use a voice kept for priority cues, and the level fanfare waits for it. `plain`: a cue that is not a
  * tune (no duck, no waiting).
  */
-export const STINGER: Record<Exclude<Stinger, 'levelUp'> | 'flag' | 'powerReady', { length: number; gain: number; priority?: boolean; plain?: boolean; play: Play }> = {
+export const STINGER: Record<Exclude<Stinger, 'levelUp'> | 'flag' | 'powerReady' | 'roar' | 'petHit', { length: number; gain: number; priority?: boolean; plain?: boolean; play: Play }> = {
   rewardSmall: { length: .45, gain: 1.3, play(s, k) {
     s.bell(k, 0, 1319, .16, .07, 2, 1.2); s.bell(k, .09, 1760, .34, .07, 2, 1.2); s.tone(k, .09, 'triangle', 880, 880, .22, .05, .01);
   } },
@@ -85,6 +89,17 @@ export const STINGER: Record<Exclude<Stinger, 'levelUp'> | 'flag' | 'powerReady'
   } },
   // The notes of 'ready' in sfx.ts (a skill off its cooldown), at the level the power strike's moment deserves.
   powerReady: { length: .3, gain: 1, plain: true, play(s, k) { s.bell(k, 0, 1320, .12, .125, 3.5, 1.4); s.tone(k, 0, 'sine', 880, 1320, .09, .09); } },
+  // The Colossus's roar (colossus.ts): two rough low voices a few Hz apart that sink, a chest note under them and a rush of
+  // air that opens and closes. It stuns, so like the hurt cry it replaced it may use a voice kept for priority cues.
+  roar: { length: 1, gain: 1, priority: true, plain: true, play(s, k) {
+    s.tone(k, 0, 'sawtooth', 112, 58, .9, .1, .07); s.tone(k, 0, 'sawtooth', 119, 61, .9, .08, .07); s.tone(k, 0, 'sine', 72, 40, 1, .22, .05);
+    s.hiss(k, 0, 'bandpass', 420, 1500, .5, .2, 1.3, .12); s.hiss(k, .3, 'lowpass', 1500, 220, .65, .16, 1, .1);
+  } },
+  // A pet's or a helper's blow: teeth snap shut and a short bark, with a small body under it.
+  petHit: { length: .16, gain: 1, plain: true, play(s, k) {
+    s.hiss(k, 0, 'bandpass', 2400, 900, .04, .13, 2.2, .002); s.tone(k, 0, 'triangle', 470, 230, .08, .094, .004); s.tone(k, 0, 'square', 470, 230, .06, .017, .004);
+    s.tone(k, 0, 'sine', 150, 70, .08, .098, .003);
+  } },
 };
 
 /**
@@ -109,6 +124,8 @@ export function installStingers(graph: AudioGraph, later: (run: () => void, seco
       queueMicrotask(() => { if ((sfx.stats.byKind.level ?? 0) > before) graph.duck('music', STINGER_DUCK, LEVEL_LENGTH); });
       return;
     }
+    // A pet's or a helper's blow lands with its own, softer sound.
+    if (blow.helper && (sound === 'hit' || sound === 'hitHeavy' || sound === 'crit')) sound = 'petHit';
     const stinger = (STINGER as Partial<Record<Sound, typeof STINGER.go>>)[sound]; if (!stinger) return;
     if (!back && !stinger.plain && now < fanfareEnd) { if (stinger.priority) tuneEnd = Math.max(tuneEnd, fanfareEnd + stinger.length); return hold(sfx, sound, fanfareEnd - now); }
     const to = graph.bus('sfx');

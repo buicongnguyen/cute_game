@@ -1,0 +1,19 @@
+/* The low-health warning (features/low-health.ts): a red edge on its own layer, and a heart on the health bar.
+   Only opacity ever changes on the layer, so the page is never laid out or painted again for it. */
+#low-health {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; contain: strict;
+  box-shadow: inset 0 0 min(20vmin, 170px) min(3.5vmin, 28px) rgba(214, 40, 48, .85);
+  transition: opacity .5s;
+}
+#low-health.on { opacity: .7; }
+#low-health.on.pulse { will-change: opacity; animation: low-health-beat .8s ease-in-out infinite; }
+/* Two swells per beat, like the heartbeat it is heard with; gentle (never a flash). */
+@keyframes low-health-beat { 0%, 100% { opacity: .5; } 14% { opacity: .92; } 30% { opacity: .6; } 44% { opacity: .82; } 70% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { #low-health { transition: none; } #low-health.on.pulse { animation: none; } }
+
+/* The heart: the warning is not colour alone. Inside the bar, at its left end, over the fill. */
+.meter.health.low::before {
+  content: '\2665\FE0E'; position: absolute; z-index: 1; left: 4px; top: 50%; transform: translateY(-50%);
+  font-size: 11px; line-height: 1; font-weight: 1000; color: #fff; text-shadow: 0 0 2px #7a0d18, 0 1px 1px #7a0d18;
+}
+.meter.health.low > div { background: linear-gradient(180deg, #ff8a7a, #e0303c); }

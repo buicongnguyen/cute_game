@@ -14,7 +14,7 @@ export type Sound = 'alert' | 'click' | 'open' | 'close' | 'punch' | 'swing' | '
   | 'splash' | 'cast' | 'reel' | 'snap' | 'bite' | 'catch' | 'stroke' | 'dive'
   | 'jump' | 'flip' | 'land'
   | 'success' | 'quest' | 'level' | 'harvest' | 'shoot' | 'poof' | 'coin' | 'buy' | 'sell' | 'ready' | 'power'
-  | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock' | 'flag' | 'thud' | 'break' | Stinger | 'powerReady';
+  | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock' | 'flag' | 'thud' | 'break' | Stinger | 'powerReady' | 'roar' | 'petHit';
 /**
  * The stingers (AAA-PLAN WP8): short musical cues for a reward, a discovery, a win, new gear, a refusal and a start. Their
  * recipes come with the features (features/stingers.ts, after the first played frame) through `AudioGraph.cue`; until
@@ -23,8 +23,11 @@ export type Sound = 'alert' | 'click' | 'open' | 'close' | 'punch' | 'swing' | '
  */
 export type Stinger = 'levelUp' | 'rewardSmall' | 'rewardMedium' | 'rewardLarge' | 'discover' | 'victory' | 'equip' | 'deny' | 'go';
 export const STINGERS: readonly Stinger[] = ['levelUp', 'rewardSmall', 'rewardMedium', 'rewardLarge', 'discover', 'victory', 'equip', 'deny', 'go'];
-/** Every sound whose recipe is not in this file: the stingers and 'powerReady' ('flag' is listed in ALL_SOUNDS). */
-export const LATE_SOUNDS: readonly Sound[] = [...STINGERS, 'powerReady'];
+/**
+ * Every sound whose recipe is not in this file: the stingers, 'powerReady', the Colossus's 'roar' and 'petHit', the bite a
+ * pet's or a helper's blow lands with instead of the explorer's hit ('flag' is listed in ALL_SOUNDS).
+ */
+export const LATE_SOUNDS: readonly Sound[] = [...STINGERS, 'powerReady', 'roar', 'petHit'];
 
 /**
  * The mix (AAA-PLAN WP8): where each kind of sound peaks, in dBFS at the speakers with the sliders at their defaults
