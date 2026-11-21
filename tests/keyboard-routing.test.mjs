@@ -1,19 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import vm from 'node:vm';
-import ts from 'typescript';
 import * as Controls from '../src/gameplay-controls.ts';
 import {bindingKey} from '../src/controls-keys.ts';
-import {JumpInput,jumpKeyAction} from '../src/jump-rules.ts';
+import {JumpInput} from '../src/jump-rules.ts';
 import {AttackHold,HOLD} from '../src/five-rules.ts';
+import {mainHarness} from './support/main-harness.mjs';
 
 // Execute the actual production DOM routing, not a second implementation of its bindings.
-const source=await readFile(new URL('../src/main.ts',import.meta.url),'utf8');
-const ast=ts.createSourceFile('main.ts',source,ts.ScriptTarget.Latest,true);
-const registration=ast.statements.filter(node=>ts.isExpressionStatement(node)&&/^(?:document\.addEventListener\('(keydown|keyup|visibilitychange)'|window\.addEventListener\('blur')/.test(node.getText(ast))).map(node=>node.getText(ast)).join('\n');
-const cleanup=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='clearHeldInput').getText(ast)+'\n'+ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='fKey').getText(ast);
-const compiled=ts.transpileModule(cleanup+'\n'+registration,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+const main=await mainHarness({functions:['clearHeldInput','fKey'],statements:[/^(?:document\.addEventListener\('(keydown|keyup|visibilitychange)'|window\.addEventListener\('blur')/]});
+const source=main.source;
 
 function target(kind='body'){
   return {kind,isContentEditable:kind==='editable',matches(selector){return ['input','textarea','select'].includes(kind)&&selector.includes(kind);},closest(selector){return this.matches(selector)||kind==='editable'&&selector.includes('contenteditable')?this:null;}};
@@ -23,7 +18,7 @@ function fixture(layout='classic'){
   const register=(handlers,name,fn)=>{const list=handlers.get(name)??[];list.push(fn);handlers.set(name,list);};
   const state={settings:{keyboardLayout:layout}},movement=new Controls.MovementControls(keys);
   const jumpInput=new JumpInput(),attackHold=new AttackHold();
-  const ctx=vm.createContext({...Controls,controls:{bindingKey,translate:(key,code)=>({key,code}),jumpUp:()=>false},jumpKeyAction,jumpInput,attackHold,attackPointers:new Set(),worldHold:null,skills:4,skillList:()=>Array.from({length:ctx.skills},()=>({})),jumpPointers:new Set(),slideCombo:{cancel(){}},air:true,airOn:()=>ctx.air,spaceKey:'jump',state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
+  const ctx={controls:{bindingKey,translate:(key,code)=>({key,code}),jumpUp:()=>false},jumpInput,attackHold,attackPointers:new Set(),worldHold:null,skills:4,skillList:()=>Array.from({length:ctx.skills},()=>({})),jumpPointers:new Set(),slideCombo:{cancel(){}},air:true,airOn:()=>ctx.air,spaceKey:'jump',state,movement,keys,started:true,modal:'',nativeDialog:false,placement:null,flight:null,fishGame:null,spaceKeys:new Set(),spacePointer:null,boostHeld:false,boostPointers:new Set(),joystick:{clear(){}},cancelLongPresses(){},cancelButtonTouches(){},
     usable:true,hostile:false,useInstead:fresh=>{if(ctx.usable&&fresh){calls.push(['interact']);return true;}return false;},hostileNear:()=>ctx.hostile,
     world:{keys,nearest:()=>null,select:()=>calls.push(['select'])},document:{hidden:false,activeElement:body,addEventListener:(name,fn)=>register(documentHandlers,name,fn),querySelector:selector=>selector==='dialog[open]'&&ctx.nativeDialog?{}:null},window:{addEventListener:(name,fn)=>register(windowHandlers,name,fn)},
     previous:0,performance:{now:()=>12345},graphics:{sample:(...args)=>calls.push(['graphicsSample',...args])},
@@ -33,8 +28,8 @@ function fixture(layout='classic'){
     // main.ts attackDown: the press attacks at once, and with jumping on the hold begins (stepHold, not part of the routing, does the rest).
     attackDown:source=>{if(ctx.air)attackHold.down(source);calls.push(['attack']);},
     gestures:{clear:()=>calls.push(['gesturesClear'])},save:()=>calls.push(['save']),
-  });
-  vm.runInContext(compiled,ctx);
+  };
+  main.context(ctx);
   function fire(type,code,key=code.length===4&&code.startsWith('Key')?code[3].toLowerCase():code==='Space'?' ':code==='Semicolon'?';':code,extra={}){
     const event={code,key,target:body,repeat:false,shiftKey:false,ctrlKey:false,metaKey:false,altKey:false,isComposing:false,defaultPrevented:false,preventDefault(){this.defaultPrevented=true;},...extra};
     // Browser KeyboardEvent fields are prototype getters, so object spread does not copy modifiers.
