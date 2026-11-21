@@ -1,0 +1,5 @@
+{
+  "note": "Reviewed changes to the server closure since docs/server-closure.txt was written (node promo/server-closure.mjs --write). An entry is { \"module\": \"name.ts\", \"why\": \"the package and the reason\" }: under 'add' for a src module the server newly loads, under 'remove' for one it no longer loads. tests/architecture-fitness.test.mjs fails on any other difference.",
+  "add": [],
+  "remove": []
+}
