@@ -1545,8 +1545,8 @@ h1 > span {
 .float.skillname.s3 { color: #e2b2ff; -webkit-text-stroke-color: #3b1f6b; }
 #damage-flash { position: absolute; inset: 0; box-shadow: inset 0 0 90px rgba(226, 73, 63, .55); opacity: 0; transition: opacity .15s; pointer-events: none; }
 #damage-flash.active { opacity: 1; }
-/* Flashes: Low (features/comfort.ts), and until that module has said 'on': the hurt flash and the warp's white-out at half. */
-:root:not([data-flashes=on]) #damage-flash.active, :root:not([data-flashes=on]) #warp-flash.show { opacity: .5; }
+/* Flashes: Low (features/comfort.ts), and until that module has said 'on': the hurt flash at half. (The warp's white-out stays whole: it hides the change of planet.) */
+:root:not([data-flashes=on]) #damage-flash.active { opacity: .5; }
 .fatal { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 40px; text-align: center; background: var(--paper); pointer-events: auto; }
 .fatal h1 { font-size: 34px; -webkit-text-stroke: 0; text-shadow: none; color: var(--ink); }
 

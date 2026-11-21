@@ -22,10 +22,10 @@
    "row": "start",
    "name": "WP9 hit feel hooks",
    "allow": {
-    "english": 455,
-    "vietnamese": 455
+    "english": 167,
+    "vietnamese": 167
    },
-   "why": "Measured growth of the start (plan allowance 0.5 KB): the press buffer, the settings-rows registry and its two calls in settings(), the hit-stop spending in frame() with world.hold, the hooks on the effects (rig, feel, punch, flashes), the zoom punch, and the style rule that keeps the hurt flash and the warp at half until the features have read the Flashes choice. The stop table, the kick, the pitch ladder, the shake model, the Screen shake and Flashes rows and the haptics load after Start (hit-stop.ts, shake.ts, features/comfort.ts)."
+   "why": "Measured growth of the start against staging f6a377e (English 798,597 -> 798,764, Vietnamese 931,989 -> 932,156; plan allowance 0.5 KB; against the staging it was first built on it measured 455): the press buffer, the settings-rows registry and its two calls in settings(), the hit-stop spending in frame() with world.hold, the hooks on the effects (rig, feel, punch, flashes), the zoom punch, and the style rule that keeps the hurt flash and the warp at half until the features have read the Flashes choice. The stop table, the kick, the pitch ladder, the shake model, the Screen shake and Flashes rows and the haptics load after Start (hit-stop.ts, shake.ts, features/comfort.ts)."
   },
   {
    "row": "start",

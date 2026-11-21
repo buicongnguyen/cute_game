@@ -33,6 +33,8 @@ export interface ServiceHost {
   slot(): number;
   /** True on a touch device. */
   touch(): boolean;
+  /** A buzz of the phone, in ms or as a pattern: behind the Vibration switch, and only on a touch screen. */
+  vibrate(pattern: number | number[]): void;
   /** The graphics level in use right now. */
   quality(): QualityLevel;
   /** game-events.ts connect: from here on the game's events reach this bus. */

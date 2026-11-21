@@ -500,7 +500,7 @@ const sfx=new Sfx();
 // Settings volume sliders (audio-settings.ts): effects preview with a click while dragging; letting go saves.
 bindAudioSliders(app,(kind,value)=>{if(kind==='sfx'){sfx.volume=value;sfx.play('click');}},(kind,value)=>{void perform('settings',{settings:kind==='music'?{musicVolume:value}:{sfxVolume:value}}).then(()=>syncAudio(state.settings));});
 function tone(kind: Sound = 'click', detune = 0) { try { sfx.volume = audioOf(state.settings).sfxVolume; sfx.play(kind, detune ? { detune } : undefined); } catch { /* before the mixer exists (early boot) a sound is simply skipped */ } }
-const vibrate=(ms:number)=>{try{if(audioOf(state.settings).vibrate&&matchMedia('(pointer: coarse)').matches)navigator.vibrate?.(ms);}catch{/* Optional. */}};
+const vibrate=(ms:number|number[])=>{try{if(audioOf(state.settings).vibrate&&matchMedia('(pointer: coarse)').matches&&world.fx?.buzzFree?.(ms)!==false)navigator.vibrate?.(ms);}catch{/* Optional. */}};
 function save() { if(!started)return;if(persistence){persistence(state);return;}if(!saveGuard.canWrite(activeKey()))return;try { state.savedAt=Date.now();localStorage.setItem(activeKey(),JSON.stringify(contextGear.persisted(state)));saveGuard.wrote(activeKey(),state.savedAt);saveFailed=false;$('#save-status').textContent=t('● Saved on this device'); } catch { saveFailed=true;$('#save-status').textContent=t('○ Saving unavailable'); } }
 // Keep at most three messages on screen (two on phones, where they also leave sooner); older ones fade out instead of stacking up the view.
 const phoneScreen=matchMedia('(max-width: 600px), (max-height: 520px)');
@@ -1889,7 +1889,7 @@ function releasePower(level:number,air:boolean){
   breakables.power(target=>powerReach(shape,level,p,world.facing,target)>=0,p,Math.max(area.length,area.radius)); // and breakable scenery takes the blow (breakables.ts)
   tone('power');vibrate(60);noteChain(t('POWER!'));emitAction({kind:'basic'});
 }
-/** A ground attack passed under the explorer. A perfect one (solo) slows the moment and makes the next hit a sure critical. */
+/** A ground attack passed under the explorer. A perfect one (solo) holds the moment (a hit-stop) and makes the next hit a sure critical. */
 function dodged(perfect:boolean){
   const now=world.time,at={x:world.position.x,y:world.jump.height*.5,z:world.position.z};
   if(perfect&&!actionHandler){
@@ -1900,7 +1900,7 @@ function dodged(perfect:boolean){
 }
 /** Every step: the jump key, a held Attack, the chain's clock, the untouched streak's bonus and the perfect dodge's sure critical (solo). */
 function stepFight(dt:number,active:boolean,combatActive:boolean){
-  if(pressBuffer.step(dt,combatActive&&combatTimers.attackCooldown<=0))basicAttack();
+  if(pressBuffer.step(dt,combatActive&&combatTimers.attackCooldown<=0)&&!(world.jump?.falling&&world.jump.height>=DIVE.minHeight))basicAttack(); // the kept press is a swing, never a dive
   syncAirCombat();if(!airOn())return;
   world.jump.max=jumpsFor(M.jumpLevel(state),Tester.isTester(state));comboMeter.window=touchFight?COMBO.windowTouch:COMBO.window;
   if(pendingLeft>0&&(pendingLeft-=dt)<=0)pendingPress=null;else if(pendingPress)firePending();
@@ -2576,5 +2576,5 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
 /** What the feature modules get from this file; features.ts makes their services of it (game-services.ts). */
-const serviceHost:ServiceHost={world,state:()=>state,perform,toast,tone,audio:sfx.graph,openDialog,closeDialog,modal:()=>modal,onFrame:gameBridge.onFrame,slot:activeSlot,touch:isTouch,quality:()=>graphics.level,connect};
+const serviceHost:ServiceHost={world,state:()=>state,perform,toast,tone,audio:sfx.graph,openDialog,closeDialog,modal:()=>modal,onFrame:gameBridge.onFrame,slot:activeSlot,touch:isTouch,quality:()=>graphics.level,vibrate,connect};
 if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{get services(){return services;},inbox,controls,gainFeed,gainDemo:()=>gainFeed.demo(),surgeView,questWalk,get welcomeBack(){return welcomeBack;},pinHero:(spot:{x:number;z:number}|null)=>{world.perfPin=spot;},newsDemo:()=>{const before=state.level;state.level=Math.max(before+1,4);levelCheck(before);updateHud();},breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({news:inbox.open,bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});

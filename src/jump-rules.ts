@@ -182,7 +182,7 @@ export const DODGE = {
   perfect: .25, perfectTouch: .4,
   /** After a perfect dodge the next hit within this many seconds is a sure critical. */
   sure: 2,
-  /** The slow-motion beat of a perfect dodge (s of hit-stop). */
+  /** The held beat of a perfect dodge (s of hit-stop: the game stands still, effects run on; hit-stop.ts keeps it whole). */
   slow: .14,
 } as const;
 /**

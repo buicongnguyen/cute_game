@@ -5,9 +5,10 @@
  *   have no stop and the camera does not shake.
  * - Screen shake: Off / Low / Full. Low is the choice of a player who asked the system for less motion and never
  *   picked one. The camera's shake and its zoom punch follow it (shake.ts gain).
- * - Flashes: On / Low (Low also until this module has read the choice, and if it never loads). Low halves the red flash round the screen when the explorer is hurt, the white-out of a warp,
+ * - Flashes: On / Low (Low also until this module has read the choice, and if it never loads). Low halves the red flash round the screen when the explorer is hurt,
  *   a creature's white hit flash and the light blooms of fx.ts (fx.flashes; the break flash of a later package reads it too).
- * - Haptics behind the Vibration switch: 12 ms on a critical and on a kill of the explorer's own, [20, 30, 40] when a
+ * - Haptics, through the game's one gate (services.vibrate: the Vibration switch, a touch screen), and a longer buzz is
+ *   never cut by a shorter one that comes while it runs: 12 ms on a critical and on a kill of the explorer's own, [20, 30, 40] when a
  *   boss breaks and when the Colossus kneels (colossus.ts calls fx.buzz).
  * Both choices are kept per device (services.pref), not in the save. The rows reach Settings through settings-extras.ts.
  */
@@ -36,8 +37,16 @@ export const flashRow = (now: FlashChoice) => choiceRow('flashes', 'Flashes', 'L
 
 /** A blow of the explorer's own (not a pet's, a helper's or a summon's). */
 const own = (impact?: { helper?: boolean; source?: string }) => !!impact && !impact.helper && impact.source !== 'pet' && impact.source !== 'summon';
-/** The Vibration switch as the save holds it (audio-settings.ts parseAudio: an old save's sound switch stands in). */
-export const vibrates = (settings: { vibrate?: unknown; sound?: unknown }) => typeof settings.vibrate === 'boolean' ? settings.vibrate : settings.sound !== false;
+/** How long a buzz runs, in ms: the sum of a pattern's buzzes and pauses. */
+export const buzzLength = (pattern: number | number[]) => typeof pattern === 'number' ? pattern : pattern.reduce((a, b) => a + b, 0);
+/**
+ * Keeps a longer buzz from being cut by a shorter one (a new vibrate() ends the one in progress): free(pattern, now)
+ * is false while a buzz is running that would outlast this one, else it notes this one and says true.
+ */
+export function buzzGuard() {
+  let until = 0;
+  return (pattern: number | number[], now: number) => { const end = now + buzzLength(pattern); if (end < until) return false; until = end; return true; };
+}
 
 // The halved flashes themselves are in style.css: they hold until this module says 'on', so also when it never loads.
 const CSS = '#dialog-body .comfort-pick button{min-width:44px;min-height:44px}';
@@ -45,10 +54,10 @@ const CSS = '#dialog-body .comfort-pick button{min-width:44px;min-height:44px}';
 export function mount(s: GameServices) {
   const calm = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
   const shake = () => shakeChoice(s.pref('shake'), calm()), flashes = () => flashChoice(s.pref('flashes'));
-  const buzz = (pattern: number | number[]) => { try { if (vibrates(s.state().settings as { vibrate?: unknown }) && s.touch()) navigator.vibrate?.(pattern); } catch { /* Optional. */ } };
+  const free = buzzGuard(), buzz = (pattern: number | number[]) => s.vibrate(pattern);
   const apply = () => {
     const fx = s.world.fx;
-    if (fx) { (fx.rig ??= new Shake()).gain = shakeGain(shake()); if (!fx.feel) { budgetStops(fx, () => s.world.time); fx.feel = (hit, broke, kill, chain) => hitFeel(fx, hit, broke, kill, chain); } fx.flashes = flashes() === 'low' ? FLASH_LOW : 1; fx.buzz = buzz; }
+    if (fx) { (fx.rig ??= new Shake()).gain = shakeGain(shake()); if (!fx.feel) { budgetStops(fx, () => s.world.time); fx.feel = (hit, broke, kill, chain) => hitFeel(fx, hit, broke, kill, chain); } fx.flashes = flashes() === 'low' ? FLASH_LOW : 1; fx.buzz = buzz; fx.buzzFree = pattern => free(pattern, performance.now()); }
     const root = globalThis.document?.documentElement; if (root) root.dataset.flashes = flashes();
   };
   if (globalThis.document?.head) { const style = document.createElement('style'); style.textContent = CSS; document.head.append(style); }

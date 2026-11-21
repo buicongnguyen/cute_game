@@ -17,21 +17,32 @@ export function hitStop(blow: Blow, saver = false) {
   return blow.broke ? STOP.break : blow.power ? STOP.power : blow.critical ? STOP.critical : blow.big ? STOP.big : blow.kill ? STOP.kill : STOP.light;
 }
 /**
- * The stop budget: in any one second of game time the game holds still for at most `most` seconds (8%), however fast
- * the blows land. A stop that would pass it is shortened; one left shorter than `least` is not worth a frame and is
- * dropped. A plain light hit may only use `light` of it, so the heavier blows (the third of a chain, a critical, a
- * power strike, a break, a kill) still find room in a quick chain.
+ * The stop budget: in any one second of game time the ordinary stops hold the game for at most `most` seconds (8%),
+ * however fast the blows land. A stop that would pass it is shortened; one left shorter than `least` is not worth a
+ * frame and is dropped. Plain light hits may use `light` of it: a steady chain stops on each hit, and a little is left
+ * for a heavier blow.
+ * The signature moments keep their whole length: a stop of `signature` seconds or more (the power strike's hit, a
+ * boss's break, a perfect dodge, the Colossus's fall). They are rare, and only one a second is let through like that;
+ * a second one inside the same second is an ordinary stop. A signature stop counts against the second like any other,
+ * so the hits right after it stop less or not at all.
  */
-export const STOP_BUDGET = { window: 1, most: .08, light: .045, least: .012 } as const;
+export const STOP_BUDGET = { window: 1, most: .08, light: .07, least: .012, signature: .09 } as const;
 export class StopBudget {
   private at: number[] = []; private held: number[] = [];
-  /** The part of a stop of `seconds` that may be held at game time `now`; it is then counted. `light`: a plain light hit. */
-  grant(seconds: number, now: number, light = false) {
+  /** The game time of the last signature stop let through whole. */
+  private signed = -Infinity;
+  /**
+   * The part of `seconds` more of stop that may be held at game time `now`; it is then counted. `light`: a plain light
+   * hit. `whole`: the stop asked for (it decides the signature class when only what it adds to a running stop is asked).
+   */
+  grant(seconds: number, now: number, light = false, whole = seconds) {
     let spent = 0;
     for (let i = this.at.length - 1; i >= 0; i--) {
       if (this.at[i] > now || now - this.at[i] >= STOP_BUDGET.window) { this.at.splice(i, 1); this.held.splice(i, 1); } else spent += this.held[i];
     }
-    const got = Math.min(seconds, (light ? STOP_BUDGET.light : STOP_BUDGET.most) - spent);
+    let got = seconds;
+    if (whole >= STOP_BUDGET.signature && !(now >= this.signed && now - this.signed < STOP_BUDGET.window)) this.signed = now;
+    else got = Math.min(seconds, (light ? STOP_BUDGET.light : STOP_BUDGET.most) - spent);
     if (!(got >= STOP_BUDGET.least)) return 0;
     this.at.push(now); this.held.push(got); return got;
   }
@@ -42,7 +53,7 @@ export class StopBudget {
  */
 export function budgetStops(fx: { hitstop: number; freeze(seconds: number, light?: boolean): void }, now: () => number, budget = new StopBudget()) {
   const freeze = fx.freeze.bind(fx);
-  fx.freeze = (seconds, light) => { const held = Math.max(0, fx.hitstop), more = seconds - held; if (more > 0) { const got = budget.grant(more, now(), light); if (got) freeze(held + got); } };
+  fx.freeze = (seconds, light) => { const held = Math.max(0, fx.hitstop), more = seconds - held; if (more > 0) { const got = budget.grant(more, now(), light, seconds); if (got) freeze(held + got); } };
   return budget;
 }
 

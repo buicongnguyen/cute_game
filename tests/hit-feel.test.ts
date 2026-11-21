@@ -8,7 +8,7 @@ import { PRESS_BUFFER, PressBuffer } from '../src/press-buffer.ts';
 import { PUNCH, zoomPunch, cameraOffset } from '../src/camera-rig.ts';
 import { Effects } from '../src/fx.ts';
 import { STEP, frameSteps } from '../src/frame-steps.ts';
-import { vibrates, shakeChoice, flashChoice } from '../src/features/comfort.ts';
+import { buzzGuard, buzzLength, shakeChoice, flashChoice } from '../src/features/comfort.ts';
 
 test('the stop table: own light 0.035, third chain hit 0.06, critical 0.08, power 0.09, break 0.11; a pet and Battery saver 0', () => {
   assert.deepEqual({ ...STOP }, { light: .035, big: .06, critical: .08, power: .09, break: .11, kill: .05 });
@@ -154,34 +154,71 @@ test('a frame spends the stop exactly: the rules lose that time and no more, at 
   }
 });
 
-test('the stop budget: never more than 80 ms held in any second of game time, light hits give way to the heavier ones', () => {
-  assert.deepEqual({ ...STOP_BUDGET }, { window: 1, most: .08, light: .045, least: .012 });
+test('the stop budget: ordinary stops hold at most 80 ms of any second; a steady light chain stops on each hit', () => {
+  assert.deepEqual({ ...STOP_BUDGET }, { window: 1, most: .08, light: .07, least: .012, signature: .09 });
   const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   let b = new StopBudget();
-  assert.equal(b.grant(STOP.light, 0, true), .035); assert.equal(b.grant(STOP.light, .5, true), 0, 'a second light hit in the second: 10 ms would be left, not worth a frame');
-  assert.ok(near(b.grant(STOP.big, .6), .045), 'the third hit of the chain is shortened to what is left of 80 ms'); assert.equal(b.grant(STOP.break, .7), 0, 'the second is full');
-  assert.equal(b.grant(STOP.light, 1, true), 0, 'the big stop of 0.6 s still counts'); assert.equal(b.grant(STOP.light, 1.6, true), .035, 'a second later the room is back');
-  b = new StopBudget(); assert.equal(b.grant(STOP.break, 0), .08, 'a break alone is cut to the budget');
+  assert.equal(b.grant(STOP.light, 0, true), .035); assert.equal(b.grant(STOP.light, .5, true), .035, 'the second light hit of the second stops too');
+  assert.equal(b.grant(STOP.light, .7, true), 0, 'a third does not'); assert.equal(b.grant(STOP.big, .8), 0, '10 ms would be left: not worth a frame');
+  assert.ok(near(b.grant(STOP.big, 1.1), .045), 'the first light hit is a second old: the third hit of the chain gets what is left of 80 ms');
   b = new StopBudget(); assert.equal(b.grant(STOP.kill, 0), .05); assert.ok(near(b.grant(STOP.critical, .3), .03)); assert.equal(b.grant(STOP.light, .4, true), 0);
   b = new StopBudget(); b.grant(.08, 5); assert.equal(b.grant(.035, 1, true), .035, 'the clock went back (another world): the past is forgotten');
-  // Any pattern of blows: every rolling second holds at most 80 ms.
+  // Any pattern of ordinary blows: every rolling second holds at most 80 ms.
   let seed = 7; const random = () => { seed = seed * 1103515245 + 12345 & 0x7fffffff; return seed / 0x7fffffff; };
+  const ordinary = [STOP.light, STOP.big, STOP.critical, STOP.kill];
   for (let round = 0; round < 20; round++) {
     const budget = new StopBudget(), log: [number, number][] = []; let t = 0;
-    for (let i = 0; i < 400; i++) { t += random() * .3; const kinds = Object.values(STOP), stop = kinds[Math.floor(random() * kinds.length)], got = budget.grant(stop, t, stop === STOP.light); assert.ok(got === 0 || got >= STOP_BUDGET.least && got <= stop); if (got) log.push([t, got]); }
+    for (let i = 0; i < 400; i++) { t += random() * .3; const stop = ordinary[Math.floor(random() * ordinary.length)], got = budget.grant(stop, t, stop === STOP.light); assert.ok(got === 0 || got >= STOP_BUDGET.least && got <= stop); if (got) log.push([t, got]); }
     for (const [from] of log) { const sum = log.filter(([at]) => at >= from && at < from + 1).reduce((a, [, got]) => a + got, 0); assert.ok(sum <= .08 + 1e-9, `${sum} s held in the second from ${from}`); }
     assert.ok(log.length > 20);
   }
-  // In front of the effects: every freeze goes through it, and one asked for during a stop only counts for what it adds.
-  const fx = { hitstop: 0, asked: [] as number[], freeze(seconds: number, _light?: boolean) { this.asked.push(seconds); this.hitstop = Math.max(this.hitstop, seconds); } };
-  let now = 10; budgetStops(fx, () => now);
-  fx.freeze(.035, true); fx.freeze(.06); assert.deepEqual(fx.asked, [.035, .06], 'the longer stop of one instant counts once: 60 ms, not 95');
-  fx.freeze(.14); assert.ok(near(fx.hitstop, .08), 'a perfect dodge on top is cut at 80 ms in all');
-  fx.hitstop = 0; now = 10.5; fx.freeze(.05); assert.equal(fx.hitstop, 0, 'nothing left in this second');
-  now = 11.2; fx.freeze(.05); assert.equal(fx.hitstop, .05);
 });
 
-test('haptics follow the Vibration switch as the save holds it', () => {
-  assert.equal(vibrates({ vibrate: true }), true); assert.equal(vibrates({ vibrate: false }), false);
-  assert.equal(vibrates({}), true); assert.equal(vibrates({ sound: false }), false, 'an old save that was silent');
+test('the signature moments keep their whole length, one a second; the hits after them wait', () => {
+  for (const whole of [STOP.power, STOP.break, .12, .14]) {
+    const b = new StopBudget(); b.grant(STOP.light, 0, true); b.grant(STOP.light, .3, true);
+    assert.equal(b.grant(whole, .5), whole, `${whole} s after two light hits`);
+    assert.equal(b.grant(STOP.light, .6, true), 0, 'the second is more than full'); assert.equal(b.grant(STOP.break, .9), 0, 'a second signature stop in the same second is an ordinary one');
+    assert.equal(b.grant(STOP.light, 1.55, true), .035, 'a second later the hits stop again'); assert.equal(b.grant(STOP.break, 1.6), STOP.break, 'and so may the next signature moment');
+  }
+  // With every kind in the mix: never more than one whole signature stop and 80 ms of ordinary stops in a second.
+  let seed = 11; const random = () => { seed = seed * 1103515245 + 12345 & 0x7fffffff; return seed / 0x7fffffff; };
+  const budget = new StopBudget(), log: [number, number, boolean][] = [], all = [...Object.values(STOP), .12, .14]; let t = 0;
+  for (let i = 0; i < 3000; i++) { t += random() * .25; const stop = all[Math.floor(random() * all.length)], got = budget.grant(stop, t, stop === STOP.light); if (got) log.push([t, got, got >= STOP_BUDGET.signature]); }
+  for (const [from] of log) { const second = log.filter(([at]) => at >= from && at < from + 1); assert.ok(second.filter(e => e[2]).length <= 1); assert.ok(second.reduce((a, e) => a + e[1], 0) <= .08 + .14 + 1e-9); }
+});
+
+/** The game as it delivers stops: hitFeel through the budget in front of the effects' freeze (features/comfort.ts mounts it so). */
+function delivered() {
+  const fx = { density: 1, hitstop: 0, now: 0, freeze(seconds: number, _light?: boolean) { this.hitstop = Math.max(this.hitstop, seconds); }, shake() {}, punch() {} };
+  budgetStops(fx, () => fx.now);
+  const hit = (at: number, over: object = {}, broke = false, kill = false) => { fx.now = at; fx.hitstop = 0; hitFeel(fx, blow(over), broke, kill, 0); return +fx.hitstop.toFixed(4); };
+  return { fx, hit };
+}
+test('what a fight really gets: a chain at the sword\'s pace, a critical, a kill, a break, the power strike, a dodge', () => {
+  const big = { knock: 2.2 }, crit = { critical: true }, power = { source: 'power', knock: 2.2 };
+  let g = delivered();
+  // Light, light, heavy at 0.55 s a swing (the wooden sword with its stops), three rounds: every hit stops; the heavy one is cut to 45 ms and the light one after it to 25.
+  const chain = [0, .55, 1.1, 1.65, 2.2, 2.75, 3.3, 3.85, 4.4].map((at, i) => g.hit(at, i % 3 === 2 ? big : {}));
+  assert.deepEqual(chain, [.035, .035, .045, .025, .035, .045, .025, .035, .045]);
+  assert.ok(chain.reduce((a, b) => a + b, 0) / 4.95 < .08, 'under 8% of the fight');
+  g = delivered(); assert.equal(g.hit(0, crit), STOP.critical); assert.equal(g.hit(.5), 0, 'the light hit after a critical finds the second full'); assert.equal(g.hit(1.05), .035);
+  g = delivered(); assert.equal(g.hit(0, {}, false, true), STOP.kill); assert.equal(g.hit(.5, {}, false, true), .03, 'a second kill in the second is cut to the 80 ms');
+  g = delivered(); assert.equal(g.hit(0), .035); assert.equal(g.hit(.4, big, true), STOP.break, 'a break keeps its 110 ms whatever came before'); assert.equal(g.hit(.6, crit), 0);
+  g = delivered(); assert.equal(g.hit(0), .035); assert.equal(g.hit(.5, power), STOP.power, 'so does the power strike\'s hit'); assert.equal(g.hit(.9, big, true), 0, 'a break in the same second is ordinary, and the second is full');
+  // Two creatures struck by one swing: one stop, the longer, counted once.
+  g = delivered(); g.fx.now = 0; hitFeel(g.fx, blow(), false, false, 0); hitFeel(g.fx, blow(big), false, false, 0); assert.equal(g.fx.hitstop, .06); g.fx.hitstop = 0; assert.ok(Math.abs(g.hit(.5, big) - .02) < 1e-9, '60 ms were counted, not 95');
+  // The freezes main.ts and the Colossus ask for themselves go the same way: a perfect dodge 0.14 s, the fall 0.12 s, the wave's first beat 0.045 s.
+  g = delivered(); g.fx.freeze(.14); assert.equal(g.fx.hitstop, .14); g.fx.hitstop = 0; g.fx.now = .5; g.fx.freeze(.12); assert.equal(g.fx.hitstop, 0, 'not two in a second');
+  g.fx.now = 1.2; g.fx.freeze(.045); assert.equal(g.fx.hitstop, .045); g.fx.now = 1.3; g.fx.hitstop = 0; hitFeel(g.fx, blow(power), false, false, 0); assert.equal(g.fx.hitstop, STOP.power);
+  // A pet's blow and Battery saver: nothing, and nothing counted.
+  g = delivered(); assert.equal(g.hit(0, { helper: true, critical: true }, true, true), 0); g.fx.density = .5; assert.equal(g.hit(.1, crit), 0); g.fx.density = 1; assert.equal(g.hit(.2, crit), STOP.critical);
+});
+
+test('haptics: a longer buzz is not cut by a shorter one that comes while it runs', () => {
+  assert.equal(buzzLength(12), 12); assert.equal(buzzLength([20, 30, 40]), 90);
+  const free = buzzGuard();
+  assert.equal(free([20, 30, 40], 1000), true, 'a boss breaks'); assert.equal(free(12, 1010), false, 'the critical of the same blow would cut the pattern: dropped');
+  assert.equal(free(25, 1070), true, 'one that outlasts what is left may take over'); assert.equal(free(12, 1100), true, 'and after it, anything');
+  assert.equal(free(80, 1105), true, 'a longer one replaces a shorter one'); assert.equal(free(12, 1110), false);
 });

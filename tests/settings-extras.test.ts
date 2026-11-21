@@ -22,15 +22,21 @@ test('rows render in the order they were added, each in its own section, afresh 
 
 function services(prefs: Record<string, string>) {
   const fx = { rig: undefined as { gain: number } | undefined, feel: undefined as unknown, density: 1, flashes: .5, hitstop: 0, freeze(_s: number) {}, buzz: undefined as unknown }, heard: Record<string, (p: never) => void> = {};
-  const s = { world: { fx, time: 0 }, state: () => ({ settings: { vibrate: true } }), touch: () => true, tone() {}, pref: (key: string, fallback = '') => prefs[key] ?? fallback, setPref: (key: string, value: string) => { prefs[key] = value; return true; },
+  const buzzed: unknown[] = [];
+  const s = { world: { fx, time: 0 }, state: () => ({ settings: { vibrate: true } }), touch: () => true, tone() {}, vibrate: (pattern: unknown) => { buzzed.push(pattern); }, pref: (key: string, fallback = '') => prefs[key] ?? fallback, setPref: (key: string, value: string) => { prefs[key] = value; return true; },
     on: (event: string, listener: (p: never) => void) => { heard[event] = listener; return () => {}; } };
-  return { s: s as unknown as GameServices, fx, heard };
+  return { s: s as unknown as GameServices, fx, heard, buzzed };
 }
 const choices = (row: string) => [...row.matchAll(/<button role="radio" aria-checked="(true|false)" class="(on)?" data-kind="(\w+)">([^<]+)<\/button>/g)].map(m => [m[3], m[4], m[1] === 'true' && m[2] === 'on']);
 
 test('the comfort feature adds Screen shake, then Flashes, with the stored choices marked; English and Vietnamese', async () => {
-  const { s, fx, heard } = services({ shake: 'low', flashes: 'low' });
+  const { s, fx, heard, buzzed } = services({ shake: 'low', flashes: 'low' });
   mount(s);
+  // Haptics go through the game's one gate (services.vibrate); the effects' buzz is that gate too.
+  const own = { amount: 1, critical: true, stun: 0, lift: 0, knock: 0, direction: { x: 0, z: 1 } };
+  (heard.hitLanded as (p: unknown) => void)({ impact: own }); (heard.hitLanded as (p: unknown) => void)({ impact: { ...own, helper: true } }); (heard.creatureDefeat as (p: unknown) => void)({ impact: { ...own, critical: false } }); (heard.creatureDefeat as (p: unknown) => void)({});
+  (heard.bossBreak as (p: unknown) => void)({}); (fx.buzz as unknown as (p: number[]) => void)([20, 30, 40]);
+  assert.deepEqual(buzzed, [12, 12, [20, 30, 40], [20, 30, 40]]); assert.equal(typeof (fx as { buzzFree?: unknown }).buzzFree, 'function');
   assert.equal(fx.rig!.gain, .4); assert.equal(fx.flashes, .5); assert.equal(typeof fx.buzz, 'function'); assert.equal(typeof fx.feel, 'function');
   assert.deepEqual(Object.keys(heard).sort(), ['bossBreak', 'creatureDefeat', 'hitLanded']);
   const html = settingsExtrasHtml('comfort'), shake = html.indexOf('<strong>Screen shake</strong>'), flashes = html.indexOf('<strong>Flashes</strong>');

@@ -174,7 +174,7 @@ export class Effects {
   readonly glow = new ParticlePool(360, true);
   /** 0–1: fewer particles on lower graphics settings. */
   density = 1;
-  /** The camera's shake (shake.ts) and the feel of a landed blow (hit-stop.ts hitFeel: it returns the cents the blow's sound goes up by). Both come after Start (features/comfort.ts). */
+  /** The camera's shake (shake.ts) and the feel of a landed blow (hit-stop.ts hitFeel: it returns the cents the blow's sound goes up by). Both come after Start (features/comfort.ts): until then the camera neither shakes nor punches, whatever asks for it. */
   rig?: Shake; feel?: (hit: CombatHit, broke: boolean, kill: boolean, chain: number) => number;
   /** The seconds of hit-stop still to spend (main.ts frame). */
   hitstop = 0;
@@ -184,8 +184,10 @@ export class Effects {
   private punchT = 1;
   /** The Flashes setting: 1, or .5 on Low; .5 too until features/comfort.ts has read the stored choice (the safe value). It scales the light blooms here and a creature's white hit flash (world.ts). */
   flashes = .5;
-  /** A phone's buzz, behind the Vibration switch (features/comfort.ts puts it here once the features are mounted). */
+  /** A phone's buzz, through the game's one gate (main.ts vibrate: the Vibration switch, a touch screen); features/comfort.ts puts it here. */
   buzz?: (pattern: number | number[]) => void;
+  /** Asked by that gate before every buzz: false when a longer one is still running and this one would cut it short (features/comfort.ts). */
+  buzzFree?: (pattern: number | number[]) => boolean;
   private root = new T.Group();
   private transients: Transient[] = [];
   /**
@@ -340,7 +342,7 @@ export class Effects {
    */
   shakeOffset(dt: number, out: T.Vector3, view?: T.Vector3) {
     if (this.rig) this.rig.offset(dt, out); else out.set(0, 0, 0);
-    if (this.punchT < PUNCH.time) { if (view) out.addScaledVector(view, zoomPunch(this.punchT, this.rig?.gain) - 1); this.punchT += dt; }
+    if (this.punchT < PUNCH.time) { if (view) out.addScaledVector(view, zoomPunch(this.punchT, this.rig?.gain ?? 0) - 1); this.punchT += dt; }
     return out;
   }
 
