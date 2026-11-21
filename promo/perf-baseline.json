@@ -1,7 +1,7 @@
 {
  "version": 1,
- "runs": 2,
- "rowsIdenticalAcrossRuns": 21,
+ "runs": 4,
+ "rowsIdenticalAcrossRuns": 20,
  "rows": {
   "village/late/42/desktop-high": {
    "key": "village/late/42/desktop-high",
@@ -23,9 +23,9 @@
    "geometryBytes": 8765510,
    "fx": 3,
    "roam": 39,
-   "fxTriangles": 288,
+   "fxTriangles": 196,
    "roamTriangles": 28934,
-   "visited": 824
+   "visited": 823
   },
   "village/late/30/desktop-high": {
    "key": "village/late/30/desktop-high",
@@ -57,23 +57,23 @@
    "shadowMap": 2048,
    "pitch": 51.55,
    "spread": {
-    "main": 2,
+    "main": 1,
     "shadow": 0,
-    "triangles": 440,
-    "programs": 0
+    "triangles": 48,
+    "programs": 1
    },
-   "main": 134,
+   "main": 132,
    "shadow": 76,
-   "triangles": 199083,
-   "programs": 51,
+   "triangles": 198643,
+   "programs": 52,
    "geometries": 405,
    "textures": 7,
-   "geometryBytes": 8765510,
-   "fx": 3,
+   "geometryBytes": 8862758,
+   "fx": 4,
    "roam": 26,
-   "fxTriangles": 194,
+   "fxTriangles": 292,
    "roamTriangles": 18756,
-   "visited": 793
+   "visited": 814
   },
   "wild/late/42/desktop-high": {
    "key": "wild/late/42/desktop-high",
@@ -95,7 +95,7 @@
    "geometryBytes": 9095414,
    "fx": 4,
    "roam": 0,
-   "fxTriangles": 658,
+   "fxTriangles": 620,
    "roamTriangles": 0,
    "visited": 698
   },
@@ -129,9 +129,9 @@
    "shadowMap": 2048,
    "pitch": 51.55,
    "spread": {
-    "main": 1,
+    "main": 0,
     "shadow": 0,
-    "triangles": 1568,
+    "triangles": 0,
     "programs": 0
    },
    "main": 59,
@@ -167,7 +167,7 @@
    "geometryBytes": 9098278,
    "fx": 1,
    "roam": 0,
-   "fxTriangles": 180,
+   "fxTriangles": 120,
    "roamTriangles": 0,
    "visited": 685
   },
@@ -189,11 +189,11 @@
    "geometries": 452,
    "textures": 9,
    "geometryBytes": 9105794,
-   "fx": 5,
+   "fx": 6,
    "roam": 0,
-   "fxTriangles": 620,
+   "fxTriangles": 816,
    "roamTriangles": 0,
-   "visited": 751
+   "visited": 752
   },
   "canyon/late/51.5/desktop-high": {
    "key": "canyon/late/51.5/desktop-high",
@@ -201,23 +201,23 @@
    "shadowMap": 2048,
    "pitch": 51.55,
    "spread": {
-    "main": 0,
+    "main": 3,
     "shadow": 0,
-    "triangles": 0,
+    "triangles": 96,
     "programs": 0
    },
-   "main": 72,
+   "main": 75,
    "shadow": 37,
-   "triangles": 69407,
+   "triangles": 69503,
    "programs": 54,
    "geometries": 460,
    "textures": 9,
-   "geometryBytes": 9107590,
-   "fx": 2,
+   "geometryBytes": 9111302,
+   "fx": 3,
    "roam": 0,
-   "fxTriangles": 1174,
+   "fxTriangles": 1384,
    "roamTriangles": 0,
-   "visited": 671
+   "visited": 676
   },
   "village/save/42/desktop-high": {
    "key": "village/save/42/desktop-high",
@@ -237,11 +237,11 @@
    "geometries": 377,
    "textures": 7,
    "geometryBytes": 8047550,
-   "fx": 4,
+   "fx": 3,
    "roam": 26,
-   "fxTriangles": 292,
+   "fxTriangles": 196,
    "roamTriangles": 18756,
-   "visited": 790
+   "visited": 789
   },
   "wild/save/42/desktop-high": {
    "key": "wild/save/42/desktop-high",
@@ -252,20 +252,20 @@
     "main": 0,
     "shadow": 0,
     "triangles": 0,
-    "programs": 0
+    "programs": 1
    },
    "main": 62,
    "shadow": 16,
    "triangles": 83613,
-   "programs": 53,
+   "programs": 54,
    "geometries": 409,
    "textures": 9,
-   "geometryBytes": 8283918,
+   "geometryBytes": 8381166,
    "fx": 5,
    "roam": 0,
-   "fxTriangles": 1746,
+   "fxTriangles": 1682,
    "roamTriangles": 0,
-   "visited": 658
+   "visited": 678
   },
   "canyon/save/42/desktop-high": {
    "key": "canyon/save/42/desktop-high",
@@ -274,22 +274,22 @@
    "pitch": 42,
    "spread": {
     "main": 0,
-    "shadow": 0,
-    "triangles": 0,
-    "programs": 0
+    "shadow": 5,
+    "triangles": 1884,
+    "programs": 1
    },
    "main": 84,
-   "shadow": 29,
-   "triangles": 74075,
-   "programs": 53,
+   "shadow": 34,
+   "triangles": 75959,
+   "programs": 54,
    "geometries": 434,
    "textures": 9,
-   "geometryBytes": 8283070,
+   "geometryBytes": 8380318,
    "fx": 3,
    "roam": 0,
-   "fxTriangles": 140,
+   "fxTriangles": 74,
    "roamTriangles": 0,
-   "visited": 632
+   "visited": 652
   },
   "village/new/42/desktop-high": {
    "key": "village/new/42/desktop-high",
@@ -335,7 +335,7 @@
    "geometryBytes": 6758306,
    "fx": 2,
    "roam": 0,
-   "fxTriangles": 386,
+   "fxTriangles": 366,
    "roamTriangles": 0,
    "visited": 597
   },
@@ -348,20 +348,20 @@
     "main": 0,
     "shadow": 0,
     "triangles": 0,
-    "programs": 0
+    "programs": 1
    },
    "main": 79,
    "shadow": 27,
    "triangles": 73238,
-   "programs": 49,
+   "programs": 50,
    "geometries": 395,
    "textures": 7,
-   "geometryBytes": 6761170,
+   "geometryBytes": 6858418,
    "fx": 0,
    "roam": 13,
    "fxTriangles": 0,
    "roamTriangles": 6622,
-   "visited": 567
+   "visited": 589
   },
   "village/late/42/phone-high": {
    "key": "village/late/42/phone-high",
@@ -383,9 +383,9 @@
    "geometryBytes": 8536594,
    "fx": 1,
    "roam": 13,
-   "fxTriangles": 4,
+   "fxTriangles": 6,
    "roamTriangles": 9162,
-   "visited": 790
+   "visited": 791
   },
   "wild/late/42/phone-high": {
    "key": "wild/late/42/phone-high",
@@ -396,20 +396,20 @@
     "main": 0,
     "shadow": 0,
     "triangles": 0,
-    "programs": 0
+    "programs": 1
    },
    "main": 60,
    "shadow": 24,
    "triangles": 84826,
-   "programs": 53,
+   "programs": 54,
    "geometries": 371,
    "textures": 9,
-   "geometryBytes": 8769250,
+   "geometryBytes": 8866498,
    "fx": 4,
    "roam": 0,
    "fxTriangles": 826,
    "roamTriangles": 0,
-   "visited": 657
+   "visited": 679
   },
   "canyon/late/42/phone-high": {
    "key": "canyon/late/42/phone-high",
@@ -422,16 +422,16 @@
     "triangles": 0,
     "programs": 1
    },
-   "main": 83,
+   "main": 82,
    "shadow": 37,
-   "triangles": 71686,
+   "triangles": 71602,
    "programs": 54,
    "geometries": 398,
    "textures": 9,
    "geometryBytes": 8877746,
-   "fx": 4,
+   "fx": 5,
    "roam": 0,
-   "fxTriangles": 142,
+   "fxTriangles": 226,
    "roamTriangles": 0,
    "visited": 653
   },
@@ -441,9 +441,9 @@
    "shadowMap": 1024,
    "pitch": 42,
    "spread": {
-    "main": 0,
+    "main": 1,
     "shadow": 0,
-    "triangles": 0,
+    "triangles": 392,
     "programs": 0
    },
    "main": 147,
@@ -453,11 +453,11 @@
    "geometries": 386,
    "textures": 7,
    "geometryBytes": 8765510,
-   "fx": 2,
+   "fx": 3,
    "roam": 39,
-   "fxTriangles": 98,
+   "fxTriangles": 196,
    "roamTriangles": 28934,
-   "visited": 822
+   "visited": 823
   },
   "wild/late/42/desktop-medium": {
    "key": "wild/late/42/desktop-medium",
@@ -468,20 +468,20 @@
     "main": 0,
     "shadow": 0,
     "triangles": 0,
-    "programs": 0
+    "programs": 1
    },
    "main": 71,
    "shadow": 24,
    "triangles": 91511,
-   "programs": 53,
+   "programs": 54,
    "geometries": 414,
    "textures": 9,
-   "geometryBytes": 8998166,
-   "fx": 0,
+   "geometryBytes": 9095414,
+   "fx": 4,
    "roam": 0,
-   "fxTriangles": 0,
+   "fxTriangles": 580,
    "roamTriangles": 0,
-   "visited": 689
+   "visited": 713
   },
   "canyon/late/42/desktop-medium": {
    "key": "canyon/late/42/desktop-medium",
@@ -492,20 +492,20 @@
     "main": 0,
     "shadow": 0,
     "triangles": 0,
-    "programs": 0
+    "programs": 1
    },
    "main": 92,
    "shadow": 37,
    "triangles": 81909,
-   "programs": 53,
-   "geometries": 438,
+   "programs": 54,
+   "geometries": 439,
    "textures": 9,
-   "geometryBytes": 9001030,
-   "fx": 1,
+   "geometryBytes": 9098278,
+   "fx": 5,
    "roam": 0,
    "fxTriangles": 240,
    "roamTriangles": 0,
-   "visited": 638
+   "visited": 662
   },
   "village/late/42/desktop-low": {
    "key": "village/late/42/desktop-low",
@@ -513,23 +513,23 @@
    "shadowMap": 0,
    "pitch": 42,
    "spread": {
-    "main": 0,
+    "main": 3,
     "shadow": 0,
-    "triangles": 0,
+    "triangles": 504,
     "programs": 0
    },
-   "main": 139,
+   "main": 140,
    "shadow": 0,
-   "triangles": 127362,
+   "triangles": 127426,
    "programs": 47,
    "geometries": 380,
    "textures": 6,
    "geometryBytes": 8717378,
    "fx": 3,
    "roam": 21,
-   "fxTriangles": 194,
+   "fxTriangles": 196,
    "roamTriangles": 14488,
-   "visited": 823
+   "visited": 824
   },
   "wild/late/42/desktop-low": {
    "key": "wild/late/42/desktop-low",
@@ -553,7 +553,7 @@
    "roam": 0,
    "fxTriangles": 486,
    "roamTriangles": 0,
-   "visited": 691
+   "visited": 698
   },
   "canyon/late/42/desktop-low": {
    "key": "canyon/late/42/desktop-low",
@@ -566,18 +566,400 @@
     "triangles": 0,
     "programs": 0
    },
-   "main": 73,
+   "main": 72,
    "shadow": 0,
-   "triangles": 43242,
+   "triangles": 43158,
    "programs": 49,
    "geometries": 433,
    "textures": 8,
    "geometryBytes": 8961282,
-   "fx": 4,
+   "fx": 5,
    "roam": 0,
-   "fxTriangles": 142,
+   "fxTriangles": 226,
    "roamTriangles": 0,
    "visited": 640
+  },
+  "village-move/late/42/desktop-high": {
+   "key": "village-move/late/42/desktop-high",
+   "level": "high",
+   "shadowMap": 2048,
+   "pitch": 42,
+   "spread": {
+    "main": 0,
+    "shadow": 0,
+    "triangles": 0,
+    "programs": 0
+   },
+   "main": 111,
+   "shadow": 70,
+   "triangles": 179929,
+   "programs": 51,
+   "geometries": 386,
+   "textures": 7,
+   "geometryBytes": 8765510,
+   "fx": 1,
+   "roam": 26,
+   "fxTriangles": 8,
+   "roamTriangles": 19772,
+   "visited": 811
+  },
+  "wild-move/late/42/desktop-high": {
+   "key": "wild-move/late/42/desktop-high",
+   "level": "high",
+   "shadowMap": 2048,
+   "pitch": 42,
+   "spread": {
+    "main": 0,
+    "shadow": 0,
+    "triangles": 0,
+    "programs": 0
+   },
+   "main": 71,
+   "shadow": 29,
+   "triangles": 95177,
+   "programs": 53,
+   "geometries": 420,
+   "textures": 9,
+   "geometryBytes": 8998166,
+   "fx": 0,
+   "roam": 0,
+   "fxTriangles": 0,
+   "roamTriangles": 0,
+   "visited": 657
+  },
+  "canyon-move/late/42/desktop-high": {
+   "key": "canyon-move/late/42/desktop-high",
+   "level": "high",
+   "shadowMap": 2048,
+   "pitch": 42,
+   "spread": {
+    "main": 0,
+    "shadow": 0,
+    "triangles": 0,
+    "programs": 0
+   },
+   "main": 90,
+   "shadow": 42,
+   "triangles": 83675,
+   "programs": 53,
+   "geometries": 439,
+   "textures": 9,
+   "geometryBytes": 9001030,
+   "fx": 1,
+   "roam": 0,
+   "fxTriangles": 100,
+   "roamTriangles": 0,
+   "visited": 624
+  },
+  "idle/late/layout/desktop-high": {
+   "key": "idle/late/layout/desktop-high",
+   "kind": "live",
+   "level": "high",
+   "spread": {
+    "layoutCount": 1,
+    "recalcStyleCount": 6,
+    "nodes": 4
+   },
+   "layoutCount": 50,
+   "recalcStyleCount": 324,
+   "nodes": 1080,
+   "slowestMs": 24.9,
+   "longTasks": 0,
+   "frames": 240
+  },
+  "swampfight/late/peak/desktop-high": {
+   "key": "swampfight/late/peak/desktop-high",
+   "kind": "live",
+   "level": "high",
+   "spread": {
+    "peakMain": 3,
+    "peakShadow": 0,
+    "peakTriangles": 285,
+    "layoutCount": 21,
+    "recalcStyleCount": 7,
+    "nodes": 14,
+    "programsCreated": 0
+   },
+   "peakMain": 135,
+   "peakShadow": 38,
+   "peakTriangles": 128157,
+   "layoutCount": 253,
+   "recalcStyleCount": 713,
+   "nodes": 1040,
+   "programsCreated": 1,
+   "slowestMs": 34.6,
+   "longTasks": 1,
+   "frames": 480
+  },
+  "space/late/frame/desktop-high": {
+   "key": "space/late/frame/desktop-high",
+   "level": "high",
+   "shadowMap": 2048,
+   "pitch": 42,
+   "spread": {
+    "main": 0,
+    "shadow": 0,
+    "triangles": 0,
+    "programs": 0
+   },
+   "main": 31,
+   "shadow": 0,
+   "triangles": 65990,
+   "programs": 62,
+   "geometries": 489,
+   "textures": 16,
+   "geometryBytes": 9457894,
+   "fx": 0,
+   "roam": 0,
+   "fxTriangles": 0,
+   "roamTriangles": 0,
+   "visited": 711
+  },
+  "bear/mid/frame/desktop-high": {
+   "key": "bear/mid/frame/desktop-high",
+   "level": "high",
+   "shadowMap": 2048,
+   "pitch": 42,
+   "spread": {
+    "main": 0,
+    "shadow": 0,
+    "triangles": 0,
+    "programs": 0
+   },
+   "main": 84,
+   "shadow": 34,
+   "triangles": 79558,
+   "programs": 49,
+   "geometries": 365,
+   "textures": 7,
+   "geometryBytes": 7725858,
+   "fx": 3,
+   "roam": 13,
+   "fxTriangles": 606,
+   "roamTriangles": 6622,
+   "visited": 614
+  },
+  "bear/mid/peak/desktop-high": {
+   "key": "bear/mid/peak/desktop-high",
+   "kind": "live",
+   "level": "high",
+   "spread": {
+    "peakMain": 0,
+    "peakShadow": 0,
+    "peakTriangles": 0,
+    "layoutCount": 2,
+    "recalcStyleCount": 4,
+    "nodes": 0,
+    "programsCreated": 0
+   },
+   "peakMain": 100,
+   "peakShadow": 34,
+   "peakTriangles": 86988,
+   "layoutCount": 117,
+   "recalcStyleCount": 326,
+   "nodes": 1003,
+   "programsCreated": 0,
+   "slowestMs": 18.6,
+   "longTasks": 0,
+   "frames": 240
+  },
+  "treant/mid/frame/desktop-high": {
+   "key": "treant/mid/frame/desktop-high",
+   "level": "high",
+   "shadowMap": 2048,
+   "pitch": 42,
+   "spread": {
+    "main": 0,
+    "shadow": 0,
+    "triangles": 0,
+    "programs": 0
+   },
+   "main": 86,
+   "shadow": 19,
+   "triangles": 149132,
+   "programs": 50,
+   "geometries": 432,
+   "textures": 7,
+   "geometryBytes": 7845230,
+   "fx": 5,
+   "roam": 13,
+   "fxTriangles": 830,
+   "roamTriangles": 6622,
+   "visited": 655
+  },
+  "treant/mid/peak/desktop-high": {
+   "key": "treant/mid/peak/desktop-high",
+   "kind": "live",
+   "level": "high",
+   "spread": {
+    "peakMain": 0,
+    "peakShadow": 0,
+    "peakTriangles": 158,
+    "layoutCount": 2,
+    "recalcStyleCount": 2,
+    "nodes": 0,
+    "programsCreated": 0
+   },
+   "peakMain": 108,
+   "peakShadow": 19,
+   "peakTriangles": 160954,
+   "layoutCount": 124,
+   "recalcStyleCount": 336,
+   "nodes": 1007,
+   "programsCreated": 0,
+   "slowestMs": 19,
+   "longTasks": 0,
+   "frames": 240
+  },
+  "bear/mid/frame/phone-high": {
+   "key": "bear/mid/frame/phone-high",
+   "level": "high",
+   "shadowMap": 2048,
+   "pitch": 42,
+   "spread": {
+    "main": 0,
+    "shadow": 0,
+    "triangles": 0,
+    "programs": 0
+   },
+   "main": 67,
+   "shadow": 28,
+   "triangles": 64278,
+   "programs": 49,
+   "geometries": 341,
+   "textures": 7,
+   "geometryBytes": 7725858,
+   "fx": 3,
+   "roam": 13,
+   "fxTriangles": 610,
+   "roamTriangles": 6622,
+   "visited": 607
+  },
+  "treant/mid/frame/phone-high": {
+   "key": "treant/mid/frame/phone-high",
+   "level": "high",
+   "shadowMap": 2048,
+   "pitch": 42,
+   "spread": {
+    "main": 2,
+    "shadow": 0,
+    "triangles": 422,
+    "programs": 0
+   },
+   "main": 84,
+   "shadow": 19,
+   "triangles": 131202,
+   "programs": 50,
+   "geometries": 395,
+   "textures": 7,
+   "geometryBytes": 7830622,
+   "fx": 9,
+   "roam": 13,
+   "fxTriangles": 1254,
+   "roamTriangles": 6622,
+   "visited": 643
+  },
+  "colossus/late/peak/desktop-high": {
+   "key": "colossus/late/peak/desktop-high",
+   "kind": "report",
+   "level": "high",
+   "spread": {
+    "peakMain": 24,
+    "peakShadow": 15,
+    "peakTriangles": 1236,
+    "layoutCount": 38,
+    "recalcStyleCount": 1,
+    "nodes": 3,
+    "programsCreated": 0
+   },
+   "peakMain": 167,
+   "peakShadow": 72,
+   "peakTriangles": 93932,
+   "layoutCount": 81,
+   "recalcStyleCount": 327,
+   "nodes": 1012,
+   "programsCreated": 0,
+   "slowestMs": 21.6,
+   "longTasks": 0,
+   "frames": 240,
+   "agree": false
+  }
+ },
+ "download": {
+  "runs": 3,
+  "cases": {
+   "new/en": {
+    "key": "new/en",
+    "beforeStart": {
+     "total": 2589791,
+     "spread": 0,
+     "byType": {
+      "js": 822279,
+      "css": 55004,
+      "glb": 1653404,
+      "audio": 0,
+      "image": 0,
+      "font": 52224,
+      "other": 6880
+     },
+     "typeSpread": {},
+     "files": 33
+    },
+    "afterStart": {
+     "total": 223764,
+     "spread": 0,
+     "byType": {
+      "js": 28437,
+      "css": 3703,
+      "glb": 191624,
+      "audio": 0,
+      "image": 0,
+      "font": 0,
+      "other": 0
+     },
+     "typeSpread": {},
+     "files": 3
+    }
+   },
+   "late/en": {
+    "key": "late/en",
+    "beforeStart": {
+     "total": 3066059,
+     "spread": 0,
+     "byType": {
+      "js": 822279,
+      "css": 55004,
+      "glb": 2115820,
+      "audio": 0,
+      "image": 13852,
+      "font": 52224,
+      "other": 6880
+     },
+     "typeSpread": {},
+     "files": 37
+    },
+    "afterStart": {
+     "total": 232044,
+     "spread": 4346,
+     "byType": {
+      "js": 28437,
+      "css": 3703,
+      "glb": 191624,
+      "audio": 0,
+      "image": 8280,
+      "font": 0,
+      "other": 0
+     },
+     "typeSpread": {
+      "image": 4346
+     },
+     "files": 5
+    }
+   }
+  },
+  "ownerLimit": {
+   "new": 1677722,
+   "late": 1887437
   }
  }
 }
