@@ -19,6 +19,7 @@
  */
 import type { Voices } from '../sfx.ts';
 import { MUSIC, type Tune } from './music-content.ts';
+import { fillNoise, mulberry32 } from '../features-rng.ts';
 
 /** A step is planned when it is at most this many seconds away. */
 export const AHEAD = .2;
@@ -32,8 +33,6 @@ export const LEVEL = 1.1;
 export const ECHO = [[.23, .28], [.41, .18], [.67, .1]] as const;
 export const MAR = 0, BASS = 1, PAD = 2, DRUM = 3, HAT = 4;
 export interface Note { kind: number; f: number; len: number; amp: number }
-/** mulberry32: a generator of numbers from 0 to 1 that gives the same row for the same seed. */
-export const seeded = (seed: number) => () => { let t = seed = seed + 0x6D2B79F5 | 0; t = Math.imul(t ^ t >>> 15, 1 | t); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
 const MAJOR = [0, 2, 4, 5, 7, 9, 11], FIVE = [[0, 1, 2, 4, 5], [0, 2, 3, 4, 6]], MINOR = [0, 1, 1, 0, 0, 1], WALK = [-2, -1, -1, 0, 1, 1, 2], LEAD_AT = [0, -1, -1, 1, 2, -1, -1, 3];
 const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
@@ -50,7 +49,7 @@ export class Score {
   private random: () => number; private scale: number[]; private order: number[] = []; private left = 0;
   private arr = 0; private motif = [5, 5, 5, 5];
   constructor(tune: Tune, seed = 1, lite = false) {
-    this.tune = tune; this.lite = lite; this.random = seeded(seed); this.beat = 60 / (tune.bpm ?? 100);
+    this.tune = tune; this.lite = lite; this.random = mulberry32(seed); this.beat = 60 / (tune.bpm ?? 100);
     const m = tune.mode ?? 0; this.scale = MAJOR.map((_, i) => (MAJOR[(i + m) % 7] - MAJOR[m] + 12) % 12);
     for (let i = 0; i < (tune.progs?.length ?? 0); i++) this.order.push(i);
   }
@@ -118,8 +117,8 @@ export function scoreBus(ctx: BaseAudioContext, to: AudioNode) {
 let shared: { ctx: BaseAudioContext; noise: AudioBuffer; wave: PeriodicWave | null } | undefined;
 function kit(ctx: BaseAudioContext) {
   if (shared?.ctx === ctx) return shared;
-  const noise = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * .2), ctx.sampleRate), data = noise.getChannelData(0); let seed = 11;
-  for (let i = 0; i < data.length; i++) { seed = (seed * 16807) % 2147483647; data[i] = seed / 1073741823.5 - 1; }
+  const noise = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * .2), ctx.sampleRate), data = noise.getChannelData(0);
+  fillNoise(data);
   return shared = { ctx, noise, wave: typeof ctx.createPeriodicWave === 'function' ? ctx.createPeriodicWave(new Float32Array(3), new Float32Array([0, 1, .3])) : null };
 }
 

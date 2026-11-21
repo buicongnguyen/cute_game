@@ -22,6 +22,7 @@
 import type * as T from 'three';
 import type { GameServices } from '../game-services.ts';
 import type { HeroMotion } from '../hero-motion.ts';
+import { mulberry32 } from '../features-rng.ts';
 
 export type Act = '' | 'look' | 'stretch' | 'tap' | 'sit' | 'cheer' | 'holdUp';
 /** The first fidget and the pause between two (seconds, drawn evenly), and when the explorer sits. */
@@ -31,7 +32,7 @@ const FIDGET_TIME = { look: 2.6, stretch: 2.4, tap: 2.2 }, LOOK_REACH = 8, HEAD_
 /** A start's lean (radians, over LEAN_TIME seconds) and how long a stop settles (seconds). */
 export const LEAN_IN = .12, LEAN_TIME = .15, SETTLE_TIME = .3;
 /** A clip's length is kept inside these (seconds); how long a clip waits for a fight pose to end before it is dropped. */
-const CLIP_MIN = .6, CLIP_MAX = 1.2, CLIP_HOLD = 3;
+export const CLIP_MIN = .6, CLIP_MAX = 1.2, CLIP_HOLD = 3;
 /** A catch is held up this long after the fish lands (seconds): the arms rise as it arrives. */
 export const HOLD_UP_DELAY = .3;
 /** No sitting with a live creature this near (metres). */
@@ -62,10 +63,9 @@ export class HeroIdle {
   on = false; kick = 0; settle = 0;
   /** A clip asked for and not yet begun: which, its length, the seconds before it may begin, the seconds it has waited under a fight pose. */
   clip: Act = ''; clipTime = 0; wait = 0; held = 0;
-  private seed: number;
-  constructor(seed = 1) { this.seed = seed >>> 0; this.next = this.pause(); }
   /** mulberry32: the same seed gives the same fidgets. */
-  private random() { let t = this.seed = this.seed + 0x6D2B79F5 | 0; t = Math.imul(t ^ t >>> 15, 1 | t); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+  private readonly random: () => number;
+  constructor(seed = 1) { this.random = mulberry32(seed); this.next = this.pause(); }
   private pause() { return FIDGET_MIN + this.random() * (FIDGET_MAX - FIDGET_MIN); }
   /**
    * The lean into a start and the settle of a stop, over the gait blend. A stop settles only after a real walk

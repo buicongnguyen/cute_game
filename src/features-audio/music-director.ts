@@ -44,7 +44,8 @@ import type { Enemy } from '../world.ts';
 import { audioLevels, radio } from '../audio-settings.ts';
 import { assetUrl } from '../asset-url.ts';
 import { MUSIC, HOME_ZONES, MODES, THEME_ONLY } from './music-content.ts';
-import { Player, scoreBus, seeded, SCORE_VOICES } from './music-score.ts';
+import { Player, scoreBus, SCORE_VOICES } from './music-score.ts';
+import { mulberry32 } from '../features-rng.ts';
 
 /** Seconds of a crossfade; seconds danger outlasts its cause, and a boss (longer than a fade); metres within which a chaser counts. */
 export const FADE = 1.8, HOLD = 1.5, BOSS_HOLD = 2, REACH = 12;
@@ -102,7 +103,7 @@ export class Director {
   /** The tune of the state at the last look and whether it changed since the music was last settled, whether the key in play is a place's, the key that waits at a border and since when, and when the theme last began. */
   private id = ''; private stale = false; private place = false; private want = ''; private since = 0; private themeAt = -1e9;
   /** `lite`: a touch device (6 voices, no pad). */
-  constructor(graph: AudioGraph, lite = false, seed = 1) { this.graph = graph; this.lite = lite; this.random = seeded(seed); }
+  constructor(graph: AudioGraph, lite = false, seed = 1) { this.graph = graph; this.lite = lite; this.random = mulberry32(seed); }
 
   /** Call it about ten times a second with the scene as it is. */
   tick(s: Scene) {

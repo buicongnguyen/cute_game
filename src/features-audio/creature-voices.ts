@@ -27,6 +27,7 @@ import type { AudioGraph } from '../sfx.ts';
 import type { GameServices } from '../game-services.ts';
 import type { Enemy } from '../world.ts';
 import { audioLevels } from '../audio-settings.ts';
+import { fillNoise } from '../features-rng.ts';
 
 export type VoiceKind = 'notice' | 'windup' | 'hurt' | 'death';
 export const VOICE_KINDS: readonly VoiceKind[] = ['notice', 'windup', 'hurt', 'death'];
@@ -190,8 +191,7 @@ export class CreatureVoices {
   private breath(ctx: Ctx) {
     if (!this.noise) {
       this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-      const data = this.noise.getChannelData(0); let seed = 11;
-      for (let i = 0; i < data.length; i++) { seed = (seed * 16807) % 2147483647; data[i] = seed / 1073741823.5 - 1; }
+      fillNoise(this.noise.getChannelData(0));
     }
     return this.noise;
   }
