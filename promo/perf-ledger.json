@@ -53,6 +53,23 @@
     "vietnamese": 16
    },
    "why": "Each package measured its growth against the staging it was built on; gzip deltas do not add up exactly. Measured on staging after merging WP6 and WP24: Vietnamese start 931,981 against a summed limit of 931,979 (2 bytes over). 16 bytes cover that rounding; no code was added."
+  },
+  {
+   "row": "space/late/frame/desktop-high",
+   "name": "WP18 round stars",
+   "allow": {
+    "textures": 1
+   },
+   "why": "The plan's ledger line for this package was 'space +1 program' for a runtime star sprite. As built there is no new program: all three star layers wear the round map, so their one points program changed instead of a second one being added (programs 7, as baselined; 31 draws and 65,990 triangles exact). What is added is the sprite itself: one 128 x 128 canvas texture, drawn once when the space view is built (the same soft round glow the halos use, with a solid middle)."
+  },
+  {
+   "row": "start",
+   "name": "WP18 our own colours",
+   "allow": {
+    "english": 445,
+    "vietnamese": 445
+   },
+   "why": "Measured growth of the start against staging ef9501e (English 798,764 -> 799,209, Vietnamese 932,156 -> 932,601; plan allowance 0.1 KB): colour values the world reads as it is built, so they cannot load after Start. About 60 colours that did not exist before (our own ground colours for seven planets, which used to come from the planet facts; the island and sea colours of Ocean and Cloud, which were written into environment-art.ts; the warm shade under forest, swamp and canyon trees; the Crocodile King's paint; the blue basalt), and the small code that applies them (the paint by material name in creature-art.ts and space-view.ts, the round star map, the smooth stand-in rock, the look switch). The old tables are kept for a before and after in dev and perf builds only (a statically false branch in the shipped build: 0 bytes; with them the start grew 1,584 bytes). Two slimming passes saved about 220 bytes (the stars reuse the halo glow; fog and sun angles moved into the table so look.ts wears it as it is)."
   }
  ]
 }
