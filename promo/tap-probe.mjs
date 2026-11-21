@@ -11,9 +11,10 @@
 // children: that run is the tap area. It also samples the corners and edge middles of the visible box: when another
 // interactive element answers there, the neighbour steals the tap ("stolen").
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { readFileSync, writeFileSync } from 'node:fs';
-const require = createRequire('C:/Users/n/source/repos/3D_claudeopus55/package.json');
-const { chromium } = require('playwright');
+// Playwright: PLAYWRIGHT_MODULE (a playwright/index.mjs) or the project's own install.
+const { chromium } = process.env.PLAYWRIGHT_MODULE ? await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href) : createRequire(import.meta.url)('playwright');
 const URL_ = process.env.PROBE_URL || 'http://localhost:5301/';
 const save = readFileSync(new URL('./save.json', import.meta.url), 'utf8');
 const MIN = 44;

@@ -1,6 +1,7 @@
 #!/bin/bash
-cd /c/Users/n/source/repos/cute_game
-FF="C:/Users/n/AppData/Roaming/Python/Python314/site-packages/imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe"
+# Run from anywhere: works in the repo root. FFMPEG names the ffmpeg to use (default: ffmpeg on the PATH).
+cd "$(dirname "$0")/.." || exit 1
+FF="${FFMPEG:-ffmpeg}"
 for L in en vi; do
   suf=""; [ $L = vi ] && suf="-vi"
   rm -rf promo/rec; LANG_CODE=$L node promo/video.mjs

@@ -1,7 +1,8 @@
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { readFileSync, mkdirSync } from 'node:fs';
-const require = createRequire('C:/Users/n/source/repos/3D_claudeopus55/package.json');
-const { chromium } = require('playwright');
+// Playwright: PLAYWRIGHT_MODULE (a playwright/index.mjs) or the project's own install.
+const { chromium } = process.env.PLAYWRIGHT_MODULE ? await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href) : createRequire(import.meta.url)('playwright');
 export const save = readFileSync(new URL(process.env.SAVE_FILE || './save.json', import.meta.url), 'utf8');
 export async function open(opts = {}) {
   const browser = await chromium.launch({ args: ['--use-angle=default', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'] });
