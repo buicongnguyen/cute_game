@@ -2,7 +2,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { assetVersions, modelVersions } from './model-versions.mjs';
-import { staleCaches, strategy, isHashedBuildFile, onDemand } from './sw-logic.mjs';
+import { staleCaches, strategy, isHashedBuildFile, onDemand, backgroundFill } from './sw-logic.mjs';
 
 // Keep the worker's paths aligned with Vite's deployment base. GitHub project
 // Pages uses /repository/, while the local Node server serves the root path.
@@ -44,9 +44,10 @@ const index = base + 'index.html';
 const core = urls.filter(url => url === index || (isHashedBuildFile(url) && /\.(js|css)$/.test(url)));
 const extra = urls.filter(url => !core.includes(url) && !onDemand(url)).map(versioned);
 const pinned = urls.map(versioned).filter((url, i) => isHashedBuildFile(urls[i]) || url !== urls[i]);
-// On-demand files (sw-logic.mjs onDemand) are kept on first use. In the background fill the models go first and the music last.
-const isAudio = url => url.includes('/assets/audio/');
-const later = urls.filter(onDemand).sort((a, b) => isAudio(a) - isAudio(b)).map(versioned);
+// On-demand files (sw-logic.mjs onDemand) are kept on first use and carried over by an update; the background fill
+// fetches the models among them, never the music (backgroundFill).
+const later = urls.filter(onDemand).map(versioned);
+const fill = urls.filter(backgroundFill).map(versioned);
 const scripts = core.filter(url => url.endsWith('.js'));
 const hash = createHash('sha256');
 for (let i = 0; i < files.length; i++) hash.update(urls[i]).update('\0').update(await readFile(files[i])).update('\0');
@@ -60,6 +61,7 @@ const VERSION=${JSON.stringify(version)};
 const CORE=${JSON.stringify(core)};
 const EXTRA=${JSON.stringify(extra)};
 const LATER=${JSON.stringify(later)};
+const FILL=${JSON.stringify(fill)};
 const KNOWN=${JSON.stringify(urls)};
 const PINNED=${JSON.stringify(pinned)};
 const SCRIPTS=${JSON.stringify(scripts)};
@@ -75,10 +77,10 @@ const copied=(url,names)=>names.reduce((found,name)=>found.then(hit=>hit||caches
 const fill=(cache,url,names)=>PINNED_SET.has(url)?copied(url,names).then(hit=>hit?cache.put(url,hit):cache.add(url)):cache.add(fresh(url));
 // Runs job over items with at most n in flight, so a big list does not fight the game for the connection. Never rejects.
 const pool=(items,n,job)=>new Promise(done=>{let next=0,live=0;const go=()=>{if(next>=items.length&&!live)return done();while(live<n&&next<items.length){live++;const item=items[next++];Promise.resolve().then(()=>job(item)).catch(()=>{}).then(()=>{live--;go();});}};go();});
-// On-demand files (models the game fetches only when first needed): copy any this build can take from an older cache at
-// install (no network), and download the rest in the background once the page asks (message 'zoo-fill'), a few at a time.
+// On-demand files (models and music the game fetches only when first needed): copy any this build can take from an older cache at
+// install (no network), and download the rest of the models (FILL) in the background once the page asks (message 'zoo-fill'), a few at a time.
 const inherit=(cache,names)=>pool(LATER,6,url=>copied(url,names).then(hit=>hit&&cache.put(url,hit)));
-const backfill=()=>Promise.all([caches.open(VERSION),older()]).then(([cache,names])=>pool(LATER,4,url=>cache.match(url).then(hit=>hit||fill(cache,url,names))));
+const backfill=()=>Promise.all([caches.open(VERSION),older()]).then(([cache,names])=>pool(FILL,4,url=>cache.match(url).then(hit=>hit||fill(cache,url,names))));
 self.addEventListener('message',event=>{if(event.data&&event.data.type==='zoo-fill')event.waitUntil(backfill());});
 // A new build takes over at once: its pinned URLs carry content hashes, so an open page of an older
 // build still gets matching files (other versions go to the network), and the page offers a reload.

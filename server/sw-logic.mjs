@@ -27,12 +27,19 @@ export function strategy({ method, mode, origin, pathname, search }, self, base,
 }
 
 /**
- * Files the install does not download: the worker keeps each one the first time the game fetches it, and fills in
- * the rest in the background later (build-offline.mjs LATER). Gear models download only when something from them is
- * first worn, planet scenery only when that planet is first visited, the farm pen kit only when the pen is first
- * shown, and music (assets/audio/) only when it first plays.
+ * Files the install does not download: the worker keeps each one the first time the game fetches it
+ * (build-offline.mjs LATER). Gear models download only when something from them is first worn, planet scenery only
+ * when that planet is first visited, the farm pen kit only when the pen is first shown, and music (assets/audio/)
+ * only when it first plays.
  */
 export const onDemand = url => /\/assets\/(models\/(gear-[a-z-]+|hero-[a-z-]+|disguises|pets|worlds-[a-z]+|farm|creatures|helper|cage|house|titans)\.glb|audio\/[^/]+)$/.test(url);
+
+/**
+ * The on-demand files the worker also fetches by itself, in the background, once the game is running (build-offline.mjs
+ * FILL): the models, so a planet never visited still shows offline. Music is left out: 444 KB a first visit may never
+ * play. Offline without it, the radio plays its stand-in tune.
+ */
+export const backgroundFill = url => onDemand(url) && !url.includes('/assets/audio/');
 
 /** Vite's content-hashed output (assets/name-HASH.ext) never changes under the same name. */
 export const isHashedBuildFile = url => /\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/.test(url);

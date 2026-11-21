@@ -342,8 +342,9 @@ test('icons and audio are pinned by content hash: unchanged ones are copied from
   assert.equal(await(await next.request(key('audio/theme.mp3','tune'))).text(),`network:${origin}${key('audio/theme.mp3','tune')}`,'the update kept the tune that was played: the radio works offline');
 });
 
-test('music is on demand: no audio in the install list; the background fill fetches it after the models',async t=>{
-  const {onDemand,isHashedBuildFile}=await import('../server/sw-logic.mjs');
+test('music is on demand: no audio in the install list or in the background fill; the first play keeps it',async t=>{
+  const {onDemand,backgroundFill,isHashedBuildFile}=await import('../server/sw-logic.mjs');
+  assert.equal(backgroundFill('/x/assets/audio/a.mp3'),false);assert.equal(backgroundFill('/x/assets/models/farm.glb'),true);assert.equal(backgroundFill('/x/assets/models/cottage.glb'),false);
   assert.equal(onDemand('/x/assets/audio/a.mp3'),true);assert.equal(onDemand('/cute_game/assets/audio/zoo-garden-theme.mp3'),true);
   assert.equal(onDemand('/x/assets/models/farm.glb'),true);assert.equal(onDemand('/x/assets/models/cottage.glb'),false,'the start models still install');
   assert.equal(onDemand('/x/assets/icons/items/a.webp'),false);assert.equal(onDemand('/x/assets/audio-AAAAAAAA.js'),false);assert.equal(isHashedBuildFile('/x/assets/audio/a.mp3'),false);
@@ -352,15 +353,21 @@ test('music is on demand: no audio in the install list; the background fill fetc
   const list=name=>JSON.parse(source.match(new RegExp(`^const ${name}=(\\[.*\\]);$`,'m'))[1]);
   assert.deepEqual([...list('CORE'),...list('EXTRA')].filter(u=>u.includes('/assets/audio/')),[],'the theme is not in the install list');
   const theme=`/x/assets/audio/zoo-garden-theme.mp3?v=${shortHash('theme')}`;
-  assert.equal(list('LATER').at(-1),theme,'on demand, after the models');assert.equal(list('LATER').length,3);
+  assert.ok(list('LATER').includes(theme),'on demand');assert.equal(list('LATER').length,3);
+  assert.deepEqual(list('FILL'),list('LATER').filter(u=>u!==theme),'the background fill is the models only');
   assert.ok(list('PINNED').includes(theme),'still cache-first under its content hash');assert.ok(list('KNOWN').includes('/x/assets/audio/zoo-garden-theme.mp3'));
   const app=worker(source);
   await app.lifecycle('install');
   assert.equal(app.caches.requests.some(u=>u.includes('/assets/audio/')),false,'installing fetches no audio');
   await app.message({type:'zoo-fill'});
-  assert.ok(app.caches.requests.includes(theme),'the background fill stores it for offline play');
+  assert.equal(app.caches.requests.some(u=>u.includes('/assets/audio/')),false,'nor does the background fill');assert.equal(app.caches.requests.filter(u=>u.includes('/assets/models/')).length,3);
+  assert.equal(app.network.some(r=>String(r.url??r).includes('/assets/audio/')),false,'no request for music until it plays');
+  // The radio plays: fetched once, kept, and there offline from then on.
+  assert.equal(await(await app.request(theme)).text(),`network:${origin}${theme}`);
   app.setNetwork(async()=>{throw new Error('offline');});
-  assert.equal(await(await app.request(theme)).text(),`cached:${theme}`);
+  assert.equal(await(await app.request(theme)).text(),`network:${origin}${theme}`,'the played theme answers offline from the cache');
+  const fresh=worker(source);await fresh.lifecycle('install');await fresh.message({type:'zoo-fill'});fresh.setNetwork(async()=>{throw new Error('offline');});
+  await assert.rejects(async()=>fresh.request(theme),/offline/,'never played: no theme offline (the radio plays its stand-in tune)');
   // The real tree: every file under public/assets/audio is on demand.
   const {readdirSync}=await import('node:fs');
   for(const name of readdirSync(path.join(root,'public/assets/audio')))assert.equal(onDemand(`/cute_game/assets/audio/${name}`),true,name);

@@ -40,8 +40,8 @@ radio theme, (WP13 score) ► music ► duck ┘
 - **Features use `services.audio`,** not an import of `sfx.ts`: a run-time import of `sfx.ts` from a feature makes the build
   split that module into one more file fetched at start. Type imports are free.
 - **Offline.** Files under `assets/audio/` are on demand (`server/sw-logic.mjs` `onDemand`): the service worker's install
-  does not download them; it keeps the theme the first time the radio plays, and the background fill fetches it after the
-  models. Offline without it, the radio plays its stand-in tune.
+  does not download them, and neither does its background fill (`backgroundFill`: models only). It keeps the theme the
+  first time the radio plays, and an update carries it over. Offline without it, the radio plays its stand-in tune.
 
 Tests: `tests/sound-bus.test.ts` (a recording fake AudioContext), `tests/offline.test.mjs`.
 
