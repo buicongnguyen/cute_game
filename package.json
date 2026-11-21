@@ -12,6 +12,8 @@
     "perf:gate": "node promo/perf-budget.mjs --compare",
     "perf:baseline": "node promo/perf-budget.mjs --baseline",
     "perf:bytes": "node promo/start-bytes.mjs",
+    "journey": "node promo/journey.mjs",
+    "reel": "node promo/reel.mjs",
     "perf:download": "node promo/first-visit-bytes.mjs --compare",
     "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
     "test:timeshift": "node tests/support/clock-shift.mjs 45 400",
