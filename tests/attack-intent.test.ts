@@ -32,23 +32,24 @@ test('in a fight Attack always attacks: beside a usable thing, on a fresh press,
 
 const foe = (x: number, o: { hp?: number; phase?: string; tutorial?: boolean; visible?: boolean } = {}) => ({ x, z: 0, hp: o.hp ?? 10, phase: o.phase ?? 'idle', tutorial: o.tutorial, mesh: { visible: o.visible ?? true } });
 const angry = (e: { phase: string }) => e.phase !== 'idle' && e.phase !== 'return';
-test('a fight is on: an angry creature within 8 m, any living creature within 6 m, a creature of the first fight within 10 m', () => {
-  assert.deepEqual(FIGHT, { aggro: 8, hostile: 6, lesson: 10, lessonSwing: 4 });
+test('a fight is on: a creature that has noticed someone within 8 m, a creature of the first fight within 10 m; a calm creature never', () => {
+  assert.deepEqual(FIGHT, { aggro: 8, lesson: 10, lessonSwing: 4 });
   assert.equal(inFight([], 0, 0, angry), false);
-  assert.equal(inFight([foe(5.9)], 0, 0, angry), true, 'a calm creature 5.9 m away');
-  assert.equal(inFight([foe(6.1)], 0, 0, angry), false, 'a calm creature 6.1 m away: Attack still uses');
+  assert.equal(inFight([foe(1)], 0, 0, angry), false, 'a calm creature one step away (beside a planet\'s shop): Attack still uses the thing');
+  assert.equal(inFight([foe(1, { phase: 'return' })], 0, 0, angry), false, 'one walking home is calm too');
   assert.equal(inFight([foe(7.9, { phase: 'chase' })], 0, 0, angry), true, 'an angry one 7.9 m away');
   assert.equal(inFight([foe(8.1, { phase: 'chase' })], 0, 0, angry), false);
-  assert.equal(inFight([foe(9.9, { tutorial: true })], 0, 0, angry), true, 'the first fight: 9.9 m');
+  assert.equal(inFight([foe(3, { phase: 'windup' })], 0, 0), true, 'the default test of "noticed" is the creature\'s phase');
+  assert.equal(inFight([foe(9.9, { tutorial: true })], 0, 0, angry), true, 'the first fight: 9.9 m, calm or not');
   assert.equal(inFight([foe(10.1, { tutorial: true })], 0, 0, angry), false);
   assert.equal(inFight([{ ...foe(3, { tutorial: true, hp: 0 }), respawn: 5 }], 0, 0, angry), true, 'the first fight: all three fell and come back in 5 s; Attack still opens nothing');
   assert.equal(inFight([{ ...foe(3, { tutorial: true, hp: 0, visible: false }), respawn: 999_999 }], 0, 0, angry), false, 'the step is done: they are gone for good');
   assert.equal(inFight([foe(14, { tutorial: true })], 0, 0, angry, 3.9), true, 'the first fight: its creatures are 14 m off, but the last swing was 3.9 s ago (beside the garden beds)');
   assert.equal(inFight([foe(14, { tutorial: true })], 0, 0, angry, 4.1), false, 'four quiet seconds: Attack plants again');
-  assert.equal(inFight([foe(14)], 0, 0, angry, 0), false, 'only the first fight step has this: a swing elsewhere changes nothing');
+  assert.equal(inFight([foe(14, { phase: 'chase' })], 0, 0, angry, 0), false, 'only the first fight step has this: a swing elsewhere changes nothing');
   assert.equal(inFight([{ ...foe(14, { tutorial: true, hp: 0, visible: false }), respawn: 999_999 }], 0, 0, angry, 0), false);
-  assert.equal(inFight([foe(1, { hp: 0 }), foe(1, { visible: false })], 0, 0, angry), false, 'a fallen or hidden creature is no fight');
-  assert.equal(inFight([foe(40), foe(3)], 0, 0, angry), true);
+  assert.equal(inFight([foe(1, { hp: 0, phase: 'chase' }), foe(1, { visible: false, phase: 'chase' })], 0, 0, angry), false, 'a fallen or hidden creature is no fight');
+  assert.equal(inFight([foe(40, { phase: 'chase' }), foe(3, { phase: 'chase' })], 0, 0, angry), true);
 });
 
 // main.ts for real (tests/support/main-harness.mjs): F and the phone's Attack ask one rule, useInstead, before they swing.
@@ -63,13 +64,13 @@ test('F and the phone Attack beside the shop: it opens out of a fight, and never
   const calm = atTheShop(); assert.equal(calm.ctx.useInstead(true), true); assert.deepEqual(calm.used, ['use:shop'], 'nothing near: Attack opens the shop');
   const key = atTheShop(); key.ctx.fKey('KeyF'); assert.deepEqual(key.used, ['use:shop'], 'F follows the same rule');
   const held = atTheShop(); assert.equal(held.ctx.useInstead(false), false, 'a held Attack never uses');
-  for (const [what, enemy] of [['a calm creature 5 m away', foe(5)], ['an angry one 7 m away', foe(7, { phase: 'chase' })], ['a creature of the first fight 9 m away', foe(9, { tutorial: true })]] as const) {
+  for (const [what, enemy] of [['an angry creature 7 m away', foe(7, { phase: 'chase' })], ['one winding up 5 m away', foe(5, { phase: 'windup' })], ['a creature of the first fight 9 m away', foe(9, { tutorial: true })]] as const) {
     const fight = atTheShop([{ ...enemy, radius: .5 }]);
     assert.equal(fight.ctx.useInstead(true), false, what); assert.deepEqual(fight.used, [], 'the shop stays shut');
     fight.ctx.fKey('KeyF'); assert.ok(!fight.used.includes('use:shop'), 'F too: ' + what);
   }
-  const far = atTheShop([{ ...foe(6.5), radius: .5 }]); assert.equal(far.ctx.useInstead(true), true, 'a calm creature 6.5 m away is no fight');
-  const early = atTheShop([{ ...foe(5), radius: .5 }]); delete (early.ctx.world as { lesson?: unknown }).lesson; assert.equal(early.ctx.useInstead(true), true, 'before the features are in (the first moment after Start) Attack follows the old table');
+  const far = atTheShop([{ ...foe(4), radius: .5 }]); assert.equal(far.ctx.useInstead(true), true, 'a calm creature 4 m away (out of reach, not targeted) is no fight: the shop opens');
+  const early = atTheShop([{ ...foe(5, { phase: 'chase' }), radius: .5 }]); delete (early.ctx.world as { lesson?: unknown }).lesson; assert.equal(early.ctx.useInstead(true), true, 'before the features are in (the first moment after Start) Attack follows the old table');
   assert.equal(noticed({ phase: 'chase' }), true); assert.equal(noticed({ phase: 'idle' }), false); assert.equal(noticed({ phase: 'return' }), false); assert.equal(noticed({}), false);
 });
 
@@ -100,4 +101,17 @@ test('a plain swing at the water splashes the pond (with its rest); one away fro
   assert.equal(s.swing(0, 0, Math.PI, 2), false, 'facing away');
   assert.equal(s.swing(0, 0, 0, 2), true, 'facing the water from its edge');
   assert.equal(s.swing(0, 0, 0, 2), false, 'the pond rests between splashes');
+});
+
+// The press that opens a dialog must not press the button that appears under the finger (main.ts tapThrough).
+const taps = await mainHarness({ functions: ['tapThrough'] });
+test('a tap-through never presses a dialog button: only a press that began after the dialog opened counts, and the keyboard always', () => {
+  const inDialog = { closest: (sel: string) => sel === '#dialog-layer' ? {} : null }, onHud = { closest: () => null };
+  const at = (pressAt: number, dialogAt: number) => taps.context({ pressAt, dialogAt });
+  assert.equal(at(100, 130).tapThrough({ detail: 1 }, inDialog), true, 'the tap on the crystal opened its dialog 30 ms later: its click on the Upgrade button under the finger is dropped');
+  assert.equal(at(200, 130).tapThrough({ detail: 1 }, inDialog), false, 'a tap that began after the dialog opened buys, however soon');
+  assert.equal(at(131, 130).tapThrough({ detail: 1 }, inDialog), false, 'a fast deliberate tap: 1 ms after it opened');
+  assert.equal(at(100, 130).tapThrough({ detail: 0 }, inDialog), false, 'Enter or Space on a focused button (no pointer) always works');
+  assert.equal(at(100, 130).tapThrough({ detail: 1 }, onHud), false, 'buttons outside the dialog are never held back');
+  assert.equal(at(0, 0).tapThrough({ detail: 1 }, inDialog), false, 'no dialog was ever opened by a press');
 });

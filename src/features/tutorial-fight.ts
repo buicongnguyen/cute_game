@@ -10,13 +10,14 @@
  *   the first win ends the wait for good (main.ts basicAttack asks world.lesson.swing).
  * - One creature teaches the ring: the first of the three winds up for LESSON.windup s inside a red ring of
  *   LESSON.ring m (a radius the telegraph pool already has) and bites only an explorer who is still in the ring when
- *   it ends. The other two never bite. A bite never takes the explorer below LESSON.floor of full health (main.ts asks
+ *   it ends, and never while a dialog is open. The other two never bite. A bite never takes the explorer below LESSON.floor of full health (main.ts asks
  *   world.lesson.bite for every blow). The village is a safe zone where world.ts lands no blow at all, so inside it this
  *   module lands the ring's bite itself; outside, the creature's own blow is the bite.
  * - Two tips, each once per save (kept by the firstRunSeen action): 'Step out of the ring!' at the first wind-up and
  *   'One more for a finisher!' after two blows in a row.
  * - The first win of a save bursts bigger (the effects' own pools: no new draw call) and sends `firstWin`, once per save:
- *   it is the defeat that happens while the save's defeat count is still 0.
+ *   the explorer's own blow (not a pet's, a helper's or another player's) fells a creature while the save's defeat count
+ *   is still 0; 'win' is kept in the save's seen list, so it is never told again.
  *
  * Danger: the chip of a zone 3 or more levels above the explorer turns red here (the words are hud-combat.ts zoneInfo's),
  * and walking out of the village towards such a zone shows its banner WARN.edge - WARN.from m before the fence, before
@@ -51,6 +52,20 @@ export function biteAllowed(damage: number, hp: number, max: number) {
   const room = Math.floor(hp - Math.ceil(max * LESSON.floor));
   return room < 1 ? 0 : Math.min(damage, room);
 }
+/** A blow of the explorer's own: not a pet's, a helper's or a summon's, and not a hazard (no blow at all). */
+export const ownBlow = (impact?: { helper?: boolean; source?: string }) => !!impact && !impact.helper && impact.source !== 'pet' && impact.source !== 'summon';
+/**
+ * The first win of a save: the explorer's own blow fells a creature while the save has no defeat counted and was never
+ * told so ('win' in the save's seen list, so a reload, or a kill that the count missed, cannot tell it twice).
+ */
+export const firstWinNow = (save: LessonSave, impact?: { helper?: boolean; source?: string }) => !!save.firstRun && save.counters.kills === 0 && !save.firstRun.seen?.includes('win') && ownBlow(impact);
+/**
+ * The ring's bite lands now: its wind-up has just ended in a strike (not a flinch or a stun, which go back to the
+ * chase), the explorer is still in the ring and inside the village (outside it world.ts lands the blow itself), and
+ * nothing holds the game (`quiet`: a dialog, the cottage, another planet).
+ */
+export const ringBites = (ring: { x: number; z: number; hp: number; phase?: string }, wasWindup: boolean, hero: { x: number; z: number }, quiet: boolean) =>
+  wasWindup && ring.phase === 'recover' && ring.hp > 0 && !quiet && Math.hypot(hero.x, hero.z) < WARN.edge && inRing(ring, hero);
 /** The explorer stands in the creature's ring. */
 export const inRing = (e: { x: number; z: number }, p: { x: number; z: number }) => Math.hypot(e.x - p.x, e.z - p.z) <= LESSON.ring;
 /** The zone whose banner should warn an explorer of `level` at (x, z) on the way out of the village, or null. */
@@ -146,25 +161,30 @@ export function mount(s: GameServices) {
   document.querySelector('#world')?.addEventListener('pointerdown', e => { if ((e as PointerEvent).pointerType === 'mouse') clicked = w.time; });
 
   s.on('hitLanded', ({ impact }) => {
-    if (!impact || impact.helper || impact.source === 'pet' || impact.source === 'summon') return;
+    if (!ownBlow(impact)) return;
     rules.release(); // a blow of the explorer's own landed (a skill counts): swings are free from here on
     blows = w.time - lastBlow <= CHAIN_GAP_S ? blows + 1 : 1; lastBlow = w.time;
   });
-  s.on('creatureDefeat', ({ enemy }) => {
-    const save = s.state(); if (!save.firstRun || save.counters.kills !== 0 || won === save) return;
-    won = save; rules.release();
+  s.on('creatureDefeat', ({ enemy, impact }) => {
+    const save = s.state(); if (won === save || !firstWinNow(save, impact)) return; // a pet's, a helper's or another player's kill is not the explorer's win
+    won = save; rules.release(); void s.perform('firstRunSeen', { id: 'win' }, { quiet: true });
     // The first win: a second, bigger burst on top of the creature's own, from the same pools.
     const fx = w.fx, at = { x: enemy.x, y: enemy.mesh.position.y, z: enemy.z };
     if (fx) { fx.burst(at, { n: 36, color: ['#ffe14a', '#ffffff', '#ff8a3c'], glow: true, size: .2, speed: 7.5, up: 8, life: 1, y: .8 }); fx.ring({ x: enemy.x, z: enemy.z }, { color: '#ffe14a', from: .4, to: 4.2, life: .6, y: .1 }); }
     queueMicrotask(() => s.emit('firstWin', {})); // after the game's own step of this defeat
   });
 
+  // The ring creature's wind-up starts (world.onTelegraph, through the game's telegraph event: the creatures' voices sound its warning from the same event).
+  s.on('telegraph', ({ enemy }) => {
+    if (enemy !== ring || seen('tip:ring') || calm()) return;
+    show('ring', 'Step out of the ring!', TIP_S); queueMicrotask(() => void s.perform('firstRunSeen', { id: 'tip:ring' }, { quiet: true }));
+  });
+
   s.onFrame(dt => {
     // The ring's bite, the moment its wind-up ends, where world.ts lands no blow (the village's safe zone).
     if (ring) {
       const windup = ring.phase === 'windup' && ring.hp > 0;
-      if (wasWindup && !windup && ring.phase === 'recover' && ring.hp > 0 && Math.hypot(w.position.x, w.position.z) < WARN.edge && inRing(ring, w.position)) w.onDamage(ring.damage, 'melee', ring.id, 'body');
-      if (windup && !wasWindup && !seen('tip:ring') && !calm()) { show('ring', 'Step out of the ring!', TIP_S); void s.perform('firstRunSeen', { id: 'tip:ring' }, { quiet: true }); }
+      if (!windup && ringBites(ring, wasWindup, w.position, calm())) w.onDamage(ring.damage, 'melee', ring.id, 'body');
       wasWindup = windup;
     }
     if (shown) { if (shown !== 'press' && (left -= dt) <= 0 || calm()) hide(); else place(); }
@@ -181,7 +201,7 @@ export function mount(s: GameServices) {
     if (w.planet === 'home' && !w.interior) {
       const r = Math.hypot(hero.x, hero.z);
       if (r < WARN.rearm) armed = true;
-      else if (armed && !s.modal()) { const id = wildAhead(hero.x, hero.z, state.level); if (id) { armed = false; const place = document.querySelector('#zone-name'), here = place?.textContent ?? ''; s.showZone(WILDS[id][0]); if (place) place.textContent = here; } } // the banner of the zone ahead; the HUD keeps the name of the place the explorer is in
+      else if (armed && !s.modal()) { const id = wildAhead(hero.x, hero.z, state.level); if (id) { armed = false; s.showZone(WILDS[id][0], true); } } // the banner of the zone ahead; the HUD keeps the name of the place the explorer is in
     }
   });
 }

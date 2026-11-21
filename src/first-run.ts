@@ -21,7 +21,7 @@ import { CROPS, ITEMS, STORY_STEPS } from './content.ts';
 /** Present only on saves started after this change; missing = an older save (full HUD, no tutorial crops). */
 export interface FirstRun { plants?: number; fought?: 1; food?: 1; seen?: FirstSeen[] }
 /** What a new save shows once: the welcome cards and the moment tips (moment-tips.ts). */
-export const FIRST_SEEN = ['cards', 'tip:plant', 'tip:harvest', 'tip:fight', 'tip:drop', 'tip:equip', 'tip:ring', 'tip:chain'] as const;
+export const FIRST_SEEN = ['cards', 'tip:plant', 'tip:harvest', 'tip:fight', 'tip:drop', 'tip:equip', 'tip:ring', 'tip:chain', 'win'] as const;
 export type FirstSeen = typeof FIRST_SEEN[number];
 export const isFirstSeen = (v: unknown): v is FirstSeen => (FIRST_SEEN as readonly unknown[]).includes(v);
 export const TUTORIAL_PLANTS = 3;

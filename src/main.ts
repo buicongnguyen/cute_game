@@ -569,6 +569,11 @@ function uiBlocked(){return !!modal||!!document.querySelector('#hud.ctl-editing'
 function botActive(){return started&&!actionHandler&&!document.hidden&&!uiBlocked()&&!placement&&!world.interior&&world.planet==='home'&&state.hp>0;}
 /** 'wardrobe' while the bag was opened from the bedroom wardrobe: it then lists only things to wear (house-stores.ts). */
 let bagMode:'bag'|'wardrobe'='bag';
+// A tap-through: the press that opened a dialog (a tap on the crystal, Attack beside the shop) must not also press the
+// button that appears under the finger. A click inside a dialog counts only when its press began after the dialog opened;
+// a keyboard's Enter or Space (detail 0) always counts.
+let dialogAt=0,pressAt=0;addEventListener('pointerdown',()=>{pressAt=performance.now();},true);
+function tapThrough(event:Event,button:Element){return (event as MouseEvent).detail>0&&pressAt<dialogAt&&!!button.closest('#dialog-layer');}
 function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF AT HOME',icon?:string) {
   // Information-only encounters never become a recurring modal. Functional menus stay available.
   if(type==='fish-help'){
@@ -583,7 +588,7 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
   if(fishGame)endFishing();if($('#dialog-layer').hidden)tone('open');
   // Inside the cottage the stove, workbench, globe, wardrobe and mirror are their own places, not the village shops (house-stores.ts).
   const store=indoorStore(type,!!world.interior,bagMode==='wardrobe');if(store){title=store.title;kicker=store.kicker;icon=store.icon;body=purposeHtml(store)+body;}$('#dialog').dataset.station=store?type:'';setDock(type);
-  if(!modal)lastFocused=document.activeElement as HTMLElement;const reopened=modal===type;modal=type;clearHeldInput();world.destination=null;world.route=[];
+  if(!modal){lastFocused=document.activeElement as HTMLElement;dialogAt=performance.now();}const reopened=modal===type;modal=type;clearHeldInput();world.destination=null;world.route=[];
   const [defaultIcon,look]=DIALOG_LOOK[type]??['✨','garden'];$('#dialog').dataset.tone=look;$('#dialog-icon').innerHTML=localizeHtml(icon??defaultIcon);
   // Re-rendering the same panel (a tab, a purchase) keeps the reader's scroll position.
   const bodyNode=$('#dialog-body'),scroll=bodyNode.scrollTop,tab=bodyNode.querySelector('.panel-tabs .active')?.textContent;
@@ -732,7 +737,7 @@ function attackFace(icon:string,label:string){const key=icon?icon+'|'+label:'';i
   const dpad=document.querySelector<HTMLElement>('#touch-controls [data-action="attack"]');if(dpad){dpad.textContent=icon||'⚔';dpad.setAttribute('aria-label',icon?label:t('Basic attack'));}}
 // The zone banner is outlined text with a difficulty chip and no card (C2): it plays once for 2.8 s and never blocks taps.
 let zoneTimer=0;
-function showZone(name:string) {const info=zoneInfo(name,state.planet,state.level),banner=$('#zone-banner');$('#zone-name').textContent=t(name);$('#banner-name').textContent=t(name);$('#banner-detail').textContent=t(info.detail);$('#banner-chip').textContent=t(info.chip);banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');clearTimeout(zoneTimer);zoneTimer=window.setTimeout(()=>banner.classList.remove('show'),2800);}
+function showZone(name:string,ahead?:boolean) {const info=zoneInfo(name,state.planet,state.level),banner=$('#zone-banner');if(!ahead)$('#zone-name').textContent=t(name);$('#banner-name').textContent=t(name);$('#banner-detail').textContent=t(info.detail);$('#banner-chip').textContent=t(info.chip);banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');clearTimeout(zoneTimer);zoneTimer=window.setTimeout(()=>banner.classList.remove('show'),2800);}
 world.onZone=showZone;
 const labelNodes=new Map<string,HTMLElement>();
 // Labels sit just above each model's real top. Heights are measured once per
@@ -2270,7 +2275,7 @@ for(const type of ['pointerup','pointercancel','lostpointercapture'] as const)ad
 const boostButton=$('#boost-button');
 boostButton.addEventListener('pointerdown',event=>{if(!flight||arriving||event.button!==0)return;event.stopPropagation();event.preventDefault();boostPointers.add(event.pointerId);boostHeld=true;boostButton.setPointerCapture(event.pointerId);});
 app.addEventListener('click',async event=>{
-  const button=(event.target as HTMLElement).closest<HTMLButtonElement>('button');if(!button||button.disabled)return;
+  const button=(event.target as HTMLElement).closest<HTMLButtonElement>('button');if(!button||button.disabled||tapThrough(event,button))return;
   // A clicked HUD button gives up focus, so Space and other shortcuts cannot press it again.
   if((event as MouseEvent).detail>0&&button.closest('#hud,#world-labels'))button.blur();
   const action=button.dataset.action,id=button.dataset.item as M.ItemId,index=Number(button.dataset.index);if(action!=='reel')tone();

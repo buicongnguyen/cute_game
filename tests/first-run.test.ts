@@ -10,7 +10,7 @@ import { VI_PACK } from '../src/locales/vi-pack.ts';
 import { STORY_STEPS } from '../src/content.ts';
 import { PEN } from '../src/farm.ts';
 import { ZONE_DIFFICULTY } from '../src/hud-combat.ts';
-import { CRITTER_NAME, LESSON, WARN, WILDS, biteAllowed, createLesson, wildAhead } from '../src/features/tutorial-fight.ts';
+import { CRITTER_NAME, LESSON, WARN, WILDS, biteAllowed, createLesson, wildAhead, ownBlow, firstWinNow, ringBites, inRing } from '../src/features/tutorial-fight.ts';
 import TUTORIAL_VI from '../src/features-vi/tutorial.ts';
 
 const fresh = () => { const s = freshStart(M.newGame('Tester')); s.bag.seed_radish = 99; return s; };
@@ -153,13 +153,44 @@ test('the first fight: only the first creature has the ring, the others never re
   assert.equal(biteAllowed(60, 130, 130), 52, '60% of 130 is 78'); assert.equal(biteAllowed(3, 78.9, 130), 0, 'never a fraction below');
   for (let i = 0; i < 40; i++) w.save.hp -= w.rules.bite(3, first.id, 100); assert.equal(w.save.hp, 60, 'forty bites in the ring: 60% and no lower');
 });
-test('the two tips of the first fight are kept in the save like the other moment tips: once', () => {
-  for (const id of ['tip:ring', 'tip:chain'] as const) {
+test('the two tips of the first fight and the first win are kept in the save like the other moment tips: once', () => {
+  for (const id of ['tip:ring', 'tip:chain', 'win'] as const) {
     assert.ok(isFirstSeen(id)); const s = fresh(); assert.equal(hasSeen(s, id), false); assert.ok(markSeen(s, id)); markSeen(s, id);
     assert.deepEqual(M.parseSave(JSON.stringify(s))!.firstRun!.seen, [id], 'saved once, and it survives a reload');
     assert.ok(applyGameAction(fresh(), { type: 'firstRunSeen', payload: { id } }), 'the action the tips use takes it');
   }
   assert.deepEqual(parseFirstRun({ seen: ['tip:ring', 'nonsense'] }), { seen: ['tip:ring'] });
+});
+test('the first win is the explorer\'s own, once per save: not a pet\'s, a helper\'s or a hazard\'s kill, and never again after a reload', () => {
+  const own = { helper: false, source: 'basic' }, save = () => ({ firstRun: {} as { seen?: string[] }, counters: { kills: 0 }, hp: 100 });
+  assert.equal(ownBlow(own), true); assert.equal(ownBlow({}), true, 'a plain strike');
+  assert.equal(ownBlow({ helper: true }), false); assert.equal(ownBlow({ source: 'pet' }), false); assert.equal(ownBlow({ source: 'summon' }), false); assert.equal(ownBlow(undefined), false, 'a hazard, or a blow settled elsewhere');
+  assert.equal(firstWinNow(save(), own), true);
+  for (const impact of [{ helper: true }, { source: 'pet' }, { source: 'summon' }, undefined]) assert.equal(firstWinNow(save(), impact), false, JSON.stringify(impact ?? 'no blow'));
+  const told = save(); told.firstRun.seen = ['win']; assert.equal(firstWinNow(told, own), false, 'told already: a kill the count missed, then a reload, does not tell it twice');
+  const later = save(); later.counters.kills = 1; assert.equal(firstWinNow(later, own), false, 'a save with a defeat counted is past its first win');
+  const older = save(); delete (older as { firstRun?: unknown }).firstRun; assert.equal(firstWinNow(older, own), false, 'an older save: never');
+  // through the save: marked, stored, reloaded
+  const s = fresh(); assert.equal(firstWinNow(s, own), true); assert.ok(applyGameAction(s, { type: 'firstRunSeen', payload: { id: 'win' } }));
+  assert.equal(firstWinNow(M.parseSave(JSON.stringify(s))!, own), false);
+});
+test('the ring bites only when its wind-up ends in a strike, with the explorer still in it, in the village, and no dialog open', () => {
+  const ring = (phase: string, hp = 30) => ({ x: 1, z: 0, hp, phase }), hero = { x: 0, z: 0 };
+  assert.equal(ringBites(ring('recover'), true, hero, false), true);
+  assert.equal(ringBites(ring('recover'), true, hero, true), false, 'a dialog, the cottage or a cut-scene holds the game: no bite');
+  assert.equal(ringBites(ring('recover'), false, hero, false), false, 'no wind-up before it');
+  assert.equal(ringBites(ring('chase'), true, hero, false), false, 'the wind-up was cut short (a flinch, a stun): no bite');
+  assert.equal(ringBites(ring('recover', 0), true, hero, false), false, 'it fell first');
+  assert.equal(ringBites(ring('recover'), true, { x: 1 + LESSON.ring + .01, z: 0 }, false), false, 'stepped out of the ring');
+  assert.equal(ringBites({ x: 19, z: 0, hp: 30, phase: 'recover' }, true, { x: 18.5, z: 0 }, false), false, 'outside the village world.ts lands the blow itself: not twice');
+  assert.equal(inRing({ x: 0, z: 0 }, { x: LESSON.ring, z: 0 }), true, 'the rim is in'); assert.equal(inRing({ x: 0, z: 0 }, { x: 1.5, z: 1.5 }), false);
+});
+test('edges: the bite floor and the warning before the fence', () => {
+  assert.equal(biteAllowed(3, 61, 100), 1); assert.equal(biteAllowed(3, 60.9, 100), 0, 'less than a whole point of room'); assert.equal(biteAllowed(0, 100, 100), 0);
+  assert.equal(biteAllowed(3, 100, 101), 3, '60% of 101 rounds up to 61'); assert.equal(biteAllowed(50, 100, 101), 39);
+  assert.equal(wildAhead(WARN.from, 0, 1), 'canyon', 'from 14.5 m'); assert.equal(wildAhead(WARN.from - .01, 0, 1), null); assert.equal(wildAhead(WARN.edge, 0, 1), null, 'at the fence the zone speaks for itself');
+  assert.equal(wildAhead(11, 11, 1), null, 'the diagonal belongs to the meadow, which is level 1');
+  assert.equal(wildAhead(11.1, 11, 4), 'canyon'); assert.equal(wildAhead(11, -11.1, 1), 'swamp'); assert.equal(wildAhead(0, 0, 1), null);
 });
 test('danger ahead: the banner of a zone 3 levels above the explorer shows before the fence, not for a zone within reach', () => {
   for (const [id, [, level]] of Object.entries(WILDS)) assert.equal(level, Math.max(1, ZONE_DIFFICULTY[id] * 3 - 2), `${id}: the level of hud-combat.ts`);
