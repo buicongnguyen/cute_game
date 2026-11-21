@@ -79,11 +79,15 @@ their defaults.
 | impact | -12 to -6 | hit, hitHeavy, crit, thud, break, boom, power | -11.1 (thud) to -6.3 (hitHeavy, crit); power -7.0 |
 | whoosh | 6 to 10 dB under its hit, never under -26 | swing, punch, cast | swing -19.0 (8.7 under a blade hit), punch -17.3 (9.0 under a fist hit), cast -21.6 |
 | ui | -26 to -21 | click, open, close | -21.9, -24.0, -25.3 |
-| cue | -24 to -10 | alert, ready, bite, hurt, catch, flag, success, quest, level and the nine stingers | alert -21.8, ready -14.5, level -17.0, stingers -20.0 (deny) to -11.8 (victory) |
+| cue | -24 to -10 | alert, ready, powerReady, bite, hurt, catch, flag, success, quest, level and the nine stingers | alert -21.8, ready -20.1, powerReady -14.4, level -17.0, stingers -20.0 (deny) to -11.8 (victory) |
 
-What WP8 changed in the old sounds: punch +13.5 dB (-30.8 to -17.3), cast +14.8 dB (-36.4 to -21.6), POWER READY +11.0 dB
-(-25.5 to -14.5), the creature alert +8.2 dB (-30.0 to -21.8), the blade swing +4.7 dB (-23.7 to -19.0). Impacts and
-taps are as loud as they were.
+What WP8 changed in the old sounds: punch +13.5 dB (-30.8 to -17.3), cast +14.8 dB (-36.4 to -21.6), the creature alert
++8.2 dB (-30.0 to -21.8), the blade swing +4.7 dB (-23.7 to -19.0). Impacts and taps are as loud as they were.
+
+The ready chime is two sounds now. `ready` plays whenever a skill button comes off its cooldown (every few seconds in a
+fight), on UNTOUCHED and on a perfect dodge: +5.4 dB (-25.5 to -20.1). `powerReady` is the same chime for the one moment
+the power strike is charged (POWER READY!, `main.ts`): +11.1 dB (-25.5 to -14.4), 8.4 dB over the music's RMS where
+`ready` is 2.7 dB over it. Its recipe is in `stingers.ts`; it is a cue, not a tune (no duck, an ordinary voice).
 
 **The numbers are not the plan's, and why.** The plan asked for impacts at -14 to -18 and taps at -26 to -30, from a
 measurement that played each sound as the first sound of a new audio context. Chromium's compressor fades in over its
@@ -116,14 +120,22 @@ over it, cast 1.2, POWER READY 8.3, a hit 13.6, the win 11.0); the depth of the 
 to 0.0 dB 0.6 s after); and a crowded fight over the theme with both sliders at the top (peak -3.1 dBFS, no clipping).
 
 `promo/loudness.json` keeps each sound's level with a signature of its recipe (`promo/sound-signature.mjs`: sources,
-volumes and pitches asked for). `tests/sound-mix.test.ts` compares: **after changing a volume or a pitch in a recipe,
+volumes, pitches, and a hash of every wave and filter type, every value and every step with its time). `tests/sound-mix.test.ts` compares: **after changing a volume or a pitch in a recipe,
 run the tool with `--check --write`**, or that test fails. Nobody can listen on a build machine; this is the check.
 
 ### The stingers
 
 Nine short musical cues, each its own recipe (`src/features/stingers.ts`, in the lazy features chunk; the start
-download holds only their names). Each lowers the music bus 6 dB for its length (`duck`), takes one voice as a
-priority cue (so it sounds over a full fight, also on a phone), and the same stinger twice within 0.1 s is one stinger.
+download holds only their names). Each lowers the music bus 6 dB for its length (`duck`, once it is sure to play) and
+takes one voice; the same stinger twice within 0.1 s is one stinger.
+
+- **Priority.** Only victory, rewardLarge, discover, go and the flag (and the level fanfare) may use the voices kept for
+  priority cues, so they sound over a full fight, also on a phone. rewardSmall, rewardMedium, equip and deny are
+  ordinary voices: in a full fight they are dropped like any sound, and a hurt cry keeps its reserved voice.
+- **One tune at a time with the fanfare.** A boss kill, a Lake Guardian catch or a vault pet that is also a level-up
+  asks for the fanfare and a stinger in the same moment. A stinger asked for while the fanfare plays waits for its end
+  (1.1 s) and then plays; a fanfare asked for while a priority stinger plays waits for that one. Nothing is dropped, and
+  a waiting cue holds no voice.
 
 | Stinger | Length | Peak | How it is made | Where it plays |
 |---|---|---|---|---|
@@ -132,18 +144,19 @@ priority cue (so it sounds over a full fight, also on a phone), and the same sti
 | rewardMedium | 0.7 s | -16.3 | a three-bell D major run over a warm low note, a shimmer | a rare drop, a gift, a forge or upgrade that worked (menu and bench), a skill level, a captured flag, a ladder step (rescue) |
 | rewardLarge | 1.1 s | -13.7 | a four-note A major run into a held chord, a drum, a high bell | a pet joins (vault), a new jump is learned |
 | discover | 1.0 s | -16.1 | a rising hum under an open bell run that ends on a raised fourth | a new planet, the starship has landed, arriving on Flag Rush Isle |
-| victory | 1.4 s | -11.8 | a drum, a three-note horn call, a second drum under a held F major chord | a boss falls, the Colossus crumbles, the Lake Guardian is caught, a friend is freed |
+| victory | 1.4 s | -11.8 | a drum, a three-note horn call, a second drum under a held F major chord | a boss falls, the Colossus crumbles, the Lake Guardian is caught, a friend is freed, a Flag Rush match is won |
 | equip | 0.4 s | -18.0 | a cloth pull, a buckle, a two-bell fifth | new gear is on |
 | deny | 0.32 s | -20.0 | two low notes stepping down | made for refusals; no site plays it yet |
 | go | 0.6 s | -16.0 | two short horn notes and a higher one with a rush of air | a Flag Rush match starts, a rescue mission and each of its waves start, the vault party sets out, the vault guardian and the Colossus wake |
 
 - **The level fanfare** now plays in one place: `levelCheck` in `main.ts`. The 30 other places that used it play the
-  stinger named above. A freed friend is played from the `rescue` event by the stingers feature; the others call
-  `tone('<stinger>')` where they called `tone('level')`.
+  stinger named above: each calls `tone('<stinger>')` where it called `tone('level')`. `tests/sound-mix.test.ts` keeps
+  the fanfare in `levelCheck` and nowhere else.
 - **The arrival flag's horn call** (`flag`) moved to `stingers.ts` with them: same recipe and level (-14.3), and it
-  now lowers the music too. That paid for the hook in the start download (the start is 22 bytes smaller than before WP8).
-- **Before the features are mounted** (the first played frame) or if their chunk never arrives, a stinger and the flag
-  play the `success` chime and nothing is lowered.
+  now lowers the music too. That paid for the hook in the start download (the start is 8 bytes smaller than before WP8).
+- **Before the features are mounted** (the first played frame) or if their chunk never arrives, a stinger, the flag and
+  `powerReady` play the `success` chime, `levelUp` plays the fanfare, and nothing is lowered or made to wait. No stinger
+  depends on an event listener: every site calls `tone` itself.
 - **Uniforms.** The Navy sailor's Lighthouse beam plays `zap` and the Ao dai gentleman's Dragon dance `boom` (both
   borrowed the fanfare). The starship's lift-off plays `boom` with the whoosh.
 - A feature plays one with `services.tone('victory')`. `sfx.play` asks `graph.cue` first for every sound; a new
@@ -151,7 +164,9 @@ priority cue (so it sounds over a full fight, also on a phone), and the same sti
 
 ### What a player may notice (WP8)
 
-- Fights sound fuller: every swing and punch is heard before its hit, and POWER READY is a clear chime.
+- Fights sound fuller: every swing and punch is heard before its hit, and POWER READY is a clear chime, well over the
+  small chime of a skill coming back.
+- A kill that is also a level-up plays the fanfare and then the win, one after the other.
 - The fanfare is rarer: only a level-up plays it. Rewards, wins, discoveries and new gear each have their own short tune.
 - The radio (and later the score) dips for about a second under those tunes and under the arrival flag.
 - **Not checked by ear.** Levels, lengths, pitch bands, the duck and the absence of clipping are measured; whether the
