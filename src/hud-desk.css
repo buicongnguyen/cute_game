@@ -4,15 +4,10 @@
 /* ---- Name + one level chip (the portrait no longer repeats the level) */
 .player-name { justify-content: flex-start; gap: 6px; margin-bottom: 2px; }
 .player-name > strong { min-width: 0; }
-#hud .player-name > .level-chip {
-  display: inline-block; flex: none; padding: 0 6px; border-radius: 999px; background: var(--berry); border: 1.5px solid #fff;
-  color: #fff; font-size: 10px; font-weight: 1000; line-height: 15px; letter-spacing: .2px; font-variant-numeric: tabular-nums;
-  -webkit-text-stroke: 0; text-shadow: none;
-}
 #hud .meter { height: 14px; }
-#hud .meter > span { font-size: 9.5px; line-height: 1; }
-#hud .experience { height: 11px; margin-top: 2px; }
-#hud .experience > span { font-size: 8.5px; }
+#hud .meter > span { font-size: 11px; line-height: 1; }
+#hud .experience { height: 13px; margin-top: 2px; }
+#hud .experience > span { font-size: 11px; }
 #hud .location { margin-top: 2px; }
 
 /* ---- Timed bonus line: like the bounty line, with a ring that drains as the seconds run out */
@@ -48,7 +43,7 @@
   .challenge-tracker strong { display: none; }
   .challenge-tracker small { margin: 0; font-size: 11px; line-height: 16px; font-weight: 900; color: #fff; }
   .ch-ring { width: 20px; height: 20px; }
-  .ch-icon { width: 15px; height: 15px; font-size: 9px; }
+  .ch-icon { width: 15px; height: 15px; font-size: 11px; }
 }
 
 /* ---- Keyboard guide: only on desktop (below); hidden on touch screens and indoors */
@@ -69,23 +64,26 @@ body.indoors .keys-guide { display: none !important; }
     position: fixed; left: auto; right: calc(var(--edge) + var(--mm) + 10px); top: calc(var(--edge) + var(--safe-top) + var(--b) + 8px); bottom: auto;
     height: 40px; padding: 0 14px 0 11px; border-width: 2px; font-size: 18px;
   }
-  /* The guide replaces the old one-line hint. */
+  /* The guide replaces the old one-line hint. It is a low strip along the bottom edge (WP16): its rows flow side by side and wrap,
+     three lines at most on a 1280 px screen, and it ends well before the prompt in the middle. It was a 188 x 230 px panel that
+     covered the garden beds beside the cottage on a new save. */
   #hud .control-hint:not(.house-hint) { display: none; }
   .keys-guide {
-    display: block; position: absolute; left: 0; bottom: 0; pointer-events: auto; width: 188px; padding: 6px 8px 7px; border-radius: 14px;
-    background: rgba(27, 47, 35, .62); border: 2px solid rgba(255, 255, 255, .5); color: #fff; font-size: 11px; box-shadow: 0 6px 18px rgba(10, 30, 10, .18);
+    display: flex; align-items: flex-start; gap: 6px; position: absolute; left: 0; bottom: 0; pointer-events: auto; max-width: calc(50vw - 150px); padding: 4px 9px 5px 5px; border-radius: var(--ui-r-md);
+    background: rgba(27, 47, 35, .62); border: var(--ui-outline); color: #fff; font-size: var(--fs-2); box-shadow: 0 6px 18px rgba(10, 30, 10, .18);
   }
-  .keys-guide.folded { width: auto; padding: 0; border-radius: 999px; }
-  .keys-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0 2px 4px; color: #fff; font-weight: 900; font-size: 11px; letter-spacing: .4px; text-transform: uppercase; }
-  .keys-toggle > span { font-size: 15px; }
-  .keys-toggle > i { margin-left: auto; font-style: normal; opacity: .8; }
-  .keys-guide.folded .keys-toggle { width: 40px; height: 40px; padding: 0; justify-content: center; }
+  .keys-guide.folded { padding: 0; border-radius: var(--ui-r-pill); }
+  .keys-toggle { flex: none; display: flex; align-items: center; gap: 2px; padding: 0; color: #fff; font-size: var(--fs-1); }
+  .keys-toggle > span { font-size: var(--fs-4); }
+  .keys-toggle > b { display: none; }
+  .keys-toggle > i { font-style: normal; opacity: .8; }
+  .keys-guide.folded .keys-toggle { width: 40px; height: 40px; justify-content: center; }
   .keys-guide.folded .keys-toggle > span { font-size: 19px; }
-  .keys-guide dl { margin: 0; display: grid; gap: 2px; }
-  .keys-guide dl > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .keys-guide dt { font-weight: 800; opacity: .92; }
-  .keys-guide dd { margin: 0; display: flex; gap: 2px; }
-  .keys-guide kbd { min-width: 18px; padding: 0 4px; border-radius: 5px; background: rgba(255, 255, 255, .22); border-bottom: 2px solid rgba(0, 0, 0, .25); text-align: center; font-family: inherit; font-size: 10px; font-weight: 900; line-height: 15px; }
+  .keys-guide dl { margin: 0; display: flex; flex-wrap: wrap; gap: 3px 12px; }
+  .keys-guide dl > div { display: flex; align-items: center; gap: 4px; }
+  .keys-guide dt { font-weight: 800; }
+  .keys-guide dd { margin: 0; display: flex; align-items: center; gap: 2px; }
+  .keys-guide kbd { min-width: 18px; padding: 0 4px; border-radius: 5px; background: rgba(255, 255, 255, .22); border-bottom: 2px solid rgba(0, 0, 0, .25); text-align: center; font-family: inherit; font-size: var(--fs-1); font-weight: 900; line-height: 15px; }
 }
 /* Short landscape phones have no room for a fourth line above the stick: while a timed task runs (at most 150 s) it takes the
    bounty's slot; the bounty lasts 30 minutes and comes back when the task ends. */

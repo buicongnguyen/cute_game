@@ -14,8 +14,8 @@
 .look-chip.on .look-chip-icon { background: radial-gradient(circle at 50% 36%, #ffffff, #cdeeb4 78%); }
 .look-chip.worn:not(.on) { border-color: #ffe39a; }
 .look-chip:disabled { cursor: default; }
-.look-price { font-size: 10px; font-weight: 800; color: #b07a00; line-height: 1.1; }
-.look-state { font-size: 10px; font-weight: 800; color: #4f9a2c; line-height: 1.1; }
+.look-price { font-size: 11px; font-weight: 800; color: #b07a00; line-height: 1.1; }
+.look-state { font-size: 11px; font-weight: 800; color: #4f9a2c; line-height: 1.1; }
 .look-state.owned { color: #8a7a60; }
 .look-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 2px dashed #f0dfc0; }
 .look-name { font-size: 15px; min-width: 0; }
@@ -49,11 +49,11 @@ body:has(#dialog-layer.trying-on) #house-bubble { display: none; }
   .look-studio { grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
   .look-builder { gap: 3px; }
   .look-row { grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 4px; }
-  .look-row-name { font-size: 10px; letter-spacing: 0; text-transform: none; line-height: 1.1; }
+  .look-row-name { font-size: 11px; letter-spacing: 0; text-transform: none; line-height: 1.1; }
   .look-chips { gap: 5px; padding: 2px 2px 3px; scrollbar-width: none; }
-  .look-chip { flex-basis: 54px; padding: 2px 2px 2px; border-width: 2px; border-radius: 12px; font-size: 10px; }
+  .look-chip { flex-basis: 54px; padding: 2px 2px 2px; border-width: 2px; border-radius: 12px; font-size: 11px; }
   .look-chip-icon { width: 34px; height: 34px; border-radius: 9px; }
-  .look-chip small { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); max-width: 50px; padding: 0 4px; border-radius: 8px; background: rgba(255, 250, 240, .94); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .look-chip small { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); max-width: 50px; padding: 0 4px; border-radius: 8px; background: rgba(255, 250, 240, .94); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* A tall, narrow glass beside the rows: the figure gets the column's height rather than its width. */
   .mirror-glass, .friend-studio .mirror-glass { aspect-ratio: 84 / 190; border-width: 6px; border-radius: 42px 42px 12px 12px; }
   .look-footer { position: sticky; bottom: 0; z-index: 2; margin-top: 2px; padding: 5px 0 1px; background: #fffaf0; }

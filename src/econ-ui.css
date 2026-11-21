@@ -15,13 +15,13 @@
 .news-card ul { margin: 6px 0 0; padding-left: 0; list-style: none; display: grid; gap: 5px; }
 .news-card li { font-size: 13px; line-height: 1.4; color: var(--ink-soft); }
 .news-card p { margin: 4px 0 0; font-size: 13px; color: var(--ink-soft); }
-.news-new { display: inline-block; margin-right: 2px; padding: 2px 7px; border-radius: 999px; background: #e5484d; color: #fff; font-size: 10px; font-weight: 900; letter-spacing: .06em; vertical-align: 2px; }
+.news-new { display: inline-block; margin-right: 2px; padding: 2px 7px; border-radius: 999px; background: #e5484d; color: #fff; font-size: 11px; font-weight: 900; letter-spacing: .06em; vertical-align: 2px; }
 .news-status { display: inline-block; margin-left: 4px; padding: 2px 8px; border-radius: 999px; background: #e3f4ff; color: #1f6fa8; font-size: 11px; font-weight: 800; vertical-align: 1px; }
 .news-earlier { margin-top: 6px; }
 @media (max-width: 600px) {
   .news-card { grid-template-columns: 36px 1fr; gap: 8px; padding: 10px; }
   .news-card .news-icon { width: 36px; height: 36px; font-size: 20px; border-radius: 11px; }
-  .icon-button[data-action="ranking"] > i.news-count { min-width: 17px; height: 17px; font-size: 10px; right: -5px; top: -5px; }
+  .icon-button[data-action="ranking"] > i.news-count { min-width: 17px; height: 17px; font-size: 11px; right: -5px; top: -5px; }
 }
 /* Settings: the music and effects volume sliders (audio-settings.ts). */
 .volume-control { display: flex; align-items: center; gap: 8px; min-width: 150px; }

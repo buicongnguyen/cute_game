@@ -20,6 +20,10 @@
   #dialog:not([data-tone="garden"]) #dialog-body .button-row, #dialog-body .button-row { row-gap: 12px; }
   #dialog-body .button-row:has(> [data-action="forge-menu"]) { margin-bottom: 8px; }
 
+  /* The timed-task pill is a slim 26 px row on phones: its hit area grows to 44 px, downwards over the bounty line, which takes
+     no taps (WP16; it was the one HUD control still under 44 px). */
+  #app #hud #challenge-tracker::after { content: ''; position: absolute; inset: -2px 0 -16px; }
+
   /* Ranking: stacked pills get a full 44 px row each instead of overlapping 6 px hit strips. */
   .ranking-tabs button, .ranking-cats button { min-height: 44px; }
 }

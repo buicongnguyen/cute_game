@@ -6,7 +6,7 @@
 /* The fight buttons stay above the discovery pill (main.ts also hides the pill where they meet). */
 #hud .skills{z-index:3}
 #discovery-progress b{display:inline-grid;place-items:center;width:20px;height:20px;background:#c7e2fc;color:#275375;border-radius:50%;font-size:15px}
-#discovery-text{display:grid;gap:1px;text-align:center}#discovery-text strong{font-size:10px;max-width:190px;overflow:hidden;text-overflow:ellipsis}#discovery-text small{font-size:12px;letter-spacing:-1px}
+#discovery-text{display:grid;gap:1px;text-align:center}#discovery-text strong{font-size:11px;max-width:190px;overflow:hidden;text-overflow:ellipsis}#discovery-text small{font-size:12px;letter-spacing:-1px}
 #hud.fishing #discovery-progress{display:none}
 @media(max-width:600px){.movement-joystick{left:16px;bottom:48px}#hud.joystick-on .skills{display:grid;grid-template-columns:repeat(2,52px);right:18px;bottom:88px;gap:16px 18px;max-width:calc(100vw - 166px)}#hud.joystick-on .skill{width:52px;min-width:52px;height:52px}#hud.joystick-on .home-button{position:fixed;right:20px;bottom:38px}}
 @media(max-height:500px){.movement-joystick{bottom:40px;left:18px}#hud.joystick-on .skills{display:grid;grid-template-columns:repeat(2,44px);bottom:74px;gap:12px 16px}#hud.joystick-on .skill{width:44px;height:44px}#hud.joystick-on .home-button{position:fixed;right:22px;bottom:30px}}

@@ -1,0 +1,12 @@
+/*
+ * Design tokens for new HUD and panel CSS (AAA plan WP16): one type scale, the warm palette of our HUD, radii, the outline
+ * and one shadow. New rules use these; the older sheets keep their own values until they are next touched (no mass refactor).
+ * Nothing on screen is under --fs-1 (11 px): tests/hud-layout.test.mjs and promo/hud-probe.mjs check it.
+ */
+:root {
+  --fs-1: 11px; --fs-2: 12px; --fs-3: 13px; --fs-4: 15px; --fs-5: 18px; --fs-6: 24px;
+  --ui-plum: #3a2433; --ui-cream: #fff6e0; --ui-honey: #ffc93a; --ui-tangerine: #ff8a2a; --ui-rose: #ff5d8c;
+  --ui-r-sm: 8px; --ui-r-md: 14px; --ui-r-pill: 999px;
+  --ui-outline: 2px solid rgba(255, 246, 224, .5);
+  --ui-shadow: 0 3px 0 rgba(58, 36, 51, .35);
+}

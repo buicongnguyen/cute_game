@@ -172,6 +172,7 @@ import * as Tester from './tester.ts';
 import './tester.css';
 import './item-groups.css';
 import './special-offers.css';
+import './ui-tokens.css'; // design tokens for new CSS (type scale, palette, radii, outline, shadow)
 import './hud-desk.css'; // last: the timed bonus line, level chip and desktop layout override the older HUD sheets
 import './hud-ours.css'; // stage 2: our own HUD arrangement and look (dock, map panel, paw cluster), over every older HUD sheet
 import './pair.css'; // the weapon pair's swap button (weapon-pair.ts)
@@ -654,7 +655,7 @@ function updateHud() {
   $('.tracker-stack').classList.toggle('folded',folded);$('#tracker-chip').hidden=!folded;
   const one=oneGoal(state),bounty=one?undefined:progressEntries(state,'bounties')[0];$('#bounty-tracker').hidden=!bounty; // one goal at a time on a new save (first-run.ts oneGoal)
   if(bounty){$('#bounty-title').textContent=t(bounty.title);$('#bounty-task').textContent=t(`${bounty.title} · ${bounty.progress}/${bounty.target}`);$('#bounty-count').textContent=t(bounty.claimed?'✓':`${bounty.progress}/${bounty.target}`);}
-  const chal=one?null:challenges.view();renderChallenge($('#challenge-tracker'),chal);setText($('#chip-chal'),chal?chal.chip:'');keysGuide.render(state.settings.keyboardLayout,getLanguage(),airOn()?spaceKey:undefined,controls.customKeys());
+  const chal=one?null:challenges.view();renderChallenge($('#challenge-tracker'),chal);setText($('#chip-chal'),chal?chal.chip:'');keysGuide.render(state.settings.keyboardLayout,getLanguage(),airOn()?spaceKey:undefined,controls.customKeys(),started);
   if(folded){$('#chip-quest').textContent=t(q?`${q.icon} ${progress}/${q.target}`:'🚀');$('#chip-bounty').textContent=t(bounty?`🎯 ${bounty.progress}/${bounty.target}`:'');}
   watchTasks(q,folded); // a row that moved on ticks (gain-feed-ui.ts)
   // Light pools cut holes in the darkness; a lamp behind the perspective camera would project mirrored, so it is skipped.
@@ -2282,7 +2283,7 @@ app.addEventListener('click',async event=>{
     case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0&&!M.isPenned(id)){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
     case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'open-market':market();break;case 'inspect':if(id){const again=id===selectedItem;if(modal==='bag'&&isDoubleTap(id,again,performance.now())){$<HTMLButtonElement>('#dialog-body .tile-e:not(:disabled)')?.click();break;}if(!again)bagUi.card=false;selectedItem=id;inventory();}break;case 'bag-card':bagUi.card=!bagUi.card;inventory();if(bagUi.card)$<HTMLElement>('#bag-card .card-close')?.focus();break;case 'bag-card-close':bagUi.card=false;inventory();$<HTMLElement>('#dialog-body .item-cell.sel .tile-q')?.focus();break;case 'quests':if(button.id==='quest-summary'&&walkToQuest())break;quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'news':inbox.open();break;
     case 'claim':if(await perform('claimQuest')){tone('quest');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
-    case 'plant':{const i=activePlot,opened=modal,root=world.root,taken=state.plots[i]?.crop;if(taken){toast(t('This bed already grows {crop}.',{crop:t(M.CROPS[taken].name)}),'🌱');refreshPlot();break;}if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
+    case 'plant':{const i=activePlot,opened=modal,root=world.root,taken=state.plots[i]?.crop;if(taken){toast(t('This bed already grows {crop}.',{crop:t(M.CROPS[taken].name)}),'🌱');refreshPlot();break;}if(await perform('plant',{index:i,id})&&world.root===root&&!visiting){keysGuide.planted();plantBurst(i);tone('pop');world.syncCrops();if(modal===opened&&activePlot===i)closeDialog();toast(`${t(M.CROPS[id as M.CropId].name)} planted. Let the sunshine do its thing.`,'🌱');}break;}
     case 'cook-everything':{let made=0;for(const id of M.pantryIds(state).filter(id=>M.ITEMS['cooked_'+id])){const n=M.pantry(state,id);if(n>0&&await perform('cook',{id,count:n}))made+=n;}if(made){tone('success');toast(t('Cooked {count} meals. Enjoy!',{count:made}),'🍲');}cooking();break;}
     // Open panels can be out of date: a helper may have used the last one meanwhile. Then the panel just catches up.
     case 'cook-one':case 'cook-all':if(M.pantry(state,id)<1){cooking();break;}if(await perform('cook',{id,count:action==='cook-all'?M.pantry(state,id):1})){tone('success');cooking();}break;
@@ -2316,7 +2317,7 @@ app.addEventListener('click',async event=>{
     case 'start-challenge':if(await perform('startChallenge',{kind:button.dataset.kind})){quests();toast('Quick challenge started!','⏱️');}break;
     case 'reroll-daily':await perform('rerollDaily',{index});quests();break;
     case 'progress-claim':if(await perform('claimProgress',{kind:button.dataset.kind,id:button.dataset.id})){tone('quest');toast('Reward collected.','🎁');}quests();break;
-    case 'plant-all':{const empty=state.plots.map((p,i)=>p.crop?-1:i).filter(i=>i>=0);const count=await perform('plantAll',{id});if(count===undefined)break;empty.filter(i=>state.plots[i]?.crop).slice(0,12).forEach(i=>plantBurst(i));if(count)tone('pop');world.syncCrops();closeDialog();toast(`Planted ${count} garden beds.`,'🌱');break;}
+    case 'plant-all':{const empty=state.plots.map((p,i)=>p.crop?-1:i).filter(i=>i>=0);const count=await perform('plantAll',{id});if(count===undefined)break;empty.filter(i=>state.plots[i]?.crop).slice(0,12).forEach(i=>plantBurst(i));if(count){tone('pop');keysGuide.planted();}world.syncCrops();closeDialog();toast(`Planted ${count} garden beds.`,'🌱');break;}
     case 'harvest-all':{const ready=state.plots.map((p,i)=>p.crop&&M.cropProgress(p)>=1?[i,p.crop] as const:null).filter(Boolean) as (readonly [number,M.CropId])[];const count=await perform('harvestAll');if(count===undefined)break;ready.slice(0,12).forEach(([i,crop])=>harvestBurst(i,crop));world.syncCrops();closeDialog();toast(`Harvested ${typeof count==='number'?count:Array.isArray(count)?count.length:0} crops.`,'🌾');break;}
     case 'unequip':{if(await perform('unequip',{slot:button.dataset.slot})&&button.dataset.slot==='weapon')contextGear.holdFists(state);world.refreshPlayer();save();inventory();break;}
     case 'craft-tab':craftTab=button.dataset.kind!;crafting();break;
