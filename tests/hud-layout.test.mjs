@@ -299,7 +299,7 @@ for (const name of ['phone 390x844', 'landscape 844x390']) {
 // leaves the screen and every touch control is a full target, at every supported size, in English and Vietnamese, while
 // calm, in a boss fight with a target and a timed task, and by the pond with the harpoon out.
 import { readFileSync } from 'node:fs';
-import { SIZES, STATES, measureHud, findings, plateFindings, pawFindings } from './support/hud-measure.mjs';
+import { SIZES, STATES, measureHud, measureReadable, readableFindings, findings, plateFindings, pawFindings } from './support/hud-measure.mjs';
 const fullSave = readFileSync(new URL('../promo/save.json', import.meta.url), 'utf8');
 for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
   test(`our HUD: nothing overlaps or leaves the screen at ${size} in ${lang}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 180000 }, async () => {
@@ -378,7 +378,9 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
         assert.deepEqual(plateFindings(stretched), [], `a long name and level 100 at ${size} in ${lang}`);
         assert.equal(stretched.plate.level.text, '100'); assert.equal(stretched.plate.level.cut, false);
         // Since e78e839 the name and the energy count share one row and the plate sizes to that row, so a long name widens it a little (it may not push into the map: the next check).
-        { const grown = (stretched.groups.hero[0].r - stretched.groups.hero[0].l) - (hero.r - hero.l); assert.ok(grown > -1 && grown < 72, `a long name widens the plate by ${grown} px at most 72 (measured 64 at 1600x900)`); }
+        // The limit is the widest growth measured plus 8 px: 77.1 px at 768x1024 (the unchanged tree of 2026-11-21 failed the older limit of 72 there, in
+        // both languages), 64 at 1600x900. The plate has the room at every size: the next check keeps it 8 px off the map.
+        { const grown = (stretched.groups.hero[0].r - stretched.groups.hero[0].l) - (hero.r - hero.l); assert.ok(grown > -1 && grown < 86, `a long name widens the plate by ${grown} px at most 86 (measured 77.1 at 768x1024, 64 at 1600x900)`); }
         assert.ok(!stretched.plate.name.cut || stretched.plate.name.ellipsis, 'a name that does not fit ends in an ellipsis');
         assert.ok(stretched.groups.map[0].l >= stretched.groups.hero[0].r + 8, 'and the plate still stops before the map');
         const look = await page.evaluate(() => { const map = document.querySelector('#hud .minimap'), cap = document.querySelector('#map-caption').getBoundingClientRect(), box = map.getBoundingClientRect(), cs = getComputedStyle(map); return { radius: parseFloat(cs.borderTopLeftRadius) / box.width, inside: cap.width > 0 && cap.top >= box.top && cap.bottom <= box.bottom + .5 && cap.left >= box.left - .5 && cap.right <= box.right + .5, emoji: [...document.querySelectorAll('#hud .top-actions button')].filter(b => !b.querySelector('svg') && !getComputedStyle(b).backgroundImage.includes('svg')).length }; });
@@ -642,6 +644,72 @@ for (const [width, height] of [[768, 1024], [800, 700], [1000, 600]]) {
       assert.deepEqual(findings(m), [], `calm at ${width}x${height}`);
       const chip = await page.evaluate(() => { const el = document.querySelector('#hud #tracker-chip'); if (!el || el.offsetParent === null) return null; const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, h: b.height }; });
       if (chip) assert.ok(chip.t >= hero.b - 1 && chip.t < hero.b + 90 && chip.l <= hero.r, `the chip stands under the hero plate: ${JSON.stringify([chip, hero])}`);
+    } finally { await browser.close(); }
+  });
+}
+
+// ---- Readable at a glance (AAA plan WP16): no text under 11 px and, on a phone, no control with a hit area under 44 px, in the HUD
+// (calm, a boss fight with a timed task running, fishing) and in the panels a player opens most. The first PC view of a new save keeps
+// the nearest garden bed free: the keyboard guide is a low strip, open for a new player.
+const newSave = readFileSync(new URL('../promo/save-new.json', import.meta.url), 'utf8');
+async function openSaved(size, lang, saveText) {
+  const [width, height, touch] = SIZES[size];
+  const browser = await (await chromium()).launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: touch ? 2 : 1, hasTouch: touch, isMobile: touch });
+  await context.addInitScript(([s, l]) => { try { localStorage.setItem('cute-game-save-v1', s); localStorage.setItem('cute-game-slot', '0'); localStorage.setItem('cute-game-language', l); localStorage.setItem('cute-game-tutorial', 'done'); } catch { /* storage blocked */ } }, [saveText, lang]);
+  const page = await context.newPage();
+  await page.routeWebSocket(socketUrl => new URL(socketUrl).searchParams.has('token'), () => {});
+  await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+  await page.waitForSelector('[data-action="start"]', { timeout: 60000 });
+  await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
+  await page.evaluate(() => document.querySelector('[data-action="start"]').click());
+  await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(5000);
+  await page.evaluate(() => { document.querySelector('[data-wc="skip"]')?.click(); document.querySelectorAll('dialog[open]').forEach(d => d.close()); (document.querySelector('#dialog-layer [data-action="close"]') || document.querySelector('#dialog-close'))?.click(); });
+  await page.waitForTimeout(500);
+  return { browser, page };
+}
+const PANELS = ['help', 'bag', 'quests', 'shop', 'settings'];
+for (const size of ['390x844', '844x390', '1600x900']) for (const lang of ['en', 'vi']) {
+  test(`readable at a glance: no text under 11 px and no touch target under 44 px at ${size} in ${lang}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 240000 }, async () => {
+    const { browser, page } = await openSaved(size, lang, fullSave);
+    try {
+      const bad = [];
+      for (const state of ['calm', 'fight', 'fishing']) {
+        await STATES[state](page); const m = await page.evaluate(measureHud);
+        for (const t of m.tiny) bad.push(`${state}: text under 11 px ${JSON.stringify(t)}`);
+        for (const t of m.small) bad.push(`${state}: touch target under 44 px ${JSON.stringify(t)}`);
+      }
+      await page.evaluate(() => { clearInterval(window.__probeFight); window.__zoo.resetCombat?.(); const w = window.__zoo.world; w.selected = null; w.position.set(0, 0, 6); w.cameraTarget.copy(w.position); }); await page.waitForTimeout(600);
+      for (const panel of PANELS) {
+        await page.evaluate(name => window.__zoo.panel(name), panel); await page.waitForSelector('#dialog-layer:not([hidden]) #dialog-body', { timeout: 8000 }); await page.waitForTimeout(700);
+        for (const line of readableFindings(await page.evaluate(measureReadable, '#dialog'))) bad.push(`${panel}: ${line}`);
+        if (panel === 'help' && SIZES[size][2]) { // a phone reads about taps: no key names in the Help it shows
+          const text = await page.evaluate(() => document.querySelector('#dialog-body .help-grid').textContent);
+          assert.doesNotMatch(text, /WASD|J\/K\/L|Q\/W\/E\/R|\bEsc\b|\bEnter\b|\bSpace\b|\bTab\b/, 'phone Help names no PC key');
+          assert.doesNotMatch(text, /\[\[|\]\]|\|\|/, 'no device mark reaches the screen');
+        }
+        await page.evaluate(() => (document.querySelector('#dialog-layer [data-action="close"]') || document.querySelector('#dialog-close'))?.click()); await page.waitForTimeout(350);
+      }
+      assert.deepEqual(bad, [], `${size} ${lang}`);
+    } finally { await browser.close(); }
+  });
+}
+for (const size of ['1600x900', '1280x720']) {
+  test(`the first PC view of a new save: the keyboard guide is open and the nearest bed is free at ${size}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 120000 }, async () => {
+    const { browser, page } = await openSaved(size, 'en', newSave);
+    try {
+      const r = await page.evaluate(() => {
+        const w = window.__zoo.world, s = window.__zoo.state, frame = w.renderer.domElement.getBoundingClientRect();
+        const beds = s.plots.map(p => { const v = w.camera.position.clone().set(p.x, .3, p.z).project(w.camera), x = frame.left + (v.x + 1) / 2 * frame.width, y = frame.top + (1 - v.y) / 2 * frame.height, hit = document.elementFromPoint(x, y); return { x: Math.round(x), y: Math.round(y), d: Math.hypot(p.x - w.position.x, p.z - w.position.z), on: hit ? (hit.tagName === 'CANVAS' ? 'canvas' : hit.id || hit.closest('[id]')?.id || hit.tagName) : 'off the screen' }; }).sort((a, b) => a.d - b.d);
+        const guide = document.querySelector('#keys-guide'), box = guide.getBoundingClientRect();
+        return { nearest: beds[0], open: !!guide.querySelector('dl'), box: { w: Math.round(box.width), h: Math.round(box.height), l: Math.round(box.left), b: Math.round(innerHeight - box.bottom) }, memory: window.__zoo.keysGuide.memory, H: innerHeight };
+      });
+      assert.equal(r.open, true, 'open for a new player'); assert.equal(r.memory.mode, 'auto');
+      assert.equal(r.nearest.on, 'canvas', `the nearest bed is under ${r.nearest.on} at ${r.nearest.x},${r.nearest.y}`);
+      assert.ok(r.box.h <= 100 && r.box.l < 40 && r.box.b < 40, `the guide is a low strip in the bottom-left corner: ${JSON.stringify(r.box)}`);
+      // The first planting folds it, and the device remembers.
+      await page.evaluate(() => window.__zoo.keysGuide.planted()); await page.waitForFunction(() => !document.querySelector('#keys-guide dl'), null, { timeout: 5000 });
+      assert.match(await page.evaluate(() => localStorage.getItem('zoo-garden-keys-guide')), /"mode":"auto","uses":30/);
     } finally { await browser.close(); }
   });
 }

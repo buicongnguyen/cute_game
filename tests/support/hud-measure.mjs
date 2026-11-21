@@ -1,4 +1,5 @@
-// Shared by promo/hud-probe.mjs and tests/hud-layout.test.mjs: measuring the HUD in the page and judging the result.
+// Shared by promo/hud-probe.mjs and tests/hud-layout.test.mjs: measuring the HUD in the page and judging the result:
+// overlaps, pieces off the screen, touch controls under 44 px and (since WP16) text under 11 px.
 // No imports, so the test can run with any Playwright build.
 export const SIZES = { '1600x900': [1600, 900, false], '1280x720': [1280, 720, false], '768x1024': [768, 1024, true], '390x844': [390, 844, true], '320x568': [320, 568, true], '844x390': [844, 390, true] };
 
@@ -27,8 +28,45 @@ export function measureHud() {
   // portrait tile, the energy count over the health bar. `cut` = the text is wider than its box; `tall` = the height of its glyphs.
   const piece = sel => { const el = document.querySelector(sel); if (!seen(el)) return null; const cs = getComputedStyle(el); return { ...box(el), text: el.textContent.trim(), cut: el.scrollWidth > el.clientWidth + 1, font: parseFloat(cs.fontSize), ellipsis: cs.textOverflow === 'ellipsis' }; };
   const plate = { name: piece('#hud #player-name'), level: piece('#hud .level-badge'), energy: piece('#hud .hero-energy'), energyText: piece('#hud #energy'), avatar: piece('#hud .avatar'), health: piece('#hud .meter.health'), oldTag: document.querySelectorAll('#hud .top-actions .energy, #hud .level-chip').length };
-  return { W: innerWidth, H: innerHeight, coarse, air: document.body.classList.contains('air-combat'), leftHanded: !!document.querySelector('#hud.joystick-right'), groups, plate, small, dockW: getComputedStyle(document.documentElement).getPropertyValue('--dock-w') };
+  // Text under 11 px (AAA plan WP16): every HUD element that shows text of its own, and the labels drawn by ::before / ::after.
+  const tiny = [], tag = el => el.id || (typeof el.className === 'string' && el.className) || el.tagName.toLowerCase();
+  for (const el of document.querySelectorAll('#hud *, #boss-bar, #boss-bar *, #target-frame, #target-frame *, #combo-counter, #combo-counter *')) {
+    if (el.closest('svg') || !seen(el) || [...el.querySelectorAll('*')].length > 40) continue;
+    let hidden = false; for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) { const c = getComputedStyle(p); if (c.display === 'none' || c.visibility === 'hidden' || +c.opacity === 0) { hidden = true; break; } } if (hidden) continue;
+    const own = [...el.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim()).map(n => n.textContent.trim()).join(' '), px = parseFloat(getComputedStyle(el).fontSize);
+    if (own && px > 0 && px < 11 - .01) tiny.push({ el: tag(el), px, text: own.slice(0, 20) });
+    for (const part of ['::before', '::after']) { const c = getComputedStyle(el, part), text = c.content; if (!text || text === 'none' || text === 'normal' || !/[^\s"']/.test(text) || c.display === 'none') continue; const size = parseFloat(c.fontSize); if (size > 0 && size < 11 - .01) tiny.push({ el: tag(el) + part, px: size, text: text.slice(0, 12) }); }
+  }
+  return { W: innerWidth, H: innerHeight, coarse, air: document.body.classList.contains('air-combat'), leftHanded: !!document.querySelector('#hud.joystick-right'), groups, plate, small, tiny, dockW: getComputedStyle(document.documentElement).getPropertyValue('--dock-w') };
 }
+/**
+ * Runs in the page, for an open panel (`scope`, a selector): text under 11 px and, on a touch screen, controls whose real hit area
+ * (what elementFromPoint gives a finger along the control's centre row and column) is under 44 px. A control cut by its
+ * scrolling panel or by the screen edge is mid-scroll and is skipped, like one covered at its centre.
+ */
+export function measureReadable(scope) {
+  const shown = el => { const b = el.getBoundingClientRect(); if (b.width <= 1 || b.height <= 1 || b.bottom <= 0 || b.right <= 0 || b.top >= innerHeight || b.left >= innerWidth || el.closest('[hidden],[inert]')) return false; for (let p = el; p && p !== document.documentElement; p = p.parentElement) { const c = getComputedStyle(p); if (c.display === 'none' || c.visibility === 'hidden' || +c.opacity === 0) return false; } return true; };
+  const tag = el => el.id || (typeof el.className === 'string' && el.className) || el.tagName.toLowerCase(), roots = [...document.querySelectorAll(scope)].filter(shown), tiny = [], small = [];
+  const top = el => { const b = el.getBoundingClientRect(), h = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, (b.left + b.right) / 2)), Math.min(innerHeight - 1, Math.max(0, (b.top + b.bottom) / 2))); return !!h && (h === el || el.contains(h) || h.contains(el)); };
+  for (const root of roots) for (const el of root.querySelectorAll('*')) {
+    if (el.closest('svg') || el.tagName === 'OPTION' || !shown(el)) continue;
+    const own = [...el.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim()).map(n => n.textContent.trim()).join(' '), px = parseFloat(getComputedStyle(el).fontSize);
+    if (own && px > 0 && px < 11 - .01 && top(el)) tiny.push({ el: tag(el), px, text: own.slice(0, 20) });
+    for (const part of ['::before', '::after']) { const c = getComputedStyle(el, part), text = c.content; if (!text || text === 'none' || text === 'normal' || !/[^\s"']/.test(text) || c.display === 'none') continue; const size = parseFloat(c.fontSize); if (size > 0 && size < 11 - .01) tiny.push({ el: tag(el) + part, px: size, text: text.slice(0, 12) }); }
+  }
+  if (matchMedia('(pointer: coarse)').matches) for (const root of roots) for (const el of root.querySelectorAll('button, a[href], summary, select, input, [role=button], [role=tab], [role=menuitem], [role=switch]')) {
+    if (!shown(el) || getComputedStyle(el).pointerEvents === 'none') continue;
+    const target = el.closest('label') || el, b = target.getBoundingClientRect(), cx = Math.round((b.left + b.right) / 2), cy = Math.round((b.top + b.bottom) / 2), mine = h => !!h && (h === target || target.contains(h));
+    let cut = b.top < 0 || b.bottom > innerHeight || b.left < 0 || b.right > innerWidth;
+    for (let p = target.parentElement; p && !cut; p = p.parentElement) { const c = getComputedStyle(p); if (/auto|scroll|hidden|clip/.test(c.overflowY + c.overflowX)) { const r = p.getBoundingClientRect(); cut = b.top < r.top + 6 || b.bottom > r.bottom - 6 || b.left < r.left - 1 || b.right > r.right + 1; } }
+    if (cut || !mine(document.elementFromPoint(cx, cy))) continue;
+    const run = (dx, dy) => { let n = 1; for (const side of [1, -1]) for (let i = 1; i < 40; i++) { if (!mine(document.elementFromPoint(cx + dx * i * side, cy + dy * i * side))) break; n++; } return n; };
+    const w = run(1, 0), h = run(0, 1); if (w < 44 || h < 44) small.push({ el: tag(el), text: el.textContent.trim().slice(0, 16), w, h });
+  }
+  return { tiny, small, sideways: document.documentElement.scrollWidth > innerWidth + 1 };
+}
+/** The findings of measureReadable, as lines. */
+export const readableFindings = r => [...r.tiny.map(t => `text under 11 px ${JSON.stringify(t)}`), ...r.small.map(t => `touch target under 44 px ${JSON.stringify(t)}`), ...(r.sideways ? ['the page scrolls sideways'] : [])];
 /** Toes and the pad are round: two of them overlap when their centres are closer than their radii allow, not when their boxes meet.
     The stick is a disc too (joystick.css, border-radius 50%): with jumping on, the attack toe sits by its lower corner, where the boxes
     meet on a 320 px phone while the discs are over 20 px apart. */
@@ -61,8 +99,8 @@ export function pawFindings(m) {
   }
   return out;
 }
-/** Known before this stage and left alone: the timed-task pill is a slim 25 px row on phones (its neighbours take no taps there). */
-export const KNOWN_SMALL = ['challenge-tracker'];
+/** Controls allowed under 44 px: none since WP16 (the timed-task pill, a slim 26 px row on phones, got a 44 px hit area in tap-targets.css). */
+export const KNOWN_SMALL = [];
 export function findings(m) {
   const out = [], names = Object.keys(m.groups), boxes = (a, b) => a.l < b.r - .5 && b.l < a.r - .5 && a.t < b.b - .5 && b.t < a.b - .5;
   const rounds = (a, b) => Math.hypot((a.l + a.r - b.l - b.r) / 2, (a.t + a.b - b.t - b.b) / 2) < (a.r - a.l + b.r - b.l) / 4 - .5;
@@ -75,6 +113,7 @@ export function findings(m) {
   }
   for (const [name, boxes] of Object.entries(m.groups)) for (const b of boxes) if (b.l < -.5 || b.t < -.5 || b.r > m.W + .5 || b.b > m.H + .5) out.push(`${name} leaves the screen ${JSON.stringify([b.l, b.t, b.r, b.b].map(Math.round))}`);
   for (const s of m.small) if (!KNOWN_SMALL.some(k => String(s.el).includes(k))) out.push(`touch target ${JSON.stringify(s)}`);
+  for (const t of m.tiny ?? []) out.push(`text under 11 px ${JSON.stringify(t)}`);
   out.push(...plateFindings(m), ...pawFindings(m));
   return out;
 }
