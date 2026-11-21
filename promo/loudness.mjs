@@ -25,7 +25,7 @@ import { writeFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { signatures } from './sound-signature.mjs';
 
-const CR = String.fromCharCode(13), LF = String.fromCharCode(10);
+const LF = String.fromCharCode(10);
 const args = process.argv.slice(2), check = args.includes('--check'), jsonAt = args.indexOf('--json');
 const pwPath = process.env.PLAYWRIGHT_MODULE;
 let chromium;
@@ -35,7 +35,7 @@ const base = `http://127.0.0.1:${process.env.PORT || 5298}`, RUNS = Number(proce
 
 /** Runs in the page: renders and measures. Returns plain data. */
 async function measure(RUNS) {
-  const { Sfx, ALL_SOUNDS, STINGERS, LOUDNESS } = await import('/src/sfx.ts');
+  const { Sfx, ALL_SOUNDS, STINGERS, LATE_SOUNDS, LOUDNESS } = await import('/src/sfx.ts');
   const { installMix } = await import('/src/features/sound-mix.ts');
   const { installStingers, STINGER, LEVEL_LENGTH } = await import('/src/features/stingers.ts');
   const { MusicBox } = await import('/src/features/radio.ts');
@@ -103,7 +103,7 @@ async function measure(RUNS) {
 
   // 1. Every sound alone.
   const sounds = {};
-  for (const sound of [...ALL_SOUNDS, ...STINGERS]) {
+  for (const sound of [...ALL_SOUNDS, ...LATE_SOUNDS]) {
     const runs = []; for (let r = 0; r < RUNS; r++) runs.push(facts(await render(2.5, sfx => sfx.play(sound), { seed: 1 + r * 7919 })));
     sounds[sound] = fold(runs); sounds[sound].cold = round(facts(await render(2.5, sfx => sfx.play(sound), { lead: 0 })).peak);
   }
@@ -123,12 +123,12 @@ async function measure(RUNS) {
     const music = (sfx, ctx, offset = 20) => { const src = ctx.createBufferSource(), trim = ctx.createGain(); src.buffer = theme; src.loop = true; trim.gain.value = MusicBox.TRIM; src.connect(trim); trim.connect(sfx.graph.nodes.music?.bus ?? sfx.graph.bus('music')); src.start(0, offset % theme.duration); };
     const alone = await render(4, (sfx, at, ctx) => music(sfx, ctx)), bed = facts(alone);
     mix.music = { peak: round(bed.peak), rms: round(dB(Math.sqrt(alone.reduce((s, v) => s + v * v, 0) / alone.length))), lufs: round(loudness(alone, 0, alone.length)) };
-    for (const sound of ['punch', 'cast', 'swing', 'ready', 'alert', 'hit', 'crit', 'power', 'click', 'level', ...STINGERS.filter(s => s !== 'levelUp')]) {
+    for (const sound of ['punch', 'cast', 'swing', 'ready', 'powerReady', 'alert', 'hit', 'crit', 'power', 'click', 'level', ...STINGERS.filter(s => s !== 'levelUp')]) {
       const both = facts(await render(4, (sfx, at, ctx) => { music(sfx, ctx); at(1, () => sfx.play(sound)); }));
       mix.cues[sound] = { overMusicPeak: round(sounds[sound].peak - mix.music.rms), overMusicLoudness: round(sounds[sound].lufs - mix.music.lufs), mixPeak: round(both.peak) };
     }
     const rmsOf = (d, a, b) => { let s = 0; for (let i = Math.floor(a * RATE); i < Math.floor(b * RATE); i++) s += d[i] * d[i]; return dB(Math.sqrt(s / Math.max(1, Math.floor(b * RATE) - Math.floor(a * RATE)))); };
-    for (const [name, length] of [['level', LEVEL_LENGTH], ...Object.entries(STINGER).map(([n, s]) => [n, s.length])]) {
+    for (const [name, length] of [['level', LEVEL_LENGTH], ...Object.entries(STINGER).filter(([, s]) => !s.plain).map(([n, s]) => [n, s.length])]) {
       // The music alone, lowered as the stinger lowers it: the stinger itself would hide what the music does.
       const d = await render(4, (sfx, at, ctx) => { music(sfx, ctx); at(1, () => sfx.graph.duck('music', 6, length)); });
       const held = Math.max(1.12, 1 + length - .02);
@@ -195,7 +195,7 @@ if (out) {
       // One line per sound, so a change shows as that sound's line.
       const rows = table => '{' + LF + Object.entries(table).map(([name, row]) => `  ${JSON.stringify(name)}: ${JSON.stringify(row)}`).join(',' + LF) + LF + ' }';
       const text = '{' + LF + Object.entries(kept).map(([key, value]) => ` ${JSON.stringify(key)}: ${key === 'sounds' || key === 'hits' ? rows(value) : JSON.stringify(value)}`).join(',' + LF) + LF + '}' + LF;
-      writeFileSync(file, text.replaceAll(LF, CR + LF)); console.log('Written: promo/loudness.json');
+      writeFileSync(file, text); console.log('Written: promo/loudness.json');
     }
   }
 }
