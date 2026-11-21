@@ -7,11 +7,15 @@
 //   (d) the lazy split: the feature modules (src/features.ts, src/features/, src/story/) and their Vietnamese phrases
 //       (src/features-vi/) are in the lazy chunks "features" and "features-vi", and nothing in (a) or (b) loads those chunks.
 //       Read from the chunk map the build writes (.scratch/build/chunk-map.json; CHUNK_MAP=<file> for another build). Exit 1 if not.
+//   (e) the limit: (a) and (b) may not pass the start section of promo/perf-baseline.json plus the allowances of the entries with
+//       row "start" in promo/perf-ledger.json (compareStart in promo/perf-compare.mjs). Exit 1 if either does.
+//       --baseline writes this build's totals as that section (only at the commit a round starts from).
 // --json prints one line of JSON for tests and the plan's table.
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { compareStart } from './perf-compare.mjs';
 
 /** Where each lazy source module must be built: the first rule that matches a module's path decides. */
 export const LAZY_HOMES = [
@@ -81,9 +85,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const lazy = Object.entries(map?.chunks ?? {}).filter(([, chunk]) => LAZY_NAMES.has(chunk.name)).map(([f, chunk]) => [f, existsSync(path.join(dist, f)) ? sizeOf(path.join(dist, f)) : 0, chunk.name]);
 
   const total = rows => rows.reduce((n, [, s]) => n + s, 0);
+  // (e) the limit.
+  const BASELINE = new URL('./perf-baseline.json', import.meta.url), LEDGER = new URL('./perf-ledger.json', import.meta.url);
+  const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {}, ledger = existsSync(LEDGER) ? JSON.parse(readFileSync(LEDGER, 'utf8')) : { entries: [] };
+  const measured = { english: total(english), vietnamese: total(vietnamese) };
+  if (process.argv.includes('--baseline')) {
+    if (split.length) { console.error('start baseline NOT written: the lazy split is broken'); process.exit(1); }
+    writeFileSync(BASELINE, JSON.stringify({ ...baseline, start: measured }, null, 1) + '\n');
+    console.log(`start baseline written: English ${measured.english}, Vietnamese ${measured.vietnamese}`); process.exit(0);
+  }
+  const gate = compareStart(baseline.start, measured, ledger), failed = split.length + gate.failures.length;
   if (process.argv.includes('--json')) {
-    console.log(JSON.stringify({ english: total(english), vietnamese: total(vietnamese), install: total(install), viChunk: viChunk ?? null, lazy: Object.fromEntries(lazy.map(([, s, name]) => [name, s])), split }));
-    process.exit(split.length ? 1 : 0);
+    console.log(JSON.stringify({ english: total(english), vietnamese: total(vietnamese), install: total(install), viChunk: viChunk ?? null, lazy: Object.fromEntries(lazy.map(([, s, name]) => [name, s])), split, limit: gate }));
+    process.exit(failed ? 1 : 0);
   }
   const show = (title, rows, all) => {
     console.log(`\n${title}`);
@@ -98,6 +112,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   for (const [f, s, name] of lazy) console.log(`  ${kb(s)}  ${f}  (${name}: ${map.chunks[f].modules.length} modules, loaded after Start)`);
   for (const problem of split) console.log(`  FAIL  ${problem}`);
   if (!split.length) console.log('  ok');
-  console.log(`\nsummary: English start ${kb(total(english)).trim()}, Vietnamese start ${kb(total(vietnamese)).trim()}, install list ${(total(install) / 1048576).toFixed(2)} MB${split.length ? `, lazy split: ${split.length} problem${split.length > 1 ? 's' : ''}` : ''}`);
-  if (split.length) process.exit(1);
+  console.log('\n(e) limit: the baseline plus the named allowances (promo/perf-ledger.json, row "start")');
+  for (const line of gate.report) console.log(`  ok    ${line}`);
+  for (const line of gate.failures) console.log(`  FAIL  ${line}`);
+  console.log(`\nsummary: English start ${kb(total(english)).trim()}, Vietnamese start ${kb(total(vietnamese)).trim()}, install list ${(total(install) / 1048576).toFixed(2)} MB${split.length ? `, lazy split: ${split.length} problem${split.length > 1 ? 's' : ''}` : ''}${gate.failures.length ? ', over the start limit' : ''}`);
+  if (failed) process.exit(1);
 }
