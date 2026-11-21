@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BAR, MAX_BARS, placeBars, engaged, targetOf, bossFor, fightNear, lootText, zoneInfo } from '../src/hud-combat.ts';
+import { BAR, MAX_BARS, placeBars, engaged, targetOf, bossFor, bossApproach, fightNear, lootText, zoneInfo, CombatHud } from '../src/hud-combat.ts';
+import { connect } from '../src/game-events.ts';
+import { createEvents } from '../src/game-services.ts';
 import type { Enemy } from '../src/world.ts';
 
 const enemy = (over: Partial<Enemy> = {}) => ({ id: 'e' + Math.random(), kind: 'enemy', name: 'Grumpy Mushroom', hp: 10, maxHp: 10, x: 0, z: 0, boss: false, phase: 'idle', level: 1, ...over }) as Enemy;
@@ -68,4 +70,82 @@ test('zone banner text names the wild zone, its level and boss instead of the ho
   assert.match(canyon.chip, /Lv 7\+/); assert.match(canyon.chip, /King Bear/);
   const ice = zoneInfo('Frost Peaks', 'ice');
   assert.ok(ice.detail.length > 0); assert.match(ice.chip, /Lv 10\+/);
+});
+
+test('bossApproach: a calm boss inside its sight radius plus 6 m, the nearest one; never one that is already in the fight', () => {
+  // King Bear sees 13 m (enemy-types.ts boss()), so the approach starts under 19 m.
+  const bear = (over: Partial<Enemy> = {}) => enemy({ boss: true, type: 'bear', name: 'King Bear', ...over });
+  assert.equal(bossApproach([bear({ x: 19.1 })], 0, 0), null, 'just outside sight + 6 m');
+  const edge = bear({ x: 18.9 });
+  assert.equal(bossApproach([edge], 0, 0), edge);
+  assert.equal(bossApproach([bear({ x: 12, z: 16 })], 0, 0), null, 'distance is measured on the ground, not per axis (20 m)');
+  assert.equal(bossApproach([bear({ x: 5, phase: 'chase' }), bear({ x: 5, phase: 'windup' }), bear({ x: 5, phase: 'attack' })], 0, 0), null, 'aggro: the fight has begun, that is bossEngaged');
+  const home = bear({ x: 5, phase: 'return' });
+  assert.equal(bossApproach([home], 0, 0), home, 'walking home is calm again');
+  assert.equal(bossApproach([bear({ x: 5, hp: 0 }), enemy({ x: 2 })], 0, 0), null, 'not a fallen boss, not an ordinary creature');
+  const far = bear({ x: 15 }), near = bear({ x: -9 });
+  assert.equal(bossApproach([far, near], 0, 0), near, 'the nearest of two');
+  assert.equal(bossApproach([bear({ x: 22 })], 0, 0, 10)?.x, 22, 'the margin is a parameter (the HUD leaves at +10 m)');
+  // The radius is the creature's own: a definition on the creature wins, then its type's, then a boss's usual 13 m.
+  const sharp = bear({ x: 24, definition: { sight: 20 } as Enemy['definition'] });
+  assert.equal(bossApproach([sharp], 0, 0), sharp);
+  assert.equal(bossApproach([enemy({ boss: true, type: 'no-such-type', x: 18.9 })], 0, 0)?.x, 18.9);
+  assert.equal(bossApproach([bear({ x: 18.9 })], 0, 0.5)?.x, 18.9); assert.equal(bossApproach([], 0, 0), null);
+});
+
+test('the boss events: approach once (again only after walking away), engaged when the bar comes up, break as the meter breaks', () => {
+  const bus = createEvents(), told: string[] = [];
+  connect(bus);
+  for (const event of ['bossApproach', 'bossEngaged', 'bossBreak'] as const) bus.on(event, ({ enemy: e }) => { told.push(`${event}:${e.id}`); });
+  const hud = new CombatHud(null as never, null as never) as unknown as { tell(enemies: Enemy[], boss: Enemy | null, x: number, z: number, now: number): void };
+  const bear = enemy({ id: 'bear', boss: true, type: 'bear', x: 30 });
+  // The HUD calls tell() a few times a second with the boss its bar shows (bossFor), or null.
+  const tick = (x: number, now = 0) => hud.tell([bear], bossFor([bear], x, 0), x, 0, now);
+  tick(0); assert.deepEqual(told, [], '30 m away: nothing');
+  tick(12); tick(13); tick(14);
+  assert.deepEqual(told, ['bossApproach:bear'], 'inside 19 m: once, not on every tick');
+  tick(8); tick(12); // out to 22 m and back in: still the same approach (it leaves at 23 m)
+  assert.equal(told.length, 1);
+  tick(6); tick(12);  // out to 24 m, then in again
+  assert.deepEqual(told.splice(0), ['bossApproach:bear', 'bossApproach:bear']);
+  bear.phase = 'chase';
+  tick(14); tick(15);
+  assert.deepEqual(told.splice(0), ['bossEngaged:bear'], 'the bar came up: engaged, once');
+  bear.hp = 6; bear.stagger = { fill: 0, need: 100, breaks: 1, start: 0, last: 0, until: 9 };
+  tick(15, 5); tick(15, 6);
+  assert.deepEqual(told.splice(0), ['bossBreak:bear'], 'on its knees until t = 9: said once');
+  tick(15, 10); bear.stagger.until = 20; tick(15, 12);
+  assert.deepEqual(told.splice(0), ['bossBreak:bear'], 'it stood up and broke again');
+  bear.phase = 'idle'; bear.hp = bear.maxHp; bear.stagger = undefined;
+  tick(15, 30); tick(16, 31);
+  assert.deepEqual(told, [], 'the boss calmed down with the hero still beside it: that is no new approach');
+  bear.phase = 'chase'; tick(16, 32);
+  assert.deepEqual(told.splice(0), ['bossEngaged:bear'], 'a second fight is engaged again');
+  // A fight that starts from afar (a shot) has no approach before it.
+  const far = enemy({ id: 'treant', boss: true, type: 'treant', x: 60, phase: 'chase' });
+  hud.tell([bear, far], bossFor([far], 30, 0), 30, 0, 40);
+  assert.deepEqual(told.splice(0), ['bossEngaged:treant']);
+  connect(undefined as never);
+});
+
+test('two calm bosses side by side: each approach is said once, however the nearest of the two alternates', () => {
+  const bus = createEvents(), told: string[] = [];
+  connect(bus);
+  bus.on('bossApproach', ({ enemy: e }) => { told.push(e.id); }); bus.on('bossEngaged', ({ enemy: e }) => { told.push('engaged:' + e.id); });
+  const hud = new CombatHud(null as never, null as never) as unknown as { tell(enemies: Enemy[], boss: Enemy | null, x: number, z: number, now: number): void };
+  const left = enemy({ id: 'left', boss: true, type: 'bear', x: -10 }), right = enemy({ id: 'right', boss: true, type: 'treant', x: 10 });
+  const tick = (x: number) => hud.tell([left, right], bossFor([left, right], x, 0), x, 0, 0);
+  tick(-1); tick(1); tick(-1); tick(1); tick(-2); tick(2);
+  assert.deepEqual(told.splice(0), ['left', 'right'], 'the hero sways between them: two approaches, not six');
+  // Walking out of one's range (past sight + 10 m) while staying in the other's: only the one left behind can be said again.
+  tick(14); tick(1); tick(-1);
+  assert.deepEqual(told.splice(0), ['left']);
+  // A fight with one does not make the other new, and the fought one is not an approach when it calms down.
+  right.phase = 'chase'; tick(1); tick(-1);
+  right.phase = 'idle'; tick(1); tick(-1); tick(1);
+  assert.deepEqual(told.splice(0), ['engaged:right']);
+  // A boss that fell and came back is approached anew.
+  left.hp = 0; tick(-1); left.hp = left.maxHp; tick(-1);
+  assert.deepEqual(told.splice(0), ['left']);
+  connect(undefined as never);
 });

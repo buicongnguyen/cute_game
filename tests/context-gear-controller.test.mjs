@@ -38,6 +38,7 @@ function fixture(...items) {
   const combatTimers = new CombatTimers();
   const ctx = vm.createContext({
     M, ContextGearSelection, FishingSimulation, FishingInput, planCast, selectCatch, catchWeight, attractMystery, mysteryMissed, mysteryLanded, mysteryCaller: newMysteryCaller(),
+    emit() {}, // game-events.ts: finishFishingCatch says fishCatch
     BASE_SKILLS, SPECIALS, MOVE_SKILLS, fightNear, recordEvent: M.recordEvent, esc: v => String(v),
     state, gearState: state, gearPlanet: state.planet, gearWater: false, combatGearUntil: 0,actionHandler:null,ctfApi:null,swim:{blocksActions:()=>false,mode:()=>'land'},
     contextGear: new ContextGearSelection(), started: true, visiting: null, blocked: false,

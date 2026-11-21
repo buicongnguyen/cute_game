@@ -449,7 +449,7 @@ if (mode === 'baseline') {
   const same = Object.values(rows).filter(r => Object.values(r.spread).every(v => v === 0)).length;
   // A partial re-take (ONLY) keeps the file's own runs and identical-rows figures: they describe the last full baseline.
   const head = only.length && old.rows ? { version: old.version ?? 1, runs: old.runs, rowsIdenticalAcrossRuns: old.rowsIdenticalAcrossRuns } : { version: 1, runs: RUNS, rowsIdenticalAcrossRuns: same };
-  writeFileSync(BASELINE, JSON.stringify({ ...head, rows: all, ...(old.download ? { download: old.download } : {}) }, null, 1) + '\n');
+  writeFileSync(BASELINE, JSON.stringify({ ...head, rows: all, ...(old.download ? { download: old.download } : {}), ...(old.start ? { start: old.start } : {}) }, null, 1) + '\n'); // the start section belongs to promo/start-bytes.mjs
   for (const r of Object.values(rows)) if (Object.values(r.spread).some(v => v !== 0)) console.log(`differs between runs: ${r.key} ${JSON.stringify(r.spread)}`);
   console.log(`baseline written: ${Object.keys(all).length} rows (${Object.keys(rows).length} measured now, ${same} of them identical across ${RUNS} runs)`);
 } else if (mode === 'compare') {
