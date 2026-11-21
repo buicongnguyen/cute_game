@@ -69,6 +69,7 @@ export const VI_HOUSE: Record<string, string> = {
   '{name} is ready again in {time}.': '{name} sẽ dùng lại được sau {time}.',
   'Squeak!': 'Chíp chíp!',
   'The radio is off.': 'Đã tắt radio.',
+  'The radio is warming up…': 'Radio đang khởi động…',
   'A cosy tune fills the cottage.': 'Một giai điệu ấm áp vang khắp ngôi nhà.',
   'Turn on sound in Settings to hear the radio.': 'Bật âm thanh trong Cài đặt để nghe radio.',
   'Every boss you beat puts a cup on the shelf; every friend you rescue hangs a photo by the fire.': 'Mỗi trùm bạn hạ được thêm một chiếc cúp lên kệ; mỗi người bạn được giải cứu có một tấm ảnh bên lò sưởi.',

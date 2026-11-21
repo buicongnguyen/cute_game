@@ -100,14 +100,15 @@ test('the effects player and the radio follow the volume sliders', async () => {
     const sfx = new Sfx(); sfx.volume = .8; sfx.play('click'); gains.push((sfx as unknown as { out: { gain: { value: number } } }).out.gain.value);
     sfx.volume = .4; sfx.play('pop'); gains.push((sfx as unknown as { out: { gain: { value: number } } }).out.gain.value);
     assert.ok(Math.abs(gains[0] - .55) < 1e-9, 'the default 0.8 keeps the original loudness'); assert.ok(Math.abs(gains[1] - .275) < 1e-9);
-    const silent = new Sfx(); silent.volume = 0; silent.play('click'); assert.equal((silent as unknown as { ctx: unknown }).ctx, null, 'volume 0 makes no sound at all');
+    const silent = new Sfx(); silent.volume = 0; assert.equal(silent.play('click'), false, 'volume 0 makes no sound at all');
   } finally { g.AudioContext = before; }
   const doc = Object.assign(new EventTarget(), { hidden: false, documentElement: {} });
   class FakeAudio { loop = false; volume = 1; src: string; constructor(src: string) { this.src = src; } play() { return Promise.resolve(); } pause() {} }
   const saved = { document: g.document, Audio: g.Audio }; g.document = doc; g.Audio = FakeAudio;
   try {
-    const { MusicBox } = await import('../src/house-life.ts'); const { audioLevels } = await import('../src/audio-settings.ts');
-    audioLevels.music = .45; const box = new MusicBox(); box.start();
+    const { MusicBox } = await import('../src/features/radio.ts'); const { audioLevels } = await import('../src/audio-settings.ts'); const { AudioGraph } = await import('../src/sfx.ts');
+    // No WebAudio here, so the element's own volume carries the slider; with it, the music bus does (tests/sound-bus.test.ts).
+    audioLevels.music = .45; const box = new MusicBox(new AudioGraph()); box.start();
     const theme = (box as unknown as { theme: FakeAudio }).theme; assert.equal(theme.volume, .45);
     audioLevels.music = .2; box.tick(.016); assert.equal(theme.volume, .2, 'the slider changes a playing radio');
     audioLevels.music = .45; box.stop();

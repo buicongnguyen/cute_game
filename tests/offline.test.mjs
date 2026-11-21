@@ -57,7 +57,7 @@ function worker(source, caches=cacheStorage()) {
   const listeners=new Map(),network=[];
   let responder=async request=>new Response(`network:${typeof request==='string'?request:request.url}`),claimed=0,skipped=0;const messages=[];
   vm.runInNewContext(source,{
-    URL,caches,Request:class{constructor(url,init={}){this.url=new URL(url,origin).href;this.cache=init.cache;}},
+    URL,caches,Response,Headers,Request:class{constructor(url,init={}){this.url=new URL(url,origin).href;this.cache=init.cache;}},
     fetch:async request=>{network.push(request);return responder(request);},
     self:{location:{origin},skipWaiting:async()=>{skipped++;},clients:{claim:async()=>{claimed++;},matchAll:async()=>[{postMessage:message=>messages.push(message)}]},addEventListener:(name,handler)=>listeners.set(name,handler)},
   });
@@ -65,9 +65,9 @@ function worker(source, caches=cacheStorage()) {
     caches,network,messages,get claimed(){return claimed;},get skipped(){return skipped;},setNetwork(fn){responder=fn;},
     async message(data) {let promise;listeners.get('message')({data,waitUntil:value=>{promise=value;}});assert.ok(promise);await promise;},
     async lifecycle(name) {let promise;listeners.get(name)({waitUntil:value=>{promise=value;}});assert.ok(promise);await promise;},
-    request(url,{method='GET',mode='cors'}={}) {
+    request(url,{method='GET',mode='cors',headers}={}) {
       let response;
-      listeners.get('fetch')({request:{url:new URL(url,origin).href,method,mode},respondWith:value=>{assert.equal(response,undefined);response=value;}});
+      listeners.get('fetch')({request:{url:new URL(url,origin).href,method,mode,...(headers?{headers:new Headers(headers)}:{})},respondWith:value=>{assert.equal(response,undefined);response=value;}});
       return response;
     },
   };
@@ -325,7 +325,12 @@ test('icons and audio are pinned by content hash: unchanged ones are copied from
   const storage=cacheStorage(),old=worker(await buildFixture(t,base),storage);
   await old.lifecycle('install');
   const key=(name,body)=>`/assets/${name}?v=${shortHash(body)}`;
-  assert.ok(old.caches.requests.includes(key('icons/items/a.webp','icon a')));assert.ok(old.caches.requests.includes(key('audio/theme.mp3','tune')));
+  assert.ok(old.caches.requests.includes(key('icons/items/a.webp','icon a')));
+  // Music is on demand (WP7): not in the install, kept on first play (cache-first under its hash), and carried over by an update.
+  assert.equal(old.caches.requests.some(u=>/audio/.test(u)),false,'the install downloads no music');
+  assert.equal(await(await old.request(key('audio/theme.mp3','tune'))).text(),`network:${origin}${key('audio/theme.mp3','tune')}`);
+  const played=old.network.length;
+  assert.equal(await(await old.request(key('audio/theme.mp3','tune'))).text(),`network:${origin}${key('audio/theme.mp3','tune')}`);assert.equal(old.network.length,played,'the second play comes from the cache');
   const seen=old.caches.requests.length;
   const next=worker(await buildFixture(t,{...base,'assets/icons/items/b.webp':'icon b v2','assets/index-BBBBBBBB.js':'js2'}),storage);
   await next.lifecycle('install');
@@ -333,4 +338,75 @@ test('icons and audio are pinned by content hash: unchanged ones are copied from
   assert.deepEqual(fetched.filter(u=>/icons|audio/.test(u)),[key('icons/items/b.webp','icon b v2')],'only the changed icon is fetched');
   const calls=next.network.length;
   assert.equal(await(await next.request(key('icons/items/a.webp','icon a'))).text(),`cached:${key('icons/items/a.webp','icon a')}`);assert.equal(next.network.length,calls,'a hashed icon is cache-first');
+  next.setNetwork(async()=>{throw new Error('offline');});
+  assert.equal(await(await next.request(key('audio/theme.mp3','tune'))).text(),`network:${origin}${key('audio/theme.mp3','tune')}`,'the update kept the tune that was played: the radio works offline');
+});
+
+test('music is on demand: no audio in the install list or in the background fill; the first play keeps it',async t=>{
+  const {onDemand,backgroundFill,isHashedBuildFile}=await import('../server/sw-logic.mjs');
+  assert.equal(backgroundFill('/x/assets/audio/a.mp3'),false);assert.equal(backgroundFill('/x/assets/models/farm.glb'),true);assert.equal(backgroundFill('/x/assets/models/cottage.glb'),false);
+  assert.equal(onDemand('/x/assets/audio/a.mp3'),true);assert.equal(onDemand('/cute_game/assets/audio/zoo-garden-theme.mp3'),true);
+  assert.equal(onDemand('/x/assets/models/farm.glb'),true);assert.equal(onDemand('/x/assets/models/cottage.glb'),false,'the start models still install');
+  assert.equal(onDemand('/x/assets/icons/items/a.webp'),false);assert.equal(onDemand('/x/assets/audio-AAAAAAAA.js'),false);assert.equal(isHashedBuildFile('/x/assets/audio/a.mp3'),false);
+  const files={'index.html':'shell','assets/index-AAAAAAAA.js':'js','assets/audio/zoo-garden-theme.mp3':'theme','assets/models/farm.glb':'farm','assets/models/worlds-ice.glb':'ice','assets/models/cottage.glb':'cottage'};
+  const source=await buildFixture(t,files,{base:'/x/'});
+  const list=name=>JSON.parse(source.match(new RegExp(`^const ${name}=(\\[.*\\]);$`,'m'))[1]);
+  assert.deepEqual([...list('CORE'),...list('EXTRA')].filter(u=>u.includes('/assets/audio/')),[],'the theme is not in the install list');
+  const theme=`/x/assets/audio/zoo-garden-theme.mp3?v=${shortHash('theme')}`;
+  assert.ok(list('LATER').includes(theme),'on demand');assert.equal(list('LATER').length,3);
+  assert.deepEqual(list('FILL'),list('LATER').filter(u=>u!==theme),'the background fill is the models only');
+  assert.ok(list('PINNED').includes(theme),'still cache-first under its content hash');assert.ok(list('KNOWN').includes('/x/assets/audio/zoo-garden-theme.mp3'));
+  const app=worker(source);
+  await app.lifecycle('install');
+  assert.equal(app.caches.requests.some(u=>u.includes('/assets/audio/')),false,'installing fetches no audio');
+  await app.message({type:'zoo-fill'});
+  assert.equal(app.caches.requests.some(u=>u.includes('/assets/audio/')),false,'nor does the background fill');assert.equal(app.caches.requests.filter(u=>u.includes('/assets/models/')).length,3);
+  assert.equal(app.network.some(r=>String(r.url??r).includes('/assets/audio/')),false,'no request for music until it plays');
+  // The radio plays: fetched once, kept, and there offline from then on.
+  assert.equal(await(await app.request(theme)).text(),`network:${origin}${theme}`);
+  app.setNetwork(async()=>{throw new Error('offline');});
+  assert.equal(await(await app.request(theme)).text(),`network:${origin}${theme}`,'the played theme answers offline from the cache');
+  const fresh=worker(source);await fresh.lifecycle('install');await fresh.message({type:'zoo-fill'});fresh.setNetwork(async()=>{throw new Error('offline');});
+  await assert.rejects(async()=>fresh.request(theme),/offline/,'never played: no theme offline (the radio plays its stand-in tune)');
+  // The real tree: every file under public/assets/audio is on demand.
+  const {readdirSync}=await import('node:fs');
+  for(const name of readdirSync(path.join(root,'public/assets/audio')))assert.equal(onDemand(`/cute_game/assets/audio/${name}`),true,name);
+});
+
+test('a media element\'s range request: the host answers 206, the worker keeps the whole file and serves ranges from it, offline too',async t=>{
+  const {byteRange}=await import('../server/sw-logic.mjs');
+  assert.deepEqual(byteRange('bytes=0-',10),[0,9]);assert.deepEqual(byteRange('bytes=2-5',10),[2,5]);assert.deepEqual(byteRange('bytes=4-99',10),[4,9]);assert.deepEqual(byteRange('bytes=-3',10),[7,9]);assert.deepEqual(byteRange(' bytes=9-9 ',10),[9,9]);
+  for(const bad of ['bytes=10-','bytes=5-2','bytes=-','bytes=-0','items=0-1','bytes=0-1,4-5','',null])assert.equal(byteRange(bad,10),null,String(bad));
+  assert.equal(byteRange('bytes=0-',0),null);
+  const tune='0123456789abcdefghij',files={'index.html':'shell','assets/index-AAAAAAAA.js':'js','assets/audio/zoo-garden-theme.mp3':tune};
+  const theme=`/assets/audio/zoo-garden-theme.mp3?v=${shortHash(tune)}`;
+  const app=worker(await buildFixture(t,files));
+  await app.lifecycle('install');
+  // The host as GitHub Pages behaves: a request with a Range header gets 206 (which a cache refuses), one without gets 200.
+  const asked=[];
+  app.setNetwork(async request=>{
+    const range=typeof request==='string'?null:request.headers?.get?.('range');asked.push(range??'whole');
+    if(!range)return new Response(tune,{status:200,headers:{'Content-Type':'audio/mpeg'}});
+    return new Response(tune.slice(0),{status:206,headers:{'Content-Range':`bytes 0-${tune.length-1}/${tune.length}`}});
+  });
+  const first=await app.request(theme,{headers:{Range:'bytes=0-'}});
+  assert.deepEqual(asked,['whole'],'fetched once, without the Range header');
+  assert.equal(first.status,206);assert.equal(first.headers.get('content-range'),`bytes 0-19/20`);assert.equal(first.headers.get('content-length'),'20');assert.equal(first.headers.get('content-type'),'audio/mpeg');assert.equal(await first.text(),tune);
+  const kept=await(await app.caches.open([...app.caches.entries.keys()][0])).match(theme);
+  assert.ok(kept,'the whole file is in the cache');assert.equal(kept.status,200);assert.equal(await kept.text(),tune);
+  // A seek: cut from the kept file, no network.
+  const seek=await app.request(theme,{headers:{Range:'bytes=10-14'}});
+  assert.equal(seek.status,206);assert.equal(seek.headers.get('content-range'),'bytes 10-14/20');assert.equal(await seek.text(),'abcde');assert.deepEqual(asked,['whole']);
+  // Offline: the real theme still plays, by ranges or whole; a range past the end is refused properly.
+  app.setNetwork(async()=>{throw new Error('offline');});
+  const off=await app.request(theme,{headers:{Range:'bytes=0-'}});assert.equal(off.status,206);assert.equal(await off.text(),tune);
+  const tail=await app.request(theme,{headers:{Range:'bytes=-4'}});assert.equal(tail.headers.get('content-range'),'bytes 16-19/20');assert.equal(await tail.text(),'ghij');
+  const past=await app.request(theme,{headers:{Range:'bytes=50-'}});assert.equal(past.status,416);assert.equal(past.headers.get('content-range'),'bytes */20');
+  const whole=await app.request(theme);assert.equal(whole.status,200);assert.equal(await whole.text(),tune);
+  // Never played and offline: the range request fails (the radio then plays its stand-in tune); an error answer is passed on, not cut.
+  const fresh=worker(await buildFixture(t,files));await fresh.lifecycle('install');
+  fresh.setNetwork(async()=>new Response('gone',{status:404}));
+  const missing=await fresh.request(theme,{headers:{Range:'bytes=0-'}});assert.equal(missing.status,404);
+  fresh.setNetwork(async()=>{throw new Error('offline');});
+  await assert.rejects(async()=>fresh.request(theme,{headers:{Range:'bytes=0-'}}),/offline/);
 });

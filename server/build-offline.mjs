@@ -2,7 +2,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { assetVersions, modelVersions } from './model-versions.mjs';
-import { staleCaches, strategy, isHashedBuildFile } from './sw-logic.mjs';
+import { staleCaches, strategy, isHashedBuildFile, onDemand, backgroundFill, byteRange } from './sw-logic.mjs';
 
 // Keep the worker's paths aligned with Vite's deployment base. GitHub project
 // Pages uses /repository/, while the local Node server serves the root path.
@@ -39,17 +39,15 @@ const versioned = url => {
   const rel = url.match(/\/assets\/((?:icons|audio)\/.+)$/)?.[1];
   return rel && assets[rel] ? `${url}?v=${assets[rel]}` : url;
 };
-// Gear models download only when something from them is first worn, planet scenery only
-// when that planet is first visited and the farm pen kit only when the pen is first shown,
-// so the worker keeps each one the first time it is fetched instead of fetching them all
-// at install.
-const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|hero-[a-z-]+|disguises|pets|worlds-[a-z]+|farm|creatures|helper|cage|house|titans)\.glb$/.test(url);
 const index = base + 'index.html';
 // The page and its hashed scripts must install together, or the worker is not worth activating.
 const core = urls.filter(url => url === index || (isHashedBuildFile(url) && /\.(js|css)$/.test(url)));
 const extra = urls.filter(url => !core.includes(url) && !onDemand(url)).map(versioned);
 const pinned = urls.map(versioned).filter((url, i) => isHashedBuildFile(urls[i]) || url !== urls[i]);
+// On-demand files (sw-logic.mjs onDemand) are kept on first use and carried over by an update; the background fill
+// fetches the models among them, never the music (backgroundFill).
 const later = urls.filter(onDemand).map(versioned);
+const fill = urls.filter(backgroundFill).map(versioned);
 const scripts = core.filter(url => url.endsWith('.js'));
 const hash = createHash('sha256');
 for (let i = 0; i < files.length; i++) hash.update(urls[i]).update('\0').update(await readFile(files[i])).update('\0');
@@ -63,11 +61,13 @@ const VERSION=${JSON.stringify(version)};
 const CORE=${JSON.stringify(core)};
 const EXTRA=${JSON.stringify(extra)};
 const LATER=${JSON.stringify(later)};
+const FILL=${JSON.stringify(fill)};
 const KNOWN=${JSON.stringify(urls)};
 const PINNED=${JSON.stringify(pinned)};
 const SCRIPTS=${JSON.stringify(scripts)};
 ${staleCaches.toString()}
 ${strategy.toString()}
+${byteRange.toString()}
 const PINNED_SET=new Set(PINNED);
 // Unpinned files install past the HTTP cache (Pages sends max-age=600), or index.html could be older than its scripts.
 // A pinned URL names one exact build of a file (hash or ?v=), so an older worker's copy of it is used as is, and
@@ -78,10 +78,10 @@ const copied=(url,names)=>names.reduce((found,name)=>found.then(hit=>hit||caches
 const fill=(cache,url,names)=>PINNED_SET.has(url)?copied(url,names).then(hit=>hit?cache.put(url,hit):cache.add(url)):cache.add(fresh(url));
 // Runs job over items with at most n in flight, so a big list does not fight the game for the connection. Never rejects.
 const pool=(items,n,job)=>new Promise(done=>{let next=0,live=0;const go=()=>{if(next>=items.length&&!live)return done();while(live<n&&next<items.length){live++;const item=items[next++];Promise.resolve().then(()=>job(item)).catch(()=>{}).then(()=>{live--;go();});}};go();});
-// On-demand files (models the game fetches only when first needed): copy any this build can take from an older cache at
-// install (no network), and download the rest in the background once the page asks (message 'zoo-fill'), a few at a time.
+// On-demand files (models and music the game fetches only when first needed): copy any this build can take from an older cache at
+// install (no network), and download the rest of the models (FILL) in the background once the page asks (message 'zoo-fill'), a few at a time.
 const inherit=(cache,names)=>pool(LATER,6,url=>copied(url,names).then(hit=>hit&&cache.put(url,hit)));
-const backfill=()=>Promise.all([caches.open(VERSION),older()]).then(([cache,names])=>pool(LATER,4,url=>cache.match(url).then(hit=>hit||fill(cache,url,names))));
+const backfill=()=>Promise.all([caches.open(VERSION),older()]).then(([cache,names])=>pool(FILL,4,url=>cache.match(url).then(hit=>hit||fill(cache,url,names))));
 self.addEventListener('message',event=>{if(event.data&&event.data.type==='zoo-fill')event.waitUntil(backfill());});
 // A new build takes over at once: its pinned URLs carry content hashes, so an open page of an older
 // build still gets matching files (other versions go to the network), and the page offers a reload.
@@ -98,6 +98,15 @@ self.addEventListener('activate',event=>{
     .then(clients=>{for(const client of clients)client.postMessage({type:'zoo-sw-ready',version:VERSION,scripts:SCRIPTS});}));
 });
 const keep=(cache,request,response)=>response.ok?cache.put(request,response.clone()).then(()=>response,()=>response):response;
+// A media element asks for its file in ranges (Range: bytes=0-). A host answers that with 206, which a cache cannot
+// store, so the radio's theme was never kept. For a pinned file the worker fetches the whole file once, without the
+// Range header, keeps that 200 and cuts every asked range out of it (browsers want a 206 back, Safari above all).
+const ranged=(range,response)=>response.status!==200?response:response.arrayBuffer().then(body=>{
+  const part=byteRange(range,body.byteLength),headers=new Headers(response.headers);
+  if(!part)return new Response(null,{status:416,statusText:'Range Not Satisfiable',headers:{'Content-Range':'bytes */'+body.byteLength}});
+  headers.set('Content-Range','bytes '+part[0]+'-'+part[1]+'/'+body.byteLength);headers.set('Content-Length',String(part[1]-part[0]+1));headers.set('Accept-Ranges','bytes');
+  return new Response(body.slice(part[0],part[1]+1),{status:206,statusText:'Partial Content',headers});
+});
 self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url);
   const how=strategy({method:request.method,mode:request.mode,origin:url.origin,pathname:url.pathname,search:url.search},self.location.origin,BASE,KNOWN,PINNED);
@@ -108,6 +117,11 @@ self.addEventListener('fetch',event=>{
   }
   // Offline, a copy an older (kept) cache holds beats a stand-in.
   const elsewhere=(error,ignoreSearch)=>caches.match(request,{ignoreSearch}).then(cached=>cached||Promise.reject(error));
+  const range=how==='pinned'&&request.headers&&request.headers.get('range');
+  if(range){
+    event.respondWith(caches.open(VERSION).then(cache=>cache.match(request.url).then(cached=>cached||fetch(request.url).then(response=>keep(cache,request.url,response),error=>elsewhere(error,false)))).then(response=>ranged(range,response)));
+    return;
+  }
   event.respondWith(caches.open(VERSION).then(cache=>how==='pinned'
     ?cache.match(request).then(cached=>cached||fetch(request).then(response=>keep(cache,request,response),error=>elsewhere(error,false)))
     :fetch(request,{cache:'no-cache'}).then(response=>keep(cache,request,response),error=>cache.match(request,{ignoreSearch:true}).then(cached=>cached||elsewhere(error,true)))));

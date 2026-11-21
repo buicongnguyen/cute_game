@@ -30,7 +30,14 @@ export const featurePhrases = async (): Promise<Record<string, string>> => Objec
  * fetched first, so a feature never shows English for a moment; in English they are fetched only if the player switches.
  * A feature that throws is logged and skipped; the others still mount. Returns the services (the dev hook shows them).
  */
-export async function mountFeatures(host: ServiceHost, phrases: typeof addPhrases): Promise<GameServices> {
+export function mountFeatures(host: ServiceHost, phrases: typeof addPhrases): Promise<GameServices> {
+  // Once per host, however often it is asked: main.ts asks again when a first fetch seemed lost (a retry, the radio).
+  let mounted = mounts.get(host);
+  if (!mounted) { mounts.set(host, mounted = mountOnce(host, phrases)); mounted.catch(() => mounts.delete(host)); }
+  return mounted;
+}
+const mounts = new WeakMap<ServiceHost, Promise<GameServices>>();
+async function mountOnce(host: ServiceHost, phrases: typeof addPhrases): Promise<GameServices> {
   const services = createServices(host);
   // Asked for only when a feature has phrases: adding a table re-renders the page's text, which an empty one must not cost.
   // Waited for at most PHRASE_WAIT: a request that hangs must not hold every feature back. Phrases that come later still
