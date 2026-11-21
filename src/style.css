@@ -1556,7 +1556,6 @@ h1 > span {
 @keyframes bob { 50% { translate: 0 -7px; } }
 @keyframes bounce { 50% { translate: 0 -4px; } }
 @keyframes nudge { 50% { scale: 1.03; } }
-@keyframes swim { 50% { translate: 150px -25px; } 100% { translate: 0 0; } }
 @keyframes ripple { from { scale: .4; opacity: 1; } to { scale: 2; opacity: 0; } }
 
 /* ------------------------------------------------------------ Layouts */
@@ -1896,7 +1895,7 @@ h1 > span {
   .planet-card { flex-wrap: wrap; }
 }
 @media (pointer: coarse) { .space-help { display: none; } }
-/* Ground-loot countdown pills, placed by drops-view.ts every frame (reference .droptag: dark pill, red under 10 s). */
+/* Ground-loot countdown pills, placed by drops-view.ts every frame: a dark pill, red under 10 s. */
 
 /* w18 home care + pen robot auto-restock (home-care.ts, farm-helper-ui.ts restockSection) */
 #buff-bar .home-recovery-chip { background: rgba(72, 150, 86, .85); }

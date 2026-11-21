@@ -1,8 +1,8 @@
 /* Upgrade levels: the "+3" tag on items, the key-stat chip on purchase rows, the bench's pips, the skill-button pip. */
-.level-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: linear-gradient(#ffe48a, #ffbf3d); color: #6a3d00; font-size: .78em; font-weight: 1000; line-height: 1.45; vertical-align: 1px; box-shadow: 0 1px 0 rgba(106, 61, 0, .25); }
+.level-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: linear-gradient(#ffe48a, #ffbf3d); color: #6a3d00; font-size: var(--fs-1); font-weight: 1000; line-height: 1.45; vertical-align: 1px; box-shadow: 0 1px 0 rgba(106, 61, 0, .25); }
 .chip-power { display: inline-flex; align-self: flex-start; width: max-content; margin: 2px 0; background: #e8f1ff; color: #24457a; font-weight: 900; }
 .shop-item strong + .chip-power { margin-top: 3px; }
-.item-tile small .level-tag { margin-left: 2px; padding: 0 4px; font-size: .9em; }
+.item-tile small .level-tag { margin-left: 2px; padding: 0 4px; }
 .bench-pips { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
 .bench-pips i { width: 9px; height: 9px; border-radius: 50%; background: #e3dccb; box-shadow: inset 0 1px 0 rgba(0, 0, 0, .15); }
 .bench-pips i.on { background: radial-gradient(circle at 35% 30%, #fff3b0, #ffb21e 70%); box-shadow: 0 0 0 1px #c97e00; }

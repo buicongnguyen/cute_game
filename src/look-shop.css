@@ -53,7 +53,7 @@ body:has(#dialog-layer.trying-on) #house-bubble { display: none; }
   .look-chips { gap: 5px; padding: 2px 2px 3px; scrollbar-width: none; }
   .look-chip { flex-basis: 54px; padding: 2px 2px 2px; border-width: 2px; border-radius: 12px; font-size: 11px; }
   .look-chip-icon { width: 34px; height: 34px; border-radius: 9px; }
-  .look-chip small { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); max-width: 50px; padding: 0 4px; border-radius: 8px; background: rgba(255, 250, 240, .94); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .look-chip small { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); max-width: 54px; padding: 0 2px; border-radius: 8px; background: rgba(255, 250, 240, .94); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* A tall, narrow glass beside the rows: the figure gets the column's height rather than its width. */
   .mirror-glass, .friend-studio .mirror-glass { aspect-ratio: 84 / 190; border-width: 6px; border-radius: 42px 42px 12px 12px; }
   .look-footer { position: sticky; bottom: 0; z-index: 2; margin-top: 2px; padding: 5px 0 1px; background: #fffaf0; }
