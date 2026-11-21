@@ -1,0 +1,1216 @@
+{
+ "note": "Numbers of promo/journey.mjs before the AAA round changed the game (docs/AAA-PLAN.md WP4). Times are seconds after Play. Each row folds its runs: a plain value is the same in every run, otherwise median with min and max. script is the hash of the tool that measured the row: compare only rows of one hash, and re-take all rows when the tool changes. The number to compare for Attack-as-use is attackProbe (one Attack press beside each usable thing); null in attackProbe.things means the walk did not get the game to offer that thing (shop and pond today), so it was not tried. Route mid: the level 8 hero of save-mid.json cannot beat King Bear, so the 120 s cap never reaches cage-open (the bear heals after every knock-out); a package that needs the cage to open starts the fight with --boss-health.",
+ "new/phone": {
+  "measured": "2026-11-21",
+  "script": "824647eb5c09",
+  "runs": 3,
+  "durationS": {
+   "median": 569.1,
+   "min": 547.9,
+   "max": 589
+  },
+  "firstNamedDialogS": {
+   "median": 29.7,
+   "min": 29.6,
+   "max": 30
+  },
+  "firstNamedDialogBy": "Pepper",
+  "firstSpokenLineS": null,
+  "dialogsOpened": {
+   "median": 26,
+   "min": 20,
+   "max": 30
+  },
+  "dialogsBy": {
+   "attack": {
+    "median": 6,
+    "min": 5,
+    "max": 8
+   },
+   "collect": 0,
+   "tap": {
+    "median": 20,
+    "min": 15,
+    "max": 21
+   },
+   "key": 0,
+   "game": {
+    "median": 0,
+    "min": 0,
+    "max": 1
+   }
+  },
+  "taps": {
+   "median": 759,
+   "min": 747,
+   "max": 782
+  },
+  "collectTaps": {
+   "median": 10,
+   "min": 10,
+   "max": 11
+  },
+  "storySteps": {
+   "median": 10,
+   "min": 10,
+   "max": 11
+  },
+  "collectTapsPerStep": 1,
+  "attackPresses": {
+   "median": 473,
+   "min": 471,
+   "max": 476
+  },
+  "levelUps": 7,
+  "levelReached": 8,
+  "ribbons": 0,
+  "cards": 0,
+  "stingers": 0,
+  "knockOuts": 0,
+  "kills": {
+   "median": 46,
+   "min": 38,
+   "max": 50
+  },
+  "fish": 2,
+  "beats": {
+   "title": {
+    "count": 1,
+    "firstS": -0.7
+   },
+   "first-view": {
+    "count": 1,
+    "firstS": 4.4
+   },
+   "seed-picker": {
+    "count": 1,
+    "firstS": {
+     "median": 7.4,
+     "min": 7.4,
+     "max": 7.5
+    }
+   },
+   "planted": {
+    "count": 1,
+    "firstS": {
+     "median": 8.3,
+     "min": 8.3,
+     "max": 8.4
+    }
+   },
+   "ripe": {
+    "count": 1,
+    "firstS": {
+     "median": 28.4,
+     "min": 28.4,
+     "max": 28.6
+    }
+   },
+   "first-harvest": {
+    "count": 1,
+    "firstS": {
+     "median": 28.7,
+     "min": 28.6,
+     "max": 29
+    }
+   },
+   "first-named-dialog": {
+    "count": {
+     "median": 2,
+     "min": 2,
+     "max": 3
+    },
+    "firstS": {
+     "median": 29.7,
+     "min": 29.6,
+     "max": 30
+    }
+   },
+   "first-spoken-line": {
+    "count": 0,
+    "firstS": null
+   },
+   "collect": {
+    "count": {
+     "median": 10,
+     "min": 10,
+     "max": 11
+    },
+    "firstS": {
+     "median": 33.4,
+     "min": 33.3,
+     "max": 34.2
+    }
+   },
+   "market": {
+    "count": 1,
+    "firstS": {
+     "median": 40.9,
+     "min": 40.7,
+     "max": 42.4
+    }
+   },
+   "shop": {
+    "count": 1,
+    "firstS": {
+     "median": 47.3,
+     "min": 47.1,
+     "max": 49.1
+    }
+   },
+   "bought": {
+    "count": 1,
+    "firstS": {
+     "median": 48.8,
+     "min": 48.5,
+     "max": 50.7
+    }
+   },
+   "backpack": {
+    "count": 1,
+    "firstS": {
+     "median": 53.1,
+     "min": 52.8,
+     "max": 55.1
+    }
+   },
+   "fight-start": {
+    "count": 1,
+    "firstS": {
+     "median": 58.6,
+     "min": 58.3,
+     "max": 60.7
+    }
+   },
+   "first-kill": {
+    "count": {
+     "median": 46,
+     "min": 38,
+     "max": 50
+    },
+    "firstS": {
+     "median": 61.3,
+     "min": 61,
+     "max": 63.4
+    }
+   },
+   "attack-opened-dialog": {
+    "count": {
+     "median": 6,
+     "min": 5,
+     "max": 8
+    },
+    "firstS": {
+     "median": 66.7,
+     "min": 66.4,
+     "max": 68.9
+    }
+   },
+   "fight-done": {
+    "count": 1,
+    "firstS": {
+     "median": 93.8,
+     "min": 85.6,
+     "max": 102.5
+    }
+   },
+   "attack-probe": {
+    "count": 4,
+    "firstS": {
+     "median": 136.4,
+     "min": 111.2,
+     "max": 143.1
+    }
+   },
+   "level-up": {
+    "count": 7,
+    "firstS": {
+     "median": 32.4,
+     "min": 32.3,
+     "max": 33
+    }
+   },
+   "knock-out": {
+    "count": 0,
+    "firstS": null
+   },
+   "crystal": {
+    "count": 0,
+    "firstS": null
+   },
+   "pond": {
+    "count": 1,
+    "firstS": {
+     "median": 206.7,
+     "min": 202.1,
+     "max": 227.9
+    }
+   },
+   "fish-bite": {
+    "count": 1,
+    "firstS": {
+     "median": 214.2,
+     "min": 209.9,
+     "max": 238.3
+    }
+   },
+   "fish-caught": {
+    "count": 2,
+    "firstS": {
+     "median": 219.2,
+     "min": 215.8,
+     "max": 243.9
+    }
+   },
+   "map": {
+    "count": 1,
+    "firstS": {
+     "median": 259,
+     "min": 238.1,
+     "max": 278.6
+    }
+   },
+   "journal": {
+    "count": 1,
+    "firstS": {
+     "median": 260.9,
+     "min": 240,
+     "max": 280.6
+    }
+   },
+   "settings": {
+    "count": 1,
+    "firstS": {
+     "median": 263.4,
+     "min": 242.5,
+     "max": 283.1
+    }
+   },
+   "help": {
+    "count": 1,
+    "firstS": {
+     "median": 266.1,
+     "min": 245.2,
+     "max": 285.8
+    }
+   },
+   "ribbon": {
+    "count": 0,
+    "firstS": null
+   },
+   "card": {
+    "count": 0,
+    "firstS": null
+   },
+   "stinger": {
+    "count": 0,
+    "firstS": null
+   },
+   "end": {
+    "count": 1,
+    "firstS": {
+     "median": 569.1,
+     "min": 547.9,
+     "max": 589
+    }
+   }
+  },
+  "fight": {
+   "startS": {
+    "median": 58.6,
+    "min": 58.3,
+    "max": 60.7
+   },
+   "completed": true,
+   "attackPressesNeeded": 0,
+   "eagerAttackPresses": {
+    "median": 20,
+    "min": 18,
+    "max": 23
+   },
+   "trackerTaps": {
+    "median": 6,
+    "min": 5,
+    "max": 7
+   },
+   "dialogsOpenedByAttack": {
+    "median": 3,
+    "min": 1,
+    "max": 5
+   },
+   "dialogsOpenedByAttackDistinct": {
+    "median": 2,
+    "min": 1,
+    "max": 2
+   },
+   "maxRepeatsOfOneDialog": {
+    "median": 2,
+    "min": 1,
+    "max": 3
+   },
+   "kills": {
+    "median": 5,
+    "min": 5,
+    "max": 6
+   },
+   "firstKillAfterS": 2.7,
+   "tookS": {
+    "median": 35.2,
+    "min": 25,
+    "max": 44.2
+   },
+   "lowestHealthPct": {
+    "median": 91,
+    "min": 91,
+    "max": 100
+   }
+  },
+  "attackProbe": {
+   "tried": 4,
+   "opened": 4,
+   "titles": 4,
+   "things": {
+    "pen": 1,
+    "sell": 1,
+    "shop": null,
+    "upgrade": 1,
+    "home": 1,
+    "fish": null
+   }
+  },
+  "freePlay": {
+   "startS": {
+    "median": 267.3,
+    "min": 246.4,
+    "max": 287
+   },
+   "tookS": {
+    "median": 301.8,
+    "min": 301.5,
+    "max": 302
+   },
+   "attackPresses": {
+    "median": 451,
+    "min": 444,
+    "max": 452
+   },
+   "collectTaps": {
+    "median": 3,
+    "min": 3,
+    "max": 4
+   },
+   "storySteps": {
+    "median": 3,
+    "min": 3,
+    "max": 4
+   },
+   "dialogsOpenedByAttack": {
+    "median": 0,
+    "min": 0,
+    "max": 1
+   },
+   "dialogsOpenedByAttackDistinct": {
+    "median": 0,
+    "min": 0,
+    "max": 1
+   },
+   "maxRepeatsOfOneDialog": {
+    "median": 0,
+    "min": 0,
+    "max": 1
+   },
+   "kills": {
+    "median": 40,
+    "min": 33,
+    "max": 45
+   },
+   "levelUps": {
+    "median": 3,
+    "min": 2,
+    "max": 3
+   },
+   "knockOuts": 0
+  }
+ },
+ "new/pc": {
+  "measured": "2026-11-21",
+  "script": "824647eb5c09",
+  "runs": 3,
+  "durationS": {
+   "median": 524.8,
+   "min": 509.4,
+   "max": 527
+  },
+  "firstNamedDialogS": {
+   "median": 29,
+   "min": 28.8,
+   "max": 29.6
+  },
+  "firstNamedDialogBy": "Pepper",
+  "firstSpokenLineS": null,
+  "dialogsOpened": {
+   "median": 47,
+   "min": 44,
+   "max": 47
+  },
+  "dialogsBy": {
+   "attack": {
+    "median": 6,
+    "min": 4,
+    "max": 8
+   },
+   "collect": 0,
+   "tap": {
+    "median": 40,
+    "min": 39,
+    "max": 41
+   },
+   "key": 0,
+   "game": 0
+  },
+  "taps": {
+   "median": 745,
+   "min": 739,
+   "max": 749
+  },
+  "collectTaps": 10,
+  "storySteps": 10,
+  "collectTapsPerStep": 1,
+  "attackPresses": {
+   "median": 459,
+   "min": 449,
+   "max": 459
+  },
+  "levelUps": 7,
+  "levelReached": 8,
+  "ribbons": 0,
+  "cards": 0,
+  "stingers": 0,
+  "knockOuts": 0,
+  "kills": {
+   "median": 46,
+   "min": 46,
+   "max": 52
+  },
+  "fish": 2,
+  "beats": {
+   "title": {
+    "count": 1,
+    "firstS": {
+     "median": -0.7,
+     "min": -0.9,
+     "max": -0.6
+    }
+   },
+   "first-view": {
+    "count": 1,
+    "firstS": {
+     "median": 4.4,
+     "min": 4.4,
+     "max": 4.8
+    }
+   },
+   "seed-picker": {
+    "count": 1,
+    "firstS": {
+     "median": 7.1,
+     "min": 7.1,
+     "max": 7.7
+    }
+   },
+   "planted": {
+    "count": 1,
+    "firstS": {
+     "median": 7.9,
+     "min": 7.8,
+     "max": 8.5
+    }
+   },
+   "ripe": {
+    "count": 1,
+    "firstS": {
+     "median": 27.8,
+     "min": 27.7,
+     "max": 28.5
+    }
+   },
+   "first-harvest": {
+    "count": 1,
+    "firstS": {
+     "median": 28,
+     "min": 27.9,
+     "max": 28.7
+    }
+   },
+   "first-named-dialog": {
+    "count": 2,
+    "firstS": {
+     "median": 29,
+     "min": 28.8,
+     "max": 29.6
+    }
+   },
+   "first-spoken-line": {
+    "count": 0,
+    "firstS": null
+   },
+   "collect": {
+    "count": 10,
+    "firstS": {
+     "median": 32.4,
+     "min": 32.3,
+     "max": 33.1
+    }
+   },
+   "market": {
+    "count": 1,
+    "firstS": {
+     "median": 37.7,
+     "min": 37.7,
+     "max": 38.5
+    }
+   },
+   "shop": {
+    "count": 1,
+    "firstS": {
+     "median": 43.9,
+     "min": 43.8,
+     "max": 44.7
+    }
+   },
+   "bought": {
+    "count": 1,
+    "firstS": {
+     "median": 45.2,
+     "min": 45.1,
+     "max": 46
+    }
+   },
+   "backpack": {
+    "count": 1,
+    "firstS": {
+     "median": 49.4,
+     "min": 49.4,
+     "max": 50.2
+    }
+   },
+   "fight-start": {
+    "count": 1,
+    "firstS": {
+     "median": 54.8,
+     "min": 54.8,
+     "max": 55.6
+    }
+   },
+   "first-kill": {
+    "count": {
+     "median": 46,
+     "min": 46,
+     "max": 52
+    },
+    "firstS": {
+     "median": 57.5,
+     "min": 57.4,
+     "max": 58.4
+    }
+   },
+   "attack-opened-dialog": {
+    "count": {
+     "median": 6,
+     "min": 4,
+     "max": 8
+    },
+    "firstS": {
+     "median": 63.5,
+     "min": 62.6,
+     "max": 75.3
+    }
+   },
+   "fight-done": {
+    "count": 1,
+    "firstS": {
+     "median": 82.1,
+     "min": 77.7,
+     "max": 82.9
+    }
+   },
+   "attack-probe": {
+    "count": 4,
+    "firstS": {
+     "median": 97.9,
+     "min": 90.3,
+     "max": 102.2
+    }
+   },
+   "level-up": {
+    "count": 7,
+    "firstS": {
+     "median": 31.6,
+     "min": 31.4,
+     "max": 32.2
+    }
+   },
+   "knock-out": {
+    "count": 0,
+    "firstS": null
+   },
+   "crystal": {
+    "count": 1,
+    "firstS": {
+     "median": 160.2,
+     "min": 154,
+     "max": 164.5
+    }
+   },
+   "pond": {
+    "count": 1,
+    "firstS": {
+     "median": 170.2,
+     "min": 164,
+     "max": 174.6
+    }
+   },
+   "fish-bite": {
+    "count": 1,
+    "firstS": {
+     "median": 176.5,
+     "min": 171,
+     "max": 183.3
+    }
+   },
+   "fish-caught": {
+    "count": 2,
+    "firstS": {
+     "median": 190.3,
+     "min": 184.7,
+     "max": 191.1
+    }
+   },
+   "map": {
+    "count": 1,
+    "firstS": {
+     "median": 216,
+     "min": 199.8,
+     "max": 218.1
+    }
+   },
+   "journal": {
+    "count": 1,
+    "firstS": {
+     "median": 217.8,
+     "min": 201.6,
+     "max": 219.9
+    }
+   },
+   "settings": {
+    "count": 1,
+    "firstS": {
+     "median": 220.3,
+     "min": 204.1,
+     "max": 222.4
+    }
+   },
+   "help": {
+    "count": 1,
+    "firstS": {
+     "median": 222.9,
+     "min": 206.7,
+     "max": 225
+    }
+   },
+   "ribbon": {
+    "count": 0,
+    "firstS": null
+   },
+   "card": {
+    "count": 0,
+    "firstS": null
+   },
+   "stinger": {
+    "count": 0,
+    "firstS": null
+   },
+   "end": {
+    "count": 1,
+    "firstS": {
+     "median": 524.8,
+     "min": 509.4,
+     "max": 527
+    }
+   }
+  },
+  "fight": {
+   "startS": {
+    "median": 54.8,
+    "min": 54.8,
+    "max": 55.6
+   },
+   "completed": true,
+   "attackPressesNeeded": 0,
+   "eagerAttackPresses": {
+    "median": 13,
+    "min": 13,
+    "max": 15
+   },
+   "trackerTaps": {
+    "median": 3,
+    "min": 3,
+    "max": 5
+   },
+   "dialogsOpenedByAttack": {
+    "median": 3,
+    "min": 1,
+    "max": 5
+   },
+   "dialogsOpenedByAttackDistinct": {
+    "median": 2,
+    "min": 1,
+    "max": 3
+   },
+   "maxRepeatsOfOneDialog": {
+    "median": 2,
+    "min": 1,
+    "max": 2
+   },
+   "kills": 5,
+   "firstKillAfterS": 2.7,
+   "tookS": {
+    "median": 26.4,
+    "min": 22.9,
+    "max": 28.1
+   },
+   "lowestHealthPct": {
+    "median": 98,
+    "min": 91,
+    "max": 100
+   }
+  },
+  "attackProbe": {
+   "tried": 4,
+   "opened": 4,
+   "titles": 4,
+   "things": {
+    "pen": 1,
+    "sell": 1,
+    "shop": null,
+    "upgrade": 1,
+    "home": 1,
+    "fish": null
+   }
+  },
+  "freePlay": {
+   "startS": {
+    "median": 224.1,
+    "min": 207.8,
+    "max": 226.2
+   },
+   "tookS": {
+    "median": 300.8,
+    "min": 300.8,
+    "max": 301.5
+   },
+   "attackPresses": {
+    "median": 440,
+    "min": 432,
+    "max": 442
+   },
+   "collectTaps": 3,
+   "storySteps": 3,
+   "dialogsOpenedByAttack": 0,
+   "dialogsOpenedByAttackDistinct": 0,
+   "maxRepeatsOfOneDialog": 0,
+   "kills": {
+    "median": 41,
+    "min": 41,
+    "max": 47
+   },
+   "levelUps": {
+    "median": 3,
+    "min": 2,
+    "max": 3
+   },
+   "knockOuts": 0
+  }
+ },
+ "mid/phone": {
+  "measured": "2026-11-21",
+  "script": "824647eb5c09",
+  "runs": 3,
+  "durationS": {
+   "median": 137.8,
+   "min": 137.5,
+   "max": 141
+  },
+  "firstNamedDialogS": null,
+  "firstNamedDialogBy": null,
+  "firstSpokenLineS": null,
+  "dialogsOpened": 12,
+  "dialogsBy": {
+   "attack": 0,
+   "collect": 0,
+   "tap": 0,
+   "key": 0,
+   "game": 12
+  },
+  "taps": {
+   "median": 206,
+   "min": 200,
+   "max": 221
+  },
+  "collectTaps": 0,
+  "storySteps": 0,
+  "collectTapsPerStep": null,
+  "attackPresses": {
+   "median": 141,
+   "min": 139,
+   "max": 156
+  },
+  "levelUps": 0,
+  "levelReached": null,
+  "ribbons": 0,
+  "cards": 0,
+  "stingers": 0,
+  "knockOuts": 11,
+  "kills": 0,
+  "fish": 0,
+  "beats": {
+   "first-view": {
+    "count": 1,
+    "firstS": {
+     "median": 7.3,
+     "min": 7.2,
+     "max": 7.6
+    }
+   },
+   "first-named-dialog": {
+    "count": 0,
+    "firstS": null
+   },
+   "first-spoken-line": {
+    "count": 0,
+    "firstS": null
+   },
+   "collect": {
+    "count": 0,
+    "firstS": null
+   },
+   "first-kill": {
+    "count": 0,
+    "firstS": null
+   },
+   "attack-opened-dialog": {
+    "count": 0,
+    "firstS": null
+   },
+   "level-up": {
+    "count": 0,
+    "firstS": null
+   },
+   "knock-out": {
+    "count": 11,
+    "firstS": {
+     "median": 17.9,
+     "min": 17.5,
+     "max": 18.3
+    }
+   },
+   "ribbon": {
+    "count": 0,
+    "firstS": null
+   },
+   "card": {
+    "count": 0,
+    "firstS": null
+   },
+   "stinger": {
+    "count": 0,
+    "firstS": null
+   },
+   "boss-in-view": {
+    "count": 1,
+    "firstS": {
+     "median": 10.1,
+     "min": 10,
+     "max": 10.4
+    }
+   },
+   "boss-engaged": {
+    "count": 1,
+    "firstS": {
+     "median": 14.2,
+     "min": 14.2,
+     "max": 14.7
+    }
+   },
+   "boss-half": {
+    "count": 0,
+    "firstS": null
+   },
+   "cage-open": {
+    "count": 0,
+    "firstS": null
+   },
+   "boss-timeout": {
+    "count": 1,
+    "firstS": {
+     "median": 134.9,
+     "min": 134.8,
+     "max": 138.1
+    }
+   },
+   "end": {
+    "count": 1,
+    "firstS": {
+     "median": 137.8,
+     "min": 137.5,
+     "max": 141
+    }
+   }
+  },
+  "boss": {
+   "engagedS": {
+    "median": 14.2,
+    "min": 14.2,
+    "max": 14.7
+   },
+   "cageOpened": false,
+   "tookS": {
+    "median": 120.7,
+    "min": 120.5,
+    "max": 123.4
+   },
+   "bossHealthLeftPct": {
+    "median": 97,
+    "min": 97,
+    "max": 100
+   },
+   "bossLowestHealthPct": {
+    "median": 94,
+    "min": 92,
+    "max": 95
+   },
+   "bossStartedAtPct": 100,
+   "attackPresses": {
+    "median": 141,
+    "min": 139,
+    "max": 156
+   },
+   "skillPresses": {
+    "median": 11,
+    "min": 9,
+    "max": 11
+   },
+   "knockOuts": 11,
+   "lowestHealthPct": {
+    "median": 15,
+    "min": 15,
+    "max": 31
+   }
+  }
+ },
+ "mid/pc": {
+  "measured": "2026-11-21",
+  "script": "824647eb5c09",
+  "runs": 3,
+  "durationS": {
+   "median": 136.4,
+   "min": 136,
+   "max": 137.1
+  },
+  "firstNamedDialogS": null,
+  "firstNamedDialogBy": null,
+  "firstSpokenLineS": null,
+  "dialogsOpened": {
+   "median": 11,
+   "min": 11,
+   "max": 12
+  },
+  "dialogsBy": {
+   "attack": 0,
+   "collect": 0,
+   "tap": 0,
+   "key": 0,
+   "game": {
+    "median": 11,
+    "min": 11,
+    "max": 12
+   }
+  },
+  "taps": {
+   "median": 288,
+   "min": 281,
+   "max": 289
+  },
+  "collectTaps": 0,
+  "storySteps": 0,
+  "collectTapsPerStep": null,
+  "attackPresses": {
+   "median": 228,
+   "min": 228,
+   "max": 234
+  },
+  "levelUps": 0,
+  "levelReached": null,
+  "ribbons": 0,
+  "cards": 0,
+  "stingers": 0,
+  "knockOuts": {
+   "median": 10,
+   "min": 10,
+   "max": 11
+  },
+  "kills": {
+   "median": 0,
+   "min": 0,
+   "max": 2
+  },
+  "fish": 0,
+  "beats": {
+   "first-view": {
+    "count": 1,
+    "firstS": {
+     "median": 7.3,
+     "min": 7.2,
+     "max": 7.5
+    }
+   },
+   "first-named-dialog": {
+    "count": 0,
+    "firstS": null
+   },
+   "first-spoken-line": {
+    "count": 0,
+    "firstS": null
+   },
+   "collect": {
+    "count": 0,
+    "firstS": null
+   },
+   "first-kill": {
+    "count": {
+     "median": 0,
+     "min": 0,
+     "max": 2
+    },
+    "firstS": {
+     "median": 68.7,
+     "min": 68.7,
+     "max": 68.7,
+     "missing": 2
+    }
+   },
+   "attack-opened-dialog": {
+    "count": 0,
+    "firstS": null
+   },
+   "level-up": {
+    "count": 0,
+    "firstS": null
+   },
+   "knock-out": {
+    "count": {
+     "median": 10,
+     "min": 10,
+     "max": 11
+    },
+    "firstS": {
+     "median": 17.2,
+     "min": 16.9,
+     "max": 17.4
+    }
+   },
+   "ribbon": {
+    "count": 0,
+    "firstS": null
+   },
+   "card": {
+    "count": 0,
+    "firstS": null
+   },
+   "stinger": {
+    "count": 0,
+    "firstS": null
+   },
+   "boss-in-view": {
+    "count": 1,
+    "firstS": {
+     "median": 10.1,
+     "min": 9.9,
+     "max": 10.2
+    }
+   },
+   "boss-engaged": {
+    "count": 1,
+    "firstS": {
+     "median": 13,
+     "min": 12.8,
+     "max": 13.2
+    }
+   },
+   "boss-half": {
+    "count": 0,
+    "firstS": null
+   },
+   "cage-open": {
+    "count": 0,
+    "firstS": null
+   },
+   "boss-timeout": {
+    "count": 1,
+    "firstS": {
+     "median": 133.7,
+     "min": 133.4,
+     "max": 134.5
+    }
+   },
+   "end": {
+    "count": 1,
+    "firstS": {
+     "median": 136.4,
+     "min": 136,
+     "max": 137.1
+    }
+   }
+  },
+  "boss": {
+   "engagedS": {
+    "median": 13,
+    "min": 12.8,
+    "max": 13.2
+   },
+   "cageOpened": false,
+   "tookS": {
+    "median": 120.6,
+    "min": 120.6,
+    "max": 121.3
+   },
+   "bossHealthLeftPct": 100,
+   "bossLowestHealthPct": {
+    "median": 95,
+    "min": 92,
+    "max": 95
+   },
+   "bossStartedAtPct": 100,
+   "attackPresses": {
+    "median": 228,
+    "min": 228,
+    "max": 234
+   },
+   "skillPresses": {
+    "median": 15,
+    "min": 14,
+    "max": 16
+   },
+   "knockOuts": {
+    "median": 10,
+    "min": 10,
+    "max": 11
+   },
+   "lowestHealthPct": {
+    "median": 2,
+    "min": 1,
+    "max": 5
+   }
+  }
+ }
+}
