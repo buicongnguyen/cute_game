@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { LOOKS, GRADE, CONTACT, GLOSS, NIGHT_GLOW, planetLook, applyLook, sunOffset, grade, installGrade, skyTexture, skyBlend, skyInView, mixHex, contactShade, shadeGeometry, lightPool } from '../src/look.ts';
-import { PLANET_LIGHT, SUN_OFFSET, LIGHT } from '../src/toon.ts';
+import { LOOKS, GRADE, CONTACT, GLOSS, NIGHT_GLOW, planetLook, applyLook, sunOffset, groundKeep, grade, installGrade, skyTexture, skyBlend, skyInView, mixHex, contactShade, shadeGeometry, lightPool } from '../src/look.ts';
+import { PLANET_LIGHT, SUN_OFFSET, LIGHT, TOON_OWN } from '../src/toon.ts';
 import { perfFlags } from '../src/perf-flags.ts';
 import { PLANETS, newGame, type PlanetId } from '../src/model.ts';
 import { groundColor, enrichGround, shadeField, buildGround, type GroundDetail } from '../src/ground.ts';
@@ -120,6 +120,19 @@ test('the gloss raises only faces that look up: tops 6 to 10% lighter, bevels ca
     assert.ok(Math.max(...now) < 1.25, 'gentle: nothing blown out');
   });
   assert.ok(at(2, -.7)[0] < 1, 'a face that looks down is still darker');
+});
+
+test('the ground is corrected so flat sunlit ground is lit exactly as under the grey ramp; none under a moon or with the ramp off', () => {
+  for (const id of Object.keys(LOOKS) as PlanetId[]) {
+    const look = LOOKS[id], keep = groundKeep(id), sky = new T.Color(look.hemi[0]).multiplyScalar(look.hemi[2]), sun = new T.Color(look.sun[0]).multiplyScalar(look.sun[1]);
+    if (id === 'shadow') { assert.deepEqual(keep, [1, 1, 1]); continue; }
+    (['r', 'g', 'b'] as const).forEach((c, i) => assert.ok(Math.abs(keep[i] * (sky[c] + sun[c] * TOON_OWN[4][i] / 255) - (sky[c] + sun[c])) < 1e-12, id));
+    assert.equal(keep[0], 1); assert.ok(keep[2] > keep[1] && keep[1] > 1 && keep[2] < 1.08, id + ': a small lift of green and blue');
+  }
+  perfFlags.ownRamp = false; assert.deepEqual(groundKeep('home'), [1, 1, 1]); perfFlags.ownRamp = true;
+  const tile = (planet: PlanetId) => (buildGround({ planet, layout: createEnvironmentLayout(planet), ponds: [], base: 0, segments: 2 }).children[0] as T.Mesh).geometry.getAttribute('color');
+  const own = tile('home'); perfFlags.ownRamp = false; const plain = tile('home'); perfFlags.ownRamp = true;
+  const keep = groundKeep('home'); for (const i of [0, 5, 11]) { assert.ok(Math.abs(own.getX(i) - plain.getX(i) * keep[0]) < 1e-6); assert.ok(Math.abs(own.getZ(i) - plain.getZ(i) * keep[2]) < 1e-6); }
 });
 
 test('shadeGeometry bakes the gloss into the top of a model and leaves its sides alone', () => {

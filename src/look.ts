@@ -1,7 +1,7 @@
 import * as T from 'three';
 import type { PlanetId } from './content.ts';
 import { perfFlags } from './perf-flags.ts';
-import { LIGHT, PLANET_LIGHT, SUN_OFFSET, warmRamp } from './toon.ts';
+import { LIGHT, PLANET_LIGHT, SUN_OFFSET, TOON_OWN, warmRamp } from './toon.ts';
 import { FOG } from './camera-rig.ts';
 
 /**
@@ -68,6 +68,18 @@ export function applyLook(look: PlanetLook, hemi: T.HemisphereLight | null | und
   if (offset) { if (perfFlags.richLook) sunOffset(look.sun[2], look.sun[3], offset); else offset.set(...SUN_OFFSET); }
 }
 
+/** A sun with more blue than red is a moon: the ramp's light steps stay neutral under it (toon.ts warmRamp). */
+const warmSun = (look: PlanetLook) => look.sun[0].slice(1, 3) >= look.sun[0].slice(5);
+/**
+ * What the ground's colour is multiplied by, per channel, so that flat ground in full sun is drawn exactly as it was
+ * under the grey ramp: (sky light + sun) / (sky light + sun x the ramp's warm light step). The grass stays fresh;
+ * shadows on the ground come out a few percent bluer, since they see only the sky light. 1 under a moon or with the ramp off.
+ */
+export function groundKeep(planet: string): number[] {
+  const look = planetLook(planet), sky = new T.Color(look.hemi[0]).multiplyScalar(look.hemi[2]), sun = new T.Color(look.sun[0]).multiplyScalar(look.sun[1]);
+  return (['r', 'g', 'b'] as const).map((c, i) => perfFlags.ownRamp && warmSun(look) ? (sky[c] + sun[c]) / (sky[c] + sun[c] * TOON_OWN[4][i] / 255) : 1);
+}
+
 // ---- The colour curve.
 /**
  * The curve, on linear colour: a little more contrast (darks deepen), more saturation, and a soft shoulder so a bright
@@ -102,7 +114,7 @@ export function installGrade() {
 export function setGrade(renderer: T.WebGLRenderer, look: PlanetLook) {
   installGrade();
   renderer.toneMapping = perfFlags.richLook ? T.CustomToneMapping : T.NoToneMapping; renderer.toneMappingExposure = look.exposure;
-  warmRamp(look.sun[0].slice(1, 3) >= look.sun[0].slice(5)); // a sun with more blue than red is a moon
+  warmRamp(warmSun(look));
 }
 
 // ---- Sky.

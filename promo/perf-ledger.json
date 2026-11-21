@@ -13,10 +13,10 @@
    "row": "start",
    "name": "WP6 toy finish",
    "allow": {
-    "english": 443,
-    "vietnamese": 443
+    "english": 507,
+    "vietnamese": 507
    },
-   "why": "Measured growth of the start (the plan's 0.3 KB was an estimate): the five colour steps, the ramp-colour shader patch and the icon/mirror swap in toon.ts, the neutral light steps under a cool sun, the gloss in look.ts, the look switch, and in crop-cards.ts (world chunk, loaded before Start) the bake at the camera pitch, the footprint cap and the centring of lopsided crops. Two slimming passes brought it from 485 to 443 bytes; the rest would mean cutting one of these."
+   "why": "Measured growth of the start (the plan's 0.3 KB was an estimate): the five colour steps, the ramp-colour shader patch and the icon/mirror swap in toon.ts, the neutral light steps under a cool sun, the ground colour correction and the gloss in look.ts, the look switch, and in crop-cards.ts (world chunk, loaded before Start) the bake at the camera pitch, the footprint cap and the centring of lopsided crops. Two slimming passes saved about 50 bytes; the rest would mean cutting one of these."
   }
  ]
 }
