@@ -10,22 +10,30 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const strip = text => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-/** Imports of one source text that load a module at run time: [specifier, kind]. `import type` loads nothing. */
-export function runtimeImports(text) {
-  const found = [], code = strip(text);
-  for (const m of code.matchAll(/^\s*import\s+(type\s+)?[^;'"]*?\bfrom\s*['"]([^'"]+)['"]/gm)) if (!m[1]) found.push([m[2], 'import']);
-  for (const m of code.matchAll(/^\s*import\s*['"]([^'"]+)['"]/gm)) found.push([m[1], 'import']);
-  for (const m of code.matchAll(/^\s*export\s+(type\s+)?[^;'"]*?\bfrom\s*['"]([^'"]+)['"]/gm)) if (!m[1]) found.push([m[2], 'export']);
-  for (const m of code.matchAll(/\bimport\(\s*['"]([^'"]+)['"]/g)) found.push([m[1], 'dynamic']);
+/**
+ * Imports of one source text that load a module at run time: [specifier, kind], kind 'import', 'export' or 'dynamic'.
+ * Read from the syntax tree, so text inside strings and comments cannot hide or fake one. `import type` loads nothing.
+ */
+export function runtimeImports(text, name = 'module.ts') {
+  const file = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS), found = [];
+  const visit = node => {
+    if (ts.isImportDeclaration(node)) { if (!node.importClause?.isTypeOnly && ts.isStringLiteralLike(node.moduleSpecifier)) found.push([node.moduleSpecifier.text, 'import']); return; }
+    if (ts.isExportDeclaration(node)) { if (node.moduleSpecifier && !node.isTypeOnly && ts.isStringLiteralLike(node.moduleSpecifier)) found.push([node.moduleSpecifier.text, 'export']); return; }
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword && node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])) found.push([node.arguments[0].text, 'dynamic']);
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
   return found;
 }
 
 /**
  * Map of src module (path inside src/, forward slashes) -> the file that first reaches it.
  * It starts at every server/*.mjs (static and dynamic imports) and follows static imports and re-exports inside src.
+ * A lazy `import()` inside a src module is not followed: the server does not load those (the Vietnamese packs of
+ * i18n.ts load only when the language is Vietnamese; the client-only ones never run there).
  */
 export function serverClosure(root = ROOT) {
   const seen = new Map(), queue = [];
@@ -47,7 +55,9 @@ export function serverClosure(root = ROOT) {
 }
 
 /** The text of docs/server-closure.txt for a closure: one module per line, sorted. */
-export const closureText = closure => [...closure.keys()].join('\n') + '\n';
+export const CLOSURE_HEADER = '# The server closure: every src module the Node server loads (node promo/server-closure.mjs --write).\n'
+  + '# Static imports and re-exports only. Modules a src file loads lazily with import() (the Vietnamese packs, help topics) are not listed.\n';
+export const closureText = closure => CLOSURE_HEADER + [...closure.keys()].join('\n') + '\n';
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2), closure = serverClosure();

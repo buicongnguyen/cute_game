@@ -12,7 +12,8 @@
 // 2. It finds the free names of the compiled pieces with the TypeScript compiler API.
 // 3. A free name that main.ts imports is imported from the same module (its own import lines are the map), so a new
 //    import in main.ts needs no test edit. Stylesheet imports load as empty modules.
-// 4. Fakes passed to context() win over everything, also over a cut function of the same name.
+// 4. Fakes passed to context() win over everything, also over a cut function of the same name. (A fake with the name
+//    of a cut variable is refused: the variable would hide it.)
 // 5. A name that is main.ts's own state or function, was not cut and has no fake, fails when the code reads it,
 //    with one message that says what to do. (It cannot fail sooner: a renderer names far more of main.ts than one
 //    test path runs.) Browser globals that are missing stay plain ReferenceErrors, so `typeof window` guards work.
@@ -140,6 +141,9 @@ export async function mainHarness(spec = {}) {
     else bindings.set(name, entry.imported === '*' ? module : module[entry.imported]);
   }
   const cutNames = wanted;
+  const cutVariables = new Set();
+  const bindNames = name => { if (ts.isIdentifier(name)) cutVariables.add(name.text); else for (const item of name.elements) if (!ts.isOmittedExpression(item)) bindNames(item.name); };
+  for (const node of ast.statements) if (ts.isVariableStatement(node) && node.declarationList.declarations.some(item => variables.includes(item.name.getText(ast)))) for (const item of node.declarationList.declarations) bindNames(item.name);
 
   /** How each free name of the cut code resolves with these fakes (for a test that wants to look, and for messages). */
   function resolve(fakes = {}) {
@@ -157,6 +161,8 @@ export async function mainHarness(spec = {}) {
     if (!Object.hasOwn(fakes, 'Date')) Object.defineProperty(fakes, 'Date', { value: Date, writable: true, enumerable: false, configurable: true });
     const missing = [...free].filter(name => !Object.hasOwn(fakes, name) && !BUILTIN.has(name) && (own.has(name) || broken.has(name)));
     const trap = name => fail(`the code cut from main.ts uses "${name}", which this test does not provide: ${broken.get(name) ?? 'it is state or a function of main.ts itself'}. Pass a fake for it to context({ ${name}: ... }), or cut it too (functions / variables).`);
+    // A cut variable is a let/const of the script: it would hide a fake of the same name without a word.
+    for (const name of cutVariables) if (Object.hasOwn(fakes, name)) fail(`"${name}" is both a cut variable and a fake: the cut one would be used. Drop it from \`variables\` to fake it, or drop the fake.`);
     const kept = [...cutNames].filter(name => Object.hasOwn(fakes, name)).map(name => [name, fakes[name]]);
     const ctx = vm.createContext(fakes);
     // The traps sit on a prototype put under the context's global: a throwing getter on the global itself is

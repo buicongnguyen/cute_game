@@ -100,6 +100,8 @@ harnessLog.push('later');
   // A fake wins over a cut function of the same name too.
   const both = await mainHarness({ mainFile, functions: ['harnessOuter', 'harnessInner'], variables: ['HARNESS_WORDS'] });
   assert.equal(both.context({ harnessInner: () => 40 }).harnessOuter(), 42);
+  // A fake cannot win over a cut variable (a let/const of the script), so that mix is refused by name.
+  assert.throws(() => both.context({ HARNESS_WORDS: [] }), /main-harness: "HARNESS_WORDS" is both a cut variable and a fake/);
 });
 
 test('a piece that main.ts no longer has fails at once, by name', async () => {

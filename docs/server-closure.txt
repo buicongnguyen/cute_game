@@ -1,3 +1,5 @@
+# The server closure: every src module the Node server loads (node promo/server-closure.mjs --write).
+# Static imports and re-exports only. Modules a src file loads lazily with import() (the Vietnamese packs, help topics) are not listed.
 actions.ts
 audio-settings.ts
 auto-plant.ts

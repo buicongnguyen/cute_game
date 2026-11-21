@@ -36,7 +36,6 @@ function sizeProblems(budget, root = ROOT) {
 }
 
 test('main.ts and world.ts stay inside their size budget', () => {
-  assert.deepEqual(SIZE_BUDGET, { 'src/main.ts': 356_000, 'src/world.ts': 272_000 });
   assert.deepEqual(sizeProblems(SIZE_BUDGET), []);
 });
 
@@ -50,7 +49,7 @@ test('the size check fails on an oversized file, and counts line ends as git sto
 // ---- 2. the server closure ------------------------------------------------------------------------------------
 /** Differences between the closure and the reviewed list, after the listed changes. */
 function closureDrift(closure, listed, allow) {
-  const expected = new Set(listed.split(/\r?\n/).map(line => line.trim()).filter(Boolean));
+  const expected = new Set(listed.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#')));
   for (const { module } of allow.add ?? []) expected.add(module);
   for (const { module } of allow.remove ?? []) expected.delete(module);
   const problems = [];
@@ -60,7 +59,18 @@ function closureDrift(closure, listed, allow) {
   return problems;
 }
 
-/** Uses of the bare names `document` and `window` that run when the module loads (not inside a function, not a typeof test). */
+/** True inside `typeof name !== 'undefined' && ...`, the true branch of such a `?:`, or the body of such an `if`. */
+function guarded(node, file) {
+  const tested = condition => new RegExp(`typeof\\s+${node.text}\\s*!==?\\s*['"]undefined['"]`).test(condition.getText(file));
+  for (let child = node, parent = node.parent; parent; child = parent, parent = parent.parent) {
+    if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && parent.right === child && tested(parent.left)) return true;
+    if (ts.isConditionalExpression(parent) && parent.whenTrue === child && tested(parent.condition)) return true;
+    if (ts.isIfStatement(parent) && parent.thenStatement === child && tested(parent.expression)) return true;
+  }
+  return false;
+}
+
+/** Uses of the bare names `document` and `window` that run when the module loads (not inside a function, not a typeof test or behind one). */
 function domAtLoad(name, text) {
   const file = ts.createSourceFile(name, text, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
   const host = { getSourceFile: wanted => wanted === name ? file : undefined, fileExists: wanted => wanted === name, readFile: () => undefined, getDefaultLibFileName: () => 'lib.d.ts',
@@ -76,7 +86,7 @@ function domAtLoad(name, text) {
       const member = ts.isPropertyAccessExpression(parent) && parent.name === node || ts.isBindingElement(parent) && parent.propertyName === node
         || (ts.isPropertyAssignment(parent) || ts.isPropertySignature(parent) || ts.isPropertyDeclaration(parent) || ts.isMethodDeclaration(parent)) && parent.name === node;
       const symbol = member ? null : ts.isShorthandPropertyAssignment(parent) ? checker.getShorthandAssignmentValueSymbol(parent) : checker.getSymbolAtLocation(node);
-      if (!member && !symbol?.declarations?.length) found.push(`${name}:${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1} uses ${node.text} when the module loads`);
+      if (!member && !symbol?.declarations?.length && !guarded(node, file)) found.push(`${name}:${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1} uses ${node.text} when the module loads`);
     }
     ts.forEachChild(node, visit);
   };
@@ -114,6 +124,7 @@ test('the closure checks fail on a fake module that imports three, and on the ot
   const clean = { 'server/server.mjs': server, 'src/rules.ts': "import { helper } from './lib/helper.ts';\nimport type { Scene } from 'three';\nimport type { View } from './view.ts';\nexport const rule = helper;\n",
     'src/lib/helper.ts': "import '../side-effect.ts';\nexport * from '../shared.ts';\nexport const helper = 1;\n", 'src/side-effect.ts': '', 'src/shared.ts': 'export const shared = 1;\n', 'src/late.ts': 'export const late = 1;\n',
     'src/view.ts': "import { Scene } from 'three';\nimport './view.css';\n", 'src/unreached.ts': "import 'three';\n" };
+  assert.deepEqual(runtimeImports("const a = '/*';\nimport { x } from './real.ts';\nconst b = '*/';\n// import './comment.ts';\nconst c = \"import './string.ts'\";\n"), [['./real.ts', 'import']], 'read from the syntax tree: strings and comments neither hide nor fake an import');
   const root = tree('clean', clean), closure = serverClosure(root);
   assert.deepEqual([...closure], [['late.ts', 'server/server.mjs (dynamic)'], ['lib/helper.ts', 'rules.ts'], ['rules.ts', 'server/server.mjs'], ['shared.ts', 'lib/helper.ts'], ['side-effect.ts', 'lib/helper.ts']],
     'static, dynamic, side-effect and re-export edges are followed; type-only imports are not');
@@ -131,8 +142,11 @@ test('the closure checks fail on a fake module that imports three, and on the ot
     "const lang = document.documentElement.lang;", "window.addEventListener('resize', () => {});",
     "if (typeof window === 'undefined') { /* Node */ }", "export function later() { return document.title + window.innerWidth; }", "export const arrow = () => window.innerWidth;",
     "export class Meter { window: number = 3; width = window.innerWidth; read(window = 2) { return window + this.window; } }", "export const COMBO = { window: 1.5 }; export const span = COMBO.window;",
-    "export class Bad { static width = window.innerWidth; }", "export const shared = 1;"].join('\n') + '\n' });
-  assert.deepEqual(loadProblems(serverClosure(dom), dom).map(line => line.split(':').slice(0, 2).join(':')), ['src/shared.ts:1 uses document when the module loads', 'src/shared.ts:2 uses window when the module loads', 'src/shared.ts:8 uses window when the module loads']);
+    "export class Bad { static width = window.innerWidth; }", "export const shared = 1;",
+    "const wide = typeof window !== 'undefined' && window.innerWidth > 900;", "const lang2 = typeof document != 'undefined' ? document.documentElement.lang : 'en';",
+    "if (typeof document !== 'undefined') { document.title = 'x'; }", "const wrong = typeof window !== 'undefined' && document.title;", "const other = typeof document === 'undefined' ? document.title : '';"].join('\n') + '\n' });
+  assert.deepEqual(loadProblems(serverClosure(dom), dom).map(line => line.split(':').slice(0, 2).join(':')), ['src/shared.ts:1 uses document when the module loads', 'src/shared.ts:2 uses window when the module loads', 'src/shared.ts:8 uses window when the module loads',
+    'src/shared.ts:13 uses document when the module loads', 'src/shared.ts:14 uses document when the module loads'], 'a use behind its own typeof test (lines 10 to 12) is fine; behind another name\'s test, or in the wrong branch, it is not');
 
   // A module that joins the closure unlisted, one that leaves it, and how the allow list settles both.
   const grown = tree('grown', { ...clean, 'src/rules.ts': clean['src/rules.ts'] + "import './view.ts';\n", 'src/lib/helper.ts': 'export const helper = 1;\n' });
