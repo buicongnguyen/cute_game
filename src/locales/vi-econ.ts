@@ -27,7 +27,7 @@ export const VI_ECON: Record<string, string> = {
   'Cooked and sold everything for {amount} energy.': 'Đã nấu và bán hết, được {amount} năng lượng.',
   // Sound settings (audio-settings.ts)
   'Music volume': 'Âm lượng nhạc',
-  'The cottage radio and its tunes': 'Radio trong nhà và những giai điệu của nó',
+  'Music in the world and the cottage radio': 'Nhạc ngoài thế giới và radio trong nhà',
   'Effects volume': 'Âm lượng hiệu ứng',
   'Taps, hits, splashes and chimes': 'Tiếng chạm, tiếng đánh, tiếng nước và tiếng chuông',
   'Vibration': 'Rung',

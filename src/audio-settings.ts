@@ -60,7 +60,7 @@ export function audioRowsHtml(settings: Partial<AudioSettings>) {
   const a = audioOf(settings);
   const slider = (kind: 'music' | 'sfx', title: string, note: string, value: number) =>
     `<div class="settings-row audio-row"><div><strong>${title}</strong><small>${note}</small></div><div class="volume-control"><input type="range" min="0" max="100" step="5" value="${Math.round(value * 100)}" data-volume="${kind}" aria-label="${title}"><output data-volume-out="${kind}">${percent(value)}</output></div></div>`;
-  return slider('music', 'Music volume', 'The cottage radio and its tunes', a.musicVolume)
+  return slider('music', 'Music volume', 'Music in the world and the cottage radio', a.musicVolume)
     + slider('sfx', 'Effects volume', 'Taps, hits, splashes and chimes', a.sfxVolume)
     + `<div class="settings-row"><div><strong>Vibration</strong><small>A little buzz on bites, hits and big moments (phones)</small></div><button class="toggle ${a.vibrate ? 'on' : ''}" role="switch" aria-checked="${a.vibrate}" aria-label="Vibration" data-action="vibrate"></button></div>`;
 }
