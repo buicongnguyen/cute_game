@@ -386,6 +386,7 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
         const look = await page.evaluate(() => { const map = document.querySelector('#hud .minimap'), cap = document.querySelector('#map-caption').getBoundingClientRect(), box = map.getBoundingClientRect(), cs = getComputedStyle(map); return { radius: parseFloat(cs.borderTopLeftRadius) / box.width, inside: cap.width > 0 && cap.top >= box.top && cap.bottom <= box.bottom + .5 && cap.left >= box.left - .5 && cap.right <= box.right + .5, emoji: [...document.querySelectorAll('#hud .top-actions button')].filter(b => !b.querySelector('svg') && !getComputedStyle(b).backgroundImage.includes('svg')).length }; });
         assert.ok(look.radius < .3, `the map is a rounded panel (corner ${look.radius.toFixed(2)} of its width)`);
         assert.ok(look.inside, 'the place name is on a strip inside the map');
+        { const cap = await page.evaluate(() => { const el = document.querySelector('#map-caption'); return { text: el.textContent.trim(), cut: el.scrollWidth > el.clientWidth }; }); if (/^clover village$/i.test(cap.text)) assert.equal(cap.cut, false, `"${cap.text}" is whole on the map at ${size}`); }
         assert.equal(look.emoji, 0, 'every dock button carries a drawing from the icon set');
         // e78e839 moved them: on roomy screens the compact task rows stand in the left column, under the hero plate.
         if (width >= 601 && height >= 521) assert.ok(g.slips.every(s => s.t >= hero.b - 1 && s.l >= hero.l - 1 && s.r <= map.l), 'on roomy screens the quest slips hang under the hero plate');
@@ -694,19 +695,27 @@ for (const size of ['390x844', '844x390', '1600x900']) for (const lang of ['en',
     } finally { await browser.close(); }
   });
 }
-for (const size of ['1600x900', '1280x720']) {
-  test(`the first PC view of a new save: the keyboard guide is open and the nearest bed is free at ${size}`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 120000 }, async () => {
-    const { browser, page } = await openSaved(size, 'en', newSave);
+// A small PC window too (1000x700), Vietnamese (longer labels: more lines) and left-handed play (the strip moves to the right corner).
+SIZES['1000x700'] ??= [1000, 700, false];
+for (const [size, lang, hand] of [['1600x900', 'en', 'right'], ['1280x720', 'en', 'right'], ['1280x720', 'vi', 'right'], ['1000x700', 'en', 'right'], ['1280x720', 'en', 'left']]) {
+  test(`the first PC view of a new save: the keyboard guide is open and the nearest bed is free at ${size} in ${lang}, ${hand}-handed`, { skip: !url && 'set HUD_LAYOUT_URL to a running DEV server', timeout: 120000 }, async () => {
+    const { browser, page } = await openSaved(size, lang, newSave);
     try {
+      if (hand === 'left') { await page.evaluate(() => { window.__zoo.state.settings.joystickSide = 'right'; document.querySelector('#hud').classList.add('joystick-right'); }); await page.waitForTimeout(400); }
       const r = await page.evaluate(() => {
         const w = window.__zoo.world, s = window.__zoo.state, frame = w.renderer.domElement.getBoundingClientRect();
         const beds = s.plots.map(p => { const v = w.camera.position.clone().set(p.x, .3, p.z).project(w.camera), x = frame.left + (v.x + 1) / 2 * frame.width, y = frame.top + (1 - v.y) / 2 * frame.height, hit = document.elementFromPoint(x, y); return { x: Math.round(x), y: Math.round(y), d: Math.hypot(p.x - w.position.x, p.z - w.position.z), on: hit ? (hit.tagName === 'CANVAS' ? 'canvas' : hit.id || hit.closest('[id]')?.id || hit.tagName) : 'off the screen' }; }).sort((a, b) => a.d - b.d);
         const guide = document.querySelector('#keys-guide'), box = guide.getBoundingClientRect();
-        return { nearest: beds[0], open: !!guide.querySelector('dl'), box: { w: Math.round(box.width), h: Math.round(box.height), l: Math.round(box.left), b: Math.round(innerHeight - box.bottom) }, memory: window.__zoo.keysGuide.memory, H: innerHeight };
+        // What the first quest points at (the way pointer's ring and label, guide-ui.ts) and the other HUD pieces down there.
+        const rect = el => { if (!el || el.hidden) return null; const b = el.getBoundingClientRect(); return b.width > 1 && b.height > 1 ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
+        const others = { prompt: rect(document.querySelector('#context-prompt button')), skills: rect(document.querySelector('#hud .skills')), pointer: rect(document.querySelector('#guide-pointer .gp-label')) };
+        return { nearest: beds[0], onScreen: beds.filter(bed => bed.on !== 'off the screen').length, under: beds.filter(bed => bed.on === 'keys-guide').length, open: !!guide.querySelector('dl'), guide: rect(guide), others, box: { w: Math.round(box.width), h: Math.round(box.height), l: Math.round(box.left), r: Math.round(innerWidth - box.right), b: Math.round(innerHeight - box.bottom) }, memory: window.__zoo.keysGuide.memory, H: innerHeight };
       });
       assert.equal(r.open, true, 'open for a new player'); assert.equal(r.memory.mode, 'auto');
-      assert.equal(r.nearest.on, 'canvas', `the nearest bed is under ${r.nearest.on} at ${r.nearest.x},${r.nearest.y}`);
-      assert.ok(r.box.h <= 100 && r.box.l < 40 && r.box.b < 40, `the guide is a low strip in the bottom-left corner: ${JSON.stringify(r.box)}`);
+      if (r.nearest.on !== 'off the screen') assert.equal(r.nearest.on, 'canvas', `the nearest bed is under ${r.nearest.on} at ${r.nearest.x},${r.nearest.y}`); // a 1000 px window shows no bed at first
+      assert.equal(r.under, 0, `no bed in view is under the guide (${r.onScreen} in view)`);
+      assert.ok(r.box.h <= 100 && (hand === 'left' ? r.box.r : r.box.l) < 40 && r.box.b <= 44, `the guide is a low strip in the bottom ${hand === 'left' ? 'right' : 'left'} corner: ${JSON.stringify(r.box)}`);
+      for (const [what, b] of Object.entries(r.others)) if (b) assert.ok(!overlaps(r.guide, b), `the guide overlaps the ${what}: ${JSON.stringify([r.guide, b])}`);
       // The first planting folds it, and the device remembers.
       await page.evaluate(() => window.__zoo.keysGuide.planted()); await page.waitForFunction(() => !document.querySelector('#keys-guide dl'), null, { timeout: 5000 });
       assert.match(await page.evaluate(() => localStorage.getItem('zoo-garden-keys-guide')), /"mode":"auto","uses":30/);
