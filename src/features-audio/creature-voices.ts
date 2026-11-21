@@ -137,6 +137,13 @@ function wobble(ctx: Ctx, osc: OscillatorNode, at: number, length: number, hz: n
   lfo.frequency.value = hz; amount.gain.value = depth; lfo.connect(amount); amount.connect(osc.frequency); lfo.start(at); lfo.stop(at + length + .02);
 }
 
+/**
+ * The voices' own little random stream (pitch and level of each play). Never Math.random: whether a voice plays depends on
+ * the audio clock, which is real time, and a draw from the game's stream would then make the game itself differ from run
+ * to run (the speed gate seeds Math.random and found exactly that).
+ */
+const ownRandom = (seed = 20261121) => () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+
 export class CreatureVoices {
   /** Counters for the probes and tests. `byKind` counts the voices that started. */
   readonly stats = { played: 0, limited: 0, capped: 0, quiet: 0, byKind: { notice: 0, windup: 0, hurt: 0, death: 0 } as Record<VoiceKind, number> };
@@ -146,7 +153,7 @@ export class CreatureVoices {
   /** When each live voice ends, and when each kind and each family's kind was last said. */
   private ends: number[] = []; private said = new Map<string, number>(); private starts: number[] = [];
   constructor(graph: AudioGraph, options: { touch?: boolean; random?: () => number; muted?: () => boolean } = {}) {
-    this.graph = graph; this.touch = !!options.touch; this.random = options.random ?? Math.random; this.muted = options.muted ?? (() => !(graph.sfx > 0));
+    this.graph = graph; this.touch = !!options.touch; this.random = options.random ?? ownRandom(); this.muted = options.muted ?? (() => !(graph.sfx > 0));
   }
   /** Creature voices sounding now. */
   live(now: number) { this.ends = this.ends.filter(end => end > now); return this.ends.length; }

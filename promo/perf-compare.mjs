@@ -1,6 +1,7 @@
 // The compare maths of the speed gate (docs/QUALITY-PLAN.md section 2), kept apart from the browser tool so tests/perf-compare.test.mjs can run it.
 //
 // A measured row:  { key, kind?, main, shadow, triangles, programs, geometries, textures, geometryBytes, visited, level, shadowMap, pitch, invalid? }
+//                  plus the chance counts: fx, roam, fxTriangles, roamTriangles, fxShadow, roamShadow, fxTextures, roamTextures, fxGeometries, roamGeometries
 // A baseline row:  the larger value of the baseline runs for every field, plus `spread` (larger minus smaller) for the gated ones.
 //
 // Row kinds (docs/AAA-PLAN.md section 7):
@@ -20,7 +21,10 @@ export const MEMORY = ['geometries', 'textures', 'geometryBytes'];
 export const MEMORY_GROWTH = 0.05;
 // `fx` (particle pools and loot cards, drawn while one is alive) and `roam` (a rescued friend's avatar, drawn while it walks through the view)
 // are chance: a small allowance, not an exact limit. They are kept out of the exact draw and triangle counts.
-export const SOFT = { fx: 3, roam: 16, fxTriangles: 500, roamTriangles: 2500, fxShadow: 3, roamShadow: 16 };
+// The same for what only they hold on the GPU: a spark's sprite is uploaded the first time a spark is drawn, so whether it is
+// there in the counted frame is chance too (`fxTextures`, `fxGeometries`; `roam...` for a friend's). `textures` and `geometries`
+// are everything else.
+export const SOFT = { fx: 3, roam: 16, fxTriangles: 500, roamTriangles: 2500, fxShadow: 3, roamShadow: 16, fxTextures: 2, roamTextures: 2, fxGeometries: 4, roamGeometries: 4 };
 export const LIVE = ['peakMain', 'peakShadow', 'peakTriangles', 'layoutCount', 'recalcStyleCount', 'nodes'];
 export const LIVE_GROWTH = 0.05;
 /** Counted from zero in a live row, and never allowed above the baseline: a new shader compiled in the middle of a fight is a hitch. */
@@ -127,9 +131,9 @@ export function compareRows(baseline, current, ledger = { entries: [] }) {
 export const DOWNLOAD_NOISE = 0.01;
 export const DOWNLOAD_TYPES = ['js', 'css', 'glb', 'audio', 'image', 'font', 'other'];
 /** The lazy chunks that may arrive after Start, with the most each may weigh (gzip bytes; section 7's install-list table). */
-export const LAZY_ALLOWANCE = { features: 30 * 1024, 'features-vi': 15 * 1024 };
+export const LAZY_ALLOWANCE = { features: 30 * 1024, 'features-audio': 30 * 1024, 'features-vi': 15 * 1024 };
 /** Which named lazy chunk a built file belongs to, or null. */
-export const lazyChunkOf = file => { const m = /(?:^|\/)assets\/(features-vi|features)-[^/]+\.(?:js|css)$/.exec(file); return m ? m[1] : null; };
+export const lazyChunkOf = file => { const m = /(?:^|\/)assets\/(features-vi|features-audio|features)-[^/]+\.(?:js|css)$/.exec(file); return m ? m[1] : null; };
 
 /** Fold the measured cases of several runs into the baseline's download section. */
 export function foldDownload(runs) {
