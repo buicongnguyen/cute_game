@@ -17,7 +17,7 @@ Never call `new AudioContext()` anywhere else.
 effects (Sfx.play) ──► sfx ──► duck ─┐
 click / open / close ─► ui ──► duck ─┤
 (WP11 ambience) ─► ambience ─► duck ─┼─► compressor ─► speakers
-radio theme, (WP13 score) ► music ► duck ┘
+radio theme, WP13 score ──► music ► duck ┘
 ```
 
 - **Levels.** `sfx`, `ui` and `ambience` follow the effects slider (0.55 at the default 0.8, the old loudness); `music` follows
@@ -168,7 +168,7 @@ takes one voice; the same stinger twice within 0.1 s is one stinger.
   small chime of a skill coming back.
 - A kill that is also a level-up plays the fanfare and then the win, one after the other.
 - The fanfare is rarer: only a level-up plays it. Rewards, wins, discoveries and new gear each have their own short tune.
-- The radio (and later the score) dips for about a second under those tunes and under the arrival flag.
+- The radio and the score dip for about a second under those tunes and under the arrival flag.
 - **Not checked by ear.** Levels, lengths, pitch bands, the duck and the absence of clipping are measured; whether the
   new tunes are pleasant, and whether punch and cast are now too present, needs a listener.
 
@@ -196,3 +196,119 @@ Other voices (alert, cast, reel, snap, ready, boom, zap, shock, freeze, magic, s
 several with richer layers. Tests: `tests/sound.test.ts`, `tests/sound-mix.test.ts`. Browser probe: `__zooSfx.stats` counts started /
 limited / capped / muted effects, `__zooSfx.graph.stats.capped` the voices the shared counter refused, and an AnalyserNode
 connected to `__zooSfx.graph.nodes.sfx.duck` meters a bus.
+
+## The music (AAA-PLAN WP13)
+
+Music plays in the world: a director (`src/features/music-director.ts`) chooses what plays, and a live score
+(`src/features/music-score.ts`) plays it from the tunes in `src/features/music-content.ts`. All three are in the lazy
+features chunk (5.1 KB gzip together). Nothing is recorded and nothing is downloaded for the score: every note is an
+oscillator, as in `promo/music.py`, which made the theme (marimba: a sine with a fourth partial that dies in a tenth of
+a second; bass: a sine; pad: a sine with an octave, slow in and out; the theme's three echoes). The melodies are not
+written down anywhere: each tune is a key, a mode, a tempo and four 8-bar chord progressions, and the melody over them
+is drawn from the tune's seed, two bars at a time, on a five-note scale.
+
+| State | When | What plays |
+|---|---|---|
+| village | Clover Village | C major, 104: the theme's key and tempo. It rests (below). |
+| forest, meadow, swamp, canyon | the wild regions of the home planet | F lydian 92, G major 96, D dorian 84, E mixolydian 108 |
+| candy, ice, lava, toy, jungle, ocean, cloud, shadow | each planet | A major 120, Bb lydian 76, C phrygian 112, D major 126, G dorian 116, Eb major 80, A lydian 72, F# minor 88 |
+| danger | a creature that is after someone (not asleep, idle or walking home) within 12 m | the tune of the place goes on and the drums join: kick, tom and shaker |
+| boss | from the boss bar (`bossEngaged`) until the boss falls or is left behind | D minor 138, with its own beat |
+| space | flying between planets | C lydian 66 |
+| ctf, rescue, vault | in a mode | E mixolydian 132, A minor 124, C# phrygian 100 |
+| indoors | inside the cottage | nothing: the radio is the music there |
+
+There is no title state: the director is made when the features mount, after the first played frame.
+
+- **Crossfades** are equal-power over 1.8 s (the squares of the gains add up to 1 all the way, also when a change comes
+  in the middle of another). Danger and boss last 1.5 s past their cause, so a creature at the edge of its reach cannot
+  make the drums flap. The drums come in within 0.3 s and leave in about 2 s.
+- **The village rests.** A tune plays once (two 8-bar phrases, 37 s), then 60 to 120 s of the world's own sounds, then
+  a variation. The wild regions play on. A tune takes another of its progressions every 8 bars, never the same more
+  than twice running, in one of three arrangements, with a new melody each time: it has no loop point.
+- **The recorded theme** (444 KB) is fetched 20 s after the first played frame or later, in idle time, and decoded
+  once (36.9 s, one channel at 48 kHz: 6.8 MB of memory). The service worker keeps it on first use. From then on it plays once on
+  each arrival in the village; the live score plays the variations after the rests.
+- **Theme only.** Below Sharp graphics and on Battery saver there is no live score: the theme plays and rests wherever
+  there is music (and nothing plays until it has come). `THEME_ONLY` in `music-content.ts` is the one flag that makes
+  this so everywhere; on one device the preference `zoo-garden-pref-music` does it (`theme`), or forces the live score
+  at any graphics level (`live`).
+- **The radio wins.** Indoors the director is silent, and while the radio plays it stays silent; a radio that starts
+  cuts what is still fading out in 0.12 s. The radio and the director share the music bus and the music slider (its
+  label is now "Music in the world and the cottage radio"), and both go through the same 0.55 trim.
+- **Off.** With the music slider at 0 the bus is at 0, nothing is planned and nothing is kept; with both sliders at 0 or
+  in a hidden tab the context sleeps (`sound-mix.ts`) and the director waits. It reads only the audio clock: a stopped
+  or faked page clock cannot stall it or make it spin, and after a stall it starts afresh from now (no burst of late
+  notes).
+- **Ducking** is not the director's: everything it plays is behind the music bus, which a stinger lowers 6 dB.
+- **Voices.** The score counts its own voices: 14 on a desktop, 6 on a touch device, where it also leaves out the pad and
+  the marimba's upper partial. It never takes a voice from the effects' counter, so music cannot make an effect or a
+  priority cue fail. On a touch device it also makes room: a note is left out when the score's voices and the effects'
+  live voices together would pass 6, the melody and the figure first, the beat and the bass last. In a fight on a phone
+  the music thins out; it does not stop.
+- **Cost.** A timer looks at the game ten times a second (where the hero is, whether a creature chases, the radio);
+  frames stop in space, so it is not a frame listener. Notes are planned once per eighth note (2.2 to 4.6 times a
+  second), at most 0.2 s ahead on the audio clock. Measured in Chromium: 10 to 27 audio nodes a second for the music on
+  a desktop, 6 to 14 on a touch device; no draw call, no DOM node, no layout.
+
+### Levels: promo/music-clips.mjs
+
+```
+PORT=<dev server port> node promo/music-clips.mjs            # the tables, and the clips with a listen page in .scratch/owner/music/
+PORT=<dev server port> node promo/music-clips.mjs --check    # exit 1 when a tune is more than 2 LU from the theme, or a fight over the music clips
+PORT=<dev server port> node promo/music-clips.mjs --write    # also keep the levels in promo/music-levels.json
+```
+
+It plays the director through the game's own graph in an OfflineAudioContext in Chromium. 30 s of each tune on the
+music bus at the default sliders (the theme the same way: peak -9.7 dBFS, RMS -23.3, loudness -24.1):
+
+| Tune | Peak, dBFS | RMS | Loudness | To the theme, LU | Notes a second | Most notes at once as written (desktop / touch) |
+|---|---|---|---|---|---|---|
+| village | -8.7 | -24.0 | -24.9 | -0.8 | 6.8 | 13 / 6 |
+| forest | -11.2 | -24.7 | -25.6 | -1.5 | 5.3 | 13 / 6 |
+| meadow | -10.3 | -24.6 | -25.3 | -1.2 | 5.3 | 11 / 5 |
+| swamp | -8.7 | -24.3 | -25.1 | -1.0 | 3.5 | 11 / 5 |
+| canyon | -9.9 | -24.5 | -25.3 | -1.2 | 7.0 | 13 / 6 |
+| candy | -9.8 | -23.9 | -25.1 | -1.0 | 7.8 | 12 / 6 |
+| ice | -8.5 | -24.7 | -25.8 | -1.7 | 2.8 | 11 / 5 |
+| lava | -10.1 | -24.2 | -25.1 | -1.0 | 9.0 | 12 / 6 |
+| toy | -10.3 | -24.3 | -25.1 | -1.0 | 8.1 | 13 / 6 |
+| jungle | -11.1 | -24.7 | -25.4 | -1.3 | 8.6 | 13 / 6 |
+| ocean | -8.7 | -24.3 | -25.1 | -1.0 | 4.3 | 11 / 5 |
+| cloud | -7.8 | -24.7 | -25.8 | -1.7 | 2.6 | 11 / 5 |
+| shadow | -9.4 | -24.4 | -25.1 | -1.0 | 3.7 | 11 / 5 |
+| boss | -7.1 | -24.0 | -24.9 | -0.8 | 18.4 | 14 / 8 |
+| space | -8.0 | -24.8 | -25.8 | -1.7 | 2.2 | 10 / 4 |
+| ctf | -8.7 | -24.2 | -25.1 | -1.0 | 11.7 | 14 / 7 |
+| rescue | -8.8 | -23.7 | -25.0 | -0.9 | 12.5 | 14 / 7 |
+| vault | -8.4 | -24.5 | -25.3 | -1.2 | 4.1 | 11 / 5 |
+
+- Every tune is 0.8 to 1.7 LU under the theme (the plan asks for within 2). The sparse tunes have a higher `gain` in
+  `music-content.ts` to get there, so their single notes peak higher.
+- The last column is what the score writes; the player then keeps to its voices (14 and 6). On a touch device the boss,
+  ctf and rescue tunes write 7 or 8 notes at some moments, and the figure's or the melody's note is left out there.
+- The chase drums add 2.2 to 2.5 dB of peak and 0.3 LU, and 5 to 7 dB above 6 kHz, where only the shaker plays
+  (forest: -65.1 to -58.3 dBFS). The touch version is 0.9 to 1.1 LU quieter (no pad).
+- Under the effects: over the loudest tune's RMS (-23.7 dBFS) a hit peaks 14.5 dB, a heavy hit 17.4, a punch 6.4, the
+  win 11.9, a small reward 5.6, POWER READY 9.3, the creature alert 1.9, a tap 1.8: the same distances as over the
+  theme. A stinger's duck takes the score down 6.0 dB and it is back 0.6 s after. A crowded fight over the boss tune
+  peaks at -2.3 dBFS at the default sliders and -1.5 with both at the top: no clipping.
+- `promo/music-levels.json` keeps each tune's level with a signature of the tune (its entry, the score's levels and its
+  first 16 bars of notes). `tests/music-score.test.ts` compares: **after changing a tune, a level or the score, run the
+  tool with `--check --write`**, or that test fails.
+
+Tests: `tests/music-director.test.ts`, `tests/music-score.test.ts` (the recording fake AudioContext).
+
+### What a player may notice (WP13)
+
+- Music in the village within a second of Start, and another tune in every region, on every planet, in space and in
+  the modes. In the village it comes and goes: about half a minute of music, then a minute or two without.
+- Drums when something gives chase, a faster minor tune with a beat at a boss, the place's own tune again afterwards.
+- On a phone in a busy fight the music gets thinner, so the blows keep their voices.
+- When the graphics level drops below Sharp there is only the recorded theme, and none until it has been fetched
+  (20 s or so into a first visit).
+- The music slider now also moves the world's music; at 0 there is none.
+- **Not checked by ear.** Keys, tempos, levels, the crossfades, the drums, the rests and the voice budgets are measured.
+  Whether the tunes are pleasant, whether seeded melodies hold up over an hour, and whether a sine marimba sounds cheap
+  on phone speakers (the bass notes are below what most of them play) needs a listener: the clips and the listen page are
+  for that. **Not verified on a real iPhone**, like the rest of the Web Audio path.
