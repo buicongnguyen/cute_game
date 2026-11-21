@@ -69,7 +69,7 @@ test('every new string has Vietnamese in the pack', () => {
 
 test('wiring: level-ups, milestones, the side-slot unlock and the update board go to News; pop-ups only when switched on', () => {
   const main = src('main.ts');
-  const level = main.slice(main.indexOf('function levelCheck'), main.indexOf('function levelCheck') + 1800); // 1800 since WP24: the level-20 Colossus entry tells the reward trade-off
+  const level = main.slice(main.indexOf('function levelCheck'), main.indexOf('function levelCheck') + 1600);
   assert.match(level, /inbox\.announce\(/); assert.match(level, /if\(popups\)\{void loadInsight\(\)\.then\(\(\)=>insight\?\.levelUp/);
   assert.match(main, /if\(!seen&&inbox\.announce\(\{kind:'unlock'/);
   assert.match(main, /initNewsBoard\(\{host:ranking\.news,autoOpen:\(\)=>inbox\.popups,onUnread:/);

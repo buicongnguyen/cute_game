@@ -32,6 +32,16 @@ export function colossusPay(fought: 'wild' | 'soothed', chosen: boolean, autoPai
   return fought === 'soothed' && !chosen && (AUTO_ALWAYS_FULL || !autoPaid) ? 'wild' : fought;
 }
 
+/**
+ * Marks today (the player's calendar day) as one the giant was awake on this profile slot: it was fought. The Ember
+ * Well's view (colossus-well-ui.ts) writes the same key when it sees the lid up, and gives no gift on such a day: asleep
+ * is a trade, not a switch to flip around the fight. The key and the day format are that file's (its test compares them).
+ */
+export function noteWellAwake(slot: string, now: number, store: Pick<Storage, 'getItem' | 'setItem'> | undefined = globalThis.localStorage) {
+  const d = new Date(now), today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  try { if (!((store!.getItem(`zoo-well-awake:${slot}`) ?? '') >= today)) store!.setItem(`zoo-well-awake:${slot}`, today); } catch { /* a private window: the well gives nothing there anyway */ }
+}
+
 /** What the runtime needs from the game (main.ts wires it). */
 export interface ColossusHost {
   world: World;
@@ -235,7 +245,7 @@ export class ColossusEvent {
   private get weak() { return !this.h.online() && this.lid(this.day) === 'soothed' ? SOOTHE_FACTOR : 1; }
   /** The well's lid in force (colossus-sleep.ts): the player's choice, else the level rule. A forced event (start(), day -2: tests and ?colossus=1) skips the level rule. */
   private lid(day: number): ColossusLid { return day === -2 && !colossusChoice() ? 'wild' : colossusLid(this.h.state().level); }
-  private spawnedWeak = 1;
+  private spawnedWeak = 1; private awakeNoted = 0;
   private soloMaxHp() { return Math.max(1, Math.round(colossusMaxHp(1 + this.nearbyExplorers(), true) / (this.weak > 1 ? SOOTHE_HP_DIVISOR : 1))); }
   private resetDay(day: number) {
     this.day = day; this.count = 0; this.attacks = []; this.nextAt = this.time + 3; this.facing = W.facing; this.lastHits.clear(); this.killer = null;
@@ -400,6 +410,7 @@ export class ColossusEvent {
       }
     }
     this.lastHits.set(who, Date.now());
+    if (who === 'local' && !hazard && !this.h.online() && Date.now() - this.awakeNoted > 60000) { this.awakeNoted = Date.now(); noteWellAwake(activeKey(), Date.now()); }
     if (who === 'local' && !hazard && !this.h.online()) M.recordEvent(this.h.state(), 'colossus');
     if (e.hp - dealt <= 0) { this.killer = who; queueMicrotask(() => this.defeated()); }
     return dealt;
@@ -418,7 +429,7 @@ export class ColossusEvent {
       const pay = colossusPay(fought, !!colossusChoice(), autoPaid), xp = S.xp * (pay === 'soothed' ? SOOTHED_XP : 1), firstAuto = fought === 'soothed' && pay === 'wild';
       if (firstAuto) try { localStorage.setItem(paidKey, '1'); } catch { /* as above */ }
       // Roar hour bonus (+25% EXP and loot counts): solo/offline only, this method returns early online (server-authoritative).
-      const loot = this.h.change(() => { const l = grantColossusReward(this.h.state(), lastHit, Math.random, false, undefined, pay); if (roar) extraXp = grantRoarBonus(this.h.state(), l); return l; });
+      const loot = this.h.change(() => { const l = grantColossusReward(this.h.state(), lastHit, Math.random, false, undefined, pay); if (roar) extraXp = grantRoarBonus(this.h.state(), l, Math.random, xp); return l; });
       this.h.spawnLoot(loot, e.x - 6, e.z);
       if (this.h.gain) this.h.gain('xp', xp + Math.round(extraXp)); else this.h.floating(extraXp ? t('+{xp} EXP (roar hour)', { xp: xp + Math.round(extraXp) }) : `+${xp} EXP`, e.x - 6, e.z, 'xp');
       if (firstAuto) this.h.toast(t('Paid in full this once. From now on a soothed win pays a fifth of the EXP plus fire seeds; wake it at the Ember Well for the full reward.'), '💧');

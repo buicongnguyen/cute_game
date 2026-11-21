@@ -176,3 +176,10 @@ test('saves from before the lid rule take either reward (promo saves), and an ol
   // A device that stored a lid before this rule has no full-pay flag: its own "soothed" pays soothed, Automatic gets its one full kill.
   assert.equal(colossusPay('soothed', true, false), 'soothed'); assert.equal(colossusPay('soothed', false, false), 'wild');
 });
+test('the roar hour adds a quarter of the EXP the kill paid: 7,500 on a full kill, 1,500 on a soothed one', async () => {
+  const { grantRoarBonus, SOOTHED_XP } = await import('../src/colossus-rewards.ts');
+  const full = M.newGame(), f0 = earned(full); assert.equal(grantRoarBonus(full, [], () => .5), 7500); assert.equal(earned(full) - f0, 7500, 'the default: unchanged');
+  const calm = M.newGame(), c0 = earned(calm), loot = grantColossusReward(calm, true, () => .5, false, 1, 'soothed'), counts = loot.map(i => i.count);
+  assert.equal(grantRoarBonus(calm, loot, () => .5, S.xp * SOOTHED_XP), 1500); assert.equal(earned(calm) - c0, 6000 + 1500, 'soothed in a roar hour: 7,500 in all (was 13,500 with the full bonus)');
+  assert.ok(loot.every((item, i) => item.count >= counts[i]), 'the loot counts still grow');
+});

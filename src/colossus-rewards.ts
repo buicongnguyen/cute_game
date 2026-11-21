@@ -42,8 +42,8 @@ export function grantColossusReward(s: M.SaveState, lastHit: boolean, rng: () =>
  * the roar hour is a banner only. Adds 25% of the Colossus's EXP and grows every loot stack by roarBonusCount (mutates `loot`).
  * Returns the extra EXP granted.
  */
-export function grantRoarBonus(s: M.SaveState, loot: { id: string; count: number }[], rng: () => number = Math.random) {
-  const extra = COLOSSUS_STATS.xp * ROAR_BONUS;
+export function grantRoarBonus(s: M.SaveState, loot: { id: string; count: number }[], rng: () => number = Math.random, paid: number = COLOSSUS_STATS.xp) {
+  const extra = paid * ROAR_BONUS; // a quarter of what the kill paid: 7,500 on a full kill, 1,500 on a soothed one
   M.gainXp(s, extra);
   for (const item of loot) item.count += roarBonusCount(item.count, rng);
   return extra;

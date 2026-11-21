@@ -51,5 +51,5 @@ export const COLOSSUS_VI: Record<string, string> = {
   'The canyon darkens and the giant fights at full strength.': 'Hẻm núi tối sầm và người khổng lồ chiến đấu hết sức.',
   'Soothe it': 'Xoa dịu nó',
   'It comes with 200,000 health and 50 times lighter blows, and the sky stays bright.': 'Nó chỉ có 200.000 máu, đòn đánh nhẹ hơn 50 lần và bầu trời vẫn sáng.',
-  'It sleeps through its hour. Nothing happens.': 'Nó ngủ suốt giờ của mình. Không có gì xảy ra.',
+  'It sleeps through its hour. No fight.': 'Nó ngủ suốt giờ của mình. Không có trận đánh.',
 };
