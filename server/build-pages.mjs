@@ -9,6 +9,7 @@ for (const args of [
   ['node_modules/typescript/bin/tsc', '--noEmit'],
   ['node_modules/vite/bin/vite.js', 'build'],
   ['server/build-offline.mjs'],
+  ['promo/await-cycle.mjs'], // a chunk that waits on itself through the Vietnamese pack leaves a blank page: fail the build instead
 ]) {
   const result = spawnSync(process.execPath, args, { env, stdio: 'inherit' });
   if (result.error) throw result.error;
