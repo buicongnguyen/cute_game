@@ -8,6 +8,15 @@
     "vietnamese": 1005
    },
    "why": "Measured growth of the start (plan allowance 1.0 KB): the emit sites in main.ts and hud-combat.ts, the sending end of the event bus, the features loader with its one retry, bossApproach, and addPhrases in i18n.ts. The bus, the services and every feature load after Start."
+  },
+  {
+   "row": "start",
+   "name": "WP10 hero gait blend",
+   "allow": {
+    "english": 279,
+    "vietnamese": 279
+   },
+   "why": "Measured growth of the start (plan allowance 0.3 KB): hero-motion.ts, the blend between the idle and the walk pose that runs from the first frame, in place of the switch in world.ts animatePlayer. The lean-in, the settle, the fidgets, the sit and the clips load after Start (features/hero-idle.ts)."
   }
  ]
 }

@@ -1243,7 +1243,7 @@ setFriendDresser((color,gear,look)=>world.friendAvatar(color,gear,look));
 const helperChat=new ChatBubbles(world,()=>!started||modal!=='');
 const friendsHomeTold=new Set<string>(),crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
   robotBed:()=>helperView.task?.index,robotAnimal:()=>farmHelperView.task?.uid,heldBed,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform:(type,payload)=>type==='rescueFriend'?perform(type,payload):workPerform(type,payload), // a rescue is the player's own tap; the rest are the friends' own jobs
-  rescued(id,at){emit('rescue',{id,at});const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
+  rescued(id,at){emit('rescue',{id,at});const [hi,story]=RESCUE_LINES[id];tone('victory');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
   locked(id){toast(lockedHint(id),'🔒');},
   worked(id,task,r,at){
     if(task.kind==='harvest'){harvestBurst(task.index,Object.keys(r.raw)[0]??'carrot','worker',at);world.syncCrops();}else if(task.kind==='plant'){plantBurst(task.index,'worker');world.syncCrops();}
@@ -1325,7 +1325,7 @@ function updateGuardian(dt:number){
   guardianView.attach(world.scene);
   const lake=started&&!visiting&&!flight&&!world.interior?guardianLake(state.planet,world.position):null,now=huntingView.now(),at=state.hunting?.guardianAt;
   if(guardianSeen?.owner===state&&at!==undefined&&at!==guardianSeen.at&&Math.abs(now-at)<10_000){
-    const p=guardianView.position??world.position;guardianView.caught(p,lake?.surface??.3,world.fx);toast('You caught the Lake Guardian! It will come back for you tomorrow.','🎏');tone('level');
+    const p=guardianView.position??world.position;guardianView.caught(p,lake?.surface??.3,world.fx);toast('You caught the Lake Guardian! It will come back for you tomorrow.','🎏');tone('victory');
   }
   guardianSeen={owner:state,at};
   if(guardianView.update(dt,lake,now,state.hunting,fishKit.ready,world.fx)==='surfaced'&&lake&&Math.hypot(lake.x-world.position.x,lake.z-world.position.z)<lake.rx+14)
@@ -1505,7 +1505,7 @@ const drops=createDrops(world,{layer:$('#world-labels'),alive:()=>state.hp>0&&!w
       });
     }else if(change(()=>M.addItem(state,d.item,d.count)))feedback(d.item,d.count);
   },
-  onFull:()=>toast('Your backpack is full. Store or sell something first.','🎒'),onRare:(d,name)=>{floating(`${d.rarity==='legendary'?'👑':'✨'} ${name}`,d.x,d.z,'item');tone('level');},onExpire:d=>world.burst(d.x,d.z,'#cfd6e6',6)});
+  onFull:()=>toast('Your backpack is full. Store or sell something first.','🎒'),onRare:(d,name)=>{floating(`${d.rarity==='legendary'?'👑':'✨'} ${name}`,d.x,d.z,'item');tone('rewardMedium');},onExpire:d=>world.burst(d.x,d.z,'#cfd6e6',6)});
 // Bags dropped where the explorer fell (death-bags-view.ts): walk up to one, or tap it, to pick it back up.
 const deathBags=initDeathBags({world,layer:$('#world-labels'),own:()=>state,active:()=>started&&!visiting&&!modal&&!flight&&!world.interior&&state.hp>0&&world.state===state,perform:(type,payload)=>perform(type,payload),toast,t});
 frameListeners.add(dt=>deathBags.update(dt));
@@ -1533,7 +1533,7 @@ function grantDefeat(e:{id:string;xp:number;boss:boolean;type?:string;name?:stri
   gainStat('xp',e.xp); // the EXP bar fills and shows +N (gain-feed.ts)
   // Loot lands on the ground (drops.ts); picking it up adds a line to the pickup list.
   drops.spawnLoot(loot,x,z);
-  if(e.boss){toast(`${e.name??'Boss'} defeated!`,'👑');tone('level');}
+  if(e.boss){toast(`${e.name??'Boss'} defeated!`,'👑');tone('victory');}
   // The first-defeat companion is banked straight into the bag (model.ts grantDefeat), never dropped on the ground.
   if(loot.pet)toast(`${t(M.ITEMS[loot.pet].name)} joined you! It waits in your bag.`,M.ITEMS[loot.pet].icon);
 }
@@ -1578,7 +1578,7 @@ function autoAttack(kind:string){
 /** The new item appears on the explorer with a sparkle, a name tag and a chime. */
 function equipFeedback(id:string){
   world.refreshPlayer();world.fx?.burst(world.position,{n:16,color:['#ffe66d','#ffffff'],glow:true,speed:3,up:6});
-  floating(`${t(M.ITEMS[id].name)} ↑`,world.position.x,world.position.z,'item big');tone('level');
+  floating(`${t(M.ITEMS[id].name)} ↑`,world.position.x,world.position.z,'item big');tone('equip');
   if(id==='harpoon')toast('Harpoon ready. Tap pond fish or select a forest bird.','🔱');
 }
 /** Eating from the bag or the HUD button: one path, with "+N ❤️" over the explorer like the reference's useItem. */
@@ -1766,7 +1766,7 @@ world.onLanded=(landing:Landing)=>{
 function noteComboHit(e:Enemy,impact:CombatHit){
   if(!airOn())return;
   // The power strike's charge (power-rules.ts): every own hit on a creature fills it, except the strike's own.
-  if(!combat.striking){const level=powerCharge.hit();if(level){tone('ready');vibrate(25);world.fx?.text({x:world.position.x,y:world.position.y+world.jump.height,z:world.position.z},t(level>1?'POWER ×2!':'POWER READY!'),'xp lane');}}
+  if(!combat.striking){const level=powerCharge.hit();if(level){tone('powerReady');vibrate(25);world.fx?.text({x:world.position.x,y:world.position.y+world.jump.height,z:world.position.z},t(level>1?'POWER ×2!':'POWER READY!'),'xp lane');}}
   const kind:ComboHit=comboKind??(world.jump.airborne?'air':impact.lift>0?'launcher':'ground'),first=kind==='launcher'&&!comboMeter.launched;
   if(kind==='air'&&!actionHandler&&!e.boss&&(e.lift??0)>.05&&e.hp>0)world.knockUpEnemy(e,AIR.juggle,.5);
   if(!comboMeter.live)chainDamage=0;chainDamage+=Math.max(0,impact.amount);
@@ -2144,7 +2144,7 @@ export const gameBridge:GameBridge={
   grantGift:gift=>{
     if(!started||!Number.isFinite(gift.energy)||gift.energy<0)return false;
     if(gift.item&&gift.count>0&&!M.addItem(state,gift.item,gift.count))return false;
-    state.energy+=gift.energy;tone('level');save();updateLabels();return true;
+    state.energy+=gift.energy;tone('rewardMedium');save();updateLabels();return true;
   },
   botContext:()=>({active:botActive(),ready:botActive()&&!visiting&&!fishGame}),
   dungeonMessage:message=>dungeonApi?.message(message),setDungeonSender:send=>{dungeonSender=send;dungeonApi?.setSender(send);},
@@ -2219,9 +2219,9 @@ async function onSpaceEvent(event:SpaceEvent){
     case 'bump':spaceView.shake=.5;tone('hit');break;
     case 'empty':spaceHint('⛽ Out of fuel! Tap <b>Return home</b> to refill (ϟ 20) and fly back, or collect <b>stardust</b> ✨.',6);break;
     case 'edge':spaceHint('🌌 This is the edge of the universe. Tap <b>Return home</b> to fly back!',4);break;
-    case 'dust':{const journey=flight,reward=await perform<{shard:boolean;nextDust?:{id:number;x:number;z:number}}>('collectStardust',{position:journey?{x:journey.x,z:journey.z}:undefined,dustId:event.id});if(!reward)break;if(journey&&flight===journey&&reward.nextDust){const dust=journey.layout.dust.find(d=>d.id===reward.nextDust!.id);if(dust)Object.assign(dust,reward.nextDust);}spaceFloat(`✨ +14 fuel · +3 ϟ${reward.shard?' · 🌟 Star shard!':''}`);tone(reward.shard?'level':'coin');break;}
+    case 'dust':{const journey=flight,reward=await perform<{shard:boolean;nextDust?:{id:number;x:number;z:number}}>('collectStardust',{position:journey?{x:journey.x,z:journey.z}:undefined,dustId:event.id});if(!reward)break;if(journey&&flight===journey&&reward.nextDust){const dust=journey.layout.dust.find(d=>d.id===reward.nextDust!.id);if(dust)Object.assign(dust,reward.nextDust);}spaceFloat(`✨ +14 fuel · +3 ϟ${reward.shard?' · 🌟 Star shard!':''}`);tone(reward.shard?'rewardSmall':'coin');break;}
     case 'discover':{if(!await perform('discover',{id:event.planet,position:flight?{x:flight.x,z:flight.z}:undefined}))break;prefetch(event.planet);const p=M.PLANETS[event.planet];
-      spaceHint(`🔭 New planet discovered: <b>${p.icon} ${t(p.name)}</b><br><small>Bosses: ${p.bosses.map(b=>t(ENEMY_TYPES[b]?.name)??b).join(', ')} · landing from level ${p.level}</small>`,6);tone('level');break;}
+      spaceHint(`🔭 New planet discovered: <b>${p.icon} ${t(p.name)}</b><br><small>Bosses: ${p.bosses.map(b=>t(ENEMY_TYPES[b]?.name)??b).join(', ')} · landing from level ${p.level}</small>`,6);tone('discover');break;}
     case 'landed':void arrive(event.planet);break;
   }
 }
@@ -2279,7 +2279,7 @@ app.addEventListener('click',async event=>{
     case 'color':await perform('settings',{color:button.dataset.color!});document.querySelectorAll<HTMLButtonElement>('.color-picker button').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});world.refreshPlayer();break;
     case 'forge-menu':forgeMenu(id);break;
     case 'craft-back':crafting();break;
-    case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'level':'pop');}forgeMenu(id);break;}
+    case 'forge':{button.disabled=true;const result=await perform<M.ForgeOutcome>('forge',{id});if(result){toast(result.success?t('Forged to +{level}!',{level:result.level}):'The forge attempt failed. Your weapon kept its level.',result.success?'✨':'🔨');tone(result.success?'rewardMedium':'pop');}forgeMenu(id);break;}
     case 'drop-item':{if(actionHandler)await perform('dropItem',{id,count:1});else if(M.looseQuantity(state,id)>0&&!M.isPenned(id)){change(()=>M.removeItem(state.bag,id));drops.spawn(id,1,world.position.x,world.position.z,{thrown:true,dir:world.facing});}inventory();break;}
     case 'close':closeDialog();break;case 'bag':bagMode='bag';inventory();break;case 'open-market':market();break;case 'inspect':if(id){const again=id===selectedItem;if(modal==='bag'&&isDoubleTap(id,again,performance.now())){$<HTMLButtonElement>('#dialog-body .tile-e:not(:disabled)')?.click();break;}if(!again)bagUi.card=false;selectedItem=id;inventory();}break;case 'bag-card':bagUi.card=!bagUi.card;inventory();if(bagUi.card)$<HTMLElement>('#bag-card .card-close')?.focus();break;case 'bag-card-close':bagUi.card=false;inventory();$<HTMLElement>('#dialog-body .item-cell.sel .tile-q')?.focus();break;case 'quests':if(button.id==='quest-summary'&&walkToQuest())break;quests();break;case 'map':map();break;case 'settings':settings();break;case 'keys-guide':keysGuide.toggle();updateHud();break;case 'trackers':trackerMode=$('.tracker-stack').classList.contains('folded')?'open':'fold';updateHud();break;case 'help':help();break;case 'news':inbox.open();break;
     case 'claim':if(await perform('claimQuest')){tone('quest');toast('A little milestone. A lovely reward!','🎁');if(modal)quests();}break;
@@ -2405,7 +2405,7 @@ app.addEventListener('click',async event=>{
     // Install as app (install-app.ts): the browser's own dialog, or the Add to Home Screen steps on iPhone and iPad.
     case 'install-app':{const mode=installMode();if(mode==='ios')openDialog('install','Add Zoo Garden to your Home Screen',iosGuideHtml(t),'INSTALL AS APP','📲');else if(mode==='prompt'&&await promptInstall()==='accepted')toast(t('Zoo Garden is installed. Your offline adventure is ready anywhere.'),'📲');syncInstallButtons();break;}
     // Backpack +4 / chest +10 slots (storage-slots.ts).
-    case 'expand-storage':{const kind=button.dataset.kind==='chest'?'chest':'bag',r=await perform<{size:number}>('expandStorage',{kind});if(r){tone('level');toast(t(kind==='bag'?'Your backpack now has {size} slots.':'Your chest now has {size} slots.',{size:r.size}),kind==='bag'?'🎒':'📦');}if(modal==='chest')storage();else if(modal==='bag')inventory();break;}
+    case 'expand-storage':{const kind=button.dataset.kind==='chest'?'chest':'bag',r=await perform<{size:number}>('expandStorage',{kind});if(r){tone('rewardSmall');toast(t(kind==='bag'?'Your backpack now has {size} slots.':'Your chest now has {size} slots.',{size:r.size}),kind==='bag'?'🎒':'📦');}if(modal==='chest')storage();else if(modal==='bag')inventory();break;}
     case 'profile':{const slot=Number(button.dataset.slot);if(slot!==activeSlot()&&setActiveSlot(slot))location.reload();break;}
     case 'friend-call':{const id=button.dataset.kind as FriendId;if(await perform('callFriend',{id}))friendDialog(id);break;}
     case 'helper-call':{if(await perform('callHelper'))helperDialog();break;}

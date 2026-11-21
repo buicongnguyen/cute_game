@@ -67,6 +67,7 @@ import {applyGait,armOf,armSwing,gaitSwing,hipOf,limbsOf,newGait,stepGait,stride
 import {DEFAULT_PIVOTS,fitOf,lookOf,lookTrim,lookPace,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {fitArmPiece} from './arm-fit.ts';
 import {part} from './part-cache.ts';
+import {heroPose,type HeroMotion} from './hero-motion.ts';
 import {WeaponTrail,measureBlade,type HeldBlade} from './weapon-trail.ts';
 import {growBlade,grownTint,heldWindLook} from './weapon-growth.ts';
 import {CUTS,SPIN,SWING,TRAIL,spinLead,spinTurn,swingPose,nextCut,type Blade,type CutIndex,type SwingPose} from './trail-ribbon.ts';
@@ -1317,6 +1318,8 @@ export class World {
   steerPoint:{x:number;z:number;at:number}|null=null;
   /** Runs after the explorer, pets and other players are posed each frame (swim.ts: the swim pose and ripples). */
   afterAnimate?:(dt:number)=>void;
+  /** The base pose's state (hero-motion.ts); the idle feature's pose over it and its cheer and hold-up clips (features/hero-idle.ts, set after Start). */
+  declare heroMove?:HeroMotion;declare heroExtras?:(m:HeroMotion,dt:number)=>void;declare playPose?:(kind:'cheer'|'holdUp',seconds?:number)=>void;
   /** How far a guard dog at this spot sinks into a pond (swim.ts; dog-world.ts DogHost). */
   dogSink?:(x:number,z:number)=>number;
   private dryCache:{from:Obstacle[];list:Obstacle[]}|null=null;
@@ -2423,19 +2426,17 @@ export class World {
     const at=this.position??{x:0,z:0},was=this.walkFrom??(this.walkFrom={x:at.x,z:at.z,v:0});if(dt>0){const v=Math.min(30,Math.hypot(at.x-was.x,at.z-was.z)/dt);was.v=v;}was.x=at.x;was.z=at.z;
     const stride=strideOf(hipOf(this.player),was.v,this.player.scale?.y||HERO_SCALE),arm=armSwing(armOf(this.player));/* longer arms swing less and hang closer (walk-cycle.ts armSwing) */
     this.walkClock=(this.walkClock||0)+dt*(this.moving?11*stride.rate:3);
-    const o=this.walkClock,c=Math.sin(o),p=this.player;
+    const p=this.player;
     const flying=this.playerFlying&&FLIGHT_POSE_DISGUISES.includes(this.state.gear.disguise??'');
     if(!flying)clearSuperheroFlightPose(p);
     const armL=part(p,'arm-left'),armR=part(p,'arm-right'),legL=part(p,'leg-left'),legR=part(p,'leg-right'),head=part(p,'head');
-    const kind=this.swingAs??this.weaponKind??'fist',pose=this.pose;
-    let twist=0,lean=0,lift=0,step=0,sx=1,sy=1,sz=1,turn=0;
+    const kind=this.swingAs??this.weaponKind??'fist',pose=this.pose,jump=this.jump,air=jump?.airborne?jump:null;
     // An arm a punch stretched is its own length again once the punch is over.
     if(this.armsStretched&&!(this.punchT>0)){armL?.scale.set(1,1,1);armR?.scale.set(1,1,1);this.armsStretched=false;}
-    // Base: walk cycle or idle breathing.
-    if(this.moving){armL?.rotation.set(-c*arm.swing-arm.ease,0,-arm.splay);armR?.rotation.set(c*arm.swing-arm.ease,0,arm.splay);legL?.rotation.set(c*stride.swing,0,0);legR?.rotation.set(-c*stride.swing,0,0);lift=stride.drop?-stride.drop*(1-Math.cos(c*stride.swing))/(1-Math.cos(stride.swing))*(this.player.scale?.y||HERO_SCALE):Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
-    else{armL?.rotation.set(0,0,-arm.splay-Math.sin(o)*.05);armR?.rotation.set(0,0,arm.splay+Math.sin(o)*.05);legL?.rotation.set(0,0,0);legR?.rotation.set(0,0,0);sy=1+Math.sin(o*1.2)*.025;if(head)head.rotation.set(0,Math.sin(o*.4)*.15,0);}
+    // Base: the walk and the idle blended, and the weapon stance (hero-motion.ts).
+    const hm=heroPose(this,dt,stride,arm,air?'':kind);
+    let twist=hm.twist,lean=hm.lean,lift=hm.lift,step=0,sx=1,sy=hm.sy,sz=1,turn=0;
     // In the air (jump-rules.ts): a squash as the feet leave, a stretch going up, a tuck at the top, a head-first dive.
-    const jump=this.jump,air=jump?.airborne?jump:null;
     if(air){
       const up=Math.max(0,Math.min(1,air.velocity/16)),down=Math.max(0,Math.min(1,-air.velocity/18)),tuck=1-Math.max(up,down);lift=0;
       armL?.rotation.set(-2.5*up-.5*tuck+.4*down,0,-.35-.5*down);armR?.rotation.set(-2.5*up-.5*tuck+.4*down,0,.35+.5*down);
@@ -2448,12 +2449,6 @@ export class World {
       if(!air.diving&&kind==='gun'&&this.aimT>0){armR?.rotation.set(-1.2,0,.05);armL?.rotation.set(-1,0,.45);twist+=.12;lean=.16;}
       // A skill cast from the air (air-cast.ts): the hands thrust out, the knees tuck, and the body leans back and turns a little while it hangs.
       if(!air.diving&&this.castAirT>0){const e=Math.sin(Math.min(1,this.castAirT/AIR_CASTING.pose)*Math.PI);armL?.rotation.set(-1.7*e-.3,0,-.55*e-.2);armR?.rotation.set(-1.7*e-.3,0,.55*e+.2);legL?.rotation.set(.75*e,0,0);legR?.rotation.set(.35*e,0,0);lean=-.2*e;twist+=.5*e;sy*=1+.05*e;}
-    }
-    // Weapon stance.
-    if(armR&&!air){
-      if(kind==='sword'){armR.rotation.x=this.moving?-.3+c*.3:-.45;armR.rotation.z=.18;}
-      else if(kind==='gun'){if(this.aimT>0){armR.rotation.set(-1.5,0,.05);armL?.rotation.set(-1.3,0,.45);twist=.12;}else{armR.rotation.x=this.moving?-.25+c*.2:-.35;armR.rotation.z=.2;}}
-      else if(kind==='rod')armR.rotation.x=this.moving?-.2+c*.2:-.3;
     }
     const hand=part(p,'hand-right');if(hand)hand.rotation.x=kind==='gun'&&this.aimT>0?1.45:0;
     // A dive with a blade: it leads the way down, and leaves its trail.

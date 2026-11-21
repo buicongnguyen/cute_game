@@ -346,7 +346,7 @@ export class ColossusEvent {
     rig.root.userData.pickHeight = 9 / 1.85; rig.root.userData.pickHeightAsset = null; rig.root.userData.footprint = S.radius * .8;
     w.enemies.push(e); this.enemy = e; this.spawnedWeak = this.weak; this.rig = rig; this.rise = online && (this.server?.hp ?? 1) < (this.server?.maxHp ?? 1) ? 1 : 0; this.dying = 0;
     if (!online && this.day < 0) this.resetDay(this.window(Date.now()).day);
-    if (!online) { this.nextAt = this.time + 3; if (this.h.news?.('The Cinderpeak Colossus has woken', 'In Redrock Canyon until 24:00. The sky darkens over every planet.') ?? true) this.h.toast(t('The Cinderpeak Colossus has woken in Redrock Canyon! The sky darkens over every planet.'), '🌋'); this.h.tone('level'); }
+    if (!online) { this.nextAt = this.time + 3; if (this.h.news?.('The Cinderpeak Colossus has woken', 'In Redrock Canyon until 24:00. The sky darkens over every planet.') ?? true) this.h.toast(t('The Cinderpeak Colossus has woken in Redrock Canyon! The sky darkens over every planet.'), '🌋'); this.h.tone('go'); }
   }
   /** Swaps the stand-in for the Blender giant once it arrives. */
   private restyle() {
@@ -407,7 +407,7 @@ export class ColossusEvent {
   private crumble() {
     const w = this.h.world, e = this.enemy; if (!e) return;
     this.dying = .001; this.attacks = []; this.serverAttacks = []; this.retreatMinions();
-    w.fx?.shake(1); w.fx?.freeze(.12); this.h.tone('level');
+    w.fx?.shake(1); w.fx?.freeze(.12); this.h.tone('victory');
     for (let i = 0; i < 6; i++) w.fx?.burst({ x: e.x + (Math.random() - .5) * 14, z: e.z + (Math.random() - .5) * 10 }, { n: 22, color: ['#4b3a3b', '#ff7a1e', '#ffd27a'], speed: 7, up: 9, size: .3, life: 1.4 });
     this.h.toast(t('The Cinderpeak Colossus crumbles! The sky clears.'), '🌋');
   }
