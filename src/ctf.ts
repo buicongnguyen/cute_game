@@ -181,7 +181,7 @@ export function initCtf(h: CtfHooks) {
     for (const b of s.bots) showBot(b);
     world.onRemotePlayerClick = id => { const b = s.bots.find(v => v.id === id); if (b?.proxy && b.proxy.hp > 0) { world.select(b.proxy); } };
     document.body.classList.add('in-ctf', 'in-mode'); hud.hidden = false; feed.hidden = false; tags.hidden = false; keeperTag.hidden = true; bubble.hidden = true;
-    h.refreshPlayer(); h.tone('level'); banner(t('Flag Rush Isle'), `${teamSize}v${teamSize} · ${t('Red team: AI opponents')}`);
+    h.refreshPlayer(); h.tone('discover'); banner(t('Flag Rush Isle'), `${teamSize}v${teamSize} · ${t('Red team: AI opponents')}`);
     world.fx?.burst({ x: world.position.x, z: world.position.z }, { n: 40, color: ['#7a8aff', '#ff7a8a', '#ffffff'], glow: true, speed: 5, up: 9 });
     h.updateHud();
     return true;
@@ -352,11 +352,11 @@ export function initCtf(h: CtfHooks) {
   function handle(events: CtfEvent[]) {
     const s = session; if (!s) return; const m = s.m, fx = world.fx;
     for (const ev of events) switch (ev.kind) {
-      case 'go': banner(t('Go!'), ''); h.tone('level'); break;
+      case 'go': banner(t('Go!'), ''); h.tone('go'); break;
       case 'overtime': banner(t('Overtime!'), t('GOLDEN POINT — the next capture wins!')); h.tone('alert'); break;
       case 'take': {
         const ours = ev.flag === s.team; post(ours ? t('{name} took our flag! Stop them!', { name: name(ev.by) }) : t('{name} took the {team} flag!', { name: name(ev.by), team: teamName(ev.flag) }), ours ? 'bad' : 'good');
-        h.tone(ours ? 'alert' : 'level'); const p = rulesPlayer(m, ev.by); if (p) fx?.burst(at(p), { n: 30, color: [TEAM_COLORS[ev.flag], '#ffffff', '#ffe14d'], glow: true, speed: 5, up: 7 });
+        h.tone(ours ? 'alert' : 'rewardSmall'); const p = rulesPlayer(m, ev.by); if (p) fx?.burst(at(p), { n: 30, color: [TEAM_COLORS[ev.flag], '#ffffff', '#ffe14d'], glow: true, speed: 5, up: 7 });
         if (ev.by === ME) banner('🚩 ' + t('You carry the flag!'), t('Bring it home!'));
         break;
       }
@@ -365,7 +365,7 @@ export function initCtf(h: CtfHooks) {
       case 'capture': {
         const scorer = rulesPlayer(m, ev.by), ours = scorer?.team === s.team;
         post(ev.by === ME ? t('You score! {a} – {b}', { a: ev.score[0], b: ev.score[1] }) : t('{name} SCORES! {a} – {b}', { name: name(ev.by), a: ev.score[0], b: ev.score[1] }), ours ? 'good big' : 'bad big');
-        h.tone(ours ? 'level' : 'hurt'); fx?.shake?.(ours ? .5 : .25);
+        h.tone(ours ? 'rewardMedium' : 'hurt'); fx?.shake?.(ours ? .5 : .25);
         if (scorer) { const p = FIELD.stands[scorer.team]; for (let i = 0; i < 3; i++) setTimeout(() => world.fx?.burst(at(p), { n: 40, color: ['#ff7ab0', '#7fd0ff', '#ffe14d', '#7aff9a'], glow: true, speed: 7, up: 11 }), i * 220); fx?.ring(at(p), { color: TEAM_COLORS[scorer.team], from: .5, to: 7, life: .8, y: .1, thick: .08 }); }
         banner(`🏆 ${ev.score[0]} – ${ev.score[1]}`, ours ? t('Point for the blue team!') : t('The red team scores!'), ours ? 'good' : 'bad');
         break;
@@ -426,7 +426,7 @@ export function initCtf(h: CtfHooks) {
   function finishMatch(result: { winner: TeamId | -1; reason: string; seconds: number }) {
     const s = session!; lastResult = result;
     const won = result.winner === s.team, draw = result.winner === -1, me = rulesPlayer(s.m, ME)!;
-    h.tone(won ? 'success' : draw ? 'level' : 'hurt');
+    h.tone(won ? 'victory' : draw ? 'rewardSmall' : 'hurt');
     banner(won ? t('VICTORY!') : draw ? t('DRAW') : t('DEFEAT'), `${s.m.score[0]} – ${s.m.score[1]}`, won ? 'good' : draw ? '' : 'bad');
     void claim(s, won, draw, me).then(() => { if (session === s) setTimeout(() => { if (session === s) endDialog(s); }, 1600); });
   }

@@ -181,7 +181,7 @@ export function initDungeon(h: DungeonHooks) {
     o.allies.forEach((def, i) => { const a = (i + 1) * TAU / (o.allies.length + 1) - Math.PI / 2; session!.allies.push({ def, id: 'vault-ally:' + def.id, x: spawn.x + Math.sin(a) * 2.6, z: spawn.z + Math.cos(a) * 2, facing: Math.PI, cd: 1 + i * .3, swing: 0, target: null, moving: false }); });
     for (const ally of session.allies) world.addRemotePlayer(ally.id, allyPose(ally));
     document.body.classList.add('in-vault', 'in-mode'); hud.hidden = false; lobbyPanel.hidden = true; keeperLabel.hidden = true;
-    h.tone('level'); for (const ally of session.allies) h.toast(t('{name} joins the party', { name: ally.def.name }), '🤝');
+    h.tone('go'); for (const ally of session.allies) h.toast(t('{name} joins the party', { name: ally.def.name }), '🤝');
     banner(0);
   }
   function wallObstacles(): World['obstacles'] { const out: World['obstacles'] = []; for (let i = 0; i < 72; i++) { const a = i * TAU / 72; out.push({ x: C.x + Math.cos(a) * (ARENA_R + 2.2), z: C.z + Math.sin(a) * (ARENA_R + 2.2), r: 1.5 }); } return out; }
@@ -259,7 +259,7 @@ export function initDungeon(h: DungeonHooks) {
   function spawnBoss(stage: number) {
     const s = session!, st = DUNGEON_STAGES[stage], e = spawn(st.boss, C.x, C.z + 4, humans()); s.boss = e; s.skillClock = 3; s.skillIndex = 0;
     if (e) { world.fx?.shake?.(.6); world.fx?.text({ x: e.x, y: 3, z: e.z }, `${DUNGEON_BOSSES[st.boss].icon} ${t(DUNGEON_BOSSES[st.boss].name)}`, 'alert callout'); }
-    h.toast('The guardian awakens!', DUNGEON_BOSSES[st.boss].icon); h.tone('level');
+    h.toast('The guardian awakens!', DUNGEON_BOSSES[st.boss].icon); h.tone('go');
   }
   function vaultEnemies() { return world.enemies.filter(e => isVaultId(e.id)); }
   function cleanupDead() {
@@ -316,7 +316,7 @@ export function initDungeon(h: DungeonHooks) {
     const parts = loot.items.map(i => `+${i.count} ${t(DUNGEON_ITEMS[i.id]?.name ?? i.id)}`);
     world.fx?.text({ x: world.position.x, y: 1.4, z: world.position.z }, `+${loot.xp} EXP`, 'xp');
     h.toast(`${t('Room {n} cleared', { n: loot.stage + 1 })} · ${parts.join(' · ')}`, '🎁');
-    if (loot.pet) { h.toast(t('{name} joined you! It waits in your bag.', { name: t(DUNGEON_ITEMS[loot.pet].name) }), DUNGEON_ITEMS[loot.pet].icon); h.tone('level'); }
+    if (loot.pet) { h.toast(t('{name} joined you! It waits in your bag.', { name: t(DUNGEON_ITEMS[loot.pet].name) }), DUNGEON_ITEMS[loot.pet].icon); h.tone('rewardLarge'); }
     h.updateHud();
   }
   function banner(stage: number) {

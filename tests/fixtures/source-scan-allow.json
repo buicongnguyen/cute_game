@@ -83,6 +83,7 @@
     "welcome.test.ts"
   ],
   "planned": [
-    "own-names.test.ts"
+    "own-names.test.ts",
+    "sound-mix.test.ts"
   ]
 }
