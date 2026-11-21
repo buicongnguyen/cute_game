@@ -11,6 +11,7 @@
 //   --runs 3 (each device that many times)   --free-play 300 (seconds)   --minutes 15 (the cap of one run)   --save <file> (route mid)
 //   --boss-health 10 (route mid: the bear starts the fight at that share of its health)   --out <dir> (default .scratch/journey)
 //   --baseline writes the numbers into promo/journey-baseline.json (median of the runs, min and max where they differ)   --video <dir>
+//   --after <file> writes them into that file instead, in the same form: a package's "after" rows beside the kept before rows
 //   PORT=5298 picks the server.  PLAYWRIGHT_MODULE=<path to playwright/index.mjs> if playwright is not found.
 //
 // Each run writes <out>/<route>-<device>/: events.json (what the page recorded), timeline.json (buildTimeline of it), one
@@ -43,6 +44,7 @@ export const WATCH = [
   ['ribbon', '[data-beat="ribbon"], .moment-ribbon'],
   ['card', '[data-beat="card"], .moment-card'],
   ['line', '[data-beat="line"], .talk-bar'],
+  ['tip', '[data-beat="tip"]'], // the first fight's bubble (WP17): 'Tap Attack!', the ring, the finisher
 ];
 const mark = name => e => e.type === 'mark' && e.name === name;
 /**
@@ -65,7 +67,10 @@ export const BEATS = [
   { id: 'bought', routes: ['new'], on: mark('bought') },
   { id: 'backpack', routes: ['new'], on: mark('backpack') },
   { id: 'fight-start', routes: ['new'], on: mark('fight-start') },
+  { id: 'fight-tip', routes: ['new'], on: e => e.type === 'tip' },
   { id: 'first-kill', on: e => e.type === 'kill' },
+  // WP17: the first win of a save is told once (the game's firstWin event), and Attack opens nothing during the fight step.
+  { id: 'first-win', routes: ['new'], on: e => e.type === 'firstWin', check: t => t.fight?.dialogsOpenedByAttack ? `${t.fight.dialogsOpenedByAttack} dialogs opened by Attack in the fight step` : null },
   { id: 'attack-opened-dialog', on: (e, i, all) => e.type === 'dialog' && opener(all, i).by === 'attack' },
   { id: 'fight-done', routes: ['new'], on: mark('fight-done') },
   { id: 'attack-probe', routes: ['new'], on: e => e.type === 'mark' && e.name === 'probe-result' && !!e.data?.opened },
@@ -159,7 +164,7 @@ export function buildTimeline(events, { route = 'new', device = 'pc', beats = BE
       startS: s(from), completed: kills >= 5, attackPressesNeeded: attack(handsOff), eagerAttackPresses: attack(fight) - attack(handsOff),
       trackerTaps: fight.filter(e => e.type === 'input' && /quest|tracker/.test(e.target ?? '')).length,
       dialogsOpenedByAttack: byAttack.count, dialogsOpenedByAttackDistinct: byAttack.distinct, maxRepeatsOfOneDialog: byAttack.maxRepeats,
-      kills, firstKillAfterS: firstKill ? round1((firstKill.t - from) / 1000) : null,
+      kills, firstKillAfterS: firstKill ? round1((firstKill.t - from) / 1000) : null, firstWins: played.filter(e => e.type === 'firstWin').length,
       tookS: done ? round1((done.t - from) / 1000) : null,
       lowestHealthPct: Math.min(100, ...fight.filter(e => e.type === 'hp').map(e => e.pct)),
     };
@@ -260,6 +265,7 @@ function recorder(watch) {
       J.push(type, { id: el.dataset.beatId || el.id || el.className.toString().split(' ')[0], speaker: el.dataset.speaker, text: el.innerText.replace(/\s+/g, ' ').trim().slice(0, 160) });
     }
     const s = window.__zoo?.state; if (!s) return;
+    if (!J.listening && window.__zoo.services) { J.listening = true; window.__zoo.services.on('firstWin', () => J.push('firstWin')); } // the features mount after the first played frame
     const now = { level: s.level, kills: s.counters?.kills ?? 0, story: s.progression?.story?.index ?? 0, fish: s.counters?.fish ?? 0, down: s.hp <= 0, hp: Math.round(s.hp) };
     if (last.level !== undefined) {
       if (now.level > last.level) J.push('level', { level: now.level });
@@ -276,7 +282,7 @@ function recorder(watch) {
 }
 
 /** The game's context button names the usable thing beside the hero: its words for each kind of thing. */
-const WORDS = { pen: /animal pen/i, sell: /market|sell/i, shop: /shop/i, upgrade: /crystal/i, home: /cottage/i, fish: /fish/i };
+const WORDS = { pen: /animal pen/i, sell: /market|sell/i, shop: /\bshop\b/i, upgrade: /crystal/i, home: /cottage/i, fish: /fish/i };
 const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1' };
 const DESKTOP = { viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 };
 
@@ -719,8 +725,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     clearTimeout(timer); await closeBrowsers();
     if (t.errors.length) failed.push(`${route}/${device} run ${run}: ${t.errors.join(' | ')}`); else (rows[`${route}/${device}`] ??= []).push(baselineNumbers(t));
   }
-  if (args.includes('--baseline')) {
-    const file = path.join(here, 'journey-baseline.json'), all = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+  if (args.includes('--baseline') || arg('after', null)) {
+    const file = arg('after', null) ? path.resolve(arg('after')) : path.join(here, 'journey-baseline.json'), all = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
     for (const [key, list] of Object.entries(rows)) if (list.length === runs) all[key] = { measured: new Date().toISOString().slice(0, 10), script: scriptHash(), runs, ...(arg('save', null) ? { provisional: true } : {}), ...(options.bossHealth ? { bossHealth: options.bossHealth } : {}), ...foldRuns(list) };
     writeFileSync(file, JSON.stringify(all, null, 1) + '\n');
   }
