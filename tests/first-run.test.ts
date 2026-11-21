@@ -154,6 +154,20 @@ test('the first fight: only the first creature has the ring, the others never re
   assert.equal(biteAllowed(60, 130, 130), 52, '60% of 130 is 78'); assert.equal(biteAllowed(3, 78.9, 130), 0, 'never a fraction below');
   for (let i = 0; i < 40; i++) w.save.hp -= w.rules.bite(3, first.id, 100); assert.equal(w.save.hp, 60, 'forty bites in the ring: 60% and no lower');
 });
+test('a fallen creature of the first fight comes back when its seconds are over, with the explorer standing right there', () => {
+  const w = lessonWorld(), [first, second, , wild] = w.enemies, back: string[] = [];
+  for (const e of w.enemies) Object.assign(e, { maxHp: e.hp, homeX: 5, homeZ: 6, respawn: 0, mesh: { visible: true }, phase: 'chase' });
+  const rules = createLesson({ enemies: () => w.enemies, hero: () => w.hero, save: () => w.save, back: e => back.push(e.id) }); rules.tend();
+  Object.assign(first, { hp: 0, respawn: 3, x: 9, z: 9, mesh: { visible: false }, fled: true, fleeT: 1 }); rules.tend();
+  assert.equal(first.hp, 0, 'still down while its seconds run'); assert.deepEqual(back, []);
+  first.respawn = 0; assert.equal(rules.tend(), first);
+  assert.equal(first.hp, 30); assert.deepEqual([first.x, first.z], [5, 6], 'at its own spot'); assert.equal(first.mesh.visible, true); assert.equal(first.phase, 'idle'); assert.equal(first.fled, false); assert.deepEqual(back, [first.id]);
+  Object.assign(second, { hp: 0, respawn: 999_999, mesh: { visible: false } }); rules.tend(); assert.equal(second.hp, 0, 'the step is done (first-run.ts sets 999,999 s): it stays down');
+  Object.assign(wild, { hp: 0, respawn: 0 }); rules.tend(); assert.equal(wild.hp, 0, 'a wild creature is the world\'s own business');
+  // Five wins from three creatures without leaving the village: every one that falls is back for the next.
+  let wins = 0; for (let round = 0; round < 5; round++) { const e = w.enemies.find(x => x.tutorial && x.hp > 0)!; assert.ok(e, `round ${round}: a creature to fight`); e.hp = 0; e.respawn = 0; wins++; rules.tend(); }
+  assert.equal(wins, 5);
+});
 test('the two tips of the first fight and the first win are kept in the save like the other moment tips: once', () => {
   for (const id of ['tip:ring', 'tip:chain', 'win'] as const) {
     assert.ok(isFirstSeen(id)); const s = fresh(); assert.equal(hasSeen(s, id), false); assert.ok(markSeen(s, id)); markSeen(s, id);

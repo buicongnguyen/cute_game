@@ -13,6 +13,8 @@
  *   it ends, and never while a dialog is open. The other two never bite. A bite never takes the explorer below LESSON.floor of full health (main.ts asks
  *   world.lesson.bite for every blow). The village is a safe zone where world.ts lands no blow at all, so inside it this
  *   module lands the ring's bite itself; outside, the creature's own blow is the bite.
+ * - A fallen creature comes back after its 5 s wherever the explorer stands (world.ts alone waits until everyone is 22 m
+ *   from its home, which in the middle of the village never happens).
  * - Two tips, each once per save (kept by the firstRunSeen action): 'Step out of the ring!' at the first wind-up and
  *   'One more for a finisher!' after two blows in a row.
  * - The first win of a save bursts bigger (the effects' own pools: no new draw call) and sends `firstWin`, once per save:
@@ -89,6 +91,8 @@ export function wildAhead(x: number, z: number, level: number): keyof typeof WIL
 
 interface LessonSave { firstRun?: { seen?: readonly string[] }; counters: { kills: number }; hp: number }
 export interface LessonHost {
+  /** A creature of the first fight came back (the puff of its return). */
+  back?(e: Enemy): void;
   enemies(): readonly Enemy[];
   hero(): { x: number; z: number };
   save(): LessonSave;
@@ -106,6 +110,13 @@ export function createLesson(h: LessonHost) {
     mine,
     tend(): Enemy | null {
       mine.length = 0; for (const e of h.enemies()) if (e.tutorial) mine.push(e);
+      // A fallen one comes back when its few seconds are over (first-run.ts sets them), wherever the explorer stands.
+      // world.ts brings a creature back only once everyone is 22 m from its home, and these live in the middle of the
+      // village: without this the step ran dry after three wins unless the player walked out of the village.
+      for (const e of mine) if (e.hp <= 0 && e.respawn <= 0) {
+        e.hp = e.maxHp; e.x = e.homeX; e.z = e.homeZ; e.mesh.visible = true; e.dying = 0; e.fled = false; e.fleeT = 0; e.phase = 'idle'; e.route = []; e.stun = 0; e.telegraphs = [];
+        h.back?.(e);
+      }
       for (let i = 0; i < mine.length; i++) {
         const e = mine[i]; if (taught.has(e) || !e.definition) continue; taught.add(e);
         e.name = CRITTER_NAME; e.definition = { ...e.definition, name: CRITTER_NAME };
@@ -143,7 +154,7 @@ const CSS = `
 
 type TipId = 'press' | 'ring' | 'finisher';
 export function mount(s: GameServices) {
-  const w = s.world, rules = createLesson({ enemies: () => w.enemies, hero: () => w.position, save: () => s.state() });
+  const w = s.world, rules = createLesson({ enemies: () => w.enemies, hero: () => w.position, save: () => s.state(), back: e => w.fx?.burst({ x: e.x, z: e.z }, { n: 14, color: [e.definition?.color ?? '#ffffff', '#ffffff'], speed: 3, up: 5 }) });
   w.lesson = rules;
   const style = document.createElement('style'); style.textContent = CSS; document.head.append(style);
   // The warning chip: whenever the banner's chip changes (main.ts showZone writes it), a zone far above the explorer gets the
