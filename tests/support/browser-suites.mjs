@@ -23,12 +23,18 @@ async function main() {
     // The repo's config with a cache of its own. node_modules may be a link into another checkout (a git worktree): its real
     // folder is allowed, or the fonts fall back and every measured width changes. .scratch holds logs and screenshots.
     server = await createServer({ root, cacheDir: '.scratch/vite-cache-browser', server: { host: '127.0.0.1', port, strictPort: true, hmr: false, watch: { ignored: ['**/.scratch/**'] }, fs: { allow: [root, realpathSync(new URL('../../node_modules', import.meta.url))] } } });
-    await server.listen(); url = `http://127.0.0.1:${port}/`;
+    try { await server.listen(); } catch (error) {
+      await server.close().catch(() => {});
+      console.error(/EADDRINUSE|already in use/i.test(String(error?.message ?? error)) ? `browser suites: port ${port} is taken. Set BROWSER_PORT to a free port, or HUD_LAYOUT_URL to the dev server that is already running.` : `browser suites: the dev server did not start: ${error?.message ?? error}`);
+      process.exit(2);
+    }
+    url = `http://127.0.0.1:${port}/`;
     console.log(`browser suites: dev server on ${url}`);
   }
   const jobs = process.env.BROWSER_JOBS ? [`--test-concurrency=${Number(process.env.BROWSER_JOBS) || 1}`] : [];
-  const code = await new Promise(done => spawn(process.execPath, ['--test', ...jobs, ...files], { cwd: root, stdio: 'inherit', env: { ...process.env, HUD_LAYOUT_URL: url } }).on('exit', (exit, signal) => done(exit ?? (signal ? 1 : 0))).on('error', () => done(1)));
-  await server?.close();
+  let code = 1;
+  try { code = await new Promise(done => spawn(process.execPath, ['--test', ...jobs, ...files], { cwd: root, stdio: 'inherit', env: { ...process.env, HUD_LAYOUT_URL: url } }).on('exit', (exit, signal) => done(exit ?? (signal ? 1 : 0))).on('error', () => done(1))); }
+  finally { await server?.close().catch(() => {}); } // the server stops whatever happened to the run
   process.exit(code);
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) await main();
