@@ -148,8 +148,8 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
   color: var(--cream); font-size: 11px; pointer-events: none;
 }
 #app #hud .minimap > small {
-  left: 0; right: 0; top: auto; bottom: 0; transform: none; padding: 2px 8px 3px; border-radius: 0; background: rgba(58, 36, 51, .84);
-  color: var(--cream); font-size: 11px; letter-spacing: .5px; text-align: center; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  left: 0; right: 0; top: auto; bottom: 0; transform: none; padding: 2px 4px 3px; border-radius: 0; background: rgba(58, 36, 51, .84);
+  color: var(--cream); font-size: 11px; letter-spacing: 0; text-align: center; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button {
   position: fixed; left: auto; bottom: auto; right: calc(var(--col) + var(--mm) + 12px); top: var(--map-top) !important;
@@ -308,7 +308,8 @@ body.air-combat #app #hud .skill[hidden] { display: none; }
 
 /* ------------------------------------------------------------------ Phones */
 @media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
-  #app #hud .minimap > small { display: block; padding: 1px 5px 2px; font-size: 11px; letter-spacing: 0; text-transform: none; }
+  /* Phone maps are 84 to 92 px wide: a long place name ("Hành Tinh Mầm Xanh", "Redrock Canyon") takes two lines instead of ending in dots. */
+  #app #hud .minimap > small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; padding: 1px 3px 2px; font-size: 11px; line-height: 12px; text-transform: none; }
   #app #hud .player-card { gap: 1px 7px; padding: 3px 8px 4px 4px; border-radius: 14px; }
   #app #hud .player-name { height: 13px; line-height: 13px; font-size: 11px; }
   #app #hud .level-badge { right: -4px; bottom: -3px; }
@@ -410,7 +411,7 @@ body.in-rescue #app #hud .home-button { right: calc(var(--edge) + var(--safe-rig
 /* Phones: the quest chip is a pill only while it is one line; with the reward button under it, it is a small card. */
 @media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
   #app #hud .quest-tracker:has(#quick-claim:not([hidden])) { border-radius: 16px; padding: 4px 26px 2px 5px; }
-  #app #hud .minimap > small { padding: 1px 3px 2px; }
+  #app #hud .minimap > small { padding: 1px 0 2px; }
 }
 
 /* Phones: the Colossus notice is a small chip at the top that opens on a tap, so it never covers the view. */
