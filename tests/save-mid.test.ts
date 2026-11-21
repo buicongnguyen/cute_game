@@ -27,7 +27,7 @@ test('the welcome is settled and Pepper is home: the entry the first hand harves
   const pepper = friendOf(s, 'pepper')!;
   assert.ok(pepper, 'Pepper is a friend'); assert.equal(pepper.home, true);
   // A new game after its first harvest by hand (actions.ts harvest -> friends.ts firstHarvestGift).
-  const fresh = M.newGame('Fresh'), now = 1_000_000; fresh.bag.seed_radish = 1;
+  const fresh = M.newGame('Fresh'), now = 1_000_000;
   assert.equal(fresh.welcome, 'pending');
   assert.ok(applyGameAction(fresh, { type: 'plant', payload: { index: 0, id: 'radish' } }, { now, random: Math.random }));
   assert.ok(applyGameAction(fresh, { type: 'harvest', payload: { index: 0 } }, { now: now + 86400000, random: Math.random }));
@@ -58,4 +58,8 @@ test('the counters match story steps 0-11 done', () => {
   assert.ok((t.cook ?? 0) >= 3, 'three meals');
   assert.ok(!(t.boss > 0), 'no boss yet');
   assert.deepEqual(s.visited, ['home']);
+  // The file is the save as the game itself writes it back: nothing parseSave would drop or add.
+  const text = readFileSync(new URL('../promo/save-mid.json', import.meta.url), 'utf8').trim();
+  assert.equal(JSON.stringify(M.parseSave(text)), text);
+  for (const id of Object.keys(s.bag)) assert.ok(Object.hasOwn(M.ITEMS, id), `${id} is a game item`);
 });
