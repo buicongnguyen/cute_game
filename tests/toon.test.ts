@@ -1,17 +1,79 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { TOON_RAMP, TOON_STEPS, PLANET_LIGHT, planetLight, applyPlanetLight, toToon, toonify, toonMaterial, isLit } from '../src/toon.ts';
+import { TOON_RAMP, TOON_RAMP_CLASSIC, TOON_OWN, TOON_STEPS, PLANET_LIGHT, planetLight, applyPlanetLight, toToon, toonify, toonMaterial, isLit, rampAt, installRampColour, withClassicRamp, warmRamp } from '../src/toon.ts';
+import { LOOKS, setGrade } from '../src/look.ts';
+import { INK, INK_CLASSIC } from '../src/outline.ts';
 import { PLANETS, type PlanetId } from '../src/model.ts';
 import { bakeModel } from '../src/assets.ts';
 import { buildGround } from '../src/ground.ts';
 import { createEnvironmentLayout } from '../src/environments.ts';
 
-test('the toon ramp is the reference 4-step [110,185,235,255] with nearest filtering', () => {
+test('the classic ramp is kept: the reference 4-step [110,185,235,255] with nearest filtering', () => {
   assert.deepEqual([...TOON_STEPS], [110, 185, 235, 255]);
-  const data = TOON_RAMP.image.data as Uint8Array;
+  const data = TOON_RAMP_CLASSIC.image.data as Uint8Array;
+  assert.equal(TOON_RAMP_CLASSIC.image.width, 4);
   assert.deepEqual([0, 1, 2, 3].map(i => data[i * 4]), [110, 185, 235, 255]);
-  assert.equal(TOON_RAMP.magFilter, T.NearestFilter); assert.equal(TOON_RAMP.minFilter, T.NearestFilter);
+  assert.equal(TOON_RAMP_CLASSIC.magFilter, T.NearestFilter); assert.equal(TOON_RAMP_CLASSIC.minFilter, T.NearestFilter);
+});
+
+test('our own ramp has 5 colour steps: the shade is blue-violet, the light a warm cream, and it gets lighter step by step', () => {
+  assert.equal(TOON_OWN.length, 5); assert.notEqual(TOON_RAMP, TOON_RAMP_CLASSIC);
+  const data = TOON_RAMP.image.data as Uint8Array; assert.equal(TOON_RAMP.image.width, 5); assert.equal(data.length, 20);
+  TOON_OWN.forEach((step, i) => assert.deepEqual([...data.slice(i * 4, i * 4 + 4)], [...step, 255]));
+  assert.equal(TOON_RAMP.magFilter, T.NearestFilter); assert.equal(TOON_RAMP.minFilter, T.NearestFilter); assert.equal(TOON_RAMP.generateMipmaps, false);
+  const [r0, g0, b0] = TOON_OWN[0], [r4, g4, b4] = TOON_OWN[4];
+  assert.ok(b0 > r0 + 40 && b0 > g0 + 40, 'the shade is bluer than it is red or green');
+  assert.ok(r0 <= TOON_STEPS[0], 'and no redder than the grey shade it replaces, so warm paint does not turn muddy');
+  assert.ok(r4 === 255 && r4 > g4 && g4 > b4, 'the light is warm');
+  const luma = (c: readonly number[]) => c[0] * .2126 + c[1] * .7152 + c[2] * .0722;
+  for (let i = 1; i < 5; i++) assert.ok(luma(TOON_OWN[i]) > luma(TOON_OWN[i - 1]), 'step ' + i);
+  assert.ok(Math.abs(luma(TOON_OWN[0]) - TOON_STEPS[0]) < 12, 'the darkest step is about as dark as the grey one: no lighter, washed-out shade');
+  // Blue minus red falls from shade to light: cool shade, warm light.
+  for (let i = 1; i < 5; i++) assert.ok(TOON_OWN[i][2] - TOON_OWN[i][0] < TOON_OWN[i - 1][2] - TOON_OWN[i - 1][0]);
+});
+
+test('the shader reads the colour of the ramp: patched once, and a grey ramp gives what it gave before', () => {
+  const chunk = T.ShaderChunk.gradientmap_pars_fragment;
+  assert.ok(chunk.includes('texture2D( gradientMap, coord ).rgb')); assert.ok(!chunk.includes('texture2D( gradientMap, coord ).r )'));
+  installRampColour(); installRampColour();
+  assert.equal(T.ShaderChunk.gradientmap_pars_fragment, chunk, 'installing again changes nothing');
+  assert.equal(chunk.split('texture2D( gradientMap, coord )').length, 2, 'one lookup, as before');
+  // The lookup on the CPU: with the grey ramp the three channels are the red channel three's own shader used.
+  for (let k = -100; k <= 100; k++) {
+    const d = k / 100, want = TOON_STEPS[Math.min(3, Math.floor((d * .5 + .5) * 4))] / 255;
+    assert.deepEqual(rampAt(TOON_STEPS, d), [want, want, want], 'dotNL ' + d);
+  }
+  assert.deepEqual(rampAt(TOON_STEPS, -1), [110 / 255, 110 / 255, 110 / 255]); assert.deepEqual(rampAt(TOON_STEPS, 1), [1, 1, 1]);
+  assert.deepEqual(rampAt(TOON_OWN, -1), TOON_OWN[0].map(v => v / 255)); assert.deepEqual(rampAt(TOON_OWN, 0), TOON_OWN[2].map(v => v / 255)); assert.deepEqual(rampAt(TOON_OWN, 1), TOON_OWN[4].map(v => v / 255));
+});
+
+test('icons and the mirror draw on the grey ramp by reference and hand our ramp back, even when the draw throws', () => {
+  const own = toonMaterial({ color: '#ff8800' }), other = new T.MeshToonMaterial({ gradientMap: TOON_RAMP_CLASSIC }), basic = new T.MeshBasicMaterial();
+  const root = new T.Group().add(new T.Mesh(new T.BoxGeometry(), own), new T.Mesh(new T.BoxGeometry(), [own, other, basic]));
+  const before = (TOON_RAMP.image.data as Uint8Array).slice(), version = TOON_RAMP.version;
+  const seen = withClassicRamp(root, () => [own.gradientMap, other.gradientMap]);
+  assert.deepEqual(seen, [TOON_RAMP_CLASSIC, TOON_RAMP_CLASSIC]);
+  assert.equal(own.gradientMap, TOON_RAMP); assert.equal(other.gradientMap, TOON_RAMP_CLASSIC);
+  assert.throws(() => withClassicRamp(root, () => { throw new Error('lost context'); })); assert.equal(own.gradientMap, TOON_RAMP);
+  assert.deepEqual(TOON_RAMP.image.data, before, 'no data changes'); assert.equal(TOON_RAMP.version, version, 'and nothing is uploaded again');
+});
+
+test('under a cool sun the two light steps are neutral, the shade steps stay; a warm sun brings the cream back', () => {
+  const data = TOON_RAMP.image.data as Uint8Array, steps = () => [0, 1, 2, 3, 4].map(i => [...data.slice(i * 4, i * 4 + 3)]), renderer = { toneMapping: 0, toneMappingExposure: 1 } as unknown as T.WebGLRenderer;
+  const version = TOON_RAMP.version;
+  setGrade(renderer, LOOKS.home); assert.deepEqual(steps(), TOON_OWN.map(s => [...s])); assert.equal(TOON_RAMP.version, version, 'nothing sent while the sun stays warm');
+  setGrade(renderer, LOOKS.shadow);
+  assert.deepEqual(steps().slice(0, 3), TOON_OWN.slice(0, 3).map(s => [...s])); assert.deepEqual(steps().slice(3), [[250, 250, 250], [255, 255, 255]]);
+  assert.equal(TOON_RAMP.version, version + 1); setGrade(renderer, LOOKS.shadow); assert.equal(TOON_RAMP.version, version + 1, 'sent once');
+  for (const id of Object.keys(LOOKS) as Array<keyof typeof LOOKS>) { setGrade(renderer, LOOKS[id]); assert.equal(data[18] === 255, id === 'shadow', id); }
+  warmRamp(true); assert.deepEqual(steps(), TOON_OWN.map(s => [...s]));
+});
+
+test('the ink is our own warm plum-brown, not the reference colour', () => {
+  assert.equal(INK_CLASSIC, '#3a2433'); assert.notEqual(INK, '#3a2433'); assert.match(INK, /^#[0-9a-f]{6}$/);
+  const c = new T.Color(INK), hsl = c.getHSL({ h: 0, s: 0, l: 0 });
+  assert.ok(c.r > c.g && c.r > c.b && c.g >= c.b, 'warm: red over green over blue'); assert.ok(hsl.l < .3, 'still dark enough to read as ink');
 });
 
 test('every planet has reference hemisphere and sun colours; lava sun is 2.0, others 2.4, hemisphere 1.5', () => {

@@ -17,6 +17,15 @@
     "vietnamese": 279
    },
    "why": "Measured growth of the start (plan allowance 0.3 KB): hero-motion.ts, the blend between the idle and the walk pose that runs from the first frame, in place of the switch in world.ts animatePlayer. The lean-in, the settle, the fidgets, the sit and the clips load after Start (features/hero-idle.ts)."
+  },
+  {
+   "row": "start",
+   "name": "WP6 toy finish",
+   "allow": {
+    "english": 733,
+    "vietnamese": 733
+   },
+   "why": "Measured growth of the start against staging at the merge (the plan's 0.3 KB was an estimate; it was 507 bytes against the staging WP6 was built on): the five colour steps, the ramp-colour shader patch and the icon/mirror swap in toon.ts, the neutral light steps under a cool sun, the ground colour correction and the gloss in look.ts, the look switch, and in crop-cards.ts (world chunk, loaded before Start) the bake at the camera pitch, the footprint cap, the centring of lopsided crops and the re-bake when the camera angle is changed. Two slimming passes saved about 50 bytes; the rest would mean cutting one of these."
   }
  ]
 }

@@ -1,15 +1,17 @@
 import * as T from 'three';
-import { CAMERA } from './camera-rig.ts';
+import { CAMERA, CAMERA_PITCH, cameraPitch } from './camera-rig.ts';
 import { cropKit } from './assets.ts';
 import { toonMaterial } from './toon.ts';
 import { perfFlags } from './perf-flags.ts';
-import { CROPS } from './content.ts';
+import { INK } from './outline.ts';
+import { BED_HALF, CROP_SCALE } from './model.ts';
 import { harvestArc, type Point3 } from './feel-rules.ts';
 
 /**
  * Garden crops as 2D cards (G2D-1/G2D-2). The crops are our own Blender models (crops.glb); once the kit has loaded
- * they are baked with the game renderer and the scene's lights into one atlas, seen along the game camera's direction
- * (51.5° pitch, orthographic), with the reference's ink outline (#3a2433) on every crop past the sprout (RG-01, F13).
+ * they are baked with the game renderer and the scene's lights into one atlas, seen along the direction of the camera
+ * the player uses (cameraPitch() when the atlas is baked, orthographic; the reference's 51.5° with perfFlags.ownRamp
+ * off), with a bold rim of our own ink (outline.ts) on every crop past the sprout.
  * All cards then draw as ONE InstancedMesh: each card turns about its base toward the camera in the vertex shader
  * (yaw and pitch, never roll, so crops stay upright on screen and keep their baked size at every screen edge), sways
  * about that base, and grows or pops via a per-instance size. A second InstancedMesh draws the soft blob shadows.
@@ -22,8 +24,20 @@ export type CropStage = 0 | 1 | 2 | 3;
 export function cropStage(crop: string | null | undefined, progress: number): CropStage { return !crop ? 0 : progress >= 1 ? 3 : progress >= (isTreeCrop(crop) ? .15 : .5) ? 2 : 1; }
 /** Reference stage scales (sprout ×1.4, young ×0.55, ripe ×1.25), here relative to each model's bed scale. */
 export const STAGE_SCALE: readonly [number, number, number, number] = [0, 1.4, .55, 1.25];
-/** The camera's pitch, the direction the atlas is baked from. */
+/** The reference camera's pitch (51.5°): what the atlas was baked from before the player could tilt the camera. */
 export const VIEW_PITCH = Math.atan2(CAMERA.offset[1], CAMERA.offset[2]);
+let pitch = VIEW_PITCH;
+/** The pitch the atlas is baked from and every crop is measured at (radians). */
+export const bakePitch = () => pitch;
+/**
+ * Takes the player's camera pitch as the bake direction (every bake starts with this: at load, after a lost context
+ * and when the cell size changes). The crops are measured again, so each keeps its on-screen height at the new angle.
+ */
+export function syncBakePitch() {
+  const next = perfFlags.ownRamp && cameraPitch() < CAMERA_PITCH.max ? cameraPitch() * Math.PI / 180 : VIEW_PITCH;
+  if (next !== pitch) { pitch = next; metrics.clear(); }
+  return pitch;
+}
 /** CSS pixels per metre across the view plane at the camera target on a portrait phone (844 px tall, default zoom). */
 export function phonePxPerMetre(height = 844) { return height / (2 * Math.hypot(...CAMERA.offset) * CAMERA.portraitScale * Math.tan(CAMERA.fov * Math.PI / 360)); }
 /** The October crop update enlarges young and ripe plants by 25%; sprouts keep their previous size. */
@@ -45,7 +59,7 @@ export function popScale(pop: number) { return Math.min(1, pop * 2) * (1 + Math.
 /** A model's silhouette on the view plane, in metres, around its pivot: the front ground point (0, 0, front). */
 export interface ViewBounds { front: number; left: number; right: number; bottom: number; top: number }
 const vertex = new T.Vector3();
-export function viewBounds(model: T.Object3D, pitch = VIEW_PITCH): ViewBounds | null {
+export function viewBounds(model: T.Object3D, pitch = bakePitch()): ViewBounds | null {
   model.updateMatrixWorld(true);
   const c = Math.cos(pitch), s = Math.sin(pitch);
   let front = -Infinity, left = Infinity, right = -Infinity, low = Infinity, high = -Infinity;
@@ -86,6 +100,14 @@ export const TREE_BOOST: Readonly<Record<number, number>> = { 1: 1.6, 2: 3, 3: 2
  * Fruit trees keep their tree sizes (TREE_BOOST); their fruit wear the faces.
  */
 export const CROP_BOOST: Readonly<Record<number, number>> = { 1: 1, 2: 1.3, 3: 1.9 };
+/** A ripe card is at most this share of its bed's width, so it never hangs over the bed beside it (AAA plan WP6). */
+export const FOOTPRINT = .95;
+/** The silhouette's width in the garden, at the garden's crop size. */
+export const cardWidth = (b: ViewBounds, scale: number) => (b.right - b.left) * scale * CROP_SCALE;
+/** `scale`, or the largest scale at which the card still fits FOOTPRINT of its bed (a melon is far wider than it is tall). */
+export const footprintScale = (b: ViewBounds, scale: number) => perfFlags.ownRamp ? scale / Math.max(1, cardWidth(b, scale) / (FOOTPRINT * 2 * BED_HALF)) : scale;
+/** How far a silhouette's middle is from its pivot: a ripe card is moved by this, so a lopsided tree stands in the middle of its bed. */
+export const cardCentre = (b: ViewBounds) => perfFlags.ownRamp ? (b.left + b.right) / 2 : 0;
 export { isTreeCrop } from './tree-crops.ts';
 import { isTreeCrop } from './tree-crops.ts';
 /** Size of a crop at a stage relative to its model: the stage scale times the model's bed scale. */
@@ -93,14 +115,15 @@ export function stageScale(crop: string, stage: CropStage) {
   if (!stage) return 0;
   const b = cropBounds(stage === 1 ? 'sprout' : crop);
   const boost = (isTreeCrop(crop) ? TREE_BOOST : CROP_BOOST)[stage] ?? 1;
-  return b ? STAGE_SCALE[stage] * bedScale(b, stage === 1) * boost : STAGE_SCALE[stage] * boost;
+  const scale = STAGE_SCALE[stage] * (b ? bedScale(b, stage === 1) : 1) * boost;
+  return b && stage === 3 ? footprintScale(b, scale) : scale;
 }
 /** A compact ready badge above the mature silhouette, in the same view plane as crop cards. */
 export function cropBadgeAnchor(crop: string, size = 1): { y: number; back: number } {
   const bounds = cropBounds(crop), scale = stageScale(crop, 3) * size;
   const top = bounds ? bounds.top * scale : RIPE_PX / phonePxPerMetre() * size;
   const height = top * 1.04 + .25; // maximum idle bob plus room for the small badge
-  return { y: SOIL_Y + height * Math.cos(VIEW_PITCH), back: height * Math.sin(VIEW_PITCH) - (bounds?.front ?? 0) * scale };
+  return { y: SOIL_Y + height * Math.cos(pitch), back: height * Math.sin(pitch) - (bounds?.front ?? 0) * scale };
 }
 /** Stable per-bed variety: about half the beds show their crop mirrored. */
 export function bedFlip(index: number) { return ((index * 2654435761) >>> 0) % 7 < 3 ? -1 : 1; }
@@ -110,7 +133,9 @@ export interface BedCrop { x: number; z: number; crop: string | null; progress: 
 interface Cell { u0: number; v0: number; du: number; dv: number; size: number; base: number; bounds: ViewBounds }
 interface BedState { key: string; stage: CropStage; crop: string | null; pop: number }
 
-const INK = '#3a2433', COLS = 8, MAX_FLIGHTS = 12;
+const COLS = 8, MAX_FLIGHTS = 12;
+/** The rim's colour: our own ink, at the sticker weight the cards always had (about 2 CSS px on a phone at a ripe crop's size). */
+export const CARD_INK = INK;
 
 /** Exactly three's Khronos PBR Neutral curve, applied in the bake (render targets skip tone mapping) when the world uses it. */
 const NEUTRAL = `vec3 neutral(vec3 color){const float start=.76;const float desat=.15;color*=exposure;float x=min(color.r,min(color.g,color.b));
@@ -124,6 +149,8 @@ export class CropCards {
   cellPx: number;
   /** Milliseconds the last bake took. */
   bakeMs = 0;
+  /** The last bake ran while the cards were hidden (on another planet, under its light): bake again when they are next drawn. */
+  private stale = false;
   /** Every crop is drawn at this share of its standard size (the garden's smaller beds, model.ts CROP_SCALE). */
   size = 1;
   private atlas: T.WebGLRenderTarget | null = null;
@@ -186,8 +213,9 @@ export class CropCards {
 
   /** Draws the crop_sprout + crop_<id> models (and a ripe sparkle) into the atlas. False leaves the 3D crops in charge. */
   bake(ids?: string[]): boolean {
-    const started = performance.now(), renderer = this.renderer;
+    const started = performance.now(), renderer = this.renderer, pitch = syncBakePitch();
     if (ids) this.bakedIds = ids; else ids = this.bakedIds;
+    this.stale = !this.group.visible;
     try {
       if (renderer.getContext().isContextLost()) return this.ready = false;
       const entries: Array<{ id: string; model: T.Object3D; outline: boolean }> = [];
@@ -207,12 +235,12 @@ export class CropCards {
         else if (light instanceof T.DirectionalLight) { const sun = new T.DirectionalLight(light.color, light.intensity); sun.position.copy(light.position).sub(light.target.position).normalize().multiplyScalar(10); scene.add(sun, sun.target); }
         else if (light instanceof T.AmbientLight) scene.add(new T.AmbientLight(light.color, light.intensity));
       }
-      const camera = new T.OrthographicCamera(-1, 1, 1, -1, .1, 40), back = new T.Vector3(0, Math.sin(VIEW_PITCH), Math.cos(VIEW_PITCH));
+      const camera = new T.OrthographicCamera(-1, 1, 1, -1, .1, 40), back = new T.Vector3(0, Math.sin(pitch), Math.cos(pitch));
       camera.position.copy(back).multiplyScalar(20); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
       // About 1.5 CSS px of ink on a phone: thinner lines break into dots without antialiasing.
       const outline = Math.max(2.5, px / 36), pad = (outline + 2) / px;
       const composite = new T.ShaderMaterial({
-        uniforms: { src: { value: scratch.texture }, texel: { value: new T.Vector2(1 / px, 1 / px) }, radius: { value: outline }, ink: { value: new T.Color(INK) }, outline: { value: 1 }, exposure: { value: renderer.toneMappingExposure }, toned: { value: renderer.toneMapping === T.NeutralToneMapping ? 1 : 0 } },
+        uniforms: { src: { value: scratch.texture }, texel: { value: new T.Vector2(1 / px, 1 / px) }, radius: { value: outline }, ink: { value: new T.Color(CARD_INK) }, outline: { value: 1 }, exposure: { value: renderer.toneMappingExposure }, toned: { value: renderer.toneMapping === T.NeutralToneMapping ? 1 : 0 } },
         vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
         fragmentShader: `uniform sampler2D src;uniform vec2 texel;uniform float radius;uniform vec3 ink;uniform float outline;uniform float exposure;uniform float toned;varying vec2 vUv;${NEUTRAL}
           void main(){vec4 c=texture2D(src,vUv);float d=0.;
@@ -268,6 +296,7 @@ export class CropCards {
 
   /** Lay out this frame's cards: one crop per bed, a sparkle over ripe beds, harvests flying up. */
   update(beds: readonly BedCrop[], time: number, dt: number) {
+    if (this.stale) { this.group.visible = true; this.bake(); }
     this.uniforms.uTime.value = time; this.clock = time;
     const { cell: cellAttr, card, sway } = this.cardAttrs;
     let n = 0, b = 0;
@@ -291,7 +320,7 @@ export class CropCards {
       const c = this.cells.get(stage === 1 ? 'sprout' : bed.crop); if (!c) return;
       state.pop = Math.min(1, state.pop + dt * 3);
       const bob = stage === 3 && state.pop >= 1 ? 1 + Math.sin(time * 4 + i * 3.1) * .04 : 1, scale = stageScale(bed.crop, stage) * popScale(state.pop) * bob * this.size, seed = i * 3.1;
-      put(c, bed.x, SOIL_Y, bed.z + c.bounds.front * scale, scale, bedFlip(i), seed, stage === 3 ? .06 : .04, stage === 3 ? 2.5 : 1.5);
+      put(c, bed.x - (stage === 3 ? cardCentre(c.bounds) * scale * bedFlip(i) : 0), SOIL_Y, bed.z + c.bounds.front * scale, scale, bedFlip(i), seed, stage === 3 ? .06 : .04, stage === 3 ? 2.5 : 1.5);
       blob(bed.x, bed.z, Math.max(.35, (c.bounds.right - c.bounds.left) * scale * 1.05));
       const star = this.cells.get('sparkle');
       if (stage === 3 && star) put(star, bed.x + .18 * this.size * bedFlip(i), SOIL_Y + c.bounds.top * scale * 1.15 + .12 + Math.sin(time * 3 + seed) * .06, bed.z + c.bounds.front * scale, (1 + Math.sin(time * 5 + seed) * .25) * popScale(state.pop), Math.cos(time * 2 + seed) || 1, seed, 0, 0);

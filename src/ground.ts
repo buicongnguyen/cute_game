@@ -3,6 +3,7 @@ import { PLANETS, type PlanetId } from './model.ts';
 import { zoneAt, type EnvironmentLayout } from './environments.ts';
 import { trailDistance, smoothstep, RIM_START } from './biomes.ts';
 import { toonMaterial } from './toon.ts';
+import { groundKeep } from './look.ts';
 
 /**
  * The ground is a grid of 80 m tiles (40 m drew twice the tiles in view for no gain: the ground casts no shadow and
@@ -152,7 +153,8 @@ export function checker(a: string, b: string) {
 }
 
 export function buildGround({ planet, ponds, base, height, segments = 20, detail }: GroundOptions): T.Group {
-  const group = new T.Group(), material = toonMaterial({ vertexColors: true, map: planet === 'toy' ? checker(PLANETS.toy.ground[0], PLANETS.toy.ground[1]) : null }), color = new T.Color();
+  // Under our warm light step the grass turned yellower and a little darker: its colour is corrected so sunlit ground looks as it did.
+  const keep = groundKeep(planet), group = new T.Group(), material = toonMaterial({ vertexColors: true, map: planet === 'toy' ? checker(PLANETS.toy.ground[0], PLANETS.toy.ground[1]) : null }), color = new T.Color();
   group.name = 'ground'; group.userData.environment = true;
   const step = GROUND_TILE, cells = Math.round(segments * step / 40);
   for (let tx = -200; tx < 200; tx += step) for (let tz = -200; tz < 200; tz += step) {
@@ -165,7 +167,7 @@ export function buildGround({ planet, ponds, base, height, segments = 20, detail
       const hill = r > RIM_START + 8 ? (r - RIM_START - 8) * .4 + noise2(x * .2, z * .2) * 2 : 0, y = base + (height?.(x, z) ?? 0) + hill;
       if (y !== base) raised = true;
       position.setY(i, y);
-      groundColor(planet, x, z, ponds, color, detail); colors.set([color.r, color.g, color.b], i * 3);
+      groundColor(planet, x, z, ponds, color, detail); colors.set([color.r * keep[0], color.g * keep[1], color.b * keep[2]], i * 3);
     }
     geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
     if (raised) geometry.computeVertexNormals();
