@@ -12,7 +12,8 @@ export class ShipSequence {
   private t = 0; private v = 0; private done: (() => void) | null = null; private finished = false;
   private focus = new T.Vector3();
 
-  constructor(private world: World, private sound: (sound: Sound) => void) {}
+  private world: World; private sound: (sound: Sound) => void;
+  constructor(world: World, sound: (sound: Sound) => void) { this.world = world; this.sound = sound; }
   get busy() { return this.phase !== null; }
 
   launch(done: () => void) {
@@ -51,7 +52,7 @@ export class ShipSequence {
       fx?.shake(.15 * Math.min(1, this.t)); smoke(30);
       if (this.t > 1.8) {
         this.phase = 'lift'; this.t = 0; this.v = 0; ship.position.x = 0;
-        this.sound('crit'); this.sound('cast');
+        this.sound('boom'); this.sound('cast');
         fx?.ring({ x: base.x, z: base.z }, { color: '#fff3c4', to: 6, life: .6, thick: .3 });
       }
     } else if (this.phase === 'lift') {
@@ -67,7 +68,7 @@ export class ShipSequence {
       if (k >= 1) {
         if (flame) flame.visible = false;
         this.world.fx?.burst(this.world.position, { n: 26, color: ['#ffffff', '#8ef6ff', '#ffe66d'], glow: true, speed: 4, up: 7 });
-        this.sound('level'); this.finish();
+        this.sound('discover'); this.finish();
       }
     }
     // Once landed, the camera goes back to the explorer. The lift speeds up faster than the 5/s cut-scene

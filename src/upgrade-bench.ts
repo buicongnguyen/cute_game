@@ -102,17 +102,17 @@ export function initUpgradeBench(d: BenchDeps) {
     const action = button.dataset.benchAction, id = button.dataset.item ?? '', index = Number(button.dataset.index);
     if (action === 'gear') {
       const done = await d.perform<{ id: string; level: number }>('upgradeGear', { id });
-      if (done) { d.tone('level'); d.toast(t('{name} is now +{level}!', { name: t(ITEMS[done.id].name), level: done.level }), '⚒️'); }
+      if (done) { d.tone('rewardMedium'); d.toast(t('{name} is now +{level}!', { name: t(ITEMS[done.id].name), level: done.level }), '⚒️'); }
     } else if (action === 'forge') {
       const done = await d.perform<ForgeOutcome>('forge', { id });
-      if (done) { d.tone(done.success ? 'level' : 'pop'); d.toast(done.success ? t('Forged to +{level}!', { level: done.level }) : t('The forge attempt failed. Your weapon kept its level.'), done.success ? '✨' : '🔨'); }
+      if (done) { d.tone(done.success ? 'rewardMedium' : 'pop'); d.toast(done.success ? t('Forged to +{level}!', { level: done.level }) : t('The forge attempt failed. Your weapon kept its level.'), done.success ? '✨' : '🔨'); }
     } else if (action === 'skill') {
       const done = await d.perform<{ index: number; level: number }>('upgradeSkill', { index });
-      if (done) { d.tone('level'); d.toast(t('{skill} reached level {level}!', { skill: t(d.ui().skills[done.index]?.name ?? ''), level: done.level }), '🌀'); }
+      if (done) { d.tone('rewardMedium'); d.toast(t('{skill} reached level {level}!', { skill: t(d.ui().skills[done.index]?.name ?? ''), level: done.level }), '🌀'); }
     }
     else if (action === 'jump') {
       const done = await d.perform<{ level: number }>('upgradeJump', {});
-      if (done) { d.tone('level'); d.toast(t(done.level >= 2 ? 'Triple jump learned! Jump three times in the air.' : 'Double jump learned! Jump again in the air.'), '⤴'); }
+      if (done) { d.tone('rewardLarge'); d.toast(t(done.level >= 2 ? 'Triple jump learned! Jump three times in the air.' : 'Double jump learned! Jump again in the air.'), '⤴'); }
     }
     if (d.modal() === 'bench') open();
   });
