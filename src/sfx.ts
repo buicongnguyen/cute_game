@@ -14,15 +14,17 @@ export type Sound = 'alert' | 'click' | 'open' | 'close' | 'punch' | 'swing' | '
   | 'splash' | 'cast' | 'reel' | 'snap' | 'bite' | 'catch' | 'stroke' | 'dive'
   | 'jump' | 'flip' | 'land'
   | 'success' | 'quest' | 'level' | 'harvest' | 'shoot' | 'poof' | 'coin' | 'buy' | 'sell' | 'ready' | 'power'
-  | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock' | 'flag' | 'thud' | 'break' | Stinger;
+  | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock' | 'flag' | 'thud' | 'break' | Stinger | 'powerReady';
 /**
  * The stingers (AAA-PLAN WP8): short musical cues for a reward, a discovery, a win, new gear, a refusal and a start. Their
  * recipes come with the features (features/stingers.ts, after the first played frame) through `AudioGraph.cue`; until
  * then a stinger plays the 'success' chime. 'levelUp' is the level fanfare ('level'), which only a level-up plays.
- * The arrival flag's horn call ('flag') is made there too.
+ * The arrival flag's horn call ('flag') and the power strike's own ready chime ('powerReady') are made there too.
  */
 export type Stinger = 'levelUp' | 'rewardSmall' | 'rewardMedium' | 'rewardLarge' | 'discover' | 'victory' | 'equip' | 'deny' | 'go';
 export const STINGERS: readonly Stinger[] = ['levelUp', 'rewardSmall', 'rewardMedium', 'rewardLarge', 'discover', 'victory', 'equip', 'deny', 'go'];
+/** Every sound whose recipe is not in this file: the stingers and 'powerReady' ('flag' is listed in ALL_SOUNDS). */
+export const LATE_SOUNDS: readonly Sound[] = [...STINGERS, 'powerReady'];
 
 /**
  * The mix (AAA-PLAN WP8): where each kind of sound peaks, in dBFS at the speakers with the sliders at their defaults
@@ -34,12 +36,13 @@ export const STINGERS: readonly Stinger[] = ['levelUp', 'rewardSmall', 'rewardMe
  * - whoosh: the swing before a blow, 6 to 10 dB under the hit it leads to (`of`), and never under `floor`.
  * - ui: taps and panels, clearly under everything in play.
  * - cue: what the player must not miss (a creature noticed you, POWER READY, a bite) and every stinger: -24 or louder.
+ *   'ready' is the small chime of a skill off its cooldown, heard every few seconds: about -20. 'powerReady' is the big one.
  */
 export const LOUDNESS = {
   impact: { peak: [-12, -6], sounds: ['hit', 'hitHeavy', 'crit', 'thud', 'break', 'boom', 'power'] },
   whoosh: { under: [6, 10], floor: -26, of: { swing: 'hit', punch: 'hit' }, sounds: ['swing', 'punch', 'cast'] },
   ui: { peak: [-26, -21], sounds: ['click', 'open', 'close'] },
-  cue: { peak: [-24, -10], sounds: ['alert', 'ready', 'bite', 'hurt', 'catch', 'flag', 'success', 'quest', 'level', ...STINGERS] },
+  cue: { peak: [-24, -10], sounds: ['alert', 'ready', 'bite', 'hurt', 'catch', 'flag', 'success', 'quest', 'level', ...LATE_SOUNDS] },
 } as const satisfies Record<string, { peak?: readonly number[]; under?: readonly number[]; floor?: number; of?: Partial<Record<Sound, Sound>>; sounds: readonly Sound[] }>;
 
 /** Every game event the sound pass covers, and the voice it plays (tests check each one has a recipe). */
@@ -334,7 +337,7 @@ export class Sfx {
       default: /* a stinger before its recipes have come */ case 'success': [523, 659, 784].forEach((f, i) => { this.bell(k, i * .08, f * 2, .3, .035, 2, 1); this.tone(k, i * .08, 'triangle', f, f, .18, .06); }); break;
       case 'quest': [784, 988, 1175, 1568].forEach((f, i) => this.bell(k, i * .07, f, .4, .05, 3.5, 1.6));
         this.hiss(k, .05, 'highpass', 3000, 9000, .5, .03, 1, .2); this.tone(k, .28, 'triangle', 392, 392, .45, .06, .02); break;
-      case 'level': [523, 659, 784].forEach((f, i) => { this.tone(k, i * .1, 'square', f, f, .12, .03); this.tone(k, i * .1, 'triangle', f, f, .16, .07); });
+      case 'levelUp': case 'level': [523, 659, 784].forEach((f, i) => { this.tone(k, i * .1, 'square', f, f, .12, .03); this.tone(k, i * .1, 'triangle', f, f, .16, .07); });
         [1046, 1318, 1568].forEach(f => { this.tone(k, .3, 'triangle', f, f, .75, .055, .02); this.tone(k, .3, 'square', f / 2, f / 2, .5, .015, .02); });
         this.bell(k, .3, 2093, .6, .03); this.hiss(k, .3, 'highpass', 5000, 9000, .6, .025, 1, .1); break;
       // Fishing: a bite is a quick double plop; the catch a big splash, droplets and a tiny ta-da.
@@ -353,7 +356,7 @@ export class Sfx {
       case 'flip': this.tone(k, 0, 'triangle', 520, 1040, .1, .06); this.hiss(k, 0, 'bandpass', 1800, 2800, .08, .05, 1.4); this.bell(k, .03, 1568, .12, .02); break;
       case 'land': this.tone(k, 0, 'sine', 170, 62, .11, .14, .002); this.hiss(k, 0, 'lowpass', 1000, 180, .12, .08); break;
       // Skill voices (skill-sounds.ts) and the power strike: a rising charge whoosh, a sub boom and an electric crack.
-      case 'ready': this.bell(k, 0, 1320, .12, .125, 3.5, 1.4); this.tone(k, 0, 'sine', 880, 1320, .09, .09); break;
+      case 'ready': this.bell(k, 0, 1320, .12, .065, 3.5, 1.4); this.tone(k, 0, 'sine', 880, 1320, .09, .048); break;
       case 'power': this.hiss(k, 0, 'bandpass', 300, 4200, .12, .1, 2, .1); this.tone(k, .1, 'sine', 150, 34, .45, .34, .004);
         this.hiss(k, .1, 'lowpass', 1600, 110, .4, .26); this.tone(k, .1, 'sawtooth', 1500, 260, .16, .045); this.hiss(k, .1, 'highpass', 4500, 2200, .16, .09);
         this.bell(k, .12, 2093, .4, .03); break;

@@ -426,7 +426,7 @@ export function initCtf(h: CtfHooks) {
   function finishMatch(result: { winner: TeamId | -1; reason: string; seconds: number }) {
     const s = session!; lastResult = result;
     const won = result.winner === s.team, draw = result.winner === -1, me = rulesPlayer(s.m, ME)!;
-    h.tone(won ? 'success' : draw ? 'rewardSmall' : 'hurt');
+    h.tone(won ? 'victory' : draw ? 'rewardSmall' : 'hurt');
     banner(won ? t('VICTORY!') : draw ? t('DRAW') : t('DEFEAT'), `${s.m.score[0]} – ${s.m.score[1]}`, won ? 'good' : draw ? '' : 'bad');
     void claim(s, won, draw, me).then(() => { if (session === s) setTimeout(() => { if (session === s) endDialog(s); }, 1600); });
   }

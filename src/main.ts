@@ -1242,7 +1242,7 @@ setFriendDresser((color,gear,look)=>world.friendAvatar(color,gear,look));
 const helperChat=new ChatBubbles(world,()=>!started||modal!=='');
 const friendsHomeTold=new Set<string>(),crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
   robotBed:()=>helperView.task?.index,robotAnimal:()=>farmHelperView.task?.uid,heldBed,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform:(type,payload)=>type==='rescueFriend'?perform(type,payload):workPerform(type,payload), // a rescue is the player's own tap; the rest are the friends' own jobs
-  rescued(id,at){emit('rescue',{id,at});const [hi,story]=RESCUE_LINES[id];world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
+  rescued(id,at){emit('rescue',{id,at});const [hi,story]=RESCUE_LINES[id];tone('victory');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
   locked(id){toast(lockedHint(id),'🔒');},
   worked(id,task,r,at){
     if(task.kind==='harvest'){harvestBurst(task.index,Object.keys(r.raw)[0]??'carrot','worker',at);world.syncCrops();}else if(task.kind==='plant'){plantBurst(task.index,'worker');world.syncCrops();}
@@ -1765,7 +1765,7 @@ world.onLanded=(landing:Landing)=>{
 function noteComboHit(e:Enemy,impact:CombatHit){
   if(!airOn())return;
   // The power strike's charge (power-rules.ts): every own hit on a creature fills it, except the strike's own.
-  if(!combat.striking){const level=powerCharge.hit();if(level){tone('ready');vibrate(25);world.fx?.text({x:world.position.x,y:world.position.y+world.jump.height,z:world.position.z},t(level>1?'POWER ×2!':'POWER READY!'),'xp lane');}}
+  if(!combat.striking){const level=powerCharge.hit();if(level){tone('powerReady');vibrate(25);world.fx?.text({x:world.position.x,y:world.position.y+world.jump.height,z:world.position.z},t(level>1?'POWER ×2!':'POWER READY!'),'xp lane');}}
   const kind:ComboHit=comboKind??(world.jump.airborne?'air':impact.lift>0?'launcher':'ground'),first=kind==='launcher'&&!comboMeter.launched;
   if(kind==='air'&&!actionHandler&&!e.boss&&(e.lift??0)>.05&&e.hp>0)world.knockUpEnemy(e,AIR.juggle,.5);
   if(!comboMeter.live)chainDamage=0;chainDamage+=Math.max(0,impact.amount);
