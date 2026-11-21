@@ -36,7 +36,7 @@ radio theme, WP13 score ──► music ► duck ┘
   holds, another only makes it last longer, at the first one's depth. It arrives with the features
   (`src/features/sound-mix.ts`), after the first played frame; before that a call does nothing.
 - **Voices.** `voices` counts live synthesized voices for everything that plays: 18 on a desktop (14 for ordinary sounds,
-  4 more for priority cues), 8 on a touch device (6 and 2). A new player calls `voices.take(now, end)` and stays silent on
+  4 more for priority cues), 10 on a touch device (8 and 2; it was 6 and 2 until WP13 measured a twelve-creature fight on a phone: 5 to 9 sounds refused with 6, 0 to 5 with 8). A new player calls `voices.take(now, end)` and stays silent on
   false; only a priority cue passes `true` as the third argument, and the radio's stand-in tune never does. Click, open and
   close take no voice, so a fight cannot starve a tap. `audioGraph().stats.capped` counts the refusals: a scripted fight with
   3 creatures under touch emulation gave 0 (37 sounds, at most 5 at once).
@@ -201,7 +201,7 @@ connected to `__zooSfx.graph.nodes.sfx.duck` meters a bus.
 
 Music plays in the world: a director (`src/features/music-director.ts`) chooses what plays, and a live score
 (`src/features/music-score.ts`) plays it from the tunes in `src/features/music-content.ts`. All three are in the lazy
-features chunk (5.1 KB gzip together). Nothing is recorded and nothing is downloaded for the score: every note is an
+features chunk (about 5.9 KB gzip together). Nothing is recorded and nothing is downloaded for the score: every note is an
 oscillator, as in `promo/music.py`, which made the theme (marimba: a sine with a fourth partial that dies in a tenth of
 a second; bass: a sine; pad: a sine with an octave, slow in and out; the theme's three echoes). The melodies are not
 written down anywhere: each tune is a key, a mode, a tempo and four 8-bar chord progressions, and the melody over them
@@ -221,18 +221,29 @@ is drawn from the tune's seed, two bars at a time, on a five-note scale.
 There is no title state: the director is made when the features mount, after the first played frame.
 
 - **Crossfades** are equal-power over 1.8 s (the squares of the gains add up to 1 all the way, also when a change comes
-  in the middle of another). Danger and boss last 1.5 s past their cause, so a creature at the edge of its reach cannot
-  make the drums flap. The drums come in within 0.3 s and leave in about 2 s.
+  in the middle of another). Danger lasts 1.5 s and a boss 2 s past its cause, so a creature at the edge of its reach
+  cannot make the drums flap. The drums come in within 0.3 s and leave in about 2 s.
+- **Borders.** Another place must hold 1.5 s before its tune takes over, so a walk along a border changes nothing. A
+  tune that another replaced plays on unheard for 4 s after its fade: if its place (or the boss) comes back in that
+  time it is faded up again where it is, not started from its first bar. At most three decks exist.
 - **The village rests.** A tune plays once (two 8-bar phrases, 37 s), then 60 to 120 s of the world's own sounds, then
   a variation. The wild regions play on. A tune takes another of its progressions every 8 bars, never the same more
   than twice running, in one of three arrangements, with a new melody each time: it has no loop point.
-- **The recorded theme** (444 KB) is fetched 20 s after the first played frame or later, in idle time, and decoded
-  once (36.9 s, one channel at 48 kHz: 6.8 MB of memory). The service worker keeps it on first use. From then on it plays once on
-  each arrival in the village; the live score plays the variations after the rests.
-- **Theme only.** Below Sharp graphics and on Battery saver there is no live score: the theme plays and rests wherever
-  there is music (and nothing plays until it has come). `THEME_ONLY` in `music-content.ts` is the one flag that makes
-  this so everywhere; on one device the preference `zoo-garden-pref-music` does it (`theme`), or forces the live score
-  at any graphics level (`live`).
+- **The recorded theme** (444 KB) is fetched 20 s after the first played frame or later, in idle time, never during a
+  chase or a boss; a fetch that fails is tried again after 30 s, then 1, 2, 4 ... 16 minutes. The service worker keeps
+  it on first use. It is decoded (36.9 s, one channel at 48 kHz: 6.8 MB of memory) only where it is needed: in the
+  village, or where there is no live score. It then plays on an arrival in the village, at most once in three minutes;
+  otherwise, and after the rests, the live score plays a variation.
+- **Theme only.** Below Sharp graphics, on Battery saver, and with "Live music" off there is no full live score: the
+  theme plays and rests wherever there is music. Until the theme is there (the first 20 s, Save-Data, offline) the
+  live score stands in with a touch device's means (six voices, no pad), so no device is silent. The graphics level is
+  the automatic governor's: the director takes it up only at a change of place, in a rest or when the switch is moved,
+  never in the middle of a chase or a boss. `THEME_ONLY` in `music-content.ts` is the one flag for everyone.
+- **The switch.** Settings has a "Live music" row after the music slider ("Tunes played for each place. Off: the
+  recorded theme only."). On is automatic, Off is the theme only; it applies at once and is kept per device
+  (`zoo-garden-pref-music`: `''` or `theme`; `live` forces the full score at any graphics level). The row is drawn
+  through the `radio.row` slot of `audio-settings.ts`, which the director fills when it mounts; its Vietnamese is in
+  `src/features-vi/music.ts`.
 - **The radio wins.** Indoors the director is silent, and while the radio plays it stays silent; a radio that starts
   cuts what is still fading out in 0.12 s. The radio and the director share the music bus and the music slider (its
   label is now "Music in the world and the cottage radio"), and both go through the same 0.55 trim.
@@ -244,8 +255,8 @@ There is no title state: the director is made when the features mount, after the
 - **Voices.** The score counts its own voices: 14 on a desktop, 6 on a touch device, where it also leaves out the pad and
   the marimba's upper partial. It never takes a voice from the effects' counter, so music cannot make an effect or a
   priority cue fail. On a touch device it also makes room: a note is left out when the score's voices and the effects'
-  live voices together would pass 6, the melody and the figure first, the beat and the bass last. In a fight on a phone
-  the music thins out; it does not stop.
+  live voices together would pass 6, the melody and the figure first. Two voices are always the score's, so the beat
+  and the bass stay under the fullest fight.
 - **Cost.** A timer looks at the game ten times a second (where the hero is, whether a creature chases, the radio);
   frames stop in space, so it is not a frame listener. Notes are planned once per eighth note (2.2 to 4.6 times a
   second), at most 0.2 s ahead on the audio clock. Measured in Chromium: 10 to 27 audio nodes a second for the music on
@@ -305,8 +316,9 @@ Tests: `tests/music-director.test.ts`, `tests/music-score.test.ts` (the recordin
   the modes. In the village it comes and goes: about half a minute of music, then a minute or two without.
 - Drums when something gives chase, a faster minor tune with a beat at a boss, the place's own tune again afterwards.
 - On a phone in a busy fight the music gets thinner, so the blows keep their voices.
-- When the graphics level drops below Sharp there is only the recorded theme, and none until it has been fetched
-  (20 s or so into a first visit).
+- Below Sharp graphics, or with "Live music" off in Settings, the recorded theme plays instead; a lighter live score
+  stands in until it has been fetched. The change comes at the next place or rest, not in the middle of a fight.
+- Walking into another region, its tune takes over about 1.5 s after the border and is fully there 1.8 s later.
 - The music slider now also moves the world's music; at 0 there is none.
 - **Not checked by ear.** Keys, tempos, levels, the crossfades, the drums, the rests and the voice budgets are measured.
   Whether the tunes are pleasant, whether seeded melodies hold up over an hour, and whether a sine marimba sounds cheap
