@@ -19,17 +19,20 @@ One tool, `promo/perf-budget.mjs` (npm scripts `perf:gate`, `perf:baseline`, `pe
 
 ```
 npx vite --port 5298 --host 127.0.0.1 --strictPort                    (one terminal; the dev server has the __zoo hook)
-PORT=5298 node promo/perf-budget.mjs --compare                        (another; about 1 to 2 minutes; exit 1 on any row over its limit)
-PORT=5298 node promo/perf-budget.mjs --baseline                       (only to re-take promo/perf-baseline.json: two runs)
+PORT=5298 node promo/perf-budget.mjs --compare                        (another; about 3 minutes for its two runs; exit 1 on any row over its limit)
+PORT=5298 RUNS=4 node promo/perf-budget.mjs --baseline                (only to re-take promo/perf-baseline.json; ONLY=<words> re-takes just those rows)
 npm run build:pages && npm run perf:bytes                             (download weight, see below)
 ```
 
 - **What it measures.** 24 rows at 1600 x 900 unless stated: village, wild and canyon at the default 42 degree camera on the late, mid and new test saves (9); 30 and 51.5 degrees on the late save (6); a phone (390 x 844, device scale 3, touch) on graphics High (3); Balanced and Battery saver on the late save (6). A row is invalid, and refused, if the camera is more than 0.5 degrees off its pitch, the graphics level is not the pinned one, the hero is not on the spot or a dialog is open.
-- **How it is frozen** (copied from `promo/draw-call-review.mjs`): `performance.now` and `Date.now` are fake, `requestAnimationFrame` is pumped by hand, `Math.random` is seeded, neighbours are off, the Colossus sleeps, graphics are seeded. After Start and the greeting cards it pumps 120 frames, waits until the kits and the crop bake are idle (up to 20 s), pins the hero, and counts ONE `world.render()` with a draw counter that is active only inside that call. No frame rate is measured (a slow CPU makes it a lottery).
-- **What a row holds:** main draws, shadow draws, triangles, shader programs, geometries, textures, geometry bytes, scene matrices visited, the graphics level and shadow-map size. Two things that chance decides are counted apart and may wobble a little: `fx` (spark and glow pools, loot cards) and `roam` (a rescued friend walking through the view; about 13 draws each). They are kept out of the exact counts.
-- **Limits** (`promo/perf-compare.mjs`, tested by `tests/perf-compare.test.mjs`): draws, shadow draws, triangles and programs must match the baseline exactly; if the two baseline runs differed, the limit is the larger value plus the observed spread. Memory counters may grow 5%. `fx` may grow 3 and `roam` 16. A named entry in `promo/perf-ledger.json` (`{ "row": "<key>", "name": "<package>", "allow": { "main": 6 } }`) raises its own row's limit and nothing else; every entry is a decision, so it carries the package's name. Compare takes the smaller of its runs (`RUNS=2`), so noise cannot fail a row while a real addition shows in every run.
+- **How it is frozen:** `performance.now` and `Date.now` are fake, `requestAnimationFrame` is pumped by hand, `setTimeout` and `setInterval` run on the fake clock from Start on, `Math.random` is seeded and every frame starts a random stream of its own (made from the frame's number), neighbours are off, the Colossus sleeps, graphics are seeded. The game advances only in blocks of 30 frames; after each block it stands still, in real time, until nothing it asked for is on its way (a download, a lazy chunk, a kit being built, a texture being decoded). So art lands between the same two frames however slow the machine is, and every run reads the same frame of the same world; each row prints that frame number. After Start and the greeting cards the game runs a fixed 900 frames; for each row the hero is pinned, 120 frames run, and ONE `world.render()` is counted with a draw counter that is active only inside that call. No frame rate is measured (a slow CPU makes it a lottery).
+- **What a row holds:** main draws, shadow draws, triangles, the shader programs that frame's own draws use (not every program compiled since the page opened), geometries, textures, geometry bytes, scene matrices visited, the graphics level and shadow-map size. What chance decides is counted apart and kept out of the exact counts: `fx` (spark and glow pools, loot cards, shots in the air), `roam` (a rescued friend walking through the view; about 13 draws each) and their shadow draws (`fxShadow`, `roamShadow`).
+- **Limits** (`promo/perf-compare.mjs`, tested by `tests/perf-compare.test.mjs`): draws, shadow draws, triangles and programs must not pass the baseline's larger value: exact, with nothing added for spread (the spread between the baseline runs is recorded in the file, and is 0 on every frozen row). Memory counters may grow 5%. `fx` and `fxShadow` may grow 3, `roam` and `roamShadow` 16. A named entry in `promo/perf-ledger.json` (`{ "row": "<key>", "name": "<package>", "allow": { "main": 6 } }`) raises its own row's limit and nothing else; every entry is a decision, so it carries the package's name. Compare measures twice and reads the smaller value of each field (a real addition shows in both runs); a row that is invalid or missing in either run is refused.
 - **Self-test:** `PROBE_ADD=village node promo/perf-budget.mjs --compare` adds one mesh to the village rows and must fail them.
 - **Download weight:** `npm run perf:bytes` (after `build:pages`) prints the English start (index.html and every script, modulepreload and stylesheet before Start, gzip), the Vietnamese start (that plus the vi-pack chunk) and the install list (the service worker's CORE and EXTRA lists: gzip for scripts, stylesheets, JSON and SVG, raw for models, audio and images), per file, so a new lazy chunk shows up by name.
+- **More rows (AAA plan WP3, 13 of them; same tool, same commands):** moving rows (`village-move`, `wild-move`, `canyon-move`: the hero walks east and north for 1 s, then one frozen frame); King Bear and the old treant on `promo/save-mid.json` (level 8, story step "Defeat a boss", the hero 8 m from the boss: `frame` is one frozen frame half way through the boss's first wind-up, on desktop and phone, `peak` the 4 s after it); `swampfight` (8 s in the swamp with a fixed input script); `space` (one frozen frame 4 s after entering space); `idle` (4 s of idle village: the page's layout work); `colossus` (4 s beside the woken Colossus). Frozen frames are exact like the standing rows. The `peak`, `swampfight` and `idle` rows are live: the fake clock, one game frame for each real browser frame; peak draws, peak shadow draws, peak triangles and Chrome's LayoutCount, RecalcStyleCount and Nodes may grow 5% over the baseline's larger value (no spread added); shader programs created during the row may not pass the baseline at all; the slowest frame and long tasks are logged only. The Colossus row is a report, never gated; since the tool reads the same world every run its runs agree within 5% (144 + 57 peak draws in all four), so it can be made a gated live row when the owner wants.
+- **Known holes (rows that need slack over 2 draws or 1% of triangles): none.** In the baseline of 2026-11-21 (four runs) all 27 frozen rows are identical in every counted field, and so are the peak draws and triangles of the live rows. What still differs between runs is Chrome's own layout work in the four live rows, because the browser's frames are real: at most 4 layouts and 26 style recalcs (3.5%, the scripted fight), inside the 5% those counters are allowed. `SHOTS=<dir>` is for looking only; `--baseline` and `--compare` refuse it. `ONLY=<words> --baseline` re-takes just those rows and leaves the rest of the file, and its run counts, alone.
+- **Before-play download:** `npm run build:pages && npm run perf:download` (`promo/first-visit-bytes.mjs`; `--baseline` re-takes the `download` section of `promo/perf-baseline.json`). It starts its own `vite preview` on `PORT` (default 5297), opens a fresh profile with the service worker blocked, and weighs what the browser fetches up to the Start button (until the network is quiet for 2 s) and from Start to 10 s after the first played frame, by type, for the new and late saves in English and Vietnamese. Files are weighed from the build as the host sends them (gzip for code, raw for models, audio, images and fonts). Limit: exact plus 1% noise per window and per type; the lazy `features` and `features-vi` chunks may arrive after Start within 30 KB and 15 KB.
 - **When a change needs an exact picture before and after,** `promo/frozen-ab.mjs` renders the same frozen frame with the change off and on.
 
 **Browser tests** (the eight suites that need a running dev server; run after every merge, about 16 minutes; `CI=1` style limits do not apply here):
@@ -52,22 +55,53 @@ Do not edit `src/` while they run. The HUD test measures the plate the way hud-o
   - The server closure, the `src` modules the Node server loads, equals `docs/server-closure.txt` (96 modules; `node promo/server-closure.mjs` prints it, `--write` rewrites the file, `node promo/server-closure.mjs <name>.ts` says whether the server reaches a module and through which file). A reviewed change goes in `tests/fixtures/closure-allow.json` with its reason. No closure module may import `three` or a stylesheet, or use `document` or `window` as it loads.
   - A test that reads files under `src/` as text must be listed in `tests/fixtures/source-scan-allow.json` (79 files today, a list that should only shrink). New tests check behaviour through imports; the list is for scans of the whole source, such as naming and locale scans.
 
-**Baseline** (dev build, frozen as above, two runs on 2026-11-21 at b3b9f57 plus the tools; `promo/perf-baseline.json` holds every row)
+**Baseline** (dev build, frozen as above, four runs on 2026-11-21, 33 of 37 rows identical across them and all 27 frozen ones; `promo/perf-baseline.json` holds every row)
 
-| Row (late save, High) | Main + shadow draws | Triangles | Programs |
+| Row (late save, High) | Main + shadow draws | Triangles | Programs in the frame |
 |---|---|---|---|
-| Village, 42 degrees | 147 + 76 | 206,005 | 51 |
-| Village, 30 degrees | 196 + 76 | 248,178 | 51 |
-| Village, 51.5 degrees | 134 + 76 | 199,083 | 51 |
-| Wilds, 42 degrees | 71 + 24 | 91,511 | 54 |
-| Redrock Canyon, 42 degrees | 92 + 37 | 81,909 | 54 |
-| Village, phone | 84 + 70 | 160,204 | 48 |
-| Village, Balanced | 147 + 76 | 206,005 | 51 |
-| Village, Battery saver | 139 + 0 | 127,362 | 47 |
+| Village, 42 degrees | 146 + 76 | 205,609 | 21 |
+| Village, 30 degrees | 196 + 76 | 248,174 | 21 |
+| Village, 51.5 degrees | 131 + 76 | 198,591 | 21 |
+| Wilds, 42 degrees | 71 + 24 | 91,507 | 15 |
+| Redrock Canyon, 42 degrees | 93 + 37 | 83,317 | 17 |
+| Village, phone | 84 + 70 | 160,212 | 16 |
+| Village, Balanced | 146 + 76 | 205,609 | 21 |
+| Village, Battery saver | 138 + 0 | 126,970 | 16 |
 
-The two draw counts leave out `fx` and `roam` (above). Two earlier tables of this file (2026-10-11, the tool before the freeze) counted a moving scene and a slow-CPU frame rate; they are replaced because they could not be repeated.
+The two draw counts leave out `fx` and `roam` (above), and `programs` counts the programs the frame uses (about 50 are compiled in a session). Two earlier tables of this file (2026-10-11, the tool before the freeze) counted a moving scene and a slow-CPU frame rate; they are replaced because they could not be repeated. The first frozen tool (WP0) still let the game run a different number of frames while it waited for art, so its rows read one or two draws or one program apart from run to run; the numbers here are from the tool that fixes the frame.
 
 Measured with `perf:bytes` on 2026-11-21 (b3b9f57 plus the tools): English start 778 KB gzip, Vietnamese start 908 KB, install list 4.55 MB (377 files; icons about 1.4 MB and models about 1.6 MB of it, raw). An earlier estimate of 2.7 MB did not hold up.
+
+Measured on 2026-11-21 with the WP3 rows (four baseline runs, then the gate twice: pass, pass):
+
+| Row | Main + shadow draws | Triangles | Programs |
+|---|---|---|---|
+| Village, walking (late save) | 111 + 70 | 179,925 | 19 |
+| Wilds, walking | 80 + 29 | 100,621 | 15 |
+| Redrock Canyon, walking | 98 + 37 | 84,031 | 16 |
+| Space, 4 s after launch | 31 + 0 | 65,990 | 7 |
+| King Bear mid-telegraph (mid save) | 77 + 34 | 77,442 | 13 |
+| King Bear mid-telegraph, phone | 62 + 29 | 63,712 | 11 |
+| Treant mid-telegraph | 94 + 20 | 154,944 | 15 |
+| Treant mid-telegraph, phone | 82 + 19 | 130,712 | 15 |
+
+| Live row | Peak draws + shadow | Peak triangles | Programs created | Layouts / style recalcs / nodes |
+|---|---|---|---|---|
+| King Bear, 4 s | 107 + 34 | 89,498 | 0 | 114 / 311 / 1,007 |
+| Treant, 4 s | 113 + 20 | 163,200 | 0 | 118 / 334 / 1,007 |
+| Scripted swamp fight, 8 s | 136 + 38 | 128,073 | 1 | 229 / 737 / 1,035 |
+| Idle village, 4 s | - | - | - | 33 / 296 / 1,080 |
+| Colossus, 4 s (report only) | 144 + 57 | 92,714 | 0 | 83 / 323 / 1,009 |
+
+Before-play download, service worker blocked (`perf:download`, 2026-11-21, three runs; the gate passed twice for the English cases):
+
+| Case | Up to Start | Start to 10 s after the first frame | Owner's limit |
+|---|---|---|---|
+| New save, English | 2.47 MB (33 files: code 0.84 MB, models 1.58 MB, fonts 0.05 MB) | 0.21 MB (the cottage model and the Almanac chunk) | 1.6 MB: **over** |
+| Late save, English | 2.92 MB (37 files: models 2.02 MB) | 0.22 MB | 1.8 MB: **over** |
+| New and late save, Vietnamese | not measurable: the page never shows Start | - | - |
+
+Two findings for the owner, both older than this tool. (1) With the title screen left to finish loading, a first visit fetches 2.47 MB before Start, not 1.6 MB: the title loads the first-view models (creatures 409 KB, farm 313 KB, fruit crops 164 KB, fish 144 KB, crops 117 KB). (2) In the built game a visitor whose language is Vietnamese gets a blank page (also on the live site on 2026-11-21): `src/i18n.ts` waits for the vi pack at the top of the module, the built vi pack imports the `rules` chunk that holds `i18n.ts`, and the two wait for each other. The dev server is not affected. The fix is under way on its own branch (`aaa/vifix`). Until it is merged the two Vietnamese cases are left out of the download baseline and fail `perf:download`; run `ONLY=en` for the English ones, and take the Vietnamese baseline with `ONLY=vi node promo/first-visit-bytes.mjs --baseline` afterwards.
 
 The live site on 2026-10-10: about 2.3 MB downloaded before play, a steady 60 frames a second standing in the village, no slow frames.
 
