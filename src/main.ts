@@ -11,7 +11,7 @@ import './style.css';
 import './level-flash.css';
 import './skills.css';
 import { viewWidth, viewHeight } from './viewport.ts';
-import { t, localizeHtml, getLanguage, switchLanguage, onLanguageChange, bindLanguage } from './i18n.ts';
+import { t, localizeHtml, getLanguage, switchLanguage, onLanguageChange, bindLanguage, addPhrases } from './i18n.ts';
 import './menus.css';
 import { Box3, Mesh, Vector3 } from 'three';
 import { World, type Entity, type Enemy } from './world.ts';
@@ -194,6 +194,8 @@ import { PetGuardView } from './pet-guard-view.ts';
 import { PetSurgeView } from './pet-surge-view.ts';
 import { SURGE } from './pet-surge.ts';
 import { HERO_MODEL_HEIGHT, HERO_SCALE } from './world.ts';
+import { emit, connect, noteProgress } from './game-events.ts';
+import type { GameServices, ServiceHost } from './game-services.ts';
 import type { DungeonApi } from './dungeon.ts';
 import { HARVEST, SKILL_NAME_RISE } from './feel-rules.ts';
 import type { CtfApi } from './ctf.ts';
@@ -271,9 +273,12 @@ let modes:typeof import('./modes.ts')|null=null,modesLoading:Promise<void>|null=
  * refusal of a `quiet` intent, which the helpers send by themselves (another worker or the player got there first).
  */
 async function perform<T=any>(type:string,payload:Record<string,unknown>={},{quiet=false}:{quiet?:boolean}={}):Promise<T|undefined>{
-  const before=state.level,original=state,online=!!actionHandler,gift=state.welcome==='pending';
+  const before=state.level,original=state,online=!!actionHandler,gift=state.welcome==='pending',energy=state.energy,kind=String(payload.kind??'story'),claim=type==='claimQuest'||type==='claimProgress'?progressEntries(state,kind as ProgressKind).find(e=>type==='claimQuest'||e.id===payload.id):undefined; // the entry a claim pays, read before the claim marks it
   try{const result=actionHandler?(await actionHandler({type,payload})).result:applyGameAction(state,{type,payload},{now:Date.now(),random:Math.random});
-    if(state!==original)return undefined;if(!online)levelCheck(before);save();updateHud();if(gift&&state.welcome==='done'&&type.startsWith('harvest'))pepperGift();return result as T;
+    if(state!==original)return undefined;if(!online)levelCheck(before);save();updateHud();if(gift&&state.welcome==='done'&&type.startsWith('harvest'))pepperGift();
+    // Events for the feature modules (game-events.ts): the player's own harvest, and a claimed reward.
+    if(result&&claim)emit('reward',{kind,entry:claim,energy:state.energy-energy});else if(result&&type.startsWith('harvest')){const crops=([] as string[]).concat(result as string|string[]);if(crops[0])emit('harvest',{crops,all:type!=='harvest',first:gift&&state.welcome==='done'});}
+    return result as T;
   }catch(error){if(state===original)reportRefusal(type,payload,error,quiet);return undefined;}
 }
 function reportRefusal(type:string,payload:Record<string,unknown>,error:unknown,quiet:boolean){
@@ -543,7 +548,7 @@ function gainItem(id:string,count:number){if(!Object.hasOwn(M.ITEMS,id)||!(count
 function gainStat(kind:'xp'|'energy',amount:number){if(gainPlace(kind)==='stat')gainFeed.stat(kind,amount);}
 /** Home clears bad effects (home-care.ts): a short sparkle and a toast. */
 function cleansedFx(){world.fx?.burst({x:world.position.x,z:world.position.z},{n:18,color:['#ffffff','#bff7ff','#ffe9a8'],glow:true,size:.1,speed:3,up:4,y:1});toast('Cleansed! Bad effects wash away at home.','✨');}
-function levelCheck(before:number) {if(state.level>before){const after=state.level;
+function levelCheck(before:number) {if(state.level>before){const after=state.level;for(let level=before+1;level<=after;level++)emit('levelUp',{level});
   // Level-ups and milestones go to News (news-inbox-ui.ts); the old toasts and the Almanac chip only with "Show announcements as pop-ups" on.
   const report=reportLevelFor(before,after);const popups=inbox.announce(report?{kind:'report',icon:'📒',title:'Level {level}!',text:'Your level {level} report card is ready',params:{level:after},open:'insight'}:{kind:'level',icon:'🌟',title:'Level {level}!',text:'A little stronger, a little braver.',params:{level:after},open:'insight'});
   for(const l of M.milestonesBetween(before,after))inbox.announce({kind:'milestone',icon:'🏅',title:'Milestone: level {level}',text:'+{energy} energy and a moonstone. Onward, legend!',params:{level:l,energy:M.milestoneReward(l).energy.toLocaleString()},open:'bag'});
@@ -602,7 +607,10 @@ function profilePicker(){
 function pepperGift(){const show=()=>{if(modal||!started){setTimeout(show,700);return;}tone('quest');openDialog('welcome',t('Your first harvest!'),`<p class="intro">${esc(t('Hi boss! I am Pepper, the village cook. What a lovely first harvest!'))}</p><p>${esc(t('I won 10,000 energy in the lottery. It is yours: spend it on seeds and gear!'))}</p><div class="button-row"><button class="primary" data-action="close">${esc(t('Thank you, Pepper!'))}</button></div>`,t('YOUR COOK'),'🍳');};setTimeout(show,900);}
 /** The three welcome cards of an untouched save (welcome-cards.ts); closing them in any way saves them as seen. */
 const welcomeCards=initWelcomeCards({openDialog,closeDialog,modal:()=>modal||null,seen:()=>void perform('firstRunSeen',{id:'cards'},{quiet:true}),touch:isTouch,planets:()=>Object.keys(M.PLANETS).length,tone:kind=>tone(kind as Parameters<typeof tone>[0]),esc});
-async function start() {setTimeout(()=>void loadInsight().catch(()=>{}),5000);/* the Almanac's chunk, once play is under way: its scores join the save's snapshots and a waiting report card is offered */settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;const cards=welcomeCardsDue(state);if(cards)welcomeCards.show();welcomeBack??=initWelcomeBack({state:()=>state,newSave:(pending=>()=>pending)(state.welcome==='pending'),calm:()=>started&&!modal&&!uiBlocked()&&!placement&&!visiting&&!fishGame&&state.hp>0&&!fightNear(world.enemies,world.position.x,world.position.z,16)&&!dungeonApi?.active&&!ctfApi?.active&&!rescueApi?.active,colossusAsleep:()=>colossusLid(state.level)==='asleep',openDialog,closeDialog,modal:()=>modal||null,perform:(type,payload)=>perform(type,payload),toast:(text,icon)=>toast(text,icon),tone:kind=>tone(kind as Parameters<typeof tone>[0]),esc,saveKey:activeKey});world.readyTrail(()=>void compileAsyncSafe(world.renderer,world.scene,world.camera)); // warm the village's shaders off the first walk, and the weapon trail's off the first swing
+/** The feature modules (features.ts): one lazy chunk, asked for after the first played frame. `started` is told once they are mounted, so they hear it. */
+let featuresAsked=false,services:GameServices|undefined;
+function loadFeatures(load:()=>Promise<typeof import('./features.ts')>=()=>import('./features.ts')){if(featuresAsked)return;featuresAsked=true;const once=()=>{frameListeners.delete(once);void load().then(m=>m.mountFeatures(serviceHost,addPhrases)).then(mounted=>{services=mounted;emit('started',{});},error=>console.error(error));};frameListeners.add(once);}
+async function start() {setTimeout(()=>void loadInsight().catch(()=>{}),5000);/* the Almanac's chunk, once play is under way: its scores join the save's snapshots and a waiting report card is offered */settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;loadFeatures();$('#title-screen').hidden=true;$('#hud').hidden=false;const cards=welcomeCardsDue(state);if(cards)welcomeCards.show();welcomeBack??=initWelcomeBack({state:()=>state,newSave:(pending=>()=>pending)(state.welcome==='pending'),calm:()=>started&&!modal&&!uiBlocked()&&!placement&&!visiting&&!fishGame&&state.hp>0&&!fightNear(world.enemies,world.position.x,world.position.z,16)&&!dungeonApi?.active&&!ctfApi?.active&&!rescueApi?.active,colossusAsleep:()=>colossusLid(state.level)==='asleep',openDialog,closeDialog,modal:()=>modal||null,perform:(type,payload)=>perform(type,payload),toast:(text,icon)=>toast(text,icon),tone:kind=>tone(kind as Parameters<typeof tone>[0]),esc,saveKey:activeKey});world.readyTrail(()=>void compileAsyncSafe(world.renderer,world.scene,world.camera)); // warm the village's shaders off the first walk, and the weapon trail's off the first swing
   applyMovePad();save();updateHud();updateLabels();if(saved||!cards)toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):isTouch()?'Start small: tap a garden bed to plant your first carrot.':'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
@@ -613,6 +621,7 @@ let welcomeBack:WelcomeBackApi|null=null;
 const skillPartsOf=new WeakMap<HTMLElement,{kbd:Element;icon:Element;name:Element;cooldown:Element}>();
 function skillParts(button:HTMLElement){let p=skillPartsOf.get(button);if(!p){p={kbd:button.querySelector('kbd')!,icon:button.querySelector('span')!,name:button.querySelector('small')!,cooldown:button.querySelector('.cooldown')!};skillPartsOf.set(button,p);}return p;}
 function updateHud() {
+  if(started)noteProgress(state,state.quest,world.lastZone,world.planet); // storyStep and place (game-events.ts)
   const known=new Set(world.state.discovered),discoveryCount=t('Discovered {count}/{total} planets',{count:known.size,total:Object.keys(M.PLANETS).length});
   if(setHtml($('#discovery-text'),`<strong>🔭 ${esc(world.state.name)}</strong><span>${esc(discoveryCount)}</span><small aria-hidden="true">${Object.entries(M.PLANETS).map(([id,planet])=>known.has(id as M.PlanetId)?planet.icon:'❔').join(' ')}</small>`)){$('#discovery-progress').setAttribute('aria-label',`${world.state.name} · ${discoveryCount} · ${t('Discovery log')}`);}
   $('#world').dataset.status=JSON.stringify({position:[+world.position.x.toFixed(2),+world.position.z.toFixed(2)],route:world.route.length,next:world.route[0]?[world.route[0].x,world.route[0].z]:null,visibility:document.visibilityState,modal,started,frameMs:Math.round(frameTime),drawCalls:world.renderer.info.render.calls});
@@ -1227,9 +1236,9 @@ const farmHelperController=new FarmHelperController({state:()=>state,context:far
 // Rescued friends (friends.ts rules, friend-crew.ts cages/following/jobs, friend-view.ts looks, friend-ui.ts panel).
 setFriendDresser((color,gear,look)=>world.friendAvatar(color,gear,look));
 const helperChat=new ChatBubbles(world,()=>!started||modal!=='');
-const crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
+const friendsHomeTold=new Set<string>(),crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
   robotBed:()=>helperView.task?.index,robotAnimal:()=>farmHelperView.task?.uid,heldBed,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform:(type,payload)=>type==='rescueFriend'?perform(type,payload):workPerform(type,payload), // a rescue is the player's own tap; the rest are the friends' own jobs
-  rescued(id,at){const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
+  rescued(id,at){emit('rescue',{id,at});const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
   locked(id){toast(lockedHint(id),'🔒');},
   worked(id,task,r,at){
     if(task.kind==='harvest'){harvestBurst(task.index,Object.keys(r.raw)[0]??'carrot','worker',at);world.syncCrops();}else if(task.kind==='plant'){plantBurst(task.index,'worker');world.syncCrops();}
@@ -1239,7 +1248,7 @@ const crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!vi
     if(Object.keys(r.cooked).length)tone('pop');
   },
   grew(id,stage){toast(t('{name} grew up! Now {share} of your height.',{name:t(FRIENDS[id].name),share:String(GROWTH[stage].height)}),'🌱');tone('success');},
-  arrived(ids){toast(t('{names} reached Clover Village and went to work!',{names:ids.map(id=>t(FRIENDS[id].name)).join(', ')}),'🏡');void friendsCatchUp();}});
+  arrived(ids){toast(t('{names} reached Clover Village and went to work!',{names:ids.map(id=>t(FRIENDS[id].name)).join(', ')}),'🏡');void friendsCatchUp();for(const id of ids)if(!friendsHomeTold.has(id)){friendsHomeTold.add(id);emit('friendHome',{id});}}});
 const nameplates=new Nameplates(world,()=>!started||modal!=='');
 frameListeners.add(dt=>{crew.update(dt);helperChat.frame(dt);nameplates.frame();});
 function friendDialog(id:FriendId){openDialog('friend',FRIENDS[id].name,friendPanel(world.state,id),'RESCUED FRIEND',{garden:'🌱',farm:'🐄',cook:'🍳'}[FRIENDS[id].role]);}
@@ -1422,6 +1431,7 @@ async function finishFishingCatch(f:FishingRound){
     if(!result){if(current())fishingView.cancel();return;}
     const reward=result,item=M.ITEMS[reward.id],caught=M.FISH[reward.id];
     if(!online&&!change(()=>reward.mystery?M.grantMysteryCatch(state,reward.id,reward.size,reward.supergiant):M.grantCatch(state,reward.id,reward.size,reward.huge))){if(current()){fishingView.cancel();toast('There is no room for this catch.','🎒');}return;}
+    emit('fishCatch',reward);
     if(!current())return;
     fishingView.land(()=>world.position,()=>{
       if(!current())return;tone('success');
@@ -1437,7 +1447,7 @@ async function finishFishingCatch(f:FishingRound){
 }
 
 
-world.onAlert=()=>tone('alert');
+world.onAlert=e=>{tone('alert');emit('creatureAlert',{enemy:e});};
 // A blow on a boss lands with a deeper thud, and the one that breaks it (boss-stagger.ts) with a crack (sfx.ts).
 world.onBossHit=(_e,broke)=>{tone('thud');if(broke)tone('break');};
 world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();minimap.invalidate();placeFlags.rebuild();};
@@ -1529,12 +1539,12 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
   if(!vault&&!ctfApi?.owns(e)&&!rescueApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
-  const hpBefore=e.hp,broke=world.damageEnemy(e,damage,stun,hazard,impact?.source,impact)==='break';combatHud.noteHit(e);world.hitFeedback(e,e.driver||e.boss?Math.max(e.hp>0?1:0,Math.round(hpBefore-e.hp)):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0,broke);if(!hazard||impact)tone(impact?.critical?'crit':(impact?.knock??0)>=2||(impact?.lift??0)>0?'hitHeavy':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
+  const hpBefore=e.hp,broke=world.damageEnemy(e,damage,stun,hazard,impact?.source,impact)==='break';combatHud.noteHit(e);if(!remote&&!hazard)emit('hitLanded',{enemy:e,damage:hpBefore-e.hp,impact});world.hitFeedback(e,e.driver||e.boss?Math.max(e.hp>0?1:0,Math.round(hpBefore-e.hp)):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0,broke);if(!hazard||impact)tone(impact?.critical?'crit':(impact?.knock??0)>=2||(impact?.lift??0)>0?'hitHeavy':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
   // Earned flinch (creature-weight.ts): a small creature's wind-up is cut short by the last hit of a chain or a critical.
   if(impact&&!hazard&&e.hp>0)world.flinchEnemy(e,{critical:!!impact.critical,big:(impact.knock??0)>=2||(impact.lift??0)>0});
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
-  if(e.hp===0){world.defeatFeedback(e);tone('poof');
+  if(e.hp===0){world.defeatFeedback(e);tone('poof');emit('creatureDefeat',{enemy:e,impact});
     if(vault){dungeonApi!.defeated(e);return;}
     if(e.driver)return;// the Colossus pays out itself (colossus.ts)
     const type=(e as Enemy&{type?:string}).type??'slime';if(network.onHostKill)network.onHostKill(e.id,e.xp,e.boss,type);else grantDefeat({...e,type,helper:!!impact?.helper});}
@@ -2014,7 +2024,7 @@ world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   if(enemyId){amount=combat.guardIncoming(amount,source,world.enemies.find(e=>e.id===enemyId));if(!(amount>0))return;}
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
-  state.hp=Math.max(0,state.hp-damage);if(state.hp<=0&&combat.surge.revive()){state.hp=Math.max(1,Math.round(M.maxHp(state)*SURGE.revive));surgeView.revived();}dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();if(airOn())streak.hurt(damage);world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
+  state.hp=Math.max(0,state.hp-damage);if(state.hp<=0&&combat.surge.revive()){state.hp=Math.max(1,Math.round(M.maxHp(state)*SURGE.revive));surgeView.revived();}dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();if(airOn())streak.hurt(damage);world.hurtFeedback(damage,enemyId?world.enemies.find(e=>e.id===enemyId):null);tone('hurt');emit('playerHurt',{amount:damage,source});vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
   checkDefeat();
   updateHud();
 };
@@ -2093,7 +2103,7 @@ export const gameBridge:GameBridge={
     updateHud();updateLabels();
   },
   spawnNetworkDrop,removeNetworkDrop,releaseNetworkDrop(id){for(const meta of networkDrops.values())if(meta.drop.id===id)meta.drop.releaseAt=0;},clearNetworkDrops(){networkDrops.clear();drops.clear();},
-  applyAuthorityHealth(delta,died){if(delta<0){world.hurtFeedback(-delta);tone('hurt');if(fishGame)endFishing('The fish got away when you were hit.');}if(died){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();closeDialog();toast('You are safe at home.','🏡');}updateHud();},
+  applyAuthorityHealth(delta,died){if(delta<0){world.hurtFeedback(-delta);tone('hurt');emit('playerHurt',{amount:-delta,source:'server'});if(fishGame)endFishing('The fish got away when you were hit.');}if(died){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();closeDialog();toast('You are safe at home.','🏡');}updateHud();},
   setNetworkHooks(hooks){network=hooks;world.networkRole=hooks.role;},
   applyRemoteHit(id,damage,stun=0,impact){const enemy=world.enemies.find(e=>e.id===id);if(enemy)hit(enemy,damage,stun,impact,true);},
   applyRemoteStatus(id,kind,duration){const enemy=world.enemies.find(e=>e.id===id);if(enemy)world.statusEnemy(enemy,kind,Math.min(12,duration));},
@@ -2557,4 +2567,6 @@ if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__r
 }
 initPlatform(message=>toast(message));
 // Development builds expose the game to browser tests; production builds leave this out.
-if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{inbox,controls,gainFeed,gainDemo:()=>gainFeed.demo(),surgeView,questWalk,get welcomeBack(){return welcomeBack;},pinHero:(spot:{x:number;z:number}|null)=>{world.perfPin=spot;},newsDemo:()=>{const before=state.level;state.level=Math.max(before+1,4);levelCheck(before);updateHud();},breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({news:inbox.open,bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
+/** What the feature modules get from this file; features.ts makes their services of it (game-services.ts). */
+const serviceHost:ServiceHost={world,state:()=>state,perform,toast,tone,openDialog,closeDialog,modal:()=>modal,onFrame:gameBridge.onFrame,slot:activeSlot,touch:isTouch,quality:()=>graphics.level,connect};
+if(import.meta.env.DEV||import.meta.env.VITE_PERF_HOOK)Object.assign(window,{__zoo:{get services(){return services;},inbox,controls,gainFeed,gainDemo:()=>gainFeed.demo(),surgeView,questWalk,get welcomeBack(){return welcomeBack;},pinHero:(spot:{x:number;z:number}|null)=>{world.perfPin=spot;},newsDemo:()=>{const before=state.level;state.level=Math.max(before+1,4);levelCheck(before);updateHud();},breakables,flags:perfFlags,matrixStats,updateSceneMatrices,world,get colossus(){return colossus;},get ranking(){return rankingApi;},get news(){return newsApi;},get insight(){return insight;},loadInsight,openInsight,panel:(type:string)=>{if(type==='wardrobe'){bagMode='wardrobe';inventory();}else({news:inbox.open,bag:inventory,shop,upgrade:upgrades,looks:()=>lookShop.open(),sell:market,travel:planets,map,quests,settings,help,craft:crafting,cook:cooking,chest:storage} as Record<string,()=>void>)[type]?.();},house,bench,combat,resetCombat,skill,airSwing,skillList,fight:{powerCharge,powerStrike,streak,attackHold,attackDown,get charge(){return attackCharge;},get counter(){return counterView;},get on(){return airOn();},set on(v:boolean){airCombat=v;syncAirCombat();},jumpInput,comboMeter,slideCombo,get touch(){return touchFight;},set touch(v:boolean){touchFight=v;},get pending(){return pendingPress;},tryJump,basicAttack,startDive,jumpBlock,get spaceKey(){return spaceKey;},get sure(){return sureLeft;}},challenges,keysGuide,startChallenge:(type:string)=>perform('startChallenge',{kind:type}),get cooldowns(){return cooldowns;},get airCooldowns(){return airCooldowns;},lookShop,drops,crew,fishingView,pondSplash,huntingView,guardianView,helperView,farmHelperView,get fishGame(){return fishGame;},get state(){return state;},planets,launch,flyHome,get flight(){return flight;},spaceView,toast,showZone,dialogs:{shop,market,inventory,settings,quests,help,map,upgrades,crafting,decorations,storage,cooking,forgeMenu,testerShop}}});
