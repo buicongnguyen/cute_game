@@ -21,18 +21,24 @@ function buildInfo(): Plugin {
  */
 const CHUNK_NAMES: Array<[string, RegExp]> = [
   ['world', /\/src\/world\.ts$/], // the 3D world, its views and the model loader (assets.ts, GLTFLoader, meshopt decoder)
-  ['rules', /\/src\/combat\.ts$/], // game rules and content tables used at start and by the modes, the Almanac and vi-pack
+  ['rules', /\/src\/combat\.ts$/], // game rules and content used at start and by the modes and the Almanac (never by vi-pack: see 'tables' below)
 ];
 function chunkName(chunk: PreRenderedChunk) {
   if (chunk.isEntry) return chunk.name;
   const ids = chunk.moduleIds.map(id => id.replace(/\\/g, '/'));
   return CHUNK_NAMES.find(([, rule]) => ids.some(id => rule.test(id)))?.[0] ?? chunk.name;
 }
+/** Game modules the Vietnamese pack (src/locales) imports at run time, besides help-topics.ts. Checked by tests/build-await-cycle.test.mjs. */
+const PACK_TABLES = ['boss-pet-content.ts', 'ctf-content.ts', 'dungeon-content.ts'];
 /** Chunks pinned by hand: three.js on its own (it changes least), and the guide's text, fetched when it first opens. */
 function manualChunk(id: string) {
   const path = id.replace(/\\/g, '/');
   if (path.includes('/node_modules/three/build/')) return 'three';
   if (path.endsWith('/src/help-topics.ts')) return 'help';
+  // The content tables the Vietnamese pack reads its English names from. i18n.ts awaits the pack at start (top-level await), so the
+  // pack must never import the chunk that holds i18n.ts, or the two wait on each other and the page stays blank. These tables
+  // import nothing at run time; tests/build-await-cycle.test.mjs fails the build check if a locale file reaches further.
+  if (PACK_TABLES.some(file => path.endsWith(`/src/${file}`))) return 'tables';
   return undefined;
 }
 
