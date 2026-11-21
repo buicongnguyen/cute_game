@@ -71,7 +71,7 @@ test('levelUp, rewardLarge, victory and equip are four different recipes, and so
   // None of them borrows a sound that was there before (the fanfare aside).
   const old = new Set(ALL_SOUNDS.map(s => recipes[s]));
   for (const s of STINGERS) if (s !== 'levelUp') assert.ok(!old.has(recipes[s]), `${s} is a new sound`);
-  assert.deepEqual(Object.keys(STINGER).sort(), [...STINGERS.filter(s => s !== 'levelUp'), 'flag', 'powerReady'].sort());
+  assert.deepEqual(Object.keys(STINGER).sort(), [...STINGERS.filter(s => s !== 'levelUp'), 'flag', 'powerReady', 'roar', 'petHit'].sort()); // the last two: tests/creature-voices.test.ts
   // Before the features bring the recipes, a stinger still sounds: the success chime.
   const { ctx, make } = fresh(), sfx = new Sfx(make); sfx.random = () => .5; ctx.currentTime = 2;
   assert.equal(sfx.play('victory'), true); assert.ok(ctx.nodes.some(n => n.started > 0));
@@ -200,7 +200,7 @@ test('the fanfare and a big stinger never sound together: whichever comes second
 });
 
 test('only the big stingers are priority cues: a win sounds over a full fight on a phone, a small reward is dropped like any sound', () => {
-  assert.deepEqual(Object.entries(STINGER).filter(([, s]) => s.priority).map(([name]) => name).sort(), ['discover', 'flag', 'go', 'rewardLarge', 'victory']);
+  assert.deepEqual(Object.entries(STINGER).filter(([, s]) => s.priority).map(([name]) => name).sort(), ['discover', 'flag', 'go', 'rewardLarge', 'roar', 'victory']); // the Colossus's roar took the hurt cry's place, a priority cue
   const { ctx, make } = fresh(), sfx = new Sfx(make); sfx.random = () => .5; installMix(sfx.graph); installStingers(sfx.graph);
   const voices = sfx.graph.voices as Voices; voices.budget = TOUCH_VOICES + 2; voices.reserve = 2; ctx.currentTime = 4;
   for (let i = 0; i < TOUCH_VOICES; i++) assert.equal(voices.take(4, 9), true);

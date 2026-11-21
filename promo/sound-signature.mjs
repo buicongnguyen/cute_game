@@ -38,6 +38,24 @@ function hash(text) { let h = 0x811c9dc5; for (let i = 0; i < text.length; i++) 
  * The signature of each sound. `Sfx` is the class of src/sfx.ts; `install(graph)` gives a fresh graph what the features
  * give it in the game (features/stingers.ts installStingers), so the stingers play their own recipes.
  */
+/**
+ * The signature of each creature voice (src/features/creature-voices.ts): per family, each kind and the wind-up of a
+ * boss ('warning'), and the heartbeat of src/features/low-health.ts.
+ */
+export function voiceSignatures(AudioGraph, CreatureVoices, families, kinds, heartbeat) {
+  const text = log => `${log.sources}:${log.gain.toFixed(4)}:${Math.round(log.pitch)}:${hash(log.all.join('|'))}`, out = {};
+  for (const family of families) {
+    out[family] = {};
+    for (const kind of [...kinds, 'warning']) {
+      const { ctx, log } = recordingContext();
+      new CreatureVoices(new AudioGraph(() => ctx), { random: () => .5 }).speak(family, kind === 'warning' ? 'windup' : kind, kind === 'warning' ? { seconds: 1.1, boss: true, radius: 1.1 } : { seconds: .8 });
+      out[family][kind] = text(log);
+    }
+  }
+  const { ctx, log } = recordingContext(); heartbeat(ctx, ctx.createGain(), START); out.heartbeat = text(log);
+  return out;
+}
+
 export function signatures(Sfx, sounds, install) {
   const out = {};
   for (const sound of sounds) {
