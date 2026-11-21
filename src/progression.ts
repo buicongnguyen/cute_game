@@ -73,7 +73,7 @@ export interface ProgressionState {
         ends: number;
     } | null;
     /** This half hour's bounties on the planets left meanwhile (key → progress and claimed), so a quick trip neither wipes progress nor pays a bounty twice. Missing on older saves. */
-    bountyLog?: Record<string, { progress: number; claimed: boolean }>;
+    bountyLog?: Record<string, { progress: number; claimed: boolean; type?: string }>;
     challenge: {
         type: string;
         target: number;
@@ -194,12 +194,13 @@ export function refreshProgress(s: SaveState, now = Date.now()) {
     const key = `${s.planet}:${Math.floor(now / 1800000)}`;
     if (p.bounty?.key !== key) {
         // Remember the bounty being left (same half hour only): coming back finds it as it was, claimed or half done.
-        const half = key.slice(key.indexOf(':')), log: Record<string, { progress: number; claimed: boolean }> = {};
+        const half = key.slice(key.indexOf(':')), log: Record<string, { progress: number; claimed: boolean; type?: string }> = {};
         for (const [k, v] of Object.entries(p.bountyLog ?? {})) if (k.endsWith(half)) log[k] = v;
-        if (p.bounty?.key.endsWith(half)) log[p.bounty.key] = { progress: p.bounty.progress, claimed: p.bounty.claimed };
-        // Only creatures up to one level above the explorer (bountyChoices).
-        const choices = bountyChoices(s.planet, s.level), seen = log[key];
-        p.bounty = choices.length ? { key, type: choices[hash(key + s.name) % choices.length], target: 3 + hash(key) % 3, progress: 0, claimed: false, ends: (Math.floor(now / 1800000) + 1) * 1800000 } : null;
+        if (p.bounty?.key.endsWith(half)) log[p.bounty.key] = { progress: p.bounty.progress, claimed: p.bounty.claimed, type: p.bounty.type };
+        // Only creatures up to one level above the explorer (bountyChoices). A bounty met earlier this half hour keeps its
+        // creature: a level gained on the trip changes the list, and the progress must not move to another one.
+        const choices = bountyChoices(s.planet, s.level), seen = log[key], kept = seen?.type && PLANETS[s.planet].spawns.some(([id]) => id === seen.type) ? seen.type : '';
+        p.bounty = kept || choices.length ? { key, type: kept || choices[hash(key + s.name) % choices.length], target: 3 + hash(key) % 3, progress: 0, claimed: false, ends: (Math.floor(now / 1800000) + 1) * 1800000 } : null;
         if (p.bounty && seen) { p.bounty.progress = Math.min(p.bounty.target, seen.progress); p.bounty.claimed = seen.claimed; }
         if (Object.keys(log).length) p.bountyLog = log; else delete p.bountyLog;
     }
@@ -465,8 +466,8 @@ export function normalizeProgression(raw: unknown, s: SaveState): ProgressionSta
     if (record(b) && typeof b.type === 'string' && Object.values(PLANETS).some(p => p.spawns.some(([type]) => type === b.type)))
         p.bounty = { key: text(b.key), type: b.type, target: Math.max(3, Math.min(5, number(b.target))), progress: Math.min(number(b.progress), number(b.target)), claimed: b.claimed === true, ends: number(b.ends, Number.MAX_SAFE_INTEGER) };
     if (record(raw.bountyLog)) {
-        const log: Record<string, { progress: number; claimed: boolean }> = {};
-        for (const [k, v] of Object.entries(raw.bountyLog).slice(0, 12)) if (/^[a-z]+:\d+$/.test(k) && record(v)) log[k] = { progress: number(v.progress, 5), claimed: v.claimed === true };
+        const log: Record<string, { progress: number; claimed: boolean; type?: string }> = {};
+        for (const [k, v] of Object.entries(raw.bountyLog).slice(0, 12)) if (/^[a-z]+:\d+$/.test(k) && record(v)) log[k] = { progress: number(v.progress, 5), claimed: v.claimed === true, ...(typeof v.type === 'string' && Object.hasOwn(ENEMY_TYPES, v.type) ? { type: v.type } : {}) };
         if (Object.keys(log).length) p.bountyLog = log;
     }
     const c = raw.challenge;

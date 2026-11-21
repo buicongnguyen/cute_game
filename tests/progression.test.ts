@@ -149,8 +149,22 @@ test('a save from before the cap: a bounty already rolled lasts to the end of it
     P.refreshProgress(s,start);const b=s.progression.bounty;assert.ok(b&&P.bountyLevel(s.planet,b.type)<=s.level+1,name+': '+b?.type);assert.ok(reload(s),name);
   }
 });
-test('a bounty left for another planet is found as it was on the way back (same half hour)',()=>{
+test('a bounty left for another planet is found as it was on the way back, creature and all, even a level higher',()=>{
   const s=M.newGame('Trip');s.level=4;P.refreshProgress(s,start);const home=s.progression.bounty!;P.recordEvent(s,'kill',1,home.type,start);
-  s.planet='toy';P.refreshProgress(s,start+1000);assert.deepEqual(s.progression.bountyLog,{[home.key]:{progress:1,claimed:false}});assert.equal(P.bountyLevel('toy',s.progression.bounty!.type),4);
-  const back=reload(s);back.planet='home';P.refreshProgress(back,start+2000);assert.deepEqual(back.progression.bounty,{...home,progress:1});
+  s.planet='toy';P.refreshProgress(s,start+1000);assert.deepEqual(s.progression.bountyLog,{[home.key]:{progress:1,claimed:false,type:home.type}});assert.equal(P.bountyLevel('toy',s.progression.bounty!.type),4);
+  const back=reload(s);assert.equal(back.progression.bountyLog![home.key].type,home.type,'the log keeps the creature through a save');back.planet='home';P.refreshProgress(back,start+2000);assert.deepEqual(back.progression.bounty,{...home,progress:1});
+  // Level 5 -> 6 on the trip: the cactus joins the list (5 -> 6 creatures), so the half hour's pick moves for most names. The begun bounty must not.
+  const half=Math.floor(start/1800000),pick=(name:string,level:number)=>{const g=M.newGame(name);g.level=level;P.refreshProgress(g,start);return g.progression.bounty!.type;};
+  const name=Array.from({length:200},(_,i)=>'Hunter '+i).find(n=>pick(n,5)!==pick(n,6))!;assert.ok(name,'a name whose pick differs between level 5 and 6');
+  const t=M.newGame(name);t.level=5;P.refreshProgress(t,start);const was=t.progression.bounty!;assert.equal(was.key,'home:'+half);P.recordEvent(t,'kill',2,was.type,start);
+  t.planet='toy';P.refreshProgress(t,start+1000);t.level=6;t.planet='home';P.refreshProgress(t,start+2000);
+  assert.equal(t.progression.bounty!.type,was.type,'the same creature, not the level-6 pick '+pick(name,6));assert.equal(t.progression.bounty!.progress,2);
+  P.recordEvent(t,'kill',9,pick(name,6),start+3000);assert.equal(t.progression.bounty!.progress,2,'kills of the other creature do not count');
+  // The next half hour picks from the level-6 list as usual.
+  P.refreshProgress(t,was.ends);assert.equal(t.progression.bounty!.progress,0);assert.ok(P.bountyChoices('home',6).includes(t.progression.bounty!.type));
+  // A log from before this rule has no creature: the half hour's pick is used. An unknown creature in a save is dropped by the parser.
+  const legacy=reload(s);delete legacy.progression.bountyLog![home.key].type;const again=reload(legacy);again.planet='home';P.refreshProgress(again,start+2000);assert.equal(again.progression.bounty!.progress,1);assert.ok(P.bountyLevel('home',again.progression.bounty!.type)<=5);
+  for(const bad of['no-such-creature',7,null]){const raw=JSON.parse(JSON.stringify(s));raw.progression.bountyLog[home.key].type=bad;const parsed=M.parseSave(JSON.stringify(raw))!.progression.bountyLog![home.key];assert.deepEqual(parsed,{progress:1,claimed:false});}
+  // A creature of another planet in the log (a tampered save) is not offered here.
+  const wrong=JSON.parse(JSON.stringify(s));wrong.progression.bountyLog[home.key].type='toysoldier';const w=M.parseSave(JSON.stringify(wrong))!;w.planet='home';P.refreshProgress(w,start+2000);assert.ok(P.bountyChoices('home',4).includes(w.progression.bounty!.type));
 });
