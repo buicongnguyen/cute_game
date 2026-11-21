@@ -66,7 +66,15 @@ async function preview() {
   const url = `http://127.0.0.1:${port}${basePath}`, until = Date.now() + 30000;
   for (;;) {
     if (child.exitCode !== null) throw new Error(`vite preview stopped (is port ${port} taken?):\n${log}`);
-    try { const r = await fetch(url); if (r.ok) break; } catch { /* not up yet */ }
+    try {
+      const r = await fetch(url);
+      if (r.ok) { // someone answers: make sure it is our preview and not another server that already had the port (ours then exits a moment later)
+        await new Promise(res => setTimeout(res, 300));
+        if (child.exitCode !== null) throw new Error(`port ${port} is taken by another server (vite preview stopped):
+${log}`);
+        break;
+      }
+    } catch (e) { if (/is taken by another server/.test(e.message)) throw e; /* else not up yet */ }
     if (Date.now() > until) { child.kill(); throw new Error(`vite preview did not answer on ${url} within 30 s:\n${log}`); }
     await new Promise(r => setTimeout(r, 250));
   }
@@ -85,7 +93,8 @@ async function measureCase(browser, url, saveName, language) {
     if (!/^https?:/.test(r.url())) return; pending--; lastActivity = Date.now();
     if (!ok) { failed.push(r.url().replace(origin, '')); return; }
     if (seen.has(r.url())) return; seen.add(r.url());
-    const w = windows[r.__window ?? into], weighed = weigh(r.url(), origin);
+    const w = windows[r.__window ?? into]; if (!w) return; // asked for after the second window closed: outside the measure
+    const weighed = weigh(r.url(), origin);
     if (!weighed) { foreign.push(r.url().replace(origin, '')); return; }
     const [file, bytes] = weighed, lazy = lazyChunkOf(file);
     w.files++; w.list.push([file, bytes]);
