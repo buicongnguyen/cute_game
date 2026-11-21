@@ -66,10 +66,10 @@
    "row": "start",
    "name": "WP18 our own colours",
    "allow": {
-    "english": 445,
-    "vietnamese": 445
+    "english": 1013,
+    "vietnamese": 1013
    },
-   "why": "Measured growth of the start against staging ef9501e (English 798,764 -> 799,209, Vietnamese 932,156 -> 932,601; plan allowance 0.1 KB): colour values the world reads as it is built, so they cannot load after Start. About 60 colours that did not exist before (our own ground colours for seven planets, which used to come from the planet facts; the island and sea colours of Ocean and Cloud, which were written into environment-art.ts; the warm shade under forest, swamp and canyon trees; the Crocodile King's paint; the blue basalt), and the small code that applies them (the paint by material name in creature-art.ts and space-view.ts, the round star map, the smooth stand-in rock, the look switch). The old tables are kept for a before and after in dev and perf builds only (a statically false branch in the shipped build: 0 bytes; with them the start grew 1,584 bytes). Two slimming passes saved about 220 bytes (the stars reuse the halo glow; fog and sun angles moved into the table so look.ts wears it as it is).",
+   "why": "Measured growth of the start against staging 66d897e (English 798,864 -> 799,877, Vietnamese 932,256 -> 933,269; plan allowance 0.1 KB; it was 445 bytes before the review round). Colour values the world reads as it is built, so they cannot load after Start: about 75 colours that did not exist before (our own ground colours for seven planets, which used to come from the planet facts; the island, dapple and sea colours of Ocean and Cloud, which were written into environment-art.ts; the warm shade under forest, swamp and canyon trees; the paint of the Crocodile King, King Bear and the Snow Yeti; eight bosses' own colours, kept in the table so the look switch turns them back; the blue basalt), and the code that applies them (paint by material name in creature-art.ts and space-view.ts, the boss colours put on as the page loads, the dappled island top, the round star map, the smooth stand-in rock, the look switch). The old tables are kept for a before and after in dev and perf builds only (a statically false branch in the shipped build: 0 bytes)."
   },
   {
    "row": "start",
