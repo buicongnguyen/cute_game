@@ -1,0 +1,26 @@
+{
+ "about": "Measured by promo/music-clips.mjs --write: 30 s of each tune on the music bus, dBFS at the speakers, sliders at their defaults. Do not edit by hand.",
+ "theme": {"peak":-9.7,"rms":-23.3,"lufs":-24.1},
+ "tunes": {
+  "village": {"peak":-8.7,"rms":-24,"lufs":-24.9,"tune":"c0d7b913e93b"},
+  "forest": {"peak":-11.2,"rms":-24.7,"lufs":-25.6,"tune":"ab3963f8ddc6"},
+  "meadow": {"peak":-10.3,"rms":-24.6,"lufs":-25.3,"tune":"23a862c9a175"},
+  "swamp": {"peak":-8.7,"rms":-24.3,"lufs":-25.1,"tune":"fe67d8f92f8f"},
+  "canyon": {"peak":-9.9,"rms":-24.5,"lufs":-25.3,"tune":"245c912c44e6"},
+  "candy": {"peak":-9.8,"rms":-23.9,"lufs":-25.1,"tune":"dd4207ad8e15"},
+  "ice": {"peak":-8.5,"rms":-24.7,"lufs":-25.8,"tune":"a2520b16e537"},
+  "lava": {"peak":-10.1,"rms":-24.2,"lufs":-25.1,"tune":"44c2334fd036"},
+  "toy": {"peak":-10.3,"rms":-24.3,"lufs":-25.1,"tune":"ca95922e915b"},
+  "jungle": {"peak":-11.1,"rms":-24.7,"lufs":-25.4,"tune":"3083b87ecdd2"},
+  "ocean": {"peak":-8.7,"rms":-24.3,"lufs":-25.1,"tune":"08a9b97cb751"},
+  "cloud": {"peak":-7.8,"rms":-24.7,"lufs":-25.8,"tune":"49ffb521153f"},
+  "shadow": {"peak":-9.4,"rms":-24.4,"lufs":-25.1,"tune":"f00d709cb4c9"},
+  "boss": {"peak":-7.1,"rms":-24,"lufs":-24.9,"tune":"6946773ea887"},
+  "space": {"peak":-8,"rms":-24.8,"lufs":-25.8,"tune":"5274e81da7c4"},
+  "ctf": {"peak":-8.7,"rms":-24.2,"lufs":-25.1,"tune":"951006eb6f31"},
+  "rescue": {"peak":-8.8,"rms":-23.7,"lufs":-25,"tune":"e06113776ae6"},
+  "vault": {"peak":-8.4,"rms":-24.5,"lufs":-25.3,"tune":"b1849d4daca1"}
+ },
+ "layers": {"forest":{"calm":{"peak":-11.2,"rms":-24.7,"lufs":-25.6,"air":-65.1},"chased":{"peak":-8.7,"rms":-24.4,"lufs":-25.3,"air":-58.3},"touch":{"peak":-11.9,"rms":-25.8,"lufs":-26.7,"air":-71.7}},"village":{"calm":{"peak":-8.7,"rms":-24,"lufs":-24.9,"air":-61.9},"chased":{"peak":-6.5,"rms":-23.7,"lufs":-24.6,"air":-57},"touch":{"peak":-10.5,"rms":-24.8,"lufs":-25.8,"air":-67.3}},"boss":{"calm":{"peak":-7.1,"rms":-24,"lufs":-24.9,"air":-54.9},"chased":null,"touch":{"peak":-7.8,"rms":-24.8,"lufs":-25.9,"air":-55.6}}},
+ "mix": {"duck":{"depth":-6,"after":0},"brawlTop":-1.5,"brawl":-2.3}
+}
