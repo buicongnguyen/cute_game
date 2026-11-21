@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { LOOKS, GRADE, CONTACT, NIGHT_GLOW, planetLook, applyLook, sunOffset, grade, installGrade, skyTexture, skyBlend, skyInView, mixHex, contactShade, shadeGeometry, lightPool } from '../src/look.ts';
+import { LOOKS, GRADE, CONTACT, GLOSS, NIGHT_GLOW, planetLook, applyLook, sunOffset, grade, installGrade, skyTexture, skyBlend, skyInView, mixHex, contactShade, shadeGeometry, lightPool } from '../src/look.ts';
 import { PLANET_LIGHT, SUN_OFFSET, LIGHT } from '../src/toon.ts';
 import { perfFlags } from '../src/perf-flags.ts';
 import { PLANETS, newGame, type PlanetId } from '../src/model.ts';
@@ -98,12 +98,39 @@ test('the sky gradient is asked for only where the view can pass the edge of the
 });
 
 test('contact shading: darker and cooler at the base, darker under overhangs, lighter at the crown', () => {
-  const base = contactShade(0, 4, 1, [1, 1, 1]).slice(), mid = contactShade(2, 4, 1, [1, 1, 1]).slice(), top = contactShade(4, 4, 1, [1, 1, 1]).slice(), under = contactShade(2, 4, -1, [1, 1, 1]).slice();
+  const base = contactShade(0, 4, 0, [1, 1, 1]).slice(), mid = contactShade(2, 4, 0, [1, 1, 1]).slice(), top = contactShade(4, 4, 0, [1, 1, 1]).slice(), under = contactShade(2, 4, -1, [1, 1, 1]).slice();
   assert.ok(base[0] < mid[0] && mid[0] < top[0]); assert.ok(base[2] > base[0], 'the shade is cool, not grey');
   assert.ok(Math.abs(mid[0] - 1) < 1e-9, 'the middle keeps the authored colour'); assert.ok(Math.abs(under[0] - CONTACT.under) < 1e-9);
   assert.ok(top[0] <= 1 + CONTACT.crown + 1e-9 && base[0] > .55, 'gentle');
   // A low piece (a pebble, a tuft) is shaded over its own small height, not flattened to dark.
   assert.ok(contactShade(.2, .25, 1)[0] > .9);
+});
+
+test('the gloss raises only faces that look up: tops 6 to 10% lighter, bevels catch a warm light, sides and undersides keep their colour', () => {
+  const at = (y: number, ny: number) => contactShade(y, 4, ny, [1, 1, 1]).slice();
+  const normals = [-1, -.3, 0, GLOSS.bevel, .4, .6, .61, .8, 1];
+  perfFlags.ownRamp = false;
+  const flat = new Map(normals.map(ny => [ny, [0, 2, 4].map(y => at(y, ny))]));
+  perfFlags.ownRamp = true;
+  for (const ny of normals) [0, 2, 4].forEach((y, k) => {
+    const now = at(y, ny), was = flat.get(ny)![k], ratio = now.map((v, i) => v / was[i]);
+    if (ny <= GLOSS.bevel) assert.deepEqual(now, was, 'sides and undersides are untouched: normal ' + ny);
+    else if (ny > GLOSS.top) { const lift = [1.06, 1.08, 1.1][k]; for (const r of ratio) assert.ok(Math.abs(r - lift) < 1e-9, 'a top is 6% lighter at the foot and 10% at the top, the same on every channel: ' + r); }
+    else { assert.ok(ratio[0] > 1.1 && ratio[0] > ratio[1] && ratio[1] > ratio[2] && ratio[2] > 1, 'a bevel catches a warm light'); assert.ok(now[0] > at(y, 1)[0], 'and is the brightest face, like the edge of a moulded toy'); }
+    assert.ok(Math.max(...now) < 1.25, 'gentle: nothing blown out');
+  });
+  assert.ok(at(2, -.7)[0] < 1, 'a face that looks down is still darker');
+});
+
+test('shadeGeometry bakes the gloss into the top of a model and leaves its sides alone', () => {
+  const make = () => { const g = new T.BoxGeometry(1, 2, 1).translate(0, 1, 0); g.setAttribute('color', new T.BufferAttribute(new Float32Array(g.getAttribute('position').count * 3).fill(.5), 3)); return g; };
+  perfFlags.ownRamp = false; const plain = shadeGeometry(make()); perfFlags.ownRamp = true; const glossy = shadeGeometry(make());
+  const n = glossy.getAttribute('normal'), a = glossy.getAttribute('color'), b = plain.getAttribute('color'); let tops = 0, others = 0;
+  for (let i = 0; i < n.count; i++) {
+    if (n.getY(i) > .6) { tops++; assert.ok(Math.abs(a.getX(i) / b.getX(i) - 1.1) < 1e-6, 'the lid is 10% lighter'); }
+    else { others++; assert.equal(a.getX(i), b.getX(i)); assert.equal(a.getZ(i), b.getZ(i)); }
+  }
+  assert.equal(tops, 4); assert.equal(others, 20);
 });
 
 test('shadeGeometry bakes the shading into existing vertex colours and keeps the triangles', () => {

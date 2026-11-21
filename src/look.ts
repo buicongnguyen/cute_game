@@ -154,15 +154,23 @@ export function lightPool(color = '#9ab8ff', strength = .3, segments = 40) {
 /** Shade a kit model takes near the ground and on faces that look down: [red, green, blue] at full strength (a cool, not grey, dark). */
 export const CONTACT = { tint: [.66, .68, .8], reach: 1.5, share: .42, under: .82, crown: .07 } as const;
 /**
+ * The toy gloss (AAA plan WP6), baked with the contact shade: faces that look up (normal y above `top`) are 6% lighter
+ * at the model's foot and 10% at its top, and faces between side and top (the bevels: normal y from `bevel` to `top`)
+ * catch a warm light. Sides and faces that look down keep their colour.
+ */
+export const GLOSS = { top: .6, lift: [.06, .1], bevel: .2, catch: [1.14, 1.12, 1.06] } as const;
+/**
  * Soft shading baked into a model's vertex colours once, when its parts are merged: darker where it meets the ground,
- * a little darker on faces that look down (under roofs, caps and canopies) and a little lighter towards the top.
+ * a little darker on faces that look down (under roofs, caps and canopies), a little lighter towards the top, and
+ * the gloss on faces that look up (GLOSS, with perfFlags.ownRamp).
  * `y` is the height above the model's base, `height` the model's height, `ny` the normal's upward part.
  * Returns the factor for each channel.
  */
 export function contactShade(y: number, height: number, ny: number, out: [number, number, number] = [1, 1, 1]) {
   const reach = Math.max(.12, Math.min(CONTACT.reach, height * CONTACT.share)), t = Math.max(0, Math.min(1, y / reach)), near = 1 - t * t * (3 - 2 * t);
   const under = ny < 0 ? 1 - (1 - CONTACT.under) * Math.min(1, -ny) : 1, crown = 1 + CONTACT.crown * (height > 0 ? Math.max(0, Math.min(1, y / height)) * 2 - 1 : 0);
-  for (let i = 0; i < 3; i++) out[i] = (1 + (CONTACT.tint[i] - 1) * near) * under * crown;
+  const up = perfFlags.ownRamp && ny > GLOSS.bevel, lift = 1 + GLOSS.lift[0] + (GLOSS.lift[1] - GLOSS.lift[0]) * (height > 0 ? Math.max(0, Math.min(1, y / height)) : 0);
+  for (let i = 0; i < 3; i++) out[i] = (1 + (CONTACT.tint[i] - 1) * near) * under * crown * (!up ? 1 : ny > GLOSS.top ? lift : GLOSS.catch[i]);
   return out;
 }
 /** Applies contactShade to a merged geometry's colour attribute (model space, base at y = 0). */
