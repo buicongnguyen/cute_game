@@ -60,7 +60,7 @@ export interface GameEvents {
   friendHome: { id: string };
   /** WP17: the first tutorial win. */
   firstWin: Record<string, never>;
-  /** WP12: a creature winds up an attack (through world.onTelegraph). */
+  /** A creature or a boss starts the wind-up of an attack; the blow lands `time` seconds later unless it is interrupted (world.onTelegraph; a guest in a room is told too, from the host's phase). */
   telegraph: { enemy: Enemy; time: number };
 }
 export type GameEvent = keyof GameEvents;

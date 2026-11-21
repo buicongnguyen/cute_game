@@ -29,9 +29,9 @@ const SITES = {
   storyStep: 'game-services.ts', place: 'game-services.ts', // compared at the HUD tick: main.ts updateHud hands the facts over (noteProgress)
   bossApproach: 'hud-combat.ts', bossEngaged: 'hud-combat.ts', bossBreak: 'hud-combat.ts',
   firstWin: 'features/tutorial-fight.ts', // the first win of a new save (AAA-PLAN WP17)
-  telegraph: 'WP12',
+  telegraph: 'main.ts', // world.onTelegraph, where world.ts starts a wind-up
 };
-const OWNERS = { WP12: 'creature voices and warnings, through world.onTelegraph' };
+const OWNERS = {};
 
 test('every event has a site that emits it, or a named later owner', () => {
   assert.deepEqual(Object.keys(SITES).sort(), Object.keys(EVENT_SAMPLES).sort(), 'the table lists exactly the events of game-events.ts (tests/support/game-event-samples.mjs)');
@@ -196,6 +196,25 @@ test('asking again (the radio before its player came): one more load while the f
   ctx.retryFeatures(load); assert.equal(frameListeners.size, 0, 'nothing more to load');
   timers[0][0](); await tick(); await tick(); await tick();
   assert.equal(loads, 3); assert.deepEqual(plain(told), [['started', {}]], 'started fires once per page, however many loads answer');
+});
+
+// ---- WP12: the places the creature voices hang on --------------------------------------------------------------------
+test('telegraph, the alert beep and the hit sound: the lines features-audio/creature-voices.ts relies on', () => {
+  const src = file => readFileSync(new URL('../src/' + file, import.meta.url), 'utf8'), main = src('main.ts'), world = src('world.ts');
+  // The creature's own notice replaces the beep once the voices have mounted (graph.creatures); until then, and if they never
+  // come (a language pack that is slow, a chunk that fails), the beep stays.
+  assert.match(main, /world\.onAlert=e=>\{emit\('creatureAlert',\{enemy:e\}\);sfx\.graph\.creatures\|\|tone\('alert'\);\};/);
+  assert.match(main, /world\.onTelegraph=\(enemy,time\)=>\{emit\('telegraph',\{enemy,time\}\);\};/);
+  // world.ts tells a wind-up once, where the creature's phase is seen to change (a guest in a room sees it too), with the time left.
+  assert.equal(world.split('this.onTelegraph?.(').length, 2);
+  assert.match(world, /if\(u\.lastPhase!==e\.phase\)\{\r?\n(.*\r?\n)?\s*if\(e\.phase==='windup'\)this\.onTelegraph\?\.\(e,e\.phaseTime\?\?0\);/);
+  // A pet's or a helper's blow is named where it is played: one sound per blow, chosen at the call.
+  assert.match(main, /tone\(impact\?\.helper\?'petHit':impact\?\.critical\?'crit':/);
+  // The Colossus roars with its own sound, and the features get the health bar as a part of 1.
+  assert.match(src('colossus.ts'), /tone\(a\.skill === 'roar' \? 'roar' : 'crit'\)/);
+  assert.match(main, /health:\(\)=>state\.hp\/M\.maxHp\(state\),/);
+  // With the hit feel of WP9 on the same call: the sound's name first, the combo detune second.
+  assert.match(main, /tone\(impact\?\.helper\?'petHit':[^;]*'hitHeavy':'hit',impact&&!remote&&!hazard\?world\.fx\?\.feel\?\.\(/);
 });
 
 test.after(() => connect(undefined));

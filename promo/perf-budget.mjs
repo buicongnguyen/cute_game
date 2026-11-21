@@ -13,7 +13,7 @@
 // pumped by hand, Math.random is seeded, neighbours are off, the colossus sleeps. After Start and the greeting dialogs: pump 120
 // frames, wait until the kits and the crop bake are idle (up to 20 s), pin the hero, stop pumping, and count ONE world.render()
 // with a draw counter that is active only inside that call, main and shadow draws split. The two particle pools (the scene's
-// 'effects' group and the loot cards) are counted apart as `fx` (whether a spark is alive in that frame is chance), and the rescued
+// 'effects' group and the loot cards; also the textures and geometries only they hold: `fxTextures`, `fxGeometries`, and `roam...` for the friends) are counted apart as `fx` (whether a spark is alive in that frame is chance), and the rescued
 // friends' avatars as `roam` (a friend walks in or out of view). Both have a small allowance in the compare (promo/perf-compare.mjs). No fps is measured: a slow CPU makes
 // that number a lottery, and the draw counts are what the game's cost is made of.
 // A row is valid only when the camera is within 0.5 degrees of its pitch, the hero is on the spot and the graphics level is the pinned one.
@@ -154,7 +154,23 @@ function installMeter() {
   const memory = () => {
     const seen = new Set(); let bytes = 0;
     w.scene.traverse(o => { if (!o.geometry) return; for (const a of [...Object.values(o.geometry.attributes), o.geometry.index].filter(Boolean)) { const b = a.array?.buffer ?? a.data?.array?.buffer; if (b && !seen.has(b)) { seen.add(b); bytes += b.byteLength; } } });
-    return { programsCompiled: r.info.programs.length, geometries: r.info.memory.geometries, textures: r.info.memory.textures, geometryBytes: bytes, ...(window.__attr ? { attr: window.__attr } : {}), visited: __zoo.matrixStats.visited };
+    // Textures and geometries on the GPU that only chance objects use (a spark's sprite is uploaded the first time a spark is
+    // drawn, a friend's when it first walks into view) are counted apart, like their draws: `textures` and `geometries` are
+    // then the same in every run. A texture or geometry that anything else in the scene uses too stays in the exact count,
+    // and so does one no object in the scene holds (a shadow map's, a render target's).
+    const tex = { fx: new Map(), roam: new Map(), rest: new Set() }, geo = { fx: new Set(), roam: new Set(), rest: new Set() };
+    const texturesOf = material => { const out = []; for (const v of Object.values(material)) if (v?.isTexture) out.push(v); for (const u of Object.values(material.uniforms ?? {})) if (u?.value?.isTexture) out.push(u.value); return out; };
+    w.scene.traverse(o => {
+      if (!o.material && !o.geometry) return;
+      const kind = classOf(o) ?? 'rest';
+      if (o.geometry) geo[kind].add(o.geometry);
+      for (const m of [].concat(o.material ?? [])) for (const t of texturesOf(m)) { if (kind === 'rest') tex.rest.add(t); else if (!tex[kind].has(t)) tex[kind].set(t, t.name || m.name || o.name || o.parent?.name || o.type); }
+    });
+    const onGpu = t => !!r.properties.get(t).__webglTexture, registered = g => !!g._listeners?.dispose?.length; // WebGLGeometries listens for dispose from the first draw on
+    const fxT = [...tex.fx].filter(([t]) => !tex.rest.has(t) && onGpu(t)), roamT = [...tex.roam].filter(([t]) => !tex.rest.has(t) && !tex.fx.has(t) && onGpu(t));
+    const fxG = [...geo.fx].filter(g => !geo.rest.has(g) && registered(g)).length, roamG = [...geo.roam].filter(g => !geo.rest.has(g) && !geo.fx.has(g) && registered(g)).length;
+    return { programsCompiled: r.info.programs.length, geometries: r.info.memory.geometries - fxG - roamG, textures: r.info.memory.textures - fxT.length - roamT.length, fxTextures: fxT.length, roamTextures: roamT.length, fxGeometries: fxG, roamGeometries: roamG,
+      geometryBytes: bytes, ...(window.__attr ? { attr: window.__attr, chanceTextures: [...fxT.map(([, name]) => 'fx:' + name), ...roamT.map(([, name]) => 'roam:' + name)] } : {}), visited: __zoo.matrixStats.visited };
   };
   const graphics = level => {
     const stored = (() => { try { return JSON.parse(localStorage.getItem('zoo-garden-graphics')).setting; } catch { return null; } })();
@@ -166,7 +182,10 @@ function installMeter() {
   // Art on its way: a download, or a kit that was asked for and is not built yet.
   const kits = () => Object.values(window.__assets).filter(k => k && typeof k === 'object' && 'ready' in k);
   // Also every request of the page the browser itself knows of (a lazy chunk, an image): the tool counts them (window.__requests).
-  const busy = async () => f.fetching() + kits().filter(k => k.requested === true && !k.ready && !stuck.has(k)).length + await window.__requests();
+  // The audio features are a second lazy chunk, asked for when the first has mounted: between the two (and between the requests of a dev
+  // server, which serves a chunk module by module) no request is on its way for a moment, so the wait also looks at the mount itself.
+  const audioComing = () => !!__zoo.services && !window.__zooSfx?.graph.creatures ? 1 : 0;
+  const busy = async () => f.fetching() + kits().filter(k => k.requested === true && !k.ready && !stuck.has(k)).length + audioComing() + await window.__requests();
   const pause = ms => new Promise(res => f.realTimeout(res, ms));
   /** Wait, in real time and without advancing the game, until no art or code is on its way (at most 20 s). */
   const stuck = new Set(); // a kit that never arrived in 20 s (a missing file) is not waited for again
@@ -227,6 +246,10 @@ async function openGame(browser, device, level, saveName, { pitch = 42, lid = 'a
     await page.goto(base + '/'); await page.waitForSelector('[data-action="start"]');
     await page.waitForFunction(() => !!window.__zoo?.world?.renderer, null, { timeout: 60000 });
     await page.evaluate(async () => { window.__assets = await import('/src/assets.ts'); window.__cam = await import('/src/camera-rig.ts'); window.__gfx = await import('/src/graphics.ts'); });
+    // Sounds draw their pitch and level from a stream of their own here, not from the seeded Math.random: whether a sound plays is
+    // decided on the audio clock (rate limits, the voice cap), which is real time, so a draw from the game's stream would make
+    // the game itself differ from run to run on a loaded machine (seen as one draw more or less in a village row).
+    await page.evaluate(() => { let seed = 7; if (window.__zooSfx) window.__zooSfx.random = () => (seed = (seed * 16807) % 2147483647) / 2147483647; });
     await page.evaluate(installMeter);
     await page.evaluate(() => window.__m.quiet()); // the title's own art, before the first game frame
     // The hero must not be hurt or knocked off its spot while a row is read: health is topped up before every frame and the hero pinned.
