@@ -182,8 +182,8 @@ export class Effects {
   posed = false;
   /** Seconds since the last zoom punch (camera-rig.ts zoomPunch). */
   private punchT = 1;
-  /** The Flashes setting (features/comfort.ts): 1, or .5 on Low. It scales the light blooms here and a creature's white hit flash (world.ts). */
-  flashes = 1;
+  /** The Flashes setting: 1, or .5 on Low; .5 too until features/comfort.ts has read the stored choice (the safe value). It scales the light blooms here and a creature's white hit flash (world.ts). */
+  flashes = .5;
   /** A phone's buzz, behind the Vibration switch (features/comfort.ts puts it here once the features are mounted). */
   buzz?: (pattern: number | number[]) => void;
   private root = new T.Group();
@@ -327,7 +327,8 @@ export class Effects {
 
   /** A camera shake of `amount` (metres at its start); with (dx, dz) it kicks along that way first. */
   shake(amount: number, dx = 0, dz = 0) { this.rig?.add(amount, dx, dz); }
-  freeze(seconds: number) { if (!(this.hitstop > 0)) this.posed = false; this.hitstop = Math.max(this.hitstop, seconds); }
+  /** Asks for a hit-stop; the longer of two wins. `_light`: a plain light hit (hit-stop.ts budgetStops reads it once the features are there). */
+  freeze(seconds: number, _light?: boolean) { if (!(this.hitstop > 0)) this.posed = false; this.hitstop = Math.max(this.hitstop, seconds); }
   /** The zoom punch: the camera jumps 3% closer and is back in 80 ms (not with Screen shake Off). */
   punch() { this.punchT = 0; }
   /** The camera's roll for this frame (rad). */

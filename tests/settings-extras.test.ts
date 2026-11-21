@@ -21,8 +21,8 @@ test('rows render in the order they were added, each in its own section, afresh 
 });
 
 function services(prefs: Record<string, string>) {
-  const fx = { rig: undefined as { gain: number } | undefined, feel: undefined as unknown, density: 1, flashes: 1, buzz: undefined as unknown }, heard: Record<string, (p: never) => void> = {};
-  const s = { world: { fx }, state: () => ({ settings: { vibrate: true } }), touch: () => true, tone() {}, pref: (key: string, fallback = '') => prefs[key] ?? fallback, setPref: (key: string, value: string) => { prefs[key] = value; return true; },
+  const fx = { rig: undefined as { gain: number } | undefined, feel: undefined as unknown, density: 1, flashes: .5, hitstop: 0, freeze(_s: number) {}, buzz: undefined as unknown }, heard: Record<string, (p: never) => void> = {};
+  const s = { world: { fx, time: 0 }, state: () => ({ settings: { vibrate: true } }), touch: () => true, tone() {}, pref: (key: string, fallback = '') => prefs[key] ?? fallback, setPref: (key: string, value: string) => { prefs[key] = value; return true; },
     on: (event: string, listener: (p: never) => void) => { heard[event] = listener; return () => {}; } };
   return { s: s as unknown as GameServices, fx, heard };
 }

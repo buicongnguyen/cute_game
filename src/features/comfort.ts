@@ -5,7 +5,7 @@
  *   have no stop and the camera does not shake.
  * - Screen shake: Off / Low / Full. Low is the choice of a player who asked the system for less motion and never
  *   picked one. The camera's shake and its zoom punch follow it (shake.ts gain).
- * - Flashes: On / Low. Low halves the red flash round the screen when the explorer is hurt, the white-out of a warp,
+ * - Flashes: On / Low (Low also until this module has read the choice, and if it never loads). Low halves the red flash round the screen when the explorer is hurt, the white-out of a warp,
  *   a creature's white hit flash and the light blooms of fx.ts (fx.flashes; the break flash of a later package reads it too).
  * - Haptics behind the Vibration switch: 12 ms on a critical and on a kill of the explorer's own, [20, 30, 40] when a
  *   boss breaks and when the Colossus kneels (colossus.ts calls fx.buzz).
@@ -14,7 +14,7 @@
 import type { GameServices } from '../game-services.ts';
 import { addSettingsRow } from '../settings-extras.ts';
 import { Shake, shakeGain } from '../shake.ts';
-import { hitFeel } from '../hit-stop.ts';
+import { budgetStops, hitFeel } from '../hit-stop.ts';
 
 export const SHAKE_CHOICES = ['off', 'low', 'full'] as const, FLASH_CHOICES = ['on', 'low'] as const;
 export type ShakeChoice = typeof SHAKE_CHOICES[number];
@@ -39,7 +39,8 @@ const own = (impact?: { helper?: boolean; source?: string }) => !!impact && !imp
 /** The Vibration switch as the save holds it (audio-settings.ts parseAudio: an old save's sound switch stands in). */
 export const vibrates = (settings: { vibrate?: unknown; sound?: unknown }) => typeof settings.vibrate === 'boolean' ? settings.vibrate : settings.sound !== false;
 
-const CSS = '#dialog-body .comfort-pick button{min-width:44px;min-height:44px}:root[data-flashes=low] #damage-flash.active,:root[data-flashes=low] #warp-flash.show{opacity:.5}';
+// The halved flashes themselves are in style.css: they hold until this module says 'on', so also when it never loads.
+const CSS = '#dialog-body .comfort-pick button{min-width:44px;min-height:44px}';
 
 export function mount(s: GameServices) {
   const calm = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
@@ -47,7 +48,7 @@ export function mount(s: GameServices) {
   const buzz = (pattern: number | number[]) => { try { if (vibrates(s.state().settings as { vibrate?: unknown }) && s.touch()) navigator.vibrate?.(pattern); } catch { /* Optional. */ } };
   const apply = () => {
     const fx = s.world.fx;
-    if (fx) { (fx.rig ??= new Shake()).gain = shakeGain(shake()); fx.feel ??= (hit, broke, kill, chain) => hitFeel(fx, hit, broke, kill, chain); fx.flashes = flashes() === 'low' ? FLASH_LOW : 1; fx.buzz = buzz; }
+    if (fx) { (fx.rig ??= new Shake()).gain = shakeGain(shake()); if (!fx.feel) { budgetStops(fx, () => s.world.time); fx.feel = (hit, broke, kill, chain) => hitFeel(fx, hit, broke, kill, chain); } fx.flashes = flashes() === 'low' ? FLASH_LOW : 1; fx.buzz = buzz; }
     const root = globalThis.document?.documentElement; if (root) root.dataset.flashes = flashes();
   };
   if (globalThis.document?.head) { const style = document.createElement('style'); style.textContent = CSS; document.head.append(style); }

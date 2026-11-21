@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { STOP, KICK, LADDER, hitStop, hitFeel, pitchStep } from '../src/hit-stop.ts';
+import { STOP, STOP_BUDGET, StopBudget, budgetStops, KICK, LADDER, hitStop, hitFeel, pitchStep } from '../src/hit-stop.ts';
 import { SHAKE, Shake, shakeGain } from '../src/shake.ts';
 import { PRESS_BUFFER, PressBuffer } from '../src/press-buffer.ts';
 import { PUNCH, zoomPunch, cameraOffset } from '../src/camera-rig.ts';
@@ -23,7 +23,7 @@ test('the stop table: own light 0.035, third chain hit 0.06, critical 0.08, powe
 const blow = (over: object = {}) => ({ amount: 5, critical: false, stun: 0, lift: 0, knock: .8, direction: { x: 0, z: 1 }, ...over });
 function feelLog() {
   const log: unknown[][] = [];
-  return { log, fx: { density: 1, freeze: (s: number) => { log.push(['freeze', s]); }, shake: (a: number, x?: number, z?: number) => { log.push(['shake', a, x, z]); }, punch: () => { log.push(['punch']); } } };
+  return { log, fx: { density: 1, freeze: (s: number, _light?: boolean) => { log.push(['freeze', s]); }, shake: (a: number, x?: number, z?: number) => { log.push(['shake', a, x, z]); }, punch: () => { log.push(['punch']); } } };
 }
 test('the feel of a landed blow: the stop, a kick along the blow, the punch on a power strike and a break; nothing for a pet', () => {
   let f = feelLog(); hitFeel(f.fx, blow(), false, false, 0);
@@ -36,7 +36,7 @@ test('the feel of a landed blow: the stop, a kick along the blow, the punch on a
   f = feelLog(); hitFeel(f.fx, blow({ source: 'power' }), false, false, 0); assert.deepEqual(f.log.map(l => l[0]), ['freeze', 'shake', 'punch']); assert.equal(f.log[0][1], STOP.power); assert.equal(f.log[1][1], KICK.power);
   f = feelLog(); hitFeel(f.fx, blow(), true, false, 0); assert.equal(f.log[0][1], STOP.break); assert.deepEqual(f.log[2], ['punch']);
   for (const pet of [{ helper: true }, { source: 'pet' }, { source: 'summon' }]) { f = feelLog(); assert.equal(hitFeel(f.fx, blow({ critical: true, ...pet }), true, true, 4), 0); assert.deepEqual(f.log, []); }
-  f = feelLog(); f.fx.density = .5; hitFeel(f.fx, blow({ critical: true }), false, false, 0); assert.equal(f.log[0][1], 0, 'Battery saver: no stop, the kick stays');
+  f = feelLog(); f.fx.density = .5; hitFeel(f.fx, blow({ critical: true }), false, false, 0); assert.deepEqual(f.log.map(l => l[0]), ['shake'], 'Battery saver: no stop, the kick stays');
   assert.equal(hitFeel(undefined, blow(), false, false, 3), 200, 'the pitch is told without effects too');
 });
 
@@ -152,6 +152,33 @@ test('a frame spends the stop exactly: the rules lose that time and no more, at 
     assert.ok(Math.abs(real - game - stop) < 1e-9 && Math.abs(held - stop) < 1e-9, `${stop} s at ${hz} Hz`);
     assert.equal(frozenFrames, Math.floor(stop * hz + 1e-6), 'whole frames with no step at all');
   }
+});
+
+test('the stop budget: never more than 80 ms held in any second of game time, light hits give way to the heavier ones', () => {
+  assert.deepEqual({ ...STOP_BUDGET }, { window: 1, most: .08, light: .045, least: .012 });
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+  let b = new StopBudget();
+  assert.equal(b.grant(STOP.light, 0, true), .035); assert.equal(b.grant(STOP.light, .5, true), 0, 'a second light hit in the second: 10 ms would be left, not worth a frame');
+  assert.ok(near(b.grant(STOP.big, .6), .045), 'the third hit of the chain is shortened to what is left of 80 ms'); assert.equal(b.grant(STOP.break, .7), 0, 'the second is full');
+  assert.equal(b.grant(STOP.light, 1, true), 0, 'the big stop of 0.6 s still counts'); assert.equal(b.grant(STOP.light, 1.6, true), .035, 'a second later the room is back');
+  b = new StopBudget(); assert.equal(b.grant(STOP.break, 0), .08, 'a break alone is cut to the budget');
+  b = new StopBudget(); assert.equal(b.grant(STOP.kill, 0), .05); assert.ok(near(b.grant(STOP.critical, .3), .03)); assert.equal(b.grant(STOP.light, .4, true), 0);
+  b = new StopBudget(); b.grant(.08, 5); assert.equal(b.grant(.035, 1, true), .035, 'the clock went back (another world): the past is forgotten');
+  // Any pattern of blows: every rolling second holds at most 80 ms.
+  let seed = 7; const random = () => { seed = seed * 1103515245 + 12345 & 0x7fffffff; return seed / 0x7fffffff; };
+  for (let round = 0; round < 20; round++) {
+    const budget = new StopBudget(), log: [number, number][] = []; let t = 0;
+    for (let i = 0; i < 400; i++) { t += random() * .3; const kinds = Object.values(STOP), stop = kinds[Math.floor(random() * kinds.length)], got = budget.grant(stop, t, stop === STOP.light); assert.ok(got === 0 || got >= STOP_BUDGET.least && got <= stop); if (got) log.push([t, got]); }
+    for (const [from] of log) { const sum = log.filter(([at]) => at >= from && at < from + 1).reduce((a, [, got]) => a + got, 0); assert.ok(sum <= .08 + 1e-9, `${sum} s held in the second from ${from}`); }
+    assert.ok(log.length > 20);
+  }
+  // In front of the effects: every freeze goes through it, and one asked for during a stop only counts for what it adds.
+  const fx = { hitstop: 0, asked: [] as number[], freeze(seconds: number, _light?: boolean) { this.asked.push(seconds); this.hitstop = Math.max(this.hitstop, seconds); } };
+  let now = 10; budgetStops(fx, () => now);
+  fx.freeze(.035, true); fx.freeze(.06); assert.deepEqual(fx.asked, [.035, .06], 'the longer stop of one instant counts once: 60 ms, not 95');
+  fx.freeze(.14); assert.ok(near(fx.hitstop, .08), 'a perfect dodge on top is cut at 80 ms in all');
+  fx.hitstop = 0; now = 10.5; fx.freeze(.05); assert.equal(fx.hitstop, 0, 'nothing left in this second');
+  now = 11.2; fx.freeze(.05); assert.equal(fx.hitstop, .05);
 });
 
 test('haptics follow the Vibration switch as the save holds it', () => {

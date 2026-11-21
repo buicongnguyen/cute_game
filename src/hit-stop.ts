@@ -16,6 +16,36 @@ export function hitStop(blow: Blow, saver = false) {
   if (saver || blow.helper) return 0;
   return blow.broke ? STOP.break : blow.power ? STOP.power : blow.critical ? STOP.critical : blow.big ? STOP.big : blow.kill ? STOP.kill : STOP.light;
 }
+/**
+ * The stop budget: in any one second of game time the game holds still for at most `most` seconds (8%), however fast
+ * the blows land. A stop that would pass it is shortened; one left shorter than `least` is not worth a frame and is
+ * dropped. A plain light hit may only use `light` of it, so the heavier blows (the third of a chain, a critical, a
+ * power strike, a break, a kill) still find room in a quick chain.
+ */
+export const STOP_BUDGET = { window: 1, most: .08, light: .045, least: .012 } as const;
+export class StopBudget {
+  private at: number[] = []; private held: number[] = [];
+  /** The part of a stop of `seconds` that may be held at game time `now`; it is then counted. `light`: a plain light hit. */
+  grant(seconds: number, now: number, light = false) {
+    let spent = 0;
+    for (let i = this.at.length - 1; i >= 0; i--) {
+      if (this.at[i] > now || now - this.at[i] >= STOP_BUDGET.window) { this.at.splice(i, 1); this.held.splice(i, 1); } else spent += this.held[i];
+    }
+    const got = Math.min(seconds, (light ? STOP_BUDGET.light : STOP_BUDGET.most) - spent);
+    if (!(got >= STOP_BUDGET.least)) return 0;
+    this.at.push(now); this.held.push(got); return got;
+  }
+}
+/**
+ * Puts the budget in front of the effects' freeze (every stop of the game goes through it: a blow's, the power
+ * strike's, a perfect dodge's, the Colossus's). A stop asked for while one is being held only counts for what it adds.
+ */
+export function budgetStops(fx: { hitstop: number; freeze(seconds: number, light?: boolean): void }, now: () => number, budget = new StopBudget()) {
+  const freeze = fx.freeze.bind(fx);
+  fx.freeze = (seconds, light) => { const held = Math.max(0, fx.hitstop), more = seconds - held; if (more > 0) { const got = budget.grant(more, now(), light); if (got) freeze(held + got); } };
+  return budget;
+}
+
 /** The camera's kick for a blow of the explorer's own (shake.ts add: metres at its start), along the blow. */
 export const KICK = { light: .08, big: .14, kill: .16, critical: .2, power: .32 } as const;
 /** The pitch ladder: each hit of a chain sounds a semitone higher than the one before, up to five; a new chain starts at 0. In cents (sfx.ts detune). */
@@ -23,7 +53,7 @@ export const LADDER = { step: 100, cap: 5 } as const;
 export const pitchStep = (chain: number) => LADDER.step * Math.max(0, Math.min(LADDER.cap, (Math.floor(chain) || 0) - 1));
 
 /** What the feel of a blow needs of the effects (fx.ts Effects). */
-export interface Feel { density: number; freeze(seconds: number): void; shake(amount: number, dx?: number, dz?: number): void; punch(): void }
+export interface Feel { density: number; freeze(seconds: number, light?: boolean): void; shake(amount: number, dx?: number, dz?: number): void; punch(): void }
 /** A blow as the fight tells it (combat.ts CombatHit). */
 export interface FeltHit { critical: boolean; knock: number; lift: number; direction: { x: number; z: number }; helper?: boolean; source?: string }
 /**
@@ -35,7 +65,8 @@ export function hitFeel(fx: Feel | undefined, hit: FeltHit, broke: boolean, kill
   if (hit.helper || hit.source === 'pet' || hit.source === 'summon') return 0;
   if (fx) {
     const big = hit.knock >= 2 || hit.lift > 0, power = hit.source === 'power';
-    fx.freeze(hitStop({ critical: hit.critical, big, power, broke, kill }, fx.density <= .5));
+    const stop = hitStop({ critical: hit.critical, big, power, broke, kill }, fx.density <= .5);
+    if (stop) fx.freeze(stop, stop <= STOP.light);
     fx.shake(power ? KICK.power : hit.critical ? KICK.critical : kill ? KICK.kill : big ? KICK.big : KICK.light, hit.direction.x, hit.direction.z);
     if (broke || power) fx.punch();
   }
