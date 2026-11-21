@@ -1,1 +1,13 @@
-{ "entries": [] }
+{
+ "entries": [
+  {
+   "row": "start",
+   "name": "WP2 plug-in foundations",
+   "allow": {
+    "english": 1005,
+    "vietnamese": 1005
+   },
+   "why": "Measured growth of the start (plan allowance 1.0 KB): the emit sites in main.ts and hud-combat.ts, the sending end of the event bus, the features loader with its one retry, bossApproach, and addPhrases in i18n.ts. The bus, the services and every feature load after Start."
+  }
+ ]
+}

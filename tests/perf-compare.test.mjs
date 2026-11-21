@@ -186,3 +186,45 @@ test('the download baseline keeps the larger of two runs and their spread', () =
   assert.deepEqual(c.cases['late/en'].beforeStart.typeSpread, { image: 4_000 });
   assert.equal(compareDownload(c, [visit('late/en', icons(58_540))]).ok, true); assert.equal(compareDownload(c, [visit('late/en', icons(58_541))]).ok, false);
 });
+
+// ---- the start download limit (promo/start-bytes.mjs) ----
+import { compareStart, startLimit } from '../promo/perf-compare.mjs';
+
+test('the start may weigh its baseline plus the named allowances, to the byte', () => {
+  const base = { english: 796_647, vietnamese: 929_769 }, none = { entries: [] };
+  assert.equal(compareStart(base, { english: 796_647, vietnamese: 929_769 }, none).ok, true);
+  assert.equal(compareStart(base, { english: 790_000, vietnamese: 929_769 }, none).ok, true, 'lighter is fine');
+  const over = compareStart(base, { english: 796_648, vietnamese: 929_769 }, none);
+  assert.equal(over.ok, false); assert.equal(over.failures.length, 1);
+  assert.match(over.failures[0], /^english start 796648 bytes \(baseline 796647, limit 796647\): 1 bytes over\./);
+  // A named entry raises its own totals and nothing else; entries add up; rows of the speed gate are not counted.
+  const ledger = { entries: [{ row: 'start', name: 'WP2', why: 'emit sites', allow: { english: 927, vietnamese: 927 } }, { row: 'start', name: 'WP7', why: 'buses', allow: { english: 300 } },
+    { row: 'village/late/42/desktop-high', name: 'WP6', allow: { main: 6 } }] };
+  assert.deepEqual(startLimit(base, ledger).limit, { english: 797_874, vietnamese: 930_696 });
+  assert.equal(compareStart(base, { english: 797_874, vietnamese: 930_696 }, ledger).ok, true);
+  assert.deepEqual(compareStart(base, { english: 797_874, vietnamese: 930_696 }, ledger).report, ['english start 797874 bytes (baseline 796647, allowances +1227, limit 797874)', 'vietnamese start 930696 bytes (baseline 929769, allowances +927, limit 930696)']);
+  const vi = compareStart(base, { english: 797_874, vietnamese: 930_697 }, ledger);
+  assert.equal(vi.failures.length, 1); assert.match(vi.failures[0], /^vietnamese start 930697 bytes \(baseline 929769, allowances \+927, limit 930696\): 1 bytes over/);
+  // A payback lowers the limit for everyone after it.
+  const paid = { entries: [...ledger.entries, { row: 'start', name: 'WP27', why: 'lazy dialogs', allow: { english: -1227, vietnamese: -927 } }] };
+  assert.deepEqual(startLimit(base, paid).limit, base);
+  assert.equal(compareStart(base, { english: 796_648, vietnamese: 929_769 }, paid).ok, false);
+});
+
+test('the start limit refuses a missing baseline, a missing measurement and an entry that does not say what it is', () => {
+  const base = { english: 100, vietnamese: 200 };
+  assert.match(compareStart(undefined, base).failures[0], /the baseline has no start section/);
+  assert.match(compareStart({ english: 100 }, base).failures[0], /the baseline has no start section/);
+  assert.deepEqual(compareStart(base, { english: 100 }).failures, ['vietnamese start: not measured']);
+  assert.match(compareStart(base, base, { entries: [{ row: 'start', allow: { english: 5 } }] }).failures[0], /needs "name" and "why"/);
+  assert.match(compareStart(base, base, { entries: [{ row: 'start', name: 'X', why: 'y', allow: { install: 5 } }] }).failures[0], /X: "install" is not a start total/);
+  assert.equal(compareStart(base, base).ok, true, 'no ledger at all is an empty one');
+});
+
+test('the repository files: the baseline has a start section and every start entry of the ledger is named', async () => {
+  const read = async name => (await import(new URL('../promo/' + name, import.meta.url).href, { with: { type: 'json' } })).default;
+  const baseline = await read('perf-baseline.json'), ledger = await read('perf-ledger.json');
+  assert.ok(Number.isInteger(baseline.start?.english) && Number.isInteger(baseline.start?.vietnamese) && baseline.start.vietnamese > baseline.start.english);
+  const { limit } = startLimit(baseline.start, ledger);
+  assert.equal(compareStart(baseline.start, limit, ledger).ok, true, 'a build exactly at the limit passes, and the entries are well formed');
+});

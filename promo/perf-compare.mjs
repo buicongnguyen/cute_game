@@ -168,3 +168,36 @@ export function compareDownload(baseline, current) {
   for (const key of Object.keys(baseline?.cases ?? {})) if (!seen.has(key)) failures.push(`${key}: missing from this run`);
   return { ok: failures.length === 0, failures, report };
 }
+
+// ---- The start download (promo/start-bytes.mjs, docs/AAA-PLAN.md section 7) ----
+// The baseline's start section is { english, vietnamese }: gzip bytes of everything fetched before the Start button, taken at
+// the commit a round starts from. A package that must add to the start gets a named ledger entry with row "start":
+//   { "row": "start", "name": "<package>", "allow": { "english": 927, "vietnamese": 927 }, "why": "<what the bytes are>" }
+// The limit of each total is the baseline plus the sum of those allowances, exact: gzip of the same build gives the same bytes.
+// An entry may be negative (a payback), which lowers the limit for everyone after it.
+export const START_ROW = 'start';
+export const START_FIELDS = ['english', 'vietnamese'];
+/** The most each start may weigh: { english, vietnamese }, with the entries that were counted. */
+export function startLimit(baseline, ledger = { entries: [] }) {
+  const entries = (ledger.entries ?? []).filter(e => e.row === START_ROW), limit = {};
+  for (const field of START_FIELDS) limit[field] = (baseline?.[field] ?? 0) + entries.reduce((n, e) => n + (e.allow?.[field] ?? 0), 0);
+  return { limit, entries };
+}
+/** Compare measured start totals with the baseline's start section. Returns { ok, failures, report }. */
+export function compareStart(baseline, current, ledger = { entries: [] }) {
+  const failures = [], report = [];
+  if (!baseline || START_FIELDS.some(field => !Number.isFinite(baseline[field]))) return { ok: false, failures: ['the baseline has no start section: write it with node promo/start-bytes.mjs --baseline at the commit the round starts from'], report };
+  const { limit, entries } = startLimit(baseline, ledger);
+  for (const e of entries) {
+    if (!e.name || !e.why) failures.push(`a start entry of the ledger needs "name" and "why" (${JSON.stringify(e)})`);
+    for (const [field, n] of Object.entries(e.allow ?? {})) if (!START_FIELDS.includes(field) || !Number.isFinite(n)) failures.push(`${e.name ?? 'a start entry'}: "${field}" is not a start total with a number of bytes`);
+  }
+  for (const field of START_FIELDS) {
+    const now = current?.[field], allowed = limit[field] - baseline[field];
+    if (!Number.isFinite(now)) { failures.push(`${field} start: not measured`); continue; }
+    const line = `${field} start ${now} bytes (baseline ${baseline[field]}${allowed ? `, allowances ${allowed > 0 ? '+' : ''}${allowed}` : ''}, limit ${limit[field]})`;
+    if (now > limit[field]) failures.push(`${line}: ${now - limit[field]} bytes over. Move code behind import(), or add a named entry with row "start" to promo/perf-ledger.json if the growth is decided.`);
+    else report.push(line);
+  }
+  return { ok: failures.length === 0, failures, report };
+}

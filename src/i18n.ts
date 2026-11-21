@@ -6,6 +6,12 @@ let vi: Record<string, string> = Object.create(null);
 let folded = new Map<string, string>();
 let templates: Rule[] = [];
 let viLoading: Promise<void> | null = null;
+// Phrases of code that loads after Start (src/features.ts, addPhrases below). They only add: a phrase of the pack keeps its text.
+const sources: Array<() => Promise<void>> = [];
+let pack = vi, units = '', extra: Record<string, string> | null = null;
+function install() {
+  vi = extra ? { ...extra, ...pack } : pack; folded = new Map(Object.entries(vi).map(([key, value]) => [key.toLowerCase(), value])); templates = compileTemplates(vi, units); cache.clear();
+}
 const listeners = new Set<() => void>();
 const cache = new Map<string, string>();
 function initialLanguage(): Language {
@@ -19,14 +25,33 @@ export function getLanguage(): Language { return language; }
 /** Loads the Vietnamese phrases (once); the page re-renders through onLanguageChange when they arrive after a switch. */
 export function loadVietnamese(): Promise<void> {
   viLoading ??= import('./locales/vi-pack.ts').then(({ VI_PACK, VI_TIME_UNITS }) => {
-    vi = VI_PACK; folded = new Map(Object.entries(VI_PACK).map(([key, value]) => [key.toLowerCase(), value])); templates = compileTemplates(VI_PACK, VI_TIME_UNITS); cache.clear();
+    pack = VI_PACK; units = VI_TIME_UNITS; install();
     if (language === 'vi') for (const listener of listeners) listener();
   }, error => { viLoading = null; throw error; });
   return viLoading;
 }
+/**
+ * Adds Vietnamese phrases that arrive apart from the pack (the lazy feature chunk's). The loader runs when the language is
+ * Vietnamese, now or after a later switch, and never for an English player; its phrases join the table, and the page
+ * re-renders through onLanguageChange. The promise settles when they are in (at once in English).
+ */
+export function addPhrases(loader: () => Promise<Record<string, string>>): Promise<void> {
+  let loading: Promise<void> | null = null;
+  const load = () => loading ??= loader().then(table => {
+    extra = { ...table, ...extra }; install();
+    if (language === 'vi') for (const listener of listeners) listener();
+  }, error => { loading = null; throw error; });
+  sources.push(load);
+  return language === 'vi' ? load() : Promise.resolve();
+}
 /** Switches language once its phrases are in memory, so the page never shows a half-translated flash. */
 export async function switchLanguage(next: Language) {
-  if (next === 'vi') { try { await loadVietnamese(); } catch { /* Offline and uncached: setLanguage still switches; the phrases follow when the load succeeds. */ } }
+  if (next === 'vi') {
+    // Every load is waited for to its end, whatever the others do: one table that fails must not switch the page while the pack is still on its way.
+    const added = Promise.allSettled(sources.map(load => load()));
+    try { await loadVietnamese(); } catch { /* Offline and uncached: setLanguage still switches; the phrases follow when the load succeeds. */ }
+    await added;
+  }
   setLanguage(next);
 }
 export function setLanguage(next: Language) {
@@ -35,6 +60,7 @@ export function setLanguage(next: Language) {
   if (language === next) { documentLanguage(); return; }
   language = next; cache.clear(); documentLanguage();
   if (next === 'vi' && !viLoading) void loadVietnamese().catch(() => { /* English text stays until a later switch retries. */ });
+  if (next === 'vi') for (const load of sources) void load().catch(() => { /* The same: a later switch retries. */ });
   for (const listener of listeners) listener();
 }
 export function onLanguageChange(callback: () => void): () => void { listeners.add(callback); return () => { listeners.delete(callback); }; }

@@ -28,6 +28,7 @@
     "flags.test.ts",
     "frame-lifecycle.test.mjs",
     "gain-feed.test.ts",
+    "game-events-main.test.mjs",
     "goals.test.ts",
     "graphics-frame.test.mjs",
     "harvest-controller.test.mjs",
