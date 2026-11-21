@@ -70,7 +70,7 @@ test('off: the page markup is the one from before; the Jump toe and the combo ch
   // The gates sit at the entry points: input, the per-step rules, dodging, the boss block, the HUD pieces.
   assert.match(main, /function airOn\(\)\{return airCombat&&!actionHandler;\}/, 'online play keeps the old rules for now, so a room never mixes them');
   assert.match(main, /function jumpBlock\(\)\{\n  if\(!airOn\(\)\)return 'idle' as const;/);
-  assert.match(main, /function stepFight\(dt:number,active:boolean,combatActive:boolean\)\{\n  syncAirCombat\(\);if\(!airOn\(\)\)return;/);
+  assert.match(main, /function stepFight\(dt:number,active:boolean,combatActive:boolean\)\{\n  if\(pressBuffer\.step\(dt,combatActive&&combatTimers\.attackCooldown<=0\)\)basicAttack\(\);\n  syncAirCombat\(\);if\(!airOn\(\)\)return;/); // the kept press (press-buffer.ts) swings with the switch off too
   assert.match(main, /combat\.edge\.scale=target=>\{const e=target as Enemy;if\(!airOn\(\)\|\|/);
   assert.match(main, /if\(airOn\(\)&&dodges\(cls,world\.jump\.height\)\)/);
   assert.match(main, /function noteComboHit\(e:Enemy,impact:CombatHit\)\{\n  if\(!airOn\(\)\)return;/);

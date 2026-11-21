@@ -17,6 +17,15 @@
     "vietnamese": 279
    },
    "why": "Measured growth of the start (plan allowance 0.3 KB): hero-motion.ts, the blend between the idle and the walk pose that runs from the first frame, in place of the switch in world.ts animatePlayer. The lean-in, the settle, the fidgets, the sit and the clips load after Start (features/hero-idle.ts)."
+  },
+  {
+   "row": "start",
+   "name": "WP9 hit feel hooks",
+   "allow": {
+    "english": 419,
+    "vietnamese": 419
+   },
+   "why": "Measured growth of the start (plan allowance 0.5 KB): the press buffer, the settings-rows registry and its two calls in settings(), the hit-stop spending in frame() with world.hold, the hooks on the effects (rig, feel, punch, flashes) and the zoom punch. The stop table, the kick, the pitch ladder, the shake model, the Screen shake and Flashes rows and the haptics load after Start (hit-stop.ts, shake.ts, features/comfort.ts)."
   }
  ]
 }
