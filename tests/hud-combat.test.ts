@@ -1,7 +1,6 @@
 import { test } from 'node:test';
-import { ENEMY_TYPES } from '../src/enemy-types.ts';
 import assert from 'node:assert/strict';
-import { BAR, MAX_BARS, placeBars, engaged, targetOf, bossFor, bossApproach, fightNear, lootText, zoneInfo, DANGER_LEVELS, DANGER_SIGN, CombatHud } from '../src/hud-combat.ts';
+import { BAR, MAX_BARS, placeBars, engaged, targetOf, bossFor, bossApproach, fightNear, lootText, zoneInfo, CombatHud } from '../src/hud-combat.ts';
 import { connect } from '../src/game-events.ts';
 import { createEvents } from '../src/game-services.ts';
 import type { Enemy } from '../src/world.ts';
@@ -72,19 +71,6 @@ test('zone banner text names the wild zone, its level and boss instead of the ho
   const ice = zoneInfo('Frost Peaks', 'ice');
   assert.ok(ice.detail.length > 0); assert.match(ice.chip, /Lv 10\+/);
 });
-
-test('the danger chip: a zone 3 or more levels above the explorer says so in words, with a warning sign', () => {
-  assert.equal(DANGER_LEVELS, 3); assert.equal(DANGER_SIGN, '⚠️');
-  const boss = ENEMY_TYPES.bear.name, danger = (name: string, planet: string, level?: number) => zoneInfo(name, planet, level).chip.startsWith(DANGER_SIGN); // the boss's name comes from the table
-  assert.equal(zoneInfo('Redrock Canyon', 'home', 2).chip, `⚠️ Lv 7+ Dangerous · 👑 ${boss}`);
-  assert.equal(danger('Redrock Canyon', 'home', 4), true, 'level 4: still 3 below');
-  assert.equal(zoneInfo('Redrock Canyon', 'home', 5).chip, `★★★ · Lv 7+ · 👑 ${boss}`, 'level 5: the plain chip');
-  assert.deepEqual(zoneInfo('Redrock Canyon', 'home', 5), zoneInfo('Redrock Canyon', 'home'), 'and without a level the chip is as it always was');
-  assert.equal(danger('Chomper Swamp', 'home', 1), true, 'Lv 4+ for a level 1'); assert.equal(danger('Chomper Swamp', 'home', 2), false);
-  assert.equal(danger('Mushroom Forest', 'home', 1), false); assert.equal(danger('Clover Village', 'home', 1), false, 'the village is safe');
-  assert.equal(danger('Frost Peaks', 'ice', 7), true, 'planets too: Lv 10+'); assert.equal(danger('Frost Peaks', 'ice', 8), false);
-});
-
 test('bossApproach: a calm boss inside its sight radius plus 6 m, the nearest one; never one that is already in the fight', () => {
   // King Bear sees 13 m (enemy-types.ts boss()), so the approach starts under 19 m.
   const bear = (over: Partial<Enemy> = {}) => enemy({ boss: true, type: 'bear', name: 'King Bear', ...over });

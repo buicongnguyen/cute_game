@@ -737,7 +737,7 @@ function attackFace(icon:string,label:string){const key=icon?icon+'|'+label:'';i
   const dpad=document.querySelector<HTMLElement>('#touch-controls [data-action="attack"]');if(dpad){dpad.textContent=icon||'⚔';dpad.setAttribute('aria-label',icon?label:t('Basic attack'));}}
 // The zone banner is outlined text with a difficulty chip and no card (C2): it plays once for 2.8 s and never blocks taps.
 let zoneTimer=0;
-function showZone(name:string,ahead?:boolean) {const info=zoneInfo(name,state.planet,state.level),banner=$('#zone-banner');if(!ahead)$('#zone-name').textContent=t(name);$('#banner-name').textContent=t(name);$('#banner-detail').textContent=t(info.detail);$('#banner-chip').textContent=t(info.chip);banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');clearTimeout(zoneTimer);zoneTimer=window.setTimeout(()=>banner.classList.remove('show'),2800);}
+function showZone(name:string,ahead?:boolean) {const info=zoneInfo(name,state.planet),banner=$('#zone-banner');if(!ahead)$('#zone-name').textContent=t(name);$('#banner-name').textContent=t(name);$('#banner-detail').textContent=t(info.detail);$('#banner-chip').textContent=t(info.chip);banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');clearTimeout(zoneTimer);zoneTimer=window.setTimeout(()=>banner.classList.remove('show'),2800);}
 world.onZone=showZone;
 const labelNodes=new Map<string,HTMLElement>();
 // Labels sit just above each model's real top. Heights are measured once per

@@ -9,8 +9,9 @@ import { FIRST_VI } from '../src/locales/vi-first.ts';
 import { VI_PACK } from '../src/locales/vi-pack.ts';
 import { STORY_STEPS } from '../src/content.ts';
 import { PEN } from '../src/farm.ts';
-import { ZONE_DIFFICULTY } from '../src/hud-combat.ts';
-import { CRITTER_NAME, LESSON, WARN, WILDS, biteAllowed, createLesson, wildAhead, ownBlow, firstWinNow, ringBites, inRing } from '../src/features/tutorial-fight.ts';
+import { ZONE_DIFFICULTY, zoneInfo } from '../src/hud-combat.ts';
+import { ENEMY_TYPES } from '../src/enemy-types.ts';
+import { DANGER_LEVELS, DANGER_SIGN, dangerChip, CRITTER_NAME, LESSON, WARN, WILDS, biteAllowed, createLesson, wildAhead, ownBlow, firstWinNow, ringBites, inRing } from '../src/features/tutorial-fight.ts';
 import TUTORIAL_VI from '../src/features-vi/tutorial.ts';
 
 const fresh = () => { const s = freshStart(M.newGame('Tester')); s.bag.seed_radish = 99; return s; };
@@ -191,6 +192,19 @@ test('edges: the bite floor and the warning before the fence', () => {
   assert.equal(wildAhead(WARN.from, 0, 1), 'canyon', 'from 14.5 m'); assert.equal(wildAhead(WARN.from - .01, 0, 1), null); assert.equal(wildAhead(WARN.edge, 0, 1), null, 'at the fence the zone speaks for itself');
   assert.equal(wildAhead(11, 11, 1), null, 'the diagonal belongs to the meadow, which is level 1');
   assert.equal(wildAhead(11.1, 11, 4), 'canyon'); assert.equal(wildAhead(11, -11.1, 1), 'swamp'); assert.equal(wildAhead(0, 0, 1), null);
+});
+test('the danger chip: a zone 3 or more levels above the explorer says so in words, with a warning sign', () => {
+  assert.equal(DANGER_LEVELS, 3); assert.equal(DANGER_SIGN, '⚠️');
+  const plain = (source: string, params?: Record<string, string | number>) => source.replace(/\{(\w+)\}/g, (_, key) => String(params?.[key]));
+  const boss = ENEMY_TYPES.bear.name, chip = (name: string, planet: string, level: number) => dangerChip(zoneInfo(name, planet).chip, level, plain); // the boss's name comes from the table
+  assert.equal(zoneInfo('Redrock Canyon', 'home').chip, `★★★ · Lv 7+ · 👑 ${boss}`, 'the plain chip is as it always was');
+  assert.equal(chip('Redrock Canyon', 'home', 2), `⚠️ Lv 7+ Dangerous · 👑 ${boss}`);
+  assert.equal(chip('Redrock Canyon', 'home', 4), `⚠️ Lv 7+ Dangerous · 👑 ${boss}`, 'level 4: still 3 below'); assert.equal(chip('Redrock Canyon', 'home', 5), null, 'level 5: the plain chip stays');
+  assert.ok(chip('Chomper Swamp', 'home', 1)?.startsWith('⚠️ Lv 4+ Dangerous')); assert.equal(chip('Chomper Swamp', 'home', 2), null);
+  assert.equal(chip('Mushroom Forest', 'home', 1), null); assert.equal(chip('Clover Village', 'home', 1), null, "the village's chip is 'Safe'");
+  assert.ok(chip('Frost Peaks', 'ice', 7)?.startsWith('⚠️ Lv 10+ Dangerous'), 'planets too'); assert.equal(chip('Frost Peaks', 'ice', 8), null);
+  assert.equal(dangerChip(`⚠️ Lv 7+ Dangerous · 👑 ${boss}`, 1, plain), null, 'a chip that already warns is left alone (the observer would loop)');
+  assert.equal(dangerChip('★★★ · Cấp 7+ · 👑 Vua Gấu', 2, s => s === 'Lv {level}+ Dangerous' ? 'Cấp {level}+ Nguy hiểm' : s), '⚠️ Cấp {level}+ Nguy hiểm · 👑 Vua Gấu', 'the level is read from the chip in any language; the words come from t()');
 });
 test('danger ahead: the banner of a zone 3 levels above the explorer shows before the fence, not for a zone within reach', () => {
   for (const [id, [, level]] of Object.entries(WILDS)) assert.equal(level, Math.max(1, ZONE_DIFFICULTY[id] * 3 - 2), `${id}: the level of hud-combat.ts`);

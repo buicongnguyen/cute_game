@@ -19,7 +19,7 @@
  *   the explorer's own blow (not a pet's, a helper's or another player's) fells a creature while the save's defeat count
  *   is still 0; 'win' is kept in the save's seen list, so it is never told again.
  *
- * Danger: the chip of a zone 3 or more levels above the explorer turns red here (the words are hud-combat.ts zoneInfo's),
+ * Danger: the chip of a zone 3 or more levels above the explorer becomes a red warning chip here (dangerChip),
  * and walking out of the village towards such a zone shows its banner WARN.edge - WARN.from m before the fence, before
  * its creatures can see the explorer.
  *
@@ -47,6 +47,18 @@ export const WARN = { from: 14.5, edge: 18, rearm: 11, levels: 3 } as const;
 /** The wilds round the village: banner name and the level its creatures start at (hud-combat.ts ZONE_DIFFICULTY x 3 - 2; a test keeps them in step). */
 export const WILDS = { canyon: ['Redrock Canyon', 7], forest: ['Mushroom Forest', 1], meadow: ['Blue Lake Meadow', 1], swamp: ['Chomper Swamp', 4] } as const;
 
+/** A zone whose creatures start this many levels above the explorer is dangerous: its chip says so, after this sign. */
+export const DANGER_LEVELS = 3, DANGER_SIGN = '\u26a0\ufe0f';
+/**
+ * The warning chip for a zone banner's chip (hud-combat.ts zoneInfo: '\u2605\u2605\u2605 \u00b7 Lv 7+ \u00b7 \ud83d\udc51 King Bear', the level is its
+ * first number with a plus), when that level is DANGER_LEVELS or more above the explorer's:
+ * '\u26a0\ufe0f Lv 7+ Dangerous \u00b7 \ud83d\udc51 King Bear'. null when the chip stays as it is (the village's 'Safe', a zone within reach, a chip
+ * that already warns).
+ */
+export function dangerChip(chip: string, heroLevel: number, t: (source: string, params?: Record<string, string | number>) => string): string | null {
+  const m = chip.startsWith(DANGER_SIGN) ? null : /(\d+)\+(.*)$/s.exec(chip), level = Number(m?.[1]);
+  return m && level >= heroLevel + DANGER_LEVELS ? `${DANGER_SIGN} ${t('Lv {level}+ Dangerous', { level })}${m[2]}` : null;
+}
 /** What of a blow of `damage` may land on an explorer with `hp` of `max`: never below LESSON.floor of full health, whole points only. */
 export function biteAllowed(damage: number, hp: number, max: number) {
   const room = Math.floor(hp - Math.ceil(max * LESSON.floor));
@@ -134,9 +146,13 @@ export function mount(s: GameServices) {
   const w = s.world, rules = createLesson({ enemies: () => w.enemies, hero: () => w.position, save: () => s.state() });
   w.lesson = rules;
   const style = document.createElement('style'); style.textContent = CSS; document.head.append(style);
-  // The warning chip (hud-combat.ts zoneInfo writes it with a warning sign in front) is red: the banner gets a class whenever its chip changes.
+  // The warning chip: whenever the banner's chip changes (main.ts showZone writes it), a zone far above the explorer gets the
+  // warning words and the red look. It happens before the next paint, so the plain chip of such a zone is never seen.
   const chip = document.querySelector('#banner-chip'), banner = document.querySelector('#zone-banner');
-  if (chip && banner) { const mark = () => banner.classList.toggle('danger', !!chip.textContent?.startsWith('\u26a0')); new MutationObserver(mark).observe(chip, { childList: true, characterData: true, subtree: true }); mark(); }
+  if (chip && banner) {
+    const mark = () => { const warn = dangerChip(chip.textContent ?? '', s.state().level, s.t); if (warn) chip.textContent = warn; banner.classList.toggle('danger', !!chip.textContent?.startsWith(DANGER_SIGN)); };
+    new MutationObserver(mark).observe(chip, { childList: true, characterData: true, subtree: true }); mark();
+  }
   const tip = document.createElement('div'); tip.id = 'lesson-tip'; tip.hidden = true; tip.setAttribute('role', 'status'); tip.dataset.beat = 'tip';
   const words = document.createElement('b'); tip.append(words); (document.querySelector('#hud') ?? document.body).append(tip);
   const pad = () => document.querySelector<HTMLElement>('#hud .attack-pad');
