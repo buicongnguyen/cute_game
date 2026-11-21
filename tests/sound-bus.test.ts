@@ -115,13 +115,13 @@ test('detune passes through: 1200 cents doubles every pitch of the sound, 0 chan
   assert.ok(Math.abs(cents - 2 ** (1 / 12)) < 1e-9, 'detune is in cents');
 });
 
-test('the voice counter refuses a 7th ordinary voice on touch, keeps 2 more for priority cues, and never starves a tap', () => {
-  assert.equal(TOUCH_VOICES, 6);
-  const voices = new Voices(TOUCH_VOICES, 0);
+test('the voice counter refuses a 7th voice of six, a touch device has 8 ordinary voices and 2 more for priority cues, and a tap is never starved', () => {
+  assert.equal(TOUCH_VOICES, 8);
+  const voices = new Voices(6, 0);
   for (let i = 0; i < 6; i++) assert.equal(voices.take(0, 1 + i * .1), true, `voice ${i + 1}`);
   assert.equal(voices.take(0, 5), false, 'the 7th is refused'); assert.equal(voices.live(.5), 6); assert.equal(voices.capped, 1);
   assert.equal(voices.live(1.05), 5); assert.equal(voices.take(1.05, 2), true, 'a finished voice frees its place'); assert.equal(voices.take(1.05, 2), false);
-  // A touch device (a coarse pointer): 6 ordinary voices, as many as a phone fight played before, and 2 more for priority cues.
+  // A touch device (a coarse pointer): 8 ordinary voices (6 until a twelve-creature fight was measured: 5 to 9 sounds refused) and 2 more for priority cues.
   const g = globalThis as Record<string, unknown>, before = g.matchMedia;
   g.matchMedia = (query: string) => ({ matches: query === '(pointer: coarse)' });
   let touch: Sfx; const { ctx, make } = fresh();
@@ -129,14 +129,14 @@ test('the voice counter refuses a 7th ordinary voice on touch, keeps 2 more for 
   const pool = touch.graph.voices; assert.deepEqual([pool.budget, pool.reserve], [TOUCH_VOICES + 2, 2]);
   ctx.currentTime = 4;
   const kinds: Sound[] = ['hit', 'crit', 'poof', 'swing', 'punch', 'shoot', 'zap', 'boom', 'pop', 'coin'];
-  assert.equal(kinds.filter(k => touch.play(k)).length, 6, 'six fight sounds at once');
+  assert.equal(kinds.filter(k => touch.play(k)).length, 8, 'eight fight sounds at once');
   assert.equal(pool.take(4, 9), false, 'another ordinary player of the same graph (the ambience, the score, the radio\'s stand-in tune) gets no priority place');
   assert.equal(new SoundGate(pool).admit('land', 4, 5), 'capped');
-  assert.equal(touch.play('level'), true, 'a level-up still sounds'); assert.equal(touch.play('quest'), true, 'and a quest chime with it'); assert.equal(touch.play('hurt'), false, 'the 9th voice is refused');
-  assert.equal(pool.live(4), 8);
+  assert.equal(touch.play('level'), true, 'a level-up still sounds'); assert.equal(touch.play('quest'), true, 'and a quest chime with it'); assert.equal(touch.play('hurt'), false, 'the 11th voice is refused');
+  assert.equal(pool.live(4), 10);
   // Taps are not starved by a fight: the ui sounds take no voice and need none.
-  assert.equal(touch.play('click'), true); assert.equal(touch.play('open'), true); assert.equal(pool.live(4), 8);
-  assert.equal(touch.stats.capped, 5); assert.equal(touch.graph.stats.capped, 7, 'the graph counts every refusal: the effects\' 5 and the two direct asks'); assert.equal(touch.graph.stats, pool);
+  assert.equal(touch.play('click'), true); assert.equal(touch.play('open'), true); assert.equal(pool.live(4), 10);
+  assert.equal(touch.stats.capped, 3); assert.equal(touch.graph.stats.capped, 5, 'the graph counts every refusal: the effects\' 3 and the two direct asks'); assert.equal(touch.graph.stats, pool);
   ctx.currentTime = 8; assert.equal(pool.live(8), 0); assert.equal(touch.play('hit'), true);
   // Not a touch device: the old 14 + 4.
   const desk = new AudioGraph(make).voices; assert.deepEqual([desk.budget, desk.reserve], [18, 4]);
