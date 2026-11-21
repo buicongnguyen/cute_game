@@ -190,7 +190,7 @@
       "icon": "🪴",
       "title": { "en": "Greenhouse", "vi": "Nhà kính" },
       "text": { "en": "A glass house next to the garden where rare flowers grow in every weather.", "vi": "Một ngôi nhà kính cạnh khu vườn, nơi hoa hiếm mọc trong mọi thời tiết." },
-      "status": { "en": "In progress", "vi": "Đang làm" }
+      "status": { "en": "Planned", "vi": "Dự kiến" }
     },
     {
       "id": "soon-night-market",

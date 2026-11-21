@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { BED_HEIGHT, CROP_PRESENTATION_SCALE, HARVEST_TIME, RIPE_PX, SOIL_Y, STAGE_SCALE, VIEW_PITCH, bedFlip, bedScale, cropBadgeAnchor, cropStage, harvestFlight, phonePxPerMetre, popScale, viewBounds } from '../src/crop-cards.ts';
+import { BED_HEIGHT, CARD_INK, CROP_BOOST, CROP_PRESENTATION_SCALE, FOOTPRINT, HARVEST_TIME, RIPE_PX, SOIL_Y, STAGE_SCALE, TREE_BOOST, VIEW_PITCH, bakePitch, bedFlip, bedScale, cardCentre, cardWidth, cropBadgeAnchor, cropStage, footprintScale, harvestFlight, phonePxPerMetre, popScale, syncBakePitch, viewBounds } from '../src/crop-cards.ts';
+import { CAMERA_PITCH, cameraPitch, setCameraPitch } from '../src/camera-rig.ts';
+import { perfFlags } from '../src/perf-flags.ts';
+import { BED_HALF } from '../src/model.ts';
+import { INK } from '../src/outline.ts';
 import { GardenBeds } from '../src/garden-beds.ts';
 
 test('crop stages follow the reference: sprout below 50 %, young until ripe, ripe at 100 %', () => {
@@ -12,8 +16,61 @@ test('crop stages follow the reference: sprout below 50 %, young until ripe, rip
   assert.deepEqual(STAGE_SCALE, [0, 1.4, .55, 1.25]);
 });
 
-test('the crop update enlarges mature plants 25% with the atlas baked along the camera pitch', () => {
-  assert.ok(Math.abs(VIEW_PITCH * 180 / Math.PI - 51.5) < .1);
+const degrees = (r: number) => r * 180 / Math.PI;
+test('the atlas is baked at the pitch of the camera the player uses: 30, 42 and 51.5 degrees', () => {
+  try {
+    for (const deg of [30, 42, 51.5]) {
+      setCameraPitch(deg); const baked = syncBakePitch();
+      assert.equal(baked, bakePitch()); assert.ok(Math.abs(degrees(bakePitch()) - cameraPitch()) < .05, deg + ' degrees'); assert.ok(Math.abs(degrees(bakePitch()) - deg) < .05);
+      if (deg === 51.5) assert.equal(bakePitch(), VIEW_PITCH, 'the classic camera is the reference offset itself');
+      // What is measured follows: a 1 m cube shows less of its top from a lower camera.
+      const b = viewBounds(new T.Mesh(new T.BoxGeometry(1, 1, 1).translate(0, .5, 0)))!;
+      assert.ok(Math.abs(b.top - (Math.cos(bakePitch()) + Math.sin(bakePitch()))) < 1e-9);
+      // The ready badge stands on the card's own plane.
+      const a = cropBadgeAnchor('carrot', .72); assert.ok(Math.abs(Math.atan2(a.back, a.y - SOIL_Y) - bakePitch()) < 1e-9);
+    }
+    setCameraPitch(CAMERA_PITCH.initial); syncBakePitch(); assert.ok(Math.abs(degrees(bakePitch()) - 42) < 1e-9, 'a new player: 42 degrees');
+    // A camera turned later does not move the cards until the next bake (the re-bake on the slider is round 2).
+    setCameraPitch(30); assert.ok(Math.abs(degrees(bakePitch()) - 42) < 1e-9);
+    // With the toy finish off the cards are the reference's again.
+    perfFlags.ownRamp = false; syncBakePitch(); assert.equal(bakePitch(), VIEW_PITCH);
+  } finally { perfFlags.ownRamp = true; setCameraPitch(CAMERA_PITCH.max); syncBakePitch(); }
+});
+
+test('a ripe card is never wider than 0.95 of its bed, at 30, 42 and 51.5 degrees', () => {
+  const bed = 2 * BED_HALF, shapes: Array<[string, T.BufferGeometry]> = [
+    ['a melon lying down', new T.SphereGeometry(.5, 12, 8).scale(1.6, .7, 1).translate(0, .35, 0)],
+    ['a tall corn', new T.CylinderGeometry(.15, .15, 1.4, 8).translate(0, .7, 0)],
+    ['a lopsided pumpkin', new T.BoxGeometry(1.2, .6, .8).translate(.3, .3, 0)],
+    ['a tree crown', new T.SphereGeometry(.7, 12, 8).translate(0, 1.2, 0)],
+  ];
+  try {
+    for (const deg of [30, 42, 51.5]) {
+      setCameraPitch(deg); syncBakePitch();
+      for (const [name, geometry] of shapes) for (const boost of [CROP_BOOST[3], TREE_BOOST[3]]) {
+        const b = viewBounds(new T.Mesh(geometry))!, full = STAGE_SCALE[3] * bedScale(b) * boost, scale = footprintScale(b, full);
+        assert.ok(scale <= full + 1e-12, 'the cap never enlarges');
+        assert.ok(cardWidth(b, scale) <= FOOTPRINT * bed + 1e-9, name + ' at ' + deg + ': ' + cardWidth(b, scale).toFixed(3) + ' m in a ' + bed + ' m bed');
+        // The card is moved so its silhouette is centred on the bed: both sides, mirrored or not, stay inside it.
+        for (const flip of [1, -1]) for (const edge of [b.left, b.right]) assert.ok(Math.abs((edge - cardCentre(b)) * flip * scale * .72) <= FOOTPRINT * BED_HALF + 1e-9);
+        if (cardWidth(b, full) <= FOOTPRINT * bed) assert.equal(scale, full, 'a crop that fits keeps its size');
+      }
+    }
+    assert.equal(FOOTPRINT, .95);
+    // The melon is the case that hung over its neighbours: uncapped it is wider than a bed.
+    const melon = viewBounds(new T.Mesh(shapes[0][1]))!, full = STAGE_SCALE[3] * bedScale(melon) * CROP_BOOST[3];
+    assert.ok(cardWidth(melon, full) > bed); assert.ok(footprintScale(melon, full) < full);
+    const lopsided = viewBounds(new T.Mesh(shapes[2][1]))!; assert.ok(Math.abs(cardCentre(lopsided) - .3) < 1e-6, 'a lopsided crop is centred by its silhouette');
+    perfFlags.ownRamp = false; assert.equal(footprintScale(melon, full), full, 'off: as before'); assert.equal(cardCentre(lopsided), 0);
+  } finally { perfFlags.ownRamp = true; setCameraPitch(CAMERA_PITCH.max); syncBakePitch(); }
+});
+
+test('the card rim is our own ink, not the reference colour', () => {
+  assert.equal(CARD_INK, INK); assert.notEqual(CARD_INK.toLowerCase(), '#3a2433');
+});
+
+test('the crop update enlarges mature plants 25%; the reference pitch is kept for the look switch', () => {
+  assert.ok(Math.abs(VIEW_PITCH * 180 / Math.PI - 51.5) < .1); assert.equal(bakePitch(), VIEW_PITCH);
   assert.ok(Math.abs(phonePxPerMetre() - 41.1) < .2);
   assert.ok(Math.abs(BED_HEIGHT * STAGE_SCALE[3] * phonePxPerMetre() - RIPE_PX) < 1e-9);
   assert.equal(CROP_PRESENTATION_SCALE,1.25);assert.equal(RIPE_PX,50);

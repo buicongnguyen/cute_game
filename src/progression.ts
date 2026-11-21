@@ -1,7 +1,7 @@
 import { t } from './i18n.ts';
 import { ITEMS, PLANETS, COLLECTIONS, STORY_STEPS, type Inventory } from './content.ts';
 import { stowItem, gainXp, xpNeeded, levelRewardBonus, MAX_PLOTS, type SaveState } from './model.ts';
-import { ENEMY_TYPES } from './enemy-types.ts';
+import { ENEMY_TYPES, HOME_SPAWNS, ZONE_DIFFICULTY } from './enemy-types.ts';
 import { kitchenLevel } from './difficulty.ts';
 import { catchUpStory } from './story-catchup.ts';
 import { noteHistory } from './insight-history.ts';
@@ -73,7 +73,7 @@ export interface ProgressionState {
         ends: number;
     } | null;
     /** This half hour's bounties on the planets left meanwhile (key → progress and claimed), so a quick trip neither wipes progress nor pays a bounty twice. Missing on older saves. */
-    bountyLog?: Record<string, { progress: number; claimed: boolean }>;
+    bountyLog?: Record<string, { progress: number; claimed: boolean; type?: string }>;
     challenge: {
         type: string;
         target: number;
@@ -124,6 +124,23 @@ function day(now: number) { return new Date(now).toISOString().slice(0, 10); }
 function week(now: number) { const d = new Date(now); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); }
 function hash(text: string) { let value = 2166136261; for (const c of text)
     value = Math.imul(value ^ c.charCodeAt(0), 16777619); return value >>> 0; }
+/** A bounty names only creatures up to this many levels above the explorer. */
+export const BOUNTY_LEVELS_ABOVE = 1;
+/**
+ * The level a creature has where a bounty hunter meets it first: its zone's difficulty x 3 - 2, as the world spawns it
+ * (world.spawnSpecies); at home the easiest zone it lives in (a wolf: the swamp, level 4).
+ */
+export function bountyLevel(planet: string, type: string) {
+    const zones = planet === 'home' ? Object.keys(HOME_SPAWNS).filter(zone => HOME_SPAWNS[zone].some(([id]) => id === type)) : [planet];
+    return Math.max(1, Math.min(...zones.map(zone => ZONE_DIFFICULTY[zone] ?? 1)) * 3 - 2); // lives nowhere: Infinity, never offered
+}
+/**
+ * The creatures a bounty may name here for an explorer of this level, sorted (the half hour's pick is a hash into this
+ * list, so the rotation stays deterministic). A bounty rolled before the cap lasts to the end of its half hour at most.
+ */
+export function bountyChoices(planet: keyof typeof PLANETS, level: number) {
+    return [...new Set(PLANETS[planet].spawns.map(([id]) => id))].filter(id => bountyLevel(planet, id) <= level + BOUNTY_LEVELS_ABOVE).sort();
+}
 /** The level a task unlocks at: cooking also waits for the kitchen (difficulty.ts: level 14 on Normal and Hard). */
 function specLevel(s: SaveState, spec: TaskSpec) { return spec.event === 'cook' ? Math.max(spec.level || 1, kitchenLevel(s)) : spec.level || 1; }
 function tasks(s: SaveState, specs: Record<string, TaskSpec>, count: number, seed: number, tier: number, level: number): Task[] { const eligible = Object.keys(specs).filter(k => level >= specLevel(s, specs[k])), result: Task[] = []; for (let i = 0; i < 80 && result.length < count; i++) {
@@ -177,11 +194,13 @@ export function refreshProgress(s: SaveState, now = Date.now()) {
     const key = `${s.planet}:${Math.floor(now / 1800000)}`;
     if (p.bounty?.key !== key) {
         // Remember the bounty being left (same half hour only): coming back finds it as it was, claimed or half done.
-        const half = key.slice(key.indexOf(':')), log: Record<string, { progress: number; claimed: boolean }> = {};
+        const half = key.slice(key.indexOf(':')), log: Record<string, { progress: number; claimed: boolean; type?: string }> = {};
         for (const [k, v] of Object.entries(p.bountyLog ?? {})) if (k.endsWith(half)) log[k] = v;
-        if (p.bounty?.key.endsWith(half)) log[p.bounty.key] = { progress: p.bounty.progress, claimed: p.bounty.claimed };
-        const choices = [...new Set(PLANETS[s.planet].spawns.map(([id]) => id))].sort(), seen = log[key];
-        p.bounty = choices.length ? { key, type: choices[hash(key + s.name) % choices.length], target: 3 + hash(key) % 3, progress: 0, claimed: false, ends: (Math.floor(now / 1800000) + 1) * 1800000 } : null;
+        if (p.bounty?.key.endsWith(half)) log[p.bounty.key] = { progress: p.bounty.progress, claimed: p.bounty.claimed, type: p.bounty.type };
+        // Only creatures up to one level above the explorer (bountyChoices). A bounty met earlier this half hour keeps its
+        // creature: a level gained on the trip changes the list, and the progress must not move to another one.
+        const choices = bountyChoices(s.planet, s.level), seen = log[key], kept = seen?.type && PLANETS[s.planet].spawns.some(([id]) => id === seen.type) ? seen.type : '';
+        p.bounty = kept || choices.length ? { key, type: kept || choices[hash(key + s.name) % choices.length], target: 3 + hash(key) % 3, progress: 0, claimed: false, ends: (Math.floor(now / 1800000) + 1) * 1800000 } : null;
         if (p.bounty && seen) { p.bounty.progress = Math.min(p.bounty.target, seen.progress); p.bounty.claimed = seen.claimed; }
         if (Object.keys(log).length) p.bountyLog = log; else delete p.bountyLog;
     }
@@ -302,6 +321,8 @@ function achievementReward(tier: number, target: number, level: number): Reward 
 /** Player-facing name of a challenge type (the daily task titles), never the internal id. */
 export function challengeTitle(type: string): string { return t(DAILY[type]?.title ?? type); }
 function entry(id: string, title: string, progress: number, target: number, claimed: boolean, reward: Reward = {}, icon = '📜', description = ''): ProgressEntry { return { id, title: t(title), description: t(description), progress: Math.min(progress, target), target, complete: progress >= target, claimed, rewardLabel: rewardLabel(reward), icon }; }
+/** "1 day in a row" / "5 days in a row": the check-in streak (the Journal's check-in row and the welcome-back card). */
+export const streakText = (count: number) => t(count === 1 ? '1 day in a row' : '{count} days in a row', { count });
 export function progressEntries(s: SaveState, kind: ProgressKind, now = Date.now()): ProgressEntry[] {
     refreshProgress(s, now);
     const p = s.progression;
@@ -314,7 +335,7 @@ export function progressEntries(s: SaveState, kind: ProgressKind, now = Date.now
         const result = state.tasks.map((task, i) => entry(`${state.key}:${i}`, specs[task.type].title, task.progress, task.target, task.claimed, fitReward(s, taskReward(s, task, weekly)), specs[task.type].icon));
         result.push(entry(`${state.key}:chest`, weekly ? 'Weekly chest' : 'Daily chest', state.tasks.filter(t => t.claimed).length, state.tasks.length, state.chest, weekly ? weeklyChest(s) : dailyChest(s, now), '🎁'));
         if (!weekly)
-            result.unshift(entry(`${day(now)}:login`, 'Daily check-in', 1, 1, p.login.day >= day(now) || !!p.rolled?.login.includes(day(now)), loginReward(s, now), '🗓️', t('{count} consecutive days', { count: p.login.streak })));
+            result.unshift(entry(`${day(now)}:login`, 'Daily check-in', 1, 1, p.login.day >= day(now) || !!p.rolled?.login.includes(day(now)), loginReward(s, now), '🗓️', streakText(p.login.streak)));
         return result;
     }
     if (kind === 'achievements')
@@ -445,8 +466,8 @@ export function normalizeProgression(raw: unknown, s: SaveState): ProgressionSta
     if (record(b) && typeof b.type === 'string' && Object.values(PLANETS).some(p => p.spawns.some(([type]) => type === b.type)))
         p.bounty = { key: text(b.key), type: b.type, target: Math.max(3, Math.min(5, number(b.target))), progress: Math.min(number(b.progress), number(b.target)), claimed: b.claimed === true, ends: number(b.ends, Number.MAX_SAFE_INTEGER) };
     if (record(raw.bountyLog)) {
-        const log: Record<string, { progress: number; claimed: boolean }> = {};
-        for (const [k, v] of Object.entries(raw.bountyLog).slice(0, 12)) if (/^[a-z]+:\d+$/.test(k) && record(v)) log[k] = { progress: number(v.progress, 5), claimed: v.claimed === true };
+        const log: Record<string, { progress: number; claimed: boolean; type?: string }> = {};
+        for (const [k, v] of Object.entries(raw.bountyLog).slice(0, 12)) if (/^[a-z]+:\d+$/.test(k) && record(v)) log[k] = { progress: number(v.progress, 5), claimed: v.claimed === true, ...(typeof v.type === 'string' && Object.hasOwn(ENEMY_TYPES, v.type) ? { type: v.type } : {}) };
         if (Object.keys(log).length) p.bountyLog = log;
     }
     const c = raw.challenge;

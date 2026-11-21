@@ -1,24 +1,69 @@
 import * as T from 'three';
 import type { PlanetId } from './content.ts';
+import { perfFlags } from './perf-flags.ts';
 
 /**
- * The reference's look (RC-05): every model is a MeshToonMaterial on one 4-step ramp [110,185,235,255] with nearest
- * filtering, under a hemisphere light (1.5) and a sun (2.4; 2.0 on lava) in per-planet colours, with no tone mapping.
+ * The reference's look (RC-05): every model is a MeshToonMaterial on one stepped ramp with nearest filtering (the
+ * reference's four grey steps [110,185,235,255]; the world now wears our own five colour steps, TOON_OWN), under a hemisphere light (1.5) and a sun (2.4; 2.0 on lava) in per-planet colours, with no tone mapping.
  * Toon lighting gives flat bands instead of the smooth PBR falloff, which is most of why the reference reads as
  * "2.5D". It is also cheaper per pixel than MeshStandardMaterial (no specular/BRDF terms).
  */
 export const TOON_STEPS = [110, 185, 235, 255] as const;
+/**
+ * Our own ramp (AAA plan WP6): five colour steps from the face turned furthest from the sun to the face turned to it.
+ * Shade is blue-violet, not grey, so a colour in shade keeps its saturation; the light is a warm cream. Each step
+ * multiplies the sun's light per channel, like the grey steps did.
+ */
+export const TOON_OWN = [[100, 102, 180], [156, 156, 218], [216, 206, 226], [250, 240, 230], [255, 246, 232]] as const;
+/** The colour a ramp gives for the cosine between a face and the sun, as the shader reads it (nearest step), 0-1. */
+export function rampAt(steps: readonly (number | readonly number[])[], dotNL: number): number[] {
+  const step = steps[Math.min(steps.length - 1, Math.max(0, Math.floor((dotNL * .5 + .5) * steps.length)))];
+  return (typeof step === 'number' ? [step, step, step] : [...step]).map(v => v / 255);
+}
 
-function makeRamp() {
-  const data = new Uint8Array(TOON_STEPS.length * 4);
-  TOON_STEPS.forEach((v, i) => data.set([v, v, v, 255], i * 4));
-  const texture = new T.DataTexture(data, TOON_STEPS.length, 1);
+/**
+ * three reads only the red channel of a toon ramp. This makes it read the colour, once, as this module loads (before
+ * any renderer compiles a shader), so no shader program is added; with a grey ramp the result is the same as before.
+ */
+export function installRampColour() {
+  T.ShaderChunk.gradientmap_pars_fragment = T.ShaderChunk.gradientmap_pars_fragment.replace('vec3( texture2D( gradientMap, coord ).r )', 'texture2D( gradientMap, coord ).rgb');
+}
+installRampColour();
+
+function makeRamp(steps: readonly (number | readonly number[])[]) {
+  const data = new Uint8Array(steps.length * 4);
+  steps.forEach((v, i) => data.set(typeof v === 'number' ? [v, v, v, 255] : [...v, 255], i * 4));
+  const texture = new T.DataTexture(data, steps.length, 1);
   texture.minFilter = texture.magFilter = T.NearestFilter; texture.generateMipmaps = false; texture.needsUpdate = true;
   texture.userData.sharedKit = true;
   return texture;
 }
-/** The one shared ramp texture. */
-export const TOON_RAMP = makeRamp();
+/** The reference's grey ramp: item icons and the mirror still draw with it (icons.ts, mirror-preview.ts), and so does the world with perfFlags.ownRamp off. */
+export const TOON_RAMP_CLASSIC = makeRamp(TOON_STEPS);
+/** The one ramp texture every toon material in the world shares. */
+export const TOON_RAMP = perfFlags.ownRamp ? makeRamp(TOON_OWN) : TOON_RAMP_CLASSIC;
+let warm = true;
+/**
+ * Under a cool sun (the Night Planet's moon) the two light steps turn neutral: a cream light would grey its blue
+ * surfaces. Five texels are sent again, only when a planet with the other kind of sun is built.
+ */
+export function warmRamp(on: boolean) {
+  if (on === warm || TOON_RAMP === TOON_RAMP_CLASSIC) return;
+  warm = on;
+  for (const i of [3, 4]) (TOON_RAMP.image.data as Uint8Array).set(on ? TOON_OWN[i] : [TOON_OWN[i][0], TOON_OWN[i][0], TOON_OWN[i][0]], i * 4);
+  TOON_RAMP.needsUpdate = true;
+}
+/**
+ * Runs `draw` with every material under `root` on the grey ramp, then puts our ramp back. A swap by reference: no
+ * texture data changes and nothing is uploaded again, and each small renderer keeps its own copy of the grey ramp.
+ */
+export function withClassicRamp<R>(root: T.Object3D, draw: () => R): R {
+  const swapped: T.MeshToonMaterial[] = [];
+  root.traverse(o => {
+    for (const m of [(o as T.Mesh).material].flat() as T.MeshToonMaterial[]) if (m?.gradientMap === TOON_RAMP) { m.gradientMap = TOON_RAMP_CLASSIC; swapped.push(m); }
+  });
+  try { return draw(); } finally { for (const m of swapped) m.gradientMap = TOON_RAMP; }
+}
 
 /** Hemisphere sky/ground and sun colours per planet, from the reference's planet table (bundle @655491…659918).
  *  The world now wears our own rig per planet (look.ts); these still light the UI's own small renderers (item icons, the

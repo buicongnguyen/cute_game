@@ -57,3 +57,24 @@ test('the gift is no offer at the start any more: Pepper brings it after the fir
   assert.equal(F.WELCOME_ENERGY, 10_000);
   const { TESTER_ENERGY } = await import('../src/tester.ts'); assert.equal(TESTER_ENERGY, 1_000_000, 'the tester gift is untouched');
 });
+
+// ---- AAA-PLAN WP24: "1 day in a row" ----
+test('the check-in streak reads "1 day in a row" and "5 days in a row", in the Journal and on the welcome-back card', async () => {
+  const P = await import('../src/progression.ts'), { readFileSync } = await import('node:fs');
+  assert.equal(P.streakText(1), '1 day in a row'); assert.equal(P.streakText(2), '2 days in a row'); assert.equal(P.streakText(5), '5 days in a row'); assert.equal(P.streakText(0), '0 days in a row');
+  const now = Date.now(), s = M.newGame(), login = () => P.progressEntries(s, 'daily', now).find(e => e.id.endsWith(':login'))!;
+  assert.equal(P.claimProgress(s, 'daily', login().id, now), true); assert.equal(s.progression.login.streak, 1); assert.equal(login().description, '1 day in a row');
+  s.progression.login.streak = 12; assert.equal(login().description, '12 days in a row');
+  const card = readFileSync(new URL('../src/welcome-back.ts', import.meta.url), 'utf8');
+  assert.ok(card.includes('<b>$' + '{e(streakText(f.streak))}</b>'), 'the card uses the same words');
+  for (const file of ['../src/welcome-back.ts', '../src/progression.ts']) assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), 'utf8'), /consecutive days/);
+  // Vietnamese has no plural: both phrases read naturally, and the old key is gone.
+  const { VI_GAMEPLAY } = await import('../src/locales/vi-gameplay.ts');
+  assert.equal(VI_GAMEPLAY['{count} days in a row'], '{count} ngày liên tiếp'); assert.equal(VI_GAMEPLAY['1 day in a row'], '1 ngày liên tiếp'); assert.equal(VI_GAMEPLAY['{count} consecutive days'], undefined);
+});
+test('News tells the truth about the Greenhouse: planned, not in progress (English and Vietnamese)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const news = JSON.parse(readFileSync(new URL('../public/news.json', import.meta.url), 'utf8')), g = news.upcoming.find((e: { id: string }) => e.id === 'soon-greenhouse');
+  assert.deepEqual(g.status, { en: 'Planned', vi: 'Dự kiến' });
+  for (const e of news.upcoming) assert.notEqual(e.status.en, 'In progress', e.id + ': nothing on the list is being built this round');
+});

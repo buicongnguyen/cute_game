@@ -26,6 +26,33 @@
     "vietnamese": 455
    },
    "why": "Measured growth of the start (plan allowance 0.5 KB): the press buffer, the settings-rows registry and its two calls in settings(), the hit-stop spending in frame() with world.hold, the hooks on the effects (rig, feel, punch, flashes), the zoom punch, and the style rule that keeps the hurt flash and the warp at half until the features have read the Flashes choice. The stop table, the kick, the pitch ladder, the shake model, the Screen shake and Flashes rows and the haptics load after Start (hit-stop.ts, shake.ts, features/comfort.ts)."
+  },
+  {
+   "row": "start",
+   "name": "WP6 toy finish",
+   "allow": {
+    "english": 733,
+    "vietnamese": 733
+   },
+   "why": "Measured growth of the start against staging at the merge (the plan's 0.3 KB was an estimate; it was 507 bytes against the staging WP6 was built on): the five colour steps, the ramp-colour shader patch and the icon/mirror swap in toon.ts, the neutral light steps under a cool sun, the ground colour correction and the gloss in look.ts, the look switch, and in crop-cards.ts (world chunk, loaded before Start) the bake at the camera pitch, the footprint cap, the centring of lopsided crops and the re-bake when the camera angle is changed. Two slimming passes saved about 50 bytes; the rest would mean cutting one of these."
+  },
+  {
+   "row": "start",
+   "name": "WP24 fair rewards and true words",
+   "allow": {
+    "english": 183,
+    "vietnamese": 193
+   },
+   "why": "Measured growth of the start against staging 48da5cb (English 797,451 -> 797,634, Vietnamese 930,833 -> 931,026). The plan allowed 0.1 KB (102 bytes): this is 81 and 91 bytes over it, after the level-20 News sentence was cut back to its old length. What is left is rule code that both sides run and the hook: the bounty cap with the creature kept in the bounty log (progression.ts; the zone table now sits beside the spawn tables in enemy-types.ts), the soothed rate in grantColossusReward and the roar bonus on the EXP paid (colossus-rewards.ts, shared with the server and folded into a start chunk), the one-line well hook in main.ts, and '1 day in a row' with its Vietnamese. Loaded on demand, not in the start: the well's view (colossus-well-ui chunk, 1.8 KB gzip with the gift's clock guard and the awake-day rule; the plan row says 1.5 KB), its Vietnamese (features-vi, +1.0 KB of that chunk's 15 KB) and Automatic's pay rule (colossus.ts, the modes chunk). news.json is 20 bytes smaller."
+  },
+  {
+   "row": "start",
+   "name": "Integration rounding (batches 1-4)",
+   "allow": {
+    "english": 0,
+    "vietnamese": 16
+   },
+   "why": "Each package measured its growth against the staging it was built on; gzip deltas do not add up exactly. Measured on staging after merging WP6 and WP24: Vietnamese start 931,981 against a summed limit of 931,979 (2 bytes over). 16 bytes cover that rounding; no code was added."
   }
  ]
 }

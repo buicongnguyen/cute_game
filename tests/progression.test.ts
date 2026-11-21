@@ -99,3 +99,72 @@ test('winding the clock back never re-rolls or re-pays dailies: the newest date 
   P.refreshProgress(s,start);assert.equal(JSON.stringify(s.progression.daily),today,'returning to today does not re-roll');
   P.refreshProgress(s,start+86400000);assert.notEqual(s.progression.daily.key,JSON.parse(today).key,'a real new day still rolls');
 });
+
+// ---- AAA-PLAN WP24: the bounty cap ----
+test('a bounty never names a creature more than one level above the explorer; at level 30 every creature is still offered',()=>{
+  assert.equal(P.BOUNTY_LEVELS_ABOVE,1);
+  // The level a hunter meets a creature at: the zone's difficulty x 3 - 2 (the easiest home zone it lives in).
+  assert.deepEqual(['mushroom','boar','bee','wolf','chomper','cactus'].map(id=>P.bountyLevel('home',id)),[1,1,1,4,4,7]);
+  assert.deepEqual(['candy','ice','lava','toy','jungle','ocean','cloud','shadow'].map(id=>P.bountyLevel(id,'x')),[7,10,13,4,7,10,13,16]);
+  assert.deepEqual(P.bountyChoices('home',1),['bee','boar','mushroom']);assert.deepEqual(P.bountyChoices('home',3),['bee','boar','chomper','mushroom','wolf']);assert.equal(P.bountyChoices('home',6).length,6);
+  for(let level=1;level<=10;level++)for(const[planet,def]of Object.entries(M.PLANETS)){
+    if(def.level>level)continue; // a planet the explorer can reach
+    const seen=new Set<string>();
+    for(let seed=0;seed<200;seed++){
+      const s=M.newGame('Seed '+seed);s.level=level;s.planet=planet as M.SaveState['planet'];P.refreshProgress(s,start+seed*1800000);
+      const b=s.progression.bounty;assert.ok(b,planet+' level '+level+': a bounty is offered');
+      assert.ok(P.bountyLevel(planet,b.type)<=level+1,planet+' level '+level+' seed '+seed+': '+b.type+' is level '+P.bountyLevel(planet,b.type));seen.add(b.type);
+      // The rotation is deterministic: the same explorer, place and half hour name the same creature.
+      const again=M.newGame('Seed '+seed);again.level=level;again.planet=s.planet;P.refreshProgress(again,start+seed*1800000);assert.deepEqual(again.progression.bounty,b);
+    }
+    assert.deepEqual([...seen].sort(),P.bountyChoices(planet,level),planet+' level '+level+': every fair creature comes round');
+  }
+  // Level 30: nothing is held back anywhere.
+  for(const[planet,def]of Object.entries(M.PLANETS)){
+    const all=[...new Set(def.spawns.map(([id])=>id))].sort(),seen=new Set<string>();assert.deepEqual(P.bountyChoices(planet,30),all,planet);
+    for(let seed=0;seed<200;seed++){const s=M.newGame('Seed '+seed);s.level=30;s.planet=planet as M.SaveState['planet'];P.refreshProgress(s,start+seed*1800000);seen.add(s.progression.bounty!.type);}
+    assert.deepEqual([...seen].sort(),all,planet+': every bounty is still offered at level 30');
+  }
+  // Too far from home for its level (only a tester gets there): no bounty rather than an unfair one.
+  const lost=M.newGame();lost.planet='shadow';P.refreshProgress(lost,start);assert.equal(lost.progression.bounty,null);assert.deepEqual(P.progressEntries(lost,'bounties',start),[]);
+});
+test('a save from before the cap: a bounty already rolled lasts to the end of its half hour and still pays; the next one is fair',async()=>{
+  const{readFileSync}=await import('node:fs');
+  const key='home:'+Math.floor(start/1800000),ends=(Math.floor(start/1800000)+1)*1800000;
+  // A level-1 explorer holding a cactus bounty (level 7) from before the cap, loaded inside the same half hour.
+  const old=(progress:number,claimed=false)=>{const s=M.newGame('Old');P.refreshProgress(s,start);s.progression.bounty={key,type:'cactus',target:4,progress,claimed,ends};return reload(s);};
+  for(const progress of[0,1]){
+    const s=old(progress);P.refreshProgress(s,start+60000);assert.deepEqual(s.progression.bounty,{key,type:'cactus',target:4,progress,claimed:false,ends},'kept as it was offered');
+    P.recordEvent(s,'kill',4,'cactus',start+60000);const entry=P.progressEntries(s,'bounties',start+60000)[0];assert.equal(entry.complete,true);assert.equal(P.claimProgress(s,'bounties',entry.id,start+60000),true,'and it pays');
+    assert.equal(P.claimProgress(s,'bounties',entry.id,start+70000),false,'once');
+    // The half hour ends (at most 30 minutes later): from here on every bounty is under the cap.
+    P.refreshProgress(s,ends);assert.notEqual(s.progression.bounty!.key,key);assert.ok(P.bountyLevel('home',s.progression.bounty!.type)<=s.level+1);
+  }
+  const paid=old(4,true);P.refreshProgress(paid,start+60000);assert.equal(paid.progression.bounty!.claimed,true,'a claimed one is not paid twice');
+  // Any later visit (the usual case: another half hour) rolls a fair one at once.
+  const later=old(0);P.refreshProgress(later,start+86400000);assert.ok(['bee','boar','mushroom'].includes(later.progression.bounty!.type));
+  // The four promo saves load; their next bounty is fair, and they save again.
+  for(const name of['save-new','save-mid','save','save-late']){
+    const s=M.parseSave(readFileSync(new URL('../promo/'+name+'.json',import.meta.url),'utf8'))!;assert.ok(s,name);
+    P.refreshProgress(s,start);const b=s.progression.bounty;assert.ok(b&&P.bountyLevel(s.planet,b.type)<=s.level+1,name+': '+b?.type);assert.ok(reload(s),name);
+  }
+});
+test('a bounty left for another planet is found as it was on the way back, creature and all, even a level higher',()=>{
+  const s=M.newGame('Trip');s.level=4;P.refreshProgress(s,start);const home=s.progression.bounty!;P.recordEvent(s,'kill',1,home.type,start);
+  s.planet='toy';P.refreshProgress(s,start+1000);assert.deepEqual(s.progression.bountyLog,{[home.key]:{progress:1,claimed:false,type:home.type}});assert.equal(P.bountyLevel('toy',s.progression.bounty!.type),4);
+  const back=reload(s);assert.equal(back.progression.bountyLog![home.key].type,home.type,'the log keeps the creature through a save');back.planet='home';P.refreshProgress(back,start+2000);assert.deepEqual(back.progression.bounty,{...home,progress:1});
+  // Level 5 -> 6 on the trip: the cactus joins the list (5 -> 6 creatures), so the half hour's pick moves for most names. The begun bounty must not.
+  const half=Math.floor(start/1800000),pick=(name:string,level:number)=>{const g=M.newGame(name);g.level=level;P.refreshProgress(g,start);return g.progression.bounty!.type;};
+  const name=Array.from({length:200},(_,i)=>'Hunter '+i).find(n=>pick(n,5)!==pick(n,6))!;assert.ok(name,'a name whose pick differs between level 5 and 6');
+  const t=M.newGame(name);t.level=5;P.refreshProgress(t,start);const was=t.progression.bounty!;assert.equal(was.key,'home:'+half);P.recordEvent(t,'kill',2,was.type,start);
+  t.planet='toy';P.refreshProgress(t,start+1000);t.level=6;t.planet='home';P.refreshProgress(t,start+2000);
+  assert.equal(t.progression.bounty!.type,was.type,'the same creature, not the level-6 pick '+pick(name,6));assert.equal(t.progression.bounty!.progress,2);
+  P.recordEvent(t,'kill',9,pick(name,6),start+3000);assert.equal(t.progression.bounty!.progress,2,'kills of the other creature do not count');
+  // The next half hour picks from the level-6 list as usual.
+  P.refreshProgress(t,was.ends);assert.equal(t.progression.bounty!.progress,0);assert.ok(P.bountyChoices('home',6).includes(t.progression.bounty!.type));
+  // A log from before this rule has no creature: the half hour's pick is used. An unknown creature in a save is dropped by the parser.
+  const legacy=reload(s);delete legacy.progression.bountyLog![home.key].type;const again=reload(legacy);again.planet='home';P.refreshProgress(again,start+2000);assert.equal(again.progression.bounty!.progress,1);assert.ok(P.bountyLevel('home',again.progression.bounty!.type)<=5);
+  for(const bad of['no-such-creature',7,null]){const raw=JSON.parse(JSON.stringify(s));raw.progression.bountyLog[home.key].type=bad;const parsed=M.parseSave(JSON.stringify(raw))!.progression.bountyLog![home.key];assert.deepEqual(parsed,{progress:1,claimed:false});}
+  // A creature of another planet in the log (a tampered save) is not offered here.
+  const wrong=JSON.parse(JSON.stringify(s));wrong.progression.bountyLog[home.key].type='toysoldier';const w=M.parseSave(JSON.stringify(wrong))!;w.planet='home';P.refreshProgress(w,start+2000);assert.ok(P.bountyChoices('home',4).includes(w.progression.bounty!.type));
+});
