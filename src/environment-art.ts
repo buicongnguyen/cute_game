@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {toonMaterial} from './toon.ts';
 import {PALETTE} from './planet-palette.ts';
+import {noise2} from './ground.ts';
 import {type EnvironmentLayout,EnvironmentSimulation,terrainHeight,thornRaised,tideHeight,trainPosition,ventPhase,raftPosition} from './environments.ts';
 
 export interface EnvironmentNode {kind:string;name:string;icon:string;index:number;x:number;z:number;radius:number;mesh:T.Group}
@@ -17,14 +18,23 @@ export class EnvironmentView {
   private ball(color:string,r:number,x=0,y=0,z=0){return this.mesh(new T.IcosahedronGeometry(r,1),color,x,y,z);}
   private cyl(color:string,r:number,h:number,x=0,y=0,z=0,top=r){return this.mesh(new T.CylinderGeometry(top,r,h,12),color,x,y,z);}
   private disk(color:string,r:number,x:number,z:number,y=.025){const mesh=this.mesh(new T.CircleGeometry(r,48),color,x,y,z);mesh.rotation.x=-Math.PI/2;mesh.castShadow=false;return mesh;}
+  /** An island's top: one mesh like the plain disc, with rings inside it so its second colour can dapple it in vertex colours (no texture, no extra draw). */
+  private isle(a:string,b:string|undefined,r:number,x:number,z:number){
+    if(!b)return this.disk(a,r,x,z,.01);
+    const g=new T.RingGeometry(0,r,32,4),p=g.attributes.position,c=new Float32Array(p.count*3),ca=new T.Color(a),cb=new T.Color(b),t=new T.Color();
+    for(let i=0;i<p.count;i++){const n=noise2((x+p.getX(i))*.3,(z-p.getY(i))*.3);t.copy(ca).lerp(cb,Math.min(1,Math.max(0,(n-.4)*4))).toArray(c,i*3);}
+    g.setAttribute('color',new T.BufferAttribute(c,3));
+    if(!this.materials.has('isle'))this.materials.set('isle',toonMaterial({vertexColors:true}));
+    const m=new T.Mesh(g,this.materials.get('isle')!);m.position.set(x,.01,z);m.rotation.x=-Math.PI/2;m.receiveShadow=true;return m;
+  }
   private node(kind:string,name:string,icon:string,index:number,x:number,z:number,radius:number,mesh:T.Group){this.nodes.push({kind,name,icon,index,x,z,radius,mesh});return mesh;}
   private crystal(color:string,r=.5){const g=new T.Group();for(let i=0;i<3;i++){const p=this.mesh(new T.OctahedronGeometry(r),color,(i-1)*r*.55,r*.9+i*.15,0,true);p.scale.set(.5,1.5,.6);g.add(p);}return g;}
   private flame(){const g=new T.Group();g.add(this.cyl('#ff813e',.43,1.5,0,.7,0,0),this.cyl('#ffe66b',.23,.95,0,.48,.08,0));g.name='flame';return g;}
   private turtle(){const g=new T.Group();const shell=this.ball('#73ad72',1,0,.48);shell.scale.set(1,.48,1.25);g.add(shell,this.ball('#b6d692',.35,0,.48,1.2));for(const x of [-1,1])for(const z of [-.6,.6]){const flipper=this.ball('#a2c583',.32,x*.78,.14,z);flipper.scale.set(1.2,.24,.8);g.add(flipper);}return g;}
   private build(){const l=this.layout;
     for(const island of l.islands){
-      const ocean=l.planet==='ocean',[pad,isle,side]=PALETTE.isles[ocean?'ocean':'cloud'];this.staticRoot.add(this.cyl(side,island.r, ocean?.55:3,island.x,ocean?-.27:-1.5,island.z,island.r));
-      this.staticRoot.add(this.disk(island.id===0?pad:isle,island.r*.998,island.x,island.z,.01));
+      const ocean=l.planet==='ocean',[pad,isle,side,,dapple]=PALETTE.isles[ocean?'ocean':'cloud'];this.staticRoot.add(this.cyl(side,island.r, ocean?.55:3,island.x,ocean?-.27:-1.5,island.z,island.r));
+      this.staticRoot.add(this.isle(island.id===0?pad:isle,dapple,island.r*.998,island.x,island.z));
       if(island.id>0){const tree=new T.Group();tree.add(this.cyl('#a77d58',.22,2.6,0,1.3));for(let k=0;k<5;k++){const leaf=this.ball(ocean?'#61bd75':'#daeeff',1.0,Math.sin(k*1.25)*.7,2.5,Math.cos(k*1.25)*.7);leaf.scale.y=.36;tree.add(leaf);}tree.position.set(island.x+island.r*.4,0,island.z);this.staticRoot.add(tree);this.colliders.push({x:tree.position.x,z:tree.position.z,r:.35});}
     }
     if(l.planet==='ocean'){

@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import * as T from 'three';
 import { PALETTE, PALETTES, type Palette, type HomeZone } from '../src/planet-palette.ts';
@@ -80,7 +81,7 @@ test('the Crocodile King is dark teal with a warm belly, well apart from the mos
   const before = swamp(CLASSIC, '#4f9e5a'), after = swamp(OWN, skin);
   assert.ok(before.dL < 15 && before.dH < 30, `before: ${before.dL.toFixed(0)} L*, ${before.dH.toFixed(0)} degrees of hue`);
   assert.ok(after.dL >= 20 && after.dH >= 70, `after: ${after.dL.toFixed(0)} L*, ${after.dH.toFixed(0)} degrees of hue`);
-  assert.deepEqual(CLASSIC.paint, {}, 'the old table leaves every creature in its file\'s colours');
+  assert.deepEqual([CLASSIC.paint, CLASSIC.bosses], [{}, {}], 'the old table leaves every creature and boss in its old colours');
 });
 
 test('the forest and the swamp are warm greens now, Candy is berry with one hot accent, the play mat and the cloud isles are more saturated', () => {
@@ -121,6 +122,14 @@ test('the Night Planet stays as it was: very dark blue', () => {
   assert.equal(ENEMY_TYPES.shadowlord.color, '#58476f', 'and its boss');
   assert.deepEqual(PLANETS.shadow.ground, ['#2a2440', '#3a3258', '#1e1a30']);
   const top = screen(OWN.light.shadow.sky[0]); assert.ok(top[2] > top[0] * 2 && lightness(top) < 5, 'very dark blue');
+});
+
+test('the own colours of the bosses come from the table, so the switch turns them back too', () => {
+  assert.deepEqual(Object.keys(OWN.bosses).sort(), ['croc', 'dragon', 'gingerbread', 'golem', 'jellyqueen', 'leviathan', 'phoenix', 'robot']);
+  for (const [id, [color, accent]] of Object.entries(OWN.bosses)) { assert.equal(ENEMY_TYPES[id].color, color, id); if (accent) assert.equal(ENEMY_TYPES[id].accent, accent, id); assert.ok(ENEMY_TYPES[id].boss, id); }
+  // enemy-types.ts on its own, as the server loads it, still holds the old colours.
+  const alone = JSON.parse(execFileSync(process.execPath, ['--experimental-strip-types', '--no-warnings', '-e', "import('./src/enemy-types.ts').then(m => console.log(JSON.stringify(Object.fromEntries(Object.entries(m.ENEMY_TYPES).map(([id, d]) => [id, d.color])))))"], { cwd: new URL('..', import.meta.url), encoding: 'utf8' }));
+  assert.deepEqual(Object.keys(OWN.bosses).sort().map(id => alone[id]), ['#4f9e5a', '#e0443a', '#c9783a', '#5a4a58', '#e75cad', '#557ebe', '#efa864', '#81bfe6']);
 });
 
 test('the game wears our own table; the old one is there for a before and after, switched as the page loads', () => {

@@ -1,5 +1,6 @@
 import type { PlanetId } from './content.ts';
 import { perfFlags } from './perf-flags.ts';
+import { ENEMY_TYPES } from './enemy-types.ts';
 
 /**
  * Our own colours, in one place (AAA plan WP18): per planet and per home region the light, the sky, the ground, the
@@ -39,14 +40,16 @@ export interface Palette {
   /** The home regions: base colour, the second colour that drifts through it, and the multiply colour under its trees. */
   zones: Record<HomeZone, readonly [base: string, accent: string, shade: string]>;
   water: Record<string, WaterTone>;
-  /** The island planets, whose ground is islands in a sea: [landing island, the other islands, their sides, the sea]. */
-  isles: Record<'ocean' | 'cloud', readonly [pad: string, isle: string, side: string, sea: string]>;
+  /** The island planets, whose ground is islands in a sea: [landing island, the other islands, their sides, the sea, and the second colour that dapples an island's top]. */
+  isles: Record<'ocean' | 'cloud', readonly [pad: string, isle: string, side: string, sea: string, dapple?: string]>;
   /** Scenery kit tints (material name → colour); "A" is the darker lower lobe, "B" the lighter crown. Home wears the kit's own colours. */
   kit: Partial<Record<PlanetId, Record<string, string>>>;
   /** The starship's sky: background, sky and ground light, three star layers, the clouds of gas, round or square stars, and our own paint for the space kit's rocks (by material name). */
   space: { sky: string; hemi: readonly [string, string]; stars: readonly [string, string, string]; nebulae: readonly string[]; round: boolean; paint?: Record<string, string> };
   /** Our own paint for a creature, by the material names of its file (creatures.glb); the others wear their file's colours. */
   paint: Record<string, Record<string, string>>;
+  /** Our own colours for bosses: [body, accent]. enemy-types.ts (which the server shares) keeps the old ones; these are put on as the page loads (below). */
+  bosses: Record<string, readonly [color: string, accent?: string]>;
 }
 
 // The Night Planet is the same in both tables: very dark blue, lit enough to read.
@@ -61,6 +64,7 @@ const NIGHT_KIT = { 'Leaf A': '#554a96', 'Leaf B': '#8f7fd6', 'Blossom A': '#8f6
  * Ours. Each day planet's light is split so that shade (which only the sky half reaches) is blue-violet while flat ground
  * in full sun gets the same light in total as before: a cooler, stronger sky half and a warmer sun.
  */
+const LAKE: WaterTone = { water: '#4ab8fc', sand: '#e6dc9e', deep: '#5ab4d8', shallow: '#9bd3dc' };
 const OWN: Palette = {
   light: {
     // A warm late-morning sun against blue-violet shade.
@@ -86,10 +90,10 @@ const OWN: Palette = {
     // Berry and raspberry, with one hot accent: the golden pad and the tangerine trees.
     candy: { base: ['#d43c86', '#ec5aa0', '#ffd86a'], patch: '#ff86bf', s: 0, l: 0, shade: '#9a6ad0', wear: '#ffc46a' },
     // Glacier blue under snow drifts.
-    ice: { base: ['#52a0ea', '#a8d4ff', '#b9d6f2'], patch: '#8cc4f6', s: 0, l: 0, shade: '#8fa8ec', wear: '#e8f4ff' },
-    lava: { base: ['#7a5258', '#96685c', '#4f4450'], patch: '#5a3c46', s: .1, l: .015, shade: '#8a5a80', wear: '#7a5a52' },
-    // The play mat: rose and sky-blue squares. The mat's texture deepens what it is given (ground.ts checker): these are drawn as about #ec5c96 and #52a8f2.
-    toy: { base: ['#f7a2c9', '#9ad4f9', '#fff4c8'], s: 0, l: 0, shade: '#b89ae6', wear: '#fff4c8' },
+    ice: { base: ['#52a0ea', '#80bef8', '#b9d6f2'], patch: '#70b4f4', s: 0, l: 0, shade: '#8fa8ec', wear: '#e8f4ff' },
+    lava: { base: ['#8a5a5e', '#9e6c5e', '#4f4450'], patch: '#5a3c46', s: .1, l: .015, shade: '#8a5a80', wear: '#7a5a52' },
+    // The play mat: rose and sky-blue squares. The mat's texture deepens what it is given (ground.ts checker): these are drawn as about #dc6a96 and #62a6e4.
+    toy: { base: ['#efadca', '#a7d3f3', '#fff4c8'], s: 0, l: 0, shade: '#b89ae6', wear: '#fff4c8' },
     jungle: { base: ['#4aa646', '#5cba50', '#8a6a3a'], patch: '#2e8f3c', s: 0, l: 0, shade: '#4f8a6a', wear: '#a67c3c' },
     // Golden sand.
     ocean: { base: ['#f0b850', '#f7d070', '#f8e8b8'], patch: '#fbe2a0', s: 0, l: 0, shade: '#c8a0a0', wear: '#f8e8b8' },
@@ -102,12 +106,11 @@ const OWN: Palette = {
     forest: ['#6cc648', '#9ccc3c', '#86a86e'],
     meadow: ['#9fe062', '#c4e860', '#6f9f96'],
     // Mossy olive, so the teal Crocodile King stands out.
-    swamp: ['#96c24e', '#72ac3a', '#8aa66a'],
+    swamp: ['#84c450', '#62aa3c', '#8aa66a'],
     canyon: ['#f4b26c', '#ee9a58', '#c9908c'],
   },
   water: {
-    home: { water: '#4ab8fc', sand: '#e6dc9e', deep: '#5ab4d8', shallow: '#9bd3dc' },
-    lake: { water: '#4ab8fc', sand: '#e6dc9e', deep: '#5ab4d8', shallow: '#9bd3dc' },
+    home: LAKE, lake: LAKE,
     swamp: { water: '#3fc4a0', sand: '#dccf8c', deep: '#1f8a6e', shallow: '#7cc79a' },
     // Grape soda.
     candy: { water: '#9858ee', sand: '#ffc6e0', deep: '#6a34c0', shallow: '#b88af5' },
@@ -117,8 +120,8 @@ const OWN: Palette = {
     ocean: { water: '#48d2e0', sand: '#f6dc90', deep: '#1a93b0', shallow: '#74d6d0' },
     shadow: NIGHT_WATER,
   },
-  // Golden sand in a turquoise sea; green islands in a blue sky, with the clouds left white.
-  isles: { ocean: ['#84d85a', '#f2bc58', '#dba24a', '#2fb4e8'], cloud: ['#84d85a', '#78d456', '#7f9ad0', '#5aa8f0'] },
+  // Golden sand in a turquoise sea; deep green islands in a blue sky, with the clouds left white. Each top is dappled with its second colour.
+  isles: { ocean: ['#f2bc58', '#f2bc58', '#dba24a', '#2fb4e8', '#f8d47c'], cloud: ['#54b83c', '#54b83c', '#7f9ad0', '#5aa8f0', '#70c84a'] },
   kit: {
     candy: { 'Leaf A': '#8438d8', 'Leaf B': '#b06cf8', 'Blossom A': '#ff5a3c', 'Blossom B': '#ff9a4a', 'Pine A': '#ff7a1c', 'Pine B': '#ffb43c', Bark: '#8a4a34', Grass: '#ff86c0', Rock: '#9a62e4' },
     ice: { 'Leaf A': '#5fb4e8', 'Leaf B': '#c4ecff', 'Blossom A': '#8fd4fa', 'Blossom B': '#e4f6ff', 'Pine A': '#4fa4d8', 'Pine B': '#b4e4fb', Bark: '#7a8fb5', Grass: '#a8e0f7', Rock: '#9cc4e6' },
@@ -130,7 +133,13 @@ const OWN: Palette = {
   // Very dark blue, with blue and teal clouds only and round stars.
   space: { sky: '#050a24', hemi: ['#c8d8ff', '#1c2a6a'], stars: ['#ffffff', '#cfe4ff', '#ffe9b0'], nebulae: ['rgba(60,130,255,.5)', 'rgba(40,200,220,.42)', 'rgba(80,110,255,.48)', 'rgba(70,235,200,.36)'], round: true, paint: { Basalt: '#3a4064' } },
   // The Crocodile King: dark teal with a warm belly, against the swamp's mossy olive.
-  paint: { croc: { 'Creature croc': '#1f7266', 'Creature croc dark': '#104a48', 'Creature croc belly': '#ffcf7a' } },
+  paint: {
+    croc: { 'Creature croc': '#1f7266', 'Creature croc dark': '#104a48', 'Creature croc belly': '#ffcf7a' },
+    // King Bear a shade darker, so he stands off the canyon's clay; the Snow Yeti cream with indigo shadows, warm against the cold glacier.
+    bear: { 'Creature bear': '#724630', 'Creature bear dark': '#4a2a1c' },
+    yeti: { 'Creature yeti': '#fff6e2', 'Creature yeti light': '#ffe9c4', 'Creature yeti dark': '#5a74cc' },
+  },
+  bosses: { croc: ['#1f7266', '#ffcf7a'], gingerbread: ['#f0a850'], jellyqueen: ['#4fe0c4'], golem: ['#4a2a48', '#ff7a1a'], dragon: ['#ffa828'], robot: ['#ffd83a'], leviathan: ['#3a5cae'], phoenix: ['#c8381c'] },
 };
 
 /** The tables as they were before WP18, for an exact before/after in one build (perfFlags.ownColours off; dev and perf builds, and tests). */
@@ -168,10 +177,12 @@ const CLASSIC: Palette | null = import.meta.env?.DEV === false && !import.meta.e
     shadow: NIGHT_KIT,
   },
   space: { sky: '#120a2a', hemi: ['#c8d8ff', '#3a2a6a'], stars: ['#ffffff', '#cfe0ff', '#ffe9b0'], nebulae: ['rgba(255,110,200,.55)', 'rgba(110,160,255,.5)', 'rgba(160,110,255,.5)', 'rgba(110,240,220,.4)'], round: false },
-  paint: {},
+  paint: {}, bosses: {},
 };
 
 /** The two tables by name, for tests and tools. */
 export const PALETTES = { own: OWN, classic: CLASSIC };
 /** The colours the game wears. Read once, as the page loads: `window.__zooFlagPreset = { ownColours: false }` gives the old ones (perf-flags.ts). */
 export const PALETTE: Palette = CLASSIC && !perfFlags.ownColours ? CLASSIC : OWN;
+// The bosses' display colours (bodies drawn from shapes, health chips, bursts and sparks all read ENEMY_TYPES): the server never loads this file.
+for (const [id, [color, accent]] of Object.entries(PALETTE.bosses)) Object.assign(ENEMY_TYPES[id], accent ? { color, accent } : { color });

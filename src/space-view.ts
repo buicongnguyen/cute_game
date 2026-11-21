@@ -9,12 +9,12 @@ import { PALETTE } from './planet-palette.ts';
 /** Soft round glows for nebulae and planet halos, drawn once per colour; `core` (0..1 of the radius) keeps the middle solid, for a round star. */
 const glowTextures = new Map<string, T.CanvasTexture>();
 function glow(color: string, core = 0) {
-  let texture = glowTextures.get(color);
+  const key = color + core; let texture = glowTextures.get(key);
   if (texture) return texture;
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 128;
   const ctx = canvas.getContext('2d')!, gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
   gradient.addColorStop(core, color); gradient.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, 128, 128);
-  texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace; glowTextures.set(color, texture);
+  texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace; glowTextures.set(key, texture);
   return texture;
 }
 const hash = (x: number, y: number, z: number) => { const v = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453; return v - Math.floor(v); };
