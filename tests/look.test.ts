@@ -129,6 +129,8 @@ test('the ground is corrected so flat sunlit ground is lit exactly as under the 
     (['r', 'g', 'b'] as const).forEach((c, i) => assert.ok(Math.abs(keep[i] * (sky[c] + sun[c] * TOON_OWN[4][i] / 255) - (sky[c] + sun[c])) < 1e-12, id));
     assert.equal(keep[0], 1); assert.ok(keep[2] > keep[1] && keep[1] > 1 && keep[2] < 1.08, id + ': a small lift of green and blue');
   }
+  // Flat ground is on the ramp's top step only while the sun stands above asin(0.6): the correction relies on it.
+  for (const id of Object.keys(LOOKS) as PlanetId[]) assert.ok(LOOKS[id].sun[3] >= 37, id + ': sun elevation ' + LOOKS[id].sun[3]);
   perfFlags.ownRamp = false; assert.deepEqual(groundKeep('home'), [1, 1, 1]); perfFlags.ownRamp = true;
   const tile = (planet: PlanetId) => (buildGround({ planet, layout: createEnvironmentLayout(planet), ponds: [], base: 0, segments: 2 }).children[0] as T.Mesh).geometry.getAttribute('color');
   const own = tile('home'); perfFlags.ownRamp = false; const plain = tile('home'); perfFlags.ownRamp = true;

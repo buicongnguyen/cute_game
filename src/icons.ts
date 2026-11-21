@@ -59,7 +59,7 @@ export function modelShot(build: () => T.Object3D | null, aim: IconAim = itemAim
     const model = build(); if (!model) return '';
     holder.add(model); scene!.add(holder); holder.updateMatrixWorld(true);
     aim(camera!, holder);
-    // Icons keep the grey ramp for now (AAA plan section 9): the pictures stay exactly as they were.
+    // Icons are drawn on the grey ramp for now (AAA plan section 9): only the ramp is swapped, the model is the world's.
     withClassicRamp(holder, () => renderer!.render(scene!, camera!));
     url = renderer!.getContext().isContextLost() ? '' : renderer!.domElement.toDataURL('image/png');
   } catch { url = ''; } finally { holder.removeFromParent(); try { free?.(holder); } catch { /* the picture stands */ } }

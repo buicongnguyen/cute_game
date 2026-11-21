@@ -69,10 +69,11 @@ export function applyLook(look: PlanetLook, hemi: T.HemisphereLight | null | und
 }
 
 /** A sun with more blue than red is a moon: the ramp's light steps stay neutral under it (toon.ts warmRamp). */
-const warmSun = (look: PlanetLook) => look.sun[0].slice(1, 3) >= look.sun[0].slice(5);
+const warmSun = (look: PlanetLook) => { const sun = new T.Color(look.sun[0]); return sun.r >= sun.b; };
 /**
  * What the ground's colour is multiplied by, per channel, so that flat ground in full sun is drawn exactly as it was
- * under the grey ramp: (sky light + sun) / (sky light + sun x the ramp's warm light step). The grass stays fresh;
+ * under the grey ramp: (sky light + sun) / (sky light + sun x the ramp's warm light step; every sun stands 37 degrees or
+ * higher, so flat ground is always on that top step). The grass stays fresh;
  * shadows on the ground come out a few percent bluer, since they see only the sky light. 1 under a moon or with the ramp off.
  */
 export function groundKeep(planet: string): number[] {

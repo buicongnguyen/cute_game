@@ -446,7 +446,7 @@ From `AAA-EVALUATION.md` section 4.
   - Under a cool sun (the Night Planet) the two light steps are neutral, so moonlit blue keeps its saturation.
   - The ramp's shade is #6466b4 and its light #fff6e8 (tuned from the plan's "about" values so warm paint in shade does not turn redder).
   - Crop cards: the rim is the new ink at the old sticker weight (the 1 px rim lost the cards' presence, owner review); the bed cap stays at 0.95 (at 1.00 with the idle bob only 2.7 px stay clear of the next bed at 390x844); a lopsided crop is centred on its bed by its silhouette, which lets the fruit trees stand about 14% larger than with a pivot-centred cap.
-  - Start bytes: +669 gzip against staging at the merge (+507 against the staging it was built on), over the 0.3 KB estimate; recorded as a named entry in `promo/perf-ledger.json`.
+  - Start bytes: +733 gzip against staging at the merge (+507 against the staging it was built on), over the 0.3 KB estimate; recorded as a named entry in `promo/perf-ledger.json`.
 
 ### WP7. Sound core: one audio system with buses
 - **Result:** the music slider works on iPhone, and the 444 KB theme no longer downloads in the background on a first visit. The base for every sound package.

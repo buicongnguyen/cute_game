@@ -149,6 +149,8 @@ export class CropCards {
   cellPx: number;
   /** Milliseconds the last bake took. */
   bakeMs = 0;
+  /** The last bake ran while the cards were hidden (on another planet, under its light): bake again when they are next drawn. */
+  private stale = false;
   /** Every crop is drawn at this share of its standard size (the garden's smaller beds, model.ts CROP_SCALE). */
   size = 1;
   private atlas: T.WebGLRenderTarget | null = null;
@@ -213,6 +215,7 @@ export class CropCards {
   bake(ids?: string[]): boolean {
     const started = performance.now(), renderer = this.renderer, pitch = syncBakePitch();
     if (ids) this.bakedIds = ids; else ids = this.bakedIds;
+    this.stale = !this.group.visible;
     try {
       if (renderer.getContext().isContextLost()) return this.ready = false;
       const entries: Array<{ id: string; model: T.Object3D; outline: boolean }> = [];
@@ -293,6 +296,7 @@ export class CropCards {
 
   /** Lay out this frame's cards: one crop per bed, a sparkle over ripe beds, harvests flying up. */
   update(beds: readonly BedCrop[], time: number, dt: number) {
+    if (this.stale) { this.group.visible = true; this.bake(); }
     this.uniforms.uTime.value = time; this.clock = time;
     const { cell: cellAttr, card, sway } = this.cardAttrs;
     let n = 0, b = 0;
