@@ -276,7 +276,7 @@ function recorder(watch) {
 }
 
 /** The game's context button names the usable thing beside the hero: its words for each kind of thing. */
-const WORDS = { pen: /pen/i, sell: /market|sell/i, shop: /shop/i, upgrade: /crystal/i, home: /cottage/i, fish: /fish/i };
+const WORDS = { pen: /animal pen/i, sell: /market|sell/i, shop: /shop/i, upgrade: /crystal/i, home: /cottage/i, fish: /fish/i };
 const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1' };
 const DESKTOP = { viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 };
 
@@ -413,10 +413,10 @@ export async function playRoute({ chromium, route, device, base, out, name = `${
   }
   P.tick = look;
   const step = async (name, data) => { await P.mark(name, data); await look(); };
-  // Attack that opens the same dialog twice in a row: hands off Attack until the hero has moved 3 m (8 s at most).
+  // Attack that opens the same dialog twice in a row: hands off Attack until the hero has moved 3 m (after 8 s the hero steps aside by itself).
   const breaker = { title: null, n: 0, from: null, since: 0, pressed: false,
     async sawDialog(title) { if (!this.pressed) return; this.pressed = false; this.n = title === this.title ? this.n + 1 : 1; this.title = title; if (this.n >= 2) { this.from = await P.hero(); this.since = Date.now(); this.n = 0; this.title = null; } },
-    async holds() { if (!this.from) return false; const h = await P.hero(); if (Math.hypot(h.x - this.from.x, h.z - this.from.z) > 3 || Date.now() - this.since > 8000) { this.from = null; return false; } return true; } };
+    async holds() { if (!this.from) return false; const h = await P.hero(); if (Math.hypot(h.x - this.from.x, h.z - this.from.z) > 3) { this.from = null; return false; } if (Date.now() - this.since > 8000) { this.from = null; await P.walkTo(h.x + 6, h.z + 4, 1.5, 5000); await P.closeDialogs(2); return false; } return true; } }; // the tracker did not lead away in 8 s: a few steps aside
   const attack = async () => { if (await breaker.holds()) return false; breaker.pressed = true; return P.attack(); };
   const trackerTap = async () => { breaker.pressed = false; return await P.tapSel('#quest-summary', { timeout: 500 }) || P.tapSel('#tracker-chip', { timeout: 500 }); };
   const pause = async ms => { await wait(ms); await look(); };
