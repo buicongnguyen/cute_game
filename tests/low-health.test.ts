@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { AudioGraph, Voices, TOUCH_VOICES } from '../src/sfx.ts';
-import { CreatureVoices, VOICES, VOICE_KINDS } from '../src/features/creature-voices.ts';
-import { LowHealth, Heart, heartbeat, pulses, LOW_ON, LOW_OFF, BEAT, BEAT_LENGTH, POLL, HEART_BAND } from '../src/features/low-health.ts';
+import { CreatureVoices, VOICES, VOICE_KINDS } from '../src/features-audio/creature-voices.ts';
+import { LowHealth, Heart, heartbeat, pulses, beats, HEART_AFTER, LOW_ON, LOW_OFF, BEAT, BEAT_LENGTH, POLL, HEART_BAND } from '../src/features/low-health.ts';
 import { voiceSignatures } from '../promo/sound-signature.mjs';
 import { fresh, near } from './support/fake-audio.ts';
 
@@ -30,20 +30,23 @@ test('on below 25%, off above 30%: between the two it stays as it was', () => {
   assert.ok(offAt > LOW_OFF && offAt < LOW_OFF + .011, `off at ${offAt.toFixed(3)}`);
 });
 
-test('off when knocked out, indoors and on Battery saver, and back on afterwards if the bar is still low', () => {
+test('off when knocked out and indoors, and back on afterwards if the bar is still low', () => {
   const low = new LowHealth();
   assert.equal(low.step({ health: .1 }), true);
   assert.equal(low.step({ health: 0 }), false, 'knocked out'); assert.equal(low.step({ health: -1 }), false); assert.equal(low.step({ health: NaN }), false);
   assert.equal(low.step({ health: .1 }), true);
   assert.equal(low.step({ health: .1, indoors: true }), false, 'the cottage is safe'); assert.equal(low.step({ health: .27, indoors: false }), false, 'and it does not come back between the two marks');
   assert.equal(low.step({ health: .2 }), true);
-  assert.equal(low.step({ health: .2, saver: true }), false, 'Battery saver'); assert.equal(low.step({ health: .05, saver: true }), false);
-  assert.equal(low.step({ health: .2 }), true);
 });
 
-test('the edge pulses on a desktop only: never on a touch device, with reduced motion or with flashes off', () => {
+test('the edge pulses on a desktop only; Battery saver keeps the still edge and the heart on the bar, without pulse or heartbeat', () => {
   assert.equal(pulses(false, false, ''), true); assert.equal(pulses(false, false, 'on'), true);
-  assert.equal(pulses(true, false, ''), false, 'a phone shows a still edge'); assert.equal(pulses(false, true, ''), false); assert.equal(pulses(false, false, 'off'), false);
+  assert.equal(pulses(true, false, ''), false, 'a phone shows a still edge'); assert.equal(pulses(false, true, ''), false, 'reduced motion');
+  assert.equal(pulses(false, false, 'low'), false, 'Settings, Flashes: Low'); assert.equal(pulses(false, false, 'on', true), false, 'Battery saver');
+  // The heart is heard while the danger is fresh: ten seconds after the last blow, never behind a dialog or on Battery saver.
+  assert.equal(HEART_AFTER, 10);
+  assert.equal(beats(false, false, 0), true); assert.equal(beats(false, false, 9.9), true); assert.equal(beats(false, false, 10), false); assert.equal(beats(false, false, Infinity), false, 'a save loaded with little health: no blow yet');
+  assert.equal(beats(false, true, 1), false, 'a dialog is open'); assert.equal(beats(true, false, 1), false, 'Battery saver');
 });
 
 test('the heartbeat: two soft thumps every 0.8 s on the audio clock, an ordinary voice that a full fight may drop', () => {
@@ -59,12 +62,12 @@ test('the heartbeat: two soft thumps every 0.8 s on the audio clock, an ordinary
   for (let i = 1; i < lubs.length; i++) assert.ok(near(lubs[i] - lubs[i - 1], BEAT, 1e-9), 'exactly 0.8 s apart, whatever the timer does');
   for (let i = 0; i < dubs.length; i++) assert.ok(near(dubs[i] - lubs[i], .17, 1e-9), 'lub-dub');
   assert.ok(graph.voices.live(104.9) <= 1, 'one voice at a time');
-  // Each thump is low: under 120 Hz, with a quieter part a phone speaker can play.
-  const first = ctx.nodes.filter(n => n.kind === 'oscillator').slice(0, 4).map(n => n.frequency.events[0].value);
-  assert.ok(Math.min(...first) < 120 && Math.max(...first) > 200 && Math.max(...first) < 400);
+  // Each thump is low (under 120 Hz), with a body above it and a short knock from 500 to 350 Hz that a phone's speaker carries.
+  const thump = ctx.nodes.filter(n => n.kind === 'oscillator').slice(0, 3).map(n => n.frequency.events.map(e => e.value));
+  assert.ok(thump[0][0] < 120); assert.deepEqual(thump[2], [500, 350]);
   // Off, then on again later: the beat starts afresh (no burst for the time in between).
   const made = ctx.nodes.length; ctx.currentTime = 105; heart.tick(false); ctx.currentTime = 130; heart.tick(true);
-  assert.equal(ctx.nodes.filter(n => n.kind === 'oscillator').length - ctx.nodes.slice(0, made).filter(n => n.kind === 'oscillator').length, 4, 'one beat, not thirty');
+  assert.equal(ctx.nodes.filter(n => n.kind === 'oscillator').length - ctx.nodes.slice(0, made).filter(n => n.kind === 'oscillator').length, 6, 'one beat, not thirty');
   // A full fight on a phone: the beat is left out and the reserved voices stay free.
   const pool = graph.voices as Voices; pool.budget = TOUCH_VOICES + 2; pool.reserve = 2; ctx.currentTime = 200;
   for (let i = 0; i < TOUCH_VOICES; i++) pool.take(200, 260);

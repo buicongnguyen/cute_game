@@ -4,12 +4,15 @@
  *
  * - On below LOW_ON (25%), off above LOW_OFF (30%): between the two it stays as it was, so a bar that sits at a quarter
  *   cannot make the warning flap.
- * - Off at 0 health (knocked out), indoors (the cottage is safe) and on Battery saver.
- * - The heartbeat: two soft low thumps every BEAT seconds at about -24 dBFS, an ordinary voice of the shared counter
- *   (a full fight may drop a beat; it never takes a voice kept for priority cues). Planned on the audio clock.
+ * - Off at 0 health (knocked out) and indoors (the cottage is safe).
+ * - The heartbeat: two soft low thumps every BEAT seconds at about -24 dBFS, with a short part near 420 Hz that a phone's
+ *   speaker carries; an ordinary voice of the shared counter (a full fight may drop a beat; it never takes a voice kept
+ *   for priority cues). Planned on the audio clock. It is heard while the danger is fresh: for HEART_AFTER seconds after
+ *   the last blow the explorer took, and not behind a dialog. The edge and the heart on the bar stay.
  * - The red edge is one layer of its own (low-health.css) whose opacity alone changes. A desktop pulses it with the
- *   beat; a touch device, a reduced-motion setting and the comfort setting (pref `flashes` = `off`, AAA-PLAN WP9) show
- *   it still.
+ *   beat; a touch device, a reduced-motion setting, Battery saver and the Flashes setting at Low (pref `flashes` =
+ *   `low`, AAA-PLAN WP9, also `data-flashes` on the root) show it still.
+ * - Battery saver: the still edge and the heart on the bar, no pulse and no heartbeat.
  * - The heart on the bar is a class on the bar that is already there: no node, no text.
  *
  * Cost: a timer looks at the health five times a second (no frame listener); classes change only when the warning
@@ -24,26 +27,32 @@ export const LOW_ON = .25, LOW_OFF = .3;
 /** Seconds from one heartbeat to the next, the length of one (both thumps), and how often the health is looked at. */
 export const BEAT = .8, BEAT_LENGTH = .3, POLL = .2;
 
-export interface Vitals { health: number; indoors?: boolean; saver?: boolean }
+/** The heartbeat goes on for this many seconds after the last blow the explorer took. */
+export const HEART_AFTER = 10;
+
+export interface Vitals { health: number; indoors?: boolean }
 /** The warning's switch: `step` takes the facts and says whether the warning is on. */
 export class LowHealth {
   on = false;
-  step({ health, indoors, saver }: Vitals) {
-    if (!(health > 0) || indoors || saver) this.on = false;
+  step({ health, indoors }: Vitals) {
+    if (!(health > 0) || indoors) this.on = false;
     else if (health < LOW_ON) this.on = true;
     else if (health > LOW_OFF) this.on = false;
     return this.on;
   }
 }
-/** Whether the edge may pulse: never on a touch device, with reduced motion, or with flashes switched off. */
-export const pulses = (touch: boolean, reduced: boolean, flashes: string) => !touch && !reduced && flashes !== 'off';
+/** Whether the edge may pulse: never on a touch device, with reduced motion, on Battery saver, or with Flashes at Low. */
+export const pulses = (touch: boolean, reduced: boolean, flashes: string, saver = false) => !touch && !reduced && !saver && flashes !== 'low';
+/** Whether the heart is heard: not on Battery saver, not behind a dialog, and only for HEART_AFTER seconds after a blow. */
+export const beats = (saver: boolean, modal: boolean, sinceHurt: number) => !saver && !modal && sinceHurt < HEART_AFTER;
 
 /** One heartbeat at `at` on the audio clock into `to`: lub-dub, each a low thump with a little body a phone can play. */
 export function heartbeat(ctx: AudioContext, to: AudioNode, at: number, volume = 1) {
   for (const [dt, level, f] of [[0, 1, 74], [.17, .72, 62]]) {
-    for (const [mult, part, length] of [[1, .066, .13], [2.5, .0125, .07]]) {
+    // The thump, its body, and a short knock from 500 to 350 Hz: the first two are below what a phone's speaker plays.
+    for (const [from, down, part, length] of [[f * 1.5, f * .62, .056, .13], [f * 3.75, f * 1.55, .011, .07], [500, 350, .03, .05]]) {
       const osc = ctx.createOscillator(), env = ctx.createGain(), t = at + dt;
-      osc.type = 'sine'; osc.frequency.value = f * mult * 1.5; osc.frequency.setValueAtTime(f * mult * 1.5, t); osc.frequency.exponentialRampToValueAtTime(f * mult * .62, t + length);
+      osc.type = 'sine'; osc.frequency.value = from; osc.frequency.setValueAtTime(from, t); osc.frequency.exponentialRampToValueAtTime(down, t + length);
       env.gain.value = 0; env.gain.setValueAtTime(.0001, t); env.gain.linearRampToValueAtTime(part * level * volume, t + .008); env.gain.exponentialRampToValueAtTime(.0008, t + length);
       osc.connect(env); env.connect(to); osc.start(t); osc.stop(t + length + .02);
     }
@@ -83,13 +92,14 @@ export function mount(s: GameServices) {
   const edge = document.createElement('div'); edge.id = 'low-health'; edge.setAttribute('aria-hidden', 'true'); flash.parentNode.insertBefore(edge, flash);
   const low = new LowHealth(), heart = new Heart(s.audio, () => !(audioLevels.sfx > 0)), reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
   Object.assign(s.audio, { lowHealth: { low, heart } }); // for the probes: __zooSfx.graph.lowHealth
-  let shown = false, pulsing = false;
+  let shown = false, pulsing = false, hurtAt = -Infinity;
+  s.on('playerHurt', () => { hurtAt = performance.now(); });
   setInterval(() => {
-    const on = low.step({ health: s.health(), indoors: !!s.world.interior, saver: s.quality() === 'low' }) && !document.hidden;
-    const pulse = on && pulses(s.touch(), !!reduced?.matches, s.pref('flashes'));
+    const on = low.step({ health: s.health(), indoors: !!s.world.interior }) && !document.hidden, saver = s.quality() === 'low';
+    const pulse = on && pulses(s.touch(), !!reduced?.matches, s.pref('flashes'), saver);
     if (on !== shown) { shown = on; edge.classList.toggle('on', on); bar?.classList.toggle('low', on); }
     if (pulse !== pulsing) { pulsing = pulse; edge.classList.toggle('pulse', pulse); }
-    heart.tick(on);
+    heart.tick(on && beats(saver, !!s.modal(), (performance.now() - hurtAt) / 1000));
   }, POLL * 1000);
 }
 

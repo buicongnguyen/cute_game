@@ -10,6 +10,8 @@
 /* Two swells per beat, like the heartbeat it is heard with; gentle (never a flash). */
 @keyframes low-health-beat { 0%, 100% { opacity: .5; } 14% { opacity: .92; } 30% { opacity: .6; } 44% { opacity: .82; } 70% { opacity: .5; } }
 @media (prefers-reduced-motion: reduce) { #low-health { transition: none; } #low-health.on.pulse { animation: none; } }
+/* Settings, Flashes: Low (AAA-PLAN WP9 sets the attribute): the edge stays, still. */
+:root[data-flashes=low] #low-health.on.pulse { animation: none; }
 
 /* The heart: the warning is not colour alone. Inside the bar, at its left end, over the fill. */
 .meter.health.low::before {

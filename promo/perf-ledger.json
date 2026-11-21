@@ -49,10 +49,10 @@
    "row": "start",
    "name": "WP12 creature voices and warnings",
    "allow": {
-    "english": 49,
-    "vietnamese": 49
+    "english": 81,
+    "vietnamese": 81
    },
-   "why": "Measured growth of the start against staging f6a377e (English 798,597 -> 798,646, Vietnamese 931,989 -> 932,038; the plan allows 0.1 KB): the hooks only. world.ts tells a wind-up where it starts (onTelegraph), main.ts forwards it as the telegraph event, plays the alert beep only while no feature listens, and hands the features the health bar as a part of 1 (services.health). The voices, the wind-up warning, the roar, the pet hit, the heartbeat, the red edge and its sheet load after Start, in the features chunk (16.9 KB gzip with them)."
+   "why": "Measured growth of the start against staging f6a377e (English 798,597 -> 798,678, Vietnamese 931,989 -> 932,070; the plan allows 0.1 KB): hooks and fallbacks only. world.ts tells a wind-up where a creature is seen to start one (onTelegraph, also for a guest in a room), main.ts forwards it as the telegraph event, plays the alert beep until the creatures have their own voices (graph.creatures), names a pet hit where it is played, and hands the features the health bar as a part of 1 (services.health); sfx.ts plays the hit for petHit and the hurt cry for roar until their recipes have come. The voices, the wind-up warning, the roar, the pet hit, the heartbeat, the red edge and its sheet load after Start: the audio features in a lazy chunk of their own (features-audio, 12.4 KB gzip), the rest in the features chunk (5.5 KB gzip, 16.9 KB before the split)."
   }
  ]
 }

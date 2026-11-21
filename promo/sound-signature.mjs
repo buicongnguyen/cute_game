@@ -36,10 +36,10 @@ function hash(text) { let h = 0x811c9dc5; for (let i = 0; i < text.length; i++) 
 
 /**
  * The signature of each sound. `Sfx` is the class of src/sfx.ts; `install(graph)` gives a fresh graph what the features
- * give it in the game (features/stingers.ts installStingers), so the stingers play their own recipes.
+ * give it in the game (features-audio/stingers.ts installStingers), so the stingers play their own recipes.
  */
 /**
- * The signature of each creature voice (src/features/creature-voices.ts): per family, each kind and the wind-up of a
+ * The signature of each creature voice (src/features-audio/creature-voices.ts): per family, each kind and the wind-up of a
  * boss ('warning'), and the heartbeat of src/features/low-health.ts.
  */
 export function voiceSignatures(AudioGraph, CreatureVoices, families, kinds, heartbeat) {

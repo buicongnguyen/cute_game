@@ -201,7 +201,8 @@ test('the low-health warning (features/low-health.css): one layer whose opacity 
   const css = read('features/low-health.css'), frames = css.slice(css.indexOf('@keyframes'), css.indexOf('@media'));
   assert.deepEqual([...new Set([...frames.matchAll(/\{\s*([a-z-]+)\s*:/g)].map(m => m[1]))], ['opacity'], 'the keyframes change opacity and nothing else');
   assert.match(css, /#low-health \{[^}]*pointer-events: none/, 'it never takes a tap from a control');
-  assert.match(css, /#low-health \{[^}]*transition: opacity/); assert.equal((css.match(/animation:/g) ?? []).length, 2, 'the pulse, and its off switch');
+  assert.match(css, /#low-health \{[^}]*transition: opacity/); assert.equal((css.match(/animation:/g) ?? []).length, 3, 'the pulse, and its two off switches');
+  assert.match(css, /:root\[data-flashes=low\] #low-health\.on\.pulse \{ animation: none; \}/, 'Settings, Flashes: Low');
   assert.match(css, /#low-health\.on\.pulse \{[^}]*animation: low-health-beat \.8s/, 'the pulse has the heartbeat\'s tempo (BEAT in features/low-health.ts)');
   assert.match(css, /prefers-reduced-motion: reduce\) \{[^@]*#low-health\.on\.pulse \{ animation: none; \}/);
   // The heart: the warning is not colour alone; text of at least 11 px, on the bar that is already there.

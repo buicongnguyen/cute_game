@@ -1452,7 +1452,7 @@ async function finishFishingCatch(f:FishingRound){
 }
 
 
-world.onAlert=e=>{emit('creatureAlert',{enemy:e})||tone('alert');};world.onTelegraph=(enemy,time)=>{emit('telegraph',{enemy,time});}; // heard: the creature's own voice once the features listen (features/creature-voices.ts)
+world.onAlert=e=>{emit('creatureAlert',{enemy:e});sfx.graph.creatures||tone('alert');};world.onTelegraph=(enemy,time)=>{emit('telegraph',{enemy,time});}; // the beep, until the creatures have their own voices (creature-voices.ts sets graph.creatures when it has mounted)
 // A blow on a boss lands with a deeper thud, and the one that breaks it (boss-stagger.ts) with a crack (sfx.ts).
 world.onBossHit=(_e,broke)=>{tone('thud');if(broke)tone('break');};
 world.onBuilt=()=>{if(fishGame)endFishing();stockPonds();minimap.invalidate();placeFlags.rebuild();};
@@ -1544,7 +1544,7 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
   if(!vault&&!ctfApi?.owns(e)&&!rescueApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
-  const hpBefore=e.hp,broke=world.damageEnemy(e,damage,stun,hazard,impact?.source,impact)==='break';combatHud.noteHit(e);if(!remote&&!hazard)emit('hitLanded',{enemy:e,damage:hpBefore-e.hp,impact});world.hitFeedback(e,e.driver||e.boss?Math.max(e.hp>0?1:0,Math.round(hpBefore-e.hp)):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0,broke);if(!hazard||impact)tone(impact?.critical?'crit':(impact?.knock??0)>=2||(impact?.lift??0)>0?'hitHeavy':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
+  const hpBefore=e.hp,broke=world.damageEnemy(e,damage,stun,hazard,impact?.source,impact)==='break';combatHud.noteHit(e);if(!remote&&!hazard)emit('hitLanded',{enemy:e,damage:hpBefore-e.hp,impact});world.hitFeedback(e,e.driver||e.boss?Math.max(e.hp>0?1:0,Math.round(hpBefore-e.hp)):damage,!!impact?.critical,(impact?.knock??0)>=2||(impact?.lift??0)>0,broke);if(!hazard||impact)tone(impact?.helper?'petHit':impact?.critical?'crit':(impact?.knock??0)>=2||(impact?.lift??0)>0?'hitHeavy':'hit'); // a hard knock or a launch (the last hit of a chain) is a big hit
   // Earned flinch (creature-weight.ts): a small creature's wind-up is cut short by the last hit of a chain or a critical.
   if(impact&&!hazard&&e.hp>0)world.flinchEnemy(e,{critical:!!impact.critical,big:(impact.knock??0)>=2||(impact.lift??0)>0});
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);

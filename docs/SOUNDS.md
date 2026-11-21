@@ -24,7 +24,7 @@ radio theme, WP13 score ──► music ► duck ┘
   the music slider (its gain is the slider value, so 0 is silence). Buses add no saved setting: the two volumes stay in
   `state.settings` (`audio-settings.ts` `parseAudio`). `bus(name)` applies the level each time it is called (a moved slider glides to its
   level in about 50 ms, never a step); `graph.sfx` and `graph.music` hold the two sliders.
-- **The radio** (`src/features/radio.ts`) plays the theme `<audio>` element through a `MediaElementAudioSourceNode` into the
+- **The radio** (`src/features-audio/radio.ts`) plays the theme `<audio>` element through a `MediaElementAudioSourceNode` into the
   music bus. An iPhone ignores `element.volume`, so the slider is the bus gain. A trim of 0.55 on the radio cancels the
   compressor's make-up gain (5.2 dB, measured), so the radio is as loud as before. Without WebAudio the element's own volume
   carries the slider. The player is in the lazy features chunk; `house-life.ts` reaches it through the `radio` slot in
@@ -34,7 +34,7 @@ radio theme, WP13 score ──► music ► duck ┘
   (the panner arrives with the features; before that sounds play in the middle).
 - **Duck.** `duck('music', 6, 1)` lowers a bus 6 dB for 1 s (down within 0.1 s, back in about 0.3 s, glides only). Ducks do not stack: while one
   holds, another only makes it last longer, at the first one's depth. It arrives with the features
-  (`src/features/sound-mix.ts`), after the first played frame; before that a call does nothing.
+  (`src/features-audio/sound-mix.ts`), after the first played frame; before that a call does nothing.
 - **Voices.** `voices` counts live synthesized voices for everything that plays: 18 on a desktop (14 for ordinary sounds,
   4 more for priority cues), 10 on a touch device (8 and 2; it was 6 and 2 until WP13 measured a twelve-creature fight on a phone: 5 to 9 sounds refused with 6, 0 to 5 with 8). A new player calls `voices.take(now, end)` and stays silent on
   false; only a priority cue passes `true` as the third argument, and the radio's stand-in tune never does. Click, open and
@@ -125,7 +125,7 @@ run the tool with `--check --write`**, or that test fails. Nobody can listen on 
 
 ### The stingers
 
-Nine short musical cues, each its own recipe (`src/features/stingers.ts`, in the lazy features chunk; the start
+Nine short musical cues, each its own recipe (`src/features-audio/stingers.ts`, in the lazy features chunk; the start
 download holds only their names). Each lowers the music bus 6 dB for its length (`duck`, once it is sure to play) and
 takes one voice; the same stinger twice within 0.1 s is one stinger.
 
@@ -199,8 +199,8 @@ connected to `__zooSfx.graph.nodes.sfx.duck` meters a bus.
 
 ## The music (AAA-PLAN WP13)
 
-Music plays in the world: a director (`src/features/music-director.ts`) chooses what plays, and a live score
-(`src/features/music-score.ts`) plays it from the tunes in `src/features/music-content.ts`. All three are in the lazy
+Music plays in the world: a director (`src/features-audio/music-director.ts`) chooses what plays, and a live score
+(`src/features-audio/music-score.ts`) plays it from the tunes in `src/features-audio/music-content.ts`. All three are in the lazy
 features chunk (about 5.9 KB gzip together). Nothing is recorded and nothing is downloaded for the score: every note is an
 oscillator, as in `promo/music.py`, which made the theme (marimba: a sine with a fourth partial that dies in a tenth of
 a second; bass: a sine; pad: a sine with an octave, slow in and out; the theme's three echoes). The melodies are not
@@ -327,52 +327,68 @@ Tests: `tests/music-director.test.ts`, `tests/music-score.test.ts` (the recordin
 
 ## Creature voices, the wind-up warning and the heartbeat (AAA-PLAN WP12)
 
-Every creature family has a voice (`src/features/creature-voices.ts`, in the lazy features chunk; nothing recorded,
+Every creature family has a voice (`src/features-audio/creature-voices.ts`, in the lazy audio chunk; nothing recorded,
 nothing downloaded). A blob squeaks, a bird chirps, a boar grunts, a bear growls; the bigger the creature, the lower it
 speaks (pitch = (0.7 / radius)^0.6, kept between 0.4 and 1.6 of the family's pitch).
 
 | Kind | When | What is heard |
 |---|---|---|
-| notice | a creature saw the explorer (`creatureAlert`) | the family's own rising "?!", in place of the shared alert beep (`main.ts` plays the beep only while no feature listens) |
-| windup | an attack is coming (`telegraph`, told by `world.onTelegraph` where world.ts starts a wind-up) | the voice starts with the telegraph, climbs in pitch and level, and peaks as the blow lands |
+| notice | a creature saw the explorer (`creatureAlert`) | the family's own rising "?!", in place of the shared alert beep (`main.ts` plays the beep until the voices have mounted: `graph.creatures`) |
+| windup | an attack is coming (`telegraph`, told by `world.onTelegraph` where world.ts sees a creature's phase turn to wind-up, on a host and on a guest) | the voice starts with the telegraph, climbs in pitch and level, and peaks as the blow lands |
 | hurt | a blow landed on it (`hitLanded`) | a short falling yelp, at most once in 0.25 s per creature |
 | death | it fell (`creatureDefeat`) | the voice falls away, under the poof |
 
 - **A boss's wind-up is the warning.** It is louder than the other voices (about -13.5 dBFS, 9 dB over the music's RMS,
-  4 dB under a hit), has an octave and breath on top, and is not held back by the pauses below. A wind-up longer than
+  4 dB under a hit), has an octave and breath on top, is not held back by the pauses below, and is the one creature
+  voice that may use a voice kept for priority cues (it sounds over a full fight, also on a phone). A wind-up longer than
   1.2 s (the rain, 1.3 s) starts its voice later, so every warning rises for at most 1.2 s and peaks at the blow.
-- **An interrupted wind-up falls silent.** A flinch, a stun, a stagger break, a creature that turns to flee, a defeat:
-  the voice is faded out within about 0.1 s. While a wind-up sounds its creature is looked at every 0.08 s (a timer
+- **An interrupted wind-up falls silent.** A flinch, a stun, a stagger break, a creature that turns to flee, a defeat,
+  a dialog that opens: the voice is faded out within about 0.1 s, and none starts behind a dialog. While a wind-up sounds its creature is looked at every 0.08 s (a timer
   that exists only then).
 - **Placing.** A voice is panned by where its creature is across the screen (at most 0.8 to a side) and faded with its
-  distance from the explorer: full inside 6 m, silent from 30 m on. An ordinary creature's wind-up is heard only
-  inside 14 m.
-- **A crowd cannot squeak a fight away.** Every voice is an ordinary voice of the shared counter (never a priority
-  one). On top of that the feature holds itself back: at most 4 creature voices at once (2 on a touch device) and 6
+  distance from the explorer: full inside 6 m, silent from 30 m on. A notice is never under half level (a creature
+  notices from up to 20 m; the beep it replaced had one level). An ordinary creature's wind-up is heard only inside 14 m.
+- **The blow can land a moment after the peak.** The voice peaks when the telegraph says the blow lands. A hit-stop
+  (AAA-PLAN WP9: 0.035 to 0.11 s of frozen game time on the explorer's own blows) that falls inside a wind-up moves the
+  blow later by that much, the audio clock does not stop: the warning then leads by up to a tenth of a second more.
+- **A crowd cannot squeak a fight away.** Every voice but a boss's warning is an ordinary voice of the shared counter. On top of that the feature holds itself back: at most 4 creature voices at once (2 on a touch device) and 6
   started in a second (4); no two of a kind within 0.08 s (a notice: 0.3 s; a wind-up: 0.15 s); the same family says
   the same kind again only after 0.4 s (notice), 0.6 s (wind-up), 0.12 s (hurt) or 0.15 s (death). One notice may sound
   over the cap, because it took the place of a cue. `__zooSfx.graph.creatures.stats` counts played, limited, capped.
 - **The Colossus roars with its own voice** (`roar` in `stingers.ts`: two rough low voices a few Hz apart that sink, a
-  chest note and a rush of air; -11.2 dBFS, 519 ms). It played the explorer's hurt cry before. Like
-  that cry it may use a voice kept for priority cues: it stuns.
+  chest note and a rush of air; -11.2 dBFS, 519 ms). It played the explorer's hurt cry before, and
+  still does until the recipes have come. Like that cry it may use a voice kept for priority cues: it stuns.
 - **A pet's or a helper's blow lands with a bite** (`petHit` in `stingers.ts`: teeth snap and a short bark), 6.1 dB
-  under the explorer's own hit (-15.3 against -9.2 dBFS), in place of hit, hitHeavy and crit. No line of the hit path
-  changed for it: `hitLanded` is told just before the hit sound in `main.ts` hit(), the feature notes whose blow it is
-  (`blow.helper`), and the stingers' `cue` swaps the sound. `tests/game-events-main.test.mjs` holds that order.
+  under the explorer's own hit (-15.3 against -9.2 dBFS), in place of hit, hitHeavy and crit: `main.ts` hit()
+  names the sound where it is played (`impact.helper`). Until the recipes have come it is the plain hit.
 
 ### The low-health warning (`src/features/low-health.ts`, `low-health.css`)
 
 Below a quarter of the health bar: a heartbeat, a red edge and a heart on the bar, until the bar is over 30% again
 (between the two it stays as it was, so a bar at exactly a quarter does not make it flap). Off when knocked out, inside
-the cottage, on Battery saver and in a hidden tab.
+the cottage and in a hidden tab.
 
-- The heartbeat is two soft low thumps every 0.8 s (-24 dBFS, 232 ms, strongest near 86 Hz with a quieter part
-  around 200 Hz for small speakers), planned on the audio clock, an ordinary voice: a full fight may drop a beat.
+- The heartbeat is two soft low thumps every 0.8 s (-23 dBFS, 225 ms, strongest near 86 Hz, with a short knock
+  from 500 to 350 Hz about 6 dB under the thump, which a phone's speaker carries), planned on the audio clock, an
+  ordinary voice: a full fight may drop a beat. It is heard while the danger is fresh: for 10 s after the last blow
+  the explorer took, and not behind a dialog; the edge and the heart on the bar stay.
 - The red edge is one layer of its own; only its opacity changes (no layout, no repaint of the page). A desktop pulses
-  it with the beat. A touch device shows it still, and so do a reduced-motion setting and the comfort preference
-  `flashes` = `off` (`zoo-garden-pref-flashes`; the Flashes switch itself comes with WP9).
+  it with the beat. A touch device shows it still, and so do a reduced-motion setting, Battery saver and Settings,
+  Flashes: Low (`zoo-garden-pref-flashes` = `low`, and `data-flashes=low` on the root, both set by WP9).
+- Battery saver keeps the still edge and the heart on the bar, without pulse and without heartbeat.
 - The heart on the bar is a class on the bar that is already there (the warning is not colour alone).
 - A timer looks at the health five times a second; nothing runs per frame.
+
+### The audio features' own chunk (`src/features-audio.ts`, `src/features-audio/`)
+
+The mix (`sound-mix.ts`), the stingers, the radio, the music director with its score and tunes, and the creature
+voices build into a second lazy chunk, "features-audio" (12.4 KB gzip; the other features are 5.5 KB). The features
+chunk asks for it as soon as its own features are mounted and does not wait for it; a fetch that fails is tried once
+more 8 s later (`game-services.ts` `loadAudio`). Until it has mounted, and for good if it never comes, the game
+sounds as before any feature: a stinger is the success chime, the roar the hurt cry, a pet's hit the plain hit, a
+creature that notices the explorer beeps, nothing is lowered under a cue. `npm run perf:bytes` holds every lazy
+feature chunk to 30 KB gzip and both chunks out of the start; `features.ts` re-exports `assetUrl` so that module
+keeps its place in the start's chunks (without it the start grows by about 0.6 KB).
 
 ### Levels (promo/loudness.mjs, parts 5 and 6; kept in promo/loudness.json)
 
@@ -386,7 +402,7 @@ comparison: a hit -9.2, the explorer's hurt cry -12, the alert beep -21.8, the m
 | hurt | -26.7 to -23.4 | -28 to -18 |
 | death | -22.4 to -18.2 | -26 to -17 |
 | warning (a boss's wind-up) | -14.3 to -13.3 | -16 to -11 |
-| heartbeat | -24 | -26 to -22 |
+| heartbeat | -23 | -26 to -22 |
 
 Each cell: peak dBFS / loudness (K-weighted estimate) / ms within 20 dB of the peak / band with the most energy and
 spectral centroid in Hz.
@@ -433,7 +449,7 @@ The warning on the clock, per boss pattern (seconds before the blow lands; the v
 | enraged rain | 1.04 | 1.03 | 1 | -0.03 | -13.2 |
 
 A crowded fight with a creature voice every 90 ms and a boss winding up, over the theme, both sliders at the top: peak
--3.2 dBFS, no clipping.
+-2.5 dBFS, no clipping.
 
 `tests/creature-voices.test.ts` and `tests/low-health.test.ts` compare every voice's signature with the one measured:
 **after changing a voice, the heartbeat, the roar or the pet hit, run `promo/loudness.mjs --check --write`.**
@@ -451,8 +467,8 @@ long each wind-up really lasted, the low-health warning as the bar falls and ris
 creature voices a second and at most 3 at once in that fight, the shared counter refused 0 sounds on the desktop and
 0 to 1 on the phone profile (staging before: 0 to 3); every King Bear telegraph (0.6 s plain blow, 1.0 s charge, 1.1 s
 slam, 1.2 s quake) had its voice, and a wind-up cut short by a stun was silent 0.2 s later; the warning came on below
-25% and went above 30%, switched once with the bar trembling at a quarter, 6 beats in 5 s; one AudioContext; no
-request for sound.
+25% and went above 30%, switched once with the bar trembling at a quarter, no beat before a blow, 6 beats in the 5 s
+after one and none ten seconds after it (the edge stayed); one AudioContext; no request for sound.
 
 ### What a player may notice (WP12)
 
@@ -465,10 +481,11 @@ request for sound.
   are measured. Whether the voices are charming or grating, whether 23 families are told apart by more than pitch, and
   whether the heartbeat is audible on a phone speaker (most of it is below 200 Hz) needs a listener. **Not verified on
   a real iPhone**, like the rest of the Web Audio path.
-- **Known limits.** A guest in an online room hears no wind-up voice (the host runs the creatures; the telegraph on the
-  ground is still drawn). A boss's warning is an ordinary voice: in a fight that fills a phone's eight voices it can
-  be dropped (not seen in the probe). The Colossus's own attacks have no wind-up voice (they do not go through
-  `world.onTelegraph`). On Battery saver there is no low-health warning at all, as the plan asks. The plan's check
+- **Known limits.** A guest in an online room is told a wind-up when the host's state arrives (about ten times a
+  second), so its voice can start up to a tenth of a second late and is that much shorter; not tried with two
+  browsers. The Colossus's own attacks have no wind-up voice (they do not go through
+  `world.onTelegraph`). If the audio chunk never comes (one retry after 8 s), a radio switched on stays at "warming
+  up" until the page is opened again. The plan's check
   names a wind-up that starts 0.4 to 0.8 s before the blow; the voice here starts with the telegraph (0.55 to 1.2 s
   before), as the plan's scope asks (a rise of 0.4 to 1.2 s). Creature wind-ups shorter than 0.4 s (wasp 0.3, wolf
   0.35) get a voice as long as their telegraph.

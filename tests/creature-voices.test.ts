@@ -1,4 +1,4 @@
-// Creature voices (AAA-PLAN WP12, src/features/creature-voices.ts): a voice per family that falls with size, the wind-up
+// Creature voices (AAA-PLAN WP12, src/features-audio/creature-voices.ts): a voice per family that falls with size, the wind-up
 // that peaks at the blow, the pauses and caps that keep a crowd quiet, placing by screen and distance, the softer hit of
 // a pet, the Colossus's own roar, and the measured levels of promo/loudness.json.
 import { test } from 'node:test';
@@ -8,10 +8,10 @@ import { Sfx, AudioGraph, Voices, TOUCH_VOICES, MAX_VOICES, type Sound } from '.
 import { ENEMY_TYPES } from '../src/enemy-types.ts';
 import { BOSS_WINDUPS } from '../src/boss-patterns.ts';
 import { createEvents } from '../src/game-services.ts';
-import { installMix } from '../src/features/sound-mix.ts';
-import { installStingers, STINGER } from '../src/features/stingers.ts';
-import { CreatureVoices, listen, blow, VOICES, VOICE_KINDS, DEFAULT_VOICE, pitchOf, panOf, fadeOf, windupRise, PAN_MAX, HEAR, FULL, HURT_GAP, GAP, FAMILY_GAP, LIVE, LIVE_TOUCH, PER_SECOND, PER_SECOND_TOUCH, WINDUP_MAX, WINDUP_NEAR, WATCH, SIZE_REF,
-  VOICE_BANDS, WARNING_BAND, PET_UNDER, type VoiceKind } from '../src/features/creature-voices.ts';
+import { installMix } from '../src/features-audio/sound-mix.ts';
+import { installStingers, STINGER } from '../src/features-audio/stingers.ts';
+import { CreatureVoices, listen, VOICES, VOICE_KINDS, DEFAULT_VOICE, pitchOf, panOf, fadeOf, windupRise, PAN_MAX, HEAR, FULL, HURT_GAP, GAP, FAMILY_GAP, LIVE, LIVE_TOUCH, PER_SECOND, PER_SECOND_TOUCH, WINDUP_MAX, WINDUP_NEAR, WATCH, SIZE_REF, NOTICE_FLOOR, SPARE,
+  VOICE_BANDS, WARNING_BAND, PET_UNDER, type VoiceKind } from '../src/features-audio/creature-voices.ts';
 import { heartbeat } from '../src/features/low-health.ts';
 import { signatures, voiceSignatures } from '../promo/sound-signature.mjs';
 import { fresh, node, near, type FakeNode } from './support/fake-audio.ts';
@@ -105,11 +105,11 @@ test('placing: panned by the place on the screen, never more than 0.8 to a side;
 
 /** The feature's listeners on a bus of its own, with creatures placed by the test. */
 function game(options: { touch?: boolean } = {}) {
-  const s = setup(options), bus = createEvents(), where = new Map<Enemy, { metres: number; screenX: number }>(), timers: { run: () => void; seconds: number }[] = [];
-  const winding = listen(bus, s.voices, enemy => where.get(enemy) ?? { metres: 3, screenX: 0 }, () => s.ctx.currentTime, (run, seconds) => timers.push({ run, seconds }));
+  const s = setup(options), bus = createEvents(), where = new Map<Enemy, { metres: number; screenX: number }>(), timers: { run: () => void; seconds: number }[] = [], dialog = { open: false };
+  const winding = listen(bus, s.voices, enemy => where.get(enemy) ?? { metres: 3, screenX: 0 }, () => s.ctx.currentTime, (run, seconds) => timers.push({ run, seconds }), () => dialog.open);
   /** Runs the look at the winding creatures that is due (the feature's timer). */
   const look = () => { const due = timers.splice(0); for (const t of due) t.run(); return due.length; };
-  return { ...s, bus, where, winding, timers, look };
+  return { ...s, bus, where, winding, timers, look, dialog };
 }
 
 test('a creature yelps at most once in a quarter of a second, and its last sound is the death voice', async () => {
@@ -158,10 +158,15 @@ test('a crowd cannot squeak a fight away: pauses, a cap of its own, ordinary voi
   }
   // The shared budget of a phone is full of blows: a creature voice is dropped, never a reserved voice taken.
   const g = game({ touch: true }), pool = g.graph.voices as Voices; pool.budget = TOUCH_VOICES + 2; pool.reserve = 2; g.ctx.currentTime = 4;
-  for (let i = 0; i < TOUCH_VOICES; i++) assert.equal(pool.take(4, 9), true);
+  // Two ordinary voices are still free: they are left to the blows, and the shared counter is not even asked.
+  for (let i = 0; i < TOUCH_VOICES - SPARE; i++) assert.equal(pool.take(4, 9), true);
   for (const kind of VOICE_KINDS) assert.equal(g.voices.speak('blob', kind, { seconds: .5 }), null, kind);
-  assert.equal(g.voices.speak('bear', 'windup', { seconds: 1.1, boss: true }), null, 'a boss\'s wind-up is an ordinary voice too');
-  assert.equal(pool.live(4), TOUCH_VOICES, 'the two voices kept for priority cues are untouched'); assert.equal(pool.take(4, 5, true), true);
+  assert.equal(pool.capped, 0, 'a creature voice that steps back is not a refused sound'); for (let i = 0; i < SPARE; i++) assert.equal(pool.take(4, 9), true, 'the blows get those voices');
+  assert.equal(pool.live(4), TOUCH_VOICES, 'the two voices kept for priority cues are untouched');
+  // A boss's wind-up is the one creature voice that may use them: the warning sounds over a full fight.
+  assert.ok(g.voices.speak('bear', 'windup', { seconds: 1.1, boss: true })); assert.equal(pool.live(4), TOUCH_VOICES + 1);
+  assert.equal(g.voices.speak('boar', 'windup', { seconds: .7, boss: false }), null, 'an ordinary creature\'s wind-up may not');
+  assert.equal(pool.take(4, 5, true), true); assert.equal(g.voices.speak('treant', 'windup', { seconds: 1.1, boss: true }), null, 'and when the reserve is used up too, even the warning is dropped');
   assert.ok(g.voices.stats.capped >= 1);
   // Muted, or the context asleep: nothing.
   const quiet = setup(); quiet.graph.sfx = 0; assert.equal(quiet.voices.speak('blob', 'notice'), null);
@@ -215,32 +220,47 @@ test('an interrupted wind-up stops promising a blow: a flinch, a break or a defe
   g.ctx.currentTime = 10.7; boar.phase = 'charge'; g.bus.emit('hitLanded', { enemy: boar, damage: 5 }); assert.equal(level(g, 10.75), 1);
 });
 
-test('a pet\'s or a helper\'s blow lands with its own bite, 6 dB under the explorer\'s hit', async () => {
-  const { ctx, make } = fresh(), sfx = new Sfx(make), bus = createEvents(); sfx.random = () => .5; installMix(sfx.graph); installStingers(sfx.graph);
-  listen(bus, new CreatureVoices(sfx.graph, { random: () => .5 }), () => ({ metres: 40, screenX: 0 }), () => ctx.currentTime);
-  const impact = { amount: 5, critical: false, stun: 0, lift: 0, knock: 0, direction: { x: 1, z: 0 } }, boar = creature('boar'), count = (s: Sound) => sfx.stats.byKind[s] ?? 0;
-  ctx.currentTime = 3; bus.emit('hitLanded', { enemy: boar, damage: 5, impact }); assert.equal(blow.helper, false); assert.equal(sfx.play('hit'), true);
-  assert.deepEqual([count('hit'), count('petHit')], [1, 0], 'the explorer\'s own blow');
-  // main.ts hit(): the event, then the sound, in the same step.
-  for (const [i, sound] of (['hit', 'hitHeavy', 'crit'] as const).entries()) {
-    ctx.currentTime = 4 + i; bus.emit('hitLanded', { enemy: boar, damage: 5, impact: { ...impact, helper: true } }); assert.equal(blow.helper, true);
-    assert.equal(sfx.play(sound), true); assert.equal(count('petHit'), i + 1, sound); assert.equal(count(sound), sound === 'hit' ? 1 : 0);
-    await Promise.resolve(); assert.equal(blow.helper, false, 'only for the blow being settled');
-  }
-  ctx.currentTime = 9; assert.equal(sfx.play('hit'), true); assert.equal(count('hit'), 2, 'the next blow of the explorer is a hit again');
+test('a pet\'s or a helper\'s blow lands with its own bite, 6 dB under the explorer\'s hit; without the recipes it is the plain hit', () => {
+  const { ctx, make } = fresh(), sfx = new Sfx(make); sfx.random = () => .5; installMix(sfx.graph); installStingers(sfx.graph);
+  const count = (s: Sound) => sfx.stats.byKind[s] ?? 0;
+  ctx.currentTime = 3; assert.equal(sfx.play('petHit'), true); assert.deepEqual([count('petHit'), count('hit')], [1, 0]);
+  ctx.currentTime = 4; assert.equal(sfx.play('hit'), true); assert.equal(sfx.play('crit'), true); assert.deepEqual([count('petHit'), count('hit'), count('crit')], [1, 1, 1], 'the explorer\'s own blows are untouched, in the same moment too');
   // An ordinary voice, not a tune: no reserved voice, no duck.
   assert.equal(STINGER.petHit.priority, undefined); assert.equal(STINGER.petHit.plain, true);
+  // Before the recipes have come, or if their chunk never does: the hit recipe, never silence and never the success chime.
+  const early = signatures(Sfx, ['petHit', 'hit', 'success']) as Record<string, string>, late = signatures(Sfx, ['petHit', 'hit'], installStingers) as Record<string, string>;
+  assert.equal(early.petHit, early.hit); assert.notEqual(early.petHit, early.success); assert.notEqual(late.petHit, late.hit, 'with the recipes it is its own sound');
   // Measured.
   assert.deepEqual(PET_UNDER, [5, 7]); assert.ok(kept.pet.under >= PET_UNDER[0] && kept.pet.under <= PET_UNDER[1], `${kept.pet.under} dB under`);
   assert.ok(near(kept.sounds.hit.peak - kept.sounds.petHit.peak, kept.pet.under, .051));
 });
 
-test('the Colossus has its own roar: not the hurt cry, and no other sound either', () => {
+test('the Colossus has its own roar: not the hurt cry, and no other sound either; without the recipes it is the hurt cry', () => {
   const names: Sound[] = ['roar', 'hurt', 'boom', 'power', 'break', 'success'], sig = signatures(Sfx, names, installStingers) as Record<Sound, string>;
   assert.equal(new Set(names.map(n => sig[n])).size, names.length);
   assert.equal(STINGER.roar.priority, true, 'it stuns: like the hurt cry it replaced it may use a reserved voice'); assert.equal(STINGER.roar.plain, true);
+  const early = signatures(Sfx, ['roar', 'hurt']) as Record<string, string>; assert.equal(early.roar, early.hurt, 'before the recipes come: the cry it used to be');
+  // Also then it is a priority cue: it sounds over a full fight.
+  const { ctx, make } = fresh(), sfx = new Sfx(make); sfx.random = () => .5; ctx.currentTime = 2;
+  for (let i = 0; i < MAX_VOICES; i++) assert.equal(sfx.graph.voices.take(2, 9), true);
+  assert.equal(sfx.play('boom'), false); assert.equal(sfx.play('roar'), true);
   assert.ok(kept.sounds.roar.peak <= -10 && kept.sounds.roar.peak >= -14, `the roar peaks at ${kept.sounds.roar.peak}`);
   assert.ok(kept.sounds.roar.peak < kept.sounds.hitHeavy.peak, 'under the heaviest blow');
+});
+
+test('a notice is never fainter than half level; behind a dialog no wind-up starts and the ones sounding are hushed', () => {
+  assert.equal(NOTICE_FLOOR, .5);
+  const g = game(), wolf = creature('wolf'), bear = creature('bear', { phase: 'windup' });
+  const levels = () => g.ctx.nodes.filter(n => n.kind === 'gain' && n.to.some(t => (t as FakeNode).kind === 'panner' || t === g.graph.nodes.sfx?.bus)).map(n => n.gain.value);
+  g.where.set(wolf, { metres: 19, screenX: 0 }); g.ctx.currentTime = 5; g.bus.emit('creatureAlert', { enemy: wolf });
+  assert.equal(g.voices.stats.byKind.notice, 1); assert.ok(fadeOf(19) < .5); assert.ok(levels().some(v => near(v, .5)), 'a wolf that notices from 19 m is heard at half level');
+  // The other kinds keep the plain fade.
+  g.ctx.currentTime = 6; g.bus.emit('hitLanded', { enemy: wolf, damage: 3 }); assert.ok(levels().some(v => near(v, fadeOf(19))));
+  // A dialog opens in the middle of a boss's wind-up: silent at the next look, and no new wind-up voice while it is open.
+  g.ctx.currentTime = 10; g.bus.emit('telegraph', { enemy: bear, time: 1.1 }); assert.ok(g.winding.has(bear));
+  g.dialog.open = true; g.ctx.currentTime = 10.08; g.look(); assert.equal(g.winding.has(bear), false);
+  const before = g.voices.stats.byKind.windup; g.ctx.currentTime = 12; g.bus.emit('telegraph', { enemy: bear, time: 1.1 }); assert.equal(g.voices.stats.byKind.windup, before);
+  g.dialog.open = false; g.ctx.currentTime = 14; g.bus.emit('telegraph', { enemy: bear, time: 1.1 }); assert.equal(g.voices.stats.byKind.windup, before + 1);
 });
 
 test('every voice is the one that was measured, and the measured levels keep their bands', () => {

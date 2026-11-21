@@ -13,9 +13,9 @@
  *   levelUp       the level fanfare of sfx.ts ('level')             a level-up, and nothing else
  *   flag          the pole thunks in, the cloth snaps, two horns    the arrival flag (place-flags.ts); it lived in sfx.ts before
  *   powerReady    the skill-ready chime of sfx.ts, 5.5 dB louder     POWER READY: the power strike is charged (not a tune: no duck)
- *   roar          a rough low voice that sinks, in a rush of air    the Colossus's roar lands (not a tune; it was the hurt cry)
- *   petHit        a snap of teeth and a short bark                  a pet's or a helper's blow lands: 6 dB under the explorer's hit,
- *                                                                   in place of hit, hitHeavy and crit (creature-voices.ts `blow`)
+ *   roar          a rough low voice that sinks, in a rush of air    the Colossus's roar lands (not a tune; the hurt cry before the recipes come)
+ *   petHit        a snap of teeth and a short bark                  a pet's or a helper's blow lands (main.ts hit): 6 dB under the
+ *                                                                   explorer's hit; before the recipes come it is the plain hit
  *
  * Every stinger lowers the music bus 6 dB for its length (sound-mix.ts duck), once it is sure to play, takes one voice of
  * the shared budget and plays on the sfx bus. Only the big ones (`priority`: a win, a large reward, a discovery, a start,
@@ -26,7 +26,6 @@
  */
 import type { AudioGraph, Kit, Sfx, Sound, Stinger } from '../sfx.ts';
 import type { GameServices } from '../game-services.ts';
-import { blow } from './creature-voices.ts';
 
 /** How far the music goes down under a stinger, in dB. */
 export const STINGER_DUCK = 6;
@@ -124,8 +123,6 @@ export function installStingers(graph: AudioGraph, later: (run: () => void, seco
       queueMicrotask(() => { if ((sfx.stats.byKind.level ?? 0) > before) graph.duck('music', STINGER_DUCK, LEVEL_LENGTH); });
       return;
     }
-    // A pet's or a helper's blow lands with its own, softer sound.
-    if (blow.helper && (sound === 'hit' || sound === 'hitHeavy' || sound === 'crit')) sound = 'petHit';
     const stinger = (STINGER as Partial<Record<Sound, typeof STINGER.go>>)[sound]; if (!stinger) return;
     if (!back && !stinger.plain && now < fanfareEnd) { if (stinger.priority) tuneEnd = Math.max(tuneEnd, fanfareEnd + stinger.length); return hold(sfx, sound, fanfareEnd - now); }
     const to = graph.bus('sfx');

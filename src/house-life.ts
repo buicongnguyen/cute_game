@@ -50,7 +50,7 @@ export function initHouseLife(d: LifeDeps) {
   const { world, house } = d, view = house.view;
   const prompt = document.createElement('button'); prompt.id = 'house-prompt'; prompt.type = 'button'; prompt.hidden = true; document.body.append(prompt);
   const bubble = document.createElement('div'); bubble.id = 'house-bubble'; bubble.hidden = true; (document.getElementById('bubble-layer') ?? document.body).append(bubble);
-  // Before the features are mounted there is no player yet: remember the wish (features/radio.ts starts it) and ask for them again.
+  // Before the features are mounted there is no player yet: remember the wish (features-audio/radio.ts starts it) and ask for them again.
   const music = { get playing() { return !!radio.box?.playing; }, start() { if (radio.box) radio.box.start(); else if (!radio.want) { radio.want = true; radio.ask?.(); } }, stop() { radio.want = false; radio.box?.stop(); } };
   let near: Activity | null = null, shown = '', scan = 0, chatClock = 4, chatLeft = 0, chatFriend: T.Object3D | null = null, decorClock = 0, bubbleAt = '';
   // Online the cooldown stamps are the server's: measure them on its clock (the last reply's `at`), as fish-hunting-view does.

@@ -6,6 +6,8 @@
 //       JSON and SVG; raw for models, audio and images), printed per file so a new lazy chunk shows up by name.
 //   (d) the lazy split: the feature modules (src/features.ts, src/features/, src/story/) and their Vietnamese phrases
 //       (src/features-vi/) are in the lazy chunks "features" and "features-vi", and nothing in (a) or (b) loads those chunks.
+//       The audio features (src/features-audio.ts, src/features-audio/) are a lazy chunk of their own, "features-audio". No lazy
+//       chunk may be over 30 KB gzip.
 //       Read from the chunk map the build writes (.scratch/build/chunk-map.json; CHUNK_MAP=<file> for another build). Exit 1 if not.
 //   (e) the limit: (a) and (b) may not pass the start section of promo/perf-baseline.json plus the allowances of the entries with
 //       row "start" in promo/perf-ledger.json (compareStart in promo/perf-compare.mjs). Exit 1 if either does.
@@ -20,9 +22,14 @@ import { compareStart } from './perf-compare.mjs';
 /** Where each lazy source module must be built: the first rule that matches a module's path decides. */
 export const LAZY_HOMES = [
   ['features-vi', /^src\/features-vi\//],
+  ['features-audio', /^src\/(features-audio\.ts$|features-audio\/)/],
   ['features', /^src\/(features\.ts$|features\/|story\/)/],
 ];
 const LAZY_NAMES = new Set(LAZY_HOMES.map(([name]) => name));
+/** No lazy feature chunk is bigger than this, gzip: a feature that outgrows it gets a chunk of its own (as the audio features did). */
+export const LAZY_LIMIT = 30 * 1024;
+/** Lazy chunks over the limit, as sentences. `lazy` is [[file, gzip bytes, chunk name], ...]. */
+export const lazySizeProblems = (lazy, limit = LAZY_LIMIT) => lazy.filter(([, size]) => size > limit).map(([file, size, name]) => `the lazy "${name}" chunk (${file}) is ${size} bytes gzip, over the ${limit} allowed for one lazy chunk: split it.`);
 
 /**
  * Problems with the lazy split, as sentences (none: []).
@@ -83,6 +90,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const split = map ? lazySplitProblems(map, { English: english.map(([f]) => f), Vietnamese: vietnamese.map(([f]) => f) })
     : [`no chunk map at ${path.relative(process.cwd(), mapFile) || mapFile}: the build writes it (vite.config.ts chunkMap). Build again, then run this.`];
   const lazy = Object.entries(map?.chunks ?? {}).filter(([, chunk]) => LAZY_NAMES.has(chunk.name)).map(([f, chunk]) => [f, existsSync(path.join(dist, f)) ? sizeOf(path.join(dist, f)) : 0, chunk.name]);
+  split.push(...lazySizeProblems(lazy));
 
   const total = rows => rows.reduce((n, [, s]) => n + s, 0);
   // (e) the limit.
@@ -108,7 +116,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   show('(b) Vietnamese start, gzip (English start + vi-pack chunk)', vietnamese.slice(english.length), false);
   console.log(`  ${kb(total(vietnamese))}  total with the English start`);
   show('(c) install list (service worker CORE + EXTRA), transfer size, largest first', install, true);
-  console.log('\n(d) lazy split: feature modules and their Vietnamese phrases stay out of the start');
+  console.log(`\n(d) lazy split: feature modules and their Vietnamese phrases stay out of the start, each lazy chunk at most ${kb(LAZY_LIMIT).trim()}`);
   for (const [f, s, name] of lazy) console.log(`  ${kb(s)}  ${f}  (${name}: ${map.chunks[f].modules.length} modules, loaded after Start)`);
   for (const problem of split) console.log(`  FAIL  ${problem}`);
   if (!split.length) console.log('  ok');

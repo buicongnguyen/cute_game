@@ -6,9 +6,11 @@
 //   2. King Bear on the mid-game save: every telegraph with its length, whether its voice started, and how long the
 //      wind-up really lasted on the page's clock;
 //   3. the low-health warning: where it comes and goes as the bar falls and rises, a bar held at exactly a quarter,
-//      the heartbeats in five seconds, and two screenshots (.scratch/voice-probe/);
+//      the heartbeats in the five seconds after a blow and none ten seconds after it, and two screenshots (.scratch/voice-probe/);
 //   4. one AudioContext for all of it, and no request made by any of it.
 //
+//   ONLY=phone keeps one profile; FIGHT=1 runs only the fight; VOICES=off silences the creature voices in the fight, for the
+//   number of refused sounds the same fight has without them (the fight is played in real time: run it a few times).
 //   PORT=<dev server port> node promo/voice-probe.mjs            (PLAYWRIGHT_MODULE=<path to playwright/index.mjs> if needed)
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -48,7 +50,7 @@ async function open(browser, profile, saveFile) {
 
 /** 1. The twelve nearest creatures in two rings around the hero in the swamp; an attack at the nearest every quarter second, a skill every second. */
 async function fight(page, seconds) {
-  return page.evaluate(async seconds => {
+  return page.evaluate(async ([seconds, silent]) => {
     const w = __zoo.world, graph = __zooSfx.graph, voices = graph.creatures, [x, z] = [-13, -57];
     w.position.set(x, 0, z); w.cameraTarget.set(x, 0, z); __zoo.pinHero?.({ x, z }); __zoo.state.hp = 1e6; // the hero stays up: this counts sounds, not skill
     const used = new Set(), far = e => Math.hypot(e.x - x, e.z - z);
@@ -58,7 +60,7 @@ async function fight(page, seconds) {
     });
     const aim = () => { const e = [...used].filter(e => e.hp > 0).sort((a, b) => Math.hypot(a.x - w.position.x, a.z - w.position.z) - Math.hypot(b.x - w.position.x, b.z - w.position.z))[0]; if (e) w.facing = Math.atan2(e.x - w.position.x, e.z - w.position.z); };
     const told = { creatureAlert: 0, telegraph: 0, hitLanded: 0, creatureDefeat: 0 }, stop = Object.keys(told).map(event => __zoo.services.on(event, () => { told[event]++; }));
-    const trace = [], speak = voices.speak; voices.speak = function (family, kind, say) { const voice = speak.call(this, family, kind, say); trace.push(`${((performance.now() - start.t) / 1000).toFixed(2)} ${family} ${kind}${say?.boss ? ' boss' : ''} ${voice ? 'heard' : 'left out'}`); return voice; };
+    const trace = [], speak = voices.speak; voices.speak = function (family, kind, say) { const voice = silent ? null : speak.call(this, family, kind, say); trace.push(`${((performance.now() - start.t) / 1000).toFixed(2)} ${family} ${kind}${say?.boss ? ' boss' : ''} ${voice ? 'heard' : 'left out'}`); return voice; };
     const start = { played: voices.stats.played, limited: voices.stats.limited, capped: voices.stats.capped, quiet: voices.stats.quiet, kinds: { ...voices.stats.byKind }, shared: graph.stats.capped, sfx: { ...__zooSfx.stats }, t: performance.now() };
     let most = 0, mostShared = 0, frames = 0, score = 0; const skills = __zoo.skillList().length;
     await new Promise(done => { const tick = () => {
@@ -78,7 +80,7 @@ async function fight(page, seconds) {
       effects: { started: __zooSfx.stats.started - start.sfx.started, limited: __zooSfx.stats.limited - start.sfx.limited, capped: __zooSfx.stats.capped - start.sfx.capped, petHit: __zooSfx.stats.byKind.petHit ?? 0 },
       music: { slider: graph.music, playing: graph.director?.name ?? '', mode: graph.director?.mode ?? '', framesWithMusic: score }, context: graph.made?.state, trace,
     };
-  }, seconds);
+  }, [seconds, process.env.VOICES === 'off']);
 }
 
 /** 2. King Bear, the hero 8 m away and kept alive: every telegraph and the wind-up that followed it. */
@@ -118,10 +120,14 @@ async function lowHealth(page, profile) {
     // Held at exactly a quarter, from above and from below, with the bar trembling by a thousandth: how often does it switch?
     let flips = 0; await set(.5); let was = read().on;
     for (let i = 0; i < 20; i++) { await set(.25 + (i % 2 ? .001 : -.001), 220); const on = read().on; if (on !== was) flips++; was = on; }
-    await set(.15); const beats = low.heart.stats.beats, t = performance.now(); await wait(5000);
+    // The heart is heard for ten seconds after a blow: one is told here (the bar is held by the probe, nothing bites in the village).
+    s.closeDialog(); await set(.15); const dialog = s.modal(), silent = low.heart.stats.beats; await wait(1200); const withoutBlow = low.heart.stats.beats - silent;
+    s.emit('playerHurt', { amount: 1, source: 'probe' }); await wait(300);
+    const beats = low.heart.stats.beats, t = performance.now(); await wait(5000);
     const heard = low.heart.stats.beats - beats, took = (performance.now() - t) / 1000;
+    await wait(5200); const late = low.heart.stats.beats; await wait(2000); const afterTen = low.heart.stats.beats - late, edgeStays = read().on;
     const style = getComputedStyle(edge), icon = getComputedStyle(bar, '::before');
-    return { steps, flipsAtAQuarter: flips, beatsIn5s: heard, beatEvery: +(took / heard).toFixed(2), dropped: low.heart.stats.dropped,
+    return { steps, flipsAtAQuarter: flips, dialogOpen: dialog, beatsWithoutABlow: withoutBlow, beatsIn5s: heard, beatsAfterTenSeconds: afterTen, edgeStaysAfterTheHeart: edgeStays, beatEvery: +(took / heard).toFixed(2), dropped: low.heart.stats.dropped,
       edge: { ...read(), animation: style.animationName, opacity: style.opacity, pointerEvents: style.pointerEvents, nodes: document.querySelectorAll('#low-health').length }, heart: { content: icon.content, fontSize: icon.fontSize } };
   });
   await page.evaluate(() => { __zoo.services.closeDialog(); }); await page.waitForTimeout(400);
@@ -132,11 +138,12 @@ async function lowHealth(page, profile) {
 const browser = await chromium.launch({ args: ['--use-angle=default', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
 const report = {};
 try {
-  for (const profile of Object.keys(PROFILES)) {
+  for (const profile of Object.keys(PROFILES).filter(p => !process.env.ONLY || process.env.ONLY === p)) {
     const late = await open(browser, profile, './save-late.json');
     const coarse = await late.page.evaluate(() => matchMedia('(pointer: coarse)').matches);
     const row = report[profile] = { touch: coarse, fight: await fight(late.page, FIGHT_SECONDS) };
     await late.ctx.close();
+    if (process.env.FIGHT) continue;
     const calm = await open(browser, profile, './save-late.json'); row.lowHealth = await lowHealth(calm.page, profile); late.page = calm.page; late.ctx = calm.ctx; late.requests.push(...calm.requests);
     row.contexts = await late.page.evaluate(() => window.__contexts); row.requests = late.requests.filter(u => !u.startsWith('/@') && !u.includes('/node_modules/'));
     await late.ctx.close();

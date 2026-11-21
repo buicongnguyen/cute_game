@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import * as T from 'three';
 import { Sfx, Voices, ALL_SOUNDS, STINGERS, LATE_SOUNDS, LOUDNESS, TOUCH_VOICES, type Sound, type Stinger } from '../src/sfx.ts';
-import { installMix } from '../src/features/sound-mix.ts';
-import { installStingers, mount as mountStingers, STINGER, STINGER_DUCK, STINGER_GAP, LEVEL_LENGTH } from '../src/features/stingers.ts';
+import { installMix } from '../src/features-audio/sound-mix.ts';
+import { installStingers, mount as mountStingers, STINGER, STINGER_DUCK, STINGER_GAP, LEVEL_LENGTH } from '../src/features-audio/stingers.ts';
 import { MAX_VOICES } from '../src/sfx.ts';
 import { skillSound } from '../src/skill-sounds.ts';
 import { ShipSequence } from '../src/ship-sequence.ts';
@@ -112,7 +112,7 @@ test('the level fanfare plays only on a level-up: each of the 30 former sites ha
   // The plan's search, tone(...'level'...) with the ternaries and sound('level'): the level check in main.ts, and the
   // levelUp stinger, which is that fanfare.
   fanfare.sort(); assert.equal(fanfare.length, 2, fanfare.join(' '));
-  assert.match(fanfare[0], /^features\/stingers\.ts:\d+$/); assert.match(fanfare[1], /^main\.ts:\d+$/);
+  assert.match(fanfare[0], /^features-audio\/stingers\.ts:\d+$/); assert.match(fanfare[1], /^main\.ts:\d+$/);
   const main = read('src/main.ts').split('\n'), at = Number(fanfare[1].split(':')[1]) - 1;
   assert.ok(main.slice(at - 8, at + 1).some(line => line.startsWith('function levelCheck(')), 'the one use left in the game is in levelCheck');
   // A freed friend: main.ts plays the win itself, so it sounds whether or not the features are mounted.

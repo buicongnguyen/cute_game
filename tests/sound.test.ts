@@ -20,9 +20,9 @@ test('every sound event maps to a sound with a recipe that starts voices', () =>
     'levelUp', 'fishBite', 'fishCatch', 'uiTap', 'uiOpen', 'uiClose', 'questComplete', 'powerStrike', 'jump', 'land', 'swimStroke', 'swimSplash'];
   for (const e of required) assert.ok(e in SOUND_EVENTS, e);
   const src = readFileSync(new URL('../src/sfx.ts', import.meta.url), 'utf8');
-  const late = readFileSync(new URL('../src/features/stingers.ts', import.meta.url), 'utf8');
+  const late = readFileSync(new URL('../src/features-audio/stingers.ts', import.meta.url), 'utf8');
   for (const s of ALL_SOUNDS) {
-    // The arrival flag's recipe loads after Start, with the stingers (features/stingers.ts); until then it is the success chime.
+    // The arrival flag's recipe loads after Start, with the stingers (features-audio/stingers.ts); until then it is the success chime.
     assert.ok(src.includes(`case '${s}':`) || s === 'flag' && late.includes('  flag: {'), `recipe for ${s}`);
     const {make, log, ctx} = fakeContext(); const sfx = new Sfx(make); sfx.random = () => .5;
     ctx.currentTime = 5; assert.equal(sfx.play(s), true, s); assert.ok(log.starts > 0, `${s} starts oscillators/noise`);

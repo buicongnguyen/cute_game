@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Sfx, AudioGraph, audioGraph, Voices, SoundGate, TOUCH_VOICES, ALL_SOUNDS, type Bus, type Sound } from '../src/sfx.ts';
 import { audioLevels, AUDIO_DEFAULTS, parseAudio, radio } from '../src/audio-settings.ts';
-import { installMix, settle, watchRest, mount as mountMix } from '../src/features/sound-mix.ts';
+import { installMix, settle, watchRest, mount as mountMix } from '../src/features-audio/sound-mix.ts';
 import { FakeContext, FakeNode, fresh, node, near } from './support/fake-audio.ts';
 
 const BUSES: Bus[] = ['sfx', 'ui', 'ambience', 'music'];
@@ -210,7 +210,7 @@ test('one context: the effects, the radio theme and its stand-in tune all play t
   g.AudioContext = FakeContext; g.Audio = FakeAudio; g.document = Object.assign(new EventTarget(), { hidden: false, documentElement: {} }); g.window = new EventTarget();
   FakeContext.made = 0;
   try {
-    const { MusicBox, mount: mountRadio } = await import('../src/features/radio.ts');
+    const { MusicBox, mount: mountRadio } = await import('../src/features-audio/radio.ts');
     const graph = audioGraph(); assert.equal(graph, audioGraph());
     audioLevels.music = .45;
     const sfx = new Sfx(); assert.equal(sfx.graph, graph, 'the game\'s effects use the shared graph');
@@ -265,7 +265,7 @@ test('a pause before play() settles (AbortError) does not lock the radio to its 
   g.Audio = FakeAudio; g.document = Object.assign(new EventTarget(), { hidden: false, documentElement: {} });
   const settled = async () => { await new Promise(r => setTimeout(r, 0)); await new Promise(r => setTimeout(r, 0)); };
   try {
-    const { MusicBox } = await import('../src/features/radio.ts');
+    const { MusicBox } = await import('../src/features-audio/radio.ts');
     const { ctx, make } = fresh(), box = new MusicBox(new AudioGraph(make)), inside = box as unknown as { theme: FakeAudio | null; fallback: boolean };
     audioLevels.music = .45;
     // On and off at once: the browser rejects play() with AbortError.
@@ -289,7 +289,7 @@ test('without WebAudio the radio still plays, on the element\'s own volume', asy
   class FakeAudio { loop = false; volume = 1; src: string; constructor(src: string) { this.src = src; } play() { return Promise.resolve(); } pause() {} }
   g.Audio = FakeAudio; g.document = Object.assign(new EventTarget(), { hidden: false, documentElement: {} });
   try {
-    const { MusicBox } = await import('../src/features/radio.ts');
+    const { MusicBox } = await import('../src/features-audio/radio.ts');
     audioLevels.music = .45; const box = new MusicBox(new AudioGraph(() => { throw new Error('no WebAudio'); })); box.start();
     const theme = (box as unknown as { theme: FakeAudio }).theme; assert.equal(theme.volume, .45);
     audioLevels.music = .2; box.tick(.016); assert.equal(theme.volume, .2);

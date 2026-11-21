@@ -9,7 +9,7 @@ test('the radio theme pauses while the tab is hidden and goes on when it is back
   const g = globalThis as Record<string, unknown>, before = { document: g.document, Audio: g.Audio };
   g.document = doc; g.Audio = FakeAudio;
   try {
-    const { MusicBox } = await import('../src/features/radio.ts'); const { AudioGraph } = await import('../src/sfx.ts');
+    const { MusicBox } = await import('../src/features-audio/radio.ts'); const { AudioGraph } = await import('../src/sfx.ts');
     const box = new MusicBox(new AudioGraph()); box.start(); assert.deepEqual(plays, ['play']);
     doc.hidden = true; doc.dispatchEvent(new Event('visibilitychange')); assert.deepEqual(plays, ['play', 'pause'], 'hidden: paused');
     doc.hidden = false; doc.dispatchEvent(new Event('visibilitychange')); assert.deepEqual(plays, ['play', 'pause', 'play'], 'back: playing again');

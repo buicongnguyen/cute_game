@@ -78,3 +78,16 @@ export function createServices(host: ServiceHost, bus: EventSink = createEvents(
     setPref(key, value) { try { globalThis.localStorage.setItem(PREF_PREFIX + key, value); return true; } catch { return false; } },
   };
 }
+
+/** How long after a failed fetch the audio features are asked for once more, in ms. */
+export const AUDIO_RETRY = 8000;
+/**
+ * Asks for the audio features' chunk (src/features-audio.ts; features.ts hands in the import()) and mounts them when it has
+ * come. Not waited for: the other features are mounted and the game goes on. A fetch that fails is logged and tried once
+ * more, AUDIO_RETRY later; if that fails too the game keeps the sounds of before the features (sfx.ts has every fallback).
+ * `later` is the timer (tests hand in their own).
+ */
+export function loadAudio(services: GameServices, load: () => Promise<{ mountAudio(services: GameServices): void }>, later: (run: () => void, ms: number) => void = (run, ms) => { setTimeout(run, ms); }) {
+  const ask = (again: boolean) => void load().then(m => m.mountAudio(services)).catch(error => { console.error(error); if (again) later(() => ask(false), AUDIO_RETRY); });
+  ask(true);
+}

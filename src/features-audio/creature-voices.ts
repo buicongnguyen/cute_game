@@ -15,11 +15,10 @@
  * family and creature, and no two voices of a kind start within that kind's GAP. A dozen creatures cannot squeak a fight away.
  * A notice took the place of the alert beep, a cue: one notice may sound over the cap, so a group that notices the
  * explorer in the middle of a fight is still heard (once, not once per creature).
- * A boss's wind-up is the one voice that is not held back by those pauses (it still needs a free voice): it is the
- * warning the player should hear, and it is louder than the others.
- *
- * Also here, because it is the same question (who struck?): `blow.helper` is true while a pet's or a helper's blow is
- * being settled, and stingers.ts then plays 'petHit' (a bite, 6 dB under the explorer's hit) in place of the hit.
+ * A boss's wind-up is the one voice that is not held back by those pauses, and the only one that may use a voice kept
+ * for priority cues: it is the warning the player should hear, and it is louder than the others.
+ * A notice is never fainter than half level (a creature notices from up to 20 m, and the beep it replaced had one level).
+ * While a dialog is open no wind-up voice starts and the ones that sound are hushed.
  *
  * Levels: docs/SOUNDS.md, measured by promo/loudness.mjs (promo/loudness.json `voices`); tests/creature-voices.test.ts.
  * This file imports sfx.ts for types only.
@@ -85,6 +84,8 @@ export const HURT_GAP = .25;
  * notices, not a chorus); FAMILY_GAP is the pause before the same family may say the same kind again.
  */
 export const GAP: Record<VoiceKind, number> = { notice: .3, windup: .15, hurt: .08, death: .08 }, FAMILY_GAP: Record<VoiceKind, number> = { notice: .4, windup: .6, hurt: .12, death: .15 };
+/** Ordinary voices of the shared counter that a creature voice always leaves free for the blows. */
+export const SPARE = 2;
 /** Creature voices sounding at once, at most: on a desktop and on a touch device. */
 export const LIVE = 4, LIVE_TOUCH = 2;
 /** Creature voices started in any one second, at most (a notice may be one more): on a desktop and on a touch device. */
@@ -100,8 +101,8 @@ export const windupRise = (seconds: number) => Math.max(.05, Math.min(WINDUP_MAX
 /** Each kind's level against a notice; a boss's wind-up is the loud one. */
 export const LEVEL: Record<VoiceKind, number> = { notice: 1, windup: .8, hurt: .6, death: .9 }, BOSS_WINDUP = 1.5;
 
-/** True while the blow being settled is a pet's or a helper's (hitLanded tells; stingers.ts reads it for the hit sound). */
-export const blow = { helper: false };
+/** A notice is never fainter than this (of full level), however far its creature is. */
+export const NOTICE_FLOOR = .5;
 
 export interface Say {
   /** The creature's radius (pitch), 0.7 when left out. */
@@ -152,7 +153,7 @@ export class CreatureVoices {
 
   /**
    * Says `kind` in the voice of `family`; null when it stays silent (muted, too far, too soon, or no voice free).
-   * A boss's wind-up skips the pauses and this feature's own cap; it still takes an ordinary voice of the shared counter.
+   * A boss's wind-up skips the pauses and this feature's own cap, and may take a voice kept for priority cues.
    */
   speak(family: string, kind: VoiceKind, say: Say = {}): Spoken | null {
     const graph = this.graph, level = Math.max(0, Math.min(1, say.gain ?? 1));
@@ -165,7 +166,10 @@ export class CreatureVoices {
     const timbre = VOICES[family] ?? VOICES[DEFAULT_VOICE], slow = timbre.len ?? 1;
     const rise = windupRise(say.seconds ?? .6), at = now + .005 + (kind === 'windup' ? Math.max(0, (say.seconds ?? .6) - rise) : 0);
     const length = kind === 'windup' ? rise + WINDUP_TAIL : kind === 'notice' ? .1 * slow * (1 + ((timbre.notes ?? 1) - 1) * 1.25) : kind === 'hurt' ? .11 * slow : Math.max(.3, .34 * slow);
-    if (!graph.voices.take(now, at + length)) { this.stats.capped++; return null; }
+    // The last ordinary voices are left to the blows: a creature voice is decoration and steps back first (it is not even asked
+    // for, so the shared counter's `capped` goes on counting sounds the fight lost, not voices).
+    if (!loud && graph.voices.live(now) >= graph.voices.budget - graph.voices.reserve - SPARE) { this.stats.capped++; return null; }
+    if (!graph.voices.take(now, at + length, loud)) { this.stats.capped++; return null; }
     this.said.set(kind, now); this.said.set(key, now); this.ends.push(at + length); this.starts.push(now);
     this.stats.played++; this.stats.byKind[kind]++;
     const out = ctx.createGain(); out.gain.value = level;
@@ -236,15 +240,15 @@ export type Place = (enemy: Enemy) => { metres: number; screenX: number };
 
 /**
  * Connects the voices to the game's events. `place` says where a creature is; `now()` is the audio clock; `later` runs
- * the look at a creature that is winding up (a timer; tests hand in their own).
+ * the look at a creature that is winding up (a timer; tests hand in their own); `paused()` is true while a dialog is open.
  * Returns the wind-ups that are sounding, by creature, for tests.
  */
-export function listen(s: Pick<GameServices, 'on'>, voices: CreatureVoices, place: Place, now: () => number, later: (run: () => void, seconds: number) => void = (run, seconds) => { setTimeout(run, seconds * 1000); }) {
+export function listen(s: Pick<GameServices, 'on'>, voices: CreatureVoices, place: Place, now: () => number, later: (run: () => void, seconds: number) => void = (run, seconds) => { setTimeout(run, seconds * 1000); }, paused: () => boolean = () => false) {
   const yelped = new WeakMap<Enemy, number>(), winding = new Map<Enemy, Spoken>();
   const say = (enemy: Enemy, kind: VoiceKind, seconds?: number) => {
     const at = place(enemy);
-    if (kind === 'windup' && !enemy.boss && at.metres > WINDUP_NEAR) return null;
-    return voices.speak(enemy.definition?.family ?? DEFAULT_VOICE, kind, { radius: enemy.radius, gain: fadeOf(at.metres), pan: panOf(at.screenX), seconds, boss: enemy.boss });
+    if (kind === 'windup' && (paused() || !enemy.boss && at.metres > WINDUP_NEAR)) return null;
+    return voices.speak(enemy.definition?.family ?? DEFAULT_VOICE, kind, { radius: enemy.radius, gain: kind === 'notice' ? Math.max(NOTICE_FLOOR, fadeOf(at.metres)) : fadeOf(at.metres), pan: panOf(at.screenX), seconds, boss: enemy.boss });
   };
   /** An interrupted wind-up (a flinch, a stun, a break, a defeat) must not go on promising a blow. */
   const hush = (enemy: Enemy, always = false) => {
@@ -254,16 +258,14 @@ export function listen(s: Pick<GameServices, 'on'>, voices: CreatureVoices, plac
   // Not every interruption is a blow of the explorer's (a stun takes hold a frame later, a creature may turn and flee):
   // while a wind-up sounds, its creature is looked at every WATCH seconds. No timer runs otherwise.
   let watching = false;
-  const watch = () => { for (const enemy of [...winding.keys()]) hush(enemy); if (winding.size) later(watch, WATCH); else watching = false; };
+  const watch = () => { const all = paused(); for (const enemy of [...winding.keys()]) hush(enemy, all); if (winding.size) later(watch, WATCH); else watching = false; };
   s.on('creatureAlert', ({ enemy }) => { say(enemy, 'notice'); });
   s.on('telegraph', ({ enemy, time }) => {
     for (const [other, voice] of winding) if (voice.end <= now()) winding.delete(other);
     hush(enemy, true); const voice = say(enemy, 'windup', time); if (voice) winding.set(enemy, voice);
     if (winding.size && !watching) { watching = true; later(watch, WATCH); }
   });
-  s.on('hitLanded', ({ enemy, impact }) => {
-    // The hit sound follows this event in the same step (main.ts hit): it reads `blow.helper` before the microtask clears it.
-    if (impact?.helper) { blow.helper = true; queueMicrotask(() => { blow.helper = false; }); }
+  s.on('hitLanded', ({ enemy }) => {
     hush(enemy);
     if (!(enemy.hp > 0)) return; // its last sound is the death voice
     const t = now(); if (t - (yelped.get(enemy) ?? -9) < HURT_GAP) return;
@@ -276,14 +278,15 @@ export function listen(s: Pick<GameServices, 'on'>, voices: CreatureVoices, plac
 
 export function mount(s: GameServices) {
   const w = s.world, graph = s.audio, voices = new CreatureVoices(graph, { touch: s.touch(), muted: () => !(audioLevels.sfx > 0) });
-  Object.assign(graph, { creatures: voices }); // for the probes: __zooSfx.graph.creatures
   const spot = w.position.clone();
   const winding = listen(s, voices, enemy => {
     // Across the screen: the creature's place seen by the camera. Behind the camera the picture is mirrored.
     spot.set(enemy.x, enemy.mesh?.position.y ?? 0, enemy.z).project(w.camera);
     return { metres: Math.hypot(enemy.x - w.position.x, enemy.z - w.position.z), screenX: spot.z > 1 ? -spot.x : spot.x };
-  }, () => graph.made?.currentTime ?? 0);
+  }, () => graph.made?.currentTime ?? 0, undefined, () => !!s.modal());
   Object.assign(voices, { winding }); // for the probes: the wind-ups that are sounding, by creature
+  // Last, when everything above has worked: from here on main.ts leaves the alert beep to the creatures' own notice.
+  graph.creatures = voices;
 }
 
 /**

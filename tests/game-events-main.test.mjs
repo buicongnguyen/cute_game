@@ -198,18 +198,17 @@ test('asking again (the radio before its player came): one more load while the f
 });
 
 // ---- WP12: the places the creature voices hang on --------------------------------------------------------------------
-test('telegraph, the alert beep and the hit sound: the lines features/creature-voices.ts relies on', () => {
+test('telegraph, the alert beep and the hit sound: the lines features-audio/creature-voices.ts relies on', () => {
   const src = file => readFileSync(new URL('../src/' + file, import.meta.url), 'utf8'), main = src('main.ts'), world = src('world.ts');
-  // The creature's own notice replaces the beep once a feature listens (emit is true then); before that the beep stays.
-  assert.match(main, /world\.onAlert=e=>\{emit\('creatureAlert',\{enemy:e\}\)\|\|tone\('alert'\);\};/);
+  // The creature's own notice replaces the beep once the voices have mounted (graph.creatures); until then, and if they never
+  // come (a language pack that is slow, a chunk that fails), the beep stays.
+  assert.match(main, /world\.onAlert=e=>\{emit\('creatureAlert',\{enemy:e\}\);sfx\.graph\.creatures\|\|tone\('alert'\);\};/);
   assert.match(main, /world\.onTelegraph=\(enemy,time\)=>\{emit\('telegraph',\{enemy,time\}\);\};/);
-  // world.ts tells a wind-up once, where it starts, with the time the telegraph on the ground uses.
+  // world.ts tells a wind-up once, where the creature's phase is seen to change (a guest in a room sees it too), with the time left.
   assert.equal(world.split('this.onTelegraph?.(').length, 2);
-  assert.match(world, /e\.windupTotal=e\.phaseTime;this\.onTelegraph\?\.\(e,e\.phaseTime\);/);
-  // A pet's hit is swapped for its own sound by the feature, which must know whose blow it is before the sound is asked for:
-  // hitLanded is told before the hit sound, in one step.
-  const line = main.split('\n').find(l => l.includes("emit('hitLanded',"));
-  assert.ok(line.indexOf("emit('hitLanded',") < line.indexOf("tone(impact?.critical?'crit'") && line.includes("tone(impact?.critical?'crit'"), 'main.ts hit() tells hitLanded before it plays the hit');
+  assert.match(world, /if\(u\.lastPhase!==e\.phase\)\{\r?\n(.*\r?\n)?\s*if\(e\.phase==='windup'\)this\.onTelegraph\?\.\(e,e\.phaseTime\?\?0\);/);
+  // A pet's or a helper's blow is named where it is played: one sound per blow, chosen at the call.
+  assert.match(main, /tone\(impact\?\.helper\?'petHit':impact\?\.critical\?'crit':/);
   // The Colossus roars with its own sound, and the features get the health bar as a part of 1.
   assert.match(src('colossus.ts'), /tone\(a\.skill === 'roar' \? 'roar' : 'crit'\)/);
   assert.match(main, /health:\(\)=>state\.hp\/M\.maxHp\(state\),/);

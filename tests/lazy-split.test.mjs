@@ -82,7 +82,11 @@ test('the chunk rules: features.ts names its chunk, the phrase tables are pinned
   assert.equal(chunkName({ isEntry: false, name: 'features', moduleIds: ['/game/src/game-services.ts', 'C:\\game\\src\\features.ts'] }), 'features');
   assert.equal(chunkName({ isEntry: false, name: 'hud', moduleIds: ['/game/src/features/hud.ts'] }), 'hud', 'a feature module alone does not name a chunk');
   assert.equal(chunkName({ isEntry: true, name: 'index', moduleIds: ['/game/src/features.ts'] }), 'index', 'an entry keeps its name');
-  assert.deepEqual(LAZY_HOMES.map(([name]) => name), ['features-vi', 'features']);
+  assert.deepEqual(LAZY_HOMES.map(([name]) => name), ['features-vi', 'features-audio', 'features']);
+  // The audio features: a lazy chunk of their own, named after src/features-audio.ts and not pinned either.
+  for (const id of ['/game/src/features-audio.ts', '/game/src/features-audio/stingers.ts']) assert.equal(manualChunk(id), undefined, id);
+  assert.equal(chunkName({ isEntry: false, name: 'x', moduleIds: ['/game/src/features-audio/radio.ts', 'C:\\game\\src\\features-audio.ts'] }), 'features-audio');
+  assert.equal(chunkName({ isEntry: false, name: 'x', moduleIds: ['/game/src/features.ts', '/game/src/features/low-health.ts'] }), 'features');
 });
 
 const chunk = (name, modules, imports = [], dynamicImports = []) => ({ name, entry: name === 'index', imports, dynamicImports, modules });
@@ -147,7 +151,7 @@ async function buildProject(name, files) {
   const root = join(temp, name);
   for (const [file, text] of Object.entries(files)) { mkdirSync(dirname(join(root, file)), { recursive: true }); writeFileSync(join(root, file), text); }
   // The game's own loader and services, as they are.
-  for (const file of ['features.ts', 'game-services.ts']) cpSync(join(ROOT, 'src', file), join(root, 'src', file));
+  for (const file of ['features.ts', 'features-audio.ts', 'game-services.ts', 'asset-url.ts']) cpSync(join(ROOT, 'src', file), join(root, 'src', file));
   await build({ root, configFile: false, logLevel: 'silent', plugins: [chunkMap('map/chunk-map.json')],
     build: { outDir: 'dist', minify: false, rollupOptions: { output: { manualChunks: manualChunk, experimentalMinChunkSize: 24_000, chunkFileNames: item => `assets/${chunkName(item)}-[hash].js` } } } });
   const map = await json(join(root, 'map', 'chunk-map.json'));
@@ -164,6 +168,8 @@ const PROJECT = {
   'src/features/moments.ts': "import { t } from '../i18n.ts';\nimport { sound } from '../sfx.ts';\nimport { scene } from '../story/scenes.ts';\nexport function mount(services: { toast(text: string): void }) { services.toast(t('A moment') + sound('pop') + scene); }\n",
   'src/story/scenes.ts': "export const scene = 'The kitchen garden';\n",
   'src/features-vi/moments.ts': "export default { 'A moment': 'Một khoảnh khắc' };\n",
+  // An audio feature: it uses start code too, and lands in the audio features' own chunk.
+  'src/features-audio/chime.ts': "import { sound } from '../sfx.ts';\nexport function mount(services: { toast(text: string): void }) { services.toast('chime' + sound('ready')); }\n",
 };
 
 test('built with the chunk rules of the game, a fixture feature lands in the lazy features chunk and its phrases in features-vi', async () => {
@@ -172,10 +178,13 @@ test('built with the chunk rules of the game, a fixture feature lands in the laz
   assert.equal(home('src/game-services.ts'), 'features', 'the services load with the features');
   assert.equal(home('src/features-vi/moments.ts'), 'features-vi');
   assert.equal(home('src/i18n.ts'), 'index'); assert.equal(home('src/sfx.ts'), 'index', 'what the start needs stays in the start, though a feature imports it too');
-  assert.deepEqual(Object.values(map.chunks).map(item => item.name).sort(), ['features', 'features-vi', 'index'], 'two lazy chunks beside the start, and no third');
+  assert.equal(home('src/features-audio/chime.ts'), 'features-audio'); assert.equal(home('src/features-audio.ts'), 'features-audio', 'the audio features are a lazy chunk of their own');
+  assert.deepEqual(Object.values(map.chunks).map(item => item.name).sort(), ['features', 'features-audio', 'features-vi', 'index'], 'three lazy chunks beside the start, and no fourth');
+  const audio = Object.keys(map.chunks).find(file => map.chunks[file].name === 'features-audio');
   const [entry, features, phrases] = ['index', 'features', 'features-vi'].map(name => Object.keys(map.chunks).find(file => map.chunks[file].name === name));
   assert.deepEqual(map.chunks[entry].imports, []); assert.deepEqual(map.chunks[entry].dynamicImports, [features], 'the start reaches the features by import() only');
-  assert.deepEqual(map.chunks[features].dynamicImports, [phrases], 'and the features reach their phrases by import() only');
+  assert.deepEqual([...new Set(map.chunks[features].dynamicImports)].sort(), [phrases, audio].sort(), 'and the features reach their phrases and the audio features by import() only');
+  assert.ok(!map.chunks[features].imports.includes(audio) && !map.chunks[entry].dynamicImports.includes(audio), 'the audio chunk is asked for by the features, after they have mounted');
   assert.deepEqual(lazySplitProblems(map, starts), []);
   assert.ok(existsSync(join(dist, features)) && existsSync(join(dist, phrases)));
   assert.ok(!existsSync(join(dist, 'chunk-map.json')) && !existsSync(join(dist, 'map')), 'the map is written outside dist/, so it never joins the install list');

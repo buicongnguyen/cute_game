@@ -63,7 +63,7 @@
  },
  "music": {"peak":-9.7,"rms":-22.8,"lufs":-23.7},
  "brawl": {"peak":-3.1},
- "brawlVoices": {"peak":-3.2},
+ "brawlVoices": {"peak":-2.5},
  "voices": {
   "blob": {"notice":{"peak":-21.3,"low":-21.7,"high":-20.8,"loudness":-30.4,"ms":58,"band":"mid","centroid":923,"recipe":"1:0.0900:880:f506e1fc"},"windup":{"peak":-23.1,"low":-23.6,"high":-22.6,"loudness":-30,"ms":843,"band":"mid","centroid":869,"recipe":"1:0.1339:546:dbd57dd6"},"hurt":{"peak":-25.6,"low":-26.1,"high":-25.2,"loudness":-34.4,"ms":70,"band":"mid","centroid":1132,"recipe":"1:0.0540:1320:dc0c43f2"},"death":{"peak":-22.1,"low":-22.6,"high":-21.6,"loudness":-31.6,"ms":190,"band":"mid","centroid":913,"recipe":"2:0.0810:1126:7b556f82"},"warning":{"peak":-13.5,"low":-14.1,"high":-12.9,"loudness":-22.6,"ms":1152,"band":"mid","centroid":2306,"recipe":"4:0.3413:4348:6f12162a"}},
   "bunny": {"notice":{"peak":-21.2,"low":-21.7,"high":-20.7,"loudness":-31.6,"ms":143,"band":"mid","centroid":1259,"recipe":"2:0.1800:2415:3c3e5468"},"windup":{"peak":-23.1,"low":-23.6,"high":-22.6,"loudness":-29.3,"ms":843,"band":"mid","centroid":1133,"recipe":"1:0.1339:713:f52ebc75"},"hurt":{"peak":-25.6,"low":-26.2,"high":-25.1,"loudness":-33.3,"ms":52,"band":"mid","centroid":1458,"recipe":"1:0.0540:1725:7046f9cc"},"death":{"peak":-22.1,"low":-22.6,"high":-21.6,"loudness":-30.8,"ms":154,"band":"mid","centroid":1188,"recipe":"2:0.0810:1472:420fad49"},"warning":{"peak":-13.4,"low":-14,"high":-13.2,"loudness":-22.3,"ms":1148,"band":"mid","centroid":2681,"recipe":"4:0.3354:5682:cdfe5b39"}},
@@ -89,7 +89,7 @@
   "eye": {"notice":{"peak":-21.2,"low":-21.6,"high":-20.7,"loudness":-31,"ms":87,"band":"mid","centroid":654,"recipe":"1:0.0900:610:1c62d7c7"},"windup":{"peak":-23.1,"low":-23.6,"high":-22.6,"loudness":-30.4,"ms":842,"band":"mid","centroid":613,"recipe":"2:0.1339:378:250d92ef"},"hurt":{"peak":-25.6,"low":-26.1,"high":-25.2,"loudness":-35.3,"ms":106,"band":"mid","centroid":795,"recipe":"1:0.0540:915:8ed58d9f"},"death":{"peak":-22.1,"low":-22.6,"high":-21.6,"loudness":-32.1,"ms":291,"band":"mid","centroid":650,"recipe":"2:0.0810:781:237c0a1c"},"warning":{"peak":-13.5,"low":-14,"high":-12.9,"loudness":-23.8,"ms":1140,"band":"low","centroid":1960,"recipe":"6:0.3092:3014:2e3a760a"}},
   "titan": {"notice":{"peak":-18.8,"low":-19.4,"high":-17.3,"loudness":-33.6,"ms":148,"band":"sub","centroid":1511,"recipe":"3:0.1711:837:6104699a"},"windup":{"peak":-20.4,"low":-21.3,"high":-19.5,"loudness":-35.5,"ms":834,"band":"sub","centroid":1157,"recipe":"3:0.2247:793:646b4b50"},"hurt":{"peak":-23.6,"low":-23.9,"high":-22.9,"loudness":-37.7,"ms":193,"band":"sub","centroid":1534,"recipe":"3:0.1027:943:a8ff91e6"},"death":{"peak":-19.7,"low":-20.8,"high":-19.3,"loudness":-34.7,"ms":553,"band":"sub","centroid":1288,"recipe":"4:0.1394:869:ee7c8060"},"warning":{"peak":-13.4,"low":-13.9,"high":-13,"loudness":-27.9,"ms":1137,"band":"sub","centroid":1220,"recipe":"4:0.5392:734:2d54ef2f"}}
  },
- "heartbeat": {"peak":-24,"low":-24,"high":-24,"loudness":-38.5,"ms":232,"band":"sub","centroid":179,"recipe":"4:0.1350:714:e1b66855"},
+ "heartbeat": {"peak":-23,"low":-23,"high":-23,"loudness":-38.9,"ms":225,"band":"sub","centroid":268,"recipe":"6:0.1668:1714:facf45c5"},
  "pet": {"peak":-15.3,"hit":-9.2,"under":6.1},
  "leads": {
   "slam": {"seconds":1.1,"rise":1.1,"starts":1.09,"overMusic":1.06,"peakAt":0,"peak":-12.5},

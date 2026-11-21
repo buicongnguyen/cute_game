@@ -10,7 +10,7 @@
  *   danger                              not a tune: the drums that join the tune of the place when something gives chase
  *   boss                                its own fast minor tune with its own beat
  *   space, ctf, rescue, vault           the flight between planets and the three modes (MODES names them)
- *   indoors                             nothing: the cottage radio is the music there (features/radio.ts)
+ *   indoors                             nothing: the cottage radio is the music there (features-audio/radio.ts)
  *
  * This file imports nothing.
  */

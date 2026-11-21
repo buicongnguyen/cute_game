@@ -1,5 +1,5 @@
 // The mix in numbers (docs/SOUNDS.md, AAA-PLAN WP8). Nobody can check a mix by reading code, and a build machine cannot
-// listen: this renders every synthesized sound of src/sfx.ts and every stinger of src/features/stingers.ts through the
+// listen: this renders every synthesized sound of src/sfx.ts and every stinger of src/features-audio/stingers.ts through the
 // game's own audio graph (bus, duck, compressor) in an OfflineAudioContext in Chromium, and measures what reaches the speakers.
 //
 //   node promo/loudness.mjs            the tables
@@ -20,7 +20,7 @@
 //   3. Against the game's theme on the music bus at the default sliders: how far each cue stands over the music, how deep
 //      the music goes under a stinger, and the highest peak of a crowded fight at full sliders (over 0 dBFS would clip).
 //   4. The LOUDNESS bands, sound by sound.
-//   5. The creature voices (src/features/creature-voices.ts), family by family: each kind's peak, loudness, length and
+//   5. The creature voices (src/features-audio/creature-voices.ts), family by family: each kind's peak, loudness, length and
 //      spectral centroid at full level (a creature beside the explorer), a boss's wind-up, and the heartbeat of
 //      src/features/low-health.ts; each against the music's RMS, a hit and the hurt cry; a pet's hit against the explorer's.
 //   6. The wind-up warning on the clock: for every boss skill, when the voice starts, when it is first over the music and
@@ -41,10 +41,10 @@ const base = `http://127.0.0.1:${process.env.PORT || 5298}`, RUNS = Number(proce
 /** Runs in the page: renders and measures. Returns plain data. */
 async function measure(RUNS) {
   const { Sfx, ALL_SOUNDS, STINGERS, LATE_SOUNDS, LOUDNESS } = await import('/src/sfx.ts');
-  const { installMix } = await import('/src/features/sound-mix.ts');
-  const { installStingers, STINGER, LEVEL_LENGTH } = await import('/src/features/stingers.ts');
-  const { MusicBox } = await import('/src/features/radio.ts');
-  const { CreatureVoices, VOICES, VOICE_KINDS, VOICE_BANDS, WARNING_BAND, PET_UNDER, windupRise } = await import('/src/features/creature-voices.ts');
+  const { installMix } = await import('/src/features-audio/sound-mix.ts');
+  const { installStingers, STINGER, LEVEL_LENGTH } = await import('/src/features-audio/stingers.ts');
+  const { MusicBox } = await import('/src/features-audio/radio.ts');
+  const { CreatureVoices, VOICES, VOICE_KINDS, VOICE_BANDS, WARNING_BAND, PET_UNDER, windupRise } = await import('/src/features-audio/creature-voices.ts');
   const { heartbeat, HEART_BAND } = await import('/src/features/low-health.ts');
   const { BOSS_WINDUPS } = await import('/src/boss-patterns.ts');
   const RATE = 48000, dB = v => v > 0 ? 20 * Math.log10(v) : -120, round = v => Math.round(v * 10) / 10;
@@ -125,7 +125,7 @@ async function measure(RUNS) {
     pairs[whoosh] = { weapon, whoosh: fold(lead), hit: fold(hit) }; pairs[whoosh].under = round(pairs[whoosh].hit.peak - pairs[whoosh].whoosh.peak);
   }
 
-  // 3. Against the theme. The radio plays the file through its trim into the music bus (features/radio.ts).
+  // 3. Against the theme. The radio plays the file through its trim into the music bus (features-audio/radio.ts).
   const mix = { cues: {}, ducks: {} };
   let theme = null;
   try { const bytes = await (await fetch('/assets/audio/zoo-garden-theme.mp3')).arrayBuffer(); theme = await new OfflineAudioContext(2, 1, RATE).decodeAudioData(bytes); } catch { /* no theme: this part is skipped */ }
@@ -194,7 +194,7 @@ async function measure(RUNS) {
     const music = (sfx, ctx) => { const src = ctx.createBufferSource(), trim = ctx.createGain(); src.buffer = theme; src.loop = true; trim.gain.value = MusicBox.TRIM; src.connect(trim); trim.connect(sfx.graph.bus('music')); src.start(0, 20); };
     const d = await render(4.5, (sfx, at, ctx) => {
       const v = new CreatureVoices(sfx.graph, { random: seeded(13) }); music(sfx, ctx);
-      for (let i = 0; i < 66; i++) at(.2 + i * .045, () => { sfx.play(brawl[i % brawl.length]); if (i % 2 === 0) v.speak(families[i % families.length], VOICE_KINDS[i % 4], { seconds: .5 }); if (i % 22 === 0) v.speak('bear', 'windup', { seconds: 1.1, boss: true, radius: 1.1 }); });
+      for (let i = 0; i < 66; i++) at(.2 + i * .045, () => { sfx.play(i % 7 === 3 ? 'petHit' : brawl[i % brawl.length]); if (i % 2 === 0) v.speak(families[i % families.length], VOICE_KINDS[i % 4], { seconds: .5 }); if (i % 22 === 0) v.speak('bear', 'windup', { seconds: 1.1, boss: true, radius: 1.1 }); });
     }, { sfxLevel: 1, musicLevel: 1, seed: 11 });
     mix.brawlVoices = { peak: round(facts(d).peak) };
   }
@@ -246,8 +246,8 @@ if (out) {
   if (args.includes('--write')) {
     if (bad) { console.error('Not written: tune the sounds into their bands first.'); process.exitCode = 1; }
     else {
-      const { Sfx, AudioGraph } = await import('../src/sfx.ts'), { installStingers } = await import('../src/features/stingers.ts');
-      const { CreatureVoices, VOICES, VOICE_KINDS } = await import('../src/features/creature-voices.ts'), { heartbeat } = await import('../src/features/low-health.ts');
+      const { Sfx, AudioGraph } = await import('../src/sfx.ts'), { installStingers } = await import('../src/features-audio/stingers.ts');
+      const { CreatureVoices, VOICES, VOICE_KINDS } = await import('../src/features-audio/creature-voices.ts'), { heartbeat } = await import('../src/features/low-health.ts');
       const sig = signatures(Sfx, Object.keys(out.sounds), installStingers), voiceSig = voiceSignatures(AudioGraph, CreatureVoices, Object.keys(VOICES), VOICE_KINDS, heartbeat);
       const level = (v, recipe) => ({ peak: v.peak, low: v.low, high: v.high, loudness: v.lufs, ms: v.ms, band: v.band, centroid: v.centroid, recipe });
       const kept = {
