@@ -35,7 +35,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { compareRows, foldRuns, FIELDS } from './perf-compare.mjs';
+import { compareRows, foldRuns, foldCompareRuns } from './perf-compare.mjs';
 
 const args = process.argv.slice(2), mode = args.includes('--baseline') ? 'baseline' : args.includes('--compare') ? 'compare' : 'print';
 const here = new URL('./', import.meta.url);
@@ -86,10 +86,33 @@ function frozenPage({ save, level, pitch, attr, lid }) {
   // Kept for the live rows: the browser's own frames and clock.
   const realFrame = window.requestAnimationFrame.bind(window), realNow = performance.now.bind(performance);
   let longTasks = 0; try { new PerformanceObserver(list => { longTasks += list.getEntries().length; }).observe({ entryTypes: ['longtask'] }); } catch { /* not counted */ }
-  let fake = 1000, id = 0; const pending = new Map();
+  const realTimeout = window.setTimeout.bind(window), realClearTimeout = window.clearTimeout.bind(window), realInterval = window.setInterval.bind(window), realClearInterval = window.clearInterval.bind(window);
+  let fake = 1000, id = 0, pumped = 0; const pending = new Map();
   performance.now = () => fake; Date.now = () => 1.8e12 + fake;
   window.requestAnimationFrame = cb => { pending.set(++id, cb); return id; }; window.cancelAnimationFrame = n => pending.delete(n);
-  const pump = n => { for (let i = 0; i < n; i++) { fake += 1000 / 60; const jobs = [...pending.values()]; pending.clear(); for (const cb of jobs) cb(fake); } };
+  // setTimeout and setInterval are the tool's own too. While the page loads (before Start) they run in real time; from the
+  // moment the tool says so (just before Start) they run on the fake clock, so a toast, a card or a retry that fires after
+  // "2 s" fires at the same game frame in every run. What is still waiting at that moment is re-armed on the fake clock:
+  // an interval one period ahead, a timeout its remaining time rounded up to a whole second.
+  let fakeTimers = false, timerId = 0, before = realNow(); const timers = new Map(), clock = () => fakeTimers ? fake : before;
+  const arm = (fn, ms, every, a) => { const n = ++timerId; timers.set(n, { at: clock() + Math.max(0, +ms || 0), every, run: typeof fn === 'function' ? () => fn(...a) : () => {} }); return n; };
+  window.setTimeout = (fn, ms, ...a) => arm(fn, ms, 0, a);
+  window.setInterval = (fn, ms, ...a) => arm(fn, ms, Math.max(1, +ms || 0), a);
+  window.clearTimeout = window.clearInterval = n => { timers.delete(n); };
+  const runTimers = () => { // the timers due by now, oldest first; one armed meanwhile waits for the next round
+    const now = clock(), due = [...timers].filter(([, t]) => t.at <= now).sort((a, b) => a[1].at - b[1].at || a[0] - b[0]);
+    for (const [n, t] of due) { if (!timers.has(n)) continue; if (t.every) t.at = Math.max(t.at + t.every, now + 1e-6); else timers.delete(n); try { t.run(); } catch (e) { realTimeout(() => { throw e; }); } }
+  };
+  const loading = realInterval(() => { before = realNow(); runTimers(); }, 8);
+  const freezeTimers = () => { if (fakeTimers) return; realClearInterval(loading); for (const t of timers.values()) t.at = fake + (t.every || Math.ceil(Math.max(0, t.at - before) / 1000) * 1000); fakeTimers = true; };
+  let eachFrame = null;
+  // Every frame starts its own random stream, made from the frame's number: what a late download's callback drew between two
+  // frames cannot shift the numbers of the frames after it.
+  const pump = n => { for (let i = 0; i < n; i++) { pumped++; fake += 1000 / 60; seed = Math.imul(pumped, 0x9E3779B1) ^ 0x5bd1e995; eachFrame?.(); if (fakeTimers) runTimers(); const jobs = [...pending.values()]; pending.clear(); for (const cb of jobs) cb(fake); } };
+  // Downloads on their way: the tool never advances the game while one is, so art lands between the same two frames in every run.
+  let fetching = 0; const realFetch = window.fetch.bind(window);
+  window.fetch = (...a) => { fetching++; const done = () => { fetching--; }; return realFetch(...a).then(r => { r.clone().arrayBuffer().then(done, done); return r; }, e => { done(); throw e; }); };
+  if (window.createImageBitmap) { const realBitmap = window.createImageBitmap.bind(window); window.createImageBitmap = (...a) => { fetching++; const done = () => { fetching--; }; const p = realBitmap(...a); p.then(done, done); return p; }; } // a texture being decoded
   const count = { active: false, calls: 0, triangles: 0 };
   for (const proto of [window.WebGLRenderingContext?.prototype, window.WebGL2RenderingContext?.prototype].filter(Boolean)) for (const key of ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced']) {
     const original = proto[key]; if (!original) continue;
@@ -99,31 +122,39 @@ function frozenPage({ save, level, pitch, attr, lid }) {
     };
   }
   window.__wantAttr = !!attr;
-  window.__frozen = { pump, seedWith, count, realFrame, realNow, longTasks: () => longTasks };
+  window.__frozen = { pump, seedWith, count, realFrame, realNow, realTimeout, longTasks: () => longTasks, frames: () => pumped, fetching: () => fetching, fakeTimers: freezeTimers, eachFrame: fn => { eachFrame = fn; } };
 }
 
 // Runs in the page once the world exists: the counters every row reads (window.__m).
 function installMeter() {
   const f = window.__frozen, w = __zoo.world, r = w.renderer, c = f.count;
-  const sp = { shadow: 0, fx: 0, fxTriangles: 0, roam: 0, roamTriangles: 0 };
-  // The wrapper on renderBufferDirect splits the shadow pass (depth materials) from the main pass.
+  const zero = () => ({ shadow: 0, fx: 0, fxTriangles: 0, fxShadow: 0, roam: 0, roamTriangles: 0, roamShadow: 0 }), sp = zero(), used = new Set();
+  // What chance decides is counted apart. `fx`: the spark and glow pools, loot cards and shots in the air (the hero's, a
+  // creature's, the modes'), alive or not in this very frame. `roam`: a rescued friend walking in or out of view.
+  const FX_ROOTS = new Set(['effects', 'drops', 'ctf-shots', 'rescue-shots']);
+  let enemyShots = new Set();
+  const isShot = o => /projectile/.test(o.name) || enemyShots.has(o) || (o.parent === w.scene && !o.name && o.isGroup && !!o.userData.look && typeof o.userData.kind === 'string') || (o.parent === w.scene && !o.name && o.isMesh && o.geometry?.type === 'IcosahedronGeometry' && o.material?.isMeshBasicMaterial);
+  const classOf = object => { for (let o = object; o && o !== w.scene; o = o.parent) { if (FX_ROOTS.has(o.name) || isShot(o)) return 'fx'; if (/^friend-/.test(o.name)) return 'roam'; } return null; };
+  // The wrapper on renderBufferDirect splits the shadow pass (depth materials) from the main pass and notes the shader program of each draw.
   const orig = r.renderBufferDirect;
   r.renderBufferDirect = function (camera, scene, geometry, material, object) {
     const calls = c.calls, tris = c.triangles, res = orig.apply(this, arguments), dc = c.calls - calls, dt = c.triangles - tris;
     if (c.active && dc) {
-      if (material.isMeshDepthMaterial || material.isMeshDistanceMaterial) sp.shadow += dc;
-      else if (object.parent?.name === 'effects' || object.name === 'drops' || /projectile/.test(object.name)) { sp.fx += dc; sp.fxTriangles += dt; } // spark and glow pools, loot cards, a shot in the air: drawn only while one is alive, which chance decides
-      else { let o = object; while (o && !/^friend-/.test(o.name)) o = o.parent; if (o) { sp.roam += dc; sp.roamTriangles += dt; } } // a rescued friend walking in or out of view
-      if (window.__attr) { const k = (material.isMeshDepthMaterial ? 's:' : 'm:') + (object.name || object.parent?.name || object.type) + '|' + (geometry.attributes.position?.count ?? 0); window.__attr[k] = (window.__attr[k] ?? 0) + dc; }
+      const kind = classOf(object), depth = material.isMeshDepthMaterial || material.isMeshDistanceMaterial;
+      if (depth) sp[kind === 'fx' ? 'fxShadow' : kind === 'roam' ? 'roamShadow' : 'shadow'] += dc;
+      else if (kind) { sp[kind] += dc; sp[kind + 'Triangles'] += dt; }
+      if (!kind) { const program = r.properties.get(material).currentProgram; if (program) used.add(program); }
+      if (window.__attr) { const k = (depth ? 's:' : 'm:') + (kind ? kind + ':' : '') + (object.name || object.parent?.name || object.type) + '|' + (geometry.attributes.position?.count ?? 0); window.__attr[k] = (window.__attr[k] ?? 0) + dc; }
     }
     return res;
   };
-  const reset = () => { if (window.__wantAttr) window.__attr = {}; Object.assign(sp, { shadow: 0, fx: 0, fxTriangles: 0, roam: 0, roamTriangles: 0 }); c.calls = 0; c.triangles = 0; };
-  const read = () => ({ main: c.calls - sp.shadow - sp.fx - sp.roam, shadow: sp.shadow, triangles: Math.round(c.triangles - sp.fxTriangles - sp.roamTriangles), fx: sp.fx, roam: sp.roam, fxTriangles: Math.round(sp.fxTriangles), roamTriangles: Math.round(sp.roamTriangles) });
+  const reset = () => { if (window.__wantAttr) window.__attr = {}; Object.assign(sp, zero()); used.clear(); enemyShots = new Set((w.enemyShots ?? []).map(shot => shot.mesh)); c.calls = 0; c.triangles = 0; };
+  // `programs`: the shader programs the counted frame's own draws use (not sparks, shots or friends), not every program compiled since the page opened.
+  const read = () => ({ main: c.calls - sp.shadow - sp.fxShadow - sp.roamShadow - sp.fx - sp.roam, shadow: sp.shadow, triangles: Math.round(c.triangles - sp.fxTriangles - sp.roamTriangles), fx: sp.fx, roam: sp.roam, fxTriangles: Math.round(sp.fxTriangles), roamTriangles: Math.round(sp.roamTriangles), fxShadow: sp.fxShadow, roamShadow: sp.roamShadow, programs: used.size });
   const memory = () => {
     const seen = new Set(); let bytes = 0;
     w.scene.traverse(o => { if (!o.geometry) return; for (const a of [...Object.values(o.geometry.attributes), o.geometry.index].filter(Boolean)) { const b = a.array?.buffer ?? a.data?.array?.buffer; if (b && !seen.has(b)) { seen.add(b); bytes += b.byteLength; } } });
-    return { programs: r.info.programs.length, geometries: r.info.memory.geometries, textures: r.info.memory.textures, geometryBytes: bytes, ...(window.__attr ? { attr: window.__attr } : {}), visited: __zoo.matrixStats.visited };
+    return { programsCompiled: r.info.programs.length, geometries: r.info.memory.geometries, textures: r.info.memory.textures, geometryBytes: bytes, ...(window.__attr ? { attr: window.__attr } : {}), visited: __zoo.matrixStats.visited };
   };
   const graphics = level => {
     const stored = (() => { try { return JSON.parse(localStorage.getItem('zoo-garden-graphics')).setting; } catch { return null; } })();
@@ -132,15 +163,31 @@ function installMeter() {
   };
   const dialog = () => { const d = document.querySelector('#dialog-layer'); return d && !d.hidden ? 'a dialog is open: ' + d.textContent.trim().replace(/\s+/g, ' ').slice(0, 60) : null; };
   const pitchNow = () => { const v = w.viewOffset; return Math.atan2(v.y, Math.hypot(v.x, v.z)) * 180 / Math.PI; };
+  // Art on its way: a download, or a kit that was asked for and is not built yet.
+  const kits = () => Object.values(window.__assets).filter(k => k && typeof k === 'object' && 'ready' in k);
+  // Also every request of the page the browser itself knows of (a lazy chunk, an image): the tool counts them (window.__requests).
+  const busy = async () => f.fetching() + kits().filter(k => k.requested === true && !k.ready && !stuck.has(k)).length + await window.__requests();
+  const pause = ms => new Promise(res => f.realTimeout(res, ms));
+  /** Wait, in real time and without advancing the game, until no art or code is on its way (at most 20 s). */
+  const stuck = new Set(); // a kit that never arrived in 20 s (a missing file) is not waited for again
+  const quiet = async () => {
+    f.seedWith(Math.imul(f.frames(), 0x85EBCA6B) ^ 0x2545F491); // what lands while the game stands still draws from a stream of its own
+    const until = f.realNow() + 20000; let calm = 0; while (calm < 2 && f.realNow() < until) { const n = await busy(); await pause(n ? 25 : 0); calm = n || await busy() ? 0 : calm + 1; }
+    if (calm < 2) for (const k of kits()) if (k.requested === true && !k.ready) stuck.add(k);
+    return calm >= 2;
+  };
+  /** Advance the game `frames` frames, in blocks; after each block the game stands still until the art it asked for has landed. */
+  const advance = async (frames, block = 30) => { let ok = true; for (let done = 0; done < frames; done += block) { f.pump(Math.min(block, frames - done)); ok = await quiet() && ok; } return ok; };
+  const signature = () => kits().map(k => +!!k.ready).join('') + (w.cropCards ? '/' + +!!w.cropCards.ready + ':' + w.cropCards.bakeMs : '/-'); // which kits are in, and the crop bake
   window.__m = {
-    memory, graphics, dialog, pitchNow,
+    memory, graphics, dialog, pitchNow, quiet, advance, signature,
     /** Stand the hero on a spot, pinned, under a camera pitch; returns the pitch the camera really has. */
     stand(x, z, deg) { f.seedWith(2468); w.position.set(x, 0, z); w.cameraTarget.set(x, 0, z); w.facing = 0; w.zoom = 1; __zoo.pinHero?.({ x, z }); window.__cam.setCameraPitch(deg); w.resize(); return pitchNow(); },
     /** Where a world point lands on the screen: -1..1 both ways when it is in frame. */
     onScreen(x, y, z) { const v = w.camera.position.clone().set(x, y, z).project(w.camera); return { x: +v.x.toFixed(2), y: +v.y.toFixed(2), inFrame: Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1 && v.z < 1 }; },
     key(type, code, key) { document.body.dispatchEvent(new KeyboardEvent(type, { code, key, bubbles: true, cancelable: true })); },
-    /** Pump frames one by one until `until()` holds, with a real pause every few so downloads and promises can land. */
-    async pumpUntil(until, most) { let n = 0; while (!until() && n < most) { f.pump(1); if (++n % 10 === 0) await new Promise(res => setTimeout(res, 0)); } return n; },
+    /** Pump frames one by one until `until()` holds; every ten frames the game stands still until the art it asked for has landed. */
+    async pumpUntil(until, most) { let n = 0; while (!until() && n < most) { f.pump(1); if (++n % 10 === 0) await quiet(); } return n; },
     /** ONE world.render(), counted. */
     render() { reset(); r.shadowMap.needsUpdate = true; c.active = true; w.render(); c.active = false; return read(); },
     /** One whole pumped frame, counted: whatever the game draws in it (the space view does not go through world.render). */
@@ -152,7 +199,7 @@ function installMeter() {
         const tick = () => {
           const now = f.realNow(); if (i) slowest = Math.max(slowest, now - last); last = now;
           each?.(i); reset(); c.active = true; f.pump(1); c.active = false;
-          peak.peakMain = Math.max(peak.peakMain, c.calls - sp.shadow); peak.peakShadow = Math.max(peak.peakShadow, sp.shadow); peak.peakTriangles = Math.max(peak.peakTriangles, Math.round(c.triangles));
+          const shadows = sp.shadow + sp.fxShadow + sp.roamShadow; peak.peakMain = Math.max(peak.peakMain, c.calls - shadows); peak.peakShadow = Math.max(peak.peakShadow, shadows); peak.peakTriangles = Math.max(peak.peakTriangles, Math.round(c.triangles));
           if (++i < frames) f.realFrame(tick); else done({ ...peak, programsCreated: r.info.programs.length - programs, frames, slowestMs: +slowest.toFixed(1), longTasks: f.longTasks() - long });
         };
         f.realFrame(tick);
@@ -161,17 +208,11 @@ function installMeter() {
   };
 }
 
-// Wait (real time, up to 20 s) until the set of loaded kits and the crop bake stop changing for 2 s.
-const idle = page => page.evaluate(async () => {
-  const a = await import('/src/assets.ts'), w = __zoo.world, kits = ['sceneryKit', 'cropKit', 'fishKit', 'heroKit', 'wearKit', 'weaponKit', 'disguiseKit', 'petKit', 'bossPetKit', 'spaceKit', 'wildsKit', 'brightKit', 'harshKit', 'dressingKit', 'farmKit', 'helperKit', 'cageKit'];
-  const sig = () => kits.map(k => +!!a[k]?.ready).join('') + (w.cropCards ? '/' + +!!w.cropCards.ready + ':' + w.cropCards.bakeMs : '/-') + '/' + w.renderer.info.memory.geometries + ':' + w.renderer.info.memory.textures + ':' + w.renderer.info.programs.length;
-  let last = sig(), stable = 0;
-  for (let i = 0; i < 80 && stable < 8; i++) { __frozen.pump(30); await new Promise(r => setTimeout(r, 250)); const s = sig(); if (s === last) stable++; else { stable = 0; last = s; } }
-  return { signature: last, stable, timedOut: stable < 8 };
-});
-
-// Frames are pumped by hand in small chunks with a real pause between them, so downloads and promises can land; no frame is ever driven by the wall clock.
-const settle = async (page, frames, chunk = 6) => { for (let done = 0; done < frames; done += chunk) { await page.evaluate(n => __frozen.pump(n), chunk); await page.waitForTimeout(30); } };
+// The game only ever advances through the meter's advance(): a block of frames, then a real-time wait with the game standing
+// still until the art it asked for has landed. So every run reads the same frame of the same world, however slow the machine.
+const settle = (page, frames) => page.evaluate(n => window.__m.advance(n), frames);
+// After Start: this many frames for the kits, the crop bake and the shaders to arrive. A fixed number, never "until it looks done".
+const WARM_FRAMES = 900;
 
 /** A fresh browser context with the game started on a save, the greeting cards closed, the kits loaded and the meter in. */
 async function openGame(browser, device, level, saveName, { pitch = 42, lid = 'asleep' } = {}) {
@@ -179,10 +220,19 @@ async function openGame(browser, device, level, saveName, { pitch = 42, lid = 'a
   const ctx = await browser.newContext({ ...device, serviceWorkers: 'block' });
   await ctx.addInitScript(frozenPage, { save, level, pitch, attr: !!process.env.ATTR, lid });
   const page = await ctx.newPage(), errors = []; page.on('pageerror', e => errors.push(e.message.slice(0, 160)));
+  // Requests on their way, for the meter's quiet(): the game never advances while one is.
+  const inFlight = new Set(); page.on('request', r => { if (/^https?:/.test(r.url())) inFlight.add(r); }); for (const end of ['requestfinished', 'requestfailed']) page.on(end, r => inFlight.delete(r));
+  await page.exposeFunction('__requests', () => inFlight.size);
   try {
-    await page.goto(base + '/'); await page.waitForSelector('[data-action="start"]'); await page.click('[data-action="start"]');
+    await page.goto(base + '/'); await page.waitForSelector('[data-action="start"]');
     await page.waitForFunction(() => !!window.__zoo?.world?.renderer, null, { timeout: 60000 });
-    await settle(page, 240); await page.waitForTimeout(500); // the greeting cards open a moment after Start
+    await page.evaluate(async () => { window.__assets = await import('/src/assets.ts'); window.__cam = await import('/src/camera-rig.ts'); window.__gfx = await import('/src/graphics.ts'); });
+    await page.evaluate(installMeter);
+    await page.evaluate(() => window.__m.quiet()); // the title's own art, before the first game frame
+    // The hero must not be hurt or knocked off its spot while a row is read: health is topped up before every frame and the hero pinned.
+    await page.evaluate(() => { const full = __zoo.state.hp; window.__frozen.eachFrame(() => { if (__zoo.state.hp < full) __zoo.state.hp = full; }); window.__frozen.fakeTimers(); });
+    await page.click('[data-action="start"]');
+    await settle(page, 240); // the greeting cards open a moment after Start
     // Close what greets the hero (the daily welcome-back card, a welcome gift): an open dialog pauses play and blurs the view.
     for (let i = 0; i < 8; i++) {
       await settle(page, 30);
@@ -190,18 +240,16 @@ async function openGame(browser, device, level, saveName, { pitch = 42, lid = 'a
       await page.evaluate(() => { const d = document.querySelector('#dialog-layer'); [...d.querySelectorAll('button')].find(b => /^(Close|No, thanks)$/i.test(b.textContent.trim()) || b.dataset.action === 'welcome-pass')?.click(); });
       await settle(page, 18); await page.keyboard.press('Escape');
     }
+    const calm = await settle(page, WARM_FRAMES - 120), mid = await page.evaluate(() => window.__m.signature());
     await settle(page, 120);
-    const settled = await idle(page);
-    // The hero must not be hurt or knocked off its spot while a row is read: health is topped up and the hero pinned.
-    await page.evaluate(() => { const s = __zoo.state, full = s.hp; setInterval(() => { if (__zoo.state.hp < full) __zoo.state.hp = full; }, 50); });
-    await page.evaluate(async () => { window.__cam = await import('/src/camera-rig.ts'); window.__gfx = await import('/src/graphics.ts'); });
-    await page.evaluate(installMeter);
+    const settled = await page.evaluate(([mid, calm]) => ({ signature: window.__m.signature(), frames: window.__frozen.frames(), timedOut: !calm || window.__m.signature() !== mid }), [mid, calm]);
     return { ctx, page, errors, settled, level };
   } catch (e) { await ctx.close(); throw e; }
 }
 /** Notes, page errors, the picture and the printed line every row gets. */
 async function emit(game, row, out) {
-  if (game.settled.timedOut) row.note = 'kits or crop bake still changing after 20 s';
+  row.frame = await game.page.evaluate(() => window.__frozen.frames()); // the game frame the row was read at: the same in every run
+  if (game.settled.timedOut) row.note = 'a kit or the crop bake was still arriving at the end of the warm-up';
   if (game.errors.length) row.pageErrors = game.errors.slice(0, 3);
   if (process.env.SHOTS) { mkdirSync(process.env.SHOTS, { recursive: true }); await game.page.screenshot({ path: `${process.env.SHOTS}/${row.key.replaceAll('/', '_')}.png` }); }
   out.push(row); console.log(JSON.stringify(row));
@@ -226,12 +274,12 @@ async function measureGroup(browser, [profile, device, level, saveName, pitches]
     for (const scene of Object.keys(SCENES)) for (const deg of pitches) {
       const key = rowKey(scene, saveName, deg, profile); if (!wanted(key)) continue;
       const [x, z] = SCENES[scene];
-      const row = await page.evaluate(([x, z, deg, key, level, probeAdd]) => {
+      const row = await page.evaluate(async ([x, z, deg, key, level, probeAdd]) => {
         const f = window.__frozen, w = __zoo.world, m = window.__m;
         f.seedWith(2468); w.position.set(x, 0, z); w.cameraTarget.set(x, 0, z); w.facing = 0; w.zoom = 1; __zoo.pinHero?.({ x, z });
         window.__cam.setCameraPitch(deg); w.resize();
         const pitch = m.pitchNow();
-        f.pump(120);
+        await m.advance(120);
         let probe = null; if (probeAdd && key.startsWith(probeAdd + '/')) { const mesh = probe = w.marker.clone(); mesh.visible = true; mesh.frustumCulled = false; mesh.position.set(x, 1, z + 2); w.scene.add(mesh); } // self-test of the gate: one more mesh in the scene
         const counted = m.render(); probe?.removeFromParent();
         const g = m.graphics(level), p = w.position;
@@ -255,9 +303,9 @@ async function measureLateExtras(browser) {
   try {
     for (const scene of Object.keys(SCENES)) {
       const key = `${scene}-move/late/42/desktop-high`; if (!wanted(key)) continue;
-      const row = await page.evaluate(([x, z, key, level, frames]) => {
+      const row = await page.evaluate(async ([x, z, key, level, frames]) => {
         const f = window.__frozen, w = __zoo.world, m = window.__m;
-        const pitch = m.stand(x, z, 42); f.pump(120);
+        const pitch = m.stand(x, z, 42); await m.advance(120);
         __zoo.pinHero?.(null); m.key('keydown', 'KeyD', 'd'); m.key('keydown', 'KeyW', 'w'); f.pump(frames); m.key('keyup', 'KeyD', 'd'); m.key('keyup', 'KeyW', 'w');
         const p = w.position, east = p.x - x, north = z - p.z; __zoo.pinHero?.({ x: p.x, z: p.z });
         const counted = m.render(), g = m.graphics(level);
@@ -273,7 +321,7 @@ async function measureLateExtras(browser) {
     }
     const idleKey = 'idle/late/layout/desktop-high';
     if (wanted(idleKey)) {
-      await page.evaluate(([x, z]) => { window.__m.stand(x, z, 42); window.__frozen.pump(120); }, SCENES.village);
+      await page.evaluate(async ([x, z]) => { window.__m.stand(x, z, 42); await window.__m.advance(120); }, SCENES.village);
       const row = await liveRow(game, idleKey, 'live', async ([level, frames]) => {
         const m = window.__m, r = await m.live(frames), g = m.graphics(level), invalid = g.bad ?? m.dialog() ?? (__zoo.state.planet !== 'home' ? 'not on the home map' : null);
         return { frames: r.frames, slowestMs: r.slowestMs, longTasks: r.longTasks, ...(invalid ? { invalid } : {}) }; // layout work only: the standing village rows hold the draws
@@ -284,7 +332,7 @@ async function measureLateExtras(browser) {
     if (wanted(fightKey)) {
       const row = await liveRow(game, fightKey, 'live', async ([x, z, level, frames]) => {
         const f = window.__frozen, w = __zoo.world, m = window.__m;
-        m.stand(x, z, 42); f.pump(120); f.seedWith(97531);
+        m.stand(x, z, 42); await m.advance(120); f.seedWith(97531);
         // The fixed script. Waves: the six nearest living creatures, set in a ring 3 m around the hero, at the start and half way.
         const used = new Set(), far = e => Math.hypot(e.x - x, e.z - z);
         const wave = () => w.enemies.filter(e => !e.boss && e.hp > 0 && !used.has(e)).sort((a, b) => far(a) - far(b) || (a.id < b.id ? -1 : 1)).slice(0, 6).forEach((e, i) => {
@@ -300,12 +348,12 @@ async function measureLateExtras(browser) {
     }
     const spaceKey = 'space/late/frame/desktop-high';
     if (wanted(spaceKey)) {
-      await page.evaluate(([x, z]) => { window.__m.stand(x, z, 42); window.__frozen.pump(120); __zoo.pinHero?.(null); void __zoo.launch(); }, SCENES.village);
+      await page.evaluate(async ([x, z]) => { window.__m.stand(x, z, 42); await window.__m.advance(120); __zoo.pinHero?.(null); void __zoo.launch(); }, SCENES.village);
       let flying = false; for (let i = 0; i < 100 && !flying; i++) { await settle(page, 30); flying = await page.evaluate(() => !!__zoo.flight); } // lift-off and the warp, up to 50 s of game time
-      const row = await page.evaluate(([key, level, frames, flying]) => {
+      const row = await page.evaluate(async ([key, level, frames, flying]) => {
         const f = window.__frozen, m = window.__m;
         if (!flying) return { key, level, invalid: 'the starship never reached space' };
-        f.pump(frames - 1 - Math.min(frames - 1, Math.round(__zoo.flight.time * 60))); // up to 4 s after entering space
+        await m.advance(frames - 1 - Math.min(frames - 1, Math.round(__zoo.flight.time * 60))); // up to 4 s after entering space
         const counted = m.frame(), g = m.graphics(level), flight = __zoo.flight;
         const invalid = g.bad ?? (!flight ? 'the flight ended' : !counted.main ? 'the space view drew nothing' : null);
         return { key, ...counted, ...m.memory(), level, shadowMap: g.shadowMap, pitch: 42, flightTime: flight ? +flight.time.toFixed(2) : null, ...(invalid ? { invalid } : {}) };
@@ -349,7 +397,7 @@ async function measureBosses(browser, profile, device) {
         }, [boss, level, LIVE_FRAMES]);
         await emit(game, peak, out);
       }
-      await page.evaluate(() => { const w = __zoo.world; window.__m.stand(0, 3.6, 42); window.__frozen.pump(30); for (const e of w.enemies) if (e.boss && e.hp > 0) e.hp = e.maxHp; }); // back to the village between the two bosses
+      await page.evaluate(async () => { const w = __zoo.world; window.__m.stand(0, 3.6, 42); await window.__m.advance(30); for (const e of w.enemies) if (e.boss && e.hp > 0) e.hp = e.maxHp; }); // back to the village between the two bosses
     }
   } finally { await game.ctx.close(); }
   return out;
@@ -360,11 +408,11 @@ async function measureColossus(browser) {
   const level = 'high', key = EXTRA_KEYS.colossus[0], game = await openGame(browser, DESKTOP, level, 'late', { lid: 'wild' }), { page } = game, out = [];
   try {
     await page.evaluate(([x, z]) => { window.__m.stand(x, z, 42); }, COLOSSUS_SPOT);
-    let ready = false; for (let i = 0; i < 80 && !ready; i++) { await settle(page, 12); ready = await page.evaluate(() => !!__zoo.colossus); } // the modes chunk loads on its own
+    let ready = false; for (let i = 0; i < 80 && !ready; i++) { await page.waitForTimeout(250); ready = await page.evaluate(() => !!__zoo.colossus); } // real time only: the game stands still // the modes chunk loads on its own
     if (!ready) { await emit(game, { key, kind: 'report', level, invalid: 'the Colossus module never loaded' }, out); return out; }
     await page.evaluate(() => __zoo.colossus.start());
     let up = false; for (let i = 0; i < 80 && !up; i++) { await settle(page, 30); up = await page.evaluate(() => __zoo.colossus.debug.hp > 0); }
-    await settle(page, 240); await idle(page); // it rises, its real model arrives
+    await settle(page, 600); // it rises, its real model arrives
     const row = up ? await liveRow(game, key, 'report', async ([level, frames]) => {
       const m = window.__m, r = await m.live(frames), g = m.graphics(level), d = __zoo.colossus.debug;
       const invalid = g.bad ?? m.dialog() ?? (!(d.hp > 0) ? 'the Colossus is gone' : null);
@@ -398,13 +446,16 @@ if (mode === 'baseline') {
   const rows = {}; for (const key of runs[0].map(r => r.key)) rows[key] = foldRuns(runs.map(run => run.find(r => r.key === key)));
   // The download section belongs to promo/first-visit-bytes.mjs; with ONLY the rows that were not measured stay as they were.
   const old = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {}, all = only.length ? { ...old.rows, ...rows } : rows;
-  const same = Object.values(all).filter(r => Object.values(r.spread).every(v => v === 0)).length;
-  writeFileSync(BASELINE, JSON.stringify({ version: 1, runs: RUNS, rowsIdenticalAcrossRuns: same, rows: all, ...(old.download ? { download: old.download } : {}) }, null, 1) + '\n');
-  console.log(`baseline written: ${Object.keys(all).length} rows (${Object.keys(rows).length} measured now), ${same} identical across ${RUNS} runs`);
+  const same = Object.values(rows).filter(r => Object.values(r.spread).every(v => v === 0)).length;
+  // A partial re-take (ONLY) keeps the file's own runs and identical-rows figures: they describe the last full baseline.
+  const head = only.length && old.rows ? { version: old.version ?? 1, runs: old.runs, rowsIdenticalAcrossRuns: old.rowsIdenticalAcrossRuns } : { version: 1, runs: RUNS, rowsIdenticalAcrossRuns: same };
+  writeFileSync(BASELINE, JSON.stringify({ ...head, rows: all, ...(old.download ? { download: old.download } : {}) }, null, 1) + '\n');
+  for (const r of Object.values(rows)) if (Object.values(r.spread).some(v => v !== 0)) console.log(`differs between runs: ${r.key} ${JSON.stringify(r.spread)}`);
+  console.log(`baseline written: ${Object.keys(all).length} rows (${Object.keys(rows).length} measured now, ${same} of them identical across ${RUNS} runs)`);
 } else if (mode === 'compare') {
   const baseline = JSON.parse(readFileSync(BASELINE, 'utf8')), ledger = existsSync(LEDGER) ? JSON.parse(readFileSync(LEDGER, 'utf8')) : { entries: [] };
-  // With several runs the smaller value of each field is compared: noise cannot fail a row, a real addition shows in every run.
-  const rows = runs[0].map(r => ({ ...r, ...Object.fromEntries(FIELDS.filter(f => typeof r[f] === 'number').map(f => [f, Math.min(...runs.map(run => run.find(x => x.key === r.key)?.[f] ?? Infinity))])) }));
+  // With several runs the smaller value of each field is compared (a real addition shows in every run); a row that is invalid or missing in any run is invalid.
+  const rows = foldCompareRuns(runs);
   const subset = only.length ? { rows: Object.fromEntries(Object.entries(baseline.rows).filter(([k]) => wanted(k))) } : baseline;
   const result = compareRows(subset, rows, ledger);
   for (const line of result.report) console.log(line);

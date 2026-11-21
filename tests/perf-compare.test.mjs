@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareRows, foldRuns, rowLimit } from '../promo/perf-compare.mjs';
+import { compareRows, foldRuns, foldCompareRuns, rowLimit } from '../promo/perf-compare.mjs';
 
 const row = (key, o = {}) => ({ key, main: 100, shadow: 40, triangles: 200000, programs: 30, geometries: 500, textures: 80, geometryBytes: 4_000_000, visited: 9000, level: 'high', shadowMap: 2048, pitch: 42, ...o });
 const baseline = rows => ({ rows: Object.fromEntries(rows.map(r => [r.key, foldRuns([r])])) });
@@ -15,13 +15,39 @@ test('an equal row passes, and one more draw on an exact row fails', () => {
   assert.equal(compareRows(b, [row('a', { main: 99 })]).ok, true, 'fewer draws pass');
 });
 
-test('two baseline runs that differed: the limit is the larger value plus the spread', () => {
+test('two baseline runs that differed: the limit is the larger value, the spread is recorded and not added', () => {
   const b = baseline([]); b.rows.a = foldRuns([row('a', { main: 100 }), row('a', { main: 103 })]);
   assert.equal(b.rows.a.main, 103); assert.equal(b.rows.a.spread.main, 3);
-  assert.equal(rowLimit(b.rows.a).main, 106);
-  assert.equal(compareRows(b, [row('a', { main: 106 })]).ok, true);
-  assert.equal(compareRows(b, [row('a', { main: 107 })]).ok, false);
-  assert.equal(rowLimit(b.rows.a).shadow, 40, 'a field that agreed keeps an exact limit');
+  assert.equal(rowLimit(b.rows.a).main, 103);
+  assert.equal(compareRows(b, [row('a', { main: 103 })]).ok, true);
+  assert.equal(compareRows(b, [row('a', { main: 104 })]).ok, false);
+  assert.equal(rowLimit(b.rows.a).shadow, 40);
+});
+
+test('several compare runs: the smaller value of each field; invalid or missing in ANY run is invalid', () => {
+  const two = foldCompareRuns([[row('a', { main: 104, programs: 30 }), row('b')], [row('a', { main: 100, programs: 31 }), row('b', { triangles: 199000 })]]);
+  assert.deepEqual(two.map(r => r.key), ['a', 'b']);
+  assert.equal(two[0].main, 100); assert.equal(two[0].programs, 30); assert.equal(two[1].triangles, 199000); assert.equal(two[0].invalid, undefined);
+  // Invalid in the second run only: the first run's good numbers must not hide it.
+  const bad = foldCompareRuns([[row('a')], [row('a', { invalid: 'a dialog is open' })]]);
+  assert.match(bad[0].invalid, /run 2 of 2: a dialog is open/);
+  assert.equal(compareRows(baseline([row('a')]), bad).ok, false);
+  assert.match(foldCompareRuns([[row('a', { invalid: 'camera off' })], [row('a')]])[0].invalid, /run 1 of 2: camera off/);
+  // Missing from the second run (the browser died half way), or only there.
+  const gone = foldCompareRuns([[row('a'), row('b')], [row('a')]]);
+  assert.match(gone.find(r => r.key === 'b').invalid, /missing from run 2 of 2/);
+  assert.match(compareRows(baseline([row('a'), row('b')]), gone).failures[0], /b: invalid row \(missing from run 2 of 2\), refused/);
+  assert.match(foldCompareRuns([[row('a')], [row('a'), row('c')]]).find(r => r.key === 'c').invalid, /missing from run 1 of 2/);
+  // A field one run did not measure is not measured.
+  const half = row('a'); delete half.textures;
+  assert.equal('textures' in foldCompareRuns([[row('a')], [half]])[0], false);
+  assert.match(compareRows(baseline([row('a')]), foldCompareRuns([[row('a')], [half]])).failures[0], /textures was not measured/);
+  // One run keeps its row as it is, live rows fold their own fields, and a report row stays a report.
+  assert.deepEqual(foldCompareRuns([[row('a')]]), [row('a')]);
+  const peak = o => ({ key: 'p', kind: 'live', peakMain: 200, layoutCount: 100, programsCreated: 1, level: 'high', ...o });
+  assert.equal(foldCompareRuns([[peak({ peakMain: 210, layoutCount: 90 })], [peak()]])[0].peakMain, 200);
+  assert.equal(foldCompareRuns([[peak({ peakMain: 210, layoutCount: 90 })], [peak()]])[0].layoutCount, 90);
+  assert.equal(compareRows({ rows: {} }, foldCompareRuns([[peak({ kind: 'report' })], [peak({ kind: 'report', invalid: 'gone' })]])).ok, true);
 });
 
 test('a ledger entry raises only its own row', () => {
@@ -48,10 +74,10 @@ test('memory counters may grow 5%, no more', () => {
 });
 
 test('chance counts (fx, roam and their triangles) have a small allowance above the baseline, no more', () => {
-  const b = baseline([row('a', { fx: 2, roam: 13, fxTriangles: 300, roamTriangles: 9000 })]);
-  const ok = row('a', { fx: 5, roam: 29, fxTriangles: 800, roamTriangles: 11500 });
+  const b = baseline([row('a', { fx: 2, roam: 13, fxTriangles: 300, roamTriangles: 9000, fxShadow: 1, roamShadow: 13 })]);
+  const ok = row('a', { fx: 5, roam: 29, fxTriangles: 800, roamTriangles: 11500, fxShadow: 4, roamShadow: 29 });
   assert.equal(compareRows(b, [ok]).ok, true);
-  for (const o of [{ fx: 6 }, { roam: 30 }, { fxTriangles: 801 }, { roamTriangles: 11501 }]) assert.equal(compareRows(b, [{ ...ok, ...o }]).ok, false, JSON.stringify(o));
+  for (const o of [{ fx: 6 }, { roam: 30 }, { fxTriangles: 801 }, { roamTriangles: 11501 }, { fxShadow: 5 }, { roamShadow: 30 }]) assert.equal(compareRows(b, [{ ...ok, ...o }]).ok, false, JSON.stringify(o));
 });
 
 // ---- The WP3 row kinds (docs/AAA-PLAN.md section 7) ----
@@ -76,8 +102,7 @@ test('live rows: draws, triangles and layout counts may grow 5%, no more', () =>
     const r = compareRows(b, [live(key, o)]); assert.equal(r.ok, false, JSON.stringify(o)); assert.match(r.failures[0], new RegExp(Object.keys(o)[0]));
   }
   const two = foldRuns([live(key, { layoutCount: 100 }), live(key, { layoutCount: 110 })]);
-  assert.equal(rowLimit(two).layoutCount, 125, 'baseline runs that differed: 5% over the larger value, plus the spread');
-  assert.equal(rowLimit(two).peakMain, 210, 'a field that agreed gets the 5% only');
+  assert.equal(two.spread.layoutCount, 10); assert.equal(rowLimit(two).layoutCount, 115, 'baseline runs that differed: 5% over the larger value, the spread is not added');
   assert.equal(compareRows(b, [live(key, { slowestMs: 900, longTasks: 40 })]).ok, true, 'the slowest frame and long tasks are logged, not gated');
   assert.match(compareRows(b, [live(key, { slowestMs: 900, longTasks: 40 })]).report[0], /slowest frame 900 ms, 40 long task/);
 });

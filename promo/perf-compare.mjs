@@ -8,18 +8,19 @@
 //   live                  some seconds of play on the fake clock: the boss peaks, the scripted fight, the idle village's layout work.
 //   report                printed and kept in the baseline, never gated (the Colossus fight, until two runs agree within 5%).
 //
-// Exact fields (draws, shadow draws, triangles, programs): the limit is the baseline's larger value plus the spread the two
-// baseline runs showed (0 when they agreed), plus what a ledger entry for this very row allows.
+// Exact fields (draws, shadow draws, triangles, programs): the limit is the baseline's larger value, plus what a ledger entry
+// for this very row allows. The spread between the baseline runs is recorded (it should be 0: the tool reads the same frame of
+// the same world in every run) and is NOT added to the limit; the rows that still differ are named in docs/QUALITY-PLAN.md.
 // Memory fields (geometries, textures, geometry bytes): may grow 5%.
 // `visited` (scene matrices walked) is reported, never gated.
 // Live fields (peak draws, peak shadow draws, peak triangles, and Chrome's LayoutCount, RecalcStyleCount and Nodes): may grow 5%
-// over the baseline's larger value (plus the spread its runs showed, as for the exact fields). Programs created during a live row may not pass the baseline's larger value at all.
+// over the baseline's larger value. Programs created during a live row may not pass the baseline's larger value at all.
 export const EXACT = ['main', 'shadow', 'triangles', 'programs'];
 export const MEMORY = ['geometries', 'textures', 'geometryBytes'];
 export const MEMORY_GROWTH = 0.05;
 // `fx` (particle pools and loot cards, drawn while one is alive) and `roam` (a rescued friend's avatar, drawn while it walks through the view)
 // are chance: a small allowance, not an exact limit. They are kept out of the exact draw and triangle counts.
-export const SOFT = { fx: 3, roam: 16, fxTriangles: 500, roamTriangles: 2500 };
+export const SOFT = { fx: 3, roam: 16, fxTriangles: 500, roamTriangles: 2500, fxShadow: 3, roamShadow: 16 };
 export const LIVE = ['peakMain', 'peakShadow', 'peakTriangles', 'layoutCount', 'recalcStyleCount', 'nodes'];
 export const LIVE_GROWTH = 0.05;
 /** Counted from zero in a live row, and never allowed above the baseline: a new shader compiled in the middle of a fight is a hitch. */
@@ -56,16 +57,34 @@ export function foldRuns(runs) {
   return out;
 }
 
+/**
+ * Fold the runs of one compare into the rows to judge: the smaller value of every gated field (a real addition shows in every
+ * run, a chance spark does not). A row that is invalid in ANY run, or missing from any run, is invalid: a run that could not
+ * be read must not be hidden by one that could.
+ */
+export function foldCompareRuns(runs) {
+  const keys = [...new Set(runs.flatMap(run => run.map(r => r.key)))];
+  return keys.map(key => {
+    const rows = runs.map(run => run.find(r => r.key === key)), first = rows.find(Boolean);
+    const gone = rows.findIndex(r => !r), bad = rows.findIndex(r => r?.invalid);
+    if (gone >= 0) return { ...first, invalid: `missing from run ${gone + 1} of ${runs.length}` };
+    if (bad >= 0) return { ...first, invalid: runs.length > 1 ? `run ${bad + 1} of ${runs.length}: ${rows[bad].invalid}` : rows[bad].invalid };
+    const out = { ...first };
+    for (const f of FIELDS) if (rows.some(r => typeof r[f] === 'number')) { if (rows.every(r => typeof r[f] === 'number')) out[f] = Math.min(...rows.map(r => r[f])); else delete out[f]; } // not measured in one run: not measured
+    return out;
+  });
+}
+
 /** The most a row may show: { field: limit }. A ledger is { entries: [{ row, name, allow: { field: extra } }] }. */
 export function rowLimit(base, ledger = { entries: [] }) {
   const limit = {}, extra = {};
   for (const e of ledger.entries ?? []) if (e.row === base.key) for (const [f, n] of Object.entries(e.allow ?? {})) extra[f] = (extra[f] ?? 0) + n;
   if (kindOf(base) !== 'standing') {
-    for (const f of LIVE) if (typeof base[f] === 'number') limit[f] = Math.floor(base[f] * (1 + LIVE_GROWTH)) + (base.spread?.[f] ?? 0) + (extra[f] ?? 0);
+    for (const f of LIVE) if (typeof base[f] === 'number') limit[f] = Math.floor(base[f] * (1 + LIVE_GROWTH)) + (extra[f] ?? 0);
     for (const f of CREATED) if (typeof base[f] === 'number') limit[f] = base[f] + (extra[f] ?? 0);
     return limit;
   }
-  for (const f of EXACT) limit[f] = base[f] + (base.spread?.[f] ?? 0) + (extra[f] ?? 0);
+  for (const f of EXACT) limit[f] = base[f] + (extra[f] ?? 0);
   for (const f of MEMORY) limit[f] = Math.floor(base[f] * (1 + MEMORY_GROWTH)) + (extra[f] ?? 0);
   for (const [f, slack] of Object.entries(SOFT)) if (typeof base[f] === 'number') limit[f] = base[f] + slack + (extra[f] ?? 0);
   return limit;
