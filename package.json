@@ -12,6 +12,8 @@
     "perf:gate": "node promo/perf-budget.mjs --compare",
     "perf:baseline": "node promo/perf-budget.mjs --baseline",
     "perf:bytes": "node promo/start-bytes.mjs",
+    "journey": "node promo/journey.mjs",
+    "reel": "node promo/reel.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
     "dev:client": "vite --host 127.0.0.1",
     "start": "node --env-file-if-exists=.env server/server.mjs",

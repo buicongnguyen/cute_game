@@ -1,0 +1,502 @@
+{
+ "note": "Numbers of promo/journey.mjs before the AAA round changed the game (docs/AAA-PLAN.md WP4). Times are seconds after Play. beats: [count, first time]. One run per row: the fight step and free play vary from run to run (where the creatures stand when Attack is pressed), so compare orders of size, not single counts. The mid rows used the mid-game save of WP3 before it was merged; take them again after the rebase (npm run journey -- --route mid --baseline).",
+ "new/phone": {
+  "measured": "2026-11-21",
+  "durationS": 900.5,
+  "firstNamedLineS": 30.1,
+  "firstNamedLineBy": "Pepper",
+  "dialogsOpened": 130,
+  "dialogsBy": {
+   "attack": 115,
+   "collect": 0,
+   "tap": 15,
+   "key": 0,
+   "game": 0
+  },
+  "taps": 1100,
+  "collectTaps": 9,
+  "storySteps": 9,
+  "collectTapsPerStep": 1,
+  "attackPresses": 574,
+  "levelUps": 6,
+  "levelReached": 7,
+  "ribbons": 0,
+  "cards": 0,
+  "stingers": 0,
+  "knockOuts": 0,
+  "kills": 36,
+  "fish": 2,
+  "beats": {
+   "title": [
+    1,
+    -0.8
+   ],
+   "first-view": [
+    1,
+    4.5
+   ],
+   "seed-picker": [
+    1,
+    7.6
+   ],
+   "planted": [
+    1,
+    8.5
+   ],
+   "ripe": [
+    1,
+    28.8
+   ],
+   "first-harvest": [
+    1,
+    29.2
+   ],
+   "first-named-line": [
+    4,
+    30.1
+   ],
+   "collect": [
+    9,
+    33.9
+   ],
+   "market": [
+    1,
+    41.5
+   ],
+   "shop": [
+    1,
+    48
+   ],
+   "bought": [
+    1,
+    49.6
+   ],
+   "backpack": [
+    1,
+    54
+   ],
+   "fight-start": [
+    1,
+    59.6
+   ],
+   "first-kill": [
+    36,
+    62.4
+   ],
+   "attack-opened-dialog": [
+    115,
+    66.8
+   ],
+   "fight-done": [
+    1,
+    299.9
+   ],
+   "level-up": [
+    6,
+    32.9
+   ],
+   "knock-out": [
+    0
+   ],
+   "crystal": [
+    1,
+    547.7
+   ],
+   "pond": [
+    2,
+    317.4
+   ],
+   "fish-bite": [
+    1,
+    592.2
+   ],
+   "fish-caught": [
+    2,
+    597.1
+   ],
+   "map": [
+    1,
+    466.7
+   ],
+   "journal": [
+    1,
+    468.8
+   ],
+   "settings": [
+    1,
+    471.6
+   ],
+   "help": [
+    1,
+    474.4
+   ],
+   "ribbon": [
+    0
+   ],
+   "card": [
+    0
+   ],
+   "stinger": [
+    0
+   ],
+   "end": [
+    1,
+    900.5
+   ]
+  },
+  "fight": {
+   "startS": 59.6,
+   "attackPressesNeeded": 0,
+   "eagerAttackPresses": 118,
+   "trackerTaps": 4,
+   "dialogsOpenedByAttack": 107,
+   "kills": 4,
+   "firstKillAfterS": 2.8,
+   "tookS": 240.4,
+   "lowestHealthPct": 100
+  }
+ },
+ "new/pc": {
+  "measured": "2026-11-21",
+  "durationS": 900.6,
+  "firstNamedLineS": 29.2,
+  "firstNamedLineBy": "Pepper",
+  "dialogsOpened": 303,
+  "dialogsBy": {
+   "attack": 220,
+   "collect": 0,
+   "tap": 83,
+   "key": 0,
+   "game": 0
+  },
+  "taps": 1316,
+  "collectTaps": 10,
+  "storySteps": 10,
+  "collectTapsPerStep": 1,
+  "attackPresses": 781,
+  "levelUps": 7,
+  "levelReached": 8,
+  "ribbons": 0,
+  "cards": 0,
+  "stingers": 0,
+  "knockOuts": 0,
+  "kills": 44,
+  "fish": 2,
+  "beats": {
+   "title": [
+    1,
+    -0.7
+   ],
+   "first-view": [
+    1,
+    4.4
+   ],
+   "seed-picker": [
+    1,
+    7.1
+   ],
+   "planted": [
+    1,
+    8
+   ],
+   "ripe": [
+    1,
+    28
+   ],
+   "first-harvest": [
+    1,
+    28.3
+   ],
+   "first-named-line": [
+    2,
+    29.2
+   ],
+   "collect": [
+    10,
+    32.8
+   ],
+   "market": [
+    1,
+    38.2
+   ],
+   "shop": [
+    1,
+    44.4
+   ],
+   "bought": [
+    1,
+    45.8
+   ],
+   "backpack": [
+    1,
+    50.1
+   ],
+   "fight-start": [
+    1,
+    55.5
+   ],
+   "first-kill": [
+    44,
+    57.7
+   ],
+   "attack-opened-dialog": [
+    220,
+    63
+   ],
+   "fight-done": [
+    1,
+    80.4
+   ],
+   "level-up": [
+    7,
+    31.9
+   ],
+   "knock-out": [
+    0
+   ],
+   "crystal": [
+    1,
+    97
+   ],
+   "pond": [
+    1,
+    107.2
+   ],
+   "fish-bite": [
+    1,
+    114.4
+   ],
+   "fish-caught": [
+    2,
+    119
+   ],
+   "map": [
+    1,
+    144.7
+   ],
+   "journal": [
+    1,
+    146.7
+   ],
+   "settings": [
+    1,
+    149.3
+   ],
+   "help": [
+    1,
+    152.1
+   ],
+   "ribbon": [
+    0
+   ],
+   "card": [
+    0
+   ],
+   "stinger": [
+    0
+   ],
+   "end": [
+    1,
+    900.6
+   ]
+  },
+  "fight": {
+   "startS": 55.5,
+   "attackPressesNeeded": 0,
+   "eagerAttackPresses": 17,
+   "trackerTaps": 4,
+   "dialogsOpenedByAttack": 3,
+   "kills": 5,
+   "firstKillAfterS": 2.2,
+   "tookS": 24.9,
+   "lowestHealthPct": 100
+  }
+ },
+ "mid/phone": {
+  "measured": "2026-11-21",
+  "durationS": 137.9,
+  "firstNamedLineS": null,
+  "firstNamedLineBy": null,
+  "dialogsOpened": 3,
+  "dialogsBy": {
+   "attack": 0,
+   "collect": 0,
+   "tap": 0,
+   "key": 0,
+   "game": 3
+  },
+  "taps": 120,
+  "collectTaps": 0,
+  "storySteps": 0,
+  "collectTapsPerStep": null,
+  "attackPresses": 42,
+  "levelUps": 0,
+  "levelReached": null,
+  "ribbons": 0,
+  "cards": 0,
+  "stingers": 0,
+  "knockOuts": 2,
+  "kills": 0,
+  "fish": 0,
+  "beats": {
+   "first-view": [
+    1,
+    7.7
+   ],
+   "first-named-line": [
+    0
+   ],
+   "collect": [
+    0
+   ],
+   "first-kill": [
+    0
+   ],
+   "attack-opened-dialog": [
+    0
+   ],
+   "level-up": [
+    0
+   ],
+   "knock-out": [
+    2,
+    18.5
+   ],
+   "ribbon": [
+    0
+   ],
+   "card": [
+    0
+   ],
+   "stinger": [
+    0
+   ],
+   "boss-in-view": [
+    1,
+    10.5
+   ],
+   "boss-engaged": [
+    1,
+    14.8
+   ],
+   "boss-half": [
+    0
+   ],
+   "cage-open": [
+    0
+   ],
+   "boss-timeout": [
+    1,
+    135.3
+   ],
+   "end": [
+    1,
+    137.9
+   ]
+  },
+  "boss": {
+   "engagedS": 14.8,
+   "cageOpened": false,
+   "tookS": 120.4,
+   "bossHealthLeftPct": 100,
+   "attackPresses": 42,
+   "skillPresses": 3,
+   "knockOuts": 2,
+   "lowestHealthPct": 23
+  }
+ },
+ "mid/pc": {
+  "measured": "2026-11-21",
+  "durationS": 136.4,
+  "firstNamedLineS": null,
+  "firstNamedLineBy": null,
+  "dialogsOpened": 9,
+  "dialogsBy": {
+   "attack": 0,
+   "collect": 0,
+   "tap": 0,
+   "key": 0,
+   "game": 9
+  },
+  "taps": 344,
+  "collectTaps": 0,
+  "storySteps": 0,
+  "collectTapsPerStep": null,
+  "attackPresses": 282,
+  "levelUps": 0,
+  "levelReached": null,
+  "ribbons": 0,
+  "cards": 0,
+  "stingers": 0,
+  "knockOuts": 8,
+  "kills": 2,
+  "fish": 0,
+  "beats": {
+   "first-view": [
+    1,
+    7.5
+   ],
+   "first-named-line": [
+    0
+   ],
+   "collect": [
+    0
+   ],
+   "first-kill": [
+    2,
+    64
+   ],
+   "attack-opened-dialog": [
+    0
+   ],
+   "level-up": [
+    0
+   ],
+   "knock-out": [
+    8,
+    17.1
+   ],
+   "ribbon": [
+    0
+   ],
+   "card": [
+    0
+   ],
+   "stinger": [
+    0
+   ],
+   "boss-in-view": [
+    1,
+    10.1
+   ],
+   "boss-engaged": [
+    1,
+    13.1
+   ],
+   "boss-half": [
+    0
+   ],
+   "cage-open": [
+    0
+   ],
+   "boss-timeout": [
+    1,
+    133.7
+   ],
+   "end": [
+    1,
+    136.4
+   ]
+  },
+  "boss": {
+   "engagedS": 13.1,
+   "cageOpened": false,
+   "tookS": 120.6,
+   "bossHealthLeftPct": 82,
+   "attackPresses": 282,
+   "skillPresses": 21,
+   "knockOuts": 8,
+   "lowestHealthPct": 4
+  }
+ }
+}
