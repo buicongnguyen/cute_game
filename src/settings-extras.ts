@@ -4,7 +4,7 @@
  * `render` returns the row's markup in English (the dialog localizes it); `bind` gets the page each time the row has
  * been put on it (undefined where there is no page), to find its own elements and listen. Rows keep the order they were added in.
  */
-export type SettingsSection = 'audio' | 'comfort';
+type SettingsSection = 'audio' | 'comfort';
 type Bind = (root: ParentNode | undefined) => void;
 const rows: [SettingsSection, () => string, Bind?][] = [];
 export function addSettingsRow(section: SettingsSection, render: () => string, bind?: Bind) { rows.push([section, render, bind]); }

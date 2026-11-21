@@ -27,22 +27,22 @@ export type Act = '' | 'look' | 'stretch' | 'tap' | 'sit' | 'cheer' | 'holdUp';
 /** The first fidget and the pause between two (seconds, drawn evenly), and when the explorer sits. */
 export const FIDGET_MIN = 6, FIDGET_MAX = 10, SIT_AT = 30;
 /** How long a fidget lasts, and how far it may look (metres; the head turns at most HEAD_TURN radians). */
-export const FIDGET_TIME = { look: 2.6, stretch: 2.4, tap: 2.2 }, LOOK_REACH = 8, HEAD_TURN = 1.1;
+const FIDGET_TIME = { look: 2.6, stretch: 2.4, tap: 2.2 }, LOOK_REACH = 8, HEAD_TURN = 1.1;
 /** A start's lean (radians, over LEAN_TIME seconds) and how long a stop settles (seconds). */
 export const LEAN_IN = .12, LEAN_TIME = .15, SETTLE_TIME = .3;
 /** A clip's length is kept inside these (seconds); how long a clip waits for a fight pose to end before it is dropped. */
-export const CLIP_MIN = .6, CLIP_MAX = 1.2, CLIP_HOLD = 3;
+const CLIP_MIN = .6, CLIP_MAX = 1.2, CLIP_HOLD = 3;
 /** A catch is held up this long after the fish lands (seconds): the arms rise as it arrives. */
 export const HOLD_UP_DELAY = .3;
 /** No sitting with a live creature this near (metres). */
-export const THREAT_REACH = 8;
+const THREAT_REACH = 8;
 /** Seconds to ease a pose in (per act) and out (when it ends by itself; when input cancels it). */
 const EASE_IN: Record<Act, number> = { '': 1, look: .4, stretch: .5, tap: .3, sit: .6, cheer: .12, holdUp: .15 }, EASE_OUT = .3, CLIP_OUT = .18, CANCEL = .12;
 
 type Rot = { rotation: { x: number; y: number; z: number } } | null | undefined;
 export interface HeroParts { armL: Rot; armR: Rot; legL: Rot; legR: Rot; head: Rot }
 /** 0: standing free; 1: walking (a fidget ends); 2: another pose has the body, or the game is not being played. */
-export type Busy = 0 | 1 | 2;
+type Busy = 0 | 1 | 2;
 
 const toward = (r: { x: number; y: number; z: number }, x: number, y: number, z: number, k: number) => { r.x += (x - r.x) * k; r.y += (y - r.y) * k; r.z += (z - r.z) * k; };
 const isClip = (act: Act) => act === 'cheer' || act === 'holdUp';

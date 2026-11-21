@@ -10,7 +10,7 @@ import type { GameServices } from '../game-services.ts';
 import { audioLevels } from '../audio-settings.ts';
 
 /** Time constants of a duck, in seconds: going down (6 dB is reached within 0.1 s) and coming back up. */
-export const DUCK_ATTACK = .02, DUCK_RELEASE = .1;
+const DUCK_ATTACK = .02, DUCK_RELEASE = .1;
 
 /**
  * Gives a graph its duck(name, dB = 6, seconds = 1), its glide for moved sliders and its panner. Ducks do not stack: while one holds, another only makes it last

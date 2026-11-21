@@ -12,7 +12,7 @@
  */
 export const FIGHT = { aggro: 8, lesson: 10, lessonSwing: 4 } as const;
 /** A fallen creature of the first fight still counts while it comes back within this many seconds (first-run.ts CRITTER.respawn is 5; once the step is done it is 999,999). */
-export const LESSON_BACK_S = 30;
+const LESSON_BACK_S = 30;
 interface Foe { x: number; z: number; hp: number; phase?: string; respawn?: number; tutorial?: boolean; mesh: { visible: boolean } }
 /** A creature that has noticed someone (hud-combat.ts aggro). */
 export const angry = (e: { phase?: string }) => !!e.phase && e.phase !== 'idle' && e.phase !== 'return';

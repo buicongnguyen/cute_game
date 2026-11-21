@@ -54,7 +54,7 @@ export function noteAwake(slot: string, now: number, store: Store | null = stora
 }
 
 /** The bag, as the game's rules see it (main.ts hands in storage-slots.ts fits and model.ts addItem). */
-export interface WellBag {
+interface WellBag {
   /** True when the bag has room for these items. */
   fits(s: SaveState, items: Record<string, number>): boolean;
   /** Puts an item in the bag, inside its slot limit; false when refused. */
@@ -82,12 +82,12 @@ export function takeWellGift(bag: WellBag, s: SaveState, slot: string, now: numb
 }
 
 /** What the text needs: the game's translator and HTML escape, and the language for the numbers (the page's own when left out). */
-export interface WellWords {
+interface WellWords {
   t(source: string, params?: Record<string, string | number>): string;
   esc(text: string): string;
   lang?: string;
 }
-export interface WellView {
+interface WellView {
   /** Automatic's full-pay kill is used on this slot: its row says so. */
   autoPaid?: boolean;
   /** The gift row: shown only while the lid in force is 'asleep'. */
@@ -111,7 +111,7 @@ export function wellChoicesHtml({ t, esc, lang }: WellWords, view: WellView = {}
 }
 
 /** What the view needs from the game (main.ts wellDialog hands it over). */
-export interface WellHost extends WellWords, WellBag {
+interface WellHost extends WellWords, WellBag {
   state(): SaveState;
   /** The game's state-change path (level check, save, HUD), the one the Colossus reward goes through. */
   change<R>(fn: () => R): R;

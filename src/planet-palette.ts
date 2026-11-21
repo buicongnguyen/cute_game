@@ -25,7 +25,7 @@ export interface PlanetLight {
   /** Brightness into the colour curve. */
   exposure: number;
 }
-export interface GroundTone {
+interface GroundTone {
   /** Base colours [low, high, landing pad]; without them the planet facts' own (content.ts). */
   base?: readonly [low: string, high: string, pad: string];
   /** Soft patches that break up wide plains (moss, sugar crust, frost, ash, clover...). */

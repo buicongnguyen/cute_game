@@ -30,7 +30,7 @@ export const BEAT = .8, BEAT_LENGTH = .3, POLL = .2;
 /** The heartbeat goes on for this many seconds after the last blow the explorer took. */
 export const HEART_AFTER = 10;
 
-export interface Vitals { health: number; indoors?: boolean }
+interface Vitals { health: number; indoors?: boolean }
 /** The warning's switch: `step` takes the facts and says whether the warning is on. */
 export class LowHealth {
   on = false;

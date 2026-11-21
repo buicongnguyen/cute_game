@@ -17,7 +17,7 @@ export interface HeroMotion {
   twist: number; lean: number; lift: number; sy: number;
 }
 /** What heroPose reads of the world. */
-export interface HeroHost { moving?: boolean; walkClock: number; player: T.Object3D; aimT: number; heroMove?: HeroMotion; heroExtras?: (m: HeroMotion, dt: number) => void }
+interface HeroHost { moving?: boolean; walkClock: number; player: T.Object3D; aimT: number; heroMove?: HeroMotion; heroExtras?: (m: HeroMotion, dt: number) => void }
 
 /**
  * Poses the arms, legs and head for this frame and returns the motion with the body's values. `kind` is the weapon in

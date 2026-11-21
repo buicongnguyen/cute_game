@@ -37,7 +37,7 @@ export const VOICE_KINDS: readonly VoiceKind[] = ['notice', 'windup', 'hurt', 'd
  * `air` breath or hiss mixed in (0 to 1); `notes` the syllables of its notice; `len` how slowly it speaks (1 = a
  * small quick creature); `vib` a wobble in Hz on the long sounds; `trim` evens the families out at the speakers, and `warn` a boss's wind-up.
  */
-export interface Timbre { wave: OscillatorType; f: number; lp?: number; beat?: number; air?: number; notes?: number; len?: number; vib?: number; trim?: number; warn?: number }
+interface Timbre { wave: OscillatorType; f: number; lp?: number; beat?: number; air?: number; notes?: number; len?: number; vib?: number; trim?: number; warn?: number }
 export const VOICES: Record<string, Timbre> = {
   blob: { wave: 'sine', f: 880, notes: 1, len: 1.1, trim: 1, warn: 1.17 }, // a squeak
   bunny: { wave: 'sine', f: 1150, notes: 2, len: .8, trim: 1, warn: 1.15 }, // two quick peeps
@@ -114,7 +114,7 @@ export interface Say {
   boss?: boolean;
 }
 /** A playing voice: `end` on the audio clock, and `stop()` fades it out at once (an interrupted wind-up). */
-export interface Spoken { end: number; peak: number; stop(): void }
+interface Spoken { end: number; peak: number; stop(): void }
 
 type Ctx = AudioContext;
 /** One source into `to` with a quick attack and a decay, its pitch gliding; a second one `beat` Hz off roughens it. */

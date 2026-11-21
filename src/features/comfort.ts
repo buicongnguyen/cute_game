@@ -18,10 +18,10 @@ import { Shake, shakeGain } from '../shake.ts';
 import { budgetStops, hitFeel } from '../hit-stop.ts';
 
 export const SHAKE_CHOICES = ['off', 'low', 'full'] as const, FLASH_CHOICES = ['on', 'low'] as const;
-export type ShakeChoice = typeof SHAKE_CHOICES[number];
-export type FlashChoice = typeof FLASH_CHOICES[number];
+type ShakeChoice = typeof SHAKE_CHOICES[number];
+type FlashChoice = typeof FLASH_CHOICES[number];
 /** What Flashes: Low leaves of a flash. */
-export const FLASH_LOW = .5;
+const FLASH_LOW = .5;
 const LABEL: Record<string, string> = { off: 'Off', low: 'Low', full: 'Full', on: 'On' };
 
 /** The stored Screen shake choice; with none stored, Low under prefers-reduced-motion (`calm`), else Full. */
@@ -29,7 +29,7 @@ export const shakeChoice = (stored: string, calm: boolean): ShakeChoice => store
 export const flashChoice = (stored: string): FlashChoice => stored === 'low' ? 'low' : 'on';
 
 /** A Settings row of two or three choices (English; the dialog localizes it). Each choice is a 44 px target on every screen. */
-export function choiceRow(key: string, title: string, note: string, choices: readonly string[], now: string) {
+function choiceRow(key: string, title: string, note: string, choices: readonly string[], now: string) {
   return `<div class="settings-row"><div><strong>${title}</strong><small>${note}</small></div><div class="segmented comfort-pick" data-comfort="${key}" role="radiogroup" aria-label="${title}">${choices.map(c => `<button role="radio" aria-checked="${c === now}" class="${c === now ? 'on' : ''}" data-kind="${c}">${LABEL[c]}</button>`).join('')}</div></div>`;
 }
 export const shakeRow = (now: ShakeChoice) => choiceRow('shake', 'Screen shake', 'How much the camera moves when a blow lands', SHAKE_CHOICES, now);
