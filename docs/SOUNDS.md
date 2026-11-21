@@ -5,7 +5,7 @@ envelopes). No audio files, no samples: nothing is added to the download (the mo
 The AudioContext is created on the first touch/key (phone unlock) or first sound, never at load.
 
 Mixing: random pitch (+-4 %, +-0.75 % for musical cues) and volume (+-12 %) per play; per-sound limit inside 100 ms
-(hit 3, coin 4, default 2, plus 18 ms minimum gap); voice cap 14 (level/quest/hurt/catch/power and every stinger get +4 headroom);
+(hit 3, coin 4, default 2, plus 18 ms minimum gap); voice cap 14 (level/quest/hurt/catch/power, the big stingers and the Colossus's roar get +4 headroom);
 a compressor on the mix. Effects volume and mute come from Settings (`sfxVolume`, `sound`); music is separate.
 
 ## The sound core: one AudioContext, four buses (AAA-PLAN WP7)
@@ -324,3 +324,151 @@ Tests: `tests/music-director.test.ts`, `tests/music-score.test.ts` (the recordin
   Whether the tunes are pleasant, whether seeded melodies hold up over an hour, and whether a sine marimba sounds cheap
   on phone speakers (the bass notes are below what most of them play) needs a listener: the clips and the listen page are
   for that. **Not verified on a real iPhone**, like the rest of the Web Audio path.
+
+## Creature voices, the wind-up warning and the heartbeat (AAA-PLAN WP12)
+
+Every creature family has a voice (`src/features/creature-voices.ts`, in the lazy features chunk; nothing recorded,
+nothing downloaded). A blob squeaks, a bird chirps, a boar grunts, a bear growls; the bigger the creature, the lower it
+speaks (pitch = (0.7 / radius)^0.6, kept between 0.4 and 1.6 of the family's pitch).
+
+| Kind | When | What is heard |
+|---|---|---|
+| notice | a creature saw the explorer (`creatureAlert`) | the family's own rising "?!", in place of the shared alert beep (`main.ts` plays the beep only while no feature listens) |
+| windup | an attack is coming (`telegraph`, told by `world.onTelegraph` where world.ts starts a wind-up) | the voice starts with the telegraph, climbs in pitch and level, and peaks as the blow lands |
+| hurt | a blow landed on it (`hitLanded`) | a short falling yelp, at most once in 0.25 s per creature |
+| death | it fell (`creatureDefeat`) | the voice falls away, under the poof |
+
+- **A boss's wind-up is the warning.** It is louder than the other voices (about -13.5 dBFS, 9 dB over the music's RMS,
+  4 dB under a hit), has an octave and breath on top, and is not held back by the pauses below. A wind-up longer than
+  1.2 s (the rain, 1.3 s) starts its voice later, so every warning rises for at most 1.2 s and peaks at the blow.
+- **An interrupted wind-up falls silent.** A flinch, a stun, a stagger break, a creature that turns to flee, a defeat:
+  the voice is faded out within about 0.1 s. While a wind-up sounds its creature is looked at every 0.08 s (a timer
+  that exists only then).
+- **Placing.** A voice is panned by where its creature is across the screen (at most 0.8 to a side) and faded with its
+  distance from the explorer: full inside 6 m, silent from 30 m on. An ordinary creature's wind-up is heard only
+  inside 14 m.
+- **A crowd cannot squeak a fight away.** Every voice is an ordinary voice of the shared counter (never a priority
+  one). On top of that the feature holds itself back: at most 4 creature voices at once (2 on a touch device) and 6
+  started in a second (4); no two of a kind within 0.08 s (a notice: 0.3 s; a wind-up: 0.15 s); the same family says
+  the same kind again only after 0.4 s (notice), 0.6 s (wind-up), 0.12 s (hurt) or 0.15 s (death). One notice may sound
+  over the cap, because it took the place of a cue. `__zooSfx.graph.creatures.stats` counts played, limited, capped.
+- **The Colossus roars with its own voice** (`roar` in `stingers.ts`: two rough low voices a few Hz apart that sink, a
+  chest note and a rush of air; -11.2 dBFS, 519 ms). It played the explorer's hurt cry before. Like
+  that cry it may use a voice kept for priority cues: it stuns.
+- **A pet's or a helper's blow lands with a bite** (`petHit` in `stingers.ts`: teeth snap and a short bark), 6.1 dB
+  under the explorer's own hit (-15.3 against -9.2 dBFS), in place of hit, hitHeavy and crit. No line of the hit path
+  changed for it: `hitLanded` is told just before the hit sound in `main.ts` hit(), the feature notes whose blow it is
+  (`blow.helper`), and the stingers' `cue` swaps the sound. `tests/creature-voices.test.ts` holds that order.
+
+### The low-health warning (`src/features/low-health.ts`, `low-health.css`)
+
+Below a quarter of the health bar: a heartbeat, a red edge and a heart on the bar, until the bar is over 30% again
+(between the two it stays as it was, so a bar at exactly a quarter does not make it flap). Off when knocked out, inside
+the cottage, on Battery saver and in a hidden tab.
+
+- The heartbeat is two soft low thumps every 0.8 s (-24 dBFS, 232 ms, strongest near 86 Hz with a quieter part
+  around 200 Hz for small speakers), planned on the audio clock, an ordinary voice: a full fight may drop a beat.
+- The red edge is one layer of its own; only its opacity changes (no layout, no repaint of the page). A desktop pulses
+  it with the beat. A touch device shows it still, and so do a reduced-motion setting and the comfort preference
+  `flashes` = `off` (`zoo-garden-pref-flashes`; the Flashes switch itself comes with WP9).
+- The heart on the bar is a class on the bar that is already there (the warning is not colour alone).
+- A timer looks at the health five times a second; nothing runs per frame.
+
+### Levels (promo/loudness.mjs, parts 5 and 6; kept in promo/loudness.json)
+
+At full level (a creature beside the explorer, of the table's size), default sliders, dBFS at the speakers. For
+comparison: a hit -9.2, the explorer's hurt cry -12, the alert beep -21.8, the music's RMS -22.8.
+
+| Kind | Peak over the families | Band (`VOICE_BANDS`, `WARNING_BAND`) |
+|---|---|---|
+| notice | -21.8 to -18.8 | -24 to -17 |
+| windup (a creature) | -24.8 to -20 | -26 to -17 |
+| hurt | -26.7 to -23.4 | -28 to -18 |
+| death | -22.4 to -18.2 | -26 to -17 |
+| warning (a boss's wind-up) | -14.3 to -13.3 | -16 to -11 |
+| heartbeat | -24 | -26 to -22 |
+
+Each cell: peak dBFS / loudness (K-weighted estimate) / ms within 20 dB of the peak / band with the most energy and
+spectral centroid in Hz.
+
+| Family | notice | windup (0.8 s) | hurt | death | warning (boss, 1.1 s) |
+|---|---|---|---|---|---|
+| blob | -21.3 / -30.4 / 58 / mid 923 | -23.1 / -30 / 843 / mid 869 | -25.6 / -34.4 / 70 / mid 1132 | -22.1 / -31.6 / 190 / mid 913 | -13.5 / -22.6 / 1152 / mid 2306 |
+| bunny | -21.2 / -31.6 / 143 / mid 1259 | -23.1 / -29.3 / 843 / mid 1133 | -25.6 / -33.3 / 52 / mid 1458 | -22.1 / -30.8 / 154 / mid 1188 | -13.4 / -22.3 / 1148 / mid 2681 |
+| mushroom | -21.3 / -32.6 / 62 / mid 1494 | -23.2 / -32.2 / 842 / mid 1245 | -25.8 / -37 / 75 / mid 1678 | -22.2 / -33.9 / 207 / mid 1338 | -13.6 / -24.9 / 1139 / low 1862 |
+| frog | -21.3 / -35.6 / 190 / low 727 | -24.8 / -35 / 843 / low 644 | -25.8 / -37.9 / 74 / low 759 | -22.1 / -34.3 / 215 / low 657 | -13.4 / -26.1 / 1121 / low 962 |
+| winged | -21.2 / -29.5 / 184 / high 2670 | -23.1 / -27.2 / 843 / high 2278 | -25.6 / -31.4 / 40 / high 2872 | -22.1 / -28.7 / 154 / high 2361 | -13.5 / -21.6 / 1149 / mid 3914 |
+| quadruped | -21.8 / -32.6 / 78 / low 730 | -21.3 / -33.8 / 816 / low 649 | -26.7 / -37.4 / 105 / low 1040 | -19.6 / -33 / 243 / low 731 | -14.1 / -26.2 / 1128 / low 1145 |
+| bear | -21.3 / -33.8 / 102 / low 994 | -22.1 / -36 / 826 / low 914 | -25.8 / -38.6 / 139 / low 1421 | -20.5 / -34.7 / 357 / low 1014 | -13.4 / -26.8 / 1123 / sub 903 |
+| crab | -19.5 / -30 / 139 / mid 2269 | -21.3 / -27.8 / 842 / mid 1995 | -24 / -32 / 31 / mid 2291 | -20.3 / -29.4 / 153 / mid 2077 | -13.7 / -23.3 / 1143 / mid 2017 |
+| flower | -20.8 / -33.7 / 70 / low 3017 | -20.4 / -32.7 / 856 / low 2507 | -23.4 / -36.3 / 79 / low 3850 | -20.2 / -34.7 / 212 / low 3105 | -13.6 / -24.2 / 1149 / low 2109 |
+| cactus | -21.3 / -34 / 91 / low 2370 | -22 / -32.1 / 848 / low 2128 | -24.6 / -36.3 / 37 / mid 3634 | -22.2 / -34.8 / 189 / low 2795 | -13.5 / -22.9 / 1145 / low 1672 |
+| treant | -21.1 / -34 / 119 / sub 986 | -21.6 / -35.9 / 830 / sub 800 | -24.1 / -38.2 / 156 / low 1270 | -20.7 / -35 / 411 / sub 910 | -13.3 / -26.6 / 1135 / sub 897 |
+| lollipop | -21.4 / -32.9 / 161 / mid 2898 | -23.4 / -30.6 / 842 / mid 2424 | -26.1 / -34.6 / 59 / mid 3125 | -22.4 / -32.1 / 158 / mid 2612 | -13.5 / -23.6 / 1149 / mid 3179 |
+| cake | -21.5 / -32.8 / 91 / low 459 | -23.2 / -32.3 / 842 / low 438 | -25.8 / -37.1 / 110 / low 545 | -22.2 / -34 / 308 / low 462 | -13.3 / -24.4 / 1133 / low 1200 |
+| biped | -19.6 / -31.1 / 178 / low 1020 | -21.3 / -28.6 / 841 / low 921 | -23.9 / -33.4 / 64 / low 1071 | -20.4 / -30.3 / 174 / low 961 | -13.5 / -23.5 / 1142 / low 1177 |
+| penguin | -20.3 / -32 / 150 / mid 1627 | -21.8 / -31.4 / 839 / mid 1381 | -25 / -34.6 / 61 / mid 1601 | -20.7 / -30.8 / 183 / mid 1436 | -13.5 / -25.4 / 1132 / mid 1910 |
+| volcano | -20.6 / -34.5 / 121 / sub 1675 | -21.3 / -36.1 / 841 / sub 1367 | -23.6 / -38.3 / 130 / sub 1932 | -20.1 / -35.2 / 347 / sub 1513 | -13.4 / -27.8 / 1139 / sub 1395 |
+| turtle | -19.5 / -32.3 / 116 / low 976 | -23.4 / -35.7 / 844 / low 960 | -23.7 / -37.1 / 136 / low 1455 | -19.9 / -33.2 / 369 / low 1006 | -13.5 / -26.3 / 1119 / low 987 |
+| worm | -20.1 / -32.9 / 96 / low 3135 | -20 / -32.4 / 857 / low 2609 | -23.6 / -35.9 / 110 / low 3949 | -19.7 / -35 / 317 / low 3195 | -13.6 / -26.4 / 1146 / low 2111 |
+| dragon | -20.8 / -34.2 / 135 / low 1598 | -21.1 / -35.5 / 837 / low 1423 | -23.4 / -37.1 / 141 / low 2096 | -18.2 / -33.7 / 405 / low 1560 | -14.3 / -27.2 / 1128 / low 1205 |
+| jackbox | -21.5 / -34.8 / 178 / mid 1453 | -23.2 / -32.2 / 842 / mid 1218 | -25.9 / -37 / 64 / mid 1625 | -22.2 / -33.9 / 174 / mid 1294 | -13.5 / -25 / 1136 / low 1824 |
+| robot | -19.5 / -31.4 / 213 / low 1261 | -21.4 / -28.7 / 841 / low 1107 | -23.9 / -33.1 / 45 / low 1277 | -20.4 / -30.3 / 152 / low 1168 | -13.7 / -23 / 1136 / low 1134 |
+| eye | -21.2 / -31 / 87 / mid 654 | -23.1 / -30.4 / 842 / mid 613 | -25.6 / -35.3 / 106 / mid 795 | -22.1 / -32.1 / 291 / mid 650 | -13.5 / -23.8 / 1140 / low 1960 |
+| titan | -18.8 / -33.6 / 148 / sub 1511 | -20.4 / -35.5 / 834 / sub 1157 | -23.6 / -37.7 / 193 / sub 1534 | -19.7 / -34.7 / 553 / sub 1288 | -13.4 / -27.9 / 1137 / sub 1220 |
+
+The warning on the clock, per boss pattern (seconds before the blow lands; the voice rendered alone):
+
+| Pattern | Wind-up, s | Voice starts | First over the music's RMS | Loudest (s from the blow) | Peak, dBFS |
+|---|---|---|---|---|---|
+| slam | 1.1 | 1.09 | 1.06 | 0 | -12.5 |
+| quake | 1.2 | 1.19 | 1.16 | -0.01 | -13.1 |
+| charge | 1 | 0.99 | 0.96 | 0.01 | -12.4 |
+| barrage | 0.9 | 0.89 | 0.86 | -0.04 | -13.1 |
+| rain | 1.3 | 1.19 | 1.16 | -0.01 | -13.1 |
+| spin | 0.7 | 0.69 | 0.66 | -0.01 | -13.5 |
+| eclipse | 1.2 | 1.19 | 1.16 | -0.01 | -13.1 |
+| plain blow | 0.6 | 0.59 | 0.56 | -0.06 | -13.7 |
+| enraged spin | 0.56 | 0.55 | 0.52 | -0.02 | -13.3 |
+| enraged rain | 1.04 | 1.03 | 1 | -0.03 | -13.2 |
+
+A crowded fight with a creature voice every 90 ms and a boss winding up, over the theme, both sliders at the top: peak
+-3.2 dBFS, no clipping.
+
+`tests/creature-voices.test.ts` and `tests/low-health.test.ts` compare every voice's signature with the one measured:
+**after changing a voice, the heartbeat, the roar or the pet hit, run `promo/loudness.mjs --check --write`.**
+
+### In the game: promo/voice-probe.mjs
+
+```
+PORT=<dev server port> node promo/voice-probe.mjs
+```
+
+Plays the real game in Chromium on a desktop and under phone emulation: a fight with twelve creatures and live music
+(voices a second, the most at once, what the shared counter refused), King Bear's telegraphs with their voices and how
+long each wind-up really lasted, the low-health warning as the bar falls and rises (with screenshots in
+`.scratch/voice-probe/`), the number of AudioContexts and every request made meanwhile. Measured for WP12: about 2
+creature voices a second and at most 3 at once in that fight, the shared counter refused 0 sounds on the desktop and
+0 to 1 on the phone profile (staging before: 0 to 3); every King Bear telegraph (0.6 s plain blow, 1.0 s charge, 1.1 s
+slam, 1.2 s quake) had its voice, and a wind-up cut short by a stun was silent 0.2 s later; the warning came on below
+25% and went above 30%, switched once with the bar trembling at a quarter, 6 beats in 5 s; one AudioContext; no
+request for sound.
+
+### What a player may notice (WP12)
+
+- Creatures sound alive: each kind has its own small voice when it notices you, when it is hit and when it falls.
+  The shared alert beep is gone from fights (it still plays for a strained fishing line and before the features load).
+- A boss's attack is heard coming: a rising growl that tops out as the blow lands. Ordinary creatures wind up quietly.
+- Pets and helpers hit with a soft bite, not with your weapon's sound; the Colossus has a roar.
+- With little health left a heartbeat, a red edge and a heart on the bar warn until you are over 30% again.
+- **Not checked by ear.** Levels, lengths, pitch by size, the lead of the warning, the caps and the absence of clipping
+  are measured. Whether the voices are charming or grating, whether 23 families are told apart by more than pitch, and
+  whether the heartbeat is audible on a phone speaker (most of it is below 200 Hz) needs a listener. **Not verified on
+  a real iPhone**, like the rest of the Web Audio path.
+- **Known limits.** A guest in an online room hears no wind-up voice (the host runs the creatures; the telegraph on the
+  ground is still drawn). A boss's warning is an ordinary voice: in a fight that fills a phone's eight voices it can
+  be dropped (not seen in the probe). The Colossus's own attacks have no wind-up voice (they do not go through
+  `world.onTelegraph`). On Battery saver there is no low-health warning at all, as the plan asks. The plan's check
+  names a wind-up that starts 0.4 to 0.8 s before the blow; the voice here starts with the telegraph (0.55 to 1.2 s
+  before), as the plan's scope asks (a rise of 0.4 to 1.2 s). Creature wind-ups shorter than 0.4 s (wasp 0.3, wolf
+  0.35) get a voice as long as their telegraph.
