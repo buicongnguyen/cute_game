@@ -4,28 +4,37 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Sfx, AudioGraph, audioGraph, Voices, SoundGate, TOUCH_VOICES, ALL_SOUNDS, type Bus, type Sound } from '../src/sfx.ts';
 import { audioLevels, AUDIO_DEFAULTS, parseAudio, radio } from '../src/audio-settings.ts';
-import { installDuck, settle, watchRest, mount as mountMix } from '../src/features/sound-mix.ts';
+import { installMix, settle, watchRest, mount as mountMix } from '../src/features/sound-mix.ts';
 
 const BUSES: Bus[] = ['sfx', 'ui', 'ambience', 'music'];
 
-/** An AudioParam that keeps its schedule, so a test can ask for the value at any time. */
+/** An AudioParam that keeps its schedule (steps, ramps and setTargetAtTime glides), so a test can ask for the value at any time. */
 class FakeParam {
-  events: { kind: 'set' | 'ramp'; value: number; time: number }[] = [];
+  events: { kind: 'set' | 'ramp' | 'target'; value: number; time: number; tau?: number }[] = [];
+  /** Direct `.value = x` writes, to prove a playing gain is never stepped. */
+  steps = 0;
   private base = 0;
   private clock: () => number;
   constructor(clock: () => number, base = 0) { this.clock = clock; this.base = base; }
   at(time: number) {
-    let value = this.base, from = -Infinity;
+    // `value` holds until an event; a target event makes it glide: value(t) = goal + (from - goal) * exp(-(t - t0) / tau).
+    let value = this.base, glide: { from: number; goal: number; t0: number; tau: number } | null = null, last = -Infinity;
+    const now = (t: number) => glide ? glide.goal + (glide.from - glide.goal) * Math.exp(-(t - glide.t0) / glide.tau) : value;
     for (const e of [...this.events].sort((a, b) => a.time - b.time)) {
-      if (e.kind === 'set') { if (e.time > time) break; value = e.value; from = e.time; }
-      else if (e.time <= time) { value = e.value; from = e.time; }
-      else { const start = Math.max(from, 0); return time <= start ? value : value + (e.value - value) * (time - start) / (e.time - start); }
+      if (e.kind === 'ramp') {
+        if (e.time <= time) { value = e.value; glide = null; last = e.time; continue; }
+        const start = Math.max(last, 0), from = now(start); return time <= start ? from : from + (e.value - from) * (time - start) / (e.time - start);
+      }
+      if (e.time > time) break;
+      if (e.kind === 'set') { value = e.value; glide = null; } else { const from = now(e.time); glide = { from, goal: e.value, t0: e.time, tau: e.tau! }; }
+      last = e.time;
     }
-    return value;
+    return now(time);
   }
   get value() { return this.at(this.clock()); }
-  set value(v: number) { this.base = v; this.events = []; }
+  set value(v: number) { this.steps++; this.base = v; this.events = []; }
   setValueAtTime(value: number, time: number) { this.events.push({ kind: 'set', value, time }); }
+  setTargetAtTime(value: number, time: number, tau: number) { this.events.push({ kind: 'target', value, time, tau }); }
   linearRampToValueAtTime(value: number, time: number) { this.events.push({ kind: 'ramp', value, time }); }
   exponentialRampToValueAtTime(value: number, time: number) { this.events.push({ kind: 'ramp', value, time }); }
   cancelScheduledValues(time: number) { this.events = this.events.filter(e => e.time < time); }
@@ -67,6 +76,7 @@ class FakeContext {
 }
 const fresh = () => { const ctx = new FakeContext(); return { ctx, make: () => ctx as unknown as AudioContext }; };
 const node = (n: unknown) => n as FakeNode;
+const near = (a: number, b: number, tolerance = 1e-6) => Math.abs(a - b) <= tolerance;
 /** Every node an output can reach by following connections (AudioParams are not nodes and end the walk). */
 function reach(from: FakeNode) {
   const seen = new Set<FakeNode>(), walk = (n: FakeNode) => { for (const t of n.to) if (t instanceof FakeNode && !seen.has(t)) { seen.add(t); walk(t); } };
@@ -78,7 +88,7 @@ const duckOf = (graph: AudioGraph, name: Bus) => node(graph.bus(name)).to[0] as 
 
 test('every voice reaches exactly one bus: click, open and close on ui, the rest on sfx, with or without pan', () => {
   for (const pan of [undefined, -.5]) for (const sound of ALL_SOUNDS) {
-    const { ctx, make } = fresh(), sfx = new Sfx(make); sfx.random = () => .5; ctx.currentTime = 3;
+    const { ctx, make } = fresh(), sfx = new Sfx(make); sfx.random = () => .5; ctx.currentTime = 3; installMix(sfx.graph);
     assert.equal(sfx.play(sound, pan === undefined ? undefined : { pan }), true, sound);
     const buses = busNodes(sfx.graph), want = ['click', 'open', 'close'].includes(sound) ? 'ui' : 'sfx';
     const sources = ctx.nodes.filter(n => n.started > 0);
@@ -99,16 +109,20 @@ test('every voice reaches exactly one bus: click, open and close on ui, the rest
   }
 });
 
-test('the four buses follow the two sliders, and no bus adds a saved setting', () => {
-  const { make } = fresh(), graph = new AudioGraph(make);
+test('the four buses follow the two sliders without a step, and no bus adds a saved setting', () => {
+  const { ctx, make } = fresh(), graph = new AudioGraph(make); installMix(graph);
+  /** Asks for every bus (which applies the sliders), lets 1 s pass, and reads the gains. */
+  const levels = () => { for (const name of BUSES) graph.bus(name); ctx.currentTime += 1; return BUSES.map(name => +node(graph.nodes[name]!.bus).gain.value.toFixed(4)); };
   assert.deepEqual([graph.sfx, graph.music], [AUDIO_DEFAULTS.sfxVolume, AUDIO_DEFAULTS.musicVolume], 'the graph starts at the default sliders');
-  assert.deepEqual(BUSES.map(name => +graph.bus(name)!.gain.value.toFixed(4)), [.55, .55, .55, .45], 'the default sliders keep the old loudness');
+  assert.deepEqual(BUSES.map(name => +graph.bus(name)!.gain.value.toFixed(4)), [.55, .55, .55, .45], 'the default sliders keep the old loudness, from the first moment');
   graph.sfx = .4; graph.music = 1;
-  assert.deepEqual(BUSES.map(name => +graph.bus(name)!.gain.value.toFixed(4)), [.275, .275, .275, 1]);
-  graph.music = 0; assert.equal(graph.bus('music')!.gain.value, 0, 'music slider at 0: music bus gain 0');
-  assert.ok(graph.bus('sfx')!.gain.value > 0, 'the effects are untouched by the music slider');
-  graph.music = 7; assert.equal(graph.bus('music')!.gain.value, 1, 'never above full level');
+  const music = node(graph.bus('music')), at = ctx.currentTime;
+  assert.ok(near(music.gain.at(at), .45), 'a moved slider does not step the gain'); assert.ok(music.gain.at(at + .02) > .45 && music.gain.at(at + .02) < 1, 'it glides');
+  assert.deepEqual(levels(), [.275, .275, .275, 1]);
+  graph.music = 0; graph.bus('music'); ctx.currentTime += .2; assert.equal(music.gain.value, 0, 'music slider at 0: music bus gain exactly 0');
+  assert.ok(node(graph.bus('sfx')).gain.value > 0, 'the effects are untouched by the music slider');
   assert.equal(graph.bus('music'), graph.bus('music'), 'one node per bus');
+  for (const name of BUSES) assert.equal(node(graph.nodes[name]!.bus).gain.steps, 1, `${name}: set outright once, when the bus is made`);
   const sfx = new Sfx(make); sfx.volume = .6; assert.equal(sfx.graph.sfx, .6, 'the effects player\'s volume is the graph\'s effects level');
   // The saved audio settings are the two volumes and the vibration switch, as before.
   assert.deepEqual(Object.keys(AUDIO_DEFAULTS).sort(), ['musicVolume', 'sfxVolume', 'vibrate']);
@@ -119,36 +133,39 @@ test('duck lowers music 6 dB within 0.1 s and restores it; overlapping ducks hol
   const { ctx, make } = fresh(), graph = new AudioGraph(make);
   graph.music = 1; graph.sfx = .8;
   ctx.currentTime = 5; graph.duck('music', 6, 1); assert.equal(duckOf(graph, 'music').gain.at(5.5), 1, 'before the features mount a duck does nothing');
-  installDuck(graph);
+  installMix(graph);
   const duck = duckOf(graph, 'music'), other = duckOf(graph, 'sfx'), low = 10 ** (-6 / 20);
   const dB = (t: number) => 20 * Math.log10(duck.gain.at(t) * node(graph.bus('music')).gain.value);
   assert.equal(dB(0), 0);
   ctx.currentTime = 10; graph.duck('music', 6, 1);
-  assert.ok(Math.abs(dB(10.1) + 6) < .01, `6 dB down after 0.1 s (${dB(10.1)})`); assert.ok(dB(10.04) < 0 && dB(10.04) > -6, 'a short ramp, not a jump');
-  assert.ok(Math.abs(dB(11) + 6) < .01, 'held to the end'); assert.ok(Math.abs(dB(11.3)) < 1e-9 && Math.abs(dB(20)) < 1e-9, 'restored');
+  assert.ok(Math.abs(dB(10.1) + 6) < .1, `6 dB down after 0.1 s (${dB(10.1)})`); assert.ok(dB(10.01) < 0 && dB(10.01) > -6, 'a short glide, not a jump'); assert.ok(near(duck.gain.at(10), 1), 'from where it was');
+  assert.ok(Math.abs(dB(11) + 6) < .001, 'held to the end'); assert.ok(dB(11.1) > -4 && dB(11.1) < 0, 'coming back'); assert.ok(Math.abs(dB(12)) < .001 && Math.abs(dB(20)) < 1e-9, 'restored');
   assert.equal(other.gain.at(10.5), 1, 'only the named bus ducks');
-  ctx.currentTime = 20; graph.duck('music'); assert.ok(Math.abs(duck.gain.at(20.5) - low) < 1e-9 && duck.gain.at(21.4) === 1, 'the defaults: 6 dB for 1 s');
+  ctx.currentTime = 20; graph.duck('music'); assert.ok(near(duck.gain.at(20.5), low) && near(duck.gain.at(22.2), 1, 1e-4), 'the defaults: 6 dB for 1 s');
 
   // Two overlapping ducks: one -6 dB (not -12) until the later one ends.
   ctx.currentTime = 30; graph.duck('music', 6, 1);
   ctx.currentTime = 30.5; graph.duck('music', 6, 1);
-  for (const t of [30.1, 30.5, 30.9, 31.2, 31.5]) assert.ok(Math.abs(duck.gain.at(t) - low) < 1e-9, `one -6 dB at ${t} (${duck.gain.at(t)})`);
-  assert.ok(duck.gain.at(31.65) > low && duck.gain.at(31.65) < 1, 'coming back after the later one');
-  assert.equal(duck.gain.at(31.8), 1);
+  for (const t of [30.1, 30.5, 30.9, 31.2, 31.5]) assert.ok(near(duck.gain.at(t), low, .005), `one -6 dB at ${t} (${duck.gain.at(t)})`);
+  assert.ok(duck.gain.at(31.65) > low + .1 && duck.gain.at(31.65) < 1, 'coming back after the later one');
+  assert.ok(near(duck.gain.at(32.7), 1, 1e-4));
   // A short duck inside a long one does not cut it short; a deeper one does not stack either.
   ctx.currentTime = 50; graph.duck('music', 6, 2);
   ctx.currentTime = 50.2; graph.duck('music', 6, .3); graph.duck('music', 12, .5);
-  assert.ok(Math.abs(duck.gain.at(51.9) - low) < 1e-9); assert.equal(duck.gain.at(52.3), 1);
-  // A duck that starts while the last one is still coming back goes down again from where the gain is.
-  ctx.currentTime = 60; graph.duck('music', 6, 1); ctx.currentTime = 61.15; const mid = duck.gain.value; assert.ok(mid > low && mid < 1);
-  graph.duck('music', 6, 1); assert.ok(Math.abs(duck.gain.at(61.15) - mid) < 1e-9, 'no jump'); assert.ok(Math.abs(duck.gain.at(61.23) - low) < 1e-9);
-  assert.equal(duck.gain.at(62.45), 1);
+  assert.ok(near(duck.gain.at(51.9), low)); assert.ok(near(duck.gain.at(53.2), 1, 1e-4));
+  // A duck that starts while the last one is still coming back goes down again from where the gain is: no jump, and
+  // the code never reads the gain back to do it.
+  ctx.currentTime = 60; graph.duck('music', 6, 1); ctx.currentTime = 61.15; const mid = duck.gain.at(61.15); assert.ok(mid > low + .1 && mid < 1);
+  graph.duck('music', 6, 1); assert.ok(near(duck.gain.at(61.15), mid), 'no jump'); assert.ok(near(duck.gain.at(61.25), low, .005)); assert.ok(duck.gain.at(61.17) < mid);
+  assert.ok(near(duck.gain.at(63.4), 1, 1e-4));
   // Two buses duck on their own clocks.
   ctx.currentTime = 70; graph.duck('ambience', 6, 3); graph.duck('music', 6, 1);
-  assert.equal(duck.gain.at(71.4), 1); assert.ok(Math.abs(duckOf(graph, 'ambience').gain.at(72.9) - low) < 1e-9);
+  assert.ok(near(duck.gain.at(72.2), 1, 1e-4)); assert.ok(near(duckOf(graph, 'ambience').gain.at(72.9), low));
+  // Glides only: no ramp, no step, no direct write on a duck gain.
+  for (const name of BUSES) { const g = node(graph.nodes[name]?.duck)?.gain; if (g) { assert.equal(g.steps, 0, name); assert.ok(g.events.every(e => e.kind === 'target'), name); } }
   // Before any sound there is nothing to duck, and no context is made for it.
   let made = 0; const quiet = new AudioGraph(() => { made++; return fresh().make(); });
-  installDuck(quiet); quiet.duck('music', 6, 1); assert.equal(made, 0);
+  installMix(quiet); quiet.duck('music', 6, 1); assert.equal(made, 0);
 });
 
 test('detune passes through: 1200 cents doubles every pitch of the sound, 0 changes nothing', () => {
@@ -166,25 +183,31 @@ test('detune passes through: 1200 cents doubles every pitch of the sound, 0 chan
   assert.ok(Math.abs(cents - 2 ** (1 / 12)) < 1e-9, 'detune is in cents');
 });
 
-test('the voice counter refuses a 7th voice on touch, and frees a voice when it ends', () => {
+test('the voice counter refuses a 7th ordinary voice on touch, keeps 2 more for priority cues, and never starves a tap', () => {
   assert.equal(TOUCH_VOICES, 6);
-  const voices = new Voices(TOUCH_VOICES);
+  const voices = new Voices(TOUCH_VOICES, 0);
   for (let i = 0; i < 6; i++) assert.equal(voices.take(0, 1 + i * .1), true, `voice ${i + 1}`);
-  assert.equal(voices.take(0, 5), false, 'the 7th is refused'); assert.equal(voices.live(.5), 6);
+  assert.equal(voices.take(0, 5), false, 'the 7th is refused'); assert.equal(voices.live(.5), 6); assert.equal(voices.capped, 1);
   assert.equal(voices.live(1.05), 5); assert.equal(voices.take(1.05, 2), true, 'a finished voice frees its place'); assert.equal(voices.take(1.05, 2), false);
-  // The effects player counts on the graph's shared counter: on touch a brawl leaves one place for a fanfare, and never passes 6.
-  const { ctx, make } = fresh(), sfx = new Sfx(make); sfx.graph.voices.budget = TOUCH_VOICES; ctx.currentTime = 4;
-  const kinds: Sound[] = ['hit', 'crit', 'poof', 'swing', 'punch', 'shoot', 'zap', 'boom', 'pop', 'coin'];
-  assert.equal(kinds.filter(k => sfx.play(k)).length, 5); assert.equal(sfx.play('level'), true, 'a level-up still sounds'); assert.equal(sfx.play('quest'), false);
-  assert.equal(sfx.graph.voices.live(4), 6); assert.equal(sfx.stats.capped, 6);
-  // Another player of the same graph (the ambience, the score) shares the count.
-  assert.equal(sfx.graph.voices.take(4, 9), false); assert.equal(new SoundGate(sfx.graph.voices).admit('land', 4, 5), 'capped');
-  ctx.currentTime = 8; assert.equal(sfx.graph.voices.live(8), 0); assert.equal(sfx.play('hit'), true);
-  assert.equal(new AudioGraph(make).voices.budget, 18, 'not a touch device: the old 14 + 4');
-  // A touch device (a coarse pointer) gets the budget of 6 from the start.
+  // A touch device (a coarse pointer): 6 ordinary voices, as many as a phone fight played before, and 2 more for priority cues.
   const g = globalThis as Record<string, unknown>, before = g.matchMedia;
   g.matchMedia = (query: string) => ({ matches: query === '(pointer: coarse)' });
-  try { assert.equal(new AudioGraph(make).voices.budget, 6); } finally { g.matchMedia = before; }
+  let touch: Sfx; const { ctx, make } = fresh();
+  try { touch = new Sfx(make); } finally { g.matchMedia = before; }
+  const pool = touch.graph.voices; assert.deepEqual([pool.budget, pool.reserve], [TOUCH_VOICES + 2, 2]);
+  ctx.currentTime = 4;
+  const kinds: Sound[] = ['hit', 'crit', 'poof', 'swing', 'punch', 'shoot', 'zap', 'boom', 'pop', 'coin'];
+  assert.equal(kinds.filter(k => touch.play(k)).length, 6, 'six fight sounds at once');
+  assert.equal(pool.take(4, 9), false, 'another ordinary player of the same graph (the ambience, the score, the radio\'s stand-in tune) gets no priority place');
+  assert.equal(new SoundGate(pool).admit('land', 4, 5), 'capped');
+  assert.equal(touch.play('level'), true, 'a level-up still sounds'); assert.equal(touch.play('quest'), true, 'and a quest chime with it'); assert.equal(touch.play('hurt'), false, 'the 9th voice is refused');
+  assert.equal(pool.live(4), 8);
+  // Taps are not starved by a fight: the ui sounds take no voice and need none.
+  assert.equal(touch.play('click'), true); assert.equal(touch.play('open'), true); assert.equal(pool.live(4), 8);
+  assert.equal(touch.stats.capped, 5); assert.equal(touch.graph.stats.capped, 7, 'the graph counts every refusal: the effects\' 5 and the two direct asks'); assert.equal(touch.graph.stats, pool);
+  ctx.currentTime = 8; assert.equal(pool.live(8), 0); assert.equal(touch.play('hit'), true);
+  // Not a touch device: the old 14 + 4.
+  const desk = new AudioGraph(make).voices; assert.deepEqual([desk.budget, desk.reserve], [18, 4]);
 });
 
 test('the first touch or key builds the context once and plays a silent sample (the phone unlock)', () => {
@@ -211,30 +234,41 @@ test('the context sleeps while both sliders are at 0 or the tab is hidden, and w
     audioLevels.music = 0; graph.sfx = 0;
     const stop = watchRest(graph, win as unknown as Window, doc as unknown as Document);
     assert.equal(graph.rest, true); win.dispatchEvent(new Event('pointerdown')); assert.equal(made, 0, 'watching never builds a context');
-    graph.sfx = .8; assert.ok(graph.bus('sfx')); assert.equal(made, 1); assert.equal(ctx.state, 'running');
-    // Both sliders to 0: asleep at the next input (letting a slider go is one); a slider back up and an input: awake.
-    graph.sfx = 0; win.dispatchEvent(new Event('change')); assert.equal(ctx.state, 'suspended'); assert.equal(graph.rest, true);
+    graph.sfx = .8; assert.equal(graph.rest, false, 'a slider up: no longer resting, before any event says so'); assert.ok(graph.bus('sfx')); assert.equal(made, 1); assert.equal(ctx.state, 'running');
+    // Both sliders to 0: asleep at the next input (dragging a slider or letting it go is one); a slider back up and an input: awake.
+    graph.sfx = 0; win.dispatchEvent(new Event('input')); assert.equal(ctx.state, 'suspended', 'dragging the last slider to 0'); assert.equal(graph.rest, true);
+    ctx.state = 'running'; win.dispatchEvent(new Event('change')); assert.equal(ctx.state, 'suspended', 'letting it go');
     win.dispatchEvent(new Event('pointerdown')); assert.equal(ctx.state, 'suspended', 'an input with everything at 0 does not wake it');
     graph.bus('sfx'); graph.bus('music'); assert.equal(ctx.state, 'suspended', 'asking for a bus does not wake a resting context');
     audioLevels.music = .3; win.dispatchEvent(new Event('pointerdown')); assert.equal(ctx.state, 'running', 'music alone keeps it awake');
     assert.equal(graph.music, .3, 'the graph has the music slider'); assert.equal(graph.rest, false);
     audioLevels.music = 0; graph.sfx = .8; win.dispatchEvent(new Event('keydown')); assert.equal(ctx.state, 'running', 'effects alone too');
+    // Awake means resume() every time: a suspend() asked a moment ago may not show in the state yet.
+    const resumes = ctx.calls.resume; win.dispatchEvent(new Event('keydown')); assert.equal(ctx.calls.resume, resumes + 1, 'resume although the state says running');
     // A hidden tab: asleep, also when something asks for a bus; back in view: awake (and at the latest on the next input).
-    doc.hidden = true; doc.dispatchEvent(new Event('visibilitychange')); assert.equal(ctx.state, 'suspended');
+    doc.hidden = true; doc.dispatchEvent(new Event('visibilitychange')); assert.equal(ctx.state, 'suspended'); assert.equal(graph.hidden, true);
     graph.bus('sfx'); win.dispatchEvent(new Event('keydown')); assert.equal(ctx.state, 'suspended');
     doc.hidden = false; win.dispatchEvent(new Event('touchend')); assert.equal(ctx.state, 'running');
-    // An iPhone's "interrupted" state (a call, the lock screen) wakes the same way; a closed context is left alone.
+    // An iPhone's "interrupted" state (a call, the lock screen) wakes the same way, on an input or when a sound asks for its bus; a closed context is left alone.
     ctx.state = 'interrupted'; win.dispatchEvent(new Event('touchend')); assert.equal(ctx.state, 'running');
-    ctx.state = 'closed'; const resumes = ctx.calls.resume; win.dispatchEvent(new Event('touchend')); assert.equal(ctx.calls.resume, resumes);
+    ctx.state = 'interrupted'; graph.bus('sfx'); assert.equal(ctx.state, 'running');
+    ctx.state = 'closed'; const closed = ctx.calls.resume; win.dispatchEvent(new Event('touchend')); assert.equal(ctx.calls.resume, closed);
     ctx.state = 'running';
     // The plain rule, and a browser whose suspend throws.
     assert.equal(settle(graph, false, 0), false); assert.equal(settle(graph, true, .5), true); graph.sfx = 0; assert.equal(settle(graph, false, 0), true); assert.equal(settle(graph, false, .5), false);
     const bad = fresh(); bad.ctx.suspend = () => { throw new Error('no'); }; const broken = new AudioGraph(bad.make); broken.bus('sfx');
     assert.equal(settle(broken, true, 1), true);
     // Stopped: nothing listens any more.
-    stop(); graph.sfx = 0; audioLevels.music = 0; win.dispatchEvent(new Event('pointerdown')); doc.dispatchEvent(new Event('visibilitychange')); assert.equal(ctx.state, 'running');
+    stop(); graph.sfx = 0; audioLevels.music = 0; for (const e of ['pointerdown', 'input', 'change']) win.dispatchEvent(new Event(e)); doc.dispatchEvent(new Event('visibilitychange')); assert.equal(ctx.state, 'running');
     assert.equal(made, 1);
   } finally { audioLevels.music = before; }
+  // The effects slider's preview from 0/0: the click the drag plays is heard at once, though nothing has settled the graph yet.
+  const quiet = fresh(), sfx = new Sfx(quiet.make);
+  assert.equal(sfx.play('click'), true); sfx.volume = 0; assert.equal(settle(sfx.graph, false, 0), true); assert.equal(quiet.ctx.state, 'suspended');
+  assert.equal(sfx.play('click'), false, 'muted at 0'); quiet.ctx.currentTime = 1;
+  sfx.volume = .5; assert.equal(sfx.play('click'), true, 'the preview click plays'); assert.equal(quiet.ctx.state, 'running', 'and wakes the context');
+  // A hidden tab skips effects: its clock is stopped, and they would all play at once on the way back.
+  settle(sfx.graph, true, 0); quiet.ctx.currentTime = 2; assert.equal(sfx.play('hit'), false); settle(sfx.graph, false, 0); assert.equal(sfx.play('hit'), true);
 });
 
 test('one context: the effects, the radio theme and its stand-in tune all play through the shared graph', async () => {
@@ -261,11 +295,11 @@ test('one context: the effects, the radio theme and its stand-in tune all play t
     const media = ctx.nodes.filter(n => n.kind === 'media'); assert.equal(media.length, 1); assert.equal(media[0].media, theme);
     const music = node(graph.bus('music')), trim = node(media[0].to[0]); assert.equal(media[0].to.length, 1); assert.deepEqual(trim.to, [music], 'element -> trim -> music bus'); assert.equal(trim.gain.value, MusicBox.TRIM);
     assert.equal(theme.volume, 1, 'the element stays at full level'); assert.equal(music.gain.value, .45);
-    audioLevels.music = .2; box.tick(.016); assert.equal(music.gain.value, .2, 'the slider moves the bus'); assert.equal(theme.volume, 1);
-    audioLevels.music = 0; box.tick(.016); assert.equal(music.gain.value, 0, 'music slider at 0: music bus gain 0'); assert.equal(theme.volume, 1);
+    audioLevels.music = .2; box.tick(.016); ctx.currentTime += .5; assert.equal(music.gain.value, .2, 'the slider moves the bus'); assert.equal(theme.volume, 1);
+    audioLevels.music = 0; box.tick(.016); ctx.currentTime += .5; assert.equal(music.gain.value, 0, 'music slider at 0: music bus gain 0'); assert.equal(theme.volume, 1);
     // A duck (a stinger, a talk bar) lowers the radio too, because it is on the music bus.
-    audioLevels.music = 1; box.tick(.016); graph.duck('music', 6, 1); ctx.currentTime += .1;
-    assert.ok(Math.abs(node(music.to[0]).gain.value - 10 ** (-6 / 20)) < 1e-9);
+    audioLevels.music = 1; box.tick(.016); graph.duck('music', 6, 1); ctx.currentTime += .2;
+    assert.ok(near(node(music.to[0]).gain.value, 10 ** (-6 / 20), 1e-4));
     box.stop(); assert.equal(theme.paused, true); box.start(); assert.equal(ctx.nodes.filter(n => n.kind === 'media').length, 1, 'switched on again: the same element and node');
     box.stop();
 
@@ -276,10 +310,46 @@ test('one context: the effects, the radio theme and its stand-in tune all play t
     const oscillators = () => ctx.nodes.filter(n => n.kind === 'oscillator' && n.started && reach(n).has(music)).length, quiet = oscillators();
     const live = graph.voices.live(ctx.currentTime); spare.tick(.016);
     assert.equal(oscillators(), quiet + 1, 'a note on the music bus'); assert.equal(graph.voices.live(ctx.currentTime), live + 1, 'counted as a live voice');
+    // Its notes are ordinary voices: with the ordinary places full it stays silent and leaves the priority places alone.
+    ctx.currentTime += 5; const pool = graph.voices; while (pool.take(ctx.currentTime, ctx.currentTime + 9)) { /* fill the ordinary places */ }
+    assert.equal(pool.live(ctx.currentTime), pool.budget - pool.reserve); const full = oscillators();
+    spare.tick(1); spare.tick(1); assert.equal(oscillators(), full, 'no note over a full fight'); assert.equal(pool.take(ctx.currentTime, ctx.currentTime + 1, true), true, 'a priority cue still has its place');
     spare.stop();
     assert.equal(FakeContext.made, 1, 'a fight plus a radio play: still one AudioContext');
     assert.deepEqual(ctx.nodes.filter(n => n.to.includes(ctx.destination)).map(n => n.kind), ['compressor'], 'nothing goes around the mix');
-  } finally { g.AudioContext = saved.AudioContext; g.Audio = saved.Audio; g.document = saved.document; g.window = saved.window; audioLevels.music = before; radio.box = undefined; }
+
+    // The radio switched on before the features came (house-life.ts sets `want`): it starts when they mount.
+    failing = false; radio.box = undefined; radio.want = true; const asked = plays.length;
+    mountRadio({ audio: graph }); const late = radio.box as InstanceType<typeof MusicBox>;
+    assert.equal(late.playing, true, 'the radio the player asked for plays'); assert.equal(radio.want, false); assert.equal(plays.length, asked + 1);
+    late.stop(); mountRadio({ audio: graph }); assert.equal(late.playing, false, 'only once');
+  } finally { g.AudioContext = saved.AudioContext; g.Audio = saved.Audio; g.document = saved.document; g.window = saved.window; audioLevels.music = before; radio.box = undefined; radio.want = false; }
+});
+
+test('a pause before play() settles (AbortError) does not lock the radio to its stand-in tune; a real failure does', async () => {
+  const g = globalThis as Record<string, unknown>, saved = { Audio: g.Audio, document: g.document }, before = audioLevels.music;
+  const answers: (Error | null)[] = []; let made = 0;
+  class FakeAudio { loop = false; volume = 1; src: string; constructor(src: string) { this.src = src; made++; } play() { const error = answers.shift(); return error ? Promise.reject(error) : Promise.resolve(); } pause() {} }
+  g.Audio = FakeAudio; g.document = Object.assign(new EventTarget(), { hidden: false, documentElement: {} });
+  const settled = async () => { await new Promise(r => setTimeout(r, 0)); await new Promise(r => setTimeout(r, 0)); };
+  try {
+    const { MusicBox } = await import('../src/features/radio.ts');
+    const { ctx, make } = fresh(), box = new MusicBox(new AudioGraph(make)), inside = box as unknown as { theme: FakeAudio | null; fallback: boolean };
+    audioLevels.music = .45;
+    // On and off at once: the browser rejects play() with AbortError.
+    answers.push(Object.assign(new Error('The play() request was interrupted by a call to pause().'), { name: 'AbortError' }));
+    box.start(); box.stop(); await settled();
+    assert.equal(inside.fallback, false, 'not the stand-in tune'); assert.ok(inside.theme, 'the theme element is kept'); assert.equal(box.playing, false);
+    // The same while it should be playing (a hidden tab paused it): it stays the theme and is not restarted as the stand-in.
+    answers.push(Object.assign(new Error('interrupted'), { name: 'AbortError' }));
+    box.start(); await settled(); assert.equal(inside.fallback, false); assert.equal(box.playing, true); assert.equal(made, 1);
+    box.stop(); box.start(); await settled(); assert.equal(inside.fallback, false, 'switched on again: the theme'); assert.equal(made, 1, 'the same element');
+    assert.equal(ctx.nodes.filter(n => n.kind === 'oscillator').length, 0, 'no stand-in note was ever made');
+    // A file that cannot play (offline and never kept, an unsupported type): the stand-in tune, from then on.
+    box.stop(); answers.push(Object.assign(new Error('no supported source'), { name: 'NotSupportedError' }));
+    box.start(); await settled(); assert.equal(inside.fallback, true); assert.equal(inside.theme, null); assert.equal(box.playing, true);
+    ctx.currentTime += 1; box.tick(1); assert.equal(ctx.nodes.filter(n => n.kind === 'oscillator' && n.started).length, 1);
+  } finally { g.Audio = saved.Audio; g.document = saved.document; audioLevels.music = before; }
 });
 
 test('without WebAudio the radio still plays, on the element\'s own volume', async () => {

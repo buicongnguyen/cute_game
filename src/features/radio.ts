@@ -49,7 +49,8 @@ export class MusicBox {
           if (bus) try { const trim = bus.context.createGain(); trim.gain.value = MusicBox.TRIM; this.graph.ctx!.createMediaElementSource(theme).connect(trim); trim.connect(bus); this.wired = true; } catch { theme.volume = this.level; }
         }
         this.playing = true;
-        void this.theme.play().catch(() => { this.fallback = true; this.theme = null; this.wired = false; if (this.playing) this.start(); });
+        // AbortError only says a pause() came before play() settled (the radio switched off at once, a hidden tab): the file is fine.
+        void this.theme.play().catch((error: unknown) => { if ((error as { name?: string } | null)?.name === 'AbortError') return; this.fallback = true; this.theme = null; this.wired = false; if (this.playing) this.start(); });
         return;
       } catch { this.fallback = true; this.theme = null; this.wired = false; }
     }
@@ -65,11 +66,15 @@ export class MusicBox {
     if (!this.playing || !this.fallback || !this.gain) return;
     if ((this.timer -= dt) > 0) return; this.timer = .32;
     const f = MusicBox.NOTES[this.step++ % MusicBox.NOTES.length]; if (!f) return;
-    const ctx = this.gain.context, at = ctx.currentTime; if (!this.graph.voices.take(at, at + .62)) return;
+    const ctx = this.gain.context, at = ctx.currentTime; if (!this.graph.voices.take(at, at + .62)) return; // an ordinary voice: never one kept for a priority cue
     const osc = ctx.createOscillator(), env = ctx.createGain();
     osc.type = 'triangle'; osc.frequency.value = f; env.gain.setValueAtTime(.9, at); env.gain.exponentialRampToValueAtTime(.001, at + .6);
     osc.connect(env); env.connect(this.gain); osc.start(at); osc.stop(at + .62);
   }
 }
 
-export function mount(services: Pick<GameServices, 'audio'>) { radio.box ??= new MusicBox(services.audio); }
+export function mount(services: Pick<GameServices, 'audio'>) {
+  radio.box ??= new MusicBox(services.audio);
+  // Switched on while this chunk was still on its way (house-life.ts): play now.
+  if (radio.want) { radio.want = false; radio.box.start(); }
+}

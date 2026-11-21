@@ -100,7 +100,7 @@ test('the effects player and the radio follow the volume sliders', async () => {
     const sfx = new Sfx(); sfx.volume = .8; sfx.play('click'); gains.push((sfx as unknown as { out: { gain: { value: number } } }).out.gain.value);
     sfx.volume = .4; sfx.play('pop'); gains.push((sfx as unknown as { out: { gain: { value: number } } }).out.gain.value);
     assert.ok(Math.abs(gains[0] - .55) < 1e-9, 'the default 0.8 keeps the original loudness'); assert.ok(Math.abs(gains[1] - .275) < 1e-9);
-    const silent = new Sfx(); silent.volume = 0; silent.play('click'); assert.equal((silent as unknown as { ctx: unknown }).ctx, null, 'volume 0 makes no sound at all');
+    const silent = new Sfx(); silent.volume = 0; assert.equal(silent.play('click'), false, 'volume 0 makes no sound at all');
   } finally { g.AudioContext = before; }
   const doc = Object.assign(new EventTarget(), { hidden: false, documentElement: {} });
   class FakeAudio { loop = false; volume = 1; src: string; constructor(src: string) { this.src = src; } play() { return Promise.resolve(); } pause() {} }

@@ -50,7 +50,8 @@ export function initHouseLife(d: LifeDeps) {
   const { world, house } = d, view = house.view;
   const prompt = document.createElement('button'); prompt.id = 'house-prompt'; prompt.type = 'button'; prompt.hidden = true; document.body.append(prompt);
   const bubble = document.createElement('div'); bubble.id = 'house-bubble'; bubble.hidden = true; (document.getElementById('bubble-layer') ?? document.body).append(bubble);
-  const music = { get playing() { return !!radio.box?.playing; }, start() { radio.box?.start(); }, stop() { radio.box?.stop(); }, tick(dt: number) { radio.box?.tick(dt); } };
+  // Before the features are mounted there is no player yet: remember the wish (features/radio.ts starts it) and ask for them again.
+  const music = { get playing() { return !!radio.box?.playing; }, start() { if (radio.box) radio.box.start(); else if (!radio.want) { radio.want = true; radio.ask?.(); } }, stop() { radio.want = false; radio.box?.stop(); } };
   let near: Activity | null = null, shown = '', scan = 0, chatClock = 4, chatLeft = 0, chatFriend: T.Object3D | null = null, decorClock = 0, bubbleAt = '';
   // Online the cooldown stamps are the server's: measure them on its clock (the last reply's `at`), as fish-hunting-view does.
   let clockOffset = 0, using = false;
@@ -83,7 +84,7 @@ export function initHouseLife(d: LifeDeps) {
     }
     if (a.kind === 'fun') {
       if (a.id === 'duck') { d.tone('pop'); world.fx?.text(fx(a), t('Squeak!'), 'callout'); world.fx?.burst(fx(a), { n: 8, color: '#ffe36b', speed: 2, up: 3, size: .08, glow: true, y: 0 }); return; }
-      if (a.id === 'radio') { if (music.playing) { music.stop(); d.toast('The radio is off.', '📻'); } else if (d.soundOn()) { music.start(); if (music.playing) d.toast('A cosy tune fills the cottage.', '🎶'); } else d.toast('Turn up the music volume in Settings to hear the radio.', '🔇'); return; }
+      if (a.id === 'radio') { if (music.playing) { music.stop(); d.toast('The radio is off.', '📻'); } else if (d.soundOn()) { music.start(); d.toast(radio.box ? 'A cosy tune fills the cottage.' : 'The radio is warming up…', '🎶'); } else d.toast('Turn up the music volume in Settings to hear the radio.', '🔇'); return; }
     }
     if (d.visiting()) return d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷');
     const left = cooldownLeft(world.state, a.id, now());
@@ -119,9 +120,9 @@ export function initHouseLife(d: LifeDeps) {
 
   const project = (x: number, y: number, z: number) => { v.set(x, y, z).project(world.camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight] as const; };
   const frame = (dt: number) => {
-    if (!house.inside) { if (!prompt.hidden) prompt.hidden = true; if (!bubble.hidden) bubble.hidden = true; view.highlight.visible = false; if (music.playing) music.stop(); return; }
+    if (!house.inside) { if (!prompt.hidden) prompt.hidden = true; if (!bubble.hidden) bubble.hidden = true; view.highlight.visible = false; if (music.playing || radio.want) music.stop(); return; }
     if (music.playing && !d.soundOn()) music.stop(); // sound switched off in Settings
-    music.tick(dt);
+    radio.box?.tick(dt);
     if ((decorClock -= dt) <= 0) { decorClock = .5; syncDecor(); }
     // The nearest activity: re-measured 8 times a second, the DOM touched only when the text changes.
     if ((scan -= dt) <= 0) {

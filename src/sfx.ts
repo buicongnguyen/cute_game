@@ -39,16 +39,22 @@ const PRIORITY = new Set<Sound>(['level', 'quest', 'hurt', 'catch', 'power', 'fl
 /** Musical cues stay in tune: less pitch spread. */
 const TUNED = new Set<Sound>(['level', 'quest', 'success', 'coin', 'buy', 'sell', 'harvest', 'magic', 'freeze', 'ready', 'open', 'close', 'flag']);
 
-/** Live synthesized voices on a touch device, shared by everything that plays through the graph. */
+/** Live synthesized voices on a touch device, shared by everything that plays through the graph; priority cues get 2 more. */
 export const TOUCH_VOICES = 6;
-/** The shared count of live synthesized voices (one per played sound or note). `budget` is the most at once. */
+/**
+ * The shared count of live synthesized voices (one per played sound or note). `budget` is the most at once; the last
+ * `reserve` of them are kept for priority cues (a fanfare in a brawl).
+ */
 export class Voices {
   private ends: number[] = [];
-  budget: number;
-  constructor(budget = MAX_VOICES + 4) { this.budget = budget; }
+  budget: number; reserve: number;
+  /** Voices refused since the page opened, for the browser probe (audioGraph().stats.capped). */
+  capped = 0;
+  /** The defaults are a desktop's: the old cap of 14 for ordinary sounds, 4 more for priority cues. */
+  constructor(budget = MAX_VOICES + 4, reserve = 4) { this.budget = budget; this.reserve = reserve; }
   live(now: number) { this.ends = this.ends.filter(e => e > now); return this.ends.length; }
-  /** Counts one voice from `now` until `end`; false (and nothing counted) when the budget, less `reserve`, is full. */
-  take(now: number, end: number, reserve = 0) { if (this.live(now) >= this.budget - reserve) return false; this.ends.push(end); return true; }
+  /** Counts one voice from `now` until `end`; false (and nothing counted) when it is full. Only a `priority` voice may use the reserve. */
+  take(now: number, end: number, priority = false) { if (this.live(now) >= this.budget - (priority ? 0 : this.reserve)) { this.capped++; return false; } this.ends.push(end); return true; }
 }
 
 /** Rate limit + voice cap, pure so tests can drive it with a fake clock. */
@@ -61,8 +67,8 @@ export class SoundGate {
   admit(sound: Sound, now: number, end: number) {
     const times = (this.recent.get(sound) ?? []).filter(t => now - t < RATE_WINDOW);
     if (times.length >= (RATE[sound] ?? 2) || (times.length && now - times[times.length - 1] < .018)) { this.recent.set(sound, times); return 'limited' as const; }
-    // Ordinary sounds leave room for a priority cue: 4 voices of the desktop 18, 1 of the 6 on touch.
-    if (!this.pool.take(now, end, PRIORITY.has(sound) ? 0 : this.pool.budget > TOUCH_VOICES ? 4 : 1)) return 'capped' as const;
+    // A tap on a button always sounds: the ui sounds are short and rate-limited, and take no voice from a fight.
+    if (!UI.has(sound) && !this.pool.take(now, end, PRIORITY.has(sound))) return 'capped' as const;
     times.push(now); this.recent.set(sound, times); return 'ok' as const;
   }
 }
@@ -76,7 +82,6 @@ interface Kit { ctx: Ctx; to: AudioNode; at: number; p: number; g: number }
 export type Bus = 'sfx' | 'ui' | 'ambience' | 'music';
 /** These play on the ui bus. */
 const UI = new Set<Sound>(['click', 'open', 'close']);
-const unit = (v: number) => Math.max(0, Math.min(1, v));
 
 /**
  * The game's one AudioContext and its mix: bus -> duck -> compressor -> speakers, for each of the four buses.
@@ -84,18 +89,18 @@ const unit = (v: number) => Math.max(0, Math.min(1, v));
  * After Start, features/sound-mix.ts lets the context sleep while both sliders are at 0 or the tab is hidden.
  */
 export class AudioGraph {
-  readonly voices = new Voices(typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? TOUCH_VOICES : MAX_VOICES + 4);
+  readonly voices = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? new Voices(TOUCH_VOICES + 2, 2) : new Voices();
   /** The effects slider, 0-1 (Sfx.volume). */
   sfx = .8;
   /** The music slider, 0-1: whoever plays music sets it from audio-settings.ts audioLevels.music before asking for the bus. */
   music = .45;
-  /** True while the context is put to sleep (features/sound-mix.ts): asking for a bus then does not wake it. */
-  rest = false;
+  /** The tab is hidden (features/sound-mix.ts keeps it). */
+  hidden = false;
   /** The context once it is made; `ctx` makes it. */
   made: Ctx | null = null;
   private mix: AudioNode | null = null;
   /** Each bus made so far, with the duck gain behind it. */
-  readonly nodes: Partial<Record<Bus, { bus: GainNode; duck: GainNode }>> = {};
+  readonly nodes: Partial<Record<Bus, { bus: GainNode; duck: GainNode; level?: number }>> = {};
   /**
    * Lowers a bus by `dB` for `seconds` so a cue or a spoken line stands out. Ducks do not stack: while one holds, another
    * only makes it last longer. features/sound-mix.ts supplies it once the features are mounted (after the first played
@@ -119,14 +124,25 @@ export class AudioGraph {
   }
   /** Both sliders at 0: nothing can be heard. */
   get silent() { return !(this.sfx > 0) && !(this.music > 0); }
+  /** True while the context should sleep: asking for a bus then does not wake it, and effects are skipped. */
+  get rest() { return this.hidden || this.silent; }
+  /** Counters for the browser probe: voices refused by the shared counter. */
+  readonly stats = this.voices;
+  /** Moves a bus gain to a new level without a step (a step in a playing gain clicks); features/sound-mix.ts supplies it. */
+  glide?: (gain: AudioParam, level: number, now: number) => void;
+  /** A panner in front of `to` (-1 left to 1 right) for one sound; features/sound-mix.ts supplies it, and until then sounds play in the middle. */
+  pan?: (to: AudioNode, pan: number) => AudioNode;
 
   /** A bus to connect to, at its slider's level right now (call it again after a slider moves); null without WebAudio. */
   bus(name: Bus): GainNode | null {
     const ctx = this.ctx; if (!ctx) return null;
     let n = this.nodes[name];
     if (!n) { n = this.nodes[name] = { bus: ctx.createGain(), duck: ctx.createGain() }; n.bus.connect(n.duck); n.duck.connect(this.mix!); }
-    n.bus.gain.value = name === 'music' ? unit(this.music) : .55 * unit(this.sfx) / .8;
-    if (!this.rest && ctx.state === 'suspended') void ctx.resume();
+    const level = name === 'music' ? this.music : .55 * this.sfx / .8, g = n.bus.gain, now = ctx.currentTime;
+    // The first level is set outright; a slider that moves later glides there.
+    if (n.level !== level) { if (n.level === undefined || !this.glide) g.value = level; else this.glide(g, level, now); n.level = level; }
+    // Not only 'suspended': an iPhone reports 'interrupted' after a call or the lock screen.
+    if (!this.rest && ctx.state !== 'running') void ctx.resume()?.catch?.(() => {});
     return n.bus;
   }
 
@@ -135,8 +151,7 @@ export class AudioGraph {
     const events = ['pointerdown', 'touchend', 'keydown'];
     const unlock = () => {
       for (const e of events) window.removeEventListener(e, unlock, { capture: true });
-      const ctx = this.silent ? null : this.ctx;
-      try { if (ctx) { if (ctx.state === 'suspended') void ctx.resume(); const s = ctx.createBufferSource(); s.buffer = ctx.createBuffer(1, 1, ctx.sampleRate); s.connect(ctx.destination); s.start(); } } catch { /* fine */ }
+      try { if (!this.silent && this.bus('sfx')) { const ctx = this.made!, s = ctx.createBufferSource(); s.buffer = ctx.createBuffer(1, 1, ctx.sampleRate); s.connect(ctx.destination); s.start(); } } catch { /* fine */ }
     };
     for (const e of events) window.addEventListener(e, unlock, { capture: true, passive: true });
   }
@@ -153,9 +168,7 @@ export class Sfx {
   /** Counters for tests and the browser probe. */
   readonly stats = { started: 0, limited: 0, capped: 0, muted: 0, byKind: {} as Partial<Record<Sound, number>> };
   random: () => number = Math.random;
-  private ctx: Ctx | null = null;
   private out: GainNode | null = null;
-  private analyser: AnalyserNode | null = null;
   private noise: AudioBuffer | null = null;
   private gate: SoundGate;
   private weapon: { kind: WeaponKind; at: number } = { kind: 'fist', at: -9 };
@@ -171,19 +184,16 @@ export class Sfx {
   private context() {
     if (!this.enabled || !(this.volume > 0)) return null;
     try {
-      this.out = this.graph.bus('sfx'); this.ctx = this.graph.ctx;
-      if (!this.ctx) return null;
+      const ctx = this.graph.ctx; this.out = this.graph.bus('sfx');
+      if (!ctx) return null;
       if (!this.noise) {
-        this.noise = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
+        this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
         const data = this.noise.getChannelData(0); let seed = 7;
         for (let i = 0; i < data.length; i++) { seed = (seed * 16807) % 2147483647; data[i] = seed / 1073741823.5 - 1; }
       }
-      return this.ctx;
+      return ctx;
     } catch { return null; }
   }
-
-  /** For the browser probe: an AnalyserNode on the effects bus (made only when asked). */
-  meter() { const ctx = this.context(); if (!ctx || !this.out) return null; if (!this.analyser) { this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 512; this.out.connect(this.analyser); } return this.analyser; }
 
   // ---- building blocks -------------------------------------------------------------------------------------
   /** One oscillator with a quick attack and exponential decay, pitch gliding from -> to. */
@@ -230,7 +240,8 @@ export class Sfx {
 
   /**
    * Plays a sound; true when it started (false: muted, resting in a hidden tab, rate-limited or over the voice cap).
-   * `detune` shifts the whole sound in cents (100 = a semitone up); `pan` places it from -1 (left) to 1 (right).
+   * `detune` shifts the whole sound in cents (100 = a semitone up); `pan` places it from -1 (left) to 1 (right), once the
+   * features are mounted (after the first played frame).
    */
   play(sound: Sound, opts?: { detune?: number; pan?: number }) {
     // A resting context has a stopped clock: sounds asked for meanwhile would all play at once when it wakes.
@@ -242,7 +253,7 @@ export class Sfx {
     this.stats.started++; this.stats.byKind[sound] = (this.stats.byKind[sound] ?? 0) + 1;
     const spread = TUNED.has(sound) ? .015 : .08;
     let to: AudioNode = UI.has(sound) ? this.graph.bus('ui')! : this.out!;
-    if (opts?.pan && typeof ctx.createStereoPanner === 'function') { const pan = ctx.createStereoPanner(); pan.pan.value = Math.max(-1, Math.min(1, opts.pan)); pan.connect(to); to = pan; }
+    if (opts?.pan && this.graph.pan) to = this.graph.pan(to, opts.pan);
     const k: Kit = { ctx, to, at: now + .005, p: (1 + (this.random() - .5) * spread) * 2 ** ((opts?.detune ?? 0) / 1200), g: .88 + this.random() * .24 };
     const weaponKind = WEAPON_OF[sound]; if (weaponKind) this.weapon = { kind: weaponKind, at: now };
     const struck: WeaponKind = now - this.weapon.at < WEAPON_MEMORY ? this.weapon.kind : 'fist';
