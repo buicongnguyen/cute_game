@@ -10,10 +10,27 @@ import { planetLook } from './look.ts';
 import { cameraOffset } from './camera-rig.ts';
 import { COLOSSUS_ID, COLOSSUS_MINIONS, COLOSSUS_MINION_SHARD, COLOSSUS_NAME, COLOSSUS_SCHEDULE as W, COLOSSUS_STATS as S, COLOSSUS_TYPE, clockText, colossusClock, colossusMaxHp, NEIGHBOUR_HIT_CAP, roarHours } from './colossus-content.ts';
 import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage, colossusSkill, colossusTelegraphs, headMultiplier, headPoint, sanitizeColossusAttack, stepColossusAttack, throughDefence, type ColossusAttack, type ColossusEffect, type ColossusHit, type ColossusSource } from './colossus-patterns.ts';
-import { colossusContributors, grantColossusReward, grantRoarBonus } from './colossus-rewards.ts';
+import { colossusContributors, grantColossusReward, grantRoarBonus, SOOTHED_XP } from './colossus-rewards.ts';
+import { activeKey } from './profiles.ts';
 import { loadColossusArt, makeColossusRig, poseColossus, colossusArtReady, type ColossusRig } from './colossus-art.ts';
 import { ColossusAttackView } from './colossus-view.ts';
 import { colossusChoice, colossusLid, COLOSSUS_LEVEL, SOOTHE_FACTOR, SOOTHE_HP_DIVISOR, type ColossusLid } from './colossus-sleep.ts';
+
+/**
+ * Automatic (no own choice at the well) pays the first soothed kill in full and later ones at the soothed rate
+ * (owner decision D19, the round-1 rule). true: Automatic always pays in full (then also set WELL_PAY.autoFull in
+ * colossus-well-ui.ts, as its test asks, and reword the level-20 News entry in main.ts levelCheck).
+ */
+export const AUTO_ALWAYS_FULL = false;
+/** Where this device remembers, per profile slot, that Automatic's full-pay kill was used (the well's view reads it). */
+export const AUTO_PAID_KEY = 'zoo-colossus-auto-paid';
+/**
+ * What a solo kill pays (grantColossusReward's lid): by the strength the giant was fought at. A soothed fight pays the
+ * soothed rate when the player picked "Soothe it"; under Automatic the first one pays in full (`autoPaid` false).
+ */
+export function colossusPay(fought: 'wild' | 'soothed', chosen: boolean, autoPaid: boolean): 'wild' | 'soothed' {
+  return fought === 'soothed' && !chosen && (AUTO_ALWAYS_FULL || !autoPaid) ? 'wild' : fought;
+}
 
 /** What the runtime needs from the game (main.ts wires it). */
 export interface ColossusHost {
@@ -394,10 +411,17 @@ export class ColossusEvent {
     this.crumble();
     if (helpers.includes('local')) {
       const lastHit = this.killer === 'local', roar = roarHours(now).active; let extraXp = 0;
+      // What it pays (colossus-rewards.ts): by the strength it was fought at. Soothed by the player's own pick: a fifth of the
+      // EXP, no crown roll, 2 fire seeds. Soothed under Automatic: this slot's first such kill pays in full, later ones the soothed rate.
+      const paidKey = `${AUTO_PAID_KEY}:${activeKey()}`, fought = this.spawnedWeak > 1 ? 'soothed' : 'wild'; let autoPaid = false;
+      try { autoPaid = localStorage.getItem(paidKey) === '1'; } catch { /* a private window: each visit's first one pays in full */ }
+      const pay = colossusPay(fought, !!colossusChoice(), autoPaid), xp = S.xp * (pay === 'soothed' ? SOOTHED_XP : 1), firstAuto = fought === 'soothed' && pay === 'wild';
+      if (firstAuto) try { localStorage.setItem(paidKey, '1'); } catch { /* as above */ }
       // Roar hour bonus (+25% EXP and loot counts): solo/offline only, this method returns early online (server-authoritative).
-      const loot = this.h.change(() => { const l = grantColossusReward(this.h.state(), lastHit, Math.random, false); if (roar) extraXp = grantRoarBonus(this.h.state(), l); return l; });
+      const loot = this.h.change(() => { const l = grantColossusReward(this.h.state(), lastHit, Math.random, false, undefined, pay); if (roar) extraXp = grantRoarBonus(this.h.state(), l); return l; });
       this.h.spawnLoot(loot, e.x - 6, e.z);
-      if (this.h.gain) this.h.gain('xp', S.xp + Math.round(extraXp)); else this.h.floating(extraXp ? t('+{xp} EXP (roar hour)', { xp: S.xp + Math.round(extraXp) }) : `+${S.xp} EXP`, e.x - 6, e.z, 'xp');
+      if (this.h.gain) this.h.gain('xp', xp + Math.round(extraXp)); else this.h.floating(extraXp ? t('+{xp} EXP (roar hour)', { xp: xp + Math.round(extraXp) }) : `+${xp} EXP`, e.x - 6, e.z, 'xp');
+      if (firstAuto) this.h.toast(t('Paid in full this once. From now on a soothed win pays a fifth of the EXP plus fire seeds; wake it at the Ember Well for the full reward.'), '💧');
       this.h.world.fx?.orbs({ x: e.x, z: e.z }, 8, '#7ff0ff', () => this.h.world.position, () => this.h.tone('coin'));
       if (lastHit) this.h.toast(bare(t('👑 You landed the FINAL BLOW! Little Cinderpeak joins you.')), '👑');
       else this.h.toast(t('A neighbour landed the final blow. Your share of the spoils is on the ground.'), '🎁');

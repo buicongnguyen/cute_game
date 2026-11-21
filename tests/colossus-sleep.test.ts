@@ -50,3 +50,86 @@ test('the Colossus honours the rule: the event, the sky and the badge, and onlin
   const wb = readFileSync(new URL('../src/welcome-back.ts', import.meta.url), 'utf8');
   assert.match(wb, /if \(s\.level >= COLOSSUS_LEVEL\)/, 'the daily card says nothing about it below 20');
 });
+
+// ---- AAA-PLAN WP24: the well's trade-off view and the sleeping well's gift (colossus-well-ui.ts) ----
+test('the sleeping well gives 1 Fertilizer once per local day per profile slot, inside the bag limit', async () => {
+  const W = await import('../src/colossus-well-ui.ts'), M = await import('../src/model.ts'), { readFileSync } = await import('node:fs');
+  const { fits } = await import('../src/storage-slots.ts');
+  assert.deepEqual(W.WELL_PAY.gift, ['manure', 1]);
+  // The bag as main.ts hands it in: the slot check and the bag-only add of the shared rules.
+  const bag = { fits, add: (save: typeof s, id: string, count: number) => M.addItem(save, id, count) };
+  // From the clock in force (also under the clock-shift preload): local noon, so "tomorrow" is 24 h on in any time zone.
+  const noon = new Date(Date.now()); noon.setHours(12, 0, 0, 0); const now = noon.getTime(), DAY = 86_400_000;
+  const s = M.newGame(), had = s.bag.manure ?? 0;
+  assert.equal(W.wellGift(bag, s, 'slotA', now), 'ready');
+  assert.equal(W.takeWellGift(bag, s, 'slotA', now), true); assert.equal(s.bag.manure, had + 1, 'manure: shown as Fertilizer'); assert.equal(M.ITEMS.manure.name, 'Fertilizer');
+  assert.equal(store.get('zoo-well-gift:slotA'), W.wellDay(now)); assert.equal(W.wellDay(new Date(2026, 0, 5, 23, 59).getTime()), 'Mon Jan 05 2026', 'the local calendar day');
+  assert.equal(W.wellGift(bag, s, 'slotA', now + 3_600_000), 'taken'); assert.equal(W.takeWellGift(bag, s, 'slotA', now + 3_600_000), false); assert.equal(s.bag.manure, had + 1, 'once a day');
+  const late = new Date(now); late.setHours(23, 59, 0, 0); assert.equal(W.takeWellGift(bag, s, 'slotA', late.getTime()), false, 'still the same local day');
+  const morning = new Date(now + DAY); morning.setHours(0, 1, 0, 0); assert.equal(W.takeWellGift(bag, s, 'slotA', morning.getTime()), true, 'the local midnight brings the next one'); assert.equal(s.bag.manure, had + 2);
+  // Another profile slot has its own day.
+  const other = M.newGame(); assert.equal(W.takeWellGift(bag, other, 'slotB', now), true); assert.equal(W.takeWellGift(bag, other, 'slotB', now), false);
+  // A full bag: the gift waits (not marked taken), and comes once there is room.
+  const full = M.newGame(); delete full.bag.manure; let filled = 0;
+  for (const id of Object.keys(M.ITEMS)) { if (!fits(full, { manure: 1 })) break; if (id !== 'manure' && !full.bag[id] && fits(full, { [id]: 1 })) { full.bag[id] = 1; filled++; } }
+  assert.ok(filled > 0 && !fits(full, { manure: 1 }), 'the bag is full');
+  assert.equal(W.wellGift(bag, full, 'slotC', now), 'full'); assert.equal(W.takeWellGift(bag, full, 'slotC', now), false); assert.equal(full.bag.manure, undefined); assert.equal(store.has('zoo-well-gift:slotC'), false);
+  delete full.bag[Object.keys(full.bag).at(-1)!]; assert.equal(W.takeWellGift(bag, full, 'slotC', now), true); assert.equal(full.bag.manure, 1);
+  // No storage (a private window): no gift rather than an endless one.
+  const none = M.newGame(), count = none.bag.manure ?? 0; assert.equal(W.takeWellGift(bag, none, 'slotD', now, null), false); assert.equal(none.bag.manure ?? 0, count);
+  // The game hands the gift out through its state-change path, as it does the Colossus reward.
+  const ui = readFileSync(new URL('../src/colossus-well-ui.ts', import.meta.url), 'utf8');
+  assert.match(ui, /if \(h\.change\(\(\) => takeWellGift\(h, h\.state\(\), h\.slot, Date\.now\(\)\)\)\) h\.toast\(/);
+  const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  assert.match(main, /\{t,esc,fits:fitsBag,add:M\.addItem,state:\(\)=>state,change,toast,slot:activeKey\(\),lid:colossusLid\(level\)\}/);
+});
+test('the well lists its four choices with what each pays, Automatic first, in English and Vietnamese', async () => {
+  const W = await import('../src/colossus-well-ui.ts'), I = await import('../src/i18n.ts'), { readFileSync } = await import('node:fs');
+  const words = () => ({ t: I.t, esc: (text: string) => text.replace(/[&<>"']/g, ch => '&#' + ch.charCodeAt(0) + ';'), lang: I.getLanguage() });
+  // The view keeps display copies of the pay numbers (it imports no game module at run time): each must equal the rule it shows.
+  const C = await import('../src/colossus-content.ts'), R = await import('../src/colossus-rewards.ts'), E = await import('../src/colossus.ts'), { ITEMS } = await import('../src/content.ts');
+  assert.deepEqual({ ...W.WELL_PAY, gift: 0 }, { xp: C.COLOSSUS_STATS.xp, soothedXp: R.SOOTHED_XP, seeds: R.SOOTHED_GIFT[1], crownChance: C.COLOSSUS_LOOT[0][1], crown: C.COLOSSUS_ITEMS.hat_colossus.name, pet: C.COLOSSUS_ITEMS[R.COLOSSUS_PET].name, autoFull: E.AUTO_ALWAYS_FULL, paidKey: E.AUTO_PAID_KEY, gift: 0 });
+  assert.equal(C.COLOSSUS_LOOT[0][0], 'hat_colossus'); assert.equal(R.SOOTHED_GIFT[0], 'seed_fire'); assert.equal(ITEMS.seed_fire.name, 'Fire seed'); assert.equal(ITEMS[W.WELL_PAY.gift[0]].name, 'Fertilizer');
+  const ids = (html: string) => [...html.matchAll(/data-well-pay="(\w+)"/g)].map(m => m[1]);
+  I.setLanguage('en');
+  const en = W.wellChoicesHtml(words());
+  assert.deepEqual(ids(en), ['auto', 'wild', 'soothed', 'asleep']);
+  for (const text of ['Automatic', 'Let it wake', 'Soothe it', 'Lower the lid', '30,000 EXP', '6,000 EXP (a fifth)', 'a 15% chance of the Cinderhorn Crown', 'the loot without the crown', 'plus 2 fire seeds', '1 Fertilizer a day', 'the final blow brings Little Cinderpeak', 'The first soothed win pays in full (30,000 EXP)'])
+    assert.ok(en.includes(text), text);
+  assert.ok(!en.includes('data-well-gift'), 'no gift row unless the lid is down');
+  assert.match(W.wellChoicesHtml(words(), { autoPaid: true }), /The full-pay win is used: soothed wins pay 6,000 EXP and 2 fire seeds\./);
+  assert.match(W.wellChoicesHtml(words(), { gift: 'ready' }), /warms the soil: 1 Fertilizer is ready\.<\/b><br><button class="primary" style="min-height:44px" data-well-gift>Take it<\/button>/);
+  assert.match(W.wellChoicesHtml(words(), { gift: 'taken' }), /Today’s 1 Fertilizer is taken\. Come back tomorrow\.<\/b><\/p>/); assert.match(W.wellChoicesHtml(words(), { gift: 'full' }), /Bag full: make room for today’s 1 Fertilizer\./);
+  // Vietnamese: the lazy table (features-vi) on top of the pack, as the game loads it after Start.
+  const table = (await import('../src/features-vi/colossus-well.ts')).default as Record<string, string>;
+  I.setLanguage('vi'); await I.loadVietnamese(); await I.addPhrases(async () => table);
+  try {
+    const vi = W.wellChoicesHtml(words(), { gift: 'ready' });
+    assert.deepEqual(ids(vi), ['auto', 'wild', 'soothed', 'asleep']);
+    for (const text of ['Tự động', 'Để nó thức dậy', 'Xoa dịu nó', 'Hạ nắp xuống', '30.000 EXP', '6.000 EXP (một phần năm)', 'Vương Miện Sừng Tro', '2 hạt giống lửa', '1 Phân Bón mỗi ngày', 'Cự Thạch Tí Hon', 'Mỗi lựa chọn được thưởng gì', '>Nhận</button>'])
+      assert.ok(vi.includes(text), text);
+    for (const english of ['fight', 'EXP (a fifth)', 'fire seeds', 'final blow', 'Take it', ' pays ', 'The ']) assert.ok(!vi.includes(english), 'left in English: ' + english);
+    for (const html of [W.wellChoicesHtml(words(), { autoPaid: true }), W.wellChoicesHtml(words(), { gift: 'taken' }), W.wellChoicesHtml(words(), { gift: 'full' })]) assert.doesNotMatch(html, /The |Today|Bag full|soothed wins/);
+    // Every phrase of the table is used by the view or by the kill notice, and none is left as English.
+    const used = readFileSync(new URL('../src/colossus-well-ui.ts', import.meta.url), 'utf8') + readFileSync(new URL('../src/colossus.ts', import.meta.url), 'utf8');
+    for (const [key, value] of Object.entries(table)) { assert.ok(used.includes("'" + key + "'"), 'unused: ' + key); assert.notEqual(value, key); }
+  } finally { I.setLanguage('en'); }
+  // The well dialog appends it (solo only), from its own chunk, and the level-20 News entry tells the trade-off.
+  const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  assert.match(main, /if\(!online\)void import\('\.\/colossus-well-ui\.ts'\)\.then\(m=>modal==='well'&&m\.mountWell\(\$\('#dialog-body'\),/);
+  assert.match(main, /soothed: your first win pays in full, later ones a fifth of the EXP plus fire seeds\. Wake it at the Ember Well for the full reward\./);
+  assert.doesNotMatch(main, /from '\.\/colossus-well-ui\.ts'/, 'never a static import: the view is not in the start download');
+  // The view imports types only: a run-time import of start code from this lazy chunk would re-split the start chunks.
+  const view = readFileSync(new URL('../src/colossus-well-ui.ts', import.meta.url), 'utf8');
+  assert.deepEqual(view.split(/\r?\n/).filter(line => /^import /.test(line) && !/^import type /.test(line)), []); assert.doesNotMatch(view, /import\(/);
+});
+test('the solo kill pays by the lid it was fought at; the server never passes a lid', async () => {
+  const { readFileSync } = await import('node:fs');
+  // The runtime pays by the strength the giant was fought at, remembers the full-pay kill per profile slot and floats what it paid.
+  const src = readFileSync(new URL('../src/colossus.ts', import.meta.url), 'utf8');
+  assert.match(src, /fought = this\.spawnedWeak > 1 \? 'soothed' : 'wild'/); assert.ok(src.includes('const paidKey = ' + String.fromCharCode(96) + '$' + '{AUTO_PAID_KEY}:$' + '{activeKey()}' + String.fromCharCode(96)));
+  assert.match(src, /const pay = colossusPay\(fought, !!colossusChoice\(\), autoPaid\), xp = S\.xp \* \(pay === 'soothed' \? SOOTHED_XP : 1\)/);
+  assert.match(src, /grantColossusReward\(this\.h\.state\(\), lastHit, Math\.random, false, undefined, pay\)/); assert.match(src, /this\.h\.gain\('xp', xp \+ Math\.round\(extraXp\)\)/);
+  const server = readFileSync(new URL('../server/combat-authority.mjs', import.meta.url), 'utf8');
+  assert.match(server, /grantColossusReward\(profile,id===killer\.account\.id,Math\.random,false,bonus\)/, 'the server never passes a lid: a shared world pays the wild rate');
+});
