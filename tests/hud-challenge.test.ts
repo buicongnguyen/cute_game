@@ -115,7 +115,7 @@ test('the keyboard guide shows the layout chosen in Settings and folds itself af
   assert.equal(guideFolded(readGuide(storage)), true, 'folded once the keys are learned, remembered on this device');
   g.toggle(); assert.equal(readGuide(storage).mode, 'open', 'reopening by hand sticks'); for (let i = 0; i < 50; i++) g.used(); assert.equal(guideFolded(g.memory), false);
   g.toggle(); assert.equal(guideFolded(readGuide(storage)), true);
-  assert.deepEqual(readGuide({ getItem: () => '{bad' }), { mode: 'auto', uses: 0 }); assert.equal(KEYS_GUIDE_KEY, 'zoo-garden-keys-guide');
+  assert.deepEqual(readGuide({ getItem: () => '{bad' }), { mode: 'auto', uses: 0, ms: 0 }); assert.equal(KEYS_GUIDE_KEY, 'zoo-garden-keys-guide');
 });
 
 test('the bonus line and the keyboard guide are fully Vietnamese', () => {

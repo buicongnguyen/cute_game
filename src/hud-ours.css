@@ -134,7 +134,7 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
 #app #hud #platform-slot .platform-tools button:not(:first-child)::before { content: none; }
 #app #hud #social-slot .social-toggle[data-online=true] { box-shadow: 0 0 0 3px #8fe06a, var(--tile-shadow); }
 #app #hud .icon-button > i { border-color: var(--cream); }
-#app #hud .icon-button > i.news-count { font-size: 10px; font-style: normal; }
+#app #hud .icon-button > i.news-count { font-size: 11px; font-style: normal; }
 @media (hover: hover) { #app #hud .icon-button:hover, #app #hud #social-slot .social-toggle:hover, #app #hud #platform-slot .platform-tools button:hover, #app #hud .home-button:hover { filter: brightness(1.06) saturate(1.1); } }
 
 /* ------------------------------------------------------------------ Map panel and Home tab */
@@ -145,11 +145,11 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
 #app #hud #minimap { border-radius: 0; }
 #app #hud .minimap > span {
   left: 5px; top: 5px; width: 16px; height: 16px; border-radius: 6px; background: var(--plum); border: 1.5px solid var(--cream);
-  color: var(--cream); font-size: 9px; pointer-events: none;
+  color: var(--cream); font-size: 11px; pointer-events: none;
 }
 #app #hud .minimap > small {
-  left: 0; right: 0; top: auto; bottom: 0; transform: none; padding: 2px 8px 3px; border-radius: 0; background: rgba(58, 36, 51, .84);
-  color: var(--cream); font-size: 10px; letter-spacing: .5px; text-align: center; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  left: 0; right: 0; top: auto; bottom: 0; transform: none; padding: 2px 4px 3px; border-radius: 0; background: rgba(58, 36, 51, .84);
+  color: var(--cream); font-size: 11px; letter-spacing: 0; text-align: center; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button {
   position: fixed; left: auto; bottom: auto; right: calc(var(--col) + var(--mm) + 12px); top: var(--map-top) !important;
@@ -199,7 +199,7 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
 }
 /* Names stay on one line under their button in both languages. */
 @media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
-  html[lang] #app #hud .skill > small { white-space: nowrap; max-width: calc(var(--sk) + 22px); overflow: hidden; text-overflow: ellipsis; font-size: 10px; line-height: 1.3; }
+  html[lang] #app #hud .skill > small { white-space: nowrap; max-width: calc(var(--sk) + 22px); overflow: hidden; text-overflow: ellipsis; padding: 1px 3px; font-size: 11px; line-height: 1.3; }
 }
 /* Touch and small screens: the paw. The pad is the heel; the four skills are toes at 162, 114, 66 and 18 degrees on a
    circle of 1.4 skill widths around its centre (neighbours are 1.14 widths apart, so 44 px toes never share a tap). */
@@ -308,7 +308,8 @@ body.air-combat #app #hud .skill[hidden] { display: none; }
 
 /* ------------------------------------------------------------------ Phones */
 @media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
-  #app #hud .minimap > small { display: block; padding: 1px 5px 2px; font-size: 8.5px; letter-spacing: 0; text-transform: none; }
+  /* Phone maps are 84 to 92 px wide: a long place name ("Hành Tinh Mầm Xanh", "Redrock Canyon") takes two lines instead of ending in dots. */
+  #app #hud .minimap > small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; padding: 1px 3px 2px; font-size: 11px; line-height: 12px; text-transform: none; }
   #app #hud .player-card { gap: 1px 7px; padding: 3px 8px 4px 4px; border-radius: 14px; }
   #app #hud .player-name { height: 13px; line-height: 13px; font-size: 11px; }
   #app #hud .level-badge { right: -4px; bottom: -3px; }
@@ -317,8 +318,8 @@ body.air-combat #app #hud .skill[hidden] { display: none; }
   #app #hud .hero-energy { height: 14px; line-height: 14px; margin-bottom: 1px; font-size: 13px; }
   #app #hud .hero-energy > span { width: 14px; height: 14px; }
   #app #hud .meter { height: 13px; }
-  #app #hud .experience { height: 11px; margin-top: 1px; }
-  #app #hud .experience > span { font-size: 8.5px; }
+  #app #hud .experience { height: 13px; margin-top: 1px; }
+  #app #hud .experience > span { font-size: 11px; }
   #app #hud .tracker-stack { top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 6px); width: min(188px, calc(100vw - var(--dock-w) - var(--mm) - var(--edge) * 3 - var(--safe-left) - var(--safe-right) - 12px)); }
   #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button { width: 44px; height: 44px; padding: 0; justify-content: center; }
   #app #hud #reel-button { width: 56px; height: 56px; bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 58px); }
@@ -405,13 +406,12 @@ body.in-rescue #app #hud .home-button { right: calc(var(--edge) + var(--safe-rig
 }
 /* 360 px and narrower: How to play stays in Settings as before, so the dock is eight tiles; in a mode Home is the ninth. */
 @media (orientation: portrait) and (max-width: 360px) {
-  #app #hud .top-actions .secondary-icon { display: none; }
   body.in-mode:not(.in-rescue) #app #hud .home-button { right: calc(var(--edge) + var(--safe-right)); top: calc(var(--menu-bottom, 360px) + 5px) !important; }
 }
 /* Phones: the quest chip is a pill only while it is one line; with the reward button under it, it is a small card. */
 @media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
   #app #hud .quest-tracker:has(#quick-claim:not([hidden])) { border-radius: 16px; padding: 4px 26px 2px 5px; }
-  #app #hud .minimap > small { padding: 1px 3px 2px; }
+  #app #hud .minimap > small { padding: 1px 0 2px; }
 }
 
 /* Phones: the Colossus notice is a small chip at the top that opens on a tap, so it never covers the view. */
@@ -452,11 +452,11 @@ body.in-rescue #app #hud .home-button { right: calc(var(--edge) + var(--safe-rig
   body.air-combat #app #hud .skills .attack-pad > svg, body.air-combat #app #hud .skills .jump-pad > svg { width: 60%; height: 60%; pointer-events: none; }
   body.air-combat #app #hud .skills .attack-pad::before, body.air-combat #app #hud .skills .jump-pad::before {
     content: attr(data-key); position: absolute; top: -9px; right: -9px; min-width: 18px; padding: 0 4px; border-radius: 7px; background: var(--plum); border: 1.5px solid var(--cream);
-    color: var(--cream); font: 900 10px/16px var(--font); text-align: center;
+    color: var(--cream); font: 900 11px/16px var(--font); text-align: center;
   }
   body.air-combat #app #hud .skills .attack-pad::after, body.air-combat #app #hud .skills .jump-pad::after {
     content: attr(data-label); position: absolute; left: 50%; top: calc(100% + 5px); translate: -50% 0; padding: 0 5px; border-radius: 7px; background: var(--cream); color: var(--plum);
-    box-shadow: 0 2px 0 rgba(58, 36, 51, .4); font: 900 10px/1.3 var(--font); white-space: nowrap; right: auto; bottom: auto; width: auto; height: auto;
+    box-shadow: 0 2px 0 rgba(58, 36, 51, .4); font: 900 11px/1.3 var(--font); white-space: nowrap; right: auto; bottom: auto; width: auto; height: auto;
   }
 }
 /* ------------------------------------------------------------------ The crown and short landscape (the fourth skill is always on the paw) */
@@ -569,7 +569,8 @@ body #app #colossus-banner.near { display: none; }
 /* Portrait phones at 360 px and narrower: two px less padding on the right and a 4 px gap between the name and the energy count keep the plate 8 px clear of the map with "Clover" whole. */
 @media (orientation: portrait) and (max-width: 360px) {
   #app #hud .player-card { padding-right: 6px; }
-  #app #hud .player-name { gap: 4px; }
+  /* With a seven-digit energy count the name was 2 px short at 320 px ("Clov..."): no side padding or letter spacing there (WP16). */
+  #app #hud .player-name { gap: 4px; padding: 0; letter-spacing: 0; }
 }
 /* The quest chip stays a positioned box (hud-compact.css grows its tap area with ::after): it is 43 px tall on a 768 px touch screen otherwise. */
 #app #hud #tracker-chip { position: relative; inset: auto; }

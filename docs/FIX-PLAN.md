@@ -67,8 +67,8 @@ Status key: **todo**, **doing**, **done**, **owner** (waits for an owner decisio
 | # | Item | Proposal | Status |
 |---|---|---|---|
 | 6.1 | Phone portrait camera | The camera is close and enemies arrive off screen; zoom out a little in portrait. | todo |
-| 6.2 | PC HUD text is tiny | The health and EXP numbers are about 8 px at 1600x900; make them larger. | todo |
-| 6.3 | Keyboard guide always on | Fold it after the first few minutes; keep it one key away. | todo |
+| 6.2 | PC HUD text is tiny | The health and EXP numbers are about 8 px at 1600x900; make them larger. | done (AAA plan WP16): nothing in the HUD or the main panels is under 11 px on any of the six test screens, in English or Vietnamese (the EXP count was 8.5 px, the map caption 8.5, the HP count 9.5); the EXP bar is 13 px tall so its numbers are whole. `tests/hud-layout.test.mjs` ("readable at a glance") and `promo/hud-probe.mjs` check it, with the 44 px touch targets. New CSS takes its sizes from `src/ui-tokens.css`. |
+| 6.3 | Keyboard guide always on | Fold it after the first few minutes; keep it one key away. | done (AAA plan WP16): open for a new player, it folds itself at the first planting, after 3 minutes of play or 30 game keys, whichever comes first (it was 120 keys); a choice made by hand is final. It is now a low strip along the bottom edge instead of a 188 x 230 px panel, so on a new save the nearest garden bed is free (`src/hud-keys.ts`, `tests/hud-keys.test.ts`). |
 | 6.4 | Dark forest and swamp | Lift the light in the forest and swamp so they read warm, not muddy. | todo |
 | 6.5 | Rescue Call in landscape | The build panel covers about 40% of the screen and the map edge shows bare ground. | todo |
 | 6.6 | Vault rooms | The floor is dark and empty; dress the rooms and fix the health-bar crowd (3.6). | todo |

@@ -34,7 +34,7 @@ test('off: the keys are the old ones (Space attacks, nothing jumps) whatever the
   assert.doesNotMatch(guide, /Jump|Shift/);
   assert.deepEqual([...guide.matchAll(/<dt>(.*?)<\/dt><dd>(.*?)<\/dd>/g)].map(m => [m[1], m[2].replace(/<\/?kbd>/g, ' ').trim().replace(/\s+/g, ' ')]),
     [['Move', 'W A S D'], ['Basic attack', 'Space'], ['Skills', 'J K L ;'], ['Interact', 'F'], ['Journal', 'P'], ['Backpack', 'I'], ['Eat', 'H'], ['Map', 'M']]);
-  assert.match(main, /keysGuide\.render\(state\.settings\.keyboardLayout,getLanguage\(\),airOn\(\)\?spaceKey:undefined,controls\.customKeys\(\)\)/);
+  assert.match(main, /keysGuide\.render\(state\.settings\.keyboardLayout,getLanguage\(\),airOn\(\)\?spaceKey:undefined,controls\.customKeys\(\),started\)/);
   assert.match(main, /const spaceAction=jumpKeyAction\(codeIn,spaceKey,airOn\(\)\);/ /* codeIn: event.code unless a custom key (Settings > Controls > Keys) stands for a preset key */);
   // F asks the shared Attack rule first (attack-intent.ts); switched off it never swings at nothing: it uses the thing beside you, hits a creature in reach, or picks one to walk to.
   assert.match(main, /else if\(key==='f'\)\{fKey\(event\.code\);\}/);

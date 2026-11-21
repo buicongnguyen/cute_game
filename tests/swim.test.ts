@@ -6,7 +6,7 @@ import { SwimState, SWIM, shoreStop, deepEdge, modeAt, shorePoint, pushesIn, swi
 import { JumpState, JUMP } from '../src/jump-rules.ts';
 import { SWIM_VI, SWIM_HELP_VI } from '../src/locales/vi-swim.ts';
 import { VI_PACK } from '../src/locales/vi-pack.ts';
-import { HELP_TOPICS } from '../src/help-topics.ts';
+import { HELP_TOPICS, forDevice } from '../src/help-topics.ts';
 import { HELP_TOPICS_VI } from '../src/locales/vi-help-topics.ts';
 
 const pond: Pool = { id: 'p', x: 0, z: 0, r: 6 };
@@ -121,7 +121,7 @@ test('the pond collider is tagged as water, so swimmers cross it and shots fly o
 test('every swim string has Vietnamese, in the pack and in the help', () => {
   for (const [en, vi] of Object.entries(SWIM_VI)) { assert.equal(VI_PACK[en], vi, en); assert.notEqual(vi, en); }
   const topic = HELP_TOPICS.find(([, title]) => title === 'Crossing water');
-  assert.ok(topic, 'help topic'); assert.equal(HELP_TOPICS_VI['Crossing water'], SWIM_HELP_VI[0]); assert.equal(HELP_TOPICS_VI[topic![2]], SWIM_HELP_VI[1]);
+  assert.ok(topic, 'help topic'); assert.equal(HELP_TOPICS_VI['Crossing water'], SWIM_HELP_VI[0]); assert.equal(HELP_TOPICS_VI[topic![2]], forDevice(SWIM_HELP_VI[1], false));
   const swim = readFileSync(new URL('../src/swim.ts', import.meta.url), 'utf8');
   for (const m of swim.matchAll(/host\.toast\('([^']+)'/g)) assert.ok(SWIM_VI[m[1]], 'translated: ' + m[1]);
 });

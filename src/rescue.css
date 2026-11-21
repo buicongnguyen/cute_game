@@ -90,14 +90,14 @@ body[data-rescue-orient="portrait"] #rescue-build.folded .rescue-tabs button.fol
 .rescue-pads { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .rescue-pads button { width: 40px; height: 40px; border-radius: 12px; border: 2px dashed #d9b98a; background: #fffaf2; font: inherit; font-weight: 900; cursor: pointer; color: #8a5a2c; position: relative; font-size: 15px; }
 .rescue-pads button.built { border-style: solid; background: #fff3d6; }
-.rescue-pads button sup { position: absolute; right: 2px; top: 1px; font-size: 9px; color: #c45a10; }
+.rescue-pads button sup { position: absolute; right: 2px; top: 1px; font-size: 11px; color: #c45a10; }
 .rescue-pads button.sel { border-color: #ffb300; background: #ffe680; box-shadow: 0 0 0 2px rgba(255, 179, 0, .4); }
 .rescue-cards, .rescue-boosts { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
 body[data-rescue-orient="portrait"] .rescue-cards, body[data-rescue-orient="portrait"] .rescue-boosts { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
 .rescue-cards .card, .rescue-boosts .card { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: auto auto auto; gap: 0 6px; align-items: center; text-align: left; padding: 6px 7px; border-radius: 14px; border: 2px solid #f0d8bc; background: #fff; cursor: pointer; font: inherit; color: inherit; min-height: 64px; }
 .rescue-cards .card img, .rescue-boosts .card .ic { grid-row: span 3; width: 40px; height: 40px; object-fit: contain; font-size: 28px; text-align: center; }
 .rescue-cards .card b, .rescue-boosts .card b { font-size: 12.5px; line-height: 1.15; }
-.rescue-cards .card small, .rescue-boosts .card small { font-size: 10.5px; opacity: .78; line-height: 1.2; }
+.rescue-cards .card small, .rescue-boosts .card small { font-size: 11px; opacity: .78; line-height: 1.2; }
 body[data-rescue-orient="portrait"] .rescue-cards .card small { display: none; }
 .rescue-cards .card em, .rescue-boosts .card em { font-style: normal; font-weight: 900; color: #c45a10; font-size: 12px; }
 .rescue-cards .card:hover, .rescue-boosts .card:hover { border-color: #ff8a3d; }
@@ -176,7 +176,7 @@ body.in-rescue #zone-name { opacity: .9; }
   .rescue-tabs button { padding: 4px 4px; font-size: 12.5px; }
   .rescue-member { padding: 5px 6px; margin-bottom: 4px; }
   .rescue-member .who { font-size: 12.5px; }
-  .rescue-member .who small { font-size: 10.5px; }
+  .rescue-member .who small { font-size: 11px; }
   .rescue-member img { width: 24px; height: 24px; }
   .rescue-row button { padding: 4px 8px; font-size: 12.5px; }
   .rescue-pads button { width: 40px; height: 40px; }
