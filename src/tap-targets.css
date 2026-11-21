@@ -20,9 +20,13 @@
   #dialog:not([data-tone="garden"]) #dialog-body .button-row, #dialog-body .button-row { row-gap: 12px; }
   #dialog-body .button-row:has(> [data-action="forge-menu"]) { margin-bottom: 8px; }
 
-  /* The timed-task pill is a slim 26 px row on phones: its hit area grows downwards over the bounty line, which takes no taps
-     (WP16; it was the one HUD control still under 44 px). Only 2 px upwards: the reward button above keeps its own 44 px. */
-  #app #hud #challenge-tracker::after { content: ''; position: absolute; inset: -2px 0 -22px; }
+  /* The timed-task pill is a slim 26 px row on phones (WP16; it was the one HUD control still under 44 px): its hit area grows
+     10 px up and down, over the quest line above and the bounty line below, which take no taps. While the reward button shows
+     in the quest line, it grows downwards instead, so that button keeps its own 44 px. Wider screens draw the pill 44 px tall. */
+  @media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
+    #app #hud #challenge-tracker::after { content: ''; position: absolute; inset: -10px 0; }
+    #app #hud .tracker-panels:has(#quick-claim:not([hidden])) #challenge-tracker::after { inset: -2px 0 -20px; }
+  }
 
   /* Ranking: stacked pills get a full 44 px row each instead of overlapping 6 px hit strips. */
   .ranking-tabs button, .ranking-cats button { min-height: 44px; }
