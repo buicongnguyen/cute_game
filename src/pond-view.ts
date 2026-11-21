@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { toonMaterial } from './toon.ts';
+import { PALETTE, type WaterTone } from './planet-palette.ts';
 
 /**
  * A pond drawn as two smooth polar meshes instead of stacked discs, so the shore, the rim and the water
@@ -12,19 +13,9 @@ import { toonMaterial } from './toon.ts';
  * Normals point straight up so the bank is lit exactly like the flat ground around it. No textures, no
  * custom shaders: 2 draw calls per pond, and neither casts a shadow.
  */
-export interface PondLook { water: string; sand: string; deep: string; shallow: string }
-/** Water colours of the reference's waters (`water:` in its planet table @655363 and the home lakes @672677). */
-const LOOKS: Record<string, PondLook> = {
-  home: { water: '#5ec8ff', sand: '#e6dc9e', deep: '#5ab4d8', shallow: '#9bd3dc' },
-  lake: { water: '#5ec8ff', sand: '#e6dc9e', deep: '#5ab4d8', shallow: '#9bd3dc' },
-  swamp: { water: '#4fc0b0', sand: '#d9cf98', deep: '#2f8a7a', shallow: '#78bba0' },
-  candy: { water: '#ff9fd2', sand: '#ffd8ec', deep: '#e06aa8', shallow: '#f6a9cc' },
-  ice: { water: '#7fd3ff', sand: '#eef6ff', deep: '#3f9fcf', shallow: '#a9dcef' },
-  toy: { water: '#6fd3ff', sand: '#ffe9a8', deep: '#2f93ad', shallow: '#86cfd0' },
-  jungle: { water: '#4fa88a', sand: '#d8c890', deep: '#2a7a62', shallow: '#6fae8f' },
-  ocean: { water: '#4fd8e0', sand: '#f2e2b0', deep: '#2a9aa8', shallow: '#7fd0c8' },
-  shadow: { water: '#3f3a7a', sand: '#5a5478', deep: '#25204a', shallow: '#4a4672' },
-};
+export type PondLook = WaterTone;
+/** Water colours per water (planet-palette.ts). */
+const LOOKS: Record<string, PondLook> = PALETTE.water;
 export const pondLook = (waterId: string) => LOOKS[waterId] ?? LOOKS.home;
 
 const SEGMENTS = 64;

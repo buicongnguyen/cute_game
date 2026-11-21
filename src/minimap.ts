@@ -3,6 +3,7 @@ import { PLANETS, YARD, type PlanetId } from './model.ts';
 import { zoneAt, type EnvironmentLayout } from './environments.ts';
 import { trailOffset, trailDistance, RIM_START } from './biomes.ts';
 import { aggro } from './hud-combat.ts';
+import { PALETTE } from './planet-palette.ts';
 
 /**
  * The map panel: a 150x150 2D canvas showing the whole world north-up at 75/144 px per metre, framed as a rounded
@@ -116,7 +117,7 @@ export function drawTerrain(ctx: Ctx, view: Pick<MapView, 'planet' | 'layout' | 
   ctx.clearRect(0, 0, MAP_PX, MAP_PX);
   if (planet === 'home') drawHome(ctx);
   else {
-    const [base, , pad] = PLANETS[planet].ground;
+    const [base, , pad] = PALETTE.ground[planet].base ?? PLANETS[planet].ground;
     ctx.fillStyle = planet === 'ocean' ? '#3a9ad9' : planet === 'cloud' ? '#d9e4ff' : base; ctx.fillRect(0, 0, MAP_PX, MAP_PX);
     ctx.fillStyle = base; for (const i of layout.islands) disc(ctx, i.x, i.z, Math.max(1.5, i.r * s));
     ctx.strokeStyle = base; ctx.lineWidth = 2; for (const l of layout.links) { const a = mapPoint(l.a.x, l.a.z), b = mapPoint(l.b.x, l.b.z); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }

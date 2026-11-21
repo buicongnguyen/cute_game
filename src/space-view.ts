@@ -4,16 +4,17 @@ import { PLANETS, type PlanetId } from './model.ts';
 import { STAR_MAP, type SpaceFlight, type AsteroidKind } from './space.ts';
 import { gatherPart, type KitLibrary, type KitPart } from './assets.ts';
 import { toonMaterial } from './toon.ts';
+import { PALETTE } from './planet-palette.ts';
 
-/** Soft round glows for nebulae and planet halos, drawn once per colour. */
+/** Soft round glows for nebulae and planet halos, drawn once per colour; `core` (0..1 of the radius) keeps the middle solid, for a round star. */
 const glowTextures = new Map<string, T.CanvasTexture>();
-function glow(color: string) {
-  let texture = glowTextures.get(color);
+function glow(color: string, core = 0) {
+  const key = color + core; let texture = glowTextures.get(key);
   if (texture) return texture;
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 128;
   const ctx = canvas.getContext('2d')!, gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gradient.addColorStop(0, color); gradient.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, 128, 128);
-  texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace; glowTextures.set(color, texture);
+  gradient.addColorStop(core, color); gradient.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, 128, 128);
+  texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace; glowTextures.set(key, texture);
   return texture;
 }
 const hash = (x: number, y: number, z: number) => { const v = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453; return v - Math.floor(v); };
@@ -55,17 +56,19 @@ export class SpaceView {
     if (this.built) { this.refreshShip(); return; }
     this.built = true;
     const scene = this.scene;
-    scene.background = new T.Color('#120a2a');
-    scene.add(new T.HemisphereLight('#c8d8ff', '#3a2a6a', 1.6));
+    const look = PALETTE.space;
+    scene.background = new T.Color(look.sky);
+    scene.add(new T.HemisphereLight(look.hemi[0], look.hemi[1], 1.6));
     const sun = new T.DirectionalLight('#fff4e0', 2.2); sun.position.set(-60, 100, 40); scene.add(sun);
     // Three layers of stars at different depths drift at different speeds as the ship moves.
-    for (const [count, y, size, color] of [[2200, -40, 1.2, '#ffffff'], [1400, -120, 2.2, '#cfe0ff'], [500, -260, 4, '#ffe9b0']] as const) {
+    for (const [count, y, size, layer] of [[2200, -40, 1.2, 0], [1400, -120, 2.2, 1], [500, -260, 4, 2]] as const) {
       const n = Math.round(count * (lowDetail ? .45 : 1)), positions = new Float32Array(n * 3);
       for (let i = 0; i < n; i++) positions.set([between(-1600, 1600), y + between(-10, 10), between(-1600, 1600)], i * 3);
       const geometry = new T.BufferGeometry(); geometry.setAttribute('position', new T.BufferAttribute(positions, 3));
-      scene.add(new T.Points(geometry, new T.PointsMaterial({ color, size, sizeAttenuation: true, transparent: true, opacity: .9, depthWrite: false })));
+      // Round stars wear the halos' round glow with a solid middle, drawn larger than the squares were: a disc with a soft rim covers less of its quad.
+      scene.add(new T.Points(geometry, new T.PointsMaterial({ color: look.stars[layer], size: look.round ? size * 1.8 : size, map: look.round ? glow('#fff', .5) : null, sizeAttenuation: true, transparent: true, opacity: look.round ? 1 : .9, depthWrite: false })));
     }
-    const nebulae = ['rgba(255,110,200,.55)', 'rgba(110,160,255,.5)', 'rgba(160,110,255,.5)', 'rgba(110,240,220,.4)'];
+    const nebulae = look.nebulae;
     for (let i = 0; i < (lowDetail ? 14 : 26); i++) {
       const cloud = new T.Mesh(new T.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new T.MeshBasicMaterial({ map: glow(nebulae[i % nebulae.length]), transparent: true, depthWrite: false, blending: T.AdditiveBlending }));
       cloud.position.set(between(-900, 900), -300, between(-900, 900)); cloud.scale.setScalar(between(180, 420)); scene.add(cloud);
@@ -138,11 +141,15 @@ export class SpaceView {
   /** One instanced mesh per part of a kit model (or of its simple stand-in). */
   private instanced(name: string, count: number, fallback: () => KitPart[]) {
     const parts = (this.kit.ready ? this.kit.parts(name) : undefined) ?? fallback();
-    return parts.map(part => { const mesh = new T.InstancedMesh(part.geometry, part.material, count); mesh.userData.part = part.matrix; return mesh; });
+    // Our own paint for a kit rock (planet-palette.ts): the space kit's materials are worn only here, so the colour is set on them once.
+    const paint = PALETTE.space.paint;
+    return parts.map(part => { const own = paint?.[(part.material as T.Material).name]; if (own) (part.material as T.MeshToonMaterial).color.set(own); const mesh = new T.InstancedMesh(part.geometry, part.material, count); mesh.userData.part = part.matrix; return mesh; });
   }
   private fallbackRock(kind: AsteroidKind): KitPart[] {
     const color = kind === 'ice' ? '#bfe6ff' : kind === 'lava' ? '#5a4048' : '#9a8a7e';
-    return [{ geometry: new T.DodecahedronGeometry(1, 0), material: toonMaterial({ color, flatShading: true, emissive: kind === 'lava' ? '#5a1a08' : '#000000' }), matrix: new T.Matrix4(), name: 'rock' }];
+    // Smooth, with the same twelve faces: every corner lies on the unit ball, so its normal is its own position and the light rolls round the rock.
+    const smooth = PALETTE.space.round, geometry = new T.DodecahedronGeometry(1, 0); if (smooth) geometry.setAttribute('normal', geometry.getAttribute('position').clone());
+    return [{ geometry, material: toonMaterial({ color, flatShading: !smooth, emissive: kind === 'lava' ? '#5a1a08' : '#000000' }), matrix: new T.Matrix4(), name: 'rock' }];
   }
   private fallbackStar(): KitPart[] {
     const shape = new T.Shape();

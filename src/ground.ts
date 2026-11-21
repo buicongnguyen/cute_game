@@ -4,6 +4,7 @@ import { zoneAt, type EnvironmentLayout } from './environments.ts';
 import { trailDistance, smoothstep, RIM_START } from './biomes.ts';
 import { toonMaterial } from './toon.ts';
 import { groundKeep } from './look.ts';
+import { PALETTE, type HomeZone } from './planet-palette.ts';
 
 /**
  * The ground is a grid of 80 m tiles (40 m drew twice the tiles in view for no gain: the ground casts no shadow and
@@ -19,8 +20,8 @@ export function noise2(x: number, z: number) {
   return a + (b - a) * sx + (c - a) * sz + (a - b - c + d) * sx * sz;
 }
 const HOME = { home: new T.Color('#93e06a'), forest: new T.Color('#5cbf57'), meadow: new T.Color('#a6e070'), swamp: new T.Color('#5fb889'), canyon: new T.Color('#f1bb7c') };
-/** Per planet, the colour of soft ground patches (moss, sugar crust, frost, ash, clover...) that break up wide plains. */
-const PATCH: Partial<Record<PlanetId, string>> = { candy: '#ffd0ea', ice: '#b9d6f2', lava: '#55424a', jungle: '#3c9440', ocean: '#f4e2b0', cloud: '#e6f4ff', shadow: '#3b3160' };
+/** A planet's ground colours [low, high, landing pad]: our own (planet-palette.ts), or the planet facts'. */
+export const groundBase = (planet: PlanetId) => PALETTE.ground[planet].base ?? PLANETS[planet].ground;
 /** Width of the red band on the canyon's side of the village fence, in metres. */
 export const DANGER_BAND = 4;
 const SAMPLES = [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3], [2.2, 2.2], [-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2]];
@@ -42,14 +43,10 @@ export interface GroundDetail {
   /** Worn patches: doorsteps, market fronts. */
   worn: readonly Pond[];
 }
-/** Deeper base colours per planet: saturation and lightness shifts, the cool multiply colour of shade, and worn earth. */
-const RICH: Record<PlanetId, { s: number; l: number; shade: string; wear: string }> = {
-  home: { s: 0, l: 0, shade: '#6f9f96', wear: '#ead27c' }, candy: { s: .03, l: -.035, shade: '#d48ac4', wear: '#ffd98a' }, ice: { s: .06, l: -.02, shade: '#8fb4ec', wear: '#e8f4ff' },
-  lava: { s: .1, l: .015, shade: '#8a5a6a', wear: '#7a5a52' }, toy: { s: 0, l: 0, shade: '#c9a8e6', wear: '#fff4c8' }, jungle: { s: 0, l: .03, shade: '#3f7a6a', wear: '#9a7a44' },
-  ocean: { s: .05, l: -.02, shade: '#c8a892', wear: '#f8e8b8' }, cloud: { s: .05, l: -.02, shade: '#96b4e0', wear: '#e8f0ff' }, shadow: { s: .15, l: .02, shade: '#5a56a8', wear: '#3a3470' },
-};
+/** Deeper base colours per planet (planet-palette.ts): saturation and lightness shifts, the multiply colour of shade, and worn earth. */
+const RICH = PALETTE.ground;
 /** The home regions in the richer look: the same hues as HOME, a step more saturated (the colour curve adds the depth). */
-const HOME_RICH = { home: new T.Color('#80d862'), forest: new T.Color('#56bf4f'), meadow: new T.Color('#9fe062'), swamp: new T.Color('#52c08c'), canyon: new T.Color('#f7c284') };
+const ZONES = PALETTE.zones, HOME_RICH = Object.fromEntries(Object.entries(ZONES).map(([zone, [base]]) => [zone, new T.Color(base)])) as Record<HomeZone, T.Color>;
 const FIELD_CELL = 4, FIELD_HALF = 212, FIELD_N = Math.ceil(FIELD_HALF * 2 / FIELD_CELL) + 1;
 /**
  * A coarse map of how much stands over the ground, from the scenery plan: each piece adds a soft blob as wide as its
@@ -69,8 +66,6 @@ export function shadeField(pieces: readonly { x: number; z: number; r: number; w
     return Math.min(1, (grid[k] * (1 - fu) + grid[k + 1] * fu) * (1 - fv) + (grid[k + FIELD_N] * (1 - fu) + grid[k + FIELD_N + 1] * fu) * fv);
   };
 }
-/** A second colour that drifts through each home region in broad patches: moss, sun-bleached grass, peat, baked clay. */
-const ACCENT = { home: '#9be064', forest: '#36a552', meadow: '#c4e860', swamp: '#3fa878', canyon: '#f0a468' } as const;
 const tint = new T.Color();
 /** The richer ground's work on a base colour: deeper and more saturated, broad light and dark drifts, shade under trees, lush banks, glow and wear. */
 export function enrichGround(planet: PlanetId, x: number, z: number, detail: GroundDetail, out: T.Color) {
@@ -80,9 +75,9 @@ export function enrichGround(planet: PlanetId, x: number, z: number, detail: Gro
   if (plain) out.multiplyScalar(1 + broad * .08 + mid * .04);
   else out.offsetHSL(broad * .028, look.s + broad * .04, look.l + broad * .055 + mid * .03 + (1 - shade) * Math.max(0, broad) * .04);
   const zone = planet === 'home' ? zoneAt({ x, z }) : null;
-  if (zone) out.lerp(tint.set(ACCENT[zone]), smoothstep(noise2(x * .045 + 41.7, z * .045 + 3.3), .48, .8) * .4);
-  // Under trees and beside rocks the ground is cooler and darker (rose-brown on the canyon's clay, not green).
-  if (shade > 0) out.lerp(tint.set(zone === 'canyon' ? '#c9908c' : look.shade).multiply(out), shade * (planet === 'lava' || planet === 'shadow' ? .4 : .7));
+  if (zone) out.lerp(tint.set(ZONES[zone][1]), smoothstep(noise2(x * .045 + 41.7, z * .045 + 3.3), .48, .8) * .4);
+  // Under trees and beside rocks the ground is darker: cool in the village, warm on the forest floor, rose-brown on the canyon's clay.
+  if (shade > 0) out.lerp(tint.set(zone ? ZONES[zone][2] : look.shade).multiply(out), shade * (planet === 'lava' || planet === 'shadow' ? .4 : .7));
   for (const p of detail.water) {
     const d = Math.hypot(x - p.x, z - p.z) - p.r;
     if (d < 9 && !plain) { const k = 1 - smoothstep(d, .5, 9); out.offsetHSL(0, .1 * k, -.07 * k); }
@@ -122,12 +117,12 @@ export function groundColor(planet: PlanetId, x: number, z: number, ponds: reado
     if (r >= 18 && x > Math.abs(z)) out.lerp(scratch.set('#d81c14'), (1 - smoothstep(r, 18, 18 + DANGER_BAND)) * .92);
     if (r > 146) out.lerp(scratch.set('#3f8f4a'), smoothstep(r, 146, 156));
   } else {
-    const def = PLANETS[planet], [low, high, pad] = def.ground, n = noise2(x * .08, z * .08) * .65 + noise2(x * .4, z * .4) * .35;
+    const [low, high, pad] = groundBase(planet), n = noise2(x * .08, z * .08) * .65 + noise2(x * .4, z * .4) * .35;
     // The toy play-mat squares come from a texture (vertex colours would blur them); this only shades it.
     if (planet === 'toy') out.set('#ffffff').offsetHSL(0, 0, (n - .5) * .06);
     else out.set(low).lerp(scratch.set(high), smoothstep(n, .3, .75));
     // Patches and a fine dapple, so the plain between props reads as ground rather than a flat fill.
-    const patch = PATCH[planet];
+    const patch = RICH[planet].patch;
     if (patch) { out.lerp(scratch.set(patch), smoothstep(noise2(x * .11 + 31, z * .11 - 17), .5, .72) * .85); out.offsetHSL(0, 0, (noise2(x * .3 + 5, z * .3) - .5) * .08); }
     if (planet === 'lava') out.lerp(scratch.set('#3a2f3a'), Math.max(0, noise2(x * .2 + 7, z * .2) - .55) * 1.5);
     if (detail) enrichGround(planet, x, z, detail, out);
@@ -158,7 +153,7 @@ export function checker(a: string, b: string) {
 
 export function buildGround({ planet, ponds, base, height, segments = 20, detail }: GroundOptions): T.Group {
   // Under our warm light step the grass turned yellower and a little darker: its colour is corrected so sunlit ground looks as it did.
-  const keep = groundKeep(planet), group = new T.Group(), material = toonMaterial({ vertexColors: true, map: planet === 'toy' ? checker(PLANETS.toy.ground[0], PLANETS.toy.ground[1]) : null }), color = new T.Color();
+  const keep = groundKeep(planet), group = new T.Group(), material = toonMaterial({ vertexColors: true, map: planet === 'toy' ? checker(groundBase('toy')[0], groundBase('toy')[1]) : null }), color = new T.Color();
   group.name = 'ground'; group.userData.environment = true;
   const step = GROUND_TILE, cells = Math.round(segments * step / 40);
   for (let tx = -200; tx < 200; tx += step) for (let tz = -200; tz < 200; tz += step) {
