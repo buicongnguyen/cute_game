@@ -325,7 +325,12 @@ test('icons and audio are pinned by content hash: unchanged ones are copied from
   const storage=cacheStorage(),old=worker(await buildFixture(t,base),storage);
   await old.lifecycle('install');
   const key=(name,body)=>`/assets/${name}?v=${shortHash(body)}`;
-  assert.ok(old.caches.requests.includes(key('icons/items/a.webp','icon a')));assert.ok(old.caches.requests.includes(key('audio/theme.mp3','tune')));
+  assert.ok(old.caches.requests.includes(key('icons/items/a.webp','icon a')));
+  // Music is on demand (WP7): not in the install, kept on first play (cache-first under its hash), and carried over by an update.
+  assert.equal(old.caches.requests.some(u=>/audio/.test(u)),false,'the install downloads no music');
+  assert.equal(await(await old.request(key('audio/theme.mp3','tune'))).text(),`network:${origin}${key('audio/theme.mp3','tune')}`);
+  const played=old.network.length;
+  assert.equal(await(await old.request(key('audio/theme.mp3','tune'))).text(),`network:${origin}${key('audio/theme.mp3','tune')}`);assert.equal(old.network.length,played,'the second play comes from the cache');
   const seen=old.caches.requests.length;
   const next=worker(await buildFixture(t,{...base,'assets/icons/items/b.webp':'icon b v2','assets/index-BBBBBBBB.js':'js2'}),storage);
   await next.lifecycle('install');
@@ -333,4 +338,30 @@ test('icons and audio are pinned by content hash: unchanged ones are copied from
   assert.deepEqual(fetched.filter(u=>/icons|audio/.test(u)),[key('icons/items/b.webp','icon b v2')],'only the changed icon is fetched');
   const calls=next.network.length;
   assert.equal(await(await next.request(key('icons/items/a.webp','icon a'))).text(),`cached:${key('icons/items/a.webp','icon a')}`);assert.equal(next.network.length,calls,'a hashed icon is cache-first');
+  next.setNetwork(async()=>{throw new Error('offline');});
+  assert.equal(await(await next.request(key('audio/theme.mp3','tune'))).text(),`network:${origin}${key('audio/theme.mp3','tune')}`,'the update kept the tune that was played: the radio works offline');
+});
+
+test('music is on demand: no audio in the install list; the background fill fetches it after the models',async t=>{
+  const {onDemand,isHashedBuildFile}=await import('../server/sw-logic.mjs');
+  assert.equal(onDemand('/x/assets/audio/a.mp3'),true);assert.equal(onDemand('/cute_game/assets/audio/zoo-garden-theme.mp3'),true);
+  assert.equal(onDemand('/x/assets/models/farm.glb'),true);assert.equal(onDemand('/x/assets/models/cottage.glb'),false,'the start models still install');
+  assert.equal(onDemand('/x/assets/icons/items/a.webp'),false);assert.equal(onDemand('/x/assets/audio-AAAAAAAA.js'),false);assert.equal(isHashedBuildFile('/x/assets/audio/a.mp3'),false);
+  const files={'index.html':'shell','assets/index-AAAAAAAA.js':'js','assets/audio/zoo-garden-theme.mp3':'theme','assets/models/farm.glb':'farm','assets/models/worlds-ice.glb':'ice','assets/models/cottage.glb':'cottage'};
+  const source=await buildFixture(t,files,{base:'/x/'});
+  const list=name=>JSON.parse(source.match(new RegExp(`^const ${name}=(\\[.*\\]);$`,'m'))[1]);
+  assert.deepEqual([...list('CORE'),...list('EXTRA')].filter(u=>u.includes('/assets/audio/')),[],'the theme is not in the install list');
+  const theme=`/x/assets/audio/zoo-garden-theme.mp3?v=${shortHash('theme')}`;
+  assert.equal(list('LATER').at(-1),theme,'on demand, after the models');assert.equal(list('LATER').length,3);
+  assert.ok(list('PINNED').includes(theme),'still cache-first under its content hash');assert.ok(list('KNOWN').includes('/x/assets/audio/zoo-garden-theme.mp3'));
+  const app=worker(source);
+  await app.lifecycle('install');
+  assert.equal(app.caches.requests.some(u=>u.includes('/assets/audio/')),false,'installing fetches no audio');
+  await app.message({type:'zoo-fill'});
+  assert.ok(app.caches.requests.includes(theme),'the background fill stores it for offline play');
+  app.setNetwork(async()=>{throw new Error('offline');});
+  assert.equal(await(await app.request(theme)).text(),`cached:${theme}`);
+  // The real tree: every file under public/assets/audio is on demand.
+  const {readdirSync}=await import('node:fs');
+  for(const name of readdirSync(path.join(root,'public/assets/audio')))assert.equal(onDemand(`/cute_game/assets/audio/${name}`),true,name);
 });

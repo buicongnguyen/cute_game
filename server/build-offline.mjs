@@ -2,7 +2,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { assetVersions, modelVersions } from './model-versions.mjs';
-import { staleCaches, strategy, isHashedBuildFile } from './sw-logic.mjs';
+import { staleCaches, strategy, isHashedBuildFile, onDemand } from './sw-logic.mjs';
 
 // Keep the worker's paths aligned with Vite's deployment base. GitHub project
 // Pages uses /repository/, while the local Node server serves the root path.
@@ -39,17 +39,14 @@ const versioned = url => {
   const rel = url.match(/\/assets\/((?:icons|audio)\/.+)$/)?.[1];
   return rel && assets[rel] ? `${url}?v=${assets[rel]}` : url;
 };
-// Gear models download only when something from them is first worn, planet scenery only
-// when that planet is first visited and the farm pen kit only when the pen is first shown,
-// so the worker keeps each one the first time it is fetched instead of fetching them all
-// at install.
-const onDemand = url => /\/assets\/models\/(gear-[a-z-]+|hero-[a-z-]+|disguises|pets|worlds-[a-z]+|farm|creatures|helper|cage|house|titans)\.glb$/.test(url);
 const index = base + 'index.html';
 // The page and its hashed scripts must install together, or the worker is not worth activating.
 const core = urls.filter(url => url === index || (isHashedBuildFile(url) && /\.(js|css)$/.test(url)));
 const extra = urls.filter(url => !core.includes(url) && !onDemand(url)).map(versioned);
 const pinned = urls.map(versioned).filter((url, i) => isHashedBuildFile(urls[i]) || url !== urls[i]);
-const later = urls.filter(onDemand).map(versioned);
+// On-demand files (sw-logic.mjs onDemand) are kept on first use. In the background fill the models go first and the music last.
+const isAudio = url => url.includes('/assets/audio/');
+const later = urls.filter(onDemand).sort((a, b) => isAudio(a) - isAudio(b)).map(versioned);
 const scripts = core.filter(url => url.endsWith('.js'));
 const hash = createHash('sha256');
 for (let i = 0; i < files.length; i++) hash.update(urls[i]).update('\0').update(await readFile(files[i])).update('\0');
