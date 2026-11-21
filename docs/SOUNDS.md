@@ -6,7 +6,44 @@ The AudioContext is created on the first touch/key (phone unlock) or first sound
 
 Mixing: random pitch (+-4 %, +-0.75 % for musical cues) and volume (+-12 %) per play; per-sound limit inside 100 ms
 (hit 3, coin 4, default 2, plus 18 ms minimum gap); voice cap 14 (level/quest/hurt/catch/power get +4 headroom);
-a compressor on the effects bus. Effects volume and mute come from Settings (`sfxVolume`, `sound`); music is separate.
+a compressor on the mix. Effects volume and mute come from Settings (`sfxVolume`, `sound`); music is separate.
+
+## The sound core: one AudioContext, four buses (AAA-PLAN WP7)
+
+The whole game has one AudioContext. `src/sfx.ts` owns it: `audioGraph()` gives `{ ctx, bus(name), duck(name, dB, seconds), voices }`.
+Never call `new AudioContext()` anywhere else.
+
+```
+effects (Sfx.play) ──► sfx ──► duck ─┐
+click / open / close ─► ui ──► duck ─┤
+(WP11 ambience) ─► ambience ─► duck ─┼─► compressor ─► speakers
+radio theme, (WP13 score) ► music ► duck ┘
+```
+
+- **Levels.** `sfx`, `ui` and `ambience` follow the effects slider (0.55 at the default 0.8, the old loudness); `music` follows
+  the music slider (its gain is the slider value, so 0 is silence). Buses add no saved setting: the two volumes stay in
+  `state.settings` (`audio-settings.ts` `parseAudio`). `bus(name)` applies the level each time it is called; `graph.sfx` and
+  `graph.music` hold the two sliders.
+- **The radio** (`src/features/radio.ts`) plays the theme `<audio>` element through a `MediaElementAudioSourceNode` into the
+  music bus. An iPhone ignores `element.volume`, so the slider is the bus gain. A trim of 0.55 on the radio cancels the
+  compressor's make-up gain (5.2 dB, measured), so the radio is as loud as before. Without WebAudio the element's own volume
+  carries the slider. The player is in the lazy features chunk; `house-life.ts` reaches it through the `radio` slot in
+  `audio-settings.ts`.
+- **Play options.** `sfx.play(sound, { detune, pan })`: `detune` in cents shifts every pitch of the sound, `pan` from -1 to 1.
+- **Duck.** `duck('music', 6, 1)` lowers a bus 6 dB for 1 s (down in 80 ms, back in 0.3 s). Ducks do not stack: while one
+  holds, another only makes it last longer, at the first one's depth. It arrives with the features
+  (`src/features/sound-mix.ts`), after the first played frame; before that a call does nothing.
+- **Voices.** `voices` counts live synthesized voices for everything that plays: 18 on a desktop (14 for ordinary sounds,
+  4 more for priority cues), 6 on a touch device (5 and 1). A new player calls `voices.take(now, end)` and stays silent on false.
+- **Rest.** While both sliders are at 0 or the tab is hidden the context is suspended, and effects are skipped; the next
+  input (or coming back to the tab) resumes it (`sound-mix.ts`, after the first played frame).
+- **Features use `services.audio`,** not an import of `sfx.ts`: a run-time import of `sfx.ts` from a feature makes the build
+  split that module into one more file fetched at start. Type imports are free.
+- **Offline.** Files under `assets/audio/` are on demand (`server/sw-logic.mjs` `onDemand`): the service worker's install
+  does not download them; it keeps the theme the first time the radio plays, and the background fill fetches it after the
+  models. Offline without it, the radio plays its stand-in tune.
+
+Tests: `tests/sound-bus.test.ts` (a recording fake AudioContext), `tests/offline.test.mjs`.
 
 | Event | Sound | How it is made |
 |---|---|---|

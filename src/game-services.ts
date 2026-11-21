@@ -3,11 +3,13 @@
  * main.ts supplies the host half (the world, the save, actions, sound, dialogs, the frame); this module adds the event
  * bus and small stored preferences. Features need nothing else from main.ts, so they load after Start, and so does
  * this module: features.ts makes the services when it mounts them (the dev hook shows them as __zoo.services from then on).
- * Sound beyond `tone` needs no service: a feature imports the audio graph from sfx.ts itself.
+ * Sound beyond `tone` goes through `audio`, the game's one audio graph (sfx.ts). A feature takes it from here and imports
+ * sfx.ts for types only: a run-time import of sfx.ts from a feature makes Rollup split that module out of the start chunk
+ * into one more file fetched at start.
  */
 import type { World } from './world.ts';
 import type { SaveState } from './model.ts';
-import type { Sound } from './sfx.ts';
+import type { Sound, AudioGraph } from './sfx.ts';
 import type { QualityLevel } from './graphics.ts';
 import type { EventBus, EventSink } from './game-events.ts';
 
@@ -19,6 +21,8 @@ export interface ServiceHost {
   perform<T = unknown>(type: string, payload?: Record<string, unknown>, options?: { quiet?: boolean }): Promise<T | undefined>;
   toast(message: string, icon?: string): void;
   tone(kind?: Sound): void;
+  /** The game's audio graph: its one AudioContext, the buses (sfx, ui, ambience, music), duck() and the shared voice counter. */
+  audio: AudioGraph;
   openDialog(type: string, title: string, body: string, kicker?: string, icon?: string): void;
   closeDialog(): void;
   /** The open dialog's type, or '' when none is open. */

@@ -106,8 +106,9 @@ test('the effects player and the radio follow the volume sliders', async () => {
   class FakeAudio { loop = false; volume = 1; src: string; constructor(src: string) { this.src = src; } play() { return Promise.resolve(); } pause() {} }
   const saved = { document: g.document, Audio: g.Audio }; g.document = doc; g.Audio = FakeAudio;
   try {
-    const { MusicBox } = await import('../src/house-life.ts'); const { audioLevels } = await import('../src/audio-settings.ts');
-    audioLevels.music = .45; const box = new MusicBox(); box.start();
+    const { MusicBox } = await import('../src/features/radio.ts'); const { audioLevels } = await import('../src/audio-settings.ts'); const { AudioGraph } = await import('../src/sfx.ts');
+    // No WebAudio here, so the element's own volume carries the slider; with it, the music bus does (tests/sound-bus.test.ts).
+    audioLevels.music = .45; const box = new MusicBox(new AudioGraph()); box.start();
     const theme = (box as unknown as { theme: FakeAudio }).theme; assert.equal(theme.volume, .45);
     audioLevels.music = .2; box.tick(.016); assert.equal(theme.volume, .2, 'the slider changes a playing radio');
     audioLevels.music = .45; box.stop();
