@@ -70,7 +70,7 @@ export function initHouseLife(d: LifeDeps) {
     if (a.id === 'bed') { d.dim(1.4); f?.text(at, 'Zzz…', 'callout'); }
     else if (a.id === 'easel') f?.text(at, `+${Math.round(r.xp)} XP`, 'callout');
     else f?.text(at, t(a.verb) + '!', 'callout');
-    d.tone(a.id === 'bath' || a.id === 'sink' || a.id === 'tea' ? 'splash' : a.id === 'bed' ? 'level' : 'success');
+    d.tone(a.id === 'bath' || a.id === 'sink' || a.id === 'tea' ? 'splash' : a.id === 'bed' ? 'rewardSmall' : 'success');
     const note = a.id === 'easel' ? t('A new painting for the craft room wall! +{n} XP', { n: Math.round(r.xp) }) : a.note ? t(a.note, { n: r.buff?.regen ?? 0 }) : t(a.verb);
     d.toast(r.buff ? `${note} · ${Math.round(r.buff.time / 60 * 10) / 10} ${t('min')}` : note, a.icon);
   };
