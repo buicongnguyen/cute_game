@@ -22,4 +22,7 @@ export const perfFlags = {
   /** Our own look (look.ts): the colour curve, the per-planet light rigs and skies, the shaded ground and the contact
    * shading on scenery. Off draws the reference's flat rig; a world must be rebuilt (world.build) to switch. */
   richLook: true,
+  /** The explorer eases between standing and walking, fidgets and sits (hero-motion.ts, features/hero-idle.ts). Off is the
+   * old switch between the two poses, for a frozen A/B. */
+  heroMotion: true,
 };
