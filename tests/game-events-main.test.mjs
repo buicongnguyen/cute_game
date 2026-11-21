@@ -28,9 +28,9 @@ const SITES = {
   rescue: 'main.ts', friendHome: 'main.ts', playerHurt: 'main.ts', fishCatch: 'main.ts',
   storyStep: 'game-services.ts', place: 'game-services.ts', // compared at the HUD tick: main.ts updateHud hands the facts over (noteProgress)
   bossApproach: 'hud-combat.ts', bossEngaged: 'hud-combat.ts', bossBreak: 'hud-combat.ts',
-  telegraph: 'WP12', firstWin: 'WP17',
+  telegraph: 'main.ts', firstWin: 'WP17', // telegraph: world.onTelegraph, where world.ts starts a wind-up
 };
-const OWNERS = { WP12: 'creature voices and warnings, through world.onTelegraph', WP17: 'the first tutorial win' };
+const OWNERS = { WP17: 'the first tutorial win' };
 
 test('every event has a site that emits it, or a named later owner', () => {
   assert.deepEqual(Object.keys(SITES).sort(), Object.keys(EVENT_SAMPLES).sort(), 'the table lists exactly the events of game-events.ts (tests/support/game-event-samples.mjs)');

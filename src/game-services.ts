@@ -33,6 +33,8 @@ export interface ServiceHost {
   slot(): number;
   /** True on a touch device. */
   touch(): boolean;
+  /** The explorer's health as a part of the full bar: 0 to 1. */
+  health(): number;
   /** The graphics level in use right now. */
   quality(): QualityLevel;
   /** game-events.ts connect: from here on the game's events reach this bus. */

@@ -204,6 +204,8 @@ export class World {
   onBuilt?: () => void;
   /** A creature has just noticed the explorer. */
   onAlert?: (e: Enemy) => void;
+  /** A creature or boss starts a wind-up that ends in a blow `seconds` later (main.ts tells it as the telegraph event). */
+  onTelegraph?: (e: Enemy, seconds: number) => void;
   joystickInput:Point|null=null;onRemotePlayerClick?:(id:string)=>void;
   playerSizeScale=1;playerShield=false;playerBat=false;
   authoritativeAction?:(intent:{type:string;payload?:Record<string,unknown>})=>Promise<unknown>;
@@ -1991,7 +1993,7 @@ export class World {
     if(chasing&&canWindup&&!e.cooldown&&!noAttack){
       e.phase='windup';e.phaseTime=this.jumpRules?warningTime(def.windup):def.windup;e.targetX=target!.x;e.targetZ=target!.z;e.mesh.userData.attackCount=(e.mesh.userData.attackCount??0)+1;e.mesh.userData.slam=e.boss&&!BOSS_SKILLS[e.type??'']&&e.mesh.userData.attackCount%3===0;
       if(e.boss)this.beginBossSkill(e,target!);else e.skill=undefined;
-      if(e.mesh.userData.slam&&!e.skill)e.phaseTime=1.1;e.windupTotal=e.phaseTime;e.mesh.rotation.y=Math.atan2(target!.x-e.x,target!.z-e.z);return;
+      if(e.mesh.userData.slam&&!e.skill)e.phaseTime=1.1;e.windupTotal=e.phaseTime;this.onTelegraph?.(e,e.phaseTime);e.mesh.rotation.y=Math.atan2(target!.x-e.x,target!.z-e.z);return;
     }
     if(chasing&&distance<8&&distance>.001&&['firebat','thunderbird','jellyzap','wisp'].includes(e.type??'')&&!noAttack){
       const side=(Number(e.id.split(':').at(-1))||0)%2?1:-1,dx=(target!.x-e.x)/distance,dz=(target!.z-e.z)/distance,radial=(distance-5)*.4;
