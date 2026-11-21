@@ -2,7 +2,7 @@ import * as T from 'three';
 import { PLANETS, type PlanetId } from './model.ts';
 import { zoneAt, type EnvironmentLayout } from './environments.ts';
 import { trailDistance, smoothstep, RIM_START } from './biomes.ts';
-import { toonMaterial } from './toon.ts';
+import { toonMaterial, TOON_RAMP_CLASSIC } from './toon.ts';
 
 /**
  * The ground is a grid of 80 m tiles (40 m drew twice the tiles in view for no gain: the ground casts no shadow and
@@ -152,7 +152,9 @@ export function checker(a: string, b: string) {
 }
 
 export function buildGround({ planet, ponds, base, height, segments = 20, detail }: GroundOptions): T.Group {
+  // The ground keeps the neutral grey ramp: under our warm light step the grass turned yellower and a little darker.
   const group = new T.Group(), material = toonMaterial({ vertexColors: true, map: planet === 'toy' ? checker(PLANETS.toy.ground[0], PLANETS.toy.ground[1]) : null }), color = new T.Color();
+  material.gradientMap = TOON_RAMP_CLASSIC;
   group.name = 'ground'; group.userData.environment = true;
   const step = GROUND_TILE, cells = Math.round(segments * step / 40);
   for (let tx = -200; tx < 200; tx += step) for (let tz = -200; tz < 200; tz += step) {

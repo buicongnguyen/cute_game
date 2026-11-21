@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { BED_HEIGHT, CARD_INK, CROP_BOOST, CROP_PRESENTATION_SCALE, FOOTPRINT, HARVEST_TIME, INK_PX, RIPE_PX, SOIL_Y, STAGE_SCALE, TREE_BOOST, VIEW_PITCH, bakePitch, bedFlip, bedScale, cardWidth, cropBadgeAnchor, cropStage, footprintScale, harvestFlight, phonePxPerMetre, popScale, syncBakePitch, viewBounds } from '../src/crop-cards.ts';
+import { BED_HEIGHT, CARD_INK, CROP_BOOST, CROP_PRESENTATION_SCALE, FOOTPRINT, HARVEST_TIME, RIPE_PX, SOIL_Y, STAGE_SCALE, TREE_BOOST, VIEW_PITCH, bakePitch, bedFlip, bedScale, cardCentre, cardWidth, cropBadgeAnchor, cropStage, footprintScale, harvestFlight, phonePxPerMetre, popScale, syncBakePitch, viewBounds } from '../src/crop-cards.ts';
 import { CAMERA_PITCH, cameraPitch, setCameraPitch } from '../src/camera-rig.ts';
 import { perfFlags } from '../src/perf-flags.ts';
 import { BED_HALF } from '../src/model.ts';
@@ -51,8 +51,8 @@ test('a ripe card is never wider than 0.95 of its bed, at 30, 42 and 51.5 degree
         const b = viewBounds(new T.Mesh(geometry))!, full = STAGE_SCALE[3] * bedScale(b) * boost, scale = footprintScale(b, full);
         assert.ok(scale <= full + 1e-12, 'the cap never enlarges');
         assert.ok(cardWidth(b, scale) <= FOOTPRINT * bed + 1e-9, name + ' at ' + deg + ': ' + cardWidth(b, scale).toFixed(3) + ' m in a ' + bed + ' m bed');
-        // Both sides, mirrored or not, stay inside the bed.
-        assert.ok(Math.max(-b.left, b.right) * scale * .72 <= FOOTPRINT * BED_HALF + 1e-9);
+        // The card is moved so its silhouette is centred on the bed: both sides, mirrored or not, stay inside it.
+        for (const flip of [1, -1]) for (const edge of [b.left, b.right]) assert.ok(Math.abs((edge - cardCentre(b)) * flip * scale * .72) <= FOOTPRINT * BED_HALF + 1e-9);
         if (cardWidth(b, full) <= FOOTPRINT * bed) assert.equal(scale, full, 'a crop that fits keeps its size');
       }
     }
@@ -60,15 +60,13 @@ test('a ripe card is never wider than 0.95 of its bed, at 30, 42 and 51.5 degree
     // The melon is the case that hung over its neighbours: uncapped it is wider than a bed.
     const melon = viewBounds(new T.Mesh(shapes[0][1]))!, full = STAGE_SCALE[3] * bedScale(melon) * CROP_BOOST[3];
     assert.ok(cardWidth(melon, full) > bed); assert.ok(footprintScale(melon, full) < full);
-    perfFlags.ownRamp = false; assert.equal(footprintScale(melon, full), full, 'off: as before');
+    const lopsided = viewBounds(new T.Mesh(shapes[2][1]))!; assert.ok(Math.abs(cardCentre(lopsided) - .3) < 1e-6, 'a lopsided crop is centred by its silhouette');
+    perfFlags.ownRamp = false; assert.equal(footprintScale(melon, full), full, 'off: as before'); assert.equal(cardCentre(lopsided), 0);
   } finally { perfFlags.ownRamp = true; setCameraPitch(CAMERA_PITCH.max); syncBakePitch(); }
 });
 
-test('the card rim is our own ink, about 1 CSS px on a phone', () => {
+test('the card rim is our own ink, not the reference colour', () => {
   assert.equal(CARD_INK, INK); assert.notEqual(CARD_INK.toLowerCase(), '#3a2433');
-  // A ripe crop: its cell (128 px, about 9/10 of it the crop) is drawn about 68 CSS px tall on a phone.
-  const cssPx = RIPE_PX * CROP_BOOST[3] * .72, perTexel = cssPx / (128 * .9);
-  assert.ok(INK_PX * perTexel > .8 && INK_PX * perTexel < 1.2, (INK_PX * perTexel).toFixed(2) + ' px');
 });
 
 test('the crop update enlarges mature plants 25%; the reference pitch is kept for the look switch', () => {

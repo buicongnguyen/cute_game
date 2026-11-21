@@ -1,7 +1,7 @@
 import * as T from 'three';
 import type { PlanetId } from './content.ts';
 import { perfFlags } from './perf-flags.ts';
-import { LIGHT, PLANET_LIGHT, SUN_OFFSET } from './toon.ts';
+import { LIGHT, PLANET_LIGHT, SUN_OFFSET, warmRamp } from './toon.ts';
 import { FOG } from './camera-rig.ts';
 
 /**
@@ -102,6 +102,7 @@ export function installGrade() {
 export function setGrade(renderer: T.WebGLRenderer, look: PlanetLook) {
   installGrade();
   renderer.toneMapping = perfFlags.richLook ? T.CustomToneMapping : T.NoToneMapping; renderer.toneMappingExposure = look.exposure;
+  warmRamp(look.sun[0].slice(1, 3) >= look.sun[0].slice(5)); // a sun with more blue than red is a moon
 }
 
 // ---- Sky.

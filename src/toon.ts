@@ -42,6 +42,17 @@ function makeRamp(steps: readonly (number | readonly number[])[]) {
 export const TOON_RAMP_CLASSIC = makeRamp(TOON_STEPS);
 /** The one ramp texture every toon material in the world shares. */
 export const TOON_RAMP = perfFlags.ownRamp ? makeRamp(TOON_OWN) : TOON_RAMP_CLASSIC;
+let warm = true;
+/**
+ * Under a cool sun (the Night Planet's moon) the two light steps turn neutral: a cream light would grey its blue
+ * surfaces. Five texels are sent again, only when a planet with the other kind of sun is built.
+ */
+export function warmRamp(on: boolean) {
+  if (on === warm || TOON_RAMP === TOON_RAMP_CLASSIC) return;
+  warm = on;
+  for (const i of [3, 4]) (TOON_RAMP.image.data as Uint8Array).set(on ? TOON_OWN[i] : [TOON_OWN[i][0], TOON_OWN[i][0], TOON_OWN[i][0]], i * 4);
+  TOON_RAMP.needsUpdate = true;
+}
 /**
  * Runs `draw` with every material under `root` on the grey ramp, then puts our ramp back. A swap by reference: no
  * texture data changes and nothing is uploaded again, and each small renderer keeps its own copy of the grey ramp.

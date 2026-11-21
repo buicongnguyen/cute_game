@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { TOON_RAMP, TOON_RAMP_CLASSIC, TOON_OWN, TOON_STEPS, PLANET_LIGHT, planetLight, applyPlanetLight, toToon, toonify, toonMaterial, isLit, rampAt, installRampColour, withClassicRamp } from '../src/toon.ts';
+import { TOON_RAMP, TOON_RAMP_CLASSIC, TOON_OWN, TOON_STEPS, PLANET_LIGHT, planetLight, applyPlanetLight, toToon, toonify, toonMaterial, isLit, rampAt, installRampColour, withClassicRamp, warmRamp } from '../src/toon.ts';
+import { LOOKS, setGrade } from '../src/look.ts';
 import { INK, INK_CLASSIC } from '../src/outline.ts';
 import { PLANETS, type PlanetId } from '../src/model.ts';
 import { bakeModel } from '../src/assets.ts';
@@ -56,6 +57,17 @@ test('icons and the mirror draw on the grey ramp by reference and hand our ramp 
   assert.equal(own.gradientMap, TOON_RAMP); assert.equal(other.gradientMap, TOON_RAMP_CLASSIC);
   assert.throws(() => withClassicRamp(root, () => { throw new Error('lost context'); })); assert.equal(own.gradientMap, TOON_RAMP);
   assert.deepEqual(TOON_RAMP.image.data, before, 'no data changes'); assert.equal(TOON_RAMP.version, version, 'and nothing is uploaded again');
+});
+
+test('under a cool sun the two light steps are neutral, the shade steps stay; a warm sun brings the cream back', () => {
+  const data = TOON_RAMP.image.data as Uint8Array, steps = () => [0, 1, 2, 3, 4].map(i => [...data.slice(i * 4, i * 4 + 3)]), renderer = { toneMapping: 0, toneMappingExposure: 1 } as unknown as T.WebGLRenderer;
+  const version = TOON_RAMP.version;
+  setGrade(renderer, LOOKS.home); assert.deepEqual(steps(), TOON_OWN.map(s => [...s])); assert.equal(TOON_RAMP.version, version, 'nothing sent while the sun stays warm');
+  setGrade(renderer, LOOKS.shadow);
+  assert.deepEqual(steps().slice(0, 3), TOON_OWN.slice(0, 3).map(s => [...s])); assert.deepEqual(steps().slice(3), [[250, 250, 250], [255, 255, 255]]);
+  assert.equal(TOON_RAMP.version, version + 1); setGrade(renderer, LOOKS.shadow); assert.equal(TOON_RAMP.version, version + 1, 'sent once');
+  for (const id of Object.keys(LOOKS) as Array<keyof typeof LOOKS>) { setGrade(renderer, LOOKS[id]); assert.equal(data[18] === 255, id === 'shadow', id); }
+  warmRamp(true); assert.deepEqual(steps(), TOON_OWN.map(s => [...s]));
 });
 
 test('the ink is our own warm plum-brown, not the reference colour', () => {

@@ -440,6 +440,13 @@ From `AAA-EVALUATION.md` section 4.
   - English and Vietnamese starts +0.3 KB or less (`toon.ts` and `look.ts` load before Start).
 - **Speed:** 0 draw calls, 0 triangles, 0 new programs; one extra 5-texel texture; vertex colours at bake time; at most 0.3 KB gzip before Start (bytes-ledger allowance); the same bytes also count in the install list's running pre-Start allowance (section 7).
 - **Refs:** I27, P17, P20, O5, O6, O18.
+- **Result (as built):**
+  - The shade target is **not met**: in shaded pixels blue minus red moves by -0.003 to +0.017, not +0.05. The ramp only colours the sun's light on faces turned from it. Cast shadows get no sun light at all (they show the hemisphere light alone) and are most of the shaded area; from the game camera the faces turned from the sun are 0.2 to 2% of the screen, and most are orange or brown paint with almost no blue to lift. The follow-up is the hemisphere colours in `LOOKS` (`src/look.ts`), with the planet colours; no light was changed in this package.
+  - The ground keeps the grey ramp (`src/ground.ts`): under the warm light step the grass turned yellower and darker. A grass-only patch is within 0.003 of before in hue, saturation and lightness.
+  - Under a cool sun (the Night Planet) the two light steps are neutral, so moonlit blue keeps its saturation.
+  - The ramp's shade is #6466b4 and its light #fff6e8 (tuned from the plan's "about" values so warm paint in shade does not turn redder).
+  - Crop cards: the rim is the new ink at the old sticker weight (the 1 px rim lost the cards' presence, owner review); the bed cap stays at 0.95 (at 1.00 with the idle bob only 2.7 px stay clear of the next bed at 390x844); a lopsided crop is centred on its bed by its silhouette, which lets the fruit trees stand about 14% larger than with a pivot-centred cap.
+  - Start bytes: +443 gzip, over the 0.3 KB estimate; recorded as a named entry in `promo/perf-ledger.json`.
 
 ### WP7. Sound core: one audio system with buses
 - **Result:** the music slider works on iPhone, and the 444 KB theme no longer downloads in the background on a first visit. The base for every sound package.

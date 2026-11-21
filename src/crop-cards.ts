@@ -11,7 +11,7 @@ import { harvestArc, type Point3 } from './feel-rules.ts';
  * Garden crops as 2D cards (G2D-1/G2D-2). The crops are our own Blender models (crops.glb); once the kit has loaded
  * they are baked with the game renderer and the scene's lights into one atlas, seen along the direction of the camera
  * the player uses (cameraPitch() when the atlas is baked, orthographic; the reference's 51.5° with perfFlags.ownRamp
- * off), with a thin rim of our own ink (outline.ts) on every crop past the sprout.
+ * off), with a bold rim of our own ink (outline.ts) on every crop past the sprout.
  * All cards then draw as ONE InstancedMesh: each card turns about its base toward the camera in the vertex shader
  * (yaw and pitch, never roll, so crops stay upright on screen and keep their baked size at every screen edge), sways
  * about that base, and grows or pops via a per-instance size. A second InstancedMesh draws the soft blob shadows.
@@ -102,14 +102,12 @@ export const TREE_BOOST: Readonly<Record<number, number>> = { 1: 1.6, 2: 3, 3: 2
 export const CROP_BOOST: Readonly<Record<number, number>> = { 1: 1, 2: 1.3, 3: 1.9 };
 /** A ripe card is at most this share of its bed's width, so it never hangs over the bed beside it (AAA plan WP6). */
 export const FOOTPRINT = .95;
-/** The card's width in the garden, pivot centred: twice the wider side, at the garden's crop size. */
-export const cardWidth = (b: ViewBounds, scale: number) => 2 * Math.max(-b.left, b.right) * scale * CROP_SCALE;
-/** How many times too wide a card is for FOOTPRINT of its bed; 1 when it fits. */
-const overWide = (b: ViewBounds, scale: number) => Math.max(1, cardWidth(b, scale) / (FOOTPRINT * 2 * BED_HALF));
+/** The silhouette's width in the garden, at the garden's crop size. */
+export const cardWidth = (b: ViewBounds, scale: number) => (b.right - b.left) * scale * CROP_SCALE;
 /** `scale`, or the largest scale at which the card still fits FOOTPRINT of its bed (a melon is far wider than it is tall). */
-export const footprintScale = (b: ViewBounds, scale: number) => perfFlags.ownRamp ? scale / overWide(b, scale) : scale;
-/** A ripe crop's size before the footprint cap. */
-const ripeScale = (crop: string, b: ViewBounds) => STAGE_SCALE[3] * bedScale(b) * (isTreeCrop(crop) ? TREE_BOOST : CROP_BOOST)[3];
+export const footprintScale = (b: ViewBounds, scale: number) => perfFlags.ownRamp ? scale / Math.max(1, cardWidth(b, scale) / (FOOTPRINT * 2 * BED_HALF)) : scale;
+/** How far a silhouette's middle is from its pivot: a ripe card is moved by this, so a lopsided tree stands in the middle of its bed. */
+export const cardCentre = (b: ViewBounds) => perfFlags.ownRamp ? (b.left + b.right) / 2 : 0;
 export { isTreeCrop } from './tree-crops.ts';
 import { isTreeCrop } from './tree-crops.ts';
 /** Size of a crop at a stage relative to its model: the stage scale times the model's bed scale. */
@@ -117,7 +115,8 @@ export function stageScale(crop: string, stage: CropStage) {
   if (!stage) return 0;
   const b = cropBounds(stage === 1 ? 'sprout' : crop);
   const boost = (isTreeCrop(crop) ? TREE_BOOST : CROP_BOOST)[stage] ?? 1;
-  return !b ? STAGE_SCALE[stage] * boost : stage === 3 ? footprintScale(b, ripeScale(crop, b)) : STAGE_SCALE[stage] * bedScale(b, stage === 1) * boost;
+  const scale = STAGE_SCALE[stage] * (b ? bedScale(b, stage === 1) : 1) * boost;
+  return b && stage === 3 ? footprintScale(b, scale) : scale;
 }
 /** A compact ready badge above the mature silhouette, in the same view plane as crop cards. */
 export function cropBadgeAnchor(crop: string, size = 1): { y: number; back: number } {
@@ -135,8 +134,8 @@ interface Cell { u0: number; v0: number; du: number; dv: number; size: number; b
 interface BedState { key: string; stage: CropStage; crop: string | null; pop: number }
 
 const COLS = 8, MAX_FLIGHTS = 12;
-/** The rim's colour, and its width in atlas pixels of a 128 px cell: about 1 CSS px on a phone at a ripe crop's size (it was about 2). */
-export const CARD_INK = INK, INK_PX = 1.75;
+/** The rim's colour: our own ink, at the sticker weight the cards always had (about 2 CSS px on a phone at a ripe crop's size). */
+export const CARD_INK = INK;
 
 /** Exactly three's Khronos PBR Neutral curve, applied in the bake (render targets skip tone mapping) when the world uses it. */
 const NEUTRAL = `vec3 neutral(vec3 color){const float start=.76;const float desat=.15;color*=exposure;float x=min(color.r,min(color.g,color.b));
@@ -235,11 +234,10 @@ export class CropCards {
       }
       const camera = new T.OrthographicCamera(-1, 1, 1, -1, .1, 40), back = new T.Vector3(0, Math.sin(pitch), Math.cos(pitch));
       camera.position.copy(back).multiplyScalar(20); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
-      // The rim: 1 CSS px on a phone (the reference's was about 2; under 1 px a line breaks into dots without antialiasing).
-      // A crop that the footprint cap draws smaller gets a wider rim in its cell, so the ink is as thin on screen as its neighbours'.
-      const thin = perfFlags.ownRamp;
+      // About 1.5 CSS px of ink on a phone: thinner lines break into dots without antialiasing.
+      const outline = Math.max(2.5, px / 36), pad = (outline + 2) / px;
       const composite = new T.ShaderMaterial({
-        uniforms: { src: { value: scratch.texture }, texel: { value: new T.Vector2(1 / px, 1 / px) }, radius: { value: 1 }, ink: { value: new T.Color(CARD_INK) }, outline: { value: 1 }, exposure: { value: renderer.toneMappingExposure }, toned: { value: renderer.toneMapping === T.NeutralToneMapping ? 1 : 0 } },
+        uniforms: { src: { value: scratch.texture }, texel: { value: new T.Vector2(1 / px, 1 / px) }, radius: { value: outline }, ink: { value: new T.Color(CARD_INK) }, outline: { value: 1 }, exposure: { value: renderer.toneMappingExposure }, toned: { value: renderer.toneMapping === T.NeutralToneMapping ? 1 : 0 } },
         vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
         fragmentShader: `uniform sampler2D src;uniform vec2 texel;uniform float radius;uniform vec3 ink;uniform float outline;uniform float exposure;uniform float toned;varying vec2 vUv;${NEUTRAL}
           void main(){vec4 c=texture2D(src,vUv);float d=0.;
@@ -255,7 +253,6 @@ export class CropCards {
       const cells = new Map<string, Cell>();
       entries.forEach(({ id, model, outline: inked }, k) => {
         const bounds = viewBounds(model); if (!bounds) return;
-        const outline = thin ? (inked ? Math.min(4, overWide(bounds, ripeScale(id, bounds))) : 1) * INK_PX * px / 128 : Math.max(2.5, px / 36), pad = (outline + 2) / px;
         // A square cell around the silhouette, pivot centred horizontally, with room for the outline.
         const half = Math.max(-bounds.left, bounds.right), bottom = Math.min(0, bounds.bottom), size = Math.max(2 * half, bounds.top - bottom) / (1 - 2 * pad);
         const low = bottom - pad * size;
@@ -264,7 +261,7 @@ export class CropCards {
         renderer.setRenderTarget(scratch); renderer.render(scene, camera); scene.remove(model);
         const col = k % COLS, row = Math.floor(k / COLS);
         atlas.viewport.set(col * px, row * px, px, px); atlas.scissor.set(col * px, row * px, px, px); atlas.scissorTest = true;
-        composite.uniforms.outline.value = inked ? 1 : 0; composite.uniforms.radius.value = outline;
+        composite.uniforms.outline.value = inked ? 1 : 0;
         renderer.setRenderTarget(atlas); renderer.render(quadScene, camera);
         cells.set(id, { u0: col / COLS, v0: row / rows, du: 1 / COLS, dv: 1 / rows, size, base: low / size, bounds });
       });
@@ -319,7 +316,7 @@ export class CropCards {
       const c = this.cells.get(stage === 1 ? 'sprout' : bed.crop); if (!c) return;
       state.pop = Math.min(1, state.pop + dt * 3);
       const bob = stage === 3 && state.pop >= 1 ? 1 + Math.sin(time * 4 + i * 3.1) * .04 : 1, scale = stageScale(bed.crop, stage) * popScale(state.pop) * bob * this.size, seed = i * 3.1;
-      put(c, bed.x, SOIL_Y, bed.z + c.bounds.front * scale, scale, bedFlip(i), seed, stage === 3 ? .06 : .04, stage === 3 ? 2.5 : 1.5);
+      put(c, bed.x - (stage === 3 ? cardCentre(c.bounds) * scale * bedFlip(i) : 0), SOIL_Y, bed.z + c.bounds.front * scale, scale, bedFlip(i), seed, stage === 3 ? .06 : .04, stage === 3 ? 2.5 : 1.5);
       blob(bed.x, bed.z, Math.max(.35, (c.bounds.right - c.bounds.left) * scale * 1.05));
       const star = this.cells.get('sparkle');
       if (stage === 3 && star) put(star, bed.x + .18 * this.size * bedFlip(i), SOIL_Y + c.bounds.top * scale * 1.15 + .12 + Math.sin(time * 3 + seed) * .06, bed.z + c.bounds.front * scale, (1 + Math.sin(time * 5 + seed) * .25) * popScale(state.pop), Math.cos(time * 2 + seed) || 1, seed, 0, 0);
