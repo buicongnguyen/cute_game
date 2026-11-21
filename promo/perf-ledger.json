@@ -17,6 +17,15 @@
     "vietnamese": 279
    },
    "why": "Measured growth of the start (plan allowance 0.3 KB): hero-motion.ts, the blend between the idle and the walk pose that runs from the first frame, in place of the switch in world.ts animatePlayer. The lean-in, the settle, the fidgets, the sit and the clips load after Start (features/hero-idle.ts)."
+  },
+  {
+   "row": "start",
+   "name": "WP24 fair rewards and true words",
+   "allow": {
+    "english": 102,
+    "vietnamese": 102
+   },
+   "why": "The plan's allowance (0.1 KB). Measured growth of the start against staging 48da5cb: English +187 bytes, Vietnamese +275; the 85 and 173 bytes past the allowance come out of the room earlier packages left under the limit. In the start by nature: the bounty cap (progression.ts, with the zone table now beside the spawn tables in enemy-types.ts), the soothed rate in grantColossusReward (colossus-rewards.ts, shared with the server), the one-line well hook and the longer level-20 News sentence in main.ts, and '1 day in a row' with its Vietnamese. Loaded on demand, not in the start: the well's view (colossus-well-ui chunk, 1.5 KB gzip, fetched when the well opens; it imports no game module at run time, which would re-split the start chunks, +1.3 KB measured), its Vietnamese (features-vi, +0.9 KB of that chunk's 15 KB) and Automatic's pay rule (colossus.ts, the modes chunk). news.json is 20 bytes smaller."
   }
  ]
 }
