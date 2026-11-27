@@ -1,6 +1,6 @@
 # Zoo Garden art kit
 
-Built with Blender 4.5 LTS by headless generators. All geometry and materials are original; no reference-game assets were extracted. The look is a glossy toy style: chunky bevelled shapes, saturated warm colours and flat colour materials with no image textures.
+Built with Blender by headless generators (5.2.5 LTS since 2026-11-27; earlier models with 4.5 LTS). All geometry and materials are original; no reference-game assets were extracted. The look is a glossy toy style: chunky bevelled shapes, saturated warm colours and flat colour materials with no image textures.
 
 ## Files
 
@@ -63,7 +63,7 @@ The egg, milk and egg-basket icons (`icons/items/egg.webp`, `milk.webp`, `egg_ba
 
 ## Rebuild
 
-From the project root, with Blender 4.5 on PATH:
+From the project root, with Blender 5.2.5 LTS (`blender` = the shared `C:/tools/blender/blender-5.2.5-windows-x64/blender.exe`):
 
 ```powershell
 blender -b --factory-startup --python art/blender/kit/build_props.py -- --install --render --fbx

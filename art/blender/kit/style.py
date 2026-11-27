@@ -82,6 +82,11 @@ def reset_scene():
             block.remove(item)
     for col in list(bpy.data.collections):
         bpy.data.collections.remove(col)
+    # Blender 5.x leaves bpy.context.collection None once the active collection is removed (4.5 fell back
+    # to the scene collection); make the scene collection active so scripts can keep linking there.
+    vl = bpy.context.view_layer
+    if vl is not None:
+        vl.active_layer_collection = vl.layer_collection
 
 
 def _link(obj, collection=None):
